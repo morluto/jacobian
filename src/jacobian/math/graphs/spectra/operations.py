@@ -129,7 +129,9 @@ def _algebraic_value(value: Any) -> RealAlgebraicValue:
         root_index = roots.index(value)
     except ValueError as exc:
         raise ValueError("spectrum root is not on its minimal-polynomial axis") from exc
-    coefficients = tuple(str(int(coefficient)) for coefficient in polynomial.all_coeffs())
+    coefficients = tuple(
+        str(int(coefficient)) for coefficient in polynomial.all_coeffs()
+    )
     return RealAlgebraicValue._from_admitted_polynomial(
         polynomial=coefficients,
         real_root_index=root_index,
@@ -138,7 +140,9 @@ def _algebraic_value(value: Any) -> RealAlgebraicValue:
 
 def _spectrum(matrix: Any) -> tuple[GraphSpectrumEntry, ...]:
     return tuple(
-        GraphSpectrumEntry(value=_algebraic_value(value), multiplicity=int(multiplicity))
+        GraphSpectrumEntry(
+            value=_algebraic_value(value), multiplicity=int(multiplicity)
+        )
         for value, multiplicity in matrix.eigenvals().items()
     )
 
@@ -166,12 +170,20 @@ def verify_spectrum(claim: GraphSpectrumResult) -> bool:
             if claim.matrix_convention == "ADJACENCY"
             else laplacian_spectrum(claim.graph)
         )
+
         def key(entry: GraphSpectrumEntry) -> tuple[tuple[str, ...], int]:
             return entry.value.polynomial, entry.value.real_root_index
-        return sorted(
-            (key(entry), entry.multiplicity) for entry in actual
-        ) == sorted((key(entry), entry.multiplicity) for entry in claim.spectrum)
-    except (AttributeError, IndexError, TypeError, ValueError, OperationDomainValidationError):
+
+        return sorted((key(entry), entry.multiplicity) for entry in actual) == sorted(
+            (key(entry), entry.multiplicity) for entry in claim.spectrum
+        )
+    except (
+        AttributeError,
+        IndexError,
+        TypeError,
+        ValueError,
+        OperationDomainValidationError,
+    ):
         return False
 
 

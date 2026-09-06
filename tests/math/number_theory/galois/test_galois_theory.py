@@ -260,9 +260,7 @@ def test_galois_group_returns_composable_generators() -> None:
 
 
 def test_galois_claims_retain_source_through_json_and_reject_forgery() -> None:
-    request = GaloisGroupRequest(
-        polynomial=_rational_polynomial((-1, -1, 0, 0, 0, 1))
-    )
+    request = GaloisGroupRequest(polynomial=_rational_polynomial((-1, -1, 0, 0, 0, 1)))
     result = _galois_group(request)
     decoded = GaloisGroupResult.model_validate_json(result.model_dump_json())
     assert decoded.polynomial == request.polynomial

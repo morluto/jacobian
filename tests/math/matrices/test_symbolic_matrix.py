@@ -1241,9 +1241,9 @@ def test_symbolic_eigenvalue_forgery_reaches_consumer_verifier() -> None:
     )
     result = _run_eigenvalues(request)
     payload = result.model_dump(mode="json")
-    payload["characteristic_polynomial"][0]["numerator"]["terms"][0][
-        "coefficient"
-    ]["num"] = "2"
+    payload["characteristic_polynomial"][0]["numerator"]["terms"][0]["coefficient"][
+        "num"
+    ] = "2"
     forged = SymbolicEigenvaluesResult.model_validate(payload)
     assert not verify_symbolic_eigenvalues(forged)
 

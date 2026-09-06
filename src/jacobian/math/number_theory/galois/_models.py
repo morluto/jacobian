@@ -258,9 +258,7 @@ class FinitePermutationGroup(StrictModel):
     """A composable permutation group on one polynomial root axis."""
 
     root_axis: GaloisRootAxis
-    generators: tuple[tuple[StrictInt, ...], ...] = Field(
-        min_length=1, max_length=16
-    )
+    generators: tuple[tuple[StrictInt, ...], ...] = Field(min_length=1, max_length=16)
 
     @model_validator(mode="after")
     def require_permutations_on_axis(self) -> Self:

@@ -998,7 +998,10 @@ class SymbolicEigenvaluesResult(StrictModel):
     @model_validator(mode="after")
     def require_square_source_and_polynomial_shape(self) -> Self:
         entries = self.matrix.entries
-        if len(entries) != len(entries[0]) or len(self.characteristic_polynomial) != self.degree + 1:
+        if (
+            len(entries) != len(entries[0])
+            or len(self.characteristic_polynomial) != self.degree + 1
+        ):
             raise _validation_error(
                 "shape_mismatch",
                 "eigenvalue claims require a square source and degree-sized polynomial",

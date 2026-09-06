@@ -60,9 +60,7 @@ class ForbiddenBlockShift(StrictModel):
 class AdjacencyShift(StrictModel):
     """An edge-shift carrier with nonnegative edge multiplicities."""
 
-    matrix: tuple[tuple[int, ...], ...] = Field(
-        max_length=MAX_ADJACENCY_STATES
-    )
+    matrix: tuple[tuple[int, ...], ...] = Field(max_length=MAX_ADJACENCY_STATES)
     two_sided: bool = True
 
     @model_validator(mode="after")

@@ -42,7 +42,11 @@ def _encoder(
     *,
     width: int | None = None,
 ) -> PrimeFieldLinearEncoder:
-    width = width if width is not None else (len(generator_matrix[0]) if generator_matrix else 1)
+    width = (
+        width
+        if width is not None
+        else (len(generator_matrix[0]) if generator_matrix else 1)
+    )
     return PrimeFieldLinearEncoder(
         field_order=field_order,
         message_axis=tuple(f"m{index}" for index in range(len(generator_matrix))),
@@ -65,7 +69,9 @@ def test_catalog_examples_use_the_canonical_encoder_carrier() -> None:
     catalog = Catalog.open()
     operation = catalog.operation("code.minimum_distance.compute")
     assert operation is not None
-    result = invoke_operation(operation.operation_id, operation.examples[0].input, catalog)
+    result = invoke_operation(
+        operation.operation_id, operation.examples[0].input, catalog
+    )
     assert result.output["minimum_distance"] == 2
     assert result.output["request"]["encoder"]["coordinate_axis"] == ["x0", "x1"]
 
@@ -81,9 +87,7 @@ def test_code_weight_distribution_counts_distinct_words_for_dependent_rows() -> 
 
 def test_code_contract_rejects_nonprime_fields_and_unbounded_enumeration() -> None:
     _assert_operation_error(
-        lambda: _minimum_distance(
-            LinearCodeRequest(encoder=_encoder(((1,),), 4))
-        ),
+        lambda: _minimum_distance(LinearCodeRequest(encoder=_encoder(((1,),), 4))),
         "code_theory.field_order_not_prime",
     )
     _assert_operation_error(
@@ -115,7 +119,9 @@ def test_zero_code_uses_length_convention_for_minimum_distance() -> None:
 def test_native_code_api_rejects_empty_generator_matrix_structurally() -> None:
     with pytest.raises(OperationDomainValidationError) as error:
         minimum_distance(_encoder((), 2, width=0))
-    assert error.value.errors()[0]["type"] == "code_theory.generator_width_out_of_bounds"
+    assert (
+        error.value.errors()[0]["type"] == "code_theory.generator_width_out_of_bounds"
+    )
 
 
 def test_native_code_api_rejects_unequal_rows_semantically() -> None:
@@ -138,12 +144,17 @@ def test_binary_repetition_code_length_four_has_covering_radius_two() -> None:
 
 
 def test_binary_hamming_code_has_covering_radius_one() -> None:
-    request = CoveringRadiusRequest(encoder=_encoder((
-            (1, 0, 0, 0, 0, 1, 1),
-            (0, 1, 0, 0, 1, 0, 1),
-            (0, 0, 1, 0, 1, 1, 0),
-            (0, 0, 0, 1, 1, 1, 1),
-        ), 2))
+    request = CoveringRadiusRequest(
+        encoder=_encoder(
+            (
+                (1, 0, 0, 0, 0, 1, 1),
+                (0, 1, 0, 0, 1, 0, 1),
+                (0, 0, 1, 0, 1, 1, 0),
+                (0, 0, 0, 1, 1, 1, 1),
+            ),
+            2,
+        )
+    )
 
     assert _covering_radius(request).covering_radius == 1
 
@@ -164,7 +175,9 @@ def test_dependent_generator_rows_use_rank_not_row_count() -> None:
 
 
 def test_full_space_code_has_covering_radius_zero() -> None:
-    request = CoveringRadiusRequest(encoder=_encoder(((1, 0, 0), (0, 1, 0), (0, 0, 1)), 2))
+    request = CoveringRadiusRequest(
+        encoder=_encoder(((1, 0, 0), (0, 1, 0), (0, 0, 1)), 2)
+    )
 
     assert _covering_radius(request).covering_radius == 0
 
@@ -201,9 +214,7 @@ def test_covering_radius_contract_rejects_excessive_transition_work() -> None:
 
 def test_covering_radius_contract_rejects_nonprime_field() -> None:
     _assert_operation_error(
-        lambda: _covering_radius(
-            CoveringRadiusRequest(encoder=_encoder(((1, 1),), 4))
-        ),
+        lambda: _covering_radius(CoveringRadiusRequest(encoder=_encoder(((1, 1),), 4))),
         "code_theory.field_order_not_prime",
     )
 
@@ -380,7 +391,9 @@ def test_covering_radius_budget_charges_the_selected_bfs_path() -> None:
 
     _assert_operation_error(
         lambda: _covering_radius(
-            CoveringRadiusRequest(encoder=_encoder(tuple(row + (1,) * 17 for row in identity), 2))
+            CoveringRadiusRequest(
+                encoder=_encoder(tuple(row + (1,) * 17 for row in identity), 2)
+            )
         ),
         "code_theory.syndrome_state_bound_exceeded",
     )

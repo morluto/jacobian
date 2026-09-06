@@ -33,9 +33,8 @@ def without_native_backends(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-def test_default_python_operations_work_without_system_backends(
-    without_native_backends: None,
-) -> None:
+@pytest.mark.usefixtures("without_native_backends")
+def test_default_python_operations_work_without_system_backends() -> None:
     import sympy
 
     from jacobian.math import matrices
@@ -56,10 +55,8 @@ def test_default_python_operations_work_without_system_backends(
         "real_algebraic.plane_semialgebraic.component_profile.compute",
     ),
 )
-def test_native_calls_raise_actionable_error(
-    operation_id: str,
-    without_native_backends: None,
-) -> None:
+@pytest.mark.usefixtures("without_native_backends")
+def test_native_calls_raise_actionable_error(operation_id: str) -> None:
     catalog = Catalog.open()
     operation = catalog.operation(operation_id)
     assert operation is not None
@@ -82,9 +79,8 @@ def test_native_calls_raise_actionable_error(
     assert "server operator" in caught.value.installation
 
 
-def test_discovery_keeps_declarations_when_backends_are_missing(
-    without_native_backends: None,
-) -> None:
+@pytest.mark.usefixtures("without_native_backends")
+def test_discovery_keeps_declarations_when_backends_are_missing() -> None:
     catalog = Catalog.open()
     declared = {
         item.operation_id: item.runtime_requirements

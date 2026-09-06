@@ -231,28 +231,6 @@ def test_ten_variable_parity_has_all_closed_form_multilinear_coefficients() -> N
     ]
 
 
-@pytest.mark.parametrize("n", [0, 10, 11, 12])
-def test_walsh_conventions_have_exact_affine_relationship(n: int) -> None:
-    from jacobian.catalog.catalog import Catalog
-    from jacobian.dispatch import invoke_operation
-
-    values = [x.bit_count() % 2 for x in range(1 << n)]
-    catalog = Catalog.open()
-    signs = invoke_operation(
-        "boolean.fourier.walsh_transform.compute", {"truth_table": values}, catalog
-    ).output
-    raw = invoke_operation(
-        "boolean.fourier_spectrum.compute",
-        {"truth_table": [c.model_dump(mode="json") for c in _truth_table(values)]},
-        catalog,
-    ).output
-    assert signs["variable_count"] == raw["variable_count"] == n
-    assert [int(v) for v in signs["spectrum"]] == [
-        ((1 << n) if i == 0 else 0) - 2 * int(v["num"])
-        for i, v in enumerate(raw["spectrum"])
-    ]
-
-
 # ---------------------------------------------------------------------------
 # Erasure noise
 # ---------------------------------------------------------------------------

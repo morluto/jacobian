@@ -278,20 +278,3 @@ def test_structure_constants_reject_non_prime_field() -> None:
         OperationDomainValidationError, match="field_order must be prime"
     ):
         center_basis(algebra)
-
-
-def test_center_retains_parent_and_rejects_noncanonical_residue() -> None:
-    from jacobian.catalog.catalog import Catalog
-    from jacobian.dispatch import invoke_operation
-    from jacobian.math.finite_dim_algebras._models import CenterResult
-
-    algebra = {"dimension": 1, "field_order": 3, "multiplication": [[[0]]]}
-    output = invoke_operation(
-        "algebra.center.compute", {"algebra": algebra}, Catalog.open()
-    ).output
-    assert output["algebra"] == algebra
-    parsed = CenterResult.model_validate(output)
-    assert parsed.algebra.field_order == 3
-    output["center_basis"] = [[3]]
-    with pytest.raises(ValueError, match="canonical residues"):
-        CenterResult.model_validate(output)

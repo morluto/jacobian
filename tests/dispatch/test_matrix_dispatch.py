@@ -127,7 +127,11 @@ def test_dispatch_returns_typed_results_at_the_boundary_order() -> None:
         Catalog.open(),
     )
     assert result.output["degree"] == MAX_MATRIX_DIMENSION
-    assert len(result.output["coefficients_descending"]) == MAX_MATRIX_DIMENSION + 1
+    terms = result.output["polynomial"]["polynomial"]["terms"]
+    assert len(terms) == MAX_MATRIX_DIMENSION + 1
+    assert [term["exponents"] for term in terms] == [
+        [i] for i in range(MAX_MATRIX_DIMENSION, -1, -1)
+    ]
 
 
 def test_dispatch_retains_a_sparse_rank_source_and_its_declared_axis() -> None:

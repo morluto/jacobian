@@ -7,6 +7,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
+from jacobian.canonical import parse_canonical_integer
 from jacobian.math.polynomials.values import RationalPolynomial
 
 MAX_POLYNOMIAL_DEGREE = 32
@@ -52,10 +53,13 @@ def _require_bounded_sturm_coefficients(polynomial: RationalPolynomial) -> None:
             label="polynomial coefficient",
         )
 
-    denominators = [int(term.coefficient.den) for term in polynomial.polynomial.terms]
+    denominators = [
+        parse_canonical_integer(term.coefficient.den)
+        for term in polynomial.polynomial.terms
+    ]
     denominator = lcm(*denominators)
     coefficients = [
-        int(term.coefficient.num) * (denominator // den)
+        parse_canonical_integer(term.coefficient.num) * (denominator // den)
         for term, den in zip(polynomial.polynomial.terms, denominators, strict=True)
     ]
     content = gcd(*coefficients)

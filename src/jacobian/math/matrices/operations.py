@@ -392,6 +392,7 @@ def _admit_rational(matrix: RationalMatrix) -> None:
 
 def _admit_exact_linear_matrix(
     entries: tuple[tuple[CanonicalRational | str, ...], ...],
+    column_count: int | None = None,
 ) -> None:
     from jacobian.math.matrices.values import require_matrix_scalar_digits
 
@@ -399,13 +400,19 @@ def _admit_exact_linear_matrix(
         entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
     )
     rows = len(entries)
-    columns = len(entries[0])
+    columns = (
+        column_count
+        if column_count is not None
+        else (len(entries[0]) if entries else 0)
+    )
     if rows > MAX_EXACT_LINEAR_MATRIX_AXIS or columns > MAX_EXACT_LINEAR_MATRIX_AXIS:
         raise _validation_error(
             "budget_exceeded",
             "matrix computation dimensions are limited to "
             f"{MAX_EXACT_LINEAR_MATRIX_AXIS} rows and columns",
         )
+    if rows == 0 or columns == 0:
+        return
     rank_bound = min(rows, columns)
     scalar_digits = max(
         len(component.lstrip("-"))
@@ -1357,10 +1364,9 @@ def _smith_normal_form_kernel(matrix: IntegerMatrix) -> SmithNormalForm:
 
 
 def smith_normal_form_result(matrix: IntegerMatrix) -> SmithNormalForm:
+    _admit(_admit_exact_linear_matrix, matrix.entries, matrix.column_count)
     if matrix.row_count == 0 or matrix.column_count == 0:
-        _admit(_admit_integer, matrix)
         return SmithNormalForm(normal_form=matrix, rank=0, invariant_factors=())
-    _admit(_admit_exact_linear_matrix, matrix.entries)
     return _smith_normal_form_kernel(matrix)
 
 

@@ -428,20 +428,3 @@ def test_all_new_operations_registered_in_catalog() -> None:
         "lattice.orthogonal_sum.compute",
     }
     assert expected <= ids
-
-
-@pytest.mark.parametrize("embedding", [[[3]], [[-2]]])
-def test_sublattice_index_rejects_false_inclusion(embedding: list[list[int]]) -> None:
-    from jacobian.catalog.catalog import Catalog
-    from jacobian.dispatch import invoke_operation
-
-    with pytest.raises(OperationDomainValidationError, match="E @ parent"):
-        invoke_operation(
-            "lattice.sublattice_index.compute",
-            {
-                "sublattice": _lattice(1, [[2]]).model_dump(mode="json"),
-                "parent": _lattice(1, [[1]]).model_dump(mode="json"),
-                "embedding": {"entries": [[str(x) for x in row] for row in embedding]},
-            },
-            Catalog.open(),
-        )

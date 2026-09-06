@@ -8,6 +8,7 @@ from pydantic import Field, StringConstraints, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.canonical import parse_canonical_integer
 from jacobian.math.polynomials.values import RationalPolynomial
 
 MAX_FACTOR_DEGREE = 12
@@ -91,7 +92,7 @@ class _SupportedGaloisPolynomialRequest(StrictModel):
         if any(
             term.coefficient.den != "1"
             or len(term.coefficient.num.lstrip("-")) > 13
-            or abs(int(term.coefficient.num)) > 10**12
+            or abs(parse_canonical_integer(term.coefficient.num)) > 10**12
             for term in terms
         ):
             raise _validation_error(
@@ -104,7 +105,9 @@ class _SupportedGaloisPolynomialRequest(StrictModel):
     def coefficients(self) -> tuple[int, ...]:
         coefficients = [0] * (self.polynomial.polynomial.terms[0].exponents[0] + 1)
         for term in self.polynomial.polynomial.terms:
-            coefficients[term.exponents[0]] = int(term.coefficient.num)
+            coefficients[term.exponents[0]] = parse_canonical_integer(
+                term.coefficient.num
+            )
         return tuple(coefficients)
 
 

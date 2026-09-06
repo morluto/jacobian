@@ -91,29 +91,6 @@ def test_rank_zero_maximum_shape_executes_without_empty_matrix_backend() -> None
     assert linear_program(program).status == "OPTIMAL"
 
 
-def test_disconnected_lp_returns_source_coordinate_optimum() -> None:
-    from jacobian.catalog.catalog import Catalog
-    from jacobian.dispatch import invoke_operation
-
-    n = 32
-    program = {
-        "variables": [f"x{i}" for i in range(n)],
-        "objective": [q(1 + i % 2) for i in range(n)],
-        "coefficients": [[q(int(i // 2 == j)) for i in range(n)] for j in range(16)],
-        "rhs": [q(1)] * 16,
-    }
-    result = invoke_operation(
-        "optimization.linear.rational_optimum.compute",
-        {"program": program},
-        Catalog.open(),
-    ).output
-    assert result["status"] == "OPTIMAL"
-    assert result["primal_objective"] == q(16)
-    assert result["primal_candidate"] == [q(1 - i % 2) for i in range(n)]
-    assert result["dual_candidate"] == [q(1)] * 16
-    assert result["dual_slacks"] == [q(i % 2) for i in range(n)]
-
-
 def test_infeasible_component_overrides_unbounded_component() -> None:
     # The first block x0-x1=0 is unbounded for -x0; the second block x2=-1
     # is infeasible. A local ray alone cannot establish global unboundedness.

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from fractions import Fraction
 
@@ -37,6 +38,8 @@ __all__ = [
     "verify_polynomial_support",
     "weight_profile",
 ]
+
+_POLYNOMIAL_VARIABLE_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,31}$")
 
 
 def _run_admission(
@@ -464,6 +467,43 @@ def exponent_support(polynomial: RationalPolynomial) -> PolynomialSupport:
     return support_from_polynomial(polynomial)
 
 
+def _canonical_variable_axis(variables: object) -> tuple[str, ...] | None:
+    if type(variables) is not tuple or not 1 <= len(variables) <= MAX_NEWTON_DIMENSION:
+        return None
+    if any(
+        type(variable) is not str
+        or _POLYNOMIAL_VARIABLE_PATTERN.fullmatch(variable) is None
+        for variable in variables
+    ) or len(set(variables)) != len(variables):
+        return None
+    return variables
+
+
+def _canonical_coefficient(value: object) -> Fraction | None:
+    if not isinstance(value, CanonicalRational):
+        return None
+    try:
+        fraction = value.as_fraction()
+        if value != CanonicalRational.from_fraction(fraction):
+            return None
+    except (TypeError, ValueError, ZeroDivisionError):
+        return None
+    return fraction if fraction else None
+
+
+def _canonical_term_exponents(
+    exponents: object, *, width: int
+) -> tuple[int, ...] | None:
+    if type(exponents) is not tuple:
+        return None
+    if len(exponents) != width or any(
+        type(exponent) is not int or exponent < 0 or exponent > MAX_POLYNOMIAL_EXPONENT
+        for exponent in exponents
+    ):
+        return None
+    return exponents
+
+
 def _bounded_support_terms(
     polynomial: RationalPolynomial,
 ) -> tuple[tuple[Fraction, tuple[int, ...]], ...] | None:
@@ -476,28 +516,41 @@ def _bounded_support_terms(
     caller-authored claim from turning verification into an unbounded scan.
     """
     try:
-        variables = polynomial.variables
-        if not 1 <= len(variables) <= MAX_NEWTON_DIMENSION:
+        if not isinstance(polynomial, RationalPolynomial):
             return None
-        raw_terms = polynomial.polynomial.terms
+        if (
+            type(polynomial.domain) is not str
+            or polynomial.domain != "QQ"
+            or type(polynomial.variables) is not tuple
+        ):
+            return None
+        variables = _canonical_variable_axis(polynomial.variables)
+        if variables is None:
+            return None
+        sparse = polynomial.polynomial
+        if not isinstance(sparse, SparseRationalPolynomial):
+            return None
+        raw_terms = sparse.terms
+        if type(raw_terms) is not tuple:
+            return None
         if len(raw_terms) > MAX_SUPPORT_TERMS:
             return None
         terms: list[tuple[Fraction, tuple[int, ...]]] = []
         for term in raw_terms:
-            exponents = tuple(term.exponents)
-            if len(exponents) != len(variables) or any(
-                type(exponent) is not int
-                or exponent < 0
-                or exponent > MAX_POLYNOMIAL_EXPONENT
-                for exponent in exponents
+            if (
+                not isinstance(term, RationalPolynomialTerm)
+                or type(term.exponents) is not tuple
             ):
                 return None
-            coefficient = term.coefficient.as_fraction()
-            if coefficient == 0:
+            coefficient = _canonical_coefficient(term.coefficient)
+            exponents = _canonical_term_exponents(term.exponents, width=len(variables))
+            if coefficient is None or exponents is None:
                 return None
             terms.append((coefficient, exponents))
         support_exponents = tuple(exponent for _coefficient, exponent in terms)
-        if len(set(support_exponents)) != len(support_exponents):
+        if len(set(support_exponents)) != len(
+            support_exponents
+        ) or support_exponents != tuple(sorted(support_exponents, reverse=True)):
             return None
         return tuple(terms)
     except (AttributeError, IndexError, TypeError, ValueError, ZeroDivisionError):

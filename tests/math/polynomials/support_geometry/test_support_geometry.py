@@ -463,6 +463,65 @@ class TestSupportCrossFieldValidation:
         )
         assert not verify_polynomial_support(claim)
 
+    def test_verifier_rejects_noncanonical_constructed_sources(self) -> None:
+        """Source claims cannot bypass the canonical polynomial envelope."""
+        from jacobian._exact import CanonicalRational
+        from jacobian.math.polynomials.values import (
+            RationalPolynomialTerm,
+            SparseRationalPolynomial,
+        )
+
+        source = _polynomial(_XY_TERMS, VARS)
+
+        def malformed_claim(
+            polynomial: RationalPolynomial,
+            exponents: tuple[tuple[int, ...], ...] = ((2, 0), (1, 1), (0, 2)),
+        ) -> PolynomialSupport:
+            return PolynomialSupport.model_construct(
+                polynomial=polynomial,
+                is_zero=False,
+                term_count=3,
+                exponents=exponents,
+                coordinate_min=(0, 0),
+                coordinate_max=(2, 2),
+                total_degree_min=2,
+                total_degree_max=2,
+            )
+
+        def source_with(
+            *,
+            domain: object = "QQ",
+            variables: object = VARS,
+            terms: object = source.polynomial.terms,
+        ) -> RationalPolynomial:
+            return RationalPolynomial.model_construct(
+                domain=domain,
+                variables=variables,
+                polynomial=SparseRationalPolynomial.model_construct(terms=terms),
+            )
+
+        reversed_terms = tuple(reversed(source.polynomial.terms))
+        noncanonical_coefficient = (
+            RationalPolynomialTerm.model_construct(
+                coefficient=CanonicalRational.model_construct(num="2", den="2"),
+                exponents=(2, 0),
+            ),
+            *source.polynomial.terms[1:],
+        )
+        cases = (
+            malformed_claim(source_with(domain="ZZ")),
+            malformed_claim(source_with(variables=["x", "y"])),
+            malformed_claim(source_with(variables=("x", "x"))),
+            malformed_claim(source_with(variables=("x", "bad-name"))),
+            malformed_claim(source_with(terms=list(source.polynomial.terms))),
+            malformed_claim(
+                source_with(terms=reversed_terms),
+                exponents=tuple(term.exponents for term in reversed_terms),
+            ),
+            malformed_claim(source_with(terms=noncanonical_coefficient)),
+        )
+        assert all(not verify_polynomial_support(case) for case in cases)
+
 
 class TestNewtonReplay:
     def test_ragged_exponent_widths_rejected(self) -> None:

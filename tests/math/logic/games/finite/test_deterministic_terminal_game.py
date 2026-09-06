@@ -448,5 +448,7 @@ def test_native_api_is_explicit() -> None:
         "StationaryChoice",
         "TerminalGameValueClass",
         "solve_terminal_game",
+        "verify_best_response",
+        "verify_nash_equilibrium",
     )
     assert all(hasattr(finite_game_theory, name) for name in finite_game_theory.__all__)

@@ -282,6 +282,36 @@ def test_orbit_count_codec_separates_native_and_json_integer_validation() -> Non
         type(distribution).model_validate_json(json.dumps(payload))
 
 
+def test_orbit_count_digit_bound_accepts_inclusive_power_of_two_boundary() -> None:
+    subspace, directions = _slice_a_values()
+    distribution = orbit_distribution(direction_rank_ledger(subspace, directions))
+    payload = distribution.model_dump(mode="json")
+    boundary = 1 << 108_852
+    payload["counts"] = ((1, boundary),)
+
+    decoded = type(distribution).model_validate(payload)
+    assert decoded.counts == ((1, boundary),)
+
+
+def test_orbit_count_digit_bound_rejects_just_over_boundary_before_formatting(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    subspace, directions = _slice_a_values()
+    distribution = orbit_distribution(direction_rank_ledger(subspace, directions))
+    payload = distribution.model_dump(mode="json")
+    payload["counts"] = ((1, 10**32_768),)
+
+    def fail(_value: object) -> str:
+        raise AssertionError("oversized count was formatted")
+
+    monkeypatch.setattr(
+        "jacobian.math.finite_fields.values.format_canonical_integer",
+        fail,
+    )
+    with pytest.raises(ValidationError):
+        type(distribution).model_validate(payload)
+
+
 @pytest.mark.parametrize(
     "mutation", ["subspace", "presentation", "axis", "source_axis"]
 )

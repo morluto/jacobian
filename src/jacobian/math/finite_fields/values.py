@@ -47,6 +47,10 @@ _MAX_HOMOGENEOUS_MONOMIALS = MAX_PRIME_FIELD_MATRIX_AXIS
 MAX_ORBIT_DISTRIBUTION_COUNT_DIGITS = 32_768
 MAX_ORBIT_DISTRIBUTION_ROWS = _MAX_FIELD_ORDER + 1
 MAX_ORBIT_DISTRIBUTION_TOTAL_DIGITS = 5_000_000
+_MAX_ORBIT_DISTRIBUTION_COUNT: int = 10**MAX_ORBIT_DISTRIBUTION_COUNT_DIGITS
+_MAX_ORBIT_DISTRIBUTION_COUNT_BIT_LENGTH: int = (
+    _MAX_ORBIT_DISTRIBUTION_COUNT.bit_length()
+)
 
 
 def _decimal_digit_upper_bound(value: int) -> int:
@@ -56,6 +60,18 @@ def _decimal_digit_upper_bound(value: int) -> int:
         return 1
     # log10(2) < 30103 / 100000; bit_length avoids formatting an oversized int.
     return (value.bit_length() * 30103 + 99_999) // 100_000
+
+
+def _orbit_count_within_digit_bound(value: int) -> bool:
+    """Check the inclusive decimal digit bound without formatting an oversized int."""
+
+    bit_length = value.bit_length()
+    if bit_length < _MAX_ORBIT_DISTRIBUTION_COUNT_BIT_LENGTH:
+        return True
+    if bit_length > _MAX_ORBIT_DISTRIBUTION_COUNT_BIT_LENGTH:
+        return False
+    # Only this one bit-length band straddles 10**MAX_ORBIT_DISTRIBUTION_COUNT_DIGITS.
+    return value < _MAX_ORBIT_DISTRIBUTION_COUNT
 
 
 def _parse_orbit_count_integer(value: Any, info: ValidationInfo) -> int:
@@ -96,7 +112,7 @@ def _parse_orbit_count_integer(value: Any, info: ValidationInfo) -> int:
             "finite_field.orbit_count_integer_nonnegative",
             "orbit counts must be nonnegative",
         )
-    if _decimal_digit_upper_bound(parsed) > MAX_ORBIT_DISTRIBUTION_COUNT_DIGITS:
+    if not _orbit_count_within_digit_bound(parsed):
         raise PydanticCustomError(
             "finite_field.orbit_count_integer_digits",
             "orbit count exceeds its canonical decimal digit bound",
@@ -134,9 +150,9 @@ def _orbit_counts_structurally_valid(counts: object) -> bool:
     digit_upper_bounds = []
     for row in counts:
         for value in row:
-            digit_bound = _decimal_digit_upper_bound(value)
-            if digit_bound > MAX_ORBIT_DISTRIBUTION_COUNT_DIGITS:
+            if not _orbit_count_within_digit_bound(value):
                 return False
+            digit_bound = _decimal_digit_upper_bound(value)
             digit_upper_bounds.append(digit_bound)
     if sum(digit_upper_bounds) > MAX_ORBIT_DISTRIBUTION_TOTAL_DIGITS:
         return False

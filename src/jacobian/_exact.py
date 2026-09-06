@@ -31,12 +31,18 @@ def _parse_native_integer(value: Any) -> int:
     """Accept native integers and canonical decimal strings at the wire edge."""
 
     if isinstance(value, bool):
-        raise TypeError("integer values must not be booleans")
+        raise PydanticCustomError(
+            "canonical_integer.type",
+            "integer values must not be booleans",
+        )
     if isinstance(value, int):
         return value
     if isinstance(value, str):
         return parse_canonical_integer(value)
-    raise TypeError("integer values must be Python integers or canonical strings")
+    raise PydanticCustomError(
+        "canonical_integer.type",
+        "integer values must be Python integers or canonical strings",
+    )
 
 
 NativeInteger = Annotated[

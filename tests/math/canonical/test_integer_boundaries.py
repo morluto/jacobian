@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import pytest
+from pydantic import TypeAdapter, ValidationError
+
+from jacobian._exact import NativeInteger
 from jacobian.math.geometry.projective.values import PrimitiveProjectiveTriple
 from jacobian.math.matrices.certified_snf.values import (
     SmithNormalFormCertificate,
@@ -36,3 +40,20 @@ def test_primitive_projective_triple_accepts_large_canonical_coordinate() -> Non
     triple = PrimitiveProjectiveTriple(coordinates=("1", coordinate, "0"))
 
     assert triple.coordinates == ("1", coordinate, "0")
+
+
+@pytest.mark.parametrize("value", [True, 1.5, None, [], {}])
+def test_native_integer_rejects_invalid_python_values_structurally(
+    value: object,
+) -> None:
+    with pytest.raises(ValidationError) as error:
+        TypeAdapter(NativeInteger).validate_python(value)
+
+    assert error.value.errors()[0]["type"] == "canonical_integer.type"
+
+
+def test_native_integer_round_trips_decimal_json_as_python_int() -> None:
+    adapter = TypeAdapter(NativeInteger)
+
+    assert adapter.validate_json('"-42"') == -42
+    assert adapter.dump_json(-42) == b'"-42"'

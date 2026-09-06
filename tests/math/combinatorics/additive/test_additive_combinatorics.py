@@ -268,7 +268,9 @@ def test_serialized_claim_verifiers_reject_forged_values() -> None:
     energy = additive_energy(left, right)
     energy_payload = energy.model_dump(mode="json")
     energy_payload["energy"] += 1
-    assert not verify_additive_energy(AdditiveEnergyResult.model_validate(energy_payload))
+    assert not verify_additive_energy(
+        AdditiveEnergyResult.model_validate(energy_payload)
+    )
 
     sumset = sumset_cardinality(left, right)
     sumset_payload = sumset.model_dump(mode="json")

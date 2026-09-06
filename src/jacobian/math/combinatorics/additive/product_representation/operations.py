@@ -92,6 +92,9 @@ def verify_product_representation_profile(result: ProductRepresentationResult) -
     """Verify every product multiplicity against the retained source sets."""
     try:
         expected = compute_product_representation_profile(result.left, result.right)
-        return expected.entries == result.entries and expected.support_cardinality == result.support_cardinality
+        return (
+            expected.entries == result.entries
+            and expected.support_cardinality == result.support_cardinality
+        )
     except Exception:
         return False

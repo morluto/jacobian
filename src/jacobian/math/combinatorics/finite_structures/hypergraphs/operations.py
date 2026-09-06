@@ -320,16 +320,19 @@ def verify_independence_number(claim: HypergraphIndependenceResult) -> bool:
             len(witness_set) != len(witness)
             or not witness_set <= source_vertices
             or witness
-            != tuple(vertex for vertex in claim.hypergraph.vertices if vertex in witness_set)
-            or any(
-                set(members) <= witness_set for _, members in claim.hypergraph.edges
+            != tuple(
+                vertex for vertex in claim.hypergraph.vertices if vertex in witness_set
             )
+            or any(set(members) <= witness_set for _, members in claim.hypergraph.edges)
             or claim.lower_bound != len(witness)
             or not claim.lower_bound <= claim.upper_bound <= len(source_vertices)
         ):
             return False
         if claim.status == "UNKNOWN":
-            return claim.independence_number is None and claim.lower_bound < claim.upper_bound
+            return (
+                claim.independence_number is None
+                and claim.lower_bound < claim.upper_bound
+            )
 
         expected = independence_number(claim.hypergraph, claim.resource_budget)
         return (
@@ -873,7 +876,9 @@ def verify_maximum_edge_matching(claim: MaximumEdgeMatchingResult) -> bool:
             or any(edge_id not in edge_map for edge_id in witness)
             or witness
             != tuple(
-                edge_id for edge_id, _ in claim.hypergraph.edges if edge_id in witness_set
+                edge_id
+                for edge_id, _ in claim.hypergraph.edges
+                if edge_id in witness_set
             )
             or claim.count != len(witness)
         ):
@@ -1030,7 +1035,9 @@ def verify_weighted_packing(claim: WeightedPackingResult) -> bool:
             or any(edge_id not in edge_map for edge_id in witness)
             or witness
             != tuple(
-                edge_id for edge_id, _ in claim.hypergraph.edges if edge_id in witness_set
+                edge_id
+                for edge_id, _ in claim.hypergraph.edges
+                if edge_id in witness_set
             )
             or set(weight_map) != set(edge_map)
         ):

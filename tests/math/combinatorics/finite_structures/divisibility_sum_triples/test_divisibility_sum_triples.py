@@ -111,7 +111,9 @@ def test_native_rejects_reversed_interval() -> None:
         construct_divisibility_sum_triples_hypergraph(4, 1)
 
 
-def test_serialized_divisibility_claim_is_verifiable_and_forgery_is_structural() -> None:
+def test_serialized_divisibility_claim_is_verifiable_and_forgery_is_structural() -> (
+    None
+):
     result = construct_divisibility_sum_triples_hypergraph(1, 4)
     decoded = type(result).model_validate_json(result.model_dump_json())
     assert verify_divisibility_sum_triples(decoded)

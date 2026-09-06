@@ -120,6 +120,24 @@ class LagrangeInterpolationRequest(StrictModel):
     )
 
 
+class LagrangeInterpolationData(StrictModel):
+    """The canonical node/value axes defining a Lagrange interpolant."""
+
+    nodes: RationalNodeSet
+    values: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_INTERPOLATION_NODES
+    )
+
+    @model_validator(mode="after")
+    def require_matching_axes(self) -> Self:
+        if len(self.nodes.nodes) != len(self.values):
+            raise _validation_error(
+                "interpolation_length_mismatch",
+                "values must have the same length as nodes",
+            )
+        return self
+
+
 def admit_interpolation_values(
     nodes: RationalNodeSet, values: tuple[CanonicalRational, ...]
 ) -> None:
@@ -144,6 +162,7 @@ def admit_interpolation_values(
 class LagrangeInterpolationResult(StrictModel):
     """The interpolation polynomial as a canonical rational polynomial."""
 
+    source: LagrangeInterpolationData
     polynomial: RationalPolynomial
 
     @model_validator(mode="after")
@@ -154,6 +173,12 @@ class LagrangeInterpolationResult(StrictModel):
                 "interpolation polynomial must use the single variable 'x'",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls, *, source: LagrangeInterpolationData, polynomial: RationalPolynomial
+    ) -> Self:
+        return cls.model_construct(source=source, polynomial=polynomial)
 
     @property
     def degree(self) -> int:
@@ -166,6 +191,7 @@ __all__ = [
     "LagrangeBasisPolynomial",
     "LagrangeBasisRequest",
     "LagrangeBasisResult",
+    "LagrangeInterpolationData",
     "LagrangeInterpolationRequest",
     "LagrangeInterpolationResult",
     "RationalNodeSet",

@@ -6,12 +6,13 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.analysis.approximation._models import (
     LagrangeBasisRequest,
     LagrangeBasisResult,
+    LagrangeInterpolationData,
     LagrangeInterpolationRequest,
     LagrangeInterpolationResult,
 )
 from jacobian.math.analysis.approximation.operations import (
     lagrange_basis,
-    lagrange_interpolate,
+    lagrange_interpolation,
 )
 
 
@@ -22,8 +23,8 @@ def _run_lagrange_basis(request: LagrangeBasisRequest) -> LagrangeBasisResult:
 def _run_lagrange_interpolation(
     request: LagrangeInterpolationRequest,
 ) -> LagrangeInterpolationResult:
-    return LagrangeInterpolationResult(
-        polynomial=lagrange_interpolate(request.nodes.nodes, request.values)
+    return lagrange_interpolation(
+        LagrangeInterpolationData(nodes=request.nodes, values=request.values)
     )
 
 

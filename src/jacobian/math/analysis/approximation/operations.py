@@ -12,6 +12,8 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.analysis.approximation._models import (
     LagrangeBasisPolynomial,
     LagrangeBasisResult,
+    LagrangeInterpolationData,
+    LagrangeInterpolationResult,
     RationalNodeSet,
     admit_interpolation_values,
 )
@@ -113,6 +115,40 @@ def lagrange_interpolate(
         ) from exc
 
 
+def lagrange_interpolation(
+    data: LagrangeInterpolationData,
+) -> LagrangeInterpolationResult:
+    """Interpolate the canonical node/value data and retain its source."""
+
+    try:
+        polynomial = _interpolate(data.nodes, data.values)
+    except PydanticCustomError as exc:
+        raise OperationDomainValidationError(
+            location=("source",), code=exc.type, message=exc.message()
+        ) from exc
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("source",),
+            code="approximation.interpolation_invalid_domain",
+            message=str(exc),
+        ) from exc
+    return LagrangeInterpolationResult._from_kernel(
+        source=data, polynomial=polynomial
+    )
+
+
+def _evaluate_polynomial(polynomial: RationalPolynomial, point: Fraction) -> Fraction:
+    if polynomial.variables != ("x",):
+        raise ValueError("polynomial must use variable x")
+    return sum(
+        (
+            term.coefficient.as_fraction() * point ** term.exponents[0]
+            for term in polynomial.polynomial.terms
+        ),
+        Fraction(0),
+    )
+
+
 def lagrange_basis(nodes: RationalNodeSet) -> LagrangeBasisResult:
     """Return the exact Lagrange basis and barycentric weights for ``nodes``."""
 
@@ -133,7 +169,49 @@ def lagrange_basis(nodes: RationalNodeSet) -> LagrangeBasisResult:
     )
 
 
+def verify_lagrange_basis(claim: LagrangeBasisResult) -> bool:
+    """Verify basis polynomials, cardinality, partition, and weights."""
+
+    try:
+        expected = lagrange_basis(claim.nodes)
+        if expected != claim:
+            return False
+        points = tuple(node.as_fraction() for node in claim.nodes.nodes)
+        for entry in claim.basis:
+            for index, point in enumerate(points):
+                if _evaluate_polynomial(entry.polynomial, point) != (
+                    Fraction(1) if index == entry.index else Fraction(0)
+                ):
+                    return False
+        return all(
+            sum(_evaluate_polynomial(entry.polynomial, point) for entry in claim.basis)
+            == 1
+            for point in points
+        )
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
+
+
+def verify_lagrange_interpolation(claim: LagrangeInterpolationResult) -> bool:
+    """Verify an interpolant against its retained node and value axes."""
+
+    try:
+        if lagrange_interpolation(claim.source) != claim:
+            return False
+        return all(
+            _evaluate_polynomial(claim.polynomial, node.as_fraction()) == value.as_fraction()
+            for node, value in zip(
+                claim.source.nodes.nodes, claim.source.values, strict=True
+            )
+        )
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
+
+
 __all__ = [
     "lagrange_basis",
     "lagrange_interpolate",
+    "lagrange_interpolation",
+    "verify_lagrange_basis",
+    "verify_lagrange_interpolation",
 ]

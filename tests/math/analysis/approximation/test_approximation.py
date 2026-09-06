@@ -13,6 +13,7 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.analysis.approximation._models import (
     LagrangeBasisRequest,
     LagrangeBasisResult,
+    LagrangeInterpolationData,
     LagrangeInterpolationRequest,
     LagrangeInterpolationResult,
     RationalNodeSet,
@@ -20,6 +21,9 @@ from jacobian.math.analysis.approximation._models import (
 from jacobian.math.analysis.approximation.operations import (
     lagrange_basis,
     lagrange_interpolate,
+    lagrange_interpolation,
+    verify_lagrange_basis,
+    verify_lagrange_interpolation,
 )
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
@@ -36,6 +40,7 @@ def compute_lagrange_interpolation(
     request: LagrangeInterpolationRequest,
 ) -> LagrangeInterpolationResult:
     return LagrangeInterpolationResult(
+        source=LagrangeInterpolationData(nodes=request.nodes, values=request.values),
         polynomial=lagrange_interpolate(request.nodes.nodes, request.values)
     )
 
@@ -289,7 +294,12 @@ class TestLagrangeInterpolationAxisBinding:
             ),
         )
         with pytest.raises(ValidationError) as exc_info:
-            LagrangeInterpolationResult(polynomial=ypoly)
+            LagrangeInterpolationResult(
+                source=LagrangeInterpolationData(
+                    nodes=_node_set(_node("0")), values=_canonical_values(_node("1"))
+                ),
+                polynomial=ypoly,
+            )
         _assert_validation_code(
             exc_info, "approximation_theory.interpolation_variable_mismatch"
         )
@@ -322,6 +332,17 @@ class TestLagrangeBasisSourceBinding:
         del payload["nodes"]
         with pytest.raises(ValidationError):
             LagrangeBasisResult.model_validate(payload)
+
+    def test_serialized_claim_verifier_rejects_forged_basis(self) -> None:
+        result = compute_lagrange_basis(
+            LagrangeBasisRequest(nodes=self._nodes("0", "1"))
+        )
+        decoded = LagrangeBasisResult.model_validate_json(result.model_dump_json())
+        assert verify_lagrange_basis(decoded)
+        payload = result.model_dump(mode="json")
+        payload["basis"][0]["barycentric_weight"]["num"] = "2"
+        forged = LagrangeBasisResult.model_validate(payload)
+        assert not verify_lagrange_basis(forged)
 
 
 def _canonical(num: str, den: str = "1") -> CanonicalRational:
@@ -422,3 +443,18 @@ class TestInterpolationPublication:
         ids = {tool.operation_id for tool in BUILTIN_TOOLS}
         assert "approximation.lagrange.interpolate.compute" in ids
         assert "approximation.lagrange.basis.compute" in ids
+
+    def test_interpolant_claim_round_trip_and_forgery(self) -> None:
+        source = LagrangeInterpolationData(
+            nodes=_node_set(_node("0"), _node("1")),
+            values=_canonical_values(_node("1"), _node("2")),
+        )
+        result = lagrange_interpolation(source)
+        decoded = LagrangeInterpolationResult.model_validate_json(
+            result.model_dump_json()
+        )
+        assert verify_lagrange_interpolation(decoded)
+        payload = result.model_dump(mode="json")
+        payload["source"]["values"][0]["num"] = "9"
+        forged = LagrangeInterpolationResult.model_validate(payload)
+        assert not verify_lagrange_interpolation(forged)

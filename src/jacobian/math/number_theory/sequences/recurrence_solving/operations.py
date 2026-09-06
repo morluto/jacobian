@@ -187,7 +187,7 @@ def verify_closed_form(claim: ClosedFormResult) -> bool:
         )
     except (TypeError, ValueError, RuntimeError):
         return False
-    return claim.expression == expected.expression
+    return claim.expression.value == expected.expression
 
 
 def verify_prime_field_recurrence(claim: PrimeFieldRecurrenceFindResult) -> bool:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
@@ -89,6 +90,29 @@ class ClosedFormRequest(StrictModel):
     )
 
 
+class ClosedFormExpression(StrictModel):
+    """A non-evaluating, bounded display grammar for a closed form.
+
+    The expression is still a display projection; its source relation is
+    established by :func:`verify_closed_form`.  Parsing only tokenizes the
+    expression and never evaluates or interprets it.
+    """
+
+    value: str = Field(min_length=1, max_length=4096)
+
+    @model_validator(mode="after")
+    def require_display_grammar(self) -> Self:
+        if not re.fullmatch(r"[A-Za-z0-9_+*\-/^()., ]+", self.value):
+            raise _validation_error(
+                "expression_grammar", "closed-form expression contains invalid syntax"
+            )
+        if any(token.startswith("__") for token in re.findall(r"[A-Za-z_][A-Za-z0-9_]*", self.value)):
+            raise _validation_error(
+                "expression_grammar", "closed-form expression contains a forbidden name"
+            )
+        return self
+
+
 class ClosedFormResult(StrictModel):
     """A closed form bound to its recurrence source.
 
@@ -102,7 +126,7 @@ class ClosedFormResult(StrictModel):
     initial_values: tuple[CanonicalRational, ...] = Field(
         min_length=1, max_length=MAX_CLOSED_FORM_ORDER
     )
-    expression: str
+    expression: ClosedFormExpression
 
     @classmethod
     def _from_kernel(
@@ -117,7 +141,7 @@ class ClosedFormResult(StrictModel):
         return cls.model_construct(
             characteristic_coefficients=characteristic_coefficients,
             initial_values=initial_values,
-            expression=expression,
+            expression=ClosedFormExpression(value=expression),
         )
 
 
@@ -240,6 +264,7 @@ class PrimeFieldRecurrenceFindResult(StrictModel):
 
 
 __all__ = [
+    "ClosedFormExpression",
     "ClosedFormRequest",
     "ClosedFormResult",
     "PrimeFieldRecurrence",

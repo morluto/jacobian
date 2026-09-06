@@ -1,5 +1,8 @@
 """Recurrence solving operations."""
 
+from jacobian.math.number_theory.sequences.recurrence_solving._models import (
+    ClosedFormExpression,
+)
 from jacobian.math.number_theory.sequences.recurrence_solving.operations import (
     ClosedForm,
     PrimeFieldRecurrence,
@@ -14,6 +17,7 @@ from jacobian.math.number_theory.sequences.recurrence_solving.operations import 
 
 __all__ = [
     "ClosedForm",
+    "ClosedFormExpression",
     "PrimeFieldRecurrence",
     "Recurrence",
     "berlekamp_massey",

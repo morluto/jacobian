@@ -1,5 +1,7 @@
 """Regression coverage for the advertised rational recurrence domain."""
 
+import pytest
+
 from jacobian._exact import CanonicalRational
 from jacobian.math.number_theory.sequences.recurrence_solving._models import (
     ClosedFormRequest,
@@ -55,7 +57,7 @@ def test_closed_form_accepts_exact_rational_data() -> None:
             initial_values=(_q(3, 2),),
         )
     )
-    assert result.expression == "3*2**(-n - 1)"
+    assert result.expression.value == "3*2**(-n - 1)"
     assert result.characteristic_coefficients == (_q(1), _q(-1, 2))
     assert result.initial_values == (_q(3, 2),)
     assert verify_closed_form(result)
@@ -63,5 +65,18 @@ def test_closed_form_accepts_exact_rational_data() -> None:
     decoded = type(result).model_validate_json(result.model_dump_json())
     assert verify_closed_form(decoded)
 
-    forged = result.model_copy(update={"expression": "0"})
+    forged = result.model_copy(
+        update={"expression": result.expression.model_copy(update={"value": "0"})}
+    )
     assert not verify_closed_form(forged)
+
+
+def test_closed_form_expression_uses_non_evaluating_wire_grammar() -> None:
+    from pydantic import ValidationError
+
+    from jacobian.math.number_theory.sequences.recurrence_solving._models import (
+        ClosedFormExpression,
+    )
+
+    with pytest.raises(ValidationError):
+        ClosedFormExpression(value="__import__('os').system('id')")

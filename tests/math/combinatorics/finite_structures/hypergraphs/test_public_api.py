@@ -19,6 +19,10 @@ def test_hypergraph_public_api_is_explicit() -> None:
         "maximum_weight_packing",
         "minimum_transversal",
         "parameters",
+        "verify_independence_number",
+        "verify_maximum_edge_matching",
+        "verify_minimum_transversal",
+        "verify_weighted_packing",
         "vertex_degrees",
     )
 

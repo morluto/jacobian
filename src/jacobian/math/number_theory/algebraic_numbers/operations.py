@@ -5,7 +5,10 @@ from fractions import Fraction
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.algebraic_numbers._models import _MAX_RESULT_DIGITS
-from jacobian.math.number_theory.algebraic_numbers.quadratic import RealQuadraticValue
+from jacobian.math.number_theory.algebraic_numbers.quadratic import (
+    RealQuadraticValue,
+    require_square_free_value,
+)
 
 
 def _fits(value: Fraction) -> bool:
@@ -25,6 +28,7 @@ def _components(
             code="algebraic_number_arithmetic.radicands_must_match",
             message="both operands must belong to the same quadratic field",
         )
+    require_square_free_value(left, location=("left",))
     return (
         left.rational_part.as_fraction(),
         left.radical_coefficient.as_fraction(),

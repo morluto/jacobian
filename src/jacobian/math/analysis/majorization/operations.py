@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational, format_canonical_rational
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.analysis.majorization._models import (
     BirkhoffDecompositionResult,
@@ -127,7 +127,7 @@ def majorization_check(x: RationalVector, y: RationalVector) -> MajorizationChec
     return MajorizationCheckResult(
         majorizes=majorizes,
         total_sum_match=total_sum_match,
-        prefix_slacks=tuple(format_canonical_rational(s) for s in slacks),
+        prefix_slacks=tuple(CanonicalRational.from_fraction(s) for s in slacks),
         first_failed_prefix=first_failed,
     )
 
@@ -179,7 +179,7 @@ def weak_majorization_check(
     return WeakMajorizationCheckResult(
         holds=all_ok,
         direction=direction,
-        prefix_slack=tuple(format_canonical_rational(s) for s in slacks),
+        prefix_slack=tuple(CanonicalRational.from_fraction(s) for s in slacks),
         first_failed_prefix=first_failed,
     )
 
@@ -273,19 +273,19 @@ def _intermediate_vectors(
     steps: list[tuple[int, int, Fraction]],
     final_perm: list[int],
     needs_perm: bool,
-) -> list[tuple[str, ...]]:
-    intermediate: list[tuple[str, ...]] = []
+) -> list[tuple[CanonicalRational, ...]]:
+    intermediate: list[tuple[CanonicalRational, ...]] = []
     current = list(x_vals)
-    intermediate.append(tuple(format_canonical_rational(v) for v in current))
+    intermediate.append(tuple(CanonicalRational.from_fraction(v) for v in current))
     for i, j, lam in steps:
         ci_val = current[i]
         cj_val = current[j]
         current[i] = lam * ci_val + (Fraction(1) - lam) * cj_val
         current[j] = (Fraction(1) - lam) * ci_val + lam * cj_val
-        intermediate.append(tuple(format_canonical_rational(v) for v in current))
+        intermediate.append(tuple(CanonicalRational.from_fraction(v) for v in current))
     if needs_perm:
         current = [current[final_perm[i]] for i in range(len(current))]
-        intermediate.append(tuple(format_canonical_rational(v) for v in current))
+        intermediate.append(tuple(CanonicalRational.from_fraction(v) for v in current))
     return intermediate
 
 
@@ -310,8 +310,9 @@ def t_transform_sequence(
             steps=(),
             final_permutation=(),
             intermediate_vectors=(),
-            composed_matrix=(),
-            target_match=False,
+            composed_matrix=None,
+            source=x,
+            target=y,
         )
 
     order = sorted(range(n), key=lambda index: (-x_vals[index], index))
@@ -323,7 +324,8 @@ def t_transform_sequence(
     current, steps = _compute_t_transform_steps(x_vals, rank_aligned_target, order)
     final_perm, needs_perm, current = _target_permutation(current, list(y_vals))
 
-    target_match = current == y_vals
+    if current != y_vals:
+        raise RuntimeError("T-transform construction did not reach the target")
 
     # Build the composed doubly stochastic matrix
     composed = _build_composed_matrix(steps, final_perm if needs_perm else None, n)
@@ -344,10 +346,14 @@ def t_transform_sequence(
         steps=step_objs,
         final_permutation=tuple(final_perm) if needs_perm else (),
         intermediate_vectors=tuple(intermediate),
-        composed_matrix=tuple(
-            tuple(format_canonical_rational(v) for v in row) for row in composed
+        composed_matrix=RationalMatrix(
+            entries=tuple(
+                tuple(CanonicalRational.from_fraction(v) for v in row)
+                for row in composed
+            )
         ),
-        target_match=target_match,
+        source=x,
+        target=y,
     )
 
 
@@ -405,8 +411,8 @@ def doubly_stochastic_check(matrix: RationalMatrix) -> DoublyStochasticCheckResu
 
     return DoublyStochasticCheckResult(
         is_doubly_stochastic=is_ds,
-        row_sums=tuple(format_canonical_rational(s) for s in row_sums),
-        col_sums=tuple(format_canonical_rational(s) for s in col_sums),
+        row_sums=tuple(CanonicalRational.from_fraction(s) for s in row_sums),
+        col_sums=tuple(CanonicalRational.from_fraction(s) for s in col_sums),
         first_negative_entry=first_neg,
         first_bad_row=first_bad_row,
         first_bad_col=first_bad_col,
@@ -491,8 +497,7 @@ def birkhoff_decomposition(matrix: RationalMatrix) -> BirkhoffDecompositionResul
 
     return BirkhoffDecompositionResult(
         terms=tuple(terms),
-        weights_sum=format_canonical_rational(weights_sum),
-        reconstruction_matches=True,
+        weights_sum=CanonicalRational.from_fraction(weights_sum),
     )
 
 
@@ -574,9 +579,9 @@ def schur_horn_check(
 
     return SchurHornCheckResult(
         feasible=feasible,
-        eigenvalues_sorted=tuple(format_canonical_rational(v) for v in e_sorted),
-        diagonal_sorted=tuple(format_canonical_rational(v) for v in d_sorted),
-        prefix_slack=tuple(format_canonical_rational(s) for s in slacks),
+        eigenvalues_sorted=tuple(CanonicalRational.from_fraction(v) for v in e_sorted),
+        diagonal_sorted=tuple(CanonicalRational.from_fraction(v) for v in d_sorted),
+        prefix_slack=tuple(CanonicalRational.from_fraction(s) for s in slacks),
         first_failed_prefix=first_failed,
         total_sum_match=total_sum_match,
     )

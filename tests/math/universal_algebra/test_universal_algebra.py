@@ -615,3 +615,26 @@ class TestValidation:
         assert (
             error.value.errors()[0]["type"] == "universal_algebra.table_cells_exceeded"
         )
+
+
+def test_quotient_noncongruence_is_domain_rejection() -> None:
+    from jacobian.catalog.catalog import Catalog
+    from jacobian.catalog.models import OperationDomainValidationError
+    from jacobian.dispatch import invoke_operation
+
+    with pytest.raises(OperationDomainValidationError) as caught:
+        invoke_operation(
+            "universal_algebra.quotient.compute",
+            {
+                "algebra": {
+                    "carrier": ["0", "1", "2"],
+                    "operations": [{"operation_id": "succ", "arity": 1}],
+                    "tables": [[1, 2, 0]],
+                },
+                "partition": [[0, 1], [2]],
+            },
+            Catalog.open(),
+        )
+    assert (
+        caught.value.errors()[0]["type"] == "universal_algebra.partition_not_congruence"
+    )

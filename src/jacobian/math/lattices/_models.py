@@ -33,8 +33,13 @@ def _require_lattice_matrix_envelope(matrix: IntegerMatrix, *, label: str) -> No
     """Admit one integer matrix into the lattice 32-axis computation envelope."""
 
     rows = len(matrix.entries)
-    columns = len(matrix.entries[0])
-    if rows > MAX_MATRIX_DIMENSION or columns > MAX_MATRIX_DIMENSION:
+    columns = matrix.column_count
+    if (
+        not rows
+        or not columns
+        or rows > MAX_MATRIX_DIMENSION
+        or columns > MAX_MATRIX_DIMENSION
+    ):
         raise _validation_error(
             "budget_exceeded",
             f"{label} dimensions are limited to {MAX_MATRIX_DIMENSION} rows and columns",
@@ -153,7 +158,7 @@ class LatticeReductionResult(StrictModel):
                 "lll_transformation_rows",
                 "LLL transformation must have one row per basis row",
             )
-        if len(self.transformation.entries[0]) != rows:
+        if self.transformation.column_count != rows:
             raise _validation_error(
                 "lll_transformation_square",
                 "LLL transformation must be square by basis row count",
@@ -181,7 +186,7 @@ class IntegerLattice(StrictModel):
     @model_validator(mode="after")
     def require_full_row_rank(self) -> Self:
         rows = len(self.basis.entries)
-        columns = len(self.basis.entries[0]) if rows else 0
+        columns = self.basis.column_count
         if rows == 0:
             raise _validation_error(
                 "basis_empty", "lattice basis must contain at least one row"

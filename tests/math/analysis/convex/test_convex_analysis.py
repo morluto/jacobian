@@ -7,8 +7,10 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.analysis.convex._models import (
     AffinePiece,
     MaxAffineEvalRequest,
+    MaxAffineEvalResult,
     MaxAffineFunction,
     MaxAffineSubdifferentialRequest,
+    MaxAffineSubdifferentialResult,
     RationalPoint,
 )
 from jacobian.math.analysis.convex.operations import (
@@ -17,11 +19,13 @@ from jacobian.math.analysis.convex.operations import (
 )
 
 
-def compute_max_affine_evaluation(request: MaxAffineEvalRequest):
+def compute_max_affine_evaluation(request: MaxAffineEvalRequest) -> MaxAffineEvalResult:
     return max_affine_evaluation(request.function, request.point)
 
 
-def compute_subdifferential(request: MaxAffineSubdifferentialRequest):
+def compute_subdifferential(
+    request: MaxAffineSubdifferentialRequest,
+) -> MaxAffineSubdifferentialResult:
     return max_affine_subdifferential(request.function, request.point)
 
 
@@ -71,7 +75,7 @@ class TestMaxAffineEvaluation:
             point=RationalPoint(coordinates=(_rational("2"),)),
         )
         result = compute_max_affine_evaluation(req)
-        assert result.value == "2"
+        assert result.value.as_fraction() == 2
         assert "p1" in result.active_pieces
 
     def test_tie(self) -> None:
@@ -94,7 +98,7 @@ class TestMaxAffineEvaluation:
             point=RationalPoint(coordinates=(_rational("0"),)),
         )
         result = compute_max_affine_evaluation(req)
-        assert result.value == "0"
+        assert result.value.as_fraction() == 0
         assert len(result.active_pieces) == 2
 
 

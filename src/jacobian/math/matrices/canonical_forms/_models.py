@@ -11,7 +11,6 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
-    CanonicalRational,
 )
 from jacobian._models import StrictModel
 from jacobian.math.matrices.values import (
@@ -20,6 +19,7 @@ from jacobian.math.matrices.values import (
 )
 from jacobian.math.polynomials.values import (
     MAX_POLYNOMIAL_EXPONENT,
+    MonicPolynomial,
     RationalPolynomial,
 )
 
@@ -1386,23 +1386,6 @@ class SquareMatrixRequest(StrictModel):
     """One square rational matrix bounded for canonical-form computation."""
 
     matrix: RationalMatrix
-
-
-class MonicPolynomial(StrictModel):
-    """One monic univariate polynomial over QQ, as increasing-degree coefficients."""
-
-    coefficients: tuple[CanonicalRational, ...] = Field(
-        min_length=1,
-        max_length=MAX_CANONICAL_FORM_DIMENSION + 1,
-    )
-
-    @model_validator(mode="after")
-    def require_monic(self) -> Self:
-        if self.coefficients[-1].as_fraction() != 1:
-            raise _validation_error(
-                "shape_mismatch", "polynomial must be monic (leading coefficient = 1)"
-            )
-        return self
 
 
 class MinimalPolynomialResult(StrictModel):

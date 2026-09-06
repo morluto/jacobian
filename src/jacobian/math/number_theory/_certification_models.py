@@ -22,36 +22,8 @@ CertifiedFactorizationInteger = Annotated[
 ]
 
 
-def _verify_pratt_identities(p: int, witness: int, sub_primes: tuple[int, ...]) -> None:
-    if pow(witness, p - 1, p) != 1:
-        raise _validation_error(
-            "pratt_witness_fails_a_p_1_1_mod_p",
-            "Pratt witness fails a^(p-1) ≡ 1 (mod p)",
-        )
-    for q in sub_primes:
-        if (p - 1) % q != 0:
-            raise _validation_error(
-                "sub_certificate_prime_must_divide_p_1",
-                "sub-certificate prime must divide p-1",
-            )
-        if pow(witness, (p - 1) // q, p) == 1:
-            raise _validation_error(
-                "pratt_witness_fails_a_p_1_q_1_mod_p",
-                "Pratt witness fails a^((p-1)/q) ≢ 1 (mod p)",
-            )
-    residual = p - 1
-    for q in sub_primes:
-        while residual % q == 0:
-            residual //= q
-    if residual != 1:
-        raise _validation_error(
-            "sub_certificates_must_exactly_cover_the_distinct_prime_factors_of_p_1",
-            "sub-certificates must exactly cover the distinct prime factors of p-1",
-        )
-
-
 class PrattCertificateNode(StrictModel):
-    """One recursively checked Pratt certificate node."""
+    """One Pratt witness claim; parsing checks its shape, not primality."""
 
     prime: BoundedInteger
     witness: BoundedInteger | None = None
@@ -95,13 +67,6 @@ class PrattCertificateNode(StrictModel):
             raise _validation_error(
                 "witness_must_be_between_2_and_p_1", "witness must be between 2 and p-1"
             )
-        _verify_pratt_identities(
-            prime,
-            witness,
-            tuple(
-                parse_canonical_integer(item.prime) for item in self.sub_certificates
-            ),
-        )
         return self
 
 

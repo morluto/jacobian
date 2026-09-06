@@ -18,7 +18,7 @@ from jacobian.math.matrices.certified_snf.operations import (
     matrix_multiply,
     smith_reduce,
 )
-from jacobian.math.matrices.certified_snf.values import CertifiedIntegerMatrix
+from jacobian.math.matrices.values import IntegerMatrix
 
 
 def _matrix_value(
@@ -26,8 +26,8 @@ def _matrix_value(
     *,
     rows: int,
     columns: int,
-) -> CertifiedIntegerMatrix:
-    return CertifiedIntegerMatrix(
+) -> IntegerMatrix:
+    return IntegerMatrix(
         row_count=rows,
         column_count=columns,
         entries=tuple(

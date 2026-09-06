@@ -291,12 +291,22 @@ class MaximalIndependentSetRequest(StrictModel):
 class MaximalIndependentSetResult(StrictModel):
     """A closed decision with a concrete rejection witness when applicable."""
 
+    graph: IndexedSimpleUndirectedGraph
+    candidate_set: tuple[int, ...]
     decision: Literal["MAXIMAL", "NOT_INDEPENDENT", "INDEPENDENT_NOT_MAXIMAL"]
     blocking_edge: tuple[int, int] | None = None
     addable_vertex: int | None = None
 
     @model_validator(mode="after")
     def bind_witness_to_decision(self) -> Self:
+        if tuple(sorted(set(self.candidate_set))) != self.candidate_set or any(
+            vertex < 0 or vertex >= self.graph.vertex_count
+            for vertex in self.candidate_set
+        ):
+            raise PydanticCustomError(
+                "graph.candidate_source",
+                "candidate must use the ordered source vertex axis",
+            )
         if self.decision == "MAXIMAL":
             if self.blocking_edge is not None or self.addable_vertex is not None:
                 raise PydanticCustomError(
@@ -311,7 +321,7 @@ class MaximalIndependentSetResult(StrictModel):
                     "a non-independent result requires exactly one blocking edge",
                 )
             u, v = self.blocking_edge
-            if u < 0 or v < 0 or u >= v:
+            if u < 0 or v < 0 or u >= v or v >= self.graph.vertex_count:
                 raise PydanticCustomError(
                     "graph.blocking_edge_must_be_a_canonical_pair_u_v",
                     "blocking_edge must be a canonical pair u < v",
@@ -322,10 +332,10 @@ class MaximalIndependentSetResult(StrictModel):
                 "graph.independent_non_maximal_result_requires_exactly_one",
                 "an independent non-maximal result requires exactly one addable vertex",
             )
-        if self.addable_vertex < 0:
+        if not 0 <= self.addable_vertex < self.graph.vertex_count:
             raise PydanticCustomError(
                 "graph.addable_vertex_must_be_nonnegative",
-                "addable_vertex must be nonnegative",
+                "addable_vertex must use the source vertex axis",
             )
         return self
 

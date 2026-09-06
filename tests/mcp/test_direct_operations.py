@@ -104,12 +104,11 @@ def test_direct_schemas_are_owner_contracts_with_only_mcp_root_projection() -> N
             assert "operation_id" not in direct.input_schema.get("properties", {})
             assert "payload" not in direct.input_schema.get("properties", {})
 
-        root_union = listed["topology.simplicial_complex.canonicalize"].input_schema
-        assert root_union["type"] == "object"
-        owner_union = operations[-1].request_type.model_json_schema()
-        assert {
-            key: value for key, value in root_union.items() if key != "type"
-        } == owner_union
+        topology_schema = listed[
+            "topology.simplicial_complex.canonicalize"
+        ].input_schema
+        assert topology_schema["type"] == "object"
+        assert topology_schema == operations[-1].request_type.model_json_schema()
 
     asyncio.run(scenario())
 

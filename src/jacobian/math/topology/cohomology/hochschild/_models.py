@@ -128,12 +128,6 @@ class AlgebraStructure(StrictModel):
                 "hochschild_complex.augmentation_shape",
                 "augmentation must have one entry per basis element",
             )
-        from sympy import isprime
-
-        if not isprime(self.prime):
-            raise _validation_error(
-                "hochschild_complex.prime", "prime must be a prime integer"
-            )
         self._require_canonical_residues()
         return self
 

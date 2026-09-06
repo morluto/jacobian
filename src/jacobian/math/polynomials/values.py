@@ -111,6 +111,46 @@ class RationalPolynomial(StrictModel):
         return self
 
 
+class MonicPolynomial(RationalPolynomial):
+    """Monic univariate QQ polynomial in the canonical sparse wire format."""
+
+    @model_validator(mode="after")
+    def require_monic_univariate(self) -> Self:
+        if (
+            len(self.variables) != 1
+            or not self.polynomial.terms
+            or self.polynomial.terms[0].coefficient.as_fraction() != 1
+        ):
+            raise _validation_error("monic", "polynomial must be univariate and monic")
+        return self
+
+    @property
+    def coefficients(self) -> tuple[CanonicalRational, ...]:
+        """Derived increasing-degree coefficient projection for native algebra."""
+        values = [CanonicalRational(num="0", den="1")] * (
+            self.polynomial.terms[0].exponents[0] + 1
+        )
+        for term in self.polynomial.terms:
+            values[term.exponents[0]] = term.coefficient
+        return tuple(values)
+
+
+def monic_polynomial_from_coefficients(
+    coefficients: tuple[CanonicalRational, ...], *, variable: str = "t"
+) -> MonicPolynomial:
+    """Encode increasing-degree coefficients in the declared polynomial ring."""
+    return MonicPolynomial(
+        variables=(variable,),
+        polynomial=SparseRationalPolynomial(
+            terms=tuple(
+                RationalPolynomialTerm(coefficient=value, exponents=(index,))
+                for index, value in reversed(tuple(enumerate(coefficients)))
+                if value.num != "0"
+            )
+        ),
+    )
+
+
 class RationalPolynomialIdeal(StrictModel):
     """A finitely generated ideal in one explicitly ordered ``QQ`` ring.
 
@@ -418,12 +458,14 @@ __all__ = [
     "MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS",
     "MAX_RATIONAL_FUNCTION_EXPONENT",
     "MAX_RATIONAL_FUNCTION_TERMS",
+    "MonicPolynomial",
     "PolynomialVariable",
     "RationalFunction",
     "RationalPolynomial",
     "RationalPolynomialIdeal",
     "RationalPolynomialTerm",
     "SparseRationalPolynomial",
+    "monic_polynomial_from_coefficients",
     "rational_evaluation_component_digit_bounds",
     "require_canonical_rational_function",
     "require_polynomial_budget",

@@ -171,14 +171,21 @@ class ExchangeMatrix(StrictModel):
                 raise _validation_error(
                     "cluster_algebra.diagonal_zero", "diagonal entries must be zero"
                 )
-        for i in range(self.n):
-            for j in range(self.n):
-                if symmetrizer[i] * entries[i][j] != -symmetrizer[j] * entries[j][i]:
-                    raise _validation_error(
-                        "cluster_algebra.skew_symmetrizable",
-                        f"skew-symmetrizability condition violated at ({i}, {j})",
-                    )
         return self
+
+
+def require_skew_symmetrizable(matrix: ExchangeMatrix) -> None:
+    """Establish the exchange-matrix skew-symmetrizability claim."""
+
+    entries = parsed_entries(matrix)
+    symmetrizer = parsed_symmetrizer(matrix)
+    for i in range(matrix.n):
+        for j in range(matrix.n):
+            if symmetrizer[i] * entries[i][j] != -symmetrizer[j] * entries[j][i]:
+                raise _validation_error(
+                    "cluster_algebra.skew_symmetrizable",
+                    f"skew-symmetrizability condition violated at ({i}, {j})",
+                )
 
 
 class SeedMutationRequest(StrictModel):

@@ -25,6 +25,7 @@ from jacobian.math.number_theory.galois.operations import (
     galois_factor,
     galois_group,
 )
+from jacobian.math.polynomials.values import RationalPolynomial
 
 
 def test_catalog_contains_only_audited_operations() -> None:
@@ -154,8 +155,9 @@ def test_factorization_result_parses_structurally() -> None:
 
     payload = result.model_dump()
     payload["field_order"] = 4
-    with pytest.raises(ValidationError, match="field_order must be prime"):
-        GaloisFactorResult.model_validate(payload)
+    assert GaloisFactorResult.model_validate(payload).field_order == 4
+    with pytest.raises(OperationDomainValidationError, match="prime"):
+        _galois_factor(GaloisFactorRequest(field_order=4, coefficients=(1, 0, 1)))
 
 
 def test_factor_producer_runs_the_backend_once(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -225,13 +227,13 @@ def test_frobenius_rejects_nonpositive_factor_degrees(
 def test_galois_backend_domain_is_enforced_before_execution(request_type: type) -> None:
     operation = _galois_group if request_type is GaloisGroupRequest else _solvable
     with pytest.raises(OperationDomainValidationError) as domain_error:
-        operation(request_type(coefficients=(0, 0, 0, 0, 1)))
+        operation(request_type(polynomial=_rational_polynomial((0, 0, 0, 0, 1))))
     assert domain_error.value.errors()[0]["type"] == (
         "galois_theory.polynomial_not_irreducible"
     )
     with pytest.raises(ValidationError) as structural_error:
-        request_type(coefficients=(-2, 0, 0, 0, 0, 0, 0, 1))
-    assert structural_error.value.errors()[0]["type"] == "too_long"
+        request_type(polynomial=_rational_polynomial((-2, 0, 0, 0, 0, 0, 0, 1)))
+    assert structural_error.value.errors()[0]["type"] == "galois_theory.degree_bound"
 
 
 def _group_from_result(result: object) -> PermutationGroup:
@@ -242,7 +244,9 @@ def _group_from_result(result: object) -> PermutationGroup:
 
 
 def test_galois_group_returns_composable_generators() -> None:
-    result = _galois_group(GaloisGroupRequest(coefficients=(-1, -1, 0, 0, 0, 1)))
+    result = _galois_group(
+        GaloisGroupRequest(polynomial=_rational_polynomial((-1, -1, 0, 0, 0, 1)))
+    )
     assert result.degree == 5
     assert result.order == 120
     assert result.is_solvable is False
@@ -251,12 +255,34 @@ def test_galois_group_returns_composable_generators() -> None:
 
 
 def test_solvable_quintic_returns_the_group_certificate() -> None:
-    result = _solvable(SolvableRequest(coefficients=(-2, 0, 0, 0, 0, 1)))
+    result = _solvable(
+        SolvableRequest(polynomial=_rational_polynomial((-2, 0, 0, 0, 0, 1)))
+    )
     assert result.solvable_by_radicals is True
     assert _group_from_result(result).order() == 20
 
 
 def test_unsolvable_quintic_uses_actual_group() -> None:
-    result = _solvable(SolvableRequest(coefficients=(-1, -1, 0, 0, 0, 1)))
+    result = _solvable(
+        SolvableRequest(polynomial=_rational_polynomial((-1, -1, 0, 0, 0, 1)))
+    )
     assert result.solvable_by_radicals is False
     assert _group_from_result(result).order() == 120
+
+
+def _rational_polynomial(coefficients: tuple[int, ...]) -> RationalPolynomial:
+    return RationalPolynomial.model_validate(
+        {
+            "variables": ["x"],
+            "polynomial": {
+                "terms": [
+                    {
+                        "coefficient": {"num": str(value), "den": "1"},
+                        "exponents": [index],
+                    }
+                    for index, value in reversed(tuple(enumerate(coefficients)))
+                    if value
+                ]
+            },
+        }
+    )

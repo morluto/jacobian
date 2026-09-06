@@ -2,6 +2,7 @@
 
 import pytest
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_fields import (
     Axis,
     AxisBoundMatrix,
@@ -57,8 +58,8 @@ def test_restricted_axes_reach_the_matrix_capacity(
 
 
 def test_source_admission_rejects_expansion_beyond_matrix_capacity() -> None:
-    with pytest.raises(ValueError, match="matrix exceeds the supported axis bound"):
-        _source(129, (1, 1, 0, 1, 1, 0, 0, 0, 1))
+    with pytest.raises(OperationDomainValidationError, match="restriction output"):
+        restrict_scalars(*_source(129, (1, 1, 0, 1, 1, 0, 0, 0, 1)))
 
 
 def test_larger_axis_does_not_expand_extension_matrix_source_capacity() -> None:

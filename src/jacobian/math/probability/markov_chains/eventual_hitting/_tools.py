@@ -8,14 +8,13 @@ from jacobian.math.probability.markov_chains.eventual_hitting._models import (
 from jacobian.math.probability.markov_chains.eventual_hitting.operations import (
     compute_eventual_hitting_profile,
 )
-from jacobian.math.probability.markov_chains.values import as_transition_matrix
 
 
 def compute_ehp_op(
     request: EventualHittingProfileRequest,
 ) -> EventualHittingProfileResult:
     return compute_eventual_hitting_profile(
-        as_transition_matrix(request.matrix),
+        request.matrix,
         request.target_states,
     )
 
@@ -38,10 +37,13 @@ TOOLS: MathTools = (
                 name="two_state",
                 description="Two-state chain with target = absorbing state 1.",
                 input={
-                    "matrix": [
-                        [{"num": "1", "den": "2"}, {"num": "1", "den": "2"}],
-                        [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
-                    ],
+                    "matrix": {
+                        "domain": "QQ",
+                        "entries": [
+                            [{"num": "1", "den": "2"}, {"num": "1", "den": "2"}],
+                            [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
+                        ],
+                    },
                     "target_states": [1],
                 },
             ),

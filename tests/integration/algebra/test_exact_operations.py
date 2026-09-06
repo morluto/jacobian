@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from fractions import Fraction
 
 import pytest
@@ -54,11 +55,11 @@ def _r(value: int) -> CanonicalRational:
 
 def test_root_isolation_returns_source_bound_composable_identities() -> None:
     request = UnivariatePolynomialRequest.model_validate(
-        {"coefficients_descending": _quadratic("-2")}
+        _isolation_payload(_quadratic("-2"))
     )
     result = compute_root_isolation(request)
 
-    assert result.source_coefficients_descending == ("1", "0", "-2")
+    assert result.source_polynomial == request.polynomial
     assert tuple(
         (entry.isolating_interval[0].num, entry.isolating_interval[1].num)
         for entry in result.roots
@@ -86,12 +87,12 @@ def test_root_isolation_returns_source_bound_composable_identities() -> None:
 def test_root_isolation_accepts_sympy_singleton_interval_for_a_rational_root() -> None:
     result = compute_root_isolation(
         UnivariatePolynomialRequest.model_validate(
-            {
-                "coefficients_descending": [
+            _isolation_payload(
+                [
                     {"num": "1", "den": "1"},
                     {"num": "-1", "den": "1"},
                 ]
-            }
+            )
         )
     )
 
@@ -105,8 +106,8 @@ def test_root_isolation_accepts_sympy_singleton_interval_for_a_rational_root() -
 def test_root_isolation_preserves_factor_identity_and_source_multiplicity() -> None:
     result = compute_root_isolation(
         UnivariatePolynomialRequest.model_validate(
-            {
-                "coefficients_descending": [
+            _isolation_payload(
+                [
                     {"num": "1", "den": "1"},
                     {"num": "1", "den": "1"},
                     {"num": "-5", "den": "1"},
@@ -114,7 +115,7 @@ def test_root_isolation_preserves_factor_identity_and_source_multiplicity() -> N
                     {"num": "8", "den": "1"},
                     {"num": "-4", "den": "1"},
                 ]
-            }
+            )
         )
     )
 
@@ -134,50 +135,48 @@ def test_root_isolation_preserves_factor_identity_and_source_multiplicity() -> N
 
 
 def test_root_isolation_keeps_an_empty_source_bound_real_root_family() -> None:
-    result = compute_root_isolation(
-        UnivariatePolynomialRequest.model_validate(
-            {"coefficients_descending": _quadratic("1")}
-        )
+    request = UnivariatePolynomialRequest.model_validate(
+        _isolation_payload(_quadratic("1"))
     )
+    result = compute_root_isolation(request)
 
-    assert result.source_coefficients_descending == ("1", "0", "1")
+    assert result.source_polynomial == request.polynomial
     assert result.roots == ()
 
 
-def test_root_isolation_normalizes_rational_source_before_identity_projection() -> None:
-    result = compute_root_isolation(
-        UnivariatePolynomialRequest.model_validate(
-            {
-                "coefficients_descending": [
-                    {"num": "2", "den": "1"},
-                    {"num": "-1", "den": "1"},
-                ]
-            }
+def test_root_isolation_retains_rational_source_before_identity_projection() -> None:
+    request = UnivariatePolynomialRequest.model_validate(
+        _isolation_payload(
+            [
+                {"num": "2", "den": "1"},
+                {"num": "-1", "den": "1"},
+            ]
         )
     )
+    result = compute_root_isolation(request)
 
-    assert result.source_coefficients_descending == ("2", "-1")
+    assert result.source_polynomial == request.polynomial
     assert result.roots[0].algebraic_value.polynomial == ("2", "-1")
 
 
 def test_root_isolation_rejects_sources_outside_the_composable_envelope() -> None:
     with pytest.raises(ValidationError):
         UnivariatePolynomialRequest.model_validate(
-            {
-                "coefficients_descending": [
+            _isolation_payload(
+                [
                     {"num": "1", "den": "1"},
                     *({"num": "0", "den": "1"} for _ in range(9)),
                 ]
-            }
+            )
         )
     with pytest.raises(ValidationError):
         UnivariatePolynomialRequest.model_validate(
-            {
-                "coefficients_descending": [
+            _isolation_payload(
+                [
                     {"num": "1" + "0" * 996, "den": "1"},
                     {"num": "1", "den": "1"},
                 ]
-            }
+            )
         )
 
 
@@ -187,14 +186,16 @@ def test_root_isolation_rejects_expanded_normalization_without_decimal_formattin
     """Clearing valid rational denominators must return the intended bound error."""
 
     base = 10 ** (MAX_ROOT_ISOLATION_SOURCE_COEFFICIENT_DIGITS - 1)
-    with pytest.raises(ValidationError, match="source_coefficient_bound"):
-        UnivariatePolynomialRequest.model_validate(
-            {
-                "coefficients_descending": [
-                    {"num": str(base + 1), "den": str(base - 1)},
-                    {"num": "1", "den": str(base + 4)},
-                ]
-            }
+    with pytest.raises(ValueError, match="primitive integer source coefficients"):
+        compute_root_isolation(
+            UnivariatePolynomialRequest.model_validate(
+                _isolation_payload(
+                    [
+                        {"num": str(base + 1), "den": str(base - 1)},
+                        {"num": "1", "den": str(base + 4)},
+                    ]
+                )
+            )
         )
 
 
@@ -302,7 +303,7 @@ def test_field_carrier_preserves_the_prior_discriminant_degree_envelope() -> Non
 
 @pytest.mark.parametrize("consumer", (discriminant, ring_of_integers))
 def test_native_integral_basis_consumers_preserve_degree_31_envelope(
-    consumer,
+    consumer: Callable[[SimpleNumberFieldPresentation], object],
 ) -> None:
     field = SimpleNumberFieldPresentation(
         coefficients_descending=("1", *("0",) * 30, "-2")
@@ -322,7 +323,7 @@ def test_native_integral_basis_consumers_preserve_degree_31_envelope(
 
 @pytest.mark.parametrize("consumer", (discriminant, ring_of_integers))
 def test_native_integral_basis_consumers_accept_degree_nine_field(
-    consumer,
+    consumer: Callable[[SimpleNumberFieldPresentation], object],
 ) -> None:
     field = SimpleNumberFieldPresentation(
         coefficients_descending=("1", *("0",) * 8, "-2")
@@ -342,7 +343,7 @@ def test_native_integral_basis_consumers_accept_degree_nine_field(
 
 @pytest.mark.parametrize("consumer", (discriminant, ring_of_integers))
 def test_native_integral_basis_consumers_bound_the_widened_field_carrier(
-    consumer,
+    consumer: Callable[[SimpleNumberFieldPresentation], object],
 ) -> None:
     field = SimpleNumberFieldPresentation(
         coefficients_descending=("1", *("0",) * 31, "-2")
@@ -473,3 +474,18 @@ def test_closed_form_contract_requires_every_initial_value() -> None:
     )
     with pytest.raises(OperationDomainValidationError, match="initial value count"):
         compute_closed_form(request)
+
+
+def _isolation_payload(coefficients: list[dict[str, str]]) -> dict[str, object]:
+    return {
+        "polynomial": {
+            "variables": ["x"],
+            "polynomial": {
+                "terms": [
+                    {"coefficient": value, "exponents": [len(coefficients) - 1 - i]}
+                    for i, value in enumerate(coefficients)
+                    if value["num"] != "0"
+                ]
+            },
+        }
+    }

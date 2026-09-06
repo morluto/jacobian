@@ -36,10 +36,11 @@ def search_generalized_exact_cover(
     Each node uses at most P intersections and population counts on R-bit
     masks to choose a primary item, followed by constant-many P- or R-bit mask
     operations for each child. At most N nodes and N-1 child edges are visited.
-    Recursion depth is at most P, so its logical mask payload is bounded by
-    (P+1)*(P+R) bits plus P selected row indices. The public P <= 256 and
-    R <= 4096 bounds keep this below Python's recursion limit and make every
-    intermediate integer width explicit.
+    The explicit DFS stack has depth at most P, with logical mask payload
+    (P+1)*(P+2R) bits plus P selected row indices. P, M, R <= 4096
+    bound retained storage independently of the Python recursion limit.
+    Admission also bounds N*P*ceil(max(P,R)/64), preserving the previous maximum
+    item-scan word work for larger instances.
     """
 
     if search_node_limit < 1:
@@ -76,16 +77,13 @@ def search_generalized_exact_cover(
     all_rows = (1 << row_count) - 1
     visited_nodes = 0
     selected_rows: list[int] = []
-
-    def visit(
-        uncovered_primary: int,
-        available_rows: int,
-    ) -> ExactCoverKernelResult:
-        nonlocal visited_nodes
+    # Frames retain only the remaining siblings, not a copy of each path.
+    stack: list[tuple[int, int, int]] = []
+    uncovered_primary, available_rows = all_primary, all_rows
+    while True:
         if visited_nodes >= search_node_limit:
             return ExactCoverKernelResult(status="UNKNOWN")
         visited_nodes += 1
-
         if uncovered_primary == 0:
             return ExactCoverKernelResult(
                 status="FOUND", selected_rows=tuple(selected_rows)
@@ -103,25 +101,20 @@ def search_generalized_exact_cover(
                 chosen_rows = candidates
                 fewest_candidates = candidate_count
                 if candidate_count == 0:
-                    return ExactCoverKernelResult(status="NO_COVER")
+                    break
             remaining_items ^= item_bit
 
-        candidates = chosen_rows
-        while candidates:
-            row_bit = candidates & -candidates
-            row = row_bit.bit_length() - 1
-            selected_rows.append(row)
-            result = visit(
-                uncovered_primary & ~row_primary_masks[row],
-                available_rows & ~row_conflicts[row],
-            )
+        while not chosen_rows:
+            if not stack:
+                return ExactCoverKernelResult(status="NO_COVER")
+            uncovered_primary, available_rows, chosen_rows = stack.pop()
             selected_rows.pop()
-            if result.status != "NO_COVER":
-                return result
-            candidates ^= row_bit
-        return ExactCoverKernelResult(status="NO_COVER")
-
-    return visit(all_primary, all_rows)
+        row_bit = chosen_rows & -chosen_rows
+        selected_row = row_bit.bit_length() - 1
+        stack.append((uncovered_primary, available_rows, chosen_rows ^ row_bit))
+        selected_rows.append(selected_row)
+        uncovered_primary &= ~row_primary_masks[selected_row]
+        available_rows &= ~row_conflicts[selected_row]
 
 
 __all__ = ["ExactCoverKernelResult", "search_generalized_exact_cover"]

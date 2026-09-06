@@ -25,7 +25,7 @@ FACTORIZATION_OPERATIONS = (
     MathTool(
         operation_id="integer.factor.certified_compute",
         title="Compute a certified integer factorization",
-        description="Factor one bounded 30-digit integer (~100 bits) in an isolated subexponential worker (Pollard rho, Pollard p-1, ECM via sympy.ntheory.factorint), returning a complete prime-power factorization with per-factor Pratt certificates, or UNKNOWN if the worker cannot establish a complete result within its envelope.",
+        description="Factor one bounded 30-digit integer (~100 bits) in an isolated subexponential worker (Pollard rho, Pollard p-1, ECM via sympy.ntheory.factorint), returning a complete prime-power factorization with per-factor Pratt certificates. Worker timeout, cancellation, or failure raises an execution error without a partial factorization.",
         request_type=CertifiedFactorizationRequest,
         result_type=CertifiedFactorizationResult,
         run=factorize_certified,
@@ -57,7 +57,7 @@ FACTORIZATION_OPERATIONS = (
     MathTool(
         operation_id="integer.compute.divisors",
         title="Enumerate positive divisors",
-        description="Enumerate every positive divisor exactly, including the input's absolute value, or return UNKNOWN when the bounded factorization worker cannot establish the enumeration.",
+        description="Enumerate and return every positive divisor exactly, including the input's absolute value. Worker timeout, cancellation, or failure raises an execution error without a partial enumeration.",
         request_type=FactorizationRequest,
         result_type=DivisorListResult,
         run=enumerate_divisors,
@@ -74,7 +74,7 @@ FACTORIZATION_OPERATIONS = (
     MathTool(
         operation_id="integer.compute.prime_factorization",
         title="Factor an integer",
-        description="Factor an integer into prime powers and return the complete prime-power factorization, or UNKNOWN when the bounded worker cannot establish it.",
+        description="Factor an integer into prime powers and return the complete prime-power factorization. Worker timeout, cancellation, or failure raises an execution error without a partial factorization.",
         request_type=FactorizationRequest,
         result_type=PrimeFactorizationResult,
         run=factorize_primes,

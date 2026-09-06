@@ -7,6 +7,7 @@ from fractions import Fraction
 import pytest
 
 from jacobian._exact import CanonicalRational
+from jacobian.math.matrices.values import RationalMatrix
 from jacobian.math.probability.markov_chains import operations
 from jacobian.math.probability.markov_chains._models import (
     TransitionMatrixRequest,
@@ -21,7 +22,7 @@ _C = CanonicalRational.from_fraction
 
 def _matrix(rows: list[list[Fraction]]) -> TransitionMatrixRequest:
     return TransitionMatrixRequest(
-        matrix=tuple(tuple(_C(f) for f in row) for row in rows)
+        matrix=RationalMatrix(entries=tuple(tuple(_C(f) for f in row) for row in rows))
     )
 
 

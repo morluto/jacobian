@@ -13,6 +13,7 @@ from jacobian.math.analysis.boolean.fourier._models import (
     TruthTableRequest,
     TruthTableResult,
 )
+from jacobian.math.analysis.boolean.fourier._pullback import WALSH_PULLBACK
 from jacobian.math.analysis.boolean.fourier.operations import (
     erasure_noise,
     fourier_spectrum,
@@ -44,6 +45,7 @@ def _z(n: str) -> dict[str, str]:
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    WALSH_PULLBACK,
     MathTool(
         operation_id="boolean.truth_table.compute",
         title="Evaluate a Boolean function over all 2^n inputs",
@@ -63,7 +65,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="boolean.fourier_spectrum.compute",
         title="Compute a Boolean Fourier spectrum",
-        description="Compute the exact Walsh-Hadamard spectrum of a Boolean function from its complete truth table.",
+        description="Compute sum_x f(x) (-1)^(s dot x) from the 0/1 values of a complete truth table with 0 through 12 variables. This BOOLEAN_VALUES convention differs from the BOOLEAN_SIGN transform of (-1)^f.",
         request_type=FourierSpectrumRequest,
         result_type=FourierSpectrumResult,
         run=_run_fourier_spectrum,
@@ -79,7 +81,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="boolean.multilinear_extension.compute",
         title="Compute the multilinear extension polynomial of a Boolean function",
-        description="Compute the unique multilinear polynomial over the rationals that agrees with the Boolean function on {0,1}^n. Returns a canonical SymPy polynomial string.",
+        description="Compute the unique multilinear polynomial over the rationals that agrees with the Boolean function on {0,1}^n. Returns exact rational coefficients indexed by the subset mask of each monomial, with the ambient variable count.",
         request_type=MultilinearExtensionRequest,
         result_type=MultilinearExtensionResult,
         run=_run_multilinear_extension,

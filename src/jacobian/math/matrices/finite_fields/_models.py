@@ -64,9 +64,8 @@ class PrimeFieldMatrixRequest(StrictModel):
     @classmethod
     def require_bounded_prime(cls, data: Any) -> Any:
         data = canonicalize_json_containers(data)
-        # Bound the characteristic BEFORE the nested canonical value is
-        # constructed: PrimeFieldMatrix.__post_init__ runs the (expensive)
-        # primality test, so an oversized prime must be rejected first.
+        # Bound the characteristic before the operation admits primality
+        # and modular arithmetic. Nested matrix parsing is structural.
         # Shared strict-JSON container canonicalization above keeps the
         # nested matrix entry rows in their declared tuple shape.
         if isinstance(data, dict):

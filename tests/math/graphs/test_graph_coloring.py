@@ -48,7 +48,13 @@ def test_path_candidate_is_maximal() -> None:
         )
     )
 
-    assert result == MaximalIndependentSetResult(decision="MAXIMAL")
+    assert result.decision == "MAXIMAL"
+    assert result.candidate_set == (0, 2)
+    assert result.graph.vertex_count == 4
+    assert (
+        MaximalIndependentSetResult.model_validate_json(result.model_dump_json())
+        == result
+    )
 
 
 def test_non_independent_candidate_returns_canonical_blocking_edge() -> None:
@@ -132,6 +138,8 @@ def test_candidate_set_is_canonical_and_in_range(
 def test_result_rejects_witness_for_maximal_decision() -> None:
     with pytest.raises(ValidationError):
         MaximalIndependentSetResult(
+            graph=_request(vertex_count=1, edges=[], candidate_set=[]).graph,
+            candidate_set=(),
             decision="MAXIMAL",
             addable_vertex=0,
         )
@@ -139,9 +147,17 @@ def test_result_rejects_witness_for_maximal_decision() -> None:
 
 def test_result_requires_matching_rejection_witness() -> None:
     with pytest.raises(ValidationError):
-        MaximalIndependentSetResult(decision="NOT_INDEPENDENT")
+        MaximalIndependentSetResult(
+            graph=_request(vertex_count=1, edges=[], candidate_set=[]).graph,
+            candidate_set=(),
+            decision="NOT_INDEPENDENT",
+        )
     with pytest.raises(ValidationError):
-        MaximalIndependentSetResult(decision="INDEPENDENT_NOT_MAXIMAL")
+        MaximalIndependentSetResult(
+            graph=_request(vertex_count=1, edges=[], candidate_set=[]).graph,
+            candidate_set=(),
+            decision="INDEPENDENT_NOT_MAXIMAL",
+        )
 
 
 def test_coloring_worker_failure_is_typed_inconclusive_without_a_math_claim(

@@ -15,9 +15,9 @@ from jacobian.math.matrices.certified_snf.operations import (
     verify_smith_normal_form_certificate,
 )
 from jacobian.math.matrices.certified_snf.values import (
-    CertifiedIntegerMatrix,
     SmithNormalFormCertificate,
 )
+from jacobian.math.matrices.values import IntegerMatrix
 
 
 class MatrixWire(TypedDict):
@@ -27,10 +27,10 @@ class MatrixWire(TypedDict):
 
 
 class CertificateFields(TypedDict):
-    source: CertifiedIntegerMatrix
-    diagonal: CertifiedIntegerMatrix
-    left_transformation: CertifiedIntegerMatrix
-    right_transformation: CertifiedIntegerMatrix
+    source: IntegerMatrix
+    diagonal: IntegerMatrix
+    left_transformation: IntegerMatrix
+    right_transformation: IntegerMatrix
     rank: int
     invariant_factors: tuple[str, ...]
     left_determinant: Literal["-1", "1"]
@@ -67,34 +67,16 @@ def test_certified_smith_request_schema_publishes_the_enforced_dimension_cap() -
     schema = CertifiedSmithNormalFormRequest.model_json_schema()
     matrix_schema = schema["properties"]["matrix"]
 
-    assert matrix_schema["properties"]["row_count"] == {
-        "maximum": 16,
-        "minimum": 1,
-        "title": "Row Count",
-        "type": "integer",
-    }
-    assert matrix_schema["properties"]["column_count"] == {
-        "maximum": 16,
-        "minimum": 1,
-        "title": "Column Count",
-        "type": "integer",
-    }
+    for axis in ("row_count", "column_count"):
+        assert matrix_schema["properties"][axis]["maximum"] == 16
+        assert matrix_schema["properties"][axis]["minimum"] == 1
+        assert matrix_schema["properties"][axis]["type"] == "integer"
 
 
 def test_certified_smith_result_source_composes_into_a_new_request() -> None:
-    source = CertifiedIntegerMatrix.model_validate(_matrix([[2]]))
-    identity = CertifiedIntegerMatrix.model_validate(_matrix([[1]]))
-    result = CertifiedSmithNormalFormResult(
-        certificate=SmithNormalFormCertificate(
-            source=source,
-            diagonal=source,
-            left_transformation=identity,
-            right_transformation=identity,
-            rank=1,
-            invariant_factors=("2",),
-            left_determinant="1",
-            right_determinant="1",
-        )
+    source = IntegerMatrix.model_validate(_matrix([[2]]))
+    result = CertifiedSmithNormalFormResult._from_kernel(
+        certificate=smith_normal_form_certificate(source),
     )
 
     request = CertifiedSmithNormalFormRequest(matrix=result.certificate.source)
@@ -103,8 +85,8 @@ def test_certified_smith_result_source_composes_into_a_new_request() -> None:
 
 
 def test_certificate_contract_requires_a_canonical_divisibility_diagonal() -> None:
-    source = CertifiedIntegerMatrix.model_validate(_matrix([[2, 0], [0, 6]]))
-    identity = CertifiedIntegerMatrix.model_validate(_matrix([[1, 0], [0, 1]]))
+    source = IntegerMatrix.model_validate(_matrix([[2, 0], [0, 6]]))
+    identity = IntegerMatrix.model_validate(_matrix([[1, 0], [0, 1]]))
 
     with pytest.raises(ValidationError):
         SmithNormalFormCertificate(
@@ -120,7 +102,7 @@ def test_certificate_contract_requires_a_canonical_divisibility_diagonal() -> No
 
 
 def test_zero_dimensional_matrices_remain_explicit_for_chain_boundaries() -> None:
-    matrix = CertifiedIntegerMatrix(
+    matrix = IntegerMatrix(
         row_count=0,
         column_count=3,
         entries=(),
@@ -130,16 +112,16 @@ def test_zero_dimensional_matrices_remain_explicit_for_chain_boundaries() -> Non
     assert matrix.column_count == 3
 
 
-def _certified_matrix(entries: list[list[int | str]]) -> CertifiedIntegerMatrix:
-    return CertifiedIntegerMatrix.model_validate(_matrix(entries))
+def _certified_matrix(entries: list[list[int | str]]) -> IntegerMatrix:
+    return IntegerMatrix.model_validate(_matrix(entries))
 
 
 def _certificate_kwargs(
     *,
-    source: CertifiedIntegerMatrix | None = None,
-    diagonal: CertifiedIntegerMatrix | None = None,
-    left_transformation: CertifiedIntegerMatrix | None = None,
-    right_transformation: CertifiedIntegerMatrix | None = None,
+    source: IntegerMatrix | None = None,
+    diagonal: IntegerMatrix | None = None,
+    left_transformation: IntegerMatrix | None = None,
+    right_transformation: IntegerMatrix | None = None,
     rank: int | None = None,
     invariant_factors: tuple[str, ...] | None = None,
     left_determinant: Literal["-1", "1"] | None = None,
@@ -297,8 +279,8 @@ def test_certificate_contract_replays_zero_dimensional_boundaries(
     rows: int,
     columns: int,
 ) -> None:
-    def square_identity(size: int) -> CertifiedIntegerMatrix:
-        return CertifiedIntegerMatrix.model_validate(
+    def square_identity(size: int) -> IntegerMatrix:
+        return IntegerMatrix.model_validate(
             _matrix(
                 [
                     [1 if row == column else 0 for column in range(size)]
@@ -307,7 +289,7 @@ def test_certificate_contract_replays_zero_dimensional_boundaries(
             )
         )
 
-    empty_source = CertifiedIntegerMatrix(
+    empty_source = IntegerMatrix(
         row_count=rows,
         column_count=columns,
         entries=tuple(() for _ in range(rows)),
@@ -318,12 +300,12 @@ def test_certificate_contract_replays_zero_dimensional_boundaries(
         left_transformation=(
             square_identity(rows)
             if rows
-            else CertifiedIntegerMatrix(row_count=0, column_count=0)
+            else IntegerMatrix(row_count=0, column_count=0)
         ),
         right_transformation=(
             square_identity(columns)
             if columns
-            else CertifiedIntegerMatrix(row_count=0, column_count=0)
+            else IntegerMatrix(row_count=0, column_count=0)
         ),
         rank=0,
         invariant_factors=(),
@@ -341,8 +323,8 @@ def test_certificate_contract_replays_zero_dimensional_boundaries(
 def test_certificate_contract_replays_rank_zero_determinants_without_formatting_them() -> (
     None
 ):
-    tall_source = CertifiedIntegerMatrix(row_count=2, column_count=0, entries=((), ()))
-    empty_right = CertifiedIntegerMatrix(row_count=0, column_count=0)
+    tall_source = IntegerMatrix(row_count=2, column_count=0, entries=((), ()))
+    empty_right = IntegerMatrix(row_count=0, column_count=0)
     permutation = _certified_matrix([[0, 1], [1, 0]])
     inflated = _certified_matrix([["1" * 64, 0], [0, 1]])
     kwargs = _certificate_kwargs(
@@ -372,3 +354,28 @@ def test_certificate_contract_replays_rank_zero_determinants_without_formatting_
             }
         )
     )
+
+
+@pytest.mark.parametrize(("rows", "columns"), [(0, 3), (3, 0), (0, 0)])
+def test_plain_smith_preserves_canonical_empty_shape(rows: int, columns: int) -> None:
+    from jacobian.math.matrices.operations import smith_normal_form_result
+
+    source = IntegerMatrix(row_count=rows, column_count=columns, entries=((),) * rows)
+    source = IntegerMatrix.model_validate_json(source.model_dump_json())
+    result = smith_normal_form_result(source)
+    assert result.normal_form == source
+    assert result.rank == 0
+    assert result.invariant_factors == ()
+    assert type(result).model_validate_json(result.model_dump_json()) == result
+
+
+def test_inferred_integer_dimensions_do_not_advertise_literal_defaults() -> None:
+    from jsonschema import Draft202012Validator
+
+    schema = IntegerMatrix.model_json_schema()
+    for name in ("row_count", "column_count"):
+        assert "default" not in schema["properties"][name]
+    payload = {"entries": [["2", "3"]]}
+    Draft202012Validator(schema).validate(payload)
+    matrix = IntegerMatrix.model_validate(payload)
+    assert (matrix.row_count, matrix.column_count) == (1, 2)

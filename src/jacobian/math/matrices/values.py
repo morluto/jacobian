@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from fractions import Fraction
 from itertools import pairwise
-from typing import Annotated, Any, ClassVar, Literal, Self, cast
+from typing import Any, Literal, Self, cast
 
 from pydantic import Field, field_validator, model_validator
 from pydantic.json_schema import JsonSchemaValue
@@ -64,13 +64,18 @@ def require_matrix_scalar_digits(
 
 
 def _require_raw_matrix_envelope(  # noqa: C901
-    data: object, *, maximum_axis: int, label: str
+    data: object, *, maximum_axis: int, label: str, allow_shape: bool = False
 ) -> object:
     """Bound raw matrix depth, axes, and scalar strings before tuple copying."""
 
     if not isinstance(data, dict):
         return data
-    if set(data).difference({"domain", "entries"}):
+    allowed = (
+        {"domain", "entries", "row_count", "column_count"}
+        if allow_shape
+        else {"domain", "entries"}
+    )
+    if set(data).difference(allowed):
         raise _validation_error("shape_mismatch", f"{label} contains unknown fields")
     entries = data.get("entries")
     if entries is None:
@@ -188,18 +193,9 @@ def _require_raw_matrix_envelope(  # noqa: C901
     return data
 
 
-def _require_domain_required(schema: dict[str, Any]) -> dict[str, Any]:
-    """Force the domain discriminator to be required in the JSON schema."""
-    required = set(schema.get("required", []))
-    required.add("domain")
-    schema["required"] = sorted(required)
-    return schema
-
-
 class RationalMatrix(StrictModel):
     """One nonempty rectangular matrix over canonical rationals."""
 
-    model_config: ClassVar[Any] = {"json_schema_extra": _require_domain_required}
     domain: Literal["QQ"] = "QQ"
     entries: tuple[tuple[CanonicalRational, ...], ...] = Field(
         min_length=1,
@@ -433,17 +429,29 @@ class RealQuadraticMatrix(StrictModel):
 
 
 class IntegerMatrix(StrictModel):
-    """One nonempty rectangular matrix over exact canonical integers.
+    """One exact integer matrix, including zero-dimensional shapes.
 
-    Structural axes follow ``MAX_INTEGER_MATRIX_ORDER``. Operations whose
-    admitted computation envelope is narrower, including exact linear
-    operations and lattice reduction, enforce that bound in owner-local
-    admission rather than on this shared value.
+    Missing shape fields are inferred from entries (an empty row family
+    defaults to 0 columns). Supply column_count to retain a 0-by-n shape.
+    Serialization always retains both dimensions. Operation bounds belong
+    to native admission, not to a certificate-specific carrier.
     """
 
     domain: Literal["ZZ"] = "ZZ"
+    row_count: int = Field(
+        default_factory=int,
+        ge=0,
+        le=MAX_INTEGER_MATRIX_ORDER,
+        description="Row count; inferred from entries when omitted.",
+    )
+    column_count: int = Field(
+        default_factory=int,
+        ge=0,
+        le=MAX_INTEGER_MATRIX_ORDER,
+        description="Column count; inferred from the first row when omitted, or zero for no rows.",
+    )
     entries: tuple[tuple[CanonicalInteger, ...], ...] = Field(
-        min_length=1,
+        default=(),
         max_length=MAX_INTEGER_MATRIX_ORDER,
     )
 
@@ -451,27 +459,30 @@ class IntegerMatrix(StrictModel):
     @classmethod
     def require_raw_matrix_envelope(cls, data: Any) -> Any:
         data = _require_raw_matrix_envelope(
-            data, maximum_axis=MAX_INTEGER_MATRIX_ORDER, label="matrix"
+            data,
+            maximum_axis=MAX_INTEGER_MATRIX_ORDER,
+            label="matrix",
+            allow_shape=True,
         )
+        if isinstance(data, dict):
+            data = dict(data)
+            entries = data.get("entries", ())
+            if isinstance(entries, (list, tuple)):
+                data.setdefault("row_count", len(entries))
+                if not entries or isinstance(entries[0], (list, tuple)):
+                    data.setdefault("column_count", len(entries[0]) if entries else 0)
         return canonicalize_json_containers(data)
 
     @model_validator(mode="after")
-    def require_rectangular_nonempty_rows(self) -> Self:
-        column_count = len(self.entries[0])
-        if column_count == 0 or column_count > MAX_INTEGER_MATRIX_ORDER:
+    def require_shape_and_scalars(self) -> Self:
+        if len(self.entries) != self.row_count or any(
+            len(row) != self.column_count for row in self.entries
+        ):
             raise _validation_error(
-                "budget_exceeded",
-                "matrix rows must contain between 1 and "
-                f"{MAX_INTEGER_MATRIX_ORDER} entries",
-            )
-        if any(len(row) != column_count for row in self.entries):
-            raise _validation_error(
-                "budget_exceeded", "matrix rows must all have the same length"
+                "shape_mismatch", "matrix entries must match the declared shape"
             )
         require_matrix_scalar_digits(
-            self.entries,
-            maximum=MAX_MATRIX_SCALAR_DIGITS,
-            label="matrix",
+            self.entries, maximum=MAX_MATRIX_SCALAR_DIGITS, label="matrix"
         )
         return self
 
@@ -504,7 +515,6 @@ class SmithNormalForm(StrictModel):
     invariant_factors: tuple[CanonicalInteger, ...] = Field(
         max_length=MAX_EXACT_LINEAR_MATRIX_AXIS
     )
-    transformation_available: Literal[False] = False
     convention: Literal["POSITIVE_DIVISIBILITY_DIAGONAL"] = (
         "POSITIVE_DIVISIBILITY_DIAGONAL"
     )
@@ -512,7 +522,7 @@ class SmithNormalForm(StrictModel):
     @model_validator(mode="after")
     def require_invariant_factor_chain(self) -> Self:
         rows = len(self.normal_form.entries)
-        columns = len(self.normal_form.entries[0])
+        columns = self.normal_form.column_count
         if len(self.invariant_factors) != self.rank:
             raise _validation_error(
                 "shape_mismatch", "nonzero invariant factor count must equal rank"
@@ -560,7 +570,6 @@ class SmithNormalForm(StrictModel):
 class EmbeddedRealSimpleNumberFieldMatrix(StrictModel):
     """One nonempty rectangular matrix over a shared embedded simple number field."""
 
-    model_config: ClassVar[Any] = {"json_schema_extra": _require_domain_required}
     domain: Literal["EMBEDDED_REAL_SIMPLE_NUMBER_FIELD"] = (
         "EMBEDDED_REAL_SIMPLE_NUMBER_FIELD"
     )
@@ -795,10 +804,7 @@ class EmbeddedRealSimpleNumberFieldMatrix(StrictModel):
         return self
 
 
-ExactRealMatrix = Annotated[
-    RationalMatrix | EmbeddedRealSimpleNumberFieldMatrix,
-    Field(discriminator="domain"),
-]
+ExactRealMatrix = RationalMatrix | EmbeddedRealSimpleNumberFieldMatrix
 
 
 __all__ = [

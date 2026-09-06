@@ -16,6 +16,10 @@ def normalize_projective_coordinates(
 
     from sympy import Poly, invert, symbols
 
+    from jacobian.math.finite_fields._admission import require_field
+
+    require_field(presentation)
+
     variable = symbols("z")
     modulus = Poly(
         sum(

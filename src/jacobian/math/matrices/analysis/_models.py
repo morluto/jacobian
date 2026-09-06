@@ -260,13 +260,13 @@ class FarkasCertificateRequest(StrictModel):
     y^T A = 0 and y^T b < 0, proving the system is infeasible.
     """
 
-    constraint_matrix: tuple[tuple[CanonicalRational, ...], ...] = Field(min_length=1)
+    constraint_matrix: RationalMatrix
     rhs_vector: tuple[CanonicalRational, ...] = Field(min_length=1)
     multipliers: tuple[CanonicalRational, ...] = Field(min_length=1)
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
-        n_constraints = len(self.constraint_matrix)
+        n_constraints = len(self.constraint_matrix.entries)
         if len(self.rhs_vector) != n_constraints:
             raise _validation_error(
                 "shape_mismatch", "rhs_vector length must match constraint count"
@@ -275,7 +275,7 @@ class FarkasCertificateRequest(StrictModel):
             raise _validation_error(
                 "shape_mismatch", "multipliers length must match constraint count"
             )
-        widths = {len(row) for row in self.constraint_matrix}
+        widths = {len(row) for row in self.constraint_matrix.entries}
         if len(widths) != 1 or 0 in widths:
             raise _validation_error(
                 "shape_mismatch",
@@ -287,10 +287,27 @@ class FarkasCertificateRequest(StrictModel):
 class FarkasCertificateResult(StrictModel):
     """Result of checking a Farkas infeasibility certificate."""
 
+    constraint_matrix: RationalMatrix
+    rhs_vector: tuple[CanonicalRational, ...]
+    multipliers: tuple[CanonicalRational, ...]
     valid: bool
-    y_t_a: tuple[str, ...]
-    y_t_b: str
+    y_t_a: tuple[CanonicalRational, ...]
+    y_t_b: CanonicalRational
     reason: str
+
+    @model_validator(mode="after")
+    def require_source_dimensions(self) -> Self:
+        rows = len(self.constraint_matrix.entries)
+        if (
+            len(self.rhs_vector) != rows
+            or len(self.multipliers) != rows
+            or len(self.y_t_a) != len(self.constraint_matrix.entries[0])
+        ):
+            raise _validation_error(
+                "shape_mismatch",
+                "Farkas source and products must retain the system dimensions",
+            )
+        return self
 
 
 __all__ = [

@@ -95,7 +95,23 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="galois_group_of_x2_minus_2",
                 description="Galois group of x^2 - 2 over Q.",
-                input={"coefficients": [-2, 0, 1]},
+                input={
+                    "polynomial": {
+                        "variables": ["x"],
+                        "polynomial": {
+                            "terms": [
+                                {
+                                    "coefficient": {"num": "1", "den": "1"},
+                                    "exponents": [2],
+                                },
+                                {
+                                    "coefficient": {"num": "-2", "den": "1"},
+                                    "exponents": [0],
+                                },
+                            ]
+                        },
+                    }
+                },
             ),
         ),
     ),
@@ -112,7 +128,23 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="x3_solvable",
                 description="Check x^3 - 2 is solvable by radicals.",
-                input={"coefficients": [-2, 0, 0, 1]},
+                input={
+                    "polynomial": {
+                        "variables": ["x"],
+                        "polynomial": {
+                            "terms": [
+                                {
+                                    "coefficient": {"num": "1", "den": "1"},
+                                    "exponents": [3],
+                                },
+                                {
+                                    "coefficient": {"num": "-2", "den": "1"},
+                                    "exponents": [0],
+                                },
+                            ]
+                        },
+                    }
+                },
             ),
         ),
     ),

@@ -29,13 +29,13 @@ from jacobian.math.geometry.affine_tori.values import (
     RationalTorusCosetFamily,
     RationalTorusPoint,
 )
-from jacobian.math.matrices.certified_snf.values import CertifiedIntegerMatrix
+from jacobian.math.matrices.values import IntegerMatrix
 
 
 def _integer_matrix(
     entries: tuple[tuple[int, ...], ...], *, rows: int, columns: int
-) -> CertifiedIntegerMatrix:
-    return CertifiedIntegerMatrix(
+) -> IntegerMatrix:
+    return IntegerMatrix(
         row_count=rows,
         column_count=columns,
         entries=tuple(

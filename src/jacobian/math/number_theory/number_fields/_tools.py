@@ -85,7 +85,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="number_field.discriminant.compute",
         title="Compute the discriminant of a number field",
-        description="Compute the field discriminant of one canonical SimpleNumberFieldPresentation in an isolated SymPy worker, or return UNKNOWN if its bounded execution cannot establish a result.",
+        description="Compute the field discriminant of one canonical SimpleNumberFieldPresentation in an isolated SymPy worker. Worker non-completion raises an execution error without a discriminant claim.",
         request_type=NumberFieldRequest,
         result_type=NumberFieldDiscriminantResult,
         run=compute_nf_discriminant,

@@ -5,7 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 from typing import Any
 
-from jacobian._exact import format_canonical_rational
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.analysis.convex._models import (
     AffinePiece,
@@ -57,10 +57,10 @@ def max_affine_evaluation(
         elif v == max_value:
             active_pieces.append(piece.piece_id)
 
-    all_values = tuple((pid, format_canonical_rational(v)) for pid, v in values)
+    all_values = tuple((pid, CanonicalRational.from_fraction(v)) for pid, v in values)
     assert max_value is not None
     return MaxAffineEvalResult(
-        value=format_canonical_rational(max_value),
+        value=CanonicalRational.from_fraction(max_value),
         active_pieces=tuple(active_pieces),
         all_values=all_values,
     )

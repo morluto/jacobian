@@ -9,6 +9,9 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.topology._models import FiniteSimplicialComplex
+from jacobian.math.topology._request_admission import (
+    require_canonical_complex_admission,
+)
 
 MAX_AMBIENT_SIMPLEX_VERTICES = 64
 """Cap on the vertex count of one supplied ambient simplex.
@@ -165,6 +168,7 @@ def _effective_ambient(
     supply both do not need to keep them perfectly synchronized.
     """
     if ambient_complex is not None:
+        require_canonical_complex_admission(ambient_complex)
         derived = _int_tuples_from_complex(ambient_complex)
         if ambient_simplices:
             # Union keeps validation permissive while still requiring closure

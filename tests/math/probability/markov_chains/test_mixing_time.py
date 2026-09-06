@@ -3,7 +3,6 @@ from __future__ import annotations
 from fractions import Fraction
 
 import pytest
-from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.probability.markov_chains._models import MixingTimeRequest
@@ -14,12 +13,19 @@ def _r(num: int, den: int = 1) -> dict[str, str]:
     return {"num": str(num), "den": str(den)}
 
 
+def _wire_matrix(matrix: list[list[dict[str, str]]]) -> dict[str, object]:
+    return {"domain": "QQ", "entries": matrix}
+
+
 def _request(
     *, epsilon: tuple[int, int] = (1, 100), max_steps: int = 8
 ) -> MixingTimeRequest:
     return MixingTimeRequest.model_validate(
         {
-            "matrix": [[_r(1, 2), _r(1, 2)], [_r(1, 4), _r(3, 4)]],
+            "matrix": {
+                "domain": "QQ",
+                "entries": [[_r(1, 2), _r(1, 2)], [_r(1, 4), _r(3, 4)]],
+            },
             "epsilon": _r(*epsilon),
             "max_steps": max_steps,
         }
@@ -71,23 +77,27 @@ def test_nonergodic_chains_return_typed_outcome(
     matrix: list[list[dict[str, str]]],
 ) -> None:
     request = MixingTimeRequest.model_validate(
-        {"matrix": matrix, "epsilon": _r(1, 10), "max_steps": 4}
+        {"matrix": _wire_matrix(matrix), "epsilon": _r(1, 10), "max_steps": 4}
     )
     assert compute_mixing_time(request).status == "NOT_ERGODIC"
 
 
 def test_search_bounds_reject_before_exact_matrix_powers() -> None:
-    with pytest.raises(ValidationError) as error:
-        MixingTimeRequest.model_validate(
-            {
-                "matrix": [
+    request = MixingTimeRequest.model_validate(
+        {
+            "matrix": {
+                "domain": "QQ",
+                "entries": [
                     [_r(1 if i == j else 0) for j in range(33)] for i in range(33)
                 ],
-                "epsilon": _r(1, 10),
-                "max_steps": 4,
-            }
-        )
-    assert error.value.errors()[0]["type"] == "too_long"
+            },
+            "epsilon": _r(1, 10),
+            "max_steps": 4,
+        }
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        compute_mixing_time(request)
+    assert error.value.errors()[0]["type"] == "markov_chain.transition_matrix_dimension"
     request = _request(epsilon=(0, 1))
     with pytest.raises(OperationDomainValidationError) as error:
         compute_mixing_time(request)
@@ -108,7 +118,11 @@ def test_search_rejects_a_rational_height_that_cannot_fit_the_result() -> None:
         for row in range(8)
     ]
     request = MixingTimeRequest.model_validate(
-        {"matrix": matrix, "epsilon": _r(1, 10), "max_steps": 256}
+        {
+            "matrix": _wire_matrix(matrix),
+            "epsilon": _r(1, 10),
+            "max_steps": 256,
+        }
     )
     with pytest.raises(OperationDomainValidationError) as error:
         compute_mixing_time(request)

@@ -2,25 +2,21 @@
 
 from __future__ import annotations
 
-from typing import Self
-
-from pydantic import Field, model_validator
+from pydantic import Field
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
+from jacobian.math.polynomials.values import RationalPolynomial
 
 MAX_POLYNOMIAL_DEGREE = 32
 MAX_POLYNOMIAL_TERMS = 33
 
-# SymPy's ``sturm`` builds the exact Euclidean remainder sequence over QQ. For
-# an integer-coefficient polynomial of degree ``n`` with ``d``-digit
-# coefficients the chain coefficients grow like ``d * n^2`` decimal digits
-# (verified adversarially), so a degree-32 input with 16-digit coefficients
-# produces Sturm-chain coefficients of at most about 16,000 digits, comfortably
-# inside the canonical 32,768-digit wire bound. Rational coefficients are
-# rejected because a 16-digit numerator/denominator drives the plain QQ
-# remainder sequence to roughly 200,000 digits, which cannot be represented.
+# Degree 32 and 16-digit primitive integer coefficients retain the established
+# Euclidean-chain envelope. Rational inputs are admitted only when denominator
+# clearing and content reduction fit that same envelope. SymPy sturm begins
+# with the monic square-free part over QQ, so nonzero scalar rescaling gives
+# the identical remainder sequence. Input scalar components remain capped.
 MAX_COEFFICIENT_DIGITS = 16
 
 
@@ -28,63 +24,60 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"polynomial.real_algebra_{reason}", message)
 
 
-class PolynomialTerm(StrictModel):
-    """One term: coefficient times x^exponent."""
+def _require_bounded_sturm_coefficients(polynomial: RationalPolynomial) -> None:
+    """Bound rational input and its primitive integer representative before Sturm."""
 
-    coefficient: CanonicalRational
-    exponent: int = Field(ge=0, le=MAX_POLYNOMIAL_DEGREE)
+    from math import gcd, lcm
 
-
-class UnivariatePolynomial(StrictModel):
-    """A sparse univariate polynomial with canonical rational terms.
-
-    The real-algebra operations below admit only denominator-one coefficients;
-    this shared wire representation can also express their rational results.
-    """
-
-    terms: tuple[PolynomialTerm, ...] = Field(
-        min_length=1, max_length=MAX_POLYNOMIAL_TERMS
-    )
-
-    @model_validator(mode="after")
-    def require_unique_exponents(self) -> Self:
-        exponents = [t.exponent for t in self.terms]
-        if len(set(exponents)) != len(exponents):
-            raise _validation_error(
-                "duplicate_exponents", "polynomial exponents must be unique"
-            )
-        if any(t.coefficient.as_fraction() == 0 for t in self.terms):
-            raise _validation_error(
-                "zero_term", "zero polynomial terms must be omitted"
-            )
-        return self
-
-
-def _require_bounded_integer_coefficients(polynomial: UnivariatePolynomial) -> None:
-    """Reject non-integer or oversized coefficients before Sturm construction."""
-
-    for term in polynomial.terms:
-        if term.coefficient.den != "1":
-            raise _validation_error(
-                "coefficient_domain", "polynomial coefficients must be integers"
-            )
+    if (
+        len(polynomial.variables) != 1
+        or len(polynomial.polynomial.terms) > MAX_POLYNOMIAL_TERMS
+        or any(
+            term.exponents[0] > MAX_POLYNOMIAL_DEGREE
+            for term in polynomial.polynomial.terms
+        )
+    ):
+        raise _validation_error(
+            "degree_bound", "Sturm input must be univariate of degree at most 32"
+        )
+    if not polynomial.polynomial.terms:
+        raise _validation_error(
+            "zero_polynomial",
+            "the zero polynomial has no finite root count or Sturm chain",
+        )
+    for term in polynomial.polynomial.terms:
         require_bounded_rational(
             term.coefficient,
             max_digits=MAX_COEFFICIENT_DIGITS,
             label="polynomial coefficient",
         )
 
+    denominators = [int(term.coefficient.den) for term in polynomial.polynomial.terms]
+    denominator = lcm(*denominators)
+    coefficients = [
+        int(term.coefficient.num) * (denominator // den)
+        for term, den in zip(polynomial.polynomial.terms, denominators, strict=True)
+    ]
+    content = gcd(*coefficients)
+    if any(
+        abs(value // content) >= 10**MAX_COEFFICIENT_DIGITS for value in coefficients
+    ):
+        raise _validation_error(
+            "coefficient_domain",
+            "primitive integer coefficients exceed the Sturm height envelope",
+        )
+
 
 class SturmChainRequest(StrictModel):
-    """Compute an ordinary Euclidean Sturm sequence for a bounded integer polynomial."""
+    """Compute an ordinary Euclidean Sturm sequence for a bounded rational polynomial."""
 
-    polynomial: UnivariatePolynomial
+    polynomial: RationalPolynomial
 
 
 class RootCountRequest(StrictModel):
-    """Count roots of a bounded integer polynomial in [lower, upper]."""
+    """Count roots of a bounded rational polynomial in [lower, upper]."""
 
-    polynomial: UnivariatePolynomial
+    polynomial: RationalPolynomial
     lower: CanonicalRational
     upper: CanonicalRational
 
@@ -92,24 +85,23 @@ class RootCountRequest(StrictModel):
 class SturmChainResult(StrictModel):
     """The ordinary exact Euclidean Sturm sequence as polynomials."""
 
-    chain: tuple[UnivariatePolynomial, ...] = Field(min_length=1)
+    chain: tuple[RationalPolynomial, ...] = Field(min_length=1)
     degree: int = Field(ge=1, le=MAX_POLYNOMIAL_DEGREE)
 
 
 class RootCountResult(StrictModel):
     """A source-bound count of distinct real roots in a closed interval."""
 
-    source_polynomial: UnivariatePolynomial
+    source_polynomial: RationalPolynomial
     root_count: int = Field(ge=0)
     lower: CanonicalRational
     upper: CanonicalRational
 
 
 __all__ = [
-    "PolynomialTerm",
+    "RationalPolynomial",
     "RootCountRequest",
     "RootCountResult",
     "SturmChainRequest",
     "SturmChainResult",
-    "UnivariatePolynomial",
 ]

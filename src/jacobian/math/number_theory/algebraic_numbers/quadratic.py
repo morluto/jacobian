@@ -88,12 +88,28 @@ class RealQuadraticValue(StrictModel):
             max_digits=_MAX_DIGITS,
             label="radical coefficient",
         )
-        if not is_square_free(self.radicand):
-            raise _validation_error(
-                "radicand_not_square_free",
-                "real-quadratic radicand must be square-free",
-            )
         return self
+
+
+def require_square_free_radicand(
+    radicand: int, *, location: tuple[str, ...] = ("radicand",)
+) -> None:
+    """Admit the field identity required by exact quadratic operations."""
+
+    if not is_square_free(radicand):
+        raise OperationDomainValidationError(
+            location=location,
+            code="real_quadratic.radicand_not_square_free",
+            message="real-quadratic radicand must be square-free",
+        )
+
+
+def require_square_free_value(
+    value: RealQuadraticValue, *, location: tuple[str, ...] = ("value",)
+) -> None:
+    """Admit one value as an element of a real quadratic field."""
+
+    require_square_free_radicand(value.radicand, location=(*location, "radicand"))
 
 
 def _require_order_admission(
@@ -321,6 +337,8 @@ def real_quadratic_order(
 ) -> RealQuadraticOrderValue:
     """Compare two canonical values from the same real quadratic field."""
 
+    require_square_free_value(left, location=("left",))
+    require_square_free_value(right, location=("right",))
     _require_order_admission(left, right)
     a = left.rational_part.as_fraction() - right.rational_part.as_fraction()
     b = left.radical_coefficient.as_fraction() - right.radical_coefficient.as_fraction()
@@ -360,6 +378,7 @@ def real_quadratic_embeddings(
 ) -> RealQuadraticEmbeddingProfile:
     """Return both exact real embeddings, trace, and norm of one element."""
 
+    require_square_free_value(element)
     source = element
     trace, norm = _embedding_scalars(source)
     for label, value in (("trace", trace), ("norm", norm)):
@@ -399,4 +418,6 @@ __all__ = [
     "RealQuadraticValue",
     "real_quadratic_embeddings",
     "real_quadratic_order",
+    "require_square_free_radicand",
+    "require_square_free_value",
 ]

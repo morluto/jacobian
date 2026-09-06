@@ -117,6 +117,60 @@ def _expand_vector(
     return tuple(expanded)
 
 
+def _component_programs(
+    program: StandardFormRationalLinearProgram, admission: LinearAdmission
+) -> RationalLinearProgramResult:
+    width, height = len(program.variables), len(program.rhs)
+    point, dual = [Fraction()] * width, [Fraction()] * height
+    ray: tuple[Fraction, ...] | None = None
+    for rows, columns in admission.components:
+        request_checkpoint("linear-program component")
+        component = StandardFormRationalLinearProgram.model_construct(
+            variables=tuple(program.variables[j] for j in columns),
+            objective=tuple(program.objective[j] for j in columns),
+            coefficients=tuple(
+                tuple(program.coefficients[i][j] for j in columns) for i in rows
+            ),
+            rhs=tuple(program.rhs[i] for i in rows),
+        )
+        result = _linear_program_admitted(
+            component,
+            LinearAdmission(tuple(range(len(columns))), admission.result_digits),
+        )
+        if result.status == "INFEASIBLE":
+            assert result.farkas_candidate is not None
+            return _certify_infeasible(
+                program,
+                _expand_vector(
+                    rows,
+                    tuple(v.as_fraction() for v in result.farkas_candidate),
+                    height,
+                ),
+                admission.result_digits,
+            )
+        assert result.primal_candidate is not None
+        for j, value in zip(columns, result.primal_candidate, strict=True):
+            point[j] = value.as_fraction()
+        if result.status == "UNBOUNDED":
+            assert result.recession_direction is not None
+            ray = _expand_vector(
+                columns,
+                tuple(v.as_fraction() for v in result.recession_direction),
+                width,
+            )
+        else:
+            assert result.dual_candidate is not None
+            for i, value in zip(rows, result.dual_candidate, strict=True):
+                dual[i] = value.as_fraction()
+    for j, cost in enumerate(program.objective):
+        if j not in admission.columns and cost.as_fraction() < 0:
+            ray = _expand_vector((j,), (Fraction(1),), width)
+            break
+    return _certify_point(
+        program, tuple(point), tuple(dual), ray, admission.result_digits
+    )
+
+
 def _linear_program_admitted(
     program: StandardFormRationalLinearProgram,
     admission: LinearAdmission,
@@ -131,6 +185,8 @@ def _linear_program_admitted(
             witness = [zero] * height
             witness[i] = Fraction(1 if rhs.num.startswith("-") else -1)
             return _certify_infeasible(program, tuple(witness), digits)
+    if len(admission.components) > 1:
+        return _component_programs(program, admission)
     columns = admission.columns
     active_rows = tuple(
         i

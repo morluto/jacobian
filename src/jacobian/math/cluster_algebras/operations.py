@@ -12,12 +12,19 @@ from jacobian.math.cluster_algebras._models import (
     _require_mutatable,
     encoded_entries,
     parsed_entries,
+    require_skew_symmetrizable,
 )
 
 
 def _admit_mutation(exchange_matrix: ExchangeMatrix, mutation_index: int) -> None:
     """Expose mutation-growth admission as a typed domain failure."""
 
+    try:
+        require_skew_symmetrizable(exchange_matrix)
+    except PydanticCustomError as exc:
+        raise OperationDomainValidationError(
+            location=("exchange_matrix",), code=exc.type, message=exc.message()
+        ) from exc
     if type(mutation_index) is not int or not 0 <= mutation_index < exchange_matrix.n:
         raise OperationDomainValidationError(
             location=("mutation_index",),
@@ -94,6 +101,12 @@ def g_vectors(exchange_matrix: ExchangeMatrix) -> GVectorResult:
 
     For the initial seed, the g-vector matrix is the identity matrix.
     """
+    try:
+        require_skew_symmetrizable(exchange_matrix)
+    except PydanticCustomError as exc:
+        raise OperationDomainValidationError(
+            location=("exchange_matrix",), code=exc.type, message=exc.message()
+        ) from exc
     return GVectorResult._from_kernel(exchange_matrix)
 
 

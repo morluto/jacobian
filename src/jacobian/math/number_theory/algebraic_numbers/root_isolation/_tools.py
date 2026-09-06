@@ -31,23 +31,42 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="quadratic_roots",
                 description="Roots of x^2-2.",
                 input={
-                    "coefficients_descending": [
-                        {"num": "1", "den": "1"},
-                        {"num": "0", "den": "1"},
-                        {"num": "-2", "den": "1"},
-                    ]
+                    "polynomial": {
+                        "variables": ["x"],
+                        "polynomial": {
+                            "terms": [
+                                {
+                                    "coefficient": {"num": "1", "den": "1"},
+                                    "exponents": [2],
+                                },
+                                {
+                                    "coefficient": {"num": "-2", "den": "1"},
+                                    "exponents": [0],
+                                },
+                            ]
+                        },
+                    }
                 },
             ),
             OperationExample(
                 name="cubic_with_leading_nonzero",
                 description="Isolate the three real roots of x^3-x; the leading coefficient must be nonzero.",
                 input={
-                    "coefficients_descending": [
-                        {"num": "1", "den": "1"},
-                        {"num": "0", "den": "1"},
-                        {"num": "-1", "den": "1"},
-                        {"num": "0", "den": "1"},
-                    ]
+                    "polynomial": {
+                        "variables": ["x"],
+                        "polynomial": {
+                            "terms": [
+                                {
+                                    "coefficient": {"num": "1", "den": "1"},
+                                    "exponents": [3],
+                                },
+                                {
+                                    "coefficient": {"num": "-1", "den": "1"},
+                                    "exponents": [1],
+                                },
+                            ]
+                        },
+                    }
                 },
             ),
         ),

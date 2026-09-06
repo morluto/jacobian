@@ -97,6 +97,7 @@ class GraphTutteBergeCertificate(StrictModel):
 
 
 class GraphMaximumMatchingResult(StrictModel):
+    graph: SimpleUndirectedGraph
     maximum_matching_cardinality: StrictInt = Field(ge=0, le=128)
     witness_edges: tuple[tuple[GraphVertex, GraphVertex], ...]
     certificate: GraphTutteBergeCertificate
@@ -175,6 +176,7 @@ class GraphRadiusResult(StrictModel):
 
 
 class GraphCardinalityMaximumResult(StrictModel):
+    graph: SimpleUndirectedGraph
     status: OptimizationStatus
     order: StrictInt = Field(ge=0, le=32)
     optimum_value: StrictInt | None = Field(default=None, ge=0, le=32)
@@ -188,12 +190,19 @@ class GraphCardinalityMaximumResult(StrictModel):
 
     @model_validator(mode="after")
     def bind_claim_and_witness(self) -> Self:
+        if self.order != len(self.graph.vertices) or not set(
+            self.witness_vertices
+        ).issubset(self.graph.vertices):
+            raise PydanticCustomError(
+                "graph.witness_source",
+                "witness vertices and order must use the source graph",
+            )
         if self.incumbent_value != len(self.witness_vertices):
             raise PydanticCustomError(
                 "graph.witness_cardinality_must_match_the_incumbent",
                 "witness cardinality must match the incumbent",
             )
-        if tuple(sorted(self.witness_vertices)) != self.witness_vertices:
+        if tuple(sorted(set(self.witness_vertices))) != self.witness_vertices:
             raise PydanticCustomError(
                 "graph.witness_vertices_must_be_canonically_sorted",
                 "witness vertices must be canonically sorted",

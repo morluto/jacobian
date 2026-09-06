@@ -199,10 +199,13 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="simple_farkas",
                 description="Simple Farkas certificate check.",
                 input={
-                    "constraint_matrix": [
-                        [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}],
-                        [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
-                    ],
+                    "constraint_matrix": {
+                        "domain": "QQ",
+                        "entries": [
+                            [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}],
+                            [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
+                        ],
+                    },
                     "rhs_vector": [
                         {"num": "-1", "den": "1"},
                         {"num": "-1", "den": "1"},

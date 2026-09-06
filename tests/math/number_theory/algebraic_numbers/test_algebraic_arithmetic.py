@@ -22,7 +22,10 @@ from jacobian.math.number_theory.algebraic_numbers._tools import (
     compute_algebraic_add,
     compute_algebraic_multiply,
 )
-from jacobian.math.number_theory.algebraic_numbers.quadratic import RealQuadraticValue
+from jacobian.math.number_theory.algebraic_numbers.quadratic import (
+    RealQuadraticValue,
+    require_square_free_value,
+)
 
 
 def _cr(value: int, den: int = 1) -> CanonicalRational:
@@ -144,19 +147,43 @@ def test_invalid_radicand_rejected() -> None:
         )
 
 
-def test_non_squarefree_radicand_rejected() -> None:
-    with pytest.raises((ValueError, ValidationError), match="square-free"):
-        RealQuadraticValue(
-            rational_part=_cr(1),
-            radical_coefficient=_cr(1),
-            radicand=12,
-        )
-    with pytest.raises((ValueError, ValidationError), match="square-free"):
-        RealQuadraticValue(
-            rational_part=_cr(1),
-            radical_coefficient=_cr(1),
-            radicand=4,
-        )
+def test_non_squarefree_radicand_is_rejected_by_arithmetic_admission() -> None:
+    value = RealQuadraticValue(
+        rational_part=_cr(1),
+        radical_coefficient=_cr(1),
+        radicand=12,
+    )
+    with pytest.raises(OperationDomainValidationError, match="square-free"):
+        compute_algebraic_add(AlgebraicAdditionRequest(left=value, right=value))
+
+
+def test_arithmetic_admits_shared_radicand_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = 0
+    original = require_square_free_value
+
+    def counted(value: RealQuadraticValue, *, location: tuple[str, ...]) -> None:
+        nonlocal calls
+        calls += 1
+        original(value, location=location)
+
+    monkeypatch.setattr(
+        "jacobian.math.number_theory.algebraic_numbers.operations.require_square_free_value",
+        counted,
+    )
+    result = add_quadratic(_element(1, 1, 2), _element(3, 2, 2))
+
+    assert result.rational_part.as_fraction() == 4
+    assert calls == 1
+
+    value = RealQuadraticValue(
+        rational_part=_cr(1),
+        radical_coefficient=_cr(1),
+        radicand=4,
+    )
+    with pytest.raises(OperationDomainValidationError, match="square-free"):
+        compute_algebraic_add(AlgebraicAdditionRequest(left=value, right=value))
 
 
 def test_result_remains_consumable() -> None:

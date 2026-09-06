@@ -93,6 +93,15 @@ def test_pang_spectra_and_proof_critical_order_are_exact() -> None:
     assert comparison.right_isolating_interval.upper.as_fraction() == Fraction(3, 5)
 
 
+def test_spectral_admission_rejects_a_composite_radicand() -> None:
+    matrix = _matrix(
+        ((_q(radicand=12), _q(radicand=12)), (_q(radicand=12), _q(radicand=12)))
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="square-free"):
+        symmetric_spectrum(matrix)
+
+
 def test_symmetric_spectrum_can_return_quartic_values() -> None:
     source = _matrix(
         (

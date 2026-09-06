@@ -93,8 +93,8 @@ class FiniteCosetCrossedProductPresentation(StrictModel):
 
     ``(u, q_i) (v, q_j) = (u + rho(q_i)v + c(q_i,q_j), q_i q_j)``.
 
-    Validation proves that the quotient table is a group, the matrices define
-    an integral group action, and the cocycle is normalized and associative.
+    Multiplication admission establishes that the quotient table is a group,
+    the matrices define an integral action, and the cocycle is associative.
     This is explicit finite data; it does not parse or solve a group
     presentation.
     """
@@ -143,19 +143,12 @@ class FiniteCosetCrossedProductPresentation(StrictModel):
     @model_validator(mode="after")
     def require_crossed_product_presentation(self) -> Self:
         self._require_base_presentation()
-        index = {label: position for position, label in enumerate(self.cosets)}
-        self._require_quotient_group(index)
-        actions = self._require_action_shapes_and_bounds()
-        cocycle = self._require_cocycle_shapes_and_bounds()
-        self._require_action_laws(index, actions)
-        self._require_cocycle_laws(index, actions, cocycle)
+        self._require_quotient_shape()
+        self._require_action_shapes_and_bounds()
+        self._require_cocycle_shapes_and_bounds()
         return self
 
     def _require_base_presentation(self) -> None:
-        from sympy import isprime
-
-        if not isprime(self.characteristic):
-            raise ValueError("characteristic must be prime")
         if len(set(self.lattice_basis)) != self.lattice_rank:
             raise ValueError("lattice basis labels must be distinct")
         if len(set(self.cosets)) != len(self.cosets):
@@ -246,7 +239,7 @@ class FiniteCosetCrossedProductPresentation(StrictModel):
                             "cocycle must satisfy c(q,r)+c(qr,s) = rho(q)c(r,s)+c(q,rs)"
                         )
 
-    def _require_quotient_group(self, index: dict[str, int]) -> None:
+    def _require_quotient_shape(self) -> None:
         coset_count = len(self.cosets)
         labels = set(self.cosets)
         if len(self.quotient_multiplication) != coset_count:
@@ -257,6 +250,8 @@ class FiniteCosetCrossedProductPresentation(StrictModel):
             if any(product not in labels for product in row):
                 raise ValueError("every quotient product must be a declared coset")
 
+    def _require_quotient_group(self, index: dict[str, int]) -> None:
+        coset_count = len(self.cosets)
         identity = index[self.identity_coset]
         for position, label in enumerate(self.cosets):
             if (

@@ -10,7 +10,8 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 
-MAX_TRUTH_TABLE_LENGTH = 4096
+MAX_WALSH_VARIABLES = 12
+MAX_TRUTH_TABLE_LENGTH = 1 << MAX_WALSH_VARIABLES
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -42,7 +43,7 @@ class BooleanWalshTransformResult(StrictModel):
         min_length=1,
         max_length=MAX_TRUTH_TABLE_LENGTH,
     )
-    variable_count: int = Field(ge=0, le=12)
+    variable_count: int = Field(ge=0, le=MAX_WALSH_VARIABLES)
     ordering: Literal["HADAMARD"] = "HADAMARD"
     convention: Literal["BOOLEAN_SIGN"] = "BOOLEAN_SIGN"
 

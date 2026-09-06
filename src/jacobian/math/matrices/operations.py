@@ -716,7 +716,7 @@ def _admit_integer(matrix: IntegerMatrix) -> None:
     )
     if (
         len(matrix.entries) > MAX_MATRIX_DIMENSION
-        or len(matrix.entries[0]) > MAX_MATRIX_DIMENSION
+        or matrix.column_count > MAX_MATRIX_DIMENSION
     ):
         raise _validation_error(
             "budget_exceeded",
@@ -747,9 +747,9 @@ def _admit_inverse(matrix: IntegerMatrix) -> None:
         matrix.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
     )
     order = len(matrix.entries)
-    if order != len(matrix.entries[0]):
+    if order == 0 or order != matrix.column_count:
         raise _validation_error(
-            "budget_exceeded", "inverse requires a square integer matrix"
+            "budget_exceeded", "inverse requires a nonempty square integer matrix"
         )
     if order > MAX_INVERSE_MATRIX_ORDER:
         raise _validation_error(
@@ -1221,7 +1221,54 @@ def rref_result(matrix: RationalMatrix) -> RrefResult:
     )
 
 
-def nullspace_result(matrix: RationalMatrix) -> NullspaceResult:
+def _sparse_nullspace_result(matrix: SparseRationalMatrix) -> NullspaceResult:
+    from jacobian.math.matrices._flint import rational_rref
+
+    plan = _admit(_admit_sparse_rank, matrix)
+    # Each nonempty support component has rank at least one. This lower
+    # bound reserves the full fundamental basis before elimination, including
+    # all inactive columns. Dense fill-in and minor heights use the rank plan.
+    nullity_bound = matrix.column_count - len(plan.components)
+    if nullity_bound * matrix.column_count > 262_144:
+        raise OperationDomainValidationError(
+            location=("matrix",),
+            code="matrix.budget_exceeded",
+            message="sparse nullspace fundamental basis exceeds the output-cell envelope",
+        )
+    pivot_rows: dict[int, dict[int, Fraction]] = {}
+    for component in plan.components:
+        positions = {column: i for i, column in enumerate(component.columns)}
+        rows = {row: i for i, row in enumerate(component.rows)}
+        dense = [[Fraction()] * len(component.columns) for _ in component.rows]
+        for source_row, source_column, value in component.entries:
+            dense[rows[source_row]][positions[source_column]] = value
+        reduced, rank = rational_rref(tuple(tuple(row) for row in dense))
+        for row in reduced[:rank]:
+            pivot = next(i for i, value in enumerate(row) if value)
+            pivot_rows[component.columns[pivot]] = {
+                column: row[i] for i, column in enumerate(component.columns) if row[i]
+            }
+    free = tuple(j for j in range(matrix.column_count) if j not in pivot_rows)
+    basis = []
+    for column in free:
+        vector = [Fraction()] * matrix.column_count
+        vector[column] = Fraction(1)
+        for pivot, coefficients in pivot_rows.items():
+            vector[pivot] = -coefficients.get(column, Fraction())
+        basis.append(tuple(CanonicalRational.from_fraction(value) for value in vector))
+    return NullspaceResult._from_kernel(
+        matrix=matrix,
+        ambient_dimension=matrix.column_count,
+        rank=len(pivot_rows),
+        nullity=len(free),
+        basis_vectors=tuple(basis),
+        free_columns=free,
+    )
+
+
+def nullspace_result(matrix: RationalMatrix | SparseRationalMatrix) -> NullspaceResult:
+    if isinstance(matrix, SparseRationalMatrix):
+        return _sparse_nullspace_result(matrix)
     _admit(_admit_exact_linear_matrix, matrix.entries)
     reduced, pivots = _flint_rref(matrix)
     pivot_columns = tuple(int(column) for column in pivots)
@@ -1259,13 +1306,18 @@ def characteristic_polynomial_result(
         fmpq(*value.as_integer_ratio()) for row in matrix.entries for value in row
     ]
     polynomial = fmpq_mat(order, order, entries).charpoly()
+    from jacobian.math.polynomials.values import monic_polynomial_from_coefficients
+
     return CharacteristicPolynomialResult(
+        matrix=matrix,
         degree=order,
-        coefficients_descending=tuple(
-            CanonicalRational.from_integer_ratio(
-                int(polynomial[index].p), int(polynomial[index].q)
+        polynomial=monic_polynomial_from_coefficients(
+            tuple(
+                CanonicalRational.from_integer_ratio(
+                    int(polynomial[index].p), int(polynomial[index].q)
+                )
+                for index in range(order + 1)
             )
-            for index in range(order, -1, -1)
         ),
     )
 
@@ -1305,6 +1357,9 @@ def _smith_normal_form_kernel(matrix: IntegerMatrix) -> SmithNormalForm:
 
 
 def smith_normal_form_result(matrix: IntegerMatrix) -> SmithNormalForm:
+    if matrix.row_count == 0 or matrix.column_count == 0:
+        _admit(_admit_integer, matrix)
+        return SmithNormalForm(normal_form=matrix, rank=0, invariant_factors=())
     _admit(_admit_exact_linear_matrix, matrix.entries)
     return _smith_normal_form_kernel(matrix)
 

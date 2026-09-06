@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.canonical import encode_strict_json
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_categories import (
     FiniteCategory,
     MorphismSpec,
@@ -285,26 +286,27 @@ class TestValidation:
     def test_identity_law_violation_rejected(self) -> None:
         # id_B∘g is declared to be f (both A→B), breaking the left identity
         # law id_B∘g = g.
-        with pytest.raises(ValidationError) as error:
-            _category_from_wire(
-                objects=["A", "B"],
-                morphisms=[
-                    {"morphism_id": "id_A", "source": "A", "target": "A"},
-                    {"morphism_id": "id_B", "source": "B", "target": "B"},
-                    {"morphism_id": "f", "source": "A", "target": "B"},
-                    {"morphism_id": "g", "source": "A", "target": "B"},
-                ],
-                identities=[["A", "id_A"], ["B", "id_B"]],
-                composition=[
-                    ["id_A", "id_A", "id_A"],
-                    ["f", "id_A", "f"],
-                    ["g", "id_A", "g"],
-                    ["id_B", "id_B", "id_B"],
-                    ["id_B", "f", "f"],
-                    ["id_B", "g", "f"],
-                ],
-            )
+        category = _category_from_wire(
+            objects=["A", "B"],
+            morphisms=[
+                {"morphism_id": "id_A", "source": "A", "target": "A"},
+                {"morphism_id": "id_B", "source": "B", "target": "B"},
+                {"morphism_id": "f", "source": "A", "target": "B"},
+                {"morphism_id": "g", "source": "A", "target": "B"},
+            ],
+            identities=[["A", "id_A"], ["B", "id_B"]],
+            composition=[
+                ["id_A", "id_A", "id_A"],
+                ["f", "id_A", "f"],
+                ["g", "id_A", "g"],
+                ["id_B", "id_B", "id_B"],
+                ["id_B", "f", "f"],
+                ["id_B", "g", "f"],
+            ],
+        )
 
+        with pytest.raises(OperationDomainValidationError) as error:
+            compute_category_profile(category)
         assert error.value.errors()[0]["type"] == "finite_category.left_identity_law"
 
 

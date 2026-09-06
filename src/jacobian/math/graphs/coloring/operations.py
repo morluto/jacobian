@@ -208,6 +208,8 @@ def maximal_independent_set(
     for edge in edges:
         if edge[0] in candidate and edge[1] in candidate:
             return MaximalIndependentSetResult(
+                graph=graph,
+                candidate_set=candidate_set,
                 decision="NOT_INDEPENDENT",
                 blocking_edge=edge,
             )
@@ -219,10 +221,14 @@ def maximal_independent_set(
     for vertex in range(graph.vertex_count):
         if vertex not in candidate and adjacency[vertex].isdisjoint(candidate):
             return MaximalIndependentSetResult(
+                graph=graph,
+                candidate_set=candidate_set,
                 decision="INDEPENDENT_NOT_MAXIMAL",
                 addable_vertex=vertex,
             )
-    return MaximalIndependentSetResult(decision="MAXIMAL")
+    return MaximalIndependentSetResult(
+        graph=graph, candidate_set=candidate_set, decision="MAXIMAL"
+    )
 
 
 def edge_k_colorability(

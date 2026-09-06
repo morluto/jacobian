@@ -42,6 +42,10 @@ caller composes the returned mathematical values.
   defects that adapters compensate for, with guard tests.
 - [Operation references](reference/operations/index.md) — external-boundary
   notes that are not captured by the live schema.
+- [Schemas and value interoperability](reference/value-interoperability.md) —
+  canonical ownership, explicit conversions, and serialized trust boundaries.
+- [Rational Bernstein coordinates](reference/polynomial-bernstein.md) — exact
+  polynomial basis conversion on boxes, admission bounds, and evidence.
 - [Testing strategy](reference/testing-strategy.md) — validation ownership and
   focused test lanes.
 

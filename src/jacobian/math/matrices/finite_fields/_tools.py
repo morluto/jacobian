@@ -79,6 +79,13 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         request_type=PrimeFieldMatrixRequest,
         result_type=PrimeFieldRrefResult,
         run=compute_rref,
+        discovery_terms=(
+            "solve linear system over GF(2)",
+            "solve Ax=b over GF(p)",
+            "prime field linear equations",
+            "augmented matrix consistency",
+            "particular solution nullspace basis",
+        ),
         tags=("linear-algebra", "finite-field", "exact"),
         examples=(
             OperationExample(
@@ -104,6 +111,11 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         request_type=PrimeFieldMatrixRequest,
         result_type=PrimeFieldNullspaceResult,
         run=compute_nullspace,
+        discovery_terms=(
+            "GF(2) linear system nullspace basis",
+            "GF(p) left nullspace inconsistency certificate",
+            "prime field homogeneous system",
+        ),
         tags=("linear-algebra", "finite-field", "exact"),
         examples=(
             OperationExample(

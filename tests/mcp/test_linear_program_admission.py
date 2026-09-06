@@ -9,6 +9,9 @@ from mcp.shared.exceptions import MCPError
 from tests.support.rationals import rational_payload as q
 
 from jacobian.catalog.catalog import Catalog
+from jacobian.math.optimization._general_models import (
+    GeneralRationalLinearProgramResult,
+)
 from jacobian.math.optimization._tools import TOOLS
 from jacobian.mcp.runtime import AppState
 from jacobian.mcp.server import _build_server
@@ -18,16 +21,16 @@ OPERATION = "optimization.linear.rational_general_optimum.compute"
 
 
 @pytest.mark.parametrize(
-    ("n", "m", "relation", "code"),
+    ("n", "m", "relation", "code", "expect_rejection"),
     [
-        (28, 24, "GE", "normalized_columns"),
-        (2, 64, "EQ", "normalized_rows"),
-        (18, 6, "EQ", "work_bound"),
-        (24, 12, "EQ", "basis_bound"),
+        (28, 24, "GE", "normalized_columns", True),
+        (2, 64, "EQ", "normalized_rows", True),
+        (18, 6, "EQ", "work_bound", False),
+        (24, 12, "EQ", "basis_bound", False),
     ],
 )
 def test_lp_inspection_explains_derived_admission(
-    n: int, m: int, relation: str, code: str
+    n: int, m: int, relation: str, code: str, expect_rejection: bool
 ) -> None:
     async def scenario() -> None:
         server = _build_server(state=AppState(operation_catalog=Catalog(TOOLS)))
@@ -68,10 +71,22 @@ def test_lp_inspection_explains_derived_admission(
             text = json.dumps(inspection.structured_content)
             assert "Normalized limits are 32 columns and 64 rows" in text
             assert "C(n+1,r)" in text and "50000000" in text
-            with pytest.raises(MCPError) as caught:
-                await client.call_tool(
+            if expect_rejection:
+                with pytest.raises(MCPError) as caught:
+                    await client.call_tool(
+                        "math.run", {"operation_id": OPERATION, "payload": payload}
+                    )
+            else:
+                result = await client.call_tool(
                     "math.run", {"operation_id": OPERATION, "payload": payload}
                 )
+                assert result.structured_content is not None
+                output = result.structured_content["output"]
+                parsed = GeneralRationalLinearProgramResult.model_validate(output)
+                assert parsed.status == "OPTIMAL"
+                assert parsed.primal_objective is not None
+                assert parsed.primal_objective.as_fraction() == m
+                return
         diagnostic = caught.value.data
         assert diagnostic["code"] == "RESOURCE_ADMISSION_REJECTED"
         assert diagnostic["stage"] == "resource_admission"

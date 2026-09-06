@@ -278,7 +278,6 @@ class TestTTransform:
         )
         assert result.majorizes is True
         assert len(result.steps) > 0
-        assert result.target_match is True
 
     def test_permutation_equivalent_vectors_return_an_exact_witness(self) -> None:
         """A label permutation needs no averaging, but must still replay to y."""
@@ -291,11 +290,16 @@ class TestTTransform:
         )
 
         assert result.majorizes is True
-        assert result.target_match is True
         assert result.steps == ()
         assert result.final_permutation == (1, 2, 0)
-        assert result.intermediate_vectors[-1] == ("1", "2", "0")
-        matrix = [[Fraction(entry) for entry in row] for row in result.composed_matrix]
+        assert tuple(
+            item.as_fraction() for item in result.intermediate_vectors[-1]
+        ) == (Fraction(1), Fraction(2), Fraction(0))
+        assert result.composed_matrix is not None
+        matrix = [
+            [entry.as_fraction() for entry in row]
+            for row in result.composed_matrix.entries
+        ]
         image = [sum(row[index] * index for index in range(3)) for row in matrix]
         assert image == [Fraction(1), Fraction(2), Fraction(0)]
 

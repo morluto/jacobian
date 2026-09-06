@@ -8,14 +8,15 @@ from typing import NoReturn
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.matrices.values import RationalMatrix
 from jacobian.math.probability.markov_chains.eventual_hitting._models import (
     EventualHittingProfileResult,
 )
 from jacobian.math.probability.markov_chains.values import (
-    TransitionMatrix,
     TransitionMatrixAdmissionError,
     _decimal_digits,
-    as_canonical_transition_matrix,
+    _TransitionMatrix,
+    as_transition_matrix,
     require_transition_matrix,
 )
 
@@ -29,7 +30,7 @@ def _reject(location: tuple[str | int, ...], code: str, message: str) -> NoRetur
 
 
 def _admit_eventual_hitting(
-    matrix: TransitionMatrix,
+    matrix: _TransitionMatrix,
     target_states: tuple[int, ...],
 ) -> tuple[set[int], set[int], tuple[int, ...]]:
     try:
@@ -133,17 +134,18 @@ def _admit_eventual_hitting(
 
 
 def compute_eventual_hitting_profile(
-    matrix: TransitionMatrix,
+    matrix: RationalMatrix,
     target_states: tuple[int, ...],
 ) -> EventualHittingProfileResult:
     """Return the eventual hitting probability profile for a Markov chain.
 
     For each state i, compute h(i) = P_i(ever hit the target set A).
     """
+    native = as_transition_matrix(matrix)
     target_set, can_reach_target, transient = _admit_eventual_hitting(
-        matrix, target_states
+        native, target_states
     )
-    n = len(matrix)
+    n = len(native)
     h = [Fraction(0)] * n
     for i in target_set:
         h[i] = Fraction(1)
@@ -151,7 +153,7 @@ def compute_eventual_hitting_profile(
     non_target = list(transient)
 
     if not non_target:
-        source_matrix = as_canonical_transition_matrix(matrix)
+        source_matrix = matrix
         almost_sure = tuple(i for i in range(n) if i in target_set)
         return EventualHittingProfileResult(
             matrix=source_matrix,
@@ -169,9 +171,9 @@ def compute_eventual_hitting_profile(
     for row_idx, i in enumerate(non_target):
         a_matrix[row_idx][row_idx] = Fraction(1)
         for col_idx, j in enumerate(non_target):
-            a_matrix[row_idx][col_idx] -= matrix[i][j]
+            a_matrix[row_idx][col_idx] -= native[i][j]
         for j in target_set:
-            b_vector[row_idx] += matrix[i][j]
+            b_vector[row_idx] += native[i][j]
 
     from jacobian.math.probability.markov_chains._flint import solve_linear_system
 
@@ -190,7 +192,7 @@ def compute_eventual_hitting_profile(
     almost_sure = tuple(i for i in range(n) if h[i] == 1)
 
     return EventualHittingProfileResult(
-        matrix=as_canonical_transition_matrix(matrix),
+        matrix=matrix,
         target_states=target_states,
         hitting_probabilities=tuple(
             CanonicalRational.from_fraction(h[i]) for i in range(n)

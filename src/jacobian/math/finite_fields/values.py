@@ -14,7 +14,7 @@ from jacobian.math.graphs.directed._models import DirectedGraph
 from jacobian.math.matrices.finite_fields._bounds import (
     MAX_PRIME_FIELD_MATRIX_AXIS,
 )
-from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix, rank
+from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
 
 _MAX_FIELD_ORDER = 65536
 _MIN_MODULUS_COEFFICIENTS = 2
@@ -137,27 +137,6 @@ class FiniteFieldPresentation(StrictModel):
             raise _validation_error(
                 "finite_field.field_order_exceeds_supported_bound",
                 "field order exceeds the supported bound",
-            )
-        from sympy import Poly, isprime, symbols
-
-        if not isprime(self.characteristic):
-            raise _validation_error(
-                "finite_field.characteristic_prime_integer",
-                "characteristic must be a prime integer",
-            )
-        variable = symbols("x")
-        polynomial = Poly(
-            sum(
-                coefficient * variable**power
-                for power, coefficient in enumerate(self.modulus_coefficients)
-            ),
-            variable,
-            modulus=self.characteristic,
-        )
-        if not polynomial.is_irreducible:
-            raise _validation_error(
-                "finite_field.modulus_irreducible_over_prime_field",
-                "modulus must be irreducible over the prime field",
             )
         return self
 
@@ -735,26 +714,6 @@ class FiniteDimensionalSubspace(StrictModel):
             raise _validation_error(
                 "finite_field.subspace_rank_matrix_exceeds_supported_bound",
                 "subspace rank matrix exceeds its supported bound",
-            )
-        flattened = tuple(
-            tuple(
-                coordinate
-                for row in matrix.entries
-                for element in row
-                for coordinate in element.coordinates
-            )
-            for matrix in self.basis
-        )
-        coordinate_rows = tuple(zip(*flattened, strict=True))
-        basis_matrix = PrimeFieldMatrix(
-            prime=self.presentation.characteristic,
-            entries=coordinate_rows,
-            columns=len(self.basis),
-        )
-        if rank(basis_matrix) != len(self.basis):
-            raise _validation_error(
-                "finite_field.subspace_basis_matrices_linearly_independent",
-                "subspace basis matrices must be linearly independent",
             )
         return self
 

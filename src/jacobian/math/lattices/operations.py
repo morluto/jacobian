@@ -7,6 +7,7 @@ from math import isqrt
 from typing import Any
 
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.lattices._lattice_ops import (
     direct_sum as _direct_sum,
 )
@@ -206,6 +207,31 @@ def compute_sublattice_index(
     embedding_values = [
         [parse_canonical_integer(v) for v in row] for row in embedding.entries
     ]
+    parent_values = _basis_int_list(parent)
+    sublattice_values = _basis_int_list(sublattice)
+    # The existing lattice axes and scalar bounds also bound this rectangular
+    # product. Establish the caller's inclusion before using E's Smith form.
+    if (
+        len(embedding_values) != len(sublattice_values)
+        or any(len(row) != len(parent_values) for row in embedding_values)
+        or sublattice.ambient_dimension != parent.ambient_dimension
+    ):
+        raise OperationDomainValidationError(
+            location=("embedding",),
+            code="lattice.sublattice_embedding_mismatch",
+            message="embedding dimensions must express sublattice = E @ parent",
+        )
+    if any(
+        sum(row[k] * parent_values[k][j] for k in range(len(parent_values)))
+        != sublattice_values[i][j]
+        for i, row in enumerate(embedding_values)
+        for j in range(parent.ambient_dimension)
+    ):
+        raise OperationDomainValidationError(
+            location=("embedding",),
+            code="lattice.sublattice_embedding_mismatch",
+            message="embedding must satisfy sublattice = E @ parent exactly",
+        )
     index, factors, free_rank = _sublattice_index(
         embedding_values,
         parent_rank=len(parent.basis.entries),

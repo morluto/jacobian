@@ -25,7 +25,10 @@ from jacobian.math.matrices.quadratic_spectral.values import (
     _definiteness_from_inertia,
 )
 from jacobian.math.matrices.values import RealQuadraticMatrix
-from jacobian.math.number_theory.algebraic_numbers.quadratic import RealQuadraticValue
+from jacobian.math.number_theory.algebraic_numbers.quadratic import (
+    RealQuadraticValue,
+    require_square_free_radicand,
+)
 from jacobian.math.number_theory.algebraic_numbers.real import RealAlgebraicValue
 
 if TYPE_CHECKING:
@@ -361,6 +364,9 @@ def spectrum_rows(
 ) -> tuple[RealAlgebraicMultiplicity, ...]:
     """Return the complete descending exact spectrum with multiplicities."""
 
+    require_square_free_radicand(
+        matrix.entries[0][0].radicand, location=("matrix", "entries", "radicand")
+    )
     if spectrum_kind == "SYMMETRIC_EIGENVALUES":
         require_symmetric_spectrum_matrix(matrix)
     else:
@@ -580,6 +586,9 @@ def inertia_data(
 ) -> tuple[int, int, int, Definiteness]:
     """Return exact Sylvester inertia data for an admitted matrix."""
 
+    require_square_free_radicand(
+        matrix.entries[0][0].radicand, location=("matrix", "entries", "radicand")
+    )
     require_inertia_matrix(matrix)
     positive, negative, zero = _inertia_counts(matrix)
     return (

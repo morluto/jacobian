@@ -9,7 +9,6 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math._labels import OpaqueLabel
-from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix, rank
 
 MAX_LINEAR_CODE_LENGTH = (
     64  # rowspace operations are O(k^2 n) and remain cheap; raised from 32
@@ -54,13 +53,7 @@ class PrimeFieldLinearEncoder(StrictModel):
     )
 
     @model_validator(mode="after")
-    def require_bounded_full_rank_encoder(self) -> Self:
-        from sympy import isprime
-
-        if not isprime(self.field_order):
-            raise _validation_error(
-                "field_order_must_be_prime", "field_order must be prime"
-            )
+    def require_structural_encoder(self) -> Self:
         if len(set(self.message_axis)) != len(self.message_axis):
             raise _validation_error(
                 "message_axis_labels_must_be_unique",
@@ -76,6 +69,11 @@ class PrimeFieldLinearEncoder(StrictModel):
                 "generator_rows_must_match_the_message_axis",
                 "generator rows must match the message axis",
             )
+        if any(len(row) != len(self.coordinate_axis) for row in self.generator_matrix):
+            raise _validation_error(
+                "generator_columns_must_match_the_coordinate_axis",
+                "generator columns must match the coordinate axis",
+            )
         if any(
             not 0 <= entry < self.field_order
             for row in self.generator_matrix
@@ -84,17 +82,6 @@ class PrimeFieldLinearEncoder(StrictModel):
             raise _validation_error(
                 "generator_entries_must_be_canonical_field_residues",
                 "generator entries must be canonical field residues",
-            )
-
-        matrix = PrimeFieldMatrix(
-            prime=self.field_order,
-            entries=self.generator_matrix,
-            columns=len(self.coordinate_axis),
-        )
-        if rank(matrix) != len(self.generator_matrix):
-            raise _validation_error(
-                "generator_matrix_must_have_full_row_rank",
-                "generator matrix must have full row rank",
             )
 
         return self

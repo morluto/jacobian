@@ -8,31 +8,44 @@ from pydantic import ValidationError
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials.real_algebra._models import (
-    PolynomialTerm,
     RootCountRequest,
     SturmChainRequest,
-    UnivariatePolynomial,
 )
 from jacobian.math.polynomials.real_algebra._tools import (
     TOOLS,
     compute_root_count,
     compute_sturm_chain,
 )
+from jacobian.math.polynomials.values import (
+    RationalPolynomial,
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
+)
 
 R = CanonicalRational
 
 
-def _poly(*terms: tuple[str, str, int]) -> UnivariatePolynomial:
-    return UnivariatePolynomial(
-        terms=tuple(
-            PolynomialTerm(coefficient=R(num=num, den=den), exponent=exp)
-            for num, den, exp in terms
-        )
+def _poly(*terms: tuple[str, str, int]) -> RationalPolynomial:
+    return RationalPolynomial(
+        variables=("x",),
+        polynomial=SparseRationalPolynomial(
+            terms=tuple(
+                RationalPolynomialTerm(
+                    coefficient=R(num=num, den=den), exponents=(exp,)
+                )
+                for num, den, exp in sorted(
+                    terms, key=lambda term: term[2], reverse=True
+                )
+            )
+        ),
     )
 
 
-def _coefficient_map(poly: UnivariatePolynomial) -> dict[int, Fraction]:
-    return {term.exponent: term.coefficient.as_fraction() for term in poly.terms}
+def _coefficient_map(poly: RationalPolynomial) -> dict[int, Fraction]:
+    return {
+        term.exponents[0]: term.coefficient.as_fraction()
+        for term in poly.polynomial.terms
+    }
 
 
 def test_sturm_metadata_matches_the_integer_euclidean_envelope() -> None:
@@ -233,19 +246,12 @@ def test_contract_rejects_lower_gt_upper() -> None:
 
 def test_contract_rejects_duplicate_exponents() -> None:
     with pytest.raises(ValidationError):
-        UnivariatePolynomial(
-            terms=(
-                PolynomialTerm(coefficient=R(num="1", den="1"), exponent=2),
-                PolynomialTerm(coefficient=R(num="1", den="1"), exponent=2),
-            )
-        )
+        _poly(("1", "1", 2), ("1", "1", 2))
 
 
 def test_contract_rejects_zero_coefficient() -> None:
     with pytest.raises(ValidationError):
-        UnivariatePolynomial(
-            terms=(PolynomialTerm(coefficient=R(num="0", den="1"), exponent=2),)
-        )
+        _poly(("0", "1", 2))
 
 
 def test_contract_rejects_oversized_coefficient_digits() -> None:
@@ -261,18 +267,16 @@ def test_contract_rejects_oversized_coefficient_digits() -> None:
         compute_root_count(request)
 
 
-def test_contract_rejects_non_integer_coefficients() -> None:
-    """Review fix: rational coefficients would blow up SymPy's plain QQ chain."""
+def test_contract_accepts_bounded_primitive_integer_normalization() -> None:
+    """Small rational rescalings preserve the primitive integer work envelope."""
     polynomial = _poly(("1", "2", 2), ("-2", "1", 0))
     root_request = RootCountRequest(
         polynomial=polynomial,
         lower=R(num="-10", den="1"),
         upper=R(num="10", den="1"),
     )
-    with pytest.raises(OperationDomainValidationError, match="must be integers"):
-        compute_root_count(root_request)
-    with pytest.raises(OperationDomainValidationError, match="must be integers"):
-        compute_sturm_chain(SturmChainRequest(polynomial=polynomial))
+    assert compute_root_count(root_request).root_count == 2
+    assert compute_sturm_chain(SturmChainRequest(polynomial=polynomial)).degree == 2
 
 
 def test_sturm_rejects_constant_polynomial() -> None:

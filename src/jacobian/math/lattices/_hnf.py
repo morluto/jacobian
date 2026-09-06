@@ -47,6 +47,12 @@ HERMITE_NORMAL_FORM_OPERATION: MathTool[
     operation_id="lattice.hermite_normal_form.compute",
     title="Compute an exact row Hermite normal form",
     description=("Compute H and U for one bounded integer matrix with H = U A."),
+    discovery_terms=(
+        "integer row lattice membership canonical basis",
+        "integer column lattice via transpose",
+        "integer multipliers lattice vector membership witness",
+        "unimodular row transformation",
+    ),
     request_type=HermiteNormalFormRequest,
     result_type=HermiteNormalFormResult,
     run=compute_hermite_normal_form,

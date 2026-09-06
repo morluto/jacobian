@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_fields import (
     Axis,
     AxisBoundMatrix,
@@ -12,6 +13,7 @@ from jacobian.math.finite_fields import (
     FiniteLinearMap,
     ProjectivePoint,
 )
+from jacobian.math.finite_fields.operations import element, restrict_scalars
 from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
 
 
@@ -56,8 +58,12 @@ def test_prime_field_presentation_has_one_dimensional_ordered_basis() -> None:
 
 
 def test_presentation_rejects_reducible_or_noncanonical_moduli() -> None:
-    with pytest.raises(ValueError, match="irreducible"):
-        FiniteFieldPresentation(characteristic=2, modulus_coefficients=(0, 0, 1))
+    candidate = FiniteFieldPresentation(
+        characteristic=2, modulus_coefficients=(0, 0, 1)
+    )
+    candidate = FiniteFieldPresentation.model_validate_json(candidate.model_dump_json())
+    with pytest.raises(OperationDomainValidationError, match="irreducible"):
+        element(candidate, (1, 0))
     with pytest.raises(ValueError, match="canonical"):
         FiniteFieldPresentation(characteristic=2, modulus_coefficients=(1, 3, 1))
 
@@ -149,12 +155,19 @@ def test_subspace_rejects_dependent_basis_matrices() -> None:
         entries=((one, zero), (zero, zero)),
     )
 
-    with pytest.raises(ValueError, match="independent"):
-        FiniteDimensionalSubspace(
-            presentation=presentation,
-            basis_axis=basis_axis,
-            basis=(matrix, matrix),
-        )
+    candidate = FiniteDimensionalSubspace(
+        presentation=presentation,
+        basis_axis=basis_axis,
+        basis=(matrix, matrix),
+    )
+    candidate = FiniteDimensionalSubspace.model_validate_json(
+        candidate.model_dump_json()
+    )
+    direction = ProjectivePoint(
+        presentation=presentation, axis=rows, coordinates=(one, zero)
+    )
+    with pytest.raises(OperationDomainValidationError, match="independent"):
+        restrict_scalars(candidate, direction)
 
 
 def test_presentation_rejects_oversized_characteristic_before_primality() -> None:

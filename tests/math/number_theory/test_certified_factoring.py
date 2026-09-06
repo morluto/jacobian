@@ -228,3 +228,15 @@ def test_operations_are_discoverable_via_catalog() -> None:
     ids = {t.operation_id for t in BUILTIN_TOOLS}
     assert "integer.factor.certified_compute" in ids
     assert "integer.primality.certificate.compute" in ids
+
+
+def test_serialized_pratt_node_is_a_claim_not_a_primality_check() -> None:
+    candidate = PrattCertificateNode.model_validate_json(
+        '{"prime":"9","witness":"2","sub_certificates":[{"prime":"2"}]}'
+    )
+    assert not verify_pratt(candidate)
+    result = compute_pratt_certificate(PrimalityCertificateRequest(value="101"))
+    assert result.certificate is not None
+    decoded = PrimalityCertificateResult.model_validate_json(result.model_dump_json())
+    assert decoded.certificate is not None
+    assert verify_pratt(decoded.certificate)

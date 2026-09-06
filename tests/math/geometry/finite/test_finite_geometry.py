@@ -2,6 +2,7 @@
 
 import pytest
 from pydantic import ValidationError
+from sympy import isprime
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_fields import (
@@ -79,6 +80,24 @@ def test_projective_point_equal_same_point() -> None:
     request = ProjectivePointEqualRequest(point_a=point, point_b=point)
     result = projective_point_equal(request.point_a, request.point_b)
     assert result.equal is True
+
+
+def test_projective_point_equal_admits_shared_parent_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = 0
+    original = isprime
+
+    def counted(value: int) -> bool:
+        nonlocal calls
+        calls += 1
+        return bool(original(value))
+
+    point = projective_point_canonicalize(_space(5, ("x", "y")), (2, 3)).point
+    monkeypatch.setattr("jacobian.math.geometry.finite.operations.isprime", counted)
+
+    assert projective_point_equal(point, point).equal is True
+    assert calls == 1
 
 
 def test_projective_point_equal_different_points() -> None:
@@ -394,9 +413,11 @@ def test_enumeration_sequence_replay_rejects_duplicates_and_wrong_counts() -> No
 
 
 def test_request_rejects_nonprime_field() -> None:
-    with pytest.raises(ValidationError) as error:
-        ProjectivePointCanonicalizeRequest(space=_space(4, ("x", "y")), vector=(1, 2))
-    assert error.value.errors()[0]["type"] == "finite_geometry.field_order_not_prime"
+    request = ProjectivePointCanonicalizeRequest(
+        space=_space(4, ("x", "y")), vector=(1, 2)
+    )
+    with pytest.raises(OperationDomainValidationError, match="must be prime"):
+        projective_point_canonicalize(request.space, request.vector)
 
 
 def test_canonical_values_compose_and_reject_different_parents() -> None:

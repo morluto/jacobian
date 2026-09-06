@@ -23,6 +23,7 @@ from jacobian.math.matrices.values import (
     integer_matrix_axis_schema,
     require_matrix_scalar_digits,
 )
+from jacobian.math.polynomials.values import MonicPolynomial
 
 MAX_INPUT_SCALAR_DIGITS = 256
 MAX_DETERMINANT_MATRIX_DIMENSION = 128
@@ -72,7 +73,9 @@ def _require_raw_matrix(value: object, *, label: str, maximum_axis: int) -> None
     """Bound raw matrix containers before converting JSON arrays to tuples."""
 
     if isinstance(value, dict):
-        unexpected = set(value).difference({"domain", "entries"})
+        unexpected = set(value).difference(
+            {"domain", "entries", "row_count", "column_count"}
+        )
         if unexpected:
             raise _validation_error(
                 "shape_mismatch", f"{label} contains unknown fields"
@@ -187,7 +190,7 @@ def _require_computation_dimensions(
 def _require_integer_computation_dimensions(matrix: IntegerMatrix) -> None:
     if (
         len(matrix.entries) > MAX_MATRIX_DIMENSION
-        or len(matrix.entries[0]) > MAX_MATRIX_DIMENSION
+        or matrix.column_count > MAX_MATRIX_DIMENSION
     ):
         raise _validation_error(
             "budget_exceeded",
@@ -434,14 +437,14 @@ class NullspaceResult(StrictModel):
     structural and does not establish an independently supplied claim.
     """
 
-    matrix: RationalMatrix
-    ambient_dimension: int = Field(ge=1, le=MAX_EXACT_LINEAR_MATRIX_AXIS)
-    rank: int = Field(ge=0, le=MAX_EXACT_LINEAR_MATRIX_AXIS)
-    nullity: int = Field(ge=0, le=MAX_EXACT_LINEAR_MATRIX_AXIS)
+    matrix: RationalMatrix | SparseRationalMatrix
+    ambient_dimension: int = Field(ge=0, le=MAX_SPARSE_RATIONAL_MATRIX_AXIS)
+    rank: int = Field(ge=0, le=MAX_SPARSE_RATIONAL_MATRIX_AXIS)
+    nullity: int = Field(ge=0, le=MAX_SPARSE_RATIONAL_MATRIX_AXIS)
     basis_vectors: tuple[tuple[CanonicalRational, ...], ...] = Field(
-        max_length=MAX_EXACT_LINEAR_MATRIX_AXIS
+        max_length=MAX_SPARSE_RATIONAL_MATRIX_AXIS
     )
-    free_columns: tuple[int, ...] = Field(max_length=MAX_EXACT_LINEAR_MATRIX_AXIS)
+    free_columns: tuple[int, ...] = Field(max_length=MAX_SPARSE_RATIONAL_MATRIX_AXIS)
     convention: Literal["RREF_FUNDAMENTAL_BASIS"] = "RREF_FUNDAMENTAL_BASIS"
 
     @classmethod
@@ -450,7 +453,11 @@ class NullspaceResult(StrictModel):
 
     @model_validator(mode="after")
     def require_basis_shape(self) -> Self:
-        if self.ambient_dimension != len(self.matrix.entries[0]):
+        if self.ambient_dimension != (
+            self.matrix.column_count
+            if isinstance(self.matrix, SparseRationalMatrix)
+            else len(self.matrix.entries[0])
+        ):
             raise _validation_error(
                 "shape_mismatch", "ambient dimension must equal the source column count"
             )
@@ -485,23 +492,25 @@ class NullspaceResult(StrictModel):
 
 
 class CharacteristicPolynomialResult(StrictModel):
-    variable: Literal["lambda"] = "lambda"
+    matrix: RationalMatrix
+    polynomial: MonicPolynomial
     degree: int = Field(ge=1, le=MAX_CHARACTERISTIC_POLYNOMIAL_ORDER)
-    coefficients_descending: tuple[CanonicalRational, ...] = Field(
-        min_length=2,
-        max_length=MAX_CHARACTERISTIC_POLYNOMIAL_ORDER + 1,
-    )
-    convention: Literal["DET_LAMBDA_I_MINUS_A"] = "DET_LAMBDA_I_MINUS_A"
+    convention: Literal["DET_T_I_MINUS_A"] = "DET_T_I_MINUS_A"
+
+    @property
+    def coefficients_descending(self) -> tuple[CanonicalRational, ...]:
+        """Derived dense projection; the serialized value is the QQ polynomial."""
+        return tuple(reversed(self.polynomial.coefficients))
 
     @model_validator(mode="after")
-    def require_dense_monic_coefficients(self) -> Self:
-        if len(self.coefficients_descending) != self.degree + 1:
+    def require_source_degree(self) -> Self:
+        if (
+            self.degree != len(self.matrix.entries)
+            or self.degree != self.polynomial.polynomial.terms[0].exponents[0]
+        ):
             raise _validation_error(
-                "shape_mismatch", "dense coefficient count must be degree plus one"
-            )
-        if self.coefficients_descending[0] != CanonicalRational(num="1", den="1"):
-            raise _validation_error(
-                "budget_exceeded", "characteristic polynomial must be monic"
+                "shape_mismatch",
+                "characteristic degree must match the matrix and polynomial",
             )
         return self
 

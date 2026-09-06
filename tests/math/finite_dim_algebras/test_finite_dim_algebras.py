@@ -3,6 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_dim_algebras import center_basis
 from jacobian.math.finite_dim_algebras._models import (
     MAX_COMMUTATOR_ELIMINATION_WORK,
@@ -268,9 +269,29 @@ def test_structure_constants_reject_non_residue() -> None:
 
 
 def test_structure_constants_reject_non_prime_field() -> None:
-    with pytest.raises(ValueError):
-        StructureConstants(
-            dimension=1,
-            field_order=4,
-            multiplication=(((0,),),),
-        )
+    algebra = StructureConstants(
+        dimension=1,
+        field_order=4,
+        multiplication=(((0,),),),
+    )
+    with pytest.raises(
+        OperationDomainValidationError, match="field_order must be prime"
+    ):
+        center_basis(algebra)
+
+
+def test_center_retains_parent_and_rejects_noncanonical_residue() -> None:
+    from jacobian.catalog.catalog import Catalog
+    from jacobian.dispatch import invoke_operation
+    from jacobian.math.finite_dim_algebras._models import CenterResult
+
+    algebra = {"dimension": 1, "field_order": 3, "multiplication": [[[0]]]}
+    output = invoke_operation(
+        "algebra.center.compute", {"algebra": algebra}, Catalog.open()
+    ).output
+    assert output["algebra"] == algebra
+    parsed = CenterResult.model_validate(output)
+    assert parsed.algebra.field_order == 3
+    output["center_basis"] = [[3]]
+    with pytest.raises(ValueError, match="canonical residues"):
+        CenterResult.model_validate(output)

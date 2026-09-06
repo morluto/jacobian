@@ -13,6 +13,7 @@ from jacobian.math.finite_dim_algebras.operations import center_basis
 def compute_center(request: CenterRequest) -> CenterResult:
     basis = center_basis(request.algebra)
     return CenterResult(
+        algebra=request.algebra,
         center_basis=basis,
         dimension=request.algebra.dimension,
         center_dimension=len(basis),

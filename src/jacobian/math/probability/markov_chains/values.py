@@ -5,13 +5,14 @@ from __future__ import annotations
 from fractions import Fraction
 from math import factorial
 
-from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
+from jacobian.math.matrices.values import RationalMatrix
 
 MAX_TRANSITION_STATES = 32
 MAX_STATIONARY_STATES = 128
 MAX_STATIONARY_SOLVE_WORK = 1_000_000
 
-type TransitionMatrix = tuple[tuple[Fraction, ...], ...]
+type _TransitionMatrix = tuple[tuple[Fraction, ...], ...]
 
 
 class TransitionMatrixAdmissionError(ValueError):
@@ -29,25 +30,15 @@ class TransitionMatrixAdmissionError(ValueError):
 
 
 def as_transition_matrix(
-    matrix: tuple[tuple[CanonicalRational, ...], ...],
-) -> TransitionMatrix:
+    matrix: RationalMatrix,
+) -> _TransitionMatrix:
     """Project parsed canonical rationals to the exact native matrix value."""
 
-    return tuple(tuple(value.as_fraction() for value in row) for row in matrix)
-
-
-def as_canonical_transition_matrix(
-    matrix: TransitionMatrix,
-) -> tuple[tuple[CanonicalRational, ...], ...]:
-    """Project a native exact matrix into its canonical serialized value."""
-
-    return tuple(
-        tuple(CanonicalRational.from_fraction(value) for value in row) for row in matrix
-    )
+    return tuple(tuple(value.as_fraction() for value in row) for row in matrix.entries)
 
 
 def require_transition_matrix(
-    matrix: TransitionMatrix, *, maximum_states: int = MAX_TRANSITION_STATES
+    matrix: _TransitionMatrix, *, maximum_states: int = MAX_TRANSITION_STATES
 ) -> None:
     """Admit one finite exact stochastic matrix before a native kernel runs."""
 
@@ -90,7 +81,7 @@ def _decimal_digits(value: int) -> int:
 
 
 def require_stationary_distribution_admission(
-    matrix: TransitionMatrix, closed_classes: tuple[tuple[int, ...], ...]
+    matrix: _TransitionMatrix, closed_classes: tuple[tuple[int, ...], ...]
 ) -> None:
     """Price solves on the already validated carrier's closed classes.
 
@@ -111,7 +102,7 @@ def require_stationary_distribution_admission(
 
 
 def _require_stationary_class_height(
-    matrix: TransitionMatrix, states: tuple[int, ...]
+    matrix: _TransitionMatrix, states: tuple[int, ...]
 ) -> None:
     dimension = len(states)
     row_bounds: list[int] = []
@@ -141,4 +132,4 @@ def _require_stationary_class_height(
         )
 
 
-__all__ = ["TransitionMatrix"]
+__all__ = ["as_transition_matrix"]

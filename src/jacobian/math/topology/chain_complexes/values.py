@@ -14,9 +14,9 @@ from jacobian.math.matrices.certified_snf.values import (
     MAX_CERTIFIED_SNF_DIMENSION,
     MAX_CERTIFIED_SNF_INPUT_DIGITS,
     MAX_CERTIFIED_SNF_OUTPUT_DIGITS,
-    CertifiedIntegerMatrix,
     SmithNormalFormCertificate,
 )
+from jacobian.math.matrices.values import IntegerMatrix
 
 MAX_CHAIN_DEGREE = 32
 MAX_BASIS_SIZE = 64
@@ -363,7 +363,7 @@ class IntegralHomologyGroupValue(StrictModel):
         max_length=MAX_INTEGRAL_HOMOLOGY_CHAIN_RANK
     )
     outgoing_smith_certificate: SmithNormalFormCertificate
-    boundary_in_cycle_coordinates: CertifiedIntegerMatrix
+    boundary_in_cycle_coordinates: IntegerMatrix
     incoming_smith_certificate: SmithNormalFormCertificate
     generator_basis: Literal[
         "SOURCE_CHAIN_BASIS_VIA_CERTIFIED_SMITH_TRANSFORMATIONS"

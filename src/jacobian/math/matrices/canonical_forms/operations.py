@@ -431,8 +431,10 @@ def _matrix_entries(
 
 
 def _to_monic_polynomial(coefficients: Sequence[Fraction]) -> MonicPolynomial:
-    return MonicPolynomial(
-        coefficients=tuple(
+    from jacobian.math.polynomials.values import monic_polynomial_from_coefficients
+
+    return monic_polynomial_from_coefficients(
+        tuple(
             CanonicalRational.from_fraction(coefficient) for coefficient in coefficients
         )
     )

@@ -1243,3 +1243,66 @@ def test_symbolic_eigenvalues_explicit_for_representable_roots() -> None:
     assert result.representation == "EXPLICIT_ROOTS"
     assert result.eigenvalues is not None
     assert result.characteristic_polynomial is None
+
+
+def test_symbolic_characteristic_support_collects_raw_products() -> None:
+    import sympy
+
+    from jacobian.catalog.catalog import Catalog
+    from jacobian.dispatch import invoke_operation
+
+    q = [[4, -1, -1, -1], [1, 4, -1, 1], [1, 1, 4, -1], [1, -1, 1, 4]]
+    c = [
+        [
+            q[i][j - 4] if i < 4 <= j else q[j][i - 4] if j < 4 <= i else 0
+            for j in range(8)
+        ]
+        for i in range(8)
+    ]
+    assert sympy.Matrix(q) * sympy.Matrix(q).T == 19 * sympy.eye(4)
+
+    def entry(value: int, diagonal: bool) -> dict[str, object]:
+        return {
+            "variables": ["t"],
+            "numerator": {
+                "terms": [
+                    {
+                        "coefficient": {
+                            "num": str(1 if diagonal else value),
+                            "den": "1",
+                        },
+                        "exponents": [int(diagonal)],
+                    }
+                ]
+                if diagonal or value
+                else []
+            },
+            "denominator": {
+                "terms": [{"coefficient": {"num": "1", "den": "1"}, "exponents": [0]}]
+            },
+        }
+
+    result = invoke_operation(
+        "matrix.symbolic.characteristic_polynomial.compute",
+        {
+            "matrix": {
+                "variables": ["t"],
+                "entries": [
+                    [entry(c[i][j], i == j) for j in range(8)] for i in range(8)
+                ],
+            }
+        },
+        Catalog.open(),
+    ).output
+    t, lam = sympy.symbols("t lambda")
+    coefficients = [
+        sum(
+            sympy.Rational(term["coefficient"]["num"], term["coefficient"]["den"])
+            * t ** term["exponents"][0]
+            for term in coefficient["numerator"]["terms"]
+        )
+        for coefficient in result["coefficients_descending"]
+    ]
+    assert sympy.Poly.from_list(coefficients, lam) == sympy.Poly(
+        ((lam - t) ** 2 - 19) ** 4, lam
+    )

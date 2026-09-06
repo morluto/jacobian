@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from jacobian.math.matrices.finite_fields.linear_algebra import (
     PrimeFieldMatrix,
-    nullspace,
-    rref,
+    _nullspace_admitted,
+    _rref_admitted,
 )
 
 
@@ -17,7 +17,7 @@ def rref_rank(matrix: list[list[int]], field_order: int) -> tuple[list[list[int]
         entries=tuple(tuple(row) for row in matrix),
         columns=len(matrix[0]) if matrix else 0,
     )
-    reduced, pivots = rref(shared_matrix)
+    reduced, pivots = _rref_admitted(shared_matrix)
     return [list(row) for row in reduced], len(pivots)
 
 
@@ -52,7 +52,7 @@ def intersection_basis(
         columns=k + m,
     )
     intersection_rows: list[list[int]] = []
-    for coefficients in nullspace(matrix):
+    for coefficients in _nullspace_admitted(matrix):
         intersection_rows.append(
             [
                 sum(

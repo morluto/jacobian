@@ -18,14 +18,13 @@ from jacobian.math.probability.markov_chains.operations import (
     mixing_time_result,
     stationary_distribution_result,
 )
-from jacobian.math.probability.markov_chains.values import as_transition_matrix
 
 
 def compute_mixing_time(request: MixingTimeRequest) -> MixingTimeResult:
     """Unpack a wire request for the native mixing-time operation."""
 
     return mixing_time_result(
-        as_transition_matrix(request.matrix),
+        request.matrix,
         request.epsilon.as_fraction(),
         request.max_steps,
     )
@@ -36,13 +35,13 @@ def compute_stationary_distribution(
 ) -> StationaryDistributionResult:
     """Unpack a wire request for the native stationary-family operation."""
 
-    return stationary_distribution_result(as_transition_matrix(request.matrix))
+    return stationary_distribution_result(request.matrix)
 
 
 def compute_ergodic_decision(request: TransitionMatrixRequest) -> ErgodicDecisionResult:
     """Unpack a wire request for the native ergodicity operation."""
 
-    return ergodic_decision(as_transition_matrix(request.matrix))
+    return ergodic_decision(request.matrix)
 
 
 def compute_communicating_classes(
@@ -50,7 +49,7 @@ def compute_communicating_classes(
 ) -> CommunicatingClassesResult:
     """Unpack a wire request for the native class-decomposition operation."""
 
-    return communicating_classes(as_transition_matrix(request.matrix))
+    return communicating_classes(request.matrix)
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
@@ -74,10 +73,13 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="two_state_chain",
                 description="Compute the 1/100 mixing time of a two-state ergodic chain; max_steps bounds the exact search.",
                 input={
-                    "matrix": [
-                        [{"num": "1", "den": "2"}, {"num": "1", "den": "2"}],
-                        [{"num": "1", "den": "4"}, {"num": "3", "den": "4"}],
-                    ],
+                    "matrix": {
+                        "domain": "QQ",
+                        "entries": [
+                            [{"num": "1", "den": "2"}, {"num": "1", "den": "2"}],
+                            [{"num": "1", "den": "4"}, {"num": "3", "den": "4"}],
+                        ],
+                    },
                     "epsilon": {"num": "1", "den": "100"},
                     "max_steps": 8,
                 },
@@ -98,10 +100,13 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="two_state_chain",
                 description="Stationary distribution of a two-state rational Markov chain.",
                 input={
-                    "matrix": [
-                        [{"num": "1", "den": "2"}, {"num": "1", "den": "2"}],
-                        [{"num": "1", "den": "4"}, {"num": "3", "den": "4"}],
-                    ]
+                    "matrix": {
+                        "domain": "QQ",
+                        "entries": [
+                            [{"num": "1", "den": "2"}, {"num": "1", "den": "2"}],
+                            [{"num": "1", "den": "4"}, {"num": "3", "den": "4"}],
+                        ],
+                    }
                 },
             ),
         ),
@@ -119,23 +124,26 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="aperiodic_three_state_chain",
                 description="An irreducible aperiodic chain with zeros in its square.",
                 input={
-                    "matrix": [
-                        [
-                            {"num": "0", "den": "1"},
-                            {"num": "1", "den": "1"},
-                            {"num": "0", "den": "1"},
+                    "matrix": {
+                        "domain": "QQ",
+                        "entries": [
+                            [
+                                {"num": "0", "den": "1"},
+                                {"num": "1", "den": "1"},
+                                {"num": "0", "den": "1"},
+                            ],
+                            [
+                                {"num": "0", "den": "1"},
+                                {"num": "0", "den": "1"},
+                                {"num": "1", "den": "1"},
+                            ],
+                            [
+                                {"num": "1", "den": "2"},
+                                {"num": "0", "den": "1"},
+                                {"num": "1", "den": "2"},
+                            ],
                         ],
-                        [
-                            {"num": "0", "den": "1"},
-                            {"num": "0", "den": "1"},
-                            {"num": "1", "den": "1"},
-                        ],
-                        [
-                            {"num": "1", "den": "2"},
-                            {"num": "0", "den": "1"},
-                            {"num": "1", "den": "2"},
-                        ],
-                    ]
+                    }
                 },
             ),
         ),
@@ -155,10 +163,13 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="two_class_chain",
                 description="A two-state chain where state 0 is transient and state 1 is absorbing.",
                 input={
-                    "matrix": [
-                        [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
-                        [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
-                    ],
+                    "matrix": {
+                        "domain": "QQ",
+                        "entries": [
+                            [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
+                            [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
+                        ],
+                    },
                 },
             ),
         ),

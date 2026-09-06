@@ -20,6 +20,7 @@ from jacobian.math.topology._models import (
     FiniteSimplicialComplex,
     SimplicialComplexCanonicalizationResult,
     SimplicialComplexRequest,
+    simplicial_complex_digest,
 )
 from jacobian.math.topology._tools import TOOLS
 from jacobian.math.topology.chain_complexes.values import (
@@ -153,6 +154,34 @@ def test_chain_and_homology_requests_validate_prime_semantics() -> None:
         )
 
 
+def test_false_face_closure_is_rejected_at_native_admission() -> None:
+    source = _canonical_complex(("a", "b", "c"), (("a", "b", "c"),))
+    payload = source.model_dump()
+    payload["faces_by_dimension"] = (
+        payload["faces_by_dimension"][0],
+        {"dimension": 1, "faces": (("a", "b"), ("a", "c"))},
+        payload["faces_by_dimension"][2],
+    )
+    payload["f_vector"] = (3, 2, 1)
+    payload["closure_size"] = 6
+    payload["complex_digest"] = simplicial_complex_digest(
+        vertices=payload["vertices"],
+        maximal_simplices=payload["maximal_simplices"],
+        faces_by_dimension=tuple(
+            type(source.faces_by_dimension[index]).model_validate(item)
+            for index, item in enumerate(payload["faces_by_dimension"])
+        ),
+        dimension=payload["dimension"],
+        f_vector=payload["f_vector"],
+        closure_size=payload["closure_size"],
+    )
+    malformed = FiniteSimplicialComplex.model_validate(payload)
+    with pytest.raises(OperationDomainValidationError):
+        _operation("topology.simplicial_complex.chain_complex.compute").run(
+            ChainComplexRequest(complex=malformed)
+        )
+
+
 def test_canonical_complex_composes_as_the_authoritative_object() -> None:
     request = SimplicialComplexRequest(
         vertices=("c", "a", "b"),
@@ -256,7 +285,7 @@ def test_inline_homology_rejects_basis_that_exceeds_its_inline_budget() -> None:
 
 
 def test_integral_homology_chain_groups_derive_from_certificate_dimension() -> None:
-    """Every integral-homology certificate matrix is a ``CertifiedIntegerMatrix``
+    """Every integral-homology certificate matrix is a ``IntegerMatrix``
     bounded at ``MAX_CERTIFIED_SNF_DIMENSION`` = 32, so a chain group of 33
     simplices must be rejected at admission rather than fail construction."""
     too_many_vertices = tuple(f"v{index}" for index in range(33))

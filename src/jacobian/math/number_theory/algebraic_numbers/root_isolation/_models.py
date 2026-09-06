@@ -9,14 +9,15 @@ from typing import Annotated, Any, Self
 from pydantic import BeforeValidator, Field, WithJsonSchema, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger, CanonicalRational
+from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import parse_canonical_integer
 from jacobian.math.number_theory.algebraic_numbers.real import (
     MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE,
     MAX_REAL_ALGEBRAIC_DEGREE,
     RealAlgebraicValue,
 )
+from jacobian.math.polynomials.values import RationalPolynomial
 
 MAX_ROOT_ISOLATION_DEGREE = 8
 
@@ -79,56 +80,71 @@ _RootIsolationRealAlgebraicValue = Annotated[
 
 
 class UnivariatePolynomialRequest(StrictModel):
-    coefficients_descending: tuple[CanonicalRational, ...] = Field(
-        min_length=2,
-        max_length=MAX_ROOT_ISOLATION_DEGREE + 1,
-        description=(
-            "Canonical rational coefficients in descending degree. Their "
-            "primitive integer normalization must use at most "
-            f"{MAX_ROOT_ISOLATION_SOURCE_COEFFICIENT_DIGITS} decimal digits."
-        ),
+    polynomial: RationalPolynomial = Field(
+        description="One nonconstant univariate QQ polynomial of degree at most 8; coefficient numerators and denominators have at most 996 digits."
     )
 
     @model_validator(mode="before")
     @classmethod
     def require_raw_factorization_envelope(cls, value: Any) -> Any:
-        """Reject oversized coefficients before nested rational parsing."""
-
+        value = canonicalize_json_containers(value)
         if not isinstance(value, Mapping):
             return value
-        value = canonicalize_json_containers(value)
-        coefficients = value.get("coefficients_descending")
-        if not isinstance(coefficients, (list, tuple)):
+        polynomial = value.get("polynomial")
+        body = polynomial.get("polynomial") if isinstance(polynomial, Mapping) else None
+        terms = body.get("terms") if isinstance(body, Mapping) else None
+        if not isinstance(terms, (list, tuple)):
             return value
-        if len(coefficients) > MAX_ROOT_ISOLATION_DEGREE + 1:
+        if len(terms) > MAX_ROOT_ISOLATION_DEGREE + 1:
             raise _validation_error(
-                "source_degree_bound",
-                f"root isolation admits degree at most {MAX_ROOT_ISOLATION_DEGREE}",
+                "source_degree_bound", "root isolation admits degree at most 8"
             )
-        for coefficient in coefficients:
-            if not isinstance(coefficient, Mapping):
-                continue
-            for component in ("num", "den"):
-                raw_component = coefficient.get(component)
-                if isinstance(raw_component, str) and len(raw_component.lstrip("-")) > (
-                    MAX_ROOT_ISOLATION_SOURCE_COEFFICIENT_DIGITS
-                ):
-                    raise _validation_error(
-                        "source_coefficient_bound",
-                        "root isolation coefficients exceed the "
-                        f"{MAX_ROOT_ISOLATION_SOURCE_COEFFICIENT_DIGITS}-digit "
-                        "factorization envelope",
-                    )
+        for term in terms:
+            coefficient = term.get("coefficient") if isinstance(term, Mapping) else None
+            if isinstance(coefficient, Mapping) and any(
+                isinstance(coefficient.get(component), str)
+                and len(coefficient[component].lstrip("-"))
+                > MAX_ROOT_ISOLATION_SOURCE_COEFFICIENT_DIGITS
+                for component in ("num", "den")
+            ):
+                raise _validation_error(
+                    "source_coefficient_bound",
+                    "root isolation coefficients exceed the 996-digit factorization envelope",
+                )
         return value
 
     @model_validator(mode="after")
-    def require_nonzero_leading(self) -> Self:
-        if self.coefficients_descending[0] == CanonicalRational(num="0", den="1"):
+    def require_isolation_shape(self) -> Self:
+        terms = self.polynomial.polynomial.terms
+        if (
+            len(self.polynomial.variables) != 1
+            or not terms
+            or not 1 <= terms[0].exponents[0] <= MAX_ROOT_ISOLATION_DEGREE
+        ):
             raise _validation_error(
-                "leading_coefficient_zero", "leading coefficient must be nonzero"
+                "source_degree_bound",
+                "root isolation requires one variable and degree at most 8 (positive)",
             )
-        self.normalized_integer_coefficients()
+        if any(
+            len(component.lstrip("-")) > MAX_ROOT_ISOLATION_SOURCE_COEFFICIENT_DIGITS
+            for term in terms
+            for component in (term.coefficient.num, term.coefficient.den)
+        ):
+            raise _validation_error(
+                "source_coefficient_bound",
+                "root isolation coefficients exceed the 996-digit factorization envelope",
+            )
         return self
+
+    @property
+    def coefficients_descending(self) -> tuple[CanonicalRational, ...]:
+        terms = self.polynomial.polynomial.terms
+        coefficients = [CanonicalRational(num="0", den="1")] * (
+            terms[0].exponents[0] + 1
+        )
+        for term in terms:
+            coefficients[-1 - term.exponents[0]] = term.coefficient
+        return tuple(coefficients)
 
     def normalized_integer_coefficients(self) -> tuple[int, ...]:
         """Return the canonical primitive positive-leading integer source."""
@@ -192,9 +208,7 @@ class RootIsolationEntry(StrictModel):
 class RootIsolationResult(StrictModel):
     """Source-bound, ordered real roots with canonical algebraic identities."""
 
-    source_coefficients_descending: tuple[CanonicalInteger, ...] = Field(
-        min_length=2, max_length=MAX_ROOT_ISOLATION_DEGREE + 1
-    )
+    source_polynomial: RationalPolynomial
     roots: tuple[RootIsolationEntry, ...] = Field(max_length=MAX_ROOT_ISOLATION_DEGREE)
 
     @model_validator(mode="before")
@@ -231,10 +245,15 @@ class RootIsolationResult(StrictModel):
 
     @model_validator(mode="after")
     def require_structural_order(self) -> Self:
-        if parse_canonical_integer(self.source_coefficients_descending[0]) <= 0:
+        terms = self.source_polynomial.polynomial.terms
+        if (
+            len(self.source_polynomial.variables) != 1
+            or not terms
+            or not 1 <= terms[0].exponents[0] <= MAX_ROOT_ISOLATION_DEGREE
+        ):
             raise _validation_error(
-                "source_leading_coefficient",
-                "source polynomial must have positive leading coefficient",
+                "source_degree_bound",
+                "root isolation requires one variable and degree at most 8 (positive)",
             )
         intervals = tuple(root.isolating_interval for root in self.roots)
         if any(
@@ -251,16 +270,13 @@ class RootIsolationResult(StrictModel):
     def _from_kernel(
         cls,
         *,
-        source_coefficients_descending: tuple[int, ...],
+        source_polynomial: RationalPolynomial,
         roots: tuple[RootIsolationEntry, ...],
     ) -> Self:
         """Construct after the factor/isolation kernel established each identity."""
 
         return cls.model_construct(
-            source_coefficients_descending=tuple(
-                format_canonical_integer(coefficient)
-                for coefficient in source_coefficients_descending
-            ),
+            source_polynomial=source_polynomial,
             roots=roots,
         )
 

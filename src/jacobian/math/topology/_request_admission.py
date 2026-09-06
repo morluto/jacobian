@@ -9,8 +9,10 @@ from pydantic_core import PydanticCustomError
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.topology._models import (
     MAX_TOPOLOGY_DIMENSION,
+    FiniteSimplicialComplex,
     SimplicialComplexRequest,
     _require_request_complex,
+    face_closure,
 )
 
 
@@ -54,4 +56,22 @@ def require_complex_admission(request: SimplicialComplexRequest) -> None:
     run_topology_admission(admit, location=("facets",))
 
 
-__all__ = ["require_complex_admission", "run_topology_admission"]
+def require_canonical_complex_admission(complex_: FiniteSimplicialComplex) -> None:
+    """Establish the authored face closure before a canonical consumer runs."""
+
+    closure = face_closure(complex_.maximal_simplices)
+    expected_faces = tuple(tuple(sorted(faces)) for faces in closure)
+    actual_faces = tuple(
+        tuple(sorted(item.faces)) for item in complex_.faces_by_dimension
+    )
+    if actual_faces != expected_faces:
+        raise ValueError("canonical complex face closure is incomplete or inconsistent")
+    if complex_.f_vector != tuple(len(faces) for faces in closure):
+        raise ValueError("canonical complex f-vector does not match its face closure")
+
+
+__all__ = [
+    "require_canonical_complex_admission",
+    "require_complex_admission",
+    "run_topology_admission",
+]

@@ -58,10 +58,6 @@ class PrimeFieldMatrix:
             for value in row
         ):
             raise ValueError("matrix entries must be canonical prime-field residues")
-        from sympy import isprime
-
-        if not isprime(self.prime):
-            raise ValueError("prime must be a prime integer")
 
     @classmethod
     def _from_admitted(
@@ -73,6 +69,19 @@ class PrimeFieldMatrix:
         object.__setattr__(matrix, "entries", entries)
         object.__setattr__(matrix, "columns", columns)
         return matrix
+
+
+def _admit_prime(prime: int) -> None:
+    from sympy import isprime
+
+    from jacobian.catalog.models import OperationDomainValidationError
+
+    if type(prime) is not int or prime < 2 or not isprime(prime):
+        raise OperationDomainValidationError(
+            location=("prime",),
+            code="finite_field.characteristic_prime_integer",
+            message="prime must be a prime integer",
+        )
 
 
 def _backend_matrix(matrix: PrimeFieldMatrix) -> Any:
@@ -103,6 +112,14 @@ def rref(
 ) -> tuple[tuple[tuple[int, ...], ...], tuple[int, ...]]:
     """Return reduced rows and pivot columns over the bound prime field."""
 
+    _admit_prime(matrix.prime)
+    return _rref_admitted(matrix)
+
+
+def _rref_admitted(
+    matrix: PrimeFieldMatrix,
+) -> tuple[tuple[tuple[int, ...], ...], tuple[int, ...]]:
+    """Reduce a structurally valid matrix after its field was admitted."""
     row_count = len(matrix.entries)
     if row_count == 0 or matrix.columns == 0:
         return tuple((0,) * matrix.columns for _ in matrix.entries), ()
@@ -137,6 +154,7 @@ def rref(
 def rank(matrix: PrimeFieldMatrix) -> int:
     """Return matrix rank over the bound prime field."""
 
+    _admit_prime(matrix.prime)
     if not matrix.entries or matrix.columns == 0:
         return 0
     if matrix.prime > MAX_PRIME_FIELD_FLINT_PRIME:
@@ -147,6 +165,12 @@ def rank(matrix: PrimeFieldMatrix) -> int:
 def nullspace(matrix: PrimeFieldMatrix) -> tuple[tuple[int, ...], ...]:
     """Return a deterministic basis of the right nullspace."""
 
+    _admit_prime(matrix.prime)
+    return _nullspace_admitted(matrix)
+
+
+def _nullspace_admitted(matrix: PrimeFieldMatrix) -> tuple[tuple[int, ...], ...]:
+    """Compute the kernel after the source field was admitted."""
     if matrix.columns == 0:
         return ()
     if not matrix.entries:
@@ -171,6 +195,7 @@ def column_basis(matrix: PrimeFieldMatrix) -> tuple[tuple[int, ...], ...]:
     """Return the first independent columns in source order."""
 
     if matrix.columns == 0 or not matrix.entries:
+        _admit_prime(matrix.prime)
         return ()
     _, pivots = rref(matrix)
     return tuple(
@@ -192,6 +217,7 @@ def quotient_basis(
         raise ValueError("basis vector has the wrong dimension")
     PrimeFieldMatrix(prime=prime, entries=(), columns=dimension)
     if dimension == 0 or not cycles:
+        _admit_prime(prime)
         return ()
     columns = tuple(
         tuple(int(value) % prime for value in vector) for vector in boundaries

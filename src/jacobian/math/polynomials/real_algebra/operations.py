@@ -17,11 +17,9 @@ from jacobian.math.polynomials.real_algebra._common_interlacing_models import (
     LabelledRationalPolynomial,
 )
 from jacobian.math.polynomials.real_algebra._models import (
-    PolynomialTerm,
     RootCountResult,
     SturmChainResult,
-    UnivariatePolynomial,
-    _require_bounded_integer_coefficients,
+    _require_bounded_sturm_coefficients,
 )
 from jacobian.math.polynomials.real_algebra._models import (
     _validation_error as _real_algebra_validation_error,
@@ -45,6 +43,8 @@ from jacobian.math.polynomials.real_algebra._strict_sublevel_models import (
 )
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
     require_polynomial_budget,
 )
 
@@ -230,26 +230,32 @@ def _run_admission(
         ) from exc
 
 
-def _poly_to_terms(poly: UnivariatePolynomial) -> list[tuple[Fraction, int]]:
-    return [(t.coefficient.as_fraction(), t.exponent) for t in poly.terms]
+def _poly_to_terms(poly: RationalPolynomial) -> list[tuple[Fraction, int]]:
+    return [
+        (t.coefficient.as_fraction(), t.exponents[0]) for t in poly.polynomial.terms
+    ]
 
 
-def _terms_to_poly(terms: list[tuple[Fraction, int]]) -> UnivariatePolynomial:
-    return UnivariatePolynomial(
-        terms=tuple(
-            PolynomialTerm(
-                coefficient=CanonicalRational.from_fraction(coeff),
-                exponent=exp,
+def _terms_to_poly(
+    terms: list[tuple[Fraction, int]], variables: tuple[str, ...]
+) -> RationalPolynomial:
+    return RationalPolynomial(
+        variables=variables,
+        polynomial=SparseRationalPolynomial(
+            terms=tuple(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational.from_fraction(coeff), exponents=(exp,)
+                )
+                for coeff, exp in sorted(terms, key=lambda term: term[1], reverse=True)
+                if coeff
             )
-            for coeff, exp in terms
-            if coeff != 0
-        )
+        ),
     )
 
 
-def _admit_integer_polynomial(polynomial: UnivariatePolynomial) -> None:
+def _admit_sturm_polynomial(polynomial: RationalPolynomial) -> None:
     try:
-        _require_bounded_integer_coefficients(polynomial)
+        _require_bounded_sturm_coefficients(polynomial)
     except PydanticCustomError as exc:
         raise OperationDomainValidationError(
             location=("polynomial",), code=exc.type, message=exc.message()
@@ -262,9 +268,9 @@ def _admit_integer_polynomial(polynomial: UnivariatePolynomial) -> None:
         ) from exc
 
 
-def compute_sturm_chain(poly: UnivariatePolynomial) -> SturmChainResult:
-    _admit_integer_polynomial(poly)
-    if max(term.exponent for term in poly.terms) < 1:
+def compute_sturm_chain(poly: RationalPolynomial) -> SturmChainResult:
+    _admit_sturm_polynomial(poly)
+    if max(term.exponents[0] for term in poly.polynomial.terms) < 1:
         error = _real_algebra_validation_error(
             "constant_input", "Sturm chain requires a non-constant polynomial"
         )
@@ -273,19 +279,19 @@ def compute_sturm_chain(poly: UnivariatePolynomial) -> SturmChainResult:
         )
     terms = _poly_to_terms(poly)
     chain = sturm_chain(terms)
-    degree = max(t.exponent for t in poly.terms)
+    degree = max(t.exponents[0] for t in poly.polynomial.terms)
     return SturmChainResult(
-        chain=tuple(_terms_to_poly(c) for c in chain),
+        chain=tuple(_terms_to_poly(c, poly.variables) for c in chain),
         degree=degree,
     )
 
 
 def compute_root_count(
-    polynomial: UnivariatePolynomial,
+    polynomial: RationalPolynomial,
     lower_bound: CanonicalRational,
     upper_bound: CanonicalRational,
 ) -> RootCountResult:
-    _admit_integer_polynomial(polynomial)
+    _admit_sturm_polynomial(polynomial)
     if lower_bound.as_fraction() > upper_bound.as_fraction():
         error = _real_algebra_validation_error(
             "interval_order", "lower bound must not exceed upper bound"

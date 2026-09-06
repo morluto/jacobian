@@ -179,7 +179,7 @@ def test_multilinear_extension_identity() -> None:
     )
     assert isinstance(result, MultilinearExtensionResult)
     assert result.variable_count == 1
-    assert result.polynomial == "x0"
+    assert [c.as_fraction() for c in result.coefficients] == [0, 1]
 
 
 def test_multilinear_extension_constant_one() -> None:
@@ -187,14 +187,14 @@ def test_multilinear_extension_constant_one() -> None:
     result = compute_multilinear_extension(
         MultilinearExtensionRequest(truth_table=_truth_table([1, 1]))
     )
-    assert result.polynomial == "1"
+    assert [c.as_fraction() for c in result.coefficients] == [1, 0]
 
 
 def test_multilinear_extension_constant_zero() -> None:
     result = compute_multilinear_extension(
         MultilinearExtensionRequest(truth_table=_truth_table([0, 0, 0, 0]))
     )
-    assert result.polynomial == "0"
+    assert [c.as_fraction() for c in result.coefficients] == [0, 0, 0, 0]
 
 
 def test_multilinear_extension_and_function() -> None:
@@ -202,46 +202,55 @@ def test_multilinear_extension_and_function() -> None:
     result = compute_multilinear_extension(
         MultilinearExtensionRequest(truth_table=_truth_table([0, 0, 0, 1]))
     )
-    assert result.polynomial == "x0*x1"
+    assert [c.as_fraction() for c in result.coefficients] == [0, 0, 0, 1]
 
 
 def test_multilinear_extension_agrees_on_hypercube() -> None:
-    import sympy
-
     truth = [0, 1, 1, 0, 1, 0, 0, 1]
     result = compute_multilinear_extension(
         MultilinearExtensionRequest(truth_table=_truth_table(truth))
     )
-    assert result.variable_count == 3
-    symbols = sympy.symbols("x0:3")
-    poly = sympy.sympify(result.polynomial)
+    parsed = MultilinearExtensionResult.model_validate_json(result.model_dump_json())
     for x in range(8):
-        assignment = {symbols[i]: (x >> i) & 1 for i in range(3)}
-        assert poly.subs(assignment) == truth[x], f"MLE disagrees at {x}"
+        assert (
+            sum(
+                c.as_fraction()
+                for mask, c in enumerate(parsed.coefficients)
+                if mask & x == mask
+            )
+            == truth[x]
+        )
 
 
 @pytest.mark.scale
 def test_ten_variable_parity_has_all_closed_form_multilinear_coefficients() -> None:
-    import sympy
+    truth = [index.bit_count() % 2 for index in range(1024)]
+    result = multilinear_extension(_truth_table(truth))
+    assert [c.as_fraction() for c in result.coefficients] == [0] + [
+        (-2) ** (mask.bit_count() - 1) for mask in range(1, 1024)
+    ]
 
-    variable_count = 10
-    truth = [index.bit_count() % 2 for index in range(1 << variable_count)]
 
-    result = compute_multilinear_extension(
-        MultilinearExtensionRequest(truth_table=_truth_table(truth))
-    )
+@pytest.mark.parametrize("n", [0, 10, 11, 12])
+def test_walsh_conventions_have_exact_affine_relationship(n: int) -> None:
+    from jacobian.catalog.catalog import Catalog
+    from jacobian.dispatch import invoke_operation
 
-    symbols = sympy.symbols(f"x0:{variable_count}")
-    expected_coefficients = {
-        tuple((subset_mask >> bit) & 1 for bit in range(variable_count)): (-2)
-        ** (subset_mask.bit_count() - 1)
-        for subset_mask in range(1, 1 << variable_count)
-    }
-    expected = sympy.Poly.from_dict(
-        expected_coefficients, symbols, domain="ZZ"
-    ).as_expr()
-
-    assert result.polynomial == str(expected)
+    values = [x.bit_count() % 2 for x in range(1 << n)]
+    catalog = Catalog.open()
+    signs = invoke_operation(
+        "boolean.fourier.walsh_transform.compute", {"truth_table": values}, catalog
+    ).output
+    raw = invoke_operation(
+        "boolean.fourier_spectrum.compute",
+        {"truth_table": [c.model_dump(mode="json") for c in _truth_table(values)]},
+        catalog,
+    ).output
+    assert signs["variable_count"] == raw["variable_count"] == n
+    assert [int(v) for v in signs["spectrum"]] == [
+        ((1 << n) if i == 0 else 0) - 2 * int(v["num"])
+        for i, v in enumerate(raw["spectrum"])
+    ]
 
 
 # ---------------------------------------------------------------------------

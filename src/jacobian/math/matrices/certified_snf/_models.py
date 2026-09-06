@@ -10,15 +10,15 @@ from pydantic.json_schema import JsonSchemaValue
 from jacobian._models import StrictModel
 from jacobian.math.matrices.certified_snf.values import (
     MAX_CERTIFIED_SNF_INPUT_DIMENSION,
-    CertifiedIntegerMatrix,
     SmithNormalFormCertificate,
 )
+from jacobian.math.matrices.values import IntegerMatrix, SmithNormalForm
 
 
 def _certified_smith_input_schema() -> JsonSchemaValue:
     """Project the producer's request bounds without creating another value type."""
 
-    schema = CertifiedIntegerMatrix.model_json_schema()
+    schema = IntegerMatrix.model_json_schema()
     for field_name in ("row_count", "column_count"):
         schema["properties"][field_name].update(
             minimum=1,
@@ -29,12 +29,13 @@ def _certified_smith_input_schema() -> JsonSchemaValue:
 
 class CertifiedSmithNormalFormRequest(StrictModel):
     matrix: Annotated[
-        CertifiedIntegerMatrix,
+        IntegerMatrix,
         WithJsonSchema(_certified_smith_input_schema()),
     ]
 
 
 class CertifiedSmithNormalFormResult(StrictModel):
+    smith_form: SmithNormalForm
     certificate: SmithNormalFormCertificate
 
     @classmethod
@@ -45,7 +46,14 @@ class CertifiedSmithNormalFormResult(StrictModel):
     ) -> Self:
         """Construct the result emitted by the trusted Smith kernel."""
 
-        return cls.model_construct(certificate=certificate)
+        return cls.model_construct(
+            smith_form=SmithNormalForm.model_construct(
+                normal_form=certificate.diagonal,
+                rank=certificate.rank,
+                invariant_factors=certificate.invariant_factors,
+            ),
+            certificate=certificate,
+        )
 
 
 __all__ = [

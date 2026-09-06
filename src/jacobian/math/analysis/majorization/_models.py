@@ -57,11 +57,13 @@ class RationalVector(StrictModel):
 def _require_majorization_matrix(matrix: RationalMatrix) -> None:
     """Apply majorization's square-matrix and scalar admission envelope."""
 
-    if len(matrix.entries) > MAX_DIMENSION:
+    row_count = len(matrix.entries)
+    column_count = len(matrix.entries[0]) if matrix.entries else 0
+    if row_count > MAX_DIMENSION or column_count > MAX_DIMENSION:
         raise _validation_error(
             "matrix_dimension", f"matrix order must not exceed {MAX_DIMENSION}"
         )
-    if len(matrix.entries) != len(matrix.entries[0]):
+    if row_count != column_count:
         raise _validation_error(
             "matrix_not_square", "majorization requires a square matrix"
         )
@@ -90,7 +92,7 @@ class MajorizationCheckResult(StrictModel):
 
     majorizes: bool
     total_sum_match: bool
-    prefix_slacks: tuple[str, ...]
+    prefix_slacks: tuple[CanonicalRational, ...]
     first_failed_prefix: int | None = None
 
 
@@ -115,7 +117,7 @@ class WeakMajorizationCheckResult(StrictModel):
 
     holds: bool
     direction: Literal["sub", "super"]
-    prefix_slack: tuple[str, ...]
+    prefix_slack: tuple[CanonicalRational, ...]
     first_failed_prefix: int | None = None
 
 
@@ -148,23 +150,41 @@ class TTransformSequenceResult(StrictModel):
     majorizes: bool
     steps: tuple[TTransformStep, ...]
     final_permutation: tuple[int, ...]
-    intermediate_vectors: tuple[tuple[str, ...], ...]
-    composed_matrix: tuple[tuple[str, ...], ...]
-    target_match: bool
+    intermediate_vectors: tuple[tuple[CanonicalRational, ...], ...]
+    composed_matrix: RationalMatrix | None
+    source: RationalVector
+    target: RationalVector
 
     @model_validator(mode="after")
     def bind_majorization_outcome(self) -> Self:
-        if self.majorizes and not self.target_match:
+        dimension = len(self.source.values)
+        if any(
+            step.i_label not in self.source.labels
+            or step.j_label not in self.source.labels
+            for step in self.steps
+        ):
             raise _validation_error(
-                "t_transform_target_mismatch",
-                "a positive T-transform construction must reach the target",
+                "t_transform_axis", "step labels must belong to the source axis"
+            )
+        if len(self.target.values) != dimension or any(
+            len(vector) != dimension for vector in self.intermediate_vectors
+        ):
+            raise _validation_error(
+                "t_transform_shape", "vectors must retain the source dimension"
+            )
+        if self.majorizes and (
+            self.composed_matrix is None
+            or len(self.composed_matrix.entries) != dimension
+            or any(len(row) != dimension for row in self.composed_matrix.entries)
+        ):
+            raise _validation_error(
+                "t_transform_shape", "composed matrix must retain both source axes"
             )
         if not self.majorizes and (
             self.steps
             or self.final_permutation
             or self.intermediate_vectors
-            or self.composed_matrix
-            or self.target_match
+            or self.composed_matrix is not None
         ):
             raise _validation_error(
                 "negative_t_transform_shape",
@@ -183,8 +203,8 @@ class DoublyStochasticCheckResult(StrictModel):
     """Result of a doubly stochastic check."""
 
     is_doubly_stochastic: bool
-    row_sums: tuple[str, ...]
-    col_sums: tuple[str, ...]
+    row_sums: tuple[CanonicalRational, ...]
+    col_sums: tuple[CanonicalRational, ...]
     first_negative_entry: tuple[int, int] | None = None
     first_bad_row: int | None = None
     first_bad_col: int | None = None
@@ -207,8 +227,7 @@ class BirkhoffDecompositionResult(StrictModel):
     """Result of a Birkhoff decomposition."""
 
     terms: tuple[BirkhoffTerm, ...]
-    weights_sum: str
-    reconstruction_matches: bool
+    weights_sum: CanonicalRational
 
 
 class SchurHornCheckRequest(StrictModel):
@@ -235,9 +254,9 @@ class SchurHornCheckResult(StrictModel):
     """Result of Schur-Horn feasibility check."""
 
     feasible: bool
-    eigenvalues_sorted: tuple[str, ...]
-    diagonal_sorted: tuple[str, ...]
-    prefix_slack: tuple[str, ...]
+    eigenvalues_sorted: tuple[CanonicalRational, ...]
+    diagonal_sorted: tuple[CanonicalRational, ...]
+    prefix_slack: tuple[CanonicalRational, ...]
     first_failed_prefix: int | None = None
     total_sum_match: bool
 

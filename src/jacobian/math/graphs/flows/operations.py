@@ -301,16 +301,15 @@ def verify_min_cost_flow(claim: MinCostFlowResult) -> bool:
     For the feasible branch this establishes the full feasibility relation
     against the retained network and demands. Optimality needs dual
     potentials, which the carrier does not retain, so it remains the
-    producer's outcome. For the infeasible branch there is no witness to
-    check; a well-formed infeasible shape is consistent but its
-    infeasibility is likewise the producer's outcome.
+    producer's outcome. The infeasible branch carries no witness, so it
+    does not verify and likewise remains a producer outcome.
     """
     try:
         _admit_min_cost_flow(claim.graph, claim.demands)
     except OperationDomainValidationError:
         return False
     if not claim.feasible:
-        return True
+        return False
     capacities: dict[tuple[int, int], Fraction] = {}
     costs: dict[tuple[int, int], Fraction] = {}
     for edge in claim.graph.edges:

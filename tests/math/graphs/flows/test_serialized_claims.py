@@ -129,6 +129,29 @@ def test_min_cost_flow_claim_checks_feasibility_and_cost() -> None:
     assert not verify_min_cost_flow(MinCostFlowResult.model_validate(unbound))
 
 
+def test_infeasible_min_cost_outcome_is_a_producer_outcome() -> None:
+    result = compute_min_cost_flow(
+        MinCostFlowRequest.model_validate(
+            {
+                "graph": {
+                    "vertex_count": 2,
+                    "edges": [
+                        {
+                            "source": 0,
+                            "target": 1,
+                            "capacity": {"num": "1", "den": "1"},
+                            "cost": {"num": "1", "den": "1"},
+                        }
+                    ],
+                },
+                "demands": [-2, 2],
+            }
+        )
+    )
+    assert result.feasible is False
+    assert not verify_min_cost_flow(result)
+
+
 def test_verifiers_reject_malformed_claims_without_raising() -> None:
     flow = compute_max_flow(
         MaxFlowRequest.model_validate(

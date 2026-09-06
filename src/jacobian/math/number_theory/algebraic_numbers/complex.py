@@ -13,6 +13,7 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalInteger, CanonicalRational
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import parse_canonical_integer
+from jacobian.catalog.models import OperationDomainValidationError
 
 MAX_COMPLEX_ALGEBRAIC_DEGREE = 8
 MAX_COMPLEX_ALGEBRAIC_COEFFICIENT_DIGITS = 1_000
@@ -206,13 +207,13 @@ class RationalComplexIsolatingRectangle(StrictModel):
 class _ComplexAlgebraicValueShape(StrictModel):
     """Canonical structural representation of an indexed nonreal root.
 
-    ``polynomial`` is primitive irreducible in ``ZZ[x]`` with positive leading
-    coefficient.  ``root_index`` uses the mathematical global order: all real
-    roots increasingly first; then conjugate pairs ordered lexicographically
-    by their positive-imaginary representative ``(Re(z), Im(z))``; and within
-    each pair the negative root precedes the positive root.  Thus the
-    polynomial and index, rather than any one of infinitely many valid
-    isolating rectangles, are the value's identity.
+    ``polynomial`` is a bounded canonical integer-coefficient spelling with
+    positive leading coefficient. ``root_index`` uses the mathematical global
+    order: all real roots increasingly first; then conjugate pairs ordered
+    lexicographically by their positive-imaginary representative ``(Re(z),
+    Im(z))``; and within each pair the negative root precedes the positive
+    root. Consumers establish primitivity, irreducibility, and nonreal-root
+    selection in their admitted computation.
 
     This structural view checks the bounded canonical representation. A public
     value constructor or mathematical consumer must additionally recognize
@@ -223,7 +224,7 @@ class _ComplexAlgebraicValueShape(StrictModel):
         min_length=2,
         max_length=MAX_COMPLEX_ALGEBRAIC_DEGREE + 1,
         description=(
-            "Primitive irreducible ZZ[x] coefficients in descending degree, "
+            "Bounded canonical ZZ[x] coefficient spelling in descending degree, "
             "with positive leading coefficient."
         ),
     )
@@ -268,15 +269,6 @@ class _ComplexAlgebraicValueShape(StrictModel):
                 "leading_sign",
                 "complex algebraic minimal polynomial must have positive leading coefficient",
             )
-        content = 0
-        for coefficient in coefficients:
-            content = gcd(content, abs(coefficient))
-        if content != 1:
-            raise _validation_error(
-                "not_primitive",
-                "complex algebraic minimal polynomial must be primitive over ZZ",
-            )
-
         if self.root_index >= len(self.polynomial) - 1:
             raise _validation_error(
                 "root_index",
@@ -303,6 +295,24 @@ class ComplexAlgebraicValue(_ComplexAlgebraicValueShape):
         """Construct after an owner has admitted the canonical polynomial/root."""
 
         return cls.model_construct(polynomial=polynomial, root_index=root_index)
+
+
+def require_primitive_complex_algebraic_value(
+    value: ComplexAlgebraicValue,
+    *,
+    location: tuple[str | int, ...] = ("value",),
+) -> None:
+    """Check the primitive-polynomial claim required by a complex-root consumer."""
+
+    content = 0
+    for coefficient in value.polynomial:
+        content = gcd(content, abs(parse_canonical_integer(coefficient)))
+    if content != 1:
+        raise OperationDomainValidationError(
+            location=location,
+            code="complex_algebraic.not_primitive",
+            message="complex algebraic minimal polynomial must be primitive over ZZ",
+        )
 
 
 def _unrecognized_complex_value_from_shape(
@@ -334,4 +344,5 @@ __all__ = [
     "algebraic_root_magnitude_numerator_bound",
     "algebraic_root_separation_denominator_bound",
     "complex_isolator_component_digit_bound",
+    "require_primitive_complex_algebraic_value",
 ]

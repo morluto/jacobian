@@ -12,11 +12,13 @@ from tests.math.number_theory.algebraic_numbers._real_algebraic_support import (
 )
 
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.number_theory.algebraic_numbers import complex as complex_algebraic
 from jacobian.math.number_theory.algebraic_numbers.real import (
     RealAlgebraicValue,
     _compare_admitted_real_algebraic,
     compare_real_algebraic,
     isolate_real_algebraic,
+    require_primitive_real_algebraic_value,
 )
 from jacobian.math.number_theory.algebraic_numbers.root_isolation._models import (
     AlgebraicCompareRequest,
@@ -78,18 +80,54 @@ def test_order_within_one_degree_sixteen_polynomial_uses_root_indices() -> None:
     assert compare_real_algebraic(negative_root, positive_root).order == "LT"
 
 
-@pytest.mark.parametrize(
-    ("polynomial", "message"),
-    [
-        (("-1", "0", "2"), "positive leading"),
-        (("2", "0", "-4"), "primitive"),
-    ],
-)
-def test_noncanonical_minimal_polynomials_are_rejected(
-    polynomial: tuple[str, ...], message: str
+def test_negative_leading_polynomials_are_rejected_structurally() -> None:
+    with pytest.raises(ValidationError, match="positive leading"):
+        _value(("-1", "0", "2"), 0)
+
+
+def test_nonprimitive_real_root_claims_parse_without_gcd_proof(
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    with pytest.raises(ValidationError, match=message):
-        _value(polynomial, 0)
+    monkeypatch.setattr(
+        "jacobian.math.number_theory.algebraic_numbers.real.gcd",
+        lambda *_args: (_ for _ in ()).throw(AssertionError("gcd was replayed")),
+    )
+
+    candidate = _value(("2", "0", "-4"), 0)
+    assert candidate.polynomial == ("2", "0", "-4")
+
+
+def test_nonprimitive_real_root_claims_are_rejected_by_consumers() -> None:
+    candidate = _value(("2", "0", "-4"), 0)
+
+    with pytest.raises(OperationDomainValidationError, match="primitive"):
+        require_primitive_real_algebraic_value(candidate)
+    with pytest.raises(OperationDomainValidationError, match="primitive"):
+        isolate_real_algebraic(candidate)
+
+
+def test_nonprimitive_complex_root_claims_parse_without_gcd_proof(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        complex_algebraic,
+        "gcd",
+        lambda *_args: (_ for _ in ()).throw(AssertionError("gcd was replayed")),
+    )
+
+    candidate = complex_algebraic.ComplexAlgebraicValue.model_validate(
+        {"polynomial": ["2", "0", "-2"], "root_index": 0}
+    )
+    assert candidate.polynomial == ("2", "0", "-2")
+
+
+def test_nonprimitive_complex_root_claims_are_rejected_by_explicit_checker() -> None:
+    candidate = complex_algebraic.ComplexAlgebraicValue(
+        polynomial=("2", "0", "-2"), root_index=0
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="primitive"):
+        complex_algebraic.require_primitive_complex_algebraic_value(candidate)
 
 
 def test_value_rejects_a_nonreal_or_missing_root() -> None:

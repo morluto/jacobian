@@ -9,6 +9,7 @@ from tests.integration.algebra._support import algebra_validation_error
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.number_theory.algebraic_numbers import real as real_algebraic
 from jacobian.math.number_theory.algebraic_numbers.root_isolation._models import (
     MAX_ROOT_ISOLATION_SOURCE_COEFFICIENT_DIGITS,
     AlgebraicCompareRequest,
@@ -82,6 +83,24 @@ def test_root_isolation_returns_source_bound_composable_identities() -> None:
         }
     )
     assert forged.roots[0].multiplicity == 2
+
+
+def test_root_isolation_uses_admitted_root_carriers_without_revalidation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_if_replayed(*_args: int) -> int:
+        raise AssertionError("root carrier gcd validation was replayed")
+
+    monkeypatch.setattr(real_algebraic, "gcd", fail_if_replayed)
+
+    result = compute_root_isolation(
+        UnivariatePolynomialRequest.model_validate(_isolation_payload(_quadratic("-2")))
+    )
+
+    assert tuple(root.algebraic_value.real_root_index for root in result.roots) == (
+        0,
+        1,
+    )
 
 
 def test_root_isolation_accepts_sympy_singleton_interval_for_a_rational_root() -> None:

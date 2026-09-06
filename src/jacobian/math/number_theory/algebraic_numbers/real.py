@@ -62,17 +62,18 @@ def _rational(value: SympyRational) -> CanonicalRational:
 class _RealAlgebraicValueShape(StrictModel):
     """Canonical structural representation of an indexed real root.
 
-    ``polynomial`` is the primitive irreducible polynomial in ``ZZ[x]`` with
-    positive leading coefficient, listed in descending degree.  The
-    zero-based ``real_root_index`` selects one of its real roots in increasing
-    order.  This pair uniquely determines the value and its real embedding.
+    ``polynomial`` is a bounded canonical integer-coefficient polynomial
+    spelling with positive leading coefficient, listed in descending degree.
+    The zero-based ``real_root_index`` selects one of its real roots in
+    increasing order.  Consumers establish primitivity, irreducibility, and
+    root existence in their admitted computation.
     """
 
     polynomial: tuple[CanonicalInteger, ...] = Field(
         min_length=2,
         max_length=MAX_REAL_ALGEBRAIC_DEGREE + 1,
         description=(
-            "Primitive irreducible ZZ[x] coefficients in descending degree, "
+            "Bounded canonical ZZ[x] coefficient spelling in descending degree, "
             "with positive leading coefficient and at most 1,000 digits each."
         ),
         examples=[["1", "0", "-2"]],
@@ -105,15 +106,6 @@ class _RealAlgebraicValueShape(StrictModel):
                 "leading_sign",
                 "real algebraic minimal polynomial must have positive leading coefficient",
             )
-        content = 0
-        for coefficient in coefficients:
-            content = gcd(content, abs(coefficient))
-        if content != 1:
-            raise _validation_error(
-                "not_primitive",
-                "real algebraic minimal polynomial must be primitive over ZZ",
-            )
-
         if self.real_root_index >= len(self.polynomial) - 1:
             raise _validation_error(
                 "root_index",
@@ -123,7 +115,7 @@ class _RealAlgebraicValueShape(StrictModel):
 
 
 class RealAlgebraicValue(_RealAlgebraicValueShape):
-    """One real algebraic number in canonical minimal-polynomial form.
+    """One structurally encoded real algebraic root identity.
 
     Parsing checks the canonical encoding. Consumers establish irreducibility
     and the selected real root within their admitted computation.
@@ -141,6 +133,24 @@ class RealAlgebraicValue(_RealAlgebraicValueShape):
         return cls.model_construct(
             polynomial=polynomial,
             real_root_index=real_root_index,
+        )
+
+
+def require_primitive_real_algebraic_value(
+    value: RealAlgebraicValue,
+    *,
+    location: tuple[str | int, ...] = ("value",),
+) -> None:
+    """Check the primitive-polynomial claim required by a real-root consumer."""
+
+    content = 0
+    for coefficient in value.polynomial:
+        content = gcd(content, abs(parse_canonical_integer(coefficient)))
+    if content != 1:
+        raise OperationDomainValidationError(
+            location=location,
+            code="real_algebraic.not_primitive",
+            message="real algebraic minimal polynomial must be primitive over ZZ",
         )
 
 
@@ -204,6 +214,7 @@ def _interval(lower: SympyRational, upper: SympyRational) -> RationalIsolatingIn
 
 
 def _admit_real_polynomial(value: RealAlgebraicValue) -> Poly:
+    require_primitive_real_algebraic_value(value)
     polynomial = _sympy_polynomial(value)
     if polynomial.is_irreducible is not True:
         raise OperationDomainValidationError(
@@ -434,4 +445,5 @@ __all__ = [
     "RealAlgebraicValue",
     "compare_real_algebraic",
     "isolate_real_algebraic",
+    "require_primitive_real_algebraic_value",
 ]

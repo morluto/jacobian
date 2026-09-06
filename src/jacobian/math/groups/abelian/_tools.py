@@ -34,27 +34,27 @@ def _run_presentation_normalize(
 
 
 def _run_element_reduce(request: ElementReduceRequest) -> ElementReduceResult:
-    return reduce_element(request.group.invariant_factors, request.coordinates)
+    return reduce_element(request.group, request.coordinates)
 
 
 def _run_element_equal(request: ElementEqualRequest) -> ElementEqualResult:
     return elements_equal(
-        request.group.invariant_factors, request.coordinates_a, request.coordinates_b
+        request.group, request.coordinates_a, request.coordinates_b
     )
 
 
 def _run_element_order(request: ElementOrderRequest) -> ElementOrderResult:
-    return element_order(request.group.invariant_factors, request.coordinates)
+    return element_order(request.group, request.coordinates)
 
 
 def _run_subgroup_generated(
     request: SubgroupGeneratedRequest,
 ) -> SubgroupGeneratedResult:
-    return generated_subgroup(request.group.invariant_factors, request.generators)
+    return generated_subgroup(request.group, request.generators)
 
 
 def _run_quotient(request: QuotientRequest) -> QuotientResult:
-    return quotient_group(request.group.invariant_factors, request.subgroup_generators)
+    return quotient_group(request.group, request.subgroup_generators)
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (

@@ -34,25 +34,25 @@ def compute_presentation_normalize(request: PresentationNormalizeRequest):
 
 
 def compute_element_reduce(request: ElementReduceRequest):
-    return reduce_element(request.group.invariant_factors, request.coordinates)
+    return reduce_element(request.group, request.coordinates)
 
 
 def compute_element_equal(request: ElementEqualRequest):
     return elements_equal(
-        request.group.invariant_factors, request.coordinates_a, request.coordinates_b
+        request.group, request.coordinates_a, request.coordinates_b
     )
 
 
 def compute_element_order(request: ElementOrderRequest):
-    return element_order(request.group.invariant_factors, request.coordinates)
+    return element_order(request.group, request.coordinates)
 
 
 def compute_subgroup_generated(request: SubgroupGeneratedRequest):
-    return generated_subgroup(request.group.invariant_factors, request.generators)
+    return generated_subgroup(request.group, request.generators)
 
 
 def compute_quotient(request: QuotientRequest):
-    return quotient_group(request.group.invariant_factors, request.subgroup_generators)
+    return quotient_group(request.group, request.subgroup_generators)
 
 
 def test_catalog_contains_only_audited_operations() -> None:

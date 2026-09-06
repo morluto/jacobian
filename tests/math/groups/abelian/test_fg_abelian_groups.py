@@ -7,11 +7,17 @@ from jacobian.math.groups.abelian._models import (
     AbelianPresentation,
     CyclicFactorPresentation,
     ElementEqualRequest,
+    ElementEqualResult,
     ElementOrderRequest,
+    ElementOrderResult,
     ElementReduceRequest,
+    ElementReduceResult,
     PresentationNormalizeRequest,
+    PresentationNormalizeResult,
     QuotientRequest,
+    QuotientResult,
     SubgroupGeneratedRequest,
+    SubgroupGeneratedResult,
 )
 from jacobian.math.groups.abelian._tools import TOOLS
 from jacobian.math.groups.abelian.operations import (
@@ -30,29 +36,33 @@ from jacobian.math.groups.abelian.operations import (
 )
 
 
-def compute_presentation_normalize(request: PresentationNormalizeRequest):
+def compute_presentation_normalize(
+    request: PresentationNormalizeRequest,
+) -> PresentationNormalizeResult:
     return normalize_presentation(
         CyclicFactorPresentation(invariant_factors=request.invariant_factors)
     )
 
 
-def compute_element_reduce(request: ElementReduceRequest):
+def compute_element_reduce(request: ElementReduceRequest) -> ElementReduceResult:
     return reduce_element(request.group, request.coordinates)
 
 
-def compute_element_equal(request: ElementEqualRequest):
+def compute_element_equal(request: ElementEqualRequest) -> ElementEqualResult:
     return elements_equal(request.group, request.coordinates_a, request.coordinates_b)
 
 
-def compute_element_order(request: ElementOrderRequest):
+def compute_element_order(request: ElementOrderRequest) -> ElementOrderResult:
     return element_order(request.group, request.coordinates)
 
 
-def compute_subgroup_generated(request: SubgroupGeneratedRequest):
+def compute_subgroup_generated(
+    request: SubgroupGeneratedRequest,
+) -> SubgroupGeneratedResult:
     return generated_subgroup(request.group, request.generators)
 
 
-def compute_quotient(request: QuotientRequest):
+def compute_quotient(request: QuotientRequest) -> QuotientResult:
     return quotient_group(request.group, request.subgroup_generators)
 
 

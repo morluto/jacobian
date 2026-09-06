@@ -172,6 +172,52 @@ class KColorabilityRequest(StrictModel):
     )
 
 
+class VertexColoringAssignment(StrictModel):
+    """A graph-indexed vertex-coloring witness.
+
+    ``coloring[i]`` is the color assigned to vertex ``i``.  This carrier
+    checks its graph, palette, and axis shape; properness is a separate
+    consumer-side relation check.
+    """
+
+    graph: IndexedColoringGraph
+    colors: int = Field(ge=1, le=MAX_COLORING_COLORS)
+    coloring: tuple[StrictInt, ...] = Field(
+        max_length=MAX_COLORING_VERTICES,
+        description="Colors aligned to graph vertices in 0..colors-1.",
+    )
+
+    @model_validator(mode="after")
+    def require_structural_assignment(self) -> Self:
+        if len(self.coloring) != self.graph.vertex_count:
+            raise PydanticCustomError(
+                "graph.coloring_must_assign_one_color_per_vertex",
+                "coloring must assign one color per vertex",
+            )
+        if any(not 0 <= color < self.colors for color in self.coloring):
+            raise PydanticCustomError(
+                "graph.coloring_values_must_be_in_0_colors_1",
+                "coloring values must be in 0..colors-1",
+            )
+        return self
+
+    # Small sequence compatibility helpers keep native callers readable while
+    # the serialized value remains the source-bound carrier.
+    def __len__(self) -> int:
+        return len(self.coloring)
+
+    def __getitem__(self, index: int) -> int:
+        return self.coloring[index]
+
+    def count(self, value: int) -> int:
+        return self.coloring.count(value)
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, tuple):
+            return self.coloring == other
+        return super().__eq__(other)
+
+
 class KColorabilityResult(StrictModel):
     """Whether a proper ``k``-coloring exists, with one coloring witness."""
 
@@ -184,7 +230,7 @@ class KColorabilityResult(StrictModel):
     )
     status: Literal["DECIDED"] = "DECIDED"
     colorable: bool
-    coloring: tuple[int, ...] | None = None
+    coloring: VertexColoringAssignment | None = None
     vertex_count: int = Field(ge=0, le=MAX_COLORING_VERTICES)
 
     @classmethod
@@ -200,13 +246,18 @@ class KColorabilityResult(StrictModel):
     ) -> Self:
         """Construct a result already established by the owner-local kernel."""
 
+        assignment = (
+            VertexColoringAssignment(graph=graph, colors=colors, coloring=coloring)
+            if coloring is not None
+            else None
+        )
         return cls.model_construct(
             graph=graph,
             colors=colors,
             solver_conflicts=solver_conflicts,
             status=status,
             colorable=colorable,
-            coloring=coloring,
+            coloring=assignment,
             vertex_count=graph.vertex_count,
         )
 
@@ -223,6 +274,20 @@ class KColorabilityResult(StrictModel):
             _require_k_colorability_negative_shape(self)
         return self
 
+    @model_validator(mode="before")
+    @classmethod
+    def accept_legacy_sequence_witness(cls, value: object) -> object:
+        """Convert pre-carrier tuple payloads during the migration."""
+        if isinstance(value, dict) and isinstance(value.get("coloring"), tuple):
+            payload = dict(value)
+            payload["coloring"] = {
+                "graph": payload.get("graph"),
+                "colors": payload.get("colors"),
+                "coloring": payload["coloring"],
+            }
+            return payload
+        return value
+
 
 def _require_k_colorability_positive_witness(result: KColorabilityResult) -> None:
     """A colorable claim must carry a proper source-bound witness."""
@@ -232,15 +297,10 @@ def _require_k_colorability_positive_witness(result: KColorabilityResult) -> Non
             "graph.a_colorable_result_must_carry_a_coloring_witness",
             "a colorable result must carry a coloring witness",
         )
-    if len(result.coloring) != result.graph.vertex_count:
+    if result.coloring.graph != result.graph or result.coloring.colors != result.colors:
         raise PydanticCustomError(
-            "graph.coloring_must_assign_one_color_per_vertex",
-            "coloring must assign one color per vertex",
-        )
-    if any(not 0 <= color < result.colors for color in result.coloring):
-        raise PydanticCustomError(
-            "graph.coloring_values_must_be_in_0_colors_1",
-            "coloring values must be in 0..colors-1",
+            "graph.coloring_witness_must_bind_result_graph_and_palette",
+            "coloring witness must bind the result graph and palette",
         )
 
 

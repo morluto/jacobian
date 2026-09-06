@@ -652,24 +652,31 @@ class TestModelValidation:
         with pytest.raises(ValidationError):
             FiniteAbelianGroup(moduli=(41, 101))
 
-    def test_incomplete_flow_assignment_rejected(self) -> None:
-        """An incomplete edge-value assignment is rejected."""
+    def test_incomplete_flow_assignment_is_diagnosed(self) -> None:
+        """An incomplete edge-value candidate is represented and diagnosed."""
         flow = (
             FlowEdgeAssignment(edge_id="e0", orientation="left_to_right", value=(1,)),
             # Missing e1 and e2
         )
-        with pytest.raises(ValidationError):
-            MultigraphFlowCheckRequest(graph=TRIANGLE, group=Z3, edge_values=flow)
+        request = MultigraphFlowCheckRequest(graph=TRIANGLE, group=Z3, edge_values=flow)
+        result = _compute_multigraph_flow_check(request)
+        assert not result.assignment_valid
+        assert {d.code for d in result.assignment_diagnostics} == {
+            "MISSING_EDGE",
+        }
 
-    def test_wrong_rank_value_rejected(self) -> None:
-        """A flow value with wrong rank is rejected."""
+    def test_wrong_rank_value_is_diagnosed(self) -> None:
+        """A flow value with wrong rank is represented and diagnosed."""
         flow = (
             FlowEdgeAssignment(edge_id="e0", orientation="left_to_right", value=(1, 0)),
             FlowEdgeAssignment(edge_id="e1", orientation="left_to_right", value=(1, 0)),
             FlowEdgeAssignment(edge_id="e2", orientation="left_to_right", value=(1, 0)),
         )
-        with pytest.raises(ValidationError):
+        result = _compute_multigraph_flow_check(
             MultigraphFlowCheckRequest(graph=TRIANGLE, group=Z3, edge_values=flow)
+        )
+        assert not result.assignment_valid
+        assert all(d.code == "RANK_MISMATCH" for d in result.assignment_diagnostics)
 
     def test_cycle_not_closed_rejected(self) -> None:
         """A non-closed cycle is rejected."""
@@ -1060,13 +1067,11 @@ class TestGroupModulusBoundsAreSchemaVisible:
 
 class TestFlowCheckAssignmentContractPublished:
     def test_edge_values_schema_states_complete_assignment(self) -> None:
-        """The complete-assignment rule must be schema-visible, not only in
-        the hidden validator."""
+        """The candidate diagnostics contract is schema-visible."""
         schema = MultigraphFlowCheckRequest.model_json_schema()
         description = schema["properties"]["edge_values"]["description"]
-        assert "exactly one record per" in description
-        assert "no repeats" in description
-        assert "group's rank" in description
+        assert "typed diagnostics" in description
+        assert "residue" in description
 
     def test_value_schema_states_group_compatibility(self) -> None:
         """Per-record value guidance must publish rank and residue rules."""
@@ -1075,13 +1080,16 @@ class TestFlowCheckAssignmentContractPublished:
         assert "rank" in value["description"]
         assert "modulus" in value["description"]
 
-    def test_duplicate_assignment_record_rejected(self) -> None:
-        """A complete set of IDs with a repeated record is not an assignment."""
+    def test_duplicate_assignment_record_is_diagnosed(self) -> None:
+        """A repeated record is represented and diagnosed by the checker."""
         flow = (
             FlowEdgeAssignment(edge_id="e0", orientation="left_to_right", value=(1,)),
             FlowEdgeAssignment(edge_id="e1", orientation="left_to_right", value=(1,)),
             FlowEdgeAssignment(edge_id="e0", orientation="left_to_right", value=(1,)),
             FlowEdgeAssignment(edge_id="e2", orientation="left_to_right", value=(1,)),
         )
-        with pytest.raises(ValidationError):
+        result = _compute_multigraph_flow_check(
             MultigraphFlowCheckRequest(graph=TRIANGLE, group=Z3, edge_values=flow)
+        )
+        assert not result.assignment_valid
+        assert [d.code for d in result.assignment_diagnostics] == ["DUPLICATE_EDGE"]

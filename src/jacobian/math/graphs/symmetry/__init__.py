@@ -7,7 +7,10 @@ from jacobian.math.graphs.symmetry._models import (
     GraphSymmetryOrbitSource,
     GraphVertexOrbit,
 )
-from jacobian.math.graphs.symmetry.operations import graph_symmetry_orbits
+from jacobian.math.graphs.symmetry.operations import (
+    graph_symmetry_orbits,
+    verify_graph_symmetry_orbits,
+)
 
 __all__ = [
     "GraphAutomorphismGenerator",
@@ -16,4 +19,5 @@ __all__ = [
     "GraphSymmetryOrbitSource",
     "GraphVertexOrbit",
     "graph_symmetry_orbits",
+    "verify_graph_symmetry_orbits",
 ]

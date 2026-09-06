@@ -27,6 +27,7 @@ from jacobian.math.graphs.coloring._models import (
     ListCapacityEdgeColoringResult,
     ListEdgeColoringStatus,
     MaximalIndependentSetResult,
+    VertexColoringAssignment,
     _incident_edge_index_pairs_for_canonical_graph,
     _require_edge_coloring_graph_bound,
     _require_indexed_coloring_graph,
@@ -231,6 +232,60 @@ def maximal_independent_set(
     )
 
 
+def verify_vertex_coloring(assignment: VertexColoringAssignment) -> bool:
+    """Return whether a source-bound vertex coloring is proper."""
+    return all(
+        assignment.coloring[left] != assignment.coloring[right]
+        for left, right in assignment.graph.edges
+    )
+
+
+vertex_coloring_check = verify_vertex_coloring
+
+
+def verify_k_colorability(claim: KColorabilityResult) -> bool:
+    """Verify the checkable positive part of a serialized colorability claim."""
+    if not claim.colorable or claim.coloring is None:
+        return False
+    return (
+        claim.coloring.graph == claim.graph
+        and claim.coloring.colors == claim.colors
+        and verify_vertex_coloring(claim.coloring)
+    )
+
+
+def verify_maximal_independent_set(claim: MaximalIndependentSetResult) -> bool:
+    """Verify a serialized independence decision and its optional obstruction."""
+    candidate = set(claim.candidate_set)
+    edges = {tuple(sorted(edge)) for edge in claim.graph.edges}
+    independent = not any(left in candidate and right in candidate for left, right in edges)
+    if claim.decision == "NOT_INDEPENDENT":
+        return (
+            not independent
+            and claim.blocking_edge is not None
+            and tuple(claim.blocking_edge) in edges
+            and set(claim.blocking_edge).issubset(candidate)
+            and claim.addable_vertex is None
+        )
+    if claim.decision == "INDEPENDENT_NOT_MAXIMAL":
+        if not independent or claim.addable_vertex is None:
+            return False
+        vertex = claim.addable_vertex
+        return vertex not in candidate and all(
+            vertex not in edge for edge in edges if edge[0] in candidate or edge[1] in candidate
+        )
+    if not independent:
+        return False
+    return all(
+        vertex in candidate
+        or any(vertex in edge and (edge[0] in candidate or edge[1] in candidate) for edge in edges)
+        for vertex in range(claim.graph.vertex_count)
+    )
+
+
+maximal_independent_set_check = verify_maximal_independent_set
+
+
 def edge_k_colorability(
     graph: SimpleUndirectedGraph, colors: int, solver_conflicts: int
 ) -> EdgeKColorabilityResult:
@@ -318,6 +373,11 @@ __all__ = [
     "k_colorability",
     "list_capacity_edge_coloring",
     "maximal_independent_set",
+    "maximal_independent_set_check",
+    "verify_k_colorability",
+    "verify_maximal_independent_set",
+    "verify_vertex_coloring",
+    "vertex_coloring_check",
 ]
 
 

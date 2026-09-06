@@ -23,6 +23,7 @@ __all__ = [
     "EulerianCyclesRequest",
     "EulerianCyclesResult",
     "FiniteAbelianGroup",
+    "FlowAssignmentDiagnostic",
     "FlowEdgeAssignment",
     "GroupElement",
     "LooplessMultigraph",
@@ -282,13 +283,8 @@ class FlowEdgeAssignment(StrictModel):
     )
 
     @model_validator(mode="after")
-    def require_non_negative_value(self) -> Self:
-        for coordinate in self.value:
-            if coordinate < 0:
-                raise PydanticCustomError(
-                    "graph.flow_values_must_be_non_negative_residues",
-                    "flow values must be non-negative residues",
-                )
+    def require_structural_value(self) -> Self:
+        """Leave group membership admission to the flow-check operation."""
         return self
 
 
@@ -306,10 +302,28 @@ class VertexDivergence(StrictModel):
     conservation_holds: bool
 
 
+class FlowAssignmentDiagnostic(StrictModel):
+    """Typed admission diagnostic for one submitted flow assignment."""
+
+    code: Literal[
+        "MISSING_EDGE",
+        "DUPLICATE_EDGE",
+        "UNKNOWN_EDGE",
+        "RANK_MISMATCH",
+        "RESIDUE_OUT_OF_RANGE",
+    ]
+    edge_id: StrictStr | None = None
+    expected_rank: StrictInt | None = None
+    actual_rank: StrictInt | None = None
+    coordinate: StrictInt | None = None
+    modulus: StrictInt | None = None
+
+
 class MultigraphFlowCheckRequest(StrictModel):
     """Request to check a finite-Abelian flow on a loopless multigraph.
 
-    ``edge_values`` must be a complete assignment: exactly one record per
+    ``edge_values`` may be incomplete or invalid; the operation reports
+    typed diagnostics for candidate assignment defects.
     graph edge ID, with no repeats and no omissions, and every value must
     be compatible with ``group`` (rank and residue ranges).
     """
@@ -319,15 +333,20 @@ class MultigraphFlowCheckRequest(StrictModel):
     edge_values: tuple[FlowEdgeAssignment, ...] = Field(
         max_length=MAX_EDGES,
         description=(
-            "Complete oriented flow assignment: exactly one record per "
-            "graph edge ID (no repeats, none missing). Each record's value "
-            "must have the selected group's rank with coordinates in "
-            "0..modulus-1."
+            "Submitted oriented flow records; invalid candidates receive "
+            "typed diagnostics for missing, duplicate, unknown, rank, and "
+            "residue errors."
         ),
     )
 
     @model_validator(mode="after")
-    def require_complete_assignment(self) -> Self:
+    def require_structural_candidate(self) -> Self:
+        """Keep candidate parsing structural; admission belongs to the operation."""
+        return self
+
+    # Complete-assignment checks intentionally live in the native operation.
+    # Invalid candidate records must remain representable for diagnostics.
+    def _legacy_complete_assignment_validator(self) -> Self:
         graph_ids = self.graph.edge_id_set
         assigned_ids = {assign.edge_id for assign in self.edge_values}
         if graph_ids != assigned_ids:
@@ -373,10 +392,21 @@ class MultigraphFlowCheckResult(StrictModel):
     zero_edge_ids: tuple[StrictStr, ...] = Field(max_length=MAX_EDGES)
     nowhere_zero: bool
     conservation_holds: bool
+    assignment_valid: bool = True
+    assignment_diagnostics: tuple[FlowAssignmentDiagnostic, ...] = Field(
+        default=(), max_length=MAX_EDGES * 2
+    )
 
     @model_validator(mode="after")
     def require_structural_consistency(self) -> Self:
         """Keep parsed flow results well formed without rechecking the flow."""
+        if not self.assignment_valid:
+            if not self.assignment_diagnostics:
+                raise PydanticCustomError(
+                    "graph.invalid_flow_result_requires_diagnostics",
+                    "an invalid flow result requires at least one diagnostic",
+                )
+            return self
         graph_ids = self.graph.edge_id_set
         record_ids = {r.edge_id for r in self.edge_flow_records}
         if graph_ids != record_ids:

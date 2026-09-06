@@ -7,7 +7,6 @@ from jacobian.math.geometry.arrangements._models import (
     MAX_GENERIC_FORMULA_INDEX,
     ChamberCountResult,
     CharacteristicPolynomialResult,
-    HyperplaneArrangementRequest,
     HyperplaneArrangementResult,
     RationalHyperplane,
 )
@@ -115,9 +114,35 @@ def arrangement(
     hyperplanes: tuple[RationalHyperplane, ...],
 ) -> HyperplaneArrangementResult:
     """Check if an arrangement is central (all hyperplanes pass through origin)."""
-    HyperplaneArrangementRequest(
-        ambient_dimension=ambient_dimension, hyperplanes=hyperplanes
-    )
+    if (
+        isinstance(ambient_dimension, bool)
+        or not isinstance(ambient_dimension, int)
+        or not 1 <= ambient_dimension <= 8
+    ):
+        _reject(
+            ("ambient_dimension",),
+            "ambient_dimension_out_of_range",
+            "ambient_dimension is outside the admitted arrangement range",
+        )
+    if not isinstance(hyperplanes, tuple) or not 1 <= len(hyperplanes) <= 16:
+        _reject(
+            ("hyperplanes",),
+            "hyperplane_count_out_of_range",
+            "hyperplanes must contain between 1 and 16 values",
+        )
+    for index, hyperplane in enumerate(hyperplanes):
+        if not isinstance(hyperplane, RationalHyperplane):
+            _reject(
+                ("hyperplanes", index),
+                "hyperplane_type_invalid",
+                "hyperplanes must be canonical rational hyperplane values",
+            )
+        if len(hyperplane.coefficients) != ambient_dimension:
+            _reject(
+                ("hyperplanes", index, "coefficients"),
+                "dimension_mismatch",
+                "hyperplane coefficients must match ambient dimension",
+            )
     is_central = all(
         hyperplane.constant.as_fraction() == 0 for hyperplane in hyperplanes
     )

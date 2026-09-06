@@ -139,8 +139,47 @@ def group_like_elements(coalgebra: Coalgebra) -> tuple[GroupLikeElement, ...]:
     return tuple(GroupLikeElement(coefficients=coeffs) for coeffs in found)
 
 
+def verify_group_like_element(
+    coalgebra: Coalgebra, element: GroupLikeElement
+) -> bool:
+    """Verify one group-like coefficient vector against a coalgebra."""
+
+    try:
+        _admit_coalgebra(coalgebra)
+        coefficients = element.coefficients
+        dimension = coalgebra.dimension
+        prime = coalgebra.prime
+        if len(coefficients) != dimension or any(
+            not 0 <= coefficient < prime for coefficient in coefficients
+        ):
+            return False
+        if (
+            sum(
+                coefficients[index] * coalgebra.counit[index]
+                for index in range(dimension)
+            )
+            % prime
+            != 1
+        ):
+            return False
+        return all(
+            sum(
+                coefficients[index]
+                * coalgebra.comultiplication[index][row][column]
+                for index in range(dimension)
+            )
+            % prime
+            == coefficients[row] * coefficients[column] % prime
+            for row in range(dimension)
+            for column in range(dimension)
+        )
+    except Exception:
+        return False
+
+
 __all__ = [
     "comultiplication",
     "counit",
     "group_like_elements",
+    "verify_group_like_element",
 ]

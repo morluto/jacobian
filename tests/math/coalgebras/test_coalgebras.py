@@ -18,6 +18,7 @@ from jacobian.math.coalgebras._models import (
     ComultiplicationResult,
     CounitRequest,
     CounitResult,
+    GroupLikeElement,
     GroupLikeElementsRequest,
     GroupLikeElementsResult,
     group_like_scan_work,
@@ -26,6 +27,7 @@ from jacobian.math.coalgebras.operations import (
     comultiplication,
     counit,
     group_like_elements,
+    verify_group_like_element,
 )
 
 
@@ -176,6 +178,29 @@ class TestGroupLikeElements:
         result = _run_group_like(GroupLikeElementsRequest(coalgebra=ca))
         assert result.count == 1
         assert result.elements[0].coefficients == (2,)
+
+    def test_serialized_candidate_verifier_rejects_forged_equations(self) -> None:
+        ca = Coalgebra(
+            prime=5,
+            dimension=2,
+            comultiplication=(
+                ((1, 0), (0, 0)),
+                ((0, 0), (0, 1)),
+            ),
+            counit=(1, 1),
+        )
+        result = _run_group_like(GroupLikeElementsRequest(coalgebra=ca))
+        candidate = GroupLikeElement.model_validate_json(
+            result.elements[0].model_dump_json()
+        )
+
+        assert verify_group_like_element(ca, candidate)
+
+        forged = candidate.model_dump(mode="json")
+        forged["coefficients"][0] = (forged["coefficients"][0] + 1) % ca.prime
+        forged_candidate = GroupLikeElement.model_validate(forged)
+
+        assert not verify_group_like_element(ca, forged_candidate)
 
     def test_composite_prime_rejected(self) -> None:
         """A composite modulus is not a field and must be rejected."""

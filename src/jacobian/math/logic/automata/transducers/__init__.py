@@ -9,6 +9,8 @@ from jacobian.math.logic.automata.transducers.operations import (
     replay_rational_path,
     run_subsequential,
     trim_subsequential,
+    verify_composition,
+    verify_subsequential_run,
 )
 from jacobian.math.logic.automata.transducers.values import (
     RationalEdge,
@@ -32,4 +34,6 @@ __all__ = [
     "replay_rational_path",
     "run_subsequential",
     "trim_subsequential",
+    "verify_composition",
+    "verify_subsequential_run",
 ]

@@ -16,6 +16,8 @@ from jacobian.math.logic.automata.transducers import (
     replay_rational_path,
     run_subsequential,
     trim_subsequential,
+    verify_composition,
+    verify_subsequential_run,
 )
 from jacobian.math.logic.automata.transducers._models import (
     ComposeRequest,
@@ -108,6 +110,12 @@ class TestSubsequentialRun:
         assert result.word == request.word
         assert result.output == (1, 0)
 
+        decoded = type(result).model_validate_json(result.model_dump_json())
+        assert verify_subsequential_run(decoded)
+        assert not verify_subsequential_run(
+            decoded.model_copy(update={"output": (0, 0)})
+        )
+
     def test_native_run_rejects_symbol_outside_alphabet(self) -> None:
         with pytest.raises(ValueError, match="outside"):
             run_subsequential(_flip(), (2,))
@@ -161,6 +169,12 @@ class TestComposition:
         assert result.first == request.first
         assert result.second == request.second
         assert run_subsequential(result.transducer, (0, 1))[1] == (1, 0)
+        decoded = type(result).model_validate_json(result.model_dump_json())
+        assert verify_composition(decoded)
+        forged = decoded.transducer.model_copy(
+            update={"transitions": decoded.transducer.transitions[:1]}
+        )
+        assert not verify_composition(decoded.model_copy(update={"transducer": forged}))
 
 
 class TestNativeTransformations:

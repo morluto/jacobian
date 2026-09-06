@@ -6,6 +6,10 @@ from collections import deque
 from typing import Literal
 
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.logic.automata.transducers._models import (
+    ComposeResult,
+    SubseqRunResult,
+)
 from jacobian.math.logic.automata.transducers.values import (
     MAX_FST_RESULT_WORD_LENGTH,
     MAX_FST_STATES,
@@ -26,6 +30,8 @@ __all__ = [
     "replay_rational_path",
     "run_subsequential",
     "trim_subsequential",
+    "verify_composition",
+    "verify_subsequential_run",
 ]
 
 
@@ -536,3 +542,28 @@ def _invalid_replay(
         tuple(state_trace),
         error,
     )
+
+
+def verify_subsequential_run(claim: SubseqRunResult) -> bool:
+    """Verify a serialized run outcome against its transducer and word."""
+
+    try:
+        expected = run_subsequential(claim.transducer, claim.word)
+        return expected == (
+            claim.status,
+            claim.output,
+            claim.final_state,
+            claim.undefined_position,
+            claim.partial_output,
+        )
+    except (TypeError, ValueError, OperationDomainValidationError):
+        return False
+
+
+def verify_composition(claim: ComposeResult) -> bool:
+    """Verify a candidate composite transducer against both source machines."""
+
+    try:
+        return compose_subsequential(claim.first, claim.second) == claim.transducer
+    except (TypeError, ValueError, OperationDomainValidationError):
+        return False

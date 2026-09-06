@@ -5,6 +5,7 @@ from __future__ import annotations
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.crossed_products._budget import require_multiplication_budget
+from jacobian.math.crossed_products._models import CrossedProductMultiplyResult
 from jacobian.math.crossed_products.values import (
     FiniteCosetCrossedProductElement,
     FiniteCosetCrossedProductPresentation,
@@ -123,4 +124,12 @@ def multiply(
     return _multiply_admitted(left, right, actions, cocycle)
 
 
-__all__ = ["multiply"]
+def verify_multiply(claim: CrossedProductMultiplyResult) -> bool:
+    """Verify a serialized sparse product against both retained operands."""
+    try:
+        return multiply(claim.left, claim.right) == claim.product
+    except (AttributeError, TypeError, ValueError, OperationDomainValidationError):
+        return False
+
+
+__all__ = ["multiply", "verify_multiply"]

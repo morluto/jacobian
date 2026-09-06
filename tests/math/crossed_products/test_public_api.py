@@ -10,6 +10,7 @@ def test_exact_public_api_symbols() -> None:
         "FiniteCosetCrossedProductPresentation",
         "FiniteCosetCrossedProductTerm",
         "multiply",
+        "verify_multiply",
     )
     assert len(crossed_products.__all__) == len(set(crossed_products.__all__))
     assert all(not name.startswith("_") for name in crossed_products.__all__)

@@ -39,6 +39,10 @@ class CrossedProductMultiplyResult(StrictModel):
             raise _validation_error(
                 "presentation_mismatch", "product must retain the operand presentation"
             )
+        if self.right.presentation != self.left.presentation:
+            raise _validation_error(
+                "presentation_mismatch", "operands must use one presentation"
+            )
         return self
 
 

@@ -18,7 +18,7 @@ from jacobian.math.crossed_products._tools import (
     TOOLS,
     compute_product,
 )
-from jacobian.math.crossed_products.operations import multiply
+from jacobian.math.crossed_products.operations import multiply, verify_multiply
 from jacobian.math.crossed_products.values import (
     FiniteCosetCrossedProductElement,
     FiniteCosetCrossedProductPresentation,
@@ -303,6 +303,7 @@ def test_wire_result_is_structural_and_preserves_the_operand_presentation() -> N
     assert claim.left == alpha
     assert claim.right == inverse
     assert claim.product != identity
+    assert not verify_multiply(claim)
 
 
 def test_compute_product_binds_fresh_kernel_output() -> None:
@@ -323,6 +324,7 @@ def test_deserialized_result_can_be_verified_explicitly() -> None:
     replayed = CrossedProductMultiplyResult.model_validate(payload)
 
     assert replayed.product == identity
+    assert verify_multiply(replayed)
 
 
 def test_element_requires_unique_canonical_coset_and_exponent_order() -> None:

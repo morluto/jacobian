@@ -11,6 +11,9 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials.multivariate._division import (
     MultivariateDivisionRequest,
 )
+from jacobian.math.polynomials.multivariate._factor_models import (
+    MultivariateFactorRequest,
+)
 from jacobian.math.polynomials.multivariate._gcd import MultivariateGcdRequest
 from jacobian.math.polynomials.multivariate._models import (
     _MAX_MULTIVARIATE_COEFFICIENT_DIGITS,
@@ -24,9 +27,17 @@ from jacobian.math.polynomials.multivariate._subresultants import (
 )
 from jacobian.math.polynomials.multivariate._tools import (
     _compute_division,
+    _compute_factor,
     _compute_gcd,
     _compute_resultant,
     _compute_subresultants,
+)
+from jacobian.math.polynomials.multivariate.operations import (
+    verify_multivariate_division,
+    verify_multivariate_factor,
+    verify_multivariate_gcd,
+    verify_multivariate_resultant,
+    verify_multivariate_subresultant_sequence,
 )
 from jacobian.math.polynomials.values import RationalPolynomial
 
@@ -75,6 +86,53 @@ def _scalar(
     if not den:
         den = "1"
     return _poly(variables, ((f"{num}/{den}", (0,) * len(variables)),))
+
+
+def test_serialized_multivariate_claims_are_source_bound_and_verifiable() -> None:
+    left = _poly(
+        ("x", "y"),
+        (("1/1", (2, 0)), ("-1/1", (0, 2))),
+    )
+    right = _poly(("x", "y"), (("1/1", (1, 0)), ("-1/1", (0, 1))))
+    unrelated = _poly(("x", "y"), (("1/1", (1, 0)), ("2/1", (0, 0))))
+
+    gcd = _compute_gcd(MultivariateGcdRequest(left=left, right=right))
+    division = _compute_division(MultivariateDivisionRequest(left=left, right=right))
+    factor = _compute_factor(MultivariateFactorRequest(polynomial=left))
+    resultant = _compute_resultant(
+        MultivariateResultantRequest(left=left, right=right, elimination_variable="x")
+    )
+    subresultants = _compute_subresultants(
+        MultivariateSubresultantSequenceRequest(
+            left=left, right=right, main_variable="x"
+        )
+    )
+
+    claims = (gcd, division, factor, resultant, subresultants)
+    verifiers = (
+        verify_multivariate_gcd,
+        verify_multivariate_division,
+        verify_multivariate_factor,
+        verify_multivariate_resultant,
+        verify_multivariate_subresultant_sequence,
+    )
+    for claim, verifier in zip(claims, verifiers, strict=True):
+        decoded = type(claim).model_validate_json(claim.model_dump_json())
+        assert verifier(decoded)
+
+    assert not verify_multivariate_gcd(gcd.model_copy(update={"right": left}))
+    assert not verify_multivariate_division(
+        division.model_copy(update={"quotient": left})
+    )
+    assert not verify_multivariate_factor(
+        factor.model_copy(update={"polynomial": right})
+    )
+    assert not verify_multivariate_resultant(
+        resultant.model_copy(update={"left": unrelated})
+    )
+    assert not verify_multivariate_subresultant_sequence(
+        subresultants.model_copy(update={"right": left})
+    )
 
 
 # --------------------------------------------------------------------------- #

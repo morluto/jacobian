@@ -80,7 +80,10 @@ def require_zeta_budget(shift: AdjacencyShift) -> None:
     """Admit the determinant and its derivable exact result size."""
 
     states = len(shift.matrix)
-    maximum_entry = max(entry for row in shift.matrix for entry in row)
+    maximum_entry = max(
+        (entry for row in shift.matrix for entry in row),
+        default=0,
+    )
     # The degree-k coefficient is a sum of principal k-minors. Its absolute
     # value is at most C(states,k) k! M^k <= (states M)^k.
     coefficient_digits = states * len(str(states * max(1, maximum_entry))) + 1

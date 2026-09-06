@@ -247,6 +247,16 @@ def adjacency_shift(
     return AdjacencyShift(matrix=matrix, two_sided=two_sided)
 
 
+def adjacency_shift_from_presentation(
+    presentation: BlockPresentation,
+) -> AdjacencyShift:
+    """Project a labeled presentation onto its ordered state adjacency carrier."""
+    return adjacency_shift(
+        presentation.adjacency_matrix,
+        two_sided=presentation.two_sided,
+    )
+
+
 def _mobius_sieve(limit: int) -> tuple[int, ...]:
     """Return mu(0)..mu(limit) by a bounded Eratosthenes sieve."""
 
@@ -274,6 +284,9 @@ def periodic_point_profile(
             message="max period is outside the supported bounds",
         )
     matrix = shift.matrix
+    if not matrix:
+        empty = (0,) * max_period
+        return empty, empty, empty
     states = len(matrix)
     matrix_work = states**3 * max_period
     divisor_work = 3 * max_period * (max_period.bit_length() + 1)
@@ -356,6 +369,7 @@ def artin_mazur_zeta(
 
 __all__ = [
     "adjacency_shift",
+    "adjacency_shift_from_presentation",
     "artin_mazur_zeta",
     "block_language",
     "enumeration_size",

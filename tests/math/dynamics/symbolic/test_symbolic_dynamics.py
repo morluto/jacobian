@@ -15,6 +15,7 @@ from jacobian.math.dynamics.symbolic import (
     AdjacencyShift,
     ForbiddenBlockShift,
     adjacency_shift,
+    adjacency_shift_from_presentation,
     block_language,
     finite_type_presentation,
     normalize_forbidden_blocks,
@@ -168,6 +169,29 @@ def test_public_surface_excludes_adjacency_carrier_invariants() -> None:
     carrier = adjacency_shift(((1, 1), (1, 0)))
     assert carrier == AdjacencyShift(matrix=((1, 1), (1, 0)))
     assert not hasattr(carrier, "is_mixing")
+
+
+def test_empty_adjacency_shift_round_trips_and_projects_from_presentation() -> None:
+    presentation = finite_type_presentation(
+        ForbiddenBlockShift(alphabet=("a",), forbidden_blocks=(("a",),))
+    )
+    carrier = adjacency_shift_from_presentation(presentation)
+
+    assert presentation.state_blocks == ()
+    assert carrier.matrix == ()
+    assert carrier.two_sided is True
+    assert AdjacencyShift.model_validate(carrier.model_dump(mode="json")) == carrier
+
+    profile = compute_periodic_point_profile(
+        PeriodicPointProfileRequest(shift=carrier, max_period=3)
+    )
+    assert profile.fixed_point_counts == ("0", "0", "0")
+    assert profile.least_period_point_counts == ("0", "0", "0")
+    assert profile.primitive_orbit_counts == ("0", "0", "0")
+
+    zeta = compute_artin_mazur_zeta(ArtinMazurZetaRequest(shift=carrier))
+    assert zeta.determinant_polynomial.variables == ("t",)
+    assert zeta.zeta_function.numerator == zeta.zeta_function.denominator
 
 
 def test_golden_mean_finite_type_presentation_is_exact() -> None:

@@ -13,6 +13,7 @@ def test_exact_public_api_symbols() -> None:
         "ForbiddenBlockShift",
         "LabeledTransition",
         "adjacency_shift",
+        "adjacency_shift_from_presentation",
         "artin_mazur_zeta",
         "block_language",
         "finite_type_presentation",

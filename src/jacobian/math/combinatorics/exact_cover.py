@@ -337,6 +337,26 @@ def _solve_generalized_exact_cover(
     )
 
 
+def verify_generalized_exact_cover(claim: GeneralizedExactCoverResult) -> bool:
+    """Check a FOUND claim's coverage relation against its retained instance.
+
+    Verifies selected-row binding, primary exact coverage, secondary
+    at-most-once coverage, and the reconstructed multiplicity profile
+    without rerunning the search. Only FOUND claims are verifiable:
+    NO_COVER and UNKNOWN are producer outcomes, not reusable claims, so
+    they do not verify.
+    """
+    if claim.status != "FOUND":
+        return False
+    if claim.selected_row_ids is None or claim.item_multiplicities is None:
+        return False
+    try:
+        expected = _expected_coverage(claim.instance, claim.selected_row_ids)
+    except PydanticCustomError:
+        return False
+    return tuple(claim.item_multiplicities) == expected
+
+
 def find_generalized_exact_cover(
     instance: GeneralizedExactCoverInstance,
     *,
@@ -383,4 +403,5 @@ __all__ = [
     "GeneralizedExactCoverInstance",
     "GeneralizedExactCoverResult",
     "find_generalized_exact_cover",
+    "verify_generalized_exact_cover",
 ]

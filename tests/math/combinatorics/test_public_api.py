@@ -39,6 +39,7 @@ def test_exact_public_api_symbols() -> None:
         "recurrence_table_residuals",
         "stirling_first",
         "stirling_second",
+        "verify_generalized_exact_cover",
     )
     assert tuple(combinatorics.__all__) == expected
     assert len(combinatorics.__all__) == len(set(combinatorics.__all__))

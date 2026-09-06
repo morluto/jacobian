@@ -22,7 +22,7 @@ from jacobian.math.matrices.analysis._models import (
 from jacobian.math.matrices.analysis._tools import (
     compute_inertia as compute_inertia_wire,
 )
-from jacobian.math.matrices.analysis.operations import compute_inertia
+from jacobian.math.matrices.analysis.operations import compute_inertia, verify_inertia
 from jacobian.math.matrices.values import EmbeddedRealSimpleNumberFieldMatrix
 from jacobian.math.number_theory.number_fields import (
     RealNumberFieldEmbedding,
@@ -137,7 +137,7 @@ def test_raw_embedded_matrix_bounds_iterable_axes_before_nested_validation() -> 
     ):
         EmbeddedRealSimpleNumberFieldMatrix.model_validate(payload)
 
-    payload["entries"] = repeat([])
+    payload["entries"] = [[[]] for _ in range(33)]
     with pytest.raises(ValidationError, match="at most 32 rows"):
         EmbeddedRealSimpleNumberFieldMatrix.model_validate(payload)
 
@@ -270,6 +270,7 @@ def test_exact_inertia_distinguishes_the_two_real_quartic_embeddings() -> None:
         )
         == positive
     )
+    assert verify_inertia(positive)
 
     wire_request = SymmetricMatrixRequest.model_validate_json(
         encode_strict_json({"matrix": positive.matrix.model_dump(mode="json")}),

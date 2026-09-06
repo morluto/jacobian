@@ -227,7 +227,19 @@ class SubsystemKroneckerProductRequest(StrictModel):
 class SubsystemKroneckerProductResult(StrictModel):
     """The factorized exact product of two rational Hermitian matrices."""
 
+    left: FactorizedHermitianMatrix
+    right: FactorizedHermitianMatrix
     product: FactorizedHermitianMatrix
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        left: FactorizedHermitianMatrix,
+        right: FactorizedHermitianMatrix,
+        product: FactorizedHermitianMatrix,
+    ) -> Self:
+        return cls.model_construct(left=left, right=right, product=product)
 
 
 class SubsystemPartialTraceRequest(StrictModel):

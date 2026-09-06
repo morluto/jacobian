@@ -17,6 +17,8 @@ from jacobian.math.matrices.subsystems._models import (
     NegativeQuadraticWitness,
     PsdInertia,
     PsdOrderResult,
+    SubsystemKroneckerProductResult,
+    SubsystemPartialTraceResult,
     _entry_fractions,
     _fraction_component_digits,
     _require_psd_pair_admission,
@@ -38,6 +40,9 @@ __all__ = [
     "kronecker_product",
     "partial_trace",
     "psd_order",
+    "verify_partial_trace",
+    "verify_psd_order",
+    "verify_subsystem_kronecker_product",
 ]
 
 
@@ -121,6 +126,35 @@ def _admit(check: Callable[..., object], *args: object) -> None:
         raise OperationDomainValidationError(
             location=("request",), code="matrix.domain_invalid", message=str(exc)
         ) from exc
+
+
+def verify_subsystem_kronecker_product(
+    claim: SubsystemKroneckerProductResult,
+) -> bool:
+    """Verify a source-bound Kronecker product claim."""
+    try:
+        return kronecker_product(claim.left, claim.right) == claim.product
+    except (AttributeError, TypeError, ValueError, OperationDomainValidationError):
+        return False
+
+
+def verify_partial_trace(claim: SubsystemPartialTraceResult) -> bool:
+    """Verify a source-bound partial-trace contraction claim."""
+    try:
+        return (
+            partial_trace(claim.source_matrix, claim.traced_factor_labels)
+            == claim.reduced_matrix
+        )
+    except (AttributeError, TypeError, ValueError, OperationDomainValidationError):
+        return False
+
+
+def verify_psd_order(claim: PsdOrderResult) -> bool:
+    """Verify a source-bound PSD-order decision and witness."""
+    try:
+        return psd_order(claim.left, claim.right) == claim
+    except (AttributeError, TypeError, ValueError, OperationDomainValidationError):
+        return False
 
 
 def _negative_direction(

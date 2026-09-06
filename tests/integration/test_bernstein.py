@@ -8,7 +8,6 @@ from typing import Any
 
 import pytest
 import sympy as sp
-from pydantic import ValidationError
 
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
@@ -16,6 +15,7 @@ from jacobian.dispatch import invoke_operation
 from jacobian.math.polynomials.bernstein import (
     RationalBernsteinPolynomial,
     bernstein_coefficients,
+    verify_bernstein_coefficients,
 )
 from jacobian.math.polynomials.bernstein._tools import BernsteinRequest
 
@@ -149,11 +149,15 @@ def test_transported_axis_permutation_transposes_the_tensor() -> None:
 
 def test_serialized_coefficients_are_claims_with_complete_source_context() -> None:
     result = _run(_fixture())
+    assert verify_bernstein_coefficients(
+        RationalBernsteinPolynomial.model_validate_json(result.model_dump_json())
+    )
     wire = deepcopy(result.model_dump(mode="json"))
     wire["coefficients"][0] = _q(999)
     claim = RationalBernsteinPolynomial.model_validate(wire)
     assert claim.polynomial == result.polynomial
     assert claim.box == result.box
+    assert not verify_bernstein_coefficients(claim)
     with pytest.raises(AssertionError):
         _reconstruct(claim)
 
@@ -191,8 +195,8 @@ def test_carrier_rejects_a_point_box() -> None:
     result = _run(_fixture())
     wire = result.model_dump(mode="json")
     wire["box"]["intervals"][0]["upper"] = _q(0)
-    with pytest.raises(ValidationError, match="positive widths"):
-        RationalBernsteinPolynomial.model_validate(wire)
+    claim = RationalBernsteinPolynomial.model_validate(wire)
+    assert not verify_bernstein_coefficients(claim)
 
 
 @pytest.mark.parametrize("constant", [0, 3])

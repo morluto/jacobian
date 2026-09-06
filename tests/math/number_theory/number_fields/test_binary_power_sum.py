@@ -27,6 +27,7 @@ from jacobian.math.number_theory.number_fields import (
     SimpleNumberFieldRealEmbeddingBinding,
     binary_power_sum_gap_profile,
     embeddings,
+    verify_binary_power_sum_gap_profile,
 )
 from jacobian.math.number_theory.number_fields._binary_power_sum import (
     BINARY_POWER_SUM_WALL_SECONDS,
@@ -488,17 +489,16 @@ def test_result_round_trip_preserves_source_partition_and_gap_reconstruction(
         _binding(_element(field, 0, 1), golden_ratio_record), 3
     )
 
-    assert (
-        BinaryPowerSumGapProfile.model_validate_json(
-            result.model_dump_json(), strict=True
-        )
-        == result
+    decoded = BinaryPowerSumGapProfile.model_validate_json(
+        result.model_dump_json(), strict=True
     )
+    assert decoded == result
+    assert verify_binary_power_sum_gap_profile(decoded)
     assert "evidence_basis" not in result.gaps[0].model_dump()
     assert "evidence_basis" not in BinaryPowerSumGap.model_json_schema()["properties"]
 
 
-def test_result_validation_rejects_duplicate_sources_and_wrong_gap_difference(
+def test_consumer_verifier_rejects_duplicate_sources_and_wrong_gap_difference(
     golden_ratio_record: RealNumberFieldEmbeddingRecord,
 ) -> None:
     field = golden_ratio_record.embedding.presentation
@@ -507,19 +507,19 @@ def test_result_validation_rejects_duplicate_sources_and_wrong_gap_difference(
     )
     duplicate = result.model_dump(mode="json")
     duplicate["value_buckets"][1]["representations"] = [[0, 0, 0]]
-    with pytest.raises(ValidationError, match="partition"):
-        BinaryPowerSumGapProfile.model_validate(duplicate)
+    duplicate_claim = BinaryPowerSumGapProfile.model_validate(duplicate)
+    assert not verify_binary_power_sum_gap_profile(duplicate_claim)
 
     wrong_gap = result.model_dump(mode="json")
-    wrong_gap["gaps"][0]["difference"] = result.value_buckets[0].value.model_dump(
+    wrong_gap["gaps"][0]["difference"] = result.gaps[1].difference.model_dump(
         mode="json"
     )
-    with pytest.raises(ValidationError, match="reconstruct"):
-        BinaryPowerSumGapProfile.model_validate(wrong_gap)
+    wrong_gap_claim = BinaryPowerSumGapProfile.model_validate(wrong_gap)
+    assert not verify_binary_power_sum_gap_profile(wrong_gap_claim)
 
 
 @pytest.mark.parametrize("index_field", ["least_gap_index", "largest_gap_index"])
-def test_result_validation_rejects_out_of_range_summary_indices_as_typed_errors(
+def test_consumer_verifier_rejects_summary_indices_outside_the_gap_family(
     index_field: str,
 ) -> None:
     field = _field("1", "0")
@@ -530,13 +530,11 @@ def test_result_validation_rejects_out_of_range_summary_indices_as_typed_errors(
     invalid = result.model_dump(mode="json")
     invalid[index_field] = 100
 
-    with pytest.raises(ValidationError) as caught:
-        BinaryPowerSumGapProfile.model_validate(invalid)
-
-    assert caught.value.errors()[0]["type"] == "binary_power_sum.gap_summary_index"
+    claim = BinaryPowerSumGapProfile.model_validate(invalid)
+    assert not verify_binary_power_sum_gap_profile(claim)
 
 
-def test_result_validation_requires_first_exactly_matching_gap_summary() -> None:
+def test_consumer_verifier_requires_first_exactly_matching_gap_summary() -> None:
     field = _field("1", "0")
     (record,) = _real_records(field)
     result = binary_power_sum_gap_profile(
@@ -547,12 +545,8 @@ def test_result_validation_requires_first_exactly_matching_gap_summary() -> None
 
     noncanonical = result.model_dump(mode="json")
     noncanonical["largest_gap_index"] = 2
-    with pytest.raises(ValidationError) as caught:
-        BinaryPowerSumGapProfile.model_validate(noncanonical)
-
-    assert (
-        caught.value.errors()[0]["type"] == "binary_power_sum.gap_summary_first_match"
-    )
+    claim = BinaryPowerSumGapProfile.model_validate(noncanonical)
+    assert not verify_binary_power_sum_gap_profile(claim)
 
 
 def test_representative_profile_charges_every_executed_math_phase() -> None:

@@ -24,6 +24,7 @@ from jacobian.math.number_theory.algebraic_numbers.real import (
     RealAlgebraicValue,
 )
 from jacobian.math.number_theory.number_fields._binary_power_sum import (
+    BinaryPowerSumGapProfile,
     binary_power_sum_gap_profile,
 )
 from jacobian.math.number_theory.number_fields._embedding_limits import (
@@ -365,6 +366,15 @@ def verify_discriminant(claim: NumberFieldDiscriminantResult) -> bool:
     )
 
 
+def verify_binary_power_sum_gap_profile(claim: BinaryPowerSumGapProfile) -> bool:
+    """Check every retained binary power-sum relation against its source."""
+    try:
+        expected = binary_power_sum_gap_profile(claim.base, claim.exponent_count)
+    except (TypeError, ValueError):
+        return False
+    return expected == claim
+
+
 def ring_of_integers(field: SimpleNumberFieldPresentation) -> list[str]:
     """Return the exact integral basis expressed in the defining power basis."""
     ring, _field_discriminant, alpha, leading = _integral_basis(field)
@@ -380,5 +390,6 @@ __all__ = [
     "discriminant",
     "embeddings",
     "ring_of_integers",
+    "verify_binary_power_sum_gap_profile",
     "verify_discriminant",
 ]

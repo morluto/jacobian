@@ -11,6 +11,7 @@ from jacobian.math.number_theory.number_fields.operations import (
     discriminant,
     embeddings,
     ring_of_integers,
+    verify_binary_power_sum_gap_profile,
     verify_discriminant,
 )
 from jacobian.math.number_theory.number_fields.values import (
@@ -39,5 +40,6 @@ __all__ = [
     "discriminant",
     "embeddings",
     "ring_of_integers",
+    "verify_binary_power_sum_gap_profile",
     "verify_discriminant",
 ]

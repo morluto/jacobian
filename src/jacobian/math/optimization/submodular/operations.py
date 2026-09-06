@@ -158,7 +158,10 @@ def check_submodularity(function: SetFunction) -> SubmodularityCheckResult:
 def verify_monotonicity(claim: MonotonicityCheckResult) -> bool:
     """Check a retained monotonicity claim against its source function."""
 
-    return check_monotonicity(claim.function) == claim
+    try:
+        return check_monotonicity(claim.function) == claim
+    except OperationDomainValidationError:
+        return False
 
 
 def verify_set_function_evaluation(claim: SetFunctionEvalResult) -> bool:
@@ -173,7 +176,10 @@ def verify_set_function_evaluation(claim: SetFunctionEvalResult) -> bool:
 def verify_submodularity(claim: SubmodularityCheckResult) -> bool:
     """Check a retained submodularity claim against its source function."""
 
-    return check_submodularity(claim.function) == claim
+    try:
+        return check_submodularity(claim.function) == claim
+    except OperationDomainValidationError:
+        return False
 
 
 __all__ = [

@@ -296,6 +296,16 @@ def test_value_height_bound_keeps_scan_work_small() -> None:
     assert (
         error.value.errors()[0]["type"] == "submodular_opt.scan_value_height_exceeded"
     )
+
+    valid_function = _make_uniform_function(1)
+    monotonicity_claim = check_monotonicity(valid_function).model_copy(
+        update={"function": monotonicity_request.function}
+    )
+    submodularity_claim = check_submodularity(valid_function).model_copy(
+        update={"function": monotonicity_request.function}
+    )
+    assert not verify_monotonicity(monotonicity_claim)
+    assert not verify_submodularity(submodularity_claim)
     submodularity_request = SubmodularityCheckRequest(
         function=SetFunction(ground_set_size=1, entries=(wide_empty, wide_full))
     )

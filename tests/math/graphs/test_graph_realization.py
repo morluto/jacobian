@@ -253,6 +253,24 @@ class TestGraphicalityCheck:
         result = _graphicality_check([2, 2, 2, 2])
         assert result.sequence.degrees == (2, 2, 2, 2)
 
+    @pytest.mark.parametrize(
+        ("degrees", "irrelevant_field"),
+        (
+            ([3, 3, 3], "degree"),
+            ([6, 1, 1, 1, 1], "k"),
+            ([3, 3, 3, 1], "degree"),
+            ([1, 2, 2, 1], "left"),
+        ),
+    )
+    def test_serialized_certificate_rejects_irrelevant_fields(
+        self, degrees: list[int], irrelevant_field: str
+    ) -> None:
+        result = _graphicality_check(degrees)
+        payload = result.model_dump(mode="json")
+        payload["certificate"][irrelevant_field] = 1 if irrelevant_field == "k" else 0
+        forged = GraphicalityCheckResult.model_validate(payload)
+        assert not verify_graphicality_check(forged)
+
 
 # ---------------------------------------------------------------------------
 # realization check

@@ -148,11 +148,21 @@ def verify_graphicality_check(claim: GraphicalityCheckResult) -> bool:
     certificate = claim.certificate
     degrees = claim.sequence.degrees
     vertex_count = len(degrees)
+    fields = ("degree", "vertex_count", "k", "left", "right")
+
+    def has_shape(*required: str) -> bool:
+        required_fields = set(required)
+        return all(
+            (getattr(certificate, field) is not None) == (field in required_fields)
+            for field in fields
+        )
+
     if certificate.kind == "ODD_SUM":
-        return not claim.is_graphical and sum(degrees) % 2 == 1
+        return has_shape() and not claim.is_graphical and sum(degrees) % 2 == 1
     if certificate.kind == "DEGREE_BOUND":
         return (
-            not claim.is_graphical
+            has_shape("degree", "vertex_count")
+            and not claim.is_graphical
             and certificate.degree is not None
             and certificate.vertex_count == vertex_count
             and certificate.degree in degrees
@@ -161,7 +171,8 @@ def verify_graphicality_check(claim: GraphicalityCheckResult) -> bool:
     sorted_degrees = sorted(degrees, reverse=True)
     if certificate.kind == "ERDOS_GALLAI_VIOLATION":
         if (
-            claim.is_graphical
+            not has_shape("k", "left", "right")
+            or claim.is_graphical
             or certificate.k is None
             or certificate.left is None
             or certificate.right is None
@@ -173,7 +184,7 @@ def verify_graphicality_check(claim: GraphicalityCheckResult) -> bool:
         right = k * (k - 1) + sum(min(value, k) for value in sorted_degrees[k:])
         return certificate.left == left and certificate.right == right and left > right
     if certificate.kind == "ERDOS_GALLAI":
-        if not claim.is_graphical or sum(degrees) % 2:
+        if not has_shape() or not claim.is_graphical or sum(degrees) % 2:
             return False
         return all(
             sum(sorted_degrees[:k])

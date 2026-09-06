@@ -342,3 +342,11 @@ def test_singular_consumers_select_runtime_lane(path: str) -> None:
 
     assert plan.run_singular is True
     assert plan.run_qepcad is False
+
+
+def test_shared_process_change_selects_both_exact_runtime_suites() -> None:
+    plan = _plan(["src/jacobian/process.py"])
+
+    assert plan.boundary_lanes == ("process",)
+    assert plan.run_singular is True
+    assert plan.run_qepcad is True

@@ -275,7 +275,9 @@ def _classify_runtime_path(path: str) -> PathDecision | None:
     if path == "src/jacobian/cli.py":
         return PathDecision(python_lanes=("cli",), run_wheel=True)
     if path == "src/jacobian/process.py":
-        return PathDecision(boundary_lanes=("process",), run_singular=True)
+        return PathDecision(
+            boundary_lanes=("process",), run_singular=True, run_qepcad=True
+        )
     if path.startswith("src/jacobian/mcp/"):
         return PathDecision(boundary_lanes=("mcp",), run_wheel=True)
     if path.startswith("src/jacobian/"):

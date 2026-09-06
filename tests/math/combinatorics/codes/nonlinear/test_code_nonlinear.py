@@ -25,17 +25,24 @@ from jacobian.math.combinatorics.codes.nonlinear._budget import (
 from jacobian.math.combinatorics.codes.nonlinear._models import (
     BinaryCodeDistanceWitness,
     ConstantWeightProfileRequest,
+    ConstantWeightProfileResult,
     ConstantWeightRequest,
     ConstantWeightResult,
     ExplicitProfileRequest,
+    ExplicitProfileResult,
     ToSetSystemRequest,
     WordDistanceRequest,
+    WordDistanceResult,
 )
 from jacobian.math.combinatorics.codes.nonlinear._tools import TOOLS
 from jacobian.math.combinatorics.codes.nonlinear.operations import (
     constant_weight_code,
     constant_weight_profile,
     explicit_profile,
+    verify_constant_weight_profile,
+    verify_distance_witness,
+    verify_explicit_profile,
+    verify_word_distance,
     word_distance,
 )
 from jacobian.math.combinatorics.codes.nonlinear.values import (
@@ -635,3 +642,49 @@ class TestCanonicalConsumers:
         assert explicit.weight_distribution == (1,)
         assert constant.intersection_histogram == (0,)
         assert supports.members == ((),)
+
+
+class TestSerializedClaimVerifiers:
+    def test_word_distance_round_trip_and_forged_distance(self) -> None:
+        result = word_distance((1, 1, 0, 0), (1, 0, 1, 0))
+        assert verify_word_distance(
+            WordDistanceResult.model_validate_json(result.model_dump_json())
+        )
+        forged = result.model_dump(mode="json")
+        forged["distance"] = 1
+        assert not verify_word_distance(WordDistanceResult.model_validate(forged))
+        forged = result.model_dump(mode="json")
+        forged["support_intersection"] = 0
+        assert not verify_word_distance(WordDistanceResult.model_validate(forged))
+
+    def test_witness_bound_to_code_and_forged_binding(self) -> None:
+        code = _code((0, 0), (0, 1), (1, 1))
+        profile = explicit_profile(code)
+        assert profile.minimum_distance_witness is not None
+        assert verify_distance_witness(code, profile.minimum_distance_witness)
+        assert verify_explicit_profile(
+            ExplicitProfileResult.model_validate_json(profile.model_dump_json())
+        )
+        other = _code((0, 0), (1, 1))
+        assert not verify_distance_witness(other, profile.minimum_distance_witness)
+        forged = profile.minimum_distance_witness.model_dump(mode="json")
+        forged["distance"] = (profile.minimum_distance or 0) + 1
+        assert not verify_distance_witness(
+            code, BinaryCodeDistanceWitness.model_validate(forged)
+        )
+
+    def test_profile_extrema_without_pairs_have_no_witnesses(self) -> None:
+        code = _code(length=3)
+        profile = explicit_profile(code)
+        assert profile.pair_count == 0
+        assert verify_explicit_profile(profile)
+
+    def test_constant_weight_profile_checks_weight_and_extrema(self) -> None:
+        code = constant_weight_code(4, 2).code
+        profile = constant_weight_profile(code)
+        assert verify_constant_weight_profile(profile)
+        forged = profile.model_dump(mode="json")
+        forged["weight"] = 3
+        assert not verify_constant_weight_profile(
+            ConstantWeightProfileResult.model_validate(forged)
+        )

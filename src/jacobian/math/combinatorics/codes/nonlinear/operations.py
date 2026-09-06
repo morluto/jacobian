@@ -294,6 +294,120 @@ def constant_weight_profile(code: ExplicitBinaryCode) -> ConstantWeightProfileRe
     )
 
 
+def verify_word_distance(claim: WordDistanceResult) -> bool:
+    """Check the Hamming relation of two retained words without profiling.
+
+    Recomputes distance, differing coordinates, weights, and support
+    intersection directly from the claimed words in linear time.
+    """
+    if not claim.word1 or len(claim.word1) != len(claim.word2):
+        return False
+    distance, differing, weight1, weight2, intersection = _word_distance_data(
+        claim.word1, claim.word2
+    )
+    return (
+        claim.distance == distance
+        and claim.differing_coordinates == differing
+        and claim.weight1 == weight1
+        and claim.weight2 == weight2
+        and claim.support_intersection == intersection
+    )
+
+
+def verify_distance_witness(
+    code: ExplicitBinaryCode, witness: BinaryCodeDistanceWitness
+) -> bool:
+    """Check one witness is bound to its code with correct Hamming metadata."""
+    if witness.left_index == witness.right_index:
+        return False
+    if not (
+        0 <= witness.left_index < len(code.codewords)
+        and 0 <= witness.right_index < len(code.codewords)
+    ):
+        return False
+    left_word = code.codewords[witness.left_index]
+    right_word = code.codewords[witness.right_index]
+    if witness.left_word != left_word or witness.right_word != right_word:
+        return False
+    left_support = tuple(i for i, bit in enumerate(left_word) if bit)
+    right_support = tuple(i for i, bit in enumerate(right_word) if bit)
+    if witness.left_support != left_support or witness.right_support != right_support:
+        return False
+    distance, differing, left_weight, right_weight, intersection = _word_distance_data(
+        left_word, right_word
+    )
+    return (
+        witness.differing_coordinates == differing
+        and witness.left_weight == left_weight
+        and witness.right_weight == right_weight
+        and witness.support_intersection == intersection
+        and witness.distance == distance
+    )
+
+
+def _verify_profile_extrema(
+    code: ExplicitBinaryCode,
+    *,
+    pair_count: int,
+    minimum_distance: int | None,
+    maximum_distance: int | None,
+    minimum_distance_witness: BinaryCodeDistanceWitness | None,
+    maximum_distance_witness: BinaryCodeDistanceWitness | None,
+) -> bool:
+    """Check extremum presence and witness bindings without reprofiling."""
+    if pair_count == 0:
+        return (
+            minimum_distance is None
+            and maximum_distance is None
+            and minimum_distance_witness is None
+            and maximum_distance_witness is None
+        )
+    if (
+        minimum_distance is None
+        or maximum_distance is None
+        or minimum_distance_witness is None
+        or maximum_distance_witness is None
+    ):
+        return False
+    return (
+        verify_distance_witness(code, minimum_distance_witness)
+        and minimum_distance_witness.distance == minimum_distance
+        and verify_distance_witness(code, maximum_distance_witness)
+        and maximum_distance_witness.distance == maximum_distance
+    )
+
+
+def verify_explicit_profile(claim: ExplicitProfileResult) -> bool:
+    """Check a profile's extremum witnesses against its retained source."""
+    return _verify_profile_extrema(
+        claim.source,
+        pair_count=claim.pair_count,
+        minimum_distance=claim.minimum_distance,
+        maximum_distance=claim.maximum_distance,
+        minimum_distance_witness=claim.minimum_distance_witness,
+        maximum_distance_witness=claim.maximum_distance_witness,
+    )
+
+
+def verify_constant_weight_profile(claim: ConstantWeightProfileResult) -> bool:
+    """Check a constant-weight profile's extremum witnesses and weight."""
+    if not claim.source.codewords:
+        return False
+    weight = sum(claim.source.codewords[0])
+    if claim.weight != weight or any(
+        sum(word) != weight for word in claim.source.codewords
+    ):
+        return False
+    return _verify_profile_extrema(
+        claim.source,
+        pair_count=claim.pair_count,
+        minimum_distance=claim.minimum_distance,
+        maximum_distance=claim.maximum_distance,
+        minimum_distance_witness=claim.minimum_distance_witness,
+        maximum_distance_witness=claim.maximum_distance_witness,
+    )
+
+
 def to_set_system(code: ExplicitBinaryCode) -> IndexedFiniteSetFamily:
     """Map binary words to subsets of the retained coordinate axis [length].
 
@@ -313,5 +427,9 @@ __all__ = [
     "constant_weight_profile",
     "explicit_profile",
     "to_set_system",
+    "verify_constant_weight_profile",
+    "verify_distance_witness",
+    "verify_explicit_profile",
+    "verify_word_distance",
     "word_distance",
 ]

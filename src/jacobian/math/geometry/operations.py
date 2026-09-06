@@ -66,6 +66,7 @@ __all__ = [
     "signed_area",
     "simple_polygon",
     "squared_distance",
+    "verify_simple_polygon",
 ]
 
 
@@ -570,6 +571,12 @@ def simple_polygon(polygon: PolygonRequest) -> SimplePolygonDecisionResult:
         is_simple=True,
         checked_edge_pairs=checked,
     )
+
+
+def verify_simple_polygon(claim: SimplePolygonDecisionResult) -> bool:
+    """Check the exact simplicity decision asserted by a serialized claim."""
+
+    return simple_polygon(claim.polygon) == claim
 
 
 def classify_polygon_point(

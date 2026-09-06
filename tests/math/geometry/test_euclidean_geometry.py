@@ -38,6 +38,7 @@ from jacobian.math.geometry.euclidean.operations import (
     verify_angle_equality,
     verify_triangle_similarity,
 )
+from jacobian.math.geometry.operations import simple_polygon, verify_simple_polygon
 
 
 def _pt(x: int, y: int) -> RationalPoint2D:
@@ -109,6 +110,21 @@ def test_point_classification_rejects_non_simple_polygon_at_operation_boundary()
     assert exc_info.value.errors()[0]["type"] == (
         "geometry.point_classification_requires_a_simple_polygon"
     )
+
+
+def test_simple_polygon_claim_round_trips_and_rejects_a_forged_decision() -> None:
+    result = simple_polygon(
+        PolygonRequest(points=(_pt(0, 0), _pt(1, 0), _pt(1, 1), _pt(0, 1)))
+    )
+    assert verify_simple_polygon(
+        type(result).model_validate_json(result.model_dump_json())
+    )
+
+    payload = result.model_dump(mode="json")
+    payload["polygon"] = PolygonRequest(
+        points=(_pt(0, 0), _pt(1, 1), _pt(0, 1), _pt(1, 0))
+    ).model_dump(mode="json")
+    assert not verify_simple_polygon(type(result).model_validate(payload))
 
 
 class TestSegmentRatio:

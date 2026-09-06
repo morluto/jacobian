@@ -44,6 +44,7 @@ from jacobian.math.graphs.multigraph.operations import (
     eulerian_cycles,
     multigraph_flow_check,
     multigraph_flow_find,
+    verify_eulerian_cycles,
 )
 
 # ---------------------------------------------------------------------------
@@ -405,6 +406,30 @@ class TestEulerianDecomposition:
         assert len(cycle.edge_ids) == 64
         replayed = EulerianCyclesResult.model_validate(result.model_dump(mode="json"))
         assert replayed == result
+
+    def test_serialized_claim_verifier_checks_incidence_and_usage(self) -> None:
+        result = _compute_eulerian_cycles(EulerianCyclesRequest(graph=TRIANGLE))
+        claim = EulerianCyclesResult.model_validate_json(result.model_dump_json())
+        assert verify_eulerian_cycles(claim)
+
+        payload = result.model_dump(mode="json")
+        payload["cycles"][0]["vertices"] = [0, 2, 1, 0]
+        payload["cycles"][0]["edge_ids"] = ["e0", "e1", "e2"]
+        forged = EulerianCyclesResult.model_validate(payload)
+        assert not verify_eulerian_cycles(forged)
+
+        payload = result.model_dump(mode="json")
+        payload["edge_usage"][0][1] = 0
+        forged = EulerianCyclesResult.model_validate(payload)
+        assert not verify_eulerian_cycles(forged)
+
+    def test_empty_selected_axis_is_a_valid_source_bound_claim(self) -> None:
+        result = _compute_eulerian_cycles(
+            EulerianCyclesRequest(graph=TRIANGLE, edge_subset=())
+        )
+        assert verify_eulerian_cycles(
+            EulerianCyclesResult.model_validate_json(result.model_dump_json())
+        )
 
 
 # ---------------------------------------------------------------------------

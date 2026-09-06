@@ -36,6 +36,7 @@ __all__ = [
     "eulerian_cycles",
     "multigraph_flow_check",
     "multigraph_flow_find",
+    "verify_eulerian_cycles",
     "verify_multigraph_flow_check",
 ]
 
@@ -585,6 +586,49 @@ def eulerian_cycles(
         edge_usage=usage_tuple,
         covers_all=covers_all,
     )
+
+
+def verify_eulerian_cycles(claim: EulerianCyclesResult) -> bool:
+    """Verify cycle incidence, disjointness, usage, and coverage claims.
+
+    The retained graph and selected edge axis are the source of truth.  This
+    checks the decomposition relation directly and deliberately does not
+    rerun the Eulerian decomposition search.
+    """
+    if claim.edge_subset is not None:
+        if len(set(claim.edge_subset)) != len(claim.edge_subset):
+            return False
+        requested = set(claim.edge_subset)
+        if not requested.issubset(claim.graph.edge_id_set):
+            return False
+    else:
+        requested = set(claim.graph.edge_id_set)
+
+    usage = dict(claim.edge_usage)
+    if tuple(edge_id for edge_id, _ in claim.edge_usage) != tuple(sorted(requested)):
+        return False
+    if any(count < 0 for count in usage.values()):
+        return False
+
+    observed: dict[str, int] = dict.fromkeys(requested, 0)
+    for cycle in claim.cycles:
+        for index, edge_id in enumerate(cycle.edge_ids):
+            if edge_id not in requested or edge_id not in claim.graph.edge_id_set:
+                return False
+            if observed[edge_id] != 0:
+                return False
+            left = cycle.vertices[index]
+            right = cycle.vertices[index + 1]
+            if left >= claim.graph.vertex_count or right >= claim.graph.vertex_count:
+                return False
+            edge = claim.graph.edge_by_id(edge_id)
+            if {left, right} != {edge.left, edge.right}:
+                return False
+            observed[edge_id] = 1
+
+    if usage != observed:
+        return False
+    return claim.covers_all is all(observed[edge_id] == 1 for edge_id in requested)
 
 
 # ---------------------------------------------------------------------------

@@ -5,6 +5,7 @@ from jacobian.math.graphs.multigraph.operations import (
     eulerian_cycles,
     multigraph_flow_check,
     multigraph_flow_find,
+    verify_eulerian_cycles,
     verify_multigraph_flow_check,
 )
 
@@ -13,5 +14,6 @@ __all__ = [
     "eulerian_cycles",
     "multigraph_flow_check",
     "multigraph_flow_find",
+    "verify_eulerian_cycles",
     "verify_multigraph_flow_check",
 ]

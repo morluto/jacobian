@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Self
 
-from pydantic import Field, StringConstraints, model_validator
+from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -15,10 +15,6 @@ MAX_FACTOR_DEGREE = 12
 MAX_GALOIS_GROUP_DEGREE = 6
 MAX_FIELD_ORDER = 251
 GaloisCoefficient = Annotated[int, Field(ge=-(10**12), le=10**12, strict=True)]
-RootIdentifier = Annotated[
-    str,
-    StringConstraints(pattern=r"^root_[0-9]+$", strict=True),
-]
 PositiveFactorDegree = Annotated[
     int,
     Field(ge=1, le=MAX_FACTOR_DEGREE, strict=True),
@@ -226,22 +222,49 @@ class FrobeniusCycleResult(StrictModel):
         return self
 
 
-class FinitePermutationGroup(StrictModel):
-    """A composable permutation group on one explicit ordered root axis."""
+class GaloisRootAxis(StrictModel):
+    """The ordered root positions of one retained source polynomial.
 
-    root_axis: tuple[RootIdentifier, ...] = Field(
+    Positions are canonical indices; the polynomial is the source that gives
+    those positions their mathematical meaning.  The shape checks here only
+    establish a well-formed axis.  Relation verification belongs to the
+    public claim verifiers.
+    """
+
+    polynomial: RationalPolynomial
+    indices: tuple[StrictInt, ...] = Field(
         min_length=1,
         max_length=MAX_GALOIS_GROUP_DEGREE,
     )
-    generators: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=16)
+
+    @model_validator(mode="after")
+    def require_structural_axis(self) -> Self:
+        terms = self.polynomial.polynomial.terms
+        if len(self.polynomial.variables) != 1 or not terms:
+            raise _validation_error(
+                "root_axis_requires_univariate_polynomial",
+                "root axis requires a nonempty univariate polynomial",
+            )
+        degree = terms[0].exponents[0]
+        if len(self.indices) != degree or self.indices != tuple(range(degree)):
+            raise _validation_error(
+                "root_axis_not_canonical",
+                "root positions must be the canonical degree-sized index axis",
+            )
+        return self
+
+
+class FinitePermutationGroup(StrictModel):
+    """A composable permutation group on one polynomial root axis."""
+
+    root_axis: GaloisRootAxis
+    generators: tuple[tuple[StrictInt, ...], ...] = Field(
+        min_length=1, max_length=16
+    )
 
     @model_validator(mode="after")
     def require_permutations_on_axis(self) -> Self:
-        if len(set(self.root_axis)) != len(self.root_axis):
-            raise _validation_error(
-                "root_axis_not_unique", "root axis entries must be unique"
-            )
-        expected = tuple(range(len(self.root_axis)))
+        expected = tuple(range(len(self.root_axis.indices)))
         if any(
             len(generator) != len(expected) or tuple(sorted(generator)) != expected
             for generator in self.generators
@@ -259,6 +282,12 @@ class GaloisGroupResult(StrictModel):
     order: int = Field(ge=1)
     degree: int = Field(ge=1, le=MAX_GALOIS_GROUP_DEGREE)
     is_solvable: bool
+
+    @property
+    def polynomial(self) -> RationalPolynomial:
+        """Return the canonical source retained by the root axis."""
+
+        return self.group.root_axis.polynomial
 
     @classmethod
     def _from_kernel(
@@ -282,7 +311,7 @@ class GaloisGroupResult(StrictModel):
 
     @model_validator(mode="after")
     def require_group_degree(self) -> Self:
-        if self.degree != len(self.group.root_axis):
+        if self.degree != len(self.group.root_axis.indices):
             raise _validation_error(
                 "group_degree_mismatch",
                 "group root axis must match the polynomial degree",
@@ -293,6 +322,12 @@ class GaloisGroupResult(StrictModel):
 class SolvableResult(StrictModel):
     solvable_by_radicals: bool
     group: FinitePermutationGroup
+
+    @property
+    def polynomial(self) -> RationalPolynomial:
+        """Return the canonical source retained by the root axis."""
+
+        return self.group.root_axis.polynomial
 
     @classmethod
     def _from_kernel(
@@ -318,6 +353,7 @@ __all__ = [
     "GaloisFactorResult",
     "GaloisGroupRequest",
     "GaloisGroupResult",
+    "GaloisRootAxis",
     "SolvableRequest",
     "SolvableResult",
 ]

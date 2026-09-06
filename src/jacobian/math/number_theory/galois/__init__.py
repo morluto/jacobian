@@ -5,6 +5,15 @@ from jacobian.math.number_theory.galois.operations import (
     galois_factor,
     galois_group,
     solvable,
+    verify_galois_group,
+    verify_solvable,
 )
 
-__all__ = ["frobenius_cycle", "galois_factor", "galois_group", "solvable"]
+__all__ = [
+    "frobenius_cycle",
+    "galois_factor",
+    "galois_group",
+    "solvable",
+    "verify_galois_group",
+    "verify_solvable",
+]

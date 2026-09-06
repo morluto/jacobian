@@ -18,10 +18,12 @@ from jacobian.math.number_theory.galois._models import (
     FrobeniusCycleResult,
     GaloisFactorResult,
     GaloisGroupResult,
+    GaloisRootAxis,
     SolvableResult,
     _require_prime,
     _supported_galois_polynomial,
 )
+from jacobian.math.polynomials.values import RationalPolynomial
 
 
 def _admit(operation: Callable[[], None], *, location: tuple[str | int, ...]) -> None:
@@ -143,11 +145,38 @@ def _galois_group_from_coeffs(coeffs: tuple[int, ...]) -> PermutationGroup:
     return perm_group
 
 
-def _wire_group(perm_group: PermutationGroup, degree: int) -> FinitePermutationGroup:
-    """Project a SymPy group onto a complete explicit root axis."""
+def _polynomial_from_coefficients(coefficients: tuple[int, ...]) -> RationalPolynomial:
+    from jacobian.math.polynomials.values import RationalPolynomial
+
+    return RationalPolynomial.model_validate(
+        {
+            "variables": ["x"],
+            "polynomial": {
+                "terms": [
+                    {
+                        "coefficient": {"num": str(value), "den": "1"},
+                        "exponents": [index],
+                    }
+                    for index, value in reversed(tuple(enumerate(coefficients)))
+                    if value
+                ]
+            },
+        }
+    )
+
+
+def _wire_group(
+    perm_group: PermutationGroup,
+    degree: int,
+    polynomial: RationalPolynomial,
+) -> FinitePermutationGroup:
+    """Project a SymPy group onto the source polynomial's ordered root axis."""
 
     return FinitePermutationGroup(
-        root_axis=tuple(f"root_{index}" for index in range(degree)),
+        root_axis=GaloisRootAxis(
+            polynomial=polynomial,
+            indices=tuple(range(degree)),
+        ),
         generators=tuple(
             tuple(int(generator(index)) for index in range(degree))
             for generator in perm_group.generators
@@ -155,19 +184,22 @@ def _wire_group(perm_group: PermutationGroup, degree: int) -> FinitePermutationG
     )
 
 
-def galois_group(coefficients: tuple[int, ...]) -> GaloisGroupResult:
+def galois_group(
+    coefficients: tuple[int, ...], *, polynomial: RationalPolynomial | None = None
+) -> GaloisGroupResult:
     """Compute the Galois group of a polynomial over Q."""
     _admit(
         lambda: _supported_galois_polynomial(coefficients),
         location=("coefficients",),
     )
     perm_group = _galois_group_from_coeffs(coefficients)
+    source = polynomial or _polynomial_from_coefficients(coefficients)
     group_name = str(perm_group)
     order = int(perm_group.order())
     is_solvable = bool(perm_group.is_solvable)
 
     return GaloisGroupResult._from_kernel(
-        group=_wire_group(perm_group, len(coefficients) - 1),
+        group=_wire_group(perm_group, len(coefficients) - 1, source),
         group_name=group_name,
         order=order,
         degree=len(coefficients) - 1,
@@ -175,7 +207,9 @@ def galois_group(coefficients: tuple[int, ...]) -> GaloisGroupResult:
     )
 
 
-def solvable(coefficients: tuple[int, ...]) -> SolvableResult:
+def solvable(
+    coefficients: tuple[int, ...], *, polynomial: RationalPolynomial | None = None
+) -> SolvableResult:
     """Determine if a polynomial is solvable by radicals.
 
     A polynomial is solvable by radicals iff its Galois group is solvable.
@@ -186,11 +220,56 @@ def solvable(coefficients: tuple[int, ...]) -> SolvableResult:
         location=("coefficients",),
     )
     perm_group = _galois_group_from_coeffs(coefficients)
+    source = polynomial or _polynomial_from_coefficients(coefficients)
     is_solvable = bool(perm_group.is_solvable)
     return SolvableResult._from_kernel(
         solvable_by_radicals=is_solvable,
-        group=_wire_group(perm_group, len(coefficients) - 1),
+        group=_wire_group(perm_group, len(coefficients) - 1, source),
     )
+
+
+def verify_galois_group(claim: GaloisGroupResult) -> bool:
+    """Verify a serialized Galois-group claim against its source polynomial."""
+
+    try:
+        coefficients = _coefficients_from_polynomial(claim.polynomial)
+        perm_group = _galois_group_from_coeffs(coefficients)
+        expected_generators = tuple(
+            tuple(int(generator(index)) for index in range(claim.degree))
+            for generator in perm_group.generators
+        )
+        return (
+            claim.group.root_axis.indices == tuple(range(claim.degree))
+            and claim.degree == len(coefficients) - 1
+            and claim.order == int(perm_group.order())
+            and claim.group_name == str(perm_group)
+            and claim.is_solvable == bool(perm_group.is_solvable)
+            and claim.group.generators == expected_generators
+        )
+    except (ArithmeticError, IndexError, TypeError, ValueError):
+        return False
+
+
+def verify_solvable(claim: SolvableResult) -> bool:
+    """Verify a serialized radical-solvability claim against its source."""
+
+    try:
+        coefficients = _coefficients_from_polynomial(claim.polynomial)
+        perm_group = _galois_group_from_coeffs(coefficients)
+        return claim.solvable_by_radicals == bool(perm_group.is_solvable)
+    except (ArithmeticError, IndexError, TypeError, ValueError):
+        return False
+
+
+def _coefficients_from_polynomial(polynomial: RationalPolynomial) -> tuple[int, ...]:
+    terms = polynomial.polynomial.terms
+    degree = terms[0].exponents[0]
+    coefficients = [0] * (degree + 1)
+    for term in terms:
+        if term.coefficient.den != "1":
+            raise ValueError("Galois source coefficients must be integral")
+        coefficients[term.exponents[0]] = int(term.coefficient.num)
+    return tuple(coefficients)
 
 
 __all__ = [
@@ -198,4 +277,6 @@ __all__ = [
     "galois_factor",
     "galois_group",
     "solvable",
+    "verify_galois_group",
+    "verify_solvable",
 ]

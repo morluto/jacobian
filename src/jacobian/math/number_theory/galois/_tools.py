@@ -34,11 +34,11 @@ def _frobenius_cycle(request: FrobeniusCycleRequest) -> FrobeniusCycleResult:
 
 
 def _galois_group(request: GaloisGroupRequest) -> GaloisGroupResult:
-    return galois_group(request.coefficients)
+    return galois_group(request.coefficients, polynomial=request.polynomial)
 
 
 def _solvable(request: SolvableRequest) -> SolvableResult:
-    return solvable(request.coefficients)
+    return solvable(request.coefficients, polynomial=request.polynomial)
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (

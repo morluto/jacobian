@@ -12,7 +12,9 @@ from jacobian.math.number_theory.galois._models import (
     GaloisFactorRequest,
     GaloisFactorResult,
     GaloisGroupRequest,
+    GaloisGroupResult,
     SolvableRequest,
+    SolvableResult,
 )
 from jacobian.math.number_theory.galois._tools import (
     TOOLS,
@@ -24,6 +26,8 @@ from jacobian.math.number_theory.galois._tools import (
 from jacobian.math.number_theory.galois.operations import (
     galois_factor,
     galois_group,
+    verify_galois_group,
+    verify_solvable,
 )
 from jacobian.math.polynomials.values import RationalPolynomial
 
@@ -250,8 +254,34 @@ def test_galois_group_returns_composable_generators() -> None:
     assert result.degree == 5
     assert result.order == 120
     assert result.is_solvable is False
-    assert result.group.root_axis == tuple(f"root_{index}" for index in range(5))
+    assert result.group.root_axis.indices == tuple(range(5))
+    assert result.polynomial == result.group.root_axis.polynomial
     assert _group_from_result(result).order() == result.order
+
+
+def test_galois_claims_retain_source_through_json_and_reject_forgery() -> None:
+    request = GaloisGroupRequest(
+        polynomial=_rational_polynomial((-1, -1, 0, 0, 0, 1))
+    )
+    result = _galois_group(request)
+    decoded = GaloisGroupResult.model_validate_json(result.model_dump_json())
+    assert decoded.polynomial == request.polynomial
+    assert verify_galois_group(decoded)
+
+    forged = decoded.model_copy(update={"order": decoded.order + 1})
+    assert not verify_galois_group(forged)
+
+    solvable_result = _solvable(
+        SolvableRequest(polynomial=_rational_polynomial((-2, 0, 0, 0, 0, 1)))
+    )
+    solvable_decoded = SolvableResult.model_validate_json(
+        solvable_result.model_dump_json()
+    )
+    assert solvable_decoded.polynomial == solvable_result.polynomial
+    assert verify_solvable(solvable_decoded)
+    assert not verify_solvable(
+        solvable_decoded.model_copy(update={"solvable_by_radicals": False})
+    )
 
 
 def test_solvable_quintic_returns_the_group_certificate() -> None:

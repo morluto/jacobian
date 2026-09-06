@@ -13,10 +13,12 @@ from jacobian.math.geometry.algebraic_curves._conic import (
 from jacobian.math.geometry.algebraic_curves._gaussian_realification import (
     GaussianRealificationResult,
     UnivariateGaussianPolynomial,
-    verify_gaussian_realification as _verify_gaussian_realification,
 )
 from jacobian.math.geometry.algebraic_curves._gaussian_realification import (
     gaussian_realification as _gaussian_realification,
+)
+from jacobian.math.geometry.algebraic_curves._gaussian_realification import (
+    verify_gaussian_realification as _verify_gaussian_realification,
 )
 from jacobian.math.geometry.algebraic_curves._models import (
     _MAX_CURVE_TERMS,

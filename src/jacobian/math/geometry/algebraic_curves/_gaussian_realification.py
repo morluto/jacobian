@@ -386,7 +386,9 @@ def verify_gaussian_realification(claim: GaussianRealificationResult) -> bool:
         )
     except (OperationDomainValidationError, ValueError, TypeError):
         return False
-    return expected.real_part == claim.real_part and expected.imag_part == claim.imag_part
+    return (
+        expected.real_part == claim.real_part and expected.imag_part == claim.imag_part
+    )
 
 
 __all__ = [

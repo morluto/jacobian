@@ -8,6 +8,8 @@ from pydantic import ValidationError
 from jacobian._exact import CanonicalRational
 from jacobian.math.geometry.algebraic_curves import (
     gaussian_realification as public_gaussian_realification,
+)
+from jacobian.math.geometry.algebraic_curves import (
     verify_gaussian_realification,
 )
 from jacobian.math.geometry.algebraic_curves._gaussian_realification import (

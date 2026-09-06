@@ -317,6 +317,26 @@ class TestOrderedDifferenceProfile:
         )
         assert verify_ordered_difference_profile(decoded)
 
+    def test_verifier_rejects_duplicate_rows_from_model_copy(self) -> None:
+        result = _run_ordered(_request((0, 0), (1, 0), (0, 1)))
+        forged = result.model_copy(
+            update={"entries": (*result.entries[:-1], result.entries[0])}
+        )
+
+        assert not verify_ordered_difference_profile(forged)
+
+    def test_verifier_rejects_reversed_rows_from_model_copy(self) -> None:
+        result = _run_ordered(_request((0, 0), (1, 0), (0, 1)))
+        forged = result.model_copy(update={"entries": tuple(reversed(result.entries))})
+
+        assert not verify_ordered_difference_profile(forged)
+
+    def test_verifier_returns_false_for_malformed_entry_container(self) -> None:
+        result = _run_ordered(_request((0, 0), (1, 0), (0, 1)))
+        forged = result.model_copy(update={"entries": list(result.entries)})
+
+        assert not verify_ordered_difference_profile(forged)
+
     def test_derived_summaries_are_claims_until_consumed(self) -> None:
         """Schema decoding keeps producer summaries without replaying entries."""
         result = _run_ordered(_request((0, 0), (1, 0), (0, 1), (1, 1)))

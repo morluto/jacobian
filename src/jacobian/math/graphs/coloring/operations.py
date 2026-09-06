@@ -258,7 +258,9 @@ def verify_maximal_independent_set(claim: MaximalIndependentSetResult) -> bool:
     """Verify a serialized independence decision and its optional obstruction."""
     candidate = set(claim.candidate_set)
     edges = {tuple(sorted(edge)) for edge in claim.graph.edges}
-    independent = not any(left in candidate and right in candidate for left, right in edges)
+    independent = not any(
+        left in candidate and right in candidate for left, right in edges
+    )
     if claim.decision == "NOT_INDEPENDENT":
         return (
             not independent
@@ -272,13 +274,18 @@ def verify_maximal_independent_set(claim: MaximalIndependentSetResult) -> bool:
             return False
         vertex = claim.addable_vertex
         return vertex not in candidate and all(
-            vertex not in edge for edge in edges if edge[0] in candidate or edge[1] in candidate
+            vertex not in edge
+            for edge in edges
+            if edge[0] in candidate or edge[1] in candidate
         )
     if not independent:
         return False
     return all(
         vertex in candidate
-        or any(vertex in edge and (edge[0] in candidate or edge[1] in candidate) for edge in edges)
+        or any(
+            vertex in edge and (edge[0] in candidate or edge[1] in candidate)
+            for edge in edges
+        )
         for vertex in range(claim.graph.vertex_count)
     )
 

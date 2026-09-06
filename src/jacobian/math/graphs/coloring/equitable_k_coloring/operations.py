@@ -25,7 +25,12 @@ def _admit(graph: SimpleUndirectedGraph, k: int) -> None:
             message="equitable coloring requires a positive palette size",
         )
     n = len(graph.vertices)
-    if graph.edges and 0 < k < n and not _is_complete(graph) and k**n > MAX_EQUITABLE_COLORING_SEARCH_NODES:
+    if (
+        graph.edges
+        and 0 < k < n
+        and not _is_complete(graph)
+        and k**n > MAX_EQUITABLE_COLORING_SEARCH_NODES
+    ):
         raise OperationDomainValidationError(
             location=("graph", "k"),
             code="graph.equitable_coloring_search_exceeded",

@@ -23,7 +23,6 @@ class EquitableColoringRequest(StrictModel):
     k: int = Field(gt=0)
 
 
-
 class EquitableColoringAssignment(StrictModel):
     """Graph-indexed structural carrier for an equitable-coloring witness."""
 
@@ -44,6 +43,7 @@ class EquitableColoringAssignment(StrictModel):
                 "coloring values must lie in 0..k-1",
             )
         return self
+
 
 class EquitableColoringResult(StrictModel):
     """The equitable k-colouring decision."""

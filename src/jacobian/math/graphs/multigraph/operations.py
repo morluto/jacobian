@@ -102,7 +102,9 @@ def _flow_assignment_diagnostics(
     seen: set[str] = set()
     diagnostics: list[FlowAssignmentDiagnostic] = []
     for edge_id in sorted(graph_ids - {record.edge_id for record in records}):
-        diagnostics.append(FlowAssignmentDiagnostic(code="MISSING_EDGE", edge_id=edge_id))
+        diagnostics.append(
+            FlowAssignmentDiagnostic(code="MISSING_EDGE", edge_id=edge_id)
+        )
     for record in records:
         if record.edge_id in seen:
             diagnostics.append(
@@ -140,9 +142,7 @@ def _flow_assignment_diagnostics(
 
 def verify_multigraph_flow_check(claim: MultigraphFlowCheckResult) -> bool:
     """Verify the exact flow ledger or typed invalid-candidate diagnostics."""
-    expected = multigraph_flow_check(
-        claim.graph, claim.group, claim.edge_flow_records
-    )
+    expected = multigraph_flow_check(claim.graph, claim.group, claim.edge_flow_records)
     return claim == expected
 
 

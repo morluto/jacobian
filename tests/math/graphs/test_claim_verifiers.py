@@ -114,7 +114,9 @@ def test_symmetry_verifier_rejects_arbitrary_complete_partition() -> None:
     )
 
 
-def test_multigraph_flow_checker_diagnoses_invalid_candidate_and_verifies_roundtrip() -> None:
+def test_multigraph_flow_checker_diagnoses_invalid_candidate_and_verifies_roundtrip() -> (
+    None
+):
     graph = LooplessMultigraph(
         vertex_count=2,
         edges=(

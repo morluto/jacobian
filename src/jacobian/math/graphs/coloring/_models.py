@@ -201,6 +201,7 @@ class VertexColoringAssignment(StrictModel):
             )
         return self
 
+
 class KColorabilityResult(StrictModel):
     """Whether a proper ``k``-coloring exists, with one coloring witness."""
 
@@ -256,6 +257,7 @@ class KColorabilityResult(StrictModel):
         else:
             _require_k_colorability_negative_shape(self)
         return self
+
 
 def _require_k_colorability_positive_witness(result: KColorabilityResult) -> None:
     """A colorable claim must carry a proper source-bound witness."""

@@ -151,15 +151,14 @@ def verify_graph_symmetry_orbits(claim: GraphSymmetryOrbitResult) -> bool:
         and claim.edges == tuple(sorted(edges))
         and claim.generator_ids
         == tuple(sorted(generator.generator_id for generator in source.generators))
-        and claim.vertex_color_mode == ("DECLARED" if graph.vertex_colors else "UNCOLORED")
+        and claim.vertex_color_mode
+        == ("DECLARED" if graph.vertex_colors else "UNCOLORED")
         and claim.edge_color_mode == ("DECLARED" if graph.edge_colors else "UNCOLORED")
         and tuple(
             (orbit.representative, orbit.members) for orbit in claim.vertex_orbits
         )
         == expected_vertex_orbits
-        and tuple(
-            (orbit.representative, orbit.members) for orbit in claim.edge_orbits
-        )
+        and tuple((orbit.representative, orbit.members) for orbit in claim.edge_orbits)
         == expected_edge_orbits
     )
 

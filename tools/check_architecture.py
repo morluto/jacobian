@@ -759,10 +759,23 @@ def _import_module_name(
 def _imports_by_local_name(
     root: Path, tree: ast.AST, source_module: str
 ) -> dict[str, tuple[str, str]]:
-    """Return statically resolvable imported symbols by local binding name."""
+    """Resolve module imports, including the typed surface of lazy exports.
+
+    PEP 562 package interfaces retain explicit imports under TYPE_CHECKING.
+    Follow those declarations without treating function-local imports as
+    module exports or interpreting arbitrary runtime branches.
+    """
 
     imports: dict[str, tuple[str, str]] = {}
-    for node in tree.body if isinstance(tree, ast.Module) else ():
+    statements = list(tree.body) if isinstance(tree, ast.Module) else []
+    for statement in tuple(statements):
+        if (
+            isinstance(statement, ast.If)
+            and isinstance(statement.test, ast.Name)
+            and statement.test.id == "TYPE_CHECKING"
+        ):
+            statements.extend(statement.body)
+    for node in statements:
         if not isinstance(node, ast.ImportFrom):
             continue
         module = _import_module_name(root, node, source_module)

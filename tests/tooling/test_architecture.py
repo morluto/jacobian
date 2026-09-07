@@ -352,14 +352,24 @@ def test_profiles_and_certificates_cannot_hide_kernel_replay(tmp_path: Path) -> 
     ]
 
 
+@pytest.mark.parametrize(
+    "export_source",
+    (
+        "from .native import value\n",
+        "from typing import TYPE_CHECKING\n"
+        "if TYPE_CHECKING:\n    from .native import value\n",
+    ),
+    ids=("eager", "lazy-typed"),
+)
 def test_exported_native_functions_do_not_construct_wire_models(
     tmp_path: Path,
+    export_source: str,
 ) -> None:
     _write(tmp_path, "src/jacobian/math/__init__.py", "__all__ = ['example']\n")
     _write(
         tmp_path,
         "src/jacobian/math/example/__init__.py",
-        "from .native import value\n__all__ = ['value']\n",
+        export_source + "__all__ = ['value']\n",
     )
     _write(
         tmp_path,
@@ -381,14 +391,24 @@ def test_exported_native_functions_do_not_construct_wire_models(
     ]
 
 
+@pytest.mark.parametrize(
+    "export_source",
+    (
+        "from .api import value\n",
+        "from typing import TYPE_CHECKING\n"
+        "if TYPE_CHECKING:\n    from .api import value\n",
+    ),
+    ids=("eager", "lazy-typed"),
+)
 def test_exported_native_functions_do_not_annotate_wire_models(
     tmp_path: Path,
+    export_source: str,
 ) -> None:
     _write(tmp_path, "src/jacobian/math/__init__.py", "__all__ = ['example']\n")
     _write(
         tmp_path,
         "src/jacobian/math/example/__init__.py",
-        "from .api import value\n__all__ = ['value']\n",
+        export_source + "__all__ = ['value']\n",
     )
     _write(
         tmp_path,

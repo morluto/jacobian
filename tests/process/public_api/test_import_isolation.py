@@ -5,6 +5,16 @@ import os
 import subprocess
 import sys
 
+import pytest
+
+_LAZY_NATIVE_PACKAGES = (
+    "jacobian.math.number_theory",
+    "jacobian.math.number_theory.number_fields",
+    "jacobian.math.matrices",
+    "jacobian.math.graphs",
+    "jacobian.math.graphs.chip_firing",
+)
+
 
 def _imported_module_snapshots(targets: tuple[str, ...]) -> dict[str, set[str]]:
     script = (
@@ -56,6 +66,81 @@ def test_native_namespace_does_not_eagerly_import_packaged_backends() -> None:
     _assert_not_imported(
         _imported_modules("jacobian.math"),
         ("networkx", "sympy", "flint"),
+    )
+
+
+@pytest.mark.parametrize("package", _LAZY_NATIVE_PACKAGES)
+def test_native_package_initialization_does_not_load_implementations(
+    package: str,
+) -> None:
+    imported = _imported_modules(package)
+    _assert_not_imported(
+        imported,
+        (
+            "sympy",
+            "flint",
+            "networkx",
+            "pydantic",
+            f"{package}.operations",
+            f"{package}.values",
+            f"{package}._models",
+        ),
+    )
+
+
+@pytest.mark.parametrize(
+    "target",
+    (
+        "jacobian.math.number_theory.number_fields.values",
+        "jacobian.math.matrices.values",
+        "jacobian.math.graphs.values",
+        "jacobian.math.graphs.chip_firing._hermite",
+        "jacobian.math.number_theory.number_fields._embeddings_worker",
+    ),
+)
+def test_value_and_kernel_imports_do_not_load_unrelated_operations(
+    target: str,
+) -> None:
+    _assert_not_imported(
+        _imported_modules(target),
+        (
+            "jacobian.math.number_theory.operations",
+            "jacobian.math.number_theory._divisibility_poset",
+            "jacobian.math.number_theory.number_fields.operations",
+            "jacobian.math.number_theory.number_fields._binary_power_sum",
+            "jacobian.math.matrices.operations",
+            "jacobian.math.graphs.operations",
+            "jacobian.math.graphs.chip_firing.operations",
+            "jacobian.math.combinatorics.operations",
+            "jacobian.catalog.collector",
+        ),
+    )
+
+
+@pytest.mark.parametrize("package", _LAZY_NATIVE_PACKAGES)
+def test_lazy_public_exports_are_discoverable_and_resolve_to_cached_objects(
+    package: str,
+) -> None:
+    script = (
+        "import importlib\n"
+        f"module = importlib.import_module({package!r})\n"
+        "exports = tuple(module.__all__)\n"
+        "assert len(exports) == len(set(exports))\n"
+        "assert set(exports) <= set(dir(module))\n"
+        "assert not set(exports).intersection(vars(module))\n"
+        "for name in exports:\n"
+        "    value = getattr(module, name)\n"
+        "    assert vars(module)[name] is value\n"
+        "    assert getattr(module, name) is value\n"
+        "assert tuple(module.__all__) == exports\n"
+        "assert len(dir(module)) == len(set(dir(module)))\n"
+        "assert not hasattr(module, 'nonexistent_public_operation')\n"
+    )
+    subprocess.run(
+        [sys.executable, "-c", script],
+        check=True,
+        capture_output=True,
+        text=True,
     )
 
 

@@ -239,6 +239,21 @@ typed-failure rules live in the [mathematical backend contract](../reference/mat
 
 ## Package organization and family folding
 
+Package initialization must not turn a canonical value or private-kernel import
+into eager loading of unrelated operations. Where startup profiles establish
+that cost, expose the package's public values and functions lazily through
+module `__getattr__`, retaining explicit imports under `TYPE_CHECKING` and a
+literal `__all__`. Resolve and cache the original object, not a wrapper; keep
+`__dir__` useful for discovery. Internal modules import their actual owner,
+not a public package interface. Required runtime type dependencies remain real
+imports; type-only imports must not hide dependencies needed for schema building.
+
+Fresh-process tests own import isolation and public-export resolution. The
+architecture checker follows the type-checking declarations as well as eager
+re-exports. Lazy public exports do not make catalog publication lazy: catalog
+construction still imports and validates every packaged manifest and fails
+closed. Worker lifetime, deadlines, admission, and cleanup are unchanged.
+
 A top-level `jacobian.math.<family>` package names a concrete, recognizable
 mathematical subject with coherent canonical values and operations. Prefer
 subjects such as matrices, graphs, polynomials, probability, and number theory

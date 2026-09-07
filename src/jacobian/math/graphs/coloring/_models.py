@@ -259,6 +259,125 @@ class KColorabilityResult(StrictModel):
         return self
 
 
+class PrecoloringEdgeRepairRequest(StrictModel):
+    """Minimize monochromatic edges over bounded total coloring extensions.
+
+    The first exact slice admits up to 256 indexed vertices, 2016 edges, 64
+    colors, at most one fixed color per vertex, and a request-visible Z3
+    conflict budget of at most 1,000,000. Sparse graphs may use the full
+    vertex axis; dense graphs are bounded by the shared coloring edge bound.
+    """
+
+    graph: IndexedColoringGraph
+    colors: int = Field(ge=1, le=MAX_COLORING_COLORS)
+    fixed_colors: tuple[tuple[int, int], ...] = Field(
+        default=(),
+        max_length=MAX_COLORING_VERTICES,
+        description=(
+            "Fixed vertex colors in compact (vertex, color) source-index order. "
+            "Empty means no fixed assignments."
+        ),
+    )
+    solver_conflicts: int = Field(
+        default=DEFAULT_SOLVER_CONFLICT_BUDGET,
+        ge=1,
+        le=MAX_SOLVER_CONFLICT_BUDGET,
+    )
+
+    @model_validator(mode="after")
+    def require_source_bound_precolouring(self) -> Self:
+        if len(self.fixed_colors) > self.graph.vertex_count:
+            raise PydanticCustomError(
+                "graph.precoloring_too_many_fixed_colors",
+                "fixed_colors cannot assign more vertices than the graph has",
+            )
+        if any(
+            vertex < 0 or vertex >= self.graph.vertex_count
+            for vertex, _ in self.fixed_colors
+        ):
+            raise PydanticCustomError(
+                "graph.precoloring_fixed_vertex_out_of_range",
+                "every fixed-color vertex must use the source graph axis",
+            )
+        if any(color < 0 or color >= self.colors for _, color in self.fixed_colors):
+            raise PydanticCustomError(
+                "graph.precoloring_fixed_color_out_of_range",
+                "every fixed color must be in 0..colors-1",
+            )
+        fixed_vertices = tuple(vertex for vertex, _ in self.fixed_colors)
+        if len(set(fixed_vertices)) != len(fixed_vertices):
+            raise PydanticCustomError(
+                "graph.precoloring_fixed_colors_must_assign_one_color_per_vertex",
+                "fixed_colors must assign one color per vertex",
+            )
+        return self
+
+
+class PrecoloringEdgeRepairResult(StrictModel):
+    """One exact minimum edge-repair optimum and its total coloring witness."""
+
+    graph: IndexedColoringGraph
+    colors: int = Field(ge=1, le=MAX_COLORING_COLORS)
+    fixed_colors: tuple[tuple[int, int], ...] = Field(
+        default=(),
+        max_length=MAX_COLORING_VERTICES,
+    )
+    solver_conflicts: int = Field(
+        default=DEFAULT_SOLVER_CONFLICT_BUDGET,
+        ge=1,
+        le=MAX_SOLVER_CONFLICT_BUDGET,
+    )
+    status: Literal["OPTIMAL"]
+    repaired_edge_count: int
+    coloring: VertexColoringAssignment
+    repaired_edge_indices: tuple[int, ...]
+
+    @model_validator(mode="after")
+    def bind_optimum_witness(self) -> Self:
+        if self.repaired_edge_count != len(self.repaired_edge_indices):
+            raise PydanticCustomError(
+                "graph.precoloring_repair_count_must_match_indices",
+                "repaired_edge_count must equal repaired_edge_indices length",
+            )
+        if tuple(sorted(self.repaired_edge_indices)) != self.repaired_edge_indices:
+            raise PydanticCustomError(
+                "graph.precoloring_repaired_edges_must_be_sorted",
+                "repaired_edge_indices must be sorted",
+            )
+        if any(
+            index < 0 or index >= len(self.graph.edges)
+            for index in self.repaired_edge_indices
+        ):
+            raise PydanticCustomError(
+                "graph.precoloring_repaired_edges_must_be_source_bound",
+                "repaired_edge_indices must use the source edge axis",
+            )
+        if self.coloring.graph != self.graph or self.coloring.colors != self.colors:
+            raise PydanticCustomError(
+                "graph.precoloring_witness_must_bind_source_and_palette",
+                "coloring must bind the result graph and palette",
+            )
+        fixed: dict[int, int] = dict(self.fixed_colors)
+        if any(
+            self.coloring.coloring[vertex] != color for vertex, color in fixed.items()
+        ):
+            raise PydanticCustomError(
+                "graph.precoloring_witness_must_extend_fixed_colors",
+                "coloring must extend every fixed color",
+            )
+        monochromatic = tuple(
+            index
+            for index, (left, right) in enumerate(self.graph.edges)
+            if self.coloring.coloring[left] == self.coloring.coloring[right]
+        )
+        if monochromatic != self.repaired_edge_indices:
+            raise PydanticCustomError(
+                "graph.precoloring_repaired_edges_must_be_monochromatic",
+                "repaired edges must be exactly the monochromatic edges",
+            )
+        return self
+
+
 def _require_k_colorability_positive_witness(result: KColorabilityResult) -> None:
     """A colorable claim must carry a proper source-bound witness."""
 

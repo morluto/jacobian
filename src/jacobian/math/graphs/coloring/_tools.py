@@ -19,6 +19,8 @@ from jacobian.math.graphs.coloring._models import (
     ListCapacityEdgeColoringResult,
     MaximalIndependentSetRequest,
     MaximalIndependentSetResult,
+    PrecoloringEdgeRepairRequest,
+    PrecoloringEdgeRepairResult,
 )
 
 
@@ -64,6 +66,17 @@ def compute_list_capacity_edge_coloring(
 ) -> ListCapacityEdgeColoringResult:
     return native.list_capacity_edge_coloring(
         request.graph, request.palette, request.lists, request.capacities
+    )
+
+
+def compute_precoloring_edge_repair(
+    request: PrecoloringEdgeRepairRequest,
+) -> PrecoloringEdgeRepairResult:
+    return native.precoloring_edge_repair(
+        request.graph,
+        request.colors,
+        request.fixed_colors,
+        request.solver_conflicts,
     )
 
 
@@ -166,6 +179,35 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "graph": {
                         "vertex_count": 3,
                         "edges": [[0, 1], [1, 2], [0, 2]],
+                    },
+                    "colors": 3,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="graph.coloring.precoloring_edge_repair.compute",
+        title="Compute minimum edge repair under a fixed precolouring",
+        description=(
+            "Minimize the number of source edges that must be deleted so a "
+            "fixed partial vertex colouring extends to a proper total "
+            "k-colouring. The result carries one total extending colouring "
+            "and exactly its monochromatic source edges; an empty fixed "
+            "sequence gives the chromatic edge-stability invariant. Uses a "
+            "bounded Z3 optimization with an explicit OPTIMAL outcome only."
+        ),
+        request_type=PrecoloringEdgeRepairRequest,
+        result_type=PrecoloringEdgeRepairResult,
+        run=compute_precoloring_edge_repair,
+        tags=("graph", "coloring", "precoloring", "edge-repair", "optimization"),
+        examples=(
+            OperationExample(
+                name="k4_three_colors_one_repair",
+                description="K4 needs one edge repair with three colors.",
+                input={
+                    "graph": {
+                        "vertex_count": 4,
+                        "edges": [[0, 1], [0, 2], [0, 3], [1, 2], [1, 3], [2, 3]],
                     },
                     "colors": 3,
                 },

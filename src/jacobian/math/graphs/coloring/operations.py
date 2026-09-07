@@ -27,6 +27,7 @@ from jacobian.math.graphs.coloring._models import (
     ListCapacityEdgeColoringResult,
     ListEdgeColoringStatus,
     MaximalIndependentSetResult,
+    PrecoloringEdgeRepairResult,
     VertexColoringAssignment,
     _incident_edge_index_pairs_for_canonical_graph,
     _require_edge_coloring_graph_bound,
@@ -98,17 +99,17 @@ def _admit_candidate_set(
             code="graph.candidate_set_must_be_strictly_increasing",
             message="candidate_set must be strictly increasing",
         )
-    if len(set(candidate_set)) != len(candidate_set):
+
+
+def _admit_precoloring_edge_repair(
+    graph: IndexedSimpleUndirectedGraph, fixed_colors: tuple[tuple[int, int], ...]
+) -> None:
+    fixed_vertices = tuple(vertex for vertex, _ in fixed_colors)
+    if len(set(fixed_vertices)) != len(fixed_vertices):
         raise OperationDomainValidationError(
-            location=("candidate_set",),
-            code="graph.candidate_set_must_not_contain_duplicate_vertices",
-            message="candidate_set must not contain duplicate vertices",
-        )
-    if any(not 0 <= vertex < graph.vertex_count for vertex in candidate_set):
-        raise OperationDomainValidationError(
-            location=("candidate_set",),
-            code="graph.candidate_set_vertices_must_be_in_range",
-            message="candidate_set vertices must be in 0..vertex_count-1",
+            location=("fixed_colors",),
+            code="graph.precoloring_fixed_vertices_must_be_unique",
+            message="fixed_colors must use distinct source vertices",
         )
 
 
@@ -196,6 +197,66 @@ def k_colorability(
             "vertex-coloring solver exhausted its conflict budget"
         )
     raise RuntimeError("vertex-coloring solver failed")
+
+
+def precoloring_edge_repair(
+    graph: IndexedSimpleUndirectedGraph,
+    colors: int,
+    fixed_colors: tuple[tuple[int, int], ...],
+    solver_conflicts: int,
+) -> PrecoloringEdgeRepairResult:
+    """Return the minimum edge repair under a fixed partial coloring."""
+
+    _admit_k_colorability(graph)
+    _admit_solver_parameters(colors, solver_conflicts)
+    _admit_precoloring_edge_repair(graph, fixed_colors)
+    if not graph.edges:
+        coloring = tuple(
+            dict(fixed_colors).get(vertex, 0) for vertex in range(graph.vertex_count)
+        )
+        return PrecoloringEdgeRepairResult(
+            graph=graph,
+            colors=colors,
+            fixed_colors=fixed_colors,
+            solver_conflicts=solver_conflicts,
+            status="OPTIMAL",
+            repaired_edge_count=0,
+            coloring=VertexColoringAssignment(
+                graph=graph, colors=colors, coloring=coloring
+            ),
+            repaired_edge_indices=(),
+        )
+    outcome, solved_coloring = run_coloring_worker(
+        "precoloring_edge_repair",
+        graph,
+        colors,
+        solver_conflicts,
+        fixed_colors,
+    )
+    if outcome != "optimal" or solved_coloring is None:
+        if outcome == "budget_exceeded":
+            raise OperationExecutionTimeoutError(
+                "precolouring edge-repair optimizer exhausted its conflict budget"
+            )
+        raise RuntimeError("precolouring edge-repair optimizer failed")
+    coloring = solved_coloring
+    repaired = tuple(
+        index
+        for index, (left, right) in enumerate(graph.edges)
+        if coloring[left] == coloring[right]
+    )
+    return PrecoloringEdgeRepairResult(
+        graph=graph,
+        colors=colors,
+        fixed_colors=fixed_colors,
+        solver_conflicts=solver_conflicts,
+        status="OPTIMAL",
+        repaired_edge_count=len(repaired),
+        coloring=VertexColoringAssignment(
+            graph=graph, colors=colors, coloring=coloring
+        ),
+        repaired_edge_indices=repaired,
+    )
 
 
 def maximal_independent_set(

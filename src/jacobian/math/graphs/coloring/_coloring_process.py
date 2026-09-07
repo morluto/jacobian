@@ -31,7 +31,9 @@ _WORKER_OUTPUT_BYTES = 64 * 1024
 _WORKER_ERROR_BYTES = 16_384
 _WORKER_ADDRESS_SPACE_BYTES = 1_536 * 1024 * 1024
 _WORKER_FILE_SIZE_BYTES = 1_024 * 1_024
-ColoringWorkerOutcome = Literal["sat", "unsat", "budget_exceeded", "execution_failed"]
+ColoringWorkerOutcome = Literal[
+    "sat", "unsat", "optimal", "budget_exceeded", "execution_failed"
+]
 
 
 def run_k_colorability_solver_kernel(
@@ -99,11 +101,58 @@ def run_edge_coloring_solver_kernel(
         return "execution_failed", None
 
 
+def run_precoloring_edge_repair_solver_kernel(
+    graph: IndexedSimpleUndirectedGraph,
+    colors: int,
+    fixed_colors: tuple[tuple[int, int], ...],
+    solver_conflicts: int,
+) -> tuple[ColoringWorkerOutcome, tuple[int, ...] | None]:
+    """Run one bounded minimum-monochromatic-edge optimization transaction."""
+
+    import z3
+
+    try:
+        optimizer = z3.Optimize()
+        optimizer.set("max_conflicts", solver_conflicts)
+        vertex_colors = [
+            z3.Int(f"color_{vertex}") for vertex in range(graph.vertex_count)
+        ]
+        optimizer.add(*(z3.And(color >= 0, color < colors) for color in vertex_colors))
+        optimizer.add(
+            *(vertex_colors[vertex] == color for vertex, color in fixed_colors)
+        )
+        optimizer.minimize(
+            z3.Sum(
+                [
+                    z3.If(vertex_colors[left] == vertex_colors[right], 1, 0)
+                    for left, right in graph.edges
+                ]
+            )
+        )
+        outcome = optimizer.check()
+        if outcome == z3.sat:
+            model = optimizer.model()
+            return "optimal", tuple(
+                model.eval(color).as_long() for color in vertex_colors
+            )
+        if outcome == z3.unsat:
+            return "execution_failed", None
+        return (
+            "budget_exceeded"
+            if "max-conflicts-reached" in optimizer.reason_unknown()
+            else "execution_failed",
+            None,
+        )
+    except z3.Z3Exception:
+        return "execution_failed", None
+
+
 def run_coloring_worker(
-    kind: Literal["vertex", "edge"],
+    kind: Literal["vertex", "edge", "precoloring_edge_repair"],
     graph: IndexedSimpleUndirectedGraph | SimpleUndirectedGraph,
     colors: int,
     solver_conflicts: int,
+    fixed_colors: tuple[tuple[int, int], ...] = (),
 ) -> tuple[ColoringWorkerOutcome, tuple[int, ...] | None]:
     """Run one complete coloring solver transaction in an isolated worker."""
 
@@ -117,6 +166,7 @@ def run_coloring_worker(
                         "graph": graph.model_dump(mode="json"),
                         "colors": colors,
                         "solver_conflicts": solver_conflicts,
+                        "fixed_colors": fixed_colors,
                     },
                     separators=(",", ":"),
                     ensure_ascii=False,
@@ -148,7 +198,13 @@ def run_coloring_worker(
         payload = json.loads(completed.stdout.decode("utf-8"))
         outcome = payload["outcome"]
         coloring = payload["coloring"]
-        if outcome not in {"sat", "unsat", "budget_exceeded", "execution_failed"}:
+        if outcome not in {
+            "sat",
+            "unsat",
+            "optimal",
+            "budget_exceeded",
+            "execution_failed",
+        }:
             raise ValueError("worker returned an invalid solver outcome")
         if coloring is None:
             return outcome, None
@@ -171,4 +227,5 @@ __all__ = [
     "run_coloring_worker",
     "run_edge_coloring_solver_kernel",
     "run_k_colorability_solver_kernel",
+    "run_precoloring_edge_repair_solver_kernel",
 ]

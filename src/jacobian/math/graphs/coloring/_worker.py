@@ -9,6 +9,7 @@ from typing import Any
 from jacobian.math.graphs.coloring._coloring_process import (
     run_edge_coloring_solver_kernel,
     run_k_colorability_solver_kernel,
+    run_precoloring_edge_repair_solver_kernel,
 )
 from jacobian.math.graphs.values import (
     IndexedSimpleUndirectedGraph,
@@ -25,7 +26,7 @@ def main() -> int:
         colors = payload["colors"]
         solver_conflicts = payload["solver_conflicts"]
         if (
-            kind not in {"vertex", "edge"}
+            kind not in {"vertex", "edge", "precoloring_edge_repair"}
             or not isinstance(colors, int)
             or isinstance(colors, bool)
             or not isinstance(solver_conflicts, int)
@@ -39,10 +40,20 @@ def main() -> int:
             outcome, coloring = run_k_colorability_solver_kernel(
                 indexed_graph, colors, solver_conflicts
             )
-        else:
+        elif kind == "edge":
             edge_graph = SimpleUndirectedGraph.model_validate(payload["graph"])
             outcome, coloring = run_edge_coloring_solver_kernel(
                 edge_graph, colors, solver_conflicts
+            )
+        else:
+            indexed_graph = IndexedSimpleUndirectedGraph.model_validate(
+                payload["graph"]
+            )
+            fixed_colors = tuple(
+                (int(vertex), int(color)) for vertex, color in payload["fixed_colors"]
+            )
+            outcome, coloring = run_precoloring_edge_repair_solver_kernel(
+                indexed_graph, colors, fixed_colors, solver_conflicts
             )
         sys.stdout.write(
             json.dumps(

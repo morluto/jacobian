@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from pydantic_core import PydanticCustomError
 
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.number_theory.galois._factor import factor_mod_prime
+from jacobian.math.number_theory.galois._factor_process import factor_mod_prime
 
 if TYPE_CHECKING:
     from sympy.combinatorics.perm_groups import PermutationGroup

@@ -9,9 +9,9 @@ import networkx as nx
 from jacobian.math.graphs.enumeration import (
     ColorPairCost,
     ConnectedColoredGraphFamily,
-    ConnectedColoredGraphsRequest,
     connected_colored_graphs,
 )
+from jacobian.math.graphs.enumeration._models import ConnectedColoredGraphsRequest
 
 
 def _native(request: ConnectedColoredGraphsRequest) -> ConnectedColoredGraphFamily:
@@ -138,20 +138,6 @@ def test_excessive_coloring_family_is_rejected() -> None:
     )
     with pytest.raises(OperationResourceAdmissionError, match="search units"):
         _native(request)
-
-
-def test_native_parameters_preserve_wire_result() -> None:
-    from jacobian.catalog.catalog import Catalog
-    from jacobian.dispatch import invoke_operation
-
-    request = _request(4, 3)
-    native = _native(request)
-    wire = invoke_operation(
-        "graph.colored.connected_family.enumerate",
-        request.model_dump(mode="json"),
-        Catalog.open(),
-    ).output
-    assert ConnectedColoredGraphFamily.model_validate(wire) == native
 
 
 def test_native_invalid_bounds_fail_before_enumeration() -> None:

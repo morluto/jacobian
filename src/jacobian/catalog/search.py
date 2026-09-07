@@ -351,7 +351,8 @@ def _explicit_domain_matches(
 ) -> bool:
     """Respect an explicitly requested coefficient domain for checking tasks.
 
-    Match only the explicitly named domain and declared checking intent.
+    Match the explicitly named domain and mathematical object, not the
+    declaration's verb: a complete computation can establish a check.
     Incidental query words remain relevance signals, never hard requirements.
     Do not substitute a quotient-ring check for an integer/rational check.
     """
@@ -361,14 +362,6 @@ def _explicit_domain_matches(
         return True
     terms = frozenset().union(*fields)
     if normalize_discovery_term(domain.group(1)) not in terms:
-        return False
-    if not frozenset().union(*fields[:2]) & {
-        "check",
-        "verify",
-        "test",
-        "decide",
-        "compare",
-    }:
         return False
     object_phrases = frozenset(
         phrase

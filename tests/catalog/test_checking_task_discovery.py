@@ -12,6 +12,14 @@ from jacobian.catalog.models import OperationMatchRequest
     "query,expected",
     [
         (
+            "check whether a multivariate polynomial factors over the rationals",
+            "polynomial.multivariate.factor.compute",
+        ),
+        (
+            "verify multivariate polynomial factorization over rationals",
+            "polynomial.multivariate.factor.compute",
+        ),
+        (
             "verify finite field irreducibility of a degree 108 polynomial using Frobenius",
             "polynomial.galois.factor_mod_p.compute",
         ),

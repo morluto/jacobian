@@ -119,13 +119,17 @@ class CanonicalRational(StrictModel):
     )
 
     num: ExactInteger = Field(
-        description="Canonical decimal numerator of the reduced rational.",
+        description=(
+            "Exact numerator of the reduced rational; a native Python int and a "
+            "canonical decimal string in JSON."
+        ),
         examples=["1"],
     )
     den: ExactInteger = Field(
         description=(
-            "Positive canonical decimal denominator; together with num it must be "
-            "reduced, and integers use den='1'."
+            "Positive exact denominator; a native Python int and a canonical decimal "
+            "string in JSON. Together with num it must be reduced, and integers use "
+            "den='1'."
         ),
         examples=["2"],
         json_schema_extra={

@@ -151,9 +151,11 @@ non-evaluating codec is sufficient. Mathematical integers that may exceed the
 interoperable JSON range use canonical decimal strings, while intrinsically
 bounded counters may remain JSON integers.
 The requirement is a canonical decimal wire encoding, not string-valued Python
-fields. Keep native fields numeric and use the owning integer codec to validate
-and decode worker JSON and encode responses. This also applies to the integer
-numerator and denominator of a canonical rational.
+fields. Use `ExactInteger` for the shared envelope or
+`Annotated[int, DecimalIntegerEncoding(...)]` for a domain-owned envelope; both
+remain ordinary `int` values at runtime. Use that annotation to validate and
+decode worker JSON and encode responses. The same rule applies to the integer
+numerator and denominator of a `CanonicalRational`.
 Do not narrow exact backend integers through floats or machine-sized integers.
 See [native integer codec requirements](value-interoperability.md#requirements-for-a-native-integer-codec).
 For range admission, see

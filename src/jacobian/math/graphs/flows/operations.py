@@ -11,6 +11,9 @@ import networkx as nx
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.flows._models import (
+    BipartiteDegreeRequirements,
+    BipartiteFactorObstruction,
+    BipartiteFactorResult,
     CostedFlowGraph,
     EdgeDisjointPathsGraph,
     EdgeDisjointPathsResult,
@@ -22,8 +25,10 @@ from jacobian.math.graphs.flows._models import (
     MinCutResult,
     _bounded_denominator_scale,
 )
+from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 
 __all__ = [
+    "bipartite_degree_constrained_factor",
     "edge_disjoint_paths",
     "max_flow",
     "min_cost_flow",
@@ -32,6 +37,178 @@ __all__ = [
     "verify_max_flow",
     "verify_min_cut",
 ]
+
+
+def _bipartite_requirements(
+    graph: IndexedSimpleUndirectedGraph,
+    left: tuple[int, ...],
+    right: tuple[int, ...],
+    requirements: tuple[int, ...],
+) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    if len(requirements) != len(left) + len(right):
+        raise OperationDomainValidationError(
+            location=("requirements",),
+            code="graph.bipartite_factor.requirements_cover_source_vertices",
+            message="requirements must contain exactly one degree per source vertex",
+        )
+    left_requirements = requirements[: len(left)]
+    right_requirements = requirements[len(left) :]
+    if any(degree < 0 for degree in requirements):
+        raise OperationDomainValidationError(
+            location=("requirements",),
+            code="graph.bipartite_factor.requirements_nonnegative",
+            message="every required degree must be nonnegative",
+        )
+    degrees = [0] * graph.vertex_count
+    for left_vertex, right_vertex in graph.edges:
+        degrees[left_vertex] += 1
+        degrees[right_vertex] += 1
+    for vertex, requirement in enumerate(requirements):
+        if requirement > degrees[vertex]:
+            raise OperationDomainValidationError(
+                location=("requirements",),
+                code="graph.bipartite_factor.requirement_exceeds_source_degree",
+                message=(
+                    f"required degree {requirement} at vertex {vertex} exceeds "
+                    f"its source degree {degrees[vertex]}"
+                ),
+            )
+    if sum(left_requirements) != sum(right_requirements):
+        raise OperationDomainValidationError(
+            location=("requirements",),
+            code="graph.bipartite_factor.requirement_totals_disagree",
+            message="left and right required-degree totals must be equal",
+        )
+    return left_requirements, right_requirements
+
+
+def _build_factor_network(
+    graph: IndexedSimpleUndirectedGraph,
+    left: tuple[int, ...],
+    right: tuple[int, ...],
+    left_requirements: tuple[int, ...],
+    right_requirements: tuple[int, ...],
+) -> nx.DiGraph[int]:
+    network: nx.DiGraph[int] = nx.DiGraph()
+    source = graph.vertex_count
+    sink = source + 1
+    network.add_nodes_from(range(sink + 1))
+    for vertex, requirement in zip(left, left_requirements, strict=True):
+        if requirement:
+            network.add_edge(source, vertex, capacity=requirement)
+    for vertex, requirement in zip(right, right_requirements, strict=True):
+        if requirement:
+            network.add_edge(vertex, sink, capacity=requirement)
+    for edge in graph.edges:
+        network.add_edge(edge[0], edge[1], capacity=1)
+    return network
+
+
+def _hall_obstruction(
+    graph: IndexedSimpleUndirectedGraph,
+    left: tuple[int, ...],
+    right: tuple[int, ...],
+    requirements: tuple[int, ...],
+    *,
+    side: bool,
+) -> BipartiteFactorObstruction:
+    active = left if side else right
+    vertices: tuple[int, ...] = ()
+    neighbors: set[int] = set()
+    incidence = [edge for edge in graph.edges if edge[0] != edge[1]]
+    while vertices != active:
+        next_vertex = active[len(vertices)]
+        vertices = (*vertices, next_vertex)
+        neighbors.update(v for u, v in incidence if u in vertices)
+        neighbors.update(u for u, v in incidence if v in vertices)
+        required = sum(requirements[vertex] for vertex in vertices)
+        capacity = sum(requirements[neighbor] for neighbor in neighbors)
+        if required > capacity:
+            return BipartiteFactorObstruction(
+                side="LEFT" if side else "RIGHT",
+                vertices=vertices,
+                neighbors=tuple(sorted(neighbors)),
+                required=required,
+                capacity=capacity,
+            )
+    raise RuntimeError("flow infeasibility did not yield a Hall obstruction")
+
+
+def bipartite_degree_constrained_factor(
+    graph: IndexedSimpleUndirectedGraph,
+    left: tuple[int, ...],
+    right: tuple[int, ...],
+    requirements: tuple[int, ...],
+) -> BipartiteFactorResult:
+    """Return a spanning prescribed-degree factor or an exact obstruction."""
+
+    left_set = set(left)
+    if tuple(sorted(left)) != tuple(range(len(left))) or tuple(sorted(right)) != tuple(
+        range(len(left), len(left) + len(right))
+    ):
+        raise OperationDomainValidationError(
+            location=("left", "right"),
+            code="graph.bipartite_factor.partition_axis",
+            message=(
+                "left must be 0..len(left)-1 and right must be "
+                "len(left)..len(left)+len(right)-1"
+            ),
+        )
+    if len(left) + len(right) != graph.vertex_count or any(
+        (edge[0] in left_set) == (edge[1] in left_set) for edge in graph.edges
+    ):
+        raise OperationDomainValidationError(
+            location=("graph", "left", "right"),
+            code="graph.bipartite_factor.crossing_edges",
+            message="the partition must cover all vertices and every edge must cross it",
+        )
+    left_requirements, right_requirements = _bipartite_requirements(
+        graph, left, right, requirements
+    )
+    network = _build_factor_network(
+        graph, left, right, left_requirements, right_requirements
+    )
+    source = graph.vertex_count
+    sink = source + 1
+    flow_value, flow_dict = nx.maximum_flow(network, source, sink)
+    if flow_value == sum(left_requirements):
+        selected: set[int] = set()
+        for source_vertex, targets in flow_dict.items():
+            if source_vertex in left_set:
+                selected.update(
+                    edge_index
+                    for edge_index, edge in enumerate(graph.edges)
+                    if edge[0] == source_vertex
+                    and edge[1] in targets
+                    and targets[edge[1]] == 1
+                )
+        return BipartiteFactorResult(
+            graph=graph,
+            left=left,
+            right=right,
+            requirements=BipartiteDegreeRequirements(
+                left=left_requirements, right=right_requirements
+            ),
+            status="FOUND",
+            selected_edge_indices=tuple(sorted(selected)),
+        )
+    obstruction = _hall_obstruction(
+        graph,
+        left,
+        right,
+        tuple(left_requirements) + tuple(right_requirements),
+        side=True,
+    )
+    return BipartiteFactorResult(
+        graph=graph,
+        left=left,
+        right=right,
+        requirements=BipartiteDegreeRequirements(
+            left=left_requirements, right=right_requirements
+        ),
+        status="INFEASIBLE",
+        obstruction=obstruction,
+    )
 
 
 def _admit_terminals(

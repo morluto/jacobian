@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from math import lcm
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -11,6 +11,7 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
+from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 
 # Derived integer scales that make rational capacities and costs exact
 # integers are intermediate growth, not input size: each denominator is
@@ -20,6 +21,12 @@ from jacobian.canonical import format_canonical_integer
 # documented conservative digit budget are rejected before any backend graph
 # is constructed.
 MAX_MIN_COST_FLOW_DERIVED_SCALE_DIGITS = 4096
+MAX_BIPARTITE_FACTOR_DEMAND = 1_000_000_000
+MAX_BIPARTITE_FACTOR_DEMAND_DIGITS = 9
+MAX_BIPARTITE_FACTOR_ARCS = 512
+
+
+BipartiteFactorStatus = Literal["FOUND", "INFEASIBLE"]
 
 
 def _bounded_denominator_scale(denominators: tuple[int, ...], kind: str) -> int:
@@ -232,6 +239,95 @@ class MinCostFlowRequest(StrictModel):
     demands: tuple[int, ...] = Field(default=(), max_length=64)
 
 
+class BipartiteDegreeRequirements(StrictModel):
+    """One nonnegative required degree per vertex of a source graph."""
+
+    left: tuple[int, ...] = Field(min_length=1, max_length=64)
+    right: tuple[int, ...] = Field(min_length=1, max_length=64)
+
+    @model_validator(mode="after")
+    def require_nonnegative_bounded_degrees(self) -> Self:
+        for side_name in ("left", "right"):
+            side = getattr(self, side_name)
+            for position, degree in enumerate(side):
+                if degree < 0 or degree > MAX_BIPARTITE_FACTOR_DEMAND:
+                    raise PydanticCustomError(
+                        "graph.bipartite_factor_degree_must_be_in_0_max",
+                        "every required degree must be in 0.."
+                        f"{MAX_BIPARTITE_FACTOR_DEMAND}",
+                        {"side": side_name, "position": position},
+                    )
+        return self
+
+
+class BipartiteFactorRequest(StrictModel):
+    """One bounded indexed bipartite graph plus complete degree requirements.
+
+    The first slice admits at most 64 vertices per side, one nonnegative
+    degree of at most 9 digits per source vertex, and at most 512 network
+    edges. Disconnected graphs and isolated vertices remain valid.
+    """
+
+    graph: IndexedSimpleUndirectedGraph
+    left: tuple[int, ...] = Field(min_length=1, max_length=64)
+    right: tuple[int, ...] = Field(min_length=1, max_length=64)
+    required_degrees: tuple[int, ...] = Field(
+        min_length=2,
+        max_length=128,
+        description=(
+            "One required degree per source vertex in graph-axis order: "
+            "left vertices first, then right vertices."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_source_bound_bipartition(self) -> Self:
+        if tuple(sorted(self.left)) != tuple(range(len(self.left))):
+            raise PydanticCustomError(
+                "graph.bipartite_factor_left_axis_must_be_0_len",
+                "left must be the complete ordered axis 0..len(left)-1",
+            )
+        if tuple(sorted(self.right)) != tuple(
+            range(len(self.left), len(self.left) + len(self.right))
+        ):
+            raise PydanticCustomError(
+                "graph.bipartite_factor_right_axis_must_follow_left",
+                "right must be the complete ordered axis "
+                "len(left)..len(left)+len(right)-1",
+            )
+        if len(self.left) + len(self.right) != self.graph.vertex_count:
+            raise PydanticCustomError(
+                "graph.bipartite_factor_axes_must_partition_graph_vertices",
+                "left and right must partition the graph vertex axis",
+            )
+        left_set = set(self.left)
+        for edge in self.graph.edges:
+            if (edge[0] in left_set) == (edge[1] in left_set):
+                raise PydanticCustomError(
+                    "graph.bipartite_factor_edges_must_cross_partition",
+                    "every source edge must cross the supplied partition",
+                )
+        if len(self.required_degrees) != self.graph.vertex_count:
+            raise PydanticCustomError(
+                "graph.bipartite_factor_requirements_must_cover_axes",
+                "required_degrees must contain exactly one degree per source vertex",
+            )
+        if any(
+            degree < 0 or degree > MAX_BIPARTITE_FACTOR_DEMAND
+            for degree in self.required_degrees
+        ):
+            raise PydanticCustomError(
+                "graph.bipartite_factor_degree_must_be_in_0_max",
+                f"every required degree must be in 0..{MAX_BIPARTITE_FACTOR_DEMAND}",
+            )
+        if len(self.graph.edges) > MAX_BIPARTITE_FACTOR_ARCS:
+            raise PydanticCustomError(
+                "graph.bipartite_factor_edges_exceed_max",
+                f"bipartite factor requests admit at most {MAX_BIPARTITE_FACTOR_ARCS} edges",
+            )
+        return self
+
+
 class FlowEdgeResult(StrictModel):
     """The flow assigned to one directed edge."""
 
@@ -289,3 +385,84 @@ class MinCostFlowResult(StrictModel):
             feasible=feasible,
             flow_edges=flow_edges,
         )
+
+
+class BipartiteFactorObstruction(StrictModel):
+    """A replayable Hall obstruction in source vertex indices."""
+
+    side: Literal["LEFT", "RIGHT"]
+    vertices: tuple[int, ...] = Field(min_length=1, max_length=64)
+    neighbors: tuple[int, ...] = Field(min_length=1, max_length=64)
+    required: int = Field(ge=0, le=MAX_BIPARTITE_FACTOR_DEMAND)
+    capacity: int = Field(ge=0, le=MAX_BIPARTITE_FACTOR_DEMAND * 64)
+
+    @model_validator(mode="after")
+    def require_neighbor_inequality(self) -> Self:
+        if tuple(sorted(self.vertices)) != self.vertices or len(
+            set(self.vertices)
+        ) != len(self.vertices):
+            raise PydanticCustomError(
+                "graph.bipartite_factor_vertices_must_be_unique_sorted",
+                "obstruction vertices must be unique and increasing",
+            )
+        if tuple(sorted(self.neighbors)) != self.neighbors or len(
+            set(self.neighbors)
+        ) != len(self.neighbors):
+            raise PydanticCustomError(
+                "graph.bipartite_factor_neighbors_must_be_unique_sorted",
+                "obstruction neighbors must be unique and increasing",
+            )
+        if self.required <= self.capacity:
+            raise PydanticCustomError(
+                "graph.bipartite_factor_obstruction_must_violate",
+                "obstruction must satisfy required > neighbor capacity",
+            )
+        return self
+
+
+class BipartiteFactorResult(StrictModel):
+    """One exact spanning prescribed-degree factor or Hall obstruction."""
+
+    graph: IndexedSimpleUndirectedGraph
+    left: tuple[int, ...] = Field(min_length=1, max_length=64)
+    right: tuple[int, ...] = Field(min_length=1, max_length=64)
+    requirements: BipartiteDegreeRequirements
+    status: BipartiteFactorStatus
+    selected_edge_indices: tuple[int, ...] = Field(
+        default=(), max_length=MAX_BIPARTITE_FACTOR_ARCS
+    )
+    obstruction: BipartiteFactorObstruction | None = None
+
+    @model_validator(mode="after")
+    def require_outcome_witness(self) -> Self:
+        if self.status == "FOUND":
+            if self.obstruction is not None:
+                raise PydanticCustomError(
+                    "graph.bipartite_factor_found_result_has_no_obstruction",
+                    "a found factor must not carry an obstruction",
+                )
+            if len(set(self.selected_edge_indices)) != len(self.selected_edge_indices):
+                raise PydanticCustomError(
+                    "graph.bipartite_factor_selected_edges_must_be_distinct",
+                    "selected edge indices must be distinct",
+                )
+            if any(
+                not 0 <= index < len(self.graph.edges)
+                for index in self.selected_edge_indices
+            ):
+                raise PydanticCustomError(
+                    "graph.bipartite_factor_selected_edges_must_be_source_bound",
+                    "selected edge indices must index the source graph",
+                )
+        else:
+            if self.selected_edge_indices:
+                raise PydanticCustomError(
+                    "graph.bipartite_factor_infeasible_result_has_no_edges",
+                    "an infeasible result must not carry selected edges",
+                )
+            if self.obstruction is None:
+                raise PydanticCustomError(
+                    "graph.bipartite_factor_infeasible_result_needs_obstruction",
+                    "an infeasible result must carry an obstruction",
+                )
+        return self

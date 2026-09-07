@@ -4,6 +4,8 @@ from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.graphs.flows._models import (
+    BipartiteFactorRequest,
+    BipartiteFactorResult,
     EdgeDisjointPathsRequest,
     EdgeDisjointPathsResult,
     MaxFlowRequest,
@@ -14,6 +16,7 @@ from jacobian.math.graphs.flows._models import (
     MinCutResult,
 )
 from jacobian.math.graphs.flows.operations import (
+    bipartite_degree_constrained_factor,
     edge_disjoint_paths,
     max_flow,
     min_cost_flow,
@@ -69,7 +72,55 @@ def compute_min_cost_flow(request: MinCostFlowRequest) -> MinCostFlowResult:
     )
 
 
+def compute_bipartite_factor(request: BipartiteFactorRequest) -> BipartiteFactorResult:
+    return bipartite_degree_constrained_factor(
+        request.graph,
+        request.left,
+        request.right,
+        request.required_degrees,
+    )
+
+
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    MathTool(
+        operation_id="graph.bipartite.degree_constrained_factor.compute",
+        title="Compute a prescribed-degree bipartite factor",
+        description=(
+            "Select source edges of a bounded bipartite graph so every vertex "
+            "has an exact required degree, or return a replayable Hall subset "
+            "obstruction. Uses an integral exact-flow kernel and keeps all "
+            "vertices, edges, requirements, and selected-edge indices source-bound."
+        ),
+        request_type=BipartiteFactorRequest,
+        result_type=BipartiteFactorResult,
+        run=compute_bipartite_factor,
+        tags=("graph", "bipartite", "factor", "degree", "flow", "exact"),
+        examples=(
+            OperationExample(
+                name="k33_two_regular_factor",
+                description="Select a spanning 2-regular factor of K(3,3).",
+                input={
+                    "graph": {
+                        "vertex_count": 6,
+                        "edges": [
+                            [0, 3],
+                            [0, 4],
+                            [0, 5],
+                            [1, 3],
+                            [1, 4],
+                            [1, 5],
+                            [2, 3],
+                            [2, 4],
+                            [2, 5],
+                        ],
+                    },
+                    "left": [0, 1, 2],
+                    "right": [3, 4, 5],
+                    "required_degrees": [2, 2, 2, 2, 2, 2],
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="graph.flow.maximum.compute",
         title="Compute the maximum flow in a capacitated graph",

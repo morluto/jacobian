@@ -22,6 +22,7 @@ from jacobian.math.graphs.flows._tools import TOOLS, compute_min_cost_flow
 
 def test_catalog_contains_only_audited_operations() -> None:
     assert {tool.operation_id for tool in TOOLS} == {
+        "graph.bipartite.degree_constrained_factor.compute",
         "graph.flow.maximum.compute",
         "graph.cut.minimum_st.compute",
         "graph.menger.edge_disjoint.compute",

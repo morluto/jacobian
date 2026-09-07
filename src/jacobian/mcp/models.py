@@ -75,25 +75,6 @@ OperationFindOperationId = Annotated[
 ]
 
 
-class OperationMatchRequest(StrictModel):
-    op: Literal["match"]
-    need: OperationNeed
-    namespace: OperationNamespace = None
-    limit: OperationMatchLimit = 10
-    cursor: OperationCursor = None
-
-
-class OperationInspectRequest(StrictModel):
-    op: Literal["inspect"]
-    operation_id: OperationId
-
-
-OperationFindRequest = Annotated[
-    OperationMatchRequest | OperationInspectRequest,
-    Field(discriminator="op"),
-]
-
-
 class OperationDiscoveryErrorDetail(StrictModel):
     code: Literal["INVALID_CURSOR", "UNKNOWN_OPERATION"]
     stage: Literal["operation_discovery", "operation_resolution"]
@@ -183,14 +164,11 @@ __all__ = [
     "OperationDiscoveryError",
     "OperationDiscoveryErrorDetail",
     "OperationFindOperationId",
-    "OperationFindRequest",
     "OperationFindResponse",
     "OperationFindResult",
-    "OperationInspectRequest",
     "OperationInspectionResult",
     "OperationInvalidRequestData",
     "OperationMatchLimit",
-    "OperationMatchRequest",
     "OperationNamespace",
     "OperationNeed",
     "OperationResourceAdmissionData",

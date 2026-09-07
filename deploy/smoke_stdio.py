@@ -38,12 +38,7 @@ async def inspect(server: Path, *, timeout_seconds: float) -> None:
         described = await asyncio.wait_for(
             client.call_tool(
                 "math.find",
-                {
-                    "request": {
-                        "op": "inspect",
-                        "operation_id": "integer.compute.extended_gcd",
-                    }
-                },
+                {"operation_id": "integer.compute.extended_gcd"},
             ),
             timeout_seconds,
         )

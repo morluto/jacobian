@@ -182,7 +182,7 @@ async def inspect(
             )
         discovery_result = await client.call_tool(
             "math.find",
-            {"request": {"op": "match", "need": need, "limit": 5}},
+            {"query": need, "limit": 5},
         )
         if discovery_result.is_error:
             failures.append("deployed operation discovery returned an MCP error")

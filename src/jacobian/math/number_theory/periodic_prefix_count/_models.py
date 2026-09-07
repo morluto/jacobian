@@ -1,10 +1,8 @@
 """Typed contracts for the periodic union prefix count operation."""
 
-from math import lcm
-from typing import Annotated, Self
+from typing import Annotated
 
-from pydantic import Field, model_validator
-from pydantic_core import PydanticCustomError
+from pydantic import Field
 
 from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
@@ -52,37 +50,6 @@ class PeriodicUnionPrefixCountResult(StrictModel):
     common_period: PeriodicPositiveInteger
     occupied_count: PeriodicNonnegativeInteger
     count: PeriodicPrefixCutoff
-
-    @model_validator(mode="after")
-    def require_count_invariants(self) -> Self:
-        cutoff = self.cutoff
-        period = self.common_period
-        occupied = self.occupied_count
-        count = self.count
-        source_period = lcm(*(subset.modulus for subset in self.source.subsets))
-        if period != source_period:
-            raise PydanticCustomError(
-                "number_theory.periodic_prefix.period_mismatch",
-                "common_period must equal the source common period",
-            )
-        if occupied > period:
-            raise PydanticCustomError(
-                "number_theory.periodic_prefix.occupied_count_out_of_range",
-                "occupied_count must lie between 0 and common_period",
-            )
-        if count > cutoff:
-            raise PydanticCustomError(
-                "number_theory.periodic_prefix.count_out_of_range",
-                "count must lie between 0 and cutoff",
-            )
-        remainder = cutoff % period
-        partial = count - (cutoff // period) * occupied
-        if not 0 <= partial <= remainder:
-            raise PydanticCustomError(
-                "number_theory.periodic_prefix.count_identity_mismatch",
-                "count must decompose into full periods and a bounded partial period",
-            )
-        return self
 
 
 __all__ = [

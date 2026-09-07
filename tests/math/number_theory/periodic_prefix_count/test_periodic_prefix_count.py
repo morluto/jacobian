@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 
 import pytest
@@ -11,6 +12,7 @@ from jacobian.math.number_theory._periodic_models import (
 )
 from jacobian.math.number_theory.periodic_prefix_count.operations import (
     compute_periodic_union_prefix_count,
+    verify_periodic_union_prefix_count,
 )
 
 
@@ -68,6 +70,28 @@ def test_result_preserves_source() -> None:
     result = compute_periodic_union_prefix_count(source, 10)
     assert result.source == source
     assert result.cutoff == 10
+
+
+@pytest.mark.parametrize(
+    ("field", "forged_value"),
+    [
+        ("common_period", "12"),
+        ("occupied_count", "5"),
+        ("count", "5"),
+    ],
+)
+def test_serialized_result_decoding_is_structural_and_verification_is_explicit(
+    field: str, forged_value: str
+) -> None:
+    source = _source([(2, [0]), (3, [1])])
+    result = compute_periodic_union_prefix_count(source, 6)
+    payload = json.loads(result.model_dump_json())
+    payload[field] = forged_value
+
+    claim = type(result).model_validate_json(json.dumps(payload))
+
+    assert getattr(claim, field) == int(forged_value)
+    assert not verify_periodic_union_prefix_count(claim)
 
 
 def test_complemented_large_period_uses_scalar_count() -> None:

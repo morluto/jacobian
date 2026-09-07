@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.graphs.values import (
     MAX_INDEXED_SIMPLE_GRAPH_EDGES,
     MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
@@ -48,6 +49,33 @@ class EdgeCliquePartitionRequest(StrictModel):
             "hold at least two distinct declared vertices."
         ),
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def bound_raw_parts(cls, value: object) -> object:
+        if isinstance(value, Mapping):
+            parts = value.get("parts")
+            if isinstance(parts, (list, tuple)):
+                if len(parts) > MAX_PARTITION_PARTS:
+                    raise _validation_error(
+                        "graph.clique_partition.too_many_parts",
+                        f"edge-clique partitions admit at most {MAX_PARTITION_PARTS} parts",
+                    )
+                references = 0
+                for part in parts:
+                    if isinstance(part, (list, tuple)):
+                        if len(part) > MAX_INDEXED_SIMPLE_GRAPH_VERTICES:
+                            raise _validation_error(
+                                "graph.clique_partition.part_too_large",
+                                "partition parts cannot exceed the graph vertex bound",
+                            )
+                        references += len(part)
+                        if references > MAX_PARTITION_VERTEX_REFERENCES:
+                            raise _validation_error(
+                                "graph.clique_partition.vertex_reference_bound",
+                                f"partition encoding exceeds {MAX_PARTITION_VERTEX_REFERENCES} vertex references",
+                            )
+        return canonicalize_json_containers(value)
 
     @model_validator(mode="after")
     def require_well_formed_parts(self) -> Self:

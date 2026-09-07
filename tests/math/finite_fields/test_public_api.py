@@ -271,26 +271,28 @@ def test_serialized_orbit_distribution_is_a_claim_checked_by_its_consumer() -> N
 
     forged = distribution.model_dump(mode="json")
     forged["counts"] = [["1", "1"]]
-    forged_decoded = type(distribution).model_validate(forged)
+    forged_decoded = type(distribution).model_validate_json(json.dumps(forged))
     assert not verify_orbit_distribution(forged_decoded)
 
 
 def test_orbit_count_codec_separates_native_and_json_integer_validation() -> None:
     subspace, directions = _slice_a_values()
     distribution = orbit_distribution(direction_rank_ledger(subspace, directions))
-    payload = distribution.model_dump(mode="json")
-    payload["counts"] = ((1, 9), (8, 48), (16, 12))
+    native_payload = distribution.model_dump()
+    native_payload["counts"] = ((1, 9), (8, 48), (16, 12))
 
-    native = type(distribution).model_validate(payload)
+    native = type(distribution).model_validate(native_payload)
     assert native.counts == distribution.counts
+    wire_payload = distribution.model_dump(mode="json")
+    wire_payload["counts"] = ((1, 9), (8, 48), (16, 12))
     with pytest.raises(ValidationError):
-        type(distribution).model_validate_json(json.dumps(payload))
+        type(distribution).model_validate_json(json.dumps(wire_payload))
 
 
 def test_orbit_count_digit_bound_accepts_inclusive_power_of_two_boundary() -> None:
     subspace, directions = _slice_a_values()
     distribution = orbit_distribution(direction_rank_ledger(subspace, directions))
-    payload = distribution.model_dump(mode="json")
+    payload = distribution.model_dump()
     boundary = 1 << 108_852
     payload["counts"] = ((1, boundary),)
 
@@ -303,7 +305,7 @@ def test_orbit_count_digit_bound_rejects_just_over_boundary_before_formatting(
 ) -> None:
     subspace, directions = _slice_a_values()
     distribution = orbit_distribution(direction_rank_ledger(subspace, directions))
-    payload = distribution.model_dump(mode="json")
+    payload = distribution.model_dump()
     payload["counts"] = ((1, 10**32_768),)
 
     def fail(_value: object) -> str:
@@ -330,7 +332,7 @@ def _orbit_counts_at_aggregate_digit_boundary(
 def test_orbit_counts_accept_exact_aggregate_digit_boundary() -> None:
     subspace, directions = _slice_a_values()
     distribution = orbit_distribution(direction_rank_ledger(subspace, directions))
-    payload = distribution.model_dump(mode="json")
+    payload = distribution.model_dump()
     payload["counts"] = _orbit_counts_at_aggregate_digit_boundary(False)
 
     decoded = type(distribution).model_validate(payload)
@@ -341,7 +343,7 @@ def test_orbit_counts_accept_exact_aggregate_digit_boundary() -> None:
 def test_orbit_counts_reject_just_over_aggregate_digit_boundary() -> None:
     subspace, directions = _slice_a_values()
     distribution = orbit_distribution(direction_rank_ledger(subspace, directions))
-    payload = distribution.model_dump(mode="json")
+    payload = distribution.model_dump()
     payload["counts"] = _orbit_counts_at_aggregate_digit_boundary(True)
 
     with pytest.raises(ValidationError):

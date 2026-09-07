@@ -41,6 +41,17 @@ lane preserves its configured timeout and worker count. Supported
 focused lanes are `math`, `catalog`, `dispatch`, `cli`, `tooling`,
 `integration`, `process`, and `mcp`; Singular and QEPCAD retain dedicated commands.
 
+The math lane defaults to one worker. On a host with spare CPU and memory,
+use `make test-math MATH_WORKERS=2` or `make affected MATH_WORKERS=2` to opt
+into bounded parallel execution. The setting also reaches focused math commands
+and preserves their selectors, markers, and timeout. Use `MATH_WORKERS=1` for
+the conservative isolated-worker path, or `MATH_WORKERS=0` to run in the main
+process, which can avoid worker startup for a small focused test. Each extra
+worker collects the suite and imports its backends separately; account for
+concurrent solver children and exact intermediates as well as worker memory.
+Do not derive a worker count from CPU count alone. Hosted math shards retain
+the one-worker default because each shard already has its own runner.
+
 In a shared checkout with unrelated static drift, declare the source and test
 paths you own instead of waiting on unrelated files:
 
@@ -125,11 +136,12 @@ coverage. Scheduled validation owns exhaustive evidence, repeated property
 checks, optional scale evidence, and randomized order/provider variation; the
 deferred exhaustive and scale lanes run as independent jobs so they do not
 serialize one another.
-Each ordinary CI lane retains JUnit timing evidence for 90 days. Use those node
-durations to tier near-envelope regressions before proposing more workers or
-timing-based sharding; ordinary product lanes remain unsharded until the
-evidence demonstrates a safe, useful split. Collection inspection remains a
-manual diagnostic, not a prerequisite for every test lane.
+Each ordinary CI lane retains JUnit timing evidence for 90 days. The complete
+math lane uses four timing-balanced jobs; focused mathematical owners use the
+planner's narrower selection. Use node and worker timings to distinguish
+expensive evidence from collection, setup, and scheduling overhead before
+changing a lane's resource policy. Collection inspection remains a manual
+diagnostic, not a prerequisite for every test lane.
 
 Markers are execution tiers, not synonyms for slow tests:
 

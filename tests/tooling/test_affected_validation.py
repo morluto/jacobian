@@ -191,6 +191,7 @@ def test_selected_commands_use_the_bounded_operator_runner(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     runner = _load()
+    monkeypatch.setenv("MATH_WORKERS", "2")
     observed: list[tuple[str, tuple[str, ...], Path, float]] = []
 
     def run_operator(
@@ -204,6 +205,7 @@ def test_selected_commands_use_the_bounded_operator_runner(
         environment: dict[str, str],
     ) -> ToolCommandResult:
         assert environment["PATH"]
+        assert environment["MATH_WORKERS"] == "2"
         assert stdout_limit_bytes == stderr_limit_bytes == 64 * 1024 * 1024
         observed.append((command, arguments, cwd, timeout_seconds))
         return ToolCommandResult(

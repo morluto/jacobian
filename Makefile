@@ -2,6 +2,8 @@
 
 UV_RUN := uv run --locked
 PYTEST_ARGS ?=
+MATH_WORKERS ?= 1
+export MATH_WORKERS
 SCALE_WORKERS ?= 2
 TESTS ?=
 PATHS ?=
@@ -39,8 +41,8 @@ help: ## Show the primary developer workflow.
 help-all: ## Show every low-level and lifecycle developer command.
 	@awk 'BEGIN {FS = ":.*## "; printf "All Jacobian developer commands:\n\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-26s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-test-math: ## Ordinary domain-owned mathematical behavior (1 worker, 120s).
-	$(UV_RUN) pytest -n 1 --dist worksteal --timeout=120 \
+test-math: ## Ordinary math; MATH_WORKERS=2 opts into parallelism, 1 is conservative, 0 runs in-process.
+	$(UV_RUN) pytest -n $(MATH_WORKERS) --dist worksteal --timeout=120 \
 		-m "$(ORDINARY_MARKER_EXPRESSION)" $(if $(TESTS),$(TESTS),tests/math) \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 

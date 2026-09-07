@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import shlex
 from pathlib import Path
+
+import pytest
+from tools.command_runner import ToolCommandStatus, run_operator_command
 
 ROOT = Path(__file__).parents[2]
 
@@ -93,7 +97,6 @@ def test_lanes_use_their_declared_worker_and_fixture_affinity() -> None:
     scale = makefile.split("_test-scale:", 1)[1].split("test-exhaustive:", 1)[0]
     exhaustive = makefile.split("_test-exhaustive:", 1)[1].split("test-property:", 1)[0]
 
-    assert "pytest -n 1 --dist worksteal" in math
     assert "pytest -n 2 --dist worksteal" in catalog
     assert "pytest -n 1 --dist worksteal" in integration
     for ordinary_lane in (math, catalog, dispatch, cli, tooling, integration):
@@ -101,6 +104,54 @@ def test_lanes_use_their_declared_worker_and_fixture_affinity() -> None:
     assert "SCALE_WORKERS ?= 2" in makefile
     assert "pytest -n $(SCALE_WORKERS) --dist worksteal" in scale
     assert "pytest -n 2 --dist worksteal" in exhaustive
+
+
+@pytest.mark.parametrize("workers", [0, 1, 2, 4])
+@pytest.mark.parametrize("target", ["test-math", "test-focused"])
+def test_math_worker_control_preserves_focused_selection(
+    workers: int, target: str
+) -> None:
+    selector = "tests/math/lattices/test_rectangular_hnf.py"
+    result = run_operator_command(
+        "make",
+        (
+            "--no-print-directory",
+            "-s",
+            "-n",
+            target,
+            "LANE=math",
+            f"MATH_WORKERS={workers}",
+            f"TESTS={selector}",
+            "PYTEST_ARGS=",
+        ),
+        cwd=ROOT,
+        timeout_seconds=10,
+        stdout_limit_bytes=64 * 1024,
+        stderr_limit_bytes=64 * 1024,
+    )
+    assert result.status is ToolCommandStatus.EXITED
+    assert result.exit_code == 0, result.stderr
+    commands = result.stdout.decode().replace("\\\n", " ").splitlines()
+    pytest_commands = [
+        shlex.split(line) for line in commands if line.startswith("uv run")
+    ]
+    assert pytest_commands == [
+        [
+            "uv",
+            "run",
+            "--locked",
+            "pytest",
+            "-n",
+            str(workers),
+            "--dist",
+            "worksteal",
+            "--timeout=120",
+            "-m",
+            "not property and not exhaustive and not scale",
+            selector,
+            "--durations=10",
+        ]
+    ]
 
 
 def test_semantic_marker_lanes_are_excluded_from_ordinary_math() -> None:

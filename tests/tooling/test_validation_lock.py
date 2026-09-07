@@ -88,11 +88,15 @@ def test_timed_out_command_releases_the_validation_lock(
     assert main(["status"]) == 0
 
 
-def test_run_forwards_pytest_arguments_to_the_locked_command(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize(
+    ("variable", "value"),
+    [("PYTEST_ARGS", "--junitxml=pytest.xml"), ("MATH_WORKERS", "2")],
+)
+def test_run_forwards_validation_controls_to_the_locked_command(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, variable: str, value: str
 ) -> None:
     monkeypatch.chdir(_worktree(tmp_path))
-    monkeypatch.setenv("PYTEST_ARGS", "--junitxml=pytest.xml")
+    monkeypatch.setenv(variable, value)
 
     result = main(
         [
@@ -102,9 +106,11 @@ def test_run_forwards_pytest_arguments_to_the_locked_command(
             "--",
             sys.executable,
             "-c",
-            "from pathlib import Path; import os; Path('args').write_text(os.environ['PYTEST_ARGS'])",
+            "from pathlib import Path; import os, sys; "
+            "Path('args').write_text(os.environ[sys.argv[1]])",
+            variable,
         ]
     )
 
     assert result == 0
-    assert (tmp_path / "args").read_text(encoding="utf-8") == "--junitxml=pytest.xml"
+    assert (tmp_path / "args").read_text(encoding="utf-8") == value

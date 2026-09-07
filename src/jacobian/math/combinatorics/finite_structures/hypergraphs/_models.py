@@ -1277,8 +1277,8 @@ class MaximumEdgeMatchingResult(StrictModel):
 MAX_WEIGHTED_PACKING_SEARCH_WORK = (
     (1 << MAX_MATCHING_EDGES) * MAX_MATCHING_EDGES * MAX_MATCHING_EDGES
 )
-# One weight component stays within the canonical rational envelope: even
-# 12,000 entries of 256 digits accumulate far below the 32,768-digit bound.
+# Each authored weight is bounded here; admission separately bounds the
+# shared denominator and numerator growth of all partial sums.
 MAX_PACKING_WEIGHT_DIGITS = 256
 
 

@@ -349,6 +349,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "(weighted set packing) with exact nonnegative per-edge weights: "
         "returns the optimum total weight and an attaining family in declared "
         "edge order, ties broken toward the lexicographically smallest family. "
+        "Conflict components use either candidate subsets or occupied-resource states, "
+        "whichever fits the bounded exact search and rational-height envelope. "
         "For all nontrivial clique edge supports with weight |E(C)|-1, "
         "the optimum equals |E(G)| minus the minimum edge-clique partition "
         "number; uncovered edges contribute single-edge parts.",

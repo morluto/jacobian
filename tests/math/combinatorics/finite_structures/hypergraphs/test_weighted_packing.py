@@ -239,3 +239,38 @@ class TestWeightedPacking:
                 hypergraph=hypergraph,
                 weights=(_weight("e1", 1), _weight("e1", 1), _weight("e2", 1)),
             )
+
+
+def test_many_duplicate_supports_use_resource_states() -> None:
+    edges: list[tuple[str, tuple[str, ...]]] = [
+        (f"e{i:02d}", ("v",)) for i in range(21)
+    ]
+    result = _pack(["v"], edges, {name: 1 for name, _ in edges})
+    assert result.packing == ("e00",)
+    assert result.total_weight.as_fraction() == 1
+
+
+def test_complete_k5_clique_candidates_keep_zero_weight_edges() -> None:
+    vertices = [str(i) for i in range(5)]
+    resources = [f"{i}{j}" for i, j in combinations(vertices, 2)]
+    edges = []
+    weights = {}
+    for size in range(2, 6):
+        for subset in combinations(vertices, size):
+            name = "q" + "".join(subset)
+            members = tuple(f"{i}{j}" for i, j in combinations(subset, 2))
+            edges.append((name, members))
+            weights[name] = len(members) - 1
+    result = _pack(resources, edges, weights)
+    assert result.total_weight.as_fraction() == 9
+    assert result.packing == ("q01234",)
+
+
+def test_resource_dp_retains_zero_weight_lexicographic_witness() -> None:
+    # The zero-weight a may precede the positive c in the lexicographic winner.
+    edges = [("a", ("x",)), ("b", ("x", "y")), ("c", ("y",))]
+    edges += [(f"z{i:02d}", ("x", "y")) for i in range(20)]
+    weights = {name: int(name == "c") for name, _ in edges}
+    result = _pack(["x", "y"], edges, weights)
+    assert result.packing == ("a", "c")
+    assert result.total_weight.as_fraction() == 1

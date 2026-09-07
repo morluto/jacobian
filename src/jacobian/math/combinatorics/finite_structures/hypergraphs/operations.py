@@ -2,6 +2,7 @@
 
 import unicodedata
 from fractions import Fraction
+from math import lcm
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
@@ -901,6 +902,7 @@ def _weighted_packing_plan(
     tuple[frozenset[str], ...],
     tuple[Fraction, ...],
     tuple[tuple[int, ...], ...],
+    tuple[tuple[str, ...] | None, ...],
     int,
 ]:
     """Build the reusable conflict-component plan for one weighted packing."""
@@ -911,11 +913,21 @@ def _weighted_packing_plan(
     edge_sets = tuple(frozenset(members) for _, members in edges)
     values = tuple(weight_of[edge_id] for edge_id in search_ids)
     components = _conflict_components(edge_sets)
-    search_work = sum(
-        (1 << len(component)) * len(component) * len(component)
+    resource_axes = tuple(
+        tuple(sorted(set().union(*(edge_sets[i] for i in component))))
         for component in components
     )
-    return search_ids, edge_sets, values, components, search_work
+    work = []
+    regimes = []
+    for component, resources in zip(components, resource_axes, strict=True):
+        exhaustive = (1 << len(component)) * len(component) ** 2
+        resource_work = (1 << len(resources)) * len(component) ** 2
+        use_resources = (
+            len(resources) <= MAX_MATCHING_EDGES and resource_work < exhaustive
+        )
+        regimes.append(resources if use_resources else None)
+        work.append(resource_work if use_resources else exhaustive)
+    return search_ids, edge_sets, values, components, tuple(regimes), sum(work)
 
 
 def _maximum_component_packing(
@@ -959,6 +971,38 @@ def _maximum_component_packing(
     return best_ids, best_weight
 
 
+def _resource_component_packing(
+    edge_sets: tuple[frozenset[str], ...],
+    values: tuple[Fraction, ...],
+    search_ids: tuple[str, ...],
+    component: tuple[int, ...],
+    resources: tuple[str, ...],
+) -> tuple[tuple[str, ...], Fraction]:
+    axis = {value: index for index, value in enumerate(resources)}
+    states = 1 << len(resources)
+    best: list[tuple[tuple[str, ...], Fraction]] = [
+        ((), Fraction(0)) for _ in range(states)
+    ]
+    # Build suffix optima, so equal-weight lexicographic choices remain
+    # valid after prepending any fixed earlier family, including zero weights.
+    for index in reversed(component):
+        support = sum(1 << axis[v] for v in edge_sets[index])
+        updated = list(best)
+        for occupied in range(states):
+            if occupied & support:
+                continue
+            suffix, weight = best[occupied | support]
+            candidate = (search_ids[index], *suffix)
+            weight += values[index]
+            incumbent, incumbent_weight = best[occupied]
+            if weight > incumbent_weight or (
+                weight == incumbent_weight and candidate < incumbent
+            ):
+                updated[occupied] = candidate, weight
+        best = updated
+    return best[0]
+
+
 def maximum_weight_packing(
     hypergraph: FiniteHypergraph,
     weights: tuple[EdgeWeight, ...],
@@ -979,10 +1023,37 @@ def maximum_weight_packing(
             code="hypergraph.weighted_packing.weight_coverage",
             message="packing weights must cover exactly the source hyperedge IDs",
         )
-    search_ids, edge_sets, values, components, search_work = _weighted_packing_plan(
-        hypergraph, weights
+    # Any partial sum is bounded after lifting to this shared denominator.
+    denominator = 1
+    for entry in weights:
+        denominator = lcm(denominator, entry.weight.den)
+        if denominator.bit_length() > 96_000:
+            raise OperationDomainValidationError(
+                location=("weights",),
+                code="hypergraph.weighted_packing.growth",
+                message="packing weight common denominator exceeds the exact height envelope",
+            )
+    numerator_bits = max(
+        (
+            abs(entry.weight.num).bit_length()
+            + (denominator // entry.weight.den).bit_length()
+            for entry in weights
+        ),
+        default=1,
     )
-    if any(len(component) > MAX_MATCHING_EDGES for component in components):
+    if numerator_bits + max(1, len(weights)).bit_length() > 96_000:
+        raise OperationDomainValidationError(
+            location=("weights",),
+            code="hypergraph.weighted_packing.growth",
+            message="packing weight sums exceed the exact height envelope",
+        )
+    search_ids, edge_sets, values, components, resources, search_work = (
+        _weighted_packing_plan(hypergraph, weights)
+    )
+    if any(
+        len(component) > MAX_MATCHING_EDGES and axis is None
+        for component, axis in zip(components, resources, strict=True)
+    ):
         raise OperationDomainValidationError(
             location=("hypergraph",),
             code="hypergraph.weighted_packing.search_bound",
@@ -1002,10 +1073,15 @@ def maximum_weight_packing(
         )
     chosen: set[str] = set()
     total = Fraction(0)
-    for component in components:
-        best_ids, best_weight = _maximum_component_packing(
-            edge_sets, values, search_ids, component
-        )
+    for component, axis in zip(components, resources, strict=True):
+        if axis is None:
+            best_ids, best_weight = _maximum_component_packing(
+                edge_sets, values, search_ids, component
+            )
+        else:
+            best_ids, best_weight = _resource_component_packing(
+                edge_sets, values, search_ids, component, axis
+            )
         chosen.update(best_ids)
         total += best_weight
     packing = tuple(edge_id for edge_id in edge_ids if edge_id in chosen)

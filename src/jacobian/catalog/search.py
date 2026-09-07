@@ -7,6 +7,7 @@ from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass
 from hashlib import sha256
+from itertools import pairwise
 from math import log
 from typing import Protocol
 
@@ -157,12 +158,16 @@ def _match_corpus(
     need_terms = discovery_terms(request.need)
     ranked: list[tuple[float, OperationDiscoveryMatch]] = []
     for descriptor, fields in corpus.entries:
+        if not _explicit_domain_matches(request.need, need_terms, fields, descriptor):
+            continue
         score = need_relevance(
             fields,
             need_terms,
             document_frequency=corpus.document_frequency,
             document_count=len(corpus.entries),
         )
+        if score > 0:
+            score += _phrase_relevance(descriptor, request.need)
         if score > 0:
             ranked.append(
                 (
@@ -306,6 +311,76 @@ def token_set(value: str) -> frozenset[str]:
     return frozenset(
         normalize_discovery_term(term)
         for term in _DISCOVERY_TOKEN_PATTERN.findall(value.casefold())
+    )
+
+
+def _phrases(value: str) -> frozenset[tuple[str, str]]:
+    """Keep adjacent mathematical words together without inventing aliases."""
+
+    words = tuple(
+        normalize_discovery_term(term)
+        for term in _DISCOVERY_TOKEN_PATTERN.findall(value.casefold())
+    )
+    return frozenset(
+        (left, right)
+        for left, right in pairwise(words)
+        if left not in _DISCOVERY_STOP_WORDS
+        and right not in _DISCOVERY_STOP_WORDS
+        and not left.isdigit()
+        and not right.isdigit()
+    )
+
+
+def _phrase_relevance(operation: SearchableOperation, need: str) -> float:
+    phrases = _phrases(need)
+    # A matched phrase in several fields is still one piece of evidence.
+    title_phrases = _phrases(operation.title) | _phrases(operation.operation_id)
+    contract_phrases = _phrases(operation.description) | frozenset(
+        phrase for term in operation.discovery_terms for phrase in _phrases(term)
+    )
+    return len(phrases & title_phrases) + 0.5 * len(
+        phrases & (contract_phrases - title_phrases)
+    )
+
+
+def _explicit_domain_matches(
+    need: str,
+    need_terms: frozenset[str],
+    fields: tuple[frozenset[str], ...],
+    operation: SearchableOperation,
+) -> bool:
+    """Respect an explicitly requested coefficient domain for checking tasks.
+
+    Match only the explicitly named domain and declared checking intent.
+    Incidental query words remain relevance signals, never hard requirements.
+    Do not substitute a quotient-ring check for an integer/rational check.
+    """
+
+    domain = re.search(r"\bover\s+(?:the\s+)?(integers?|rationals?)\b", need.casefold())
+    if domain is None or not need_terms & {"check", "verify", "test"}:
+        return True
+    terms = frozenset().union(*fields)
+    if normalize_discovery_term(domain.group(1)) not in terms:
+        return False
+    if not frozenset().union(*fields[:2]) & {
+        "check",
+        "verify",
+        "test",
+        "decide",
+        "compare",
+    }:
+        return False
+    object_phrases = frozenset(
+        phrase
+        for phrase in _phrases(need)
+        if not set(phrase) & {"check", "verify", "test", "exact", "over", "please"}
+    )
+    if object_phrases and not object_phrases & (
+        _phrases(operation.title) | _phrases(operation.operation_id)
+    ):
+        return False
+    return not (
+        {"modular", "modulo"} & terms and not {"modular", "modulo"} & need_terms
     )
 
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.1](https://github.com/morluto/jacobian/compare/jacobian-v0.19.0...jacobian-v0.19.1) (2026-09-07)
+
+
+### Bug Fixes
+
+* **npm:** make setup refresh existing registrations ([847f02b](https://github.com/morluto/jacobian/commit/847f02b96ecd3fe666ff46d6cfc787f8d0c83fe1))
+
 ## [0.19.0](https://github.com/morluto/jacobian/compare/jacobian-v0.18.0...jacobian-v0.19.0) (2026-09-07)
 
 

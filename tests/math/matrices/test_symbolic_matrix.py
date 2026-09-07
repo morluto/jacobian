@@ -1175,6 +1175,7 @@ def test_symbolic_native_api_exports_matrix_value_and_product() -> None:
         "RationalFunctionMatrix",
         "RationalFunctionVector",
         "RationalFunctionVectorBasis",
+        "RationalPolynomialMatrix",
         "symbolic_characteristic_polynomial",
         "symbolic_determinant",
         "symbolic_linear_system_solve",

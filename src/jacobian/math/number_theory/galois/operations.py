@@ -8,11 +8,14 @@ from typing import TYPE_CHECKING
 from pydantic_core import PydanticCustomError
 
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.number_theory.galois._factor import factor_mod_prime
 
 if TYPE_CHECKING:
     from sympy.combinatorics.perm_groups import PermutationGroup
 
 from jacobian.math.number_theory.galois._models import (
+    MAX_FACTOR_DEGREE,
+    MAX_FIELD_ORDER,
     FiniteFieldFactor,
     FinitePermutationGroup,
     FrobeniusCycleResult,
@@ -36,6 +39,21 @@ def _admit(operation: Callable[[], None], *, location: tuple[str | int, ...]) ->
 
 
 def _admit_factor(field_order: int, coefficients: tuple[int, ...]) -> None:
+    if type(field_order) is not int or not 2 <= field_order <= MAX_FIELD_ORDER:
+        raise PydanticCustomError(
+            "galois_theory.field_order_bound",
+            "field_order must be an integer in 2..251",
+        )
+    if not 2 <= len(coefficients) <= MAX_FACTOR_DEGREE + 1:
+        raise PydanticCustomError(
+            "galois_theory.degree_bound",
+            "factorization admits degree one through 128",
+        )
+    if any(type(coefficient) is not int for coefficient in coefficients):
+        raise PydanticCustomError(
+            "galois_theory.coefficient_type",
+            "coefficients must be strict integers",
+        )
     _require_prime(field_order)
     if any(not 0 <= coefficient < field_order for coefficient in coefficients):
         raise PydanticCustomError(
@@ -54,6 +72,24 @@ def _admit_frobenius(
     polynomial_degree: int,
     factorization_degrees: tuple[int, ...],
 ) -> None:
+    if type(field_order) is not int or not 2 <= field_order <= MAX_FIELD_ORDER:
+        raise PydanticCustomError(
+            "galois_theory.field_order_bound",
+            "field_order must be an integer in 2..251",
+        )
+    if (
+        type(polynomial_degree) is not int
+        or not 1 <= polynomial_degree <= MAX_FACTOR_DEGREE
+        or not 1 <= len(factorization_degrees) <= MAX_FACTOR_DEGREE
+        or any(
+            type(degree) is not int or not 1 <= degree <= MAX_FACTOR_DEGREE
+            for degree in factorization_degrees
+        )
+    ):
+        raise PydanticCustomError(
+            "galois_theory.degree_bound",
+            "Frobenius partitions admit total degree one through 128",
+        )
     from collections import Counter
 
     from sympy import divisors, mobius
@@ -83,25 +119,15 @@ def _admit_frobenius(
 def galois_factor(
     field_order: int, coefficients: tuple[int, ...]
 ) -> GaloisFactorResult:
-    """Factor a polynomial over GF(p) using SymPy."""
+    """Factor canonical ascending coefficients over GF(p)."""
     _admit(
         lambda: _admit_factor(field_order, coefficients),
         location=("field_order", "coefficients"),
     )
-    from sympy import GF, Poly, Symbol
-
-    field = GF(field_order)
-    x = Symbol("x")
-    coeffs = list(coefficients)
-    terms = sum(c * x**i for i, c in enumerate(coeffs))
-    poly = Poly(terms, domain=field)
-    unit, factor_polys = poly.factor_list()
+    unit, factor_polys = factor_mod_prime(field_order, coefficients)
     result_factors = tuple(
         FiniteFieldFactor(
-            coefficients=tuple(
-                int(coefficient) % field_order
-                for coefficient in reversed(factor_poly.all_coeffs())
-            ),
+            coefficients=factor_poly,
             multiplicity=int(multiplicity),
         )
         for factor_poly, multiplicity in factor_polys

@@ -45,9 +45,12 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="polynomial.galois.factor_mod_p.compute",
         title="Factor a polynomial over GF(p)",
-        description="Factor a polynomial over a prime finite field GF(p) using SymPy, "
-        "retaining the unit, monic factors, positive multiplicities, and a "
-        "reconstruction-checked irreducibility result.",
+        description="Factor a polynomial over a prime finite field GF(p), retaining "
+        "the source polynomial, unit, monic irreducible factors and multiplicities. "
+        "Determines finite-field polynomial irreducibility from the supplied "
+        "polynomial coefficients, in ascending order. Admits degree d<=128, "
+        "prime p<=251 and 32*(p+1)*d^3<=1,000,000,000 scalar updates; "
+        "deterministic Berlekamp factorization has a shared 60-second safety deadline.",
         request_type=GaloisFactorRequest,
         result_type=GaloisFactorResult,
         run=_galois_factor,
@@ -63,8 +66,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="polynomial.galois.frobenius_cycle.compute",
         title="Compute the Frobenius cycle type",
-        description="Compute the Frobenius cycle type from a factorization pattern over "
-        "GF(p), returning the cycle type and irreducibility.",
+        description="Compute the Frobenius cycle type from supplied distinct "
+        "factor degrees over GF(p), with total degree at most 128 and prime at "
+        "most 251. Consumes a degree partition, not polynomial coefficients; "
+        "it does not check that a source polynomial has the supplied factors.",
         request_type=FrobeniusCycleRequest,
         result_type=FrobeniusCycleResult,
         run=_frobenius_cycle,

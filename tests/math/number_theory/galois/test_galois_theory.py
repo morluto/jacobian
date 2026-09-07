@@ -166,17 +166,17 @@ def test_factorization_result_parses_structurally() -> None:
 
 
 def test_factor_producer_runs_the_backend_once(monkeypatch: pytest.MonkeyPatch) -> None:
-    from sympy import Poly
+    from jacobian.math.number_theory.galois import _factor
 
-    original = Poly.factor_list
+    original = _factor._factor_polynomial
     calls = 0
 
-    def counted(self: Poly, *args: object, **kwargs: object) -> Any:
+    def counted(*args: Any, **kwargs: Any) -> Any:
         nonlocal calls
         calls += 1
-        return original(self, *args, **kwargs)
+        return original(*args, **kwargs)
 
-    monkeypatch.setattr(Poly, "factor_list", counted)
+    monkeypatch.setattr(_factor, "_factor_polynomial", counted)
     result = _galois_factor(GaloisFactorRequest(field_order=5, coefficients=(1, 0, 1)))
 
     assert result.is_irreducible is False

@@ -11,7 +11,7 @@ from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.polynomials.values import RationalPolynomial
 
-MAX_FACTOR_DEGREE = 12
+MAX_FACTOR_DEGREE = 128
 MAX_GALOIS_GROUP_DEGREE = 6
 MAX_FIELD_ORDER = 251
 GaloisCoefficient = Annotated[int, Field(ge=-(10**12), le=10**12, strict=True)]
@@ -64,9 +64,12 @@ class GaloisFactorRequest(StrictModel):
     """A nonzero, nonconstant polynomial over the prime field ``GF(p)``."""
 
     field_order: int = Field(ge=2, le=MAX_FIELD_ORDER, strict=True)
-    coefficients: tuple[int, ...] = Field(
+    coefficients: tuple[
+        Annotated[int, Field(ge=0, le=MAX_FIELD_ORDER - 1, strict=True)], ...
+    ] = Field(
         min_length=2,
         max_length=MAX_FACTOR_DEGREE + 1,
+        description="Canonical GF(p) residues in ascending coefficient order, with a nonzero leading coefficient. Degree and modulus jointly determine work admission.",
     )
 
 

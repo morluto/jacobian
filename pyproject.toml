@@ -16,7 +16,7 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: CPython",
 ]
 dependencies = [
-    "mcp==2.1.0",
+    "mcp==2.1.1",
     "networkx==3.6.1",
     "pydantic>=2.12,<3",
     "pydantic-core>=2.0,<3",

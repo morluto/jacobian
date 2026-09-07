@@ -494,9 +494,9 @@ class TestNativeSystemAdmission:
         variables: tuple[str, ...] = (),
     ) -> tuple[
         SystemClassification,
-        tuple[RationalFunction, ...] | None,
-        tuple[RationalFunction, ...] | None,
-        tuple[tuple[RationalFunction, ...], ...] | None,
+        RationalFunctionVector | None,
+        RationalFunctionVector | None,
+        RationalFunctionVectorBasis | None,
     ]:
         from jacobian.math.matrices.symbolic.operations import (
             symbolic_linear_system_solve,

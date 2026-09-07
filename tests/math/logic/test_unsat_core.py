@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
-import z3  # type: ignore[import-untyped]
+import z3
 from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
@@ -193,7 +193,7 @@ def test_core_worker_failures_never_project_a_math_verdict(
 def test_core_extraction_failure_is_a_typed_unknown(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def fail_core_extraction(_solver: z3.Solver) -> None:
+    def fail_core_extraction(_solver: object) -> None:
         raise z3.Z3Exception("core extraction failed")
 
     monkeypatch.setattr(z3.Solver, "unsat_core", fail_core_extraction)

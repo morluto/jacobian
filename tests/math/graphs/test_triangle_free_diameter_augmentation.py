@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any, cast
 
 import networkx as nx
 import pytest
@@ -35,12 +36,18 @@ def _edge(a: str, b: str) -> tuple[str, str]:
     return (a, b) if a < b else (b, a)
 
 
+def _triangle_count(graph: nx.Graph[str]) -> int:
+    triangles = nx.triangles(graph)
+    assert isinstance(triangles, dict)
+    return sum(triangles.values()) // 3
+
+
 def _path(n: int) -> SimpleUndirectedGraph:
     verts = tuple(str(i) for i in range(n))
     edges = tuple(_edge(str(i), str(i + 1)) for i in range(n - 1))
     # canonical sort
     verts = tuple(sorted(verts))
-    edges = tuple(sorted(tuple(sorted(e)) for e in edges))
+    edges = tuple(sorted(_edge(*e) for e in edges))
     # For n>=10 lexicographic weirdness, keep numeric string order but ensure edges canonical left<right string cmp
     # Rebuild with proper canonical edges via sorted string compare
     edges = tuple(sorted(_edge(*e) for e in edges))
@@ -61,11 +68,11 @@ def test_path_four_target_two_unique_one_edge_solution() -> None:
     assert result.added_edges == (("0", "3"),)
     assert result.augmented_diameter == 2
     # validate union triangle-free
-    aug = nx.Graph()
+    aug: nx.Graph[str] = nx.Graph()
     aug.add_nodes_from(g.vertices)
     aug.add_edges_from(g.edges)
     aug.add_edges_from(result.added_edges)
-    assert sum(nx.triangles(aug).values()) // 3 == 0
+    assert _triangle_count(aug) == 0
     assert nx.diameter(aug) == 2
 
 
@@ -105,11 +112,11 @@ def test_exhaustive_differential_small_graphs() -> None:
             )
             if best is not None and len(added) >= best:
                 continue
-            aug = nx.Graph()
+            aug: nx.Graph[str] = nx.Graph()
             aug.add_nodes_from(verts)
             aug.add_edges_from(graph.edges)
             aug.add_edges_from(added)
-            if sum(nx.triangles(aug).values()) // 3 != 0:
+            if _triangle_count(aug) != 0:
                 continue
             if not nx.is_connected(aug):
                 continue
@@ -136,10 +143,10 @@ def test_exhaustive_differential_small_graphs() -> None:
         except Exception:
             continue
         # filter triangle-free and connected
-        aug0 = nx.Graph()
+        aug0: nx.Graph[str] = nx.Graph()
         aug0.add_nodes_from(g.vertices)
         aug0.add_edges_from(g.edges)
-        if sum(nx.triangles(aug0).values()) // 3 != 0:
+        if _triangle_count(aug0) != 0:
             continue
         if not nx.is_connected(aug0):
             continue
@@ -155,11 +162,11 @@ def test_exhaustive_differential_small_graphs() -> None:
                 assert res.status == "EXACT"
                 assert res.added_edge_count == brute_best
                 # verify diameter
-                aug = nx.Graph()
+                aug: nx.Graph[str] = nx.Graph()
                 aug.add_nodes_from(g.vertices)
                 aug.add_edges_from(g.edges)
                 aug.add_edges_from(res.added_edges)
-                assert sum(nx.triangles(aug).values()) // 3 == 0
+                assert _triangle_count(aug) == 0
                 assert nx.is_connected(aug)
                 assert nx.diameter(aug) <= target
 
@@ -173,11 +180,11 @@ def test_multiple_additions_minimality() -> None:
     # verify no single edge suffices
     _, cands, _ = _derive_candidates(g)
     for edge in cands:
-        aug = nx.Graph()
+        aug: nx.Graph[str] = nx.Graph()
         aug.add_nodes_from(g.vertices)
         aug.add_edges_from(g.edges)
         aug.add_edge(*edge)
-        if sum(nx.triangles(aug).values()) // 3 != 0:
+        if _triangle_count(aug) != 0:
             continue
         if not nx.is_connected(aug):
             continue
@@ -221,7 +228,9 @@ def test_solver_budget_exhaustion() -> None:
     g = _graph(("0", "1", "2", "3"), (("0", "1"), ("1", "2"), ("2", "3")))
     budget = TriangleFreeDiameterAugmentationBudget(wall_seconds=1, max_order=10)
     # monkeypatch time.monotonic inside kernel to simulate expiry
-    import jacobian.math.graphs.triangle_free_diameter_augmentation._augmentation_z3 as mod
+    import jacobian.math.graphs.triangle_free_diameter_augmentation._augmentation_z3 as _augmentation_z3
+
+    mod: Any = cast(Any, _augmentation_z3)
 
     orig = mod.time.monotonic
     try:
@@ -276,10 +285,10 @@ def test_sparse_triangle_free_family_native_mcp_replay() -> None:
     tool = TOOLS[0]
     for g in families:
         # ensure triangle-free and connected
-        aug = nx.Graph()
+        aug: nx.Graph[str] = nx.Graph()
         aug.add_nodes_from(g.vertices)
         aug.add_edges_from(g.edges)
-        assert sum(nx.triangles(aug).values()) // 3 == 0
+        assert _triangle_count(aug) == 0
         assert nx.is_connected(aug)
         for target in [2, 3]:
             budget = TriangleFreeDiameterAugmentationBudget(
@@ -300,11 +309,11 @@ def test_sparse_triangle_free_family_native_mcp_replay() -> None:
             )
             assert reparsed == native
             if native.status == "EXACT":
-                aug2 = nx.Graph()
+                aug2: nx.Graph[str] = nx.Graph()
                 aug2.add_nodes_from(g.vertices)
                 aug2.add_edges_from(g.edges)
                 aug2.add_edges_from(native.added_edges)
-                assert sum(nx.triangles(aug2).values()) // 3 == 0
+                assert _triangle_count(aug2) == 0
                 assert nx.is_connected(aug2)
                 assert nx.diameter(aug2) <= target
                 # check canonical sorted
@@ -354,7 +363,9 @@ def test_admission_bounds_candidate_and_reachability() -> None:
     assert res.status in ("EXACT", "INFEASIBLE", "SOLVER_BUDGET_EXCEEDED")
 
     # Force candidate bound exceed by temporarily lowering limit
-    import jacobian.math.graphs.triangle_free_diameter_augmentation._augmentation_z3 as mod
+    import jacobian.math.graphs.triangle_free_diameter_augmentation._augmentation_z3 as _augmentation_z3
+
+    mod: Any = cast(Any, _augmentation_z3)
 
     orig_cand = mod.HARD_MAX_CANDIDATES
     try:

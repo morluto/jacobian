@@ -8,7 +8,10 @@ from pydantic import ValidationError
 from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.sets._models import FiniteIntegerSet
-from jacobian.math.combinatorics.posets.core._models import MAX_POSET_ELEMENTS
+from jacobian.math.combinatorics.posets.core._models import (
+    MAX_POSET_ELEMENTS,
+    FinitePoset,
+)
 from jacobian.math.number_theory._divisibility_poset import (
     compute_divisibility_poset,
     divisibility_poset,
@@ -21,7 +24,7 @@ from jacobian.math.number_theory._divisibility_poset_models import (
 MAX_ADMITTED_ELEMENTS = min(MAX_DIVISIBILITY_SET_SIZE, MAX_POSET_ELEMENTS)
 
 
-def _compute(elements: list[int]):
+def _compute(elements: list[int]) -> FinitePoset:
     request = DivisibilityPosetRequest.model_validate(
         {"values": {"elements": elements}}
     )

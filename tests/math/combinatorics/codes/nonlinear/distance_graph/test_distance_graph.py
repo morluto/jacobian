@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
+from typing import cast
 
 import pytest
 from pydantic import ValidationError
@@ -15,7 +17,7 @@ from jacobian.math.combinatorics.codes.nonlinear.distance_graph.operations impor
 from jacobian.math.combinatorics.codes.nonlinear.values import ExplicitBinaryCode
 
 
-def _code(length, codewords):
+def _code(length: int, codewords: Sequence[Sequence[int]]) -> ExplicitBinaryCode:
     return ExplicitBinaryCode(
         length=length, codewords=tuple(tuple(c) for c in codewords)
     )
@@ -93,7 +95,7 @@ def test_request_schema_inlines_binary_word_definition() -> None:
 def test_request_rejects_non_strict_target_distance(distance: object) -> None:
     code = _code(2, [[0, 0], [1, 1]])
     with pytest.raises(ValidationError):
-        BinaryCodeDistanceGraphRequest(source=code, target_distance=distance)
+        BinaryCodeDistanceGraphRequest(source=code, target_distance=cast(int, distance))
 
 
 def test_native_admission_rejects_invalid_distance() -> None:

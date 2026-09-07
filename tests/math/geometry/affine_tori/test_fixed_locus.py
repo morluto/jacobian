@@ -462,8 +462,8 @@ def test_empty_character_satisfies_the_obstruction_definition() -> None:
 
 def test_empty_result_deserialization_does_not_replay_obstruction_theorem() -> None:
     source = _source(
-        [[1]],
-        [Fraction(1, 3)],
+        ((1,),),
+        (Fraction(1, 3),),
     )
     result = affine_torus_fixed_locus(source)
     assert isinstance(result.outcome, EmptyAffineTorusFixedLocus)
@@ -1131,7 +1131,9 @@ def test_dimension_envelope_agrees_with_the_matrix_carrier() -> None:
     seventeen_identity = [
         [int(row == column) for column in range(17)] for row in range(17)
     ]
-    source = _source(seventeen_identity, (Fraction(0),) * 17)
+    source = _source(
+        tuple(tuple(row) for row in seventeen_identity), (Fraction(0),) * 17
+    )
     plan = build_affine_torus_plan(source, deadline=monotonic() + 30)
     assert plan.dimension == 17
 

@@ -85,7 +85,7 @@ def test_flow_cut_and_paths_round_trip() -> None:
     )
 
 
-def _costed_graph() -> dict:
+def _costed_graph() -> dict[str, Any]:
     return {
         "vertex_count": 3,
         "edges": [

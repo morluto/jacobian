@@ -9,10 +9,13 @@ from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.optimization.submodular._models import (
     MonotonicityCheckRequest,
+    MonotonicityCheckResult,
     SetFunction,
     SetFunctionEntry,
     SetFunctionEvalRequest,
+    SetFunctionEvalResult,
     SubmodularityCheckRequest,
+    SubmodularityCheckResult,
 )
 from jacobian.math.optimization.submodular.operations import (
     check_monotonicity,
@@ -24,15 +27,19 @@ from jacobian.math.optimization.submodular.operations import (
 )
 
 
-def _evaluate_request(request: SetFunctionEvalRequest):
+def _evaluate_request(request: SetFunctionEvalRequest) -> SetFunctionEvalResult:
     return evaluate_set_function(request.function, request.subset)
 
 
-def _check_monotonicity_request(request: MonotonicityCheckRequest):
+def _check_monotonicity_request(
+    request: MonotonicityCheckRequest,
+) -> MonotonicityCheckResult:
     return check_monotonicity(request.function)
 
 
-def _check_submodularity_request(request: SubmodularityCheckRequest):
+def _check_submodularity_request(
+    request: SubmodularityCheckRequest,
+) -> SubmodularityCheckResult:
     return check_submodularity(request.function)
 
 

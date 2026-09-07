@@ -118,12 +118,14 @@ class TestMultivariateFactorResultInvariants:
             MultivariateFactorResult(
                 coefficient=CanonicalRational.from_fraction(Fraction(0)),
                 factors=(),
+                polynomial=zero,
                 reconstructed=zero,
             )
         with pytest.raises(ValidationError):
             MultivariateFactorResult(
                 coefficient=CanonicalRational.from_fraction(Fraction(0)),
                 factors=(),
+                polynomial=_poly(("x", "y"), ((3, 2, (1, 1)),)),
                 reconstructed=_poly(("x", "y"), ((3, 2, (1, 1)),)),
             )
 
@@ -133,6 +135,7 @@ class TestMultivariateFactorResultInvariants:
             MultivariateFactorResult(
                 coefficient=CanonicalRational.from_fraction(Fraction(1)),
                 factors=(),
+                polynomial=zero,
                 reconstructed=zero,
             )
 
@@ -195,6 +198,7 @@ class TestAggregateDegreeGate:
             MultivariateFactorResult(
                 coefficient=CanonicalRational.from_fraction(Fraction(1)),
                 factors=payload,
+                polynomial=small,
                 reconstructed=small,
             )
 

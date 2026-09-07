@@ -52,7 +52,7 @@ def test_decoded_gram_rejects_shape_forgery() -> None:
         gram=IntegerMatrix(entries=((1,),)),
     )
     assert not verify_gram(malformed)
-    assert not verify_gram(result.model_copy(update={"gram": None}))  # type: ignore[arg-type]
+    assert not verify_gram(result.model_copy(update={"gram": None}))
     assert not verify_gram(result.model_copy(update={"vectors": ()}))
 
 

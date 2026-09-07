@@ -20,6 +20,7 @@ from jacobian.math.number_theory.numerical_semigroups._tools import (
     compute_membership,
     compute_summary,
 )
+from jacobian.math.number_theory.numerical_semigroups.values import NumericalSemigroup
 
 
 class TestSemigroupSummary:
@@ -75,7 +76,9 @@ class TestSemigroupSummary:
     ) -> None:
         with pytest.raises(ValidationError):
             NumericalSemigroupSummaryResult(
-                minimal_generators=axis,
+                semigroup=NumericalSemigroup.model_validate(
+                    {"minimal_generators": axis}
+                ),
                 multiplicity=3,
                 embedding_dimension=2,
                 frobenius_number=7,

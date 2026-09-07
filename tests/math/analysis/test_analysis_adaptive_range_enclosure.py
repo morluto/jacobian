@@ -672,8 +672,10 @@ def test_quadratic_full_leaf_boundary_retains_exact_partition_enclosures() -> No
     assert result.disposition.reason == "MAX_LEAVES"
     assert result.evaluations_used == 2047
     assert len(result.leaves) == 1024
-    assert result.enclosure.lower.as_fraction() <= 0
-    assert result.enclosure.upper.as_fraction() >= 1
+    enclosure = result.enclosure
+    assert enclosure is not None
+    assert enclosure.lower.as_fraction() <= 0
+    assert enclosure.upper.as_fraction() >= 1
     for leaf in result.leaves:
         assert isinstance(leaf, AdaptiveRangeLeaf)
         interval = leaf.box.intervals[0]

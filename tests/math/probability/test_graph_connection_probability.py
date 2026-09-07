@@ -13,6 +13,7 @@ from jacobian.math.probability._graph_connection_probability import (
     GRAPH_CONNECTION_PROBABILITY_OPERATION,
     GraphConnectionProbabilityRequest,
     GraphReliabilityEdgeProbability,
+    GraphReliabilitySource,
     compute_graph_connection_probability,
     verify_graph_connection_probability,
 )
@@ -63,7 +64,9 @@ def test_empty_edge_axis_is_retained_and_verifiable() -> None:
         edge_probabilities=(),
         terminals=("a", "b"),
     )
-    result = compute_graph_connection_probability(request)
+    result = compute_graph_connection_probability(
+        GraphReliabilitySource.model_validate(request.model_dump())
+    )
 
     assert result.connection_probability.as_fraction() == Fraction(0)
     assert result.edge_count == 0
@@ -83,7 +86,9 @@ def test_reliability_verifier_rejects_state_with_forged_edge_axis() -> None:
         ),
         terminals=("a", "b"),
     )
-    result = compute_graph_connection_probability(request)
+    result = compute_graph_connection_probability(
+        GraphReliabilitySource.model_validate(request.model_dump())
+    )
     decoded = type(result).model_validate_json(result.model_dump_json())
     forged_state = decoded.states[0].model_copy(update={"open_edge_indices": (0,)})
     forged = decoded.model_copy(update={"states": (forged_state, decoded.states[1])})

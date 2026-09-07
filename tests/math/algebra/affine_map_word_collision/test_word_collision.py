@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.algebra.affine_map_word_collision._models import (
+    AffineMapFamily,
     AffineMapSpec,
     WordCollisionProfileRequest,
 )
@@ -116,11 +117,13 @@ def test_rational_coefficients() -> None:
 def test_rejects_depth_zero() -> None:
     with pytest.raises(ValidationError):
         WordCollisionProfileRequest(
-            generators=(
-                AffineMapSpec(
-                    slope=CanonicalRational(num=1, den=1),
-                    intercept=CanonicalRational(num=1, den=1),
-                ),
+            family=AffineMapFamily(
+                generators=(
+                    AffineMapSpec(
+                        slope=CanonicalRational(num=1, den=1),
+                        intercept=CanonicalRational(num=1, den=1),
+                    ),
+                )
             ),
             depth=0,
         )
@@ -168,7 +171,15 @@ def test_mixed_constant_family_preserves_reset_bound() -> None:
 
 def test_canonical_map_rows_compose_as_native_input() -> None:
     result = compute_word_collision_profile(((Fraction(1), Fraction(2)),), 1)
-    replayed = compute_word_collision_profile((result.rows[0].map,), 1)
+    replayed = compute_word_collision_profile(
+        (
+            (
+                result.rows[0].map.slope.as_fraction(),
+                result.rows[0].map.intercept.as_fraction(),
+            ),
+        ),
+        1,
+    )
     assert replayed.rows[0].map == result.rows[0].map
 
 

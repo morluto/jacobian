@@ -8,6 +8,7 @@ import time
 from fractions import Fraction
 from threading import Event
 from types import CodeType
+from typing import Any, cast
 
 import pytest
 from pydantic import ValidationError
@@ -444,10 +445,13 @@ def test_real_embedding_rejects_degree_above_its_runtime_carrier_bound() -> None
         RealNumberFieldEmbedding(
             kind="REAL",
             presentation=degree_nine,
-            root={
-                "polynomial": degree_nine.coefficients_descending,
-                "real_root_index": 0,
-            },
+            root=cast(
+                Any,
+                {
+                    "polynomial": degree_nine.coefficients_descending,
+                    "real_root_index": 0,
+                },
+            ),
         )
 
 

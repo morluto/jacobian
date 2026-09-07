@@ -216,7 +216,7 @@ def test_arc_admission_bounds_exact_coefficient_growth_before_expansion() -> Non
 def test_serialized_claim_forgery_is_structural_but_fails_verification() -> None:
     native = energy((1, 1), Fraction(-1, 4), Fraction(1, 4))
     assert not verify_unit_circle_arc_energy(
-        native.model_copy(update={"pi_inverse_coefficient": None})  # type: ignore[arg-type]
+        native.model_copy(update={"pi_inverse_coefficient": None})
     )
     payload = json.loads(native.model_dump_json())
     payload["rational_part"] = {"num": "2", "den": "1"}

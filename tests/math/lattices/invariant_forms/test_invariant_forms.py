@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import json
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from fractions import Fraction
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from pydantic import ValidationError
@@ -108,6 +108,7 @@ def _integer_matrix(form: IntegralBilinearForm) -> Matrix:
 def _assert_every_basis_form_is_invariant(
     result: InvariantBilinearFormLattice,
 ) -> None:
+    assert isinstance(result.action, RationalMatrixAction)
     generators = tuple(
         Matrix(
             [[entry.as_fraction() for entry in row] for row in generator.matrix.entries]
@@ -496,7 +497,7 @@ def test_near_envelope_constraint_count_matches_realized_expansion(
         [int(row == column) for column in range(dimension)] for row in range(dimension)
     ]
     action = _action([(f"A{index:02d}", identity) for index in range(generator_count)])
-    original = kernel._constraint_coefficient
+    original = cast(Callable[..., Fraction], kernel._constraint_coefficient)
     executed = 0
 
     def counted(*args: Any, **kwargs: Any) -> Fraction:
@@ -617,7 +618,7 @@ def test_cancellation_is_polled_inside_constraint_expansion(
             return self.cancelled
 
     cancellation = _Cancellation()
-    original = kernel._constraint_coefficient
+    original = cast(Callable[..., Fraction], kernel._constraint_coefficient)
 
     def cancel_after_one(*args: Any, **kwargs: Any) -> Fraction:
         value = original(*args, **kwargs)

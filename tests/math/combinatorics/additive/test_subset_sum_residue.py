@@ -43,7 +43,9 @@ def _request(
     )
 
 
-def _run_residue(request: SubsetSumResidueProfileRequest):
+def _run_residue(
+    request: SubsetSumResidueProfileRequest,
+) -> SubsetSumResidueProfileResult:
     return subset_sum_residue_profile(
         request.source,
         request.modulus,

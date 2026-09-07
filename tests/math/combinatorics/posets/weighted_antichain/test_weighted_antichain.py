@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from fractions import Fraction
 
 import pytest
@@ -7,6 +8,7 @@ import pytest
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.posets.core._models import (
+    FinitePoset,
     PresentationPair,
     ReflexivePairPolicy,
     RelationInterpretation,
@@ -17,11 +19,11 @@ from jacobian.math.combinatorics.posets.weighted_antichain.operations import (
 )
 
 
-def _cr(num, den=1):
+def _cr(num: int, den: int = 1) -> CanonicalRational:
     return CanonicalRational.from_fraction(Fraction(num, den))
 
 
-def _chain_poset(elements):
+def _chain_poset(elements: Sequence[str]) -> FinitePoset:
     pairs = tuple(
         PresentationPair(lower=elements[i], upper=elements[i + 1])
         for i in range(len(elements) - 1)
@@ -34,7 +36,7 @@ def _chain_poset(elements):
     )
 
 
-def _antichain_poset(elements):
+def _antichain_poset(elements: Sequence[str]) -> FinitePoset:
     return materialize_finite_poset(
         elements=tuple(elements),
         relation=(),

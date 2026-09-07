@@ -10,6 +10,7 @@ from jacobian.math.graphs._tools import TOOLS as GRAPH_TOOLS
 from jacobian.math.graphs._tools import Graph6DecodeRequest
 from jacobian.math.probability._graph_connection_probability import (
     GraphConnectionProbabilityRequest,
+    GraphReliabilitySource,
     compute_graph_connection_probability,
 )
 
@@ -31,7 +32,14 @@ def test_graph_connection_probability_rejects_unbound_edge_probabilities() -> No
     )
 
     with pytest.raises(OperationDomainValidationError) as error:
-        compute_graph_connection_probability(request)
+        compute_graph_connection_probability(
+            GraphReliabilitySource.model_construct(
+                graph=request.graph,
+                edge_probabilities=request.edge_probabilities,
+                terminals=request.terminals,
+                event=request.event,
+            )
+        )
 
     assert error.value.errors()[0]["loc"] == ("edge_probabilities",)
 

@@ -19,8 +19,8 @@ from jacobian.math.probability._all_terminal_reliability import (
     compute_all_terminal_reliability,
 )
 from jacobian.math.probability._graph_connection_probability import (
-    GraphConnectionProbabilityRequest,
     GraphReliabilityEdgeProbability,
+    GraphReliabilitySource,
     compute_graph_connection_probability,
 )
 from jacobian.math.probability.all_terminal_reliability import (
@@ -138,7 +138,7 @@ def test_all_terminal_event_differs_from_two_terminal_connectivity() -> None:
     )
     half = CanonicalRational(num=1, den=2)
     two_terminal = compute_graph_connection_probability(
-        GraphConnectionProbabilityRequest(
+        GraphReliabilitySource(
             graph=graph,
             edge_probabilities=tuple(
                 GraphReliabilityEdgeProbability(edge=edge, open_probability=half)

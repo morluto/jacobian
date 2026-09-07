@@ -15,6 +15,7 @@ from jacobian.math.combinatorics.additive._models import (
     MultisetSumRepresentationProfileRequest,
     MultisetSumRepresentationProfileResult,
     RepresentationProfileRequest,
+    RepresentationProfileResult,
 )
 from jacobian.math.combinatorics.additive._multiset_sum import (
     MAX_ARITY,
@@ -34,13 +35,17 @@ from jacobian.math.combinatorics.finite_structures.sets._models import (
 )
 
 
-def _run_multiset(request: MultisetSumRepresentationProfileRequest):
+def _run_multiset(
+    request: MultisetSumRepresentationProfileRequest,
+) -> MultisetSumRepresentationProfileResult:
     return multiset_sum_representation_profile(
         request.source, request.arity, request.window
     )
 
 
-def _run_representation(request: RepresentationProfileRequest):
+def _run_representation(
+    request: RepresentationProfileRequest,
+) -> RepresentationProfileResult:
     return representation_profile(request.left, request.right)
 
 

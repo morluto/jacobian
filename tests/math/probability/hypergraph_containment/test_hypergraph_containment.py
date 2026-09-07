@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from fractions import Fraction
 from math import comb
 
@@ -12,7 +13,9 @@ from jacobian.math.probability.hypergraph_containment.operations import (
 )
 
 
-def _hg(vertices, edges):
+def _hg(
+    vertices: Iterable[str], edges: Iterable[tuple[str, Iterable[str]]]
+) -> FiniteHypergraph:
     return FiniteHypergraph(
         vertices=tuple(vertices),
         edges=tuple((eid, tuple(m)) for eid, m in edges),

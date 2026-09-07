@@ -13,7 +13,7 @@ from jacobian.math.combinatorics.additive.rational_fixed_arity.operations import
 )
 
 
-def _cr(num, den=None):
+def _cr(num: int, den: int | None = None) -> CanonicalRational:
     if den is None:
         return CanonicalRational.from_fraction(Fraction(num))
     return CanonicalRational.from_fraction(Fraction(num, den))
@@ -69,7 +69,7 @@ def test_replay() -> None:
     expected: dict[Fraction, int] = {}
     fracs = [v.as_fraction() for v in values]
     for indices in combinations(range(len(values)), arity):
-        s = sum(fracs[i] for i in indices)
+        s = sum((fracs[i] for i in indices), Fraction(0))
         expected[s] = expected.get(s, 0) + 1
     actual = {r.sum_value.as_fraction(): r.multiplicity for r in result.rows}
     assert actual == expected

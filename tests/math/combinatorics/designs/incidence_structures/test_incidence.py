@@ -1,7 +1,7 @@
 """Tests for incidence structure operations."""
 
 import json
-from typing import Literal
+from typing import Literal, cast
 
 import pytest
 from pydantic import ValidationError
@@ -485,4 +485,7 @@ class TestGram:
 
     def test_gram_invalid_axis(self) -> None:
         with pytest.raises(ValidationError):
-            GramRequest(incidence=STRUCTURE, axis="invalid")
+            GramRequest(
+                incidence=STRUCTURE,
+                axis=cast(Literal["point", "block"], "invalid"),
+            )

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import cast
 
 import pytest
 from pydantic import ValidationError
@@ -23,6 +24,7 @@ from jacobian.math.cluster_algebras.operations import (
 from jacobian.math.cluster_algebras.operations import (
     mutate_seed as native_mutate_seed,
 )
+from jacobian.math.matrices.values import IntegerMatrix
 
 
 def compute_seed_mutation(request: SeedMutationRequest) -> SeedMutationResult:
@@ -299,9 +301,10 @@ class TestGVectorBinding:
         with pytest.raises(ValidationError) as exc_info:
             GVectorResult(
                 exchange_matrix=b,
-                g_matrix={
-                    "entries": [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
-                },
+                g_matrix=cast(
+                    IntegerMatrix,
+                    {"entries": [[1, 0, 0], [0, 1, 0], [0, 0, 1]]},
+                ),
                 convention="FOMIN_ZELEVINSKY",
             )
         assert exc_info.value.errors()[0]["type"] == "cluster_algebra.g_matrix_shape"

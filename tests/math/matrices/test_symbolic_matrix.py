@@ -96,8 +96,26 @@ def _request(
     entries: Sequence[Sequence[RationalFunction]],
     variables: tuple[str, ...],
 ) -> SymbolicMatrixRequest:
+    normalized = tuple(map(tuple, entries))
     return SymbolicMatrixRequest(
-        matrix=SymbolicMatrix(variables=variables, entries=tuple(map(tuple, entries)))
+        matrix=SymbolicMatrix(
+            variables=variables,
+            row_count=len(normalized),
+            column_count=len(normalized[0]) if normalized else 0,
+            entries=normalized,
+        )
+    )
+
+
+def _matrix(
+    entries: Sequence[Sequence[RationalFunction]], variables: tuple[str, ...]
+) -> SymbolicMatrix:
+    normalized = tuple(map(tuple, entries))
+    return SymbolicMatrix(
+        variables=variables,
+        row_count=len(normalized),
+        column_count=len(normalized[0]) if normalized else 0,
+        entries=normalized,
     )
 
 
@@ -106,9 +124,21 @@ def _product_request(
     right: Sequence[Sequence[RationalFunction]],
     variables: tuple[str, ...],
 ) -> SymbolicMatrixProductRequest:
+    normalized_left = tuple(map(tuple, left))
+    normalized_right = tuple(map(tuple, right))
     return SymbolicMatrixProductRequest(
-        left=SymbolicMatrix(variables=variables, entries=tuple(map(tuple, left))),
-        right=SymbolicMatrix(variables=variables, entries=tuple(map(tuple, right))),
+        left=SymbolicMatrix(
+            variables=variables,
+            row_count=len(normalized_left),
+            column_count=len(normalized_left[0]) if normalized_left else 0,
+            entries=normalized_left,
+        ),
+        right=SymbolicMatrix(
+            variables=variables,
+            row_count=len(normalized_right),
+            column_count=len(normalized_right[0]) if normalized_right else 0,
+            entries=normalized_right,
+        ),
     )
 
 
@@ -116,8 +146,14 @@ def _square_request(
     entries: Sequence[Sequence[RationalFunction]],
     variables: tuple[str, ...],
 ) -> SquareSymbolicMatrixRequest:
+    normalized = tuple(map(tuple, entries))
     return SquareSymbolicMatrixRequest(
-        matrix=SymbolicMatrix(variables=variables, entries=tuple(map(tuple, entries)))
+        matrix=SymbolicMatrix(
+            variables=variables,
+            row_count=len(normalized),
+            column_count=len(normalized[0]) if normalized else 0,
+            entries=normalized,
+        )
     )
 
 
@@ -237,11 +273,7 @@ def test_determinant_request_rejects_unrepresentable_expansion() -> None:
     )
 
     with pytest.raises(OperationDomainValidationError):
-        _run_determinant(
-            SymbolicDeterminantRequest(
-                matrix=SymbolicMatrix(variables=variables, entries=entries)
-            )
-        )
+        _run_determinant(SymbolicDeterminantRequest(matrix=_matrix(entries, variables)))
 
 
 def test_determinant_request_admission_does_not_execute_kernel(
@@ -274,9 +306,8 @@ def test_symbolic_matrix_product_is_exact_and_composes_with_rank() -> None:
     a, b = (_variable(variables, index) for index in range(2))
     one = _rf(variables, (1, 1, (0, 0)))
     product = _run_product(_product_request(((a, b),), ((one,), (one,)), variables))
-    assert product == SymbolicMatrix(
-        variables=variables,
-        entries=((_rf(variables, (1, 1, (1, 0)), (1, 1, (0, 1))),),),
+    assert product == _matrix(
+        ((_rf(variables, (1, 1, (1, 0)), (1, 1, (0, 1))),),), variables
     )
     assert _run_rank(SymbolicMatrixRequest(matrix=product)).rank == 1
 
@@ -302,8 +333,8 @@ def test_symbolic_matrix_product_rejects_field_and_shape_mismatches() -> None:
     b = _variable(("b",), 0)
     _assert_product_admission_rejected(
         SymbolicMatrixProductRequest(
-            left=SymbolicMatrix(variables=("a",), entries=((a,),)),
-            right=SymbolicMatrix(variables=("b",), entries=((b,),)),
+            left=_matrix(((a,),), ("a",)),
+            right=_matrix(((b,),), ("b",)),
         )
     )
     _assert_product_admission_rejected(
@@ -467,10 +498,7 @@ def test_symbolic_matrix_product_admits_boundary_aggregate_canonical_support() -
     left = ((dense,),)
     right = (tuple(one for _ in range(8)),)
     product = _run_product(_product_request(left, right, variables))
-    assert product == SymbolicMatrix(
-        variables=variables,
-        entries=(tuple(dense for _ in range(8)),),
-    )
+    assert product == _matrix((tuple(dense for _ in range(8)),), variables)
 
 
 def test_symbolic_matrix_product_charges_retained_denominator_in_scalar_copy(
@@ -1200,7 +1228,7 @@ def test_empty_rational_function_product_retains_result_axes() -> None:
 
 
 def test_native_consumers_revalidate_forged_carrier_models() -> None:
-    matrix = SymbolicMatrix(variables=("t",), entries=((_rf(("t",), (1, 1, (0,))),),))
+    matrix = _matrix(((_rf(("t",), (1, 1, (0,))),),), ("t",))
     forged = matrix.model_copy(update={"column_count": 0})
     with pytest.raises(OperationDomainValidationError):
         symbolic_matrix_multiply(forged, matrix)
@@ -1264,10 +1292,7 @@ def test_symbolic_polynomial_runners_revalidate_forged_matrix_envelopes(
     runner: Callable[[Any], Any],
     request_type: Any,
 ) -> None:
-    source = SymbolicMatrix(
-        variables=(),
-        entries=((_constant(1),),),
-    )
+    source = _matrix(((_constant(1),),), ())
     forged = source.model_copy(update={"row_count": 0, "entries": ("oops",)})
     request = request_type(matrix=source).model_copy(update={"matrix": forged})
     with pytest.raises(OperationDomainValidationError):
@@ -1277,9 +1302,9 @@ def test_symbolic_polynomial_runners_revalidate_forged_matrix_envelopes(
 def test_matrix_rejects_nonrectangular_mismatched_and_invalid_axes() -> None:
     a = _variable(("a",), 0)
     with pytest.raises(ValidationError):
-        SymbolicMatrix(variables=("a",), entries=((a, a), (a,)))
+        _matrix(((a, a), (a,)), ("a",))
     with pytest.raises(ValidationError):
-        SymbolicMatrix(variables=("b",), entries=((a,),))
+        _matrix(((a,),), ("b",))
     with pytest.raises(ValidationError):
         SymbolicMatrix.model_validate(
             {"variables": [""], "entries": [[a.model_dump()]]}
@@ -1315,7 +1340,7 @@ def test_nonreduced_matrix_entry_parses_then_determinant_rejects_it() -> None:
         (1, 1, (1,)),
         denominator=((1, 1, (1,)),),
     )
-    matrix = SymbolicMatrix(variables=variables, entries=((nonreduced,),))
+    matrix = _matrix(((nonreduced,),), variables)
 
     with pytest.raises(OperationDomainValidationError, match="must be coprime"):
         symbolic_determinant(matrix.entries, matrix.variables)
@@ -1329,8 +1354,8 @@ def test_nonreduced_matrix_entry_is_rejected_on_the_product_path() -> None:
         denominator=((1, 1, (1,)),),
     )
     one = _rf(variables, (1, 1, (0,)))
-    left = SymbolicMatrix(variables=variables, entries=((nonreduced,),))
-    right = SymbolicMatrix(variables=variables, entries=((one,),))
+    left = _matrix(((nonreduced,),), variables)
+    right = _matrix(((one,),), variables)
 
     with pytest.raises(OperationDomainValidationError, match="must be coprime"):
         symbolic_matrix_multiply(left, right)

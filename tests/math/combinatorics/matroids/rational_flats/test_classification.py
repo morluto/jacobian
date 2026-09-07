@@ -475,6 +475,7 @@ def test_serialized_complete_claim_and_representative_are_verifiable() -> None:
         result.model_dump_json()
     )
     assert verify_rational_flat_classification(decoded)
+    assert decoded.outcome.status == "COMPLETE_EXACT"
     representative = decoded.outcome.representatives[0]
     assert verify_rational_flat_representative(decoded, representative)
 

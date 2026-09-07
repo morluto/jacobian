@@ -12,7 +12,9 @@ from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials.maps._models import (
     CompositionRequest,
+    CompositionResult,
     EvalRequest,
+    EvalResult,
     VariablePoint,
 )
 from jacobian.math.polynomials.maps.operations import (
@@ -29,11 +31,11 @@ from jacobian.math.polynomials.values import (
 )
 
 
-def _evaluate(request: EvalRequest):
+def _evaluate(request: EvalRequest) -> EvalResult:
     return evaluate_polynomial(request.polynomial, request.point)
 
 
-def _compose(request: CompositionRequest):
+def _compose(request: CompositionRequest) -> CompositionResult:
     return compose_polynomials(
         request.outer,
         request.inner,

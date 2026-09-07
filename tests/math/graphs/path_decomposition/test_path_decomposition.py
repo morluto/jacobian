@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from itertools import pairwise
 
 import pytest
@@ -15,7 +16,9 @@ from jacobian.math.graphs.path_decomposition.operations import (
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
-def _graph(vertices, edges):
+def _graph(
+    vertices: Sequence[str], edges: Sequence[tuple[str, str]]
+) -> SimpleUndirectedGraph:
     return SimpleUndirectedGraph(
         vertices=tuple(vertices),
         edges=tuple((a, b) for a, b in edges),
@@ -156,7 +159,7 @@ def test_result_bound_charges_only_active_path_vertices() -> None:
         {"path_count": 1, "paths": [["a", "b", "a"]]},
     ],
 )
-def test_result_parsing_stays_structural(payload_update: dict) -> None:
+def test_result_parsing_stays_structural(payload_update: dict[str, object]) -> None:
     graph = _graph(["a", "b"], [("a", "b")])
     payload = {
         "graph": graph.model_dump(mode="json"),
@@ -175,7 +178,7 @@ def test_result_parsing_stays_structural(payload_update: dict) -> None:
         [],
     ],
 )
-def test_verifier_rejects_non_partition_claims(bad_paths: list) -> None:
+def test_verifier_rejects_non_partition_claims(bad_paths: list[list[str]]) -> None:
     graph = _graph(["a", "b"], [("a", "b")])
     claim = PathDecompositionResult.model_validate(
         {

@@ -12,12 +12,13 @@ from jacobian.math.number_theory._divisibility_edge_profile import (
     divisibility_edge_profile,
 )
 from jacobian.math.number_theory._divisibility_edge_profile_models import (
+    DivisibilityEdge,
     DivisibilityEdgeProfileRequest,
     DivisibilityEdgeProfileResult,
 )
 
 
-def _edges(values: list[str]) -> dict:
+def _edges(values: list[str]) -> dict[tuple[int, int], DivisibilityEdge]:
     request = DivisibilityEdgeProfileRequest(
         values=FiniteIntegerSet(elements=tuple(int(value) for value in values))
     )

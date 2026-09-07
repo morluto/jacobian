@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 import pytest
 
 from jacobian.catalog.models import OperationDomainValidationError
@@ -12,7 +14,9 @@ from jacobian.math.number_theory.periodic_prefix_count.operations import (
 )
 
 
-def _source(subsets, complement=False):
+def _source(
+    subsets: Sequence[tuple[int, Sequence[int]]], complement: bool = False
+) -> PeriodicCongruenceUnionSource:
     return PeriodicCongruenceUnionSource(
         subsets=tuple(
             PeriodicCongruenceSubset(modulus=m, residues=tuple(r)) for m, r in subsets

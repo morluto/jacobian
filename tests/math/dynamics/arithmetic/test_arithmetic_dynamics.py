@@ -47,25 +47,27 @@ from jacobian.math.finite_fields.operations import (
 from jacobian.math.finite_fields.values import (
     FiniteFieldElement,
     FiniteFieldPresentation,
+    FinitePolynomialMap,
 )
+from jacobian.math.polynomials.values import RationalPolynomial
 
 
 def _r(value: int | str) -> CanonicalRational:
     return CanonicalRational.from_fraction(Fraction(value))
 
 
-def _p(*values: CanonicalRational):
+def _p(*values: CanonicalRational) -> RationalPolynomial:
     return polynomial_from_coefficients(tuple(value.as_fraction() for value in values))
 
 
-def _coefficients(polynomial):
+def _coefficients(polynomial: RationalPolynomial) -> tuple[CanonicalRational, ...]:
     return tuple(
         CanonicalRational.from_fraction(value)
         for value in polynomial_coefficients(polynomial)
     )
 
 
-def _fm(prime: int, *values: int):
+def _fm(prime: int, *values: int) -> FinitePolynomialMap:
     presentation = FiniteFieldPresentation(
         characteristic=prime, modulus_coefficients=(0, 1), generator="x"
     )

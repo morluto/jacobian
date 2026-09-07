@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import cast
 
 import pytest
 from pydantic import ValidationError
@@ -21,7 +22,9 @@ from jacobian.math.probability.stochastic_processes._models import (
     MAX_PROCESS_TIME_STEPS,
     ConditionalExpectationRequest,
     DoobMartingaleRequest,
+    DoobMartingaleResult,
     FiltrationRequest,
+    FiltrationResult,
     FromObservationRequest,
 )
 from jacobian.math.probability.stochastic_processes._tools import (
@@ -170,7 +173,7 @@ class TestFiltration:
         decoded = type(result).model_validate_json(result.model_dump_json())
         assert verify_filtration(decoded)
         assert not verify_filtration(decoded.model_copy(update={"sigmas": ()}))
-        assert not verify_filtration(object())
+        assert not verify_filtration(cast(FiltrationResult, object()))
         assert not verify_filtration(decoded.model_copy(update={"space": object()}))
 
     def test_time_axis_is_bounded_for_requests_and_native_calls(self) -> None:
@@ -220,7 +223,7 @@ class TestDoobMartingale:
             }
         )
         assert not verify_doob_martingale(forged_payoff)
-        assert not verify_doob_martingale(object())
+        assert not verify_doob_martingale(cast(DoobMartingaleResult, object()))
         assert not verify_doob_martingale(
             decoded.model_copy(update={"martingale": None})
         )

@@ -20,7 +20,9 @@ DIAMOND = {
 }
 
 
-def _check(graph: dict[str, object], parts: list[list[str]]):
+def _check(
+    graph: dict[str, object], parts: list[list[str]]
+) -> EdgeCliquePartitionResult:
     request = EdgeCliquePartitionRequest.model_validate(
         {"graph": graph, "parts": [tuple(part) for part in parts]}
     )

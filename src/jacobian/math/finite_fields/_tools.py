@@ -2,9 +2,13 @@
 
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.finite_fields import (
+    Axis,
+    AxisBoundMatrix,
     CollisionResult,
     DirectionRankLedger,
     FiberPartition,
+    FiniteFieldElement,
+    FiniteFieldPresentation,
     FiniteLinearMap,
     FiniteMapTable,
     HomogeneousFixedSubspace,
@@ -43,18 +47,22 @@ from jacobian.math.finite_fields._models import (
     RestrictScalarsRequest,
 )
 
-_FIELD: dict[str, object] = {
-    "characteristic": 2,
-    "modulus_coefficients": [1, 1, 1],
-    "generator": "a",
-}
+_FIELD_VALUE = FiniteFieldPresentation(
+    characteristic=2,
+    modulus_coefficients=(1, 1, 1),
+    generator="a",
+)
+_FIELD: dict[str, object] = _FIELD_VALUE.model_dump(mode="json")
 _ROWS: dict[str, object] = {"name": "b", "labels": ["b1", "b2"]}
 _IMAGE: dict[str, object] = {"name": "image", "labels": ["y1"]}
 _BASIS_AXIS: dict[str, object] = {"name": "basis", "labels": ["B1"]}
 
 
 def _element(first: int, second: int) -> dict[str, object]:
-    return {"presentation": _FIELD, "coordinates": [first, second]}
+    return FiniteFieldElement(
+        presentation=_FIELD_VALUE,
+        coordinates=(first, second),
+    ).model_dump(mode="json")
 
 
 def _direction(first: tuple[int, int], second: tuple[int, int]) -> dict[str, object]:
@@ -93,6 +101,18 @@ _PROJECTIVE_LINE: dict[str, object] = {
     "axis": _ROWS,
     "points": list(_DIRECTIONS),
 }
+_F2_VALUE = FiniteFieldPresentation(
+    characteristic=2,
+    modulus_coefficients=(0, 1),
+    generator="a",
+)
+_F2_ONE = FiniteFieldElement(presentation=_F2_VALUE, coordinates=(1,))
+_RANK_MATRIX = AxisBoundMatrix(
+    presentation=_F2_VALUE,
+    row_axis=Axis(name="rows", labels=("r0", "r1")),
+    column_axis=Axis(name="cols", labels=("c0", "c1")),
+    entries=((_F2_ONE, _F2_ONE), (_F2_ONE, _F2_ONE)),
+)
 
 
 def _linear_map(rank: int) -> dict[str, object]:
@@ -361,11 +381,11 @@ def _build_tools() -> MathTools:
                 name="paley_tournament_over_f3",
                 description="Construct the directed three-cycle from the canonical F_3 presentation.",
                 input={
-                    "presentation": {
-                        "characteristic": 3,
-                        "modulus_coefficients": [0, 1],
-                        "generator": "a",
-                    }
+                    "presentation": FiniteFieldPresentation(
+                        characteristic=3,
+                        modulus_coefficients=(0, 1),
+                        generator="a",
+                    ).model_dump(mode="json")
                 },
             ),
         ),
@@ -386,55 +406,7 @@ def _build_tools() -> MathTools:
             OperationExample(
                 name="rank_one_over_f2",
                 description="Rank [[1,1],[1,1]] over F_2 is 1; the matrix must use one consistent field presentation.",
-                input={
-                    "matrix": {
-                        "presentation": {
-                            "characteristic": 2,
-                            "modulus_coefficients": [0, 1],
-                            "generator": "a",
-                        },
-                        "row_axis": {"name": "rows", "labels": ["r0", "r1"]},
-                        "column_axis": {"name": "cols", "labels": ["c0", "c1"]},
-                        "entries": [
-                            [
-                                {
-                                    "presentation": {
-                                        "characteristic": 2,
-                                        "modulus_coefficients": [0, 1],
-                                        "generator": "a",
-                                    },
-                                    "coordinates": [1],
-                                },
-                                {
-                                    "presentation": {
-                                        "characteristic": 2,
-                                        "modulus_coefficients": [0, 1],
-                                        "generator": "a",
-                                    },
-                                    "coordinates": [1],
-                                },
-                            ],
-                            [
-                                {
-                                    "presentation": {
-                                        "characteristic": 2,
-                                        "modulus_coefficients": [0, 1],
-                                        "generator": "a",
-                                    },
-                                    "coordinates": [1],
-                                },
-                                {
-                                    "presentation": {
-                                        "characteristic": 2,
-                                        "modulus_coefficients": [0, 1],
-                                        "generator": "a",
-                                    },
-                                    "coordinates": [1],
-                                },
-                            ],
-                        ],
-                    }
-                },
+                input={"matrix": _RANK_MATRIX.model_dump(mode="json")},
             ),
         ),
     )

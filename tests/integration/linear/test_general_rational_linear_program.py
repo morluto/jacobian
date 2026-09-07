@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from fractions import Fraction
+from itertools import pairwise
 
 import pytest
 from pydantic import ValidationError
@@ -501,3 +502,39 @@ def test_general_lp_keeps_multi_offset_optima_within_the_mapped_bounds() -> None
     assert result.dual_objective is not None
     assert result.dual_objective.as_fraction() == expected
     assert result.model_validate_json(result.model_dump_json()) == result
+
+
+@pytest.mark.parametrize(
+    "n,k,lower,total",
+    [(9, 4, Fraction(1, 10), Fraction(1)), (6, 2, Fraction(-1, 3), Fraction(2))],
+)
+def test_documented_ordered_simplex_reduction(
+    n: int, k: int, lower: Fraction, total: Fraction
+) -> None:
+    result = _run(
+        _program(
+            variables=[_variable(f"difference_{n - i}", q(0)) for i in range(n)],
+            sense="MAXIMIZE",
+            objective=[q(max(k - i, 0)) for i in range(n)],
+            constraints=[
+                _row(
+                    "weighted_sum",
+                    [q(n - i) for i in range(n)],
+                    "EQ",
+                    CanonicalRational.from_fraction(total - n * lower),
+                )
+            ],
+        )
+    )
+    assert result.status == "OPTIMAL"
+    differences = _fractions(result.primal_candidate)
+    assert differences is not None
+    point = tuple(lower + sum(differences[: i + 1]) for i in range(n))
+    assert all(x >= lower for x in point)
+    assert all(a <= b for a, b in pairwise(point))
+    assert sum(point) == total
+    assert sum(point[:k]) == k * total / n
+    assert result.primal_objective is not None
+    assert result.primal_objective.as_fraction() + k * lower == sum(point[:k])
+    assert result.primal_objective == result.dual_objective
+    assert all(value.num == 0 for value in result.stationarity_residuals or ())

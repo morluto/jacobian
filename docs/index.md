@@ -15,6 +15,9 @@ caller composes the returned mathematical values.
 - [Native Python API](reference/python-api.md) — supported `jacobian.math`
   functions and canonical values.
 
+- [Reduce ordered-simplex LPs](how-to/reduce-ordered-simplex-lps.md) — chain
+  differences before exact basis-work admission.
+
 ### Understand the model
 
 - [Executable mathematical vocabulary](explanation/executable-mathematical-vocabulary.md) —

@@ -99,10 +99,24 @@ def _admit_candidate_set(
             code="graph.candidate_set_must_be_strictly_increasing",
             message="candidate_set must be strictly increasing",
         )
+    if len(set(candidate_set)) != len(candidate_set):
+        raise OperationDomainValidationError(
+            location=("candidate_set",),
+            code="graph.candidate_set_must_not_contain_duplicate_vertices",
+            message="candidate_set must not contain duplicate vertices",
+        )
+    if any(not 0 <= vertex < graph.vertex_count for vertex in candidate_set):
+        raise OperationDomainValidationError(
+            location=("candidate_set",),
+            code="graph.candidate_set_vertices_must_be_in_range",
+            message="candidate_set vertices must be in 0..vertex_count-1",
+        )
 
 
 def _admit_precoloring_edge_repair(
-    graph: IndexedSimpleUndirectedGraph, fixed_colors: tuple[tuple[int, int], ...]
+    graph: IndexedSimpleUndirectedGraph,
+    fixed_colors: tuple[tuple[int, int], ...],
+    colors: int,
 ) -> None:
     fixed_vertices = tuple(vertex for vertex, _ in fixed_colors)
     if len(set(fixed_vertices)) != len(fixed_vertices):
@@ -110,6 +124,18 @@ def _admit_precoloring_edge_repair(
             location=("fixed_colors",),
             code="graph.precoloring_fixed_vertices_must_be_unique",
             message="fixed_colors must use distinct source vertices",
+        )
+    if any(not 0 <= vertex < graph.vertex_count for vertex, _ in fixed_colors):
+        raise OperationDomainValidationError(
+            location=("fixed_colors",),
+            code="graph.precoloring_fixed_vertex_out_of_range",
+            message="every fixed-color vertex must use the source graph axis",
+        )
+    if any(not 0 <= color < colors for _, color in fixed_colors):
+        raise OperationDomainValidationError(
+            location=("fixed_colors",),
+            code="graph.precoloring_fixed_color_out_of_range",
+            message="every fixed color must be in 0..colors-1",
         )
 
 
@@ -209,7 +235,7 @@ def precoloring_edge_repair(
 
     _admit_k_colorability(graph)
     _admit_solver_parameters(colors, solver_conflicts)
-    _admit_precoloring_edge_repair(graph, fixed_colors)
+    _admit_precoloring_edge_repair(graph, fixed_colors, colors)
     if not graph.edges:
         coloring = tuple(
             dict(fixed_colors).get(vertex, 0) for vertex in range(graph.vertex_count)

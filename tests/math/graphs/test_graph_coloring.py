@@ -7,6 +7,7 @@ from typing import NoReturn
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.coloring import _coloring_process as coloring_process
 from jacobian.math.graphs.coloring._models import (
     EdgeKColorabilityResult,
@@ -133,6 +134,25 @@ def test_candidate_set_is_canonical_and_in_range(
 ) -> None:
     with pytest.raises(ValidationError, match=message):
         _request(vertex_count=3, edges=[], candidate_set=candidate_set)
+
+
+@pytest.mark.parametrize(
+    ("candidate_set", "code"),
+    [
+        ((0, 0), "graph.candidate_set_must_not_contain_duplicate_vertices"),
+        ((0, 3), "graph.candidate_set_vertices_must_be_in_range"),
+    ],
+)
+def test_native_candidate_set_admission_matches_wire_envelope(
+    candidate_set: tuple[int, ...],
+    code: str,
+) -> None:
+    graph = IndexedSimpleUndirectedGraph(vertex_count=3, edges=())
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        maximal_independent_set(graph, candidate_set)
+
+    assert error.value.errors()[0]["type"] == code
 
 
 def test_result_rejects_witness_for_maximal_decision() -> None:

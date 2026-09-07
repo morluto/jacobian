@@ -121,7 +121,7 @@ def run_precoloring_edge_repair_solver_kernel(
         optimizer.add(
             *(vertex_colors[vertex] == color for vertex, color in fixed_colors)
         )
-        optimizer.minimize(
+        repair_cost = optimizer.minimize(
             z3.Sum(
                 [
                     z3.If(vertex_colors[left] == vertex_colors[right], 1, 0)
@@ -131,6 +131,16 @@ def run_precoloring_edge_repair_solver_kernel(
         )
         outcome = optimizer.check()
         if outcome == z3.sat:
+            # An interrupted optimization still reports sat with only an
+            # incumbent witness, so proven bounds are required for optimality.
+            lower = repair_cost.lower()
+            upper = repair_cost.upper()
+            if (
+                not z3.is_int_value(lower)
+                or not z3.is_int_value(upper)
+                or lower.as_long() != upper.as_long()
+            ):
+                return "budget_exceeded", None
             model = optimizer.model()
             return "optimal", tuple(
                 model.eval(color).as_long() for color in vertex_colors

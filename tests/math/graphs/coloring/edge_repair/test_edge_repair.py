@@ -4,11 +4,16 @@ from __future__ import annotations
 
 import json
 from itertools import combinations, product
+from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.coloring import precoloring_edge_repair
+from jacobian.math.graphs.coloring._coloring_process import (
+    run_precoloring_edge_repair_solver_kernel,
+)
 from jacobian.math.graphs.coloring._models import (
     PrecoloringEdgeRepairRequest,
     PrecoloringEdgeRepairResult,
@@ -150,3 +155,83 @@ def test_native_and_catalog_paths_share_the_result() -> None:
     catalog = compute_precoloring_edge_repair(request)
 
     assert native == catalog
+
+
+@pytest.mark.parametrize(
+    ("fixed_colors", "code"),
+    [
+        (((9, 0),), "graph.precoloring_fixed_vertex_out_of_range"),
+        (((0, 2),), "graph.precoloring_fixed_color_out_of_range"),
+    ],
+)
+def test_native_fixed_precolouring_admission_matches_wire_envelope(
+    fixed_colors: tuple[tuple[int, int], ...], code: str
+) -> None:
+    graph = IndexedSimpleUndirectedGraph(vertex_count=3, edges=((0, 1), (1, 2)))
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        precoloring_edge_repair(graph, 2, fixed_colors, 100_000)
+
+    assert error.value.errors()[0]["type"] == code
+
+
+def _incumbent_only_optimizer(
+    monkeypatch: pytest.MonkeyPatch, upper_bound: int
+) -> None:
+    import z3
+
+    class IncumbentOnlyOptimize:
+        def set(self, *_args: object, **_kwargs: object) -> None:
+            pass
+
+        def add(self, *_constraints: object) -> None:
+            pass
+
+        def minimize(self, _objective: object) -> object:
+            return SimpleNamespace(
+                lower=lambda: z3.IntVal(0),
+                upper=lambda: z3.IntVal(upper_bound),
+            )
+
+        def check(self) -> object:
+            return z3.sat
+
+        def model(self) -> object:
+            return SimpleNamespace(eval=lambda _variable, **_kwargs: z3.IntVal(0))
+
+        def reason_unknown(self) -> str:
+            return "max-conflicts-reached"
+
+    monkeypatch.setattr(z3, "Optimize", IncumbentOnlyOptimize)
+
+
+def test_interrupted_optimization_is_not_optimal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _incumbent_only_optimizer(monkeypatch, upper_bound=2)
+
+    outcome, coloring = run_precoloring_edge_repair_solver_kernel(
+        IndexedSimpleUndirectedGraph(vertex_count=2, edges=((0, 1),)),
+        2,
+        (),
+        10,
+    )
+
+    assert outcome == "budget_exceeded"
+    assert coloring is None
+
+
+def test_proven_bounds_establish_optimal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _incumbent_only_optimizer(monkeypatch, upper_bound=0)
+
+    outcome, coloring = run_precoloring_edge_repair_solver_kernel(
+        IndexedSimpleUndirectedGraph(vertex_count=2, edges=((0, 1),)),
+        2,
+        (),
+        10,
+    )
+
+    assert outcome == "optimal"
+    assert coloring == (0, 0)

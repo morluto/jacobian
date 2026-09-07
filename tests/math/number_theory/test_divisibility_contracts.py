@@ -85,15 +85,15 @@ def test_gcd_result_composes_with_arithmetic_integer_consumers() -> None:
     gcd = integer_gcd(-84, 30)
 
     assert type(gcd) is IntegerValue
-    assert absolute_value(gcd) == IntegerValue(value="6")
+    assert absolute_value(gcd) == IntegerValue(value=6)
 
 
 def test_native_divisibility_vocabulary_remains_available() -> None:
-    assert integer_lcm(12, 18) == IntegerValue(value="36")
-    assert extended_gcd(84, 30).gcd == "6"
-    assert divisor_count(36) == IntegerValue(value="9")
-    assert divisor_sum(12) == IntegerValue(value="28")
-    assert aliquot_sum(12) == IntegerValue(value="16")
+    assert integer_lcm(12, 18) == IntegerValue(value=36)
+    assert extended_gcd(84, 30).gcd == 6
+    assert divisor_count(36) == IntegerValue(value=9)
+    assert divisor_sum(12) == IntegerValue(value=28)
+    assert aliquot_sum(12) == IntegerValue(value=16)
     assert are_coprime(35, 12).holds
     assert divides(7, 42).holds
     assert is_even(42).holds

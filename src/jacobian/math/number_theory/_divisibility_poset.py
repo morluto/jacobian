@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from jacobian.canonical import parse_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -46,7 +46,7 @@ def _admit_values(values: FiniteIntegerSet) -> tuple[str, ...]:
             ),
         )
     if any(
-        type(value) is not str or len(value) > MAX_ELEMENT_LABEL_LENGTH
+        type(value) is not int or len(str(abs(value))) > MAX_ELEMENT_LABEL_LENGTH
         for value in elements
     ):
         raise OperationDomainValidationError(
@@ -57,21 +57,14 @@ def _admit_values(values: FiniteIntegerSet) -> tuple[str, ...]:
                 f"{MAX_ELEMENT_LABEL_LENGTH} characters"
             ),
         )
-    try:
-        parsed = tuple(parse_canonical_integer(value) for value in elements)
-    except (TypeError, ValueError) as exc:
-        raise OperationDomainValidationError(
-            location=("values",),
-            code="divisibility_poset.values_domain",
-            message="values must be canonical positive integers",
-        ) from exc
+    parsed = elements
     if any(value <= 0 for value in parsed):
         raise OperationDomainValidationError(
             location=("values",),
             code="divisibility_poset.values_domain",
             message="values must be canonical positive integers",
         )
-    return elements
+    return tuple(format_canonical_integer(value) for value in elements)
 
 
 def divisibility_poset(values: FiniteIntegerSet) -> FinitePoset:

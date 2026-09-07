@@ -1,6 +1,7 @@
 """Tests for incidence structure operations."""
 
-from typing import Literal
+import json
+from typing import Literal, cast
 
 import pytest
 from pydantic import ValidationError
@@ -74,17 +75,19 @@ class TestIncidenceMatrix:
 
     def test_matrix_shape_is_bound_to_label_axes(self) -> None:
         with pytest.raises(ValidationError, match="dimensions"):
-            IncidenceMatrixResult.model_validate(
-                {
-                    "points": ["p1", "p2"],
-                    "block_ids": ["b1"],
-                    "matrix": {
-                        "domain": "ZZ",
-                        "row_count": 1,
-                        "column_count": 1,
-                        "entries": [["1"]],
-                    },
-                }
+            IncidenceMatrixResult.model_validate_json(
+                json.dumps(
+                    {
+                        "points": ["p1", "p2"],
+                        "block_ids": ["b1"],
+                        "matrix": {
+                            "domain": "ZZ",
+                            "row_count": 1,
+                            "column_count": 1,
+                            "entries": [["1"]],
+                        },
+                    }
+                )
             )
 
     def test_duplicate_points_rejected(self) -> None:
@@ -482,4 +485,7 @@ class TestGram:
 
     def test_gram_invalid_axis(self) -> None:
         with pytest.raises(ValidationError):
-            GramRequest(incidence=STRUCTURE, axis="invalid")
+            GramRequest(
+                incidence=STRUCTURE,
+                axis=cast(Literal["point", "block"], "invalid"),
+            )

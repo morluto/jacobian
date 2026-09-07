@@ -105,22 +105,22 @@ def test_derived_area_must_fit_the_canonical_rational_carrier() -> None:
 
 
 def test_all_coordinate_denominator_factors_are_bounded() -> None:
-    denominators = ["1" + "0" * 9_000 + suffix for suffix in ("1", "3", "7", "9")]
+    denominators = [10**9_001 + suffix for suffix in (1, 3, 7, 9)]
     config = PointConfiguration(
         points=(
             LabelledRationalPoint(label="a", coordinates=(_cr(0), _cr(0))),
             LabelledRationalPoint(
                 label="b",
                 coordinates=(
-                    CanonicalRational(num="1", den=denominators[0]),
-                    CanonicalRational(num="1", den=denominators[1]),
+                    CanonicalRational(num=1, den=denominators[0]),
+                    CanonicalRational(num=1, den=denominators[1]),
                 ),
             ),
             LabelledRationalPoint(
                 label="c",
                 coordinates=(
-                    CanonicalRational(num="1", den=denominators[2]),
-                    CanonicalRational(num="1", den=denominators[3]),
+                    CanonicalRational(num=1, den=denominators[2]),
+                    CanonicalRational(num=1, den=denominators[3]),
                 ),
             ),
         )

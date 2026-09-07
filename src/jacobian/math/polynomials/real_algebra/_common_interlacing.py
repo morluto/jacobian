@@ -7,7 +7,7 @@ from fractions import Fraction
 from math import gcd, lcm
 from typing import TYPE_CHECKING
 
-from jacobian._exact import CanonicalInteger, CanonicalRational
+from jacobian._exact import CanonicalRational
 from jacobian.canonical import (
     CanonicalLimits,
     format_canonical_integer,
@@ -68,7 +68,7 @@ MAX_COMMON_INTERLACING_COMPARISONS = 512
 class _FactorPlan:
     polynomial: Poly
     multiplicity: int
-    canonical_coefficients: tuple[CanonicalInteger, ...]
+    canonical_coefficients: tuple[int, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,7 +111,10 @@ def _integer_digits(value: int) -> int:
 
 
 def _coefficient_digits(value: CanonicalRational) -> int:
-    return max(len(value.num.lstrip("-")), len(value.den))
+    return max(
+        len(format_canonical_integer(abs(value.num))),
+        len(format_canonical_integer(value.den)),
+    )
 
 
 def _dense_primitive_coefficients(
@@ -153,7 +156,7 @@ def _dense_primitive_coefficients(
     )
 
 
-def _canonical_factor(factor: Poly) -> tuple[CanonicalInteger, ...]:
+def _canonical_factor(factor: Poly) -> tuple[int, ...]:
     coefficients = [int(coefficient) for coefficient in factor.all_coeffs()]
     content = 0
     for coefficient in coefficients:
@@ -161,7 +164,7 @@ def _canonical_factor(factor: Poly) -> tuple[CanonicalInteger, ...]:
     coefficients = [coefficient // content for coefficient in coefficients]
     if coefficients[0] < 0:
         coefficients = [-coefficient for coefficient in coefficients]
-    return tuple(format_canonical_integer(coefficient) for coefficient in coefficients)
+    return tuple(coefficients)
 
 
 def _factor_digit_bound(degree: int, height_digits: int) -> int:
@@ -357,7 +360,7 @@ def _factor_source(
     for factor, multiplicity in factorization:
         canonical_coefficients = _canonical_factor(factor)
         if any(
-            len(coefficient.lstrip("-")) > MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS
+            abs(coefficient) >= 10**MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS
             for coefficient in canonical_coefficients
         ):
             _reject(
@@ -494,8 +497,8 @@ def _canonical_rational(value: SympyRational) -> CanonicalRational:
 
     rational = sympy.Rational(value)
     return CanonicalRational(
-        num=format_canonical_integer(int(rational.p)),
-        den=format_canonical_integer(int(rational.q)),
+        num=int(rational.p),
+        den=int(rational.q),
     )
 
 
@@ -566,7 +569,7 @@ def _common_interlacing_outcome(
     common_degree: int,
 ) -> CommonInterlacingOutcome:
     comparison_cache: dict[
-        tuple[tuple[tuple[str, ...], int], tuple[tuple[str, ...], int]], str
+        tuple[tuple[tuple[int, ...], int], tuple[tuple[int, ...], int]], str
     ] = {}
 
     def root_order(

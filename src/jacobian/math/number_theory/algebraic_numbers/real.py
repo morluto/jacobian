@@ -9,9 +9,9 @@ from typing import TYPE_CHECKING, Annotated, Literal, Self
 from pydantic import Field, StrictInt, ValidateAs, WithJsonSchema, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger, CanonicalRational
+from jacobian._exact import CanonicalRational, DecimalIntegerEncoding
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math._root_isolation import strict_root_count
 
@@ -29,6 +29,9 @@ if TYPE_CHECKING:
 MAX_REAL_ALGEBRAIC_DEGREE = 16
 MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE = 8
 MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS = 1_000
+RealAlgebraicInteger = Annotated[
+    int, DecimalIntegerEncoding(max_digits=MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS)
+]
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -43,7 +46,7 @@ def _sympy_polynomial(value: RealAlgebraicValue) -> Poly:
 
     x = sympy.Symbol("x")
     return sympy.Poly.from_list(
-        [parse_canonical_integer(coefficient) for coefficient in value.polynomial],
+        list(value.polynomial),
         gens=x,
         domain=sympy.ZZ,
     )
@@ -54,8 +57,8 @@ def _rational(value: SympyRational) -> CanonicalRational:
 
     rational = sympy.Rational(value)
     return CanonicalRational(
-        num=format_canonical_integer(int(rational.p)),
-        den=format_canonical_integer(int(rational.q)),
+        num=int(rational.p),
+        den=int(rational.q),
     )
 
 
@@ -69,7 +72,7 @@ class _RealAlgebraicValueShape(StrictModel):
     root existence in their admitted computation.
     """
 
-    polynomial: tuple[CanonicalInteger, ...] = Field(
+    polynomial: tuple[RealAlgebraicInteger, ...] = Field(
         min_length=2,
         max_length=MAX_REAL_ALGEBRAIC_DEGREE + 1,
         description=(
@@ -90,7 +93,8 @@ class _RealAlgebraicValueShape(StrictModel):
     @model_validator(mode="after")
     def require_canonical_polynomial_shape(self) -> Self:
         if any(
-            len(coefficient.lstrip("-")) > MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS
+            len(format_canonical_integer(abs(coefficient)))
+            > MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS
             for coefficient in self.polynomial
         ):
             raise _validation_error(
@@ -98,9 +102,7 @@ class _RealAlgebraicValueShape(StrictModel):
                 "real algebraic polynomial coefficients exceed the "
                 f"{MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS}-digit bound",
             )
-        coefficients = tuple(
-            parse_canonical_integer(coefficient) for coefficient in self.polynomial
-        )
+        coefficients = tuple(coefficient for coefficient in self.polynomial)
         if coefficients[0] <= 0:
             raise _validation_error(
                 "leading_sign",
@@ -125,7 +127,7 @@ class RealAlgebraicValue(_RealAlgebraicValueShape):
     def _from_admitted_polynomial(
         cls,
         *,
-        polynomial: tuple[CanonicalInteger, ...],
+        polynomial: tuple[RealAlgebraicInteger, ...],
         real_root_index: int,
     ) -> RealAlgebraicValue:
         """Construct after an owner has admitted the canonical polynomial/root."""
@@ -145,7 +147,7 @@ def require_primitive_real_algebraic_value(
 
     content = 0
     for coefficient in value.polynomial:
-        content = gcd(content, abs(parse_canonical_integer(coefficient)))
+        content = gcd(content, abs(coefficient))
     if content != 1:
         raise OperationDomainValidationError(
             location=location,

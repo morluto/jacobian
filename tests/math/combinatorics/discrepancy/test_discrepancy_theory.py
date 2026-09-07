@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import itertools
+import json
 import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -14,6 +15,7 @@ from pydantic import ValidationError
 
 import jacobian.math.combinatorics.discrepancy._models as discrepancy_models
 import jacobian.math.combinatorics.discrepancy._optimum_process as optimum_process
+from jacobian._exact import CanonicalRational
 from jacobian._execution import OperationExecutionTimeoutError
 from jacobian.math.combinatorics.discrepancy._models import (
     MAX_COLUMN_INCIDENCES,
@@ -47,7 +49,14 @@ def _validation_code(code: str) -> Iterator[None]:
     assert caught.value.errors()[0]["type"] == code
 
 
-def _rational(value: Fraction | int) -> dict[str, str]:
+def _rational(value: Fraction | int) -> CanonicalRational:
+    fraction = Fraction(value)
+    return CanonicalRational.from_integer_ratio(
+        fraction.numerator, fraction.denominator
+    )
+
+
+def _wire(value: Fraction | int) -> dict[str, str]:
     fraction = Fraction(value)
     return {"num": str(fraction.numerator), "den": str(fraction.denominator)}
 
@@ -106,7 +115,10 @@ class TestHardConstraintRounding:
             Fraction(1),
             Fraction(-1),
         )
-        assert HardConstraintRoundingResult.model_validate(first.model_dump()) == first
+        assert (
+            HardConstraintRoundingResult.model_validate_json(first.model_dump_json())
+            == first
+        )
 
     def test_large_active_column_distinguishes_row_only_rounding(self) -> None:
         request = _rounding_request(
@@ -199,12 +211,12 @@ class TestHardConstraintRounding:
         [
             (
                 "values",
-                (_rational(Fraction(-1, 2)),) * 4,
+                (_wire(Fraction(-1, 2)),) * 4,
                 "discrepancy_theory.source_values_out_of_range",
             ),
             (
                 "values",
-                (_rational(Fraction(1, 3)),) + (_rational(Fraction(1, 2)),) * 3,
+                (_wire(Fraction(1, 3)),) + (_wire(Fraction(1, 2)),) * 3,
                 "discrepancy_theory.row_sum_not_integral",
             ),
             (
@@ -235,29 +247,31 @@ class TestHardConstraintRounding:
     def test_malformed_sources_are_rejected_before_the_kernel(
         self, field: str, replacement: object, message: str
     ) -> None:
-        payload = _rounding_request().model_dump()
+        payload = _rounding_request().model_dump(mode="json")
         payload["source"][field] = replacement
         with _validation_code(message):
-            HardConstraintRoundingRequest.model_validate(payload)
+            HardConstraintRoundingRequest.model_validate_json(json.dumps(payload))
 
     @pytest.mark.parametrize("mutation", ["bit", "row", "column", "source"])
     def test_result_parsing_checks_shape_without_replaying_source_claims(
         self, mutation: str
     ) -> None:
-        payload = compute_hard_constraint_rounding(_rounding_request()).model_dump()
+        payload = compute_hard_constraint_rounding(_rounding_request()).model_dump(
+            mode="json"
+        )
         if mutation == "bit":
             payload["rounded_values"] = (0, 0, 1, 0)
         elif mutation == "row":
             payload["row_ledger"][0]["rounded_sum"] = 0
         elif mutation == "column":
-            payload["column_ledger"][0]["signed_error"] = _rational(0)
+            payload["column_ledger"][0]["signed_error"] = _wire(0)
         else:
             payload["source"]["values"] = (
-                _rational(Fraction(1, 3)),
-                _rational(Fraction(2, 3)),
+                _rational(Fraction(1, 3)).model_dump(mode="json"),
+                _rational(Fraction(2, 3)).model_dump(mode="json"),
                 *payload["source"]["values"][2:],
             )
-        parsed = HardConstraintRoundingResult.model_validate(payload)
+        parsed = HardConstraintRoundingResult.model_validate_json(json.dumps(payload))
         assert parsed.source.coordinate_labels == ("a0", "a1", "a2", "a3")
 
     def test_exhaustive_small_half_integral_sources_satisfy_defining_invariants(
@@ -555,7 +569,10 @@ class TestDiscrepancyOptimum:
         result = compute_optimal_discrepancy(req)
         assert result.status == "OPTIMAL"
         assert result.optimal_discrepancy == 2
-        assert DiscrepancyOptimumResult.model_validate(result.model_dump()) == result
+        assert (
+            DiscrepancyOptimumResult.model_validate_json(result.model_dump_json())
+            == result
+        )
 
     def test_empty_ground_set(self) -> None:
         req = DiscrepancyOptimumRequest(
@@ -735,7 +752,7 @@ class TestDiscrepancyOptimum:
             discrepancy_models, "_feasibility_outcome", solver_must_not_run
         )
 
-        result = DiscrepancyOptimumResult.model_validate(payload)
+        result = DiscrepancyOptimumResult.model_validate_json(json.dumps(payload))
 
         assert result.optimal_discrepancy == 0
 
@@ -753,7 +770,10 @@ class TestDiscrepancyOptimum:
         )
         assert result.status == "OPTIMAL"
         assert result.optimal_discrepancy == 0
-        assert DiscrepancyOptimumResult.model_validate(result.model_dump()) == result
+        assert (
+            DiscrepancyOptimumResult.model_validate_json(result.model_dump_json())
+            == result
+        )
 
     @pytest.mark.parametrize(
         ("proof_outcome", "expected_exception"),
@@ -787,9 +807,9 @@ class TestDiscrepancyOptimum:
             result = compute_optimal_discrepancy(req)
             assert result.status == "OPTIMAL"
             assert result.optimal_discrepancy == 2
-            assert DiscrepancyOptimumResult.model_validate(result.model_dump()) == (
-                result
-            )
+            assert DiscrepancyOptimumResult.model_validate_json(
+                result.model_dump_json()
+            ) == (result)
         else:
             with pytest.raises(expected_exception):
                 compute_optimal_discrepancy(req)

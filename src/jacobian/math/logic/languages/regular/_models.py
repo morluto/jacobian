@@ -7,9 +7,8 @@ from typing import Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
-from jacobian.canonical import parse_canonical_integer
 from jacobian.math.logic.languages.regular.values import (
     DFA,
     MAX_COUNT_WORD_LENGTH,
@@ -126,17 +125,17 @@ class RunResult(RunRequest):
 class CountResult(CountRequest):
     """Exact count of accepted words of a given length."""
 
-    count: CanonicalInteger
+    count: ExactInteger
     word_length: int = Field(ge=0, le=MAX_COUNT_WORD_LENGTH)
 
     @model_validator(mode="after")
     def require_nonnegative_count(self) -> Self:
-        if parse_canonical_integer(self.count) < 0:
+        if self.count < 0:
             raise _validation_error("count_negative", "word count must be nonnegative")
         return self
 
     @classmethod
-    def _from_kernel(cls, request: CountRequest, *, count: CanonicalInteger) -> Self:
+    def _from_kernel(cls, request: CountRequest, *, count: ExactInteger) -> Self:
         return cls.model_construct(
             dfa=request.dfa,
             word_length=request.word_length,

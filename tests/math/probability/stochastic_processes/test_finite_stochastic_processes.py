@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+from typing import cast
+
 import pytest
 from pydantic import ValidationError
 
@@ -19,7 +22,9 @@ from jacobian.math.probability.stochastic_processes._models import (
     MAX_PROCESS_TIME_STEPS,
     ConditionalExpectationRequest,
     DoobMartingaleRequest,
+    DoobMartingaleResult,
     FiltrationRequest,
+    FiltrationResult,
     FromObservationRequest,
 )
 from jacobian.math.probability.stochastic_processes._tools import (
@@ -148,7 +153,7 @@ class TestConditionalExpectation:
             ConditionalExpectationRequest(rv=rv, sigma=sigma)
         )
 
-        assert len(result.values[0].den) > 256
+        assert len(str(result.values[0].den)) > 256
 
 
 # ---------------------------------------------------------------------------
@@ -168,7 +173,7 @@ class TestFiltration:
         decoded = type(result).model_validate_json(result.model_dump_json())
         assert verify_filtration(decoded)
         assert not verify_filtration(decoded.model_copy(update={"sigmas": ()}))
-        assert not verify_filtration(object())
+        assert not verify_filtration(cast(FiltrationResult, object()))
         assert not verify_filtration(decoded.model_copy(update={"space": object()}))
 
     def test_time_axis_is_bounded_for_requests_and_native_calls(self) -> None:
@@ -218,7 +223,7 @@ class TestDoobMartingale:
             }
         )
         assert not verify_doob_martingale(forged_payoff)
-        assert not verify_doob_martingale(object())
+        assert not verify_doob_martingale(cast(DoobMartingaleResult, object()))
         assert not verify_doob_martingale(
             decoded.model_copy(update={"martingale": None})
         )
@@ -261,7 +266,7 @@ class TestValidation:
             "samples": ["a", "b"],
             "masses": [{"num": "-1", "den": "3"}, {"num": "1", "den": "3"}],
         }
-        decoded = FiniteProbabilitySpace.model_validate(payload)
+        decoded = FiniteProbabilitySpace.model_validate_json(json.dumps(payload))
         assert decoded.samples == ("a", "b")
         with pytest.raises(OperationDomainValidationError) as error:
             admit_probability_space(decoded)
@@ -270,11 +275,13 @@ class TestValidation:
         )
 
     def test_mass_component_bound_is_operation_admission(self) -> None:
-        oversized = FiniteProbabilitySpace.model_validate(
-            {
-                "samples": ["a"],
-                "masses": [{"num": "1" + "0" * 256, "den": "1"}],
-            }
+        oversized = FiniteProbabilitySpace.model_validate_json(
+            json.dumps(
+                {
+                    "samples": ["a"],
+                    "masses": [{"num": "1" + "0" * 256, "den": "1"}],
+                }
+            )
         )
         with pytest.raises(OperationDomainValidationError) as error:
             admit_probability_space(oversized)

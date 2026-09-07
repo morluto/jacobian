@@ -1,5 +1,7 @@
 """Exact contract and reconstruction tests for Newton interpolation."""
 
+import json
+
 import pytest
 from pydantic import ValidationError
 
@@ -51,7 +53,9 @@ def test_divided_differences_are_canonical_rationals() -> None:
     forged = decoded.model_dump(mode="json")
     forged["coefficients"][0] = {"num": "2", "den": "1"}
     assert (
-        verify_divided_differences(DividedDifferencesResult.model_validate(forged))
+        verify_divided_differences(
+            DividedDifferencesResult.model_validate_json(json.dumps(forged))
+        )
         is False
     )
 
@@ -68,7 +72,10 @@ def test_newton_form_is_directly_evaluable() -> None:
     assert verify_newton_evaluation(decoded) is True
     forged = decoded.model_dump(mode="json")
     forged["result"] = {"num": "11", "den": "1"}
-    assert verify_newton_evaluation(type(result).model_validate(forged)) is False
+    assert (
+        verify_newton_evaluation(type(result).model_validate_json(json.dumps(forged)))
+        is False
+    )
 
 
 def test_interpolation_reconstructs_every_sample() -> None:
@@ -107,7 +114,7 @@ def test_newton_coefficients_may_grow_beyond_input_digit_bound() -> None:
         ).samples
     )
 
-    assert len(form.coefficients[1].den) > 256
+    assert form.coefficients[1].den >= 10**256
 
 
 def test_equal_rational_nodes_are_rejected_before_division() -> None:
@@ -129,12 +136,14 @@ def test_samples_require_equal_lengths() -> None:
 )
 def test_noncanonical_rational_inputs_are_rejected(bad_rational: object) -> None:
     with pytest.raises(ValidationError):
-        InterpolationSamples.model_validate(
-            {
-                "nodes": [{"num": "0", "den": "1"}, bad_rational],
-                "values": [
-                    {"num": "1", "den": "1"},
-                    {"num": "2", "den": "1"},
-                ],
-            }
+        InterpolationSamples.model_validate_json(
+            json.dumps(
+                {
+                    "nodes": [{"num": "0", "den": "1"}, bad_rational],
+                    "values": [
+                        {"num": "1", "den": "1"},
+                        {"num": "2", "den": "1"},
+                    ],
+                }
+            )
         )

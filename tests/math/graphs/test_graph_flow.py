@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from fractions import Fraction
 
 import pytest
@@ -29,13 +30,17 @@ from jacobian.math.graphs.flows._tools import (
 
 def _max_flow(graph: dict[str, object], source: int, sink: int) -> MaxFlowResult:
     return compute_max_flow(
-        MaxFlowRequest.model_validate({"graph": graph, "source": source, "sink": sink})
+        MaxFlowRequest.model_validate_json(
+            json.dumps({"graph": graph, "source": source, "sink": sink})
+        )
     )
 
 
 def _min_cut(graph: dict[str, object], source: int, sink: int) -> MinCutResult:
     return compute_min_cut(
-        MinCutRequest.model_validate({"graph": graph, "source": source, "sink": sink})
+        MinCutRequest.model_validate_json(
+            json.dumps({"graph": graph, "source": source, "sink": sink})
+        )
     )
 
 
@@ -43,8 +48,8 @@ def _edge_disjoint(
     graph: dict[str, object], source: int, sink: int
 ) -> EdgeDisjointPathsResult:
     return compute_edge_disjoint_paths(
-        EdgeDisjointPathsRequest.model_validate(
-            {"graph": graph, "source": source, "sink": sink}
+        EdgeDisjointPathsRequest.model_validate_json(
+            json.dumps({"graph": graph, "source": source, "sink": sink})
         )
     )
 
@@ -67,8 +72,8 @@ class TestMaxFlow:
             0,
             2,
         )
-        assert result.flow_value.num == "2"
-        assert result.flow_value.den == "1"
+        assert result.flow_value.num == 2
+        assert result.flow_value.den == 1
 
     def test_flow_decomposition_returns_per_edge_flow(self) -> None:
         """The flow_edges field should contain per-edge flow values."""
@@ -136,8 +141,8 @@ class TestMaxFlow:
             0,
             1,
         )
-        assert result.flow_value.num == "10"
-        assert result.flow_value.den == "1"
+        assert result.flow_value.num == 10
+        assert result.flow_value.den == 1
 
     def test_disconnected_graph_max_flow_is_zero(self) -> None:
         """When there is no path from source to sink, max flow is 0."""
@@ -152,8 +157,8 @@ class TestMaxFlow:
             0,
             3,
         )
-        assert result.flow_value.num == "0"
-        assert result.flow_value.den == "1"
+        assert result.flow_value.num == 0
+        assert result.flow_value.den == 1
 
     def test_rational_capacities_max_flow(self) -> None:
         """Max flow with rational (non-integer) capacities."""
@@ -171,41 +176,45 @@ class TestMaxFlow:
         assert result.flow_value.as_fraction() == Fraction(1, 3)
 
     def test_contract_rejects_source_equals_sink(self) -> None:
-        request = MaxFlowRequest.model_validate(
-            {
-                "graph": {
-                    "vertex_count": 2,
-                    "edges": [
-                        {
-                            "source": 0,
-                            "target": 1,
-                            "capacity": {"num": "1", "den": "1"},
-                        },
-                    ],
-                },
-                "source": 0,
-                "sink": 0,
-            }
+        request = MaxFlowRequest.model_validate_json(
+            json.dumps(
+                {
+                    "graph": {
+                        "vertex_count": 2,
+                        "edges": [
+                            {
+                                "source": 0,
+                                "target": 1,
+                                "capacity": {"num": "1", "den": "1"},
+                            },
+                        ],
+                    },
+                    "source": 0,
+                    "sink": 0,
+                }
+            )
         )
         with pytest.raises(OperationDomainValidationError):
             compute_max_flow(request)
 
     def test_contract_rejects_out_of_range_source(self) -> None:
-        request = MaxFlowRequest.model_validate(
-            {
-                "graph": {
-                    "vertex_count": 2,
-                    "edges": [
-                        {
-                            "source": 0,
-                            "target": 1,
-                            "capacity": {"num": "1", "den": "1"},
-                        },
-                    ],
-                },
-                "source": 5,
-                "sink": 1,
-            }
+        request = MaxFlowRequest.model_validate_json(
+            json.dumps(
+                {
+                    "graph": {
+                        "vertex_count": 2,
+                        "edges": [
+                            {
+                                "source": 0,
+                                "target": 1,
+                                "capacity": {"num": "1", "den": "1"},
+                            },
+                        ],
+                    },
+                    "source": 5,
+                    "sink": 1,
+                }
+            )
         )
         with pytest.raises(OperationDomainValidationError):
             compute_max_flow(request)
@@ -229,8 +238,8 @@ class TestMinCut:
             0,
             2,
         )
-        assert result.cut_value.num == "2"
-        assert result.cut_value.den == "1"
+        assert result.cut_value.num == 2
+        assert result.cut_value.den == 1
 
     def test_cut_partition_covers_all_vertices(self) -> None:
         result = _min_cut(
@@ -292,8 +301,8 @@ class TestMinCut:
             0,
             3,
         )
-        assert result.cut_value.num == "0"
-        assert result.cut_value.den == "1"
+        assert result.cut_value.num == 0
+        assert result.cut_value.den == 1
 
     def test_rational_capacities_min_cut(self) -> None:
         result = _min_cut(

@@ -115,7 +115,9 @@ def test_canonical_errors_preserve_only_repair_relevant_context(
 
 def test_canonical_rational_wire_model_rejects_unreduced_input() -> None:
     with pytest.raises(ValidationError) as error:
-        CanonicalRational.model_validate({"num": "2", "den": "4"})
+        CanonicalRational.model_validate_json(
+            encode_strict_json({"num": "2", "den": "4"})
+        )
     assert (
         error.value.errors()[0]["type"]
         == "canonical_rational.noncanonical_representation"
@@ -137,7 +139,7 @@ def test_bounded_rational_rejects_oversized_canonical_components(
         ValueError, match=rf"test rational exceeds the {max_digits}-digit bound"
     ):
         require_bounded_rational(
-            CanonicalRational.model_validate(value),
+            CanonicalRational.model_validate_json(encode_strict_json(value)),
             max_digits=max_digits,
             label="test rational",
         )
@@ -147,7 +149,9 @@ def test_negative_zero_is_not_a_canonical_integer_encoding() -> None:
     with pytest.raises(CanonicalizationError, match=r"canonical decimal"):
         canonicalize_json({"num": "-0", "den": "1"})
     with pytest.raises(ValidationError) as error:
-        CanonicalRational.model_validate({"num": "-0", "den": "1"})
+        CanonicalRational.model_validate_json(
+            encode_strict_json({"num": "-0", "den": "1"})
+        )
     assert error.value.errors()[0]["type"] == "string_pattern_mismatch"
 
 

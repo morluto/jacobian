@@ -1,6 +1,5 @@
 """Exact number-theory operations with structured, argument-bound results."""
 
-from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.number_theory._derived_models import (
     BinomialPrimeValuationRequest,
@@ -35,8 +34,8 @@ def compute_factorial_valuation(
 ) -> FactorialValuationResult:
     return _factorial_valuation(
         admit_factorial_valuation(
-            parse_canonical_integer(request.n),
-            parse_canonical_integer(request.base),
+            request.n,
+            request.base,
         )
     )
 
@@ -46,9 +45,9 @@ def compute_binomial_prime_valuation(
 ) -> BinomialPrimeValuationResult:
     return _binomial_prime_valuation(
         admit_binomial_prime_valuation(
-            parse_canonical_integer(request.n),
-            parse_canonical_integer(request.k),
-            parse_canonical_integer(request.prime),
+            request.n,
+            request.k,
+            request.prime,
         )
     )
 

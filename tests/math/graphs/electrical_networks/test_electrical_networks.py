@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from fractions import Fraction
 
 import pytest
@@ -33,9 +34,11 @@ from jacobian.math.graphs.electrical_networks.operations import (
 C = CanonicalRational
 
 
-def _edge(source: int, target: int, num: str, den: str) -> ConductanceEdge:
+def _edge(source: int, target: int, num: int, den: int) -> ConductanceEdge:
     return ConductanceEdge(
-        source=source, target=target, conductance=C(num=num, den=den)
+        source=source,
+        target=target,
+        conductance=C(num=num, den=den),
     )
 
 
@@ -52,10 +55,7 @@ def _star_of_distinct_fifty_digit_dens(leaf_count: int = 215) -> ConductanceNetw
 
     return _net(
         leaf_count + 1,
-        *(
-            _edge(0, leaf + 1, "1", str(10**49 + 2 * leaf + 1))
-            for leaf in range(leaf_count)
-        ),
+        *(_edge(0, leaf + 1, 1, 10**49 + 2 * leaf + 1) for leaf in range(leaf_count)),
     )
 
 
@@ -63,7 +63,7 @@ def _star_of_distinct_fifty_digit_dens(leaf_count: int = 215) -> ConductanceNetw
 
 
 def test_single_edge_resistance_is_one() -> None:
-    net = _net(2, _edge(0, 1, "1", "1"))
+    net = _net(2, _edge(0, 1, 1, 1))
     req = EffectiveResistanceRequest(network=net, terminal_a=0, terminal_b=1)
     result = compute_effective_resistance(req)
     assert result.effective_resistance.as_fraction() == Fraction(1)
@@ -72,7 +72,7 @@ def test_single_edge_resistance_is_one() -> None:
 
 
 def test_triangle_unit_resistances_gives_two_thirds() -> None:
-    net = _net(3, _edge(0, 1, "1", "1"), _edge(1, 2, "1", "1"), _edge(0, 2, "1", "1"))
+    net = _net(3, _edge(0, 1, 1, 1), _edge(1, 2, 1, 1), _edge(0, 2, 1, 1))
     req = EffectiveResistanceRequest(network=net, terminal_a=0, terminal_b=1)
     assert compute_effective_resistance(
         req
@@ -80,7 +80,7 @@ def test_triangle_unit_resistances_gives_two_thirds() -> None:
 
 
 def test_path_graph_three_vertices_gives_two() -> None:
-    net = _net(3, _edge(0, 1, "1", "1"), _edge(1, 2, "1", "1"))
+    net = _net(3, _edge(0, 1, 1, 1), _edge(1, 2, 1, 1))
     req = EffectiveResistanceRequest(network=net, terminal_a=0, terminal_b=2)
     assert compute_effective_resistance(
         req
@@ -89,7 +89,7 @@ def test_path_graph_three_vertices_gives_two() -> None:
 
 def test_high_conductance_gives_low_resistance() -> None:
     """Single edge with conductance 3 -> resistance 1/3."""
-    net = _net(2, _edge(0, 1, "3", "1"))
+    net = _net(2, _edge(0, 1, 3, 1))
     req = EffectiveResistanceRequest(network=net, terminal_a=0, terminal_b=1)
     assert compute_effective_resistance(
         req
@@ -100,10 +100,10 @@ def test_four_cycle_square_unit_resistances_gives_expected_values() -> None:
     """C4 with unit resistances: R(adjacent) = 3/4, R(opposite) = 1."""
     net = _net(
         4,
-        _edge(0, 1, "1", "1"),
-        _edge(1, 2, "1", "1"),
-        _edge(2, 3, "1", "1"),
-        _edge(0, 3, "1", "1"),
+        _edge(0, 1, 1, 1),
+        _edge(1, 2, 1, 1),
+        _edge(2, 3, 1, 1),
+        _edge(0, 3, 1, 1),
     )
     req_adj = EffectiveResistanceRequest(network=net, terminal_a=0, terminal_b=1)
     assert compute_effective_resistance(
@@ -117,7 +117,7 @@ def test_four_cycle_square_unit_resistances_gives_expected_values() -> None:
 
 def test_rational_conductances_give_exact_rational_resistance() -> None:
     """Single edge with conductance 2/3 -> resistance 3/2."""
-    net = _net(2, _edge(0, 1, "2", "3"))
+    net = _net(2, _edge(0, 1, 2, 3))
     req = EffectiveResistanceRequest(network=net, terminal_a=0, terminal_b=1)
     assert compute_effective_resistance(
         req
@@ -128,7 +128,7 @@ def test_rational_conductances_give_exact_rational_resistance() -> None:
 
 
 def test_node_potentials_path_graph() -> None:
-    net = _net(3, _edge(0, 1, "1", "1"), _edge(1, 2, "1", "1"))
+    net = _net(3, _edge(0, 1, 1, 1), _edge(1, 2, 1, 1))
     req = NodePotentialRequest(network=net, source=0, sink=2)
     result = compute_node_potentials(req)
     assert len(result.potentials) == 3
@@ -138,7 +138,7 @@ def test_node_potentials_path_graph() -> None:
 
 
 def test_node_potentials_sink_is_gauge_zero() -> None:
-    net = _net(2, _edge(0, 1, "1", "1"))
+    net = _net(2, _edge(0, 1, 1, 1))
     req = NodePotentialRequest(network=net, source=0, sink=1)
     result = compute_node_potentials(req)
     assert result.potentials[1].potential.as_fraction() == Fraction(0)
@@ -147,7 +147,7 @@ def test_node_potentials_sink_is_gauge_zero() -> None:
 def test_node_potentials_satisfy_kirchhoff_current() -> None:
     """For a path 0-1 with unit conductance, injecting 1A at 0, extracting at 1:
     V0 - V1 = 1 (resistance), V1 = 0 (gauge), so V0 = 1."""
-    net = _net(2, _edge(0, 1, "1", "1"))
+    net = _net(2, _edge(0, 1, 1, 1))
     req = NodePotentialRequest(network=net, source=0, sink=1)
     result = compute_node_potentials(req)
     assert result.potentials[0].potential.as_fraction() == Fraction(1)
@@ -158,7 +158,7 @@ def test_flint_solves_a_path_above_the_previous_vertex_ceiling() -> None:
     vertex_count = 200
     net = _net(
         vertex_count,
-        *(_edge(node, node + 1, "1", "1") for node in range(vertex_count - 1)),
+        *(_edge(node, node + 1, 1, 1) for node in range(vertex_count - 1)),
     )
 
     resistance = compute_effective_resistance(
@@ -180,7 +180,7 @@ def test_flint_solves_the_wide_carrier_unit_path() -> None:
     vertex_count = 256
     net = _net(
         vertex_count,
-        *(_edge(node, node + 1, "1", "1") for node in range(vertex_count - 1)),
+        *(_edge(node, node + 1, 1, 1) for node in range(vertex_count - 1)),
     )
 
     resistance = compute_effective_resistance(
@@ -219,7 +219,7 @@ def test_laplacian_keeps_its_separate_materialized_matrix_ceiling() -> None:
     with pytest.raises(ValidationError):
         LaplacianNetwork(
             vertex_count=MAX_LAPLACIAN_VERTICES + 1,
-            edges=(_edge(0, 1, "1", "1"),),
+            edges=(_edge(0, 1, 1, 1),),
         )
 
 
@@ -235,7 +235,7 @@ def test_laplacian_request_schema_exposes_vertex_ceiling() -> None:
 
 
 def test_laplacian_single_edge() -> None:
-    net = _laplacian_net(2, _edge(0, 1, "1", "1"))
+    net = _laplacian_net(2, _edge(0, 1, 1, 1))
     req = LaplacianRequest(network=net)
     result = compute_laplacian(req)
     assert result.matrix.row_count == 2
@@ -253,9 +253,9 @@ def test_laplacian_single_edge() -> None:
 def test_laplacian_triangle_diagonal_sums_conductances() -> None:
     net = _laplacian_net(
         3,
-        _edge(0, 1, "1", "1"),
-        _edge(1, 2, "1", "1"),
-        _edge(0, 2, "2", "1"),
+        _edge(0, 1, 1, 1),
+        _edge(1, 2, 1, 1),
+        _edge(0, 2, 2, 1),
     )
     req = LaplacianRequest(network=net)
     result = compute_laplacian(req)
@@ -278,10 +278,10 @@ def test_laplacian_triangle_diagonal_sums_conductances() -> None:
 def test_laplacian_rows_sum_to_zero() -> None:
     net = _laplacian_net(
         4,
-        _edge(0, 1, "1", "1"),
-        _edge(1, 2, "3", "2"),
-        _edge(2, 3, "5", "3"),
-        _edge(0, 3, "7", "4"),
+        _edge(0, 1, 1, 1),
+        _edge(1, 2, 3, 2),
+        _edge(2, 3, 5, 3),
+        _edge(0, 3, 7, 4),
     )
     req = LaplacianRequest(network=net)
     result = compute_laplacian(req)
@@ -296,7 +296,7 @@ def test_laplacian_rows_sum_to_zero() -> None:
 
 def test_laplacian_accepts_disconnected_network() -> None:
     """The Laplacian is well-defined without connectivity."""
-    net = _laplacian_net(4, _edge(0, 1, "1", "1"), _edge(2, 3, "1", "1"))
+    net = _laplacian_net(4, _edge(0, 1, 1, 1), _edge(2, 3, 1, 1))
     result = compute_laplacian(LaplacianRequest(network=net))
     assert result.matrix.row_count == 4
     assert len(result.matrix.entries) == 4
@@ -307,7 +307,7 @@ def test_laplacian_accepts_disconnected_network() -> None:
 
 
 def test_contract_rejects_nonpositive_conductance() -> None:
-    edge = ConductanceEdge(source=0, target=1, conductance=C(num="0", den="1"))
+    edge = ConductanceEdge(source=0, target=1, conductance=C(num=0, den=1))
     with pytest.raises(OperationDomainValidationError) as error:
         compute_laplacian(LaplacianRequest(network=_laplacian_net(2, edge)))
     assert (
@@ -316,7 +316,7 @@ def test_contract_rejects_nonpositive_conductance() -> None:
 
 
 def test_contract_rejects_self_loop() -> None:
-    edge = ConductanceEdge(source=0, target=0, conductance=C(num="1", den="1"))
+    edge = ConductanceEdge(source=0, target=0, conductance=C(num=1, den=1))
     with pytest.raises(OperationDomainValidationError) as error:
         compute_laplacian(LaplacianRequest(network=_laplacian_net(2, edge)))
     assert (
@@ -326,7 +326,7 @@ def test_contract_rejects_self_loop() -> None:
 
 
 def test_contract_rejects_duplicate_edges() -> None:
-    net = _laplacian_net(3, _edge(0, 1, "1", "1"), _edge(1, 0, "2", "1"))
+    net = _laplacian_net(3, _edge(0, 1, 1, 1), _edge(1, 0, 2, 1))
     with pytest.raises(OperationDomainValidationError) as error:
         compute_laplacian(LaplacianRequest(network=net))
     assert error.value.errors()[0]["type"] == "electrical_network.duplicate_edges"
@@ -334,12 +334,12 @@ def test_contract_rejects_duplicate_edges() -> None:
 
 def test_contract_rejects_nonzero_denominator() -> None:
     with pytest.raises(ValidationError) as error:
-        C(num="1", den="0")
+        C(num=1, den=0)
     assert error.value.errors()[0]["type"] == "canonical_rational.zero_denominator"
 
 
 def test_contract_rejects_same_terminals() -> None:
-    net = _net(2, _edge(0, 1, "1", "1"))
+    net = _net(2, _edge(0, 1, 1, 1))
     req = EffectiveResistanceRequest(network=net, terminal_a=0, terminal_b=0)
     with pytest.raises(OperationDomainValidationError) as error:
         compute_effective_resistance(req)
@@ -349,7 +349,7 @@ def test_contract_rejects_same_terminals() -> None:
 
 
 def test_contract_rejects_vertex_out_of_range() -> None:
-    net = _laplacian_net(2, _edge(0, 5, "1", "1"))
+    net = _laplacian_net(2, _edge(0, 5, 1, 1))
     with pytest.raises(OperationDomainValidationError) as error:
         compute_laplacian(LaplacianRequest(network=net))
     assert (
@@ -362,7 +362,7 @@ def test_contract_rejects_vertex_out_of_range() -> None:
 
 def test_contract_rejects_disconnected_effective_resistance() -> None:
     """Deleting one Laplacian row/column still leaves a singular component."""
-    net = _net(4, _edge(0, 1, "1", "1"), _edge(2, 3, "1", "1"))
+    net = _net(4, _edge(0, 1, 1, 1), _edge(2, 3, 1, 1))
     req = EffectiveResistanceRequest(network=net, terminal_a=0, terminal_b=1)
     with pytest.raises(OperationDomainValidationError) as error:
         compute_effective_resistance(req)
@@ -370,7 +370,7 @@ def test_contract_rejects_disconnected_effective_resistance() -> None:
 
 
 def test_contract_rejects_disconnected_node_potentials() -> None:
-    net = _net(4, _edge(0, 1, "1", "1"), _edge(2, 3, "1", "1"))
+    net = _net(4, _edge(0, 1, 1, 1), _edge(2, 3, 1, 1))
     req = NodePotentialRequest(network=net, source=0, sink=1)
     with pytest.raises(OperationDomainValidationError) as error:
         compute_node_potentials(req)
@@ -378,7 +378,7 @@ def test_contract_rejects_disconnected_node_potentials() -> None:
 
 
 def test_contract_rejects_isolated_vertex() -> None:
-    net = _net(4, _edge(1, 2, "1", "1"))
+    net = _net(4, _edge(1, 2, 1, 1))
     req = EffectiveResistanceRequest(network=net, terminal_a=1, terminal_b=2)
     with pytest.raises(OperationDomainValidationError) as error:
         compute_effective_resistance(req)
@@ -389,7 +389,7 @@ def test_contract_rejects_oversized_conductance() -> None:
     edge = ConductanceEdge(
         source=0,
         target=1,
-        conductance=C(num="9" * 51, den="1"),
+        conductance=C(num=10**50, den=1),
     )
     with pytest.raises(OperationDomainValidationError) as error:
         compute_laplacian(LaplacianRequest(network=_laplacian_net(2, edge)))
@@ -401,15 +401,15 @@ def test_contract_rejects_oversized_conductance() -> None:
 
 def test_contract_accepts_boundary_conductance() -> None:
     """A 50-digit conductance is the declared maximum and must be accepted."""
-    numerator = "9" * 50
-    net = _net(2, _edge(0, 1, numerator, "1"))
+    numerator = 10**50 - 1
+    net = _net(2, _edge(0, 1, numerator, 1))
     req = EffectiveResistanceRequest(network=net, terminal_a=0, terminal_b=1)
     result = compute_effective_resistance(req)
-    assert result.effective_resistance.as_fraction() == Fraction(1, int(numerator))
+    assert result.effective_resistance.as_fraction() == Fraction(1, numerator)
 
 
 def test_serialized_effective_resistance_claim_is_source_bound() -> None:
-    net = _net(2, _edge(0, 1, "1", "1"))
+    net = _net(2, _edge(0, 1, 1, 1))
     result = compute_effective_resistance(
         EffectiveResistanceRequest(network=net, terminal_a=0, terminal_b=1)
     )
@@ -418,12 +418,12 @@ def test_serialized_effective_resistance_claim_is_source_bound() -> None:
     forged = restored.model_dump(mode="json")
     forged["network"]["edges"][0]["conductance"] = {"num": "2", "den": "1"}
     assert not verify_effective_resistance(
-        EffectiveResistanceResult.model_validate(forged)
+        EffectiveResistanceResult.model_validate_json(json.dumps(forged))
     )
 
 
 def test_serialized_node_potential_claim_is_equation_checked() -> None:
-    net = _net(2, _edge(0, 1, "1", "1"))
+    net = _net(2, _edge(0, 1, 1, 1))
     result = compute_node_potentials(
         NodePotentialRequest(network=net, source=0, sink=1)
     )
@@ -431,14 +431,16 @@ def test_serialized_node_potential_claim_is_equation_checked() -> None:
     assert verify_node_potentials(restored)
     forged = restored.model_dump(mode="json")
     forged["potentials"][0]["potential"] = {"num": "0", "den": "1"}
-    assert not verify_node_potentials(NodePotentialResult.model_validate(forged))
+    assert not verify_node_potentials(
+        NodePotentialResult.model_validate_json(json.dumps(forged))
+    )
 
 
 def test_serialized_laplacian_claim_requires_complete_matrix() -> None:
-    net = _laplacian_net(2, _edge(0, 1, "1", "1"))
+    net = _laplacian_net(2, _edge(0, 1, 1, 1))
     result = compute_laplacian(LaplacianRequest(network=net))
     restored = LaplacianResult.model_validate_json(result.model_dump_json())
     assert verify_laplacian(restored)
     forged = restored.model_dump(mode="json")
     forged["matrix"]["entries"][0][0] = {"num": "0", "den": "1"}
-    assert not verify_laplacian(LaplacianResult.model_validate(forged))
+    assert not verify_laplacian(LaplacianResult.model_validate_json(json.dumps(forged)))

@@ -6,7 +6,6 @@ from fractions import Fraction
 from math import gcd
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.geometry.affine_tori._bounds import (
     begin_affine_torus_deadline,
     build_affine_torus_plan,
@@ -36,9 +35,7 @@ from jacobian.math.matrices.values import IntegerMatrix
 def verify_integral_torus_character(character: IntegralTorusCharacter) -> bool:
     """Verify the primitive-domain claim of a source-bound character."""
     try:
-        values = tuple(
-            parse_canonical_integer(value) for value in character.coefficients
-        )
+        values = character.coefficients
         if len(values) != character.torus.dimension:
             return False
         divisor = 0
@@ -55,9 +52,7 @@ def _integer_matrix(
     return IntegerMatrix(
         row_count=rows,
         column_count=columns,
-        entries=tuple(
-            tuple(format_canonical_integer(value) for value in row) for row in entries
-        ),
+        entries=entries,
     )
 
 
@@ -102,13 +97,9 @@ def _nonempty_result(
                 rows=generator_count,
                 columns=generator_count,
             ),
-            generator_orders=tuple(
-                format_canonical_integer(value) for value in kernel.generator_orders
-            ),
-            invariant_factors=tuple(
-                format_canonical_integer(value) for value in kernel.invariant_factors
-            ),
-            component_count=format_canonical_integer(kernel.component_count),
+            generator_orders=kernel.generator_orders,
+            invariant_factors=kernel.invariant_factors,
+            component_count=kernel.component_count,
         ),
     )
     return AffineTorusFixedLocusResult(
@@ -120,7 +111,7 @@ def _nonempty_result(
 def _empty_result(
     source: RationalAffineTorusMap, kernel: EmptyFixedLocusKernel
 ) -> AffineTorusFixedLocusResult:
-    character = tuple(format_canonical_integer(value) for value in kernel.character)
+    character = kernel.character
     candidate = IntegralTorusCharacter.model_construct(
         torus=source.torus,
         coefficients=character,

@@ -10,6 +10,7 @@ from pydantic import Field, model_validator
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.polynomials.multivariate._models import (
     _MAX_MULTIVARIATE_COEFFICIENT_DIGITS,
     _MAX_MULTIVARIATE_EXPONENT,
@@ -149,7 +150,11 @@ _FactorContentKey = tuple[tuple[tuple[int, ...], str, str], ...]
 
 def _factor_content_key(record: MultivariateIrreducibleFactor) -> _FactorContentKey:
     return tuple(
-        (term.exponents, term.coefficient.num, term.coefficient.den)
+        (
+            term.exponents,
+            format_canonical_integer(term.coefficient.num),
+            format_canonical_integer(term.coefficient.den),
+        )
         for term in record.factor.polynomial.terms
     )
 

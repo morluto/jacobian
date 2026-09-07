@@ -11,7 +11,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import parse_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.number_theory.algebraic_numbers.real import (
     MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE,
     MAX_REAL_ALGEBRAIC_DEGREE,
@@ -126,7 +126,8 @@ class UnivariatePolynomialRequest(StrictModel):
                 "root isolation requires one variable and degree at most 8 (positive)",
             )
         if any(
-            len(component.lstrip("-")) > MAX_ROOT_ISOLATION_SOURCE_COEFFICIENT_DIGITS
+            len(format_canonical_integer(abs(component)))
+            > MAX_ROOT_ISOLATION_SOURCE_COEFFICIENT_DIGITS
             for term in terms
             for component in (term.coefficient.num, term.coefficient.den)
         ):
@@ -139,9 +140,7 @@ class UnivariatePolynomialRequest(StrictModel):
     @property
     def coefficients_descending(self) -> tuple[CanonicalRational, ...]:
         terms = self.polynomial.polynomial.terms
-        coefficients = [CanonicalRational(num="0", den="1")] * (
-            terms[0].exponents[0] + 1
-        )
+        coefficients = [CanonicalRational(num=0, den=1)] * (terms[0].exponents[0] + 1)
         for term in terms:
             coefficients[-1 - term.exponents[0]] = term.coefficient
         return tuple(coefficients)
@@ -151,12 +150,8 @@ class UnivariatePolynomialRequest(StrictModel):
 
         from math import gcd, lcm
 
-        numerators = tuple(
-            parse_canonical_integer(value.num) for value in self.coefficients_descending
-        )
-        denominators = tuple(
-            parse_canonical_integer(value.den) for value in self.coefficients_descending
-        )
+        numerators = tuple(value.num for value in self.coefficients_descending)
+        denominators = tuple(value.den for value in self.coefficients_descending)
         common_denominator = lcm(*denominators)
         coefficients = tuple(
             numerator * (common_denominator // denominator)

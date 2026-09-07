@@ -10,7 +10,7 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import parse_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.math._labels import MAX_OPAQUE_LABEL_LENGTH, OpaqueLabel
 from jacobian.math.matrices.values import (
     MAX_RATIONAL_MATRIX_ORDER,
@@ -166,7 +166,7 @@ def _canonicalize_coordinate_axis(data: dict[str, object]) -> dict[str, object]:
 
 
 def _reject_nested_rational_components(entries: object) -> None:
-    """Reject non-string ``num``/``den`` values before recursive parsing.
+    """Reject non-integer ``num``/``den`` values before recursive parsing.
 
     A deeply nested dict or list inside a recognized rational component
     would pass the ``num``/``den`` key check but cause a ``RecursionError``
@@ -183,7 +183,7 @@ def _reject_nested_rational_components(entries: object) -> None:
                 continue
             for key in ("num", "den"):
                 value = cell.get(key)
-                if value is not None and not isinstance(value, str):
+                if value is not None and type(value) not in (int, str):
                     raise _validation_error(
                         "rational_component",
                         f"rational {key} must be a string, not {type(value).__name__}",
@@ -259,6 +259,10 @@ def _require_raw_action_envelope(data: object) -> object:  # noqa: C901
                                 for comp in (cell.get("num"), cell.get("den")):
                                     if isinstance(comp, str):
                                         raw_digit_work += len(comp.lstrip("-"))
+                                    elif type(comp) is int:
+                                        raw_digit_work += len(
+                                            format_canonical_integer(abs(comp))
+                                        )
             elif isinstance(generator, RationalActionGenerator):
                 # Already a canonical RationalActionGenerator instance.
                 total_cells += len(generator.matrix.entries) * (
@@ -642,13 +646,9 @@ class IntegralBilinearForm(StrictModel):
                 "form_symmetry", "a SYMMETRIC form matrix must equal its transpose"
             )
         if self.kind == "ALTERNATING" and (
-            any(
-                parse_canonical_integer(entries[index][index]) != 0
-                for index in range(dimension)
-            )
+            any(entries[index][index] != 0 for index in range(dimension))
             or any(
-                parse_canonical_integer(entries[row][column])
-                != -parse_canonical_integer(entries[column][row])
+                entries[row][column] != -entries[column][row]
                 for row in range(dimension)
                 for column in range(row + 1, dimension)
             )
@@ -665,7 +665,7 @@ class IntegralBilinearForm(StrictModel):
         *,
         coordinate_axis: tuple[OpaqueLabel, ...],
         kind: FormKind,
-        entries: tuple[tuple[str, ...], ...],
+        entries: tuple[tuple[int, ...], ...],
     ) -> Self:
         """Construct a form already established by the owner-local kernel."""
 

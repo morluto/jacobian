@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from fractions import Fraction
 from itertools import product
@@ -339,7 +340,7 @@ def test_malformed_arenas_fail_at_the_typed_boundary(
     payload: dict[str, object], error_type: str
 ) -> None:
     with pytest.raises(ValidationError) as exc_info:
-        DeterministicTerminalGame.model_validate(payload)
+        DeterministicTerminalGame.model_validate_json(json.dumps(payload))
     assert exc_info.value.errors()[0]["type"] == error_type
 
 
@@ -350,12 +351,12 @@ def test_threshold_work_is_admitted_and_rejected_before_solving() -> None:
                 {
                     "label": f"t{index}",
                     "owner": "TERMINAL",
-                    "payoff": {"num": str(index), "den": "1"},
+                    "payoff": {"num": index, "den": 1},
                 }
                 for index in range(size)
             ],
             "moves": [],
-            "draw_payoff": {"num": "0", "den": "1"},
+            "draw_payoff": {"num": 0, "den": 1},
         }
 
     admitted = DeterministicTerminalGame.model_validate(terminal_game(400))
@@ -379,7 +380,7 @@ def test_result_bytes_do_not_reject_admitted_threshold_work() -> None:
         "draw_payoff": {"num": "0", "den": "1"},
     }
 
-    game = DeterministicTerminalGame.model_validate(payload)
+    game = DeterministicTerminalGame.model_validate_json(json.dumps(payload))
     result = solve_terminal_game(game)
 
     assert result.game == game
@@ -392,8 +393,8 @@ def test_public_request_and_example_return_the_declared_result() -> None:
         for tool in TOOLS
         if tool.operation_id == "game.deterministic_terminal.solve"
     )
-    request = DeterministicTerminalGameRequest.model_validate(
-        operation.examples[0].input
+    request = DeterministicTerminalGameRequest.model_validate_json(
+        json.dumps(operation.examples[0].input)
     )
 
     result = solve_terminal_game(request.game)

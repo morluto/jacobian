@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from fractions import Fraction
 
 import pytest
@@ -11,7 +12,9 @@ from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials.maps._models import (
     CompositionRequest,
+    CompositionResult,
     EvalRequest,
+    EvalResult,
     VariablePoint,
 )
 from jacobian.math.polynomials.maps.operations import (
@@ -28,11 +31,11 @@ from jacobian.math.polynomials.values import (
 )
 
 
-def _evaluate(request: EvalRequest):
+def _evaluate(request: EvalRequest) -> EvalResult:
     return evaluate_polynomial(request.polynomial, request.point)
 
 
-def _compose(request: CompositionRequest):
+def _compose(request: CompositionRequest) -> CompositionResult:
     return compose_polynomials(
         request.outer,
         request.inner,
@@ -66,12 +69,12 @@ def test_evaluation_returns_a_canonical_rational() -> None:
         point=VariablePoint(
             variables=("x", "y"),
             values=(
-                CanonicalRational(num="3", den="1"),
-                CanonicalRational(num="1", den="1"),
+                CanonicalRational(num=3, den=1),
+                CanonicalRational(num=1, den=1),
             ),
         ),
     )
-    assert _evaluate(request).value == CanonicalRational(num="11", den="1")
+    assert _evaluate(request).value == CanonicalRational(num=11, den=1)
 
 
 def test_evaluation_requires_the_complete_ordered_axis() -> None:
@@ -79,7 +82,7 @@ def test_evaluation_requires_the_complete_ordered_axis() -> None:
         polynomial=_polynomial(("x", "y"), {(1, 0): 1}),
         point=VariablePoint(
             variables=("x",),
-            values=(CanonicalRational(num="1", den="1"),),
+            values=(CanonicalRational(num=1, den=1),),
         ),
     )
     with pytest.raises(OperationDomainValidationError):
@@ -91,7 +94,7 @@ def test_evaluation_rejects_a_point_whose_exact_value_exceeds_result_bound() -> 
         polynomial=_polynomial(("x",), {(64,): 1}),
         point=VariablePoint(
             variables=("x",),
-            values=(CanonicalRational(num="1" + "0" * 600, den="1"),),
+            values=(CanonicalRational(num=10**600, den=1),),
         ),
     )
     with pytest.raises(OperationDomainValidationError):
@@ -120,7 +123,7 @@ def test_jacobian_entries_are_directly_composable_polynomials() -> None:
         "num": "99",
         "den": "1",
     }
-    assert not verify_jacobian(type(result).model_validate(payload))
+    assert not verify_jacobian(type(result).model_validate_json(json.dumps(payload)))
 
 
 def test_jacobian_preserves_axes_for_an_empty_output_map() -> None:

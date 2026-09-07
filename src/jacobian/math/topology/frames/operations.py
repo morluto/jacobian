@@ -5,7 +5,6 @@ from __future__ import annotations
 from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.values import IntegerMatrix
 from jacobian.math.topology.frames._flint import integer_gram, integer_gram_and_rank
@@ -52,10 +51,7 @@ def _gram_result(value: VectorFamily) -> GramResult:
         gram=IntegerMatrix(
             row_count=len(matrix),
             column_count=len(matrix[0]) if matrix else len(value.vectors),
-            entries=tuple(
-                tuple(format_canonical_integer(entry) for entry in row)
-                for row in matrix
-            ),
+            entries=matrix,
         ),
     )
 
@@ -95,9 +91,7 @@ def verify_gram(claim: GramResult) -> bool:
             return False
         _require_gram_work_budget(claim)
         expected = integer_gram(claim.vectors)
-        return claim.gram.entries == tuple(
-            tuple(format_canonical_integer(entry) for entry in row) for row in expected
-        )
+        return claim.gram.entries == expected
     except (
         AttributeError,
         IndexError,
@@ -156,6 +150,4 @@ def frame_potential(value: VectorFamily) -> FramePotentialResult:
     _admit_frame(value, rank=rank)
     assert matrix is not None
     total = sum(entry**2 for row in matrix for entry in row)
-    return FramePotentialResult._from_kernel(
-        vectors=value.vectors, potential=format_canonical_integer(total)
-    )
+    return FramePotentialResult._from_kernel(vectors=value.vectors, potential=total)

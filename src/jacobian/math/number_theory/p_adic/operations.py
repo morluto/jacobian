@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Sequence
 from math import isqrt
 
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.p_adic._models import (
     MAX_PRECISION,
@@ -125,9 +124,7 @@ def _wire_polynomial(coefficients: Sequence[int]) -> IntegerPolynomial:
     """Convert ascending int coefficients to the canonical descending value."""
     trimmed = _trim_asc(coefficients)
     return IntegerPolynomial(
-        coefficients=tuple(
-            format_canonical_integer(coefficient) for coefficient in reversed(trimmed)
-        )
+        coefficients=tuple(coefficient for coefficient in reversed(trimmed))
     )
 
 
@@ -211,7 +208,7 @@ def verify_hensel_root(claim: HenselRootResult) -> bool:
         )
     except OperationDomainValidationError:
         return False
-    lifted = parse_canonical_integer(claim.lifted_root)
+    lifted = claim.lifted_root
     modulus = claim.prime**claim.precision
     return (
         0 <= lifted < modulus

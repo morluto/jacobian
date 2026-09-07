@@ -17,6 +17,7 @@ from jacobian.canonical import (
     CanonicalizationError,
     CanonicalLimits,
     encode_strict_json,
+    format_canonical_integer,
     loads_strict_json,
 )
 from jacobian.math.geometry.differential._execution import (
@@ -97,7 +98,11 @@ def canonical_recognition_candidates(
 
 def _polynomial_payload(polynomial: SparseRationalPolynomial) -> list[list[Any]]:
     return [
-        [*term.exponents, term.coefficient.num, term.coefficient.den]
+        [
+            *term.exponents,
+            format_canonical_integer(term.coefficient.num),
+            format_canonical_integer(term.coefficient.den),
+        ]
         for term in polynomial.terms
     ]
 

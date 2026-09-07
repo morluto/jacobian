@@ -1,5 +1,6 @@
 """Known-answer and adversarial tests for arithmetic dynamics."""
 
+import json
 from copy import deepcopy
 from fractions import Fraction
 
@@ -46,25 +47,27 @@ from jacobian.math.finite_fields.operations import (
 from jacobian.math.finite_fields.values import (
     FiniteFieldElement,
     FiniteFieldPresentation,
+    FinitePolynomialMap,
 )
+from jacobian.math.polynomials.values import RationalPolynomial
 
 
 def _r(value: int | str) -> CanonicalRational:
     return CanonicalRational.from_fraction(Fraction(value))
 
 
-def _p(*values: CanonicalRational):
+def _p(*values: CanonicalRational) -> RationalPolynomial:
     return polynomial_from_coefficients(tuple(value.as_fraction() for value in values))
 
 
-def _coefficients(polynomial):
+def _coefficients(polynomial: RationalPolynomial) -> tuple[CanonicalRational, ...]:
     return tuple(
         CanonicalRational.from_fraction(value)
         for value in polynomial_coefficients(polynomial)
     )
 
 
-def _fm(prime: int, *values: int):
+def _fm(prime: int, *values: int) -> FinitePolynomialMap:
     presentation = FiniteFieldPresentation(
         characteristic=prime, modulus_coefficients=(0, 1), generator="x"
     )
@@ -326,15 +329,24 @@ class TestFiniteFieldFunctionalGraph:
         assert restored.polynomial_map == result.polynomial_map
         forged = deepcopy(restored.model_dump(mode="json"))
         forged["edges"][0][1] = 1
-        assert not verify_finite_field_map(FiniteFieldMapResult.model_validate(forged))
+        assert not verify_finite_field_map(
+            FiniteFieldMapResult.model_validate_json(json.dumps(forged))
+        )
 
     def test_nonprime_modulus_is_rejected(self) -> None:
         with pytest.raises(OperationDomainValidationError):
             FiniteFieldMapRequest(polynomial_map=_fm(4, 1))
 
     def test_noncanonical_integer_coefficients_have_an_owner_code(self) -> None:
+        payload = FiniteFieldMapRequest(polynomial_map=_fm(5, 1)).model_dump(
+            mode="json"
+        )
+        payload["polynomial_map"]["polynomial"]["coefficients"][0]["coordinates"][0] = (
+            "01"
+        )
+
         with pytest.raises(ValidationError):
-            FiniteFieldMapRequest.model_validate({"polynomial_map": {"bad": 1}})
+            FiniteFieldMapRequest.model_validate_json(json.dumps(payload))
 
     def test_wire_and_native_paths_share_the_field_prime_bound(self) -> None:
         oversized_prime = MAX_FIELD_PRIME + 1
@@ -357,8 +369,11 @@ class TestCanonicalAndPortfolioContracts:
     def test_noncanonical_rational_coefficients_are_rejected(
         self, coefficient: object
     ) -> None:
+        payload = MapIterateRequest(polynomial=_p(_r(1)), n=1).model_dump(mode="json")
+        payload["polynomial"]["polynomial"]["terms"][0]["coefficient"] = coefficient
+
         with pytest.raises(ValidationError):
-            MapIterateRequest.model_validate({"coefficients": [coefficient], "n": 1})
+            MapIterateRequest.model_validate_json(json.dumps(payload))
 
     def test_trailing_zero_coefficients_are_rejected(self) -> None:
         with pytest.raises(ValueError, match="trailing zeros"):
@@ -373,7 +388,9 @@ class TestCanonicalAndPortfolioContracts:
         assert verify_map_iterate(restored_iterate)
         forged_iterate = deepcopy(restored_iterate.model_dump(mode="json"))
         forged_iterate["degree"] = 0
-        assert not verify_map_iterate(type(iterate).model_validate(forged_iterate))
+        assert not verify_map_iterate(
+            type(iterate).model_validate_json(json.dumps(forged_iterate))
+        )
 
         dynatomic = compute_dynatomic_polynomial(
             DynatomicPolynomialRequest(polynomial=_p(_r(0), _r(0), _r(1)), n=1)
@@ -386,7 +403,7 @@ class TestCanonicalAndPortfolioContracts:
         forged_dynatomic = deepcopy(restored_dynatomic.model_dump(mode="json"))
         forged_dynatomic["degree"] = 0
         assert not verify_dynatomic_polynomial(
-            type(dynatomic).model_validate(forged_dynatomic)
+            type(dynatomic).model_validate_json(json.dumps(forged_dynatomic))
         )
 
         cycle = compute_cycle_multiplier(
@@ -397,7 +414,9 @@ class TestCanonicalAndPortfolioContracts:
         assert verify_cycle_multiplier(restored_cycle)
         forged_cycle = deepcopy(restored_cycle.model_dump(mode="json"))
         forged_cycle["multiplier"] = {"num": "2", "den": "1"}
-        assert not verify_cycle_multiplier(type(cycle).model_validate(forged_cycle))
+        assert not verify_cycle_multiplier(
+            type(cycle).model_validate_json(json.dumps(forged_cycle))
+        )
 
     def test_fixed_point_equation_is_native_not_a_catalog_slot(self) -> None:
         operation_ids = {tool.operation_id for tool in TOOLS}

@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import json
 from copy import deepcopy
 from typing import Any, cast
 
 import pytest
 from pydantic import ValidationError
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.analysis._models import (
     MAX_RATIONAL_SPECTRUM_INPUT_DIGITS,
@@ -22,11 +24,11 @@ from jacobian.math.matrices.analysis.operations import (
 )
 
 
-def _rational(value: int, denominator: int = 1) -> dict[str, str]:
-    return {"num": str(value), "den": str(denominator)}
+def _rational(value: int, denominator: int = 1) -> CanonicalRational:
+    return CanonicalRational.from_integer_ratio(value, denominator)
 
 
-def _matrix(entries: list[list[dict[str, str]]]) -> dict[str, object]:
+def _matrix(entries: Any) -> dict[str, object]:
     return {"entries": entries}
 
 
@@ -42,7 +44,7 @@ def _claim(
 
 
 def _request(
-    entries: list[list[dict[str, str]]],
+    entries: Any,
     claims: list[dict[str, object]],
 ) -> RationalSpectrumClaimRequest:
     return RationalSpectrumClaimRequest.model_validate(
@@ -56,7 +58,7 @@ def _request(
 def _mutate_source_matrix(data: dict[str, Any]) -> None:
     matrix = cast(dict[str, Any], data["matrix"])
     entries = cast(list[list[Any]], matrix["entries"])
-    entries[0][0] = _rational(3)
+    entries[0][0] = {"num": "3", "den": "1"}
 
 
 def _mutate_claim(data: dict[str, Any]) -> None:
@@ -97,7 +99,7 @@ def test_complete_repeated_rational_spectrum_binds_exact_nullities() -> None:
     assert result.claimed_multiplicity_sum == 3
     assert result.established_multiplicity_sum == 3
     assert (
-        RationalSpectrumClaimResult.model_validate(result.model_dump(mode="json"))
+        RationalSpectrumClaimResult.model_validate_json(result.model_dump_json())
         == result
     )
 
@@ -249,7 +251,7 @@ def test_result_parsing_does_not_replay_claim_computation() -> None:
     for mutate in mutations:
         forged = deepcopy(result.model_dump(mode="json"))
         mutate(forged)
-        assert RationalSpectrumClaimResult.model_validate(forged)
+        assert RationalSpectrumClaimResult.model_validate_json(json.dumps(forged))
 
 
 def test_result_source_is_structural_without_an_implicit_verifier() -> None:
@@ -262,7 +264,7 @@ def test_result_source_is_structural_without_an_implicit_verifier() -> None:
     forged = deepcopy(result.model_dump(mode="json"))
     _mutate_source_matrix(forged)
 
-    supplied = RationalSpectrumClaimResult.model_validate(forged)
+    supplied = RationalSpectrumClaimResult.model_validate_json(json.dumps(forged))
     assert supplied.matrix.entries[0][0].as_fraction() == 3
 
 

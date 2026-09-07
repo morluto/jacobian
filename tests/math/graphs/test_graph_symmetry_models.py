@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
@@ -56,14 +57,14 @@ def test_graph_symmetry_request_rejects_object_shaped_mapping() -> None:
     ]
 
     with pytest.raises(ValidationError):
-        GraphSymmetryOrbitRequest.model_validate(payload)
+        GraphSymmetryOrbitRequest.model_validate_json(json.dumps(payload))
 
 
 def test_graph_symmetry_request_rejects_incomplete_permutation() -> None:
     payload = _path_request()
     del payload["generators"][0]["mapping"][2]
 
-    request = GraphSymmetryOrbitRequest.model_validate(payload)
+    request = GraphSymmetryOrbitRequest.model_validate_json(json.dumps(payload))
     with pytest.raises(OperationDomainValidationError):
         graph_symmetry_orbits(request.graph, request.generators)
 
@@ -72,7 +73,7 @@ def test_graph_symmetry_request_requires_declared_vertex_order_mapping() -> None
     payload = _path_request()
     payload["generators"][0]["mapping"] = [["b", "b"], ["a", "c"], ["c", "a"]]
 
-    request = GraphSymmetryOrbitRequest.model_validate(payload)
+    request = GraphSymmetryOrbitRequest.model_validate_json(json.dumps(payload))
     with pytest.raises(OperationDomainValidationError):
         graph_symmetry_orbits(request.graph, request.generators)
 
@@ -81,7 +82,7 @@ def test_graph_symmetry_request_rejects_color_breaking_generator() -> None:
     payload = _path_request()
     payload["graph"]["vertex_colors"][2] = "distinguished"
 
-    request = GraphSymmetryOrbitRequest.model_validate(payload)
+    request = GraphSymmetryOrbitRequest.model_validate_json(json.dumps(payload))
     with pytest.raises(OperationDomainValidationError):
         graph_symmetry_orbits(request.graph, request.generators)
 
@@ -93,14 +94,14 @@ def test_graph_symmetry_request_rejects_labels_outside_artifact_budget() -> None
     }
 
     with pytest.raises(ValidationError):
-        GraphSymmetryOrbitRequest.model_validate(payload)
+        GraphSymmetryOrbitRequest.model_validate_json(json.dumps(payload))
 
 
 def test_graph_symmetry_request_requires_nfc_generator_identifiers() -> None:
     payload = _path_request()
     payload["generators"][0]["generator_id"] = "refle\u0301ction"
 
-    request = GraphSymmetryOrbitRequest.model_validate(payload)
+    request = GraphSymmetryOrbitRequest.model_validate_json(json.dumps(payload))
     with pytest.raises(OperationDomainValidationError):
         graph_symmetry_orbits(request.graph, request.generators)
 
@@ -110,7 +111,7 @@ def test_graph_symmetry_request_requires_nfc_vertex_colors() -> None:
     payload["graph"]["vertex_colors"][0] = "\u0344endpoint"
 
     with pytest.raises(ValidationError):
-        GraphSymmetryOrbitRequest.model_validate(payload)
+        GraphSymmetryOrbitRequest.model_validate_json(json.dumps(payload))
 
 
 def test_graph_symmetry_request_requires_nfc_edge_colors() -> None:
@@ -118,7 +119,7 @@ def test_graph_symmetry_request_requires_nfc_edge_colors() -> None:
     payload["graph"]["edge_colors"] = ["\u0344" * 64, "\u0344" * 64]
 
     with pytest.raises(ValidationError):
-        GraphSymmetryOrbitRequest.model_validate(payload)
+        GraphSymmetryOrbitRequest.model_validate_json(json.dumps(payload))
 
 
 def test_graph_symmetry_schema_publishes_nfc_requirement() -> None:
@@ -164,7 +165,7 @@ def test_graph_symmetry_request_rejects_non_nfc_color_names() -> None:
     payload["graph"]["vertex_colors"] = ["endpo\u0069\u0301nt", "middle", "endpoint"]
 
     with pytest.raises(ValidationError):
-        GraphSymmetryOrbitRequest.model_validate(payload)
+        GraphSymmetryOrbitRequest.model_validate_json(json.dumps(payload))
 
 
 def test_canonicalization_result_passes_unchanged_into_symmetry_request() -> None:
@@ -336,7 +337,7 @@ def test_graph_symmetry_den_num_identity_generator_canonicalizes() -> None:
             }
         ],
     }
-    request = GraphSymmetryOrbitRequest.model_validate(payload)
+    request = GraphSymmetryOrbitRequest.model_validate_json(json.dumps(payload))
     result = graph_symmetry_orbits(request.graph, request.generators)
 
     assert result.vertex_orbit_count == 2
@@ -349,7 +350,7 @@ def test_graph_symmetry_result_rejects_generator_ids_not_matching_source() -> No
     payload["generator_count"] = 0
 
     with pytest.raises(ValidationError):
-        GraphSymmetryOrbitResult.model_validate(payload)
+        GraphSymmetryOrbitResult.model_validate_json(json.dumps(payload))
 
 
 def test_graph_symmetry_result_rejects_vertices_not_matching_source() -> None:
@@ -365,7 +366,7 @@ def test_graph_symmetry_result_rejects_vertices_not_matching_source() -> None:
     ]
 
     with pytest.raises(ValidationError):
-        GraphSymmetryOrbitResult.model_validate(payload)
+        GraphSymmetryOrbitResult.model_validate_json(json.dumps(payload))
 
 
 def test_graph_symmetry_result_rejects_color_modes_contradicting_source() -> None:
@@ -373,7 +374,7 @@ def test_graph_symmetry_result_rejects_color_modes_contradicting_source() -> Non
     payload["vertex_color_mode"] = "UNCOLORED"
 
     with pytest.raises(ValidationError):
-        GraphSymmetryOrbitResult.model_validate(payload)
+        GraphSymmetryOrbitResult.model_validate_json(json.dumps(payload))
 
     uncolored_payload = _reflection_path_result_payload()
     uncolored_payload["source"] = {

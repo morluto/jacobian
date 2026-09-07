@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from bisect import bisect_right
 from heapq import merge
-from typing import Literal, NamedTuple, Self
+from typing import Annotated, Literal, NamedTuple, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import DecimalIntegerEncoding
 from jacobian._models import StrictModel
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import format_canonical_integer
 
 MAX_R_FULL_CUTOFF_DIGITS = 32_768
 MAX_R_FULL_CUTOFF = 10**MAX_R_FULL_CUTOFF_DIGITS
@@ -117,15 +117,16 @@ class RFullEnumerateRequest(StrictModel):
         ),
         examples=[2],
     )
-    cutoff: CanonicalInteger = Field(
-        max_length=MAX_R_FULL_CUTOFF_DIGITS + 1,
+    cutoff: Annotated[
+        int, DecimalIntegerEncoding(max_digits=MAX_R_FULL_CUTOFF_DIGITS)
+    ] = Field(
         description="Positive upper bound (inclusive).",
         examples=["100"],
     )
 
     @model_validator(mode="after")
     def require_positive_cutoff(self) -> Self:
-        cutoff = parse_canonical_integer(self.cutoff)
+        cutoff = self.cutoff
         if cutoff <= 0 or cutoff > MAX_R_FULL_CUTOFF:
             raise PydanticCustomError(
                 "r_full_enumerate.cutoff_bound",
@@ -138,11 +139,11 @@ class RFullEnumerateResult(StrictModel):
     """The complete ordered family of r-full integers up to the cutoff."""
 
     minimum_exponent: int = Field(ge=MIN_R_FULL_EXPONENT)
-    cutoff: CanonicalInteger = Field(max_length=MAX_R_FULL_CUTOFF_DIGITS + 1)
+    cutoff: Annotated[int, DecimalIntegerEncoding(max_digits=MAX_R_FULL_CUTOFF_DIGITS)]
     count: int = Field(ge=0)
-    family: tuple[CanonicalInteger, ...] = Field(
-        default=(), max_length=MAX_R_FULL_FAMILY_SIZE
-    )
+    family: tuple[
+        Annotated[int, DecimalIntegerEncoding(max_digits=MAX_R_FULL_CUTOFF_DIGITS)], ...
+    ] = Field(default=(), max_length=MAX_R_FULL_FAMILY_SIZE)
 
     @model_validator(mode="after")
     def require_canonical_family(self) -> Self:
@@ -151,18 +152,21 @@ class RFullEnumerateResult(StrictModel):
                 "r_full_enumerate.count_mismatch",
                 "count must equal the family length",
             )
-        cutoff = parse_canonical_integer(self.cutoff)
+        cutoff = self.cutoff
         if cutoff <= 0 or cutoff > MAX_R_FULL_CUTOFF:
             raise PydanticCustomError(
                 "r_full_enumerate.cutoff_bound",
                 "cutoff must be a positive canonical integer within the admitted bound",
             )
-        if any(len(value) > MAX_R_FULL_CUTOFF_DIGITS + 1 for value in self.family):
+        if any(
+            len(format_canonical_integer(abs(value))) > MAX_R_FULL_CUTOFF_DIGITS
+            for value in self.family
+        ):
             raise PydanticCustomError(
                 "r_full_enumerate.family_member_width",
                 "family members exceed the admitted canonical width",
             )
-        values = [parse_canonical_integer(v) for v in self.family]
+        values = list(self.family)
         if any(v < 1 for v in values):
             raise PydanticCustomError(
                 "r_full_enumerate.positive_only",
@@ -194,10 +198,10 @@ class RFullEnumerateResult(StrictModel):
     def _from_kernel(
         cls,
         minimum_exponent: int,
-        cutoff: str,
+        cutoff: int,
         raw_family: list[int],
     ) -> RFullEnumerateResult:
-        family = tuple(format_canonical_integer(v) for v in sorted(raw_family))
+        family = tuple(sorted(raw_family))
         return cls.model_construct(
             minimum_exponent=minimum_exponent,
             cutoff=cutoff,

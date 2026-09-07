@@ -85,7 +85,7 @@ def test_chain_value_parsing_is_structural_and_consumers_admit_prime(
 
     monkeypatch.setattr(chain_operations, "require_prime_field_admission", tracked)
     value = ChainComplexValue.model_validate(payload)
-    ChainComplexValue.model_validate(value.model_dump(mode="json"))
+    ChainComplexValue.model_validate_json(value.model_dump_json())
     assert calls == []
     with pytest.raises(ValueError, match="not prime"):
         differential_squares_to_zero(value)
@@ -288,7 +288,7 @@ class TestIntegralHomology:
 
     @staticmethod
     def _apply(
-        matrix: tuple[tuple[str, ...], ...], coefficients: tuple[str, ...]
+        matrix: tuple[tuple[str | int, ...], ...], coefficients: tuple[int | str, ...]
     ) -> tuple[int, ...]:
         return tuple(
             sum(
@@ -312,7 +312,7 @@ class TestIntegralHomology:
         assert isinstance(degree_zero, IntegralHomologyGroupValue)
         assert isinstance(degree_one, IntegralHomologyGroupValue)
         assert degree_zero.free_rank == 0
-        assert degree_zero.torsion_invariant_factors == (str(order),)
+        assert degree_zero.torsion_invariant_factors == (order,)
         assert degree_one.free_rank == 0
         torsion = degree_zero.torsion_generators[0]
         assert self._apply(
@@ -325,8 +325,7 @@ class TestIntegralHomology:
         self, rank: int
     ) -> None:
         result = homology_groups(self._complex((rank,), ()))
-        payload = result.model_dump(mode="json")
-        serialized = HomologyResult.model_validate(payload)
+        serialized = HomologyResult.model_validate_json(result.model_dump_json())
         group = _integral_groups(serialized)[0]
 
         assert (
@@ -338,7 +337,7 @@ class TestIntegralHomology:
             group.incoming_smith_certificate.source.column_count,
         ) == (rank, 0)
         identity = tuple(
-            tuple("1" if row == column else "0" for column in range(rank))
+            tuple(1 if row == column else 0 for column in range(rank))
             for row in range(rank)
         )
         assert group.outgoing_smith_certificate.right_transformation.entries == identity
@@ -361,7 +360,7 @@ class TestIntegralHomology:
         assert isinstance(degree_one, IntegralHomologyGroupValue)
         assert (degree_zero.free_rank, degree_zero.torsion_invariant_factors) == (
             1,
-            ("2",),
+            (2,),
         )
         assert (degree_one.free_rank, degree_one.torsion_invariant_factors) == (
             1,
@@ -407,7 +406,7 @@ class TestIntegralHomology:
                 (group.free_rank, group.torsion_invariant_factors)
                 for group in changed_groups
             )
-            == ((0, ("2", "2")), (0, ()))
+            == ((0, (2, 2)), (0, ()))
         )
 
     def test_three_term_middle_homology_retains_cycles_and_bounding_chain(
@@ -425,7 +424,7 @@ class TestIntegralHomology:
 
         assert tuple(
             (group.free_rank, group.torsion_invariant_factors) for group in groups
-        ) == ((0, ()), (1, ("2",)), (0, ()))
+        ) == ((0, ()), (1, (2,)), (0, ()))
         middle = groups[1]
         cycles = tuple(generator.cycle for generator in middle.free_generators) + tuple(
             generator.cycle for generator in middle.torsion_generators
@@ -456,7 +455,7 @@ class TestIntegralHomology:
 
         assert tuple(
             (group.free_rank, group.torsion_invariant_factors) for group in groups
-        ) == ((1, ("2",)), (1, ()), (2, ()))
+        ) == ((1, (2,)), (1, ()), (2, ()))
 
     def test_signed_permutation_differential_is_admitted_exactly(self) -> None:
         """A unit-equivalent differential has zero homology in both degrees.
@@ -553,7 +552,7 @@ class TestIntegralHomology:
 
         degree_zero = result.homology_groups[0]
         assert isinstance(degree_zero, IntegralHomologyGroupValue)
-        assert degree_zero.torsion_invariant_factors == ("6",)
+        assert degree_zero.torsion_invariant_factors == (6,)
         assert produced.value.coefficient_ring is CoefficientRing.INTEGER
 
     def test_negative_degrees_and_zero_rank_groups_round_trip(self) -> None:
@@ -577,7 +576,7 @@ class TestIntegralHomology:
             degree_minus_one.incoming_smith_certificate.source.row_count,
             degree_minus_one.incoming_smith_certificate.source.column_count,
         ) == (0, 2)
-        assert HomologyResult.model_validate(result.model_dump(mode="json")) == result
+        assert HomologyResult.model_validate_json(result.model_dump_json()) == result
 
     def test_malformed_d_squared_is_rejected_before_smith(self) -> None:
         malformed = self._complex(
@@ -946,7 +945,7 @@ class TestIntegralHomology:
         assert executed_work > 0
         assert tuple(
             (group.free_rank, group.torsion_invariant_factors) for group in groups
-        ) == ((0, ("2",)), (0, ()))
+        ) == ((0, (2,)), (0, ()))
         assert_charged_work_parity(
             charged={"smith": plan.smith_work},
             executed={"smith": executed_work},

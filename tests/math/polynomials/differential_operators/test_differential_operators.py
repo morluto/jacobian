@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import itertools
+import json
 import math
 import random
 from collections.abc import Mapping
@@ -14,6 +15,7 @@ from pydantic import ValidationError
 from tests.math.polynomials._support import polynomial_validation_error
 
 from jacobian._exact import CanonicalRational
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials._conversions import rational_polynomial_from_sympy
 from jacobian.math.polynomials.differential_operators._bounds import (
@@ -108,7 +110,9 @@ def test_catalog_contains_the_single_atomic_application() -> None:
 
 
 def test_known_second_iterate_and_exact_comparison() -> None:
-    request = TOOLS[0].request_type.model_validate(TOOLS[0].examples[0].input)
+    request = TOOLS[0].request_type.model_validate_json(
+        json.dumps(TOOLS[0].examples[0].input)
+    )
 
     result = compute_differential_operator_application(request)
 
@@ -257,8 +261,8 @@ def test_tall_expanding_iterates_are_admitted_by_derived_budgets() -> None:
             expected=_polynomial(("x",), {(903,): math.perm(5_000, 4_097)}),
         )
     )
-    replayed = DifferentialOperatorApplyResult.model_validate(
-        result.model_dump(mode="json")
+    replayed = DifferentialOperatorApplyResult.model_validate_json(
+        result.model_dump_json()
     )
 
     assert result.output == _polynomial(("x",), {(903,): math.perm(5_000, 4_097)})
@@ -301,8 +305,8 @@ def test_colliding_powered_orders_are_counted_distinctly() -> None:
             expected=expected,
         )
     )
-    replayed = DifferentialOperatorApplyResult.model_validate(
-        result.model_dump(mode="json")
+    replayed = DifferentialOperatorApplyResult.model_validate_json(
+        result.model_dump_json()
     )
 
     assert result.output == expected
@@ -327,8 +331,8 @@ def test_annihilating_powered_terms_are_excluded_from_the_candidate_cap() -> Non
             expected=source,
         )
     )
-    replayed = DifferentialOperatorApplyResult.model_validate(
-        result.model_dump(mode="json")
+    replayed = DifferentialOperatorApplyResult.model_validate_json(
+        result.model_dump_json()
     )
 
     assert result.output == source
@@ -382,8 +386,8 @@ def test_identity_result_retains_expected_and_replays_bound() -> None:
     assert result.output == source
     assert result.matches_expected is True
     assert result.is_zero is False
-    replayed = DifferentialOperatorApplyResult.model_validate(
-        result.model_dump(mode="json")
+    replayed = DifferentialOperatorApplyResult.model_validate_json(
+        result.model_dump_json()
     )
     assert replayed == result
 
@@ -414,8 +418,8 @@ def test_identity_power_retains_expected_and_replays_bound() -> None:
             expected=tall_source,
         )
     )
-    replayed = DifferentialOperatorApplyResult.model_validate(
-        result.model_dump(mode="json")
+    replayed = DifferentialOperatorApplyResult.model_validate_json(
+        result.model_dump_json()
     )
 
     assert result.output == tall_source
@@ -436,8 +440,8 @@ def test_nonidentity_scalar_operators_follow_scale_only_budgets() -> None:
             expected=_polynomial(variables, {(129,): -1}),
         )
     )
-    replayed = DifferentialOperatorApplyResult.model_validate(
-        result.model_dump(mode="json")
+    replayed = DifferentialOperatorApplyResult.model_validate_json(
+        result.model_dump_json()
     )
 
     assert result.output == _polynomial(variables, {(129,): -1})
@@ -460,7 +464,7 @@ def test_nonidentity_scalar_operators_follow_scale_only_budgets() -> None:
 
 def test_signed_unit_scalar_iterate_admits_the_coefficient_boundary_source() -> None:
     variables = ("x",)
-    coefficient = CanonicalRational(num="1" + "0" * 32_767, den="1")
+    coefficient = CanonicalRational(num=10**32_767, den=1)
     source = RationalPolynomial(
         variables=variables,
         polynomial=SparseRationalPolynomial(
@@ -472,7 +476,7 @@ def test_signed_unit_scalar_iterate_admits_the_coefficient_boundary_source() -> 
         polynomial=SparseRationalPolynomial(
             terms=(
                 RationalPolynomialTerm(
-                    coefficient=CanonicalRational(num="-1" + "0" * 32_767, den="1"),
+                    coefficient=CanonicalRational(num=-(10**32_767), den=1),
                     exponents=(1,),
                 ),
             )
@@ -489,8 +493,8 @@ def test_signed_unit_scalar_iterate_admits_the_coefficient_boundary_source() -> 
                 expected=source if iterations % 2 == 0 else negated,
             )
         )
-        replayed = DifferentialOperatorApplyResult.model_validate(
-            result.model_dump(mode="json")
+        replayed = DifferentialOperatorApplyResult.model_validate_json(
+            result.model_dump_json()
         )
 
         assert result.output == (source if iterations % 2 == 0 else negated)
@@ -570,7 +574,7 @@ def test_merged_unit_paths_still_gate_at_the_coefficient_budget() -> None:
 @pytest.mark.scale
 def test_growing_derivatives_still_gate_at_the_coefficient_budget() -> None:
     variables = ("x",)
-    coefficient = CanonicalRational(num="1" + "0" * 32_767, den="1")
+    coefficient = CanonicalRational(num=10**32_767, den=1)
 
     def boundary_source(exponent: int) -> RationalPolynomial:
         return RationalPolynomial(
@@ -618,7 +622,7 @@ def test_growing_derivatives_still_gate_at_the_coefficient_budget() -> None:
 @pytest.mark.scale
 def test_nonunit_scalar_growth_still_gates_at_the_coefficient_budget() -> None:
     variables = ("x",)
-    coefficient = CanonicalRational(num="1" + "0" * 32_767, den="1")
+    coefficient = CanonicalRational(num=10**32_767, den=1)
     source = RationalPolynomial(
         variables=variables,
         polynomial=SparseRationalPolynomial(
@@ -644,7 +648,7 @@ def test_no_growth_derivatives_are_admitted_at_the_coefficient_boundary() -> Non
         polynomial=SparseRationalPolynomial(
             terms=(
                 RationalPolynomialTerm(
-                    coefficient=CanonicalRational(num="1" + "0" * 32_767, den="1"),
+                    coefficient=CanonicalRational(num=10**32_767, den=1),
                     exponents=(1,),
                 ),
             )
@@ -659,15 +663,18 @@ def test_no_growth_derivatives_are_admitted_at_the_coefficient_boundary() -> Non
             expected=_polynomial(variables, {(0,): 10**32_767}),
         )
     )
-    replayed = DifferentialOperatorApplyResult.model_validate(
-        result.model_dump(mode="json")
+    replayed = DifferentialOperatorApplyResult.model_validate_json(
+        result.model_dump_json()
     )
 
     assert result.output == _polynomial(variables, {(0,): 10**32_767})
     assert result.matches_expected is True
     assert result.is_zero is False
     assert replayed == result
-    assert len(result.output.polynomial.terms[0].coefficient.num) == 32_768
+    assert (
+        len(format_canonical_integer(result.output.polynomial.terms[0].coefficient.num))
+        == 32_768
+    )
 
 
 @pytest.mark.scale
@@ -679,7 +686,7 @@ def test_multinomial_path_multiplicity_gates_the_coefficient_bound() -> None:
         polynomial=SparseRationalPolynomial(
             terms=(
                 RationalPolynomialTerm(
-                    coefficient=CanonicalRational(num="1" + "0" * 32_701, den="1"),
+                    coefficient=CanonicalRational(num=10**32_701, den=1),
                     exponents=(32,),
                 ),
             )
@@ -711,13 +718,16 @@ def test_multinomial_path_multiplicity_gates_the_coefficient_bound() -> None:
             ),
         )
     )
-    replayed = DifferentialOperatorApplyResult.model_validate(
-        result.model_dump(mode="json")
+    replayed = DifferentialOperatorApplyResult.model_validate_json(
+        result.model_dump_json()
     )
 
     assert result.matches_expected is True
     assert result.is_zero is False
-    assert len(result.output.polynomial.terms[0].coefficient.num) > 32_700
+    assert (
+        len(format_canonical_integer(result.output.polynomial.terms[0].coefficient.num))
+        > 32_700
+    )
     assert replayed == result
 
 
@@ -794,7 +804,7 @@ def test_guaranteed_zero_admits_sources_beyond_expansion_caps() -> None:
 @pytest.mark.scale
 def test_tall_source_coefficients_are_admitted_by_derived_growth() -> None:
     variables = ("x",)
-    coefficient = CanonicalRational(num=str(10**300 - 1), den="1")
+    coefficient = CanonicalRational(num=10**300 - 1, den=1)
     source = RationalPolynomial(
         variables=variables,
         polynomial=SparseRationalPolynomial(
@@ -832,7 +842,7 @@ def test_tall_source_coefficients_are_admitted_by_derived_growth() -> None:
         polynomial=SparseRationalPolynomial(
             terms=(
                 RationalPolynomialTerm(
-                    coefficient=CanonicalRational(num=str(2 * (10**300 - 1)), den="1"),
+                    coefficient=CanonicalRational(num=2 * (10**300 - 1), den=1),
                     exponents=(0,),
                 ),
             )
@@ -865,7 +875,7 @@ def test_tall_source_coefficients_are_admitted_by_derived_growth() -> None:
                 polynomial=SparseRationalPolynomial(
                     terms=(
                         RationalPolynomialTerm(
-                            coefficient=CanonicalRational(num="1" + "0" * 299, den="1"),
+                            coefficient=CanonicalRational(num=10**299, den=1),
                             exponents=(1,),
                         ),
                     )
@@ -894,7 +904,7 @@ def test_tall_source_coefficients_are_admitted_by_derived_growth() -> None:
 
 def test_tall_operator_coefficients_are_admitted_by_derived_growth() -> None:
     variables = ("x",)
-    coefficient = CanonicalRational(num=str(10**300 - 1), den="1")
+    coefficient = CanonicalRational(num=10**300 - 1, den=1)
     operator = ConstantCoefficientDifferentialOperator(
         variables=variables,
         terms=(DifferentialOperatorTerm(coefficient=coefficient, orders=(1,)),),
@@ -928,7 +938,7 @@ def test_tall_operator_coefficients_are_admitted_by_derived_growth() -> None:
                 variables=variables,
                 terms=(
                     DifferentialOperatorTerm(
-                        coefficient=CanonicalRational(num="1" + "0" * 299, den="1"),
+                        coefficient=CanonicalRational(num=10**299, den=1),
                         orders=(1,),
                     ),
                 ),
@@ -947,7 +957,7 @@ def test_tall_operator_coefficients_are_admitted_by_derived_growth() -> None:
                 variables=variables,
                 terms=(
                     DifferentialOperatorTerm(
-                        coefficient=CanonicalRational(num="1" + "0" * 32_700, den="1"),
+                        coefficient=CanonicalRational(num=10**32_700, den=1),
                         orders=(1,),
                     ),
                 ),
@@ -958,7 +968,7 @@ def test_tall_operator_coefficients_are_admitted_by_derived_growth() -> None:
 
 @pytest.mark.scale
 def test_degenerate_shortcuts_still_honor_the_retained_byte_budget() -> None:
-    coefficient = CanonicalRational(num="1" + "0" * 32_767, den="1")
+    coefficient = CanonicalRational(num=10**32_767, den=1)
 
     def oversized_source(term_count: int) -> RationalPolynomial:
         return RationalPolynomial(
@@ -1022,8 +1032,8 @@ def test_expected_comparison_admits_values_beyond_the_kernel_regime() -> None:
             expected=unreachable,
         )
     )
-    replayed = DifferentialOperatorApplyResult.model_validate(
-        result.model_dump(mode="json")
+    replayed = DifferentialOperatorApplyResult.model_validate_json(
+        result.model_dump_json()
     )
 
     assert result.output == _polynomial(variables, {(0,): 1})
@@ -1033,7 +1043,7 @@ def test_expected_comparison_admits_values_beyond_the_kernel_regime() -> None:
 
 @pytest.mark.scale
 def test_expected_retention_is_not_capped_by_serialized_size() -> None:
-    coefficient = CanonicalRational(num="1" + "0" * 32_767, den="1")
+    coefficient = CanonicalRational(num=10**32_767, den=1)
     heavy_expected = RationalPolynomial(
         variables=("x",),
         polynomial=SparseRationalPolynomial(
@@ -1409,8 +1419,8 @@ def test_correlated_powered_axes_are_counted_distinctly() -> None:
             expected=expected,
         )
     )
-    replayed = DifferentialOperatorApplyResult.model_validate(
-        result.model_dump(mode="json")
+    replayed = DifferentialOperatorApplyResult.model_validate_json(
+        result.model_dump_json()
     )
 
     assert result.output == expected
@@ -1437,8 +1447,8 @@ def test_correlated_support_survives_the_enumeration_cutoff() -> None:
             expected=expected,
         )
     )
-    replayed = DifferentialOperatorApplyResult.model_validate(
-        result.model_dump(mode="json")
+    replayed = DifferentialOperatorApplyResult.model_validate_json(
+        result.model_dump_json()
     )
 
     assert result.output == expected
@@ -1489,8 +1499,8 @@ def test_per_monomial_annihilation_is_counted_in_the_candidate_bound() -> None:
             expected=expected,
         )
     )
-    replayed = DifferentialOperatorApplyResult.model_validate(
-        result.model_dump(mode="json")
+    replayed = DifferentialOperatorApplyResult.model_validate_json(
+        result.model_dump_json()
     )
 
     assert result.output == expected
@@ -1511,8 +1521,8 @@ def test_scalar_on_source_regime_skips_unreachable_expansion() -> None:
             expected=_polynomial(variables, {(0,): 1}),
         )
     )
-    replayed = DifferentialOperatorApplyResult.model_validate(
-        result.model_dump(mode="json")
+    replayed = DifferentialOperatorApplyResult.model_validate_json(
+        result.model_dump_json()
     )
 
     assert result.output == _polynomial(variables, {(0,): 1})
@@ -1570,8 +1580,8 @@ def test_distinct_source_denominators_are_not_merged_without_collision() -> None
             expected=expected,
         )
     )
-    replayed = DifferentialOperatorApplyResult.model_validate(
-        result.model_dump(mode="json")
+    replayed = DifferentialOperatorApplyResult.model_validate_json(
+        result.model_dump_json()
     )
 
     assert result.output == expected
@@ -1626,8 +1636,8 @@ def test_cross_canceling_operator_weights_keep_true_heights() -> None:
             expected=expected,
         )
     )
-    replayed = DifferentialOperatorApplyResult.model_validate(
-        result.model_dump(mode="json")
+    replayed = DifferentialOperatorApplyResult.model_validate_json(
+        result.model_dump_json()
     )
 
     assert result.output == expected
@@ -1652,8 +1662,8 @@ def test_annihilating_rescale_terms_are_excluded_from_growth() -> None:
             expected=expected,
         )
     )
-    replayed = DifferentialOperatorApplyResult.model_validate(
-        result.model_dump(mode="json")
+    replayed = DifferentialOperatorApplyResult.model_validate_json(
+        result.model_dump_json()
     )
 
     assert result.output == expected
@@ -1665,7 +1675,7 @@ def test_annihilating_rescale_terms_are_excluded_from_growth() -> None:
 @pytest.mark.scale
 def test_weight_enumeration_aborts_before_huge_powers_materialize() -> None:
     variables = ("x",)
-    numerator_n = CanonicalRational(num="1" + "0" * 32_767, den="1")
+    numerator_n = CanonicalRational(num=10**32_767, den=1)
     source = _polynomial(variables, {(400,): 1})
     operator = ConstantCoefficientDifferentialOperator(
         variables=variables,
@@ -1708,8 +1718,8 @@ def test_annihilating_rescale_scan_follows_the_request_work_budget() -> None:
             expected=source,
         )
     )
-    replayed = DifferentialOperatorApplyResult.model_validate(
-        result.model_dump(mode="json")
+    replayed = DifferentialOperatorApplyResult.model_validate_json(
+        result.model_dump_json()
     )
 
     assert result.output == source
@@ -1739,13 +1749,13 @@ def test_rescale_scan_overflow_falls_back_to_expansion_gates() -> None:
 @pytest.mark.scale
 def test_rescale_scaling_reduces_against_source_denominators() -> None:
     variables = ("x",)
-    numerator_n = "1" + "0" * 19999 + "1"
+    numerator_n = 10**20000 + 1
     source = RationalPolynomial(
         variables=variables,
         polynomial=SparseRationalPolynomial(
             terms=(
                 RationalPolynomialTerm(
-                    coefficient=CanonicalRational(num="1", den=numerator_n),
+                    coefficient=CanonicalRational(num=1, den=numerator_n),
                     exponents=(1,),
                 ),
             )
@@ -1755,7 +1765,7 @@ def test_rescale_scaling_reduces_against_source_denominators() -> None:
         variables=variables,
         terms=(
             DifferentialOperatorTerm(
-                coefficient=CanonicalRational(num=numerator_n, den="1"),
+                coefficient=CanonicalRational(num=numerator_n, den=1),
                 orders=(0,),
             ),
         ),
@@ -1769,8 +1779,8 @@ def test_rescale_scaling_reduces_against_source_denominators() -> None:
             expected=_polynomial(variables, {(1,): 1}),
         )
     )
-    replayed = DifferentialOperatorApplyResult.model_validate(
-        result.model_dump(mode="json")
+    replayed = DifferentialOperatorApplyResult.model_validate_json(
+        result.model_dump_json()
     )
 
     assert result.output == _polynomial(variables, {(1,): 1})
@@ -1782,7 +1792,7 @@ def test_rescale_scaling_reduces_against_source_denominators() -> None:
 @pytest.mark.scale
 def test_boundary_scalar_coefficient_is_measured_exactly() -> None:
     variables = ("x",)
-    coefficient = CanonicalRational(num="9" * 32_768, den="1")
+    coefficient = CanonicalRational(num=10**32_768 - 1, den=1)
     source = _polynomial(variables, {(0,): 1})
     operator = ConstantCoefficientDifferentialOperator(
         variables=variables,
@@ -1797,12 +1807,15 @@ def test_boundary_scalar_coefficient_is_measured_exactly() -> None:
             expected=_polynomial(variables, {(0,): Fraction(10**32_768 - 1)}),
         )
     )
-    replayed = DifferentialOperatorApplyResult.model_validate(
-        result.model_dump(mode="json")
+    replayed = DifferentialOperatorApplyResult.model_validate_json(
+        result.model_dump_json()
     )
 
     assert result.output == _polynomial(variables, {(0,): 10**32_768 - 1})
-    assert len(result.output.polynomial.terms[0].coefficient.num) == 32_768
+    assert (
+        len(format_canonical_integer(result.output.polynomial.terms[0].coefficient.num))
+        == 32_768
+    )
     assert result.matches_expected is True
     assert result.is_zero is False
     assert replayed == result
@@ -1810,7 +1823,7 @@ def test_boundary_scalar_coefficient_is_measured_exactly() -> None:
 
 def test_wide_operator_weight_growth_gates_at_the_height_cap() -> None:
     variables = ("x",)
-    n_coefficient = CanonicalRational(num="1" + "0" * 1_499, den="1")
+    n_coefficient = CanonicalRational(num=10**1_499, den=1)
     source = _polynomial(variables, {(400,): 1})
     operator = ConstantCoefficientDifferentialOperator(
         variables=variables,
@@ -1876,8 +1889,8 @@ def test_coprime_tall_operator_denominators_defer_the_shared_height() -> None:
             expected=expected,
         )
     )
-    replayed = DifferentialOperatorApplyResult.model_validate(
-        result.model_dump(mode="json")
+    replayed = DifferentialOperatorApplyResult.model_validate_json(
+        result.model_dump_json()
     )
 
     assert result.output == expected
@@ -1899,12 +1912,15 @@ def test_falling_factorial_growth_is_measured_exactly() -> None:
             expected=_polynomial(variables, {(0,): factorial}),
         )
     )
-    replayed = DifferentialOperatorApplyResult.model_validate(
-        result.model_dump(mode="json")
+    replayed = DifferentialOperatorApplyResult.model_validate_json(
+        result.model_dump_json()
     )
 
     assert result.output == _polynomial(variables, {(0,): factorial})
-    assert len(result.output.polynomial.terms[0].coefficient.num) == 29_711
+    assert (
+        len(format_canonical_integer(result.output.polynomial.terms[0].coefficient.num))
+        == 29_711
+    )
     assert result.matches_expected is True
     assert result.is_zero is False
     assert replayed == result
@@ -1950,12 +1966,15 @@ def test_falling_factorial_cancels_against_source_denominators() -> None:
             expected=expected,
         )
     )
-    replayed = DifferentialOperatorApplyResult.model_validate(
-        result.model_dump(mode="json")
+    replayed = DifferentialOperatorApplyResult.model_validate_json(
+        result.model_dump_json()
     )
 
     assert result.output == expected
-    assert len(result.output.polynomial.terms[0].coefficient.num) == 29_924
+    assert (
+        len(format_canonical_integer(result.output.polynomial.terms[0].coefficient.num))
+        == 29_924
+    )
     assert result.matches_expected is True
     assert result.is_zero is False
     assert replayed == result
@@ -2012,12 +2031,15 @@ def test_class_sums_are_reduced_before_height_measurement() -> None:
             expected=expected,
         )
     )
-    replayed = DifferentialOperatorApplyResult.model_validate(
-        result.model_dump(mode="json")
+    replayed = DifferentialOperatorApplyResult.model_validate_json(
+        result.model_dump_json()
     )
 
     assert result.output == expected
-    assert len(result.output.polynomial.terms[0].coefficient.num) == 32_768
+    assert (
+        len(format_canonical_integer(result.output.polynomial.terms[0].coefficient.num))
+        == 32_768
+    )
     assert result.matches_expected is True
     assert result.is_zero is False
     assert replayed == result
@@ -2041,8 +2063,8 @@ def test_colliding_output_exponents_share_the_candidate_budget() -> None:
             expected=expected,
         )
     )
-    replayed = DifferentialOperatorApplyResult.model_validate(
-        result.model_dump(mode="json")
+    replayed = DifferentialOperatorApplyResult.model_validate_json(
+        result.model_dump_json()
     )
 
     assert result.output == expected
@@ -2065,12 +2087,15 @@ def test_class_heights_keep_signed_cancellation() -> None:
             expected=_polynomial(variables, {(1,): height}),
         )
     )
-    replayed = DifferentialOperatorApplyResult.model_validate(
-        result.model_dump(mode="json")
+    replayed = DifferentialOperatorApplyResult.model_validate_json(
+        result.model_dump_json()
     )
 
     assert result.output == _polynomial(variables, {(1,): height})
-    assert len(result.output.polynomial.terms[0].coefficient.num) == 32_768
+    assert (
+        len(format_canonical_integer(result.output.polynomial.terms[0].coefficient.num))
+        == 32_768
+    )
     assert result.matches_expected is True
     assert result.is_zero is False
     assert replayed == result
@@ -2099,7 +2124,7 @@ def test_iterations_stay_inside_the_interoperable_integer_range() -> None:
 
 def test_coefficient_growth_boundary_is_admitted_then_rejected() -> None:
     source = _polynomial(("x",), {(0,): 1})
-    coefficient = CanonicalRational(num=str(10**255), den="1")
+    coefficient = CanonicalRational(num=10**255, den=1)
     operator = ConstantCoefficientDifferentialOperator(
         variables=("x",),
         terms=(DifferentialOperatorTerm(coefficient=coefficient, orders=(0,)),),
@@ -2111,7 +2136,10 @@ def test_coefficient_growth_boundary_is_admitted_then_rejected() -> None:
         iterations=128,
     )
     result = compute_differential_operator_application(accepted)
-    assert len(result.output.polynomial.terms[0].coefficient.num) == 32_641
+    assert (
+        len(format_canonical_integer(result.output.polynomial.terms[0].coefficient.num))
+        == 32_641
+    )
 
     with pytest.raises(OperationDomainValidationError):
         compute_differential_operator_application(
@@ -2124,23 +2152,25 @@ def test_coefficient_growth_boundary_is_admitted_then_rejected() -> None:
 
 
 def test_result_rejects_forged_zero_and_expected_decisions() -> None:
-    request = TOOLS[0].request_type.model_validate(TOOLS[0].examples[0].input)
+    request = TOOLS[0].request_type.model_validate_json(
+        json.dumps(TOOLS[0].examples[0].input)
+    )
     result = compute_differential_operator_application(request)
 
     payload = result.model_dump(mode="json")
     payload["is_zero"] = True
     with polynomial_validation_error():
-        DifferentialOperatorApplyResult.model_validate(payload)
+        DifferentialOperatorApplyResult.model_validate_json(json.dumps(payload))
 
     payload = result.model_dump(mode="json")
     payload["matches_expected"] = False
     with polynomial_validation_error():
-        DifferentialOperatorApplyResult.model_validate(payload)
+        DifferentialOperatorApplyResult.model_validate_json(json.dumps(payload))
 
     payload = result.model_dump(mode="json")
     payload["expected"]["polynomial"]["terms"][-1]["coefficient"]["num"] = "5"
     with polynomial_validation_error():
-        DifferentialOperatorApplyResult.model_validate(payload)
+        DifferentialOperatorApplyResult.model_validate_json(json.dumps(payload))
 
 
 def test_dvorsky_finite_identities_for_m_one_through_six() -> None:

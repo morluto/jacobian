@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 from collections.abc import Iterator, Sequence
 from fractions import Fraction
@@ -15,6 +16,7 @@ from pydantic import (
     StringConstraints,
     TypeAdapter,
     ValidationError,
+    ValidationInfo,
     model_validator,
 )
 from pydantic_core import PydanticCustomError
@@ -22,6 +24,7 @@ from sympy import Matrix, Rational
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel, canonicalize_json_containers
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.geometry.polytopes._rational_geometry import (
     determinant_sign,
     recession_cone_is_trivial,
@@ -324,19 +327,21 @@ def _require_raw_component_digit_bound(
     """
 
     if isinstance(component, CanonicalRational):
-        num, den = component.num, component.den
+        require_bounded_rational(component, max_digits=max_digits, label=label)
+        return
     elif isinstance(component, dict):
         raw_num = component.get("num")
         raw_den = component.get("den")
-        if not isinstance(raw_num, str) or not isinstance(raw_den, str):
-            return
-        num, den = raw_num, raw_den
+        for value in (raw_num, raw_den):
+            if (isinstance(value, str) and len(value.lstrip("-")) > max_digits) or (
+                type(value) is int and abs(value) >= 10**max_digits
+            ):
+                raise _validation_error(
+                    "component_digit_bound",
+                    f"{label} exceeds the {max_digits}-digit bound",
+                )
     else:
         return
-    if max(len(num.lstrip("-")), len(den.lstrip("-"))) > max_digits:
-        raise _validation_error(
-            "component_digit_bound", f"{label} exceeds the {max_digits}-digit bound"
-        )
 
 
 def _require_raw_component_within_support_envelope(
@@ -404,14 +409,12 @@ def _require_raw_canonical_rational_component(
 
     if isinstance(component, CanonicalRational):
         return
-    if (
-        isinstance(component, dict)
-        and set(component) == {"num", "den"}
-        and isinstance(component["num"], str)
-        and isinstance(component["den"], str)
-    ):
+    if isinstance(component, dict) and set(component) == {"num", "den"}:
         try:
-            CanonicalRational.model_validate(component)
+            if isinstance(component["num"], str) and isinstance(component["den"], str):
+                CanonicalRational.model_validate_json(json.dumps(component))
+            else:
+                CanonicalRational.model_validate(component)
         except ValidationError as exc:
             raise _validation_error(
                 "canonical_rational", f"{label} must be a canonical rational"
@@ -544,7 +547,11 @@ def _require_raw_exposed_face_vertex(
 
     if isinstance(vertex, RationalPolytopeVertex):
         return vertex.vertex_id, tuple(
-            (component.num, component.den) for component in vertex.coordinates
+            (
+                format_canonical_integer(component.num),
+                format_canonical_integer(component.den),
+            )
+            for component in vertex.coordinates
         )
     if (
         not isinstance(vertex, dict)
@@ -574,9 +581,19 @@ def _require_raw_exposed_face_vertex(
             component, "exposed face vertex coordinate"
         )
     return vertex["vertex_id"], tuple(
-        (component.num, component.den)
+        (
+            format_canonical_integer(component.num),
+            format_canonical_integer(component.den),
+        )
         if isinstance(component, CanonicalRational)
-        else (component["num"], component["den"])
+        else (
+            format_canonical_integer(component["num"])
+            if type(component["num"]) is int
+            else component["num"],
+            format_canonical_integer(component["den"])
+            if type(component["den"]) is int
+            else component["den"],
+        )
         for component in coordinates
     )
 
@@ -1378,7 +1395,9 @@ class FacetIncidenceRequest(StrictModel):
 
     @model_validator(mode="before")
     @classmethod
-    def accept_canonical_v_polytope_value(cls, data: object) -> object:
+    def accept_canonical_v_polytope_value(
+        cls, data: object, info: ValidationInfo
+    ) -> object:
         """Project the canonical labelled V-polytope onto bare vertices.
 
         Support results carry ``RationalVPolytope`` as the domain's
@@ -1421,7 +1440,11 @@ class FacetIncidenceRequest(StrictModel):
             return {**data, "vertices": _canonical_v_polytope_vertices(value)}
         if isinstance(value, dict) and set(value) == {"space", "vertices"}:
             _require_raw_v_polytope_coordinates_within_facet_envelope(value)
-            canonical = RationalVPolytope.model_validate(value)
+            canonical = (
+                RationalVPolytope.model_validate_json(json.dumps(value))
+                if info.mode == "json"
+                else RationalVPolytope.model_validate(value)
+            )
             return {**data, "vertices": _canonical_v_polytope_vertices(canonical)}
         return data
 
@@ -1909,7 +1932,9 @@ class PolytopeVolumeRequest(StrictModel):
 
     @model_validator(mode="before")
     @classmethod
-    def accept_canonical_v_polytope_value(cls, data: object) -> object:
+    def accept_canonical_v_polytope_value(
+        cls, data: object, info: ValidationInfo
+    ) -> object:
         """Project the canonical labelled V-polytope onto bare vertices.
 
         Support results carry ``RationalVPolytope`` as the domain's
@@ -1956,7 +1981,11 @@ class PolytopeVolumeRequest(StrictModel):
         if isinstance(value, RationalVPolytope):
             return {**data, "vertices": _canonical_v_polytope_vertices(value)}
         if isinstance(value, dict) and set(value) == {"space", "vertices"}:
-            canonical = RationalVPolytope.model_validate(value)
+            canonical = (
+                RationalVPolytope.model_validate_json(json.dumps(value))
+                if info.mode == "json"
+                else RationalVPolytope.model_validate(value)
+            )
             return {**data, "vertices": _canonical_v_polytope_vertices(canonical)}
         return data
 
@@ -1995,8 +2024,12 @@ def _validate_vertices(
             require_bounded_rational(
                 coord, max_digits=COORDINATE_DIGITS, label="vertex coordinate"
             )
-            numerator_digits = max(numerator_digits, len(coord.num.lstrip("-")))
-            denominator_digits = max(denominator_digits, len(coord.den))
+            numerator_digits = max(
+                numerator_digits, len(format_canonical_integer(abs(coord.num)))
+            )
+            denominator_digits = max(
+                denominator_digits, len(format_canonical_integer(coord.den))
+            )
     dim = len(vertices[0].coordinates)
     if dim > dimension_bound:
         raise _validation_error(

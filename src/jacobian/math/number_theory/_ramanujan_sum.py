@@ -7,7 +7,7 @@ from typing import Annotated, Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import DecimalIntegerEncoding
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     MathTool,
@@ -28,21 +28,16 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 
 
 RamanujanModulus = Annotated[
-    CanonicalInteger,
-    Field(max_length=_MAX_MODULUS_DIGITS),
+    int,
+    DecimalIntegerEncoding(_MAX_MODULUS_DIGITS),
 ]
 
-# Every field binds through ``jacobian._exact.CanonicalInteger``, the owner of
-# Jacobian's canonical signed-decimal integer encoding: zero is exactly "0" and
-# every other value carries an optional minus sign on a nonzero leading digit,
-# so negative zero cannot bind and mathematically equal inputs share one
-# serialized identity across request and result.  Operation-specific execution
-# bounds are applied on top of the owner type, never by restating its grammar;
-# the modulus's nonnegativity is a mathematical precondition enforced by the
-# native operation rather than part of the owned encoding.
+# Request and result fields use the shared strict decimal integer codec. The
+# modulus's nonnegativity is a mathematical precondition enforced by the
+# native operation rather than part of the integer encoding.
 RamanujanSumInteger = Annotated[
-    CanonicalInteger,
-    Field(max_length=MAX_INTEGER_DIGITS),
+    int,
+    DecimalIntegerEncoding(MAX_INTEGER_DIGITS),
 ]
 
 
@@ -79,7 +74,7 @@ class RamanujanSumResult(StrictModel):
 
     @model_validator(mode="after")
     def require_nonnegative_modulus(self) -> Self:
-        if int(self.modulus) < 0:
+        if self.modulus < 0:
             raise _validation_error(
                 "modulus_must_be_nonnegative", "modulus must be nonnegative"
             )
@@ -90,20 +85,20 @@ class RamanujanSumResult(StrictModel):
         """Build one result after the admitted sum kernel established its value."""
 
         return cls.model_construct(
-            modulus=request.modulus, frequency=request.frequency, value=str(value)
+            modulus=request.modulus, frequency=request.frequency, value=value
         )
 
 
 def compute_ramanujan_sum(request: RamanujanSumRequest) -> RamanujanSumResult:
     """Evaluate one admitted exact Ramanujan sum."""
 
-    if int(request.modulus) < 0:
+    if request.modulus < 0:
         raise OperationDomainValidationError(
             location=("modulus",),
             code="number_theory.modulus_must_be_nonnegative",
             message="modulus must be nonnegative",
         )
-    value = ramanujan_sum(int(request.modulus), int(request.frequency))
+    value = ramanujan_sum(request.modulus, request.frequency)
     return RamanujanSumResult._from_kernel(request, value=value)
 
 

@@ -97,15 +97,15 @@ def _open_unit_disk_request() -> PlaneComponentProfileRequest:
                         "polynomial": {
                             "terms": [
                                 {
-                                    "coefficient": {"num": "1", "den": "1"},
+                                    "coefficient": {"num": 1, "den": 1},
                                     "exponents": [2, 0],
                                 },
                                 {
-                                    "coefficient": {"num": "1", "den": "1"},
+                                    "coefficient": {"num": 1, "den": 1},
                                     "exponents": [0, 2],
                                 },
                                 {
-                                    "coefficient": {"num": "-1", "den": "1"},
+                                    "coefficient": {"num": -1, "den": 1},
                                     "exponents": [0, 0],
                                 },
                             ]
@@ -120,10 +120,10 @@ def _open_unit_disk_request() -> PlaneComponentProfileRequest:
 
 
 def _whole_plane_with_origin() -> PlaneComponentProfileRequest:
-    coordinate = {"polynomial": ["1", "0"], "real_root_index": 0}
+    coordinate = {"polynomial": [1, 0], "real_root_index": 0}
     interval = {
-        "lower": {"num": "0", "den": "1"},
-        "upper": {"num": "0", "den": "1"},
+        "lower": {"num": 0, "den": 1},
+        "upper": {"num": 0, "den": 1},
     }
     return PlaneComponentProfileRequest.model_validate(
         {

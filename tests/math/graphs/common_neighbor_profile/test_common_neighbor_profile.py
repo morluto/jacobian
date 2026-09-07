@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable
 
 import pytest
@@ -111,13 +112,13 @@ def test_serialized_profile_claim_is_verified_for_content_and_coverage() -> None
     payload = result.model_dump(mode="json")
     payload["rows"][0]["codegree"] = 7
     assert not verify_common_neighbor_profile(
-        CommonNeighborProfileResult.model_validate(payload)
+        CommonNeighborProfileResult.model_validate_json(json.dumps(payload))
     )
 
     payload = result.model_dump(mode="json")
     payload["rows"] = payload["rows"][1:]
     assert not verify_common_neighbor_profile(
-        CommonNeighborProfileResult.model_validate(payload)
+        CommonNeighborProfileResult.model_validate_json(json.dumps(payload))
     )
 
 

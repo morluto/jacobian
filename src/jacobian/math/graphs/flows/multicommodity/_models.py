@@ -10,7 +10,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.graphs.flows._models import FlowGraph
 
 # This operation scans a sparse commodity-by-edge tensor and materializes one
@@ -238,8 +238,8 @@ def _component_sums_with_folds(
         (edge.source, edge.target): {} for edge in flow.network.edges
     }
     for entry in flow.entries:
-        numerator = parse_canonical_integer(entry.amount.num)
-        denominator = parse_canonical_integer(entry.amount.den)
+        numerator = entry.amount.num
+        denominator = entry.amount.den
         source_key = (entry.commodity_id, entry.source)
         target_key = (entry.commodity_id, entry.target)
         edge_key = (entry.source, entry.target)

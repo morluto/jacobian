@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from copy import deepcopy
 from fractions import Fraction
 from typing import Any
@@ -34,21 +35,23 @@ def _request(
     *,
     precision_bits: int = 128,
 ) -> IntervalExpressionSecondJetEnclosureRequest:
-    return IntervalExpressionSecondJetEnclosureRequest.model_validate(
-        {
-            "expression": expression,
-            "box": {
-                "variables": [name for name, _, _ in coordinates],
-                "intervals": [
-                    {
-                        "lower": _q(lower.numerator, lower.denominator),
-                        "upper": _q(upper.numerator, upper.denominator),
-                    }
-                    for _, lower, upper in coordinates
-                ],
-            },
-            "precision_bits": precision_bits,
-        }
+    return IntervalExpressionSecondJetEnclosureRequest.model_validate_json(
+        json.dumps(
+            {
+                "expression": expression,
+                "box": {
+                    "variables": [name for name, _, _ in coordinates],
+                    "intervals": [
+                        {
+                            "lower": _q(lower.numerator, lower.denominator),
+                            "upper": _q(upper.numerator, upper.denominator),
+                        }
+                        for _, lower, upper in coordinates
+                    ],
+                },
+                "precision_bits": precision_bits,
+            }
+        )
     )
 
 
@@ -274,7 +277,9 @@ def test_source_bound_result_round_trips_without_replaying_mutated_partials() ->
     )
     payload = deepcopy(payload)
     payload["hessian"][0]["enclosure"]["lower"] = {"mantissa": "0", "exponent": 0}
-    parsed = IntervalExpressionSecondJetEnclosureResult.model_validate(payload)
+    parsed = IntervalExpressionSecondJetEnclosureResult.model_validate_json(
+        json.dumps(payload)
+    )
     assert parsed.model_dump(mode="json") == payload
 
 

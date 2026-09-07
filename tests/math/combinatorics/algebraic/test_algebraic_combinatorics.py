@@ -26,14 +26,14 @@ def test_hook_lengths_partition_321() -> None:
         HookLengthRequest(partition=IntegerPartition(parts=(3, 2, 1)))
     )
     assert result.hooks == ((5, 3, 1), (3, 1), (1,))
-    assert result.total_product == "45"
+    assert result.total_product == 45
 
 
 def test_hook_lengths_single_row() -> None:
     """Hook lengths of (n) are [n, n-1, ..., 1]."""
     result = hook_lengths(HookLengthRequest(partition=IntegerPartition(parts=(4,))))
     assert result.hooks == ((4, 3, 2, 1),)
-    assert result.total_product == "24"
+    assert result.total_product == 24
 
 
 def test_hook_lengths_single_column() -> None:
@@ -42,7 +42,7 @@ def test_hook_lengths_single_column() -> None:
         HookLengthRequest(partition=IntegerPartition(parts=(1, 1, 1)))
     )
     assert result.hooks == ((3,), (2,), (1,))
-    assert result.total_product == "6"
+    assert result.total_product == 6
 
 
 def test_syt_count_partition_321() -> None:
@@ -50,7 +50,7 @@ def test_syt_count_partition_321() -> None:
     result = syt_count(
         StandardYoungTableauCountRequest(partition=IntegerPartition(parts=(3, 2, 1)))
     )
-    assert result.count == "16"
+    assert result.count == 16
     assert result.n == 6
 
 
@@ -59,7 +59,7 @@ def test_syt_count_single_row() -> None:
     result = syt_count(
         StandardYoungTableauCountRequest(partition=IntegerPartition(parts=(5,)))
     )
-    assert result.count == "1"
+    assert result.count == 1
     assert result.n == 5
 
 
@@ -68,7 +68,7 @@ def test_syt_count_single_column() -> None:
     result = syt_count(
         StandardYoungTableauCountRequest(partition=IntegerPartition(parts=(1, 1, 1, 1)))
     )
-    assert result.count == "1"
+    assert result.count == 1
     assert result.n == 4
 
 
@@ -77,7 +77,7 @@ def test_syt_count_rectangle_22() -> None:
     result = syt_count(
         StandardYoungTableauCountRequest(partition=IntegerPartition(parts=(2, 2)))
     )
-    assert result.count == "2"
+    assert result.count == 2
 
 
 def _count_syt_brute_force(parts: tuple[int, ...]) -> int:
@@ -107,7 +107,7 @@ def test_syt_count_matches_brute_force() -> None:
         result = syt_count(
             StandardYoungTableauCountRequest(partition=IntegerPartition(parts=parts))
         )
-        assert result.count == str(brute)
+        assert result.count == brute
 
 
 def test_conjugate_self_conjugate_partition() -> None:
@@ -152,8 +152,8 @@ def test_empty_canonical_partition_composes_with_all_partition_consumers() -> No
     )
 
     assert hook_result.hooks == ()
-    assert hook_result.total_product == "1"
-    assert count_result.count == "1"
+    assert hook_result.total_product == 1
+    assert count_result.count == 1
     assert count_result.n == 0
     assert conjugate_result.conjugate == partition
     assert algebraic_combinatorics.hook_lengths(partition) == ()
@@ -187,7 +187,7 @@ def test_partition_operations_return_typed_results_at_the_size_boundary() -> Non
     count_result = syt_count(
         StandardYoungTableauCountRequest(partition=conjugate_result.conjugate)
     )
-    assert count_result.count == "1"
+    assert count_result.count == 1
     assert count_result.n == 500
 
 
@@ -215,4 +215,4 @@ def test_syt_count_large_returns_canonical_string() -> None:
             partition=IntegerPartition(parts=(10, 9, 8, 7, 6, 5, 4, 1))
         )
     )
-    assert result.count == "322821557622027077916662169600"
+    assert result.count == 322821557622027077916662169600

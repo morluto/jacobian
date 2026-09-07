@@ -50,7 +50,7 @@ def test_native_rank_accepts_dimension_retaining_sparse_values() -> None:
                 {
                     "row": 0,
                     "column": 127,
-                    "value": {"num": "1", "den": "1"},
+                    "value": {"num": 1, "den": 1},
                 }
             ],
         }

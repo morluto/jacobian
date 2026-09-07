@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from copy import deepcopy
 from dataclasses import replace
@@ -48,13 +49,17 @@ def _payload(
 
 
 def _compute(payload: dict[str, object]) -> AsymmetricLocalLemmaWitnessCheckResult:
-    request = AsymmetricLocalLemmaWitnessRequest.model_validate(payload)
+    request = AsymmetricLocalLemmaWitnessRequest.model_validate_json(
+        json.dumps(payload)
+    )
     return compute_asymmetric_local_lemma_witness_check(request)
 
 
 def _assert_result_claim_invalid(payload: dict[str, object]) -> None:
     try:
-        result = AsymmetricLocalLemmaWitnessCheckResult.model_validate(payload)
+        result = AsymmetricLocalLemmaWitnessCheckResult.model_validate_json(
+            json.dumps(payload)
+        )
     except ValidationError:
         return
     with pytest.raises(ValueError):
@@ -347,7 +352,9 @@ def test_raw_input_rational_digit_bound_precedes_canonical_integer_parsing() -> 
             payload = _payload(("A",), (Fraction(),), (Fraction(),), ((),))
             payload["probability_upper_bounds"] = [{"num": oversized, "den": "1"}]
             with pytest.raises(ValidationError):
-                AsymmetricLocalLemmaWitnessRequest.model_validate(payload)
+                AsymmetricLocalLemmaWitnessRequest.model_validate_json(
+                    json.dumps(payload)
+                )
     finally:
         sys.set_int_max_str_digits(previous_limit)
 
@@ -362,7 +369,9 @@ def test_raw_result_digit_bound_precedes_source_replay() -> None:
     }
 
     with pytest.raises(ValidationError):
-        AsymmetricLocalLemmaWitnessCheckResult.model_validate(serialized)
+        AsymmetricLocalLemmaWitnessCheckResult.model_validate_json(
+            json.dumps(serialized)
+        )
 
 
 def test_event_count_is_rejected_in_raw_preflight() -> None:
@@ -422,8 +431,8 @@ def test_operation_declares_the_exact_public_contract() -> None:
     assert ASYMMETRIC_LOCAL_LEMMA_OPERATION.operation_id == (
         "probability.local_lemma.asymmetric_witness.check"
     )
-    example_request = AsymmetricLocalLemmaWitnessRequest.model_validate(
-        ASYMMETRIC_LOCAL_LEMMA_OPERATION.examples[0].input
+    example_request = AsymmetricLocalLemmaWitnessRequest.model_validate_json(
+        json.dumps(ASYMMETRIC_LOCAL_LEMMA_OPERATION.examples[0].input),
     )
     example_result = ASYMMETRIC_LOCAL_LEMMA_OPERATION.run(example_request)
     assert isinstance(example_result, AsymmetricLocalLemmaWitnessCheckResult)

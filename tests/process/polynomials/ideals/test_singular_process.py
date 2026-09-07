@@ -42,7 +42,7 @@ def _ideal() -> RationalPolynomialIdeal:
                 polynomial=SparseRationalPolynomial(
                     terms=(
                         RationalPolynomialTerm(
-                            coefficient=CanonicalRational(num="1", den="1"),
+                            coefficient=CanonicalRational(num=1, den=1),
                             exponents=(2,),
                         ),
                     )
@@ -64,7 +64,7 @@ def _eight_var_ideal() -> RationalPolynomialIdeal:
                 polynomial=SparseRationalPolynomial(
                     terms=(
                         RationalPolynomialTerm(
-                            coefficient=CanonicalRational(num="1", den="1"),
+                            coefficient=CanonicalRational(num=1, den=1),
                             exponents=tuple(2 for _ in variables),
                         ),
                     )
@@ -362,7 +362,7 @@ def test_component_wider_than_the_ring_dimension_is_accepted(
                 polynomial=SparseRationalPolynomial(
                     terms=(
                         RationalPolynomialTerm(
-                            coefficient=CanonicalRational(num="1", den="1"),
+                            coefficient=CanonicalRational(num=1, den=1),
                             exponents=(1, 1),
                         ),
                     )
@@ -394,7 +394,7 @@ def test_component_at_the_ring_dimension_is_accepted(
                 polynomial=SparseRationalPolynomial(
                     terms=(
                         RationalPolynomialTerm(
-                            coefficient=CanonicalRational(num="1", den="1"),
+                            coefficient=CanonicalRational(num=1, den=1),
                             exponents=(1, 1),
                         ),
                     )

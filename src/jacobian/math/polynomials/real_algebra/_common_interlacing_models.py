@@ -83,8 +83,12 @@ def _bound_raw_rational(value: object, *, label: str) -> None:
     else:
         return
     for component in components:
-        if isinstance(component, str) and (
-            len(component.lstrip("-")) > MAX_COMMON_INTERLACING_INPUT_DIGITS
+        if (
+            isinstance(component, str)
+            and len(component.lstrip("-")) > MAX_COMMON_INTERLACING_INPUT_DIGITS
+        ) or (
+            type(component) is int
+            and abs(component) >= 10**MAX_COMMON_INTERLACING_INPUT_DIGITS
         ):
             raise _validation_error(
                 "coefficient_digits",

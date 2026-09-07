@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.analysis.boolean._models import BooleanWalshTransformResult
+from jacobian.math.analysis.boolean.fourier._models import FourierSpectrumResult
 
 
 def walsh_hadamard_transform(truth_table: Sequence[int]) -> list[int]:
@@ -50,7 +50,7 @@ def walsh_hadamard_transform(truth_table: Sequence[int]) -> list[int]:
 
 
 def verify_walsh_transform(
-    claim: BooleanWalshTransformResult,
+    claim: FourierSpectrumResult,
 ) -> bool:
     """Verify a Walsh spectrum against its retained Boolean truth table."""
 
@@ -59,7 +59,9 @@ def verify_walsh_transform(
         expected = walsh_hadamard_transform(truth)
     except (OperationDomainValidationError, ValueError, TypeError):
         return False
-    return tuple(expected) == claim.spectrum.values
+    return tuple(expected) == tuple(
+        int(value.as_fraction()) for value in claim.spectrum.values
+    )
 
 
 __all__ = ["verify_walsh_transform", "walsh_hadamard_transform"]

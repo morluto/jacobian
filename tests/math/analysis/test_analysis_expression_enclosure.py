@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import json
 from fractions import Fraction
+from typing import Literal
 
 import pytest
+from jsonschema import Draft202012Validator
+from pydantic import ValidationError
 from tests.math.analysis._analysis_support import analysis_validation_error
 
 from jacobian.math.analysis._arb import dyadic_endpoints
@@ -10,19 +14,45 @@ from jacobian.math.analysis._expression_enclosure import (
     IntervalExpressionEnclosureRequest,
     IntervalExpressionEnclosureResult,
 )
-from jacobian.math.analysis._models import MAX_DYADIC_EXPONENT, ExactDyadic
+from jacobian.math.analysis._models import (
+    MAX_DYADIC_EXPONENT,
+    MAX_DYADIC_MANTISSA_DIGITS,
+    ExactDyadic,
+)
 from jacobian.math.analysis.operations import expression_enclosure
+
+
+@pytest.mark.parametrize("mode", ["validation", "serialization"])
+@pytest.mark.parametrize("sign", [1, -1])
+def test_dyadic_signed_mantissa_boundary(
+    mode: Literal["validation", "serialization"], sign: int
+) -> None:
+    digits = MAX_DYADIC_MANTISSA_DIGITS - int(sign < 0)
+    accepted = sign * (10**digits - 1)
+    rejected = sign * (10**digits + 1)
+    native = ExactDyadic(mantissa=accepted, exponent=0)
+    assert ExactDyadic.model_validate_json(native.model_dump_json()) == native
+    validator = Draft202012Validator(ExactDyadic.model_json_schema(mode=mode))
+    assert validator.is_valid(native.model_dump(mode="json"))
+    wire = {"mantissa": str(rejected), "exponent": 0}
+    assert not validator.is_valid(wire)
+    with pytest.raises(ValidationError):
+        ExactDyadic(mantissa=rejected, exponent=0)
+    with pytest.raises(ValidationError):
+        ExactDyadic.model_validate_json(json.dumps(wire))
 
 
 def _run(
     expression: dict[str, object], argument: str = "0"
 ) -> IntervalExpressionEnclosureResult:
-    request = IntervalExpressionEnclosureRequest.model_validate(
-        {
-            "expression": expression,
-            "argument": {"num": argument, "den": "1"},
-            "precision_bits": 128,
-        }
+    request = IntervalExpressionEnclosureRequest.model_validate_json(
+        json.dumps(
+            {
+                "expression": expression,
+                "argument": {"num": argument, "den": "1"},
+                "precision_bits": 128,
+            }
+        )
     )
     return expression_enclosure(
         request.expression, request.argument, request.precision_bits
@@ -118,27 +148,29 @@ def test_uncertain_denominator_reports_precision_instead_of_domain_error() -> No
         "op": "exp",
         "children": [{"op": "const", "value": {"num": "1", "den": "1"}}],
     }
-    request = IntervalExpressionEnclosureRequest.model_validate(
-        {
-            "expression": {
-                "op": "div",
-                "children": [
-                    {"op": "const", "value": {"num": "1", "den": "1"}},
-                    {
-                        "op": "add",
-                        "children": [
-                            {
-                                "op": "const",
-                                "value": {"num": "1", "den": str(2**100)},
-                            },
-                            {"op": "sub", "children": [exp_one, exp_one]},
-                        ],
-                    },
-                ],
-            },
-            "argument": {"num": "0", "den": "1"},
-            "precision_bits": 32,
-        }
+    request = IntervalExpressionEnclosureRequest.model_validate_json(
+        json.dumps(
+            {
+                "expression": {
+                    "op": "div",
+                    "children": [
+                        {"op": "const", "value": {"num": "1", "den": "1"}},
+                        {
+                            "op": "add",
+                            "children": [
+                                {
+                                    "op": "const",
+                                    "value": {"num": "1", "den": str(2**100)},
+                                },
+                                {"op": "sub", "children": [exp_one, exp_one]},
+                            ],
+                        },
+                    ],
+                },
+                "argument": {"num": "0", "den": "1"},
+                "precision_bits": 32,
+            }
+        )
     )
     result = expression_enclosure(
         request.expression, request.argument, request.precision_bits
@@ -205,8 +237,8 @@ def test_dyadic_enclosure_order_avoids_expanding_huge_binary_exponents(
     result = IntervalExpressionEnclosureResult(
         status="ENCLOSED",
         precision_bits=128,
-        lower=ExactDyadic(mantissa="1", exponent=MAX_DYADIC_EXPONENT),
-        upper=ExactDyadic(mantissa="3", exponent=MAX_DYADIC_EXPONENT - 1),
+        lower=ExactDyadic(mantissa=1, exponent=MAX_DYADIC_EXPONENT),
+        upper=ExactDyadic(mantissa=3, exponent=MAX_DYADIC_EXPONENT - 1),
         relative_accuracy_bits=100,
         detail="synthetic compact dyadic enclosure",
     )

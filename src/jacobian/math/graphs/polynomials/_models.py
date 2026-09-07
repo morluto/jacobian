@@ -5,10 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Annotated, Literal, Self
 
-from pydantic import ConfigDict, Field, StrictInt, StringConstraints, model_validator
+from pydantic import ConfigDict, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, ExactInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.graphs.values import (
@@ -21,12 +21,6 @@ from jacobian.math.polynomials.values import (
     SparseRationalPolynomial,
     require_polynomial_budget,
 )
-
-_NonnegativeCanonicalInteger = Annotated[
-    str,
-    StringConstraints(pattern=r"^(?:0|[1-9][0-9]*)$", strict=True),
-]
-
 
 MAX_INDEPENDENCE_POLYNOMIAL_VERTICES = 256
 # The canonical graph representation accepts at most 256 vertices, and every
@@ -210,21 +204,24 @@ class TreeIndependencePolynomialResult(StrictModel):
         le=MAX_INDEPENDENCE_POLYNOMIAL_EXPONENT,
         description="The tree independence number alpha(T).",
     )
-    independent_set_count: _NonnegativeCanonicalInteger = Field(
+    independent_set_count: Annotated[ExactInteger, Field(ge=0)] = Field(
         description="The total I_T(1) as a canonical decimal integer."
     )
 
     @property
-    def coefficients(self) -> tuple[str, ...]:
+    def coefficients(self) -> tuple[int, ...]:
         """Native dense integer projection; no duplicate polynomial is serialized."""
         terms = self.polynomial.polynomial.terms
-        if any(term.coefficient.den != "1" for term in terms):
+        if any(term.coefficient.den != 1 for term in terms):
             raise ValueError(
                 "integer coefficient projection requires integral coefficients"
             )
         degree = max((term.exponents[0] for term in terms), default=0)
-        values = {term.exponents[0]: term.coefficient.num for term in terms}
-        return tuple(values.get(i, "0") for i in range(degree + 1))
+        values = {
+            term.exponents[0]: term.coefficient.as_fraction().numerator
+            for term in terms
+        }
+        return tuple(values.get(i, 0) for i in range(degree + 1))
 
     @model_validator(mode="after")
     def require_structural_shape(self) -> Self:
@@ -241,7 +238,7 @@ class TreeIndependencePolynomialResult(StrictModel):
             label="independence polynomial",
         )
         if (
-            len(self.independent_set_count.lstrip("-"))
+            len(format_canonical_integer(self.independent_set_count))
             > MAX_INDEPENDENCE_POLYNOMIAL_COEFFICIENT_DIGITS
         ):
             raise PydanticCustomError(
@@ -264,7 +261,7 @@ class TreeIndependencePolynomialResult(StrictModel):
             graph=graph,
             polynomial=_polynomial_from_dense_coefficients(coefficients),
             independence_number=len(coefficients) - 1,
-            independent_set_count=format_canonical_integer(sum(coefficients)),
+            independent_set_count=sum(coefficients),
         )
 
 
@@ -279,8 +276,8 @@ def _polynomial_from_dense_coefficients(
             terms=tuple(
                 RationalPolynomialTerm(
                     coefficient=CanonicalRational(
-                        num=format_canonical_integer(coefficient),
-                        den="1",
+                        num=coefficient,
+                        den=1,
                     ),
                     exponents=(degree,),
                 )

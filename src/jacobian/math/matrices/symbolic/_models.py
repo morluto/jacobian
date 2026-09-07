@@ -12,6 +12,7 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel, canonicalize_json_containers
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.polynomials.values import (
     PolynomialVariable,
     RationalFunction,
@@ -31,8 +32,8 @@ def _is_polynomial_entry(value: RationalFunction) -> bool:
     terms = value.denominator.terms
     return (
         len(terms) == 1
-        and terms[0].coefficient.num == "1"
-        and terms[0].coefficient.den == "1"
+        and terms[0].coefficient.num == 1
+        and terms[0].coefficient.den == 1
         and all(exponent == 0 for exponent in terms[0].exponents)
     )
 
@@ -41,8 +42,8 @@ def _is_scalar_identity(value: RationalFunction) -> bool:
     terms = value.numerator.terms
     return (
         len(terms) == 1
-        and terms[0].coefficient.num == "1"
-        and terms[0].coefficient.den == "1"
+        and terms[0].coefficient.num == 1
+        and terms[0].coefficient.den == 1
         and all(exponent == 0 for exponent in terms[0].exponents)
         and _is_polynomial_entry(value)
     )
@@ -128,7 +129,7 @@ def _require_determinant_family_result_budget(
         )
     coefficient_digits = max(
         (
-            len(component.lstrip("-"))
+            len(format_canonical_integer(abs(component)))
             for value in values
             for term in value.numerator.terms
             for component in (term.coefficient.num, term.coefficient.den)
@@ -456,7 +457,7 @@ def _maximum_coefficient_digits(value: RationalFunction, *, numerator: bool) -> 
     polynomial = value.numerator if numerator else value.denominator
     return max(
         (
-            len(component.lstrip("-"))
+            len(format_canonical_integer(abs(component)))
             for term in polynomial.terms
             for component in (term.coefficient.num, term.coefficient.den)
         ),
@@ -481,15 +482,17 @@ def _sum_coefficient_digit_bound(
     if term_count <= 1:
         return product_coefficient_digits
     if integral_coefficients:
-        return product_coefficient_digits + len(str(term_count))
-    return term_count * product_coefficient_digits + len(str(term_count))
+        return product_coefficient_digits + len(format_canonical_integer(term_count))
+    return term_count * product_coefficient_digits + len(
+        format_canonical_integer(term_count)
+    )
 
 
 def _has_integral_coefficients(value: RationalFunction) -> bool:
     """Report whether every coefficient of both polynomial sides is an integer."""
 
     return all(
-        term.coefficient.den == "1"
+        term.coefficient.den == 1
         for polynomial in (value.numerator, value.denominator)
         for term in polynomial.terms
     )
@@ -526,7 +529,7 @@ def _scalar_constant_digits(value: RationalFunction) -> int | None:
         and _is_polynomial_entry(value)
     ):
         return max(
-            len(component.lstrip("-"))
+            len(format_canonical_integer(abs(component)))
             for component in (terms[0].coefficient.num, terms[0].coefficient.den)
         )
     return None
@@ -588,7 +591,8 @@ def _polynomial_budget_violation(
             for exponent in term.exponents
         )
         or any(
-            len(component.lstrip("-")) > MAX_SYMBOLIC_RESULT_COEFFICIENT_DIGITS
+            len(format_canonical_integer(abs(component)))
+            > MAX_SYMBOLIC_RESULT_COEFFICIENT_DIGITS
             for term in polynomial.terms
             for component in (term.coefficient.num, term.coefficient.den)
         )
@@ -689,7 +693,7 @@ def _shared_common_denominator_bounds(
             for axis in range(len(variables))
         ),
         max(
-            len(component.lstrip("-"))
+            len(format_canonical_integer(abs(component)))
             for polynomial in (numerator, common)
             for term in polynomial.terms
             for component in (term.coefficient.num, term.coefficient.den)
@@ -1247,7 +1251,7 @@ def _entry_growth_factor(value: RationalFunction) -> int:
     numerator_terms = len(value.numerator.terms)
     denominator_terms = len(value.denominator.terms)
     unit_denominator = denominator_terms == 1 and all(
-        term.coefficient.num == "1" and all(e == 0 for e in term.exponents)
+        term.coefficient.num == 1 and all(e == 0 for e in term.exponents)
         for term in value.denominator.terms
     )
     if unit_denominator:
@@ -1420,7 +1424,10 @@ def _solution_component_growth_bound(
     )
     coefficient_digits = max(
         (
-            max(len(term.coefficient.num.lstrip("-")), len(term.coefficient.den))
+            max(
+                len(format_canonical_integer(abs(term.coefficient.num))),
+                len(format_canonical_integer(term.coefficient.den)),
+            )
             for value in values
             for polynomial in (value.numerator, value.denominator)
             for term in polynomial.terms
@@ -1431,7 +1438,8 @@ def _solution_component_growth_bound(
     exponent_bound = 2 * work * maximum_exponent
     digits_bound = max(
         (
-            expansion * 2 * size * coefficient_digits + len(str(max(expansion, 1)))
+            expansion * 2 * size * coefficient_digits
+            + len(format_canonical_integer(max(expansion, 1)))
             for size, expansion in enumerate(maximum_expansion_by_size)
             if size >= 1
         ),

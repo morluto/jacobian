@@ -13,8 +13,9 @@ from pydantic import (
 )
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.number_theory.characters.values import (
     MAX_PRINCIPAL_CHARACTER_MODULUS,
     PrincipalDirichletCharacter,
@@ -29,8 +30,8 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"dirichlet_character.{reason}", message)
 
 
-def _require_bounded_digits(value: str) -> str:
-    if len(value.lstrip("-")) > MAX_INTEGER_DIGITS:
+def _require_bounded_digits(value: int) -> int:
+    if len(format_canonical_integer(abs(value))) > MAX_INTEGER_DIGITS:
         raise _validation_error(
             "integer_digit_bound",
             f"integer exceeds the {MAX_INTEGER_DIGITS}-digit bound",
@@ -38,8 +39,8 @@ def _require_bounded_digits(value: str) -> str:
     return value
 
 
-BoundedCanonicalInteger = Annotated[
-    CanonicalInteger,
+DirichletCharacterInteger = Annotated[
+    ExactInteger,
     AfterValidator(_require_bounded_digits),
 ]
 
@@ -61,7 +62,7 @@ class PrincipalDirichletCharacterValueRequest(StrictModel):
     """Evaluate a canonical principal-character value at one exact integer."""
 
     character: PrincipalDirichletCharacter
-    integer: BoundedCanonicalInteger = Field(
+    integer: DirichletCharacterInteger = Field(
         description="Canonical base-10 integer syntax, reduced modulo character.modulus."
     )
 
@@ -73,7 +74,7 @@ class PrincipalDirichletCharacterValueResult(StrictModel):
     """A source-bound principal-character evaluation with canonical residue data."""
 
     character: PrincipalDirichletCharacter
-    integer: BoundedCanonicalInteger
+    integer: DirichletCharacterInteger
     canonical_residue: StrictInt = Field(ge=0, lt=MAX_PRINCIPAL_CHARACTER_MODULUS)
     is_unit: StrictBool
     value: Literal[0, 1]
@@ -95,7 +96,7 @@ class PrincipalDirichletCharacterValueResult(StrictModel):
         cls,
         *,
         character: PrincipalDirichletCharacter,
-        integer: BoundedCanonicalInteger,
+        integer: DirichletCharacterInteger,
         canonical_residue: StrictInt,
         is_unit: StrictBool,
         value: Literal[0, 1],
@@ -113,7 +114,7 @@ class PrincipalDirichletCharacterValueResult(StrictModel):
 
 __all__ = [
     "MAX_INTEGER_DIGITS",
-    "BoundedCanonicalInteger",
+    "DirichletCharacterInteger",
     "PrincipalDirichletCharacterRequest",
     "PrincipalDirichletCharacterValueRequest",
     "PrincipalDirichletCharacterValueResult",

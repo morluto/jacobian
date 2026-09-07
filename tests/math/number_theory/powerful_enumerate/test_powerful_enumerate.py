@@ -63,8 +63,8 @@ def test_operation_round_trip() -> None:
     assert result.cutoff == 100
     assert result.count == len(result.family)
     assert int(result.family[0]) == 1
-    assert "4" in result.family
-    assert "12" not in result.family
+    assert 4 in result.family
+    assert 12 not in result.family
 
 
 def test_square_cube_representation() -> None:
@@ -104,9 +104,9 @@ def test_operation_is_discoverable_with_one_executable_example() -> None:
     request = operation.request_type.model_validate(example.input)
     result = operation.run(request)
     assert result.cutoff == 100
-    assert "1" in result.family
-    assert "4" in result.family
-    assert "8" in result.family
-    assert "9" in result.family
-    assert "12" not in result.family
+    assert 1 in result.family
+    assert 4 in result.family
+    assert 8 in result.family
+    assert 9 in result.family
+    assert 12 not in result.family
     assert result.count == len(result.family)

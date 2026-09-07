@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterator
 
 import pytest
@@ -129,8 +130,8 @@ def test_native_api_enforces_the_source_digit_bound_before_work() -> None:
 
 
 def test_native_api_accepts_the_shared_canonical_integer_value() -> None:
-    canonical_source = IntegerValue(value="100")
-    canonical_cutoff = IntegerValue(value="5")
+    canonical_source = IntegerValue(value=100)
+    canonical_cutoff = IntegerValue(value=5)
 
     assert count_friable(canonical_source, canonical_cutoff) == 34
     assert count_friable(canonical_source, canonical_source) == 100
@@ -138,7 +139,7 @@ def test_native_api_accepts_the_shared_canonical_integer_value() -> None:
 
 
 def test_native_source_digit_bound_covers_canonical_integer_values() -> None:
-    beyond = "9" * (_MAX_FRIABLE_SOURCE_DIGITS + 1)
+    beyond = 10 ** (_MAX_FRIABLE_SOURCE_DIGITS + 1) - 1
     with pytest.raises(
         ValueError,
         match=rf"{_MAX_FRIABLE_SOURCE_DIGITS} decimal digits",
@@ -148,31 +149,29 @@ def test_native_source_digit_bound_covers_canonical_integer_values() -> None:
 
 def test_request_rejects_negative_and_noncanonical_sources() -> None:
     with pytest.raises(OperationDomainValidationError, match="must be nonnegative"):
-        compute_friable_count(FriableCountRequest(x="-1", y="2"))
+        compute_friable_count(FriableCountRequest(x=-1, y=2))
     with pytest.raises(ValidationError):
-        FriableCountRequest(x="01", y="2")
+        FriableCountRequest.model_validate_json('{"x":"01","y":"2"}')
 
 
 def test_request_rejects_unbounded_generated_prime_cutoff() -> None:
     with pytest.raises(ValueError, match="exceeds the admitted prime cutoff"):
         compute_friable_count(
             FriableCountRequest(
-                x=str(MAX_FRIABLE_MATERIALIZED_X + 1),
-                y=str(MAX_FRIABLE_GENERATED_CUTOFF + 1),
+                x=MAX_FRIABLE_MATERIALIZED_X + 1,
+                y=MAX_FRIABLE_GENERATED_CUTOFF + 1,
             )
         )
 
 
 def test_request_rejects_generated_search_above_node_budget() -> None:
     with pytest.raises(ValueError, match="exceeds the search-node budget"):
-        compute_friable_count(
-            FriableCountRequest(x=str(_MAX_FRIABLE_SOURCE_ABS // 10), y="5")
-        )
+        compute_friable_count(FriableCountRequest(x=_MAX_FRIABLE_SOURCE_ABS // 10, y=5))
 
 
 def test_result_validation_is_structural() -> None:
-    forged = FriableCountResult(x="100", y="5", count="35")
-    assert forged.count == "35"
+    forged = FriableCountResult(x=100, y=5, count=35)
+    assert forged.count == 35
 
 
 def test_producer_executes_the_friable_kernel_once(
@@ -189,9 +188,9 @@ def test_producer_executes_the_friable_kernel_once(
         return original(x, y)
 
     monkeypatch.setattr(publication, "count_friable", observed_count)
-    result = publication.compute_friable_count(FriableCountRequest(x="100", y="5"))
+    result = publication.compute_friable_count(FriableCountRequest(x=100, y=5))
 
-    assert result.count == "34"
+    assert result.count == 34
     assert calls == 1
 
 
@@ -205,8 +204,10 @@ def test_operation_is_discoverable_with_one_executable_example() -> None:
     )
     assert len(operation.examples) == 1
     example = operation.examples[0]
-    request = operation.request_type.model_validate(example.input)
-    assert operation.run(request).count == "34"
+    request = operation.request_type.model_validate_json(
+        json.dumps(example.input), strict=True
+    )
+    assert operation.run(request).count == 34
 
 
 def test_number_theory_native_api_is_explicit() -> None:

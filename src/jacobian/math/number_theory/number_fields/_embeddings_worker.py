@@ -9,7 +9,6 @@ from functools import cmp_to_key
 from typing import Any
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.number_theory.algebraic_numbers.complex import (
     RationalComplexIsolatingRectangle,
     algebraic_real_part_separation_denominator_bound,
@@ -174,10 +173,7 @@ def compute_embeddings_worker_response(
     field = request.field
     variable = sympy.Symbol("x")
     polynomial = sympy.Poly.from_list(
-        [
-            parse_canonical_integer(coefficient)
-            for coefficient in field.coefficients_descending
-        ],
+        list(field.coefficients_descending),
         gens=variable,
         domain=sympy.ZZ,
     )
@@ -249,9 +245,7 @@ def compute_embeddings_worker_response(
         kind="complete",
         real_intervals=real_intervals,
         negative_complex_rectangles=negative_rectangles,
-        defining_polynomial_discriminant=format_canonical_integer(
-            int(polynomial.discriminant())
-        ),
+        defining_polynomial_discriminant=int(polynomial.discriminant()),
     )
 
 

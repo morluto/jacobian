@@ -38,7 +38,7 @@ class MaximumWeightAntichainRequest(StrictModel):
                 "weights must have exactly one entry per poset element",
             )
         for w in self.weights:
-            if w.num.startswith("-") and w.num != "0":
+            if w.num < 0:
                 raise PydanticCustomError(
                     "weighted_antichain.negative_weight",
                     "all weights must be nonnegative",

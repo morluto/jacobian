@@ -21,6 +21,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 MAX_CHROMATIC_CERTIFICATE_VERTICES = 20
@@ -63,7 +64,7 @@ def _preflight_bounded_rational(
     max_digits: int,
     label: str,
 ) -> object:
-    """Reject oversized wire components before canonical integer parsing."""
+    """Bound native and wire components before nested scalar validation."""
     if isinstance(value, CanonicalRational):
         require_bounded_rational(
             value,
@@ -77,7 +78,7 @@ def _preflight_bounded_rational(
             if (
                 isinstance(raw_component, str)
                 and len(raw_component.lstrip("-")) > max_digits
-            ):
+            ) or (type(raw_component) is int and abs(raw_component) >= 10**max_digits):
                 raise PydanticCustomError(
                     "graph.label_exceeds_max_digits_digit_bound_return",
                     f"{label} exceeds the {max_digits}-digit bound",
@@ -155,9 +156,13 @@ def _intermediate_digit_bound(weights: tuple[CanonicalRational, ...]) -> int:
     if not weights:
         return 1
     unique_denominators = {weight.den for weight in weights}
-    denominator_product_digits = sum(len(value) for value in unique_denominators)
+    denominator_product_digits = sum(
+        len(format_canonical_integer(value)) for value in unique_denominators
+    )
     scaled_digits = max(
-        len(weight.num.lstrip("-")) + denominator_product_digits - len(weight.den)
+        len(format_canonical_integer(weight.num))
+        + denominator_product_digits
+        - len(format_canonical_integer(weight.den))
         for weight in weights
     )
     # A sum of n signed scaled integers gains at most digits(n), with one

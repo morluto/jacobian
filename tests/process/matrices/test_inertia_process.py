@@ -18,13 +18,11 @@ from jacobian.math.number_theory.number_fields import (
 def test_algebraic_inertia_rejects_an_unbound_worker_projection(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    presentation = SimpleNumberFieldPresentation(
-        coefficients_descending=("1", "0", "-2")
-    )
+    presentation = SimpleNumberFieldPresentation(coefficients_descending=(1, 0, -2))
     embedding = RealNumberFieldEmbedding.model_validate(
         {
             "kind": "REAL",
-            "presentation": presentation.model_dump(mode="json"),
+            "presentation": presentation,
             "root": {
                 "polynomial": presentation.coefficients_descending,
                 "real_root_index": 1,

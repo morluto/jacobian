@@ -22,7 +22,9 @@ def test_periodic_congruence_examples_execute_through_catalog() -> None:
         assert operation.examples
         for invocation_example in operation.examples:
             result = invoke_operation(operation_id, invocation_example.input, catalog)
-            validated = operation.result_type.model_validate(result.output)
+            validated = operation.result_type.model_validate_json(
+                json.dumps(result.output)
+            )
             assert validated.model_dump(mode="json") == result.output
 
 
@@ -36,7 +38,9 @@ def test_published_profile_example_executes_exactly() -> None:
         operation.examples[0].input,
         Catalog.open(),
     )
-    validated = PeriodicCongruenceUnionProfileResult.model_validate(result.output)
+    validated = PeriodicCongruenceUnionProfileResult.model_validate_json(
+        json.dumps(result.output)
+    )
 
     assert validated.source.model_dump(mode="json") == {
         "subsets": [
@@ -45,10 +49,10 @@ def test_published_profile_example_executes_exactly() -> None:
         ],
         "complement": True,
     }
-    assert validated.common_period == "12"
-    assert validated.occupied_count == "4"
+    assert validated.common_period == 12
+    assert validated.occupied_count == 4
     assert validated.density.as_fraction() == Fraction(1, 3)
-    assert validated.occupied_residues == ("3", "5", "9", "11")
+    assert validated.occupied_residues == (3, 5, 9, 11)
 
 
 def test_advertised_profile_example_parses_through_strict_json() -> None:
@@ -82,10 +86,12 @@ def test_published_profile_consumes_serialized_measure_source_unchanged() -> Non
         measure_output["source"],
         catalog,
     )
-    validated = PeriodicCongruenceUnionProfileResult.model_validate(result.output)
+    validated = PeriodicCongruenceUnionProfileResult.model_validate_json(
+        json.dumps(result.output)
+    )
 
     assert validated.source.model_dump(mode="json") == measure_output["source"]
-    assert validated.common_period == "5"
-    assert validated.occupied_count == "1"
+    assert validated.common_period == 5
+    assert validated.occupied_count == 1
     assert validated.density.as_fraction() == Fraction(1, 5)
-    assert validated.occupied_residues == ("0",)
+    assert validated.occupied_residues == (0,)

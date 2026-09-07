@@ -1,5 +1,7 @@
 """Cross-owner composition for rational conic coordinate functions."""
 
+import json
+
 from jacobian._exact import CanonicalRational
 from jacobian.math.geometry.algebraic_curves._models import (
     RationalConicParametrizationRequest,
@@ -46,13 +48,15 @@ def test_conic_coordinate_serialization_is_a_symbolic_matrix_entry() -> None:
         )
     )
     coordinate_payload = parametrization.model_dump(mode="json")["coordinates"][0]
-    determinant_request = SymbolicDeterminantRequest.model_validate(
-        {
-            "matrix": {
-                "variables": ["t"],
-                "entries": [[coordinate_payload]],
+    determinant_request = SymbolicDeterminantRequest.model_validate_json(
+        json.dumps(
+            {
+                "matrix": {
+                    "variables": ["t"],
+                    "entries": [[coordinate_payload]],
+                }
             }
-        }
+        )
     )
 
     assert determinant_request.matrix.entries[0][0] == parametrization.coordinates[0]
@@ -83,16 +87,20 @@ def test_exceptional_point_serialization_evaluates_on_its_source_conic() -> None
         "point": point.model_dump(mode="json"),
         "parameter": "t",
     }
-    request = RationalConicParametrizationRequest.model_validate(request_payload)
+    request = RationalConicParametrizationRequest.model_validate_json(
+        json.dumps(request_payload)
+    )
     assert request.point == point
 
     parametrization = compute_rational_conic_parametrization(request)
     exceptional_payload = parametrization.model_dump(mode="json")["exceptional_point"]
-    evaluation_request = EvalRequest.model_validate(
-        {
-            "polynomial": source.model_dump(mode="json"),
-            "point": exceptional_payload,
-        }
+    evaluation_request = EvalRequest.model_validate_json(
+        json.dumps(
+            {
+                "polynomial": source.model_dump(mode="json"),
+                "point": exceptional_payload,
+            }
+        )
     )
     assert evaluation_request.point == parametrization.exceptional_point
     assert evaluate_polynomial(

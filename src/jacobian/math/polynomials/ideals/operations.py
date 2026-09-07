@@ -21,7 +21,6 @@ from jacobian._execution import (
     request_cancelled,
 )
 from jacobian.backends import BackendUnavailableError
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -164,7 +163,7 @@ def _admit_source(ideal: RationalPolynomialIdeal, *, label: str) -> None:
     if any(
         len(generator.polynomial.terms) == 1
         and not any(generator.polynomial.terms[0].exponents)
-        and generator.polynomial.terms[0].coefficient.num != "0"
+        and generator.polynomial.terms[0].coefficient.num != 0
         for generator in ideal.generators
     ):
         if len(ideal.variables) > MAX_VARS:
@@ -186,7 +185,7 @@ def _admit_source(ideal: RationalPolynomialIdeal, *, label: str) -> None:
             if (
                 len(generator.polynomial.terms) == 1
                 and not any(generator.polynomial.terms[0].exponents)
-                and generator.polynomial.terms[0].coefficient.num != "0"
+                and generator.polynomial.terms[0].coefficient.num != 0
             ):
                 continue
             require_polynomial_budget(
@@ -398,7 +397,7 @@ def _admit_membership_certificate(
             entries=tuple(sorted(entries, key=lambda entry: (entry.row, entry.column))),
         ),
         rhs=tuple(
-            target.get(exponents, CanonicalRational(num="0", den="1"))
+            target.get(exponents, CanonicalRational(num=0, den=1))
             for exponents in ordered_rows
         ),
     )
@@ -484,9 +483,7 @@ def ideal_membership_certificate(
         if coefficient:
             cofactor_terms[generator_index].append(
                 RationalPolynomialTerm(
-                    coefficient=CanonicalRational(
-                        num=format_canonical_integer(coefficient.numerator), den="1"
-                    ),
+                    coefficient=CanonicalRational(num=coefficient.numerator, den=1),
                     exponents=exponents,
                 )
             )
@@ -618,7 +615,7 @@ def main() -> None:
         variables = tuple(payload["variables"])
         symbols = symbols_for_variables(variables)
         gens = [
-            RationalPolynomial.model_validate(item)
+            RationalPolynomial.model_validate_json(json.dumps(item))
             for item in payload["generators"]
         ]
         exprs = [rational_polynomial_to_sympy(g).as_expr() for g in gens]
@@ -655,7 +652,7 @@ def main() -> None:
                 generators.append(converted)
             _emit({"status": "ok", "generators": generators})
         elif mode == "normal_form":
-            target = RationalPolynomial.model_validate(payload["polynomial"])
+            target = RationalPolynomial.model_validate_json(json.dumps(payload["polynomial"]))
             poly_expr = rational_polynomial_to_sympy(target).as_expr()
             basis = sympy.groebner(
                 exprs, *symbols, order=payload.get("order", "grevlex"), domain=sympy.QQ
@@ -681,7 +678,7 @@ def main() -> None:
             )
         elif mode == "ideal_relation":
             right_gens = [
-                RationalPolynomial.model_validate(item)
+                RationalPolynomial.model_validate_json(json.dumps(item))
                 for item in payload["right_generators"]
             ]
             right_exprs = [
@@ -727,7 +724,7 @@ def main() -> None:
             _emit(response)
         elif mode == "verify_ideal_equality":
             claimed = [
-                RationalPolynomial.model_validate(item)
+                RationalPolynomial.model_validate_json(json.dumps(item))
                 for item in payload["basis"]
             ]
             claimed_exprs = [
@@ -779,7 +776,7 @@ def main() -> None:
             # S-polynomial reduction, and both ideal inclusions.
             order = payload.get("order", "grevlex")
             claimed = [
-                RationalPolynomial.model_validate(item)
+                RationalPolynomial.model_validate_json(json.dumps(item))
                 for item in payload["basis"]
             ]
             claimed_exprs = [
@@ -1158,7 +1155,7 @@ def _relation_ledger(
     payload: dict[str, Any], *, deadline: float
 ) -> IdealContainmentLedger:
     _raise_if_relation_deadline_exceeded(deadline)
-    ledger = IdealContainmentLedger.model_validate(payload)
+    ledger = IdealContainmentLedger.model_validate_json(json.dumps(payload))
     _raise_if_relation_deadline_exceeded(deadline)
     return ledger
 
@@ -1472,7 +1469,8 @@ def groebner_basis(
         ) from error
 
     basis_generators = [
-        RationalPolynomial.model_validate(item) for item in result_payload["generators"]
+        RationalPolynomial.model_validate_json(json.dumps(item))
+        for item in result_payload["generators"]
     ]
     if not basis_generators:
         from jacobian.math.polynomials.values import SparseRationalPolynomial
@@ -1533,7 +1531,9 @@ def ideal_normal_form(
             f"exact remainder: {error}"
         ) from error
 
-    remainder_poly = RationalPolynomial.model_validate(result_payload["remainder"])
+    remainder_poly = RationalPolynomial.model_validate_json(
+        json.dumps(result_payload["remainder"])
+    )
     return IdealNormalFormResult._from_kernel(
         ideal, polynomial, monomial_order, remainder_poly
     )
@@ -1559,7 +1559,7 @@ def _elimination_ideal_from_payload(
                 polynomial=SparseRationalPolynomial(
                     terms=(
                         RationalPolynomialTerm(
-                            coefficient=CanonicalRational(num="1", den="1"),
+                            coefficient=CanonicalRational(num=1, den=1),
                             exponents=(0,) * len(remaining_tuple),
                         ),
                     )
@@ -1575,7 +1575,7 @@ def _elimination_ideal_from_payload(
         ]
     else:
         elimination_generators = [
-            RationalPolynomial.model_validate(item)
+            RationalPolynomial.model_validate_json(json.dumps(item))
             for item in result_payload["generators"]
         ]
     return RationalPolynomialIdeal(

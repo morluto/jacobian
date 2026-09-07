@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from fractions import Fraction
 from itertools import islice
 
@@ -92,14 +93,12 @@ def test_flint_exact_linear_operations_support_reported_46_by_21_shape() -> None
     smith = compute_smith_normal_form(
         IntegerMatrixRequest(
             matrix=IntegerMatrix(
-                entries=tuple(
-                    tuple(str(value) for value in row) for row in integer_rows
-                )
+                entries=tuple(tuple(value for value in row) for row in integer_rows)
             )
         )
     )
     assert smith.rank == 20
-    assert smith.invariant_factors == ("1",) * 20
+    assert smith.invariant_factors == (1,) * 20
     assert len(smith.normal_form.entries) == 46
     assert len(smith.normal_form.entries[0]) == 21
 
@@ -111,7 +110,7 @@ def test_native_exact_linear_operations_share_the_46_by_21_flint_path() -> None:
         tuple(tuple(Fraction(value) for value in row) for row in integer_rows)
     )
     integer = IntegerMatrix(
-        entries=tuple(tuple(str(value) for value in row) for row in integer_rows)
+        entries=tuple(tuple(value for value in row) for row in integer_rows)
     )
 
     native_rank, native_pivots = matrices.rank(source)
@@ -153,7 +152,7 @@ def test_exact_linear_admission_rejects_unrepresentable_rref_height() -> None:
     matrix = RationalMatrix(
         entries=tuple(
             tuple(
-                CanonicalRational(num="1", den=str(denominator))
+                CanonicalRational(num=1, den=denominator)
                 for denominator in denominators
             )
             for _ in range(64)
@@ -172,13 +171,7 @@ def _matrix(rows: list[list[str]]) -> RationalMatrix:
         {
             "domain": "QQ",
             "entries": [
-                [
-                    {
-                        "num": value.split("/")[0],
-                        "den": value.split("/")[1] if "/" in value else "1",
-                    }
-                    for value in row
-                ]
+                [CanonicalRational.from_fraction(Fraction(value)) for value in row]
                 for row in rows
             ],
         }
@@ -237,21 +230,21 @@ def test_producer_results_replay_across_shapes() -> None:
 def test_serialized_results_round_trip(rows: list[list[str]]) -> None:
     matrix = _matrix(rows)
     rref = compute_rref(RationalMatrixRequest(matrix=matrix))
-    assert RrefResult.model_validate(rref.model_dump()) == rref
+    assert RrefResult.model_validate_json(rref.model_dump_json()) == rref
 
     rank = compute_rank(MatrixRankRequest(matrix=matrix))
-    assert MatrixRankResult.model_validate(rank.model_dump()) == rank
+    assert MatrixRankResult.model_validate_json(rank.model_dump_json()) == rank
 
     nullspace = compute_nullspace(MatrixRankRequest(matrix=matrix))
-    assert NullspaceResult.model_validate(nullspace.model_dump()) == nullspace
+    assert NullspaceResult.model_validate_json(nullspace.model_dump_json()) == nullspace
 
 
 def test_producer_to_serialized_interoperability() -> None:
     """Serialized RREF agrees with independently produced rank and nullspace."""
 
     matrix = _matrix([["1", "2", "3"], ["4", "5", "6"], ["7", "8", "9"]])
-    rref = RrefResult.model_validate(
-        compute_rref(RationalMatrixRequest(matrix=matrix)).model_dump()
+    rref = RrefResult.model_validate_json(
+        compute_rref(RationalMatrixRequest(matrix=matrix)).model_dump_json()
     )
     rank = compute_rank(MatrixRankRequest(matrix=matrix))
     nullspace = compute_nullspace(MatrixRankRequest(matrix=matrix))
@@ -269,16 +262,14 @@ def test_product_value_feeds_determinant_without_reencoding() -> None:
 
     # Transport composition parses the producer's canonical payload directly,
     # and native composition retains its exact owner type unchanged.
-    transported = MatrixDeterminantRequest.model_validate(
-        {"matrix": product.product.model_dump(mode="json")}
+    transported = MatrixDeterminantRequest.model_validate_json(
+        json.dumps({"matrix": product.product.model_dump(mode="json")})
     )
     assert transported.matrix == product.product
 
     request = MatrixDeterminantRequest(matrix=product.product)
     assert request.matrix is product.product
-    assert compute_determinant(request).determinant == CanonicalRational(
-        num="2", den="1"
-    )
+    assert compute_determinant(request).determinant == CanonicalRational(num=2, den=1)
 
 
 def test_flint_rectangular_product_exceeds_shared_matrix_axis() -> None:
@@ -311,14 +302,14 @@ def test_product_rejects_coefficient_growth_before_backend() -> None:
     left = RationalMatrix(
         entries=(
             tuple(
-                CanonicalRational(num="1", den=str(10**255 + index + 1))
+                CanonicalRational(num=1, den=10**255 + index + 1)
                 for index in range(inner_dimension)
             ),
         )
     )
     right = RationalMatrix(
         entries=tuple(
-            (CanonicalRational(num="1", den="1"),) for _ in range(inner_dimension)
+            (CanonicalRational(num=1, den=1),) for _ in range(inner_dimension)
         )
     )
 
@@ -327,8 +318,8 @@ def test_product_rejects_coefficient_growth_before_backend() -> None:
 
 
 def _identity_entries(size: int) -> tuple[tuple[CanonicalRational, ...], ...]:
-    one = CanonicalRational(num="1", den="1")
-    zero = CanonicalRational(num="0", den="1")
+    one = CanonicalRational(num=1, den=1)
+    zero = CanonicalRational(num=0, den=1)
     return tuple(
         tuple(one if index == column else zero for column in range(size))
         for index in range(size)
@@ -337,7 +328,7 @@ def _identity_entries(size: int) -> tuple[tuple[CanonicalRational, ...], ...]:
 
 def test_product_admits_dense_shared_denominator_order_32_times_identity() -> None:
     order = 32
-    huge = CanonicalRational(num="1", den=str(10**255 + 1))
+    huge = CanonicalRational(num=1, den=10**255 + 1)
     left = RationalMatrix(
         entries=tuple(tuple(huge for _ in range(order)) for _ in range(order))
     )
@@ -351,7 +342,7 @@ def test_product_admits_dense_shared_denominator_order_32_times_identity() -> No
 def test_product_admits_shared_denominator_dot_product() -> None:
     inner_dimension = 128
     denominator = 10**255 + 1
-    value = CanonicalRational(num="1", den=str(denominator))
+    value = CanonicalRational(num=1, den=denominator)
     left = RationalMatrix(entries=(tuple(value for _ in range(inner_dimension)),))
     right = RationalMatrix(entries=tuple((value,) for _ in range(inner_dimension)))
 
@@ -365,10 +356,10 @@ def test_product_admits_shared_denominator_dot_product() -> None:
 def test_product_admits_cancelling_order_32_dot_product_terms() -> None:
     order = 32
     denominators = tuple(10**255 + 2 * index + 1 for index in range(order // 2))
-    zero = CanonicalRational(num="0", den="1")
-    one = CanonicalRational(num="1", den="1")
+    zero = CanonicalRational(num=0, den=1)
+    one = CanonicalRational(num=1, den=1)
     row = tuple(
-        CanonicalRational(num="1" if offset == 0 else "-1", den=str(denominator))
+        CanonicalRational(num=1 if offset == 0 else -1, den=denominator)
         for denominator in denominators
         for offset in range(2)
     )
@@ -391,8 +382,8 @@ def test_product_admits_cancelling_swapped_denominator_pairs() -> None:
         entries=(
             tuple(
                 CanonicalRational(
-                    num="1" if index % 2 == 0 else "-1",
-                    den=str(denominator_a if index % 2 == 0 else denominator_b),
+                    num=1 if index % 2 == 0 else -1,
+                    den=denominator_a if index % 2 == 0 else denominator_b,
                 )
                 for index in range(128)
             ),
@@ -402,8 +393,8 @@ def test_product_admits_cancelling_swapped_denominator_pairs() -> None:
         entries=tuple(
             (
                 CanonicalRational(
-                    num="1",
-                    den=str(denominator_b if index % 2 == 0 else denominator_a),
+                    num=1,
+                    den=denominator_b if index % 2 == 0 else denominator_a,
                 ),
             )
             for index in range(128)
@@ -412,15 +403,14 @@ def test_product_admits_cancelling_swapped_denominator_pairs() -> None:
 
     result = compute_product(RationalMatrixProductRequest(left=left, right=right))
 
-    assert result.product.entries == ((CanonicalRational(num="0", den="1"),),)
+    assert result.product.entries == ((CanonicalRational(num=0, den=1),),)
 
 
 def test_product_admits_sparse_order_32_with_one_large_entry() -> None:
     order = 32
-    denominator = str(10**255 + 1)
-    one = CanonicalRational(num="1", den="1")
-    zero = CanonicalRational(num="0", den="1")
-    huge = CanonicalRational(num="1", den=denominator)
+    one = CanonicalRational(num=1, den=1)
+    zero = CanonicalRational(num=0, den=1)
+    huge = CanonicalRational(num=1, den=10**255 + 1)
     left_entries = [
         [one if row == column else zero for column in range(order)]
         for row in range(order)
@@ -526,8 +516,7 @@ def test_exact_linear_requests_admit_tall_matrices_above_the_square_dimension() 
     tall = RationalMatrix(
         entries=tuple(
             tuple(
-                CanonicalRational(num=str(int(row == column)), den="1")
-                for column in range(21)
+                CanonicalRational(num=int(row == column), den=1) for column in range(21)
             )
             for row in range(46)
         )
@@ -539,9 +528,7 @@ def test_exact_linear_requests_admit_tall_matrices_above_the_square_dimension() 
 def test_exact_linear_requests_reject_an_axis_above_the_operation_envelope() -> None:
     matrix = RationalMatrix(
         entries=tuple(
-            tuple(
-                CanonicalRational(num=str(column + 1), den="1") for column in range(2)
-            )
+            tuple(CanonicalRational(num=column + 1, den=1) for column in range(2))
             for _ in range(MAX_EXACT_LINEAR_MATRIX_AXIS + 1)
         )
     )
@@ -587,7 +574,7 @@ def test_flint_determinant_executes_above_the_previous_order_ceiling() -> None:
 
     result = compute_determinant(MatrixDeterminantRequest(matrix=matrix))
 
-    assert result.determinant == CanonicalRational(num="-2", den="3")
+    assert result.determinant == CanonicalRational(num=-2, den=3)
     native = matrices.determinant(_sympy_from_fractions(entries))
     assert native == sympy.Rational(-2, 3)
 
@@ -656,11 +643,13 @@ def test_raw_preflight_keeps_exact_linear_and_determinant_axis_boundaries() -> N
         ]
 
     rank_boundary = {"matrix": {"entries": wire_identity(MAX_EXACT_LINEAR_MATRIX_AXIS)}}
-    assert MatrixRankRequest.model_validate(
-        rank_boundary
+    assert MatrixRankRequest.model_validate_json(
+        json.dumps(rank_boundary)
     ).matrix.entries == _identity_entries(MAX_EXACT_LINEAR_MATRIX_AXIS)
-    rank_above_operation_axis = MatrixRankRequest.model_validate(
-        {"matrix": {"entries": wire_identity(MAX_EXACT_LINEAR_MATRIX_AXIS + 1)}}
+    rank_above_operation_axis = MatrixRankRequest.model_validate_json(
+        json.dumps(
+            {"matrix": {"entries": wire_identity(MAX_EXACT_LINEAR_MATRIX_AXIS + 1)}}
+        )
     )
     with pytest.raises(OperationDomainValidationError, match="64 rows and columns"):
         compute_rank(rank_above_operation_axis)
@@ -668,12 +657,18 @@ def test_raw_preflight_keeps_exact_linear_and_determinant_axis_boundaries() -> N
     determinant_boundary = {
         "matrix": {"entries": wire_identity(MAX_DETERMINANT_MATRIX_DIMENSION)}
     }
-    assert MatrixDeterminantRequest.model_validate(
-        determinant_boundary
+    assert MatrixDeterminantRequest.model_validate_json(
+        json.dumps(determinant_boundary)
     ).matrix.entries == (_identity_entries(MAX_DETERMINANT_MATRIX_DIMENSION))
     with pytest.raises(ValidationError):
-        MatrixDeterminantRequest.model_validate(
-            {"matrix": {"entries": wire_identity(MAX_DETERMINANT_MATRIX_DIMENSION + 1)}}
+        MatrixDeterminantRequest.model_validate_json(
+            json.dumps(
+                {
+                    "matrix": {
+                        "entries": wire_identity(MAX_DETERMINANT_MATRIX_DIMENSION + 1)
+                    }
+                }
+            )
         )
 
 

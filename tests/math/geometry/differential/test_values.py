@@ -19,7 +19,7 @@ def _sparse(*terms: tuple[int, tuple[int, ...]]) -> dict[str, Any]:
     return {
         "terms": [
             {
-                "coefficient": {"num": str(coefficient), "den": "1"},
+                "coefficient": {"num": (coefficient), "den": 1},
                 "exponents": list(exponents),
             }
             for coefficient, exponents in terms
@@ -54,9 +54,7 @@ def _tensor(
         {
             "coordinate_axis": list(variables),
             "variance": list(variance),
-            "components": [
-                component.model_dump(mode="json") for component in components
-            ],
+            "components": [component.model_dump() for component in components],
             "retained_nonzero_denominators": list(guards),
         }
     )

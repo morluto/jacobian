@@ -11,6 +11,7 @@ from jacobian._exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
     require_bounded_rational,
 )
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.polynomials.differential_operators.values import (
     ConstantCoefficientDifferentialOperator,
 )
@@ -483,7 +484,10 @@ def _height_decimal_digits(bits: int, value: int) -> int:
 def _max_coefficient_digits(polynomial: RationalPolynomial) -> int:
     return max(
         (
-            max(len(term.coefficient.num.lstrip("-")), len(term.coefficient.den))
+            max(
+                len(format_canonical_integer(abs(term.coefficient.num))),
+                len(format_canonical_integer(term.coefficient.den)),
+            )
             for term in polynomial.polynomial.terms
         ),
         default=1,

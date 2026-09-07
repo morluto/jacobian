@@ -1,5 +1,6 @@
 """Tests for hyperplane arrangement operations."""
 
+import json
 from copy import deepcopy
 
 import pytest
@@ -396,7 +397,7 @@ def test_serialized_results_retain_sources_and_reject_forgery() -> None:
     forged_arrangement = deepcopy(restored_arrangement.model_dump(mode="json"))
     forged_arrangement["is_central"] = True
     assert not verify_arrangement(
-        type(arrangement_result).model_validate(forged_arrangement)
+        type(arrangement_result).model_validate_json(json.dumps(forged_arrangement))
     )
 
     characteristic = compute_characteristic_polynomial(
@@ -415,7 +416,7 @@ def test_serialized_results_retain_sources_and_reject_forgery() -> None:
     forged_characteristic = deepcopy(restored_characteristic.model_dump(mode="json"))
     forged_characteristic["coefficients"][0] = "3"
     assert not verify_characteristic_polynomial(
-        type(characteristic).model_validate(forged_characteristic)
+        type(characteristic).model_validate_json(json.dumps(forged_characteristic))
     )
 
     chamber = compute_chamber_count(
@@ -425,7 +426,9 @@ def test_serialized_results_retain_sources_and_reject_forgery() -> None:
     assert verify_chamber_count(restored_chamber)
     forged_chamber = deepcopy(restored_chamber.model_dump(mode="json"))
     forged_chamber["chamber_count"] = "7"
-    assert not verify_chamber_count(type(chamber).model_validate(forged_chamber))
+    assert not verify_chamber_count(
+        type(chamber).model_validate_json(json.dumps(forged_chamber))
+    )
 
 
 # --- Issue 3: validate hyperplane inputs ---
@@ -465,9 +468,10 @@ def test_rational_hyperplane_accepts_negative_rationals() -> None:
 
 
 def test_result_integer_type_errors_are_structured() -> None:
-    with pytest.raises(ValidationError, match="integer values must not be booleans"):
+    with pytest.raises(ValidationError) as error:
         ChamberCountResult(
             ambient_dimension=2,
             hyperplane_count=3,
             chamber_count=True,
         )
+    assert error.value.errors()[0]["type"] == "int_type"

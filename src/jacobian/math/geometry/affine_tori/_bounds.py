@@ -16,7 +16,6 @@ from jacobian._execution import (
 )
 from jacobian.canonical import (
     format_canonical_integer,
-    parse_canonical_integer,
     strict_json_object_size,
 )
 from jacobian.catalog.models import OperationDomainValidationError
@@ -690,7 +689,9 @@ def _worker_source_bytes(source: RationalAffineTorusMap) -> int:
 
     dimension = source.torus.dimension
     entry_rows = tuple(
-        _array_item_wire_bytes(tuple(len(entry) + 2 for entry in row))
+        _array_item_wire_bytes(
+            tuple(len(format_canonical_integer(entry)) + 2 for entry in row)
+        )
         for row in source.linear_part.entries
     )
     linear_part_bytes = strict_json_object_size(
@@ -704,8 +705,8 @@ def _worker_source_bytes(source: RationalAffineTorusMap) -> int:
     coordinate_bytes = tuple(
         strict_json_object_size(
             (
-                ("num", len(coordinate.num) + 2),
-                ("den", len(coordinate.den) + 2),
+                ("num", len(format_canonical_integer(coordinate.num)) + 2),
+                ("den", len(format_canonical_integer(coordinate.den)) + 2),
             )
         )
         for coordinate in source.translation.coordinates
@@ -731,15 +732,17 @@ def _worker_input_wire_bytes(source: RationalAffineTorusMap) -> int:
 
     dimension = source.torus.dimension
     linear_rows = tuple(
-        _array_item_wire_bytes(tuple(len(entry) + 2 for entry in row))
+        _array_item_wire_bytes(
+            tuple(len(format_canonical_integer(entry)) + 2 for entry in row)
+        )
         for row in source.linear_part.entries
     )
     linear_part_bytes = _array_item_wire_bytes(linear_rows)
     translation_entries = tuple(
         strict_json_object_size(
             (
-                ("num", len(coordinate.num) + 2),
-                ("den", len(coordinate.den) + 2),
+                ("num", len(format_canonical_integer(coordinate.num)) + 2),
+                ("den", len(format_canonical_integer(coordinate.den)) + 2),
             )
         )
         for coordinate in source.translation.coordinates
@@ -925,10 +928,7 @@ def build_affine_torus_plan(
     dimension = source.torus.dimension
     displacement_height = max(
         (
-            abs(
-                parse_canonical_integer(source.linear_part.entries[row][column])
-                - int(row == column)
-            )
+            abs(source.linear_part.entries[row][column] - int(row == column))
             for row in range(dimension)
             for column in range(dimension)
         ),
@@ -960,8 +960,7 @@ def build_affine_torus_plan(
     # will build at that rank rather than an over-large worst case.
     displacement = tuple(
         tuple(
-            parse_canonical_integer(source.linear_part.entries[row][column])
-            - int(row == column)
+            source.linear_part.entries[row][column] - int(row == column)
             for column in range(dimension)
         )
         for row in range(dimension)

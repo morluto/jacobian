@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 from math import comb
-from typing import Self
+from typing import Annotated, Self
 
 from pydantic import ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import DecimalIntegerEncoding, ExactInteger
 from jacobian._models import StrictModel
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.graphs.values import (
     MAX_INDEXED_SIMPLE_GRAPH_EDGES,
     MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
@@ -157,9 +157,9 @@ class InducedVertexSubsetPatternCountResult(StrictModel):
 
     host: SimpleUndirectedGraph
     pattern: SimpleUndirectedGraph
-    occurrence_count: CanonicalInteger = Field(
-        min_length=1,
-        max_length=MAX_INDUCED_PATTERN_COUNT_DIGITS,
+    occurrence_count: Annotated[
+        int, DecimalIntegerEncoding(max_digits=MAX_INDUCED_PATTERN_COUNT_DIGITS)
+    ] = Field(
         description=(
             "Canonical nonnegative decimal count of host vertex subsets inducing "
             "a graph isomorphic to pattern; subsets, not labelled maps, are counted."
@@ -168,7 +168,7 @@ class InducedVertexSubsetPatternCountResult(StrictModel):
 
     @model_validator(mode="after")
     def require_structural_shape(self) -> Self:
-        claimed = parse_canonical_integer(self.occurrence_count)
+        claimed = self.occurrence_count
         if claimed < 0:
             raise PydanticCustomError(
                 "graph.occurrence_count_must_be_nonnegative",
@@ -183,7 +183,7 @@ class InducedVertexSubsetPatternCountResult(StrictModel):
         *,
         host: SimpleUndirectedGraph,
         pattern: SimpleUndirectedGraph,
-        occurrence_count: CanonicalInteger,
+        occurrence_count: ExactInteger,
     ) -> Self:
         """Construct a count emitted by the trusted owner-local kernel."""
 

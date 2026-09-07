@@ -1,6 +1,7 @@
 """Composition checks for sparse modular-polynomial values."""
 
 import copy
+import json
 import re
 
 import pytest
@@ -15,7 +16,6 @@ from jacobian.math.number_theory._modular_models import (
     ModularPolynomialVariable,
 )
 from jacobian.math.number_theory.modular_polynomials import (
-    _INTEGER,
     ModularPolynomialTerm,
     NormalizedModularPolynomialTerm,
     modular_polynomial_identity,
@@ -31,12 +31,12 @@ def _request(*, exponent: int = 1) -> ModularPolynomialResidueImageRequest:
     return ModularPolynomialResidueImageRequest(
         modulus=5,
         variables=(ModularPolynomialVariable(name="x", residues=(0, 1)),),
-        terms=(ModularPolynomialTerm(coefficient="3", exponents=(exponent,)),),
+        terms=(ModularPolynomialTerm(coefficient=3, exponents=(exponent,)),),
     )
 
 
 def _request_with_coefficient(
-    coefficient: str,
+    coefficient: int,
 ) -> ModularPolynomialResidueImageRequest:
     return ModularPolynomialResidueImageRequest(
         modulus=5,
@@ -78,7 +78,7 @@ def test_residue_image_consumes_and_produces_the_canonical_term_types() -> None:
 
 
 def test_identity_native_api_exposes_values_and_semantic_scalars() -> None:
-    term = ModularPolynomialTerm(coefficient="6", exponents=(1,))
+    term = ModularPolynomialTerm(coefficient=6, exponents=(1,))
 
     result = modular_polynomial_identity(5, ("x",), (term,))
 
@@ -92,13 +92,13 @@ def test_identity_result_verifier_rejects_a_forged_residual() -> None:
     identity = modular_polynomial_identity(
         5,
         ("x",),
-        (ModularPolynomialTerm(coefficient="1", exponents=(1,)),),
+        (ModularPolynomialTerm(coefficient=1, exponents=(1,)),),
     )
     payload = identity.model_dump(mode="json")
     payload["residual"] = []
     payload["identical"] = True
 
-    decoded = type(identity).model_validate(payload)
+    decoded = type(identity).model_validate_json(json.dumps(payload))
     assert not list(
         Draft202012Validator(type(identity).model_json_schema()).iter_errors(payload)
     )
@@ -146,7 +146,7 @@ def test_identity_schema_and_parser_reject_the_same_structural_forgery(
     )
     assert schema_errors
     with pytest.raises(ValidationError):
-        type(identity).model_validate(payload)
+        type(identity).model_validate_json(json.dumps(payload))
 
 
 def test_identity_verifier_preflights_malicious_tuple_subclass_without_hashing() -> (
@@ -198,8 +198,8 @@ def test_identity_result_round_trips_through_canonical_json() -> None:
     identity = modular_polynomial_identity(
         5,
         ("x",),
-        (ModularPolynomialTerm(coefficient="1", exponents=(1,)),),
-        (ModularPolynomialTerm(coefficient="1", exponents=(1,)),),
+        (ModularPolynomialTerm(coefficient=1, exponents=(1,)),),
+        (ModularPolynomialTerm(coefficient=1, exponents=(1,)),),
     )
 
     decoded = type(identity).model_validate_json(identity.model_dump_json())
@@ -214,7 +214,7 @@ def test_identity_result_decoding_does_not_replay_subtraction(
     identity = modular_polynomial_identity(
         5,
         ("x",),
-        (ModularPolynomialTerm(coefficient="1", exponents=(1,)),),
+        (ModularPolynomialTerm(coefficient=1, exponents=(1,)),),
     )
     payload = identity.model_dump(mode="json")
     payload["residual"] = []
@@ -232,12 +232,12 @@ def test_identity_result_decoding_does_not_replay_subtraction(
 
 def test_identity_verifier_accepts_the_bounded_maximum_sparse_claim() -> None:
     terms_left = tuple(
-        ModularPolynomialTerm(coefficient="1", exponents=(index // 257, index % 257))
+        ModularPolynomialTerm(coefficient=1, exponents=(index // 257, index % 257))
         for index in range(512)
     )
     terms_right = tuple(
         ModularPolynomialTerm(
-            coefficient="1",
+            coefficient=1,
             exponents=(index // 257 + 2, index % 257),
         )
         for index in range(512)
@@ -267,14 +267,13 @@ def test_published_term_schema_matches_residue_image_admission() -> None:
     ]["terms"]["items"]
     coefficient_schema = term_schema["properties"]["coefficient"]
 
-    assert coefficient_schema["maxLength"] == 256
-    assert coefficient_schema["pattern"] == _INTEGER.pattern
+    shared_schema = ModularPolynomialTerm.model_json_schema()
+    assert coefficient_schema == shared_schema["properties"]["coefficient"]
     assert term_schema["properties"]["exponents"]["maxItems"] == 6
     assert term_schema["properties"]["exponents"]["items"]["maximum"] == 32
 
-    shared_schema = ModularPolynomialTerm.model_json_schema()
     assert shared_schema["properties"]["coefficient"]["maxLength"] == 257
-    assert "pattern" not in shared_schema["properties"]["coefficient"]
+    assert "pattern" in shared_schema["properties"]["coefficient"]
     assert shared_schema["properties"]["exponents"]["maxItems"] == 20
 
 
@@ -365,29 +364,39 @@ def test_shared_normalized_term_type_retains_its_wider_envelope_elsewhere() -> N
     identity = modular_polynomial_identity(
         5,
         ("a", "b", "c", "d", "e", "f", "g"),
-        (ModularPolynomialTerm(coefficient="1", exponents=wide_vector),),
+        (ModularPolynomialTerm(coefficient=1, exponents=wide_vector),),
     )
 
     assert identity.normalized_left[0].exponents == wide_vector
 
 
 def test_coefficient_boundary_follows_the_advertised_envelope() -> None:
-    admitted = _request_with_coefficient("-" + "9" * 255)
-    assert int(admitted.terms[0].coefficient) < 0
+    admitted = _request_with_coefficient(-(10**255 - 1))
+    assert admitted.terms[0].coefficient < 0
 
     with pytest.raises(OperationDomainValidationError, match="coefficient"):
-        request = _request_with_coefficient("-" + "9" * 256)
+        # Bypass the value codec only to exercise the operation's independent
+        # residue-image admission guard at its exact 256-digit threshold.
+        request = _request_with_coefficient(1).model_copy(
+            update={
+                "terms": (
+                    ModularPolynomialTerm.model_construct(
+                        coefficient=-(10**256), exponents=(1,)
+                    ),
+                )
+            }
+        )
         modular_polynomial_residue_image(
             request.modulus, request.variables, request.terms
         )
 
 
 def test_shared_term_type_retains_its_wider_envelope_elsewhere() -> None:
-    widest = "-" + "9" * 256
+    widest = -(10**256 - 1)
     identity = modular_polynomial_identity(
         5,
         ("x",),
         (ModularPolynomialTerm(coefficient=widest, exponents=(1,)),),
     )
 
-    assert identity.normalized_left[0].coefficient == int(widest) % 5
+    assert identity.normalized_left[0].coefficient == widest % 5

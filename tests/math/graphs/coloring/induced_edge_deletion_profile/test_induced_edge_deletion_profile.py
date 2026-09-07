@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 from itertools import combinations, product
 
@@ -349,7 +350,9 @@ def test_native_mcp_parity() -> None:
     via_tool = tool.run(request)
     assert native == via_tool
     # also test via wire round-trip
-    dumped = InducedEdgeDeletionProfileResult.model_validate(native.model_dump())
+    dumped = InducedEdgeDeletionProfileResult.model_validate_json(
+        native.model_dump_json()
+    )
     assert dumped == native
 
 
@@ -357,7 +360,9 @@ def test_serialized_round_trip() -> None:
     g = _graph(["0", "1", "2"], [("0", "1"), ("1", "2")])
     result = compute_induced_edge_deletion_profile(g, 2)
     serialized = result.model_dump()
-    restored = InducedEdgeDeletionProfileResult.model_validate(serialized)
+    restored = InducedEdgeDeletionProfileResult.model_validate_json(
+        json.dumps(serialized)
+    )
     assert restored == result
     # rows remain sorted
     assert restored.rows == tuple(

@@ -6,6 +6,8 @@ extracted from the public cdc-lean construction.
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from pydantic import ValidationError
 
@@ -404,7 +406,7 @@ class TestEulerianDecomposition:
         cycle = result.cycles[0]
         assert len(cycle.vertices) == 65
         assert len(cycle.edge_ids) == 64
-        replayed = EulerianCyclesResult.model_validate(result.model_dump(mode="json"))
+        replayed = EulerianCyclesResult.model_validate_json(result.model_dump_json())
         assert replayed == result
 
     def test_serialized_claim_verifier_checks_incidence_and_usage(self) -> None:
@@ -871,7 +873,7 @@ class TestEulerianSubsetDuplicates:
         payload = result.model_dump()
         payload["edge_subset"] = ["e0", "e0", "e1", "e2"]
         with pytest.raises(ValidationError):
-            EulerianCyclesResult.model_validate(payload)
+            EulerianCyclesResult.model_validate_json(json.dumps(payload))
 
     def test_request_still_rejects_duplicate_ids(self) -> None:
         with pytest.raises(ValidationError):
@@ -973,8 +975,8 @@ class TestAggregateSearchBudgetAcrossValidation:
             resource_budget={"require_nowhere_zero": True},
         )
         payload = result.model_dump()
-        MultigraphFlowFindResult.model_validate(payload)
-        MultigraphFlowFindResult.model_validate(payload)
+        MultigraphFlowFindResult.model_validate_json(json.dumps(payload))
+        MultigraphFlowFindResult.model_validate_json(json.dumps(payload))
         assert calls["count"] == 1
         assert result.status == "EXHAUSTED"
         assert result.states_explored <= result.resource_budget.max_states

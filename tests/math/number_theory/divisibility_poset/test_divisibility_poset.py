@@ -8,7 +8,10 @@ from pydantic import ValidationError
 from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.sets._models import FiniteIntegerSet
-from jacobian.math.combinatorics.posets.core._models import MAX_POSET_ELEMENTS
+from jacobian.math.combinatorics.posets.core._models import (
+    MAX_POSET_ELEMENTS,
+    FinitePoset,
+)
 from jacobian.math.number_theory._divisibility_poset import (
     compute_divisibility_poset,
     divisibility_poset,
@@ -21,7 +24,7 @@ from jacobian.math.number_theory._divisibility_poset_models import (
 MAX_ADMITTED_ELEMENTS = min(MAX_DIVISIBILITY_SET_SIZE, MAX_POSET_ELEMENTS)
 
 
-def _compute(elements: list[str]):
+def _compute(elements: list[int]) -> FinitePoset:
     request = DivisibilityPosetRequest.model_validate(
         {"values": {"elements": elements}}
     )
@@ -29,7 +32,7 @@ def _compute(elements: list[str]):
 
 
 def test_divisors_of_12() -> None:
-    result = _compute(["1", "2", "3", "4", "6", "12"])
+    result = _compute([1, 2, 3, 4, 6, 12])
     assert result.elements == ("1", "12", "2", "3", "4", "6")
     pairs = {(pair.lower, pair.upper) for pair in result.strict_order_pairs}
     assert ("1", "2") in pairs
@@ -47,7 +50,7 @@ def test_divisors_of_12() -> None:
 
 
 def test_single_element() -> None:
-    result = _compute(["7"])
+    result = _compute([7])
     assert result.elements == ("7",)
     assert result.strict_order_pairs == ()
 
@@ -59,14 +62,14 @@ def test_empty_set() -> None:
 
 
 def test_antichain_coprime_pair() -> None:
-    result = _compute(["2", "3"])
+    result = _compute([2, 3])
     assert result.elements == ("2", "3")
     assert result.strict_order_pairs == ()
     assert len(result.incomparable_pairs) == 1
 
 
 def test_chain() -> None:
-    result = _compute(["2", "4", "8", "16"])
+    result = _compute([2, 4, 8, 16])
     pairs = {(pair.lower, pair.upper) for pair in result.strict_order_pairs}
     assert pairs == {
         ("2", "4"),
@@ -79,14 +82,14 @@ def test_chain() -> None:
 
 
 def test_unsorted_input_is_canonical() -> None:
-    result_a = _compute(["3", "1", "12", "6", "4", "2"])
-    result_b = _compute(["1", "2", "3", "4", "6", "12"])
+    result_a = _compute([3, 1, 12, 6, 4, 2])
+    result_b = _compute([1, 2, 3, 4, 6, 12])
     assert result_a.poset_digest == result_b.poset_digest
     assert result_a.elements == result_b.elements
 
 
 def test_native_path_rejects_nonpositive_source_values() -> None:
-    source = FiniteIntegerSet(elements=("-1", "1"))
+    source = FiniteIntegerSet(elements=(-1, 1))
     with pytest.raises(OperationDomainValidationError, match="positive integers"):
         divisibility_poset(source)
 
@@ -99,7 +102,7 @@ def test_duplicate_rejected() -> None:
 
 
 def test_operation_element_limit_is_not_request_structure() -> None:
-    elements = [str(index) for index in range(1, MAX_ADMITTED_ELEMENTS + 2)]
+    elements = list(range(1, MAX_ADMITTED_ELEMENTS + 2))
     request = DivisibilityPosetRequest.model_validate(
         {"values": {"elements": elements}}
     )
@@ -109,13 +112,13 @@ def test_operation_element_limit_is_not_request_structure() -> None:
 
 
 def test_exactly_max_elements() -> None:
-    elements = [str(index) for index in range(1, MAX_ADMITTED_ELEMENTS + 1)]
+    elements = list(range(1, MAX_ADMITTED_ELEMENTS + 1))
     result = _compute(elements)
     assert len(result.elements) == MAX_ADMITTED_ELEMENTS
 
 
 def test_poset_is_valid_finite_poset() -> None:
-    result = _compute(["1", "2", "4", "8"])
+    result = _compute([1, 2, 4, 8])
     assert result.poset_digest.startswith("sha256:")
     assert result.graded is True
     assert result.ranks is not None
@@ -123,13 +126,13 @@ def test_poset_is_valid_finite_poset() -> None:
 
 
 def test_minimal_and_maximal_elements() -> None:
-    result = _compute(["1", "2", "4"])
+    result = _compute([1, 2, 4])
     assert result.minimal_elements == ("1",)
     assert result.maximal_elements == ("4",)
 
 
 def test_transitive_closure_completeness() -> None:
-    result = _compute(["2", "4", "8"])
+    result = _compute([2, 4, 8])
     pairs = {(pair.lower, pair.upper) for pair in result.strict_order_pairs}
     assert pairs == {("2", "4"), ("4", "8"), ("2", "8")}
 
@@ -141,7 +144,7 @@ def test_catalog_discovery() -> None:
 
 
 def test_power_of_two_chain() -> None:
-    result = _compute(["1", "2", "4", "8", "16", "32"])
+    result = _compute([1, 2, 4, 8, 16, 32])
     count = len(result.elements)
     assert len(result.strict_order_pairs) == count * (count - 1) // 2
     assert result.incomparable_pairs == ()

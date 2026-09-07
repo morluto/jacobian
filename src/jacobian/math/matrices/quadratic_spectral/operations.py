@@ -8,7 +8,6 @@ from math import gcd
 from typing import TYPE_CHECKING, Literal
 
 from jacobian._flint import flint_workprec
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math._root_isolation import strict_root_count
 from jacobian.math.matrices.quadratic_spectral._bounds import (
@@ -185,7 +184,7 @@ def _sympy_polynomial(coefficients: tuple[int, ...]) -> Poly:
     return sympy.Poly.from_list(coefficients, gens=sympy.Symbol("x"), domain=sympy.ZZ)
 
 
-def _canonical_factor(factor: Poly) -> tuple[str, ...]:
+def _canonical_factor(factor: Poly) -> tuple[int, ...]:
     coefficients = [int(coefficient) for coefficient in factor.all_coeffs()]
     content = 0
     for coefficient in coefficients:
@@ -193,7 +192,7 @@ def _canonical_factor(factor: Poly) -> tuple[str, ...]:
     coefficients = [coefficient // content for coefficient in coefficients]
     if coefficients[0] < 0:
         coefficients = [-coefficient for coefficient in coefficients]
-    return tuple(format_canonical_integer(coefficient) for coefficient in coefficients)
+    return tuple(coefficients)
 
 
 def _root_data(polynomial: Poly) -> tuple[_RootData, ...]:

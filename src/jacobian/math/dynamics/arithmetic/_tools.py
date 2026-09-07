@@ -21,7 +21,6 @@ from jacobian.math.dynamics.arithmetic._models import (
     OrbitPrefixRequest,
     OrbitPrefixResult,
     OrbitRepeatEvidence,
-    PolynomialCoefficientRequest,
     _validation_code,
 )
 from jacobian.math.dynamics.arithmetic.operations import (
@@ -30,7 +29,6 @@ from jacobian.math.dynamics.arithmetic.operations import (
     finite_field_functional_graph,
     iterate_polynomial,
     orbit_prefix,
-    polynomial_coefficients,
     polynomial_from_coefficients,
 )
 from jacobian.math.finite_fields.operations import (
@@ -41,7 +39,6 @@ from jacobian.math.finite_fields.values import (
     FiniteFieldElement,
     FiniteFieldPresentation,
 )
-from jacobian.math.polynomials.values import RationalPolynomial
 
 
 def _translate_value_error(
@@ -52,16 +49,6 @@ def _translate_value_error(
         code=f"arithmetic_dynamics.{_validation_code(str(exc))}",
         message=str(exc),
     ) from exc
-
-
-def _request_polynomial(request: PolynomialCoefficientRequest) -> RationalPolynomial:
-    try:
-        # Admission owns the univariate/source bounds; the request only carries
-        # the shared canonical polynomial value.
-        polynomial_coefficients(request.polynomial)
-        return request.polynomial
-    except ValueError as exc:
-        _translate_value_error(exc, ("polynomial",))
 
 
 def _polynomial_example(coefficients: tuple[int, ...]) -> dict[str, Any]:
@@ -86,11 +73,10 @@ def _finite_map_example(prime: int, coefficients: tuple[int, ...]) -> dict[str, 
 
 
 def compute_map_iterate(request: MapIterateRequest) -> MapIterateResult:
-    polynomial = _request_polynomial(request)
     try:
-        result = iterate_polynomial(polynomial, request.n)
+        result = iterate_polynomial(request.polynomial, request.n)
     except ValueError as exc:
-        location = ("coefficients",) if "coefficient" in str(exc) else ("n",)
+        location = ("polynomial",) if "polynomial" in str(exc) else ("n",)
         _translate_value_error(exc, location)
     return MapIterateResult._from_kernel(
         source_polynomial=request.polynomial,
@@ -103,11 +89,10 @@ def compute_map_iterate(request: MapIterateRequest) -> MapIterateResult:
 
 
 def compute_orbit_prefix(request: OrbitPrefixRequest) -> OrbitPrefixResult:
-    polynomial = _request_polynomial(request)
     try:
-        result = orbit_prefix(polynomial, request.start, request.max_steps)
+        result = orbit_prefix(request.polynomial, request.start, request.max_steps)
     except ValueError as exc:
-        location = ("start",) if "orbit start" in str(exc) else ("coefficients",)
+        location = ("start",) if "orbit start" in str(exc) else ("polynomial",)
         _translate_value_error(exc, location)
     repeat = (
         None
@@ -132,11 +117,10 @@ def compute_orbit_prefix(request: OrbitPrefixRequest) -> OrbitPrefixResult:
 def compute_dynatomic_polynomial(
     request: DynatomicPolynomialRequest,
 ) -> DynatomicPolynomialResult:
-    polynomial = _request_polynomial(request)
     try:
-        result = dynatomic_polynomial(polynomial, request.n)
+        result = dynatomic_polynomial(request.polynomial, request.n)
     except ValueError as exc:
-        location = ("coefficients",) if "coefficient" in str(exc) else ("n",)
+        location = ("polynomial",) if "polynomial" in str(exc) else ("n",)
         _translate_value_error(exc, location)
     return DynatomicPolynomialResult._from_kernel(
         source_polynomial=request.polynomial,
@@ -151,11 +135,11 @@ def compute_dynatomic_polynomial(
 def compute_cycle_multiplier(
     request: CycleMultiplierRequest,
 ) -> CycleMultiplierResult:
-    polynomial = _request_polynomial(request)
     try:
-        multiplier = cycle_multiplier(polynomial, request.cycle)
+        multiplier = cycle_multiplier(request.polynomial, request.cycle)
     except ValueError as exc:
-        _translate_value_error(exc, ("cycle",))
+        location = ("cycle",) if "cycle" in str(exc) else ("polynomial",)
+        _translate_value_error(exc, location)
     return CycleMultiplierResult._from_kernel(
         source_polynomial=request.polynomial,
         cycle=request.cycle,
@@ -187,8 +171,7 @@ def compute_finite_field_map(request: FiniteFieldMapRequest) -> FiniteFieldMapRe
             tuple(values), polynomial_map.domain.characteristic
         )
     except ValueError as exc:
-        location = ("coefficients",) if "coefficient" in str(exc) else ("prime",)
-        _translate_value_error(exc, location)
+        _translate_value_error(exc, ("polynomial_map",))
     return FiniteFieldMapResult._from_kernel(
         polynomial_map=polynomial_map,
         edges=graph.edges,
@@ -202,13 +185,9 @@ def verify_finite_field_map(claim: FiniteFieldMapResult) -> bool:
         expected = compute_finite_field_map(
             FiniteFieldMapRequest(polynomial_map=claim.polynomial_map)
         )
-    except Exception:
+    except (TypeError, ValueError, OperationDomainValidationError):
         return False
-    return (
-        claim.edges == expected.edges
-        and claim.cycles == expected.cycles
-        and claim.tail_lengths == expected.tail_lengths
-    )
+    return claim == expected
 
 
 def verify_map_iterate(claim: MapIterateResult) -> bool:
@@ -216,9 +195,9 @@ def verify_map_iterate(claim: MapIterateResult) -> bool:
         expected = compute_map_iterate(
             MapIterateRequest(polynomial=claim.source_polynomial, n=claim.n)
         )
-    except Exception:
+    except (TypeError, ValueError, OperationDomainValidationError):
         return False
-    return claim.polynomial == expected.polynomial and claim.degree == expected.degree
+    return claim == expected
 
 
 def verify_orbit_prefix(claim: OrbitPrefixResult) -> bool:
@@ -230,7 +209,7 @@ def verify_orbit_prefix(claim: OrbitPrefixResult) -> bool:
                 max_steps=claim.requested_steps,
             )
         )
-    except Exception:
+    except (TypeError, ValueError, OperationDomainValidationError):
         return False
     return claim == expected
 
@@ -240,9 +219,9 @@ def verify_dynatomic_polynomial(claim: DynatomicPolynomialResult) -> bool:
         expected = compute_dynatomic_polynomial(
             DynatomicPolynomialRequest(polynomial=claim.source_polynomial, n=claim.n)
         )
-    except Exception:
+    except (TypeError, ValueError, OperationDomainValidationError):
         return False
-    return claim.polynomial == expected.polynomial and claim.degree == expected.degree
+    return claim == expected
 
 
 def verify_cycle_multiplier(claim: CycleMultiplierResult) -> bool:
@@ -252,9 +231,9 @@ def verify_cycle_multiplier(claim: CycleMultiplierResult) -> bool:
                 polynomial=claim.source_polynomial, cycle=claim.cycle
             )
         )
-    except Exception:
+    except (TypeError, ValueError, OperationDomainValidationError):
         return False
-    return claim.multiplier == expected.multiplier and claim.period == expected.period
+    return claim == expected
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (

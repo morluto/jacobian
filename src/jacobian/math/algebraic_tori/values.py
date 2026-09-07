@@ -8,9 +8,9 @@ from typing import Annotated, Any, Literal, Self
 from pydantic import Field, StrictInt, StringConstraints, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import DecimalIntegerEncoding
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import CanonicalizationError
+from jacobian.canonical import CanonicalizationError, format_canonical_integer
 from jacobian.math.matrices.certified_snf.values import (
     MAX_CERTIFIED_SNF_INPUT_DIGITS,
     MAX_CERTIFIED_SNF_INPUT_DIMENSION,
@@ -35,11 +35,13 @@ MAX_TORUS_COMPONENT_DIGITS = (
     + 1
 )
 PositiveTorusInteger = Annotated[
-    CanonicalInteger,
-    StringConstraints(
-        max_length=MAX_TORUS_COMPONENT_DIGITS,
-        pattern=r"^[1-9][0-9]*$",
-        strict=True,
+    int,
+    DecimalIntegerEncoding(max_digits=MAX_TORUS_COMPONENT_DIGITS),
+    Field(
+        gt=0,
+        json_schema_extra={
+            "pattern": rf"^[1-9][0-9]{{0,{MAX_TORUS_COMPONENT_DIGITS - 1}}}(?![\s\S])"
+        },
     ),
 ]
 
@@ -54,8 +56,16 @@ def _raw_field(value: object, name: str) -> object:
     return getattr(value, name, None)
 
 
-def _integer_digits(value: str) -> int:
-    return len(value.lstrip("-"))
+def _raw_integer_exceeds_bound(value: object) -> bool:
+    if isinstance(value, int) and not isinstance(value, bool):
+        return (
+            len(format_canonical_integer(value).lstrip("-"))
+            > MAX_CERTIFIED_SNF_INPUT_DIGITS
+        )
+    return (
+        isinstance(value, str)
+        and len(value.lstrip("-")) > MAX_CERTIFIED_SNF_INPUT_DIGITS
+    )
 
 
 class HomogeneousMonomialSystem(StrictModel):
@@ -107,8 +117,7 @@ class HomogeneousMonomialSystem(StrictModel):
                     "exponent entries must match the declared matrix columns",
                 )
             if any(
-                isinstance(value, str)
-                and _integer_digits(value) > MAX_CERTIFIED_SNF_INPUT_DIGITS
+                _raw_integer_exceeds_bound(value)
                 for row in entries
                 if isinstance(row, (list, tuple))
                 for value in row
@@ -157,7 +166,7 @@ class HomogeneousMonomialSystem(StrictModel):
                 "coordinate-axis labels must be unique",
             )
         if any(
-            _integer_digits(value) > MAX_CERTIFIED_SNF_INPUT_DIGITS
+            abs(value) >= 10**MAX_CERTIFIED_SNF_INPUT_DIGITS
             for row in matrix.entries
             for value in row
         ):
@@ -316,7 +325,7 @@ class AlgebraicTorusSolutionSubgroup(StrictModel):
         source: HomogeneousMonomialSystem,
         smith_certificate: SmithNormalFormCertificate,
         torsion_character_group: TorsionCharacterGroup,
-        connected_component_count: str,
+        connected_component_count: int,
         torsion_parameter_axis: tuple[str, ...],
         smith_free_parameter_axis: tuple[str, ...],
         reduced_free_parameter_axis: tuple[str, ...],

@@ -40,7 +40,6 @@ from typing import Literal
 
 from sympy import Matrix, Rational
 
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.polytopes import _rational_geometry
 from jacobian.math.geometry.polytopes._rational_geometry import (
@@ -231,7 +230,7 @@ def _facets_and_box(  # noqa: C901
     facets: list[tuple[tuple[int, ...], int]] = []
     if halfspaces is not None:
         if any(
-            all(coefficient.num == "0" for coefficient in halfspace.coefficients)
+            all(coefficient.num == 0 for coefficient in halfspace.coefficients)
             for halfspace in halfspaces
         ):
             raise OperationDomainValidationError(
@@ -442,12 +441,7 @@ def enumerate_lattice_points(
     points, _count = _scan_box(facets, lo, hi, d, collect=True)
     return EnumerateLatticePointsResult._from_kernel(
         dimension=d,
-        points=tuple(
-            LatticePoint._from_kernel(
-                tuple(format_canonical_integer(component) for component in point)
-            )
-            for point in points
-        ),
+        points=tuple(LatticePoint._from_kernel(tuple(point)) for point in points),
         representation=representation,
     )
 

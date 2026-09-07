@@ -14,8 +14,8 @@ from jacobian.math.optimization._general_models import (
 )
 
 
-def _q(numerator: int, denominator: int = 1) -> dict[str, str]:
-    return {"num": str(numerator), "den": str(denominator)}
+def _q(numerator: int, denominator: int = 1) -> dict[str, int]:
+    return {"num": numerator, "den": denominator}
 
 
 def _lower_bound_program(
@@ -58,9 +58,7 @@ def test_source_six_row_interval_program_is_solved_before_slack_expansion() -> N
         Fraction(0),
     )
     assert (
-        GeneralRationalLinearProgramResult.model_validate(
-            result.model_dump(mode="json")
-        )
+        GeneralRationalLinearProgramResult.model_validate_json(result.model_dump_json())
         == result
     )
 
@@ -135,8 +133,6 @@ def test_presolve_admits_513_digit_residuals_from_128_digit_inputs() -> None:
     assert result.constraint_slacks is not None
     assert result.constraint_slacks[1].as_fraction() == tall_residual
     assert (
-        GeneralRationalLinearProgramResult.model_validate(
-            result.model_dump(mode="json")
-        )
+        GeneralRationalLinearProgramResult.model_validate_json(result.model_dump_json())
         == result
     )

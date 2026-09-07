@@ -33,16 +33,15 @@ def _point_to_fraction(p: RationalPoint2D) -> tuple[Fraction, Fraction]:
 
 
 def _fraction_to_point(x: Fraction, y: Fraction) -> RationalPoint2D:
-    from jacobian.canonical import format_canonical_integer
 
     return RationalPoint2D(
         x=CanonicalRational(
-            num=format_canonical_integer(x.numerator),
-            den=format_canonical_integer(x.denominator),
+            num=x.numerator,
+            den=x.denominator,
         ),
         y=CanonicalRational(
-            num=format_canonical_integer(y.numerator),
-            den=format_canonical_integer(y.denominator),
+            num=y.numerator,
+            den=y.denominator,
         ),
     )
 

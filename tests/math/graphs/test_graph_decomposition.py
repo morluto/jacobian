@@ -515,7 +515,7 @@ class TestSPQRTree:
         assert [node.kind for node in result.nodes] == ["R_NODE"]
         assert len(result.nodes[0].graph.edges) == len(k33_edges) == 528
         assert len(result.source_edge_owners) == 528
-        replayed = SPQRTreeResult.model_validate(result.model_dump(mode="json"))
+        replayed = SPQRTreeResult.model_validate_json(result.model_dump_json())
         assert replayed == result
 
     def test_result_deserialization_round_trips_genuine_decomposition(self) -> None:
@@ -525,5 +525,5 @@ class TestSPQRTree:
                 "edges": [(0, 2), (1, 2), (0, 3), (1, 3), (0, 4), (1, 4)],
             }
         )
-        replayed = SPQRTreeResult.model_validate(result.model_dump(mode="json"))
+        replayed = SPQRTreeResult.model_validate_json(result.model_dump_json())
         assert replayed == result

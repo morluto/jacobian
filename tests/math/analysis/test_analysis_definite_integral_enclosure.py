@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from fractions import Fraction
@@ -57,6 +58,10 @@ def _q(value: Fraction | int, denominator: int = 1) -> dict[str, str]:
     return {"num": str(fraction.numerator), "den": str(fraction.denominator)}
 
 
+def _validate_json(model: Any, payload: Any) -> Any:
+    return model.model_validate_json(json.dumps(payload))
+
+
 def _var(name: str = "t") -> dict[str, Any]:
     return {"op": "var", "variable": name}
 
@@ -70,30 +75,32 @@ def _request(
     *,
     lower: Fraction = Fraction(0),
     upper: Fraction = Fraction(1),
-    target_mantissa: str = "1",
+    target_mantissa: int = 1,
     target_exponent: int = -2,
     precision_bits: int = 128,
     max_leaves: int = 8,
     wall_seconds: int = 30,
     variable: str = "t",
 ) -> DefiniteIntegralEnclosureRequest:
-    return DefiniteIntegralEnclosureRequest.model_validate(
-        {
-            "expression": expression,
-            "box": {
-                "variables": [variable],
-                "intervals": [
-                    {"lower": _q(lower), "upper": _q(upper)},
-                ],
-            },
-            "precision_bits": precision_bits,
-            "target_width": {
-                "mantissa": target_mantissa,
-                "exponent": target_exponent,
-            },
-            "max_leaves": max_leaves,
-            "wall_seconds": wall_seconds,
-        }
+    return DefiniteIntegralEnclosureRequest.model_validate_json(
+        json.dumps(
+            {
+                "expression": expression,
+                "box": {
+                    "variables": [variable],
+                    "intervals": [
+                        {"lower": _q(lower), "upper": _q(upper)},
+                    ],
+                },
+                "precision_bits": precision_bits,
+                "target_width": {
+                    "mantissa": str(target_mantissa),
+                    "exponent": target_exponent,
+                },
+                "max_leaves": max_leaves,
+                "wall_seconds": wall_seconds,
+            }
+        )
     )
 
 
@@ -124,7 +131,7 @@ def _balanced_sum_expression(depth: int) -> dict[str, Any]:
 
 
 def test_constant_one_has_the_exact_integral_singleton() -> None:
-    result = _run(_const(1), target_mantissa="0", target_exponent=0, max_leaves=1)
+    result = _run(_const(1), target_mantissa=0, target_exponent=0, max_leaves=1)
 
     assert isinstance(result.outcome, DefiniteIntegralTargetMet)
     assert result.outcome.enclosure.lower.as_fraction() == 1
@@ -144,7 +151,7 @@ def test_degenerate_interval_uses_the_explicit_zero_integral_convention() -> Non
         expression,
         lower=Fraction(7, 3),
         upper=Fraction(7, 3),
-        target_mantissa="0",
+        target_mantissa=0,
         target_exponent=0,
         max_leaves=1,
     )
@@ -157,7 +164,7 @@ def test_degenerate_interval_uses_the_explicit_zero_integral_convention() -> Non
 
 
 def test_linear_integral_contains_one_half_and_reconstructs_each_leaf() -> None:
-    result = _run(_var(), target_mantissa="1", target_exponent=-2, max_leaves=8)
+    result = _run(_var(), target_mantissa=1, target_exponent=-2, max_leaves=8)
 
     assert isinstance(result.outcome, DefiniteIntegralTargetMet)
     assert _contains(result.outcome.enclosure, Fraction(1, 2))
@@ -210,8 +217,8 @@ def test_quadratic_refinement_contains_one_six_and_tightens_the_sum() -> None:
             },
         ],
     }
-    coarse = _run(expression, target_mantissa="0", target_exponent=0, max_leaves=1)
-    refined = _run(expression, target_mantissa="1", target_exponent=-2, max_leaves=8)
+    coarse = _run(expression, target_mantissa=0, target_exponent=0, max_leaves=1)
+    refined = _run(expression, target_mantissa=1, target_exponent=-2, max_leaves=8)
 
     assert isinstance(coarse.outcome, DefiniteIntegralBudgetExhausted)
     assert isinstance(refined.outcome, DefiniteIntegralTargetMet)
@@ -255,7 +262,7 @@ def test_sendov_shaped_polynomial_contains_its_exact_integral() -> None:
             },
         ],
     }
-    result = _run(expression, target_mantissa="1", target_exponent=-5, max_leaves=32)
+    result = _run(expression, target_mantissa=1, target_exponent=-5, max_leaves=32)
 
     assert isinstance(result.outcome, DefiniteIntegralTargetMet)
     assert _contains(result.outcome.enclosure, Fraction(23, 160))
@@ -266,8 +273,8 @@ def test_sine_integral_matches_an_independent_endpoint_antiderivative() -> None:
     from flint import arb
 
     expression = {"op": "sin", "children": [_var()]}
-    coarse = _run(expression, target_mantissa="0", target_exponent=0, max_leaves=1)
-    refined = _run(expression, target_mantissa="1", target_exponent=-4, max_leaves=16)
+    coarse = _run(expression, target_mantissa=0, target_exponent=0, max_leaves=1)
+    refined = _run(expression, target_mantissa=1, target_exponent=-4, max_leaves=16)
 
     assert isinstance(coarse.outcome, DefiniteIntegralBudgetExhausted)
     assert isinstance(refined.outcome, DefiniteIntegralTargetMet)
@@ -289,7 +296,7 @@ def test_negative_linear_integral_preserves_orientation_and_sign() -> None:
         _var(),
         lower=Fraction(-1),
         upper=Fraction(0),
-        target_mantissa="1",
+        target_mantissa=1,
         target_exponent=-2,
         max_leaves=8,
     )
@@ -299,7 +306,7 @@ def test_negative_linear_integral_preserves_orientation_and_sign() -> None:
 
 
 def test_equal_contribution_widths_use_lexicographic_path_ties() -> None:
-    result = _run(_var(), target_mantissa="0", target_exponent=0, max_leaves=3)
+    result = _run(_var(), target_mantissa=0, target_exponent=0, max_leaves=3)
 
     assert isinstance(result.outcome, DefiniteIntegralBudgetExhausted)
     assert tuple(leaf.path for leaf in result.outcome.leaves) == (
@@ -310,7 +317,7 @@ def test_equal_contribution_widths_use_lexicographic_path_ties() -> None:
 
 
 def test_budget_exhaustion_retains_a_sound_complete_enclosure() -> None:
-    result = _run(_var(), target_mantissa="1", target_exponent=-4, max_leaves=2)
+    result = _run(_var(), target_mantissa=1, target_exponent=-4, max_leaves=2)
 
     assert isinstance(result.outcome, DefiniteIntegralBudgetExhausted)
     assert _contains(result.outcome.enclosure, Fraction(1, 2))
@@ -336,7 +343,7 @@ def test_unproved_real_domain_never_returns_an_integral_conclusion(
         expression,
         lower=lower,
         upper=Fraction(1),
-        target_mantissa="1",
+        target_mantissa=1,
         target_exponent=8,
         max_leaves=8,
     )
@@ -363,7 +370,7 @@ def test_arb_domain_uncertainty_is_a_typed_leaf_nonconclusion() -> None:
     result = _run(
         expression,
         precision_bits=32,
-        target_mantissa="1",
+        target_mantissa=1,
         target_exponent=8,
         max_leaves=1,
     )
@@ -391,7 +398,7 @@ def test_arb_domain_uncertainty_can_resolve_under_midpoint_refinement() -> None:
     result = _run(
         expression,
         precision_bits=32,
-        target_mantissa="1",
+        target_mantissa=1,
         target_exponent=8,
         max_leaves=16,
     )
@@ -422,7 +429,7 @@ def test_admitted_domain_proof_is_inherited_without_late_readmission() -> None:
     result = _run(
         expression,
         precision_bits=256,
-        target_mantissa="0",
+        target_mantissa=0,
         target_exponent=0,
         max_leaves=200,
         wall_seconds=120,
@@ -450,7 +457,7 @@ def test_dependency_domain_obstruction_can_be_resolved_by_subdivision() -> None:
     }
     result = _run(
         expression,
-        target_mantissa="1",
+        target_mantissa=1,
         target_exponent=4,
         max_leaves=2,
     )
@@ -464,8 +471,8 @@ def test_dependency_domain_obstruction_can_be_resolved_by_subdivision() -> None:
 
 
 def test_target_boundary_is_inclusive() -> None:
-    met = _run(_var(), target_mantissa="1", target_exponent=-2, max_leaves=4)
-    missed = _run(_var(), target_mantissa="1", target_exponent=-3, max_leaves=4)
+    met = _run(_var(), target_mantissa=1, target_exponent=-2, max_leaves=4)
+    missed = _run(_var(), target_mantissa=1, target_exponent=-3, max_leaves=4)
 
     assert isinstance(met.outcome, DefiniteIntegralTargetMet)
     assert isinstance(missed.outcome, DefiniteIntegralBudgetExhausted)
@@ -473,11 +480,11 @@ def test_target_boundary_is_inclusive() -> None:
 
 
 def test_zero_target_is_admitted_but_negative_target_is_not() -> None:
-    zero = _request(_const(1), target_mantissa="0", target_exponent=0, max_leaves=1)
-    assert zero.target_width == ExactDyadic(mantissa="0", exponent=0)
+    zero = _request(_const(1), target_mantissa=0, target_exponent=0, max_leaves=1)
+    assert zero.target_width == ExactDyadic(mantissa=0, exponent=0)
 
     with pytest.raises(ValidationError, match="must be nonnegative"):
-        _request(_const(1), target_mantissa="-1", target_exponent=0)
+        _request(_const(1), target_mantissa=-1, target_exponent=0)
 
 
 @pytest.mark.parametrize(
@@ -494,14 +501,15 @@ def test_request_requires_one_explicit_integration_axis(
 ) -> None:
     intervals = [{"lower": _q(0), "upper": _q(1)} for _ in box_variables]
     with pytest.raises(ValidationError, match=message):
-        DefiniteIntegralEnclosureRequest.model_validate(
+        _validate_json(
+            DefiniteIntegralEnclosureRequest,
             {
                 "expression": expression,
                 "box": {"variables": box_variables, "intervals": intervals},
                 "target_width": {"mantissa": "1", "exponent": -2},
                 "max_leaves": 4,
                 "wall_seconds": 30,
-            }
+            },
         )
 
 
@@ -531,14 +539,14 @@ def test_concurrent_precision_requests_do_not_overlap_the_arb_context(
     low_request = _request(
         expression,
         precision_bits=32,
-        target_mantissa="0",
+        target_mantissa=0,
         target_exponent=0,
         max_leaves=1,
     )
     high_request = _request(
         expression,
         precision_bits=512,
-        target_mantissa="0",
+        target_mantissa=0,
         target_exponent=0,
         max_leaves=1,
     )
@@ -614,7 +622,7 @@ def test_structural_validation_rejects_an_invalid_partition_path() -> None:
     payload["outcome"]["leaves"][0]["path"] = []
 
     with pytest.raises(ValidationError):
-        DefiniteIntegralEnclosureResult.model_validate(payload)
+        _validate_json(DefiniteIntegralEnclosureResult, payload)
 
 
 def test_result_deserialization_does_not_replay_computed_math(
@@ -635,19 +643,19 @@ def test_result_deserialization_does_not_replay_computed_math(
     ):
         monkeypatch.setattr(integral, name, replayed)
 
-    parsed = DefiniteIntegralEnclosureResult.model_validate(
-        result.model_dump(mode="json")
+    parsed = _validate_json(
+        DefiniteIntegralEnclosureResult, result.model_dump(mode="json")
     )
     assert parsed == result
 
 
 def test_result_rejects_a_leaf_deeper_than_the_requested_budget() -> None:
-    result = _run(_var(), target_mantissa="0", target_exponent=0, max_leaves=3)
+    result = _run(_var(), target_mantissa=0, target_exponent=0, max_leaves=3)
     payload = deepcopy(result.model_dump(mode="json"))
     payload["outcome"]["leaves"][0]["path"] = [0, 0, 0]
 
     with pytest.raises(ValidationError, match="requested partition-depth"):
-        DefiniteIntegralEnclosureResult.model_validate(payload)
+        _validate_json(DefiniteIntegralEnclosureResult, payload)
 
 
 def test_domain_unproven_result_cannot_smuggle_a_global_enclosure() -> None:
@@ -663,7 +671,7 @@ def test_domain_unproven_result_cannot_smuggle_a_global_enclosure() -> None:
     }
 
     with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
-        DefiniteIntegralEnclosureResult.model_validate(payload)
+        _validate_json(DefiniteIntegralEnclosureResult, payload)
 
 
 def test_domain_failure_evidence_is_bound_to_the_expression_node() -> None:
@@ -681,7 +689,7 @@ def test_domain_failure_evidence_is_bound_to_the_expression_node() -> None:
     }
 
     with pytest.raises(ValidationError, match="does not match"):
-        DefiniteIntegralEnclosureResult.model_validate(payload)
+        _validate_json(DefiniteIntegralEnclosureResult, payload)
 
 
 def test_result_schema_exposes_both_discriminated_branch_families() -> None:
@@ -775,12 +783,12 @@ def test_leaf_and_wall_field_bounds_reject_one_beyond() -> None:
     payload = _request(_var()).model_dump(mode="json")
     payload["max_leaves"] = MAX_DEFINITE_INTEGRAL_LEAVES + 1
     with pytest.raises(ValidationError):
-        DefiniteIntegralEnclosureRequest.model_validate(payload)
+        _validate_json(DefiniteIntegralEnclosureRequest, payload)
 
     payload = _request(_var()).model_dump(mode="json")
     payload["wall_seconds"] = MAX_DEFINITE_INTEGRAL_WALL_SECONDS + 1
     with pytest.raises(ValidationError):
-        DefiniteIntegralEnclosureRequest.model_validate(payload)
+        _validate_json(DefiniteIntegralEnclosureRequest, payload)
 
 
 def test_admission_charges_every_executed_partition_primitive(
@@ -805,7 +813,7 @@ def test_admission_charges_every_executed_partition_primitive(
             {"op": "sub", "children": [_const(1), _var()]},
         ],
     }
-    request = _request(expression, target_mantissa="0", target_exponent=0, max_leaves=8)
+    request = _request(expression, target_mantissa=0, target_exponent=0, max_leaves=8)
     node_count = len(_bounded_expression_nodes(request.expression))
 
     original_admit = integral._admit_definite_integral

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
@@ -33,7 +34,7 @@ from jacobian.math.geometry.polytopes.operations import (
 
 
 def _rational(value: int) -> CanonicalRational:
-    return CanonicalRational(num=str(value), den="1")
+    return CanonicalRational(num=value, den=1)
 
 
 def _vertex(vertex_id: str, *coordinates: int) -> RationalPolytopeVertex:
@@ -63,8 +64,8 @@ def _covector(*components: int) -> RationalCovector:
 
 
 def _large_rational(digits: int) -> CanonicalRational:
-    numerator = "9" * digits
-    return CanonicalRational(num=numerator, den="8")
+    numerator = 10**digits - 1
+    return CanonicalRational(num=numerator, den=8)
 
 
 def _oversized_simplex_payload() -> dict[str, Any]:
@@ -460,7 +461,9 @@ def test_built_matching_covector_composes_with_serialized_polytope() -> None:
     axes still composes unchanged: the mixed-payload gate mirrors the
     common-space rule without narrowing the published domain."""
 
-    payload = _square_payload()
+    payload = PolytopeSupportRequest.model_validate_json(
+        json.dumps(_square_payload())
+    ).model_dump()
     payload["covector"] = _covector(1, 0)
     request = PolytopeSupportRequest.model_validate(payload)
     result = compute_polytope_support(request)
@@ -512,11 +515,13 @@ def test_serialized_request_accepts_components_at_the_envelope_boundary() -> Non
             ),
         ),
     )
-    request = PolytopeSupportRequest.model_validate(
-        {
-            "polytope": polytope.model_dump(mode="json"),
-            "covector": _covector(1, 0).model_dump(mode="json"),
-        }
+    request = PolytopeSupportRequest.model_validate_json(
+        json.dumps(
+            {
+                "polytope": polytope.model_dump(mode="json"),
+                "covector": _covector(1, 0).model_dump(mode="json"),
+            }
+        )
     )
 
     result = compute_polytope_support(request)
@@ -904,7 +909,7 @@ def test_built_matching_exposed_face_composes_with_serialized_result(
     still composes unchanged: the mixed-payload gate mirrors the
     common-space rule without narrowing the published domain."""
 
-    payload = square_result.model_dump(mode="json")
+    payload = square_result.model_dump()
     payload["exposed_face"] = square_result.exposed_face
 
     assert PolytopeSupportResult.model_validate(payload) == square_result
@@ -931,7 +936,7 @@ def test_serialized_result_still_round_trips_through_conclusion_gate(
     """The conclusion gate admits the exact published result shape."""
 
     assert (
-        PolytopeSupportResult.model_validate(square_result.model_dump(mode="json"))
+        PolytopeSupportResult.model_validate_json(square_result.model_dump_json())
         == square_result
     )
 
@@ -961,9 +966,7 @@ def test_serialized_result_round_trips_at_the_envelope_boundary() -> None:
         PolytopeSupportRequest(polytope=polytope, covector=_covector(1, 0))
     )
 
-    assert (
-        PolytopeSupportResult.model_validate(result.model_dump(mode="json")) == result
-    )
+    assert PolytopeSupportResult.model_validate_json(result.model_dump_json()) == result
 
 
 def test_large_coordinate_canonical_values_construct_and_round_trip() -> None:
@@ -992,10 +995,8 @@ def test_large_coordinate_canonical_values_construct_and_round_trip() -> None:
         components=(big, bigger),
     )
 
-    assert (
-        RationalVPolytope.model_validate(polytope.model_dump(mode="json")) == polytope
-    )
-    assert RationalCovector.model_validate(covector.model_dump(mode="json")) == covector
+    assert RationalVPolytope.model_validate_json(polytope.model_dump_json()) == polytope
+    assert RationalCovector.model_validate_json(covector.model_dump_json()) == covector
 
 
 def test_extremality_subfacet_bound_is_enforced_before_filtering() -> None:
@@ -1100,7 +1101,7 @@ def test_extremality_height_work_bound_is_enforced_before_exact_conversion(
         RationalPolytopeVertex(
             vertex_id=f"v{index:02d}",
             coordinates=tuple(
-                CanonicalRational(num="9" * (digits - 2) + f"{index:02d}", den="1")
+                CanonicalRational(num=(10 ** (digits - 2) - 1) * 100 + index, den=1)
                 for _ in range(4)
             ),
         )
@@ -1123,8 +1124,8 @@ def test_extremality_height_work_grades_admission_by_coordinate_height() -> None
     6-vertex dim-3 family just past ``MAX_EXTREMALITY_HEIGHT_WORK``."""
 
     threshold_digits = 18_257  # 3 * 18_257^2 <= MAX < 60 * 18_258^2
-    big = CanonicalRational(num="9" * threshold_digits, den="1")
-    zero = CanonicalRational(num="0", den="1")
+    big = CanonicalRational(num=10**threshold_digits - 1, den=1)
+    zero = CanonicalRational(num=0, den=1)
     triangle = RationalVPolytope(
         space=RationalCoordinateSpace(axes=("x", "y")),
         vertices=(
@@ -1133,7 +1134,7 @@ def test_extremality_height_work_grades_admission_by_coordinate_height() -> None
             RationalPolytopeVertex(vertex_id="top", coordinates=(zero, big)),
         ),
     )
-    assert len(triangle.vertices[1].coordinates[0].num) == threshold_digits
+    assert triangle.vertices[1].coordinates[0].num == 10**threshold_digits - 1
 
     def unexpected_conversion(polytope: object) -> None:
         raise AssertionError("exact conversion ran before the height-work gate")
@@ -1143,7 +1144,9 @@ def test_extremality_height_work_grades_admission_by_coordinate_height() -> None
         RationalPolytopeVertex(
             vertex_id=f"v{index:02d}",
             coordinates=tuple(
-                CanonicalRational(num="9" * (over_digits - 2) + f"{index:02d}", den="1")
+                CanonicalRational(
+                    num=(10 ** (over_digits - 2) - 1) * 100 + index, den=1
+                )
                 for _ in range(3)
             ),
         )

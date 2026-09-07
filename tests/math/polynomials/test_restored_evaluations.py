@@ -21,11 +21,11 @@ from jacobian.math.polynomials.values import (
 
 def test_integer_polynomial_evaluation_is_published_and_exact() -> None:
     request = IntegerPolynomialEvaluationRequest(
-        polynomial=IntegerPolynomial(coefficients=("2", "-3", "1")),
-        point="4",
+        polynomial=IntegerPolynomial(coefficients=(2, -3, 1)),
+        point=4,
     )
 
-    assert integer_polynomial_evaluate(request.polynomial, request.point).value == "21"
+    assert integer_polynomial_evaluate(request.polynomial, request.point).value == 21
     assert any(
         operation.operation_id == "polynomial.integer.compute.evaluate"
         for operation in INTEGER_POLYNOMIAL_OPERATIONS
@@ -38,21 +38,21 @@ def test_rational_polynomial_evaluation_is_exact() -> None:
         polynomial=SparseRationalPolynomial(
             terms=(
                 RationalPolynomialTerm(
-                    coefficient=CanonicalRational(num="1", den="1"), exponents=(2,)
+                    coefficient=CanonicalRational(num=1, den=1), exponents=(2,)
                 ),
                 RationalPolynomialTerm(
-                    coefficient=CanonicalRational(num="1", den="1"), exponents=(0,)
+                    coefficient=CanonicalRational(num=1, den=1), exponents=(0,)
                 ),
             )
         ),
     )
     request = RationalPolynomialEvaluationRequest(
         polynomial=polynomial,
-        point=CanonicalRational(num="2", den="1"),
+        point=CanonicalRational(num=2, den=1),
     )
     result = rational_polynomial_evaluate(request.polynomial, request.point)
 
-    assert result.value == CanonicalRational(num="5", den="1")
+    assert result.value == CanonicalRational(num=5, den=1)
 
 
 def test_rational_polynomial_evaluation_rejects_oversized_exact_result() -> None:
@@ -61,7 +61,7 @@ def test_rational_polynomial_evaluation_rejects_oversized_exact_result() -> None
         polynomial=SparseRationalPolynomial(
             terms=(
                 RationalPolynomialTerm(
-                    coefficient=CanonicalRational(num="1", den="1"),
+                    coefficient=CanonicalRational(num=1, den=1),
                     exponents=(64,),
                 ),
             )
@@ -70,8 +70,8 @@ def test_rational_polynomial_evaluation_rejects_oversized_exact_result() -> None
     request = RationalPolynomialEvaluationRequest(
         polynomial=polynomial,
         point=CanonicalRational(
-            num="1" + "0" * (MAX_CANONICAL_RATIONAL_DIGITS - 1),
-            den="1",
+            num=10 ** (MAX_CANONICAL_RATIONAL_DIGITS - 1),
+            den=1,
         ),
     )
 

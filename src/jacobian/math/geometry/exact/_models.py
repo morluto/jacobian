@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from typing import Annotated, Self
 
-from pydantic import ConfigDict, Field, StringConstraints, model_validator
+from pydantic import ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, DecimalIntegerEncoding
 from jacobian._models import StrictModel, canonicalize_json_containers
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 from jacobian.math.matrices.values import RationalMatrix
 
@@ -205,12 +206,8 @@ MAX_PINNED_PROFILE_AUTHORED_RATIONAL_CHARACTERS = 10 * 1024 * 1024
 
 
 PinnedBoundedInteger = Annotated[
-    str,
-    StringConstraints(
-        pattern=rf"^(?:0|-?[1-9][0-9]{{0,{COORDINATE_DIGITS - 1}}})$",
-        strict=True,
-        max_length=COORDINATE_DIGITS + 1,
-    ),
+    int,
+    DecimalIntegerEncoding(max_digits=COORDINATE_DIGITS),
 ]
 """Canonical signed integer whose magnitude carries at most ``COORDINATE_DIGITS`` digits.
 
@@ -218,11 +215,13 @@ The bound is published as a standard JSON Schema ``pattern``/``maxLength`` so
 schema-driven clients can pre-validate the pinned-line wire domain."""
 
 PinnedPositiveInteger = Annotated[
-    str,
-    StringConstraints(
-        pattern=rf"^[1-9][0-9]{{0,{COORDINATE_DIGITS - 1}}}$",
-        strict=True,
-        max_length=COORDINATE_DIGITS,
+    PinnedBoundedInteger,
+    Field(
+        gt=0,
+        json_schema_extra={
+            "pattern": rf"^[1-9][0-9]{{0,{COORDINATE_DIGITS - 1}}}(?![\s\S])",
+            "maxLength": COORDINATE_DIGITS,
+        },
     ),
 ]
 """Canonical positive integer whose magnitude carries at most ``COORDINATE_DIGITS`` digits."""
@@ -350,9 +349,18 @@ class PinnedLineEntry(StrictModel):
 def _rational_component_bytes(value: object) -> int:
     """Raw numerator/denominator character count of one authored rational."""
     if isinstance(value, CanonicalRational):
-        return len(value.num) + len(value.den)
+        return len(format_canonical_integer(value.num)) + len(
+            format_canonical_integer(value.den)
+        )
     if isinstance(value, dict):
-        return sum(len(str(value.get(key, ""))) for key in ("num", "den"))
+        return sum(
+            len(format_canonical_integer(component))
+            if type(component) is int
+            else len(component)
+            if isinstance(component, str)
+            else 0
+            for component in (value.get("num"), value.get("den"))
+        )
     return 0
 
 

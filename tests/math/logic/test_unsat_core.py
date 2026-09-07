@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
-import z3  # type: ignore[import-untyped]
+import z3
 from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
@@ -192,7 +193,7 @@ def test_core_worker_failures_never_project_a_math_verdict(
 def test_core_extraction_failure_is_a_typed_unknown(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def fail_core_extraction(_solver: z3.Solver) -> None:
+    def fail_core_extraction(_solver: object) -> None:
         raise z3.Z3Exception("core extraction failed")
 
     monkeypatch.setattr(z3.Solver, "unsat_core", fail_core_extraction)
@@ -1607,11 +1608,11 @@ def test_unsat_result_requires_a_nonempty_canonical_core() -> None:
     payload["core_indices"] = []
 
     with raises_logic_validation():
-        SmtUnsatCoreResult.model_validate(payload)
+        SmtUnsatCoreResult.model_validate_json(json.dumps(payload))
 
     payload["core_indices"] = [1, 0]
     with raises_logic_validation():
-        SmtUnsatCoreResult.model_validate(payload)
+        SmtUnsatCoreResult.model_validate_json(json.dumps(payload))
 
 
 def test_request_schema_explains_validator_owned_indexing() -> None:

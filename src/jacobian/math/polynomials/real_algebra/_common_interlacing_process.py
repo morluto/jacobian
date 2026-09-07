@@ -16,7 +16,7 @@ from typing import Any
 from pydantic import TypeAdapter, ValidationError
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import ExactInteger
 from jacobian._execution import (
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
@@ -26,6 +26,7 @@ from jacobian._execution import (
 )
 from jacobian.canonical import (
     CanonicalizationError,
+    encode_strict_json,
     format_canonical_integer,
     loads_strict_json,
     parse_canonical_integer,
@@ -59,7 +60,7 @@ _WALL_SECONDS = 3_600.0
 _ADDRESS_SPACE_BYTES = 2 * 1024 * 1024 * 1024
 _STDOUT_LIMIT = 11 * 1024 * 1024
 _STDERR_LIMIT = 64 * 1024
-_CANONICAL_POLYNOMIAL = TypeAdapter(tuple[CanonicalInteger, ...])
+_CANONICAL_POLYNOMIAL = TypeAdapter(tuple[ExactInteger, ...])
 _OUTCOME: TypeAdapter[CommonInterlacingOutcome] = TypeAdapter(CommonInterlacingOutcome)
 
 
@@ -91,7 +92,10 @@ def _preflight_family_size(
         for term in terms:
             coeff = term.coefficient
             if (
-                max(len(coeff.num.lstrip("-")), len(coeff.den))
+                max(
+                    len(format_canonical_integer(abs(coeff.num))),
+                    len(format_canonical_integer(coeff.den)),
+                )
                 > MAX_COMMON_INTERLACING_INPUT_DIGITS
             ):
                 raise OperationDomainValidationError(
@@ -254,7 +258,7 @@ def _root_profile_from_worker(  # noqa: C901
         raise ValueError("worker omitted source factor declarations")
 
     roots: list[PolynomialRealRoot] = []
-    seen_identities: set[tuple[tuple[str, ...], int]] = set()
+    seen_identities: set[tuple[tuple[int, ...], int]] = set()
     factor_multiplicities: dict[tuple[int, ...], int] = {}
     factor_row_counts: dict[tuple[int, ...], int] = {}
     factor_root_indices: dict[tuple[int, ...], set[int]] = {}
@@ -280,13 +284,15 @@ def _root_profile_from_worker(  # noqa: C901
             raise ValueError("worker root polynomial is malformed")
         if not 2 <= len(raw_polynomial) <= MAX_COMMON_INTERLACING_FACTOR_DEGREE + 1:
             raise ValueError("worker root polynomial exceeds its length bound")
-        polynomial = _CANONICAL_POLYNOMIAL.validate_python(raw_polynomial)
+        polynomial = _CANONICAL_POLYNOMIAL.validate_json(
+            encode_strict_json(raw_polynomial), strict=True
+        )
         root_index = raw_value.get("real_root_index")
         if type(root_index) is not int or root_index < 0:
             raise ValueError("malformed algebraic root index")
         coefficients = [int(coefficient) for coefficient in polynomial]
         if any(
-            len(coefficient.lstrip("-")) > MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS
+            abs(coefficient) >= 10**MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS
             for coefficient in polynomial
         ):
             raise ValueError(
@@ -362,8 +368,8 @@ def _root_profile_from_worker(  # noqa: C901
             PolynomialRealRoot._from_worker(
                 value=algebraic_value,
                 multiplicity=multiplicity,
-                isolating_interval=RationalIsolatingInterval.model_validate(
-                    raw_interval
+                isolating_interval=RationalIsolatingInterval.model_validate_json(
+                    json.dumps(raw_interval)
                 ),
             )
         )

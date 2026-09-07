@@ -82,7 +82,9 @@ def test_lp_inspection_explains_derived_admission(
                 )
                 assert result.structured_content is not None
                 output = result.structured_content["output"]
-                parsed = GeneralRationalLinearProgramResult.model_validate(output)
+                parsed = GeneralRationalLinearProgramResult.model_validate_json(
+                    json.dumps(output)
+                )
                 assert parsed.status == "OPTIMAL"
                 assert parsed.primal_objective is not None
                 assert parsed.primal_objective.as_fraction() == m

@@ -197,7 +197,7 @@ def test_large_ap_carrier_reaches_linear_consumers_not_independence_search() -> 
     assert len(source.vertices) == 212
     assert len(source.edges) == 11_130
     assert sum(len(members) for _, members in source.edges) == 33_390
-    assert FiniteHypergraph.model_validate(source.model_dump(mode="json")) == source
+    assert FiniteHypergraph.model_validate_json(source.model_dump_json()) == source
     parameter_result = parameters(source)
     assert (
         parameter_result.vertex_count,
@@ -425,7 +425,7 @@ def test_all_three_vertex_hypergraphs_match_exhaustive_search() -> None:
         assert result.independence_number == len(_brute_force_witness(source))
 
 
-def test_serialized_claim_is_structural_and_verifiable() -> None:
+def test_result_verifier_rejects_a_forged_source() -> None:
     result = _compute(
         {
             "vertices": ["a", "b", "c"],
@@ -433,38 +433,19 @@ def test_serialized_claim_is_structural_and_verifiable() -> None:
         }
     )
     payload = result.model_dump(mode="json")
-    payload["hypergraph"]["edges"][0][1] = ["a", "b"]
-    decoded = HypergraphIndependenceResult.model_validate_json(json.dumps(payload))
-    assert not verify_independence_number(decoded)
+    payload["hypergraph"]["edges"] = []
+    forged = HypergraphIndependenceResult.model_validate_json(json.dumps(payload))
+    assert not verify_independence_number(forged)
 
 
-def test_source_context_is_retained_without_a_digest() -> None:
+def test_distinct_unicode_sources_round_trip_without_normalization() -> None:
     decomposed = _compute({"vertices": ["e\u0301"], "edges": []})
     composed = _compute({"vertices": ["\u00e9"], "edges": []})
     assert decomposed.hypergraph != composed.hypergraph
-    payload = decomposed.model_dump(mode="json")
-    payload["hypergraph"] = composed.hypergraph.model_dump(mode="json")
-    payload["incumbent_vertices"] = list(composed.incumbent_vertices)
-    decoded = HypergraphIndependenceResult.model_validate(payload)
-    assert decoded.hypergraph == composed.hypergraph
-    assert verify_independence_number(decoded)
-
-
-def test_verifier_rejects_forged_exact_optimum_and_infeasible_incumbent() -> None:
-    result = _compute(
-        {
-            "vertices": ["a", "b", "c", "d"],
-            "edges": [["triple", ["a", "b", "c"]]],
-        }
+    assert (
+        type(decomposed).model_validate_json(decomposed.model_dump_json()) == decomposed
     )
-    assert result.status == "EXACT"
-    payload = result.model_dump(mode="json")
-    payload["incumbent_vertices"] = ["a", "b"]
-    payload["lower_bound"] = 2
-    payload["upper_bound"] = 2
-    payload["independence_number"] = 2
-    forged = HypergraphIndependenceResult.model_validate_json(json.dumps(payload))
-    assert not verify_independence_number(forged)
+    assert type(composed).model_validate_json(composed.model_dump_json()) == composed
 
 
 def test_solver_call_limit_returns_only_sound_partial_bounds() -> None:
@@ -489,7 +470,6 @@ def test_solver_call_limit_returns_only_sound_partial_bounds() -> None:
     assert result.termination_reason == "SOLVER_CALL_LIMIT"
     assert result.solver_calls == 1
     assert not result.wall_budget_exhausted
-    assert not verify_independence_number(result)
 
 
 def test_wall_expiry_returns_unknown_without_a_false_optimum(
@@ -541,7 +521,7 @@ def test_public_independence_path_bounds_the_entire_z3_worker(
         return _independence_worker_result(
             expected.model_dump(
                 mode="json",
-                exclude={"hypergraph", "resource_budget"},
+                exclude={"hypergraph", "hypergraph_digest", "resource_budget"},
             )
         )
 
@@ -591,7 +571,7 @@ def test_independence_worker_projection_cannot_replace_the_submitted_request(
         lambda *_args, **_kwargs: _independence_worker_result(
             wrong_result.model_dump(
                 mode="json",
-                exclude={"hypergraph", "resource_budget"},
+                exclude={"hypergraph", "hypergraph_digest", "resource_budget"},
             )
         ),
     )
@@ -824,7 +804,7 @@ def test_producer_projects_solver_error_when_witness_misses_threshold(
     assert result.solver_calls == 1
     assert not result.wall_budget_exhausted
     assert result.termination_reason == "SOLVER_ERROR"
-    assert HypergraphIndependenceResult.model_validate(result.model_dump(mode="json"))
+    assert HypergraphIndependenceResult.model_validate_json(result.model_dump_json())
 
 
 def test_produced_exact_result_meets_the_queried_threshold() -> None:

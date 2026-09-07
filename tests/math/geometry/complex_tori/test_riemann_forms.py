@@ -54,7 +54,7 @@ def test_elliptic_degree_d_form_uses_standard_positive_sign_and_type() -> None:
     form = IntegralBilinearForm(
         coordinate_axis=torus.coordinate_axis,
         kind="ALTERNATING",
-        matrix=IntegerMatrix(entries=(("0", str(d)), (str(-d), "0"))),
+        matrix=IntegerMatrix(entries=((0, d), (-d, 0))),
     )
 
     result = compute_riemann_form_profile(torus, form)
@@ -68,8 +68,8 @@ def test_elliptic_degree_d_form_uses_standard_positive_sign_and_type() -> None:
     )
     assert result.outcome.hermitian_inertia.n_positive == 1
     assert result.outcome.is_riemann_form is True
-    assert result.alternating_elementary_divisors == (str(d),)
-    assert result.outcome.polarization_type == (str(d),)
+    assert result.alternating_elementary_divisors == (d,)
+    assert result.outcome.polarization_type == (d,)
     assert (
         RiemannFormProfile.model_validate_json(
             encode_strict_json(result.model_dump(mode="json")),
@@ -84,7 +84,7 @@ def test_elliptic_degree_d_form_uses_standard_positive_sign_and_type() -> None:
         "num": "7",
         "den": "1",
     }
-    forged_claim = RiemannFormProfile.model_validate(forged)
+    forged_claim = RiemannFormProfile.model_validate_json(encode_strict_json(forged))
     assert verify_riemann_form_profile(forged_claim) is False
 
 
@@ -155,7 +155,7 @@ def test_basis_changed_index_six_fixture_has_exact_type_and_signature() -> None:
     result = compute_riemann_form_profile(torus, form)
 
     assert result.outcome.status == "HODGE_NON_POSITIVE"
-    assert result.alternating_elementary_divisors == ("1", "6")
+    assert result.alternating_elementary_divisors == (1, 6)
     assert result.outcome.associated_form_inertia.n_positive == 2
     assert result.outcome.associated_form_inertia.n_negative == 2
     assert result.outcome.hermitian_inertia.n_positive == 1
@@ -261,7 +261,7 @@ def test_unimodular_coordinate_change_transports_the_public_riemann_profile() ->
             kind="ALTERNATING",
             matrix=IntegerMatrix(
                 entries=tuple(
-                    tuple(str(int(matrix[row, column])) for column in range(4))
+                    tuple(int(matrix[row, column]) for column in range(4))
                     for row in range(4)
                 )
             ),
@@ -278,8 +278,8 @@ def test_unimodular_coordinate_change_transports_the_public_riemann_profile() ->
         source.outcome.polarization_type
         == target.outcome.polarization_type
         == (
-            "1",
-            "3",
+            1,
+            3,
         )
     )
     assert source.outcome.hermitian_inertia == target.outcome.hermitian_inertia
@@ -305,10 +305,10 @@ def test_non_hodge_alternating_form_is_a_discriminated_mathematical_outcome() ->
         kind="ALTERNATING",
         matrix=IntegerMatrix(
             entries=(
-                ("0", "1", "0", "0"),
-                ("-1", "0", "0", "0"),
-                ("0", "0", "0", "0"),
-                ("0", "0", "0", "0"),
+                (0, 1, 0, 0),
+                (-1, 0, 0, 0),
+                (0, 0, 0, 0),
+                (0, 0, 0, 0),
             )
         ),
     )
@@ -317,7 +317,7 @@ def test_non_hodge_alternating_form_is_a_discriminated_mathematical_outcome() ->
 
     assert result.outcome.status == "NOT_HODGE"
     assert result.outcome.is_riemann_form is False
-    assert result.alternating_elementary_divisors == ("1",)
+    assert result.alternating_elementary_divisors == (1,)
     assert result.is_degenerate is True
 
 
@@ -334,7 +334,7 @@ def test_zero_hodge_form_has_zero_hermitian_inertia_without_a_type() -> None:
     form = IntegralBilinearForm(
         coordinate_axis=torus.coordinate_axis,
         kind="ALTERNATING",
-        matrix=IntegerMatrix(entries=(("0", "0"), ("0", "0"))),
+        matrix=IntegerMatrix(entries=((0, 0), (0, 0))),
     )
 
     result = compute_riemann_form_profile(torus, form)
@@ -379,9 +379,7 @@ def test_rank_fifty_two_zero_hodge_form_returns_a_typed_profile() -> None:
         coordinate_axis=torus.coordinate_axis,
         kind="ALTERNATING",
         matrix=IntegerMatrix(
-            entries=tuple(
-                tuple("0" for _ in range(dimension)) for _ in range(dimension)
-            )
+            entries=tuple(tuple(0 for _ in range(dimension)) for _ in range(dimension))
         ),
     )
 
@@ -428,7 +426,7 @@ def test_hodge_outcome_schema_preserves_the_canonical_rational_domain_default(
     form = IntegralBilinearForm(
         coordinate_axis=torus.coordinate_axis,
         kind="ALTERNATING",
-        matrix=IntegerMatrix(entries=(("0", str(form_scale)), (str(-form_scale), "0"))),
+        matrix=IntegerMatrix(entries=((0, form_scale), (-form_scale, 0))),
     )
     payload = compute_riemann_form_profile(torus, form).model_dump(mode="json")
     assert payload["outcome"]["status"] == expected_status
@@ -441,9 +439,9 @@ def test_hodge_outcome_schema_preserves_the_canonical_rational_domain_default(
     del missing_inertia_domain["outcome"]["associated_form_inertia"]["matrix"]["domain"]
     for defaulted in (missing_torus_domain, missing_inertia_domain):
         assert not list(validator.iter_errors(defaulted))
-        assert RiemannFormProfile.model_validate(
-            defaulted
-        ) == RiemannFormProfile.model_validate(payload)
+        assert RiemannFormProfile.model_validate_json(
+            encode_strict_json(defaulted)
+        ) == RiemannFormProfile.model_validate_json(encode_strict_json(payload))
         invalid = copy.deepcopy(defaulted)
         matrix = invalid["torus"]["complex_structure"]
         if "domain" in matrix:
@@ -451,4 +449,4 @@ def test_hodge_outcome_schema_preserves_the_canonical_rational_domain_default(
         matrix["domain"] = "ZZ"
         assert list(validator.iter_errors(invalid))
         with pytest.raises(ValidationError):
-            RiemannFormProfile.model_validate(invalid)
+            RiemannFormProfile.model_validate_json(encode_strict_json(invalid))

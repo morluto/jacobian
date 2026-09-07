@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from jacobian.canonical import parse_canonical_integer
 from jacobian.math.number_theory.number_fields.values import (
     SimpleNumberFieldPresentation,
 )
@@ -19,10 +18,7 @@ def recognized_integral_basis(
     from sympy.polys.numberfields import round_two
 
     alpha = sympy.Symbol("alpha")
-    coefficients = tuple(
-        parse_canonical_integer(coefficient)
-        for coefficient in field.coefficients_descending
-    )
+    coefficients = tuple(coefficient for coefficient in field.coefficients_descending)
     leading = coefficients[0]
     # beta = leading * alpha has the monic integral polynomial
     # leading^(n-1) f(beta / leading). This preserves QQ(alpha) while

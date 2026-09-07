@@ -10,6 +10,7 @@ from jacobian._execution import (
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
 )
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials._conversions import (
     rational_polynomial_from_sympy,
@@ -478,7 +479,11 @@ def multivariate_factor(polynomial: RationalPolynomial) -> MultivariateFactorRes
                 default=0,
             ),
             tuple(
-                (term.exponents, term.coefficient.num, term.coefficient.den)
+                (
+                    term.exponents,
+                    format_canonical_integer(term.coefficient.num),
+                    format_canonical_integer(term.coefficient.den),
+                )
                 for term in record.factor.polynomial.terms
             ),
         )

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 
 from ._flint import integer_gram
@@ -179,8 +178,8 @@ def determinant_profile(hadamard: HadamardMatrix) -> DeterminantProfileResult:
     gram_determinant = n**n
     return DeterminantProfileResult(
         order=n,
-        determinant_magnitude=format_canonical_integer(magnitude),
-        gram_determinant=format_canonical_integer(gram_determinant),
+        determinant_magnitude=magnitude,
+        gram_determinant=gram_determinant,
         identity="det(H)^2 = det(H H^T)",
     )
 

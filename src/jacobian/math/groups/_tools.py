@@ -193,7 +193,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 description="Decide the two-point spectral pair A={0,2}, Lambda={0,1} in Z/4.",
                 input={
                     "source": {
-                        "group": {"moduli": [4]},
+                        "group": {"moduli": ["4"]},
                         "points": [[0], [2]],
                         "frequencies": [[0], [1]],
                     }
@@ -229,7 +229,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 description="Exact sums for G=Z/4, labelled sequence (0,1,2,3), frequencies 0 and 1, intervals [0,4) and [1,3); the second interval separates the labelled sums from a set transform.",
                 input={
                     "source": {
-                        "group": {"moduli": [4]},
+                        "group": {"moduli": ["4"]},
                         "sequence": [[0], [1], [2], [3]],
                         "frequencies": [[0], [1]],
                         "intervals": [[0, 4], [1, 3]],

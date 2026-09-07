@@ -65,8 +65,8 @@ def test_distance_profiles_retain_sources_and_reject_serialized_forgery() -> Non
     decoded = DistanceProfileResult.model_validate_json(profile.model_dump_json())
     assert verify_distance_profile(decoded)
 
-    forged = DistanceProfileResult.model_validate(
-        _forged_json(profile, ("entries", 0, "pair_count"), 99)
+    forged = DistanceProfileResult.model_validate_json(
+        json.dumps(_forged_json(profile, ("entries", 0, "pair_count"), 99))
     )
     assert not verify_distance_profile(forged)
 
@@ -105,8 +105,8 @@ def test_orbit_and_pinned_line_claims_reject_serialized_forgery() -> None:
     pinned = pinned_line_distance_profile(pinned_source, (_q(0), _q(1)))
     decoded_pinned = type(pinned).model_validate_json(pinned.model_dump_json())
     assert verify_pinned_line_distance_profile(decoded_pinned)
-    forged_pinned = type(pinned).model_validate(
-        _forged_json(pinned, ("anchor", 0, "num"), "1")
+    forged_pinned = type(pinned).model_validate_json(
+        json.dumps(_forged_json(pinned, ("anchor", 0, "num"), "1"))
     )
     assert not verify_pinned_line_distance_profile(forged_pinned)
 
@@ -117,9 +117,11 @@ def test_point_profile_claims_reject_serialized_forgery() -> None:
     support = compute_pinned_distance_support_profile(source)
     decoded_support = type(support).model_validate_json(support.model_dump_json())
     assert verify_pinned_distance_support_profile(decoded_support)
-    forged_support = type(support).model_validate(
-        _forged_json(
-            support, ("entries", 0, "distance_classes", 0, "target_labels"), []
+    forged_support = type(support).model_validate_json(
+        json.dumps(
+            _forged_json(
+                support, ("entries", 0, "distance_classes", 0, "target_labels"), []
+            )
         )
     )
     assert not verify_pinned_distance_support_profile(forged_support)
@@ -127,13 +129,15 @@ def test_point_profile_claims_reject_serialized_forgery() -> None:
     lines = compute_spanned_line_profile(source)
     decoded_lines = type(lines).model_validate_json(lines.model_dump_json())
     assert verify_spanned_line_profile(decoded_lines)
-    forged_lines = type(lines).model_validate(_forged_json(lines, ("line_count",), 0))
+    forged_lines = type(lines).model_validate_json(
+        json.dumps(_forged_json(lines, ("line_count",), 0))
+    )
     assert not verify_spanned_line_profile(forged_lines)
 
     areas = compute_triangle_area_profile(source)
     decoded_areas = type(areas).model_validate_json(areas.model_dump_json())
     assert verify_triangle_area_profile(decoded_areas)
-    forged_areas = type(areas).model_validate(
-        _forged_json(areas, ("entries", 0, "area", "num"), "7")
+    forged_areas = type(areas).model_validate_json(
+        json.dumps(_forged_json(areas, ("entries", 0, "area", "num"), "7"))
     )
     assert not verify_triangle_area_profile(forged_areas)

@@ -30,7 +30,7 @@ def test_native_classical_numbers_reject_noninteger_or_negative_indices() -> Non
 
 
 def test_native_recurrence_admission_uses_typed_domain_errors() -> None:
-    rational = CanonicalRational(num="1", den="1")
+    rational = CanonicalRational(num=1, den=1)
 
     with pytest.raises(OperationDomainValidationError, match="convention"):
         evaluate_linear_recurrence(

@@ -43,7 +43,7 @@ def test_single_vertex() -> None:
 def test_lexical_graph_edges_follow_the_retained_source_axis() -> None:
     """Numeric pair ordering must not replace the source's vertex ordering."""
     result = construct_non_coprimality_graph((10, 2))
-    assert result.integers.elements == ("10", "2")
+    assert result.integers.elements == (10, 2)
     assert result.graph.vertices == ("10", "2")
     assert result.graph.edges == (("10", "2"),)
     assert verify_non_coprimality_graph(
@@ -71,14 +71,14 @@ def test_rejects_non_positive() -> None:
 
 def test_rejects_duplicates() -> None:
     with pytest.raises(ValidationError):
-        NonCoprimalityGraphRequest(integers=FiniteIntegerSet(elements=("2", "2")))
+        NonCoprimalityGraphRequest(integers=FiniteIntegerSet(elements=(2, 2)))
 
 
 def test_request_uses_canonical_integer_strings() -> None:
     request = NonCoprimalityGraphRequest(
-        integers=FiniteIntegerSet(elements=("2", "3", "4", "6"))
+        integers=FiniteIntegerSet(elements=(2, 3, 4, 6))
     )
-    assert request.integers.elements == ("2", "3", "4", "6")
+    assert request.integers.elements == (2, 3, 4, 6)
 
 
 def test_vertex_labels_preserve_integers() -> None:
@@ -91,12 +91,12 @@ def test_result_preserves_source() -> None:
     """Result retains the source integers."""
     ints = (3, 5, 7)
     result = construct_non_coprimality_graph(ints)
-    assert result.integers.elements == tuple(str(value) for value in ints)
+    assert result.integers.elements == ints
 
 
 def test_canonical_integer_strings_preserve_large_values() -> None:
     result = construct_non_coprimality_graph((2**53 + 1, 2**53 + 3))
-    assert result.integers.elements == (str(2**53 + 1), str(2**53 + 3))
+    assert result.integers.elements == (2**53 + 1, 2**53 + 3)
 
 
 def test_serialized_graph_claim_verifies_and_rejects_forgery() -> None:
@@ -105,7 +105,9 @@ def test_serialized_graph_claim_verifies_and_rejects_forgery() -> None:
     assert verify_non_coprimality_graph(restored)
     forged = restored.model_dump(mode="json")
     forged["graph"]["edges"].pop()
-    assert not verify_non_coprimality_graph(type(result).model_validate(forged))
+    assert not verify_non_coprimality_graph(
+        type(result).model_validate_json(__import__("json").dumps(forged))
+    )
 
 
 def test_native_rejects_oversized_integer_before_gcd() -> None:

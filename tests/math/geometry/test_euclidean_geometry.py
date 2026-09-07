@@ -1,5 +1,6 @@
 """Tests for Euclidean geometry operations."""
 
+import json
 from fractions import Fraction
 
 import pytest
@@ -47,8 +48,8 @@ from jacobian.math.geometry.operations import (
 
 def _pt(x: int, y: int) -> RationalPoint2D:
     return RationalPoint2D(
-        x=CanonicalRational(num=str(x), den="1"),
-        y=CanonicalRational(num=str(y), den="1"),
+        x=CanonicalRational(num=x, den=1),
+        y=CanonicalRational(num=y, den=1),
     )
 
 
@@ -57,8 +58,8 @@ def _triangulation_request(
 ) -> ConvexPolygonTriangulationRequest:
     """Parse raw wire fixtures at the same boundary as the public request."""
 
-    return ConvexPolygonTriangulationRequest.model_validate(
-        {"polygon": polygon, "diagonal_weights": diagonal_weights}
+    return ConvexPolygonTriangulationRequest.model_validate_json(
+        json.dumps({"polygon": polygon, "diagonal_weights": diagonal_weights})
     )
 
 
@@ -83,12 +84,12 @@ def test_circumcircle_rejects_collinear_points_at_operation_boundary() -> None:
 def test_circumcircle_handles_large_rational_coordinates_exactly() -> None:
     """SymPy's large-rational Segment2D projection must not leak a host error."""
 
-    denominator = "9" * 30
+    denominator = 10**30 - 1
     request = CircumcircleRequest(
         first=_pt(0, 0),
         second=GeometryRationalPoint2D(
-            x=CanonicalRational(num="2", den=denominator),
-            y=CanonicalRational(num="0", den="1"),
+            x=CanonicalRational(num=2, den=denominator),
+            y=CanonicalRational(num=0, den=1),
         ),
         third=_pt(0, 2),
     )
@@ -96,8 +97,8 @@ def test_circumcircle_handles_large_rational_coordinates_exactly() -> None:
     result = circumcircle(request)
 
     assert result.center.x.den == denominator
-    assert result.center.y == CanonicalRational(num="1", den="1")
-    assert result.radius_squared.den == str(int(denominator) ** 2)
+    assert result.center.y == CanonicalRational(num=1, den=1)
+    assert result.radius_squared.den == denominator**2
 
 
 def test_point_classification_rejects_non_simple_polygon_at_operation_boundary() -> (
@@ -129,7 +130,9 @@ def test_polygon_point_claim_round_trips_and_rejects_a_forged_source() -> None:
 
     payload = result.model_dump(mode="json")
     payload["point"] = _pt(3, 3).model_dump(mode="json")
-    assert not verify_polygon_point_classification(type(result).model_validate(payload))
+    assert not verify_polygon_point_classification(
+        type(result).model_validate_json(json.dumps(payload))
+    )
 
 
 def test_simple_polygon_claim_round_trips_and_rejects_a_forged_decision() -> None:
@@ -145,7 +148,9 @@ def test_simple_polygon_claim_round_trips_and_rejects_a_forged_decision() -> Non
         _pt(0, 1).model_dump(mode="json"),
         _pt(1, 0).model_dump(mode="json"),
     ]
-    assert not verify_simple_polygon(type(result).model_validate(payload))
+    assert not verify_simple_polygon(
+        type(result).model_validate_json(json.dumps(payload))
+    )
 
 
 class TestSegmentRatio:
@@ -285,8 +290,8 @@ class TestRationalWeightTriangulation:
             item for item in result.split_table if (item.start, item.end) == (0, 2)
         )
         assert entry.optimum.as_fraction() == Fraction(1, denominator)
-        validated = ConvexPolygonTriangulationResult.model_validate(
-            result.model_dump(mode="json")
+        validated = ConvexPolygonTriangulationResult.model_validate_json(
+            result.model_dump_json()
         )
         assert validated.optimum.as_fraction() == 0
         assert tuple(edge.weight for edge in validated.diagonals) == tuple(
@@ -318,8 +323,8 @@ class TestRationalWeightTriangulation:
             item for item in result.split_table if (item.start, item.end) == (0, 2)
         )
         assert entry.optimum.as_fraction() == Fraction(1, denominator)
-        validated = ConvexPolygonTriangulationResult.model_validate(
-            result.model_dump(mode="json")
+        validated = ConvexPolygonTriangulationResult.model_validate_json(
+            result.model_dump_json()
         )
         assert validated.optimum.as_fraction() == 0
 
@@ -344,7 +349,7 @@ class TestRationalWeightTriangulation:
 
         assert result.optimum.as_fraction() == Fraction(2, 10**20000 + 5)
         for entry in result.split_table:
-            assert len(entry.optimum.den) == 20001
+            assert 10**20000 <= entry.optimum.den < 10**20001
 
     @pytest.mark.scale
     def test_noncrossing_large_weight_pair_is_still_rejected(self) -> None:
@@ -391,7 +396,7 @@ class TestRationalWeightTriangulation:
             item for item in result.split_table if (item.start, item.end) == (0, 3)
         )
         assert entry.optimum.as_fraction() == Fraction(1, small) + Fraction(1, large)
-        assert len(entry.optimum.den) <= 32_768
+        assert entry.optimum.den < 10**32_768
         assert result.optimum.as_fraction() == 0
 
     @pytest.mark.scale
@@ -439,7 +444,7 @@ class TestRationalWeightTriangulation:
         assert entry.optimum.as_fraction() == Fraction(1, 10**16383 + 1) + Fraction(
             1, 10**16384 + 3
         )
-        assert len(entry.optimum.den) <= 32_768
+        assert entry.optimum.den < 10**32_768
 
     _REVIEW_PENTAGON = ((0, 0), (2, 0), (3, 1), (2, 3), (0, 2))
     _REVIEW_PENTAGON_DIAGONALS = ((0, 2), (0, 3), (1, 3), (1, 4), (2, 4))
@@ -497,8 +502,8 @@ class TestRationalWeightTriangulation:
             item for item in result.split_table if (item.start, item.end) == (0, 4)
         )
         assert root.optimum.as_fraction() == expected
-        validated = ConvexPolygonTriangulationResult.model_validate(
-            result.model_dump(mode="json")
+        validated = ConvexPolygonTriangulationResult.model_validate_json(
+            result.model_dump_json()
         )
         assert validated.optimum == result.optimum
 
@@ -532,8 +537,8 @@ class TestRationalWeightTriangulation:
         result = minimum_weight_triangulation(request)
 
         assert result.optimum.as_fraction() == 29 * weight
-        validated = ConvexPolygonTriangulationResult.model_validate(
-            result.model_dump(mode="json")
+        validated = ConvexPolygonTriangulationResult.model_validate_json(
+            result.model_dump_json()
         )
         assert validated.optimum == result.optimum
 
@@ -566,8 +571,8 @@ class TestRationalWeightTriangulation:
             item for item in result.split_table if (item.start, item.end) == (0, 2)
         )
         assert entry.optimum.as_fraction() == Fraction(1, 10**30000 + 1)
-        validated = ConvexPolygonTriangulationResult.model_validate(
-            result.model_dump(mode="json")
+        validated = ConvexPolygonTriangulationResult.model_validate_json(
+            result.model_dump_json()
         )
         assert validated.optimum == result.optimum
 
@@ -591,11 +596,15 @@ class TestAngleEquality:
 
         payload = result.model_dump(mode="json")
         payload["equal"] = False
-        assert not verify_angle_equality(type(result).model_validate(payload))
+        assert not verify_angle_equality(
+            type(result).model_validate_json(json.dumps(payload))
+        )
 
         payload = result.model_dump(mode="json")
         payload["ray2_b"] = _pt(1, 1).model_dump(mode="json")
-        assert not verify_angle_equality(type(result).model_validate(payload))
+        assert not verify_angle_equality(
+            type(result).model_validate_json(json.dumps(payload))
+        )
 
     def test_different_angles(self) -> None:
         req = AngleEqualityRequest(
@@ -669,11 +678,15 @@ class TestTriangleSimilarity:
 
         payload = result.model_dump(mode="json")
         payload["similar"] = False
-        assert not verify_triangle_similarity(type(result).model_validate(payload))
+        assert not verify_triangle_similarity(
+            type(result).model_validate_json(json.dumps(payload))
+        )
 
         payload = result.model_dump(mode="json")
         payload["triangle2"]["c"] = _pt(0, 3).model_dump(mode="json")
-        assert not verify_triangle_similarity(type(result).model_validate(payload))
+        assert not verify_triangle_similarity(
+            type(result).model_validate_json(json.dumps(payload))
+        )
 
     def test_not_similar(self) -> None:
         req = TriangleSimilarityRequest(

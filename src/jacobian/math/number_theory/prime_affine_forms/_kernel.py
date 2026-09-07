@@ -10,8 +10,6 @@ from typing import TYPE_CHECKING
 from sympy import isprime, primerange
 from sympy.ntheory.modular import crt
 
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
-
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
@@ -27,8 +25,8 @@ def local_bad_residues(
 
     by_residue: dict[int, list[str]] = {}
     for form in source.forms:
-        coefficient = parse_canonical_integer(form.coefficient)
-        constant = parse_canonical_integer(form.constant)
+        coefficient = form.coefficient
+        constant = form.constant
         if coefficient % prime == 0:
             continue
         residue = (-constant * pow(coefficient, -1, prime)) % prime
@@ -149,10 +147,7 @@ def translated_tuple(source: PrimeAffineTuple, shift: int) -> PrimeAffineTuple:
             PrimitiveIntegerAffineForm(
                 form_id=form.form_id,
                 coefficient=form.coefficient,
-                constant=format_canonical_integer(
-                    parse_canonical_integer(form.constant)
-                    + parse_canonical_integer(form.coefficient) * shift
-                ),
+                constant=form.constant + form.coefficient * shift,
             )
             for form in source.forms
         )

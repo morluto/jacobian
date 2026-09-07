@@ -44,26 +44,28 @@ def _canonical_json(value: Any) -> Any:
 
 def test_matrix_product_value_composes_into_determinant_request() -> None:
     product = compute_product(
-        RationalMatrixProductRequest.model_validate(
-            {
-                "left": {
-                    "entries": [
-                        [{"num": "1", "den": "1"}, {"num": "2", "den": "1"}],
-                        [{"num": "3", "den": "1"}, {"num": "4", "den": "1"}],
-                    ]
-                },
-                "right": {
-                    "entries": [
-                        [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}],
-                        [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
-                    ]
-                },
-            }
+        RationalMatrixProductRequest.model_validate_json(
+            json.dumps(
+                {
+                    "left": {
+                        "entries": [
+                            [{"num": "1", "den": "1"}, {"num": "2", "den": "1"}],
+                            [{"num": "3", "den": "1"}, {"num": "4", "den": "1"}],
+                        ]
+                    },
+                    "right": {
+                        "entries": [
+                            [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}],
+                            [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
+                        ]
+                    },
+                }
+            )
         )
     )
 
-    determinant_request = MatrixDeterminantRequest.model_validate(
-        {"matrix": _canonical_json(product.product)}
+    determinant_request = MatrixDeterminantRequest.model_validate_json(
+        json.dumps({"matrix": _canonical_json(product.product)})
     )
 
     assert compute_determinant(determinant_request).determinant.as_fraction() == -2
@@ -76,39 +78,43 @@ def test_support_polytope_value_composes_into_volume_request() -> None:
         if tool.operation_id == "polytope.rational.support.compute"
     )
     support = compute_polytope_support(
-        support_tool.request_type.model_validate(support_tool.examples[0].input)
+        support_tool.request_type.model_validate_json(
+            json.dumps(support_tool.examples[0].input)
+        )
     )
 
-    volume_request = PolytopeVolumeRequest.model_validate(
-        {"vertices": _canonical_json(support.polytope)}
+    volume_request = PolytopeVolumeRequest.model_validate_json(
+        json.dumps({"vertices": _canonical_json(support.polytope)})
     )
 
     assert compute_polytope_volume(volume_request).volume.as_fraction() == 1
 
 
 def test_formal_series_value_composes_into_truncation_request() -> None:
-    producer_request = SeriesFromPolynomialRequest.model_validate(
-        {
-            "polynomial": {
-                "variables": ["x"],
+    producer_request = SeriesFromPolynomialRequest.model_validate_json(
+        json.dumps(
+            {
                 "polynomial": {
-                    "terms": [
-                        {"coefficient": {"num": "3", "den": "1"}, "exponents": [2]},
-                        {"coefficient": {"num": "2", "den": "1"}, "exponents": [1]},
-                        {"coefficient": {"num": "1", "den": "1"}, "exponents": [0]},
-                    ]
+                    "variables": ["x"],
+                    "polynomial": {
+                        "terms": [
+                            {"coefficient": {"num": "3", "den": "1"}, "exponents": [2]},
+                            {"coefficient": {"num": "2", "den": "1"}, "exponents": [1]},
+                            {"coefficient": {"num": "1", "den": "1"}, "exponents": [0]},
+                        ]
+                    },
                 },
-            },
-            "truncation_order": 3,
-        }
+                "truncation_order": 3,
+            }
+        )
     )
     produced = from_polynomial(
         producer_request.polynomial,
         producer_request.truncation_order,
     )
 
-    consumer_request = SeriesTruncateRequest.model_validate(
-        {"series": _canonical_json(produced.result), "target_order": 2}
+    consumer_request = SeriesTruncateRequest.model_validate_json(
+        json.dumps({"series": _canonical_json(produced.result), "target_order": 2})
     )
     truncated = truncate(consumer_request.series, consumer_request.target_order)
 
@@ -140,7 +146,7 @@ def test_tree_automaton_value_composes_into_count_request() -> None:
         )
     )
 
-    assert int(count.count) == 1
+    assert count.count == 1
 
 
 def test_matrix_polynomial_producers_compose_without_coefficient_rewriting() -> None:
@@ -195,7 +201,9 @@ def test_prime_field_matrix_coordinate_maps_retain_presentation_and_axes() -> No
         ).output["rank"]
         == 1
     )
-    restored = prime_matrix_coordinates(AxisBoundMatrix.model_validate(wire))
+    restored = prime_matrix_coordinates(
+        AxisBoundMatrix.model_validate_json(presented.model_dump_json())
+    )
     assert restored == matrix
     assert (
         bind_prime_matrix(

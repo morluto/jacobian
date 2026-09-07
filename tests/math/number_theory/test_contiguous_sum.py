@@ -21,7 +21,7 @@ from jacobian.math.number_theory._contiguous_sum_models import (
 
 def test_small() -> None:
     result = compute_contiguous_sum_profile(
-        ContiguousSumProfileRequest(lower_bound="1", upper_bound="15")
+        ContiguousSumProfileRequest(lower_bound=1, upper_bound=15)
     )
     counts = [r.representation_count for r in result.rows]
     # 15 = 15, 7+8, 4+5+6, 1+2+3+4+5 -> 4
@@ -32,7 +32,7 @@ def test_small() -> None:
 
 def test_segmented_profile_strips_even_residual_before_counting_odd_divisors() -> None:
     result = compute_contiguous_sum_profile(
-        ContiguousSumProfileRequest(lower_bound="10", upper_bound="10")
+        ContiguousSumProfileRequest(lower_bound=10, upper_bound=10)
     )
 
     assert result.rows[0].representation_count == 2
@@ -41,7 +41,7 @@ def test_segmented_profile_strips_even_residual_before_counting_odd_divisors() -
 def test_primes() -> None:
     """Primes have exactly 2 representations (as n and as sum of consecutive ints from 1 to some point)."""
     result = compute_contiguous_sum_profile(
-        ContiguousSumProfileRequest(lower_bound="1", upper_bound="50")
+        ContiguousSumProfileRequest(lower_bound=1, upper_bound=50)
     )
     from sympy import isprime
 
@@ -53,7 +53,7 @@ def test_primes() -> None:
             )
 
 
-@pytest.mark.parametrize("value", [True, 1000001, "01"])
+@pytest.mark.parametrize("value", [True, "01"])
 def test_request_endpoints_are_strict_integers(value: object) -> None:
     with pytest.raises(ValidationError):
         ContiguousSumProfileRequest.model_validate(
@@ -64,8 +64,7 @@ def test_request_endpoints_are_strict_integers(value: object) -> None:
 def test_high_magnitude_singleton_does_not_allocate_to_upper_bound() -> None:
     result = compute_contiguous_sum_profile(
         ContiguousSumProfileRequest(
-            lower_bound="1099511627776",
-            upper_bound="1099511627776",
+            lower_bound=1099511627776, upper_bound=1099511627776
         )
     )
     assert result.rows[0].representation_count == 1
@@ -94,7 +93,7 @@ def test_high_magnitude_width_is_admitted_at_request_parse_but_rejected_before_k
     None
 ):
     request = ContiguousSumProfileRequest(
-        lower_bound="1000000000001", upper_bound="1000000000129"
+        lower_bound=1000000000001, upper_bound=1000000000129
     )
 
     with pytest.raises(ValueError, match="direct-factorization width bound"):
@@ -104,14 +103,14 @@ def test_high_magnitude_width_is_admitted_at_request_parse_but_rejected_before_k
 def test_large_endpoint_uses_canonical_strings_and_immutable_rows() -> None:
     result = compute_contiguous_sum_profile(
         ContiguousSumProfileRequest(
-            lower_bound="9007199254740992",
-            upper_bound="9007199254740992",
+            lower_bound=9007199254740992,
+            upper_bound=9007199254740992,
         )
     )
 
-    assert result.lower_bound == "9007199254740992"
-    assert result.upper_bound == "9007199254740992"
-    assert result.rows[0].n == "9007199254740992"
+    assert result.lower_bound == 9007199254740992
+    assert result.upper_bound == 9007199254740992
+    assert result.rows[0].n == 9007199254740992
     assert isinstance(result.rows, tuple)
     with pytest.raises(AttributeError):
         result.rows.append(result.rows[0])  # type: ignore[attr-defined]
@@ -135,9 +134,9 @@ def test_complete_profile_cannot_carry_worker_diagnostics() -> None:
         ContiguousSumProfileResult.model_validate(
             {
                 "status": "COMPLETE",
-                "lower_bound": "1",
-                "upper_bound": "1",
-                "rows": [{"n": "1", "representation_count": 1}],
+                "lower_bound": 1,
+                "upper_bound": 1,
+                "rows": [{"n": 1, "representation_count": 1}],
                 "diagnostic": {
                     "failure": "WORKER_TIMEOUT",
                     "timeout_layer": "WORKER_WALL",

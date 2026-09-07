@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal, TypedDict
+from typing import TypedDict
 
 import pytest
 from pydantic import ValidationError
@@ -23,7 +23,7 @@ from jacobian.math.matrices.values import IntegerMatrix
 class MatrixWire(TypedDict):
     row_count: int
     column_count: int
-    entries: list[list[str]]
+    entries: list[list[int]]
 
 
 class CertificateFields(TypedDict):
@@ -32,16 +32,16 @@ class CertificateFields(TypedDict):
     left_transformation: IntegerMatrix
     right_transformation: IntegerMatrix
     rank: int
-    invariant_factors: tuple[str, ...]
-    left_determinant: Literal["-1", "1"]
-    right_determinant: Literal["-1", "1"]
+    invariant_factors: tuple[int, ...]
+    left_determinant: int
+    right_determinant: int
 
 
-def _matrix(entries: list[list[int | str]]) -> MatrixWire:
+def _matrix(entries: list[list[int]]) -> MatrixWire:
     return {
         "row_count": len(entries),
         "column_count": len(entries[0]),
-        "entries": [[str(value) for value in row] for row in entries],
+        "entries": entries,
     }
 
 
@@ -56,7 +56,7 @@ def test_certified_smith_request_accepts_a_bounded_integer_rectangle() -> None:
 
 def test_certified_smith_request_rejects_large_input_scalars() -> None:
     request = CertifiedSmithNormalFormRequest.model_validate(
-        {"matrix": _matrix([["1" * 33]])}
+        {"matrix": _matrix([[(10**33 - 1) // 9]])}
     )
 
     with pytest.raises(OperationDomainValidationError):
@@ -95,9 +95,9 @@ def test_certificate_contract_requires_a_canonical_divisibility_diagonal() -> No
             left_transformation=identity,
             right_transformation=identity,
             rank=2,
-            invariant_factors=("2", "3"),
-            left_determinant="1",
-            right_determinant="1",
+            invariant_factors=(2, 3),
+            left_determinant=1,
+            right_determinant=1,
         )
 
 
@@ -112,8 +112,8 @@ def test_zero_dimensional_matrices_remain_explicit_for_chain_boundaries() -> Non
     assert matrix.column_count == 3
 
 
-def _certified_matrix(entries: list[list[int | str]]) -> IntegerMatrix:
-    return IntegerMatrix.model_validate(_matrix(entries))
+def _certified_matrix(entries: list[list[int]]) -> IntegerMatrix:
+    return IntegerMatrix(entries=tuple(tuple(row) for row in entries))
 
 
 def _certificate_kwargs(
@@ -123,9 +123,9 @@ def _certificate_kwargs(
     left_transformation: IntegerMatrix | None = None,
     right_transformation: IntegerMatrix | None = None,
     rank: int | None = None,
-    invariant_factors: tuple[str, ...] | None = None,
-    left_determinant: Literal["-1", "1"] | None = None,
-    right_determinant: Literal["-1", "1"] | None = None,
+    invariant_factors: tuple[int, ...] | None = None,
+    left_determinant: int | None = None,
+    right_determinant: int | None = None,
 ) -> CertificateFields:
     return {
         "source": source if source is not None else _certified_matrix([[2]]),
@@ -142,11 +142,11 @@ def _certificate_kwargs(
         ),
         "rank": rank if rank is not None else 1,
         "invariant_factors": (
-            invariant_factors if invariant_factors is not None else ("2",)
+            invariant_factors if invariant_factors is not None else (2,)
         ),
-        "left_determinant": (left_determinant if left_determinant is not None else "1"),
+        "left_determinant": (left_determinant if left_determinant is not None else 1),
         "right_determinant": (
-            right_determinant if right_determinant is not None else "1"
+            right_determinant if right_determinant is not None else 1
         ),
     }
 
@@ -172,12 +172,12 @@ def test_certificate_contract_replays_declared_determinant_signs() -> None:
             left_transformation=permutation,
             right_transformation=identity,
             rank=2,
-            invariant_factors=("1", "1"),
-            left_determinant="-1",
+            invariant_factors=(1, 1),
+            left_determinant=-1,
         )
     )
 
-    assert certificate.left_determinant == "-1"
+    assert certificate.left_determinant == -1
     assert verify_smith_normal_form_certificate(certificate)
     assert not verify_smith_normal_form_certificate(
         SmithNormalFormCertificate(
@@ -187,8 +187,8 @@ def test_certificate_contract_replays_declared_determinant_signs() -> None:
                 left_transformation=permutation,
                 right_transformation=identity,
                 rank=2,
-                invariant_factors=("1", "1"),
-                left_determinant="1",
+                invariant_factors=(1, 1),
+                left_determinant=1,
             )
         )
     )
@@ -203,8 +203,8 @@ def test_certificate_contract_replays_declared_determinant_signs() -> None:
         ("right_transformation", _certified_matrix([[3]])),
         ("rank", 0),
         ("invariant_factors", ("4",)),
-        ("left_determinant", "-1"),
-        ("right_determinant", "-1"),
+        ("left_determinant", -1),
+        ("right_determinant", -1),
     ],
 )
 def test_certificate_verifier_fails_closed_on_any_claim_field_mutation(
@@ -265,7 +265,7 @@ def test_certificate_contract_replays_rank_deficient_sources() -> None:
                 left_transformation=_certified_matrix([[1, 0], [0, 1]]),
                 right_transformation=_certified_matrix([[1, -2], [0, 1]]),
                 rank=2,
-                invariant_factors=("2", "2"),
+                invariant_factors=(2, 2),
             )
         )
     )
@@ -316,7 +316,7 @@ def test_certificate_contract_replays_zero_dimensional_boundaries(
     assert certificate.rank == 0
     assert verify_smith_normal_form_certificate(certificate)
     assert not verify_smith_normal_form_certificate(
-        SmithNormalFormCertificate.model_validate({**kwargs, "left_determinant": "-1"})
+        SmithNormalFormCertificate.model_validate({**kwargs, "left_determinant": -1})
     )
 
 
@@ -326,7 +326,7 @@ def test_certificate_contract_replays_rank_zero_determinants_without_formatting_
     tall_source = IntegerMatrix(row_count=2, column_count=0, entries=((), ()))
     empty_right = IntegerMatrix(row_count=0, column_count=0)
     permutation = _certified_matrix([[0, 1], [1, 0]])
-    inflated = _certified_matrix([["1" * 64, 0], [0, 1]])
+    inflated = _certified_matrix([[(10**64 - 1) // 9, 0], [0, 1]])
     kwargs = _certificate_kwargs(
         source=tall_source,
         diagonal=tall_source,
@@ -339,18 +339,18 @@ def test_certificate_contract_replays_rank_zero_determinants_without_formatting_
         {
             **kwargs,
             "left_transformation": permutation,
-            "left_determinant": "-1",
+            "left_determinant": -1,
         }
     )
 
-    assert certificate.left_determinant == "-1"
+    assert certificate.left_determinant == -1
     assert verify_smith_normal_form_certificate(certificate)
     assert not verify_smith_normal_form_certificate(
         SmithNormalFormCertificate.model_validate(
             {
                 **kwargs,
                 "left_transformation": inflated,
-                "left_determinant": "-1",
+                "left_determinant": -1,
             }
         )
     )
@@ -377,5 +377,5 @@ def test_inferred_integer_dimensions_do_not_advertise_literal_defaults() -> None
         assert "default" not in schema["properties"][name]
     payload = {"entries": [["2", "3"]]}
     Draft202012Validator(schema).validate(payload)
-    matrix = IntegerMatrix.model_validate(payload)
+    matrix = IntegerMatrix.model_validate_json(__import__("json").dumps(payload))
     assert (matrix.row_count, matrix.column_count) == (1, 2)

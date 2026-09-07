@@ -1,3 +1,4 @@
+import json
 from fractions import Fraction
 
 import pytest
@@ -48,8 +49,8 @@ def _two_state_counterexample(exponent: int) -> dict[str, object]:
 
 
 def test_stationary_request_rejects_exact_two_state_height_counterexample() -> None:
-    request = StationaryDistributionRequest.model_validate(
-        _two_state_counterexample(45_000)
+    request = StationaryDistributionRequest.model_validate_json(
+        json.dumps(_two_state_counterexample(45_000))
     )
 
     with pytest.raises(OperationDomainValidationError) as error:
@@ -61,14 +62,16 @@ def test_stationary_request_rejects_exact_two_state_height_counterexample() -> N
 
 
 def test_stationary_bound_does_not_narrow_ergodic_decision_request() -> None:
-    request = TransitionMatrixRequest.model_validate(_two_state_counterexample(45_000))
+    request = TransitionMatrixRequest.model_validate_json(
+        json.dumps(_two_state_counterexample(45_000))
+    )
 
     assert len(request.matrix.entries) == 2
 
 
 def test_useful_near_boundary_stationary_request_remains_admitted() -> None:
-    request = StationaryDistributionRequest.model_validate(
-        _two_state_counterexample(4_000)
+    request = StationaryDistributionRequest.model_validate_json(
+        json.dumps(_two_state_counterexample(4_000))
     )
 
     assert len(request.matrix.entries) == 2
@@ -104,4 +107,4 @@ def test_native_stationary_rejects_unrepresentable_transient_source() -> None:
     # operation can be admitted; this is the public boundary for native APIs.
     with pytest.raises(ValidationError) as error:
         stationary_distribution_result(rational_matrix_from_fractions(matrix))
-    assert error.value.errors()[0]["type"] == "canonical_rational.component_digits"
+    assert error.value.errors()[0]["type"] == "exact_integer.digit_bound"

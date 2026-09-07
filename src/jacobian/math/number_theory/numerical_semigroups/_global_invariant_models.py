@@ -6,9 +6,8 @@ from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
-from jacobian._exact import CanonicalInteger, CanonicalRational, NativeInteger
+from jacobian._exact import CanonicalRational, ExactInteger
 from jacobian._models import StrictModel
-from jacobian.canonical import parse_canonical_integer
 from jacobian.math.number_theory.numerical_semigroups._models import (
     _GENERAL_GENERATOR_ENVELOPE,
     MAX_GENERATORS,
@@ -21,7 +20,7 @@ from jacobian.math.number_theory.numerical_semigroups.values import NumericalSem
 class BettiElementsRequest(StrictModel):
     """Betti elements of a numerical semigroup."""
 
-    generators: tuple[CanonicalInteger, ...] = Field(
+    generators: tuple[ExactInteger, ...] = Field(
         min_length=1,
         max_length=MAX_GENERATORS,
         description=(
@@ -35,21 +34,21 @@ class BettiElementsRequest(StrictModel):
 class BettiElementsResult(StrictModel):
     """Betti elements of a semigroup."""
 
-    minimal_generators: tuple[CanonicalInteger, ...] = Field(
+    minimal_generators: tuple[ExactInteger, ...] = Field(
         min_length=1, max_length=MAX_GENERATORS
     )
-    apery_set: tuple[CanonicalInteger, ...]
+    apery_set: tuple[ExactInteger, ...]
     candidate_count: int = Field(ge=0)
-    betti_elements: tuple[CanonicalInteger, ...]
+    betti_elements: tuple[ExactInteger, ...]
 
     @classmethod
     def _from_kernel(
         cls,
         *,
-        minimal_generators: tuple[CanonicalInteger, ...],
-        apery_set: tuple[CanonicalInteger, ...],
+        minimal_generators: tuple[ExactInteger, ...],
+        apery_set: tuple[ExactInteger, ...],
         candidate_count: int,
-        betti_elements: tuple[CanonicalInteger, ...],
+        betti_elements: tuple[ExactInteger, ...],
     ) -> Self:
         """Construct output established by one admitted Betti-data kernel call."""
 
@@ -63,9 +62,7 @@ class BettiElementsResult(StrictModel):
     @model_validator(mode="after")
     def require_complete_betti_data(self) -> Self:
         _require_canonical_generator_axis(self.minimal_generators)
-        if self.betti_elements != tuple(
-            sorted(set(self.betti_elements), key=parse_canonical_integer)
-        ):
+        if self.betti_elements != tuple(sorted(set(self.betti_elements))):
             raise _validation_error(
                 "betti_elements must be increasing and duplicate-free"
             )
@@ -75,7 +72,7 @@ class BettiElementsResult(StrictModel):
 class DeltaSetRequest(StrictModel):
     """Global delta set of a numerical semigroup."""
 
-    generators: tuple[CanonicalInteger, ...] = Field(
+    generators: tuple[ExactInteger, ...] = Field(
         min_length=1,
         max_length=MAX_GENERATORS,
         description=(
@@ -89,7 +86,7 @@ class DeltaSetRequest(StrictModel):
 class DeltaSetResult(StrictModel):
     """Global delta set of the semigroup."""
 
-    minimal_generators: tuple[CanonicalInteger, ...] = Field(
+    minimal_generators: tuple[ExactInteger, ...] = Field(
         min_length=1, max_length=MAX_GENERATORS
     )
     delta_set: tuple[int, ...]
@@ -103,7 +100,7 @@ class DeltaSetResult(StrictModel):
     def _from_kernel(
         cls,
         *,
-        minimal_generators: tuple[CanonicalInteger, ...],
+        minimal_generators: tuple[ExactInteger, ...],
         delta_set: tuple[int, ...],
         periodicity_bound: int,
         checked_through: int,
@@ -136,7 +133,7 @@ class DeltaSetResult(StrictModel):
 class ElasticityRequest(StrictModel):
     """Global elasticity of a numerical semigroup."""
 
-    generators: tuple[CanonicalInteger, ...] = Field(
+    generators: tuple[ExactInteger, ...] = Field(
         min_length=1,
         max_length=MAX_GENERATORS,
         description=(
@@ -152,14 +149,14 @@ class ElasticityResult(StrictModel):
 
     semigroup: NumericalSemigroup
     elasticity: CanonicalRational
-    smallest_generator: NativeInteger
-    largest_generator: NativeInteger
+    smallest_generator: ExactInteger
+    largest_generator: ExactInteger
 
 
 class CatenaryDegreeRequest(StrictModel):
     """Global catenary degree of a numerical semigroup."""
 
-    generators: tuple[CanonicalInteger, ...] = Field(
+    generators: tuple[ExactInteger, ...] = Field(
         min_length=1,
         max_length=MAX_GENERATORS,
         description=(
@@ -173,28 +170,28 @@ class CatenaryDegreeRequest(StrictModel):
 class BettiCatenaryDegree(StrictModel):
     """Catenary degree witnessed at one Betti element."""
 
-    betti_element: CanonicalInteger
+    betti_element: ExactInteger
     catenary_degree: int = Field(ge=0)
 
 
 class CatenaryDegreeResult(StrictModel):
     """Global catenary degree of the semigroup."""
 
-    minimal_generators: tuple[CanonicalInteger, ...] = Field(
+    minimal_generators: tuple[ExactInteger, ...] = Field(
         min_length=1, max_length=MAX_GENERATORS
     )
     catenary_degree: int = Field(ge=0)
     betti_degrees: tuple[BettiCatenaryDegree, ...]
-    witness_betti_elements: tuple[CanonicalInteger, ...]
+    witness_betti_elements: tuple[ExactInteger, ...]
 
     @classmethod
     def _from_kernel(
         cls,
         *,
-        minimal_generators: tuple[CanonicalInteger, ...],
+        minimal_generators: tuple[ExactInteger, ...],
         catenary_degree: int,
         betti_degrees: tuple[BettiCatenaryDegree, ...],
-        witness_betti_elements: tuple[CanonicalInteger, ...],
+        witness_betti_elements: tuple[ExactInteger, ...],
     ) -> Self:
         """Construct output established from one admitted Betti pass."""
 
@@ -211,7 +208,6 @@ class CatenaryDegreeResult(StrictModel):
         if tuple(record.betti_element for record in self.betti_degrees) != tuple(
             sorted(
                 (record.betti_element for record in self.betti_degrees),
-                key=parse_canonical_integer,
             )
         ):
             raise _validation_error("betti_degrees must be increasing by Betti element")

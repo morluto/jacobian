@@ -11,7 +11,7 @@ from pydantic import ValidationError
 
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import MathTool, OperationDomainValidationError
-from jacobian.dispatch import invoke_operation
+from jacobian.dispatch import invoke_operation, parse_operation_input
 
 MAX_MUTATIONS_PER_EXAMPLE = 256
 
@@ -141,8 +141,10 @@ def test_every_distinct_accepted_boundary_mutation_returns_the_declared_result(
         for index, (mutation, payload) in enumerate(mutations):
             if index >= MAX_MUTATIONS_PER_EXAMPLE:
                 break
+            if not isinstance(payload, dict):
+                continue
             try:
-                request = operation.request_type.model_validate(payload)
+                request = parse_operation_input(operation.request_type, payload)
             except ValidationError:
                 continue
             canonical_request = request.model_dump_json()

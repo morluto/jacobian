@@ -9,6 +9,7 @@ from pydantic import Field, StrictBool, StrictInt, model_validator
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.number_theory.prime_affine_forms._kernel import (
     local_bad_residues,
     local_counts,
@@ -34,7 +35,11 @@ from jacobian.math.number_theory.prime_affine_forms.values import PrimeAffineTup
 
 
 def _digits(value: int | str) -> int:
-    return len(str(value).lstrip("-"))
+    return (
+        len(value.lstrip("-"))
+        if isinstance(value, str)
+        else len(format_canonical_integer(abs(value)))
+    )
 
 
 def _factor_digit_upper_bound(source: PrimeAffineTuple, prime: int) -> int:

@@ -7,7 +7,7 @@ from typing import Self
 
 from pydantic import Field, StrictInt, model_validator
 
-from jacobian._exact import CanonicalRational, format_canonical_rational
+from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 
 MAX_COMPOSITION_WORK = 5_000_000
@@ -24,11 +24,8 @@ class AffineMapSpec(StrictModel):
     @classmethod
     def _from_kernel(cls, slope: Fraction, intercept: Fraction) -> Self:
         def rational(value: Fraction) -> CanonicalRational:
-            numerator, separator, denominator = format_canonical_rational(
-                value
-            ).partition("/")
             return CanonicalRational.model_construct(
-                num=numerator, den=denominator if separator else "1"
+                num=value.numerator, den=value.denominator
             )
 
         return cls.model_construct(

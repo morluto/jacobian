@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Literal, NoReturn, TypedDict
 
 import pytest
@@ -54,24 +55,24 @@ def _run_elimination(request: EliminationIdealRequest) -> EliminationIdealResult
     )
 
 
-class _CanonicalRationalWire(TypedDict):
-    num: str
-    den: str
+class _NativeRationalComponents(TypedDict):
+    num: int
+    den: int
 
 
-class _RationalPolynomialTermWire(TypedDict):
-    coefficient: _CanonicalRationalWire
+class _NativePolynomialTerm(TypedDict):
+    coefficient: _NativeRationalComponents
     exponents: list[int]
 
 
-class _RationalPolynomialWire(TypedDict):
-    terms: list[_RationalPolynomialTermWire]
+class _NativePolynomialTerms(TypedDict):
+    terms: list[_NativePolynomialTerm]
 
 
 class _RationalPolynomialPayload(TypedDict):
     domain: Literal["QQ"]
     variables: list[str]
-    polynomial: _RationalPolynomialWire
+    polynomial: _NativePolynomialTerms
 
 
 def _poly(
@@ -84,7 +85,7 @@ def _poly(
         "polynomial": {
             "terms": [
                 {
-                    "coefficient": {"num": str(num), "den": str(den)},
+                    "coefficient": {"num": num, "den": den},
                     "exponents": list(exp),
                 }
                 for num, den, exp in terms
@@ -185,7 +186,7 @@ class TestGroebnerBasisValidation:
         payload["basis"]["generators"][0]["polynomial"]["terms"][0]["coefficient"][
             "num"
         ] = "2"
-        forged = type(result).model_validate(payload)
+        forged = type(result).model_validate_json(json.dumps(payload))
 
         assert not verify_groebner_basis(forged)
 
@@ -253,7 +254,7 @@ class TestIdealNormalForm:
         payload = decoded.model_dump(mode="json")
         payload["remainder"] = _poly(("x",), (1, 1, (0,))).model_dump(mode="json")
         payload["in_ideal"] = False
-        forged = type(result).model_validate(payload)
+        forged = type(result).model_validate_json(json.dumps(payload))
 
         assert not verify_ideal_normal_form(forged)
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from math import gcd, lcm
 
 import pytest
@@ -7,7 +8,7 @@ from pydantic import BaseModel, TypeAdapter, ValidationError
 from sympy import divisors, mobius
 from tests.math.number_theory._validation import expect_validation
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import ExactInteger
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory import ramanujan_sum
 from jacobian.math.number_theory._models import MAX_INTEGER_DIGITS
@@ -80,25 +81,21 @@ def test_ramanujan_sum_complete_period_orthogonality(
 
 
 def test_operation_returns_an_exact_result_without_replaying_it_on_parse() -> None:
-    result = RAMANUJAN_SUM_OPERATION.run(
-        RamanujanSumRequest(modulus="4", frequency="2")
-    )
-    assert result == RamanujanSumResult(modulus="4", frequency="2", value="-2")
+    result = RAMANUJAN_SUM_OPERATION.run(RamanujanSumRequest(modulus=4, frequency=2))
+    assert result == RamanujanSumResult(modulus=4, frequency=2, value=-2)
 
     assert (
         RamanujanSumResult.model_validate(
-            {"modulus": "4", "frequency": "1", "value": "-2"}
+            {"modulus": 4, "frequency": 1, "value": -2}
         ).value
-        == "-2"
+        == -2
     )
 
 
 def test_zero_sum_binds_the_canonical_zero_string() -> None:
-    result = RAMANUJAN_SUM_OPERATION.run(
-        RamanujanSumRequest(modulus="4", frequency="3")
-    )
-    assert result.value == "0"
-    assert result == RamanujanSumResult(modulus="4", frequency="3", value="0")
+    result = RAMANUJAN_SUM_OPERATION.run(RamanujanSumRequest(modulus=4, frequency=3))
+    assert result.value == 0
+    assert result == RamanujanSumResult(modulus=4, frequency=3, value=0)
 
 
 @pytest.mark.parametrize(
@@ -107,8 +104,8 @@ def test_zero_sum_binds_the_canonical_zero_string() -> None:
 )
 def test_result_rejects_noncanonical_value_encodings(noncanonical: str) -> None:
     with pytest.raises(ValidationError):
-        RamanujanSumResult.model_validate(
-            {"modulus": "4", "frequency": "3", "value": noncanonical}
+        RamanujanSumResult.model_validate_json(
+            json.dumps({"modulus": "4", "frequency": "3", "value": noncanonical})
         )
 
 
@@ -129,7 +126,7 @@ def test_negative_zero_frequency_is_rejected_before_source_binding(
     model: type[BaseModel], payload: dict[str, str]
 ) -> None:
     with pytest.raises(ValidationError):
-        model.model_validate(payload)
+        model.model_validate_json(json.dumps(payload))
 
 
 @pytest.mark.parametrize(
@@ -140,13 +137,15 @@ def test_request_rejects_noncanonical_frequency_encodings(
     noncanonical: str,
 ) -> None:
     with pytest.raises(ValidationError):
-        RamanujanSumRequest(modulus="4", frequency=noncanonical)
+        RamanujanSumRequest.model_validate_json(
+            json.dumps({"modulus": "4", "frequency": noncanonical})
+        )
 
 
 def test_equal_frequencies_share_one_serialized_identity() -> None:
-    zero_request = RamanujanSumRequest(modulus="4", frequency="0")
+    zero_request = RamanujanSumRequest(modulus=4, frequency=0)
     result = RAMANUJAN_SUM_OPERATION.run(zero_request)
-    assert result == RamanujanSumResult(modulus="4", frequency="0", value="2")
+    assert result == RamanujanSumResult(modulus=4, frequency=0, value=2)
 
 
 @pytest.mark.parametrize(
@@ -166,16 +165,18 @@ def test_equal_frequencies_share_one_serialized_identity() -> None:
     ),
 )
 def test_frequency_grammar_is_owned_by_canonical_integer(encoding: str) -> None:
-    owner = TypeAdapter(CanonicalInteger)
+    owner = TypeAdapter(ExactInteger)
     try:
-        expected = owner.validate_python(encoding)
+        expected = owner.validate_json(json.dumps(encoding))
         owner_accepts = True
     except ValidationError:
         owner_accepts = False
         expected = None
 
     try:
-        request = RamanujanSumRequest(modulus="4", frequency=encoding)
+        request = RamanujanSumRequest.model_validate_json(
+            json.dumps({"modulus": "4", "frequency": encoding})
+        )
     except ValidationError:
         assert not owner_accepts
     else:
@@ -188,16 +189,18 @@ def test_frequency_grammar_is_owned_by_canonical_integer(encoding: str) -> None:
     ("0", "7", "9" * 12, "-0", "+0", "00", "-007", "", "-", "+1"),
 )
 def test_modulus_grammar_is_owned_by_canonical_integer(encoding: str) -> None:
-    owner = TypeAdapter(CanonicalInteger)
+    owner = TypeAdapter(ExactInteger)
     try:
-        expected = owner.validate_python(encoding)
+        expected = owner.validate_json(json.dumps(encoding))
         owner_accepts = True
     except ValidationError:
         owner_accepts = False
         expected = None
 
     try:
-        request = RamanujanSumRequest(modulus=encoding, frequency="0")
+        request = RamanujanSumRequest.model_validate_json(
+            json.dumps({"modulus": encoding, "frequency": "0"})
+        )
     except ValidationError:
         assert not owner_accepts
     else:
@@ -205,31 +208,27 @@ def test_modulus_grammar_is_owned_by_canonical_integer(encoding: str) -> None:
         assert request.modulus == expected
 
 
-@pytest.mark.parametrize("negative", ("-1", "-4", "-" + "9" * 11))
+@pytest.mark.parametrize("negative", (-1, -4, -(10**11 - 1)))
 def test_owner_grammar_admits_negative_moduli_the_operation_rejects(
-    negative: str,
+    negative: int,
 ) -> None:
-    assert TypeAdapter(CanonicalInteger).validate_python(negative) == negative
+    assert TypeAdapter(ExactInteger).validate_python(negative) == negative
     with pytest.raises(OperationDomainValidationError, match="nonnegative"):
-        RAMANUJAN_SUM_OPERATION.run(
-            RamanujanSumRequest(modulus=negative, frequency="0")
-        )
+        RAMANUJAN_SUM_OPERATION.run(RamanujanSumRequest(modulus=negative, frequency=0))
     with expect_validation("number_theory."):
-        RamanujanSumResult.model_validate(
-            {"modulus": negative, "frequency": "2", "value": "-2"}
-        )
+        RamanujanSumResult(modulus=negative, frequency=2, value=-2)
 
 
 @pytest.mark.parametrize(
     ("modulus", "frequency", "value"),
     (
-        ("4", "-2", "-2"),
-        ("5", "-3", "-1"),
-        ("1", "-9", "1"),
+        (4, -2, -2),
+        (5, -3, -1),
+        (1, -9, 1),
     ),
 )
 def test_canonical_negative_frequencies_round_trip(
-    modulus: str, frequency: str, value: str
+    modulus: int, frequency: int, value: int
 ) -> None:
     request = RamanujanSumRequest(modulus=modulus, frequency=frequency)
     assert RAMANUJAN_SUM_OPERATION.run(request) == RamanujanSumResult(
@@ -243,14 +242,14 @@ def test_canonical_negative_frequencies_round_trip(
 @pytest.mark.parametrize(
     ("modulus", "frequency", "value"),
     (
-        ("5", "0", "4"),
-        ("4", "2", "-2"),
-        ("1", "9", "1"),
-        ("549755813888", "274877906944", "-274877906944"),
+        (5, 0, 4),
+        (4, 2, -2),
+        (1, 9, 1),
+        (549755813888, 274877906944, -274877906944),
     ),
 )
 def test_result_accepts_canonical_nonzero_values(
-    modulus: str, frequency: str, value: str
+    modulus: int, frequency: int, value: int
 ) -> None:
     result = RamanujanSumResult.model_validate(
         {"modulus": modulus, "frequency": frequency, "value": value}
@@ -260,20 +259,24 @@ def test_result_accepts_canonical_nonzero_values(
 
 def test_ramanujan_sum_request_bounds_factorization_and_frequency_work() -> None:
     boundary = RamanujanSumRequest(
-        modulus="9" * _MAX_MODULUS_DIGITS,
-        frequency="9" * MAX_INTEGER_DIGITS,
+        modulus=10**_MAX_MODULUS_DIGITS - 1,
+        frequency=10**MAX_INTEGER_DIGITS - 1,
     )
     result = RAMANUJAN_SUM_OPERATION.run(boundary)
     assert int(result.value) == ramanujan_sum(
         int(boundary.modulus), int(boundary.frequency)
     )
 
-    with expect_validation("number_theory."):
-        RamanujanSumRequest(modulus=str(10**_MAX_MODULUS_DIGITS), frequency="0")
-    with expect_validation("number_theory."):
-        RamanujanSumRequest(modulus="1", frequency="9" * (MAX_INTEGER_DIGITS + 1))
+    with pytest.raises(ValidationError):
+        RamanujanSumRequest.model_validate_json(
+            json.dumps({"modulus": str(10**_MAX_MODULUS_DIGITS), "frequency": "0"})
+        )
+    with pytest.raises(ValidationError):
+        RamanujanSumRequest.model_validate_json(
+            json.dumps({"modulus": "1", "frequency": "9" * (MAX_INTEGER_DIGITS + 1)})
+        )
     with pytest.raises(OperationDomainValidationError, match="nonnegative"):
-        RAMANUJAN_SUM_OPERATION.run(RamanujanSumRequest(modulus="-1", frequency="0"))
+        RAMANUJAN_SUM_OPERATION.run(RamanujanSumRequest(modulus=-1, frequency=0))
 
 
 def test_ramanujan_sum_rejects_negative_native_modulus() -> None:
@@ -304,11 +307,11 @@ def test_native_ramanujan_sum_bounds_frequency_magnitude() -> None:
 
 
 def test_native_ramanujan_sum_accepts_the_shared_canonical_integer_value() -> None:
-    assert ramanujan_sum(IntegerValue(value="4"), IntegerValue(value="-2")) == -2
+    assert ramanujan_sum(IntegerValue(value=4), IntegerValue(value=-2)) == -2
     assert ramanujan_sum(absolute_value(-5), 0) == 4
     assert (
         ramanujan_sum(
-            IntegerValue(value="549755813888"), IntegerValue(value="274877906944")
+            IntegerValue(value=549755813888), IntegerValue(value=274877906944)
         )
         == -274877906944
     )
@@ -316,15 +319,15 @@ def test_native_ramanujan_sum_accepts_the_shared_canonical_integer_value() -> No
 
 def test_native_frequency_bound_covers_canonical_integer_values() -> None:
     with pytest.raises(ValueError, match=rf"at most {MAX_INTEGER_DIGITS}"):
-        ramanujan_sum(4, IntegerValue(value="9" * (MAX_INTEGER_DIGITS + 1)))
+        ramanujan_sum(4, IntegerValue(value=10 ** (MAX_INTEGER_DIGITS + 1) - 1))
 
 
 def test_native_frequency_bound_matches_wire_admission() -> None:
     for modulus, frequency in (
-        ("4", str(10**MAX_INTEGER_DIGITS - 2)),
-        ("1", "9" * MAX_INTEGER_DIGITS),
+        (4, 10**MAX_INTEGER_DIGITS - 2),
+        (1, 10**MAX_INTEGER_DIGITS - 1),
     ):
         request = RamanujanSumRequest(modulus=modulus, frequency=frequency)
-        assert RAMANUJAN_SUM_OPERATION.run(request).value == str(
-            ramanujan_sum(int(modulus), int(frequency))
+        assert RAMANUJAN_SUM_OPERATION.run(request).value == ramanujan_sum(
+            modulus, frequency
         )

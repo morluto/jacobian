@@ -2,7 +2,6 @@
 
 from typing import Any
 
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -53,7 +52,7 @@ def compute_count(request: CountRequest) -> CountResult:
     count = count_accepted_words(request.dfa, request.word_length)
     return CountResult._from_kernel(
         request,
-        count=format_canonical_integer(count),
+        count=count,
     )
 
 

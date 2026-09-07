@@ -13,7 +13,7 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, StringConstraints, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
 
 # ---------------------------------------------------------------------------
@@ -56,7 +56,7 @@ class IntegerBaseDigitsRequest(StrictModel):
     with modular arithmetic.
     """
 
-    value: CanonicalInteger
+    value: ExactInteger
     base: int = Field(ge=2, le=_MAX_BASE)
 
 
@@ -72,7 +72,7 @@ class IntegerNthRootRequest(StrictModel):
     is not integral-real.
     """
 
-    value: CanonicalInteger
+    value: ExactInteger
     degree: int = Field(ge=1, le=_MAX_NTH_ROOT_DEGREE)
 
 
@@ -85,7 +85,7 @@ class IntegerSignResult(StrictModel):
 class IntegerNthRootResult(StrictModel):
     """The floor nth root of one integer and whether it is exact."""
 
-    root: CanonicalInteger
+    root: ExactInteger
     exact: bool
 
 

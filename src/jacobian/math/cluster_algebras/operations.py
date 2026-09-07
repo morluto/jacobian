@@ -11,8 +11,6 @@ from jacobian.math.cluster_algebras._models import (
     SeedMutationResult,
     _identity_matrix,
     _require_mutatable,
-    encoded_entries,
-    parsed_entries,
     require_skew_symmetrizable,
 )
 
@@ -47,7 +45,7 @@ def _mutation_of(matrix: ExchangeMatrix, k: int) -> ExchangeMatrix:
     kernel.
     """
     n = matrix.n
-    old = [list(row) for row in parsed_entries(matrix)]
+    old = [list(row) for row in matrix.entries]
 
     new = [[0] * n for _ in range(n)]
     for i in range(n):
@@ -68,7 +66,7 @@ def _mutation_of(matrix: ExchangeMatrix, k: int) -> ExchangeMatrix:
                 )
     return ExchangeMatrix(
         n=n,
-        entries=encoded_entries(tuple(tuple(row) for row in new)),
+        entries=tuple(tuple(row) for row in new),
         symmetrizer=matrix.symmetrizer,
     )
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
@@ -674,7 +675,7 @@ def test_moment_verifier_rejects_unrealizable_sparse_zero_profile() -> None:
     payload["right_total"] = 720
 
     assert not verify_incidence_moment_comparison(
-        IncidenceMomentComparison.model_validate(payload)
+        IncidenceMomentComparison.model_validate_json(json.dumps(payload))
     )
 
 
@@ -728,7 +729,9 @@ def test_moment_comparison_round_trips_through_serialization() -> None:
     )
 
     payload: dict[str, Any] = comparison.model_dump(mode="python")
-    assert IncidenceMomentComparison.model_validate(payload) == comparison
+    assert (
+        IncidenceMomentComparison.model_validate_json(json.dumps(payload)) == comparison
+    )
     serialized = comparison.model_dump(mode="json")
     assert serialized["left"] == left.model_dump(mode="json")
     assert serialized["right"] == right.model_dump(mode="json")
@@ -765,7 +768,7 @@ def test_moment_verifier_rejects_mutated_serialized_multiplicities() -> None:
     payload["differences"][0]["left_multiplicity"] = 51
 
     assert not verify_incidence_moment_comparison(
-        IncidenceMomentComparison.model_validate(payload)
+        IncidenceMomentComparison.model_validate_json(json.dumps(payload))
     )
 
 

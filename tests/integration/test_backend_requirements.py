@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import shutil
 
 import pytest
@@ -63,19 +64,23 @@ def test_native_calls_raise_actionable_error(operation_id: str) -> None:
     assert operation is not None
     payload = copy.deepcopy(operation.examples[0].input)
     if operation_id == SINGULAR_OPERATIONS[-1]:
-        smooth = operation.run(operation.request_type.model_validate(payload))
+        smooth = operation.run(
+            operation.request_type.model_validate_json(json.dumps(payload))
+        )
         assert smooth.model_dump(mode="json")["outcome"]["status"] == (
             "SMOOTH_OVER_ALGEBRAIC_CLOSURE"
         )
         for term in payload["polynomial"]["polynomial"]["terms"]:
             term["exponents"] = [2 * exponent for exponent in term["exponents"]]
     if operation_id not in SINGULAR_OPERATIONS:
-        empty = operation.run(operation.request_type.model_validate(payload))
+        empty = operation.run(
+            operation.request_type.model_validate_json(json.dumps(payload))
+        )
         assert empty.model_dump(mode="json")["outcome"]["components"] == []
         payload["semialgebraic_set"]["sign_conditions"] = [
             {"signs": ["NEGATIVE", "NEGATIVE"]}
         ]
-    request = operation.request_type.model_validate(payload)
+    request = operation.request_type.model_validate_json(json.dumps(payload))
     with pytest.raises(BackendUnavailableError) as caught:
         operation.run(request)
     backend = "singular" if operation_id in SINGULAR_OPERATIONS else "qepcad"

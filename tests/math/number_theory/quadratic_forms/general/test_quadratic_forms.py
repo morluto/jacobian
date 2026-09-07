@@ -30,8 +30,8 @@ from jacobian.math.number_theory.quadratic_forms.general.values import (
 )
 
 
-def _rational(numerator: int, denominator: int = 1) -> dict[str, str]:
-    return {"num": str(numerator), "den": str(denominator)}
+def _rational(numerator: int, denominator: int = 1) -> dict[str, int]:
+    return {"num": numerator, "den": denominator}
 
 
 def _form() -> dict[str, object]:
@@ -56,7 +56,7 @@ def test_evaluate_uses_explicit_polynomial_cross_term_convention() -> None:
         EvaluationRequest.model_validate({"form": _form(), "vector": _vector()})
     )
 
-    assert result.value == CanonicalRational(num="47", den="2")
+    assert result.value == CanonicalRational(num=47, den=2)
     assert result.form.axis == ("x", "y")
     assert result.vector.axis == result.form.axis
 
@@ -77,7 +77,7 @@ def test_zero_form_is_a_complete_exact_value() -> None:
 
     assert evaluate_form(
         EvaluationRequest.model_validate({"form": form, "vector": vector})
-    ).value == CanonicalRational(num="0", den="1")
+    ).value == CanonicalRational(num=0, den=1)
 
 
 def test_zero_dimensional_form_evaluates_to_zero() -> None:
@@ -89,7 +89,7 @@ def test_zero_dimensional_form_evaluates_to_zero() -> None:
     )
 
     assert evaluate_rational_quadratic_form(request.form, request.vector) == Fraction(0)
-    assert evaluate_form(request).value == CanonicalRational(num="0", den="1")
+    assert evaluate_form(request).value == CanonicalRational(num=0, den=1)
 
 
 def test_zero_dimensional_axis_keeps_coupled_length_validation() -> None:
@@ -162,7 +162,7 @@ def test_result_parsing_keeps_the_bounded_structural_contract() -> None:
 
 
 def test_digit_bounds_reject_before_exact_arithmetic() -> None:
-    too_large_coefficient = "1" + "0" * MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS
+    too_large_coefficient = 10**MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS
     with pytest.raises(ValidationError) as error:
         RationalQuadraticForm.model_validate(
             {
@@ -172,18 +172,18 @@ def test_digit_bounds_reject_before_exact_arithmetic() -> None:
                     {
                         "left": 0,
                         "right": 1,
-                        "coefficient": {"num": too_large_coefficient, "den": "1"},
+                        "coefficient": {"num": too_large_coefficient, "den": 1},
                     }
                 ],
             }
         )
     assert error.value.errors()[0]["type"] == "quadratic_form.coefficient_bound"
-    too_large_coordinate = "1" + "0" * MAX_QUADRATIC_VECTOR_COORDINATE_DIGITS
+    too_large_coordinate = 10**MAX_QUADRATIC_VECTOR_COORDINATE_DIGITS
     with pytest.raises(ValidationError) as error:
         RationalCoordinateVector.model_validate(
             {
                 "axis": ["x"],
-                "coordinates": [{"num": too_large_coordinate, "den": "1"}],
+                "coordinates": [{"num": too_large_coordinate, "den": 1}],
             }
         )
     assert error.value.errors()[0]["type"] == "quadratic_form.coordinate_bound"
@@ -207,7 +207,7 @@ def test_work_based_admission_accepts_light_high_dimension_forms() -> None:
 
 
 def test_evaluation_budget_admits_forms_near_the_denominator_boundary() -> None:
-    denominator = "1" + "0" * (MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS - 1)
+    denominator = 10 ** (MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS - 1)
     densest_terms = (
         MAX_QUADRATIC_EVALUATION_DIGITS - MAX_QUADRATIC_EVALUATION_TERM_DIGITS
     ) // MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS
@@ -219,7 +219,7 @@ def test_evaluation_budget_admits_forms_near_the_denominator_boundary() -> None:
     labels = [f"x{index}" for index in range(axes)]
     form = {
         "axis": labels,
-        "diagonal_coefficients": [{"num": "1", "den": denominator} for _ in labels],
+        "diagonal_coefficients": [{"num": 1, "den": denominator} for _ in labels],
     }
     vector = {
         "axis": labels,
@@ -233,14 +233,14 @@ def test_evaluation_budget_admits_forms_near_the_denominator_boundary() -> None:
 
 
 def test_evaluation_preflights_the_aggregate_denominator() -> None:
-    denominator = "1" + "0" * (MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS - 1)
+    denominator = 10 ** (MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS - 1)
     dimension = (
         MAX_QUADRATIC_EVALUATION_DIGITS - MAX_QUADRATIC_EVALUATION_TERM_DIGITS
     ) // MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS + 1
     labels = [f"x{index}" for index in range(dimension)]
     form = {
         "axis": labels,
-        "diagonal_coefficients": [{"num": "1", "den": denominator} for _ in labels],
+        "diagonal_coefficients": [{"num": 1, "den": denominator} for _ in labels],
     }
     vector = {
         "axis": labels,
@@ -255,13 +255,13 @@ def test_evaluation_preflights_the_aggregate_denominator() -> None:
 
 
 def test_evaluation_budget_ignores_annihilated_monomials() -> None:
-    denominator = "1" + "0" * (MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS - 1)
+    denominator = 10 ** (MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS - 1)
     labels = [f"x{index}" for index in range(30)]
     form = {
         "axis": labels,
-        "diagonal_coefficients": [{"num": "1", "den": denominator} for _ in labels],
+        "diagonal_coefficients": [{"num": 1, "den": denominator} for _ in labels],
         "cross_terms": [
-            {"left": 0, "right": 1, "coefficient": {"num": "1", "den": denominator}},
+            {"left": 0, "right": 1, "coefficient": {"num": 1, "den": denominator}},
         ],
     }
     vector = {
@@ -271,19 +271,19 @@ def test_evaluation_budget_ignores_annihilated_monomials() -> None:
 
     assert evaluate_form(
         EvaluationRequest.model_validate({"form": form, "vector": vector})
-    ).value == CanonicalRational(num="0", den="1")
+    ).value == CanonicalRational(num=0, den=1)
 
 
 def test_zero_coordinates_exclude_irrelevant_coefficient_denominators() -> None:
-    active_denominator = "1" + "0" * (MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS // 2 - 1)
-    annihilated_denominator = "1" + "0" * (MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS - 1)
+    active_denominator = 10 ** (MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS // 2 - 1)
+    annihilated_denominator = 10 ** (MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS - 1)
     labels = [f"a{index}" for index in range(20)] + [f"b{index}" for index in range(20)]
     form = {
         "axis": labels,
         "diagonal_coefficients": [
-            {"num": "1", "den": active_denominator} for _ in range(20)
+            {"num": 1, "den": active_denominator} for _ in range(20)
         ]
-        + [{"num": "1", "den": annihilated_denominator} for _ in range(20)],
+        + [{"num": 1, "den": annihilated_denominator} for _ in range(20)],
     }
     vector = {
         "axis": labels,

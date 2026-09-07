@@ -8,7 +8,6 @@ from typing import Literal, Self
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
-from jacobian.canonical import parse_canonical_integer
 from jacobian.math.number_theory._models import BoundedInteger, _validation_error
 
 # Friable counting has two exact, result-sensitive execution regimes. The
@@ -131,7 +130,7 @@ class FriableCountResult(StrictModel):
 
     @model_validator(mode="after")
     def require_structural_count(self) -> Self:
-        count = parse_canonical_integer(self.count)
+        count = self.count
         if count < 0:
             raise _validation_error(
                 "friable_count_must_be_nonnegative", "friable count must be nonnegative"
@@ -145,7 +144,7 @@ class FriableCountResult(StrictModel):
         return cls.model_construct(
             x=request.x,
             y=request.y,
-            count=str(count),
+            count=count,
         )
 
 

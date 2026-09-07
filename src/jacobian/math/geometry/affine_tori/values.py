@@ -9,11 +9,12 @@ from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
-    CanonicalInteger,
     CanonicalRational,
+    ExactInteger,
     require_bounded_rational,
 )
 from jacobian._models import StrictModel, canonicalize_json_containers
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.matrices.values import IntegerMatrix
 
 # Conservative preflight fallback: the derived admission in
@@ -46,8 +47,9 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"affine_torus.{reason}", message)
 
 
-def _integer_digits(value: str) -> int:
-    return len(value.lstrip("-"))
+def _integer_digits(value: int | str) -> int:
+    text = value if isinstance(value, str) else format_canonical_integer(value)
+    return len(text.lstrip("-"))
 
 
 def _preflight_sequence(value: object, *, label: str, maximum: int) -> None:
@@ -143,9 +145,12 @@ def _preflight_affine_linear_part(value: object) -> None:
         )
         assert isinstance(row, (list, tuple))
         for entry in row:
-            if not isinstance(entry, str):
+            if not (
+                isinstance(entry, str)
+                or (isinstance(entry, int) and not isinstance(entry, bool))
+            ):
                 raise _validation_error(
-                    "raw_type", "integer matrix entries must be canonical strings"
+                    "raw_type", "integer matrix entries must be exact integers"
                 )
             if _integer_digits(entry) > MAX_AFFINE_TORUS_INPUT_DIGITS:
                 raise _validation_error(
@@ -172,9 +177,12 @@ def _preflight_rational_coordinates(
             label="rational coordinate",
         )
         for component in (coordinate.get("num"), coordinate.get("den")):
-            if not isinstance(component, str):
+            if not (
+                isinstance(component, str)
+                or (isinstance(component, int) and not isinstance(component, bool))
+            ):
                 raise _validation_error(
-                    "raw_type", "rational components must be canonical strings"
+                    "raw_type", "rational components must be exact integers"
                 )
             if _integer_digits(component) > maximum_digits:
                 raise _validation_error(
@@ -447,7 +455,7 @@ class IntegralTorusCharacter(StrictModel):
     """
 
     torus: StandardRealTorus
-    coefficients: tuple[CanonicalInteger, ...] = Field(
+    coefficients: tuple[ExactInteger, ...] = Field(
         min_length=1, max_length=MAX_AFFINE_TORUS_DIMENSION
     )
 
@@ -489,13 +497,13 @@ class FiniteTorusComponentPresentation(StrictModel):
 
     generator_count: StrictInt = Field(ge=0, le=MAX_AFFINE_TORUS_DIMENSION)
     relation_matrix: IntegerMatrix
-    generator_orders: tuple[CanonicalInteger, ...] = Field(
+    generator_orders: tuple[ExactInteger, ...] = Field(
         max_length=MAX_AFFINE_TORUS_DIMENSION
     )
-    invariant_factors: tuple[CanonicalInteger, ...] = Field(
+    invariant_factors: tuple[ExactInteger, ...] = Field(
         max_length=MAX_AFFINE_TORUS_DIMENSION
     )
-    component_count: CanonicalInteger
+    component_count: ExactInteger
 
     @model_validator(mode="after")
     def require_finite_presentation_metadata(self) -> Self:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from copy import deepcopy
 from fractions import Fraction
 from itertools import product
@@ -38,21 +39,23 @@ def _request(
     *,
     precision_bits: int = 128,
 ) -> IntervalExpressionBoxEnclosureRequest:
-    return IntervalExpressionBoxEnclosureRequest.model_validate(
-        {
-            "expression": expression,
-            "box": {
-                "variables": [name for name, _, _ in coordinates],
-                "intervals": [
-                    {
-                        "lower": _q(lower.numerator, lower.denominator),
-                        "upper": _q(upper.numerator, upper.denominator),
-                    }
-                    for _, lower, upper in coordinates
-                ],
-            },
-            "precision_bits": precision_bits,
-        }
+    return IntervalExpressionBoxEnclosureRequest.model_validate_json(
+        json.dumps(
+            {
+                "expression": expression,
+                "box": {
+                    "variables": [name for name, _, _ in coordinates],
+                    "intervals": [
+                        {
+                            "lower": _q(lower.numerator, lower.denominator),
+                            "upper": _q(upper.numerator, upper.denominator),
+                        }
+                        for _, lower, upper in coordinates
+                    ],
+                },
+                "precision_bits": precision_bits,
+            }
+        )
     )
 
 
@@ -76,7 +79,9 @@ def _const(value: int) -> dict[str, Any]:
 
 
 def test_analysis_and_geometry_boxes_compose_through_the_same_interval_value() -> None:
-    interval = ClosedRationalInterval.model_validate({"lower": _q(0), "upper": _q(1)})
+    interval = ClosedRationalInterval.model_validate_json(
+        json.dumps({"lower": _q(0), "upper": _q(1)})
+    )
 
     analysis_box = RationalIntervalBox(variables=("x",), intervals=(interval,))
     geometry_box = RationalAxisAlignedBox(dimension=1, intervals=(interval,))
@@ -87,11 +92,13 @@ def test_analysis_and_geometry_boxes_compose_through_the_same_interval_value() -
 
 
 def test_analysis_request_accepts_the_shared_derived_endpoint_envelope() -> None:
-    interval = ClosedRationalInterval.model_validate(
-        {
-            "lower": _q(0),
-            "upper": {"num": "1" * MAX_RATIONAL_BOX_ENDPOINT_DIGITS, "den": "1"},
-        }
+    interval = ClosedRationalInterval.model_validate_json(
+        json.dumps(
+            {
+                "lower": _q(0),
+                "upper": {"num": "1" * MAX_RATIONAL_BOX_ENDPOINT_DIGITS, "den": "1"},
+            }
+        )
     )
     box = RationalIntervalBox(variables=("x",), intervals=(interval,))
 
@@ -111,15 +118,14 @@ def test_monotone_box_enclosures_contain_both_endpoint_enclosures(op: str) -> No
 
     point_results = []
     for argument in (lower, upper):
-        request = IntervalExpressionEnclosureRequest.model_validate(
-            {
-                "expression": {
-                    "op": op,
-                    "children": [{"op": "var"}],
-                },
-                "argument": _q(argument.numerator, argument.denominator),
-                "precision_bits": 128,
-            }
+        request = IntervalExpressionEnclosureRequest.model_validate_json(
+            json.dumps(
+                {
+                    "expression": {"op": op, "children": [{"op": "var"}]},
+                    "argument": _q(argument.numerator, argument.denominator),
+                    "precision_bits": 128,
+                }
+            )
         )
         point_results.append(
             expression_enclosure(
@@ -141,12 +147,14 @@ def test_degenerate_point_box_agrees_with_point_expression_operation() -> None:
         {"op": "exp", "children": [_var("x")]},
         (("x", Fraction(1), Fraction(1)),),
     )
-    request = IntervalExpressionEnclosureRequest.model_validate(
-        {
-            "expression": {"op": "exp", "children": [{"op": "var"}]},
-            "argument": _q(1),
-            "precision_bits": 128,
-        }
+    request = IntervalExpressionEnclosureRequest.model_validate_json(
+        json.dumps(
+            {
+                "expression": {"op": "exp", "children": [{"op": "var"}]},
+                "argument": _q(1),
+                "precision_bits": 128,
+            }
+        )
     )
     point_result = expression_enclosure(
         request.expression, request.argument, request.precision_bits
@@ -366,7 +374,7 @@ def test_source_derived_fields_deserialize_without_replaying(mutation: str) -> N
         {"op": "exp", "children": [_var("x")]},
         (("x", Fraction(0), Fraction(1)),),
     )
-    payload = deepcopy(result.model_dump())
+    payload = deepcopy(json.loads(result.model_dump_json()))
     if mutation == "expression":
         payload["expression"]["op"] = "sin"
     elif mutation == "box":
@@ -374,7 +382,9 @@ def test_source_derived_fields_deserialize_without_replaying(mutation: str) -> N
     else:
         payload["lower"] = {"mantissa": "0", "exponent": 0}
 
-    parsed = IntervalExpressionBoxEnclosureResult.model_validate(payload)
+    parsed = IntervalExpressionBoxEnclosureResult.model_validate_json(
+        json.dumps(payload)
+    )
     assert parsed != result
 
 
@@ -384,10 +394,12 @@ def test_domain_rejection_round_trips_without_replaying_its_source() -> None:
         (("x", Fraction(-1), Fraction(1)),),
     )
     assert (
-        IntervalExpressionBoxEnclosureResult.model_validate(result.model_dump())
+        IntervalExpressionBoxEnclosureResult.model_validate_json(
+            result.model_dump_json()
+        )
         == result
     )
-    payload = deepcopy(result.model_dump())
+    payload = deepcopy(json.loads(result.model_dump_json()))
     payload["box"]["intervals"] = (
         {
             "lower": _q(1),
@@ -395,7 +407,9 @@ def test_domain_rejection_round_trips_without_replaying_its_source() -> None:
         },
     )
 
-    parsed = IntervalExpressionBoxEnclosureResult.model_validate(payload)
+    parsed = IntervalExpressionBoxEnclosureResult.model_validate_json(
+        json.dumps(payload)
+    )
     assert parsed != result
 
 
@@ -520,15 +534,17 @@ def test_expression_and_box_must_share_one_complete_named_axis(
     payload: dict[str, Any], message: str
 ) -> None:
     with pytest.raises(ValidationError, match=message):
-        IntervalExpressionBoxEnclosureRequest.model_validate(payload)
+        IntervalExpressionBoxEnclosureRequest.model_validate_json(json.dumps(payload))
 
 
 def test_named_variables_are_not_accepted_by_the_point_expression_contract() -> None:
-    request = IntervalExpressionEnclosureRequest.model_validate(
-        {
-            "expression": _var("x"),
-            "argument": _q(0),
-        }
+    request = IntervalExpressionEnclosureRequest.model_validate_json(
+        json.dumps(
+            {
+                "expression": _var("x"),
+                "argument": _q(0),
+            }
+        )
     )
     with pytest.raises(OperationDomainValidationError, match="anonymous"):
         expression_enclosure(
@@ -581,12 +597,14 @@ def test_variable_names_are_non_evaluating_identifiers() -> None:
 
 
 def test_point_and_box_requests_compose_through_strict_json_transport() -> None:
-    point = IntervalExpressionEnclosureRequest.model_validate(
-        {
-            "expression": {"op": "exp", "children": [{"op": "var"}]},
-            "argument": _q(1),
-            "precision_bits": 128,
-        }
+    point = IntervalExpressionEnclosureRequest.model_validate_json(
+        json.dumps(
+            {
+                "expression": {"op": "exp", "children": [{"op": "var"}]},
+                "argument": _q(1),
+                "precision_bits": 128,
+            }
+        )
     )
     box = _request(
         {"op": "exp", "children": [_var("x")]},
@@ -655,7 +673,7 @@ def test_raw_rationals_and_domain_paths_are_bounded_before_nested_parsing() -> N
     payload = domain_result.model_dump(mode="json")
     payload["domain_failure"]["node_path"] = [0] * 16
     with analysis_validation_error():
-        IntervalExpressionBoxEnclosureResult.model_validate(payload)
+        IntervalExpressionBoxEnclosureResult.model_validate_json(json.dumps(payload))
 
 
 def test_raw_expression_size_is_bounded_before_recursive_model_parsing() -> None:

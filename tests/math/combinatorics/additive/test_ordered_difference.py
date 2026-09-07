@@ -20,12 +20,16 @@ from jacobian.math.combinatorics.additive.operations import (
 
 
 def _request(*vectors: tuple[int, ...]) -> OrderedDifferenceProfileRequest:
-    return OrderedDifferenceProfileRequest.model_validate(
-        {
-            "vectors": {
-                "vectors": [{"coordinates": [str(c) for c in vec]} for vec in vectors]
+    return OrderedDifferenceProfileRequest.model_validate_json(
+        json.dumps(
+            {
+                "vectors": {
+                    "vectors": [
+                        {"coordinates": [str(c) for c in vec]} for vec in vectors
+                    ]
+                }
             }
-        }
+        )
     )
 
 
@@ -195,9 +199,8 @@ class TestOrderedDifferenceProfile:
         repeated = [e for e in payload["entries"] if int(e["multiplicity"]) > 1]
         assert len(repeated) >= 2
         payload["first_collision"] = repeated[-1]["pairs"][0]
-        assert not verify_ordered_difference_profile(
-            OrderedDifferenceProfileResult.model_validate(payload)
-        )
+        forged = OrderedDifferenceProfileResult.model_validate_json(json.dumps(payload))
+        assert not verify_ordered_difference_profile(forged)
 
     def test_result_rejects_nondesignated_pair_from_first_entry(self) -> None:
         """Swapping in a different valid pair of the same first repeated
@@ -215,7 +218,7 @@ class TestOrderedDifferenceProfile:
             first_repeated["pairs"][0],
         )
         with pytest.raises(ValidationError):
-            OrderedDifferenceProfileResult.model_validate(payload)
+            OrderedDifferenceProfileResult.model_validate_json(json.dumps(payload))
 
     def test_verifier_rejects_boolean_first_collision_index_from_model_copy(
         self,
@@ -259,7 +262,7 @@ class TestOrderedDifferenceProfile:
             )
         with pytest.raises(ValidationError) as schema_error:
             IntegerVector.model_validate({"coordinates": ["9" * 100_000]})
-        assert schema_error.value.errors()[0]["type"] == "string_too_long"
+        assert schema_error.value.errors()[0]["type"] == "int_type"
 
     def test_difference_coordinates_may_carry_one_extra_digit(self) -> None:
         """Exact differences of maximally bounded sources stay representable."""
@@ -353,13 +356,15 @@ class TestOrderedDifferenceProfile:
         """Schema decoding keeps producer summaries without replaying entries."""
         result = _run_ordered(_request((0, 0), (1, 0), (0, 1), (1, 1)))
         payload = result.model_dump(mode="json")
-        payload["total_ordered_pairs"] = "0"
-        payload["support_size"] = "0"
-        payload["max_multiplicity"] = "0"
+        payload["total_ordered_pairs"] = 0
+        payload["support_size"] = 0
+        payload["max_multiplicity"] = 0
         payload["has_repeated_difference"] = False
         payload["first_collision"] = None
 
-        decoded = OrderedDifferenceProfileResult.model_validate(payload)
+        decoded = OrderedDifferenceProfileResult.model_validate_json(
+            json.dumps(payload)
+        )
 
         assert decoded.total_ordered_pairs == 0
         assert decoded.support_size == 0
@@ -371,19 +376,21 @@ class TestOrderedDifferenceProfile:
         payload = result.model_dump(mode="json")
         payload["entries"][0]["difference"]["coordinates"] = ["-2", "0"]
 
-        decoded = OrderedDifferenceProfileResult.model_validate(payload)
+        decoded = OrderedDifferenceProfileResult.model_validate_json(
+            json.dumps(payload)
+        )
 
         assert decoded.entries[0].difference.as_int_tuple() == (-2, 0)
         assert not verify_ordered_difference_profile(decoded)
 
-    def test_summary_counts_use_decimal_strings_in_json(self) -> None:
+    def test_summary_counts_use_native_integers_in_json(self) -> None:
         result = _run_ordered(_request((0, 0), (1, 0)))
         payload = result.model_dump(mode="json")
 
-        assert isinstance(payload["total_ordered_pairs"], str)
-        assert isinstance(payload["support_size"], str)
-        assert isinstance(payload["max_multiplicity"], str)
-        assert isinstance(payload["entries"][0]["multiplicity"], str)
+        assert type(payload["total_ordered_pairs"]) is int
+        assert type(payload["support_size"]) is int
+        assert type(payload["max_multiplicity"]) is int
+        assert type(payload["entries"][0]["multiplicity"]) is int
 
     def test_native_integer_payload_roundtrip(self) -> None:
         result = _run_ordered(_request((0, 0), (1, 0), (0, 1)))
@@ -399,18 +406,22 @@ class TestOrderedDifferenceProfile:
         "field",
         ("total_ordered_pairs", "support_size", "max_multiplicity"),
     )
-    def test_json_summary_counts_reject_numeric_values(self, field: str) -> None:
+    def test_json_summary_counts_accept_numeric_values(self, field: str) -> None:
         result = _run_ordered(_request((0, 0), (1, 0)))
         payload = result.model_dump(mode="json")
-        payload[field] = 2
+        expected = payload[field]
 
-        with pytest.raises(ValidationError):
-            OrderedDifferenceProfileResult.model_validate_json(json.dumps(payload))
+        decoded = OrderedDifferenceProfileResult.model_validate_json(
+            json.dumps(payload)
+        )
+        assert getattr(decoded, field) == expected
 
-    def test_json_multiplicity_rejects_numeric_value(self) -> None:
+    def test_json_multiplicity_accepts_numeric_value(self) -> None:
         result = _run_ordered(_request((0, 0), (1, 0)))
         payload = result.model_dump(mode="json")
-        payload["entries"][0]["multiplicity"] = 1
+        expected = payload["entries"][0]["multiplicity"]
 
-        with pytest.raises(ValidationError):
-            OrderedDifferenceProfileResult.model_validate_json(json.dumps(payload))
+        decoded = OrderedDifferenceProfileResult.model_validate_json(
+            json.dumps(payload)
+        )
+        assert decoded.entries[0].multiplicity == expected

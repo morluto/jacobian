@@ -9,7 +9,7 @@ from typing import Any
 import sympy
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import parse_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -113,8 +113,8 @@ def _admit_arc(
         )
     conductor = lcm(
         4,
-        parse_canonical_integer(start_turn.den),
-        parse_canonical_integer(end_turn.den),
+        start_turn.den,
+        end_turn.den,
     )
     if conductor > MAX_ARC_ENERGY_CONDUCTOR:
         raise OperationDomainValidationError(
@@ -124,8 +124,8 @@ def _admit_arc(
         )
     component_digits = tuple(
         (
-            len(term.coefficient.num.lstrip("-")),
-            len(term.coefficient.den),
+            len(format_canonical_integer(abs(term.coefficient.num))),
+            len(format_canonical_integer(term.coefficient.den)),
         )
         for term in polynomial.polynomial.terms
     )
@@ -154,15 +154,15 @@ def _admit_arc(
 # primitive minimal polynomials of alpha_N = 2*cos(2*pi/N), in descending
 # order.  Fixing this table makes the standard complex embedding part of the
 # value's identity and avoids expression-dependent minimal-polynomial search.
-_REAL_CYCLOTOMIC_POLYNOMIALS: dict[int, tuple[str, ...]] = {
-    4: ("1", "0"),
-    8: ("1", "0", "-2"),
-    12: ("1", "0", "-3"),
-    16: ("1", "0", "-4", "0", "2"),
-    20: ("1", "0", "-5", "0", "5"),
-    24: ("1", "0", "-4", "0", "1"),
-    28: ("1", "0", "-7", "0", "14", "0", "-7"),
-    32: ("1", "0", "-8", "0", "20", "0", "-16", "0", "2"),
+_REAL_CYCLOTOMIC_POLYNOMIALS: dict[int, tuple[int, ...]] = {
+    4: (1, 0),
+    8: (1, 0, -2),
+    12: (1, 0, -3),
+    16: (1, 0, -4, 0, 2),
+    20: (1, 0, -5, 0, 5),
+    24: (1, 0, -4, 0, 1),
+    28: (1, 0, -7, 0, 14, 0, -7),
+    32: (1, 0, -8, 0, 20, 0, -16, 0, 2),
 }
 
 
@@ -211,7 +211,7 @@ def _coordinate_scale(
 
 
 def _coordinate_times_generator(
-    value: tuple[Fraction, ...], polynomial: tuple[str, ...]
+    value: tuple[Fraction, ...], polynomial: tuple[int, ...]
 ) -> tuple[Fraction, ...]:
     shifted = [Fraction(0), *value]
     leading = shifted.pop()
@@ -246,13 +246,11 @@ def _two_cosine_coordinates(exponent: int, conductor: int) -> tuple[Fraction, ..
 def _sine_coordinates(
     turn: CanonicalRational, shift: int, conductor: int
 ) -> tuple[Fraction, ...]:
-    denominator = parse_canonical_integer(turn.den)
+    denominator = turn.den
     # Only the endpoint phase modulo one enters the sine term.  Reduce before
     # multiplying so an unwrapped turn with a large integer part cannot make
     # recurrence work depend on its decimal height.
-    phase = (parse_canonical_integer(turn.num) % denominator) * (
-        conductor // denominator
-    )
+    phase = (turn.num % denominator) * (conductor // denominator)
     exponent = (shift * phase - conductor // 4) % conductor
     return _coordinate_scale(
         _two_cosine_coordinates(exponent, conductor), Fraction(1, 2)
@@ -303,7 +301,7 @@ def _cyclotomic_binding(
     )
 
 
-def _minimal_polynomial(expr: Any) -> tuple[str, ...]:
+def _minimal_polynomial(expr: Any) -> tuple[int, ...]:
     variable = sympy.Symbol("x")
     polynomial = sympy.Poly(
         sympy.minimal_polynomial(expr, variable), variable, domain=sympy.QQ
@@ -312,7 +310,7 @@ def _minimal_polynomial(expr: Any) -> tuple[str, ...]:
     _content, primitive = integral.primitive()
     if primitive.LC() < 0:
         primitive = -primitive
-    coefficients = tuple(str(int(value)) for value in primitive.all_coeffs())
+    coefficients = tuple(int(value) for value in primitive.all_coeffs())
     if len(coefficients) - 1 > MAX_ARC_ENERGY_FIELD_DEGREE:
         raise OperationDomainValidationError(
             location=("pi_inverse_coefficient",),
@@ -320,7 +318,8 @@ def _minimal_polynomial(expr: Any) -> tuple[str, ...]:
             message="the real cyclotomic coefficient exceeds the field-degree bound",
         )
     if any(
-        len(value.lstrip("-")) > MAX_ARC_ENERGY_FIELD_COEFFICIENT_DIGITS
+        len(format_canonical_integer(abs(value)))
+        > MAX_ARC_ENERGY_FIELD_COEFFICIENT_DIGITS
         for value in coefficients
     ):
         raise OperationDomainValidationError(
@@ -338,9 +337,7 @@ def _binding_in_field(
     record: RealNumberFieldEmbeddingRecord,
 ) -> SimpleNumberFieldRealEmbeddingBinding:
     if expr == 0:
-        element_coordinates = (
-            CanonicalRational(num="0", den="1"),
-        ) * presentation.degree
+        element_coordinates = (CanonicalRational(num=0, den=1),) * presentation.degree
     else:
         algebraic = sympy.to_number_field(expr, alpha)
         descending = tuple(algebraic.coeffs())
@@ -450,8 +447,10 @@ def verify_unit_circle_arc_energy(claim: UnitCircleArcEnergyResult) -> bool:
 def _laurent_coefficients(source: HermitianLaurentPolynomial) -> dict[int, Fraction]:
     for term in source.terms:
         if (
-            len(term.coefficient.num.lstrip("-")) > MAX_FEJER_RIESZ_COMPONENT_DIGITS
-            or len(term.coefficient.den) > MAX_FEJER_RIESZ_COMPONENT_DIGITS
+            len(format_canonical_integer(abs(term.coefficient.num)))
+            > MAX_FEJER_RIESZ_COMPONENT_DIGITS
+            or len(format_canonical_integer(term.coefficient.den))
+            > MAX_FEJER_RIESZ_COMPONENT_DIGITS
         ):
             raise OperationResourceAdmissionError(
                 location=("source", "terms"),

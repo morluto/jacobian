@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from sympy.ntheory.factor_ import factorint
 
-from jacobian.canonical import format_canonical_integer
 from jacobian.math.number_theory._r_full_enumerate import (
     enumerate_r_full,
     enumerate_r_full_numbers,
@@ -61,22 +62,22 @@ def test_sorted_and_unique() -> None:
 
 def test_operation_round_trip() -> None:
     """The operation model round-trips through the kernel."""
-    request = RFullEnumerateRequest(minimum_exponent=3, cutoff="100")
+    request = RFullEnumerateRequest(minimum_exponent=3, cutoff=100)
     result = enumerate_r_full_numbers(request)
     assert result.minimum_exponent == 3
-    assert result.cutoff == "100"
+    assert result.cutoff == 100
     assert result.count == len(result.family)
 
 
 def test_r2_compatibility() -> None:
     """r=2 result matches the powerful family from #2767."""
-    request = RFullEnumerateRequest(minimum_exponent=2, cutoff="100")
+    request = RFullEnumerateRequest(minimum_exponent=2, cutoff=100)
     result = enumerate_r_full_numbers(request)
-    assert "1" in result.family
-    assert "4" in result.family
-    assert "8" in result.family
-    assert "9" in result.family
-    assert "12" not in result.family
+    assert 1 in result.family
+    assert 4 in result.family
+    assert 8 in result.family
+    assert 9 in result.family
+    assert 12 not in result.family
 
 
 def test_result_requires_one_for_positive_cutoff() -> None:
@@ -84,7 +85,7 @@ def test_result_requires_one_for_positive_cutoff() -> None:
     with pytest.raises(ValueError, match="must begin with 1"):
         RFullEnumerateResult(
             minimum_exponent=2,
-            cutoff="10",
+            cutoff=10,
             count=0,
             family=(),
         )
@@ -116,13 +117,13 @@ def test_native_path_does_not_apply_transport_byte_ceiling() -> None:
 
 def test_large_admitted_cutoff_uses_canonical_integer_formatting() -> None:
     """Large admitted integers do not hit CPython's decimal conversion cap."""
-    cutoff = "1" + "0" * 5_000
+    cutoff = 10**5_000
     result = enumerate_r_full_numbers(
         RFullEnumerateRequest(minimum_exponent=16_000, cutoff=cutoff)
     )
     assert result.cutoff == cutoff
-    assert result.family[0] == "1"
-    assert format_canonical_integer(2**16_000) in result.family
+    assert result.family[0] == 1
+    assert 2**16_000 in result.family
     assert result.count == 611
 
 
@@ -147,7 +148,7 @@ def test_high_exponent_family_uses_mathematical_family_bound() -> None:
     result = enumerate_r_full_numbers(
         RFullEnumerateRequest(
             minimum_exponent=64,
-            cutoff="1" + "0" * 128,
+            cutoff=10**128,
         )
     )
 
@@ -157,21 +158,29 @@ def test_high_exponent_family_uses_mathematical_family_bound() -> None:
 
 def test_result_rejects_oversized_family_member_before_parsing() -> None:
     """Result validation bounds member representations before bigint parsing."""
-    with pytest.raises(ValueError, match="canonical width"):
-        RFullEnumerateResult(
-            minimum_exponent=2,
-            cutoff="10",
-            count=1,
-            family=("9" * 1_000_000,),
+    with pytest.raises(ValueError, match="at most 32769 characters"):
+        RFullEnumerateResult.model_validate_json(
+            json.dumps(
+                {
+                    "minimum_exponent": 2,
+                    "cutoff": "10",
+                    "count": 1,
+                    "family": ["9" * 1_000_000],
+                }
+            )
         )
 
 
 def test_result_rejects_oversized_cutoff_before_parsing() -> None:
     """Result validation bounds cutoff representations before bigint parsing."""
     with pytest.raises(ValueError, match="at most 32769 characters"):
-        RFullEnumerateResult(
-            minimum_exponent=2,
-            cutoff="1" * 1_000_000,
-            count=1,
-            family=("1",),
+        RFullEnumerateResult.model_validate_json(
+            json.dumps(
+                {
+                    "minimum_exponent": 2,
+                    "cutoff": "1" * 1_000_000,
+                    "count": 1,
+                    "family": ["1"],
+                }
+            )
         )

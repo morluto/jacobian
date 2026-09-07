@@ -128,6 +128,8 @@ def test_projective_point_embeds_into_finite_field_restrict_scalars() -> None:
     zero = element(presentation, (0, 0))
     subspace = FiniteDimensionalSubspace(
         presentation=presentation,
+        row_axis=row_axis,
+        column_axis=Axis(name="target", labels=("c",)),
         basis_axis=Axis(name="matrix basis", labels=("B",)),
         basis=(
             AxisBoundMatrix(
@@ -146,9 +148,7 @@ def test_projective_point_embeds_into_finite_field_restrict_scalars() -> None:
         (1, 0),
     )
     assert restricted.matrix.entries == ((1,), (0,))
-    assert (
-        type(direction).model_validate(direction.model_dump(mode="json")) == direction
-    )
+    assert type(direction).model_validate_json(direction.model_dump_json()) == direction
 
 
 def test_projective_point_embedding_requires_explicit_compatible_target() -> None:
@@ -335,7 +335,7 @@ def test_grassmannian_count_lines_in_pg_2_2() -> None:
     result = grassmannian_count(
         request.field_order, request.ambient_dimension, request.subspace_dimension
     )
-    assert result.count == "7"
+    assert result.count == 7
 
 
 def test_grassmannian_count_planes_in_f2_4() -> None:
@@ -345,14 +345,14 @@ def test_grassmannian_count_planes_in_f2_4() -> None:
     result = grassmannian_count(
         request.field_order, request.ambient_dimension, request.subspace_dimension
     )
-    assert result.count == "35"
+    assert result.count == 35
 
 
 def test_grassmannian_count_exact_past_json_integer_range() -> None:
-    """The exact Gaussian-binomial value stays a canonical decimal string."""
+    """The exact Gaussian-binomial value exceeds JavaScript's safe range."""
 
     result = grassmannian_count(2, 15, 7)
-    assert result.count == "246614610741341843"
+    assert result.count == 246614610741341843
     assert int(result.count) > (1 << 53) - 1
 
 
@@ -464,9 +464,9 @@ def test_result_models_remain_structural_only() -> None:
 
     count = grassmannian_count(2, 3, 1)
     payload = count.model_dump()
-    payload["count"] = "8"
+    payload["count"] = 8
     forged_count = type(count).model_validate(payload)
-    assert forged_count.count == "8"
+    assert forged_count.count == 8
 
 
 def test_subspace_rref_is_an_explicit_claim() -> None:

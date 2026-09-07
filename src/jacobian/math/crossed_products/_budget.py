@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.crossed_products.values import (
     MAX_EXPONENT_DIGITS,
@@ -61,7 +60,7 @@ def require_multiplication_budget(
 
     characteristic = left.presentation.characteristic
     coefficient_intermediate = (characteristic - 1) ** 2 + characteristic - 1
-    if len(str(coefficient_intermediate)) > MAX_COEFFICIENT_INTERMEDIATE_DIGITS:
+    if coefficient_intermediate >= 10**MAX_COEFFICIENT_INTERMEDIATE_DIGITS:
         _reject(
             location=("left", "right"),
             code="coefficient_growth_bound",
@@ -70,22 +69,14 @@ def require_multiplication_budget(
 
     if pair_count:
         left_height = _maximum_absolute(
-            tuple(
-                parse_canonical_integer(exponent)
-                for term in left.terms
-                for exponent in term.exponents
-            )
+            tuple(exponent for term in left.terms for exponent in term.exponents)
         )
         right_height = _maximum_absolute(
-            tuple(
-                parse_canonical_integer(exponent)
-                for term in right.terms
-                for exponent in term.exponents
-            )
+            tuple(exponent for term in right.terms for exponent in term.exponents)
         )
         action_height = _maximum_absolute(
             tuple(
-                parse_canonical_integer(entry)
+                entry
                 for matrix in left.presentation.action_matrices
                 for row in matrix
                 for entry in row
@@ -93,7 +84,7 @@ def require_multiplication_budget(
         )
         cocycle_height = _maximum_absolute(
             tuple(
-                parse_canonical_integer(entry)
+                entry
                 for row in left.presentation.cocycle_table
                 for vector in row
                 for entry in vector
@@ -104,7 +95,7 @@ def require_multiplication_budget(
         exponent_height = (
             left_height + dimension * action_height * right_height + cocycle_height
         )
-        if len(str(exponent_height)) > MAX_EXPONENT_DIGITS:
+        if exponent_height >= 10**MAX_EXPONENT_DIGITS:
             _reject(
                 location=("left", "right"),
                 code="exponent_growth_bound",

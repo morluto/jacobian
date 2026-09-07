@@ -125,7 +125,7 @@ def test_standard_real_cyclotomic_field_and_embedding_are_fixed_by_conductor() -
     result = energy((1, 1), Fraction(0), Fraction(1, 8))
     binding = result.pi_inverse_coefficient
     assert result.cyclotomic_conductor == 8
-    assert binding.element.presentation.coefficients_descending == ("1", "0", "-2")
+    assert binding.element.presentation.coefficients_descending == (1, 0, -2)
     assert tuple(
         value.as_fraction() for value in binding.element.coefficients_ascending
     ) == (Fraction(0), Fraction(1, 2))
@@ -216,7 +216,7 @@ def test_arc_admission_bounds_exact_coefficient_growth_before_expansion() -> Non
 def test_serialized_claim_forgery_is_structural_but_fails_verification() -> None:
     native = energy((1, 1), Fraction(-1, 4), Fraction(1, 4))
     assert not verify_unit_circle_arc_energy(
-        native.model_copy(update={"pi_inverse_coefficient": None})  # type: ignore[arg-type]
+        native.model_copy(update={"pi_inverse_coefficient": None})
     )
     payload = json.loads(native.model_dump_json())
     payload["rational_part"] = {"num": "2", "den": "1"}

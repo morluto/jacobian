@@ -17,11 +17,7 @@ from pydantic.json_schema import JsonSchemaValue
 
 from jacobian._models import StrictModel
 from jacobian.math.number_theory._models import (
-    MAX_INTEGER_DIGITS,
     _validation_error,
-)
-from jacobian.math.number_theory.modular_polynomials import (
-    _INTEGER as _TERM_INTEGER,
 )
 from jacobian.math.number_theory.modular_polynomials import (
     ModularPolynomialTerm as _ModularPolynomialTerm,
@@ -84,9 +80,6 @@ def _residue_image_term_schema() -> JsonSchemaValue:
     """Project the shared term schema onto residue-image admission."""
 
     schema = _ModularPolynomialTerm.model_json_schema()
-    coefficient = schema["properties"]["coefficient"]
-    coefficient["maxLength"] = MAX_INTEGER_DIGITS
-    coefficient["pattern"] = _TERM_INTEGER.pattern
     exponents = schema["properties"]["exponents"]
     exponents["maxItems"] = _MAX_RESIDUE_VARIABLES
     exponents["items"]["maximum"] = _MAX_RESIDUE_EXPONENT

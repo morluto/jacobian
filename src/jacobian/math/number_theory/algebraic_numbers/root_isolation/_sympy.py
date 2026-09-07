@@ -6,7 +6,6 @@ import sympy
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math._root_isolation import strict_root_count
 from jacobian.math.number_theory.algebraic_numbers.real import (
@@ -51,22 +50,19 @@ def compute_root_isolation(request: UnivariatePolynomialRequest) -> RootIsolatio
         if owning_factor.eval(lower) == 0:
             left_roots -= 1
         algebraic_value = RealAlgebraicValue._from_admitted_polynomial(
-            polynomial=tuple(
-                format_canonical_integer(coefficient)
-                for coefficient in factor_coefficients
-            ),
+            polynomial=tuple(factor_coefficients),
             real_root_index=left_roots,
         )
         roots.append(
             RootIsolationEntry(
                 isolating_interval=(
                     CanonicalRational(
-                        num=format_canonical_integer(sympy.Rational(lower).p),
-                        den=format_canonical_integer(sympy.Rational(lower).q),
+                        num=int(sympy.Rational(lower).p),
+                        den=int(sympy.Rational(lower).q),
                     ),
                     CanonicalRational(
-                        num=format_canonical_integer(sympy.Rational(upper).p),
-                        den=format_canonical_integer(sympy.Rational(upper).q),
+                        num=int(sympy.Rational(upper).p),
+                        den=int(sympy.Rational(upper).q),
                     ),
                 ),
                 multiplicity=source_multiplicity,

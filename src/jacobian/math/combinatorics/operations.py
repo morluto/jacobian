@@ -11,10 +11,6 @@ from typing import Literal, NoReturn
 
 from jacobian._exact import CanonicalRational
 from jacobian._execution import bind_request_deadline, current_request_execution
-from jacobian.canonical import (
-    format_canonical_integer,
-    parse_canonical_integer,
-)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics._counting_process import evaluate_count
 from jacobian.math.combinatorics._progression_hypergraph_models import (
@@ -170,28 +166,35 @@ def _bind_counting_deadline() -> None:
     bind_request_deadline(started + 120.0)
 
 
-def _canonical_count(operation: str, n: int, k: int) -> str:
-    return evaluate_count(operation, n, k)
+def _canonical_count(operation: str, n: int, k: int) -> int:
+    value = evaluate_count(operation, n, k)
+    sign = -1 if value.startswith("-") else 1
+    digits = value[1:] if sign < 0 else value
+    first_width = len(digits) % 9 or 9
+    result = int(digits[:first_width])
+    for offset in range(first_width, len(digits), 9):
+        result = result * 1_000_000_000 + int(digits[offset : offset + 9])
+    return sign * result
 
 
-def canonical_binomial(n: int, k: int) -> str:
+def canonical_binomial(n: int, k: int) -> int:
     """Return the canonical decimal of ``C(n, k)`` after admission."""
 
     first = _bounded_sparse_counting_index(n, name="n")
     second = _bounded_sparse_counting_index(k, name="k")
     if second > first:
-        return "0"
+        return 0
     _admit_cancelled_binomial_count(first, second)
     return _canonical_count("comb", first, second)
 
 
-def canonical_permutations(n: int, k: int) -> str:
+def canonical_permutations(n: int, k: int) -> int:
     """Return the canonical decimal of ``P(n, k)`` after admission."""
 
     first = _bounded_sparse_counting_index(n, name="n")
     second = _bounded_sparse_counting_index(k, name="k")
     if second > first:
-        return "0"
+        return 0
     _admit_multiplicative_count(
         maximum_factor=first,
         steps=second,
@@ -200,15 +203,15 @@ def canonical_permutations(n: int, k: int) -> str:
     return _canonical_count("perm", first, second)
 
 
-def canonical_compositions(n: int, k: int) -> str:
+def canonical_compositions(n: int, k: int) -> int:
     """Return the canonical decimal of the composition count after admission."""
 
     total = _bounded_sparse_counting_index(n, name="n")
     parts = _bounded_sparse_counting_index(k, name="k")
     if total == parts == 0:
-        return "1"
+        return 1
     if parts == 0 or parts > total:
-        return "0"
+        return 0
     _admit_cancelled_binomial_count(total - 1, parts - 1)
     return _canonical_count("comb", total - 1, parts - 1)
 
@@ -265,7 +268,7 @@ def factorial(n: int) -> int:
 def binomial(n: int, k: int) -> int:
     """Return the exact binomial coefficient, with zero for ``k > n``."""
 
-    return parse_canonical_integer(canonical_binomial(n, k))
+    return canonical_binomial(n, k)
 
 
 def multinomial(values: tuple[int, ...]) -> int:
@@ -302,7 +305,7 @@ def multinomial(values: tuple[int, ...]) -> int:
 def permutations(n: int, k: int) -> int:
     """Return the exact number of ordered ``k``-selections from ``n``."""
 
-    return parse_canonical_integer(canonical_permutations(n, k))
+    return canonical_permutations(n, k)
 
 
 def central_binomial(n: int) -> int:
@@ -315,7 +318,7 @@ def central_binomial(n: int) -> int:
 def compositions(n: int, k: int) -> int:
     """Count ordered compositions of ``n`` into ``k`` positive parts."""
 
-    return parse_canonical_integer(canonical_compositions(n, k))
+    return canonical_compositions(n, k)
 
 
 def bell_number(n: int) -> int:
@@ -464,8 +467,8 @@ def progression_hypergraph(group_order: int) -> ProgressionHypergraphResult:
 
 def _wire(value: Fraction) -> CanonicalRational:
     return CanonicalRational(
-        num=format_canonical_integer(value.numerator),
-        den=format_canonical_integer(value.denominator),
+        num=value.numerator,
+        den=value.denominator,
     )
 
 
@@ -481,18 +484,7 @@ def _canonical_fractions(
         if not isinstance(value, CanonicalRational):
             return None
         _require_bounded_rational(value, max_digits=max_digits, label=label)
-        if type(value.num) is not str or type(value.den) is not str:
-            return None
-        numerator = parse_canonical_integer(value.num)
-        denominator = parse_canonical_integer(value.den)
-        if denominator <= 0:
-            return None
-        fraction = Fraction(numerator, denominator)
-        if value.num != format_canonical_integer(
-            fraction.numerator
-        ) or value.den != format_canonical_integer(fraction.denominator):
-            return None
-        fractions.append(fraction)
+        fractions.append(value.as_fraction())
     return tuple(fractions)
 
 
@@ -697,7 +689,7 @@ def rational_generating_function_coefficients(
     numerator: tuple[CanonicalRational, ...],
     denominator: tuple[CanonicalRational, ...],
     coefficient_convention: Literal["ASCENDING_POWERS_OF_X"],
-    expansion_point: Literal["0"],
+    expansion_point: int,
     truncation_order: int,
 ) -> RationalGeneratingFunctionCoefficientsResult:
     """Expand ``N(x)/D(x)`` through one bounded exact truncation order."""
@@ -708,7 +700,7 @@ def rational_generating_function_coefficients(
             code="combinatorics.generating_function_convention",
             message="unsupported generating-function coefficient convention",
         )
-    if expansion_point != "0":
+    if expansion_point != 0:
         raise OperationDomainValidationError(
             location=("expansion_point",),
             code="combinatorics.generating_function_expansion_point",
@@ -776,7 +768,7 @@ def verify_rational_generating_function_coefficients(
             type(order) is not int
             or not 1 <= order <= MAX_RATIONAL_SERIES_TRUNCATION_ORDER
             or claim.coefficient_convention != "ASCENDING_POWERS_OF_X"
-            or claim.expansion_point != "0"
+            or claim.expansion_point != 0
             or not isinstance(series, TruncatedSeries)
             or series.variable != "x"
             or type(series.truncation_order) is not int

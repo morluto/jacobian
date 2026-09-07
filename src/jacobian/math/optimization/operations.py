@@ -40,7 +40,7 @@ def _wire(values: tuple[Fraction, ...], digits: int) -> tuple[CanonicalRational,
         denominator = format_canonical_integer(value.denominator)
         if max(len(numerator.lstrip("-")), len(denominator)) > digits:
             _execution_failure()
-        result.append(CanonicalRational(num=numerator, den=denominator))
+        result.append(CanonicalRational(num=value.numerator, den=value.denominator))
     return tuple(result)
 
 
@@ -181,24 +181,18 @@ def _linear_program_admitted(
     width, height = len(program.variables), len(program.rhs)
     zero = Fraction()
     for i, (row, rhs) in enumerate(zip(program.coefficients, program.rhs, strict=True)):
-        if not any(v.num != "0" for v in row) and rhs.num != "0":
+        if not any(v.num != 0 for v in row) and rhs.num != 0:
             witness = [zero] * height
-            witness[i] = Fraction(1 if rhs.num.startswith("-") else -1)
+            witness[i] = Fraction(1 if rhs.num < 0 else -1)
             return _certify_infeasible(program, tuple(witness), digits)
     if len(admission.components) > 1:
         return _component_programs(program, admission)
     columns = admission.columns
     active_rows = tuple(
-        i
-        for i, row in enumerate(program.coefficients)
-        if any(v.num != "0" for v in row)
+        i for i, row in enumerate(program.coefficients) if any(v.num != 0 for v in row)
     )
     zero_ray = next(
-        (
-            j
-            for j, c in enumerate(program.objective)
-            if j not in columns and c.num.startswith("-")
-        ),
+        (j for j, c in enumerate(program.objective) if j not in columns and c.num < 0),
         None,
     )
     if not columns:

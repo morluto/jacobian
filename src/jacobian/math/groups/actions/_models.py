@@ -7,7 +7,7 @@ from typing import Annotated, Self
 from pydantic import AfterValidator, Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import NativeInteger
+from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
 
 MAX_DOMAIN_SIZE = 50
@@ -55,7 +55,7 @@ def _require_polya_coefficient(value: int) -> int:
 
 
 PolyaCoefficient = Annotated[
-    NativeInteger,
+    ExactInteger,
     AfterValidator(_require_polya_coefficient),
 ]
 PolyaMonomial = Annotated[

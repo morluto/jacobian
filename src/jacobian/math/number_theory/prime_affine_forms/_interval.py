@@ -4,11 +4,10 @@ from __future__ import annotations
 
 from typing import Annotated, Self
 
-from pydantic import Field, StrictInt, StringConstraints, model_validator
+from pydantic import Field, StrictInt, model_validator
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import DecimalIntegerEncoding
 from jacobian._models import StrictModel
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.number_theory.affine_forms.values import MAX_AFFINE_COMPONENT_DIGITS
 from jacobian.math.number_theory.prime_affine_forms._admissibility import (
     _admit_primitive_tuple,
@@ -31,16 +30,16 @@ MAX_INTERVAL_ENUMERATION_CELLS = 65_536
 # Endpoint syntax is neutral canonical integer grammar. Its effective size is
 # bounded from the source before parsing, so cancellation intervals are not
 # rejected by a fixed syntax cap.
-IntervalEndpointInteger = CanonicalInteger
+IntervalEndpointInteger = Annotated[int, DecimalIntegerEncoding(max_digits=257)]
 DeterministicPrimeInteger = Annotated[
-    CanonicalInteger,
-    StringConstraints(max_length=20, strict=True),
+    int,
+    DecimalIntegerEncoding(max_digits=20),
 ]
 
 
-def _parse_interval(lower: str, upper: str) -> tuple[int, int, int]:
-    lower_value = parse_canonical_integer(lower)
-    upper_value = parse_canonical_integer(upper)
+def _parse_interval(lower: int, upper: int) -> tuple[int, int, int]:
+    lower_value = lower
+    upper_value = upper
     if lower_value > upper_value:
         raise _validation_error(
             "interval lower endpoint must not exceed upper endpoint"
@@ -50,7 +49,7 @@ def _parse_interval(lower: str, upper: str) -> tuple[int, int, int]:
 
 def require_bounded_affine_endpoints(
     source: PrimeAffineTuple,
-    *values: str,
+    *values: int,
     label: str,
 ) -> None:
     """Reject endpoints that cannot yield a bounded affine value before parsing.
@@ -63,11 +62,11 @@ def require_bounded_affine_endpoints(
     maximum_digits = (
         max(
             MAX_AFFINE_COMPONENT_DIGITS,
-            *(len(form.constant.lstrip("-")) for form in source.forms),
+            *(_digits(form.constant) for form in source.forms),
         )
         + 1
     )
-    if any(len(value.lstrip("-")) > maximum_digits for value in values):
+    if any(_digits(value) > maximum_digits for value in values):
         raise _validation_error(
             f"{label} endpoint exceeds the {maximum_digits}-digit "
             "source-sensitive pre-parse bound"
@@ -103,8 +102,8 @@ class PrimeAffineIntervalCountRequest(StrictModel):
 
 def _admit_interval_count(
     source: PrimeAffineTuple,
-    lower_text: str,
-    upper_text: str,
+    lower_text: int,
+    upper_text: int,
 ) -> tuple[int, int, int, int]:
     _admit_primitive_tuple(source)
     require_bounded_affine_endpoints(source, lower_text, upper_text, label="interval")
@@ -121,8 +120,8 @@ def _admit_interval_count(
 
 def _admit_interval_enumerate(
     source: PrimeAffineTuple,
-    lower_text: str,
-    upper_text: str,
+    lower_text: int,
+    upper_text: int,
 ) -> tuple[int, int, int]:
     lower, upper, interval_size, _value_digits = _admit_interval_count(
         source, lower_text, upper_text
@@ -177,8 +176,8 @@ class PrimePatternIntervalCountResult(StrictModel):
         if self.match_count > interval_size:
             raise _validation_error("match_count cannot exceed interval_size")
         if self.first_match is not None and self.last_match is not None:
-            first = parse_canonical_integer(self.first_match)
-            last = parse_canonical_integer(self.last_match)
+            first = self.first_match
+            last = self.last_match
             if not lower <= first <= last <= upper:
                 raise _validation_error("match endpoints must lie in interval order")
         return self
@@ -188,14 +187,14 @@ class PrimePatternIntervalCountResult(StrictModel):
         cls,
         *,
         source: PrimeAffineTuple,
-        lower: str,
-        upper: str,
+        lower: int,
+        upper: int,
         count: int,
         first: int | None,
         last: int | None,
     ) -> Self:
-        lower_value = parse_canonical_integer(lower)
-        upper_value = parse_canonical_integer(upper)
+        lower_value = lower
+        upper_value = upper
         interval_size = upper_value - lower_value + 1
         return cls.model_construct(
             source=source,
@@ -204,8 +203,8 @@ class PrimePatternIntervalCountResult(StrictModel):
             interval_size=interval_size,
             affine_values_examined=interval_size * source.form_count,
             match_count=count,
-            first_match=None if first is None else format_canonical_integer(first),
-            last_match=None if last is None else format_canonical_integer(last),
+            first_match=first,
+            last_match=last,
         )
 
 
@@ -229,8 +228,8 @@ class PrimePatternIntervalEnumerateResult(StrictModel):
         lower, upper, interval_size = _parse_interval(self.lower, self.upper)
         actual = tuple(
             (
-                parse_canonical_integer(match.parameter),
-                tuple(parse_canonical_integer(value) for value in match.prime_values),
+                match.parameter,
+                tuple(match.prime_values),
             )
             for match in self.matches
         )
@@ -261,12 +260,12 @@ class PrimePatternIntervalEnumerateResult(StrictModel):
         cls,
         *,
         source: PrimeAffineTuple,
-        lower: str,
-        upper: str,
+        lower: int,
+        upper: int,
         matches: tuple[tuple[int, tuple[int, ...]], ...],
     ) -> Self:
-        lower_value = parse_canonical_integer(lower)
-        upper_value = parse_canonical_integer(upper)
+        lower_value = lower
+        upper_value = upper
         interval_size = upper_value - lower_value + 1
         return cls.model_construct(
             source=source,
@@ -276,10 +275,8 @@ class PrimePatternIntervalEnumerateResult(StrictModel):
             affine_values_examined=interval_size * source.form_count,
             matches=tuple(
                 PrimePatternMatch(
-                    parameter=format_canonical_integer(parameter),
-                    prime_values=tuple(
-                        format_canonical_integer(value) for value in values
-                    ),
+                    parameter=parameter,
+                    prime_values=tuple(values),
                 )
                 for parameter, values in matches
             ),

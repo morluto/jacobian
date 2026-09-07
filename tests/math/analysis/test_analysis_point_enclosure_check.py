@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from fractions import Fraction
 from importlib import import_module
 from typing import Any, cast
@@ -28,11 +29,11 @@ from jacobian.math.analysis._point_enclosure_check import (
 )
 
 _LOG_137_80_LOWER = ExactDyadic(
-    mantissa="183056359489241580409096213252691826307",
+    mantissa=183056359489241580409096213252691826307,
     exponent=-128,
 )
 _LOG_137_80_UPPER = ExactDyadic(
-    mantissa="183056359489241580409096213252691826313",
+    mantissa=183056359489241580409096213252691826313,
     exponent=-128,
 )
 
@@ -64,17 +65,19 @@ def _request(
     *,
     precision_bits: int = 128,
 ) -> PointEnclosureCheckRequest:
-    return PointEnclosureCheckRequest.model_validate(
-        {
-            "enclosure": _claim(
-                function,
-                numerator,
-                denominator,
-                lower,
-                upper,
-                precision_bits=precision_bits,
-            )
-        }
+    return PointEnclosureCheckRequest.model_validate_json(
+        json.dumps(
+            {
+                "enclosure": _claim(
+                    function,
+                    numerator,
+                    denominator,
+                    lower,
+                    upper,
+                    precision_bits=precision_bits,
+                )
+            }
+        )
     )
 
 
@@ -105,11 +108,11 @@ def _integer_dyadic(value: int) -> ExactDyadic:
 
 def _normalized_dyadic(mantissa: int, exponent: int) -> ExactDyadic:
     if mantissa == 0:
-        return ExactDyadic(mantissa="0", exponent=0)
+        return ExactDyadic(mantissa=0, exponent=0)
     while mantissa % 2 == 0:
         mantissa //= 2
         exponent += 1
-    return ExactDyadic(mantissa=str(mantissa), exponent=exponent)
+    return ExactDyadic(mantissa=mantissa, exponent=exponent)
 
 
 def test_log_137_80_accepts_the_source_bound_arb_enclosure() -> None:
@@ -134,19 +137,21 @@ def test_log_137_80_accepts_the_source_bound_arb_enclosure() -> None:
 
 def test_producer_enclosure_crosses_the_checker_boundary_unchanged() -> None:
     producer_result = _point_enclosure(
-        ArbPointEnclosureRequest.model_validate(
-            {
-                "function": "LOG",
-                "argument": {"num": "137", "den": "80"},
-                "precision_bits": 128,
-            }
+        ArbPointEnclosureRequest.model_validate_json(
+            json.dumps(
+                {
+                    "function": "LOG",
+                    "argument": {"num": "137", "den": "80"},
+                    "precision_bits": 128,
+                }
+            )
         )
     )
     serialized = producer_result.model_dump(mode="json")
     assert serialized["status"] == "ENCLOSED"
 
-    request = PointEnclosureCheckRequest.model_validate(
-        {"enclosure": serialized["enclosure"]}
+    request = PointEnclosureCheckRequest.model_validate_json(
+        json.dumps({"enclosure": serialized["enclosure"]})
     )
     outcome = _check_point_enclosure(request)
 
@@ -162,12 +167,14 @@ def test_producer_enclosure_crosses_the_checker_boundary_unchanged() -> None:
 
 def test_nonfinite_outcome_retains_the_request_source() -> None:
     nonfinite = _point_enclosure(
-        ArbPointEnclosureRequest.model_validate(
-            {
-                "function": "LOG",
-                "argument": {"num": "-1", "den": "1"},
-                "precision_bits": 128,
-            }
+        ArbPointEnclosureRequest.model_validate_json(
+            json.dumps(
+                {
+                    "function": "LOG",
+                    "argument": {"num": "-1", "den": "1"},
+                    "precision_bits": 128,
+                }
+            )
         )
     )
     assert nonfinite.status == "NONFINITE"
@@ -184,12 +191,14 @@ def test_nonfinite_outcome_retains_the_request_source() -> None:
 
 
 def test_unrepresentable_point_enclosure_is_an_execution_failure() -> None:
-    request = ArbPointEnclosureRequest.model_validate(
-        {
-            "function": "EXP",
-            "argument": {"num": "1" + "0" * 17, "den": "1"},
-            "precision_bits": 32,
-        }
+    request = ArbPointEnclosureRequest.model_validate_json(
+        json.dumps(
+            {
+                "function": "EXP",
+                "argument": {"num": "1" + "0" * 17, "den": "1"},
+                "precision_bits": 32,
+            }
+        )
     )
 
     with pytest.raises(RuntimeError, match="outside the interoperable dyadic"):
@@ -198,12 +207,14 @@ def test_unrepresentable_point_enclosure_is_an_execution_failure() -> None:
 
 def test_enclosed_result_must_restate_the_retained_request_source() -> None:
     producer_result = _point_enclosure(
-        ArbPointEnclosureRequest.model_validate(
-            {
-                "function": "SQRT",
-                "argument": {"num": "2", "den": "1"},
-                "precision_bits": 128,
-            }
+        ArbPointEnclosureRequest.model_validate_json(
+            json.dumps(
+                {
+                    "function": "SQRT",
+                    "argument": {"num": "2", "den": "1"},
+                    "precision_bits": 128,
+                }
+            )
         )
     )
     assert producer_result.status == "ENCLOSED"
@@ -314,7 +325,7 @@ def test_reversed_and_provably_excluding_intervals_are_typed_rejections() -> Non
         "137",
         "80",
         _integer_dyadic(0),
-        ExactDyadic(mantissa="1", exponent=-1),
+        ExactDyadic(mantissa=1, exponent=-1),
     )
 
     assert reversed_result.outcome == "REJECTED"
@@ -324,7 +335,7 @@ def test_reversed_and_provably_excluding_intervals_are_typed_rejections() -> Non
 
 def test_log_overlapping_claim_at_the_series_cap_is_a_non_result() -> None:
     near_log_two = ExactDyadic(
-        mantissa=(
+        mantissa=int(
             "9293584264128987901384440660653081117630633404975079641076009770"
             "5783645736330756451676239180675129869308430405969526366636736757"
             "98576024949780480621393957"
@@ -338,7 +349,7 @@ def test_log_overlapping_claim_at_the_series_cap_is_a_non_result() -> None:
         "2",
         "1",
         _integer_dyadic(0),
-        ExactDyadic(mantissa="1", exponent=-1),
+        ExactDyadic(mantissa=1, exponent=-1),
     )
     unresolved = _run("LOG", "2", "1", near_log_two, near_log_two, precision_bits=512)
 
@@ -416,7 +427,9 @@ def test_result_parsing_is_structural_and_checker_verifies_claims() -> None:
 
     forged_verdict = result.model_dump(mode="json")
     forged_verdict["outcome"] = "REJECTED"
-    parsed_forged_verdict = PointEnclosureCheckResult.model_validate(forged_verdict)
+    parsed_forged_verdict = PointEnclosureCheckResult.model_validate_json(
+        json.dumps(forged_verdict)
+    )
     assert parsed_forged_verdict.outcome == "REJECTED"
     assert (
         _check_point_enclosure(
@@ -427,7 +440,9 @@ def test_result_parsing_is_structural_and_checker_verifies_claims() -> None:
 
     tampered_interval = result.model_dump(mode="json")
     tampered_interval["enclosure"]["upper"] = {"mantissa": "1", "exponent": -1}
-    parsed_interval = PointEnclosureCheckResult.model_validate(tampered_interval)
+    parsed_interval = PointEnclosureCheckResult.model_validate_json(
+        json.dumps(tampered_interval)
+    )
     assert (
         _check_point_enclosure(
             PointEnclosureCheckRequest(enclosure=parsed_interval.enclosure)
@@ -437,7 +452,9 @@ def test_result_parsing_is_structural_and_checker_verifies_claims() -> None:
 
     wrong_function = result.model_dump(mode="json")
     wrong_function["enclosure"]["function"] = "SQRT"
-    parsed_function = PointEnclosureCheckResult.model_validate(wrong_function)
+    parsed_function = PointEnclosureCheckResult.model_validate_json(
+        json.dumps(wrong_function)
+    )
     assert (
         _check_point_enclosure(
             PointEnclosureCheckRequest(enclosure=parsed_function.enclosure)
@@ -447,7 +464,9 @@ def test_result_parsing_is_structural_and_checker_verifies_claims() -> None:
 
     wrong_argument = result.model_dump(mode="json")
     wrong_argument["enclosure"]["argument"] = {"num": "0", "den": "1"}
-    parsed_argument = PointEnclosureCheckResult.model_validate(wrong_argument)
+    parsed_argument = PointEnclosureCheckResult.model_validate_json(
+        json.dumps(wrong_argument)
+    )
     assert (
         _check_point_enclosure(
             PointEnclosureCheckRequest(enclosure=parsed_argument.enclosure)
@@ -471,11 +490,11 @@ def test_request_accepts_exact_structural_bounds_and_result_fits_output_budget()
         "1" + "0" * 127,
         "1",
         ExactDyadic(
-            mantissa=largest_negative_mantissa,
+            mantissa=int(largest_negative_mantissa),
             exponent=MAX_POINT_CHECK_DYADIC_EXPONENT,
         ),
         ExactDyadic(
-            mantissa=largest_positive_mantissa,
+            mantissa=int(largest_positive_mantissa),
             exponent=MAX_POINT_CHECK_DYADIC_EXPONENT,
         ),
         precision_bits=4096,
@@ -499,7 +518,7 @@ def test_request_rejects_values_immediately_over_each_structural_bound() -> None
             "1",
             "1",
             _integer_dyadic(0),
-            ExactDyadic(mantissa="1", exponent=MAX_POINT_CHECK_DYADIC_EXPONENT + 1),
+            ExactDyadic(mantissa=1, exponent=MAX_POINT_CHECK_DYADIC_EXPONENT + 1),
         )
     with analysis_validation_error():
         _request(
@@ -511,7 +530,7 @@ def test_request_rejects_values_immediately_over_each_structural_bound() -> None
             precision_bits=4097,
         )
     with analysis_validation_error():
-        ExactDyadic(mantissa="9" * 1_236, exponent=0)
+        ExactDyadic(mantissa=9 * 1_236, exponent=0)
 
 
 @pytest.mark.parametrize(

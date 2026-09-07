@@ -40,8 +40,8 @@ from jacobian.math.matrices.values import (
 )
 
 
-def _q(value: Fraction) -> dict[str, str]:
-    return q(value.numerator, value.denominator)
+def _q(value: Fraction) -> dict[str, int]:
+    return {"num": value.numerator, "den": value.denominator}
 
 
 def _system(
@@ -82,16 +82,17 @@ def _inconsistent_system() -> dict[str, object]:
 
 
 def test_sparse_rational_matrix_round_trips_through_its_dense_owner() -> None:
-    dense = RationalMatrix.model_validate(
-        {
-            "entries": [
-                [_q(Fraction(0)), _q(Fraction(2)), _q(Fraction(0))],
-                [_q(Fraction(0)), _q(Fraction(0)), _q(Fraction(0))],
-            ]
-        }
+    dense = RationalMatrix(
+        entries=tuple(
+            tuple(CanonicalRational(**_q(Fraction(value))) for value in row)
+            for row in (
+                (Fraction(0), Fraction(2), Fraction(0)),
+                (Fraction(0), Fraction(0), Fraction(0)),
+            )
+        )
     )
     sparse = sparse_rational_matrix_from_dense(dense)
-    restored = SparseRationalMatrix.model_validate(sparse.model_dump(mode="json"))
+    restored = SparseRationalMatrix.model_validate_json(sparse.model_dump_json())
 
     assert restored.row_count == 2
     assert restored.column_count == 3
@@ -141,7 +142,7 @@ def test_sparse_rational_matrix_rejects_entries_on_a_zero_axis(
     payload: dict[str, object],
 ) -> None:
     with pytest.raises(ValidationError, match="coordinates exceed declared axes"):
-        SparseRationalMatrix.model_validate(payload)
+        SparseRationalMatrix.model_validate_json(json.dumps(payload))
 
 
 @pytest.mark.parametrize(
@@ -246,10 +247,11 @@ def test_solution_uses_flint_for_a_dense_support_crossover() -> None:
     rows = 518
     columns = 298
     entries = [
-        {"row": 0, "column": column, "value": q(1000)} for column in range(columns)
+        {"row": 0, "column": column, "value": _q(Fraction(1000))}
+        for column in range(columns)
     ]
     entries.extend(
-        {"row": row, "column": 0, "value": q(1000)} for row in range(1, rows)
+        {"row": row, "column": 0, "value": _q(Fraction(1000))} for row in range(1, rows)
     )
     system = LinearRationalSystem.model_validate(
         {
@@ -259,7 +261,7 @@ def test_solution_uses_flint_for_a_dense_support_crossover() -> None:
                 "column_count": columns,
                 "entries": entries,
             },
-            "rhs": [q(1000) for _ in range(rows)],
+            "rhs": [_q(Fraction(1000)) for _ in range(rows)],
         }
     )
 
@@ -540,7 +542,7 @@ def test_sparse_diagonal_system_scales_beyond_the_dense_32_axis() -> None:
     )
     assert result.status == "SOLUTION"
     assert result.values == tuple(
-        CanonicalRational(num="1", den="1") for _ in range(dimension)
+        CanonicalRational(num=1, den=1) for _ in range(dimension)
     )
 
 
@@ -578,8 +580,8 @@ def test_result_sensitive_admission_keeps_a_wide_one_row_system() -> None:
     )
     assert result.values is not None
     assert len(result.values) == dimension
-    assert result.values[-1] == CanonicalRational(num="7", den="1")
-    assert all(value.num == "0" for value in result.values[:-1])
+    assert result.values[-1] == CanonicalRational(num=7, den=1)
+    assert all(value.num == 0 for value in result.values[:-1])
 
 
 @pytest.mark.parametrize(
@@ -639,8 +641,8 @@ def test_result_deserialization_does_not_repeat_semantic_admission() -> None:
             "rhs": [_q(Fraction(0)) for _ in range(dimension)],
         }
     )
-    restored = LinearRationalSolutionResult.model_validate(
-        {"system": system.model_dump(mode="json"), "status": "INCONSISTENT"}
+    restored = LinearRationalSolutionResult.model_validate_json(
+        json.dumps({"system": system.model_dump(mode="json"), "status": "INCONSISTENT"})
     )
     assert restored.system == system
 
@@ -711,7 +713,7 @@ def test_solution_admission_excludes_dual_witness_height() -> None:
     result = compute_rational_solution(LinearRationalSolutionFindRequest(system=system))
 
     assert result.status == "SOLUTION"
-    assert result.values == (CanonicalRational(num="1", den="1"),)
+    assert result.values == (CanonicalRational(num=1, den=1),)
 
 
 def test_inconsistency_admission_still_enforces_witness_height() -> None:
@@ -758,8 +760,10 @@ def test_solution_verifier_checks_ax_equals_b_after_serialization() -> None:
     )
     forged = result.model_dump(mode="json")
     assert forged["values"] is not None
-    forged["values"][0] = _q(Fraction(0))
-    assert not verify_solution(LinearRationalSolutionResult.model_validate(forged))
+    forged["values"][0] = q(0)
+    assert not verify_solution(
+        LinearRationalSolutionResult.model_validate_json(json.dumps(forged))
+    )
     negative = compute_rational_solution(
         LinearRationalSolutionFindRequest(
             system=LinearRationalSystem.model_validate(_inconsistent_system())
@@ -780,10 +784,10 @@ def test_inconsistency_verifier_checks_witness_and_pairing() -> None:
     )
     forged = result.model_dump(mode="json")
     assert forged["left_witness"] is not None
-    forged["left_witness"][0] = _q(Fraction(0))
-    forged["left_witness"][1] = _q(Fraction(0))
+    forged["left_witness"][0] = q(0)
+    forged["left_witness"][1] = q(0)
     assert not verify_inconsistency(
-        LinearRationalInconsistencyResult.model_validate(forged)
+        LinearRationalInconsistencyResult.model_validate_json(json.dumps(forged))
     )
     consistent = compute_rational_inconsistency(
         LinearRationalInconsistencyFindRequest(

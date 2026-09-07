@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from jacobian.canonical import format_canonical_integer
 from jacobian.math.analysis._models import (
     MAX_DYADIC_EXPONENT,
     ExactDyadic,
@@ -27,11 +26,11 @@ def dyadic_endpoints(
         return None
     return (
         ExactDyadic(
-            mantissa=format_canonical_integer(int(lower_mantissa)),
+            mantissa=int(lower_mantissa),
             exponent=int(lower_exponent),
         ),
         ExactDyadic(
-            mantissa=format_canonical_integer(int(upper_mantissa)),
+            mantissa=int(upper_mantissa),
             exponent=int(upper_exponent),
         ),
     )

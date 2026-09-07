@@ -22,7 +22,7 @@ from jacobian.math.probability.operations import (
 
 
 def _q(numerator: int, denominator: int = 1) -> CanonicalRational:
-    return CanonicalRational(num=str(numerator), den=str(denominator))
+    return CanonicalRational(num=numerator, den=denominator)
 
 
 def _distribution() -> FiniteRationalDistribution:

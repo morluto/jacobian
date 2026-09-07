@@ -18,6 +18,7 @@ from jacobian._execution import (
     OperationExecutionTimeoutError,
     request_execution,
 )
+from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.analysis.intervals import ClosedRationalInterval, RationalBox
 from jacobian.math.number_theory.algebraic_numbers.real import RealAlgebraicValue
@@ -167,9 +168,9 @@ def _coordinate_value(
     constant = index + 1 if degree == 1 else _SAMPLE_PRIMES[index]
     return RealAlgebraicValue._from_admitted_polynomial(
         polynomial=(
-            str(leading_coefficient),
-            *("0" for _ in range(degree - 1)),
-            str(-constant),
+            leading_coefficient,
+            *(0 for _ in range(degree - 1)),
+            -constant,
         ),
         real_root_index=1 if degree % 2 == 0 else 0,
     )
@@ -222,7 +223,7 @@ def _formula_marker_point(index: int) -> IsolatedRealPlanePoint:
                     * 2
                     * (coefficient_base + (adjustment if degree == 15 else 0))
                 )
-            coefficients.append(str(coefficient))
+            coefficients.append(coefficient)
         return RealAlgebraicValue._from_admitted_polynomial(
             polynomial=tuple(coefficients),
             real_root_index=0,
@@ -360,7 +361,7 @@ def test_term_and_total_term_boundaries_reject_before_backend_execution() -> Non
         }
     )
     with pytest.raises(ValidationError, match="term"):
-        PlaneComponentProfileRequest.model_validate(raw)
+        PlaneComponentProfileRequest.model_validate_json(encode_strict_json(raw))
 
     boundary_counts = (12, 12, 12, 12)
     assert sum(boundary_counts) == MAX_PLANE_COMPONENT_TOTAL_TERMS
@@ -410,7 +411,7 @@ def test_plane_dimension_polynomial_and_sign_row_bounds_reject_raw_excess() -> N
         raw["semialgebraic_set"]["sign_conditions"][0]
     )
     with pytest.raises(ValidationError, match="sign table"):
-        PlaneComponentProfileRequest.model_validate(raw)
+        PlaneComponentProfileRequest.model_validate_json(encode_strict_json(raw))
 
 
 def test_sample_count_degree_and_height_envelopes_are_preflighted() -> None:
@@ -422,7 +423,7 @@ def test_sample_count_degree_and_height_envelopes_are_preflighted() -> None:
     raw = _whole_plane_request((), samples=samples).model_dump(mode="json")
     raw["samples"].append(raw["samples"][0])
     with pytest.raises(ValidationError, match="samples"):
-        PlaneComponentProfileRequest.model_validate(raw)
+        PlaneComponentProfileRequest.model_validate_json(encode_strict_json(raw))
 
     degree_boundary = _sample(0, degree=MAX_PLANE_COMPONENT_SAMPLE_DEGREE)
     assert (
@@ -438,7 +439,9 @@ def test_sample_count_degree_and_height_envelopes_are_preflighted() -> None:
         "-2",
     ]
     with pytest.raises(ValidationError, match="coordinate polynomial"):
-        PlaneComponentProfileRequest.model_validate(raw_over_degree)
+        PlaneComponentProfileRequest.model_validate_json(
+            encode_strict_json(raw_over_degree)
+        )
 
     height_boundary = _sample(
         0,
@@ -455,7 +458,9 @@ def test_sample_count_degree_and_height_envelopes_are_preflighted() -> None:
         10**MAX_PLANE_COMPONENT_SAMPLE_COEFFICIENT_DIGITS
     )
     with pytest.raises(ValidationError, match="coefficient"):
-        PlaneComponentProfileRequest.model_validate(raw_over_height)
+        PlaneComponentProfileRequest.model_validate_json(
+            encode_strict_json(raw_over_height)
+        )
 
 
 def test_projection_cell_envelope_distinguishes_admitted_and_rejected_families() -> (

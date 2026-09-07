@@ -98,9 +98,9 @@ def test_constant_work_integer_operations_admit_safe_integer_scale() -> None:
 
 def test_factorial_valuation_accepts_large_canonical_argument() -> None:
     n = 10**100
-    result = compute_factorial_valuation(FactorialValuationRequest(n=str(n), base="2"))
+    result = compute_factorial_valuation(FactorialValuationRequest(n=n, base=2))
 
-    assert result.n == str(n)
+    assert result.n == n
     assert int(result.valuation) == n - n.bit_count()
 
 
@@ -109,16 +109,16 @@ def test_scalar_binomial_prime_valuation(
     n: int, k: int, prime: int, expected: int
 ) -> None:
     result = compute_binomial_prime_valuation(
-        BinomialPrimeValuationRequest(n=str(n), k=str(k), prime=str(prime))
+        BinomialPrimeValuationRequest(n=n, k=k, prime=prime)
     )
 
-    assert result.valuation == str(expected)
+    assert result.valuation == expected
 
 
 def test_source_scale_binomial_valuation_matches_factorial_identity() -> None:
     n, k, prime = 99_999_937, 40_000_001, 2
     result = compute_binomial_prime_valuation(
-        BinomialPrimeValuationRequest(n=str(n), k=str(k), prime=str(prime))
+        BinomialPrimeValuationRequest(n=n, k=k, prime=prime)
     )
 
     def factorial_exponent(value: int) -> int:
@@ -134,18 +134,18 @@ def test_kummer_carries_match_direct_binomial_factorization() -> None:
         for k in range(n + 1):
             for prime in (2, 3, 5, 7):
                 result = compute_binomial_prime_valuation(
-                    BinomialPrimeValuationRequest(n=str(n), k=str(k), prime=str(prime))
+                    BinomialPrimeValuationRequest(n=n, k=k, prime=prime)
                 )
                 value = math.comb(n, k)
                 expected = 0
                 while value % prime == 0:
                     value //= prime
                     expected += 1
-                assert result.valuation == str(expected)
+                assert result.valuation == expected
 
 
 def test_scalar_binomial_valuation_rejects_composite_base() -> None:
-    request = BinomialPrimeValuationRequest(n="20", k="7", prime="4")
+    request = BinomialPrimeValuationRequest(n=20, k=7, prime=4)
     with pytest.raises(OperationDomainValidationError, match="prime must be prime"):
         compute_binomial_prime_valuation(request)
 
@@ -162,11 +162,11 @@ def test_valuation_request_schemas_publish_semantic_bounds() -> None:
 
 
 def test_valuation_admission_follows_copied_request_fields() -> None:
-    request = BinomialPrimeValuationRequest(n="8", k="3", prime="2")
-    assert compute_binomial_prime_valuation(request).valuation == "3"
-    copied = request.model_copy(update={"n": "20", "k": "7"})
-    assert compute_binomial_prime_valuation(copied).valuation == "4"
-    assert copied.n == "20"
+    request = BinomialPrimeValuationRequest(n=8, k=3, prime=2)
+    assert compute_binomial_prime_valuation(request).valuation == 3
+    copied = request.model_copy(update={"n": 20, "k": 7})
+    assert compute_binomial_prime_valuation(copied).valuation == 4
+    assert copied.n == 20
 
 
 def test_chinese_remainder_rejects_combined_modulus_beyond_result_budget() -> None:
@@ -211,28 +211,28 @@ def test_chinese_remainder_admits_boundary_system_and_solves_exactly() -> None:
     request = ChineseRemainderRequest(residues=(1,) * len(moduli), moduli=tuple(moduli))
     result = chinese_remainder(request.residues, request.moduli)
 
-    assert result.residue == "1"
-    assert result.modulus == str(combined)
+    assert result.residue == 1
+    assert result.modulus == combined
     assert int(result.modulus) == lcm(*moduli)
-    assert len(result.modulus) <= MAX_INTEGER_DIGITS
+    assert len(str(result.modulus)) <= MAX_INTEGER_DIGITS
 
 
 def test_in_process_factorization_dependencies_have_small_input_bounds() -> None:
     for model, payload in (
         (PositiveIntegerRequest, {"n": 10_001}),
         (NonnegativeIntegerRequest, {"n": 10_001}),
-        (ModularValueRequest, {"value": "2", "modulus": 1_000_001}),
-        # Eight digits exceeds the published base digit ceiling (len("1000000")).
-        (FactorialValuationRequest, {"n": "1", "base": "10000000"}),
-        (FactorizationRequest, {"value": "1" + "0" * 20}),
+        (ModularValueRequest, {"value": 2, "modulus": 1_000_001}),
     ):
         with expect_validation("number_theory."):
             model.model_validate(payload)
+    request = FactorialValuationRequest(n=1, base=1_000_001)
+    with pytest.raises(OperationDomainValidationError):
+        compute_factorial_valuation(request)
 
 
 def test_primality_keeps_its_operation_specific_input_bound() -> None:
-    with expect_validation("string_too_long"):
-        PrimalityRequest(value="1" + "0" * MAX_INTEGER_DIGITS)
+    with expect_validation("exact_integer."):
+        PrimalityRequest(value=10**MAX_INTEGER_DIGITS)
 
 
 def test_direct_factorization_contract_schemas_preserve_their_envelopes() -> None:
@@ -244,9 +244,9 @@ def test_direct_factorization_contract_schemas_preserve_their_envelopes() -> Non
         "value"
     ]
 
-    assert request_value["maxLength"] == MAX_DIRECT_FACTORIZATION_DIGITS
-    assert divisor_source["maxLength"] == MAX_DIRECT_FACTORIZATION_DIGITS
-    assert factorization_source["maxLength"] == MAX_DIRECT_FACTORIZATION_DIGITS
+    assert request_value["maxLength"] == MAX_DIRECT_FACTORIZATION_DIGITS + 1
+    assert divisor_source["maxLength"] == MAX_DIRECT_FACTORIZATION_DIGITS + 1
+    assert factorization_source["maxLength"] == MAX_DIRECT_FACTORIZATION_DIGITS + 1
 
 
 def test_modular_residue_image_contract_round_trips_canonical_assignments() -> None:
@@ -258,7 +258,7 @@ def test_modular_residue_image_contract_round_trips_canonical_assignments() -> N
         {
             "modulus": 5,
             "variables": [{"name": "x", "residues": [0, 1, 2]}],
-            "terms": [{"coefficient": "2", "exponents": [2]}],
+            "terms": [{"coefficient": 2, "exponents": [2]}],
         }
     )
 
@@ -283,25 +283,25 @@ def test_modular_residue_image_contract_round_trips_canonical_assignments() -> N
 
 
 def test_divisor_list_result_preserves_structural_constraints() -> None:
-    full = DivisorListResult(value="12", divisors=("1", "2", "3", "4", "6", "12"))
+    full = DivisorListResult(value=12, divisors=(1, 2, 3, 4, 6, 12))
     assert full.convention == "ALL_POSITIVE_DIVISORS"
     proper = DivisorListResult(
-        value="-12",
-        divisors=("1", "2", "3", "4", "6"),
+        value=-12,
+        divisors=(1, 2, 3, 4, 6),
         convention="PROPER_DIVISORS",
     )
-    assert proper.divisors == ("1", "2", "3", "4", "6")
+    assert proper.divisors == (1, 2, 3, 4, 6)
 
-    one_full = DivisorListResult(value="1", divisors=("1",))
-    assert one_full.divisors == ("1",)
+    one_full = DivisorListResult(value=1, divisors=(1,))
+    assert one_full.divisors == (1,)
     one_proper = DivisorListResult(
-        value="1",
+        value=1,
         divisors=(),
         convention="PROPER_DIVISORS",
     )
     assert one_proper.divisors == ()
-    minus_one = DivisorListResult(value="-1", divisors=("1",))
-    assert minus_one.divisors == ("1",)
+    minus_one = DivisorListResult(value=-1, divisors=(1,))
+    assert minus_one.divisors == (1,)
 
 
 def test_divisor_list_result_admits_twenty_digit_source_boundary() -> None:
@@ -312,14 +312,14 @@ def test_divisor_list_result_admits_twenty_digit_source_boundary() -> None:
     prime = 99_999_999_999_999_999_989
     assert len(str(prime)) == MAX_DIRECT_FACTORIZATION_DIGITS == 20
     assert isprime(prime)
-    result = DivisorListResult(value=str(prime), divisors=("1", str(prime)))
-    assert result.value == str(prime)
+    result = DivisorListResult(value=prime, divisors=(1, prime))
+    assert result.value == prime
 
     with expect_validation("number_theory."):
         DivisorListResult.model_validate(
             {
-                "value": "10" + "0" * 19,
-                "divisors": ["1"],
+                "value": 10,
+                "divisors": [-1],
                 "convention": "ALL_POSITIVE_DIVISORS",
             }
         )
@@ -328,8 +328,8 @@ def test_divisor_list_result_admits_twenty_digit_source_boundary() -> None:
 def test_divisor_list_result_rejects_mutations() -> None:
     with expect_validation("number_theory."):
         DivisorListResult(
-            value="12",
-            divisors=("12", "6", "4", "3", "2", "1"),
+            value=12,
+            divisors=(12, 6, 4, 3, 2, 1),
             convention="ALL_POSITIVE_DIVISORS",
         )
 
@@ -341,7 +341,7 @@ def test_direct_factorization_admits_nonzero_values_in_models() -> None:
         factorize_primes,
     )
 
-    request = FactorizationRequest(value="0")
+    request = FactorizationRequest(value=0)
     for operation in (enumerate_divisors, enumerate_proper_divisors, factorize_primes):
         with pytest.raises(OperationDomainValidationError, match="zero"):
             operation(request)
@@ -351,15 +351,15 @@ def test_prime_factorization_result_accepts_kernel_shape() -> None:
     from jacobian.math.number_theory._integer_models import PrimePower
 
     result = PrimeFactorizationResult(
-        value="72",
-        factors=(PrimePower(prime="2", power=3), PrimePower(prime="3", power=2)),
+        value=72,
+        factors=(PrimePower(prime=2, power=3), PrimePower(prime=3, power=2)),
     )
-    assert result.factors[0].prime == "2"
-    empty_one = PrimeFactorizationResult(value="1", factors=())
-    minus_one = PrimeFactorizationResult(value="-1", factors=())
+    assert result.factors[0].prime == 2
+    empty_one = PrimeFactorizationResult(value=1, factors=())
+    minus_one = PrimeFactorizationResult(value=-1, factors=())
     assert not empty_one.factors and not minus_one.factors
     prime_power = PrimeFactorizationResult(
-        value="-8", factors=(PrimePower(prime="2", power=3),)
+        value=-8, factors=(PrimePower(prime=2, power=3),)
     )
     assert prime_power.factors[0].power == 3
 
@@ -369,13 +369,13 @@ def test_prime_factorization_result_preserves_structural_constraints() -> None:
 
     with expect_validation("number_theory."):
         PrimeFactorizationResult(
-            value="12",
-            factors=(PrimePower(prime="3", power=1), PrimePower(prime="2", power=2)),
+            value=12,
+            factors=(PrimePower(prime=3, power=1), PrimePower(prime=2, power=2)),
         )
     with expect_validation("number_theory."):
         PrimeFactorizationResult(
-            value="4",
-            factors=(PrimePower(prime="2", power=1), PrimePower(prime="2", power=2)),
+            value=4,
+            factors=(PrimePower(prime=2, power=1), PrimePower(prime=2, power=2)),
         )
 
 
@@ -385,11 +385,11 @@ def test_prime_factorization_result_rejects_source_beyond_worker_envelope() -> N
     width = 256
     exponent = 849
     assert len(str(2**exponent)) == width > MAX_DIRECT_FACTORIZATION_DIGITS
-    with expect_validation("string_too_long"):
+    with expect_validation("int_type"):
         PrimeFactorizationResult.model_validate(
             {
                 "value": str(2**exponent),
-                "factors": [{"prime": "2", "power": exponent}],
+                "factors": [{"prime": 2, "power": exponent}],
             }
         )
 
@@ -405,7 +405,7 @@ def test_producer_results_serialize_and_reconstruct() -> None:
         factorize_primes,
     )
 
-    request = FactorizationRequest(value="72")
+    request = FactorizationRequest(value=72)
     factorization = PrimeFactorizationResult.model_validate(
         factorize_primes(request).model_dump()
     )
@@ -426,9 +426,9 @@ def test_divisor_enumeration_uses_the_twenty_digit_source_envelope() -> None:
     from jacobian.math.number_theory._factorization_kernels import enumerate_divisors
 
     # This is the least integer with more than the former 4096-divisor ceiling.
-    result = enumerate_divisors(FactorizationRequest(value="146659312800"))
+    result = enumerate_divisors(FactorizationRequest(value=146659312800))
 
     assert result.status == "COMPLETE"
     assert len(result.divisors) == 4320
-    assert result.divisors[0] == "1"
+    assert result.divisors[0] == 1
     assert result.divisors[-1] == result.value

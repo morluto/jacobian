@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 from typing import Any, TypedDict
 
@@ -14,6 +15,7 @@ from jacobian.math.polynomials.sum_of_squares._models import (
     GramCertificateRequest,
     GramCertificateResult,
     SOSDecompositionCheckRequest,
+    SOSDecompositionCheckResult,
 )
 from jacobian.math.polynomials.sum_of_squares.operations import (
     check_gram_certificate,
@@ -32,11 +34,11 @@ class RationalWire(TypedDict):
 type GramEntries = tuple[tuple[RationalWire, ...], ...]
 
 
-def _check_sos(request: SOSDecompositionCheckRequest):
+def _check_sos(request: SOSDecompositionCheckRequest) -> SOSDecompositionCheckResult:
     return check_sos_decomposition(request.polynomial, request.summands)
 
 
-def _check_gram(request: GramCertificateRequest):
+def _check_gram(request: GramCertificateRequest) -> GramCertificateResult:
     return check_gram_certificate(
         request.polynomial, request.monomial_basis, request.gram_matrix
     )
@@ -52,7 +54,7 @@ def _poly(
             "polynomial": {
                 "terms": [
                     {
-                        "coefficient": {"num": str(n), "den": str(d)},
+                        "coefficient": {"num": (n), "den": (d)},
                         "exponents": list(e),
                     }
                     for n, d, e in terms
@@ -213,15 +215,17 @@ class TestGramCertificateAdmission:
     def _request(self, gram_entries: GramEntries) -> GramCertificateRequest:
         p = _poly(("x",), (1, 1, (2,)), (1, 1, (0,)))
         basis = (_poly(("x",), (1, 1, (1,))), _poly(("x",), (1, 1, (0,))))
-        return GramCertificateRequest.model_validate(
-            {
-                "polynomial": p.model_dump(mode="json"),
-                "monomial_basis": [item.model_dump(mode="json") for item in basis],
-                "gram_matrix": {
-                    "domain": "QQ",
-                    "entries": gram_entries,
-                },
-            }
+        return GramCertificateRequest.model_validate_json(
+            json.dumps(
+                {
+                    "polynomial": p.model_dump(mode="json"),
+                    "monomial_basis": [item.model_dump(mode="json") for item in basis],
+                    "gram_matrix": {
+                        "domain": "QQ",
+                        "entries": gram_entries,
+                    },
+                }
+            )
         )
 
     @staticmethod
@@ -255,23 +259,25 @@ class TestGramCertificateAdmission:
                 (self._entry("0"), self._entry("1")),
             ),
         }
-        request = GramCertificateRequest.model_validate(
-            {
-                "polynomial": _poly(("x",), (1, 1, (2,)), (1, 1, (0,))).model_dump(
-                    mode="json"
-                ),
-                "monomial_basis": [
-                    _poly(("x",), (1, 1, (1,))).model_dump(mode="json"),
-                    _poly(("x",), (1, 1, (0,))).model_dump(mode="json"),
-                ],
-                "gram_matrix": payload,
-            }
+        request = GramCertificateRequest.model_validate_json(
+            json.dumps(
+                {
+                    "polynomial": _poly(("x",), (1, 1, (2,)), (1, 1, (0,))).model_dump(
+                        mode="json"
+                    ),
+                    "monomial_basis": [
+                        _poly(("x",), (1, 1, (1,))).model_dump(mode="json"),
+                        _poly(("x",), (1, 1, (0,))).model_dump(mode="json"),
+                    ],
+                    "gram_matrix": payload,
+                }
+            )
         )
-        assert request.gram_matrix.entries[0][0].num == "1"
+        assert request.gram_matrix.entries[0][0].num == 1
         # The returned value is a canonical RationalMatrix that downstream
         # matrix consumers accept unchanged.
-        MatrixRankRequest.model_validate(
-            {"matrix": request.gram_matrix.model_dump(mode="json")}
+        MatrixRankRequest.model_validate_json(
+            json.dumps({"matrix": request.gram_matrix.model_dump(mode="json")})
         )
 
     def test_non_square_side_vs_basis_rejected(self) -> None:
@@ -299,7 +305,7 @@ class TestGramCertificateAdmission:
                 (self._entry("0"), self._entry("1")),
             )
         )
-        assert request.gram_matrix.entries[0][0].num == edge
+        assert request.gram_matrix.entries[0][0].num == 10**128 - 1
 
 
 class TestGramCertificateResultStructure:
@@ -309,24 +315,28 @@ class TestGramCertificateResultStructure:
         p = _poly(("x",), (1, 1, (2,)), (1, 1, (0,)))
         basis = (_poly(("x",), (1, 1, (1,))), _poly(("x",), (1, 1, (0,))))
         request = _check_gram(
-            GramCertificateRequest.model_validate(
-                {
-                    "polynomial": p.model_dump(mode="json"),
-                    "monomial_basis": [item.model_dump(mode="json") for item in basis],
-                    "gram_matrix": {
-                        "domain": "QQ",
-                        "entries": (
-                            (
-                                {"num": "1", "den": "1"},
-                                {"num": "0", "den": "1"},
+            GramCertificateRequest.model_validate_json(
+                json.dumps(
+                    {
+                        "polynomial": p.model_dump(mode="json"),
+                        "monomial_basis": [
+                            item.model_dump(mode="json") for item in basis
+                        ],
+                        "gram_matrix": {
+                            "domain": "QQ",
+                            "entries": (
+                                (
+                                    {"num": "1", "den": "1"},
+                                    {"num": "0", "den": "1"},
+                                ),
+                                (
+                                    {"num": "0", "den": "1"},
+                                    {"num": "1", "den": "1"},
+                                ),
                             ),
-                            (
-                                {"num": "0", "den": "1"},
-                                {"num": "1", "den": "1"},
-                            ),
-                        ),
-                    },
-                }
+                        },
+                    }
+                )
             )
         )
         return request.model_dump(mode="json")
@@ -347,7 +357,7 @@ class TestGramCertificateResultStructure:
             "entries": [zero_row for _ in range(40)],
         }
         with pytest.raises(ValidationError) as exc_info:
-            GramCertificateResult.model_validate(payload)
+            GramCertificateResult.model_validate_json(json.dumps(payload))
         assert exc_info.value.errors()[0]["type"] == "too_long"
 
     def test_oversized_result_basis_is_rejected_at_field_validation(self) -> None:
@@ -358,7 +368,7 @@ class TestGramCertificateResultStructure:
             _poly(("x",), (1, 1, (k,))).model_dump(mode="json") for k in range(33)
         ]
         with pytest.raises(ValidationError) as exc_info:
-            GramCertificateResult.model_validate(payload)
+            GramCertificateResult.model_validate_json(json.dumps(payload))
         assert exc_info.value.errors()[0]["type"] == "too_long"
 
 
@@ -367,16 +377,18 @@ class TestGramMonomialBasisAdmission:
         p = _poly(("x",), (1, 1, (2,)), (2, 1, (1,)), (1, 1, (0,)))
         with pytest.raises(OperationDomainValidationError) as exc_info:
             _check_gram(
-                GramCertificateRequest.model_validate(
-                    {
-                        "polynomial": p.model_dump(mode="json"),
-                        "monomial_basis": [
-                            _poly(("x",), (1, 1, (1,)), (1, 1, (0,))).model_dump(
-                                mode="json"
-                            )
-                        ],
-                        "gram_matrix": {"entries": (({"num": "1", "den": "1"},),)},
-                    }
+                GramCertificateRequest.model_validate_json(
+                    json.dumps(
+                        {
+                            "polynomial": p.model_dump(mode="json"),
+                            "monomial_basis": [
+                                _poly(("x",), (1, 1, (1,)), (1, 1, (0,))).model_dump(
+                                    mode="json"
+                                )
+                            ],
+                            "gram_matrix": {"entries": (({"num": "1", "den": "1"},),)},
+                        }
+                    )
                 )
             )
         assert exc_info.value.errors()[0]["type"] == "sum_of_squares.basis_monomial"
@@ -385,26 +397,28 @@ class TestGramMonomialBasisAdmission:
         p = _poly(("x",), (2, 1, (2,)), (1, 1, (0,)))
         with pytest.raises(OperationDomainValidationError) as exc_info:
             _check_gram(
-                GramCertificateRequest.model_validate(
-                    {
-                        "polynomial": p.model_dump(mode="json"),
-                        "monomial_basis": [
-                            _poly(("x",), (1, 1, (1,))).model_dump(mode="json"),
-                            _poly(("x",), (1, 1, (1,))).model_dump(mode="json"),
-                        ],
-                        "gram_matrix": {
-                            "entries": (
-                                (
-                                    {"num": "2", "den": "1"},
-                                    {"num": "0", "den": "1"},
-                                ),
-                                (
-                                    {"num": "0", "den": "1"},
-                                    {"num": "1", "den": "1"},
-                                ),
-                            )
-                        },
-                    }
+                GramCertificateRequest.model_validate_json(
+                    json.dumps(
+                        {
+                            "polynomial": p.model_dump(mode="json"),
+                            "monomial_basis": [
+                                _poly(("x",), (1, 1, (1,))).model_dump(mode="json"),
+                                _poly(("x",), (1, 1, (1,))).model_dump(mode="json"),
+                            ],
+                            "gram_matrix": {
+                                "entries": (
+                                    (
+                                        {"num": "2", "den": "1"},
+                                        {"num": "0", "den": "1"},
+                                    ),
+                                    (
+                                        {"num": "0", "den": "1"},
+                                        {"num": "1", "den": "1"},
+                                    ),
+                                )
+                            },
+                        }
+                    )
                 )
             )
         assert exc_info.value.errors()[0]["type"] == "sum_of_squares.basis_distinct"
@@ -416,12 +430,14 @@ class TestExactPsdCriterion:
     def _request(self, gram_entries: GramEntries) -> GramCertificateRequest:
         p = _poly(("x",), (1, 1, (2,)), (1, 1, (0,)))
         basis = (_poly(("x",), (1, 1, (1,))), _poly(("x",), (1, 1, (0,))))
-        return GramCertificateRequest.model_validate(
-            {
-                "polynomial": p.model_dump(mode="json"),
-                "monomial_basis": [item.model_dump(mode="json") for item in basis],
-                "gram_matrix": {"entries": gram_entries},
-            }
+        return GramCertificateRequest.model_validate_json(
+            json.dumps(
+                {
+                    "polynomial": p.model_dump(mode="json"),
+                    "monomial_basis": [item.model_dump(mode="json") for item in basis],
+                    "gram_matrix": {"entries": gram_entries},
+                }
+            )
         )
 
     def test_irreducible_characteristic_polynomial_is_decided(self) -> None:
@@ -441,19 +457,21 @@ class TestExactPsdCriterion:
         ]
         gram = tuple(tuple(entry(v) for v in row) for row in rows)
         result = _check_gram(
-            GramCertificateRequest.model_validate(
-                {
-                    "polynomial": _poly(
-                        ("x",),
-                        (1, 1, (2,)),
-                        (1, 1, (0,)),
-                    ).model_dump(mode="json"),
-                    "monomial_basis": [
-                        _poly(("x",), (1, 1, (k,))).model_dump(mode="json")
-                        for k in range(5)
-                    ],
-                    "gram_matrix": {"entries": gram},
-                }
+            GramCertificateRequest.model_validate_json(
+                json.dumps(
+                    {
+                        "polynomial": _poly(
+                            ("x",),
+                            (1, 1, (2,)),
+                            (1, 1, (0,)),
+                        ).model_dump(mode="json"),
+                        "monomial_basis": [
+                            _poly(("x",), (1, 1, (k,))).model_dump(mode="json")
+                            for k in range(5)
+                        ],
+                        "gram_matrix": {"entries": gram},
+                    }
+                )
             )
         )
         assert result.is_psd is True
@@ -464,14 +482,18 @@ class TestExactPsdCriterion:
 
         gram = ((entry("-1"),),)
         result = _check_gram(
-            GramCertificateRequest.model_validate(
-                {
-                    "polynomial": _poly(("x",), (-1, 1, (2,))).model_dump(mode="json"),
-                    "monomial_basis": [
-                        _poly(("x",), (1, 1, (1,))).model_dump(mode="json")
-                    ],
-                    "gram_matrix": {"entries": gram},
-                }
+            GramCertificateRequest.model_validate_json(
+                json.dumps(
+                    {
+                        "polynomial": _poly(("x",), (-1, 1, (2,))).model_dump(
+                            mode="json"
+                        ),
+                        "monomial_basis": [
+                            _poly(("x",), (1, 1, (1,))).model_dump(mode="json")
+                        ],
+                        "gram_matrix": {"entries": gram},
+                    }
+                )
             )
         )
         assert result.is_psd is False
@@ -492,8 +514,8 @@ class TestSOSCoefficientGrowthAdmission:
             terms = [
                 {
                     "coefficient": {
-                        "num": "1",
-                        "den": str(10**120 + 64 * e + 2 * k + 3),
+                        "num": 1,
+                        "den": 10**120 + 64 * e + 2 * k + 3,
                     },
                     "exponents": [7 - e],
                 }

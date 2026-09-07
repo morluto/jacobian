@@ -9,6 +9,7 @@ from fractions import Fraction
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials.support_geometry._models import (
     MAX_WEIGHTED_COEFFICIENT_DIGITS,
@@ -127,7 +128,7 @@ def _admit_weighted_polynomial(
             ),
         )
     if any(
-        len(component.lstrip("-")) > MAX_WEIGHTED_COEFFICIENT_DIGITS
+        len(format_canonical_integer(abs(component))) > MAX_WEIGHTED_COEFFICIENT_DIGITS
         for term in terms
         for component in (term.coefficient.num, term.coefficient.den)
     ):

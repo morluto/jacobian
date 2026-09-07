@@ -310,7 +310,7 @@ def test_canonical_labels_stay_sorted_across_the_three_digit_boundary() -> None:
     assert result.canonical_graph.graph.vertices == expected_labels
     assert result.canonical_graph.vertex_colors == tuple(sorted(colors))
 
-    ColoredGraphCanonicalizationResult.model_validate(result.model_dump(mode="json"))
+    ColoredGraphCanonicalizationResult.model_validate_json(result.model_dump_json())
 
 
 def test_request_rejects_edge_key_work_before_enumeration() -> None:
@@ -457,7 +457,7 @@ def test_colored_graph_rejects_noncanonical_presentations(
     payload: dict[str, object], message: str
 ) -> None:
     with pytest.raises(ValidationError, match=message):
-        ColoredUndirectedGraph.model_validate(payload)
+        ColoredUndirectedGraph.model_validate_json(json.dumps(payload))
 
 
 def test_schema_explains_alignment_and_work_admission() -> None:

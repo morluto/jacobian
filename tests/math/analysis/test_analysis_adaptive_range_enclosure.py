@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from fractions import Fraction
@@ -68,27 +69,29 @@ def _request(
     max_evaluations: int = 32,
     wall_seconds: int = 30,
 ) -> AdaptiveRangeEnclosureRequest:
-    return AdaptiveRangeEnclosureRequest.model_validate(
-        {
-            "expression": expression,
-            "box": {
-                "variables": [name for name, _, _ in coordinates],
-                "intervals": [
-                    {
-                        "lower": _q(lower.numerator, lower.denominator),
-                        "upper": _q(upper.numerator, upper.denominator),
-                    }
-                    for _, lower, upper in coordinates
-                ],
-            },
-            "target_width": _q(target_width.numerator, target_width.denominator),
-            "precision_bits": precision_bits,
-            "maximum_precision_bits": maximum_precision_bits,
-            "max_leaves": max_leaves,
-            "max_depth": max_depth,
-            "max_evaluations": max_evaluations,
-            "wall_seconds": wall_seconds,
-        }
+    return AdaptiveRangeEnclosureRequest.model_validate_json(
+        json.dumps(
+            {
+                "expression": expression,
+                "box": {
+                    "variables": [name for name, _, _ in coordinates],
+                    "intervals": [
+                        {
+                            "lower": _q(lower.numerator, lower.denominator),
+                            "upper": _q(upper.numerator, upper.denominator),
+                        }
+                        for _, lower, upper in coordinates
+                    ],
+                },
+                "target_width": _q(target_width.numerator, target_width.denominator),
+                "precision_bits": precision_bits,
+                "maximum_precision_bits": maximum_precision_bits,
+                "max_leaves": max_leaves,
+                "max_depth": max_depth,
+                "max_evaluations": max_evaluations,
+                "wall_seconds": wall_seconds,
+            }
+        )
     )
 
 
@@ -328,15 +331,17 @@ def test_reduced_matrix_norm_fixture_needs_refinement_for_one_third_bound() -> N
     }
     source_box = ("x", Fraction(0), Fraction(1, 2))
     one_box = _box_expression_enclosure(
-        IntervalExpressionBoxEnclosureRequest.model_validate(
-            {
-                "expression": expression,
-                "box": {
-                    "variables": ["x"],
-                    "intervals": [{"lower": _q(0), "upper": _q(1, 2)}],
-                },
-                "precision_bits": 128,
-            }
+        IntervalExpressionBoxEnclosureRequest.model_validate_json(
+            json.dumps(
+                {
+                    "expression": expression,
+                    "box": {
+                        "variables": ["x"],
+                        "intervals": [{"lower": _q(0), "upper": _q(1, 2)}],
+                    },
+                    "precision_bits": 128,
+                }
+            )
         )
     )
     result = _run(
@@ -602,11 +607,11 @@ def test_raw_target_and_cross_precision_bounds_reject_before_execution() -> None
         "maximum_precision_bits": 64,
     }
     with analysis_validation_error():
-        AdaptiveRangeEnclosureRequest.model_validate(payload)
+        AdaptiveRangeEnclosureRequest.model_validate_json(json.dumps(payload))
 
     payload["target_width"] = _q(1)
     with analysis_validation_error():
-        AdaptiveRangeEnclosureRequest.model_validate(payload)
+        AdaptiveRangeEnclosureRequest.model_validate_json(json.dumps(payload))
 
 
 @pytest.mark.parametrize("target", [Fraction(0), Fraction(-1)])
@@ -667,8 +672,10 @@ def test_quadratic_full_leaf_boundary_retains_exact_partition_enclosures() -> No
     assert result.disposition.reason == "MAX_LEAVES"
     assert result.evaluations_used == 2047
     assert len(result.leaves) == 1024
-    assert result.enclosure.lower.as_fraction() <= 0
-    assert result.enclosure.upper.as_fraction() >= 1
+    enclosure = result.enclosure
+    assert enclosure is not None
+    assert enclosure.lower.as_fraction() <= 0
+    assert enclosure.upper.as_fraction() >= 1
     for leaf in result.leaves:
         assert isinstance(leaf, AdaptiveRangeLeaf)
         interval = leaf.box.intervals[0]
@@ -797,11 +804,11 @@ def test_adaptive_budget_field_boundaries_are_schema_visible(
         "wall_seconds": 30,
     }
     payload[field] = at_limit
-    AdaptiveRangeEnclosureRequest.model_validate(payload)
+    AdaptiveRangeEnclosureRequest.model_validate_json(json.dumps(payload))
 
     payload[field] = above_limit
     with analysis_validation_error():
-        AdaptiveRangeEnclosureRequest.model_validate(payload)
+        AdaptiveRangeEnclosureRequest.model_validate_json(json.dumps(payload))
 
 
 def test_past_request_context_expires_before_semantic_preflight() -> None:
@@ -861,7 +868,7 @@ def test_derived_midpoint_box_round_trips_into_fixed_box_consumer() -> None:
     assert isinstance(first_leaf, AdaptiveRangeLeaf)
     midpoint = first_leaf.box.intervals[0].upper
     assert midpoint.as_fraction() == Fraction(1, 2 * q)
-    assert len(midpoint.den) == 129
+    assert len(str(midpoint.den)) == 129
 
     parsed = AdaptiveRangeEnclosureResult.model_validate_json(
         result.model_dump_json(), strict=True
@@ -984,7 +991,7 @@ def test_round_trip_rejects_forged_partition_path_structure() -> None:
     payload["leaves"][0]["path"] = [0, 1]
 
     with pytest.raises(ValidationError):
-        AdaptiveRangeEnclosureResult.model_validate(payload)
+        AdaptiveRangeEnclosureResult.model_validate_json(json.dumps(payload))
 
 
 def test_result_deserialization_does_not_reconstruct_partition_boxes() -> None:
@@ -999,7 +1006,7 @@ def test_result_deserialization_does_not_reconstruct_partition_boxes() -> None:
     payload = deepcopy(result.model_dump(mode="json"))
     payload["leaves"][0]["box"]["intervals"][0]["upper"] = _q(1, 3)
 
-    parsed = AdaptiveRangeEnclosureResult.model_validate(payload)
+    parsed = AdaptiveRangeEnclosureResult.model_validate_json(json.dumps(payload))
 
     assert parsed.leaves[0].box.intervals[0].upper.as_fraction() == Fraction(1, 3)
 
@@ -1026,7 +1033,7 @@ def test_result_structural_counters_remain_within_the_request(
     payload[field] = value
 
     with pytest.raises(ValidationError, match=message):
-        AdaptiveRangeEnclosureResult.model_validate(payload)
+        AdaptiveRangeEnclosureResult.model_validate_json(json.dumps(payload))
 
 
 def test_result_preflights_authored_leaf_endpoints_before_fraction_work() -> None:
@@ -1047,7 +1054,7 @@ def test_result_preflights_authored_leaf_endpoints_before_fraction_work() -> Non
     with pytest.raises(
         ValidationError, match=rf"{MAX_RATIONAL_BOX_ENDPOINT_DIGITS}-digit bound"
     ):
-        AdaptiveRangeEnclosureResult.model_validate(payload)
+        AdaptiveRangeEnclosureResult.model_validate_json(json.dumps(payload))
 
 
 def test_result_structurally_bounds_authored_dyadic_exponents() -> None:
@@ -1065,7 +1072,7 @@ def test_result_structurally_bounds_authored_dyadic_exponents() -> None:
     )
 
     with pytest.raises(ValidationError, match="source-and-precision bound"):
-        AdaptiveRangeEnclosureResult.model_validate(payload)
+        AdaptiveRangeEnclosureResult.model_validate_json(json.dumps(payload))
 
 
 def test_result_deserialization_does_not_replay_computed_math(
@@ -1092,7 +1099,7 @@ def test_result_deserialization_does_not_replay_computed_math(
     ):
         monkeypatch.setattr(adaptive, name, replayed)
 
-    parsed = AdaptiveRangeEnclosureResult.model_validate(result.model_dump(mode="json"))
+    parsed = AdaptiveRangeEnclosureResult.model_validate_json(result.model_dump_json())
     assert parsed == result
 
 
@@ -1123,7 +1130,7 @@ def test_domain_unproven_result_cannot_carry_a_global_enclosure() -> None:
     }
 
     with pytest.raises(ValidationError, match="cannot carry a global enclosure"):
-        AdaptiveRangeEnclosureResult.model_validate(payload)
+        AdaptiveRangeEnclosureResult.model_validate_json(json.dumps(payload))
 
 
 def test_domain_failure_evidence_is_bound_to_the_source_expression_node() -> None:
@@ -1150,7 +1157,7 @@ def test_domain_failure_evidence_is_bound_to_the_source_expression_node() -> Non
     payload["leaves"][0]["domain_failure"]["node_path"] = [0]
 
     with pytest.raises(ValidationError, match="does not match the source expression"):
-        AdaptiveRangeEnclosureResult.model_validate(payload)
+        AdaptiveRangeEnclosureResult.model_validate_json(json.dumps(payload))
 
 
 def test_result_schema_has_status_discriminated_conclusion_branches() -> None:
@@ -1226,8 +1233,8 @@ def test_result_schema_and_parser_reject_contradictory_outcome_shapes() -> None:
         max_depth=8,
         max_evaluations=1,
     )
-    concluded_payload = concluded.model_dump(mode="json")
-    uncertain_payload = uncertain.model_dump(mode="json")
+    concluded_payload = json.loads(concluded.model_dump_json())
+    uncertain_payload = json.loads(uncertain.model_dump_json())
     schema = AdaptiveRangeEnclosureResult.model_json_schema()
     Draft202012Validator.check_schema(schema)
     validator = Draft202012Validator(schema)
@@ -1259,12 +1266,14 @@ def test_result_schema_and_parser_reject_contradictory_outcome_shapes() -> None:
     ):
         assert list(validator.iter_errors(forged))
         with pytest.raises(ValidationError):
-            AdaptiveRangeEnclosureResult.model_validate(forged)
+            AdaptiveRangeEnclosureResult.model_validate_json(json.dumps(forged))
 
     target_contradiction = deepcopy(concluded_payload)
     target_contradiction["target_width"] = {"num": "1", "den": "1000000"}
     with pytest.raises(ValidationError, match="TARGET_MET"):
-        AdaptiveRangeEnclosureResult.model_validate(target_contradiction)
+        AdaptiveRangeEnclosureResult.model_validate_json(
+            json.dumps(target_contradiction)
+        )
 
     budget_contradiction = deepcopy(concluded_payload)
     budget_contradiction["disposition"] = {
@@ -1272,4 +1281,6 @@ def test_result_schema_and_parser_reject_contradictory_outcome_shapes() -> None:
         "reason": "MAX_LEAVES",
     }
     with pytest.raises(ValidationError, match="BUDGET_EXHAUSTED"):
-        AdaptiveRangeEnclosureResult.model_validate(budget_contradiction)
+        AdaptiveRangeEnclosureResult.model_validate_json(
+            json.dumps(budget_contradiction)
+        )

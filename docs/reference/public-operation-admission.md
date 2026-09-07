@@ -129,6 +129,30 @@ mathematically valid. Improve the analysis, presolve, or algorithm when needed;
 a compact answer alone does not prove bounded runtime, and increasing a digit
 cap does not repair an estimate that grows needlessly at every step.
 
+### Large integers and large finite groups
+
+Do not use a finite group's cardinality as a universal cost estimate. Exact
+factorization by enumerating every group element genuinely depends on that
+cardinality. Computing a cyclic element's order by gcd/lcm, or classifying a
+compact relation matrix by Smith form, does not enumerate those elements.
+For those operations, analyze coordinate count, relation-matrix dimensions,
+coefficient bit lengths, intermediate growth, and exact output instead.
+Smith diagonal computation and computation of full transformation matrices
+also have different work and output obligations; do not copy a bound between
+them without checking its assumptions.
+
+For example, a one-generator group of order `65537` has a tiny presentation.
+The product of cyclic groups of orders `1000000007` and `1000000009` has a
+normalized cyclic factor `1000000016000000063`, larger than the interoperable
+JSON-number range even though each input modulus fits. The first example
+probes an overly coarse cardinality cap; the second also probes exact output
+representation. Neither example alone proves a general Smith complexity bound.
+
+Repair [integer encoding](value-interoperability.md#exact-integers-representation-is-not-a-work-limit)
+and algorithm admission separately, then test them together through the public
+operation. Merely raising a cardinality constant, permitting larger JSON
+numbers, or timing one private-kernel success does not finish the repair.
+
 When changing admission, freeze the motivating rejected input and compare the
 estimate with a bounded diagnostic execution of the selected kernel. Record
 the reduced problem, measured work or time, available intermediate/output

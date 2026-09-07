@@ -49,12 +49,7 @@ def test_zero_sum_schema_publishes_coupled_admission_and_dispatches() -> None:
     payload = _small_game()
     assert not list(Draft202012Validator(schema).iter_errors(payload))
     output = invoke_operation(operation.operation_id, payload, Catalog.open()).output
-    assert set(output) == {
-        "payoff_matrix",
-        "row_strategy",
-        "col_strategy",
-        "value",
-    }
+    assert set(output) == {"payoff_matrix", "row_strategy", "col_strategy", "value"}
     assert len(output["row_strategy"]) == 2
     assert len(output["col_strategy"]) == 2
 
@@ -96,7 +91,7 @@ def test_best_response_declaration_publishes_an_operation_neutral_schema() -> No
         "(max(n_rows, n_cols) + 2) * (sum of payoff denominator decimal digits "
         "+ maximum payoff numerator decimal digits)"
     ) not in best_response_schema["description"]
-    assert str(MAX_EXACT_EQUILIBRIUM_WORK) not in str(best_response_schema)
+    assert str(MAX_EXACT_EQUILIBRIUM_WORK) not in best_response_schema["description"]
 
     assert "linear program" in equilibrium_schema["description"]
     assert equilibrium_schema["x-jacobian-bounds"]["max_exact_equilibrium_work"] == (

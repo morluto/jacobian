@@ -6,7 +6,6 @@ import math
 from collections import Counter
 from dataclasses import dataclass
 
-from jacobian.canonical import format_canonical_integer
 from jacobian.math.combinatorics.additive.values import (
     MAX_SUBSET_SUM_ITEMS,
     MAX_SUBSET_SUM_PROFILE_ENTRIES,
@@ -51,10 +50,10 @@ def subset_sum_profile_envelope(
     # state. Result deserialization does not repeat the dynamic program.
     transition_bound = 2 * item_count * support_bound
     maximum_sum_characters = max(
-        len(format_canonical_integer(negative_sum)),
-        len(format_canonical_integer(positive_sum)),
+        len(str(abs(negative_sum))),
+        len(str(abs(positive_sum))),
     )
-    maximum_multiplicity_digits = len(format_canonical_integer(total_subsets))
+    maximum_multiplicity_digits = len(str(total_subsets))
     if support_bound > MAX_SUBSET_SUM_PROFILE_ENTRIES:
         raise ValueError(
             "predicted subset-sum support exceeds the "

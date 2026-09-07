@@ -6,7 +6,7 @@ from fractions import Fraction
 from typing import Any, Literal
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import parse_canonical_integer
 from jacobian.math.number_theory.algebraic_numbers.real import RationalIsolatingInterval
 from jacobian.math.number_theory.number_fields._real_embedding_order_protocol import (
     SelectedImageWorkerComplete,
@@ -29,7 +29,7 @@ def compute_selected_image_isolation(
     field = request.field
     alpha = sympy.Symbol("alpha")
     polynomial = sympy.Poly.from_list(
-        [parse_canonical_integer(value) for value in field.coefficients_descending],
+        list(field.coefficients_descending),
         gens=alpha,
         domain=sympy.QQ,
     )
@@ -52,8 +52,8 @@ def compute_selected_image_isolation(
             kind="complete",
             order="EQ",
             isolating_interval=RationalIsolatingInterval(
-                lower=CanonicalRational(num="0", den="1"),
-                upper=CanonicalRational(num="0", den="1"),
+                lower=CanonicalRational(num=0, den=1),
+                upper=CanonicalRational(num=0, den=1),
                 interval_type="SINGLETON",
             ),
         )
@@ -66,12 +66,12 @@ def compute_selected_image_isolation(
         order: Literal["LT", "GT"] = "LT" if rational < 0 else "GT"
         rational_interval = RationalIsolatingInterval(
             lower=CanonicalRational(
-                num=format_canonical_integer(rational.numerator),
-                den=format_canonical_integer(rational.denominator),
+                num=rational.numerator,
+                den=rational.denominator,
             ),
             upper=CanonicalRational(
-                num=format_canonical_integer(rational.numerator),
-                den=format_canonical_integer(rational.denominator),
+                num=rational.numerator,
+                den=rational.denominator,
             ),
             interval_type="SINGLETON",
         )
@@ -148,12 +148,12 @@ def compute_selected_image_isolation(
         order=final_order,
         isolating_interval=RationalIsolatingInterval(
             lower=CanonicalRational(
-                num=format_canonical_integer(lower_fraction.numerator),
-                den=format_canonical_integer(lower_fraction.denominator),
+                num=lower_fraction.numerator,
+                den=lower_fraction.denominator,
             ),
             upper=CanonicalRational(
-                num=format_canonical_integer(upper_fraction.numerator),
-                den=format_canonical_integer(upper_fraction.denominator),
+                num=upper_fraction.numerator,
+                den=upper_fraction.denominator,
             ),
             interval_type="SINGLETON" if lower_fraction == upper_fraction else "OPEN",
         ),

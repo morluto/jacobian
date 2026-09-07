@@ -1,5 +1,6 @@
 """Contract and mathematical-property tests for Galois operations."""
 
+import json
 from typing import Any
 
 import pytest
@@ -284,14 +285,14 @@ def test_galois_claims_retain_source_through_json_and_reject_forgery() -> None:
     forged_group_payload = solvable_decoded.model_dump(mode="json")
     degree = len(forged_group_payload["group"]["root_axis"]["indices"])
     forged_group_payload["group"]["generators"] = [list(range(degree))]
-    forged_group = SolvableResult.model_validate(forged_group_payload)
+    forged_group = SolvableResult.model_validate_json(json.dumps(forged_group_payload))
     assert not verify_solvable(forged_group)
 
     reducible_payload = decoded.model_dump(mode="json")
     reducible_payload["group"]["root_axis"]["polynomial"] = _rational_polynomial(
         (0, 0, 0, 0, 0, 1)
     ).model_dump(mode="json")
-    unadmitted = GaloisGroupResult.model_validate(reducible_payload)
+    unadmitted = GaloisGroupResult.model_validate_json(json.dumps(reducible_payload))
     assert not verify_galois_group(unadmitted)
 
 
@@ -318,7 +319,7 @@ def _rational_polynomial(coefficients: tuple[int, ...]) -> RationalPolynomial:
             "polynomial": {
                 "terms": [
                     {
-                        "coefficient": {"num": str(value), "den": "1"},
+                        "coefficient": {"num": value, "den": 1},
                         "exponents": [index],
                     }
                     for index, value in reversed(tuple(enumerate(coefficients)))

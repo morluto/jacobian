@@ -35,7 +35,11 @@ def _smith_stdout_limit(matrix: IntegerMatrix) -> int:
     columns = len(matrix.entries[0]) if matrix.entries else 0
     rank = min(rows, columns)
     source_digits = max(
-        (len(value.lstrip("-")) for row in matrix.entries for value in row),
+        (
+            len(format_canonical_integer(value).lstrip("-"))
+            for row in matrix.entries
+            for value in row
+        ),
         default=1,
     )
     # Every nonzero Smith factor divides a rank minor. Leibniz gives the safe
@@ -71,10 +75,7 @@ def smith_normal_form_killable(
     payload = encode_strict_json(
         {
             "entries": [
-                [
-                    format_canonical_integer(parse_canonical_integer(value))
-                    for value in row
-                ]
+                [format_canonical_integer(value) for value in row]
                 for row in matrix.entries
             ]
         },
@@ -161,9 +162,7 @@ def smith_normal_form_killable(
     canonical_normal_form = IntegerMatrix(
         entries=tuple(
             tuple(
-                format_canonical_integer(factors[row])
-                if row == column and row < rank
-                else "0"
+                factors[row] if row == column and row < rank else 0
                 for column in range(dimension)
             )
             for row in range(dimension)
@@ -173,7 +172,7 @@ def smith_normal_form_killable(
     return SmithNormalForm(
         normal_form=canonical_normal_form,
         rank=rank,
-        invariant_factors=tuple(format_canonical_integer(value) for value in factors),
+        invariant_factors=factors,
     )
 
 

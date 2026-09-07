@@ -26,25 +26,25 @@ from jacobian.math.number_theory.operations import (
 def test_native_preimage_operations_accept_canonical_values() -> None:
     sigma_result = native_ksigma_preimage(2, 8)
     profile_result = native_p_adic_interval_profile(0, 10, 2)
-    assert sigma_result.preimages == ("3",)
-    assert profile_result.total_valuation == "8"
+    assert sigma_result.preimages == (3,)
+    assert profile_result.total_valuation == 8
 
 
 def test_ksigma_preimage_preserves_multiplier_contract() -> None:
-    result = compute_ksigma_preimage(KSigmaPreimageRequest(k=2, target_value="8"))
+    result = compute_ksigma_preimage(KSigmaPreimageRequest(k=2, target_value=8))
     assert result.k == 2
-    assert result.target_value == "8"
-    assert result.preimages == ("3",)
+    assert result.target_value == 8
+    assert result.preimages == (3,)
     assert result.count == 1
 
 
 def test_ksigma_preimage_nondivisible_target_has_empty_fiber() -> None:
-    result = compute_ksigma_preimage(KSigmaPreimageRequest(k=3, target_value="8"))
+    result = compute_ksigma_preimage(KSigmaPreimageRequest(k=3, target_value=8))
     assert result.preimages == ()
 
 
 def test_ksigma_preimage_search_boundary_is_complete() -> None:
-    request = KSigmaPreimageRequest(k=100, target_value="10000000")
+    request = KSigmaPreimageRequest(k=100, target_value=10000000)
     result = compute_ksigma_preimage(request)
     assert all(
         100 * __import__("sympy").divisor_sigma(int(n)) == 10000000
@@ -53,7 +53,7 @@ def test_ksigma_preimage_search_boundary_is_complete() -> None:
 
 
 def test_ksigma_preimage_rejects_oversized_search() -> None:
-    request = KSigmaPreimageRequest(k=1, target_value="100001")
+    request = KSigmaPreimageRequest(k=1, target_value=100001)
     with pytest.raises(OperationDomainValidationError) as error:
         compute_ksigma_preimage(request)
     assert error.value.errors()[0]["type"] == "number_theory.ksigma_search_bound"
@@ -61,43 +61,43 @@ def test_ksigma_preimage_rejects_oversized_search() -> None:
 
 def test_p_adic_profile_uses_interval_histogram() -> None:
     result = compute_p_adic_interval_profile(
-        PAdicIntervalProfileRequest(start="0", length="10", prime="2")
+        PAdicIntervalProfileRequest(start=0, length=10, prime=2)
     )
     assert [(row.valuation, row.count) for row in result.rows] == [
-        (0, "5"),
-        (1, "3"),
-        (2, "1"),
-        (3, "1"),
+        (0, 5),
+        (1, 3),
+        (2, 1),
+        (3, 1),
     ]
-    assert result.total_valuation == "8"
+    assert result.total_valuation == 8
     assert result.maximum_valuation == 3
     assert sum(int(row.count) for row in result.rows) == 10
 
 
 def test_p_adic_profile_interval_boundaries_and_large_prime() -> None:
     result = compute_p_adic_interval_profile(
-        PAdicIntervalProfileRequest(start="7", length="1", prime="2")
+        PAdicIntervalProfileRequest(start=7, length=1, prime=2)
     )
-    assert [(row.valuation, row.count) for row in result.rows] == [(3, "1")]
+    assert [(row.valuation, row.count) for row in result.rows] == [(3, 1)]
     result = compute_p_adic_interval_profile(
-        PAdicIntervalProfileRequest(start="0", length="10", prime="101")
+        PAdicIntervalProfileRequest(start=0, length=10, prime=101)
     )
-    assert [(row.valuation, row.count) for row in result.rows] == [(0, "10")]
+    assert [(row.valuation, row.count) for row in result.rows] == [(0, 10)]
     result = compute_p_adic_interval_profile(
-        PAdicIntervalProfileRequest(start="0", length="10", prime="1000003")
+        PAdicIntervalProfileRequest(start=0, length=10, prime=1000003)
     )
-    assert [(row.valuation, row.count) for row in result.rows] == [(0, "10")]
+    assert [(row.valuation, row.count) for row in result.rows] == [(0, 10)]
 
 
 def test_p_adic_profile_rejects_nonprime_and_empty_interval() -> None:
-    nonprime = PAdicIntervalProfileRequest(start="0", length="10", prime="4")
+    nonprime = PAdicIntervalProfileRequest(start=0, length=10, prime=4)
     with pytest.raises(OperationDomainValidationError) as nonprime_error:
         compute_p_adic_interval_profile(nonprime)
     assert nonprime_error.value.errors()[0]["type"] == (
         "number_theory.p_adic_interval_prime_must_be_prime"
     )
 
-    empty = PAdicIntervalProfileRequest(start="0", length="0", prime="2")
+    empty = PAdicIntervalProfileRequest(start=0, length=0, prime=2)
     with pytest.raises(OperationDomainValidationError) as empty_error:
         compute_p_adic_interval_profile(empty)
     assert empty_error.value.errors()[0]["type"] == (
@@ -107,23 +107,23 @@ def test_p_adic_profile_rejects_nonprime_and_empty_interval() -> None:
 
 def test_p_adic_profile_admits_large_endpoint_when_exact_result_is_small() -> None:
     result = compute_p_adic_interval_profile(
-        PAdicIntervalProfileRequest(start="9" * 256, length="1", prime="2")
+        PAdicIntervalProfileRequest(start=10**256 - 1, length=1, prime=2)
     )
-    assert [(row.valuation, row.count) for row in result.rows] == [(256, "1")]
-    assert result.total_valuation == "256"
+    assert [(row.valuation, row.count) for row in result.rows] == [(256, 1)]
+    assert result.total_valuation == 256
 
 
 def test_p_adic_profile_admits_large_length_from_exact_valuation_sum() -> None:
     length = 10**252
     result = compute_p_adic_interval_profile(
         PAdicIntervalProfileRequest(
-            start="0",
-            length="1" + "0" * 252,
-            prime="2",
+            start=0,
+            length=10**252,
+            prime=2,
         )
     )
-    assert int(result.total_valuation) == length - length.bit_count()
-    assert len(result.total_valuation) <= MAX_INTEGER_DIGITS
+    assert result.total_valuation == length - length.bit_count()
+    assert len(str(result.total_valuation)) <= MAX_INTEGER_DIGITS
     assert len(result.rows) <= MAX_INTERVAL_PROFILE_ROWS
 
 
@@ -151,8 +151,8 @@ def test_p_adic_profile_schema_exposes_coupled_endpoint_admission() -> None:
 
 
 def test_p_adic_profile_rejects_primality_work_before_backend_execution() -> None:
-    large_prime = str(2**521 - 1)
-    request = PAdicIntervalProfileRequest(start="0", length="1", prime=large_prime)
+    large_prime = 2**521 - 1
+    request = PAdicIntervalProfileRequest(start=0, length=1, prime=large_prime)
 
     with pytest.raises(OperationDomainValidationError) as error:
         compute_p_adic_interval_profile(request)
@@ -165,7 +165,7 @@ def test_p_adic_profile_rejects_primality_work_before_backend_execution() -> Non
 
 def test_p_adic_profile_matches_direct_small_interval() -> None:
     result = compute_p_adic_interval_profile(
-        PAdicIntervalProfileRequest(start="3", length="8", prime="3")
+        PAdicIntervalProfileRequest(start=3, length=8, prime=3)
     )
     expected: dict[int, int] = {}
     for n in range(4, 12):

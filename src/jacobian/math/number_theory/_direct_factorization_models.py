@@ -9,8 +9,9 @@ from __future__ import annotations
 
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, StringConstraints, model_validator
+from pydantic import Field, model_validator
 
+from jacobian._exact import DecimalIntegerEncoding
 from jacobian._models import StrictModel
 from jacobian.math.number_theory._integer_models import PrimePower
 from jacobian.math.number_theory._models import (
@@ -28,12 +29,8 @@ MAX_DIRECT_DIVISORS = 245_760
 MAX_DIRECT_FACTOR_ENTRIES = 256
 
 FactorizationInteger = Annotated[
-    str,
-    StringConstraints(
-        pattern=r"^-?(?:0|[1-9][0-9]*)$",
-        max_length=MAX_DIRECT_FACTORIZATION_DIGITS,
-        strict=True,
-    ),
+    int,
+    DecimalIntegerEncoding(max_digits=MAX_DIRECT_FACTORIZATION_DIGITS),
 ]
 
 
@@ -67,8 +64,8 @@ class DivisorListResult(StrictModel):
     def _from_kernel(
         cls,
         *,
-        value: str,
-        divisors: tuple[str, ...],
+        value: FactorizationInteger,
+        divisors: tuple[BoundedInteger, ...],
         convention: Literal["ALL_POSITIVE_DIVISORS", "PROPER_DIVISORS"],
     ) -> Self:
         """Build a complete result after the factorization kernel succeeds."""
@@ -81,7 +78,7 @@ class DivisorListResult(StrictModel):
 
     @model_validator(mode="after")
     def require_source_enumeration(self) -> Self:
-        values = [int(divisor) for divisor in self.divisors]
+        values = list(self.divisors)
         if any(value < 1 for value in values):
             raise _validation_error(
                 "divisors_must_be_positive", "divisors must be positive"
@@ -118,7 +115,7 @@ class PrimeFactorizationResult(StrictModel):
     def _from_kernel(
         cls,
         *,
-        value: str,
+        value: FactorizationInteger,
         factors: tuple[PrimePower, ...],
     ) -> Self:
         """Build a complete result after the factorization kernel succeeds."""
@@ -134,7 +131,7 @@ class PrimeFactorizationResult(StrictModel):
             )
         previous_prime = 0
         for factor in self.factors:
-            prime = int(factor.prime)
+            prime = factor.prime
             if prime <= previous_prime:
                 raise _validation_error(
                     "prime_bases_must_be_strictly_ascending",

@@ -471,7 +471,11 @@ def _restrict_scalars_admitted(
         target_axis=target_axis,
         matrix=PrimeFieldMatrix(
             prime=subspace.presentation.characteristic,
-            entries=tuple(zip(*columns, strict=True)),
+            entries=(
+                tuple(zip(*columns, strict=True))
+                if columns
+                else ((),) * len(target_axis.labels)
+            ),
             columns=len(subspace.basis),
         ),
     )
@@ -948,6 +952,8 @@ def finite_polynomial(
     require_field(presentation)
     if not coefficients:
         raise ValueError("finite polynomial requires coefficients")
+    if any(coefficient.presentation != presentation for coefficient in coefficients):
+        raise ValueError("finite polynomial coefficients must share their parent")
     last = next(
         (
             index

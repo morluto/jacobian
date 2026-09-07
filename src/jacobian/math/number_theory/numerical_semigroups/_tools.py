@@ -3,7 +3,6 @@
 from collections.abc import Callable
 from typing import Any
 
-from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -91,7 +90,7 @@ def _run_native[T](
         ) from error
 
 
-def _generators(values: tuple[str, ...]) -> tuple[int, ...]:
+def _generators(values: tuple[int, ...]) -> tuple[int, ...]:
     return _require_minimal_generators(values)
 
 
@@ -109,9 +108,7 @@ def compute_membership(
     return _run_native(
         "membership",
         ("generators", "value"),
-        lambda: membership(
-            _generators(request.generators), parse_canonical_integer(request.value)
-        ),
+        lambda: membership(_generators(request.generators), request.value),
     )
 
 
@@ -121,9 +118,7 @@ def compute_factorizations(
     return _run_native(
         "factorizations",
         ("generators", "value"),
-        lambda: factorization_profile(
-            _generators(request.generators), parse_canonical_integer(request.value)
-        ),
+        lambda: factorization_profile(_generators(request.generators), request.value),
     )
 
 
@@ -134,7 +129,7 @@ def compute_factorization_lengths(
         "factorization_lengths",
         ("generators", "value"),
         lambda: factorization_lengths_profile(
-            _generators(request.generators), parse_canonical_integer(request.value)
+            _generators(request.generators), request.value
         ),
     )
 
@@ -147,7 +142,7 @@ def compute_factorization_distance(
         ("generators", "value", "first", "second"),
         lambda: factorization_distance_profile(
             _generators(request.generators),
-            parse_canonical_integer(request.value),
+            request.value,
             request.first,
             request.second,
         ),
@@ -161,7 +156,7 @@ def compute_factorization_graph(
         "factorization_graph",
         ("generators", "value"),
         lambda: factorization_graph_profile(
-            _generators(request.generators), parse_canonical_integer(request.value)
+            _generators(request.generators), request.value
         ),
     )
 
@@ -173,7 +168,7 @@ def compute_element_delta_set(
         "element_delta_set",
         ("generators", "value"),
         lambda: element_delta_set_profile(
-            _generators(request.generators), parse_canonical_integer(request.value)
+            _generators(request.generators), request.value
         ),
     )
 
@@ -185,7 +180,7 @@ def compute_element_elasticity(
         "element_elasticity",
         ("generators", "value"),
         lambda: element_elasticity_profile(
-            _generators(request.generators), parse_canonical_integer(request.value)
+            _generators(request.generators), request.value
         ),
     )
 
@@ -197,7 +192,7 @@ def compute_element_catenary_degree(
         "element_catenary_degree",
         ("generators", "value"),
         lambda: element_catenary_degree_profile(
-            _generators(request.generators), parse_canonical_integer(request.value)
+            _generators(request.generators), request.value
         ),
     )
 

@@ -9,6 +9,7 @@ from pydantic import Field
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 from jacobian.math._rational_height import RationalHeight, sum_heights
 from jacobian.math.finite_fields.values import FinitePolynomialMap
 from jacobian.math.polynomials.values import RationalPolynomial
@@ -100,7 +101,10 @@ def _validation_code(message: str) -> str:
 def _fraction_height(value: Fraction) -> CoefficientHeight:
     if value == 0:
         return None
-    return RationalHeight(len(str(abs(value.numerator))), len(str(value.denominator)))
+    return RationalHeight(
+        len(format_canonical_integer(abs(value.numerator))),
+        len(format_canonical_integer(value.denominator)),
+    )
 
 
 def _add_heights(

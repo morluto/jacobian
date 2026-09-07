@@ -1,5 +1,6 @@
 """Graph-relative claims require explicit relation checking."""
 
+import json
 from itertools import combinations
 
 import pytest
@@ -51,7 +52,9 @@ def test_matching_certificate_checks_source_relation(change: str) -> None:
     graph = SimpleUndirectedGraph(vertices=("a", "b", "c"), edges=(("a", "b"),))
     result = _maximum_matching_execute(GraphMaximumMatchingRequest(graph=graph))
     payload = result.model_dump(mode="json")
-    assert verify_maximum_matching(GraphMaximumMatchingResult.model_validate(payload))
+    assert verify_maximum_matching(
+        GraphMaximumMatchingResult.model_validate_json(json.dumps(payload))
+    )
     if change == "edge":
         payload["witness_edges"] = [["a", "c"]]
     elif change == "barrier":
@@ -59,7 +62,7 @@ def test_matching_certificate_checks_source_relation(change: str) -> None:
     else:
         payload["certificate"]["odd_component_count"] = 0
     assert not verify_maximum_matching(
-        GraphMaximumMatchingResult.model_validate(payload)
+        GraphMaximumMatchingResult.model_validate_json(json.dumps(payload))
     )
 
 

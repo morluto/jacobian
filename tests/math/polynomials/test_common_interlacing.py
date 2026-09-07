@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import threading
 import time
 from fractions import Fraction
@@ -16,6 +17,7 @@ from jacobian._execution import (
     OperationExecutionTimeoutError,
     request_execution,
 )
+from jacobian.canonical import encode_strict_json, format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.algebraic_numbers.real import (
     RealAlgebraicValue,
@@ -32,6 +34,7 @@ from jacobian.math.polynomials.real_algebra._common_interlacing import (
     _root_profile,
 )
 from jacobian.math.polynomials.real_algebra._common_interlacing_models import (
+    MAX_COMMON_INTERLACING_INPUT_DIGITS,
     CommonInterlacingDoesNotExist,
     CommonInterlacingExists,
     CommonInterlacingProfile,
@@ -141,6 +144,36 @@ def _request(*family: LabelledRationalPolynomial) -> CommonInterlacingRequest:
     return CommonInterlacingRequest(family=family)
 
 
+@pytest.mark.parametrize("sign", [-1, 1])
+def test_input_height_bound_applies_to_native_and_json_components(sign: int) -> None:
+    boundary = 10**MAX_COMMON_INTERLACING_INPUT_DIGITS
+    companion = _source("q", (1, 1))
+    accepted = _request(_source("p", (1, 1), (sign * (boundary - 1), 0)), companion)
+    assert CommonInterlacingRequest.model_validate(accepted.model_dump()) == accepted
+    assert (
+        CommonInterlacingRequest.model_validate_json(accepted.model_dump_json())
+        == accepted
+    )
+    oversized = _source("p", (1, 1), (sign * boundary, 0))
+    with pytest.raises(ValidationError, match="input bound"):
+        _request(oversized, companion)
+    with pytest.raises(ValidationError, match="input bound"):
+        CommonInterlacingRequest.model_validate(
+            {"family": [oversized.model_dump(), companion.model_dump()]}
+        )
+    with pytest.raises(ValidationError, match="input bound"):
+        CommonInterlacingRequest.model_validate_json(
+            encode_strict_json(
+                {
+                    "family": [
+                        oversized.model_dump(mode="json"),
+                        companion.model_dump(mode="json"),
+                    ]
+                }
+            )
+        )
+
+
 def _referenced_value(
     result: CommonInterlacingProfile,
     reference: PolynomialRootReference,
@@ -171,7 +204,9 @@ def test_quadratic_family_returns_complete_attained_gap() -> None:
         "num": "-2",
         "den": "1",
     }
-    forged_claim = CommonInterlacingProfile.model_validate(forged)
+    forged_claim = CommonInterlacingProfile.model_validate_json(
+        encode_strict_json(forged)
+    )
     assert verify_common_interlacing_profile(forged_claim) is False
     assert isinstance(result.outcome, CommonInterlacingExists)
     assert tuple(profile.source_index for profile in result.root_profiles) == (0, 1)
@@ -349,13 +384,13 @@ def test_returned_factor_rows_reconstruct_the_retained_source() -> None:
         strict=True,
     )
 
-    factor_rows: dict[tuple[str, ...], list[int]] = {}
+    factor_rows: dict[tuple[int, ...], list[int]] = {}
     for root in parsed.root_profiles[0].roots:
         factor_rows.setdefault(root.value.polynomial, []).append(root.multiplicity)
 
     reconstructed: tuple[int, ...] = (1,)
     for polynomial, multiplicities in factor_rows.items():
-        factor = tuple(int(coefficient) for coefficient in polynomial)
+        factor = polynomial
         assert len(multiplicities) == len(factor) - 1
         assert len(set(multiplicities)) == 1
         for _ in range(multiplicities[0]):
@@ -497,7 +532,13 @@ def test_worker_profile_binding_does_not_call_public_result_validation(
     payload = {
         "source_factors": [
             [
-                [list(factor.canonical_coefficients), factor.multiplicity]
+                [
+                    [
+                        format_canonical_integer(value)
+                        for value in factor.canonical_coefficients
+                    ],
+                    factor.multiplicity,
+                ]
                 for factor in source.factors
             ]
             for source in plan.sources
@@ -656,11 +697,11 @@ def test_request_result_and_endpoint_values_round_trip_and_compose() -> None:
 
 
 def test_trusted_producer_does_not_weaken_caller_authored_algebraic_values() -> None:
-    reducible = RealAlgebraicValue(polynomial=("1", "0", "-1"), real_root_index=0)
+    reducible = RealAlgebraicValue(polynomial=(1, 0, -1), real_root_index=0)
     with pytest.raises(OperationDomainValidationError, match="irreducible"):
         compare_real_algebraic(reducible, reducible)
 
-    no_real_root = RealAlgebraicValue(polynomial=("1", "0", "1"), real_root_index=0)
+    no_real_root = RealAlgebraicValue(polynomial=(1, 0, 1), real_root_index=0)
     with pytest.raises(OperationDomainValidationError, match="existing real root"):
         compare_real_algebraic(no_real_root, no_real_root)
 
@@ -926,7 +967,9 @@ def test_catalog_declaration_is_discoverable_and_example_executes() -> None:
     )
 
     assert "common interlacer" in operation.discovery_terms
-    request = operation.request_type.model_validate(operation.examples[0].input)
+    request = operation.request_type.model_validate_json(
+        json.dumps(operation.examples[0].input)
+    )
     result = operation.run(request)
     assert isinstance(result, CommonInterlacingProfile)
     assert result.status == "EXISTS"

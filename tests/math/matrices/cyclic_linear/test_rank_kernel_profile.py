@@ -103,7 +103,7 @@ def test_cyclotomic_element_has_explicit_shared_number_field_conversion() -> Non
 
     converted = element.to_simple_number_field_element()
 
-    assert converted.presentation.coefficients_descending == ("1", "1", "1")
+    assert converted.presentation.coefficients_descending == (1, 1, 1)
     assert converted.coefficients_ascending == element.coefficients_ascending
 
 
@@ -458,26 +458,30 @@ def test_period_59_phi_59_flips_rank_and_reconstructs_nontrivial_kernel() -> Non
     assert (mutated.global_rank, mutated.global_nullity) == (59, 0)
 
     assert (
-        RationalCyclotomicField.model_validate(
-            result.components[1].field.model_dump(mode="json"), strict=True
+        RationalCyclotomicField.model_validate_json(
+            json.dumps(result.components[1].field.model_dump(mode="json")), strict=True
         )
         == result.components[1].field
     )
     assert (
-        RationalCyclotomicMatrix.model_validate(
-            result.components[1].component_matrix.model_dump(mode="json"), strict=True
+        RationalCyclotomicMatrix.model_validate_json(
+            json.dumps(result.components[1].component_matrix.model_dump(mode="json")),
+            strict=True,
         )
         == result.components[1].component_matrix
     )
     assert (
-        RationalCyclotomicVectorSpaceBasis.model_validate(
-            result.components[1].kernel_basis.model_dump(mode="json"), strict=True
+        RationalCyclotomicVectorSpaceBasis.model_validate_json(
+            json.dumps(result.components[1].kernel_basis.model_dump(mode="json")),
+            strict=True,
         )
         == result.components[1].kernel_basis
     )
     assert (
-        RationalCyclotomicElement.model_validate(
-            result.components[1].kernel_basis.vectors[0][0].model_dump(mode="json"),
+        RationalCyclotomicElement.model_validate_json(
+            json.dumps(
+                result.components[1].kernel_basis.vectors[0][0].model_dump(mode="json")
+            ),
             strict=True,
         )
         == result.components[1].kernel_basis.vectors[0][0]
@@ -496,7 +500,9 @@ def test_cyclotomic_parent_is_bound_to_exact_component_order() -> None:
     component["order"] = 2
 
     with pytest.raises(ValueError, match=r"Phi_order|declared field"):
-        CyclicRationalRankKernelProfile.model_validate(payload, strict=True)
+        CyclicRationalRankKernelProfile.model_validate_json(
+            json.dumps(payload), strict=True
+        )
 
     extra_polynomial_payload = result.components[1].field.model_dump(mode="json")
     extra_polynomial_payload["coefficients_descending"] = ["1", "0", "1"]
@@ -601,13 +607,15 @@ def test_request_and_result_round_trip_strictly() -> None:
     result = TOOLS[0].run(request)
 
     assert (
-        CyclicRationalRankKernelProfileRequest.model_validate(
-            request.model_dump(mode="json"), strict=True
+        CyclicRationalRankKernelProfileRequest.model_validate_json(
+            json.dumps(request.model_dump(mode="json")), strict=True
         )
         == request
     )
     assert (
-        TOOLS[0].result_type.model_validate(result.model_dump(mode="json"), strict=True)
+        TOOLS[0].result_type.model_validate_json(
+            json.dumps(result.model_dump(mode="json")), strict=True
+        )
         == result
     )
 
@@ -678,7 +686,9 @@ def test_symbol_schema_projects_the_sign_aware_64_digit_rational_bound() -> None
 
     accepted = payload("-" + "9" * 64)
     assert validator.is_valid(accepted)
-    CyclicRationalRankKernelProfileRequest.model_validate(accepted, strict=True)
+    CyclicRationalRankKernelProfileRequest.model_validate_json(
+        json.dumps(accepted), strict=True
+    )
 
     for rejected in (
         payload("9" * 65),
@@ -688,7 +698,9 @@ def test_symbol_schema_projects_the_sign_aware_64_digit_rational_bound() -> None
     ):
         assert not validator.is_valid(rejected)
         with pytest.raises(ValueError):
-            CyclicRationalRankKernelProfileRequest.model_validate(rejected, strict=True)
+            CyclicRationalRankKernelProfileRequest.model_validate_json(
+                json.dumps(rejected), strict=True
+            )
 
 
 def test_fraction_free_height_bound_rejects_before_elimination() -> None:

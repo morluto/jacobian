@@ -18,7 +18,8 @@ from jacobian.math.geometry._models import RationalPoint2D
 
 def _pt(x: str, y: str) -> RationalPoint2D:
     return RationalPoint2D(
-        x=CanonicalRational(num=x, den="1"), y=CanonicalRational(num=y, den="1")
+        x=CanonicalRational(num=int(x), den=1),
+        y=CanonicalRational(num=int(y), den=1),
     )
 
 
@@ -33,9 +34,9 @@ def test_overlapping_squares_polygon() -> None:
     assert result.kind == "POLYGON"
     assert result.polygon is not None
     pts = [(p.x.num, p.y.num) for p in result.polygon.points]
-    assert pts == [("1", "1"), ("2", "1"), ("2", "2"), ("1", "2")]
+    assert pts == [(1, 1), (2, 1), (2, 2), (1, 2)]
     # Least vertex first
-    assert pts[0] == ("1", "1")
+    assert pts[0] == (1, 1)
     # Provenance: each vertex has active edges
     assert len(result.vertex_active_edges) == 4
 
@@ -46,7 +47,7 @@ def test_vertex_touch_point() -> None:
     result = convex_polygon_intersection(a, b)
     assert result.kind == "POINT"
     assert result.point is not None
-    assert result.point.x.num == "1" and result.point.y.num == "0"
+    assert result.point.x.num == 1 and result.point.y.num == 0
     assert len(result.vertex_active_edges) == 1
 
 
@@ -58,8 +59,8 @@ def test_edge_touch_segment() -> None:
     assert result.kind == "SEGMENT"
     assert result.segment is not None
     # Lexicographically ordered
-    assert result.segment.start.x.num == "1" and result.segment.start.y.num == "1"
-    assert result.segment.end.x.num == "2" and result.segment.end.y.num == "1"
+    assert result.segment.start.x.num == 1 and result.segment.start.y.num == 1
+    assert result.segment.end.x.num == 2 and result.segment.end.y.num == 1
     assert len(result.vertex_active_edges) == 2
 
 
@@ -79,7 +80,7 @@ def test_containment_reproduces_inner() -> None:
     assert result.polygon is not None
     pts = [(p.x.num, p.y.num) for p in result.polygon.points]
     # Should be exactly small polygon canonicalized
-    assert set(pts) == {("0", "0"), ("1", "0"), ("0", "1")}
+    assert set(pts) == {(0, 0), (1, 0), (0, 1)}
 
 
 def test_rational_nonintegral_intersection() -> None:

@@ -47,7 +47,7 @@ def test_sequence_core_manifest_publishes_every_recovered_operation() -> None:
 
 
 def test_dispatch_matches_native_sum_value() -> None:
-    native = sequence_sum(IntegerSequence(values=("1", "2", "3")))
+    native = sequence_sum(IntegerSequence(values=(1, 2, 3)))
     dispatched = invoke_operation(
         "sequence.compute.sum",
         {"values": ["1", "2", "3"]},

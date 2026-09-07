@@ -4,18 +4,17 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from math import comb
-from typing import Any, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import ConfigDict, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
-    CanonicalInteger,
     CanonicalRational,
+    DecimalIntegerEncoding,
     require_bounded_rational,
 )
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -89,7 +88,9 @@ class AllTerminalReliabilityWireResult(StrictModel):
 
     graph: SimpleUndirectedGraph
     open_probability: CanonicalRational
-    connected_spanning_subgraph_counts: tuple[CanonicalInteger, ...] = Field(
+    connected_spanning_subgraph_counts: tuple[
+        Annotated[int, DecimalIntegerEncoding(max_digits=7)], ...
+    ] = Field(
         min_length=1,
         max_length=MAX_ALL_TERMINAL_RELIABILITY_EDGES + 1,
         description=(
@@ -144,8 +145,7 @@ class AllTerminalReliabilityWireResult(StrictModel):
                 "all-terminal reliability open probability must lie in [0, 1]"
             )
         actual_counts = tuple(
-            parse_canonical_integer(value)
-            for value in self.connected_spanning_subgraph_counts
+            value for value in self.connected_spanning_subgraph_counts
         )
         if len(actual_counts) != len(self.graph.edges) + 1:
             raise _validation_error(
@@ -183,9 +183,7 @@ class AllTerminalReliabilityWireResult(StrictModel):
         return cls.model_construct(
             graph=request.graph,
             open_probability=request.open_probability,
-            connected_spanning_subgraph_counts=tuple(
-                format_canonical_integer(count) for count in counts
-            ),
+            connected_spanning_subgraph_counts=tuple(count for count in counts),
             reliability_probability=reliability_probability,
             visited_states=visited_states,
             event="ALL_VERTICES_CONNECTED",

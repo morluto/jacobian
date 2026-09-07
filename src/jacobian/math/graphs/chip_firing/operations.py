@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections import deque
 
 from jacobian._execution import request_checkpoint
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.chip_firing._models import (
     MAX_COEFFICIENT_DIGITS,
@@ -163,10 +162,7 @@ def laplacian(graph: SimpleUndirectedGraph) -> LaplacianResult:
         laplacian=IntegerMatrix(
             row_count=n,
             column_count=n,
-            entries=tuple(
-                tuple(format_canonical_integer(int(value)) for value in row)
-                for row in laplacian
-            ),
+            entries=tuple(tuple(int(value) for value in row) for row in laplacian),
         ),
         degrees=tuple(degrees),
     )
@@ -191,10 +187,7 @@ def reduced_laplacian(
         reduced_laplacian=IntegerMatrix(
             row_count=len(reduced),
             column_count=len(reduced[0]) if reduced else 0,
-            entries=tuple(
-                tuple(format_canonical_integer(int(value)) for value in row)
-                for row in reduced
-            ),
+            entries=tuple(tuple(int(value) for value in row) for row in reduced),
         ),
     )
 

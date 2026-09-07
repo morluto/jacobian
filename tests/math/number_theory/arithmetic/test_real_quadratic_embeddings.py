@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from fractions import Fraction
 
 import pytest
@@ -74,28 +75,36 @@ def test_profile_parsing_keeps_structural_embedding_checks() -> None:
     payload = profile.model_dump(mode="json")
 
     with pytest.raises(ValidationError) as exc_info:
-        RealQuadraticEmbeddingProfile.model_validate(
-            {**payload, "images": list(reversed(payload["images"]))}
+        RealQuadraticEmbeddingProfile.model_validate_json(
+            json.dumps({**payload, "images": list(reversed(payload["images"]))})
         )
     assert (
         exc_info.value.errors()[0]["type"] == "real_quadratic.embedding_images_mismatch"
     )
     # Arithmetic outputs remain authored claims after serialization. Parsing
     # preserves them while checking embedding labels and parent context.
-    claimed = RealQuadraticEmbeddingProfile.model_validate(
-        {**payload, "norm": {"num": "2", "den": "1"}, "trace": {"num": "7", "den": "1"}}
+    claimed = RealQuadraticEmbeddingProfile.model_validate_json(
+        json.dumps(
+            {
+                **payload,
+                "norm": {"num": "2", "den": "1"},
+                "trace": {"num": "7", "den": "1"},
+            }
+        )
     )
     assert claimed.norm.as_fraction() == 2
     assert claimed.trace.as_fraction() == 7
     with pytest.raises(ValidationError) as exc_info:
-        RealQuadraticEmbeddingProfile.model_validate(
-            {
-                **payload,
-                "source": {
-                    **payload["source"],
-                    "radicand": 3,
-                },
-            }
+        RealQuadraticEmbeddingProfile.model_validate_json(
+            json.dumps(
+                {
+                    **payload,
+                    "source": {
+                        **payload["source"],
+                        "radicand": 3,
+                    },
+                }
+            )
         )
     assert (
         exc_info.value.errors()[0]["type"] == "real_quadratic.embedding_images_mismatch"

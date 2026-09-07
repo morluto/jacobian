@@ -27,13 +27,16 @@ from jacobian.math.number_theory.algebraic_numbers.root_isolation._models import
 
 
 def _value(polynomial: tuple[str, ...], root: int) -> RealAlgebraicValue:
-    return RealAlgebraicValue(polynomial=polynomial, real_root_index=root)
+    return RealAlgebraicValue(
+        polynomial=tuple(int(coefficient) for coefficient in polynomial),
+        real_root_index=root,
+    )
 
 
 def test_minimal_polynomial_and_root_index_determine_one_value() -> None:
     positive_sqrt_two = _value(("1", "0", "-2"), 1)
 
-    assert positive_sqrt_two.polynomial == ("1", "0", "-2")
+    assert positive_sqrt_two.polynomial == (1, 0, -2)
     assert positive_sqrt_two.real_root_index == 1
     interval = isolate_real_algebraic(positive_sqrt_two)
     assert interval.lower.as_fraction() == 1
@@ -94,7 +97,7 @@ def test_nonprimitive_real_root_claims_parse_without_gcd_proof(
     )
 
     candidate = _value(("2", "0", "-4"), 0)
-    assert candidate.polynomial == ("2", "0", "-4")
+    assert candidate.polynomial == (2, 0, -4)
 
 
 def test_nonprimitive_real_root_claims_are_rejected_by_consumers() -> None:
@@ -116,14 +119,14 @@ def test_nonprimitive_complex_root_claims_parse_without_gcd_proof(
     )
 
     candidate = complex_algebraic.ComplexAlgebraicValue.model_validate(
-        {"polynomial": ["2", "0", "-2"], "root_index": 0}
+        {"polynomial": [2, 0, -2], "root_index": 0}
     )
-    assert candidate.polynomial == ("2", "0", "-2")
+    assert candidate.polynomial == (2, 0, -2)
 
 
 def test_nonprimitive_complex_root_claims_are_rejected_by_explicit_checker() -> None:
     candidate = complex_algebraic.ComplexAlgebraicValue(
-        polynomial=("2", "0", "-2"), root_index=0
+        polynomial=(2, 0, -2), root_index=0
     )
 
     with pytest.raises(OperationDomainValidationError, match="primitive"):
@@ -142,10 +145,10 @@ def test_degree_and_coefficient_boundaries_are_closed() -> None:
     thousand_digit_leading = _value(("1" + "0" * 999, "1"), 0)
 
     assert len(degree_sixteen.polynomial) == 17
-    assert len(thousand_digit_leading.polynomial[0]) == 1_000
+    assert len(str(thousand_digit_leading.polynomial[0])) == 1_000
     with pytest.raises(ValidationError):
         _value(("1",) + ("0",) * 16 + ("-2",), 1)
-    with real_algebraic_validation_error():
+    with pytest.raises(ValidationError):
         _value(("1" + "0" * 1_000, "1"), 0)
 
 
@@ -199,14 +202,14 @@ def test_comparison_preflights_raw_degree_before_algebraic_recognition() -> None
 
 def test_root_isolation_retains_its_degree_eight_work_envelope() -> None:
     coefficients = [
-        {"num": "1" if index in {0, 9} else "0", "den": "1"} for index in range(10)
+        {"num": 1 if index in {0, 9} else 0, "den": 1} for index in range(10)
     ]
 
     with pytest.raises(ValidationError, match="degree at most 8"):
         UnivariatePolynomialRequest.model_validate(_isolation_payload(coefficients))
 
 
-def _isolation_payload(coefficients: list[dict[str, str]]) -> dict[str, object]:
+def _isolation_payload(coefficients: list[dict[str, int]]) -> dict[str, object]:
     return {
         "polynomial": {
             "variables": ["x"],
@@ -214,7 +217,7 @@ def _isolation_payload(coefficients: list[dict[str, str]]) -> dict[str, object]:
                 "terms": [
                     {"coefficient": value, "exponents": [len(coefficients) - 1 - i]}
                     for i, value in enumerate(coefficients)
-                    if value["num"] != "0"
+                    if value["num"] != 0
                 ]
             },
         }

@@ -9,7 +9,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from pydantic import ValidationError
 
-from jacobian.canonical import encode_strict_json, parse_canonical_integer
+from jacobian.canonical import encode_strict_json
 from jacobian.math.logic.languages.regular._models import (
     TransitionParikhProfileRequest,
 )
@@ -59,10 +59,7 @@ def _automaton(
 
 def _profile_map(profile: TransitionParikhProfile) -> Counter[tuple[int, ...]]:
     return Counter(
-        {
-            entry.transition_counts: parse_canonical_integer(entry.multiplicity)
-            for entry in profile.entries
-        }
+        {entry.transition_counts: entry.multiplicity for entry in profile.entries}
     )
 
 
@@ -117,7 +114,7 @@ def test_two_loop_paths_form_a_histogram_not_a_set() -> None:
             (2, 0): 1,
         }
     )
-    assert profile.total_path_count == "4"
+    assert profile.total_path_count == 4
 
 
 def test_length_zero_and_empty_transition_conventions_retain_the_carrier() -> None:
@@ -129,11 +126,11 @@ def test_length_zero_and_empty_transition_conventions_retain_the_carrier() -> No
 
     assert identity.automaton == automaton
     assert _profile_map(identity) == Counter({(): 1})
-    assert identity.total_path_count == "1"
+    assert identity.total_path_count == 1
     assert distinct.entries == ()
-    assert distinct.total_path_count == "0"
+    assert distinct.total_path_count == 0
     assert positive_length.entries == ()
-    assert positive_length.total_path_count == "0"
+    assert positive_length.total_path_count == 0
 
 
 def test_profile_multiplicities_sum_to_independent_state_path_count() -> None:
@@ -161,7 +158,7 @@ def test_profile_multiplicities_sum_to_independent_state_path_count() -> None:
     profile = transition_parikh_profile(automaton, 0, 2, path_length)
 
     assert sum(_profile_map(profile).values()) == state_counts[2]
-    assert parse_canonical_integer(profile.total_path_count) == state_counts[2]
+    assert profile.total_path_count == state_counts[2]
 
 
 def test_profile_satisfies_the_transition_recurrence() -> None:
@@ -623,7 +620,7 @@ def test_atlas_length_three_clock_cubed_carry_profile_is_complete() -> None:
 
     assert automaton.state_count == 81
     assert len(automaton.transitions) == 729
-    assert profile.total_path_count != "0"
+    assert profile.total_path_count != 0
     assert _profile_map(profile) == _brute_profile(automaton, start, start, 3)
 
 
@@ -661,8 +658,7 @@ def _states_reachable_through_length_three(
         target
         for target in range(automaton.state_count)
         for length in range(4)
-        if transition_parikh_profile(automaton, 0, target, length).total_path_count
-        != "0"
+        if transition_parikh_profile(automaton, 0, target, length).total_path_count != 0
     }
 
 

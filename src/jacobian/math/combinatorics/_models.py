@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from pydantic import Field, StrictInt
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger, CanonicalRational
+from jacobian._exact import CanonicalRational, DecimalIntegerEncoding
 from jacobian._models import StrictModel
 
 
@@ -27,6 +29,7 @@ def _combinatorics_validation_error(message: str) -> PydanticCustomError:
 
 
 _MAX_N = 10_000
+CountingInteger = Annotated[int, DecimalIntegerEncoding(max_digits=131_072)]
 
 
 class NonnegativeIntegerRequest(StrictModel):
@@ -39,7 +42,7 @@ class NonnegativePairRequest(StrictModel):
 
 
 class IntegerResult(StrictModel):
-    value: CanonicalInteger
+    value: CountingInteger
 
 
 class RationalResult(StrictModel):

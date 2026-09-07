@@ -16,7 +16,7 @@ from jacobian._execution import (
     request_checkpoint,
     request_execution,
 )
-from jacobian.canonical import CanonicalizationError, format_canonical_integer
+from jacobian.canonical import CanonicalizationError
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -103,7 +103,7 @@ def compute_divisibility_edge_profile(
 
 
 def _build_divisibility_edge_profile(
-    canonical_elements: tuple[str, ...],
+    canonical_elements: tuple[int, ...],
     edge_plan: tuple[tuple[int, int, int], ...],
 ) -> DivisibilityEdgeProfileResult:
     try:
@@ -126,8 +126,8 @@ def _build_divisibility_edge_profile(
         DivisibilityEdge(
             source=d.source,
             target=d.target,
-            quotient=format_canonical_integer(d.quotient),
-            least_prime_factor=format_canonical_integer(d.least_prime_factor),
+            quotient=d.quotient,
+            least_prime_factor=d.least_prime_factor,
         )
         for d in data
     )

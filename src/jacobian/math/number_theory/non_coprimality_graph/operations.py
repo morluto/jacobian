@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from math import gcd
 
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.sets._models import FiniteIntegerSet
 from jacobian.math.graphs.values import SimpleUndirectedGraph
@@ -22,7 +22,7 @@ __all__ = ["construct_non_coprimality_graph", "verify_non_coprimality_graph"]
 class NonCoprimalityGraphAdmission:
     """Canonical source and exact conflict edges computed during admission."""
 
-    source: tuple[str, ...]
+    source: tuple[int, ...]
     vertices: tuple[str, ...]
     edges: tuple[tuple[str, str], ...]
 
@@ -31,9 +31,7 @@ def _admit_non_coprimality_graph(
     integers: FiniteIntegerSet | tuple[int, ...],
 ) -> NonCoprimalityGraphAdmission:
     if isinstance(integers, FiniteIntegerSet):
-        integer_values = tuple(
-            parse_canonical_integer(value) for value in integers.elements
-        )
+        integer_values = tuple(value for value in integers.elements)
     else:
         integer_values = integers
     if not isinstance(integer_values, tuple):
@@ -49,7 +47,7 @@ def _admit_non_coprimality_graph(
             message=f"integers must contain between 1 and {MAX_INTEGERS} values",
         )
 
-    source: list[str] = []
+    source: list[int] = []
     values: list[int] = []
     for index, value in enumerate(integer_values):
         if type(value) is not int:
@@ -84,7 +82,7 @@ def _admit_non_coprimality_graph(
                     f"integer {index} exceeds the {MAX_INTEGER_DIGITS}-digit bound"
                 ),
             )
-        source.append(label)
+        source.append(value)
         values.append(value)
     if len(set(values)) != len(values):
         raise OperationDomainValidationError(
@@ -94,9 +92,9 @@ def _admit_non_coprimality_graph(
         )
 
     # The retained source owns the graph's vertex axis; preserve its order.
-    vertices = tuple(source)
+    vertices = tuple(format_canonical_integer(value) for value in source)
     edges: list[tuple[str, str]] = []
-    source_pairs = tuple(zip(source, values, strict=True))
+    source_pairs = tuple(zip(vertices, values, strict=True))
     for left_index, (left_label, left_value) in enumerate(source_pairs):
         for right_label, right_value in source_pairs[left_index + 1 :]:
             if gcd(left_value, right_value) > 1:
@@ -132,12 +130,14 @@ def verify_non_coprimality_graph(claim: NonCoprimalityGraphResult) -> bool:
     if not 1 <= len(source.elements) <= MAX_INTEGERS:
         return False
     try:
-        values = tuple(parse_canonical_integer(value) for value in source.elements)
+        values = tuple(source.elements)
     except (TypeError, ValueError):
         return False
     if any(value <= 0 for value in values) or len(set(values)) != len(values):
         return False
-    if claim.graph.vertices != source.elements:
+    if claim.graph.vertices != tuple(
+        format_canonical_integer(value) for value in source.elements
+    ):
         return False
     expected = {
         (min(str(left), str(right)), max(str(left), str(right)))

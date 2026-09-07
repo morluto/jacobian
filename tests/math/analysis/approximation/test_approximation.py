@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from fractions import Fraction
 from typing import TypedDict
 
@@ -55,7 +56,7 @@ def _node(num: str, den: str = "1") -> RationalWire:
 
 
 def _canonical_node(node: RationalWire) -> CanonicalRational:
-    return CanonicalRational.model_validate(node)
+    return CanonicalRational.model_validate_json(json.dumps(node))
 
 
 def _node_set(*nodes: RationalWire) -> RationalNodeSet:
@@ -289,7 +290,7 @@ class TestLagrangeInterpolationAxisBinding:
             polynomial=SparseRationalPolynomial(
                 terms=(
                     RationalPolynomialTerm(
-                        coefficient=CanonicalRational(num="1", den="1"),
+                        coefficient=CanonicalRational(num=1, den=1),
                         exponents=(0,),
                     ),
                 )
@@ -315,15 +316,15 @@ class TestLagrangeBasisSourceBinding:
         request = LagrangeBasisRequest(nodes=self._nodes("0", "1", "2"))
         result = compute_lagrange_basis(request)
         assert result.nodes.nodes == request.nodes.nodes
-        LagrangeBasisResult.model_validate(result.model_dump(mode="json"))
+        LagrangeBasisResult.model_validate_json(result.model_dump_json())
 
     def test_duplicate_index_rejected(self) -> None:
         request = LagrangeBasisRequest(nodes=self._nodes("0", "1"))
         genuine = compute_lagrange_basis(request)
-        payload = genuine.model_dump()
+        payload = json.loads(genuine.model_dump_json())
         payload["basis"][1]["index"] = 0
         with pytest.raises(ValidationError) as exc_info:
-            LagrangeBasisResult.model_validate(payload)
+            LagrangeBasisResult.model_validate_json(json.dumps(payload))
         _assert_validation_code(exc_info, "approximation_theory.basis_indices_invalid")
 
     def test_missing_node_set_rejected(self) -> None:
@@ -333,7 +334,7 @@ class TestLagrangeBasisSourceBinding:
         payload = genuine.model_dump()
         del payload["nodes"]
         with pytest.raises(ValidationError):
-            LagrangeBasisResult.model_validate(payload)
+            LagrangeBasisResult.model_validate_json(json.dumps(payload))
 
     def test_serialized_claim_verifier_rejects_forged_basis(self) -> None:
         result = compute_lagrange_basis(
@@ -343,11 +344,11 @@ class TestLagrangeBasisSourceBinding:
         assert verify_lagrange_basis(decoded)
         payload = result.model_dump(mode="json")
         payload["basis"][0]["barycentric_weight"]["num"] = "2"
-        forged = LagrangeBasisResult.model_validate(payload)
+        forged = LagrangeBasisResult.model_validate_json(json.dumps(payload))
         assert not verify_lagrange_basis(forged)
 
 
-def _canonical(num: str, den: str = "1") -> CanonicalRational:
+def _canonical(num: int, den: int = 1) -> CanonicalRational:
     return CanonicalRational(num=num, den=den)
 
 
@@ -373,16 +374,16 @@ class TestLagrangeInterpolateNative:
         from jacobian.math.analysis.approximation import lagrange_interpolate
 
         result = lagrange_interpolate(
-            (_canonical("0"), _canonical("1"), _canonical("2")),
-            (_canonical("1"), _canonical("3"), _canonical("9")),
+            (_canonical(0), _canonical(1), _canonical(2)),
+            (_canonical(1), _canonical(3), _canonical(9)),
         )
         assert result == _dense_polynomial([Fraction(1), Fraction(0), Fraction(2)])
 
     def test_returned_value_is_a_canonical_consumer_input(self) -> None:
         from jacobian.math.analysis.approximation import lagrange_interpolate
 
-        nodes = (_canonical("0"), _canonical("1", "2"), _canonical("3"))
-        values = (_canonical("-1"), _canonical("1", "4"), _canonical("5"))
+        nodes = (_canonical(0), _canonical(1, 2), _canonical(3))
+        values = (_canonical(-1), _canonical(1, 4), _canonical(5))
         result = RationalPolynomial.model_validate(
             lagrange_interpolate(nodes, values).model_dump()
         )
@@ -391,9 +392,7 @@ class TestLagrangeInterpolateNative:
     def test_single_node_constant(self) -> None:
         from jacobian.math.analysis.approximation import lagrange_interpolate
 
-        result = lagrange_interpolate(
-            (_canonical("7", "3"),), (_canonical("-11", "5"),)
-        )
+        result = lagrange_interpolate((_canonical(7, 3),), (_canonical(-11, 5),))
         assert result == _dense_polynomial([Fraction(-11, 5)])
 
     def test_unsorted_nodes_rejected(self) -> None:
@@ -401,7 +400,7 @@ class TestLagrangeInterpolateNative:
 
         with pytest.raises(OperationDomainValidationError) as exc_info:
             lagrange_interpolate(
-                (_canonical("1"), _canonical("0")), (_canonical("1"), _canonical("2"))
+                (_canonical(1), _canonical(0)), (_canonical(1), _canonical(2))
             )
         assert (
             exc_info.value.errors()[0]["type"]
@@ -413,7 +412,7 @@ class TestLagrangeInterpolateNative:
 
         with pytest.raises(OperationDomainValidationError) as exc_info:
             lagrange_interpolate(
-                (_canonical("0"), _canonical("0")), (_canonical("1"), _canonical("2"))
+                (_canonical(0), _canonical(0)), (_canonical(1), _canonical(2))
             )
         assert (
             exc_info.value.errors()[0]["type"]
@@ -427,7 +426,7 @@ class TestLagrangeInterpolateNative:
             OperationDomainValidationError,
             match="values must have the same length as nodes",
         ):
-            lagrange_interpolate((_canonical("0"), _canonical("1")), (_canonical("1"),))
+            lagrange_interpolate((_canonical(0), _canonical(1)), (_canonical(1),))
 
 
 class TestInterpolationPublication:
@@ -458,5 +457,5 @@ class TestInterpolationPublication:
         assert verify_lagrange_interpolation(decoded)
         payload = result.model_dump(mode="json")
         payload["source"]["values"][0]["num"] = "9"
-        forged = LagrangeInterpolationResult.model_validate(payload)
+        forged = LagrangeInterpolationResult.model_validate_json(json.dumps(payload))
         assert not verify_lagrange_interpolation(forged)

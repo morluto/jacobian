@@ -10,7 +10,6 @@ from jacobian._exact import (
     CanonicalRational,
     canonical_rational_component_digits,
 )
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
@@ -21,10 +20,7 @@ from jacobian.math.probability.hypergraph_containment._models import (
     HypergraphVertexContainmentResult,
 )
 
-__all__ = [
-    "compute_hypergraph_vertex_containment",
-    "verify_hypergraph_vertex_containment",
-]
+__all__ = ["compute_hypergraph_vertex_containment"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -196,10 +192,9 @@ def compute_hypergraph_vertex_containment(
         return HypergraphVertexContainmentResult(
             hypergraph=hypergraph,
             retention_probability=retention_probability,
-            cardinality_axis=tuple(range(n + 1)),
-            containing_subset_counts=tuple("0" for _ in range(n + 1)),
-            total_state_count=format_canonical_integer(1 << n),
-            success_count="0",
+            containing_subset_counts=tuple(0 for _ in range(n + 1)),
+            total_state_count=1 << n,
+            success_count=0,
             probability=CanonicalRational.from_fraction(Fraction(0)),
         )
     if any(not members for _, members in hypergraph.edges):
@@ -207,12 +202,9 @@ def compute_hypergraph_vertex_containment(
         return HypergraphVertexContainmentResult(
             hypergraph=hypergraph,
             retention_probability=retention_probability,
-            cardinality_axis=tuple(range(n + 1)),
-            containing_subset_counts=tuple(
-                format_canonical_integer(value) for value in all_counts
-            ),
-            total_state_count=format_canonical_integer(1 << n),
-            success_count=format_canonical_integer(1 << n),
+            containing_subset_counts=tuple(value for value in all_counts),
+            total_state_count=1 << n,
+            success_count=1 << n,
             probability=CanonicalRational.from_fraction(Fraction(1)),
         )
 
@@ -232,12 +224,9 @@ def compute_hypergraph_vertex_containment(
         return HypergraphVertexContainmentResult(
             hypergraph=hypergraph,
             retention_probability=retention_probability,
-            cardinality_axis=tuple(range(n + 1)),
-            containing_subset_counts=tuple(
-                format_canonical_integer(value) for value in singleton_counts
-            ),
-            total_state_count=format_canonical_integer(1 << n),
-            success_count=format_canonical_integer(success),
+            containing_subset_counts=tuple(value for value in singleton_counts),
+            total_state_count=1 << n,
+            success_count=success,
             probability=CanonicalRational.from_fraction(probability),
         )
     if plan.use_inclusion_exclusion:
@@ -262,12 +251,9 @@ def compute_hypergraph_vertex_containment(
         return HypergraphVertexContainmentResult(
             hypergraph=hypergraph,
             retention_probability=retention_probability,
-            cardinality_axis=tuple(range(n + 1)),
-            containing_subset_counts=tuple(
-                format_canonical_integer(value) for value in ie_counts
-            ),
-            total_state_count=format_canonical_integer(1 << n),
-            success_count=format_canonical_integer(success_count),
+            containing_subset_counts=tuple(value for value in ie_counts),
+            total_state_count=1 << n,
+            success_count=success_count,
             probability=CanonicalRational.from_fraction(probability),
         )
 
@@ -292,12 +278,9 @@ def compute_hypergraph_vertex_containment(
     return HypergraphVertexContainmentResult(
         hypergraph=hypergraph,
         retention_probability=retention_probability,
-        cardinality_axis=tuple(range(n + 1)),
-        containing_subset_counts=tuple(
-            format_canonical_integer(value) for value in counts
-        ),
-        total_state_count=format_canonical_integer(total),
-        success_count=format_canonical_integer(success),
+        containing_subset_counts=tuple(value for value in counts),
+        total_state_count=total,
+        success_count=success,
         probability=CanonicalRational.from_fraction(prob),
     )
 
@@ -305,7 +288,6 @@ def compute_hypergraph_vertex_containment(
 def verify_hypergraph_vertex_containment(
     claim: HypergraphVertexContainmentResult,
 ) -> bool:
-    """Verify the retained cardinality profile and probability claim."""
     try:
         expected = compute_hypergraph_vertex_containment(
             claim.hypergraph, claim.retention_probability

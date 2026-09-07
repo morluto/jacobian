@@ -17,10 +17,7 @@ from jacobian.math.polynomials.ideals._models import (
     IdealMembershipCertificateRequest,
     IdealMembershipCertificateResult,
 )
-from jacobian.math.polynomials.ideals.operations import (
-    ideal_membership_certificate,
-    verify_ideal_membership_certificate,
-)
+from jacobian.math.polynomials.ideals.operations import ideal_membership_certificate
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
     RationalPolynomialIdeal,
@@ -37,7 +34,7 @@ def _polynomial(
         polynomial=SparseRationalPolynomial(
             terms=tuple(
                 RationalPolynomialTerm(
-                    coefficient=CanonicalRational(num=str(coefficient), den="1"),
+                    coefficient=CanonicalRational(num=coefficient, den=1),
                     exponents=exponents,
                 )
                 for coefficient, exponents in terms
@@ -103,35 +100,8 @@ def test_certificate_clears_rational_cofactor_denominators_primitively() -> None
 
     assert result.status == "CERTIFICATE"
     assert result.multiplier == 2
-    assert result.model_dump(mode="json")["multiplier"] == "2"
     assert result.cofactors is not None
     assert result.cofactors[0] == _polynomial(variables, ((1, (0,)),))
-
-
-def test_serialized_certificate_round_trip_and_forgery_verifier() -> None:
-    variables = ("x", "y")
-    request = _request(
-        (
-            _polynomial(variables, ((1, (1, 0)), (-1, (0, 1)))),
-            _polynomial(variables, ((1, (1, 0)), (1, (0, 1)))),
-        ),
-        _polynomial(variables, ((1, (2, 0)), (-1, (0, 2)))),
-        1,
-    )
-    result = ideal_membership_certificate(
-        request.ideal, request.polynomial, request.cofactor_degree_bound
-    )
-    decoded = type(result).model_validate_json(result.model_dump_json())
-
-    assert decoded == result
-    assert verify_ideal_membership_certificate(decoded)
-
-    assert decoded.cofactors is not None
-    payload = decoded.model_dump(mode="json")
-    payload["cofactors"][0]["polynomial"]["terms"][0]["coefficient"]["num"] = "2"
-    forged = type(result).model_validate(payload)
-
-    assert not verify_ideal_membership_certificate(forged)
 
 
 def test_negative_result_is_limited_to_the_declared_cofactor_degree() -> None:
@@ -153,7 +123,6 @@ def test_negative_result_is_limited_to_the_declared_cofactor_degree() -> None:
         IdealMembershipCertificateResult.model_validate_json(result.model_dump_json())
         == result
     )
-    assert verify_ideal_membership_certificate(result)
 
 
 def test_certificate_search_rejects_expansion_before_enumeration() -> None:

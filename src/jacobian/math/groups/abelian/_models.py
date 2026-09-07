@@ -7,7 +7,7 @@ from typing import Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import NativeInteger
+from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
 
 MAX_ORDERS = 32
@@ -21,7 +21,7 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 class AbelianPresentation(StrictModel):
     """An invariant-factor decomposition of a finitely generated abelian group."""
 
-    invariant_factors: tuple[NativeInteger, ...] = Field(
+    invariant_factors: tuple[ExactInteger, ...] = Field(
         min_length=0, max_length=MAX_ORDERS
     )
 
@@ -62,7 +62,7 @@ class CyclicFactorPresentation(StrictModel):
     operation returns that canonical decomposition.
     """
 
-    invariant_factors: tuple[NativeInteger, ...] = Field(
+    invariant_factors: tuple[ExactInteger, ...] = Field(
         min_length=0,
         max_length=MAX_ORDERS,
         description=(
@@ -93,7 +93,7 @@ class CyclicFactorPresentation(StrictModel):
 class PresentationNormalizeRequest(StrictModel):
     """Transport projection for a cyclic-factor presentation."""
 
-    invariant_factors: tuple[NativeInteger, ...] = Field(
+    invariant_factors: tuple[ExactInteger, ...] = Field(
         min_length=0,
         max_length=MAX_ORDERS,
         description=(
@@ -110,7 +110,7 @@ class PresentationNormalizeRequest(StrictModel):
 
 class ElementReduceRequest(StrictModel):
     group: AbelianPresentation
-    coordinates: tuple[NativeInteger, ...] = Field(min_length=0, max_length=MAX_ORDERS)
+    coordinates: tuple[ExactInteger, ...] = Field(min_length=0, max_length=MAX_ORDERS)
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
@@ -124,12 +124,8 @@ class ElementReduceRequest(StrictModel):
 
 class ElementEqualRequest(StrictModel):
     group: AbelianPresentation
-    coordinates_a: tuple[NativeInteger, ...] = Field(
-        min_length=0, max_length=MAX_ORDERS
-    )
-    coordinates_b: tuple[NativeInteger, ...] = Field(
-        min_length=0, max_length=MAX_ORDERS
-    )
+    coordinates_a: tuple[ExactInteger, ...] = Field(min_length=0, max_length=MAX_ORDERS)
+    coordinates_b: tuple[ExactInteger, ...] = Field(min_length=0, max_length=MAX_ORDERS)
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
@@ -148,7 +144,7 @@ class ElementEqualRequest(StrictModel):
 
 class ElementOrderRequest(StrictModel):
     group: AbelianPresentation
-    coordinates: tuple[NativeInteger, ...] = Field(min_length=0, max_length=MAX_ORDERS)
+    coordinates: tuple[ExactInteger, ...] = Field(min_length=0, max_length=MAX_ORDERS)
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
@@ -161,7 +157,7 @@ class ElementOrderRequest(StrictModel):
 
 class SubgroupGeneratedRequest(StrictModel):
     group: AbelianPresentation
-    generators: tuple[tuple[NativeInteger, ...], ...] = Field(
+    generators: tuple[tuple[ExactInteger, ...], ...] = Field(
         min_length=1, max_length=MAX_ORDERS
     )
 
@@ -184,7 +180,7 @@ class SubgroupGeneratedRequest(StrictModel):
 
 class QuotientRequest(StrictModel):
     group: AbelianPresentation
-    subgroup_generators: tuple[tuple[NativeInteger, ...], ...] = Field(
+    subgroup_generators: tuple[tuple[ExactInteger, ...], ...] = Field(
         min_length=1, max_length=MAX_ORDERS
     )
 
@@ -215,7 +211,7 @@ class AbelianElement(StrictModel):
     """A canonical coordinate value in one finite abelian group."""
 
     group: AbelianPresentation
-    coordinates: tuple[NativeInteger, ...] = Field(min_length=0, max_length=MAX_ORDERS)
+    coordinates: tuple[ExactInteger, ...] = Field(min_length=0, max_length=MAX_ORDERS)
 
     @model_validator(mode="after")
     def require_canonical_coordinates(self) -> Self:
@@ -258,7 +254,7 @@ class AbelianQuotient(StrictModel):
 
     group: AbelianPresentation
     subgroup: AbelianSubgroup
-    invariant_factors: tuple[NativeInteger, ...] = ()
+    invariant_factors: tuple[ExactInteger, ...] = ()
 
     @model_validator(mode="after")
     def require_parent_bound_subgroup(self) -> Self:
@@ -277,7 +273,7 @@ class PresentationNormalizeResult(StrictModel):
     presentation: AbelianPresentation
 
     @property
-    def invariant_factors(self) -> tuple[NativeInteger, ...]:
+    def invariant_factors(self) -> tuple[ExactInteger, ...]:
         """Project the canonical invariant factors."""
 
         return self.presentation.invariant_factors
@@ -300,7 +296,7 @@ class PresentationNormalizeResult(StrictModel):
 
 class ElementReduceResult(StrictModel):
     group: AbelianPresentation
-    coordinates: tuple[NativeInteger, ...]
+    coordinates: tuple[ExactInteger, ...]
     reduced: AbelianElement
 
 
@@ -318,15 +314,15 @@ class ElementOrderResult(StrictModel):
 
     group: AbelianPresentation
     element: AbelianElement
-    order: NativeInteger = Field(ge=1)
+    order: ExactInteger = Field(ge=1)
 
 
 class SubgroupGeneratedResult(StrictModel):
     subgroup: AbelianSubgroup
-    index: NativeInteger = Field(ge=1)
+    index: ExactInteger = Field(ge=1)
     coset_representatives: tuple[AbelianElement, ...] = ()
 
 
 class QuotientResult(StrictModel):
     quotient: AbelianQuotient
-    quotient_order: NativeInteger = Field(ge=1)
+    quotient_order: ExactInteger = Field(ge=1)

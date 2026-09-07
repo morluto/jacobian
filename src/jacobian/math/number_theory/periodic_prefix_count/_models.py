@@ -1,18 +1,18 @@
 """Typed contracts for the periodic union prefix count operation."""
 
-from typing import Annotated, Any
+from math import lcm
+from typing import Annotated, Self
 
-from pydantic import BeforeValidator, Field, PlainSerializer
+from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
-from jacobian.canonical import (
-    CanonicalLimits,
-    format_canonical_integer,
-    parse_canonical_integer,
-)
+from jacobian.canonical import CanonicalLimits
 from jacobian.math.number_theory._periodic_models import (
     PeriodicCongruenceUnionSource,
+    PeriodicNonnegativeInteger,
+    PeriodicPositiveInteger,
 )
 
 # Prefix arithmetic is scalar and does not inherit the 256-digit period bound;
@@ -20,42 +20,14 @@ from jacobian.math.number_theory._periodic_models import (
 # impractically large conversions before they reach the kernel.
 MAX_PREFIX_CUTOFF_DIGITS = CanonicalLimits().max_integer_digits
 PeriodicPrefixCutoff = Annotated[
-    int,
-    BeforeValidator(
-        lambda value: _parse_native_integer(value, max_digits=MAX_PREFIX_CUTOFF_DIGITS)
+    ExactInteger,
+    Field(
+        ge=0,
+        json_schema_extra={
+            "pattern": rf"^(?:0|[1-9][0-9]{{0,{MAX_PREFIX_CUTOFF_DIGITS - 1}}})(?![\s\S])",
+            "maxLength": MAX_PREFIX_CUTOFF_DIGITS,
+        },
     ),
-    PlainSerializer(format_canonical_integer, return_type=str, when_used="json"),
-]
-
-
-def _parse_native_integer(value: Any, *, max_digits: int) -> int:
-    if isinstance(value, bool):
-        raise PydanticCustomError(
-            "canonical_integer.type", "integer must not be boolean"
-        )
-    if isinstance(value, int):
-        parsed = value
-    elif isinstance(value, str):
-        parsed = parse_canonical_integer(value)
-    else:
-        raise PydanticCustomError(
-            "canonical_integer.type",
-            "integer must be a Python int or canonical decimal string",
-        )
-    if parsed < 0 or len(format_canonical_integer(parsed).lstrip("-")) > max_digits:
-        raise PydanticCustomError(
-            "canonical_integer.bounds",
-            f"integer must be nonnegative and at most {max_digits} digits",
-        )
-    return parsed
-
-
-PeriodicNativeInteger = Annotated[
-    int,
-    BeforeValidator(
-        lambda value: _parse_native_integer(value, max_digits=MAX_PREFIX_CUTOFF_DIGITS)
-    ),
-    PlainSerializer(format_canonical_integer, return_type=str, when_used="json"),
 ]
 
 
@@ -77,9 +49,40 @@ class PeriodicUnionPrefixCountResult(StrictModel):
 
     source: PeriodicCongruenceUnionSource
     cutoff: PeriodicPrefixCutoff
-    common_period: PeriodicNativeInteger
-    occupied_count: PeriodicNativeInteger
-    count: PeriodicNativeInteger
+    common_period: PeriodicPositiveInteger
+    occupied_count: PeriodicNonnegativeInteger
+    count: PeriodicPrefixCutoff
+
+    @model_validator(mode="after")
+    def require_count_invariants(self) -> Self:
+        cutoff = self.cutoff
+        period = self.common_period
+        occupied = self.occupied_count
+        count = self.count
+        source_period = lcm(*(subset.modulus for subset in self.source.subsets))
+        if period != source_period:
+            raise PydanticCustomError(
+                "number_theory.periodic_prefix.period_mismatch",
+                "common_period must equal the source common period",
+            )
+        if occupied > period:
+            raise PydanticCustomError(
+                "number_theory.periodic_prefix.occupied_count_out_of_range",
+                "occupied_count must lie between 0 and common_period",
+            )
+        if count > cutoff:
+            raise PydanticCustomError(
+                "number_theory.periodic_prefix.count_out_of_range",
+                "count must lie between 0 and cutoff",
+            )
+        remainder = cutoff % period
+        partial = count - (cutoff // period) * occupied
+        if not 0 <= partial <= remainder:
+            raise PydanticCustomError(
+                "number_theory.periodic_prefix.count_identity_mismatch",
+                "count must decompose into full periods and a bounded partial period",
+            )
+        return self
 
 
 __all__ = [

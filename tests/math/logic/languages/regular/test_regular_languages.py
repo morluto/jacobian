@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from itertools import product
 
 import pytest
@@ -267,7 +268,7 @@ def test_count_binary_strings_ending_in_1() -> None:
 
     dfa = _dfa_ends_in_1()
     result = compute_count(CountRequest(dfa=dfa, word_length=3))
-    assert result.count == "4"
+    assert result.count == 4
     assert (
         verify_accepted_word_count(
             type(result).model_validate_json(result.model_dump_json())
@@ -276,22 +277,30 @@ def test_count_binary_strings_ending_in_1() -> None:
     )
     forged = result.model_dump(mode="json")
     forged["count"] = "5"
-    assert verify_accepted_word_count(type(result).model_validate(forged)) is False
+    assert (
+        verify_accepted_word_count(
+            type(result).model_validate_json(__import__("json").dumps(forged))
+        )
+        is False
+    )
     forged = result.model_dump(mode="json")
     forged["dfa"]["transitions"][1]["target"] = 0
-    assert verify_accepted_word_count(type(result).model_validate(forged)) is False
+    assert (
+        verify_accepted_word_count(type(result).model_validate_json(json.dumps(forged)))
+        is False
+    )
 
 
 def test_count_length_zero() -> None:
     dfa = _dfa_ends_in_1()
     result = compute_count(CountRequest(dfa=dfa, word_length=0))
-    assert result.count == "0"  # initial state 0 is not accepting
+    assert result.count == 0  # initial state 0 is not accepting
 
 
 def test_count_length_zero_accepting() -> None:
     dfa = _dfa_even_zeros()
     result = compute_count(CountRequest(dfa=dfa, word_length=0))
-    assert result.count == "1"  # initial state 0 is accepting
+    assert result.count == 1  # initial state 0 is accepting
 
 
 def test_count_even_zeros_length_3() -> None:
@@ -299,7 +308,7 @@ def test_count_even_zeros_length_3() -> None:
 
     dfa = _dfa_even_zeros()
     result = compute_count(CountRequest(dfa=dfa, word_length=3))
-    assert result.count == "4"
+    assert result.count == 4
 
 
 def test_count_matches_brute_force() -> None:
@@ -313,7 +322,7 @@ def test_count_matches_brute_force() -> None:
             run = compute_run(RunRequest(dfa=dfa, word=word))
             if run.accepted:
                 brute += 1
-        assert result.count == str(brute), f"Length {length}: {result.count} != {brute}"
+        assert result.count == brute, f"Length {length}: {result.count} != {brute}"
 
 
 def test_count_exact_matrix_powering_known_answer() -> None:
@@ -321,7 +330,7 @@ def test_count_exact_matrix_powering_known_answer() -> None:
 
     dfa = _dfa_ends_in_1()
     result = compute_count(CountRequest(dfa=dfa, word_length=10))
-    assert result.count == "512"
+    assert result.count == 512
 
 
 def test_count_large_value_uses_canonical_string() -> None:
@@ -329,14 +338,14 @@ def test_count_large_value_uses_canonical_string() -> None:
 
     dfa = _dfa_full_alphabet_accepting()
     result = compute_count(CountRequest(dfa=dfa, word_length=200))
-    assert result.count == str(32**200)
+    assert result.count == 32**200
 
 
 def test_count_uses_flint_powering_above_the_previous_length_ceiling() -> None:
     dfa = _dfa_full_alphabet_accepting()
     result = compute_count(CountRequest(dfa=dfa, word_length=1_000))
 
-    assert result.count == str(32**1_000)
+    assert result.count == 32**1_000
 
 
 def test_count_rejects_projected_result_digits_before_powering() -> None:
@@ -376,7 +385,7 @@ def test_count_empty_accepting_set_short_circuits_before_result_bound() -> None:
     """Empty accepting sets are exactly zero without charging large-n growth."""
 
     dfa = _dfa_full_alphabet_rejecting()
-    assert compute_count(CountRequest(dfa=dfa, word_length=22_000)).count == "0"
+    assert compute_count(CountRequest(dfa=dfa, word_length=22_000)).count == 0
     assert count_accepted_words(dfa, 22_000) == 0
     assert count_accepted_words(dfa, 0) == 0
 
@@ -441,9 +450,9 @@ def test_run_and_count_results_remain_structural() -> None:
 
     count = compute_count(CountRequest(dfa=dfa, word_length=3))
     count_payload = count.model_dump()
-    count_payload["count"] = "5"
+    count_payload["count"] = 5
     forged_count = type(count).model_validate(count_payload)
-    assert int(forged_count.count) == 5
+    assert forged_count.count == 5
 
 
 def test_native_kernels_are_typed_and_consistent() -> None:

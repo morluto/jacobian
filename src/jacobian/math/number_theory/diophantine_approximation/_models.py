@@ -8,8 +8,9 @@ from typing import Self
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 
 _MAX_DISCRIMINANT = 1_000_000
 _MAX_TERMS = 5_000
@@ -122,8 +123,8 @@ class ConvergentValue(StrictModel):
     """One convergent p_n/q_n with index n."""
 
     index: StrictInt = Field(ge=0)
-    numerator: CanonicalInteger
-    denominator: CanonicalInteger
+    numerator: ExactInteger
+    denominator: ExactInteger
 
 
 class ConvergentResult(StrictModel):
@@ -157,8 +158,8 @@ class ConvergentResult(StrictModel):
         digit_cap = _convergent_component_digit_cap(self.convergent_count)
         for value in self.convergents:
             if (
-                len(value.numerator.lstrip("-")) > digit_cap
-                or len(value.denominator.lstrip("-")) > digit_cap
+                len(format_canonical_integer(abs(value.numerator))) > digit_cap
+                or len(format_canonical_integer(abs(value.denominator))) > digit_cap
             ):
                 raise _validation_error(
                     "diophantine_approximation.component_digit_bound_exceeded",
@@ -194,25 +195,20 @@ class PellEquationResult(StrictModel):
     """The fundamental solution (x, y) to x^2 - D*y^2 = 1."""
 
     discriminant: StrictInt = Field(ge=2, le=_MAX_DISCRIMINANT)
-    x: CanonicalInteger
-    y: CanonicalInteger
+    x: ExactInteger
+    y: ExactInteger
 
     @model_validator(mode="after")
     def require_bounded_positive_components(self) -> Self:
         if (
-            len(self.x.lstrip("-")) > _pell_component_digit_cap()
-            or len(self.y.lstrip("-")) > _pell_component_digit_cap()
+            len(format_canonical_integer(abs(self.x))) > _pell_component_digit_cap()
+            or len(format_canonical_integer(abs(self.y))) > _pell_component_digit_cap()
         ):
             raise _validation_error(
                 "diophantine_approximation.pell_component_digit_bound_exceeded",
                 "Pell components exceed the digit bound implied by the admitted discriminant",
             )
-        if (
-            self.x.startswith("-")
-            or self.x == "0"
-            or self.y.startswith("-")
-            or self.y == "0"
-        ):
+        if self.x <= 0 or self.y <= 0:
             raise _validation_error(
                 "diophantine_approximation.pell_components_not_positive",
                 "Pell solution components must be positive",
@@ -221,7 +217,7 @@ class PellEquationResult(StrictModel):
 
     @classmethod
     def _from_kernel(
-        cls, *, discriminant: int, x: CanonicalInteger, y: CanonicalInteger
+        cls, *, discriminant: int, x: ExactInteger, y: ExactInteger
     ) -> Self:
         """Build a result from the owner-local Pell kernel."""
 

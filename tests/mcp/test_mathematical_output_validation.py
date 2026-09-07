@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import cProfile
+import json
 from types import CodeType
 
 import pytest
 from mcp.types import CallToolResult
 
 from jacobian.catalog.catalog import Catalog
+from jacobian.math.finite_fields import finite_field
 from jacobian.mcp.direct_tools import direct_operation_tools
 
 
@@ -48,10 +50,7 @@ from jacobian.mcp.direct_tools import direct_operation_tools
         (
             "finite_field.projective_line.enumerate",
             {
-                "presentation": {
-                    "characteristic": 2,
-                    "modulus_coefficients": [1, 1, 0, 1],
-                },
+                "presentation": finite_field(2, (1, 1, 0, 1)).model_dump(mode="json"),
                 "axis": {"name": "coordinates", "labels": ["x", "y"]},
             },
         ),
@@ -62,8 +61,8 @@ def test_direct_sdk_result_validation_does_not_replay_proofs(
 ) -> None:
     operation = Catalog.open().operation(operation_id)
     assert operation is not None
-    request = operation.request_type.model_validate(
-        operation.examples[0].input if payload is None else payload
+    request = operation.request_type.model_validate_json(
+        json.dumps(operation.examples[0].input if payload is None else payload)
     )
     result = operation.run(request)
     wire = CallToolResult(content=[], structured_content=result.model_dump(mode="json"))
@@ -71,7 +70,12 @@ def test_direct_sdk_result_validation_does_not_replay_proofs(
     profiler = cProfile.Profile()
     projected = profiler.runcall(tool.fn_metadata.convert_result, wire)
     assert projected == wire
-    assert operation.result_type.model_validate(projected.structured_content) == result
+    assert (
+        operation.result_type.model_validate_json(
+            json.dumps(projected.structured_content)
+        )
+        == result
+    )
     calls = [
         entry.code
         for entry in profiler.getstats()

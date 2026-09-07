@@ -7,7 +7,7 @@ from math import isqrt
 
 import pytest
 
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.crossed_products._budget import MAX_CONVOLUTION_PAIRS
 from jacobian.math.crossed_products._models import (
@@ -54,17 +54,11 @@ def _c2_presentation(
         identity_coset="e",
         quotient_multiplication=(("e", "a"), ("a", "e")),
         action_matrices=tuple(
-            tuple(
-                tuple(format_canonical_integer(entry) for entry in row)
-                for row in matrix
-            )
+            tuple(tuple(entry for entry in row) for row in matrix)
             for matrix in (identity, action)
         ),
         cocycle_table=tuple(
-            tuple(
-                tuple(format_canonical_integer(entry) for entry in vector)
-                for vector in row
-            )
+            tuple(tuple(entry for entry in vector) for vector in row)
             for row in ((zero, zero), (zero, cocycle_square))
         ),
     )
@@ -92,9 +86,7 @@ def _element(
             FiniteCosetCrossedProductTerm(
                 coefficient=coefficient,
                 coset=coset,
-                exponents=tuple(
-                    format_canonical_integer(exponent) for exponent in exponents
-                ),
+                exponents=tuple(exponent for exponent in exponents),
             )
             for _, exponents, coset in support
         ),
@@ -129,7 +121,7 @@ def _shift(support: Support, shift: Exponent) -> Support:
 
 
 def _gardam_presentation() -> FiniteCosetCrossedProductPresentation:
-    zero = ("0", "0", "0")
+    zero = (0, 0, 0)
     return FiniteCosetCrossedProductPresentation(
         characteristic=2,
         lattice_basis=("x", "y", "z"),
@@ -142,25 +134,25 @@ def _gardam_presentation() -> FiniteCosetCrossedProductPresentation:
             ("ab", "b", "a", "1"),
         ),
         action_matrices=(
-            (("1", "0", "0"), ("0", "1", "0"), ("0", "0", "1")),
-            (("1", "0", "0"), ("0", "-1", "0"), ("0", "0", "-1")),
-            (("-1", "0", "0"), ("0", "1", "0"), ("0", "0", "-1")),
-            (("-1", "0", "0"), ("0", "-1", "0"), ("0", "0", "1")),
+            ((1, 0, 0), (0, 1, 0), (0, 0, 1)),
+            ((1, 0, 0), (0, -1, 0), (0, 0, -1)),
+            ((-1, 0, 0), (0, 1, 0), (0, 0, -1)),
+            ((-1, 0, 0), (0, -1, 0), (0, 0, 1)),
         ),
         cocycle_table=(
             (zero, zero, zero, zero),
-            (zero, ("1", "0", "0"), zero, ("1", "0", "0")),
+            (zero, (1, 0, 0), zero, (1, 0, 0)),
             (
                 zero,
-                ("-1", "1", "-1"),
-                ("0", "1", "0"),
-                ("-1", "0", "-1"),
+                (-1, 1, -1),
+                (0, 1, 0),
+                (-1, 0, -1),
             ),
             (
                 zero,
-                ("0", "-1", "1"),
-                ("0", "-1", "0"),
-                ("0", "0", "1"),
+                (0, -1, 1),
+                (0, -1, 0),
+                (0, 0, 1),
             ),
         ),
     )
@@ -268,8 +260,8 @@ def test_gardam_one_symbol_mutation_preserves_counts_but_breaks_identity() -> No
         FiniteCosetCrossedProductTerm(
             coefficient=term.coefficient,
             coset=term.coset,
-            exponents=("0", "1", "0")
-            if term.coset == "a" and term.exponents == ("0", "0", "1")
+            exponents=(0, 1, 0)
+            if term.coset == "a" and term.exponents == (0, 0, 1)
             else term.exponents,
         )
         for term in alpha.terms
@@ -299,7 +291,9 @@ def test_wire_result_is_structural_and_preserves_the_operand_presentation() -> N
 
     payload = result.model_dump(mode="json")
     payload["product"]["terms"][0]["exponents"] = ["1", "0", "0"]
-    claim = CrossedProductMultiplyResult.model_validate(payload)
+    claim = CrossedProductMultiplyResult.model_validate_json(
+        encode_strict_json(payload)
+    )
     assert claim.left == alpha
     assert claim.right == inverse
     assert claim.product != identity
@@ -321,7 +315,9 @@ def test_deserialized_result_can_be_verified_explicitly() -> None:
         CrossedProductMultiplyRequest(left=alpha, right=inverse)
     ).model_dump(mode="json")
 
-    replayed = CrossedProductMultiplyResult.model_validate(payload)
+    replayed = CrossedProductMultiplyResult.model_validate_json(
+        encode_strict_json(payload)
+    )
 
     assert replayed.product == identity
     assert verify_multiply(replayed)
@@ -334,27 +330,29 @@ def test_deserialized_parent_mismatches_are_verified_after_structural_decode() -
     foreign["characteristic"] = 3
     payload = result.model_dump(mode="json")
     payload["right"]["presentation"] = foreign
-    claim = CrossedProductMultiplyResult.model_validate(payload)
+    claim = CrossedProductMultiplyResult.model_validate_json(
+        encode_strict_json(payload)
+    )
     assert not verify_multiply(claim)
 
     payload = result.model_dump(mode="json")
     payload["product"]["presentation"] = foreign
-    claim = CrossedProductMultiplyResult.model_validate(payload)
+    claim = CrossedProductMultiplyResult.model_validate_json(
+        encode_strict_json(payload)
+    )
     assert not verify_multiply(claim)
 
 
 def test_element_requires_unique_canonical_coset_and_exponent_order() -> None:
     presentation = _c2_presentation()
-    term = FiniteCosetCrossedProductTerm(coefficient=1, coset="e", exponents=("0",))
+    term = FiniteCosetCrossedProductTerm(coefficient=1, coset="e", exponents=(0,))
     with pytest.raises(ValueError, match="unique"):
         FiniteCosetCrossedProductElement(presentation=presentation, terms=(term, term))
     with pytest.raises(ValueError, match="coset order"):
         FiniteCosetCrossedProductElement(
             presentation=presentation,
             terms=(
-                FiniteCosetCrossedProductTerm(
-                    coefficient=1, coset="a", exponents=("0",)
-                ),
+                FiniteCosetCrossedProductTerm(coefficient=1, coset="a", exponents=(0,)),
                 term,
             ),
         )
@@ -372,7 +370,11 @@ def test_presentation_rejects_non_group_table() -> None:
     payload = _c2_presentation().model_dump(mode="json")
     payload["quotient_multiplication"][1][1] = "a"
     with pytest.raises(OperationDomainValidationError, match=r"inverse|associative"):
-        _multiply_zero(FiniteCosetCrossedProductPresentation.model_validate(payload))
+        _multiply_zero(
+            FiniteCosetCrossedProductPresentation.model_validate_json(
+                encode_strict_json(payload)
+            )
+        )
 
 
 def test_presentation_requires_a_prime_characteristic() -> None:
@@ -386,7 +388,11 @@ def test_presentation_rejects_non_unimodular_action() -> None:
     payload = _c2_presentation().model_dump(mode="json")
     payload["action_matrices"][1][0][0] = "2"
     with pytest.raises(OperationDomainValidationError, match="unimodular"):
-        _multiply_zero(FiniteCosetCrossedProductPresentation.model_validate(payload))
+        _multiply_zero(
+            FiniteCosetCrossedProductPresentation.model_validate_json(
+                encode_strict_json(payload)
+            )
+        )
 
 
 def test_presentation_rejects_unimodular_non_action() -> None:
@@ -403,14 +409,22 @@ def test_presentation_rejects_non_normalized_cocycle() -> None:
     payload = _c2_presentation().model_dump(mode="json")
     payload["cocycle_table"][0][1][0] = "1"
     with pytest.raises(OperationDomainValidationError, match="normalized"):
-        _multiply_zero(FiniteCosetCrossedProductPresentation.model_validate(payload))
+        _multiply_zero(
+            FiniteCosetCrossedProductPresentation.model_validate_json(
+                encode_strict_json(payload)
+            )
+        )
 
 
 def test_presentation_rejects_cocycle_equation_failure() -> None:
     payload = _gardam_presentation().model_dump(mode="json")
     payload["cocycle_table"][1][1][0] = "2"
     with pytest.raises(OperationDomainValidationError, match="cocycle must satisfy"):
-        _multiply_zero(FiniteCosetCrossedProductPresentation.model_validate(payload))
+        _multiply_zero(
+            FiniteCosetCrossedProductPresentation.model_validate_json(
+                encode_strict_json(payload)
+            )
+        )
 
 
 @pytest.mark.parametrize(
@@ -428,7 +442,9 @@ def test_presentation_rejects_oversized_nested_rows(
     payload[field][0] = oversized_value
 
     with pytest.raises(ValueError, match="at most"):
-        FiniteCosetCrossedProductPresentation.model_validate(payload)
+        FiniteCosetCrossedProductPresentation.model_validate_json(
+            encode_strict_json(payload)
+        )
 
 
 def test_request_rejects_pairwise_convolution_before_expansion() -> None:
@@ -501,7 +517,9 @@ def test_owner_declares_only_the_admitted_atomic_operation() -> None:
 def test_published_example_is_valid_and_runs() -> None:
     (tool,) = TOOLS
     (invocation_example,) = tool.examples
-    request = tool.request_type.model_validate(invocation_example.input)
+    request = tool.request_type.model_validate_json(
+        encode_strict_json(invocation_example.input)
+    )
 
     result = tool.run(request)
 
@@ -509,6 +527,6 @@ def test_published_example_is_valid_and_runs() -> None:
         FiniteCosetCrossedProductTerm(
             coefficient=1,
             coset="e",
-            exponents=("-1",),
+            exponents=(-1,),
         ),
     )

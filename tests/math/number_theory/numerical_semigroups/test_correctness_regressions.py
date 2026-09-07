@@ -127,11 +127,9 @@ def _brute_catenary(factorizations: tuple[tuple[int, ...], ...]) -> int:
 
 def test_betti_and_minimal_presentation_replay_independently() -> None:
     generators = (6, 10, 15)
-    betti = compute_betti_elements(
-        BettiElementsRequest(generators=tuple(map(str, generators)))
-    )
+    betti = compute_betti_elements(BettiElementsRequest(generators=generators))
     presentation = compute_minimal_presentation(
-        MinimalPresentationRequest(generators=tuple(map(str, generators)))
+        MinimalPresentationRequest(generators=generators)
     )
     brute_betti: list[int] = []
     required_relations = 0
@@ -159,8 +157,8 @@ def test_minimal_presentation_result_retains_relation_coordinates() -> None:
     generators = (4, 10, 15)
     result = MinimalPresentationResult.model_validate(
         {
-            "minimal_generators": ["4", "10", "15"],
-            "betti_elements": ["20", "30"],
+            "minimal_generators": [4, 10, 15],
+            "betti_elements": [20, 30],
             "relations": [
                 {"first": [5, 0, 0], "second": [0, 2, 0]},
                 {"first": [0, 3, 0], "second": [5, 1, 0]},
@@ -192,23 +190,19 @@ def test_element_and_global_catenary_replay_independently() -> None:
     for value in (16, 18, 20, 30):
         expected = _brute_catenary(_brute_factorizations(generators, value))
         observed = compute_element_catenary_degree(
-            ElementCatenaryDegreeRequest(
-                generators=tuple(map(str, generators)), value=str(value)
-            )
+            ElementCatenaryDegreeRequest(generators=generators, value=value)
         )
         assert observed.catenary_degree == expected
     global_result = compute_catenary_degree(
-        CatenaryDegreeRequest(generators=tuple(map(str, generators)))
+        CatenaryDegreeRequest(generators=generators)
     )
     assert global_result.catenary_degree == 6
-    assert global_result.witness_betti_elements == ("18",)
+    assert global_result.witness_betti_elements == (18,)
 
 
 def test_global_catenary_includes_distances_inside_betti_r_classes() -> None:
     generators = (4, 10, 15)
-    result = compute_catenary_degree(
-        CatenaryDegreeRequest(generators=tuple(map(str, generators)))
-    )
+    result = compute_catenary_degree(CatenaryDegreeRequest(generators=generators))
     expected = max(
         _brute_catenary(_brute_factorizations(generators, int(record.betti_element)))
         for record in result.betti_degrees
@@ -223,7 +217,7 @@ def test_global_catenary_includes_distances_inside_betti_r_classes() -> None:
 
 def test_global_delta_replays_every_element_through_theorem_bound() -> None:
     generators = (3, 8, 10)
-    result = compute_delta_set(DeltaSetRequest(generators=tuple(map(str, generators))))
+    result = compute_delta_set(DeltaSetRequest(generators=generators))
     observed: set[int] = set()
     for value in range(result.checked_through + 1):
         lengths = sorted(
@@ -239,9 +233,7 @@ def test_global_delta_replays_every_element_through_theorem_bound() -> None:
 
 def test_global_elasticity_has_an_exact_attaining_witness() -> None:
     generators = (4, 6, 9)
-    result = compute_elasticity(
-        ElasticityRequest(generators=tuple(map(str, generators)))
-    )
+    result = compute_elasticity(ElasticityRequest(generators=generators))
     witness = lcm(generators[0], generators[-1])
     lengths = tuple(
         sum(factorization)
@@ -256,11 +248,11 @@ def test_global_elasticity_has_an_exact_attaining_witness() -> None:
 def test_presentation_binomials_replay_to_zero() -> None:
     generators = (4, 6, 9)
     presentation = compute_minimal_presentation(
-        MinimalPresentationRequest(generators=tuple(map(str, generators)))
+        MinimalPresentationRequest(generators=generators)
     )
     result = compute_presentation_binomials(
         PresentationBinomialsRequest(
-            generators=tuple(map(str, generators)),
+            generators=generators,
             relations=presentation.relations,
         )
     )
@@ -277,59 +269,49 @@ def test_presentation_binomials_replay_to_zero() -> None:
                 binomial.right_exponents, generators, strict=True
             )
         )
-        assert (binomial.left_coefficient, binomial.right_coefficient) == ("1", "-1")
+        assert (binomial.left_coefficient, binomial.right_coefficient) == (1, -1)
         assert left_degree == right_degree
 
 
 def test_degenerate_free_semigroup_has_empty_relations_and_invariants() -> None:
     assert (
-        compute_betti_elements(BettiElementsRequest(generators=("1",))).betti_elements
+        compute_betti_elements(BettiElementsRequest(generators=(1,))).betti_elements
         == ()
     )
     assert (
         compute_minimal_presentation(
-            MinimalPresentationRequest(generators=("1",))
+            MinimalPresentationRequest(generators=(1,))
         ).relations
         == ()
     )
-    assert compute_delta_set(DeltaSetRequest(generators=("1",))).delta_set == ()
+    assert compute_delta_set(DeltaSetRequest(generators=(1,))).delta_set == ()
     assert (
-        compute_catenary_degree(
-            CatenaryDegreeRequest(generators=("1",))
-        ).catenary_degree
+        compute_catenary_degree(CatenaryDegreeRequest(generators=(1,))).catenary_degree
         == 0
     )
 
 
 def test_nonmember_and_undefined_element_invariants_fail_closed() -> None:
     with operation_domain_error():
-        compute_element_delta_set(
-            ElementDeltaSetRequest(generators=("3", "5"), value="7")
-        )
+        compute_element_delta_set(ElementDeltaSetRequest(generators=(3, 5), value=7))
     with operation_domain_error():
-        compute_element_elasticity(
-            ElementElasticityRequest(generators=("3", "5"), value="0")
-        )
+        compute_element_elasticity(ElementElasticityRequest(generators=(3, 5), value=0))
     with operation_domain_error():
         compute_element_catenary_degree(
-            ElementCatenaryDegreeRequest(generators=("3", "5"), value="7")
+            ElementCatenaryDegreeRequest(generators=(3, 5), value=7)
         )
 
 
 def test_completeness_boundaries_reject_unmaterializable_claims() -> None:
     with operation_domain_error():
         compute_factorizations(
-            FactorizationComputeRequest(
-                generators=("6", "7", "8", "9", "10", "11"), value="220"
-            )
+            FactorizationComputeRequest(generators=(6, 7, 8, 9, 10, 11), value=220)
         )
     with operation_domain_error():
         compute_factorization_graph(
-            FactorizationGraphComputeRequest(
-                generators=("6", "7", "8", "9", "10", "11"), value="200"
-            )
+            FactorizationGraphComputeRequest(generators=(6, 7, 8, 9, 10, 11), value=200)
         )
     with operation_domain_error():
-        compute_betti_elements(BettiElementsRequest(generators=("499", "500")))
+        compute_betti_elements(BettiElementsRequest(generators=(499, 500)))
     with operation_domain_error():
-        compute_delta_set(DeltaSetRequest(generators=("10", "11", "34", "35")))
+        compute_delta_set(DeltaSetRequest(generators=(10, 11, 34, 35)))

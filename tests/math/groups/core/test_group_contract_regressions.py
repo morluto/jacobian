@@ -1,5 +1,6 @@
 """Contract regression tests for the finite group operations."""
 
+import json
 from collections.abc import Iterator
 from contextlib import contextmanager
 
@@ -272,13 +273,17 @@ def test_group_claim_verifiers_reject_forged_serialized_values() -> None:
     assert verify_group_order(type(order).model_validate_json(order.model_dump_json()))
     order_payload = order.model_dump(mode="json")
     order_payload["order"] = "7"
-    assert not verify_group_order(type(order).model_validate(order_payload))
+    assert not verify_group_order(
+        type(order).model_validate_json(json.dumps(order_payload))
+    )
 
     orbit = compute_group_orbit(GroupOrbitRequest(group=group, point=0))
     assert verify_group_orbit(type(orbit).model_validate_json(orbit.model_dump_json()))
     orbit_payload = orbit.model_dump(mode="json")
     orbit_payload["orbit"] = [0]
-    assert not verify_group_orbit(type(orbit).model_validate(orbit_payload))
+    assert not verify_group_orbit(
+        type(orbit).model_validate_json(json.dumps(orbit_payload))
+    )
 
     classes = compute_group_conjugacy_classes(
         GroupConjugacyClassesRequest(degree=3, generators=S3_GENERATORS)
@@ -289,7 +294,7 @@ def test_group_claim_verifiers_reject_forged_serialized_values() -> None:
     classes_payload = classes.model_dump(mode="json")
     classes_payload["classes"] = classes_payload["classes"][:-1]
     assert not verify_group_conjugacy_classes(
-        type(classes).model_validate(classes_payload)
+        type(classes).model_validate_json(json.dumps(classes_payload))
     )
 
     from jacobian.math.groups._models import GroupElementOrderRequest
@@ -303,7 +308,9 @@ def test_group_claim_verifiers_reject_forged_serialized_values() -> None:
     )
     element_payload = element.model_dump(mode="json")
     element_payload["order"] = "2"
-    assert not verify_element_order(type(element).model_validate(element_payload))
+    assert not verify_element_order(
+        type(element).model_validate_json(json.dumps(element_payload))
+    )
 
 
 def test_element_order_verifier_uses_group_membership_without_enumeration() -> None:

@@ -1,5 +1,6 @@
 """Defining-invariant and boundary tests for edge-intersection profiles."""
 
+import json
 from itertools import combinations
 
 import pytest
@@ -151,14 +152,14 @@ class TestEdgeIntersectionBinding:
         payload["pair_intersections"][0]["intersection_size"] = 1
 
         with pytest.raises(ValidationError):
-            EdgeIntersectionsResult.model_validate(payload)
+            EdgeIntersectionsResult.model_validate_json(json.dumps(payload))
 
     def test_rejects_forged_histogram(self) -> None:
         payload = _profile(NONLINEAR).model_dump(mode="json")
         payload["histogram"] = [[1, 3]]
 
         with pytest.raises(ValidationError):
-            EdgeIntersectionsResult.model_validate(payload)
+            EdgeIntersectionsResult.model_validate_json(json.dumps(payload))
 
     @pytest.mark.parametrize(
         ("field", "value", "message"),
@@ -183,7 +184,7 @@ class TestEdgeIntersectionBinding:
         payload[field] = value
 
         with pytest.raises(ValidationError, match=message):
-            EdgeIntersectionsResult.model_validate(payload)
+            EdgeIntersectionsResult.model_validate_json(json.dumps(payload))
 
     def test_rejects_aggregate_authored_intersections_before_replay(self) -> None:
         vertices = tuple(f"v{i:02}" for i in range(14))

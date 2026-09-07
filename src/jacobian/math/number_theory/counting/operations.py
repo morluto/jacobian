@@ -2,7 +2,6 @@
 
 from math import gcd
 
-from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.counting._models import (
     _MAX_BOX_COORD,
@@ -130,7 +129,7 @@ def verify_floor_sum(claim: FloorSumResult) -> bool:
     """Check a serialized floor-sum claim against its retained parameters."""
     try:
         expected = floor_sum(claim.n, claim.m, claim.a, claim.b)
-        actual = parse_canonical_integer(claim.value)
+        actual = claim.value
     except (OperationDomainValidationError, TypeError, ValueError):
         return False
     return actual == expected

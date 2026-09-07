@@ -2,15 +2,22 @@
 
 from __future__ import annotations
 
+import json
 from fractions import Fraction
 from typing import Annotated, Self
 
-from pydantic import BeforeValidator, Field, StrictInt, ValidationError, model_validator
+from pydantic import (
+    BeforeValidator,
+    Field,
+    StrictInt,
+    ValidationError,
+    ValidationInfo,
+    model_validator,
+)
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
-from jacobian.canonical import format_canonical_integer
 from jacobian.math.probability._gaussian import (
     MAX_GAUSSIAN_POLYNOMIAL_TERMS,
     MAX_GAUSSIAN_TERM_DEGREE,
@@ -78,27 +85,43 @@ class RawGaussianPolynomial(StrictModel):
 
 def _rational(value: Fraction) -> CanonicalRational:
     return CanonicalRational(
-        num=format_canonical_integer(value.numerator),
-        den=format_canonical_integer(value.denominator),
+        num=value.numerator,
+        den=value.denominator,
     )
 
 
-def canonical_gaussian_polynomial(value: object) -> GaussianPolynomial:
+def canonical_gaussian_polynomial(
+    value: object, info: ValidationInfo
+) -> GaussianPolynomial:
     """Parse a strict canonical value or canonicalize bounded loose wire terms."""
 
     if isinstance(value, GaussianPolynomial):
         return value
 
+    # JSON mode has already decoded the outer object, but its nested exact scalar
+    # fields intentionally remain canonical strings. Decode that nested object
+    # through the model's JSON boundary before canonicalization; Python callers
+    # continue to receive strict native-integer validation.
+    if info.mode == "json":
+        encoded = json.dumps(value, separators=(",", ":"))
+        try:
+            return GaussianPolynomial.model_validate_json(encoded)
+        except ValidationError:
+            raw = RawGaussianPolynomial.model_validate_json(encoded)
+    else:
+        raw = None
+
     # A canonical request is itself a valid public boundary form. Parsing it first
     # makes the canonical JSON projection replayable after duplicate raw terms have
     # legitimately accumulated beyond the per-raw-term 128-digit bound. The strict
     # value still enforces the 16-term and 4,096-digit component bounds.
-    try:
-        return GaussianPolynomial.model_validate(value)
-    except ValidationError:
-        pass
+    if raw is None:
+        try:
+            return GaussianPolynomial.model_validate(value)
+        except ValidationError:
+            pass
 
-    raw = RawGaussianPolynomial.model_validate(value)
+        raw = RawGaussianPolynomial.model_validate(value)
     combined: dict[tuple[int, ...], tuple[Fraction, Fraction]] = {}
     for term in raw.terms:
         real, imaginary = term.coefficient.as_fractions()

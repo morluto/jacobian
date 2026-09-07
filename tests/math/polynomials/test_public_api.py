@@ -119,7 +119,7 @@ def test_exact_public_api_symbols() -> None:
     )
 
 
-def _univariate(variable: str, terms: dict[int, str]) -> Any:
+def _univariate(variable: str, terms: dict[int, int]) -> Any:
     from jacobian._exact import CanonicalRational
     from jacobian.math.polynomials.values import (
         RationalPolynomial,
@@ -133,8 +133,8 @@ def _univariate(variable: str, terms: dict[int, str]) -> Any:
             terms=tuple(
                 RationalPolynomialTerm(
                     coefficient=CanonicalRational(
-                        num=value.split("/")[0],
-                        den=value.split("/")[1] if "/" in value else "1",
+                        num=value,
+                        den=1,
                     ),
                     exponents=(degree,),
                 )
@@ -153,7 +153,7 @@ def test_factor_producers_compute_once_and_round_trip_structurally(
         PolynomialSquareFreeDecompositionResult,
     )
 
-    source = _univariate("x", {4: "1", 2: "-2", 0: "1"})
+    source = _univariate("x", {4: 1, 2: -2, 0: 1})
     factor_calls = square_free_calls = 0
     original_factorization = _operations.factorization
     original_square_free = _operations.square_free_decomposition
@@ -191,7 +191,7 @@ def test_factor_results_keep_structural_ring_and_order_checks() -> None:
     )
     from jacobian.math.polynomials.operations import polynomial_factorization
 
-    result = polynomial_factorization(_univariate("x", {3: "1", 0: "-1"}))
+    result = polynomial_factorization(_univariate("x", {3: 1, 0: -1}))
     with pytest.raises(ValidationError):
         PolynomialFactorizationResult(
             polynomial=result.polynomial,
@@ -204,10 +204,10 @@ def test_factor_results_keep_structural_ring_and_order_checks() -> None:
             polynomial=result.polynomial,
             coefficient=result.coefficient,
             factors=(),
-            reconstructed=_univariate("y", {3: "1", 0: "-1"}),
+            reconstructed=_univariate("y", {3: 1, 0: -1}),
         )
     foreign = PolynomialIrreducibleFactor(
-        factor=_univariate("y", {1: "1", 0: "-1"}), multiplicity=1
+        factor=_univariate("y", {1: 1, 0: -1}), multiplicity=1
     )
     with pytest.raises(ValidationError):
         PolynomialFactorizationResult(

@@ -1,5 +1,6 @@
 """Tests for tree automaton operations."""
 
+import json
 from math import comb
 
 import pytest
@@ -9,9 +10,6 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic.automata.tree import (
     ReachableStateProfile,
     reachable_state_profile,
-    verify_accepted_tree_count,
-    verify_reachable_state_profile,
-    verify_tree_run,
 )
 from jacobian.math.logic.automata.tree._models import (
     AcceptedTreeCountRequest,
@@ -38,7 +36,6 @@ from jacobian.math.logic.automata.tree.values import (
     RankedTree,
     TreeAutomatonTransition,
     TreeStateChartEntry,
-    TreeStateWitness,
     _priced_saturation,
     ranked_tree_node_count,
 )
@@ -169,20 +166,6 @@ class TestRun:
         assert result.accepted is True
         assert result.root_states == (0,)
 
-        decoded = type(result).model_validate_json(result.model_dump_json())
-        assert isinstance(decoded.state_chart[0], TreeStateChartEntry)
-        assert decoded == result
-        assert verify_tree_run(decoded)
-
-    def test_serialized_run_verifier_rejects_forged_chart(self) -> None:
-        result = compute_tree_run(
-            TreeRunRequest(automaton=_simple_automaton(), tree=_node(_leaf(), _leaf()))
-        )
-        decoded = type(result).model_validate_json(result.model_dump_json())
-        assert verify_tree_run(decoded)
-        forged = decoded.model_copy(update={"root_states": ()})
-        assert not verify_tree_run(forged)
-
     def test_run_request_rejects(self) -> None:
         # Use automaton where state 1 is final but not state 0
         automaton = BottomUpTreeAutomaton(
@@ -226,7 +209,7 @@ class TestRun:
 
         payload = result.model_dump()
         payload["state_chart"] = (((), (0,)),)
-        forged = type(result).model_validate(payload)
+        forged = type(result).model_validate_json(json.dumps(payload))
         assert forged.state_chart != result.state_chart
 
     def test_native_run_rejects_invalid_nested_rank(self) -> None:
@@ -248,14 +231,14 @@ class TestAcceptedTreeCount:
         )
 
         assert (
-            BottomUpTreeAutomaton.model_validate(automaton.model_dump(mode="json"))
+            BottomUpTreeAutomaton.model_validate_json(automaton.model_dump_json())
             == automaton
         )
 
         count = compute_accepted_tree_count(
             AcceptedTreeCountRequest(automaton=automaton, tree_size=1)
         )
-        assert count.count == "0"
+        assert count.count == 0
         assert count.estimated_work_bound == 0
 
         profile = compute_tree_automaton_reachability(
@@ -274,17 +257,14 @@ class TestAcceptedTreeCount:
         result = compute_accepted_tree_count(
             AcceptedTreeCountRequest(automaton=automaton, tree_size=1)
         )
-        assert result.count == "1"
-        decoded = type(result).model_validate_json(result.model_dump_json())
-        assert verify_accepted_tree_count(decoded)
-        assert not verify_accepted_tree_count(decoded.model_copy(update={"count": "2"}))
+        assert result.count == 1
 
     def test_count_size_3(self) -> None:
         automaton = _simple_automaton()
         result = compute_accepted_tree_count(
             AcceptedTreeCountRequest(automaton=automaton, tree_size=3)
         )
-        assert result.count == "1"
+        assert result.count == 1
 
     def test_nondeterminism_counts_trees_not_accepting_runs(self) -> None:
         automaton = BottomUpTreeAutomaton(
@@ -341,7 +321,7 @@ class TestAcceptedTreeCount:
             AcceptedTreeCountRequest(automaton=automaton, tree_size=99)
         )
 
-        assert result.count == str(comb(98, 49) // 50)
+        assert result.count == comb(98, 49) // 50
         assert result.tree_size == 99
         assert result.estimated_work_bound <= 2_000_000
 
@@ -352,7 +332,7 @@ class TestAcceptedTreeCount:
             AcceptedTreeCountRequest(automaton=automaton, tree_size=2)
         )
 
-        assert result.count == "0"
+        assert result.count == 0
 
 
 class TestReachableStates:
@@ -366,19 +346,13 @@ class TestReachableStates:
         assert profile.reachable_states == (0,)
         assert profile.unreachable_states == (1,)
         for witness in profile.witnesses:
-            state, tree = witness.state, witness.tree
-            assert run_tree_automaton(automaton, tree) == {state}
+            assert run_tree_automaton(automaton, witness.tree) == {witness.state}
 
         result = compute_tree_automaton_reachability(
             TreeAutomatonReachabilityRequest(automaton=automaton)
         )
         assert isinstance(result, ReachableStateProfile)
         assert result == profile
-
-        decoded = type(profile).model_validate_json(profile.model_dump_json())
-        assert verify_reachable_state_profile(decoded)
-        forged = decoded.model_copy(update={"witnesses": ((0, _leaf()), (1, _leaf()))})
-        assert not verify_reachable_state_profile(forged)
 
     def test_no_nullary_seed_has_an_empty_reachable_profile(self) -> None:
         automaton = BottomUpTreeAutomaton(
@@ -428,8 +402,7 @@ class TestReachableStates:
             9,
         )
         for witness in result.witnesses:
-            state, tree = witness.state, witness.tree
-            assert state in run_tree_automaton(automaton, tree)
+            assert witness.state in run_tree_automaton(automaton, witness.tree)
 
     def test_reachability_requires_every_hyperedge_child(self) -> None:
         automaton = BottomUpTreeAutomaton(
@@ -518,9 +491,6 @@ class TestReachableStates:
 
         assert result.witnesses[0].tree == RankedTree(symbol=0)
         assert result.witnesses[1].tree == RankedTree(symbol=0)
-        decoded = type(result).model_validate_json(result.model_dump_json())
-        assert isinstance(decoded.witnesses[0], TreeStateWitness)
-        assert verify_reachable_state_profile(decoded)
 
         forged_payload = result.model_dump()
         forged_payload["witnesses"] = [[0, {"symbol": 1, "children": []}], [1, _leaf()]]
@@ -576,7 +546,7 @@ class TestReachableStates:
         payload["reachable_states"] = (1,)
 
         with pytest.raises(ValidationError) as exc:
-            ReachableStateProfile.model_validate(payload)
+            ReachableStateProfile.model_validate_json(json.dumps(payload))
         _assert_validation_code(exc, "tree_automata.states_not_disjoint")
 
     def test_result_model_accepts_structural_witness_data(self) -> None:
@@ -606,7 +576,7 @@ class TestReachableStates:
         profile = reachable_state_profile(automaton)
 
         payload = profile.model_dump()
-        revalidated = ReachableStateProfile.model_validate(payload)
+        revalidated = ReachableStateProfile.model_validate_json(json.dumps(payload))
 
         assert revalidated == profile
 

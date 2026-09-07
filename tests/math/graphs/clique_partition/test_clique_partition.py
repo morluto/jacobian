@@ -20,7 +20,9 @@ DIAMOND = {
 }
 
 
-def _check(graph: dict[str, object], parts: list[list[str]]):
+def _check(
+    graph: dict[str, object], parts: list[list[str]]
+) -> EdgeCliquePartitionResult:
     request = EdgeCliquePartitionRequest.model_validate(
         {"graph": graph, "parts": [tuple(part) for part in parts]}
     )
@@ -112,7 +114,7 @@ class TestSemantics:
     def test_result_reparses(self) -> None:
         result = _check(DIAMOND, [["a", "b", "c"], ["a", "d"], ["b", "d"]])
         assert (
-            EdgeCliquePartitionResult.model_validate(result.model_dump(mode="json"))
+            EdgeCliquePartitionResult.model_validate_json(result.model_dump_json())
             == result
         )
 

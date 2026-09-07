@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.lattices import reduce_basis
 from jacobian.math.lattices._models import (
@@ -21,14 +21,11 @@ from jacobian.math.matrices.values import (
 
 def _wire(matrix: Any) -> IntegerMatrix:
     entries = tuple(
-        tuple(
-            format_canonical_integer(int(matrix[row, column]))
-            for column in range(matrix.ncols())
-        )
+        tuple(int(matrix[row, column]) for column in range(matrix.ncols()))
         for row in range(matrix.nrows())
     )
     if any(
-        len(value.lstrip("-")) > MAX_MATRIX_SCALAR_DIGITS
+        len(format_canonical_integer(abs(value))) > MAX_MATRIX_SCALAR_DIGITS
         for row in entries
         for value in row
     ):
@@ -43,10 +40,7 @@ def reduce_lattice_basis(
         lambda: _require_lattice_matrix_envelope(request.basis, label="basis input"),
         location=("basis",),
     )
-    entries = [
-        [parse_canonical_integer(value) for value in row]
-        for row in request.basis.entries
-    ]
+    entries = [list(row) for row in request.basis.entries]
     reduced, transformation, rank = reduce_basis(entries)
     return LatticeReductionResult(
         reduced_basis=_wire(reduced),
@@ -60,8 +54,8 @@ LATTICE_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         operation_id="lattice.basis.reduce",
         title="Reduce an exact integer lattice basis",
         description=(
-            "Reduce a bounded exact integer row basis and return its exact left "
-            "transformation."
+            "Reduce a bounded exact integer row basis and return the retained "
+            "source basis with its exact left transformation."
         ),
         request_type=LatticeReductionRequest,
         result_type=LatticeReductionResult,

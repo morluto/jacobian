@@ -19,7 +19,9 @@ from jacobian.process import BoundedProcessResult, ProcessResourceLimits
 
 
 def _number_field(*coefficients: str) -> SimpleNumberFieldPresentation:
-    return SimpleNumberFieldPresentation(coefficients_descending=coefficients)
+    return SimpleNumberFieldPresentation(
+        coefficients_descending=tuple(int(coefficient) for coefficient in coefficients)
+    )
 
 
 def test_timed_out_number_field_worker_is_an_operational_failure(

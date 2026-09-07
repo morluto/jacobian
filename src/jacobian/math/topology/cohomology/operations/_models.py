@@ -8,6 +8,7 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.topology._models import FiniteSimplicialComplex
 from jacobian.math.topology._request_admission import (
     require_canonical_complex_admission,
@@ -89,7 +90,7 @@ def _require_bounded_vertex_labels(
 ) -> None:
     for simplex in entries:
         for vertex in simplex:
-            if len(str(abs(vertex))) > MAX_VERTEX_LABEL_DIGITS:
+            if len(format_canonical_integer(abs(vertex))) > MAX_VERTEX_LABEL_DIGITS:
                 raise _validation_error(
                     "vertex_label_bound",
                     f"{label} vertex label {vertex} exceeds the "
@@ -102,7 +103,7 @@ def _require_bounded_coefficients(
     label: str,
 ) -> None:
     for coefficient in coefficients:
-        if len(str(abs(coefficient))) > MAX_COEFFICIENT_DIGITS:
+        if len(format_canonical_integer(abs(coefficient))) > MAX_COEFFICIENT_DIGITS:
             raise _validation_error(
                 "coefficient_bound",
                 f"{label} coefficient {coefficient} exceeds the "

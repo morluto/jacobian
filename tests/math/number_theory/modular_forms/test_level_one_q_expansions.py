@@ -70,7 +70,7 @@ def test_delta_known_prefix_and_defining_e4_e6_identity() -> None:
     e6 = level_one_named_q_expansion("E6", 7).q_expansion
     derived = scalar_multiply(
         subtract(power(e4, 3).result, power(e6, 2).result).result,
-        CanonicalRational(num="1", den="1728"),
+        CanonicalRational(num=1, den=1728),
     ).result
     assert derived == delta.q_expansion
 
@@ -94,9 +94,7 @@ def test_delta_precision_1024_satisfies_its_defining_identity_coefficientwise() 
     e6 = level_one_named_q_expansion("E6", precision).q_expansion
 
     def polynomial(coefficients: tuple[CanonicalRational, ...]) -> fmpq_poly:
-        return fmpq_poly(
-            [fmpq(int(value.num), int(value.den)) for value in coefficients]
-        )
+        return fmpq_poly([fmpq(value.num, value.den) for value in coefficients])
 
     delta_poly = polynomial(delta.coefficients)
     e4_poly = polynomial(e4.coefficients)
@@ -129,7 +127,7 @@ def test_order_one_retains_the_known_constant_coefficient() -> None:
 def test_eisenstein_prefixes_beyond_the_former_carrier_ceiling_are_admitted() -> None:
     e6 = level_one_named_q_expansion("E6", 1000)
     assert len(e6.q_expansion.coefficients) == 1000
-    assert all(coefficient.den == "1" for coefficient in e6.q_expansion.coefficients)
+    assert all(coefficient.den == 1 for coefficient in e6.q_expansion.coefficients)
     assert int(e6.q_expansion.coefficients[-1].as_fraction()) == -504 * (
         divisor_power_sum(999, 5)
     )

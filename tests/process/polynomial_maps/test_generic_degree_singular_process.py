@@ -52,7 +52,7 @@ def _map() -> RationalPolynomialMap:
                 polynomial=SparseRationalPolynomial(
                     terms=(
                         RationalPolynomialTerm(
-                            coefficient=CanonicalRational(num="1", den="1"),
+                            coefficient=CanonicalRational(num=1, den=1),
                             exponents=(1,),
                         ),
                     )
@@ -72,7 +72,7 @@ def _two_variable_map() -> RationalPolynomialMap:
                 polynomial=SparseRationalPolynomial(
                     terms=(
                         RationalPolynomialTerm(
-                            coefficient=CanonicalRational(num="1", den="1"),
+                            coefficient=CanonicalRational(num=1, den=1),
                             exponents=exponents,
                         ),
                     )
@@ -269,7 +269,7 @@ def _stripe_certificate() -> GenericFiberCertificate:
         numerator=SparseRationalPolynomial(
             terms=(
                 RationalPolynomialTerm(
-                    coefficient=CanonicalRational(num="1", den="1"),
+                    coefficient=CanonicalRational(num=1, den=1),
                     exponents=(0, 0),
                 ),
             )
@@ -277,7 +277,7 @@ def _stripe_certificate() -> GenericFiberCertificate:
         denominator=SparseRationalPolynomial(
             terms=(
                 RationalPolynomialTerm(
-                    coefficient=CanonicalRational(num="1", den="1"),
+                    coefficient=CanonicalRational(num=1, den=1),
                     exponents=(0, 0),
                 ),
             )
@@ -409,11 +409,11 @@ def test_protocol_coefficient_with_common_factor_is_normalized_on_construction()
     assert tuple(
         (term.exponents, term.coefficient.num, term.coefficient.den)
         for term in coefficient.numerator.terms
-    ) == (((1,), "1", "1"), ((0,), "1", "1"))
+    ) == (((1,), 1, 1), ((0,), 1, 1))
     assert tuple(
         (term.exponents, term.coefficient.num, term.coefficient.den)
         for term in coefficient.denominator.terms
-    ) == (((0,), "1", "1"),)
+    ) == (((0,), 1, 1),)
 
 
 def test_backend_script_uses_only_fixed_internal_identifiers() -> None:

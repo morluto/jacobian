@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 from collections import Counter
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
 
 import pytest
+from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
@@ -39,17 +41,49 @@ def raises_code(code: str) -> Iterator[None]:
 
 def test_sidon_request_rejects_duplicate_integer_elements() -> None:
     with raises_code("combinatorics.sidon_invariant"):
-        IntegerSidonRequest(elements=("1", "2", "1"))
+        IntegerSidonRequest(elements=(1, 2, 1))
+
+
+@pytest.mark.parametrize("mode", ["validation", "serialization"])
+def test_integer_set_schemas_retain_canonical_signed_bounds(mode: Any) -> None:
+    for model, field in (
+        (IntegerSidonRequest, "elements"),
+        (IntegerSidonResult, "normalized_elements"),
+        (CyclicDifferenceSetExtensionRequest, "base_elements"),
+    ):
+        schema = model.model_json_schema(mode=mode)["properties"][field]["items"]
+        validator = Draft202012Validator(schema)
+        for accepted in ("0", "9" * 128, "-" + "9" * 127):
+            assert validator.is_valid(accepted)
+        for rejected in (0, "01", "-0", "1\n", "9" * 129, "-" + "9" * 128):
+            assert not validator.is_valid(rejected)
+
+
+@pytest.mark.parametrize("sign", [1, -1])
+def test_integer_set_signed_bound_matches_native_and_json(sign: int) -> None:
+    digits = 128 - int(sign < 0)
+    accepted = sign * (10**digits - 1)
+    rejected = sign * 10**digits
+    for model, field, extra in (
+        (IntegerSidonRequest, "elements", {}),
+        (CyclicDifferenceSetExtensionRequest, "base_elements", {"target_order": 3}),
+    ):
+        native = model.model_validate({field: (accepted,), **extra})
+        assert model.model_validate_json(native.model_dump_json()) == native
+        with pytest.raises(ValidationError):
+            model.model_validate({field: (rejected,), **extra})
+        with pytest.raises(ValidationError):
+            model.model_validate_json(json.dumps({field: [str(rejected)], **extra}))
 
 
 def test_sidon_result_keeps_structural_normalization() -> None:
-    produced = decide_integer_sidon(IntegerSidonRequest(elements=("4", "1", "2")))
-    result = IntegerSidonResult.model_validate(produced.model_dump(mode="json"))
-    assert result.normalized_elements == ("1", "2", "4")
+    produced = decide_integer_sidon(IntegerSidonRequest(elements=(4, 1, 2)))
+    result = IntegerSidonResult.model_validate_json(produced.model_dump_json())
+    assert result.normalized_elements == (1, 2, 4)
 
 
 def test_sidon_kernel_returns_the_complete_ordered_difference_profile() -> None:
-    result = decide_integer_sidon(IntegerSidonRequest(elements=("0", "1", "3")))
+    result = decide_integer_sidon(IntegerSidonRequest(elements=(0, 1, 3)))
     expected = tuple(
         (left, right, left - right)
         for left in (0, 1, 3)
@@ -66,21 +100,21 @@ def test_sidon_kernel_returns_the_complete_ordered_difference_profile() -> None:
 
 
 def test_sidon_kernel_decision_matches_its_complete_profile() -> None:
-    result = decide_integer_sidon(IntegerSidonRequest(elements=("0", "1", "3")))
+    result = decide_integer_sidon(IntegerSidonRequest(elements=(0, 1, 3)))
     differences = tuple(int(item.difference) for item in result.ordered_differences)
     assert result.is_sidon == (len(set(differences)) == len(differences))
 
 
 def test_singleton_sidon_has_empty_complete_ledger() -> None:
-    result = decide_integer_sidon(IntegerSidonRequest(elements=("7",)))
+    result = decide_integer_sidon(IntegerSidonRequest(elements=(7,)))
 
-    assert result.normalized_elements == ("7",)
+    assert result.normalized_elements == (7,)
     assert result.ordered_differences == ()
     assert result.is_sidon is True
 
 
 def test_sidon_admits_complete_profile_for_first_69_squares() -> None:
-    elements = tuple(str(value * value) for value in range(1, 70))
+    elements = tuple(value * value for value in range(1, 70))
     result = decide_integer_sidon(IntegerSidonRequest(elements=elements))
 
     assert len(result.normalized_elements) == 69
@@ -89,12 +123,12 @@ def test_sidon_admits_complete_profile_for_first_69_squares() -> None:
 
 def test_sidon_parser_ceiling_is_a_direct_cardinality_bound() -> None:
     admitted = tuple(range(MAX_SIDON_SET_SIZE))
-    rejected = tuple(str(value) for value in range(MAX_SIDON_SET_SIZE + 1))
+    rejected = tuple(value for value in range(MAX_SIDON_SET_SIZE + 1))
 
     assert MAX_SIDON_ORDERED_DIFFERENCES == MAX_SIDON_SET_SIZE * (
         MAX_SIDON_SET_SIZE - 1
     )
-    IntegerSidonRequest(elements=tuple(str(value) for value in admitted))
+    IntegerSidonRequest(elements=admitted)
     _require_integer_sidon_result_admission(admitted)
     with pytest.raises(ValidationError) as exc_info:
         IntegerSidonRequest(elements=rejected)
@@ -103,25 +137,25 @@ def test_sidon_parser_ceiling_is_a_direct_cardinality_bound() -> None:
 
 def test_sidon_translated_interval_reaches_result_sensitive_admission() -> None:
     elements = tuple(range(-9, 426))
-    request = IntegerSidonRequest(elements=tuple(str(value) for value in elements))
+    request = IntegerSidonRequest(elements=elements)
     plan = _require_integer_sidon_result_admission(elements)
 
     assert len(request.elements) == 435
     assert MAX_SIDON_SET_SIZE == 435
-    assert len(plan.difference_wires) == MAX_SIDON_ORDERED_DIFFERENCES
+    assert len(plan.differences) == MAX_SIDON_ORDERED_DIFFERENCES
 
 
 def test_sidon_nonnegative_interval_at_the_ceiling_is_admitted() -> None:
     elements = tuple(range(MAX_SIDON_SET_SIZE))
-    IntegerSidonRequest(elements=tuple(str(value) for value in elements))
+    IntegerSidonRequest(elements=elements)
 
     plan = _require_integer_sidon_result_admission(elements)
-    assert len(plan.difference_wires) == MAX_SIDON_ORDERED_DIFFERENCES
+    assert len(plan.differences) == MAX_SIDON_ORDERED_DIFFERENCES
 
 
 def test_sidon_zero_through_256_reaches_result_sensitive_admission() -> None:
     elements = tuple(range(257))
-    request = IntegerSidonRequest(elements=tuple(str(value) for value in elements))
+    request = IntegerSidonRequest(elements=elements)
 
     assert len(request.elements) == 257
     _require_integer_sidon_result_admission(elements)
@@ -143,42 +177,44 @@ def test_sidon_kernel_reuses_admitted_difference_wires(
 
     monkeypatch.setattr(sidon_models, "_integer_sidon_profile", counted_profile)
     monkeypatch.setattr(sidon_kernel, "_integer_sidon_profile", counted_profile)
-    result = decide_integer_sidon(IntegerSidonRequest(elements=("0", "1", "3")))
+    result = decide_integer_sidon(IntegerSidonRequest(elements=(0, 1, 3)))
 
     assert calls == 1
     plan = captured[0]
-    assert result.normalized_elements == plan.normalized_wires
+    assert result.normalized_elements == plan.normalized_elements
     assert result.is_sidon == plan.is_sidon
     assert (
         tuple(
             (item.minuend, item.subtrahend, item.difference)
             for item in result.ordered_differences
         )
-        == plan.difference_wires
+        == plan.differences
     )
 
 
 def test_sidon_admits_wide_elements_within_the_cardinality_bound() -> None:
     prefix = "9" * 125
-    elements = tuple(f"{prefix}{value:03d}" for value in range(256))
+    elements = tuple(int(f"{prefix}{value:03d}") for value in range(256))
 
-    result = decide_integer_sidon(IntegerSidonRequest(elements=elements))
+    result = decide_integer_sidon(
+        IntegerSidonRequest(elements=tuple(int(value) for value in elements))
+    )
     assert len(result.ordered_differences) == 256 * 255
 
 
 def test_sidon_result_rejects_forged_difference_and_decision() -> None:
-    result = decide_integer_sidon(IntegerSidonRequest(elements=("0", "1", "3")))
+    result = decide_integer_sidon(IntegerSidonRequest(elements=(0, 1, 3)))
     payload = result.model_dump(mode="json")
     payload["ordered_differences"][0]["difference"] = "0"
     payload["is_sidon"] = not result.is_sidon
 
     with raises_code("combinatorics.sidon_invariant"):
-        IntegerSidonResult.model_validate(payload)
+        IntegerSidonResult.model_validate_json(json.dumps(payload))
 
 
 def test_extension_request_rejects_an_unbounded_candidate_space() -> None:
     request = CyclicDifferenceSetExtensionRequest(
-        base_elements=("0", "1", "2", "3", "4", "5", "6"),
+        base_elements=(0, 1, 2, 3, 4, 5, 6),
         target_order=10,
     )
     with pytest.raises(OperationDomainValidationError) as error:
@@ -243,10 +279,10 @@ def test_pds_kernel_returns_the_complete_profile_for_its_source() -> None:
 
 def test_extension_result_rejects_a_witness_that_drops_the_retained_base() -> None:
     result = decide_cyclic_difference_set_extension(
-        CyclicDifferenceSetExtensionRequest(base_elements=("0", "1"), target_order=3)
+        CyclicDifferenceSetExtensionRequest(base_elements=(0, 1), target_order=3)
     )
     assert result.decision == "EXTENDS"
     payload = result.model_dump(mode="json")
     payload["extension"] = [0, 2, 4]
     with pytest.raises(ValidationError):
-        CyclicDifferenceSetExtensionResult.model_validate(payload)
+        CyclicDifferenceSetExtensionResult.model_validate_json(json.dumps(payload))

@@ -11,6 +11,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 
 MAX_GROUND_SET = 64
 MAX_SETS = 1_000
@@ -55,7 +56,9 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 
 
 def _fraction_wire_size(value: Fraction) -> int:
-    return len(str(abs(value.numerator))) + len(str(value.denominator))
+    return len(format_canonical_integer(abs(value.numerator))) + len(
+        format_canonical_integer(value.denominator)
+    )
 
 
 def _sum_selected_fractions(
@@ -209,14 +212,16 @@ class HardConstraintRoundingSource(StrictModel):
             )
 
         common_denominator_digits = 1 + sum(
-            len(value.den) for value in self.values if value.den != "1"
+            len(format_canonical_integer(value.den))
+            for value in self.values
+            if value.den != 1
         )
         # For an f-column zero-one retained system, fraction-free nullspace
         # coordinates are minors. Hadamard bounds each minor by f^(f/2);
         # f*digits(f)+1 is a simple conservative decimal bound. A common
         # denominator therefore grows by at most this factor per endpoint move.
         direction_growth_digits = sum(
-            support * len(str(support)) + 1
+            support * len(format_canonical_integer(support)) + 1
             for support in range(2, fractional_count + 1)
         )
         if (
@@ -242,10 +247,12 @@ class HardConstraintRoundingSource(StrictModel):
         ]
 
         input_rational_digits = sum(
-            len(value.num.lstrip("-")) + len(value.den) for value in self.values
+            len(format_canonical_integer(value.num))
+            + len(format_canonical_integer(value.den))
+            for value in self.values
         )
         row_digits = sum(_fraction_wire_size(row_sum) for row_sum in row_sums)
-        coordinate_digits = len(str(max(1, coordinate_count)))
+        coordinate_digits = len(format_canonical_integer(max(1, coordinate_count)))
         column_digits = sum(
             3 * (_fraction_wire_size(value) + coordinate_digits + 1)
             for value in column_sums

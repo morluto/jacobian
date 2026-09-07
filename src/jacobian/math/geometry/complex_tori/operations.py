@@ -19,7 +19,7 @@ from jacobian._execution import (
     current_request_execution,
     request_checkpoint,
 )
-from jacobian.canonical import parse_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.complex_tori._models import (
     HermitianDefiniteness,
@@ -157,11 +157,13 @@ def _scalar_height_ledger(
             for coordinate in value.coefficients_ascending
         )
         field_digits = max(
-            len(coefficient.lstrip("-"))
+            len(format_canonical_integer(coefficient).lstrip("-"))
             for coefficient in matrix.embedding.presentation.coefficients_descending
         )
         leading_digits = len(
-            matrix.embedding.presentation.coefficients_descending[0].lstrip("-")
+            format_canonical_integer(
+                matrix.embedding.presentation.coefficients_descending[0]
+            ).lstrip("-")
         )
         algebraic = True
     else:
@@ -170,11 +172,13 @@ def _scalar_height_ledger(
         field_digits = 1
         leading_digits = 1
         algebraic = False
-    numerator_digits = max(len(value.num.lstrip("-")) for value in coordinates)
+    numerator_digits = max(
+        len(format_canonical_integer(abs(value.num))) for value in coordinates
+    )
     denominator_digits = (
         0
-        if all(value.den == "1" for value in coordinates)
-        else max(len(value.den) for value in coordinates)
+        if all(value.den == 1 for value in coordinates)
+        else max(len(format_canonical_integer(value.den)) for value in coordinates)
     )
     return (
         algebraic,
@@ -293,7 +297,9 @@ def _admit_riemann_form_execution(
     except PydanticCustomError as exc:
         raise _as_complex_torus_admission_error(exc) from exc
     form_digits = max(
-        len(value.lstrip("-")) for row in form.matrix.entries for value in row
+        len(format_canonical_integer(value).lstrip("-"))
+        for row in form.matrix.entries
+        for value in row
     )
     associated_numerator_digits = (
         products.numerator_digits
@@ -327,9 +333,7 @@ def _admit_riemann_form_execution(
             denominator_digits=associated_denominator_digits,
             field_digits=products.field_digits,
             leading_digits=products.leading_digits,
-            zero_matrix=all(
-                value == "0" for row in form.matrix.entries for value in row
-            ),
+            zero_matrix=all(value == 0 for row in form.matrix.entries for value in row),
         )
     except PydanticCustomError as exc:
         raise _as_complex_torus_admission_error(exc) from exc
@@ -347,13 +351,7 @@ def _admit_riemann_form_execution(
 
 
 def _rational_domain_matrix(matrix: RationalMatrix) -> DomainMatrix:
-    rows = [
-        [
-            QQ(parse_canonical_integer(value.num), parse_canonical_integer(value.den))
-            for value in row
-        ]
-        for row in matrix.entries
-    ]
+    rows = [[QQ(value.num, value.den) for value in row] for row in matrix.entries]
     return DomainMatrix(rows, (len(rows), len(rows[0])), QQ)
 
 

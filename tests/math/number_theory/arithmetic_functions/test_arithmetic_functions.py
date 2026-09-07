@@ -37,12 +37,12 @@ from jacobian.math.number_theory.arithmetic_functions.operations import (
 # ---------------------------------------------------------------------------
 
 
-def _rat(num: int, den: int = 1) -> dict[str, str]:
-    return {"num": str(num), "den": str(den)}
+def _rat(num: int, den: int = 1) -> dict[str, int]:
+    return {"num": num, "den": den}
 
 
-def _vals(*vals: tuple[int, int]) -> list[dict[str, str]]:
-    return [{"num": str(n), "den": str(d)} for n, d in vals]
+def _vals(*vals: tuple[int, int]) -> list[dict[str, int]]:
+    return [{"num": n, "den": d} for n, d in vals]
 
 
 def _frac(v: CanonicalRational) -> Fraction:
@@ -370,7 +370,7 @@ def test_divisor_prefix_bound_is_derived_from_incidence_work() -> None:
 
 def test_materialized_prefix_above_former_cap_is_exact() -> None:
     length = 50_000
-    one = CanonicalRational(num="1", den="1")
+    one = CanonicalRational(num=1, den=1)
 
     result = dirichlet_convolution((one,) * length, (one,) * length)
 
@@ -380,12 +380,12 @@ def test_materialized_prefix_above_former_cap_is_exact() -> None:
 
 def test_mobius_admission_preserves_a_shared_denominator() -> None:
     length = _MAX_DIVISOR_PREFIX_LENGTH
-    value = CanonicalRational(num="1", den="1000000007")
+    value = CanonicalRational(num=1, den=1000000007)
 
     result = compute_mobius_transform(MobiusTransformRequest(values=(value,) * length))
 
     assert result.values[0] == value
-    assert all(entry.num == "0" and entry.den == "1" for entry in result.values[1:])
+    assert all(entry.num == 0 and entry.den == 1 for entry in result.values[1:])
 
 
 def test_mobius_admission_bounds_two_prime_denominator_lcm() -> None:
@@ -396,15 +396,15 @@ def test_mobius_admission_bounds_two_prime_denominator_lcm() -> None:
     common = first_prime * second_prime
     values = tuple(
         CanonicalRational(
-            num="1",
-            den=str(first_prime if index % 2 == 0 else second_prime),
+            num=1,
+            den=first_prime if index % 2 == 0 else second_prime,
         )
         for index in range(_MAX_DIVISOR_PREFIX_LENGTH)
     )
 
     result = compute_mobius_transform(MobiusTransformRequest(values=values))
 
-    assert result.values[0] == CanonicalRational(num="1", den=str(first_prime))
+    assert result.values[0] == CanonicalRational(num=1, den=first_prime)
     # f(2) = F(2) - F(1) = 1/q - 1/p; f(3) = F(3) - F(1) = 0.
     assert result.values[1].as_fraction() == (
         Fraction(1, second_prime) - Fraction(1, first_prime)
@@ -415,8 +415,8 @@ def test_mobius_admission_bounds_two_prime_denominator_lcm() -> None:
 
 def test_mobius_admission_accounts_for_lifting_carries() -> None:
     values = (
-        CanonicalRational(num="-97", den="10"),
-        CanonicalRational(num="70", den="99"),
+        CanonicalRational(num=-97, den=10),
+        CanonicalRational(num=70, den=99),
     )
     result = compute_mobius_transform(MobiusTransformRequest(values=values))
     assert result.values[0].as_fraction() == Fraction(-97, 10)
@@ -425,8 +425,8 @@ def test_mobius_admission_accounts_for_lifting_carries() -> None:
 
 def test_mobius_admission_sizes_lcm_without_decimal_stringification() -> None:
     values = (
-        CanonicalRational(num="1", den="2"),
-        CanonicalRational(num="1", den="1" + "0" * 4299 + "1"),
+        CanonicalRational(num=1, den=2),
+        CanonicalRational(num=1, den=10**4299 + 1),
     )
     shared = _shared_denominator_lcm(values)
     assert shared is not None
@@ -440,8 +440,8 @@ def test_mobius_mixed_two_prime_denominators_match_the_defining_sum() -> None:
     second_prime = 11
     values = tuple(
         CanonicalRational(
-            num="1",
-            den=str(first_prime if index % 2 == 0 else second_prime),
+            num=1,
+            den=first_prime if index % 2 == 0 else second_prime,
         )
         for index in range(12)
     )
@@ -475,34 +475,34 @@ def test_mobius_admission_uses_rational_height_not_encoded_size() -> None:
     assert len(str(max(primes))) == 3
     assert len(str(common)) >= 80
     values = tuple(
-        CanonicalRational(num="1", den=str(primes[index % len(primes)]))
+        CanonicalRational(num=1, den=primes[index % len(primes)])
         for index in range(_MAX_DIVISOR_PREFIX_LENGTH)
     )
 
     result = compute_mobius_transform(MobiusTransformRequest(values=values))
 
     assert len(result.values) == len(values)
-    assert max(len(value.den) for value in result.values) <= len(str(common))
+    assert max(len(str(value.den)) for value in result.values) <= len(str(common))
 
 
 def test_convolution_admission_preserves_shared_denominators() -> None:
     length = _MAX_DIVISOR_PREFIX_LENGTH
-    value = CanonicalRational(num="1", den="1000000007")
+    value = CanonicalRational(num=1, den=1000000007)
     values = (value,) * length
 
     result = dirichlet_convolution(values, values)
 
     assert len(result) == length
-    assert result[0] == CanonicalRational(num="1", den="1000000014000000049")
-    assert all(entry.den == "1000000014000000049" for entry in result)
+    assert result[0] == CanonicalRational(num=1, den=1000000014000000049)
+    assert all(entry.den == 1000000014000000049 for entry in result)
     # tau(k) / D^2 for the constant-1/D prefix.
     assert result[5].as_fraction() == Fraction(4, 1000000014000000049)
 
 
 def test_convolution_admission_tracks_denominators_per_result_slot() -> None:
     length = 54_269
-    values = [CanonicalRational(num="1", den="1") for _ in range(length)]
-    values[-1] = CanonicalRational(num="1", den=str(10**100 + 1))
+    values = [CanonicalRational(num=1, den=1) for _ in range(length)]
+    values[-1] = CanonicalRational(num=1, den=10**100 + 1)
 
     result = dirichlet_convolution(tuple(values), tuple(values))
 
@@ -511,11 +511,11 @@ def test_convolution_admission_tracks_denominators_per_result_slot() -> None:
 
 
 def test_constant_one_inverse_admits_widened_prefix() -> None:
-    ones = (CanonicalRational(num="1", den="1"),) * _MAX_DIVISOR_PREFIX_LENGTH
+    ones = (CanonicalRational(num=1, den=1),) * _MAX_DIVISOR_PREFIX_LENGTH
     result = dirichlet_inverse(ones)
 
     assert len(result) == _MAX_DIVISOR_PREFIX_LENGTH
-    assert result[0] == CanonicalRational(num="1", den="1")
+    assert result[0] == CanonicalRational(num=1, den=1)
     assert result[1].as_fraction() == Fraction(-1)
     assert all(
         entry.as_fraction() in {Fraction(-1), Fraction(0), Fraction(1)}

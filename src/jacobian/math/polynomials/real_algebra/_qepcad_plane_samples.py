@@ -510,8 +510,7 @@ def _point_from_coordinate_data(
     coordinates = tuple(
         RealAlgebraicValue._from_admitted_polynomial(
             polynomial=tuple(
-                format_canonical_integer(int(coefficient))
-                for coefficient in polynomial.all_coeffs()
+                int(coefficient) for coefficient in polynomial.all_coeffs()
             ),
             real_root_index=root_index,
         )
@@ -544,10 +543,7 @@ def _point_coordinate_data(
     ):
         variable = sympy.Symbol("x")
         coordinate_polynomial = sympy.Poly.from_list(
-            tuple(
-                parse_canonical_integer(coefficient)
-                for coefficient in coordinate.polynomial
-            ),
+            coordinate.polynomial,
             gens=variable,
             domain=sympy.ZZ,
         )
@@ -560,8 +556,7 @@ def _point_coordinate_data(
         )
         recognized_polynomial, recognized_root_index, _root = recognized
         recognized_coefficients = tuple(
-            format_canonical_integer(int(coefficient))
-            for coefficient in recognized_polynomial.all_coeffs()
+            int(coefficient) for coefficient in recognized_polynomial.all_coeffs()
         )
         if (
             recognized_coefficients != coordinate.polynomial

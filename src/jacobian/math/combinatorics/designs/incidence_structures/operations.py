@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Literal
 
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.designs.incidence_structures._kernel import (
     containment_profile_data,
@@ -139,10 +138,7 @@ def incidence_matrix(incidence: IncidenceStructure) -> IncidenceMatrixResult:
         row_count=len(incidence.points),
         column_count=len(incidence.block_ids),
         entries=tuple(
-            tuple(
-                format_canonical_integer(int(point in block))
-                for block in incidence.blocks
-            )
+            tuple(int(point in block) for block in incidence.blocks)
             for point in incidence.points
         ),
     )
@@ -364,9 +360,6 @@ def gram(incidence: IncidenceStructure, axis: Literal["point", "block"]) -> Gram
         matrix=IntegerMatrix(
             row_count=len(labels),
             column_count=len(labels),
-            entries=tuple(
-                tuple(format_canonical_integer(value) for value in row)
-                for row in matrix
-            ),
+            entries=tuple(tuple(value for value in row) for row in matrix),
         ),
     )

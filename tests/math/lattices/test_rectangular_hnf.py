@@ -8,7 +8,7 @@ from jacobian.math.lattices._hnf import HERMITE_NORMAL_FORM_OPERATION
 from jacobian.math.lattices._hnf_bounds import admit_hermite_normal_form
 
 
-def _determinant(entries: tuple[tuple[str, ...], ...]) -> Fraction:
+def _determinant(entries: tuple[tuple[int, ...], ...]) -> Fraction:
     """Independent rational elimination, without the HNF backend."""
     a = [[Fraction(x) for x in row] for row in entries]
     det = Fraction(1)
@@ -39,7 +39,7 @@ def test_rectangular_coefficient_lattice(shape: tuple[int, int]) -> None:
     ]
     tool = HERMITE_NORMAL_FORM_OPERATION
     request = tool.request_type.model_validate(
-        {"matrix": {"entries": [[str(x) for x in row] for row in entries]}}
+        {"matrix": {"entries": [list(row) for row in entries]}}
     )
     result = tool.run(request)
     h, u = result.normal_form.entries, result.transformation.entries
@@ -80,13 +80,11 @@ def test_degenerate_inputs_and_native_parity(entries: list[list[int]]) -> None:
 
     tool = HERMITE_NORMAL_FORM_OPERATION
     result = tool.run(
-        tool.request_type.model_validate(
-            {"matrix": {"entries": [[str(x) for x in row] for row in entries]}}
-        )
+        tool.request_type.model_validate({"matrix": {"entries": entries}})
     )
     h, u = hermite_normal_form(entries)
     assert result.normal_form.entries == tuple(
-        tuple(str(h[i, j]) for j in range(h.ncols())) for i in range(h.nrows())
+        tuple(int(h[i, j]) for j in range(h.ncols())) for i in range(h.nrows())
     )
     assert abs(_determinant(result.transformation.entries)) == 1
     assert all(
@@ -118,7 +116,7 @@ def test_hnf_specific_excessive_envelopes(
     ]
     tool = HERMITE_NORMAL_FORM_OPERATION
     request = tool.request_type.model_validate(
-        {"matrix": {"entries": [[str(x) for x in row] for row in entries]}}
+        {"matrix": {"entries": [list(row) for row in entries]}}
     )
     with pytest.raises(OperationDomainValidationError, match=message):
         tool.run(request)
@@ -143,14 +141,12 @@ def test_determinant_modulus_is_not_a_cancelled_rref_denominator(order: int) -> 
     tool = HERMITE_NORMAL_FORM_OPERATION
     result = tool.run(
         tool.request_type.model_validate(
-            {"matrix": {"entries": [[str(x) for x in row] for row in entries]}}
+            {"matrix": {"entries": [list(row) for row in entries]}}
         )
     )
-    assert result.normal_form.entries == tuple(
-        tuple(str(x) for x in row) for row in entries
-    )
+    assert result.normal_form.entries == tuple(tuple(x for x in row) for row in entries)
     assert result.transformation.entries == tuple(
-        tuple(str(int(i == j)) for j in range(order)) for i in range(order)
+        tuple(int(i == j) for j in range(order)) for i in range(order)
     )
 
 
@@ -165,14 +161,14 @@ def test_small_normal_form_retains_large_exact_transformation() -> None:
     tool = HERMITE_NORMAL_FORM_OPERATION
     result = tool.run(
         tool.request_type.model_validate(
-            {"matrix": {"entries": [[str(x) for x in row] for row in entries]}}
+            {"matrix": {"entries": [list(row) for row in entries]}}
         )
     )
     assert result.normal_form.entries == tuple(
-        tuple(str(int(i == j)) for j in range(order)) for i in range(order)
+        tuple(int(i == j) for j in range(order)) for i in range(order)
     )
     assert result.transformation.entries == tuple(
-        tuple(str((-scale) ** (j - i)) if j >= i else "0" for j in range(order))
+        tuple((-scale) ** (j - i) if j >= i else 0 for j in range(order))
         for i in range(order)
     )
 
@@ -200,7 +196,7 @@ def test_seeded_rectangles_match_independent_reconstruction_and_flint_hnf() -> N
                 abs(
                     _determinant(
                         tuple(
-                            tuple(str(u[i, j]) for j in range(rows))
+                            tuple(int(u[i, j]) for j in range(rows))
                             for i in range(rows)
                         )
                     )

@@ -36,7 +36,7 @@ def test_timed_out_certified_factorization_raises_timeout(
     monkeypatch.setattr(process_runtime, "run_bounded_process", _timed_out_worker)
 
     with pytest.raises(TimeoutError):
-        factorize_certified(CertifiedFactorizationRequest(value="10403"))
+        factorize_certified(CertifiedFactorizationRequest(value=10403))
 
 
 def test_timed_out_direct_factorization_worker_raises_timeout(
@@ -44,7 +44,7 @@ def test_timed_out_direct_factorization_worker_raises_timeout(
 ) -> None:
     monkeypatch.setattr(process_runtime, "run_bounded_process", _timed_out_worker)
 
-    request = FactorizationRequest(value="12")
+    request = FactorizationRequest(value=12)
     with pytest.raises(TimeoutError):
         enumerate_divisors(request)
     with pytest.raises(TimeoutError):
@@ -63,9 +63,9 @@ def test_factorization_workers_have_private_cwds_and_os_resource_limits(
     monkeypatch.setattr(process_runtime, "run_bounded_process", timed_out_worker)
 
     with pytest.raises(TimeoutError):
-        factorize_certified(CertifiedFactorizationRequest(value="10403"))
+        factorize_certified(CertifiedFactorizationRequest(value=10403))
     with pytest.raises(TimeoutError):
-        factorize_primes(FactorizationRequest(value="12"))
+        factorize_primes(FactorizationRequest(value=12))
     assert len(recorded) == 2
     for invocation, prefix in zip(
         recorded,

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from jacobian.canonical import parse_canonical_integer
 from jacobian.math.number_theory._friable_enumerate_models import (
     plan_friable_enumerate,
 )
@@ -94,7 +93,7 @@ def _as_python_integer(value: int | IntegerValue) -> int:
     """Return one admitted integer input as its Python integer value."""
 
     if isinstance(value, IntegerValue):
-        return parse_canonical_integer(value.value)
+        return value.value
     return value
 
 

@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from decimal import Decimal
 from typing import cast
 
 import pytest
+from jsonschema import Draft202012Validator
 
 from jacobian._models import StrictModel
 from jacobian.catalog import catalog as catalog_module
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import MathTool, OperationMatchRequest
 from jacobian.catalog.search import browse_operations, match_operations
-from jacobian.dispatch import invoke_operation
+from jacobian.dispatch import invoke_operation, parse_operation_input
 
 
 class _BindingRequest(StrictModel):
@@ -27,6 +29,33 @@ class _WrongBindingResult(StrictModel):
 
 class _ExtraBindingResult(_BindingResult):
     leaked: str
+
+
+class _DecimalBoundary(StrictModel):
+    value: Decimal
+
+
+def test_catalog_schemas_distinguish_accepted_input_from_emitted_output() -> None:
+    operation = MathTool(
+        operation_id="test.schema.boundary",
+        title="Test schema boundary",
+        description="Expose the distinction between validation and serialization.",
+        request_type=_DecimalBoundary,
+        result_type=_DecimalBoundary,
+        run=lambda request: request,
+    )
+    catalog = Catalog((operation,))
+    descriptor = catalog.inspect(operation.operation_id)
+    assert descriptor is not None
+    input_validator = Draft202012Validator(descriptor.input_schema)
+    output_validator = Draft202012Validator(descriptor.output_schema)
+
+    assert input_validator.is_valid({"value": 42})
+    assert input_validator.is_valid({"value": "42"})
+    result = invoke_operation(operation.operation_id, {"value": "42"}, catalog)
+    assert result.output == {"value": "42"}
+    assert output_validator.is_valid(result.output)
+    assert not output_validator.is_valid({"value": 42})
 
 
 def test_catalog_inspects_determinant_without_sqlite() -> None:
@@ -55,7 +84,7 @@ def test_every_served_operation_publishes_request_valid_examples() -> None:
             f"{descriptor.operation_id} must publish an invocation example"
         )
         for invocation_example in operation.examples:
-            operation.request_type.model_validate(invocation_example.input)
+            parse_operation_input(operation.request_type, invocation_example.input)
 
 
 def test_checked_catalog_binding_rejects_an_incorrect_declared_result() -> None:

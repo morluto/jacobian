@@ -7,7 +7,6 @@ from collections.abc import Iterator
 from itertools import product
 from math import prod
 
-from jacobian.canonical import format_canonical_integer
 from jacobian.math.logic.automata.tree._models import (
     AcceptedTreeCountResult,
     TreeRunResult,
@@ -215,11 +214,6 @@ def verify_accepted_tree_count(claim: AcceptedTreeCountResult) -> bool:
     """Verify an accepted-tree count against its bounded source automaton."""
 
     try:
-        return (
-            format_canonical_integer(
-                accepted_tree_count(claim.automaton, claim.tree_size)
-            )
-            == claim.count
-        )
+        return accepted_tree_count(claim.automaton, claim.tree_size) == claim.count
     except (TypeError, ValueError):
         return False

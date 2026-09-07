@@ -9,7 +9,7 @@ from typing import Annotated, Any, Literal, Self, cast
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math._labels import OpaqueLabel
 from jacobian.math.lattices.invariant_forms._models import (
@@ -207,7 +207,7 @@ class RiemannFormPositive(_RiemannFormHodgeProfile):
 
     status: Literal["RIEMANN_FORM"]
     is_riemann_form: Literal[True] = True
-    polarization_type: tuple[CanonicalInteger, ...]
+    polarization_type: tuple[ExactInteger, ...]
 
 
 RiemannFormOutcome = Annotated[
@@ -245,7 +245,7 @@ class RiemannFormProfile(StrictModel):
     torus: LatticeComplexStructure
     form: IntegralBilinearForm
     smith_normal_form: SmithNormalForm
-    alternating_elementary_divisors: tuple[CanonicalInteger, ...]
+    alternating_elementary_divisors: tuple[ExactInteger, ...]
     is_degenerate: bool
     outcome: RiemannFormOutcome
 

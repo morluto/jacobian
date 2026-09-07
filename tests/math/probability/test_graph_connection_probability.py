@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+import json
 from fractions import Fraction
 
 import pytest
 
+from jacobian._exact import CanonicalRational
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.probability._graph_connection_probability import (
     GRAPH_CONNECTION_PROBABILITY_OPERATION,
     GraphConnectionProbabilityRequest,
     GraphReliabilityEdgeProbability,
+    GraphReliabilitySource,
     compute_graph_connection_probability,
     verify_graph_connection_probability,
 )
@@ -22,9 +25,9 @@ def test_operation_preserves_the_complete_triangle_ledger() -> None:
     operation = GRAPH_CONNECTION_PROBABILITY_OPERATION
     payload = operation.examples[0].input
 
-    request = operation.request_type.model_validate(payload)
+    request = operation.request_type.model_validate_json(json.dumps(payload))
     result = operation.run(request)
-    reparsed = operation.result_type.model_validate(result.model_dump(mode="json"))
+    reparsed = operation.result_type.model_validate_json(result.model_dump_json())
 
     assert operation.operation_id == (
         "probability.graph_reliability.connection_probability.compute"
@@ -45,7 +48,7 @@ def test_probability_domain_is_admitted_at_operation_time() -> None:
         graph=graph,
         edge_probabilities=(
             GraphReliabilityEdgeProbability(
-                edge=("a", "b"), open_probability={"num": "2", "den": "1"}
+                edge=("a", "b"), open_probability=CanonicalRational(num=2, den=1)
             ),
         ),
         terminals=("a", "b"),
@@ -61,7 +64,9 @@ def test_empty_edge_axis_is_retained_and_verifiable() -> None:
         edge_probabilities=(),
         terminals=("a", "b"),
     )
-    result = compute_graph_connection_probability(request)
+    result = compute_graph_connection_probability(
+        GraphReliabilitySource.model_validate(request.model_dump())
+    )
 
     assert result.connection_probability.as_fraction() == Fraction(0)
     assert result.edge_count == 0
@@ -76,12 +81,14 @@ def test_reliability_verifier_rejects_state_with_forged_edge_axis() -> None:
         graph=SimpleUndirectedGraph(vertices=("a", "b"), edges=(("a", "b"),)),
         edge_probabilities=(
             GraphReliabilityEdgeProbability(
-                edge=("a", "b"), open_probability={"num": "1", "den": "2"}
+                edge=("a", "b"), open_probability=CanonicalRational(num=1, den=2)
             ),
         ),
         terminals=("a", "b"),
     )
-    result = compute_graph_connection_probability(request)
+    result = compute_graph_connection_probability(
+        GraphReliabilitySource.model_validate(request.model_dump())
+    )
     decoded = type(result).model_validate_json(result.model_dump_json())
     forged_state = decoded.states[0].model_copy(update={"open_edge_indices": (0,)})
     forged = decoded.model_copy(update={"states": (forged_state, decoded.states[1])})

@@ -12,9 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from itertools import pairwise
-from typing import Literal
 
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.certified_snf.values import (
     MAX_CERTIFIED_SNF_INPUT_DIGITS,
@@ -93,7 +91,7 @@ def smith_normal_form_certificate(
 
     _admit_certified_smith_input(matrix)
     reduction = smith_reduce(
-        [[parse_canonical_integer(value) for value in row] for row in matrix.entries],
+        [list(row) for row in matrix.entries],
         row_count=matrix.row_count,
         column_count=matrix.column_count,
     )
@@ -298,9 +296,7 @@ def _contract_matrix(
     return IntegerMatrix(
         row_count=rows,
         column_count=columns,
-        entries=tuple(
-            tuple(format_canonical_integer(value) for value in row) for row in entries
-        ),
+        entries=tuple(tuple(int(value) for value in row) for row in entries),
     )
 
 
@@ -309,12 +305,8 @@ def certificate_from_reduction(
 ) -> SmithNormalFormCertificate:
     rows = len(reduction.source)
     columns = len(reduction.source[0]) if reduction.source else len(reduction.right)
-    left_determinant: Literal["-1", "1"] = (
-        "1" if reduction.left_determinant == 1 else "-1"
-    )
-    right_determinant: Literal["-1", "1"] = (
-        "1" if reduction.right_determinant == 1 else "-1"
-    )
+    left_determinant = reduction.left_determinant
+    right_determinant = reduction.right_determinant
     return SmithNormalFormCertificate._from_kernel(
         source=_contract_matrix(reduction.source, rows=rows, columns=columns),
         diagonal=_contract_matrix(reduction.diagonal, rows=rows, columns=columns),
@@ -329,9 +321,7 @@ def certificate_from_reduction(
             columns=columns,
         ),
         rank=reduction.rank,
-        invariant_factors=tuple(
-            format_canonical_integer(value) for value in reduction.invariant_factors
-        ),
+        invariant_factors=tuple(value for value in reduction.invariant_factors),
         left_determinant=left_determinant,
         right_determinant=right_determinant,
     )
@@ -353,22 +343,10 @@ def verify_smith_normal_form_certificate(
     except OperationDomainValidationError:
         return False
 
-    source = [
-        [parse_canonical_integer(value) for value in row]
-        for row in certificate.source.entries
-    ]
-    diagonal = [
-        [parse_canonical_integer(value) for value in row]
-        for row in certificate.diagonal.entries
-    ]
-    left = [
-        [parse_canonical_integer(value) for value in row]
-        for row in certificate.left_transformation.entries
-    ]
-    right = [
-        [parse_canonical_integer(value) for value in row]
-        for row in certificate.right_transformation.entries
-    ]
+    source = [list(row) for row in certificate.source.entries]
+    diagonal = [list(row) for row in certificate.diagonal.entries]
+    left = [list(row) for row in certificate.left_transformation.entries]
+    right = [list(row) for row in certificate.right_transformation.entries]
     try:
         if matrix_multiply(matrix_multiply(left, source), right) != diagonal:
             return False

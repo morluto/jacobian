@@ -5,12 +5,13 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Annotated, Self
 
-from pydantic import Field, StrictInt, StringConstraints, model_validator
+from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 from sympy import isprime
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import DecimalIntegerEncoding
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.affine_forms.values import AffineFormId
 from jacobian.math.number_theory.prime_affine_forms.values import (
@@ -49,8 +50,8 @@ CompactPrime = Annotated[
     ),
 ]
 DeterministicPrimeInteger = Annotated[
-    CanonicalInteger,
-    StringConstraints(max_length=20, strict=True),
+    int,
+    DecimalIntegerEncoding(max_digits=20),
 ]
 
 
@@ -83,7 +84,11 @@ def _validation_error(message: str) -> PydanticCustomError:
 
 
 def _digits(value: int | str) -> int:
-    return len(str(value).lstrip("-"))
+    return (
+        len(format_canonical_integer(abs(value)))
+        if isinstance(value, int)
+        else len(value.lstrip("-"))
+    )
 
 
 def _require_prime(prime: int, *, maximum: int) -> None:

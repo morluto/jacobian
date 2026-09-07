@@ -20,12 +20,8 @@ from jacobian.math.matrices.values import IntegerMatrix
 
 
 def test_source_bound_lattice_claims() -> None:
-    parent = IntegerLattice(
-        ambient_dimension=2, basis=IntegerMatrix(entries=(("1", "0"),))
-    )
-    child = IntegerLattice(
-        ambient_dimension=2, basis=IntegerMatrix(entries=(("2", "0"),))
-    )
+    parent = IntegerLattice(ambient_dimension=2, basis=IntegerMatrix(entries=((1, 0),)))
+    child = IntegerLattice(ambient_dimension=2, basis=IntegerMatrix(entries=((2, 0),)))
     result: Any
     verifier: Callable[[Any], bool]
     for result, verifier, field, forged in (
@@ -34,10 +30,10 @@ def test_source_bound_lattice_claims() -> None:
             compute_discriminant_group(child),
             verify_discriminant_group,
             "invariant_factors",
-            ["8"],
+            [8],
         ),
         (
-            compute_sublattice_index(child, parent, IntegerMatrix(entries=(("2",),))),
+            compute_sublattice_index(child, parent, IntegerMatrix(entries=((2,),))),
             verify_sublattice_index,
             "index",
             3,
@@ -56,14 +52,12 @@ def test_source_bound_lattice_claims() -> None:
 
 
 def test_covolume_is_canonical_and_bound_to_source() -> None:
-    lattice = IntegerLattice(
-        ambient_dimension=1, basis=IntegerMatrix(entries=(("2",),))
-    )
+    lattice = IntegerLattice(ambient_dimension=1, basis=IntegerMatrix(entries=((2,),)))
     result = compute_rank_gram(lattice)
     assert result.squared_covolume == 4
     assert result.model_dump(mode="json")["squared_covolume"] == "4"
     payload = result.model_dump()
-    payload["lattice"]["basis"]["entries"] = [["3"]]
+    payload["lattice"]["basis"]["entries"] = [[3]]
     assert not verify_rank_gram(type(result).model_validate(payload))
     for malformed in ("anything", "+4", "04", "-0"):
         payload["squared_covolume"] = malformed
@@ -72,12 +66,12 @@ def test_covolume_is_canonical_and_bound_to_source() -> None:
 
 
 def test_integer_claim_scalars_are_native_with_canonical_json() -> None:
-    parent = IntegerLattice(ambient_dimension=1, basis=IntegerMatrix(entries=(("1",),)))
-    child = IntegerLattice(ambient_dimension=1, basis=IntegerMatrix(entries=(("2",),)))
+    parent = IntegerLattice(ambient_dimension=1, basis=IntegerMatrix(entries=((1,),)))
+    child = IntegerLattice(ambient_dimension=1, basis=IntegerMatrix(entries=((2,),)))
     claims = (
         (compute_saturation(child), "saturation_index"),
         (
-            compute_sublattice_index(child, parent, IntegerMatrix(entries=(("2",),))),
+            compute_sublattice_index(child, parent, IntegerMatrix(entries=((2,),))),
             "index",
         ),
         (compute_discriminant_group(child), "discriminant_order"),

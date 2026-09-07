@@ -12,8 +12,9 @@ from typing import Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalInteger
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, ExactInteger
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 
 MAX_SEQUENCE_LENGTH = 100_000
 MAX_INTEGER_SEQUENCE_ITEM_DIGITS = MAX_CANONICAL_RATIONAL_DIGITS
@@ -34,7 +35,7 @@ class IntegerSequence(StrictModel):
     work and result budgets remain owned by each native operation.
     """
 
-    values: tuple[CanonicalInteger, ...] = Field(
+    values: tuple[ExactInteger, ...] = Field(
         min_length=1,
         max_length=MAX_SEQUENCE_LENGTH,
     )
@@ -42,7 +43,7 @@ class IntegerSequence(StrictModel):
     @model_validator(mode="after")
     def require_bounded_representation(self) -> Self:
         if any(
-            len(value.lstrip("-")) > MAX_INTEGER_SEQUENCE_ITEM_DIGITS
+            len(format_canonical_integer(abs(value))) > MAX_INTEGER_SEQUENCE_ITEM_DIGITS
             for value in self.values
         ):
             raise _validation_error(
@@ -50,7 +51,9 @@ class IntegerSequence(StrictModel):
                 "sequence item exceeds the "
                 f"{MAX_INTEGER_SEQUENCE_ITEM_DIGITS}-digit bound",
             )
-        total_digits = sum(len(value.lstrip("-")) for value in self.values)
+        total_digits = sum(
+            len(format_canonical_integer(abs(value))) for value in self.values
+        )
         if total_digits > MAX_SEQUENCE_TOTAL_DIGITS:
             raise _validation_error(
                 "representation_too_large",

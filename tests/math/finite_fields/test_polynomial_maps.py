@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 
 import pytest
@@ -72,7 +73,22 @@ def test_frobenius_map_is_a_permutation() -> None:
     assert {source.digest: target.digest for source, target in table.entries} == {
         target.digest: source.digest for target, source in result.inverse_entries
     }
-    assert type(result).model_validate(result.model_dump(mode="json")) == result
+    assert type(result).model_validate_json(result.model_dump_json()) == result
+
+
+def test_polynomial_normalization_checks_parent_of_discarded_zero() -> None:
+    field = finite_field(2, (1, 1, 1))
+    other = finite_field(3, (0, 1))
+    one = element(field, (1, 0))
+    foreign_zero = element(other, (0,))
+    with pytest.raises(ValueError, match="coefficients must share their parent"):
+        finite_polynomial(field, (one, foreign_zero))
+    zero = element(field, (0, 0))
+    polynomial = finite_polynomial(field, (one, zero, zero))
+    assert polynomial.coefficients == (one,)
+    assert (
+        type(polynomial).model_validate_json(polynomial.model_dump_json()) == polynomial
+    )
 
 
 def test_slice_b_values_reject_wrong_parent_and_incomplete_table() -> None:
@@ -113,13 +129,9 @@ def test_fibers_and_collisions_preserve_the_table_defining_invariants() -> None:
         for source, target in table.entries
         if source in (collision.left, collision.right)
     )
-    assert type(table).model_validate(table.model_dump(mode="json")) == table
-    assert (
-        type(partition).model_validate(partition.model_dump(mode="json")) == partition
-    )
-    assert (
-        type(collision).model_validate(collision.model_dump(mode="json")) == collision
-    )
+    assert type(table).model_validate_json(table.model_dump_json()) == table
+    assert type(partition).model_validate_json(partition.model_dump_json()) == partition
+    assert type(collision).model_validate_json(collision.model_dump_json()) == collision
 
 
 def test_slice_b_reuses_one_table_for_fiber_and_certificate_handoff() -> None:
@@ -146,7 +158,7 @@ def test_consumers_authenticate_the_supplied_polynomial_table(
         payload["entries"][1][1] = payload["entries"][0][1]
     else:
         payload["map"]["polynomial"]["coefficients"] = [payload["entries"][0][0]]
-    candidate = FiniteMapTable.model_validate(payload)
+    candidate = FiniteMapTable.model_validate_json(json.dumps(payload))
 
     with pytest.raises(OperationDomainValidationError) as error:
         consumer(candidate)
@@ -193,7 +205,7 @@ def test_serialized_fiber_partition_is_explicitly_verifiable() -> None:
 
     forged = partition.model_dump(mode="json")
     forged["fibers"][1][1] = [forged["fibers"][1][1][0]]
-    forged_decoded = type(partition).model_validate(forged)
+    forged_decoded = type(partition).model_validate_json(json.dumps(forged))
     assert not verify_fiber_partition(forged_decoded)
 
 
@@ -204,7 +216,7 @@ def test_serialized_collision_is_explicitly_verifiable() -> None:
 
     forged = collision.model_dump(mode="json")
     forged["image"] = forged["table"]["entries"][0][1]
-    forged_decoded = type(collision).model_validate(forged)
+    forged_decoded = type(collision).model_validate_json(json.dumps(forged))
     assert not verify_collisions(forged_decoded)
 
 
@@ -215,5 +227,5 @@ def test_serialized_permutation_is_explicitly_verifiable() -> None:
 
     forged = permutation.model_dump(mode="json")
     forged["inverse_entries"][0][1] = forged["inverse_entries"][1][1]
-    forged_decoded = type(permutation).model_validate(forged)
+    forged_decoded = type(permutation).model_validate_json(json.dumps(forged))
     assert not verify_permutation(forged_decoded)

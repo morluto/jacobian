@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from fractions import Fraction
 from itertools import combinations
 
@@ -26,22 +27,27 @@ from jacobian.math.graphs.signed_induced_weight.operations import (
 )
 
 
-def _edge(a: str, b: str, w: int | str) -> RationalWeightedEdge:
-    frac = Fraction(w, 1) if isinstance(w, int) else Fraction(w)
+def _edge(a: str, b: str, w: int | Fraction) -> RationalWeightedEdge:
+    frac = Fraction(w, 1) if isinstance(w, int) else w
     return RationalWeightedEdge(
         endpoints=(a, b) if a < b else (b, a),
         weight=CanonicalRational.from_fraction(frac),
     )
 
 
-def _graph(vertices, edges) -> RationalWeightedGraph:
+def _graph(
+    vertices: Sequence[str], edges: Sequence[RationalWeightedEdge]
+) -> RationalWeightedGraph:
     return RationalWeightedGraph(
         vertices=tuple(vertices),
         edges=tuple(edges),
     )
 
 
-def _simple_graph(vertices, edge_specs) -> RationalWeightedGraph:
+def _simple_graph(
+    vertices: Sequence[str],
+    edge_specs: Sequence[tuple[str, str, int | Fraction]],
+) -> RationalWeightedGraph:
     return _graph(vertices, [_edge(a, b, w) for a, b, w in edge_specs])
 
 
@@ -111,7 +117,7 @@ def test_edgeless_graph() -> None:
 
 def test_rational_weights() -> None:
     """Test with non-integer rational weights."""
-    g = _simple_graph(["a", "b"], [("a", "b", "1/2")])
+    g = _simple_graph(["a", "b"], [("a", "b", Fraction(1, 2))])
     result = signed_induced_weight_extrema(g)
     assert result.maximum.value.as_fraction() == Fraction(1, 2)
 
@@ -124,7 +130,7 @@ def test_witness_replay() -> None:
     )
     result = signed_induced_weight_extrema(g)
 
-    def replay(selected):
+    def replay(selected: Sequence[str]) -> Fraction:
         total = Fraction(0)
         sset = set(selected)
         for edge in g.edges:
@@ -192,7 +198,7 @@ def test_disjoint_edge_components_compose() -> None:
     assert result.maximum.value.as_fraction() == Fraction(6)
     assert result.minimum.value.as_fraction() == Fraction(-5)
 
-    def replay(selected):
+    def replay(selected: Sequence[str]) -> Fraction:
         total = Fraction(0)
         selected_set = set(selected)
         for edge in g.edges:
@@ -287,7 +293,7 @@ def test_rejects_unrepresentable_rational_height_before_search() -> None:
         edges.append(
             RationalWeightedEdge(
                 endpoints=(left, right),
-                weight=CanonicalRational(num="1", den=str(prime**exponent)),
+                weight=CanonicalRational(num=1, den=prime**exponent),
             )
         )
     graph = _graph(vertices, edges)

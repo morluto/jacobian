@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from fractions import Fraction
 from itertools import product
 from typing import Any
@@ -126,7 +127,7 @@ def test_quadratic_measure_retains_exact_irrational_boundary_sum() -> None:
         "num": "2",
         "den": "1",
     }
-    forged_claim = StrictSublevelMeasureResult.model_validate(forged)
+    forged_claim = StrictSublevelMeasureResult.model_validate_json(json.dumps(forged))
     assert verify_strict_sublevel_measure(forged_claim) is False
 
     reconstructed_length = sum(
@@ -165,7 +166,7 @@ def test_producer_isolates_once_and_result_parsing_stays_structural(
     )
     assert calls == 1
 
-    StrictSublevelMeasureResult.model_validate(result.model_dump(mode="json"))
+    StrictSublevelMeasureResult.model_validate_json(result.model_dump_json())
     assert calls == 1
 
 

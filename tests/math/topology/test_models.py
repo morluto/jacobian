@@ -46,8 +46,7 @@ def test_simplicial_homology_result_roundtrip_does_not_retest_prime(
 
     monkeypatch.setattr(topology_models, "is_bounded_prime", tracked)
     assert (
-        SimplicialHomologyResult.model_validate(result.model_dump(mode="json"))
-        == result
+        SimplicialHomologyResult.model_validate_json(result.model_dump_json()) == result
     )
     assert calls == []
 

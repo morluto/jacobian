@@ -7,7 +7,6 @@ from fractions import Fraction
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry._models import (
     ConvexPolygonTriangulationRequest,
@@ -25,8 +24,8 @@ from jacobian.math.geometry._models import (
 
 def _wire(value: Fraction) -> CanonicalRational:
     return CanonicalRational(
-        num=format_canonical_integer(value.numerator),
-        den=format_canonical_integer(value.denominator),
+        num=value.numerator,
+        den=value.denominator,
     )
 
 

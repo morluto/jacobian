@@ -10,7 +10,6 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -35,10 +34,7 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 def _require_bounded_rational(
     value: CanonicalRational, *, max_digits: int, label: str
 ) -> None:
-    if (
-        len(value.num.lstrip("-")) > max_digits
-        or len(value.den.lstrip("-")) > max_digits
-    ):
+    if abs(value.num) >= 10**max_digits or abs(value.den) >= 10**max_digits:
         raise _validation_error(
             "rational_bound_exceeded", f"{label} exceeds the {max_digits}-digit bound"
         )
@@ -129,8 +125,8 @@ def _require_order_admission(
         - right.radical_coefficient.as_fraction(),
     )
     if any(
-        len(format_canonical_integer(component.numerator).lstrip("-")) > _MAX_DIGITS
-        or len(format_canonical_integer(component.denominator)) > _MAX_DIGITS
+        abs(component.numerator) >= 10**_MAX_DIGITS
+        or abs(component.denominator) >= 10**_MAX_DIGITS
         for component in difference_components
     ):
         raise OperationResourceAdmissionError(

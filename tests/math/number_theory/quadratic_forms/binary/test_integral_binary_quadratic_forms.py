@@ -538,7 +538,7 @@ class TestProperClassComposition:
                 first=_proper_class(2, -1, 3),
                 second=_proper_class(2, -1, 3),
             )
-        ).model_dump(mode="json")
+        ).model_dump()
         result["composed_form"] = {"a": 1, "b": 0, "c": 1}
 
         with pytest.raises(
@@ -685,7 +685,7 @@ class TestRepresentations:
 
         assert result.representations == ()
         assert result.count == result.primitive_count == 0
-        assert type(result).model_validate(result.model_dump(mode="json")) == result
+        assert type(result).model_validate_json(result.model_dump_json()) == result
 
         with pytest.raises(OperationDomainValidationError) as exc_info:
             compute_representations(

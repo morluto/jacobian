@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 
 from pydantic_core import PydanticCustomError
 
-from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 
 if TYPE_CHECKING:
@@ -155,7 +154,7 @@ def _polynomial_from_coefficients(coefficients: tuple[int, ...]) -> RationalPoly
             "polynomial": {
                 "terms": [
                     {
-                        "coefficient": {"num": str(value), "den": "1"},
+                        "coefficient": {"num": value, "den": 1},
                         "exponents": [index],
                     }
                     for index, value in reversed(tuple(enumerate(coefficients)))
@@ -269,9 +268,9 @@ def _coefficients_from_polynomial(polynomial: RationalPolynomial) -> tuple[int, 
     degree = terms[0].exponents[0]
     coefficients = [0] * (degree + 1)
     for term in terms:
-        if term.coefficient.den != "1":
+        if term.coefficient.den != 1:
             raise ValueError("Galois source coefficients must be integral")
-        coefficients[term.exponents[0]] = parse_canonical_integer(term.coefficient.num)
+        coefficients[term.exponents[0]] = term.coefficient.num
     return tuple(coefficients)
 
 

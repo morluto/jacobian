@@ -9,6 +9,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel, canonicalize_json_containers
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.matrices.values import (
     MAX_SPARSE_RATIONAL_MATRIX_AXIS,
     MAX_SPARSE_RATIONAL_MATRIX_NONZEROS,
@@ -102,7 +103,12 @@ class LinearRationalSystem(StrictModel):
             )
             if any(
                 isinstance(component, (str, int))
-                and len(str(component).lstrip("-")) > MAX_RATIONAL_DIGITS
+                and (
+                    len(component.lstrip("-"))
+                    if isinstance(component, str)
+                    else len(format_canonical_integer(abs(component)))
+                )
+                > MAX_RATIONAL_DIGITS
                 for component in components
             ):
                 raise _validation_error(

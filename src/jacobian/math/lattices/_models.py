@@ -8,7 +8,7 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, WithJsonSchema, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import NativeInteger
+from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.lattices._hnf_bounds import MAX_HNF_MATRIX_ORDER
@@ -184,17 +184,13 @@ class LatticeReductionResult(StrictModel):
 class IntegerLattice(StrictModel):
     """A rank-``r`` lattice in ``ZZ^n`` given by full-row-rank integer rows."""
 
-    ambient_dimension: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
+    ambient_dimension: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
     basis: IntegerMatrix
 
     @model_validator(mode="after")
     def require_full_row_rank(self) -> Self:
         rows = len(self.basis.entries)
         columns = self.basis.column_count
-        if rows == 0:
-            raise _validation_error(
-                "basis_empty", "lattice basis must contain at least one row"
-            )
         if columns != self.ambient_dimension:
             raise _validation_error(
                 "basis_columns_mismatch", "basis columns must equal ambient_dimension"
@@ -223,7 +219,7 @@ class RankGramResult(StrictModel):
 
     lattice: IntegerLattice
     gram_matrix: IntegerMatrix
-    squared_covolume: NativeInteger
+    squared_covolume: ExactInteger
     covolume_rational: bool
     relation: Literal["GRAM_EQUALS_BASIS_TIMES_BASIS_TRANSPOSE"] = (
         "GRAM_EQUALS_BASIS_TIMES_BASIS_TRANSPOSE"
@@ -288,7 +284,7 @@ class SaturationResult(StrictModel):
 
     saturated_basis: IntegerMatrix
     inclusion_transform: IntegerMatrix
-    saturation_index: NativeInteger = Field(ge=1)
+    saturation_index: ExactInteger = Field(ge=1)
     relation: Literal["SATURATED_BASIS_SPANS_PRIMITIVE_CLOSURE"] = (
         "SATURATED_BASIS_SPANS_PRIMITIVE_CLOSURE"
     )
@@ -326,9 +322,7 @@ class SublatticeIndexRequest(StrictModel):
                 "ambient_dimensions_mismatch",
                 "sublattice and parent ambient dimensions must match",
             )
-        if self.embedding.entries and len(self.embedding.entries[0]) != len(
-            self.parent.basis.entries
-        ):
+        if self.embedding.column_count != len(self.parent.basis.entries):
             raise _validation_error(
                 "embedding_columns_mismatch",
                 "embedding columns must match parent basis rows",
@@ -347,10 +341,8 @@ class SublatticeIndexResult(StrictModel):
     sublattice: IntegerLattice
     parent: IntegerLattice
     embedding: IntegerMatrix
-    index: NativeInteger = Field(ge=1)
-    invariant_factors: tuple[NativeInteger, ...] = Field(
-        max_length=MAX_MATRIX_DIMENSION
-    )
+    index: ExactInteger | Literal["INFINITE"]
+    invariant_factors: tuple[ExactInteger, ...] = Field(max_length=MAX_MATRIX_DIMENSION)
     free_rank: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
     relation: Literal["QUOTIENT_IS_DIRECT_SUM_OF_CYCLIC_GROUPS"] = (
         "QUOTIENT_IS_DIRECT_SUM_OF_CYCLIC_GROUPS"
@@ -367,10 +359,8 @@ class DiscriminantGroupResult(StrictModel):
     """Finite abelian group ``L^*/L`` and the discriminant order ``|det G|``."""
 
     lattice: IntegerLattice
-    discriminant_order: NativeInteger = Field(ge=1)
-    invariant_factors: tuple[NativeInteger, ...] = Field(
-        max_length=MAX_MATRIX_DIMENSION
-    )
+    discriminant_order: ExactInteger = Field(ge=1)
+    invariant_factors: tuple[ExactInteger, ...] = Field(max_length=MAX_MATRIX_DIMENSION)
     relation: Literal["DISCRIMINANT_GROUP_EQUALS_DUAL_MOD_LATTICE"] = (
         "DISCRIMINANT_GROUP_EQUALS_DUAL_MOD_LATTICE"
     )
@@ -424,7 +414,7 @@ class DirectSumResult(StrictModel):
     second: IntegerLattice
 
     direct_sum_basis: IntegerMatrix
-    ambient_dimension: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
+    ambient_dimension: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
     relation: Literal["DIRECT_SUM_IS_BLOCK_DIAGONAL_EMBEDDING"] = (
         "DIRECT_SUM_IS_BLOCK_DIAGONAL_EMBEDDING"
     )
@@ -437,7 +427,7 @@ class OrthogonalSumResult(StrictModel):
     second: IntegerLattice
 
     orthogonal_sum_basis: IntegerMatrix
-    ambient_dimension: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
+    ambient_dimension: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
     relation: Literal["ORTHOGONAL_SUM_IS_BLOCK_DIAGONAL_GRAM"] = (
         "ORTHOGONAL_SUM_IS_BLOCK_DIAGONAL_GRAM"
     )

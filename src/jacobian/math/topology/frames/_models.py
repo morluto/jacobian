@@ -7,7 +7,7 @@ from typing import Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger, CanonicalRational
+from jacobian._exact import CanonicalRational, ExactInteger
 from jacobian.math.matrices.values import IntegerMatrix
 from jacobian.math.topology.frames.values import (
     MAX_DIM,
@@ -79,11 +79,11 @@ class CoherenceResult(CoherenceRequest):
 
 
 class FramePotentialResult(FiniteFrameRequest):
-    potential: CanonicalInteger
+    potential: ExactInteger
 
     @classmethod
     def _from_kernel(
-        cls, *, vectors: tuple[tuple[int, ...], ...], potential: CanonicalInteger
+        cls, *, vectors: tuple[tuple[int, ...], ...], potential: ExactInteger
     ) -> Self:
         return cls.model_construct(
             vectors=vectors,

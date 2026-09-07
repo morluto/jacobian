@@ -58,9 +58,9 @@ def _empty(order: int, prefix: str) -> SimpleUndirectedGraph:
     return _graph(tuple(f"{prefix}{index:02d}" for index in range(order)), [])
 
 
-def _count(host: SimpleUndirectedGraph, pattern: SimpleUndirectedGraph) -> str:
+def _count(host: SimpleUndirectedGraph, pattern: SimpleUndirectedGraph) -> int:
     request = InducedVertexSubsetPatternCountRequest(host=host, pattern=pattern)
-    return TOOLS[0].run(request).occurrence_count
+    return int(TOOLS[0].run(request).occurrence_count)
 
 
 def _edge_key(left: str, right: str) -> tuple[str, str]:
@@ -94,12 +94,12 @@ def _brute_force_count(
 @pytest.mark.parametrize(
     ("example_name", "expected"),
     (
-        ("two_induced_p4_in_p5", "2"),
-        ("c4_does_not_induce_p4", "0"),
-        ("one_induced_two_edge_matching", "1"),
+        ("two_induced_p4_in_p5", 2),
+        ("c4_does_not_induce_p4", 0),
+        ("one_induced_two_edge_matching", 1),
     ),
 )
-def test_public_known_answer_examples(example_name: str, expected: str) -> None:
+def test_public_known_answer_examples(example_name: str, expected: int) -> None:
     """The motivating P4, C4, and 2K2 cases stay public and executable."""
 
     operation = TOOLS[0]
@@ -113,26 +113,26 @@ def test_public_known_answer_examples(example_name: str, expected: str) -> None:
 
 
 def test_k4_contains_four_triangle_subsets_not_twenty_four_maps() -> None:
-    assert _count(_complete(4, "h"), _complete(3, "p")) == "4"
+    assert _count(_complete(4, "h"), _complete(3, "p")) == 4
 
 
 def test_c4_contains_one_full_induced_c4_copy() -> None:
-    assert _count(_cycle(4, "h"), _cycle(4, "p")) == "1"
+    assert _count(_cycle(4, "h"), _cycle(4, "p")) == 1
 
 
 @pytest.mark.parametrize(
     ("host", "pattern", "expected"),
     (
-        (_complete(5, "h"), _complete(2, "p"), "10"),
-        (_empty(5, "h"), _empty(2, "p"), "10"),
-        (_complete(5, "h"), _empty(2, "p"), "0"),
-        (_empty(5, "h"), _complete(2, "p"), "0"),
+        (_complete(5, "h"), _complete(2, "p"), 10),
+        (_empty(5, "h"), _empty(2, "p"), 10),
+        (_complete(5, "h"), _empty(2, "p"), 0),
+        (_empty(5, "h"), _complete(2, "p"), 0),
     ),
 )
 def test_complete_and_empty_hosts_distinguish_complement_patterns(
     host: SimpleUndirectedGraph,
     pattern: SimpleUndirectedGraph,
-    expected: str,
+    expected: int,
 ) -> None:
     assert _count(host, pattern) == expected
 
@@ -144,7 +144,7 @@ def test_isolated_pattern_vertex_is_semantically_significant() -> None:
         [("p0", "p1")],
     )
 
-    assert _count(host, pattern) == "2"
+    assert _count(host, pattern) == 2
 
 
 def test_empty_pattern_has_one_occurrence_without_backend_search(
@@ -154,8 +154,8 @@ def test_empty_pattern_has_one_occurrence_without_backend_search(
         raise AssertionError("empty-pattern count must not invoke NetworkX")
 
     monkeypatch.setattr(nx, "vf2pp_is_isomorphic", fail_isomorphism)
-    assert _count(_empty(0, "h"), _empty(0, "p")) == "1"
-    assert _count(_path(5, "h"), _empty(0, "p")) == "1"
+    assert _count(_empty(0, "h"), _empty(0, "p")) == 1
+    assert _count(_path(5, "h"), _empty(0, "p")) == 1
 
 
 def test_pattern_larger_than_host_returns_zero_without_backend_search(
@@ -165,7 +165,7 @@ def test_pattern_larger_than_host_returns_zero_without_backend_search(
         raise AssertionError("pattern-larger-than-host must not invoke NetworkX")
 
     monkeypatch.setattr(nx, "vf2pp_is_isomorphic", fail_isomorphism)
-    assert _count(_path(3, "h"), _path(4, "p")) == "0"
+    assert _count(_path(3, "h"), _path(4, "p")) == 0
 
 
 def test_host_and_pattern_relabelling_and_row_order_preserve_count() -> None:
@@ -179,7 +179,7 @@ def test_host_and_pattern_relabelling_and_row_order_preserve_count() -> None:
         edges=(("alpha", "beta"), ("beta", "gamma"), ("delta", "gamma")),
     )
 
-    assert original == "2"
+    assert original == 2
     assert _count(host, pattern) == original
 
 
@@ -201,7 +201,7 @@ def test_canonical_graph_producer_output_enters_request_unchanged() -> None:
 
     assert request.host == host
     assert request.pattern == pattern
-    assert TOOLS[0].run(request).occurrence_count == "2"
+    assert TOOLS[0].run(request).occurrence_count == 2
 
 
 def test_small_random_graphs_match_independent_subset_and_permutation_oracle() -> None:
@@ -239,7 +239,7 @@ def test_request_accepts_useful_case_near_subset_bound() -> None:
         host=_empty(20, "h"),
         pattern=_complete(4, "p"),
     )
-    assert TOOLS[0].run(request).occurrence_count == "0"
+    assert TOOLS[0].run(request).occurrence_count == 0
 
 
 def test_dense_host_at_subset_bound_avoids_host_filtered_views(
@@ -262,7 +262,7 @@ def test_dense_host_at_subset_bound_avoids_host_filtered_views(
 
     # C(100, 2) = 4,950, so this dense case exercises the useful candidate
     # boundary without allowing work to depend on the host vertices' degrees.
-    assert _count(_complete(100, "h"), _complete(2, "p")) == "4950"
+    assert _count(_complete(100, "h"), _complete(2, "p")) == 4950
     assert host_pair_probes == comb(100, 2)
 
 
@@ -279,7 +279,7 @@ def test_request_rejects_next_graph_order_above_subset_bound() -> None:
 def test_request_bounds_per_subset_isomorphism_work() -> None:
     # A single order-eight comparison fits; the next order still has one
     # subset but exceeds the conservative VF2++ partial-injection work bound.
-    assert _count(_empty(8, "h"), _empty(8, "p")) == "1"
+    assert _count(_empty(8, "h"), _empty(8, "p")) == 1
     request = InducedVertexSubsetPatternCountRequest(
         host=_empty(9, "h"),
         pattern=_empty(9, "p"),

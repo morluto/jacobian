@@ -2,7 +2,6 @@
 
 from typing import Any
 
-from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.number_theory.prime_affine_forms._admissibility import (
     PrimeTupleAdmissibilityRequest,
@@ -108,9 +107,7 @@ def compute_residue_wheel_enumeration(
 def compute_wheel_membership(
     request: PrimeTupleWheelMembershipRequest,
 ) -> PrimeTupleWheelMembershipResult:
-    return native_wheel_membership(
-        request.wheel, parse_canonical_integer(request.value)
-    )
+    return native_wheel_membership(request.wheel, request.value)
 
 
 def compute_interval_residue_profile(
@@ -118,8 +115,8 @@ def compute_interval_residue_profile(
 ) -> PrimeTupleIntervalResidueProfileResult:
     return native_interval_residue_profile(
         request.wheel,
-        parse_canonical_integer(request.lower),
-        parse_canonical_integer(request.upper),
+        request.lower,
+        request.upper,
     )
 
 

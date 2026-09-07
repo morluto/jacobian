@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from fractions import Fraction
 
 import pytest
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 from tests.integration.algebra._support import algebra_validation_error
 
 from jacobian._exact import CanonicalRational
@@ -51,13 +52,15 @@ def _quadratic(constant: str) -> list[dict[str, str]]:
 
 
 def _r(value: int) -> CanonicalRational:
-    return CanonicalRational(num=str(value), den="1")
+    return CanonicalRational(num=value, den=1)
+
+
+def _wire[ModelT: BaseModel](model: type[ModelT], payload: object) -> ModelT:
+    return model.model_validate_json(json.dumps(payload))
 
 
 def test_root_isolation_returns_source_bound_composable_identities() -> None:
-    request = UnivariatePolynomialRequest.model_validate(
-        _isolation_payload(_quadratic("-2"))
-    )
+    request = _wire(UnivariatePolynomialRequest, _isolation_payload(_quadratic("-2")))
     result = compute_root_isolation(request)
 
     assert result.source_polynomial == request.polynomial
@@ -65,14 +68,17 @@ def test_root_isolation_returns_source_bound_composable_identities() -> None:
         (entry.isolating_interval[0].num, entry.isolating_interval[1].num)
         for entry in result.roots
     ) == (
-        ("-2", "-1"),
-        ("1", "2"),
+        (-2, -1),
+        (1, 2),
     )
     assert tuple(entry.algebraic_value.real_root_index for entry in result.roots) == (
         0,
         1,
     )
-    assert type(result).model_validate(result.model_dump(mode="json")) == result
+    assert (
+        type(result).model_validate_json(json.dumps(result.model_dump(mode="json")))
+        == result
+    )
 
     forged = result.model_copy(
         update={
@@ -94,7 +100,7 @@ def test_root_isolation_uses_admitted_root_carriers_without_revalidation(
     monkeypatch.setattr(real_algebraic, "gcd", fail_if_replayed)
 
     result = compute_root_isolation(
-        UnivariatePolynomialRequest.model_validate(_isolation_payload(_quadratic("-2")))
+        _wire(UnivariatePolynomialRequest, _isolation_payload(_quadratic("-2")))
     )
 
     assert tuple(root.algebraic_value.real_root_index for root in result.roots) == (
@@ -105,26 +111,28 @@ def test_root_isolation_uses_admitted_root_carriers_without_revalidation(
 
 def test_root_isolation_accepts_sympy_singleton_interval_for_a_rational_root() -> None:
     result = compute_root_isolation(
-        UnivariatePolynomialRequest.model_validate(
+        _wire(
+            UnivariatePolynomialRequest,
             _isolation_payload(
                 [
                     {"num": "1", "den": "1"},
                     {"num": "-1", "den": "1"},
                 ]
-            )
+            ),
         )
     )
 
     root = result.roots[0]
     lower, upper = root.isolating_interval
-    assert (lower.num, lower.den, upper.num, upper.den) == ("1", "1", "1", "1")
+    assert (lower.num, lower.den, upper.num, upper.den) == (1, 1, 1, 1)
     assert root.multiplicity == 1
-    assert root.algebraic_value.polynomial == ("1", "-1")
+    assert root.algebraic_value.polynomial == (1, -1)
 
 
 def test_root_isolation_preserves_factor_identity_and_source_multiplicity() -> None:
     result = compute_root_isolation(
-        UnivariatePolynomialRequest.model_validate(
+        _wire(
+            UnivariatePolynomialRequest,
             _isolation_payload(
                 [
                     {"num": "1", "den": "1"},
@@ -134,15 +142,15 @@ def test_root_isolation_preserves_factor_identity_and_source_multiplicity() -> N
                     {"num": "8", "den": "1"},
                     {"num": "-4", "den": "1"},
                 ]
-            )
+            ),
         )
     )
 
     # (x - 1)^3 (x + 2)^2 has degree five and two distinct real roots.
     assert tuple(root.multiplicity for root in result.roots) == (2, 3)
     assert tuple(root.algebraic_value.polynomial for root in result.roots) == (
-        ("1", "2"),
-        ("1", "-1"),
+        (1, 2),
+        (1, -1),
     )
     comparison = compute_algebraic_compare(
         AlgebraicCompareRequest(
@@ -154,9 +162,7 @@ def test_root_isolation_preserves_factor_identity_and_source_multiplicity() -> N
 
 
 def test_root_isolation_keeps_an_empty_source_bound_real_root_family() -> None:
-    request = UnivariatePolynomialRequest.model_validate(
-        _isolation_payload(_quadratic("1"))
-    )
+    request = _wire(UnivariatePolynomialRequest, _isolation_payload(_quadratic("1")))
     result = compute_root_isolation(request)
 
     assert result.source_polynomial == request.polynomial
@@ -164,38 +170,41 @@ def test_root_isolation_keeps_an_empty_source_bound_real_root_family() -> None:
 
 
 def test_root_isolation_retains_rational_source_before_identity_projection() -> None:
-    request = UnivariatePolynomialRequest.model_validate(
+    request = _wire(
+        UnivariatePolynomialRequest,
         _isolation_payload(
             [
                 {"num": "2", "den": "1"},
                 {"num": "-1", "den": "1"},
             ]
-        )
+        ),
     )
     result = compute_root_isolation(request)
 
     assert result.source_polynomial == request.polynomial
-    assert result.roots[0].algebraic_value.polynomial == ("2", "-1")
+    assert result.roots[0].algebraic_value.polynomial == (2, -1)
 
 
 def test_root_isolation_rejects_sources_outside_the_composable_envelope() -> None:
     with pytest.raises(ValidationError):
-        UnivariatePolynomialRequest.model_validate(
+        _wire(
+            UnivariatePolynomialRequest,
             _isolation_payload(
                 [
                     {"num": "1", "den": "1"},
                     *({"num": "0", "den": "1"} for _ in range(9)),
                 ]
-            )
+            ),
         )
     with pytest.raises(ValidationError):
-        UnivariatePolynomialRequest.model_validate(
+        _wire(
+            UnivariatePolynomialRequest,
             _isolation_payload(
                 [
                     {"num": "1" + "0" * 996, "den": "1"},
                     {"num": "1", "den": "1"},
                 ]
-            )
+            ),
         )
 
 
@@ -207,20 +216,22 @@ def test_root_isolation_rejects_expanded_normalization_without_decimal_formattin
     base = 10 ** (MAX_ROOT_ISOLATION_SOURCE_COEFFICIENT_DIGITS - 1)
     with pytest.raises(ValueError, match="primitive integer source coefficients"):
         compute_root_isolation(
-            UnivariatePolynomialRequest.model_validate(
+            _wire(
+                UnivariatePolynomialRequest,
                 _isolation_payload(
                     [
                         {"num": str(base + 1), "den": str(base - 1)},
                         {"num": "1", "den": str(base + 4)},
                     ]
-                )
+                ),
             )
         )
 
 
 def test_algebraic_comparison_parses_canonical_interval_endpoints() -> None:
     result = compute_algebraic_compare(
-        AlgebraicCompareRequest.model_validate(
+        _wire(
+            AlgebraicCompareRequest,
             {
                 "left": {
                     "polynomial": ["1", "0", "-2"],
@@ -230,7 +241,7 @@ def test_algebraic_comparison_parses_canonical_interval_endpoints() -> None:
                     "polynomial": ["1", "0", "-3"],
                     "real_root_index": 1,
                 },
-            }
+            },
         )
     )
 
@@ -244,7 +255,8 @@ def test_algebraic_comparison_parses_canonical_interval_endpoints() -> None:
 def test_algebraic_comparison_rejects_coefficients_above_its_work_bound() -> None:
     oversized_coefficient = "1" + "0" * 1_000
     with algebra_validation_error():
-        AlgebraicCompareRequest.model_validate(
+        _wire(
+            AlgebraicCompareRequest,
             {
                 "left": {
                     "polynomial": [oversized_coefficient, "1"],
@@ -254,13 +266,14 @@ def test_algebraic_comparison_rejects_coefficients_above_its_work_bound() -> Non
                     "polynomial": ["1", "0"],
                     "real_root_index": 0,
                 },
-            }
+            },
         )
 
 
 def test_algebraic_comparison_contract_rejects_a_missing_real_root() -> None:
     with algebra_validation_error():
-        AlgebraicCompareRequest.model_validate(
+        _wire(
+            AlgebraicCompareRequest,
             {
                 "left": {
                     "polynomial": ["1", "0", "-2"],
@@ -270,12 +283,12 @@ def test_algebraic_comparison_contract_rejects_a_missing_real_root() -> None:
                     "polynomial": ["1", "0", "-3"],
                     "real_root_index": 1,
                 },
-            }
+            },
         )
 
 
 def test_number_field_discriminant_is_not_power_basis_discriminant() -> None:
-    field = SimpleNumberFieldPresentation(coefficients_descending=("1", "0", "-5"))
+    field = SimpleNumberFieldPresentation(coefficients_descending=(1, 0, -5))
     result = compute_nf_discriminant(NumberFieldRequest(field=field))
 
     assert result.discriminant == 5
@@ -283,11 +296,9 @@ def test_number_field_discriminant_is_not_power_basis_discriminant() -> None:
 
 def test_embedding_field_composes_unchanged_with_field_invariant_consumers() -> None:
     produced = embeddings(
-        SimpleNumberFieldPresentation(coefficients_descending=("1", "0", "1"))
+        SimpleNumberFieldPresentation(coefficients_descending=(1, 0, 1))
     ).field
-    request = NumberFieldRequest.model_validate(
-        {"field": produced.model_dump(mode="json")}
-    )
+    request = _wire(NumberFieldRequest, {"field": produced.model_dump(mode="json")})
 
     assert request.field == produced
     assert compute_nf_discriminant(request).discriminant == -4
@@ -312,9 +323,7 @@ def test_field_discriminant_request_schema_uses_the_canonical_presentation() -> 
 
 
 def test_field_carrier_preserves_the_prior_discriminant_degree_envelope() -> None:
-    field = SimpleNumberFieldPresentation(
-        coefficients_descending=("1", *("0",) * 30, "1")
-    )
+    field = SimpleNumberFieldPresentation(coefficients_descending=(1, *(0,) * 30, 1))
 
     assert field.degree == 31
     assert NumberFieldRequest(field=field).field is field
@@ -324,9 +333,7 @@ def test_field_carrier_preserves_the_prior_discriminant_degree_envelope() -> Non
 def test_native_integral_basis_consumers_preserve_degree_31_envelope(
     consumer: Callable[[SimpleNumberFieldPresentation], object],
 ) -> None:
-    field = SimpleNumberFieldPresentation(
-        coefficients_descending=("1", *("0",) * 30, "-2")
-    )
+    field = SimpleNumberFieldPresentation(coefficients_descending=(1, *(0,) * 30, -2))
 
     result = consumer(field)
 
@@ -344,9 +351,7 @@ def test_native_integral_basis_consumers_preserve_degree_31_envelope(
 def test_native_integral_basis_consumers_accept_degree_nine_field(
     consumer: Callable[[SimpleNumberFieldPresentation], object],
 ) -> None:
-    field = SimpleNumberFieldPresentation(
-        coefficients_descending=("1", *("0",) * 8, "-2")
-    )
+    field = SimpleNumberFieldPresentation(coefficients_descending=(1, *(0,) * 8, -2))
 
     result = consumer(field)
 
@@ -364,23 +369,21 @@ def test_native_integral_basis_consumers_accept_degree_nine_field(
 def test_native_integral_basis_consumers_bound_the_widened_field_carrier(
     consumer: Callable[[SimpleNumberFieldPresentation], object],
 ) -> None:
-    field = SimpleNumberFieldPresentation(
-        coefficients_descending=("1", *("0",) * 31, "-2")
-    )
+    field = SimpleNumberFieldPresentation(coefficients_descending=(1, *(0,) * 31, -2))
 
     with pytest.raises(ValueError, match="limited to degree 31"):
         consumer(field)
 
 
 def test_integral_basis_is_computed_in_the_defining_power_basis() -> None:
-    field = SimpleNumberFieldPresentation(coefficients_descending=("1", "0", "-5"))
+    field = SimpleNumberFieldPresentation(coefficients_descending=(1, 0, -5))
 
     assert ring_of_integers(field) == ["1", "alpha/2 + 1/2"]
     assert discriminant(field) == 5
 
 
 def test_number_field_consumers_accept_a_nonmonic_canonical_presentation() -> None:
-    field = SimpleNumberFieldPresentation(coefficients_descending=("2", "0", "1"))
+    field = SimpleNumberFieldPresentation(coefficients_descending=(2, 0, 1))
 
     assert compute_nf_discriminant(NumberFieldRequest(field=field)).discriminant == -8
     assert discriminant(field) == -8
@@ -388,13 +391,14 @@ def test_number_field_consumers_accept_a_nonmonic_canonical_presentation() -> No
 
 
 def test_number_field_reducibility_is_an_owner_declared_invalid_request() -> None:
-    request = NumberFieldRequest.model_validate(
+    request = _wire(
+        NumberFieldRequest,
         {
             "field": {
                 "domain": "QQ",
                 "coefficients_descending": ["1", "0", "-1"],
             }
-        }
+        },
     )
 
     with pytest.raises(OperationDomainValidationError) as caught:
@@ -405,13 +409,14 @@ def test_number_field_reducibility_is_an_owner_declared_invalid_request() -> Non
 
 def test_number_field_rejects_oversized_coefficients_before_sympy() -> None:
     with pytest.raises(ValidationError) as caught:
-        NumberFieldRequest.model_validate(
+        _wire(
+            NumberFieldRequest,
             {
                 "field": {
                     "domain": "QQ",
                     "coefficients_descending": ["1" + "0" * 256, "0", "-2"],
                 }
-            }
+            },
         )
 
     assert caught.value.errors()[0]["type"] == "simple_number_field.coefficient_bound"

@@ -77,15 +77,27 @@ class NashEquilibriumRequest(ZeroSumGameRequest):
 
 
 class BestResponseResult(StrictModel):
-    """Best response values for the row player."""
+    """A source-bound pure maximin row and its exact payoff."""
 
     payoff_matrix: PayoffMatrix
     value: CanonicalRational
     best_row: int = Field(ge=0)
 
+    @model_validator(mode="after")
+    def require_row_axis(self) -> Self:
+        if self.best_row >= self.payoff_matrix.n_rows:
+            raise PydanticCustomError(
+                "finite_game.best_response_row_axis",
+                "best_row must belong to the payoff matrix row axis",
+            )
+        return self
+
     @classmethod
     def _from_kernel(
-        cls, payoff_matrix: PayoffMatrix, value: CanonicalRational, best_row: int
+        cls,
+        payoff_matrix: PayoffMatrix,
+        value: CanonicalRational,
+        best_row: int,
     ) -> Self:
         """Construct trusted output from the owner-local exact kernel."""
 
@@ -95,12 +107,24 @@ class BestResponseResult(StrictModel):
 
 
 class NashEquilibriumResult(StrictModel):
-    """Nash equilibrium of a 2-player zero-sum game."""
+    """A source-bound equilibrium in the payoff matrix's ordered strategy axes."""
 
     payoff_matrix: PayoffMatrix
     row_strategy: tuple[CanonicalRational, ...]
     col_strategy: tuple[CanonicalRational, ...]
     value: CanonicalRational
+
+    @model_validator(mode="after")
+    def require_strategy_axes(self) -> Self:
+        if (
+            len(self.row_strategy) != self.payoff_matrix.n_rows
+            or len(self.col_strategy) != self.payoff_matrix.n_cols
+        ):
+            raise PydanticCustomError(
+                "finite_game.equilibrium_strategy_axes",
+                "strategies must retain the payoff matrix row and column axes",
+            )
+        return self
 
     @classmethod
     def _from_kernel(

@@ -1,5 +1,6 @@
 """Tests for multivariate polynomial factorization (#2105)."""
 
+import json
 from collections.abc import Iterable
 from fractions import Fraction
 from itertools import islice
@@ -46,6 +47,29 @@ def _poly(
 
 
 class TestMultivariateFactor:
+    def test_factor_order_survives_native_integer_and_json_roundtrip(self) -> None:
+        # (x + y + 10)(x + y + 2): canonical decimal order puts 10 before 2.
+        poly = _poly(
+            ("x", "y"),
+            (
+                (1, 1, (2, 0)),
+                (2, 1, (1, 1)),
+                (12, 1, (1, 0)),
+                (1, 1, (0, 2)),
+                (12, 1, (0, 1)),
+                (20, 1, (0, 0)),
+            ),
+        )
+        result = _compute_factor(MultivariateFactorRequest(polynomial=poly))
+        assert tuple(
+            factor.factor.polynomial.terms[-1].coefficient.num
+            for factor in result.factors
+        ) == (10, 2)
+        assert (
+            MultivariateFactorResult.model_validate_json(result.model_dump_json())
+            == result
+        )
+
     def test_simple_factorization(self) -> None:
         """Factor x^2*y - x = x * (x*y - 1) in Q[x,y]."""
         poly = _poly(("x", "y"), ((1, 1, (2, 1)), (-1, 1, (1, 0))))
@@ -94,12 +118,14 @@ class TestMultivariateFactorResultInvariants:
             MultivariateFactorResult(
                 coefficient=CanonicalRational.from_fraction(Fraction(0)),
                 factors=(),
+                polynomial=zero,
                 reconstructed=zero,
             )
         with pytest.raises(ValidationError):
             MultivariateFactorResult(
                 coefficient=CanonicalRational.from_fraction(Fraction(0)),
                 factors=(),
+                polynomial=_poly(("x", "y"), ((3, 2, (1, 1)),)),
                 reconstructed=_poly(("x", "y"), ((3, 2, (1, 1)),)),
             )
 
@@ -109,6 +135,7 @@ class TestMultivariateFactorResultInvariants:
             MultivariateFactorResult(
                 coefficient=CanonicalRational.from_fraction(Fraction(1)),
                 factors=(),
+                polynomial=zero,
                 reconstructed=zero,
             )
 
@@ -171,6 +198,7 @@ class TestAggregateDegreeGate:
             MultivariateFactorResult(
                 coefficient=CanonicalRational.from_fraction(Fraction(1)),
                 factors=payload,
+                polynomial=small,
                 reconstructed=small,
             )
 
@@ -425,7 +453,6 @@ class TestKillableFactorBackend:
     def test_worker_backend_agrees_with_in_process_factor_list(self) -> None:
         """The bounded worker returns the same exact decomposition as an
         in-process ``factor_list`` on ordinary inputs."""
-        import json
         import os
         import subprocess
         import sys
@@ -562,7 +589,6 @@ class TestKillableFactorBackend:
     def test_worker_aborts_without_containment_before_factoring(self) -> None:
         """A worker that cannot apply its address-space cap exits before
         any allocation-heavy factorization work."""
-        import json
         import os
         import subprocess
         import sys
@@ -781,7 +807,6 @@ class TestExecutionInterruptionSeparation:
 
     def test_worker_reports_address_space_flag(self) -> None:
         """The worker response carries its hard-limit proof on success."""
-        import json
         import os
         import subprocess
         import sys

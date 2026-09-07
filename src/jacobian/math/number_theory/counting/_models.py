@@ -7,7 +7,7 @@ from typing import Self
 from pydantic import ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
 
 # The floor-sum kernel is the Euclidean-like recursion (O(log m * log a/m)
@@ -54,7 +54,7 @@ class FloorSumResult(StrictModel):
     m: int = Field(ge=1, le=_MAX_FLOOR_SUM_PARAM)
     a: int = Field(ge=0, le=_MAX_FLOOR_SUM_PARAM)
     b: int = Field(ge=0, le=_MAX_FLOOR_SUM_PARAM)
-    value: CanonicalInteger
+    value: ExactInteger
 
 
 class CongruenceBoxCountRequest(StrictModel):

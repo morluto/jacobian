@@ -108,7 +108,9 @@ def _direct_operation_tool(
 
     metadata = FuncMetadata(
         arg_model=_direct_argument_model(operation),
-        output_model=operation.result_type,
+        # The projector has already serialized the domain result. Advertise its
+        # wire schema without reinterpreting JSON strings as native model input.
+        output_schema=operation.result_type.model_json_schema(mode="serialization"),
     )
     return Tool(
         fn=execute,

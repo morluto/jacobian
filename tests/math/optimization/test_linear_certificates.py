@@ -1,5 +1,6 @@
 """Exact source certificates for the covering regressions #3194 and #3192."""
 
+import json
 from fractions import Fraction
 from itertools import combinations, permutations
 from random import Random
@@ -18,13 +19,15 @@ from jacobian.math.optimization._models import StandardFormRationalLinearProgram
 def standard_program(
     rows: list[list[int]], rhs: list[int], objective: list[int]
 ) -> StandardFormRationalLinearProgram:
-    return StandardFormRationalLinearProgram.model_validate(
-        {
-            "variables": [f"x{i}" for i in range(len(objective))],
-            "objective": [q(v) for v in objective],
-            "coefficients": [[q(v) for v in row] for row in rows],
-            "rhs": [q(v) for v in rhs],
-        }
+    return StandardFormRationalLinearProgram.model_validate_json(
+        json.dumps(
+            {
+                "variables": [f"x{i}" for i in range(len(objective))],
+                "objective": [q(v) for v in objective],
+                "coefficients": [[q(v) for v in row] for row in rows],
+                "rhs": [q(v) for v in rhs],
+            }
+        )
     )
 
 
@@ -72,22 +75,27 @@ def assert_standard_certificate(program: StandardFormRationalLinearProgram) -> s
 
 
 def cover_program(rows: list[list[int]]) -> GeneralFormRationalLinearProgram:
-    return GeneralFormRationalLinearProgram.model_validate(
-        {
-            "variables": [
-                {"name": f"x{i}", "lower_bound": q(0)} for i in range(len(rows[0]))
-            ],
-            "objective": {"sense": "MINIMIZE", "coefficients": [q(1)] * len(rows[0])},
-            "constraints": [
-                {
-                    "label": f"row{i}",
-                    "coefficients": [q(a) for a in row],
-                    "relation": "GE",
-                    "rhs": q(1),
-                }
-                for i, row in enumerate(rows)
-            ],
-        }
+    return GeneralFormRationalLinearProgram.model_validate_json(
+        json.dumps(
+            {
+                "variables": [
+                    {"name": f"x{i}", "lower_bound": q(0)} for i in range(len(rows[0]))
+                ],
+                "objective": {
+                    "sense": "MINIMIZE",
+                    "coefficients": [q(1)] * len(rows[0]),
+                },
+                "constraints": [
+                    {
+                        "label": f"row{i}",
+                        "coefficients": [q(a) for a in row],
+                        "relation": "GE",
+                        "rhs": q(1),
+                    }
+                    for i, row in enumerate(rows)
+                ],
+            }
+        )
     )
 
 
@@ -127,13 +135,15 @@ def test_cover_row_order_preserves_exact_optimum(order: tuple[int, ...]) -> None
 
 def test_standard_cover_has_valid_objective_two_certificate() -> None:
     rows = [[-1, -1, 1, 0, 0], [-1, 0, 0, 1, 0], [0, -1, 0, 0, 1]]
-    program = StandardFormRationalLinearProgram.model_validate(
-        {
-            "variables": [f"x{i}" for i in range(5)],
-            "objective": [q(1), q(1), q(0), q(0), q(0)],
-            "coefficients": [[q(a) for a in row] for row in rows],
-            "rhs": [q(-1)] * 3,
-        }
+    program = StandardFormRationalLinearProgram.model_validate_json(
+        json.dumps(
+            {
+                "variables": [f"x{i}" for i in range(5)],
+                "objective": [q(1), q(1), q(0), q(0), q(0)],
+                "coefficients": [[q(a) for a in row] for row in rows],
+                "rhs": [q(-1)] * 3,
+            }
+        )
     )
     result = linear_program(program)
     assert result.status == "OPTIMAL"
@@ -258,22 +268,24 @@ def test_dense_full_rank_infeasibility_near_work_limit() -> None:
 
 
 def test_coupled_farkas_maps_upper_and_lower_signs() -> None:
-    program = GeneralFormRationalLinearProgram.model_validate(
-        {
-            "variables": [
-                {"name": name, "lower_bound": q(0), "upper_bound": q(1)}
-                for name in ("x", "y")
-            ],
-            "objective": {"sense": "MINIMIZE", "coefficients": [q(-1), q(-1)]},
-            "constraints": [
-                {
-                    "label": "sum",
-                    "coefficients": [q(1), q(1)],
-                    "relation": "GE",
-                    "rhs": q(3),
-                }
-            ],
-        }
+    program = GeneralFormRationalLinearProgram.model_validate_json(
+        json.dumps(
+            {
+                "variables": [
+                    {"name": name, "lower_bound": q(0), "upper_bound": q(1)}
+                    for name in ("x", "y")
+                ],
+                "objective": {"sense": "MINIMIZE", "coefficients": [q(-1), q(-1)]},
+                "constraints": [
+                    {
+                        "label": "sum",
+                        "coefficients": [q(1), q(1)],
+                        "relation": "GE",
+                        "rhs": q(3),
+                    }
+                ],
+            }
+        )
     )
     result = general_linear_program(program)
     assert result.status == "INFEASIBLE"

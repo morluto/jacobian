@@ -1,5 +1,7 @@
 """Colored hypergraph families retain source color and vertex axes."""
 
+import json
+
 import pytest
 from pydantic import ValidationError
 
@@ -22,12 +24,12 @@ def test_empty_edge_family_axes_and_claim() -> None:
     payload = result.model_dump(mode="json")
     payload["colours"] = ["foreign"]
     with pytest.raises(ValidationError):
-        type(result).model_validate(payload)
+        type(result).model_validate_json(json.dumps(payload))
     payload = result.model_dump(mode="json")
     payload["hypergraphs"][0]["edges"] = []
     assert not verify_monochromatic_path_hypergraphs(
-        type(result).model_validate(payload)
+        type(result).model_validate_json(json.dumps(payload))
     )
     payload["hypergraphs"][0]["vertices"] = ["foreign"]
     with pytest.raises(ValidationError):
-        type(result).model_validate(payload)
+        type(result).model_validate_json(json.dumps(payload))

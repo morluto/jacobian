@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.lattices import hermite_normal_form
 from jacobian.math.lattices._models import (
@@ -17,10 +16,7 @@ from jacobian.math.matrices.values import IntegerMatrix
 def _matrix(value: Any) -> IntegerMatrix:
     return IntegerMatrix(
         entries=tuple(
-            tuple(
-                format_canonical_integer(int(value[row, column]))
-                for column in range(value.ncols())
-            )
+            tuple(int(value[row, column]) for column in range(value.ncols()))
             for row in range(value.nrows())
         )
     )
@@ -29,10 +25,7 @@ def _matrix(value: Any) -> IntegerMatrix:
 def compute_hermite_normal_form(
     request: HermiteNormalFormRequest,
 ) -> HermiteNormalFormResult:
-    integer_entries = [
-        [parse_canonical_integer(value) for value in row]
-        for row in request.matrix.entries
-    ]
+    integer_entries = [list(row) for row in request.matrix.entries]
     normal_form, transformation = hermite_normal_form(integer_entries)
     return HermiteNormalFormResult(
         normal_form=_matrix(normal_form),
@@ -46,7 +39,10 @@ HERMITE_NORMAL_FORM_OPERATION: MathTool[
 ] = MathTool(
     operation_id="lattice.hermite_normal_form.compute",
     title="Compute an exact row Hermite normal form",
-    description=("Compute H and U for one bounded integer matrix with H = U A."),
+    description=(
+        "Compute H and U for one bounded integer matrix, retaining A so that "
+        "the serialized result retains the relation H = U A."
+    ),
     discovery_terms=(
         "integer row lattice membership canonical basis",
         "integer column lattice via transpose",

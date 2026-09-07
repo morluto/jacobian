@@ -14,7 +14,7 @@ from jacobian._execution import (
     current_request_execution,
     request_checkpoint,
 )
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.analysis.intervals import RationalBox
 from jacobian.math.polynomials.bernstein.values import (
@@ -59,12 +59,12 @@ def _reject(message: str) -> None:
     )
 
 
-def _digits(value: str) -> int:
-    return len(value.lstrip("-"))
+def _digits(value: int) -> int:
+    return len(format_canonical_integer(abs(value)))
 
 
-def _denominator_digits(value: str) -> int:
-    return 0 if value == "1" else len(value)
+def _denominator_digits(value: int) -> int:
+    return 0 if value == 1 else len(format_canonical_integer(value))
 
 
 def _integer_digits(value: int) -> int:
@@ -115,9 +115,7 @@ def _admit(
         if _denominator_digits(term.coefficient.den) > MAX_COMPONENT_DIGITS:
             source_denominator_digits = MAX_COMPONENT_DIGITS + 1
             break
-        source_denominator = lcm(
-            source_denominator, parse_canonical_integer(term.coefficient.den)
-        )
+        source_denominator = lcm(source_denominator, term.coefficient.den)
         if source_denominator.bit_length() > MAX_COMPONENT_DIGITS * 4:
             source_denominator_digits = MAX_COMPONENT_DIGITS + 1
             break
@@ -152,10 +150,13 @@ def _admit(
         len(es) * (m + 1) for es, m in zip(exponents, multidegree, strict=True)
     )
     source_chars = sum(
-        _digits(t.coefficient.num) + len(t.coefficient.den) + 128 for t in terms
+        _digits(t.coefficient.num)
+        + len(format_canonical_integer(t.coefficient.den))
+        + 128
+        for t in terms
     )
     source_chars += sum(
-        _digits(q.num) + len(q.den) + 128
+        _digits(q.num) + len(format_canonical_integer(q.den)) + 128
         for i in box.intervals
         for q in (i.lower, i.upper)
     )
@@ -280,8 +281,8 @@ def bernstein_coefficients(
             values, shape = _contract_axis(values, shape, axis, rows, multidegree[axis])
         coefficients = [
             CanonicalRational.model_construct(
-                num=format_canonical_integer(int(value.numerator)),
-                den=format_canonical_integer(int(value.denominator)),
+                num=int(value.numerator),
+                den=int(value.denominator),
             )
             for value in values
         ]
@@ -307,8 +308,8 @@ def bernstein_coefficients(
         # FLINT already returns a reduced rational. Do not repeat gcd work.
         coefficients.append(
             CanonicalRational.model_construct(
-                num=format_canonical_integer(int(value.numerator)),
-                den=format_canonical_integer(int(value.denominator)),
+                num=int(value.numerator),
+                den=int(value.denominator),
             )
         )
     result = _mark_trusted_tensor(
@@ -382,9 +383,7 @@ def _restriction_admit(
     # multiplying unrelated reduced denominators at every interpolation.
     common_denominator = 1
     for coefficient in parent.coefficients:
-        common_denominator = lcm(
-            common_denominator, parse_canonical_integer(coefficient.den)
-        )
+        common_denominator = lcm(common_denominator, coefficient.den)
         if common_denominator.bit_length() > MAX_COMPONENT_DIGITS * 4:
             _reject(
                 "Bernstein restriction rational growth exceeds the 8192-digit envelope"

@@ -84,8 +84,8 @@ def test_derived_quotient_must_fit_the_rational_carrier() -> None:
 
 
 def test_quotient_height_is_checked_before_arithmetic() -> None:
-    denominator = "1" + "0" * 32_767
-    value = CanonicalRational(num="1", den=denominator)
+    denominator = 10**32_767
+    value = CanonicalRational(num=1, den=denominator)
     matrix = _rm(tuple(tuple(value for _ in range(17)) for _ in range(17)))
     vector = tuple(value for _ in range(17))
     with pytest.raises(OperationDomainValidationError, match="quotient rational"):
@@ -93,8 +93,8 @@ def test_quotient_height_is_checked_before_arithmetic() -> None:
 
 
 def test_derived_denominator_growth_is_checked_before_arithmetic() -> None:
-    denominator = "1" + "0" * 5_000
-    value = CanonicalRational(num="1", den=denominator)
+    denominator = 10**5_000
+    value = CanonicalRational(num=1, den=denominator)
     matrix = _rm(tuple(tuple(value for _ in range(4)) for _ in range(4)))
     vector = tuple(value for _ in range(4))
 

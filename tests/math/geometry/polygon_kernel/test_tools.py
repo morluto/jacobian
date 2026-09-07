@@ -32,8 +32,8 @@ def compute_visibility_kernel(request: PolygonKernelRequest) -> PolygonKernelRes
 def _point(x: int | Fraction, y: int | Fraction) -> dict[str, object]:
     x_value, y_value = Fraction(x), Fraction(y)
     return {
-        "x": {"num": str(x_value.numerator), "den": str(x_value.denominator)},
-        "y": {"num": str(y_value.numerator), "den": str(y_value.denominator)},
+        "x": {"num": x_value.numerator, "den": x_value.denominator},
+        "y": {"num": y_value.numerator, "den": y_value.denominator},
     }
 
 
@@ -349,7 +349,7 @@ def test_accepts_vertex_and_coordinate_boundaries() -> None:
 
     magnitude = 10 ** (MAX_KERNEL_COORDINATE_DIGITS - 1)
     coordinate_boundary = _request([(0, 0), (magnitude, 0), (0, 1)])
-    assert coordinate_boundary.polygon.points[1].x.num == str(magnitude)
+    assert coordinate_boundary.polygon.points[1].x.num == magnitude
 
 
 def test_rejects_immediately_above_structural_boundaries() -> None:

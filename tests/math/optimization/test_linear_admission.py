@@ -1,8 +1,10 @@
 """Derived LP limits, useful boundaries, and one request deadline."""
 
+import json
 from time import monotonic
 
 import pytest
+from pydantic import ValidationError
 from tests.support.rationals import rational_payload as q
 
 from jacobian._execution import (
@@ -18,22 +20,52 @@ from jacobian.math.optimization._linear_basis import (
     LINEAR_PROGRAM_WALL_SECONDS,
     basis_bounds,
 )
-from jacobian.math.optimization._models import StandardFormRationalLinearProgram
+from jacobian.math.optimization._models import (
+    MAX_RATIONAL_DIGITS,
+    StandardFormRationalLinearProgram,
+)
+
+
+@pytest.mark.parametrize("sign", [-1, 1])
+def test_scalar_envelope_agrees_for_native_and_json_components(sign: int) -> None:
+    boundary = 10**MAX_RATIONAL_DIGITS
+    native = {
+        "variables": ["x"],
+        "objective": [{"num": sign * (boundary - 1), "den": 1}],
+        "coefficients": [[{"num": 1, "den": 1}]],
+        "rhs": [{"num": 0, "den": 1}],
+    }
+    accepted = StandardFormRationalLinearProgram.model_validate(native)
+    assert (
+        StandardFormRationalLinearProgram.model_validate_json(
+            accepted.model_dump_json()
+        )
+        == accepted
+    )
+    native["objective"] = [{"num": sign * boundary, "den": 1}]
+    with pytest.raises(ValidationError, match="digit bound"):
+        StandardFormRationalLinearProgram.model_validate(native)
+    wire = accepted.model_dump(mode="json")
+    wire["objective"] = [{"num": str(sign * boundary), "den": "1"}]
+    with pytest.raises(ValidationError, match="digit bound"):
+        StandardFormRationalLinearProgram.model_validate_json(json.dumps(wire))
 
 
 @pytest.mark.parametrize(
     ("n", "m", "code"), [(18, 6, "work_bound"), (24, 12, "basis_bound")]
 )
 def test_standard_admission_reports_measured_costs(n: int, m: int, code: str) -> None:
-    program = StandardFormRationalLinearProgram.model_validate(
-        {
-            "variables": [f"x{i}" for i in range(n)],
-            "objective": [q(1)] * n,
-            "coefficients": [
-                [q(1 + int(i == j % m)) for j in range(n)] for i in range(m)
-            ],
-            "rhs": [q(1)] * m,
-        }
+    program = StandardFormRationalLinearProgram.model_validate_json(
+        json.dumps(
+            {
+                "variables": [f"x{i}" for i in range(n)],
+                "objective": [q(1)] * n,
+                "coefficients": [
+                    [q(1 + int(i == j % m)) for j in range(n)] for i in range(m)
+                ],
+                "rhs": [q(1)] * m,
+            }
+        )
     )
     with pytest.raises(OperationResourceAdmissionError) as caught:
         linear_program(program)
@@ -48,22 +80,24 @@ def test_standard_admission_reports_measured_costs(n: int, m: int, code: str) ->
 def test_native_general_deadline_covers_normalization_and_respects_outer_deadline() -> (
     None
 ):
-    program = GeneralFormRationalLinearProgram.model_validate(
-        {
-            "variables": [
-                {"name": "x", "lower_bound": q(0)},
-                {"name": "y", "lower_bound": q(0)},
-            ],
-            "objective": {"sense": "MINIMIZE", "coefficients": [q(1), q(1)]},
-            "constraints": [
-                {
-                    "label": "sum",
-                    "relation": "GE",
-                    "coefficients": [q(1), q(1)],
-                    "rhs": q(1),
-                }
-            ],
-        }
+    program = GeneralFormRationalLinearProgram.model_validate_json(
+        json.dumps(
+            {
+                "variables": [
+                    {"name": "x", "lower_bound": q(0)},
+                    {"name": "y", "lower_bound": q(0)},
+                ],
+                "objective": {"sense": "MINIMIZE", "coefficients": [q(1), q(1)]},
+                "constraints": [
+                    {
+                        "label": "sum",
+                        "relation": "GE",
+                        "coefficients": [q(1), q(1)],
+                        "rhs": q(1),
+                    }
+                ],
+            }
+        )
     )
     start = monotonic()
     with request_execution(start):
@@ -80,13 +114,15 @@ def test_native_general_deadline_covers_normalization_and_respects_outer_deadlin
 
 
 def test_rank_zero_maximum_shape_executes_without_empty_matrix_backend() -> None:
-    program = StandardFormRationalLinearProgram.model_validate(
-        {
-            "variables": [f"x{i}" for i in range(32)],
-            "objective": [q(0)] * 32,
-            "coefficients": [[q(0)] * 32 for _ in range(64)],
-            "rhs": [q(0)] * 64,
-        }
+    program = StandardFormRationalLinearProgram.model_validate_json(
+        json.dumps(
+            {
+                "variables": [f"x{i}" for i in range(32)],
+                "objective": [q(0)] * 32,
+                "coefficients": [[q(0)] * 32 for _ in range(64)],
+                "rhs": [q(0)] * 64,
+            }
+        )
     )
     assert linear_program(program).status == "OPTIMAL"
 
@@ -94,13 +130,15 @@ def test_rank_zero_maximum_shape_executes_without_empty_matrix_backend() -> None
 def test_infeasible_component_overrides_unbounded_component() -> None:
     # The first block x0-x1=0 is unbounded for -x0; the second block x2=-1
     # is infeasible. A local ray alone cannot establish global unboundedness.
-    program = StandardFormRationalLinearProgram.model_validate(
-        {
-            "variables": ["x0", "x1", "x2"],
-            "objective": [q(-1), q(0), q(0)],
-            "coefficients": [[q(1), q(-1), q(0)], [q(0), q(0), q(1)]],
-            "rhs": [q(0), q(-1)],
-        }
+    program = StandardFormRationalLinearProgram.model_validate_json(
+        json.dumps(
+            {
+                "variables": ["x0", "x1", "x2"],
+                "objective": [q(-1), q(0), q(0)],
+                "coefficients": [[q(1), q(-1), q(0)], [q(0), q(0), q(1)]],
+                "rhs": [q(0), q(-1)],
+            }
+        )
     )
     result = linear_program(program)
     assert result.status == "INFEASIBLE"

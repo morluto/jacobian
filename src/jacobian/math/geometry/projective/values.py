@@ -8,9 +8,8 @@ from typing import Annotated, Self
 from pydantic import Field, StrictInt, StringConstraints, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, ExactInteger
 from jacobian._models import StrictModel
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.number_theory.number_fields.values import (
     NumberFieldEmbedding,
     SimpleNumberFieldElement,
@@ -70,25 +69,10 @@ class RationalProjectiveLine(StrictModel):
 class PrimitiveProjectiveTriple(StrictModel):
     """Integer homogeneous coordinates with canonical decimal spelling."""
 
-    coordinates: tuple[str, str, str]
+    coordinates: tuple[ExactInteger, ExactInteger, ExactInteger]
 
     @model_validator(mode="after")
     def require_canonical_integer_coordinates(self) -> Self:
-        try:
-            values = tuple(parse_canonical_integer(value) for value in self.coordinates)
-        except ValueError as exc:
-            raise _validation_error(
-                "projective_coordinates_integer_strings",
-                "projective coordinates must be integer strings",
-            ) from exc
-        if (
-            tuple(format_canonical_integer(value) for value in values)
-            != self.coordinates
-        ):
-            raise _validation_error(
-                "projective_coordinates_canonical_integer_strings",
-                "projective coordinates must be canonical integer strings",
-            )
         return self
 
 
@@ -144,7 +128,7 @@ def verify_rational_projective_line(line: RationalProjectiveLine) -> bool:
 def verify_primitive_projective_triple(triple: PrimitiveProjectiveTriple) -> bool:
     """Check nonzero primitive sign-normalized integer coordinates."""
     try:
-        values = tuple(parse_canonical_integer(value) for value in triple.coordinates)
+        values = triple.coordinates
         divisor = 0
         for value in values:
             divisor = gcd(divisor, abs(value))

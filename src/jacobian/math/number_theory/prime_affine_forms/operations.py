@@ -6,7 +6,6 @@ from fractions import Fraction
 from math import gcd, prod
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.number_theory.affine_forms.values import (
     MAX_AFFINE_COMPONENT_DIGITS,
 )
@@ -71,8 +70,8 @@ from jacobian.math.number_theory.prime_affine_forms.values import PrimeAffineTup
 def verify_primitive_affine_form(form: object) -> bool:
     """Check a caller-supplied affine form's primitive-domain claim."""
     try:
-        coefficient = parse_canonical_integer(form.coefficient)  # type: ignore[attr-defined]
-        constant = parse_canonical_integer(form.constant)  # type: ignore[attr-defined]
+        coefficient = form.coefficient  # type: ignore[attr-defined]
+        constant = form.constant  # type: ignore[attr-defined]
         if coefficient == 0 or gcd(abs(coefficient), abs(constant)) != 1:
             return False
     except (TypeError, ValueError):
@@ -135,20 +134,18 @@ def local_admissibility(source: PrimeAffineTuple) -> PrimeTupleAdmissibilityResu
 
 
 def interval_count(
-    source: PrimeAffineTuple, lower: str | int, upper: str | int
+    source: PrimeAffineTuple, lower: int, upper: int
 ) -> PrimePatternIntervalCountResult:
     """Count every admitted positive-prime affine tuple in the interval."""
 
-    lower_text = lower if isinstance(lower, str) else format_canonical_integer(lower)
-    upper_text = upper if isinstance(upper, str) else format_canonical_integer(upper)
     lower, upper, _, _ = _run_admission(
-        lambda: _admit_interval_count(source, lower_text, upper_text)
+        lambda: _admit_interval_count(source, lower, upper)
     )
     count, first, last = interval_match_summary(source, lower, upper)
     return PrimePatternIntervalCountResult._from_kernel(
         source=source,
-        lower=lower_text,
-        upper=upper_text,
+        lower=lower,
+        upper=upper,
         count=count,
         first=first,
         last=last,
@@ -156,19 +153,17 @@ def interval_count(
 
 
 def interval_enumerate(
-    source: PrimeAffineTuple, lower: str | int, upper: str | int
+    source: PrimeAffineTuple, lower: int, upper: int
 ) -> PrimePatternIntervalEnumerateResult:
     """Materialize every admitted positive-prime affine tuple in the interval."""
 
-    lower_text = lower if isinstance(lower, str) else format_canonical_integer(lower)
-    upper_text = upper if isinstance(upper, str) else format_canonical_integer(upper)
     lower, upper, _ = _run_admission(
-        lambda: _admit_interval_enumerate(source, lower_text, upper_text)
+        lambda: _admit_interval_enumerate(source, lower, upper)
     )
     return PrimePatternIntervalEnumerateResult._from_kernel(
         source=source,
-        lower=lower_text,
-        upper=upper_text,
+        lower=lower,
+        upper=upper,
         matches=interval_matches(source, lower, upper),
     )
 
@@ -201,9 +196,9 @@ def _admit_verified_wheel(wheel: PrimeTupleResidueWheel) -> None:
         raise _validation_error(
             "wheel must equal the compact wheel for its source and primes"
         )
-    if parse_canonical_integer(wheel.modulus) != expected_modulus:
+    if wheel.modulus != expected_modulus:
         raise _validation_error("wheel modulus does not match its canonical prime set")
-    if parse_canonical_integer(wheel.valid_count) != expected_valid_count:
+    if wheel.valid_count != expected_valid_count:
         raise _validation_error("wheel valid count does not match its local rows")
 
 
@@ -215,7 +210,7 @@ def _admit_wheel_enumeration(wheel: PrimeTupleResidueWheel) -> None:
             f"wheel local residue enumeration {local_residue_rows} exceeds "
             f"{MAX_WHEEL_LOCAL_RESIDUES}"
         )
-    result_count = parse_canonical_integer(wheel.valid_count)
+    result_count = wheel.valid_count
     if result_count > MAX_WHEEL_RESIDUES:
         raise _validation_error(
             f"wheel has {result_count} valid residues, exceeding {MAX_WHEEL_RESIDUES}"
@@ -248,12 +243,8 @@ def _admit_interval_residue_profile(
     wheel: PrimeTupleResidueWheel, lower: int, upper: int
 ) -> tuple[int, int]:
     _admit_verified_wheel(wheel)
-    lower_text = format_canonical_integer(lower)
-    upper_text = format_canonical_integer(upper)
-    require_bounded_affine_endpoints(
-        wheel.source, lower_text, upper_text, label="interval"
-    )
-    lower, upper, interval_size = _parse_interval(lower_text, upper_text)
+    require_bounded_affine_endpoints(wheel.source, lower, upper, label="interval")
+    lower, upper, interval_size = _parse_interval(lower, upper)
     if interval_size > MAX_WHEEL_INTERVAL_LENGTH:
         raise _validation_error(
             f"wheel interval length {interval_size} exceeds {MAX_WHEEL_INTERVAL_LENGTH}"
@@ -278,10 +269,8 @@ def residue_wheel(
         source=source,
         primes=primes,
         local_rows=local_rows,
-        modulus=format_canonical_integer(wheel_modulus(primes)),
-        valid_count=format_canonical_integer(
-            prod((row.valid_count for row in local_rows), start=1)
-        ),
+        modulus=wheel_modulus(primes),
+        valid_count=prod((row.valid_count for row in local_rows), start=1),
     )
 
 
@@ -296,7 +285,7 @@ def enumerate_residue_wheel(
         wheel=wheel,
         residues=tuple(
             PrimeTupleWheelResidueRow(
-                residue=format_canonical_integer(residue),
+                residue=residue,
                 components=components,
             )
             for residue, components in rows
@@ -310,7 +299,7 @@ def wheel_membership(
     """Reduce one exact integer through a source-bound residue wheel."""
 
     _run_admission(lambda: _admit_wheel_membership(wheel, value))
-    modulus = parse_canonical_integer(wheel.modulus)
+    modulus = wheel.modulus
     residue = value % modulus
     components = tuple(value % prime for prime in wheel.primes)
     first_prime: int | None = None
@@ -323,8 +312,8 @@ def wheel_membership(
             break
     return PrimeTupleWheelMembershipResult.model_construct(
         wheel=wheel,
-        value=format_canonical_integer(value),
-        canonical_residue=format_canonical_integer(residue),
+        value=value,
+        canonical_residue=residue,
         components=components,
         is_permitted=first_prime is None,
         first_excluded_prime=first_prime,
@@ -353,10 +342,10 @@ def interval_residue_profile(
     )
     return PrimeTupleIntervalResidueProfileResult.model_construct(
         wheel=wheel,
-        lower=format_canonical_integer(lower),
-        upper=format_canonical_integer(upper),
+        lower=lower,
+        upper=upper,
         interval_size=upper - lower + 1,
-        survivors=tuple(format_canonical_integer(value) for value in survivors),
+        survivors=survivors,
     )
 
 

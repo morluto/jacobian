@@ -96,7 +96,7 @@ its standard array persistence uses the
 [binary `.npy` format](https://numpy.org/doc/stable/reference/generated/numpy.save.html).
 Neither library requires mathematical values to be stored as JSON strings.
 
-The preferred design is one domain-owned mathematical value type with:
+Each domain owns one mathematical value type with:
 
 - Exact integers in Python.
 - Canonical decimal strings when serialized to JSON.
@@ -106,18 +106,21 @@ This keeps native arithmetic, comparisons, and tests numeric while preserving
 lossless producer-consumer composition across JSON. It does not require
 parallel native and wire mathematical value classes.
 
-The current `CanonicalInteger` is string-valued, so shared models declaring
-those fields also expose strings to Python callers. This describes the current
-implementation, not the preferred end state. Matching model fields directly to
-the wire encoding simplifies serialization but shifts conversion work onto
-native callers. JSON safety alone does not justify that tradeoff. Until those
-models are migrated, use their documented native constructors and accessors
-where available, and keep conversions out of mathematical kernels.
+JSON safety does not require Python-facing fields to store strings. Use native
+constructors and numeric accessors for computation; encode and decode only at
+the JSON boundary.
 
-Moving to native integer fields requires a coordinated migration of producers,
-consumers, validators, serializers, worker codecs, and schemas. Preserve the
-canonical JSON encoding and test both native and serialized composition; this
-documentation does not imply that migration has already happened.
+Producers, consumers, validators, serializers, worker codecs, and schemas share
+this boundary. When changing an exact-integer contract, preserve its canonical
+JSON encoding and test both native and serialized composition.
+
+An encoding migration changes the leaves of a canonical value, not the value's
+mathematical shape. Do not replace an owned polynomial or map with a bare
+coefficient tuple merely to expose its integers. For example, rational dynamics
+accepts `RationalPolynomial`, and finite-field functional-graph operations accept
+`FinitePolynomialMap`; those carriers retain their ring or field, variable, and
+domain/codomain context. Migrate the integer fields inside those values, then
+prove that a serialized producer result decodes directly as the consumer input.
 
 Test arithmetic with native exact values wherever the native API accepts them.
 Test serialization separately for canonical spelling, malformed inputs, and
@@ -125,19 +128,41 @@ lossless round trips, and retain producer-consumer composition tests across the
 wire boundary. String encoding adds boundary tests; it should not require every
 mathematical test to construct JSON or compare textual numbers.
 
-#### Requirements for a native integer codec
+#### Requirements for a native-integer codec
 
-The following are migration requirements, not a claim that every current
-integer field or worker already implements them. Pydantic supports
+The shared codec uses Pydantic's
 [separate Python and JSON validation](https://docs.pydantic.dev/latest/api/pydantic_core_schema/#pydantic_core.core_schema.json_or_python_schema)
 and JSON-only serialization on the same annotated native type.
 
-| Boundary | Required behavior for a migrated exact-integer field |
+| Boundary | Exact-integer behavior |
 | --- | --- |
 | Native construction and Python validation | Accept exact integers; reject booleans, floats, and decimal strings rather than silently coercing them. |
 | Python `model_dump()` | Retain integers for native consumers. |
 | JSON validation | Accept canonical ASCII decimal strings, validate spelling and digit bounds before conversion, and decode to integers. Reject JSON numbers for these fields even at small magnitudes. |
 | `model_dump(mode="json")` and `model_dump_json()` | Encode integers as canonical decimal strings at every magnitude. |
+
+The encoding is selected for the field's complete admitted domain, not for the
+magnitude of each value. If a field can contain integers outside JSON's safe
+integer range, every instance uses the string form. Switching between a JSON
+number for `2` and a string for a larger value would give one field two wire
+types and make schemas and consumers branch on magnitude. For example:
+
+```python
+from jacobian.math.finite_fields import FiniteFieldPresentation
+
+field = FiniteFieldPresentation(
+    characteristic=2,
+    modulus_coefficients=(1, 1, 0, 1),
+    generator="a",
+)
+assert field.characteristic == 2
+assert field.model_dump()["characteristic"] == 2
+assert field.model_dump(mode="json")["characteristic"] == "2"
+```
+
+Accordingly, generated JSON Schema examples show strings even when their sample
+values are small. They describe the wire contract, not Python construction or
+the in-memory mathematical representation.
 
 For this split, `model_validate()` on an already-decoded wire dictionary is not
 equivalent to `model_validate_json()`: the former selects Python validation.
@@ -150,7 +175,7 @@ MCP path covers them.
 Publish request schemas with `mode="validation"` and result schemas with
 `mode="serialization"`; Pydantic documents these as
 [distinct schema modes](https://docs.pydantic.dev/latest/concepts/json_schema/#configuring-the-jsonschemamode).
-For migrated exact-integer fields, both describe strings even though Python
+For exact-integer fields, both describe strings even though Python
 fields hold integers. The generated schema and runtime validator must agree on
 spelling and digit limits. For example, a three-digit envelope accepts `"999"`
 and `"-999"`, but rejects `"9999"`. A four-character maximum alone does not
@@ -170,6 +195,76 @@ safe-integer range and Python's configured decimal-conversion guard, positive
 and negative digit-boundary cases, and rejection of booleans, floats, leading
 zeros, plus signs, negative zero, whitespace, exponent notation, and non-ASCII
 digits. A standalone scalar round trip is not evidence of complete migration.
+
+### Exact integers: representation is not a work limit
+
+For native integer fields, use `Annotated[int, DecimalIntegerEncoding(max_digits=...)]`
+from `jacobian._exact`, with the owning structural digit envelope. This is codec
+metadata, not a second mathematical value class. It validates native integers
+and canonical JSON strings separately; both JSON schema modes publish the
+string encoding. Python `model_dump()` remains numeric, while
+`model_dump(mode="json")` and `model_dump_json()` serialize strings. Read wire
+values with `model_validate_json()` (the dispatcher uses this path), not
+`model_validate()` on an already JSON-decoded dictionary.
+
+Use the shared `ExactInteger` annotation when the domain uses the common
+32,768-digit envelope. Add `DecimalIntegerEncoding` directly only for a
+different domain-owned envelope; do not introduce synonymous integer wrappers.
+
+The same boundary applies to shared integer matrices, polynomial coefficients,
+and the integer components of `CanonicalRational`. A rational remains one
+compound value: `CanonicalRational(num=3, den=7)` in Python serializes as
+`{"num":"3","den":"7"}` in JSON. Its denominator must be positive, its
+components reduced, and zero represented as `0/1`; decoding validates these
+invariants rather than silently normalizing an authored representation.
+
+Mathematical integer fields whose domain or results can exceed the interoperable
+JSON-number range, `[-(2**53 - 1), 2**53 - 1]`, must encode consistently as decimal
+strings, including small values: `"0"`, `"42"`, `"1000000016000000063"`.
+Canonical spelling has no leading plus, leading zeros, exponent notation,
+whitespace, or negative zero. Do not add a second big-integer wrapper or switch
+between JSON numbers and strings according to magnitude.
+
+The string is the **wire encoding of an exact integer**, not a symbolic
+expression and not an instruction to compute with text. Use
+`parse_canonical_integer` and `format_canonical_integer` from
+`jacobian.canonical` at arithmetic/transport boundaries; these helpers also
+handle values beyond Python's ordinary decimal-conversion digit limit.
+Compute with exact Python or backend integers. Never pass through a float or
+JavaScript `Number` to parse or serialize them. Keep intrinsically bounded
+indices, dimensions, and counters as JSON integers when their complete domain
+fits that range.
+
+There are three separate questions:
+
+| Limit | What it protects | Where it belongs |
+| --- | --- | --- |
+| JSON safe-integer range | Exact exchange with ordinary JSON consumers | Scalar field encoding; if the field can exceed the range, use canonical strings for every value. |
+| Input bytes, decimal digits, collection size | Bounded parsing and materialization | Documented transport or structural guards, before expensive conversion/allocation. |
+| Arithmetic work, intermediate growth, memory, output size | A bounded exact computation | Admission for the actual operation and algorithm. |
+
+Arbitrary-precision encoding does not promise unlimited computation. Conversely,
+a transport number limit must not become a mathematical limit merely because a
+field was originally encoded as a JSON number. Keep the strict JSON encoder's
+safety check; fix the mathematical value that crosses it.
+
+An integer-range repair is a shared-value migration:
+
+1. Freeze an exact value that fails today, including a result that grows beyond
+   its individually small input scalars.
+2. Change the domain-owned scalar fields, then migrate every producer, consumer,
+   native entry point, worker codec, catalog example, and generated schema that
+   uses them. Preserve parents and ordered axes, including empty values.
+3. Update arithmetic conversions and exact output bounds. Do not leave a
+   narrowing conversion to a machine integer or float in an intermediate path.
+4. Test strict-JSON round trips and serialized producer-consumer composition
+   beyond `2**53 - 1`, malformed encodings, and retained resource rejections.
+   Encoding a large value is not evidence that an operation admits it.
+
+For the separate computation repair, follow the
+[execution-envelope review](public-operation-admission.md#execution-envelope-review).
+
+### Shared schemas and explicit conversions
 
 Generate public schemas from the actual domain-owned request and result types.
 Required fields, defaults, literals, and result branches must agree with public

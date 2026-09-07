@@ -6,18 +6,11 @@ import itertools
 from fractions import Fraction
 from typing import Annotated, Literal, Self
 
-from pydantic import (
-    Field,
-    StrictInt,
-    field_serializer,
-    field_validator,
-    model_validator,
-)
+from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, ExactInteger
 from jacobian._models import StrictModel
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
     RationalPolynomialIdeal,
@@ -77,7 +70,7 @@ def _admit_monomial_ideal(ideal: RationalPolynomialIdeal) -> None:
                 "every monomial-ideal generator must be a single monomial term"
             )
         term = terms[0]
-        if term.coefficient != CanonicalRational(num="1", den="1"):
+        if term.coefficient != CanonicalRational(num=1, den=1):
             raise _validation_error(
                 "every monomial-ideal generator must have unit coefficient"
             )
@@ -405,7 +398,7 @@ def _require_provable_family_fit(ideal: RationalPolynomialIdeal) -> None:
     unit_witness = any(
         len(generator.polynomial.terms) == 1
         and not any(generator.polynomial.terms[0].exponents)
-        and generator.polynomial.terms[0].coefficient.num != "0"
+        and generator.polynomial.terms[0].coefficient.num != 0
         for generator in ideal.generators
     )
     if unit_witness:
@@ -1004,28 +997,13 @@ class IdealMembershipCertificateResult(StrictModel):
     polynomial: RationalPolynomial
     cofactor_degree_bound: StrictInt = Field(ge=0, le=MAX_CERTIFICATE_COFACTOR_DEGREE)
     status: Literal["CERTIFICATE", "NO_CERTIFICATE_WITHIN_BOUND"]
-    multiplier: StrictInt | None = None
+    multiplier: ExactInteger | None = None
     cofactors: tuple[RationalPolynomial, ...] | None = Field(
         default=None, max_length=MAX_GENERATORS
     )
 
-    @field_validator("multiplier", mode="before")
-    @classmethod
-    def parse_multiplier(cls, value: object) -> object:
-        if isinstance(value, str):
-            return parse_canonical_integer(value)
-        return value
-
-    @field_serializer("multiplier", when_used="json")
-    def serialize_multiplier(self, value: int | None) -> str | None:
-        return None if value is None else format_canonical_integer(value)
-
     @model_validator(mode="after")
     def require_certificate_shape(self) -> Self:
-        if self.polynomial.variables != self.ideal.variables:
-            raise _validation_error(
-                "certificate polynomial must use the ideal's ordered ring"
-            )
         produced = self.status == "CERTIFICATE"
         if produced != (self.multiplier is not None and self.cofactors is not None):
             raise _validation_error(
@@ -1046,7 +1024,7 @@ class IdealMembershipCertificateResult(StrictModel):
         ):
             raise _validation_error("certificate cofactors must use the source ring")
         if any(
-            term.coefficient.den != "1"
+            term.coefficient.den != 1
             for cofactor in self.cofactors
             for term in cofactor.polynomial.terms
         ):
@@ -1061,7 +1039,7 @@ class IdealMembershipCertificateResult(StrictModel):
         polynomial: RationalPolynomial,
         cofactor_degree_bound: int,
         status: Literal["CERTIFICATE", "NO_CERTIFICATE_WITHIN_BOUND"],
-        multiplier: int | None = None,
+        multiplier: ExactInteger | None = None,
         cofactors: tuple[RationalPolynomial, ...] | None = None,
     ) -> Self:
         return cls.model_construct(

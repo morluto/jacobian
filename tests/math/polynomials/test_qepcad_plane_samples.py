@@ -31,7 +31,7 @@ Coordinate 2 = -1/2
 
     assert point.isolating_box.intervals[0].lower.as_fraction() == 0
     assert point.isolating_box.intervals[1].lower.as_fraction() == Fraction(-1, 2)
-    assert point.coordinate_polynomials[1].polynomial.terms[0].coefficient.num == "2"
+    assert point.coordinate_polynomials[1].polynomial.terms[0].coefficient.num == 2
 
 
 def test_primitive_algebraic_coordinate_uses_its_minimal_polynomial() -> None:
@@ -50,8 +50,8 @@ Coordinate 2 = alpha
 
     terms = point.coordinate_polynomials[1].polynomial.terms
     assert tuple((term.coefficient.num, term.exponents) for term in terms) == (
-        ("1", (0, 2)),
-        ("-3", (0, 0)),
+        (1, (0, 2)),
+        (-3, (0, 0)),
     )
     assert point.isolating_box.intervals[1].lower.as_fraction() > 0
 
@@ -71,8 +71,8 @@ Coordinate 2 = the unique root of x - alpha between 0 and 4
         axis=("x", "y"),
     )
 
-    assert point.coordinate_polynomials[0].polynomial.terms[1].coefficient.num == "-2"
-    assert point.coordinate_polynomials[1].polynomial.terms[1].coefficient.num == "-2"
+    assert point.coordinate_polynomials[0].polynomial.terms[1].coefficient.num == -2
+    assert point.coordinate_polynomials[1].polynomial.terms[1].coefficient.num == -2
     assert point.isolating_box.intervals[0].lower.as_fraction() > 0
     assert point.isolating_box.intervals[1].lower.as_fraction() > 0
 

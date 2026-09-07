@@ -202,7 +202,7 @@ def test_singular_protocol_parser_rejects_trailing_output() -> None:
 def test_singular_protocol_accepts_coefficients_beyond_input_budget() -> None:
     coefficient = "1" + "0" * 256
 
-    assert _singular._parse_coefficient(coefficient).num == coefficient
+    assert _singular._parse_coefficient(coefficient).num == 10**256
 
 
 def test_singular_protocol_decodes_coefficients_beyond_the_python_digit_cap() -> None:
@@ -210,7 +210,7 @@ def test_singular_protocol_decodes_coefficients_beyond_the_python_digit_cap() ->
 
     coefficient = "1" + "0" * 5_000
 
-    assert _singular._parse_coefficient(coefficient).num == coefficient
+    assert _singular._parse_coefficient(coefficient).num == 10**5000
     assert _singular._parse_coefficient(f"-{coefficient}/3").as_fraction() == (
         Fraction(-(10**5000), 3)
     )
@@ -358,8 +358,8 @@ def test_singular_codec_normalizes_wide_nonzero_constant_units() -> None:
             terms=(
                 RationalPolynomialTerm(
                     coefficient=CanonicalRational(
-                        num="1" + "0" * 5_000,
-                        den="1",
+                        num=10**5_000,
+                        den=1,
                     ),
                     exponents=(0,),
                 ),

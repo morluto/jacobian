@@ -7,14 +7,13 @@ from dataclasses import dataclass
 from math import factorial
 from typing import Any
 
-from jacobian._exact import NativeInteger
 from jacobian._execution import (
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
     bind_request_deadline,
     current_request_execution,
 )
-from jacobian.canonical import parse_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.number_theory.algebraic_numbers.complex import (
     ComplexAlgebraicValue,
     algebraic_root_separation_denominator_bound,
@@ -54,6 +53,7 @@ from jacobian.math.number_theory.number_fields.values import (
     ComplexNumberFieldEmbedding,
     ComplexNumberFieldEmbeddingRecord,
     NumberFieldConjugatePair,
+    NumberFieldDiscriminantInteger,
     NumberFieldEmbeddingProfile,
     NumberFieldSignature,
     RealNumberFieldEmbedding,
@@ -98,10 +98,7 @@ def _admit_number_field_embeddings(
 ) -> NumberFieldEmbeddingAdmission:
     """Preflight root work, intermediates, and the worker projection."""
 
-    coefficients = tuple(
-        parse_canonical_integer(coefficient)
-        for coefficient in field.coefficients_descending
-    )
+    coefficients = tuple(coefficient for coefficient in field.coefficients_descending)
     degree = field.degree
     if degree > MAX_NUMBER_FIELD_EMBEDDING_DEGREE:
         raise NumberFieldEmbeddingAdmissionError(
@@ -128,7 +125,7 @@ def _admit_number_field_embeddings(
         isolator_digits = max(
             isolator_digits,
             *(
-                len(coefficient.lstrip("-"))
+                len(format_canonical_integer(abs(coefficient)))
                 for coefficient in field.coefficients_descending
             ),
         )
@@ -348,7 +345,9 @@ def _integral_basis(
     return integral_basis
 
 
-def discriminant(field: SimpleNumberFieldPresentation) -> NativeInteger:
+def discriminant(
+    field: SimpleNumberFieldPresentation,
+) -> NumberFieldDiscriminantInteger:
     _ring_of_integers, field_discriminant, _alpha, _leading = _integral_basis(field)
     return int(field_discriminant)
 

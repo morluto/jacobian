@@ -20,7 +20,7 @@ from jacobian._execution import (
     current_request_execution,
     request_checkpoint,
 )
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.certified_snf.operations import (
     Matrix,
@@ -1403,16 +1403,12 @@ def _integer_matrix(entries: Matrix, *, rows: int, columns: int) -> IntegerMatri
     return IntegerMatrix(
         row_count=rows,
         column_count=columns,
-        entries=tuple(
-            tuple(format_canonical_integer(value) for value in row) for row in entries
-        ),
+        entries=tuple(tuple(int(value) for value in row) for row in entries),
     )
 
 
 def _integral_vector(values: list[int]) -> IntegralVector:
-    return IntegralVector(
-        coefficients=tuple(format_canonical_integer(value) for value in values)
-    )
+    return IntegralVector(coefficients=tuple(values))
 
 
 def _integer_sequence_bits(values: list[int]) -> int:
@@ -1565,7 +1561,7 @@ def compute_integral_homology(
             generator_values.extend((factor, *coordinate, *cycle, *bounding_chain))
             torsion_generators.append(
                 IntegralTorsionGenerator(
-                    order=format_canonical_integer(factor),
+                    order=factor,
                     cycle=_integral_vector(cycle),
                     cycle_coordinates=_integral_vector(coordinate),
                     bounding_chain=_integral_vector(bounding_chain),
@@ -1591,7 +1587,7 @@ def compute_integral_homology(
                 incoming_boundary_rank=incoming_rank,
                 free_rank=cycle_rank - incoming_rank,
                 torsion_invariant_factors=tuple(
-                    format_canonical_integer(factor)
+                    factor
                     for factor in incoming_reduction.invariant_factors
                     if factor > 1
                 ),

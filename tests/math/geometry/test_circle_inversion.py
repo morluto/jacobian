@@ -5,7 +5,6 @@ from fractions import Fraction
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry._models import (
     CircleInversionRequest,
@@ -15,14 +14,14 @@ from jacobian.math.geometry._models import (
 from jacobian.math.geometry._tools import circle_inversion
 
 
-def _pt(x: int | str, y: int | str) -> RationalPoint2D:
+def _pt(x: int, y: int) -> RationalPoint2D:
     return RationalPoint2D(
-        x=_cr(str(x), "1"),
-        y=_cr(str(y), "1"),
+        x=_cr(x, 1),
+        y=_cr(y, 1),
     )
 
 
-def _cr(num: str, den: str) -> CanonicalRational:
+def _cr(num: int, den: int) -> CanonicalRational:
     return CanonicalRational(num=num, den=den)
 
 
@@ -31,7 +30,7 @@ class TestCircleInversion:
         result = circle_inversion(
             CircleInversionRequest(
                 center=_pt(0, 0),
-                power=_cr("1", "1"),
+                power=_cr(1, 1),
                 point=_pt(2, 0),
             ),
         )
@@ -43,7 +42,7 @@ class TestCircleInversion:
         result = circle_inversion(
             CircleInversionRequest(
                 center=_pt(0, 0),
-                power=_cr("1", "1"),
+                power=_cr(1, 1),
                 point=_pt(1, 2),
             ),
         )
@@ -55,7 +54,7 @@ class TestCircleInversion:
         result = circle_inversion(
             CircleInversionRequest(
                 center=_pt(1, 1),
-                power=_cr("2", "1"),
+                power=_cr(2, 1),
                 point=_pt(3, 1),
             ),
         )
@@ -68,7 +67,7 @@ class TestCircleInversion:
         result = circle_inversion(
             CircleInversionRequest(
                 center=_pt(0, 0),
-                power=_cr("4", "1"),
+                power=_cr(4, 1),
                 point=_pt(2, 0),
             ),
         )
@@ -79,14 +78,14 @@ class TestCircleInversion:
         first = circle_inversion(
             CircleInversionRequest(
                 center=_pt(0, 0),
-                power=_cr("3", "1"),
+                power=_cr(3, 1),
                 point=_pt(1, 1),
             ),
         )
         second = circle_inversion(
             CircleInversionRequest(
                 center=_pt(0, 0),
-                power=_cr("3", "1"),
+                power=_cr(3, 1),
                 point=first.point,
             ),
         )
@@ -96,17 +95,17 @@ class TestCircleInversion:
     def test_rejects_point_at_center(self) -> None:
         request = CircleInversionRequest(
             center=_pt(1, 1),
-            power=_cr("1", "1"),
+            power=_cr(1, 1),
             point=_pt(1, 1),
         )
         with pytest.raises(OperationDomainValidationError):
             circle_inversion(request)
 
     def test_rejects_nonpositive_power(self) -> None:
-        for power in ("0", "-1"):
+        for power in (0, -1):
             request = CircleInversionRequest(
                 center=_pt(0, 0),
-                power=_cr(power, "1"),
+                power=_cr(power, 1),
                 point=_pt(1, 0),
             )
             with pytest.raises(OperationDomainValidationError):
@@ -120,10 +119,10 @@ class TestCircleInversion:
         # before any large intermediate is built.
         request = CircleInversionRequest(
             center=_pt(0, 0),
-            power=_cr(format_canonical_integer(10**20000 + 1), "1"),
+            power=_cr(10**20000 + 1, 1),
             point=RationalPoint2D(
-                x=_cr("1", format_canonical_integer(10**20000)),
-                y=_cr("0", "1"),
+                x=_cr(1, 10**20000),
+                y=_cr(0, 1),
             ),
         )
         with pytest.raises(OperationDomainValidationError):
@@ -135,10 +134,10 @@ class TestCircleInversion:
         # admission bound but the inverted result does not.
         request = CircleInversionRequest(
             center=_pt(1, 1),
-            power=_cr(format_canonical_integer(10**1600), "1"),
+            power=_cr(10**1600, 1),
             point=RationalPoint2D(
                 x=CanonicalRational.from_fraction(Fraction(1) + Fraction(1, 10**3200)),
-                y=_cr("1", "1"),
+                y=_cr(1, 1),
             ),
         )
         with pytest.raises(OperationDomainValidationError):
@@ -149,17 +148,17 @@ class TestCircleInversion:
         # (exactly 32,768 digits here), so parsing is schema-valid, but the
         # exact inversion would form ~262,000-digit intermediates. Admission
         # must reject on the static input bound before computing anything.
-        a = format_canonical_integer(10**32767)
+        a = 10**32767
 
         def frac(n: int, d: int) -> CanonicalRational:
             return _cr(
-                format_canonical_integer(10**32767 + n),
-                format_canonical_integer(10**32767 + d),
+                10**32767 + n,
+                10**32767 + d,
             )
 
         request = CircleInversionRequest(
             center=_pt(0, 0),
-            power=_cr(a, format_canonical_integer(10**32767 + 29)),
+            power=_cr(a, 10**32767 + 29),
             point=RationalPoint2D(
                 x=frac(1, 3),
                 y=frac(5, 7),
@@ -173,17 +172,17 @@ class TestCircleInversion:
         # within the admission bound (at most 1,601 digits), which the
         # fed-back request accepts identically. Admission must accept both
         # rounds and the double inversion must recover p exactly.
-        tiny = CanonicalRational(num="1", den=format_canonical_integer(10**800))
+        tiny = CanonicalRational(num=1, den=10**800)
         center = _pt(0, 0)
-        point = RationalPoint2D(x=tiny, y=_cr("1", "1"))
-        first = CircleInversionRequest(center=center, power=_cr("1", "1"), point=point)
+        point = RationalPoint2D(x=tiny, y=_cr(1, 1))
+        first = CircleInversionRequest(center=center, power=_cr(1, 1), point=point)
         result = circle_inversion(first)
-        assert len(result.point.x.num.lstrip("-")) == 801
-        assert len(result.point.x.den) == 1601
-        assert len(result.point.y.den) == 1601
+        assert 10**800 <= abs(result.point.x.num) < 10**801
+        assert 10**1600 <= result.point.x.den < 10**1601
+        assert 10**1600 <= result.point.y.den < 10**1601
 
         second = CircleInversionRequest(
-            center=center, power=_cr("1", "1"), point=result.point
+            center=center, power=_cr(1, 1), point=result.point
         )
         recovered = circle_inversion(second)
         assert recovered.point == point
@@ -194,20 +193,20 @@ class TestCircleInversion:
         # exactly 2,048 digits, so both sides fit and the request is
         # admitted. One digit more is rejected statically even though the
         # exact inverted point would remain canonically representable.
-        edge = format_canonical_integer(10**2047)
+        edge = 10**2047
         request = CircleInversionRequest(
             center=_pt(0, 0),
-            power=_cr("1", "1"),
-            point=RationalPoint2D(x=_cr(edge, "1"), y=_cr("0", "1")),
+            power=_cr(1, 1),
+            point=RationalPoint2D(x=_cr(edge, 1), y=_cr(0, 1)),
         )
         result = circle_inversion(request)
         assert result.point.x.as_fraction() == Fraction(1, 10**2047)
 
-        over = format_canonical_integer(10**2048)
+        over = 10**2048
         request = CircleInversionRequest(
             center=_pt(0, 0),
-            power=_cr("1", "1"),
-            point=RationalPoint2D(x=_cr(over, "1"), y=_cr("0", "1")),
+            power=_cr(1, 1),
+            point=RationalPoint2D(x=_cr(over, 1), y=_cr(0, 1)),
         )
         with pytest.raises(OperationDomainValidationError):
             circle_inversion(request)
@@ -216,13 +215,13 @@ class TestCircleInversion:
         # Defining invariant: for every admitted (c,s,p), the fed-back request
         # (c,s,I(p)) is admitted again and recovers p.
         cases = (
-            (_pt(0, 0), _cr("1", "1"), _pt(3, -7)),
-            (_pt(1, 1), _cr("2", "1"), _pt(-4, 9)),
-            (_pt(-2, 5), _cr("7", "3"), _pt(11, -13)),
+            (_pt(0, 0), _cr(1, 1), _pt(3, -7)),
+            (_pt(1, 1), _cr(2, 1), _pt(-4, 9)),
+            (_pt(-2, 5), _cr(7, 3), _pt(11, -13)),
             (
                 _pt(0, 0),
-                _cr("6", "5"),
-                RationalPoint2D(x=_cr("3", "7"), y=_cr("-2", "11")),
+                _cr(6, 5),
+                RationalPoint2D(x=_cr(3, 7), y=_cr(-2, 11)),
             ),
         )
         for center, power, point in cases:

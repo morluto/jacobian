@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 
 import pytest
@@ -176,9 +177,13 @@ def test_rank_claim_checks_upper_bound_and_selected_minor() -> None:
     source = _matrix(_f2(), [[[0], [0]], [[0], [1]]], ["r0", "r1"], ["c0", "c1"])
     payload = matrix_rank(source).model_dump(mode="json")
     payload.update(rank=0, pivot_rows=[], pivot_columns=[])
-    assert not verify_matrix_rank(MatrixRankResult.model_validate(payload))
+    assert not verify_matrix_rank(
+        MatrixRankResult.model_validate_json(json.dumps(payload))
+    )
     payload.update(rank=1, pivot_rows=["r0"], pivot_columns=["c0"])
-    assert not verify_matrix_rank(MatrixRankResult.model_validate(payload))
+    assert not verify_matrix_rank(
+        MatrixRankResult.model_validate_json(json.dumps(payload))
+    )
 
     zero = _matrix(_f2(), [[[0]]], ["r"], ["c"])
     forged = MatrixRankResult(

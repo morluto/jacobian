@@ -87,7 +87,12 @@ def _source(
     linear_part: tuple[tuple[int, ...], ...],
     translation: tuple[Fraction, ...],
 ) -> RationalAffineTorusMap:
-    return RationalAffineTorusMap.model_validate(_payload(linear_part, translation))
+    payload = _payload(linear_part, translation)
+    payload["linear_part"]["entries"] = linear_part
+    payload["translation"]["coordinates"] = [
+        {"num": value.numerator, "den": value.denominator} for value in translation
+    ]
+    return RationalAffineTorusMap.model_validate(payload)
 
 
 def _kernel_source(source: RationalAffineTorusMap) -> AffineTorusKernelSource:
@@ -192,12 +197,12 @@ def test_identity_map_has_the_whole_torus_and_zero_dimensional_presentation() ->
     assert isinstance(result.outcome, NonemptyAffineTorusFixedLocus)
     family = result.outcome.fixed_locus
     assert family.identity_component.parameter_dimension == 2
-    assert family.identity_component.embedding.entries == (("1", "0"), ("0", "1"))
+    assert family.identity_component.embedding.entries == ((1, 0), (0, 1))
     assert family.component_generators == ()
     assert family.finite_components.relation_matrix.row_count == 0
     assert family.finite_components.relation_matrix.column_count == 0
     assert family.finite_components.relation_matrix.entries == ()
-    assert family.finite_components.component_count == "1"
+    assert family.finite_components.component_count == 1
 
 
 def test_zero_dimensional_torus_has_its_single_exact_fixed_point() -> None:
@@ -217,7 +222,7 @@ def test_zero_dimensional_torus_has_its_single_exact_fixed_point() -> None:
     assert family.component_generators == ()
     assert family.finite_components.generator_count == 0
     assert family.finite_components.relation_matrix.entries == ()
-    assert family.finite_components.component_count == "1"
+    assert family.finite_components.component_count == 1
     assert (
         AffineTorusFixedLocusResult.model_validate_json(
             encode_strict_json(result.model_dump(mode="json")),
@@ -233,7 +238,7 @@ def test_translated_identity_returns_the_first_primitive_obstruction() -> None:
     result = affine_torus_fixed_locus(source)
 
     assert result.outcome.status == "EMPTY"
-    assert result.outcome.obstruction.coefficients == ("1", "0")
+    assert result.outcome.obstruction.coefficients == (1, 0)
     assert result.outcome.obstruction_pairing.as_fraction() == Fraction(1, 3)
 
 
@@ -251,10 +256,10 @@ def test_zero_linear_map_returns_its_unique_fixed_point() -> None:
     assert family.identity_component.embedding.entries == ((), ())
     # The standard image-saturation generators are retained even when their
     # classes have order one; C=I makes the trivial component group explicit.
-    assert family.finite_components.relation_matrix.entries == (("1", "0"), ("0", "1"))
-    assert family.finite_components.generator_orders == ("1", "1")
+    assert family.finite_components.relation_matrix.entries == ((1, 0), (0, 1))
+    assert family.finite_components.generator_orders == (1, 1)
     assert family.finite_components.invariant_factors == ()
-    assert family.finite_components.component_count == "1"
+    assert family.finite_components.component_count == 1
 
 
 def test_base_point_height_accounts_for_minor_times_translation_denominator() -> None:
@@ -266,7 +271,7 @@ def test_base_point_height_accounts_for_minor_times_translation_denominator() ->
     assert isinstance(result.outcome, NonemptyAffineTorusFixedLocus)
     family = result.outcome.fixed_locus
     assert family.base_point.coordinates[0].as_fraction() == Fraction(31, 32)
-    assert family.finite_components.component_count == "16"
+    assert family.finite_components.component_count == 16
     assert plan.bounds_for_rank(1).rational_intermediate_height >= 32
 
 
@@ -278,14 +283,14 @@ def test_positive_dimensional_locus_with_two_components() -> None:
     assert isinstance(result.outcome, NonemptyAffineTorusFixedLocus)
     family = result.outcome.fixed_locus
     assert family.identity_component.parameter_dimension == 1
-    assert family.identity_component.embedding.entries == (("0",), ("1",))
+    assert family.identity_component.embedding.entries == ((0,), (1,))
     assert tuple(
         value.as_fraction() for value in family.component_generators[0].coordinates
     ) == (Fraction(1, 2), Fraction(0))
-    assert family.finite_components.relation_matrix.entries == (("2",),)
-    assert family.finite_components.generator_orders == ("2",)
-    assert family.finite_components.invariant_factors == ("2",)
-    assert family.finite_components.component_count == "2"
+    assert family.finite_components.relation_matrix.entries == ((2,),)
+    assert family.finite_components.generator_orders == (2,)
+    assert family.finite_components.invariant_factors == (2,)
+    assert family.finite_components.component_count == 2
 
 
 def test_component_relation_may_land_nontrivially_in_identity_subtorus() -> None:
@@ -295,15 +300,15 @@ def test_component_relation_may_land_nontrivially_in_identity_subtorus() -> None
 
     assert isinstance(result.outcome, NonemptyAffineTorusFixedLocus)
     family = result.outcome.fixed_locus
-    assert family.identity_component.embedding.entries == (("5",), ("-4",))
+    assert family.identity_component.embedding.entries == ((5,), (-4,))
     generator = tuple(
         value.as_fraction() for value in family.component_generators[0].coordinates
     )
     assert generator == (Fraction(3, 4), Fraction(0))
-    assert family.finite_components.relation_matrix.entries == (("1",),)
-    assert family.finite_components.generator_orders == ("1",)
+    assert family.finite_components.relation_matrix.entries == ((1,),)
+    assert family.finite_components.generator_orders == (1,)
     assert family.finite_components.invariant_factors == ()
-    assert family.finite_components.component_count == "1"
+    assert family.finite_components.component_count == 1
 
     # A component relation vanishes modulo the connected subtorus, not
     # necessarily as a point of the ambient torus. Here the nonintegral
@@ -361,7 +366,7 @@ def test_paper_empty_examples_return_the_first_coordinate_character(
     result = affine_torus_fixed_locus(_source(linear_part, translation))
 
     assert result.outcome.status == "EMPTY"
-    assert result.outcome.obstruction.coefficients == ("1", "0", "0", "0")
+    assert result.outcome.obstruction.coefficients == (1, 0, 0, 0)
     assert result.outcome.obstruction_pairing.as_fraction() == expected_pairing
 
 
@@ -424,7 +429,7 @@ def test_nonempty_result_reconstructs_defining_integer_and_rational_identities()
     )
     determinant = abs(_determinant_two(relation_matrix))
     assert determinant == int(family.finite_components.component_count) == 6
-    assert family.finite_components.invariant_factors == ("6",)
+    assert family.finite_components.invariant_factors == (6,)
 
 
 def test_empty_character_satisfies_the_obstruction_definition() -> None:
@@ -457,15 +462,15 @@ def test_empty_character_satisfies_the_obstruction_definition() -> None:
 
 def test_empty_result_deserialization_does_not_replay_obstruction_theorem() -> None:
     source = _source(
-        [[1]],
-        [Fraction(1, 3)],
+        ((1,),),
+        (Fraction(1, 3),),
     )
     result = affine_torus_fixed_locus(source)
     assert isinstance(result.outcome, EmptyAffineTorusFixedLocus)
     payload = result.model_dump(mode="json")
     payload["outcome"]["obstruction_pairing"] = {"num": "1", "den": "2"}
 
-    assert AffineTorusFixedLocusResult.model_validate(payload)
+    assert AffineTorusFixedLocusResult.model_validate_json(encode_strict_json(payload))
 
 
 def test_character_primitivity_is_an_explicit_claim() -> None:
@@ -495,7 +500,7 @@ def test_nonempty_result_deserialization_does_not_replay_kernel_dimension() -> N
     outcome["fixed_locus"] = family
     result["outcome"] = outcome
 
-    assert AffineTorusFixedLocusResult.model_validate(result)
+    assert AffineTorusFixedLocusResult.model_validate_json(encode_strict_json(result))
 
 
 @pytest.mark.parametrize(
@@ -590,12 +595,12 @@ def test_integral_shear_carries_a_positive_dimensional_fixed_locus() -> None:
     assert isinstance(sheared_result.outcome, NonemptyAffineTorusFixedLocus)
     source_family = source_result.outcome.fixed_locus
     sheared_family = sheared_result.outcome.fixed_locus
-    assert source_family.identity_component.embedding.entries == (("0",), ("1",))
-    assert sheared_family.identity_component.embedding.entries == (("1",), ("1",))
+    assert source_family.identity_component.embedding.entries == ((0,), (1,))
+    assert sheared_family.identity_component.embedding.entries == ((1,), (1,))
     assert (
         sheared_family.finite_components.component_count
         == source_family.finite_components.component_count
-        == "2"
+        == 2
     )
     assert tuple(
         value.as_fraction() for value in sheared_family.base_point.coordinates
@@ -608,8 +613,8 @@ def test_zero_dimensional_matrices_and_discriminated_result_round_trip() -> None
         _source(((0, 0), (0, 0)), (Fraction(1, 3), Fraction(2, 5))),
     ):
         result = affine_torus_fixed_locus(source)
-        restored = AffineTorusFixedLocusResult.model_validate(
-            result.model_dump(mode="json")
+        restored = AffineTorusFixedLocusResult.model_validate_json(
+            encode_strict_json(result.model_dump(mode="json"))
         )
         assert restored == result
 
@@ -626,7 +631,7 @@ def test_component_relation_theorem_is_not_replayed_during_deserialization() -> 
     outcome["fixed_locus"] = family
     result["outcome"] = outcome
 
-    assert AffineTorusFixedLocusResult.model_validate(result)
+    assert AffineTorusFixedLocusResult.model_validate_json(encode_strict_json(result))
 
 
 def test_saturated_annihilator_theorem_is_not_replayed_during_deserialization() -> None:
@@ -660,7 +665,7 @@ def test_saturated_annihilator_theorem_is_not_replayed_during_deserialization() 
     outcome["fixed_locus"] = family
     result["outcome"] = outcome
 
-    assert AffineTorusFixedLocusResult.model_validate(result)
+    assert AffineTorusFixedLocusResult.model_validate_json(encode_strict_json(result))
 
 
 def test_contradictory_discriminator_and_component_metadata_fail_closed() -> None:
@@ -673,7 +678,9 @@ def test_contradictory_discriminator_and_component_metadata_fail_closed() -> Non
         "status": "EMPTY",
     }
     with pytest.raises(ValidationError):
-        AffineTorusFixedLocusResult.model_validate(contradictory_status)
+        AffineTorusFixedLocusResult.model_validate_json(
+            encode_strict_json(contradictory_status)
+        )
 
     contradictory_count = dict(result)
     outcome = dict(result["outcome"])
@@ -683,7 +690,9 @@ def test_contradictory_discriminator_and_component_metadata_fail_closed() -> Non
     family["finite_components"] = components
     outcome["fixed_locus"] = family
     contradictory_count["outcome"] = outcome
-    assert AffineTorusFixedLocusResult.model_validate(contradictory_count)
+    assert AffineTorusFixedLocusResult.model_validate_json(
+        encode_strict_json(contradictory_count)
+    )
 
     contradictory_order = dict(result)
     outcome = dict(result["outcome"])
@@ -693,7 +702,9 @@ def test_contradictory_discriminator_and_component_metadata_fail_closed() -> Non
     family["finite_components"] = components
     outcome["fixed_locus"] = family
     contradictory_order["outcome"] = outcome
-    assert AffineTorusFixedLocusResult.model_validate(contradictory_order)
+    assert AffineTorusFixedLocusResult.model_validate_json(
+        encode_strict_json(contradictory_order)
+    )
 
 
 @pytest.mark.parametrize(
@@ -750,7 +761,7 @@ def test_request_schema_matches_sign_aware_affine_scalar_digit_bounds() -> None:
         )
     }
     assert not list(validator.iter_errors(valid_payload))
-    AffineTorusFixedLocusRequest.model_validate(valid_payload)
+    AffineTorusFixedLocusRequest.model_validate_json(encode_strict_json(valid_payload))
 
     for field, invalid in (
         ("linear", "-" + "1" * 501),
@@ -766,7 +777,9 @@ def test_request_schema_matches_sign_aware_affine_scalar_digit_bounds() -> None:
             component["num" if field == "numerator" else "den"] = invalid
         assert list(validator.iter_errors(invalid_payload)), (field, invalid)
         with pytest.raises(ValidationError):
-            AffineTorusFixedLocusRequest.model_validate(invalid_payload)
+            AffineTorusFixedLocusRequest.model_validate_json(
+                encode_strict_json(invalid_payload)
+            )
 
 
 def test_point_schema_matches_sign_aware_carrier_digit_bounds() -> None:
@@ -789,7 +802,7 @@ def test_point_schema_matches_sign_aware_carrier_digit_bounds() -> None:
         "coordinates": [{"num": "1" + "0" * (digit_cap - 1), "den": "9" * digit_cap}],
     }
     assert not list(validator.iter_errors(valid_point))
-    RationalTorusPoint.model_validate(valid_point)
+    RationalTorusPoint.model_validate_json(encode_strict_json(valid_point))
 
     for component, invalid in (
         ("num", "1" * (digit_cap + 1)),
@@ -804,7 +817,7 @@ def test_point_schema_matches_sign_aware_carrier_digit_bounds() -> None:
         invalid_point["coordinates"][0][component] = invalid
         assert list(validator.iter_errors(invalid_point)), (component, invalid)
         with pytest.raises(ValidationError):
-            RationalTorusPoint.model_validate(invalid_point)
+            RationalTorusPoint.model_validate_json(encode_strict_json(invalid_point))
 
     result_schema = AffineTorusFixedLocusResult.model_json_schema()
     result_scalar = result_schema["$defs"]["RationalTorusPoint"]["properties"][
@@ -1118,7 +1131,9 @@ def test_dimension_envelope_agrees_with_the_matrix_carrier() -> None:
     seventeen_identity = [
         [int(row == column) for column in range(17)] for row in range(17)
     ]
-    source = _source(seventeen_identity, (Fraction(0),) * 17)
+    source = _source(
+        tuple(tuple(row) for row in seventeen_identity), (Fraction(0),) * 17
+    )
     plan = build_affine_torus_plan(source, deadline=monotonic() + 30)
     assert plan.dimension == 17
 

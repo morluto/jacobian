@@ -36,8 +36,8 @@ def test_timed_out_high_magnitude_profile_is_unknown(
 
     result = compute_contiguous_sum_profile(
         ContiguousSumProfileRequest(
-            lower_bound="1099511627776",
-            upper_bound="1099511627776",
+            lower_bound=1099511627776,
+            upper_bound=1099511627776,
         )
     )
 
@@ -137,8 +137,8 @@ def test_worker_stop_reason_is_retained_in_public_result(
 
     result = compute_contiguous_sum_profile(
         ContiguousSumProfileRequest(
-            lower_bound="1099511627776",
-            upper_bound="1099511627776",
+            lower_bound=1099511627776,
+            upper_bound=1099511627776,
         )
     )
 

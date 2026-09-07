@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from fractions import Fraction
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from pydantic import ValidationError
@@ -40,11 +41,11 @@ from jacobian.math.lattices.invariant_forms._tools import (
 from jacobian.math.matrices.values import IntegerMatrix
 
 
-def _rational(value: int | Fraction) -> dict[str, str]:
+def _rational(value: int | Fraction) -> dict[str, int]:
     fraction = Fraction(value)
     return {
-        "num": str(fraction.numerator),
-        "den": str(fraction.denominator),
+        "num": fraction.numerator,
+        "den": fraction.denominator,
     }
 
 
@@ -107,6 +108,7 @@ def _integer_matrix(form: IntegralBilinearForm) -> Matrix:
 def _assert_every_basis_form_is_invariant(
     result: InvariantBilinearFormLattice,
 ) -> None:
+    assert isinstance(result.action, RationalMatrixAction)
     generators = tuple(
         Matrix(
             [[entry.as_fraction() for entry in row] for row in generator.matrix.entries]
@@ -139,10 +141,10 @@ def test_source_paper_alternating_lattice_recovers_q_zero() -> None:
     assert result.constraint_rank == 5
     assert result.rank == 1
     assert result.basis_forms[0].matrix.entries == (
-        ("0", "0", "0", "1"),
-        ("0", "0", "6", "0"),
-        ("0", "-6", "0", "0"),
-        ("-1", "0", "0", "0"),
+        (0, 0, 0, 1),
+        (0, 0, 6, 0),
+        (0, -6, 0, 0),
+        (-1, 0, 0, 0),
     )
     _assert_every_basis_form_is_invariant(result)
 
@@ -155,12 +157,12 @@ def test_source_paper_all_bilinear_forms_include_delta_square() -> None:
     assert result.rank == 2
     assert result.constraint_rank == 14
     assert result.basis_forms[0].matrix.entries == (
-        ("0", "0", "0", "1"),
-        ("0", "0", "6", "0"),
-        ("0", "-6", "0", "0"),
-        ("-1", "0", "0", "0"),
+        (0, 0, 0, 1),
+        (0, 0, 6, 0),
+        (0, -6, 0, 0),
+        (-1, 0, 0, 0),
     )
-    assert result.basis_forms[1].matrix.entries[-1][-1] == "1"
+    assert result.basis_forms[1].matrix.entries[-1][-1] == 1
     _assert_every_basis_form_is_invariant(result)
 
 
@@ -203,8 +205,8 @@ def test_wire_request_preserves_the_empty_embedded_action_carrier() -> None:
         kind="BILINEAR",
     )
 
-    decoded = InvariantBilinearFormLatticeRequest.model_validate(
-        request.model_dump(mode="json")
+    decoded = InvariantBilinearFormLatticeRequest.model_validate_json(
+        json.dumps(request.model_dump(mode="json"))
     )
 
     assert isinstance(decoded.action, EmbeddedRealNumberFieldMatrixAction)
@@ -394,7 +396,7 @@ def test_deep_unknown_form_data_is_rejected_before_recursive_canonicalization() 
         nested = {"next": nested}
     action = _action([("A", [[-1, 0], [0, 1]])])
     form = compute_invariant_bilinear_form_lattice(action, "BILINEAR").basis_forms[0]
-    payload = form.model_dump(mode="json")
+    payload = form.model_dump()
     payload["unknown"] = nested
 
     with pytest.raises(ValidationError) as exc_info:
@@ -410,7 +412,7 @@ def test_form_materializes_axis_before_validating_a_typed_matrix() -> None:
         {
             "coordinate_axis": iter(("x",)),
             "kind": "BILINEAR",
-            "matrix": IntegerMatrix(entries=(("1",),)),
+            "matrix": IntegerMatrix(entries=((1,),)),
         }
     )
 
@@ -441,8 +443,8 @@ def test_result_round_trip_retains_source_and_exact_empty_lattice() -> None:
     action = _action([("twice", [[2, 0], [0, 2]])])
     result = compute_invariant_bilinear_form_lattice(action, "SYMMETRIC")
 
-    replayed = InvariantBilinearFormLattice.model_validate(
-        result.model_dump(mode="json")
+    replayed = InvariantBilinearFormLattice.model_validate_json(
+        json.dumps(result.model_dump(mode="json"))
     )
 
     assert replayed == result
@@ -495,7 +497,7 @@ def test_near_envelope_constraint_count_matches_realized_expansion(
         [int(row == column) for column in range(dimension)] for row in range(dimension)
     ]
     action = _action([(f"A{index:02d}", identity) for index in range(generator_count)])
-    original = kernel._constraint_coefficient
+    original = cast(Callable[..., Fraction], kernel._constraint_coefficient)
     executed = 0
 
     def counted(*args: Any, **kwargs: Any) -> Fraction:
@@ -523,9 +525,9 @@ def test_source_height_is_coupled_to_constraint_expansion_work(
     import jacobian.math.lattices.invariant_forms._kernel as kernel
 
     dimension = 8
-    large = {"num": "1" + "0" * 10_000, "den": "1"}
-    zero = {"num": "0", "den": "1"}
-    one = {"num": "1", "den": "1"}
+    large = {"num": 10**10_000, "den": 1}
+    zero = {"num": 0, "den": 1}
+    one = {"num": 1, "den": 1}
     entries = [
         [
             large if row == column == 0 else one if row == column else zero
@@ -570,9 +572,7 @@ def test_catalog_publishes_typed_operation_and_valid_example() -> None:
         encode_strict_json(operation.examples[0].input), strict=True
     )
     result = operation.run(request)
-    assert (
-        operation.result_type.model_validate(result.model_dump(mode="json")) == result
-    )
+    assert operation.result_type.model_validate_json(result.model_dump_json()) == result
 
 
 def test_oversized_generator_matrices_are_rejected_before_nested_parsing() -> None:
@@ -618,7 +618,7 @@ def test_cancellation_is_polled_inside_constraint_expansion(
             return self.cancelled
 
     cancellation = _Cancellation()
-    original = kernel._constraint_coefficient
+    original = cast(Callable[..., Fraction], kernel._constraint_coefficient)
 
     def cancel_after_one(*args: Any, **kwargs: Any) -> Fraction:
         value = original(*args, **kwargs)

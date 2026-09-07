@@ -1,6 +1,5 @@
 """Declarations for finite periodic congruence unions."""
 
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.number_theory._periodic_models import (
     PeriodicCongruenceSubset,
@@ -23,18 +22,14 @@ def normalize_periodic_source(
 
     merged: dict[int, set[int]] = {}
     for subset in request.subsets:
-        modulus = parse_canonical_integer(subset.modulus)
+        modulus = subset.modulus
         residues = merged.setdefault(modulus, set())
-        residues.update(
-            parse_canonical_integer(residue) % modulus for residue in subset.residues
-        )
+        residues.update(residue % modulus for residue in subset.residues)
     return PeriodicCongruenceUnionSource(
         subsets=tuple(
             PeriodicCongruenceSubset(
-                modulus=format_canonical_integer(modulus),
-                residues=tuple(
-                    format_canonical_integer(residue) for residue in sorted(residues)
-                ),
+                modulus=modulus,
+                residues=tuple(sorted(residues)),
             )
             for modulus, residues in sorted(merged.items())
         ),

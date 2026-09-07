@@ -216,18 +216,18 @@ def _univariate_component_polynomial(
     return variable, polynomial
 
 
-def _primitive_integer_factor(polynomial: sympy.Poly) -> tuple[str, ...]:
+def _primitive_integer_factor(polynomial: sympy.Poly) -> tuple[int, ...]:
     _denominator, integer_polynomial = polynomial.clear_denoms(convert=True)
     _content, primitive = integer_polynomial.primitive()
     if primitive.LC() < 0:
         primitive = -primitive
     coefficients = tuple(int(coefficient) for coefficient in primitive.all_coeffs())
     if any(
-        len(str(abs(coefficient))) > _MAX_POINT_COORDINATE_DIGITS
+        len(format_canonical_integer(abs(coefficient))) > _MAX_POINT_COORDINATE_DIGITS
         for coefficient in coefficients
     ):
         raise ValueError("a residue-field polynomial exceeds the carrier digit bound")
-    return tuple(format_canonical_integer(coefficient) for coefficient in coefficients)
+    return tuple(coefficients)
 
 
 def _canonical_rational(value: Any) -> CanonicalRational:
@@ -235,8 +235,8 @@ def _canonical_rational(value: Any) -> CanonicalRational:
     numerator = int(rational.p)
     denominator = int(rational.q)
     if (
-        len(str(abs(numerator))) > _MAX_POINT_COORDINATE_DIGITS
-        or len(str(denominator)) > _MAX_POINT_COORDINATE_DIGITS
+        len(format_canonical_integer(abs(numerator))) > _MAX_POINT_COORDINATE_DIGITS
+        or len(format_canonical_integer(denominator)) > _MAX_POINT_COORDINATE_DIGITS
     ):
         raise ValueError("a point coordinate exceeds the carrier digit bound")
     return CanonicalRational.from_fraction(Fraction(numerator, denominator))
@@ -276,7 +276,7 @@ def _seed_for_factor(
     chart_index: int,
 ) -> ProjectiveSingularityPointSeed:
     if int(factor.degree()) == 1:
-        presentation = SimpleNumberFieldPresentation(coefficients_descending=("1", "0"))
+        presentation = SimpleNumberFieldPresentation(coefficients_descending=(1, 0))
         root = -factor.nth(0) / factor.nth(1)
         coordinate_values = tuple(
             _rational_field_element(presentation, polynomial.eval(root))

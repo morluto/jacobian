@@ -10,6 +10,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 
 # Derived integer scales that make rational capacities and costs exact
 # integers are intermediate growth, not input size: each denominator is
@@ -26,7 +27,10 @@ def _bounded_denominator_scale(denominators: tuple[int, ...], kind: str) -> int:
     scale = 1
     for denominator in denominators:
         scale = lcm(scale, abs(denominator))
-        if len(str(scale)) > MAX_MIN_COST_FLOW_DERIVED_SCALE_DIGITS:
+        if (
+            len(format_canonical_integer(scale))
+            > MAX_MIN_COST_FLOW_DERIVED_SCALE_DIGITS
+        ):
             raise PydanticCustomError(
                 "graph.least_common_multiple_kind_denominators_exceeds_max",
                 f"the least common multiple of {kind} denominators exceeds the "

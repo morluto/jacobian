@@ -8,7 +8,6 @@ from functools import lru_cache
 from math import gcd
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
-from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math._rational_height import RationalHeight, sum_heights
 from jacobian.math.number_theory.arithmetic_functions._models import (
@@ -243,14 +242,14 @@ def _shared_denominator_lcm(
 
     if not values:
         return None
-    running = parse_canonical_integer(values[0].den)
+    running = values[0].den
     seen = {values[0].den}
     for value in values[1:]:
         den = value.den
         if den in seen:
             continue
         seen.add(den)
-        merged = _bounded_lcm(running, parse_canonical_integer(den))
+        merged = _bounded_lcm(running, den)
         if merged is None:
             return None
         running = merged
@@ -345,10 +344,7 @@ def _admit_mobius(
     _require_length(values, "values", _MAX_DIVISOR_PREFIX_LENGTH)
     incidences = _require_divisor_incidences(len(values))
     heights = _heights(values)
-    ratios = tuple(
-        (parse_canonical_integer(value.num), parse_canonical_integer(value.den))
-        for value in values
-    )
+    ratios = tuple((value.num, value.den) for value in values)
     dens = tuple(denominator for _, denominator in ratios)
     shared_lcm = _shared_denominator_lcm(values)
     sums = _HeightSums(

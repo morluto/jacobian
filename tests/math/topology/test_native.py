@@ -247,9 +247,7 @@ def test_integral_topology_result_wraps_the_chain_owned_result() -> None:
     )
     assert topology.homology == composed
     assert (
-        IntegralSimplicialHomologyResult.model_validate(
-            topology.model_dump(mode="json")
-        )
+        IntegralSimplicialHomologyResult.model_validate_json(topology.model_dump_json())
         == topology
     )
 

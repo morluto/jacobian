@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from itertools import combinations, islice
 
 import networkx as nx
@@ -518,7 +519,7 @@ class TestCarrierParseEnvelope:
             if request_type is ReachabilityRequest:
                 payload["source"] = 0
             with pytest.raises(ValidationError) as excinfo:
-                request_type.model_validate(payload)
+                request_type.model_validate_json(json.dumps(payload))
             assert "parse-safety envelope" in str(excinfo.value)
 
     def test_envelope_boundary_remains_structurally_valid(self) -> None:

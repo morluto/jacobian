@@ -8,8 +8,9 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.matrices.certified_snf.values import (
     MAX_CERTIFIED_SNF_DIMENSION,
     MAX_CERTIFIED_SNF_INPUT_DIGITS,
@@ -301,14 +302,15 @@ class HomologyGroupValue(StrictModel):
 class IntegralVector(StrictModel):
     """Coordinates of one integral chain in its retained source basis."""
 
-    coefficients: tuple[CanonicalInteger, ...] = Field(
+    coefficients: tuple[ExactInteger, ...] = Field(
         max_length=MAX_INTEGRAL_HOMOLOGY_CHAIN_RANK
     )
 
     @model_validator(mode="after")
     def require_output_digit_budget(self) -> Self:
         if any(
-            len(value.lstrip("-")) > MAX_INTEGRAL_HOMOLOGY_OUTPUT_DIGITS
+            len(format_canonical_integer(abs(value)))
+            > MAX_INTEGRAL_HOMOLOGY_OUTPUT_DIGITS
             for value in self.coefficients
         ):
             raise _validation_error(
@@ -328,7 +330,7 @@ class IntegralFreeGenerator(StrictModel):
 class IntegralTorsionGenerator(StrictModel):
     """One torsion cycle together with a chain bounding its exact multiple."""
 
-    order: CanonicalInteger
+    order: ExactInteger
     cycle: IntegralVector
     cycle_coordinates: IntegralVector
     bounding_chain: IntegralVector
@@ -337,7 +339,8 @@ class IntegralTorsionGenerator(StrictModel):
     def require_nontrivial_bounded_order(self) -> Self:
         if (
             int(self.order) <= 1
-            or len(self.order.lstrip("-")) > MAX_INTEGRAL_HOMOLOGY_OUTPUT_DIGITS
+            or len(format_canonical_integer(abs(self.order)))
+            > MAX_INTEGRAL_HOMOLOGY_OUTPUT_DIGITS
         ):
             raise _validation_error(
                 "integral_homology_torsion_order_invalid",
@@ -357,7 +360,7 @@ class IntegralHomologyGroupValue(StrictModel):
     cycle_rank: StrictInt = Field(ge=0, le=MAX_INTEGRAL_HOMOLOGY_CHAIN_RANK)
     incoming_boundary_rank: StrictInt = Field(ge=0, le=MAX_INTEGRAL_HOMOLOGY_CHAIN_RANK)
     free_rank: StrictInt = Field(ge=0, le=MAX_INTEGRAL_HOMOLOGY_CHAIN_RANK)
-    torsion_invariant_factors: tuple[CanonicalInteger, ...] = Field(
+    torsion_invariant_factors: tuple[ExactInteger, ...] = Field(
         max_length=MAX_INTEGRAL_HOMOLOGY_CHAIN_RANK
     )
     free_generators: tuple[IntegralFreeGenerator, ...] = Field(
@@ -449,7 +452,10 @@ def _require_integral_group_source_binding(
             or group.incoming_chain_rank != incoming_rank
             or certified_source.row_count != outgoing_rows
             or certified_source.column_count != group.chain_rank
-            or certified_source.entries != outgoing_entries
+            or tuple(
+                tuple(str(value) for value in row) for row in certified_source.entries
+            )
+            != outgoing_entries
         ):
             raise _validation_error(
                 "integral_homology_source_mismatch",

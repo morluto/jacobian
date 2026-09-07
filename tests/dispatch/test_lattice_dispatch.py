@@ -16,10 +16,8 @@ from jacobian.math.lattices._models import (
 from jacobian.math.matrices.values import MAX_MATRIX_DIMENSION, IntegerMatrix
 
 
-def _identity_entries(size: int) -> list[list[str]]:
-    return [
-        ["1" if row == column else "0" for column in range(size)] for row in range(size)
-    ]
+def _identity_entries(size: int) -> list[list[int]]:
+    return [[int(row == column) for column in range(size)] for row in range(size)]
 
 
 def test_lattice_reduction_admits_before_lll_backend() -> None:
@@ -37,7 +35,7 @@ def test_lattice_reduction_admits_before_lll_backend() -> None:
 
 def test_hermite_admits_before_hnf_backend() -> None:
     entries = [
-        [str(10**255 + ((i + 1) * (j + 3) + j * j) % 101) for j in range(64)]
+        [10**255 + ((i + 1) * (j + 3) + j * j) % 101 for j in range(64)]
         for i in range(64)
     ]
     matrix = IntegerMatrix.model_validate({"entries": entries})
@@ -51,7 +49,9 @@ def test_hermite_admits_before_hnf_backend() -> None:
 
 
 def test_dispatch_accepts_hnf_above_the_lll_axis() -> None:
-    entries = _identity_entries(MAX_MATRIX_DIMENSION + 1)
+    entries = [
+        list(map(str, row)) for row in _identity_entries(MAX_MATRIX_DIMENSION + 1)
+    ]
     result = invoke_operation(
         "lattice.hermite_normal_form.compute",
         {"matrix": {"entries": entries}},
@@ -71,7 +71,14 @@ def test_dispatch_rejects_lll_above_the_lattice_axis() -> None:
     with pytest.raises(OperationRequestValidationError) as exc_info:
         invoke_operation(
             "lattice.basis.reduce",
-            {"basis": {"entries": _identity_entries(MAX_MATRIX_DIMENSION + 1)}},
+            {
+                "basis": {
+                    "entries": [
+                        list(map(str, row))
+                        for row in _identity_entries(MAX_MATRIX_DIMENSION + 1)
+                    ]
+                }
+            },
             Catalog.open(),
         )
     assert f"limited to {MAX_MATRIX_DIMENSION} rows and columns" in str(

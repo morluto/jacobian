@@ -169,7 +169,7 @@ def _constraint_coefficient(
 
 
 def _integer_digit_count(value: int) -> int:
-    return len(format_canonical_integer(value).lstrip("-"))
+    return len(format_canonical_integer(abs(value)))
 
 
 def _normalize_constraint(
@@ -222,11 +222,14 @@ def _require_constraint_expansion_envelope(
             0
         ].matrix.embedding.presentation.coefficients_descending
         field_digits = max(
-            len(coefficient.lstrip("-")) for coefficient in field_coefficients
+            len(format_canonical_integer(abs(coefficient)))
+            for coefficient in field_coefficients
         )
         leading_coefficient = abs(int(field_coefficients[0]))
         leading_denominator_digits = (
-            0 if leading_coefficient == 1 else len(str(leading_coefficient))
+            0
+            if leading_coefficient == 1
+            else len(format_canonical_integer(leading_coefficient))
         )
         degree = action.generators[0].matrix.embedding.presentation.degree
     else:
@@ -239,14 +242,16 @@ def _require_constraint_expansion_envelope(
         field_digits = 1
         leading_denominator_digits = 0
         degree = 1
-    numerator_digits = max(len(value.num.lstrip("-")) for value in values)
-    all_denominators_are_one = all(value.den == "1" for value in values)
+    numerator_digits = max(_integer_digit_count(value.num) for value in values)
+    all_denominators_are_one = all(value.den == 1 for value in values)
     denominator_growth_digits = (
-        0 if all_denominators_are_one else max(len(value.den) for value in values)
+        0
+        if all_denominators_are_one
+        else max(_integer_digit_count(value.den) for value in values)
     )
     source_component_digits = max(
         numerator_digits,
-        max(len(value.den) for value in values),
+        max(_integer_digit_count(value.den) for value in values),
     )
     transformed_terms = 1 if kind == "BILINEAR" else 2
     # One product has two source numerators and denominators. Combining two
@@ -732,7 +737,7 @@ def _form_entries(
     positions: tuple[CoefficientPosition, ...],
     dimension: int,
     kind: FormKind,
-) -> tuple[tuple[str, ...], ...]:
+) -> tuple[tuple[int, ...], ...]:
     entries = [[0] * dimension for _ in range(dimension)]
     for value, (row, column) in zip(coefficient_vector, positions, strict=True):
         entries[row][column] = value
@@ -740,9 +745,7 @@ def _form_entries(
             entries[column][row] = value
         elif kind == "ALTERNATING":
             entries[column][row] = -value
-    return tuple(
-        tuple(format_canonical_integer(value) for value in row) for row in entries
-    )
+    return tuple(tuple(row) for row in entries)
 
 
 def _admit_invariant_bilinear_form_lattice(

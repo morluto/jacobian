@@ -33,7 +33,7 @@ from pydantic_core import PydanticCustomError
 from sympy import Matrix, Rational
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.polytopes._models import (
     COORDINATE_DIGITS,
@@ -567,7 +567,10 @@ def require_full_dimensional_extreme_vertices(polytope: RationalVPolytope) -> No
             f"({extremality_tests} > {MAX_SUPPORT_ORIENTATION_TESTS})"
         )
     component_digits = max(
-        max(len(coordinate.num.lstrip("-")), len(coordinate.den.lstrip("-")))
+        max(
+            len(format_canonical_integer(abs(coordinate.num))),
+            len(format_canonical_integer(abs(coordinate.den))),
+        )
         for vertex in polytope.vertices
         for coordinate in vertex.coordinates
     )
@@ -971,14 +974,14 @@ def convex_hull_volume(
 
 def verify_primitive_facet(claim: PrimitiveFacet) -> bool:
     """Check nonzero primitive integer normalization of at most eight scalars."""
-    if all(value.num == "0" for value in claim.halfspace.coefficients):
+    if all(value.num == 0 for value in claim.halfspace.coefficients):
         return False
     entries = (*claim.halfspace.coefficients, claim.halfspace.offset)
-    if any(value.den != "1" for value in entries):
+    if any(value.den != 1 for value in entries):
         return False
     divisor = 0
     for value in entries:
-        divisor = math.gcd(divisor, abs(parse_canonical_integer(value.num)))
+        divisor = math.gcd(divisor, abs(value.num))
     return divisor == 1
 
 

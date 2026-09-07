@@ -1,5 +1,6 @@
 """Tests for exact graph characteristic-polynomial operations."""
 
+import json
 from collections.abc import Callable
 from fractions import Fraction
 from math import comb
@@ -61,14 +62,14 @@ def _exponents(polynomial: RationalPolynomial) -> tuple[int, ...]:
     return tuple(term.exponents[0] for term in polynomial.polynomial.terms)
 
 
-def _univariate_polynomial(coefficients: dict[int, str]) -> RationalPolynomial:
+def _univariate_polynomial(coefficients: dict[int, int]) -> RationalPolynomial:
     """Build a canonical univariate polynomial from {degree: numerator}."""
     return RationalPolynomial(
         variables=("x",),
         polynomial=SparseRationalPolynomial(
             terms=tuple(
                 RationalPolynomialTerm(
-                    coefficient=CanonicalRational(num=numerator, den="1"),
+                    coefficient=CanonicalRational(num=numerator, den=1),
                     exponents=(degree,),
                 )
                 for degree, numerator in sorted(coefficients.items(), reverse=True)
@@ -241,19 +242,21 @@ def test_trusted_characteristic_polynomial_producers_run_the_kernel_once(
 
 
 def test_replay_rejects_more_terms_than_any_admitted_charpoly_has() -> None:
-    oversized = _univariate_polynomial(dict.fromkeys(range(5), "2"))
+    oversized = _univariate_polynomial(dict.fromkeys(range(5), 2))
     with pytest.raises(ValidationError):
         GraphCharacteristicPolynomialResult.model_validate(_charpoly_payload(oversized))
 
 
 def test_replay_rejects_exponents_beyond_the_graph_order_bound() -> None:
-    beyond = _univariate_polynomial({3: "1", 4: "1"})
+    beyond = _univariate_polynomial({3: 1, 4: 1})
     with pytest.raises(ValidationError):
         GraphCharacteristicPolynomialResult.model_validate(_charpoly_payload(beyond))
 
 
 def test_replay_rejects_coefficients_beyond_the_charpoly_digit_budget() -> None:
-    huge = _univariate_polynomial({3: "9" * (_charpoly_coefficient_digit_bound(3) + 1)})
+    huge = _univariate_polynomial(
+        {3: int("9" * (_charpoly_coefficient_digit_bound(3) + 1))}
+    )
     with pytest.raises(ValidationError):
         GraphCharacteristicPolynomialResult.model_validate(_charpoly_payload(huge))
 
@@ -264,12 +267,12 @@ def test_maximal_path_round_trips_through_serialization() -> None:
         vertex_count=256, edges=tuple((i, i + 1) for i in range(255))
     )
     polynomial = adjacency_characteristic_polynomial(graph)
-    restored = GraphCharacteristicPolynomialResult.model_validate(
+    restored = GraphCharacteristicPolynomialResult.model_validate_json(
         GraphCharacteristicPolynomialResult(
             graph=graph,
             convention="ADJACENCY",
             polynomial=polynomial,
-        ).model_dump(mode="json")
+        ).model_dump_json()
     )
     assert restored.polynomial == polynomial
     assert max(_exponents(restored.polynomial)) == 256
@@ -302,8 +305,8 @@ def test_native_polynomial_is_accepted_unchanged_by_a_polynomial_consumer() -> N
     request = RationalPolynomialRequest(polynomial=polynomial)
     assert request.polynomial is polynomial
 
-    serialized = RationalPolynomialRequest.model_validate(
-        {"polynomial": polynomial.model_dump(mode="json")}
+    serialized = RationalPolynomialRequest.model_validate_json(
+        json.dumps({"polynomial": polynomial.model_dump(mode="json")})
     )
     derivative = rational_polynomial_derivative(request.polynomial).derivative
     assert (
@@ -324,8 +327,8 @@ def test_native_isolated_vertex_composes_without_reshaping() -> None:
 def test_catalog_result_round_trips_source_binding() -> None:
     request = _request([[0, 1], [1, 2]], 3)
     result = compute_adjacency_characteristic_polynomial(request)
-    restored = GraphCharacteristicPolynomialResult.model_validate(
-        result.model_dump(mode="json")
+    restored = GraphCharacteristicPolynomialResult.model_validate_json(
+        result.model_dump_json()
     )
     assert restored == result
     assert restored.graph == request.graph

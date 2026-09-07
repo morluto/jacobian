@@ -1,6 +1,5 @@
 """Induced graph-pattern count operation declaration."""
 
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.graphs.patterns._models import (
     MAX_INDUCED_PATTERN_CANDIDATES,
@@ -19,8 +18,8 @@ def _run_count(
     return InducedVertexSubsetPatternCountResult._from_kernel(
         host=request.host,
         pattern=request.pattern,
-        occurrence_count=format_canonical_integer(
-            induced_vertex_subset_pattern_count(request.host, request.pattern)
+        occurrence_count=induced_vertex_subset_pattern_count(
+            request.host, request.pattern
         ),
     )
 

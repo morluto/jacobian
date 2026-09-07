@@ -128,7 +128,7 @@ def test_result_axis_round_trips_through_serialization() -> None:
         PrimeShiftProfileRequest(lower_bound=4, upper_bound=5)
     )
 
-    restored = PrimeShiftProfileResult.model_validate(result.model_dump(mode="json"))
+    restored = PrimeShiftProfileResult.model_validate_json(result.model_dump_json())
 
     assert tuple(row.n for row in restored.rows) == (4, 5)
 

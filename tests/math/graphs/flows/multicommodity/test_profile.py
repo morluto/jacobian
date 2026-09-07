@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections import defaultdict
 from copy import deepcopy
 from fractions import Fraction
@@ -310,22 +311,22 @@ def test_sparse_tensor_rejects_zero_duplicate_unknown_and_unsorted_cells() -> No
     zero = deepcopy(payload)
     zero["entries"][0]["amount"] = {"num": "0", "den": "1"}
     with multicommodity_validation_error():
-        MulticommodityFlow.model_validate(zero)
+        MulticommodityFlow.model_validate_json(json.dumps(zero))
 
     duplicate = deepcopy(payload)
     duplicate["entries"].append(deepcopy(duplicate["entries"][0]))
     with multicommodity_validation_error():
-        MulticommodityFlow.model_validate(duplicate)
+        MulticommodityFlow.model_validate_json(json.dumps(duplicate))
 
     undeclared = deepcopy(payload)
     undeclared["entries"][1]["commodity_id"] = "aa"
     with multicommodity_validation_error():
-        MulticommodityFlow.model_validate(undeclared)
+        MulticommodityFlow.model_validate_json(json.dumps(undeclared))
 
     unsorted = deepcopy(payload)
     unsorted["entries"] = list(reversed(unsorted["entries"]))
     with multicommodity_validation_error():
-        MulticommodityFlow.model_validate(unsorted)
+        MulticommodityFlow.model_validate_json(json.dumps(unsorted))
 
 
 def test_low_commodity_networks_admit_vertices_up_to_the_cell_budget() -> None:
@@ -436,19 +437,20 @@ def test_operand_digit_budget_bounds_the_canonical_boundary() -> None:
     # A lone amount is its own reduced sum: even at the canonical 32,768-digit
     # maximum, measured admission keeps it because every derived component
     # stays within that operand's own size.
-    at_boundary = unit_edge_amounts((CanonicalRational(num="9" * 32_768, den="1"),))
+    boundary_value = 10**32_768 - 1
+    at_boundary = unit_edge_amounts((CanonicalRational(num=boundary_value, den=1),))
     result = compute_multicommodity_flow_profile(at_boundary)
     assert result.capacity_feasible is False
-    assert result.edge_profiles[0].load.num == "9" * 32_768
-    assert result.congestion == CanonicalRational(num="9" * 32_768, den="1")
+    assert result.edge_profiles[0].load.num == boundary_value
+    assert result.congestion == CanonicalRational(num=boundary_value, den=1)
 
     # Two such amounts on one edge genuinely add: their exact load has
     # 32,769 digits, above the canonical cap, so the profile boundary fails
     # closed while the canonical tensor itself stays constructible.
     over_boundary = unit_edge_amounts(
         (
-            CanonicalRational(num="9" * 32_768, den="1"),
-            CanonicalRational(num="9" * 32_768, den="1"),
+            CanonicalRational(num=boundary_value, den=1),
+            CanonicalRational(num=boundary_value, den=1),
         )
     )
     MulticommodityFlowProfileRequest(flow=over_boundary)
@@ -465,7 +467,7 @@ def test_sole_operand_components_inherit_their_canonical_sides() -> None:
     # exactly one. Admission tracks the contributing operand count instead of
     # charging nonexistent summation growth, so no 40,008-digit component is
     # implied and the tensor stays far below every bound.
-    operand = CanonicalRational(num="9" * 20_000, den="1" + "0" * 19_999)
+    operand = CanonicalRational(num=10**20_000 - 1, den=10**19_999)
     flow = MulticommodityFlow(
         network=FlowGraph(
             vertex_count=2,
@@ -485,7 +487,7 @@ def test_sole_operand_components_inherit_their_canonical_sides() -> None:
     assert result.congestion == q(1)
     assert result.edge_profiles[0].load == operand
     assert result.edge_profiles[0].slack == q(0)
-    negative_operand = CanonicalRational(num="-" + "9" * 20_000, den="1" + "0" * 19_999)
+    negative_operand = CanonicalRational(num=-(10**20_000 - 1), den=10**19_999)
     assert [row.divergence for row in result.divergences] == [
         operand,
         negative_operand,
@@ -499,7 +501,7 @@ def test_rational_components_are_bounded_independently() -> None:
     # capacity exactly and its congestion is zero, so numerator and denominator
     # growth are tracked separately and the tensor is admitted even though the
     # summed component lengths exceed the per-component 32,768-digit cap.
-    capacity = CanonicalRational(num="9" * 20_000, den="1" + "0" * 19_999)
+    capacity = CanonicalRational(num=10**20_000 - 1, den=10**19_999)
     flow = MulticommodityFlow(
         network=FlowGraph(
             vertex_count=2,
@@ -524,7 +526,7 @@ def test_per_component_digit_bounds_admit_unrelated_large_operands() -> None:
     # budget covers only the operands that can reach it. Two unrelated
     # 16,380-digit capacities stay admitted even though summing both would
     # imply a 32,770-digit bound above the canonical 32,768-digit cap.
-    big_capacity = CanonicalRational(num="9" * 16_380, den="1")
+    big_capacity = CanonicalRational(num=10**16_380 - 1, den=1)
     capacities_flow = MulticommodityFlow(
         network=FlowGraph(
             vertex_count=3,
@@ -550,7 +552,7 @@ def test_per_component_digit_bounds_admit_unrelated_large_operands() -> None:
     # The same independence holds between amounts on different edges: no
     # component ever sums both operands, so the paired tensor below stays
     # admitted although its aggregated operand digits exceed the cap.
-    big_amount = CanonicalRational(num="9" * 16_380, den="1")
+    big_amount = CanonicalRational(num=10**16_380 - 1, den=1)
     amounts_flow = MulticommodityFlow(
         network=FlowGraph(
             vertex_count=3,
@@ -830,7 +832,7 @@ def test_profile_digit_budget_prices_rows_at_their_actual_sides() -> None:
 
     # With no entries each load is exactly zero and each slack equals its
     # capacity, so the digit budget follows the nonzero side directly.
-    admitted = comb_edge_tensor(CanonicalRational(num="9" * 32_000, den="1"), 100)
+    admitted = comb_edge_tensor(CanonicalRational(num=10**32_000 - 1, den=1), 100)
     assert derived_profile_digit_budget(admitted) == 32_000
 
 
@@ -846,7 +848,7 @@ def test_congestion_bound_uses_the_capacity_denominator() -> None:
                 CapacitatedEdge(
                     source=0,
                     target=1,
-                    capacity=CanonicalRational(num="1", den="5" * 4_000),
+                    capacity=CanonicalRational(num=1, den=5 * 10**3_999),
                 ),
             ),
         ),
@@ -928,7 +930,7 @@ def test_null_congestion_admits_ratios_the_result_omits() -> None:
             edges=(
                 CapacitatedEdge(source=0, target=1, capacity=rational(capacity)),
                 CapacitatedEdge(
-                    source=1, target=2, capacity=CanonicalRational(num="0", den="1")
+                    source=1, target=2, capacity=CanonicalRational(num=0, den=1)
                 ),
             ),
         ),
@@ -988,9 +990,9 @@ def test_shared_denominator_sums_stay_at_operand_size() -> None:
     # congestion is exactly one, and every divergence stays within D's own
     # 20,000-digit sides -- the shared denominator prevents any denominator
     # growth, so no summed digit-count bound rejects this small result.
-    denominator = "5" * 20_000
-    first = CanonicalRational(num="1", den=denominator)
-    second = CanonicalRational(num="5" * 19_999 + "4", den=denominator)
+    denominator = 5 * (10**20_000 - 1) // 9
+    first = CanonicalRational(num=1, den=denominator)
+    second = CanonicalRational(num=5 * (10**19_999 - 1) // 9 * 10 + 4, den=denominator)
     flow = MulticommodityFlow(
         network=FlowGraph(
             vertex_count=2,
@@ -1021,7 +1023,7 @@ def test_cancelling_amounts_are_admitted_regardless_of_entry_order() -> None:
     # canonical cap applies to completed components only: every final
     # divergence cancels to at most one digit, each large edge has exactly
     # zero slack and unit congestion, and the tensor is admitted.
-    big = CanonicalRational(num="9" * 32_768, den="1")
+    big = CanonicalRational(num=9 * 32_768, den=1)
     flow = MulticommodityFlow(
         network=FlowGraph(
             vertex_count=3,
@@ -1071,13 +1073,13 @@ def test_coprime_denominator_flood_fails_closed() -> None:
             commodity_id="a",
             source=0,
             target=1,
-            amount=CanonicalRational(num="1", den="3" + "0" * 19_999),
+            amount=CanonicalRational(num=1, den=3 * 10**19_999),
         ),
         CommodityEdgeFlow(
             commodity_id="b",
             source=0,
             target=1,
-            amount=CanonicalRational(num="1", den="7" + "0" * 12_775 + "1"),
+            amount=CanonicalRational(num=1, den=7 * 10**12_775 + 1),
         ),
     )
     flood = MulticommodityFlow(
@@ -1164,8 +1166,8 @@ def test_fold_intermediates_admit_coprime_sums_with_small_components() -> None:
 
     def amount(numerator: int, denominator: int) -> CanonicalRational:
         return CanonicalRational(
-            num=format_canonical_integer(numerator),
-            den=format_canonical_integer(denominator),
+            num=numerator,
+            den=denominator,
         )
 
     commodity_amounts = (
@@ -1223,12 +1225,12 @@ def test_folding_intermediates_cancel_beneath_the_completed_cap() -> None:
     # within the separately derived fold-intermediate budget -- and the
     # later terms cancel each pair to exactly one half, so the completed
     # load is exactly 1 while every divergence stays input-sized.
-    p_digits = "1" + "0" * 19_998 + "1"
-    q_digits = "3" + "0" * 19_998 + "1"
-    first = CanonicalRational(num="1", den=p_digits)
-    second = CanonicalRational(num="1", den=q_digits)
-    half_of_p = CanonicalRational(num="9" * 19_999, den="2" + "0" * 19_998 + "2")
-    half_of_q = CanonicalRational(num="2" + "9" * 19_999, den="6" + "0" * 19_998 + "2")
+    p_digits = 10**19_999 + 1
+    q_digits = 3 * 10**19_999 + 1
+    first = CanonicalRational(num=1, den=p_digits)
+    second = CanonicalRational(num=1, den=q_digits)
+    half_of_p = CanonicalRational(num=10**19_999 - 1, den=2 * 10**19_999 + 2)
+    half_of_q = CanonicalRational(num=3 * 10**19_999 - 1, den=6 * 10**19_999 + 2)
     flow = MulticommodityFlow(
         network=FlowGraph(
             vertex_count=2,
@@ -1278,9 +1280,9 @@ def test_folds_are_bounded_by_the_intermediate_budget_not_the_component_cap() ->
     # fails closed before the cross-denominator arithmetic runs. Pairwise
     # coprimality: 3p-q = 2, r - 5p = -2, and r - q = 2p share no odd factor
     # with any denominator.
-    p_digits = "1" + "0" * 23_998 + "1"
-    q_digits = "3" + "0" * 23_998 + "1"
-    r_digits = "5" + "0" * 23_998 + "3"
+    p_digits = 10**23_999 + 1
+    q_digits = 3 * 10**23_999 + 1
+    r_digits = 5 * 10**23_999 + 3
     cancelling_cell = MulticommodityFlow(
         network=FlowGraph(
             vertex_count=3,
@@ -1296,19 +1298,19 @@ def test_folds_are_bounded_by_the_intermediate_budget_not_the_component_cap() ->
                 commodity_id="a",
                 source=0,
                 target=1,
-                amount=CanonicalRational(num="1", den=p_digits),
+                amount=CanonicalRational(num=1, den=p_digits),
             ),
             CommodityEdgeFlow(
                 commodity_id="a",
                 source=1,
                 target=0,
-                amount=CanonicalRational(num="1", den=q_digits),
+                amount=CanonicalRational(num=1, den=q_digits),
             ),
             CommodityEdgeFlow(
                 commodity_id="a",
                 source=2,
                 target=0,
-                amount=CanonicalRational(num="1", den=r_digits),
+                amount=CanonicalRational(num=1, den=r_digits),
             ),
         ),
     )
@@ -1329,9 +1331,9 @@ def test_near_cap_coprime_growth_aborts_within_budget_sized_arithmetic() -> None
     # the canonical cap, whatever the request's total digit mass, so
     # request validation cannot be driven into multi-million-digit rational
     # arithmetic by a sub-envelope tensor. Pairwise coprimality as above.
-    p_digits = "1" + "0" * 31_998 + "1"
-    q_digits = "3" + "0" * 31_998 + "1"
-    r_digits = "5" + "0" * 31_998 + "3"
+    p_digits = 10**31_999 + 1
+    q_digits = 3 * 10**31_999 + 1
+    r_digits = 5 * 10**31_999 + 3
     near_cap_growth = MulticommodityFlow(
         network=FlowGraph(
             vertex_count=3,
@@ -1347,19 +1349,19 @@ def test_near_cap_coprime_growth_aborts_within_budget_sized_arithmetic() -> None
                 commodity_id="a",
                 source=0,
                 target=1,
-                amount=CanonicalRational(num="1", den=p_digits),
+                amount=CanonicalRational(num=1, den=p_digits),
             ),
             CommodityEdgeFlow(
                 commodity_id="a",
                 source=1,
                 target=0,
-                amount=CanonicalRational(num="1", den=q_digits),
+                amount=CanonicalRational(num=1, den=q_digits),
             ),
             CommodityEdgeFlow(
                 commodity_id="a",
                 source=2,
                 target=0,
-                amount=CanonicalRational(num="1", den=r_digits),
+                amount=CanonicalRational(num=1, den=r_digits),
             ),
         ),
     )
@@ -1372,16 +1374,21 @@ def test_result_round_trip_and_validation_remains_structural_only() -> None:
     result = compute_multicommodity_flow_profile(shared_bottleneck_flow())
     payload = result.model_dump(mode="json")
 
-    assert MulticommodityFlowProfileResult.model_validate(payload) == result
+    assert (
+        MulticommodityFlowProfileResult.model_validate_json(json.dumps(payload))
+        == result
+    )
 
     forged_load = deepcopy(payload)
     forged_load["edge_profiles"][2]["load"] = {"num": "2", "den": "1"}
-    assert MulticommodityFlowProfileResult.model_validate(forged_load)
+    assert MulticommodityFlowProfileResult.model_validate_json(json.dumps(forged_load))
 
     forged_source = deepcopy(payload)
     forged_source["flow"]["commodities"][1]["demand"] = {"num": "1", "den": "1"}
-    assert MulticommodityFlowProfileResult.model_validate(forged_source)
+    assert MulticommodityFlowProfileResult.model_validate_json(
+        json.dumps(forged_source)
+    )
 
     forged_work = deepcopy(payload)
     forged_work["work"]["logical_steps_per_call"] = 1
-    assert MulticommodityFlowProfileResult.model_validate(forged_work)
+    assert MulticommodityFlowProfileResult.model_validate_json(json.dumps(forged_work))

@@ -1,5 +1,6 @@
 """Flow and cut witnesses stay bound to their source networks."""
 
+import json
 from collections.abc import Callable
 from typing import Any
 
@@ -38,18 +39,24 @@ def test_flow_cut_and_paths_round_trip() -> None:
         ],
     }
     flow = compute_max_flow(
-        MaxFlowRequest.model_validate({"graph": graph, "source": 0, "sink": 2})
+        MaxFlowRequest.model_validate_json(
+            json.dumps({"graph": graph, "source": 0, "sink": 2})
+        )
     )
     cut = compute_min_cut(
-        MinCutRequest.model_validate({"graph": graph, "source": 0, "sink": 2})
+        MinCutRequest.model_validate_json(
+            json.dumps({"graph": graph, "source": 0, "sink": 2})
+        )
     )
     paths = compute_edge_disjoint_paths(
-        EdgeDisjointPathsRequest.model_validate(
-            {
-                "graph": {"vertex_count": 3, "edges": [[0, 1], [1, 2]]},
-                "source": 0,
-                "sink": 2,
-            }
+        EdgeDisjointPathsRequest.model_validate_json(
+            json.dumps(
+                {
+                    "graph": {"vertex_count": 3, "edges": [[0, 1], [1, 2]]},
+                    "source": 0,
+                    "sink": 2,
+                }
+            )
         )
     )
     result: Any
@@ -63,20 +70,22 @@ def test_flow_cut_and_paths_round_trip() -> None:
     payload = flow.model_dump(mode="json")
     payload["flow_edges"] = []
     payload["flow_value"] = {"num": "0", "den": "1"}
-    assert not verify_max_flow(type(flow).model_validate(payload))
+    assert not verify_max_flow(type(flow).model_validate_json(json.dumps(payload)))
     payload = flow.model_dump(mode="json")
     payload["flow_edges"][0]["target"] = 2
     with pytest.raises(ValidationError):
-        type(flow).model_validate(payload)
+        type(flow).model_validate_json(json.dumps(payload))
     payload = cut.model_dump(mode="json")
     payload["cut_value"] = {"num": "2", "den": "1"}
-    assert not verify_min_cut(type(cut).model_validate(payload))
+    assert not verify_min_cut(type(cut).model_validate_json(json.dumps(payload)))
     payload = paths.model_dump(mode="json")
     payload["paths"] = [[0, 2]]
-    assert not verify_edge_disjoint_paths(type(paths).model_validate(payload))
+    assert not verify_edge_disjoint_paths(
+        type(paths).model_validate_json(json.dumps(payload))
+    )
 
 
-def _costed_graph() -> dict:
+def _costed_graph() -> dict[str, Any]:
     return {
         "vertex_count": 3,
         "edges": [
@@ -104,8 +113,8 @@ def _costed_graph() -> dict:
 
 def test_min_cost_flow_claim_checks_feasibility_and_cost() -> None:
     result = compute_min_cost_flow(
-        MinCostFlowRequest.model_validate(
-            {"graph": _costed_graph(), "demands": [-2, 0, 2]}
+        MinCostFlowRequest.model_validate_json(
+            json.dumps({"graph": _costed_graph(), "demands": [-2, 0, 2]})
         )
     )
     assert result.feasible
@@ -116,36 +125,44 @@ def test_min_cost_flow_claim_checks_feasibility_and_cost() -> None:
 
     forged = result.model_dump(mode="json")
     forged["total_cost"] = {"num": "7", "den": "1"}
-    assert not verify_min_cost_flow(MinCostFlowResult.model_validate(forged))
+    assert not verify_min_cost_flow(
+        MinCostFlowResult.model_validate_json(json.dumps(forged))
+    )
 
     over_capacity = result.model_dump(mode="json")
     over_capacity["flow_edges"][0]["flow"] = {"num": "99", "den": "1"}
-    assert not verify_min_cost_flow(MinCostFlowResult.model_validate(over_capacity))
+    assert not verify_min_cost_flow(
+        MinCostFlowResult.model_validate_json(json.dumps(over_capacity))
+    )
 
     unbound = result.model_dump(mode="json")
     unbound["flow_edges"].append(
         {"source": 2, "target": 0, "flow": {"num": "1", "den": "1"}}
     )
-    assert not verify_min_cost_flow(MinCostFlowResult.model_validate(unbound))
+    assert not verify_min_cost_flow(
+        MinCostFlowResult.model_validate_json(json.dumps(unbound))
+    )
 
 
 def test_infeasible_min_cost_outcome_is_a_producer_outcome() -> None:
     result = compute_min_cost_flow(
-        MinCostFlowRequest.model_validate(
-            {
-                "graph": {
-                    "vertex_count": 2,
-                    "edges": [
-                        {
-                            "source": 0,
-                            "target": 1,
-                            "capacity": {"num": "1", "den": "1"},
-                            "cost": {"num": "1", "den": "1"},
-                        }
-                    ],
-                },
-                "demands": [-2, 2],
-            }
+        MinCostFlowRequest.model_validate_json(
+            json.dumps(
+                {
+                    "graph": {
+                        "vertex_count": 2,
+                        "edges": [
+                            {
+                                "source": 0,
+                                "target": 1,
+                                "capacity": {"num": "1", "den": "1"},
+                                "cost": {"num": "1", "den": "1"},
+                            }
+                        ],
+                    },
+                    "demands": [-2, 2],
+                }
+            )
         )
     )
     assert result.feasible is False
@@ -154,36 +171,40 @@ def test_infeasible_min_cost_outcome_is_a_producer_outcome() -> None:
 
 def test_verifiers_reject_malformed_claims_without_raising() -> None:
     flow = compute_max_flow(
-        MaxFlowRequest.model_validate(
-            {
-                "graph": {
-                    "vertex_count": 2,
-                    "edges": [
-                        {
-                            "source": 0,
-                            "target": 1,
-                            "capacity": {"num": "1", "den": "1"},
-                        }
-                    ],
-                },
-                "source": 0,
-                "sink": 1,
-            }
+        MaxFlowRequest.model_validate_json(
+            json.dumps(
+                {
+                    "graph": {
+                        "vertex_count": 2,
+                        "edges": [
+                            {
+                                "source": 0,
+                                "target": 1,
+                                "capacity": {"num": "1", "den": "1"},
+                            }
+                        ],
+                    },
+                    "source": 0,
+                    "sink": 1,
+                }
+            )
         )
     )
     payload = flow.model_dump(mode="json")
     payload["sink"] = 7
-    assert not verify_max_flow(MaxFlowResult.model_validate(payload))
+    assert not verify_max_flow(MaxFlowResult.model_validate_json(json.dumps(payload)))
 
     with pytest.raises(ValidationError):
-        EdgeDisjointPathsResult.model_validate(
-            {
-                "graph": {"vertex_count": 2, "edges": [[0, 1]]},
-                "source": 0,
-                "sink": 1,
-                "path_count": 1,
-                "paths": [[]],
-            }
+        EdgeDisjointPathsResult.model_validate_json(
+            json.dumps(
+                {
+                    "graph": {"vertex_count": 2, "edges": [[0, 1]]},
+                    "source": 0,
+                    "sink": 1,
+                    "path_count": 1,
+                    "paths": [[]],
+                }
+            )
         )
     from jacobian.math.graphs.flows._models import EdgeDisjointPathsGraph
 

@@ -1,17 +1,19 @@
 from __future__ import annotations
 
+import json
 from fractions import Fraction
 from itertools import combinations
 from math import comb
 
 from jacobian._exact import CanonicalRational
+from jacobian.canonical import parse_canonical_integer
 from jacobian.math.combinatorics.additive.rational_fixed_arity.operations import (
     compute_rational_fixed_arity_sum_profile,
     verify_rational_fixed_arity_sum_profile,
 )
 
 
-def _cr(num, den=None):
+def _cr(num: int, den: int | None = None) -> CanonicalRational:
     if den is None:
         return CanonicalRational.from_fraction(Fraction(num))
     return CanonicalRational.from_fraction(Fraction(num, den))
@@ -54,7 +56,7 @@ def test_arity_1() -> None:
 
 
 def test_singleton_at_maximum_rational_digit_width_is_admitted() -> None:
-    value = CanonicalRational(num="1" * 32_768, den="1")
+    value = CanonicalRational(num=1 * 32_768, den=1)
     result = compute_rational_fixed_arity_sum_profile((value,), 1)
     assert result.rows[0].sum_value == value
 
@@ -67,7 +69,7 @@ def test_replay() -> None:
     expected: dict[Fraction, int] = {}
     fracs = [v.as_fraction() for v in values]
     for indices in combinations(range(len(values)), arity):
-        s = sum(fracs[i] for i in indices)
+        s = sum((fracs[i] for i in indices), Fraction(0))
         expected[s] = expected.get(s, 0) + 1
     actual = {r.sum_value.as_fraction(): r.multiplicity for r in result.rows}
     assert actual == expected
@@ -104,8 +106,8 @@ def test_native_admission_rejects_rational_growth() -> None:
 
     digits = 17_000
     values = (
-        CanonicalRational(num="1", den="1" + "0" * digits),
-        CanonicalRational(num="1", den="1" + "0" * digits + "1"),
+        CanonicalRational(num=1, den=parse_canonical_integer("1" + "0" * digits)),
+        CanonicalRational(num=1, den=parse_canonical_integer("1" + "0" * digits + "1")),
     )
     with pytest.raises(ValueError, match="rational digit bound"):
         compute_rational_fixed_arity_sum_profile(values, 2)
@@ -115,7 +117,7 @@ def test_serialized_forged_profile_is_rejected_by_verifier() -> None:
     result = compute_rational_fixed_arity_sum_profile((_cr(1), _cr(2)), 1)
     payload = result.model_dump(mode="json")
     payload["rows"][0]["multiplicity"] += 1
-    decoded = result.model_validate(payload)
+    decoded = result.model_validate_json(json.dumps(payload))
     assert not verify_rational_fixed_arity_sum_profile(decoded)
 
 
@@ -166,10 +168,10 @@ def test_exact_cancellation_is_presolved_without_lcm_expansion() -> None:
     first = "1" + "0" * digits
     second = first + "1"
     values = (
-        CanonicalRational(num="1", den=first),
-        CanonicalRational(num="-1", den=first),
-        CanonicalRational(num="1", den=second),
-        CanonicalRational(num="-1", den=second),
+        CanonicalRational(num=1, den=parse_canonical_integer(first)),
+        CanonicalRational(num=-1, den=parse_canonical_integer(first)),
+        CanonicalRational(num=1, den=parse_canonical_integer(second)),
+        CanonicalRational(num=-1, den=parse_canonical_integer(second)),
     )
     result = compute_rational_fixed_arity_sum_profile(values, len(values))
     assert result.rows[0].sum_value == _cr(0)
@@ -177,8 +179,8 @@ def test_exact_cancellation_is_presolved_without_lcm_expansion() -> None:
 
 def test_arity_zero_does_not_sum_wide_source_values() -> None:
     values = (
-        CanonicalRational(num="1", den="1" + "0" * 17_001),
-        CanonicalRational(num="1", den="1" + "0" * 17_001 + "1"),
+        CanonicalRational(num=1, den=parse_canonical_integer("1" + "0" * 17_001)),
+        CanonicalRational(num=1, den=parse_canonical_integer("1" + "0" * 17_001 + "1")),
     )
     result = compute_rational_fixed_arity_sum_profile(values, 0)
     assert result.rows[0].sum_value == _cr(0)

@@ -73,7 +73,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="z6_z4",
                 description="Normalize Z/6 x Z/4.",
-                input={"invariant_factors": [6, 4]},
+                input={"invariant_factors": ["6", "4"]},
             ),
         ),
     ),
@@ -89,7 +89,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="reduce_z6",
                 description="Reduce 7 mod 6 in Z/6.",
-                input={"group": {"invariant_factors": [6]}, "coordinates": [7]},
+                input={"group": {"invariant_factors": ["6"]}, "coordinates": ["7"]},
             ),
         ),
     ),
@@ -107,9 +107,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="equal_elements",
                 description="Check 1 and 7 are equal in Z/6.",
                 input={
-                    "group": {"invariant_factors": [6]},
-                    "coordinates_a": [1],
-                    "coordinates_b": [7],
+                    "group": {"invariant_factors": ["6"]},
+                    "coordinates_a": ["1"],
+                    "coordinates_b": ["7"],
                 },
             ),
         ),
@@ -126,7 +126,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="order_in_z6",
                 description="Order of 2 in Z/6.",
-                input={"group": {"invariant_factors": [6]}, "coordinates": [2]},
+                input={"group": {"invariant_factors": ["6"]}, "coordinates": ["2"]},
             ),
         ),
     ),
@@ -144,8 +144,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="subgroup_z6",
                 description="Index of <2> in Z/6.",
                 input={
-                    "group": {"invariant_factors": [6]},
-                    "generators": [[2]],
+                    "group": {"invariant_factors": ["6"]},
+                    "generators": [["2"]],
                 },
             ),
         ),
@@ -164,8 +164,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="quotient_z6_by_2z",
                 description="Quotient Z/6 / <2>.",
                 input={
-                    "group": {"invariant_factors": [6]},
-                    "subgroup_generators": [[2]],
+                    "group": {"invariant_factors": ["6"]},
+                    "subgroup_generators": [["2"]],
                 },
             ),
         ),

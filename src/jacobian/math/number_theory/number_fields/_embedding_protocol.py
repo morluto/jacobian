@@ -6,7 +6,6 @@ from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, TypeAdapter, model_validator
 
-from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.math.number_theory.algebraic_numbers.complex import (
     RationalComplexIsolatingRectangle,
@@ -19,6 +18,7 @@ from jacobian.math.number_theory.number_fields._embedding_limits import (
 )
 from jacobian.math.number_theory.number_fields.values import (
     MAX_NUMBER_FIELD_EMBEDDING_DEGREE,
+    NumberFieldDiscriminantInteger,
     SimpleNumberFieldPresentation,
 )
 
@@ -53,7 +53,7 @@ class NumberFieldEmbeddingWorkerComplete(StrictModel):
     negative_complex_rectangles: tuple[RationalComplexIsolatingRectangle, ...] = Field(
         max_length=MAX_NUMBER_FIELD_EMBEDDING_DEGREE // 2
     )
-    defining_polynomial_discriminant: CanonicalInteger
+    defining_polynomial_discriminant: NumberFieldDiscriminantInteger
 
     @model_validator(mode="after")
     def bind_degree_and_half_plane(self) -> Self:

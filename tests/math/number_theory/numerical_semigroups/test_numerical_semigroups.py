@@ -20,6 +20,7 @@ from jacobian.math.number_theory.numerical_semigroups._tools import (
     compute_membership,
     compute_summary,
 )
+from jacobian.math.number_theory.numerical_semigroups.values import NumericalSemigroup
 
 
 class TestSemigroupSummary:
@@ -33,7 +34,7 @@ class TestSemigroupSummary:
         assert generators["maxItems"] == MAX_GENERATORS
 
     def test_semigroup_3_5(self) -> None:
-        req = NumericalSemigroupSummaryRequest(generators=("3", "5"))
+        req = NumericalSemigroupSummaryRequest(generators=(3, 5))
         result = compute_summary(req)
         assert result.frobenius_number == 7
         assert result.multiplicity == 3
@@ -43,21 +44,21 @@ class TestSemigroupSummary:
         assert result.conductor == 8
 
     def test_semigroup_4_5_6(self) -> None:
-        req = NumericalSemigroupSummaryRequest(generators=("4", "5", "6"))
+        req = NumericalSemigroupSummaryRequest(generators=(4, 5, 6))
         result = compute_summary(req)
         assert result.multiplicity == 4
         # Frobenius number of <4,5,6> is 7
         assert result.frobenius_number == 7
 
     def test_two_generators(self) -> None:
-        req = NumericalSemigroupSummaryRequest(generators=("2", "3"))
+        req = NumericalSemigroupSummaryRequest(generators=(2, 3))
         result = compute_summary(req)
         # <2,3> has Frobenius=1, gaps={1}, genus=1
         assert result.frobenius_number == 1
         assert result.genus == 1
 
     def test_two_and_one_hundred_one(self) -> None:
-        req = NumericalSemigroupSummaryRequest(generators=("2", "101"))
+        req = NumericalSemigroupSummaryRequest(generators=(2, 101))
         result = compute_summary(req)
         assert result.frobenius_number == 99
         assert result.conductor == 100
@@ -65,11 +66,9 @@ class TestSemigroupSummary:
 
     def test_rejects_nonpositive_generators(self) -> None:
         with operation_domain_error():
-            compute_summary(NumericalSemigroupSummaryRequest(generators=("-1",)))
+            compute_summary(NumericalSemigroupSummaryRequest(generators=(-1,)))
         with operation_domain_error():
-            compute_membership(
-                SemigroupMembershipRequest(generators=("0", "2"), value="4")
-            )
+            compute_membership(SemigroupMembershipRequest(generators=(0, 2), value=4))
 
     @pytest.mark.parametrize("axis", [(), tuple(map(str, range(30, 51)))])
     def test_summary_result_rejects_empty_or_overlong_minimal_axis(
@@ -77,13 +76,15 @@ class TestSemigroupSummary:
     ) -> None:
         with pytest.raises(ValidationError):
             NumericalSemigroupSummaryResult(
-                minimal_generators=axis,
-                multiplicity="3",
+                semigroup=NumericalSemigroup.model_validate(
+                    {"minimal_generators": axis}
+                ),
+                multiplicity=3,
                 embedding_dimension=2,
-                frobenius_number="7",
-                conductor="8",
+                frobenius_number=7,
+                conductor=8,
                 genus=4,
-                gaps=("1", "2", "4", "7"),
+                gaps=(1, 2, 4, 7),
             )
 
 
@@ -99,28 +100,26 @@ class TestSemigroupMembership:
         assert str(MAX_ELEMENT) in properties["value"]["description"]
 
     def test_in_semigroup(self) -> None:
-        req = SemigroupMembershipRequest(generators=("3", "5"), value="8")
+        req = SemigroupMembershipRequest(generators=(3, 5), value=8)
         result = compute_membership(req)
         assert result.in_semigroup is True
 
     def test_not_in_semigroup(self) -> None:
-        req = SemigroupMembershipRequest(generators=("3", "5"), value="7")
+        req = SemigroupMembershipRequest(generators=(3, 5), value=7)
         result = compute_membership(req)
         assert result.in_semigroup is False
 
     def test_zero_is_in(self) -> None:
-        req = SemigroupMembershipRequest(generators=("3", "5"), value="0")
+        req = SemigroupMembershipRequest(generators=(3, 5), value=0)
         result = compute_membership(req)
         assert result.in_semigroup is True
 
     def test_free_axis_membership_does_not_allocate_to_the_element_value(
         self,
     ) -> None:
-        value = str(MAX_ELEMENT + 1)
+        value = MAX_ELEMENT + 1
         result = compute_membership(
-            SemigroupMembershipRequest(
-                generators=("1", str(MAX_GENERATOR + 1)), value=value
-            )
+            SemigroupMembershipRequest(generators=(1, MAX_GENERATOR + 1), value=value)
         )
         assert result.value == value
         assert result.in_semigroup is True

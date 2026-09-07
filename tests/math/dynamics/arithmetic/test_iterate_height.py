@@ -10,13 +10,14 @@ from jacobian.math.dynamics.arithmetic._tools import (
     compute_dynatomic_polynomial,
     compute_map_iterate,
 )
+from jacobian.math.polynomials.values import RationalPolynomial
 
 
 def _integer(value: str) -> CanonicalRational:
-    return CanonicalRational(num=value, den="1")
+    return CanonicalRational(num=int(value), den=1)
 
 
-def _p(*values: CanonicalRational):
+def _p(*values: CanonicalRational) -> RationalPolynomial:
     from jacobian.math.dynamics.arithmetic import polynomial_from_coefficients
 
     return polynomial_from_coefficients(tuple(value.as_fraction() for value in values))

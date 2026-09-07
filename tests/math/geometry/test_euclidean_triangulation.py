@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from fractions import Fraction
 
 import pytest
@@ -74,8 +75,8 @@ def _translated_parabola_ring(
 def _request(
     points: tuple[dict[str, dict[str, str]], ...],
 ) -> EuclideanConvexPolygonTriangulationRequest:
-    return EuclideanConvexPolygonTriangulationRequest.model_validate(
-        {"polygon": {"points": points}}
+    return EuclideanConvexPolygonTriangulationRequest.model_validate_json(
+        json.dumps({"polygon": {"points": points}})
     )
 
 
@@ -155,8 +156,8 @@ class TestEuclideanTriangulation:
         )
         assert result.unresolved_comparison is not None
 
-        validated = EuclideanConvexPolygonTriangulationResult.model_validate(
-            result.model_dump(mode="json")
+        validated = EuclideanConvexPolygonTriangulationResult.model_validate_json(
+            result.model_dump_json()
         )
 
         assert validated.status == "COMPARISON_UNRESOLVED"
@@ -183,7 +184,9 @@ class TestEuclideanTriangulation:
         payload["unresolved_comparison"]["right_split"] = 2
 
         with pytest.raises(ValidationError):
-            EuclideanConvexPolygonTriangulationResult.model_validate(payload)
+            EuclideanConvexPolygonTriangulationResult.model_validate_json(
+                json.dumps(payload)
+            )
 
     def test_unresolved_result_rejects_a_span_outside_the_polygon(self) -> None:
         scale = 10**30
@@ -201,7 +204,9 @@ class TestEuclideanTriangulation:
         payload["unresolved_comparison"]["end"] = 4
 
         with pytest.raises(ValidationError):
-            EuclideanConvexPolygonTriangulationResult.model_validate(payload)
+            EuclideanConvexPolygonTriangulationResult.model_validate_json(
+                json.dumps(payload)
+            )
 
     def test_unresolved_root_stops_before_a_cheaper_later_pivot(self) -> None:
         scale = 10**30
@@ -265,8 +270,8 @@ class TestEuclideanTriangulation:
             _request(tuple(_point(index, index * index) for index in range(29)))
         )
 
-        validated = EuclideanConvexPolygonTriangulationResult.model_validate(
-            result.model_dump(mode="json")
+        validated = EuclideanConvexPolygonTriangulationResult.model_validate_json(
+            result.model_dump_json()
         )
 
         assert validated.vertex_count == 29
@@ -446,8 +451,8 @@ class TestEuclideanTriangulation:
         )
         assert result.status == "CERTIFIED_OPTIMUM"
 
-        validated = EuclideanConvexPolygonTriangulationResult.model_validate(
-            result.model_dump(mode="json")
+        validated = EuclideanConvexPolygonTriangulationResult.model_validate_json(
+            result.model_dump_json()
         )
 
         assert validated.status == "CERTIFIED_OPTIMUM"

@@ -4,11 +4,10 @@ from __future__ import annotations
 
 from typing import Annotated, Self
 
-from pydantic import Field, StrictInt, StringConstraints, model_validator
+from pydantic import Field, StrictInt, model_validator
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import DecimalIntegerEncoding
 from jacobian._models import StrictModel
-from jacobian.canonical import parse_canonical_integer
 from jacobian.math._labels import OpaqueLabel
 
 MAX_CHARACTERISTIC = 2_147_483_647
@@ -20,12 +19,12 @@ MAX_ELEMENT_TERMS = 1_024
 MAX_PRESENTATION_SCALAR_WORK = 600_000
 
 PresentationInteger = Annotated[
-    CanonicalInteger,
-    StringConstraints(max_length=MAX_PRESENTATION_INTEGER_DIGITS + 1),
+    int,
+    DecimalIntegerEncoding(max_digits=MAX_PRESENTATION_INTEGER_DIGITS),
 ]
 ExponentInteger = Annotated[
-    CanonicalInteger,
-    StringConstraints(max_length=MAX_EXPONENT_DIGITS + 1),
+    int,
+    DecimalIntegerEncoding(max_digits=MAX_EXPONENT_DIGITS),
 ]
 QuotientMultiplicationRow = Annotated[
     tuple[OpaqueLabel, ...],
@@ -47,10 +46,6 @@ CocycleTableRow = Annotated[
     tuple[CocycleVector, ...],
     Field(max_length=MAX_COSETS),
 ]
-
-
-def _integer_digits(value: str) -> int:
-    return len(value.lstrip("-"))
 
 
 def _integer_matrix_product(
@@ -290,19 +285,14 @@ class FiniteCosetCrossedProductPresentation(StrictModel):
             if len(matrix) != dimension or any(len(row) != dimension for row in matrix):
                 raise ValueError("every action matrix must have shape d by d")
             if any(
-                _integer_digits(entry) > MAX_PRESENTATION_INTEGER_DIGITS
+                abs(entry) >= 10**MAX_PRESENTATION_INTEGER_DIGITS
                 for row in matrix
                 for entry in row
             ):
                 raise ValueError(
                     "action entries exceed the 16-digit presentation bound"
                 )
-            parsed.append(
-                tuple(
-                    tuple(parse_canonical_integer(entry) for entry in row)
-                    for row in matrix
-                )
-            )
+            parsed.append(tuple(tuple(entry for entry in row) for row in matrix))
         return tuple(parsed)
 
     def _require_cocycle_shapes_and_bounds(
@@ -319,17 +309,14 @@ class FiniteCosetCrossedProductPresentation(StrictModel):
         ):
             raise ValueError("every cocycle vector must have d coordinates")
         if any(
-            _integer_digits(entry) > MAX_PRESENTATION_INTEGER_DIGITS
+            abs(entry) >= 10**MAX_PRESENTATION_INTEGER_DIGITS
             for row in self.cocycle_table
             for vector in row
             for entry in vector
         ):
             raise ValueError("cocycle entries exceed the 16-digit presentation bound")
         return tuple(
-            tuple(
-                tuple(parse_canonical_integer(entry) for entry in vector)
-                for vector in row
-            )
+            tuple(tuple(entry for entry in vector) for vector in row)
             for row in self.cocycle_table
         )
 
@@ -345,9 +332,7 @@ class FiniteCosetCrossedProductTerm(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_exponents(self) -> Self:
-        if any(
-            _integer_digits(entry) > MAX_EXPONENT_DIGITS for entry in self.exponents
-        ):
+        if any(abs(entry) >= 10**MAX_EXPONENT_DIGITS for entry in self.exponents):
             raise ValueError("term exponents exceed the 64-digit carrier bound")
         return self
 
@@ -383,7 +368,7 @@ class FiniteCosetCrossedProductElement(StrictModel):
             keys.append(
                 (
                     coset_index[term.coset],
-                    tuple(parse_canonical_integer(entry) for entry in term.exponents),
+                    tuple(entry for entry in term.exponents),
                 )
             )
         if len(set(keys)) != len(keys):

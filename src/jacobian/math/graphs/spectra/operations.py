@@ -64,8 +64,7 @@ def _characteristic_polynomial_coeffs(
 
     coefficients = fmpz_mat(order, order, entries).charpoly().coeffs()
     return tuple(
-        CanonicalRational(num=str(int(coefficient)), den="1")
-        for coefficient in coefficients
+        CanonicalRational(num=int(coefficient), den=1) for coefficient in coefficients
     )
 
 
@@ -129,9 +128,7 @@ def _algebraic_value(value: Any) -> RealAlgebraicValue:
         root_index = roots.index(value)
     except ValueError as exc:
         raise ValueError("spectrum root is not on its minimal-polynomial axis") from exc
-    coefficients = tuple(
-        str(int(coefficient)) for coefficient in polynomial.all_coeffs()
-    )
+    coefficients = tuple(int(coefficient) for coefficient in polynomial.all_coeffs())
     return RealAlgebraicValue._from_admitted_polynomial(
         polynomial=coefficients,
         real_root_index=root_index,
@@ -171,7 +168,7 @@ def verify_spectrum(claim: GraphSpectrumResult) -> bool:
             else laplacian_spectrum(claim.graph)
         )
 
-        def key(entry: GraphSpectrumEntry) -> tuple[tuple[str, ...], int]:
+        def key(entry: GraphSpectrumEntry) -> tuple[tuple[int, ...], int]:
             return entry.value.polynomial, entry.value.real_root_index
 
         return sorted((key(entry), entry.multiplicity) for entry in actual) == sorted(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Iterator
 from contextlib import contextmanager
 
@@ -71,11 +72,15 @@ def test_polynomial_recurrence_result_rejects_malformed_prefix_projection(
     result["values"] = values
 
     with raises_code("combinatorics.result_bound"):
-        PolynomialCoefficientRecurrenceEvaluationResult.model_validate(result)
+        PolynomialCoefficientRecurrenceEvaluationResult.model_validate_json(
+            json.dumps(result)
+        )
 
 
 def test_polynomial_recurrence_result_accepts_canonical_projection() -> None:
-    result = PolynomialCoefficientRecurrenceEvaluationResult.model_validate(_result())
+    result = PolynomialCoefficientRecurrenceEvaluationResult.model_validate_json(
+        json.dumps(_result())
+    )
 
     assert tuple(item.index for item in result.values) == (0, 1, 2, 3)
 
@@ -105,7 +110,9 @@ def test_polynomial_recurrence_aborts_when_an_intermediate_exceeds_digit_bound()
         "indices": [],
     }
 
-    parsed = PolynomialCoefficientRecurrenceEvaluationRequest.model_validate(request)
+    parsed = PolynomialCoefficientRecurrenceEvaluationRequest.model_validate_json(
+        json.dumps(request)
+    )
     with pytest.raises(OperationDomainValidationError) as caught:
         evaluate_polynomial_coefficient_recurrence(
             parsed.coefficient_polynomials,

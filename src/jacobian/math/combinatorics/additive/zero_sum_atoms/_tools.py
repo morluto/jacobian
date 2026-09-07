@@ -52,7 +52,7 @@ TOOLS: MathTools = (
                 ),
                 input={
                     "source": {
-                        "group": {"moduli": [7]},
+                        "group": {"moduli": ["7"]},
                         "elements": [
                             [1],
                             [2],

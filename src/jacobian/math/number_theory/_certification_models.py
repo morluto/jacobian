@@ -4,29 +4,24 @@ from __future__ import annotations
 
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, StrictInt, StringConstraints, model_validator
+from pydantic import Field, StrictInt, model_validator
 
+from jacobian._exact import DecimalIntegerEncoding
 from jacobian._models import StrictModel
-from jacobian.canonical import parse_canonical_integer
-from jacobian.math.number_theory._models import BoundedInteger, _validation_error
+from jacobian.math.number_theory._models import _validation_error
 
 # SymPy factoring and recursive factoring of p - 1 are synchronous here.
 MAX_CERTIFIED_FACTORIZATION_DIGITS = 30
 CertifiedFactorizationInteger = Annotated[
-    str,
-    StringConstraints(
-        pattern=r"^-?(?:0|[1-9][0-9]*)$",
-        max_length=MAX_CERTIFIED_FACTORIZATION_DIGITS,
-        strict=True,
-    ),
+    int, DecimalIntegerEncoding(max_digits=MAX_CERTIFIED_FACTORIZATION_DIGITS)
 ]
 
 
 class PrattCertificateNode(StrictModel):
     """One Pratt witness claim; parsing checks its shape, not primality."""
 
-    prime: BoundedInteger
-    witness: BoundedInteger | None = None
+    prime: CertifiedFactorizationInteger
+    witness: CertifiedFactorizationInteger | None = None
     factors: tuple[PrattCertificateFactor, ...] = Field(
         default_factory=tuple, min_length=0, max_length=256
     )
@@ -35,7 +30,7 @@ class PrattCertificateNode(StrictModel):
 class PrattCertificateFactor(StrictModel):
     """One claimed prime-power factor of a Pratt node's ``prime - 1``."""
 
-    prime: BoundedInteger
+    prime: CertifiedFactorizationInteger
     exponent: StrictInt = Field(ge=1, le=4096)
     certificate: PrattCertificateNode
 
@@ -47,7 +42,7 @@ class CertifiedFactorizationRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_composite_domain(self) -> Self:
-        if parse_canonical_integer(self.value) < 2:
+        if self.value < 2:
             raise _validation_error(
                 "certified_factorization_requires_an_integer_at_least_2",
                 "certified factorization requires an integer at least 2",
@@ -58,7 +53,7 @@ class CertifiedFactorizationRequest(StrictModel):
 class CertifiedFactor(StrictModel):
     """One certified prime factor with its Pratt certificate."""
 
-    prime: BoundedInteger
+    prime: CertifiedFactorizationInteger
     exponent: StrictInt = Field(ge=1, le=4096)
     certificate: PrattCertificateNode
 
@@ -87,7 +82,7 @@ class PrimalityCertificateRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_candidate_domain(self) -> Self:
-        if parse_canonical_integer(self.value) < 2:
+        if self.value < 2:
             raise _validation_error(
                 "primality_certificate_requires_an_integer_at_least_2",
                 "primality certificate requires an integer at least 2",

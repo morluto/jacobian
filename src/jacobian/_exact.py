@@ -1,54 +1,75 @@
-"""Canonical exact scalar wire values."""
+"""Canonical exact scalar values and their JSON encodings."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from fractions import Fraction
 from typing import Annotated, Any, Self
 
 from pydantic import (
-    BeforeValidator,
     ConfigDict,
     Field,
-    PlainSerializer,
-    StringConstraints,
+    GetCoreSchemaHandler,
     model_validator,
 )
-from pydantic_core import PydanticCustomError
+from pydantic_core import PydanticCustomError, core_schema
 
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 
-CanonicalInteger = Annotated[
-    str,
-    StringConstraints(
-        pattern=r"^(?:0|-?[1-9][0-9]*)$",
-        strict=True,
-    ),
-]
 
+@dataclass(frozen=True)
+class DecimalIntegerEncoding:
+    """JSON codec metadata for native integers, not a second value class.
 
-def _parse_native_integer(value: Any) -> int:
-    """Accept native integers and canonical decimal strings at the wire edge."""
+    Python validation accepts integers only. JSON validation checks canonical
+    decimal spelling and the digit envelope before decoding. Python dumps stay
+    numeric; JSON dumps use strings at every magnitude.
+    """
 
-    if isinstance(value, bool):
-        raise PydanticCustomError(
-            "canonical_integer.type",
-            "integer values must not be booleans",
+    max_digits: int
+
+    def __get_pydantic_core_schema__(
+        self, source: Any, handler: GetCoreSchemaHandler
+    ) -> core_schema.CoreSchema:
+        if source is not int or self.max_digits < 1:
+            raise TypeError(
+                "decimal integer encoding requires int and a positive digit bound"
+            )
+        limit = 10**self.max_digits
+
+        def require_bound(value: int) -> int:
+            if abs(value) >= limit:
+                raise PydanticCustomError(
+                    "exact_integer.digit_bound",
+                    "integer exceeds the decimal digit bound",
+                )
+            return value
+
+        wire = core_schema.str_schema(
+            strict=True,
+            # A negative lookahead expresses absolute end-of-input in both
+            # Python and JSON Schema regex syntax (unlike `$` before a newline).
+            pattern=rf"^(?:0|-?[1-9][0-9]{{0,{self.max_digits - 1}}})(?![\s\S])",
+            regex_engine="python-re",
+            max_length=self.max_digits + 1,
         )
-    if isinstance(value, int):
-        return value
-    if isinstance(value, str):
-        return parse_canonical_integer(value)
-    raise PydanticCustomError(
-        "canonical_integer.type",
-        "integer values must be Python integers or canonical strings",
-    )
+        return core_schema.json_or_python_schema(
+            json_schema=core_schema.no_info_after_validator_function(
+                parse_canonical_integer, wire
+            ),
+            python_schema=core_schema.no_info_after_validator_function(
+                require_bound, core_schema.int_schema(strict=True)
+            ),
+            serialization=core_schema.plain_serializer_function_ser_schema(
+                format_canonical_integer, when_used="json", return_schema=wire
+            ),
+        )
 
 
-NativeInteger = Annotated[
-    int,
-    BeforeValidator(_parse_native_integer),
-    PlainSerializer(format_canonical_integer, return_type=str, when_used="json"),
+MAX_CANONICAL_INTEGER_DIGITS = 32_768
+ExactInteger = Annotated[
+    int, DecimalIntegerEncoding(max_digits=MAX_CANONICAL_INTEGER_DIGITS)
 ]
 
 MAX_CANONICAL_RATIONAL_DIGITS = 32_768
@@ -72,7 +93,10 @@ def format_canonical_rational(value: Fraction) -> str:
 def canonical_rational_component_digits(value: CanonicalRational) -> int:
     """Return the greatest decimal width of a canonical rational component."""
 
-    return max(len(value.num.lstrip("-")), len(value.den))
+    return max(
+        len(format_canonical_integer(abs(value.num))),
+        len(format_canonical_integer(value.den)),
+    )
 
 
 def require_bounded_rational(
@@ -83,10 +107,7 @@ def require_bounded_rational(
 ) -> None:
     """Reject a canonical rational whose components exceed a domain bound."""
 
-    if (
-        len(value.num.lstrip("-")) > max_digits
-        or len(value.den.lstrip("-")) > max_digits
-    ):
+    if abs(value.num) >= 10**max_digits or value.den >= 10**max_digits:
         raise ValueError(f"{label} exceeds the {max_digits}-digit bound")
 
 
@@ -97,37 +118,34 @@ class CanonicalRational(StrictModel):
         json_schema_extra={"examples": [{"num": "1", "den": "2"}]}
     )
 
-    num: CanonicalInteger = Field(
-        description="Canonical decimal numerator of the reduced rational.",
+    num: ExactInteger = Field(
+        description=(
+            "Exact numerator of the reduced rational; a native Python int and a "
+            "canonical decimal string in JSON."
+        ),
         examples=["1"],
     )
-    den: CanonicalInteger = Field(
+    den: ExactInteger = Field(
         description=(
-            "Positive canonical decimal denominator; together with num it must be "
-            "reduced, and integers use den='1'."
+            "Positive exact denominator; a native Python int and a canonical decimal "
+            "string in JSON. Together with num it must be reduced, and integers use "
+            "den='1'."
         ),
         examples=["2"],
+        json_schema_extra={
+            "pattern": rf"^[1-9][0-9]{{0,{MAX_CANONICAL_RATIONAL_DIGITS - 1}}}(?![\s\S])",
+            "maxLength": MAX_CANONICAL_RATIONAL_DIGITS,
+        },
     )
 
     @model_validator(mode="after")
     def require_reduced_positive_denominator(self) -> Self:
-        if (
-            len(self.num.lstrip("-")) > MAX_CANONICAL_RATIONAL_DIGITS
-            or len(self.den.lstrip("-")) > MAX_CANONICAL_RATIONAL_DIGITS
-        ):
-            raise _validation_error(
-                "component_digits",
-                "rational components exceed the canonical 32,768-digit limit",
-            )
-        denominator = parse_canonical_integer(self.den)
-        if denominator == 0:
+        if self.den == 0:
             raise _validation_error(
                 "zero_denominator", "rational denominator cannot be zero"
             )
-        value = Fraction(parse_canonical_integer(self.num), denominator)
-        if self.num != format_canonical_integer(
-            value.numerator
-        ) or self.den != format_canonical_integer(value.denominator):
+        value = Fraction(self.num, self.den)
+        if (self.num, self.den) != (value.numerator, value.denominator):
             raise _validation_error(
                 "noncanonical_representation",
                 "rational must be reduced with a positive denominator and canonical zero",
@@ -138,7 +156,7 @@ class CanonicalRational(StrictModel):
         return Fraction(*self.as_integer_ratio())
 
     def as_integer_ratio(self) -> tuple[int, int]:
-        return parse_canonical_integer(self.num), parse_canonical_integer(self.den)
+        return self.num, self.den
 
     @classmethod
     def from_integer_ratio(cls, numerator: int, denominator: int) -> CanonicalRational:
@@ -151,6 +169,6 @@ class CanonicalRational(StrictModel):
     @classmethod
     def from_fraction(cls, value: Fraction) -> CanonicalRational:
         return cls(
-            num=format_canonical_integer(value.numerator),
-            den=format_canonical_integer(value.denominator),
+            num=value.numerator,
+            den=value.denominator,
         )

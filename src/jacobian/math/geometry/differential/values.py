@@ -8,7 +8,7 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import CanonicalLimits
+from jacobian.canonical import CanonicalLimits, format_canonical_integer
 from jacobian.math.polynomials.values import (
     MAX_POLYNOMIAL_VARIABLES,
     PolynomialVariable,
@@ -71,7 +71,11 @@ def _polynomial_key(
     polynomial: SparseRationalPolynomial,
 ) -> tuple[tuple[tuple[int, ...], str, str], ...]:
     return tuple(
-        (term.exponents, term.coefficient.num, term.coefficient.den)
+        (
+            term.exponents,
+            format_canonical_integer(term.coefficient.num),
+            format_canonical_integer(term.coefficient.den),
+        )
         for term in polynomial.terms
     )
 

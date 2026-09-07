@@ -4,20 +4,22 @@ from __future__ import annotations
 
 import builtins
 from itertools import pairwise
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import ConfigDict, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
-    CanonicalInteger,
     CanonicalRational,
+    DecimalIntegerEncoding,
+    ExactInteger,
     require_bounded_rational,
 )
 from jacobian._models import StrictModel
 from jacobian.math.polynomials.series._models import TruncatedSeries
 
 MAX_LINEAR_RECURRENCE_ORDER = 16
+
 MAX_LINEAR_RECURRENCE_INDEX = 512
 MAX_LINEAR_RECURRENCE_REQUESTED_INDICES = 256
 MAX_P_RECURSIVE_POLYNOMIAL_DEGREE = 16
@@ -87,8 +89,8 @@ class FibonacciPairResult(StrictModel):
     """Two consecutive Fibonacci values forming one recurrence boundary."""
 
     n: StrictInt = Field(ge=0, le=MAX_FIBONACCI_INDEX)
-    f_n: CanonicalInteger
-    f_n_plus_one: CanonicalInteger
+    f_n: ExactInteger
+    f_n_plus_one: ExactInteger
 
 
 class FibonacciPairRequest(StrictModel):
@@ -318,7 +320,11 @@ class RationalGeneratingFunctionCoefficientsRequest(StrictModel):
         max_length=MAX_RATIONAL_GENERATING_FUNCTION_DEGREE + 1,
     )
     coefficient_convention: Literal["ASCENDING_POWERS_OF_X"]
-    expansion_point: Literal["0"]
+    expansion_point: Annotated[
+        int,
+        DecimalIntegerEncoding(max_digits=1),
+        Field(ge=0, le=0),
+    ]
     truncation_order: StrictInt = Field(
         ge=1,
         le=MAX_RATIONAL_SERIES_TRUNCATION_ORDER,
@@ -369,7 +375,11 @@ class RationalGeneratingFunctionCoefficientsResult(StrictModel):
         max_length=MAX_RATIONAL_GENERATING_FUNCTION_DEGREE + 1,
     )
     coefficient_convention: Literal["ASCENDING_POWERS_OF_X"]
-    expansion_point: Literal["0"]
+    expansion_point: Annotated[
+        int,
+        DecimalIntegerEncoding(max_digits=1),
+        Field(ge=0, le=0),
+    ]
     truncation_order: StrictInt = Field(
         ge=1,
         le=MAX_RATIONAL_SERIES_TRUNCATION_ORDER,
@@ -383,7 +393,7 @@ class RationalGeneratingFunctionCoefficientsResult(StrictModel):
         numerator: tuple[CanonicalRational, ...],
         denominator: tuple[CanonicalRational, ...],
         coefficient_convention: Literal["ASCENDING_POWERS_OF_X"],
-        expansion_point: Literal["0"],
+        expansion_point: int,
         truncation_order: int,
         coefficients: tuple[CanonicalRational, ...],
     ) -> Self:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import cast
 
 import networkx as nx
@@ -258,7 +259,7 @@ def test_result_parsing_rejects_constructed_rows_not_bound_to_source() -> None:
     }
 
     with pytest.raises(ValidationError, match="partition all graph vertices"):
-        RootedTreeFinePartition.model_validate(payload)
+        RootedTreeFinePartition.model_validate_json(json.dumps(payload))
 
 
 def test_result_parsing_rejects_contradictory_non_tree_diagnostic() -> None:
@@ -275,7 +276,7 @@ def test_result_parsing_rejects_contradictory_non_tree_diagnostic() -> None:
     }
 
     with pytest.raises(ValidationError, match="diagnostic must match"):
-        RootedTreeFinePartition.model_validate(payload)
+        RootedTreeFinePartition.model_validate_json(json.dumps(payload))
 
 
 def test_result_parsing_rejects_non_tree_status_for_a_tree() -> None:
@@ -292,7 +293,7 @@ def test_result_parsing_rejects_non_tree_status_for_a_tree() -> None:
     }
 
     with pytest.raises(ValidationError, match="disconnected or cyclic"):
-        RootedTreeFinePartition.model_validate(payload)
+        RootedTreeFinePartition.model_validate_json(json.dumps(payload))
 
 
 def test_result_parsing_rejects_undeclared_upper_seed_without_key_error(
@@ -303,7 +304,7 @@ def test_result_parsing_rejects_undeclared_upper_seed_without_key_error(
     payload["outcome"]["shrubs"][0]["boundary_seeds"] = ["c", "missing"]
 
     with pytest.raises(ValidationError, match="upper_seed must be a retained seed"):
-        RootedTreeFinePartition.model_validate(payload)
+        RootedTreeFinePartition.model_validate_json(json.dumps(payload))
 
 
 @pytest.mark.parametrize(
@@ -388,7 +389,7 @@ def test_structural_result_parsing_rejects_an_empty_retained_source_label() -> N
     }
 
     with pytest.raises(ValidationError, match="graph vertex labels must not be empty"):
-        RootedTreeFinePartition.model_validate(payload)
+        RootedTreeFinePartition.model_validate_json(json.dumps(payload))
 
 
 def test_shared_maximum_order_path_is_admitted() -> None:

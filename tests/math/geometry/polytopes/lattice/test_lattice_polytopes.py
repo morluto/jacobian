@@ -26,15 +26,15 @@ from jacobian.math.geometry.polytopes.lattice._tools import (
 from jacobian.math.geometry.polytopes.lattice.operations import LatticePointBudgetError
 
 
-def _cr(num: str, den: str = "1") -> CanonicalRational:
+def _cr(num: int, den: int = 1) -> CanonicalRational:
     return CanonicalRational.model_validate({"num": num, "den": den})
 
 
-def _v(*coords: tuple[str, str]) -> Vertex:
+def _v(*coords: tuple[int, int]) -> Vertex:
     return Vertex(coordinates=tuple(_cr(n, d) for n, d in coords))
 
 
-def _hs(coeffs: tuple[tuple[str, str], ...], offset: tuple[str, str]) -> Halfspace:
+def _hs(coeffs: tuple[tuple[int, int], ...], offset: tuple[int, int]) -> Halfspace:
     return Halfspace(
         coefficients=tuple(_cr(n, d) for n, d in coeffs),
         offset=_cr(offset[0], offset[1]),
@@ -49,24 +49,24 @@ def raises_code(code: str) -> Iterator[None]:
 
 
 UNIT_SQUARE_V = (
-    _v(("0", "1"), ("0", "1")),
-    _v(("1", "1"), ("0", "1")),
-    _v(("1", "1"), ("1", "1")),
-    _v(("0", "1"), ("1", "1")),
+    _v((0, 1), (0, 1)),
+    _v((1, 1), (0, 1)),
+    _v((1, 1), (1, 1)),
+    _v((0, 1), (1, 1)),
 )
 
 UNIT_SQUARE_H = (
-    _hs((("1", "1"), ("0", "1")), ("1", "1")),  #  x <= 1
-    _hs((("-1", "1"), ("0", "1")), ("0", "1")),  # -x <= 0
-    _hs((("0", "1"), ("1", "1")), ("1", "1")),  #  y <= 1
-    _hs((("0", "1"), ("-1", "1")), ("0", "1")),  # -y <= 0
+    _hs(((1, 1), (0, 1)), (1, 1)),  #  x <= 1
+    _hs(((-1, 1), (0, 1)), (0, 1)),  # -x <= 0
+    _hs(((0, 1), (1, 1)), (1, 1)),  #  y <= 1
+    _hs(((0, 1), (-1, 1)), (0, 1)),  # -y <= 0
 )
 
 
 def test_canonical_polytope_values_feed_lattice_requests_directly() -> None:
-    vertex = Vertex(coordinates=(_cr("0"),))
-    upper = Halfspace(coefficients=(_cr("1"),), offset=_cr("0"))
-    lower = Halfspace(coefficients=(_cr("-1"),), offset=_cr("0"))
+    vertex = Vertex(coordinates=(_cr(0),))
+    upper = Halfspace(coefficients=(_cr(1),), offset=_cr(0))
+    lower = Halfspace(coefficients=(_cr(-1),), offset=_cr(0))
 
     vertex_request = LatticePolytopeRequest(vertices=(vertex,))
     halfspace_request = LatticePolytopeRequest(halfspaces=(upper, lower))
@@ -86,10 +86,10 @@ class TestEnumerate:
         assert result.representation == "vertices"
         coords = {p.coordinates for p in result.points}
         assert coords == {
-            ("0", "0"),
-            ("1", "0"),
-            ("0", "1"),
-            ("1", "1"),
+            (0, 0),
+            (1, 0),
+            (0, 1),
+            (1, 1),
         }
 
     def test_unit_square_halfspaces(self) -> None:
@@ -100,10 +100,10 @@ class TestEnumerate:
         assert result.representation == "halfspaces"
         coords = {p.coordinates for p in result.points}
         assert coords == {
-            ("0", "0"),
-            ("1", "0"),
-            ("0", "1"),
-            ("1", "1"),
+            (0, 0),
+            (1, 0),
+            (0, 1),
+            (1, 1),
         }
 
     def test_simplex_two_by_two(self) -> None:
@@ -111,21 +111,21 @@ class TestEnumerate:
         result = enumerate_lattice_points(
             EnumerateLatticePointsRequest(
                 vertices=(
-                    _v(("0", "1"), ("0", "1")),
-                    _v(("2", "1"), ("0", "1")),
-                    _v(("0", "1"), ("2", "1")),
+                    _v((0, 1), (0, 1)),
+                    _v((2, 1), (0, 1)),
+                    _v((0, 1), (2, 1)),
                 ),
             )
         )
         assert result.point_count == 6
         coords = {p.coordinates for p in result.points}
         assert coords == {
-            ("0", "0"),
-            ("1", "0"),
-            ("2", "0"),
-            ("0", "1"),
-            ("1", "1"),
-            ("0", "2"),
+            (0, 0),
+            (1, 0),
+            (2, 0),
+            (0, 1),
+            (1, 1),
+            (0, 2),
         }
 
     def test_three_dimensional_tetrahedron(self) -> None:
@@ -133,10 +133,10 @@ class TestEnumerate:
         result = enumerate_lattice_points(
             EnumerateLatticePointsRequest(
                 vertices=(
-                    _v(("0", "1"), ("0", "1"), ("0", "1")),
-                    _v(("1", "1"), ("0", "1"), ("0", "1")),
-                    _v(("0", "1"), ("1", "1"), ("0", "1")),
-                    _v(("0", "1"), ("0", "1"), ("1", "1")),
+                    _v((0, 1), (0, 1), (0, 1)),
+                    _v((1, 1), (0, 1), (0, 1)),
+                    _v((0, 1), (1, 1), (0, 1)),
+                    _v((0, 1), (0, 1), (1, 1)),
                 ),
             )
         )
@@ -147,18 +147,18 @@ class TestEnumerate:
         result = enumerate_lattice_points(
             EnumerateLatticePointsRequest(
                 vertices=(
-                    _v(("0", "1")),
-                    _v(("3", "1")),
+                    _v((0, 1)),
+                    _v((3, 1)),
                 ),
             )
         )
         assert result.point_count == 4
         assert result.dimension == 1
         assert [p.coordinates for p in result.points] == [
-            ("0",),
-            ("1",),
-            ("2",),
-            ("3",),
+            (0,),
+            (1,),
+            (2,),
+            (3,),
         ]
 
     def test_rational_vertex_box_rounds_inclusively(self) -> None:
@@ -167,17 +167,17 @@ class TestEnumerate:
         result = enumerate_lattice_points(
             EnumerateLatticePointsRequest(
                 vertices=(
-                    _v(("0", "1"), ("0", "1")),
-                    _v(("3", "2"), ("0", "1")),
-                    _v(("3", "2"), ("3", "2")),
-                    _v(("0", "1"), ("3", "2")),
+                    _v((0, 1), (0, 1)),
+                    _v((3, 2), (0, 1)),
+                    _v((3, 2), (3, 2)),
+                    _v((0, 1), (3, 2)),
                 ),
             )
         )
         # The half-open convex hull of these vertices is [0, 3/2] x [0, 3/2],
         # which contains integer points (0,0),(0,1),(1,0),(1,1) only.
         coords = {p.coordinates for p in result.points}
-        assert coords == {("0", "0"), ("1", "0"), ("0", "1"), ("1", "1")}
+        assert coords == {(0, 0), (1, 0), (0, 1), (1, 1)}
 
 
 class TestCount:
@@ -190,9 +190,9 @@ class TestCount:
         result = count_lattice_points(
             LatticePolytopeRequest(
                 vertices=(
-                    _v(("0", "1"), ("0", "1")),
-                    _v(("2", "1"), ("0", "1")),
-                    _v(("0", "1"), ("2", "1")),
+                    _v((0, 1), (0, 1)),
+                    _v((2, 1), (0, 1)),
+                    _v((0, 1), (2, 1)),
                 ),
             )
         )
@@ -201,9 +201,9 @@ class TestCount:
     def test_count_and_enumerate_agree_on_cube(self) -> None:
         cube = tuple(
             _v(
-                (str(a), "1"),
-                (str(b), "1"),
-                (str(c), "1"),
+                (a, 1),
+                (b, 1),
+                (c, 1),
             )
             for a in (0, 1)
             for b in (0, 1)
@@ -222,9 +222,7 @@ class TestCount:
 class TestRejection:
     def test_unbounded_halfspace_representation_is_rejected(self) -> None:
         # Only x <= 1: the polytope is unbounded in every other direction.
-        request = LatticePolytopeRequest(
-            halfspaces=(_hs((("1", "1"), ("0", "1")), ("1", "1")),)
-        )
+        request = LatticePolytopeRequest(halfspaces=(_hs(((1, 1), (0, 1)), (1, 1)),))
         with pytest.raises(ValueError, match="unbounded"):
             count_lattice_points(request)
 
@@ -232,8 +230,8 @@ class TestRejection:
         # x >= 0 and y >= 0 only: unbounded.
         request = LatticePolytopeRequest(
             halfspaces=(
-                _hs((("-1", "1"), ("0", "1")), ("0", "1")),
-                _hs((("0", "1"), ("-1", "1")), ("0", "1")),
+                _hs(((-1, 1), (0, 1)), (0, 1)),
+                _hs(((0, 1), (-1, 1)), (0, 1)),
             ),
         )
         with pytest.raises(ValueError, match="unbounded"):
@@ -243,8 +241,8 @@ class TestRejection:
         with pytest.raises(ValidationError):
             LatticePolytopeRequest(
                 vertices=(
-                    _v(("0", "1"), ("0", "1"), ("0", "1"), ("0", "1"), ("0", "1")),
-                    _v(("1", "1"), ("0", "1"), ("0", "1"), ("0", "1"), ("0", "1")),
+                    _v((0, 1), (0, 1), (0, 1), (0, 1), (0, 1)),
+                    _v((1, 1), (0, 1), (0, 1), (0, 1), (0, 1)),
                 ),
             )
 
@@ -252,17 +250,15 @@ class TestRejection:
         # A 5-dimensional vertex is rejected by the field max_length.
         with pytest.raises(ValidationError):
             LatticePolytopeRequest(
-                vertices=(
-                    _v(("0", "1"), ("0", "1"), ("0", "1"), ("0", "1"), ("0", "1")),
-                ),
+                vertices=(_v((0, 1), (0, 1), (0, 1), (0, 1), (0, 1)),),
                 dimension_bound=MAX_DIMENSION,
             )
 
     def test_both_representations_rejected(self) -> None:
         with raises_code("representation_not_exclusive"):
             LatticePolytopeRequest(
-                vertices=(_v(("0", "1"), ("0", "1")),),
-                halfspaces=(_hs((("1", "1"), ("0", "1")), ("1", "1")),),
+                vertices=(_v((0, 1), (0, 1)),),
+                halfspaces=(_hs(((1, 1), (0, 1)), (1, 1)),),
             )
 
     def test_neither_representation_rejected(self) -> None:
@@ -270,7 +266,7 @@ class TestRejection:
             LatticePolytopeRequest()
 
     def test_all_zero_halfspace_normal_rejected(self) -> None:
-        halfspace = Halfspace(coefficients=(_cr("0"), _cr("0")), offset=_cr("1"))
+        halfspace = Halfspace(coefficients=(_cr(0), _cr(0)), offset=_cr(1))
         with pytest.raises(OperationDomainValidationError):
             count_lattice_points(LatticePolytopeRequest(halfspaces=(halfspace,)))
 
@@ -278,8 +274,8 @@ class TestRejection:
 class TestBudgets:
     def test_bounding_box_span_bound_enforced(self) -> None:
         # A 1D interval spanning more than MAX_BOUND_SPAN integer points.
-        far = str(MAX_BOUND_SPAN + 5)
-        request = LatticePolytopeRequest(vertices=(_v(("0", "1")), _v((far, "1"))))
+        far = MAX_BOUND_SPAN + 5
+        request = LatticePolytopeRequest(vertices=(_v((0, 1)), _v((far, 1))))
         with pytest.raises(ValueError, match="per-axis span bound"):
             count_lattice_points(request)
 
@@ -290,13 +286,13 @@ class TestBudgets:
         from jacobian.math.geometry.polytopes.lattice._models import MAX_LATTICE_POINTS
 
         side = 1010  # 1010 x 1010 = 1_020_100 > 1_000_000; per-axis 1011 <= 10000
-        far = str(side)
+        far = side
         request = LatticePolytopeRequest(
             vertices=(
-                _v(("0", "1"), ("0", "1")),
-                _v((far, "1"), ("0", "1")),
-                _v((far, "1"), (far, "1")),
-                _v(("0", "1"), (far, "1")),
+                _v((0, 1), (0, 1)),
+                _v((far, 1), (0, 1)),
+                _v((far, 1), (far, 1)),
+                _v((0, 1), (far, 1)),
             )
         )
         assert (side + 1) * (side + 1) > MAX_LATTICE_POINTS
@@ -343,10 +339,10 @@ class TestMembershipWorkBudget:
         # Each side of the [0,9]^2 box repeated 16 times: the scan must use
         # the four distinct normalized facets and stay exact.
         sides = (
-            _hs((("1", "1"), ("0", "1")), ("9", "1")),
-            _hs((("-1", "1"), ("0", "1")), ("0", "1")),
-            _hs((("0", "1"), ("1", "1")), ("9", "1")),
-            _hs((("0", "1"), ("-1", "1")), ("0", "1")),
+            _hs(((1, 1), (0, 1)), (9, 1)),
+            _hs(((-1, 1), (0, 1)), (0, 1)),
+            _hs(((0, 1), (1, 1)), (9, 1)),
+            _hs(((0, 1), (-1, 1)), (0, 1)),
         )
         request = LatticePolytopeRequest(halfspaces=sides * 16)
         assert request.halfspaces is not None
@@ -359,10 +355,10 @@ class TestMembershipWorkBudget:
         # work at 4 distinct facets so the request is admitted instead of
         # failing internally after acceptance.
         sides = (
-            _hs((("1", "1"), ("0", "1")), ("2499", "1")),
-            _hs((("-1", "1"), ("0", "1")), ("0", "1")),
-            _hs((("0", "1"), ("1", "1")), ("3999", "1")),
-            _hs((("0", "1"), ("-1", "1")), ("0", "1")),
+            _hs(((1, 1), (0, 1)), (2499, 1)),
+            _hs(((-1, 1), (0, 1)), (0, 1)),
+            _hs(((0, 1), (1, 1)), (3999, 1)),
+            _hs(((0, 1), (-1, 1)), (0, 1)),
         )
         request = LatticePolytopeRequest(halfspaces=sides * 16)
         assert request.halfspaces is not None
@@ -373,14 +369,12 @@ class TestMembershipWorkBudget:
         # facets over a 10M-candidate scan: beyond the membership budget,
         # so the domain is narrowed in the request model itself.
         sides = [
-            _hs((("1", "1"), ("0", "1")), ("9999", "1")),
-            _hs((("-1", "1"), ("0", "1")), ("0", "1")),
-            _hs((("0", "1"), ("1", "1")), ("999", "1")),
-            _hs((("0", "1"), ("-1", "1")), ("0", "1")),
+            _hs(((1, 1), (0, 1)), (9999, 1)),
+            _hs(((-1, 1), (0, 1)), (0, 1)),
+            _hs(((0, 1), (1, 1)), (999, 1)),
+            _hs(((0, 1), (-1, 1)), (0, 1)),
         ]
-        diagonals = [
-            _hs((("1", "1"), ("1", "1")), (str(c), "1")) for c in range(10998, 11005)
-        ]
+        diagonals = [_hs(((1, 1), (1, 1)), (c, 1)) for c in range(10998, 11005)]
         request = LatticePolytopeRequest(halfspaces=tuple(sides + diagonals))
         with pytest.raises(ValueError, match="facet-membership work budget"):
             count_lattice_points(request)
@@ -389,14 +383,12 @@ class TestMembershipWorkBudget:
         # Exactly 10 distinct facets over a 10M-candidate scan sits at the
         # 100M-test budget and is admitted; duplicates do not push past it.
         sides = [
-            _hs((("1", "1"), ("0", "1")), ("9999", "1")),
-            _hs((("-1", "1"), ("0", "1")), ("0", "1")),
-            _hs((("0", "1"), ("1", "1")), ("999", "1")),
-            _hs((("0", "1"), ("-1", "1")), ("0", "1")),
+            _hs(((1, 1), (0, 1)), (9999, 1)),
+            _hs(((-1, 1), (0, 1)), (0, 1)),
+            _hs(((0, 1), (1, 1)), (999, 1)),
+            _hs(((0, 1), (-1, 1)), (0, 1)),
         ]
-        six_cuts = [
-            _hs((("1", "1"), ("1", "1")), (str(c), "1")) for c in range(10998, 11004)
-        ]
+        six_cuts = [_hs(((1, 1), (1, 1)), (c, 1)) for c in range(10998, 11004)]
         boundary = LatticePolytopeRequest(halfspaces=tuple(sides + six_cuts))
         assert boundary.halfspaces is not None
         padded = LatticePolytopeRequest(
@@ -444,7 +436,7 @@ class TestCountResultConstraints:
                 {
                     "dimension": 2,
                     "point_count": 1,
-                    "points": (LatticePoint(coordinates=("0", "0")),),
+                    "points": (LatticePoint(coordinates=(0, 0)),),
                     "representation": "anything",
                 }
             )
@@ -457,15 +449,15 @@ class TestLowerDimensionalRejection:
         # counted the whole eight-point bounding box instead of the segment.
         request = LatticePolytopeRequest(
             vertices=(
-                _v(("0", "1"), ("0", "1"), ("0", "1")),
-                _v(("1", "1"), ("1", "1"), ("1", "1")),
+                _v((0, 1), (0, 1), (0, 1)),
+                _v((1, 1), (1, 1), (1, 1)),
             )
         )
         with pytest.raises(ValueError, match="not full-dimensional"):
             count_lattice_points(request)
 
     def test_single_vertex_in_two_d_rejected(self) -> None:
-        request = LatticePolytopeRequest(vertices=(_v(("0", "1"), ("0", "1")),))
+        request = LatticePolytopeRequest(vertices=(_v((0, 1), (0, 1)),))
         with pytest.raises(ValueError, match="not full-dimensional"):
             count_lattice_points(request)
 
@@ -473,9 +465,9 @@ class TestLowerDimensionalRejection:
         # Three collinear vertices in 2-D: affine rank 1 < 2.
         request = LatticePolytopeRequest(
             vertices=(
-                _v(("0", "1"), ("0", "1")),
-                _v(("1", "1"), ("1", "1")),
-                _v(("2", "1"), ("2", "1")),
+                _v((0, 1), (0, 1)),
+                _v((1, 1), (1, 1)),
+                _v((2, 1), (2, 1)),
             )
         )
         with pytest.raises(ValueError, match="not full-dimensional"):
@@ -503,24 +495,24 @@ class TestLargeCoordinateBounds:
         # A singleton 1-D V-representation at 10**5000: the public contract
         # admits 32,768-digit coordinates, so measuring the bounding box must
         # not trip CPython's default 4,300-digit int-to-str limit.
-        huge = format_canonical_integer(10**5000)
+        huge = 10**5000
         result = enumerate_lattice_points(
-            EnumerateLatticePointsRequest(vertices=(_v((huge, "1")),))
+            EnumerateLatticePointsRequest(vertices=(_v((huge, 1)),))
         )
         assert result.point_count == 1
-        assert result.points[0].coordinates == (huge,)
+        assert result.points[0].coordinates == (10**5000,)
 
 
 class TestEnumerateRequestBoundary:
     @pytest.mark.scale
     def test_large_enumeration_is_governed_by_point_count(self) -> None:
-        far = "599"
+        far = 599
         request = EnumerateLatticePointsRequest(
             vertices=(
-                _v(("0", "1"), ("0", "1")),
-                _v((far, "1"), ("0", "1")),
-                _v((far, "1"), (far, "1")),
-                _v(("0", "1"), (far, "1")),
+                _v((0, 1), (0, 1)),
+                _v((far, 1), (0, 1)),
+                _v((far, 1), (far, 1)),
+                _v((0, 1), (far, 1)),
             )
         )
         result = enumerate_lattice_points(
@@ -539,7 +531,7 @@ class TestEnumerateRequestBoundary:
             EnumerateLatticePointsResult(
                 dimension=1,
                 point_count=0,
-                points=(LatticePoint(coordinates=("1",)),),
+                points=(LatticePoint(coordinates=(1,)),),
                 representation="vertices",
             )
 
@@ -547,10 +539,10 @@ class TestEnumerateRequestBoundary:
         from jacobian.math.geometry.polytopes.lattice._models import LatticePoint
 
         with pytest.raises(ValidationError):
-            LatticePoint(coordinates=("01",))
+            LatticePoint.model_validate_json('{"coordinates":["01"]}')
         with pytest.raises(ValidationError):
-            LatticePoint(coordinates=("x",))
-        assert LatticePoint(coordinates=("-42",)).coordinates == ("-42",)
+            LatticePoint.model_validate({"coordinates": ("x",)})
+        assert LatticePoint(coordinates=(-42,)).coordinates == (-42,)
 
 
 class TestEnumerationResultInvariants:
@@ -565,8 +557,8 @@ class TestEnumerationResultInvariants:
                 dimension=1,
                 point_count=2,
                 points=(
-                    LatticePoint(coordinates=("0",)),
-                    LatticePoint(coordinates=("0",)),
+                    LatticePoint(coordinates=(0,)),
+                    LatticePoint(coordinates=(0,)),
                 ),
                 representation="vertices",
             )
@@ -581,7 +573,7 @@ class TestEnumerationResultInvariants:
             EnumerateLatticePointsResult(
                 dimension=2,
                 point_count=1,
-                points=(LatticePoint(coordinates=("0",)),),
+                points=(LatticePoint(coordinates=(0,)),),
                 representation="vertices",
             )
 
@@ -591,10 +583,10 @@ class TestEnumerationResultInvariants:
             LatticePoint,
         )
 
-        exactly_at = "9" * COORDINATE_DIGITS
+        exactly_at = 10**COORDINATE_DIGITS - 1
         assert LatticePoint(coordinates=(exactly_at,)).coordinates == (exactly_at,)
-        with raises_code("lattice_point_coordinate_digit_bound"):
-            LatticePoint(coordinates=("9" * (COORDINATE_DIGITS + 1),))
+        with pytest.raises(ValidationError):
+            LatticePoint(coordinates=(10**COORDINATE_DIGITS,))
 
 
 class TestVertexFacetMembershipBudget:
@@ -605,9 +597,7 @@ class TestVertexFacetMembershipBudget:
         exceeds the 100M membership budget, so validation must reject the
         request instead of permitting hundreds of millions of exact
         evaluations (review counterexample shape)."""
-        vertices = tuple(
-            _v((str(i * 63), "1"), (str(i * i // 2), "1")) for i in range(64)
-        )
+        vertices = tuple(_v((i * 63, 1), (i * i // 2, 1)) for i in range(64))
         request = LatticePolytopeRequest(vertices=vertices)
         with pytest.raises(ValueError, match="facet-membership work budget"):
             count_lattice_points(request)
@@ -616,9 +606,9 @@ class TestVertexFacetMembershipBudget:
         """A small full-dimensional V-representation stays within the
         combined scan-times-facet budget."""
         triangle = (
-            _v(("0", "1"), ("0", "1")),
-            _v(("4", "1"), ("0", "1")),
-            _v(("0", "1"), ("4", "1")),
+            _v((0, 1), (0, 1)),
+            _v((4, 1), (0, 1)),
+            _v((0, 1), (4, 1)),
         )
         request = LatticePolytopeRequest(vertices=triangle)
         assert count_lattice_points(request).point_count == 15
@@ -644,7 +634,7 @@ class TestOneDimensionalSingletonException:
 
     def test_singleton_roundtrip_unchanged(self) -> None:
         result = enumerate_lattice_points(
-            EnumerateLatticePointsRequest(vertices=(_v(("3", "1")),))
+            EnumerateLatticePointsRequest(vertices=(_v((3, 1)),))
         )
         assert result.point_count == 1
 
@@ -653,14 +643,14 @@ class TestFacetGeometryComputedOnce:
     """The C(n,d) subset enumeration runs once per request, not per phase."""
 
     SQUARE_WITH_EDGE_MIDPOINTS = (
-        _v(("0", "1"), ("0", "1")),
-        _v(("1", "1"), ("0", "1")),
-        _v(("2", "1"), ("0", "1")),
-        _v(("2", "1"), ("1", "1")),
-        _v(("2", "1"), ("2", "1")),
-        _v(("1", "1"), ("2", "1")),
-        _v(("0", "1"), ("2", "1")),
-        _v(("0", "1"), ("1", "1")),
+        _v((0, 1), (0, 1)),
+        _v((1, 1), (0, 1)),
+        _v((2, 1), (0, 1)),
+        _v((2, 1), (1, 1)),
+        _v((2, 1), (2, 1)),
+        _v((1, 1), (2, 1)),
+        _v((0, 1), (2, 1)),
+        _v((0, 1), (1, 1)),
     )
 
     def _count_facet_passes(self, monkeypatch: pytest.MonkeyPatch) -> list[int]:
@@ -739,10 +729,10 @@ class TestTightBoundingBox:
             LatticePolytopeRequest(
                 vertices=(
                     _v(
-                        ("1", "2"),
+                        (1, 2),
                     ),
                     _v(
-                        ("19999", "2"),
+                        (19999, 2),
                     ),
                 ),
             )
@@ -756,10 +746,10 @@ class TestTightBoundingBox:
             LatticePolytopeRequest(
                 vertices=(
                     _v(
-                        ("1", "2"),
+                        (1, 2),
                     ),
                     _v(
-                        ("3", "4"),
+                        (3, 4),
                     ),
                 ),
             )
@@ -776,8 +766,8 @@ class TestBoundedEmptyHalfspacePolytopes:
     """
 
     EMPTY_INTERVAL = (
-        _hs((("1", "1"),), ("0", "1")),  #  x <= 0
-        _hs((("-1", "1"),), ("-1", "1")),  # -x <= -1, i.e. x >= 1
+        _hs(((1, 1),), (0, 1)),  #  x <= 0
+        _hs(((-1, 1),), (-1, 1)),  # -x <= -1, i.e. x >= 1
     )
 
     def test_reviewer_bounded_empty_interval_counts_zero(self) -> None:
@@ -801,10 +791,10 @@ class TestBoundedEmptyHalfspacePolytopes:
         # x <= -1 with x >= 2 and 0 <= y <= 0: positively spanning
         # normals, trivial recession cone, no feasible point in 2-D.
         square = (
-            _hs((("1", "1"), ("0", "1")), ("-1", "1")),
-            _hs((("-1", "1"), ("0", "1")), ("-2", "1")),
-            _hs((("0", "1"), ("1", "1")), ("0", "1")),
-            _hs((("0", "1"), ("-1", "1")), ("0", "1")),
+            _hs(((1, 1), (0, 1)), (-1, 1)),
+            _hs(((-1, 1), (0, 1)), (-2, 1)),
+            _hs(((0, 1), (1, 1)), (0, 1)),
+            _hs(((0, 1), (-1, 1)), (0, 1)),
         )
         counted = count_lattice_points(LatticePolytopeRequest(halfspaces=square))
         assert counted.point_count == 0
@@ -815,7 +805,7 @@ class TestBoundedEmptyHalfspacePolytopes:
         assert enumerated.points == ()
 
     def test_unbounded_representation_still_rejected(self) -> None:
-        request = LatticePolytopeRequest(halfspaces=(_hs((("1", "1"),), ("0", "1")),))
+        request = LatticePolytopeRequest(halfspaces=(_hs(((1, 1),), (0, 1)),))
         with pytest.raises(OperationDomainValidationError, match="unbounded"):
             count_lattice_points(request)
 
@@ -884,8 +874,8 @@ class TestReviewRegressions:
 
         request = LatticePolytopeRequest(
             halfspaces=(
-                _hs((("1", "1"), ("0", "1")), ("0", "1")),
-                _hs((("-1", "1"), ("0", "1")), ("-1", "1")),
+                _hs(((1, 1), (0, 1)), (0, 1)),
+                _hs(((-1, 1), (0, 1)), (-1, 1)),
             )
         )
         geometry = _facets_and_box(
@@ -899,9 +889,7 @@ class TestReviewRegressions:
     def test_feasible_unbounded_lineality_system_still_rejected(self) -> None:
         """A feasible vertex-free system with lineality stays rejected."""
 
-        request = LatticePolytopeRequest(
-            halfspaces=(_hs((("1", "1"), ("0", "1")), ("0", "1")),)
-        )
+        request = LatticePolytopeRequest(halfspaces=(_hs(((1, 1), (0, 1)), (0, 1)),))
         with pytest.raises(ValueError, match="unbounded"):
             count_lattice_points(request)
 
@@ -921,7 +909,7 @@ class TestReviewRegressions:
 class TestSecondWaveRegressions:
     def test_feasibility_probe_uses_unrestricted_coordinates(self) -> None:
         """x <= -1 is unbounded, not empty: the probe must not assume x >= 0."""
-        request = LatticePolytopeRequest(halfspaces=(_hs((("-1", "1"),), ("-1", "1")),))
+        request = LatticePolytopeRequest(halfspaces=(_hs(((-1, 1),), (-1, 1)),))
         with pytest.raises(ValueError, match="unbounded"):
             count_lattice_points(request)
 
@@ -932,16 +920,16 @@ class TestSecondWaveRegressions:
                 "vertices": [
                     {
                         "coordinates": [
-                            {"num": a, "den": "1"},
-                            {"num": b, "den": "1"},
-                            {"num": c, "den": "3"},
+                            {"num": a, "den": 1},
+                            {"num": b, "den": 1},
+                            {"num": c, "den": 3},
                         ]
                     }
                     for a, b, c in (
-                        ("0", "0", "1"),
-                        ("9999", "0", "1"),
-                        ("0", "9999", "1"),
-                        ("9999", "9999", "2"),
+                        (0, 0, 1),
+                        (9999, 0, 1),
+                        (0, 9999, 1),
+                        (9999, 9999, 2),
                     )
                 ]
             }
@@ -957,12 +945,12 @@ class TestSecondWaveRegressions:
         yet the solved vertex coordinate exceeds it; admission must reject
         before an accepted request fails while constructing LatticePoint.
         """
-        small_den = "1" + "0" * 10000  # 10^10000, 10,001 digits
-        big_offset = "1" + "0" * 25000  # 10^25000, 25,001 digits
+        small_den = 10**10000  # 10^10000, 10,001 digits
+        big_offset = 10**25000  # 10^25000, 25,001 digits
         request = LatticePolytopeRequest(
             halfspaces=(
-                _hs((("1", small_den),), (big_offset, "1")),
-                _hs((("-1", small_den),), ("-" + big_offset, "1")),
+                _hs(((1, small_den),), (big_offset, 1)),
+                _hs(((-1, small_den),), (-big_offset, 1)),
             )
         )
         with pytest.raises(ValueError, match="representable bound"):
@@ -994,16 +982,16 @@ class TestSecondWaveRegressions:
         ), h_schema
 
 
-BOUNDARY_COORDINATE = "1" + "0" * 32_767
+BOUNDARY_COORDINATE = 10**32_767
 
 
 def _singleton_halfspaces(*, negative: bool) -> tuple[Halfspace, ...]:
     """Pin x to ±10^32767 with matching upper and lower half-spaces."""
-    upper = ("-" + BOUNDARY_COORDINATE) if negative else BOUNDARY_COORDINATE
-    lower = BOUNDARY_COORDINATE if negative else "-" + BOUNDARY_COORDINATE
+    upper = (-BOUNDARY_COORDINATE) if negative else BOUNDARY_COORDINATE
+    lower = BOUNDARY_COORDINATE if negative else -BOUNDARY_COORDINATE
     return (
-        _hs((("1", "1"),), (upper, "1")),
-        _hs((("-1", "1"),), (lower, "1")),
+        _hs(((1, 1),), (upper, 1)),
+        _hs(((-1, 1),), (lower, 1)),
     )
 
 
@@ -1029,9 +1017,12 @@ class TestDerivedCoordinateSignBoundary:
             )
         )
         assert result.point_count == 1
-        assert result.points[0].coordinates == ("-" + BOUNDARY_COORDINATE,)
+        assert result.points[0].coordinates == (-(10**32_767),)
         # The returned coordinate satisfies the same magnitude convention.
-        assert len(result.points[0].coordinates[0].lstrip("-")) == COORDINATE_DIGITS
+        assert (
+            len(format_canonical_integer(result.points[0].coordinates[0]).lstrip("-"))
+            == COORDINATE_DIGITS
+        )
 
     @pytest.mark.scale
     def test_positive_boundary_singleton_is_admitted_symmetrically(self) -> None:
@@ -1042,7 +1033,7 @@ class TestDerivedCoordinateSignBoundary:
         enumerated = enumerate_lattice_points(
             EnumerateLatticePointsRequest.model_validate(request.model_dump())
         )
-        assert enumerated.points[0].coordinates == (BOUNDARY_COORDINATE,)
+        assert enumerated.points[0].coordinates == (10**32_767,)
 
     @pytest.mark.scale
     @pytest.mark.parametrize("negative", [False, True])
@@ -1051,14 +1042,14 @@ class TestDerivedCoordinateSignBoundary:
     ) -> None:
         """x/10^10000 <= ±10^25000 pins x = ±10^35000: beyond the canonical
         representable magnitude regardless of sign, so admission rejects."""
-        small_den = "1" + "0" * 10000
-        big_offset = "1" + "0" * 25000
-        upper = ("-" + big_offset) if negative else big_offset
-        lower = big_offset if negative else "-" + big_offset
+        small_den = 10**10000
+        big_offset = 10**25000
+        upper = (-big_offset) if negative else big_offset
+        lower = big_offset if negative else -big_offset
         request = LatticePolytopeRequest(
             halfspaces=(
-                _hs((("1", small_den),), (upper, "1")),
-                _hs((("-1", small_den),), (lower, "1")),
+                _hs(((1, small_den),), (upper, 1)),
+                _hs(((-1, small_den),), (lower, 1)),
             )
         )
         with pytest.raises(ValueError, match="representable bound"):
@@ -1067,36 +1058,36 @@ class TestDerivedCoordinateSignBoundary:
 
 UNIT_SQUARE_4D_SIDES = (
     _hs(
-        (("1", "1"), ("0", "1"), ("0", "1"), ("0", "1")),
-        ("1", "1"),
+        ((1, 1), (0, 1), (0, 1), (0, 1)),
+        (1, 1),
     ),
     _hs(
-        (("-1", "1"), ("0", "1"), ("0", "1"), ("0", "1")),
-        ("0", "1"),
+        ((-1, 1), (0, 1), (0, 1), (0, 1)),
+        (0, 1),
     ),
     _hs(
-        (("0", "1"), ("1", "1"), ("0", "1"), ("0", "1")),
-        ("1", "1"),
+        ((0, 1), (1, 1), (0, 1), (0, 1)),
+        (1, 1),
     ),
     _hs(
-        (("0", "1"), ("-1", "1"), ("0", "1"), ("0", "1")),
-        ("0", "1"),
+        ((0, 1), (-1, 1), (0, 1), (0, 1)),
+        (0, 1),
     ),
     _hs(
-        (("0", "1"), ("0", "1"), ("1", "1"), ("0", "1")),
-        ("1", "1"),
+        ((0, 1), (0, 1), (1, 1), (0, 1)),
+        (1, 1),
     ),
     _hs(
-        (("0", "1"), ("0", "1"), ("-1", "1"), ("0", "1")),
-        ("0", "1"),
+        ((0, 1), (0, 1), (-1, 1), (0, 1)),
+        (0, 1),
     ),
     _hs(
-        (("0", "1"), ("0", "1"), ("0", "1"), ("1", "1")),
-        ("1", "1"),
+        ((0, 1), (0, 1), (0, 1), (1, 1)),
+        (1, 1),
     ),
     _hs(
-        (("0", "1"), ("0", "1"), ("0", "1"), ("-1", "1")),
-        ("0", "1"),
+        ((0, 1), (0, 1), (0, 1), (-1, 1)),
+        (0, 1),
     ),
 )
 
@@ -1140,10 +1131,10 @@ class TestThirdWaveRegressions:
         bounded with positively spanning normals, so it is admitted and
         counts its two endpoints."""
         segment = (
-            _hs((("1", "1"), ("0", "1")), ("0", "1")),
-            _hs((("-1", "1"), ("0", "1")), ("0", "1")),
-            _hs((("0", "1"), ("1", "1")), ("1", "1")),
-            _hs((("0", "1"), ("-1", "1")), ("0", "1")),
+            _hs(((1, 1), (0, 1)), (0, 1)),
+            _hs(((-1, 1), (0, 1)), (0, 1)),
+            _hs(((0, 1), (1, 1)), (1, 1)),
+            _hs(((0, 1), (-1, 1)), (0, 1)),
         )
         result = count_lattice_points(LatticePolytopeRequest(halfspaces=segment))
         assert result.point_count == 2
@@ -1202,8 +1193,8 @@ class TestThirdWaveRegressions:
         # 6 raw rows collapse onto the 4 primitive constraints.
         sides = (
             *UNIT_SQUARE_H,
-            _hs((("2", "1"), ("0", "1")), ("2", "1")),  # 2x <= 2 == x <= 1
-            _hs((("0", "1"), ("-3", "1")), ("0", "1")),  # -3y <= 0 == -y <= 0
+            _hs(((2, 1), (0, 1)), (2, 1)),  # 2x <= 2 == x <= 1
+            _hs(((0, 1), (-3, 1)), (0, 1)),  # -3y <= 0 == -y <= 0
         )
         request = LatticePolytopeRequest(halfspaces=sides)
         assert seen_sizes == []

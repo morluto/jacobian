@@ -16,6 +16,7 @@ from pydantic import ConfigDict, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -33,6 +34,13 @@ from jacobian.process import (
     run_bounded_process,
     worker_environment,
 )
+
+
+def _decimal_digits(value: int) -> int:
+    """Count decimal digits without Python's 4300-digit string guard."""
+
+    return len(format_canonical_integer(abs(value)))
+
 
 _MAX_CORE_ASSERTIONS = 512
 _MAX_CORE_TOKENS = 32_768
@@ -773,7 +781,9 @@ def _multiplied_envelope(
     pairs = _product_pairs(tuple(envelope.pairs for envelope in envelopes))
     common_denominator = _pairs_common_denominator(pairs)
     if common_denominator is not None:
-        denominator_digits = min(denominator_digits, len(str(common_denominator)))
+        denominator_digits = min(
+            denominator_digits, _decimal_digits(common_denominator)
+        )
     if validate_budget:
         _require_bounded_coefficient_digit_budget(
             numerator_digits,
@@ -817,15 +827,19 @@ def _divided_envelope(
     """Divide one envelope by a closed nonzero constant, SMT-LIB div included."""
 
     scaled = dividend.height / abs(divisor)
-    numerator_digits = dividend.numerator_digits + len(str(divisor.denominator))
-    denominator_digits = dividend.denominator_digits + len(str(abs(divisor.numerator)))
+    numerator_digits = dividend.numerator_digits + _decimal_digits(divisor.denominator)
+    denominator_digits = dividend.denominator_digits + _decimal_digits(
+        divisor.numerator
+    )
     if not exact:
         scaled += 1
         numerator_digits += 1
     pairs = _scaled_pairs(Fraction(1) / divisor, dividend.pairs) if exact else None
     common_denominator = _pairs_common_denominator(pairs)
     if common_denominator is not None:
-        denominator_digits = min(denominator_digits, len(str(common_denominator)))
+        denominator_digits = min(
+            denominator_digits, _decimal_digits(common_denominator)
+        )
     _require_bounded_normalized_coefficient(scaled)
     if validate_budget:
         _require_bounded_coefficient_digit_budget(
@@ -855,7 +869,7 @@ def _signed_sum_envelope(
         ),
         default=0,
     )
-    numerator_digits = widest_numerator + len(str(len(envelopes)))
+    numerator_digits = widest_numerator + _decimal_digits(len(envelopes))
     pairs = None
     shared = _shared_denominator_of_pairs(envelopes)
     if shared is not None:
@@ -885,10 +899,10 @@ def _signed_sum_envelope(
             common_denominator = _pairs_common_denominator(pairs)
             if common_denominator is not None:
                 denominator_digits = min(
-                    denominator_digits, len(str(common_denominator))
+                    denominator_digits, _decimal_digits(common_denominator)
                 )
             widest_merged = max(abs((value / shared).numerator) for value in reachable)
-            numerator_digits = min(numerator_digits, len(str(widest_merged)))
+            numerator_digits = min(numerator_digits, _decimal_digits(widest_merged))
     else:
         pairs = None
     if validate_budget:
@@ -941,7 +955,7 @@ def _compared_envelope(
         )
     denominator_digits = min(
         sum(envelope.denominator_digits for envelope in envelopes),
-        len(str(shared)),
+        _decimal_digits(shared),
     )
     lifted_numerator = 0
     for left_index, left in enumerate(envelopes):
@@ -953,7 +967,7 @@ def _compared_envelope(
                         - Fraction(right_numerator, right_denominator)
                     )
                     lifted_numerator = max(lifted_numerator, difference.numerator)
-    numerator_digits = len(str(lifted_numerator))
+    numerator_digits = _decimal_digits(lifted_numerator)
     if validate_budget:
         _require_bounded_coefficient_digit_budget(
             numerator_digits,
@@ -985,8 +999,8 @@ def _maximal_digit_envelope(
 def _closed_value_envelope(value: Fraction) -> _CoefficientEnvelope:
     return _CoefficientEnvelope(
         abs(value),
-        len(str(abs(value.numerator))),
-        len(str(value.denominator)),
+        _decimal_digits(value.numerator),
+        _decimal_digits(value.denominator),
         ((value.numerator, value.denominator),),
     )
 
@@ -999,8 +1013,8 @@ def _affine_form_envelope(
     coefficients = (form[1], *(coefficient for coefficient, _core in form[0]))
     return _CoefficientEnvelope(
         height,
-        max(len(str(abs(value.numerator))) for value in coefficients),
-        max(len(str(value.denominator)) for value in coefficients),
+        max(_decimal_digits(value.numerator) for value in coefficients),
+        max(_decimal_digits(value.denominator) for value in coefficients),
         _capped_pairs({(value.numerator, value.denominator) for value in coefficients}),
     )
 
@@ -1011,17 +1025,25 @@ def _scaled_coefficient_envelope(
 ) -> _CoefficientEnvelope:
     """Validate a scalar against a dependent's budget before scaling it."""
 
-    numerator_digits = len(str(abs(coefficient.numerator))) + envelope.numerator_digits
-    denominator_digits = len(str(coefficient.denominator)) + envelope.denominator_digits
+    numerator_digits = (
+        _decimal_digits(coefficient.numerator) + envelope.numerator_digits
+    )
+    denominator_digits = (
+        _decimal_digits(coefficient.denominator) + envelope.denominator_digits
+    )
     pairs = _scaled_pairs(coefficient, envelope.pairs)
     common_denominator = _pairs_common_denominator(pairs)
     if common_denominator is not None:
-        denominator_digits = min(denominator_digits, len(str(common_denominator)))
+        denominator_digits = min(
+            denominator_digits, _decimal_digits(common_denominator)
+        )
         widest_scaled_numerator = max(
             abs(numerator) for numerator, _denominator in pairs or ()
         )
         if widest_scaled_numerator:
-            numerator_digits = min(numerator_digits, len(str(widest_scaled_numerator)))
+            numerator_digits = min(
+                numerator_digits, _decimal_digits(widest_scaled_numerator)
+            )
     _require_bounded_coefficient_digit_budget(numerator_digits, denominator_digits)
     return _CoefficientEnvelope(
         coefficient * envelope.height,
@@ -1164,7 +1186,7 @@ def _require_bounded_coefficient_digit_budget(
 
 def _require_bounded_normalized_coefficient(value: Fraction) -> None:
     if any(
-        len(str(abs(component))) > _MAX_CORE_NUMERAL_DIGITS
+        abs(component) >= 10**_MAX_CORE_NUMERAL_DIGITS
         for component in (value.numerator, value.denominator)
     ):
         raise _logic_error(

@@ -8,7 +8,6 @@ from math import isqrt, prod
 from time import monotonic
 from typing import Literal
 
-from jacobian.canonical import parse_canonical_integer
 from jacobian.math.number_theory._contiguous_sum_admission import (
     ContiguousSumProfileAdmission,
 )
@@ -113,11 +112,7 @@ def _factored_odd_divisor_count(
     )
     if factors is None:
         return None
-    return prod(
-        factor.power + 1
-        for factor in factors
-        if parse_canonical_integer(factor.prime) % 2
-    )
+    return prod(factor.power + 1 for factor in factors if factor.prime % 2)
 
 
 def run_contiguous_sum_profile(

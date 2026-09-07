@@ -7,8 +7,9 @@ from typing import Annotated, Any, ClassVar, Literal, Self
 from pydantic import Field, WithJsonSchema, field_validator, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger, CanonicalRational
+from jacobian._exact import CanonicalRational, ExactInteger
 from jacobian._models import StrictModel, canonicalize_json_containers
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.matrices.values import (
     MAX_EXACT_LINEAR_MATRIX_AXIS,
     MAX_MATRIX_DIMENSION,
@@ -59,8 +60,12 @@ def _require_raw_scalar_digits(value: object, *, label: str) -> None:
     else:
         components = (value,)
     for component in components:
-        if isinstance(component, (str, int)) and len(str(component).lstrip("-")) > (
-            MAX_INPUT_SCALAR_DIGITS
+        if (
+            isinstance(component, str)
+            and len(component.lstrip("-")) > MAX_INPUT_SCALAR_DIGITS
+        ) or (
+            type(component) is int
+            and len(format_canonical_integer(abs(component))) > MAX_INPUT_SCALAR_DIGITS
         ):
             raise _validation_error(
                 "budget_exceeded",
@@ -211,9 +216,14 @@ def _require_integer_computation_dimensions(matrix: IntegerMatrix) -> None:
 
 
 def _check_integer_digits(
-    value: str, *, maximum: int = MAX_INPUT_SCALAR_DIGITS
+    value: str | int, *, maximum: int = MAX_INPUT_SCALAR_DIGITS
 ) -> None:
-    if len(value.lstrip("-")) > maximum:
+    digits = (
+        len(value.lstrip("-"))
+        if isinstance(value, str)
+        else len(format_canonical_integer(abs(value)))
+    )
+    if digits > maximum:
         raise _validation_error(
             "budget_exceeded", f"matrix scalars are limited to {maximum} decimal digits"
         )
@@ -544,12 +554,12 @@ class MatrixInverseResult(StrictModel):
 
 
 class MatrixTraceResult(StrictModel):
-    trace: CanonicalInteger
+    trace: ExactInteger
     convention: Literal["SUM_OF_DIAGONAL_ENTRIES"] = "SUM_OF_DIAGONAL_ENTRIES"
 
     @field_validator("trace")
     @classmethod
-    def require_bounded_trace(cls, value: CanonicalInteger) -> CanonicalInteger:
+    def require_bounded_trace(cls, value: ExactInteger) -> ExactInteger:
         _check_integer_digits(value, maximum=MAX_MATRIX_SCALAR_DIGITS)
         return value
 

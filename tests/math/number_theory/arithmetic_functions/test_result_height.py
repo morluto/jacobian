@@ -1,6 +1,5 @@
 import pytest
 
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.arithmetic_functions._models import (
     DirichletConvolutionRequest,
@@ -16,7 +15,7 @@ from jacobian.math.number_theory.arithmetic_functions._tools import (
 )
 
 
-def _rational(num: str, den: str = "1") -> dict[str, str]:
+def _rational(num: int, den: int = 1) -> dict[str, int]:
     return {"num": num, "den": den}
 
 
@@ -25,8 +24,8 @@ def test_summatory_rejects_cross_denominator_growth() -> None:
     request = SummatoryFunctionRequest.model_validate(
         {
             "values": [
-                _rational("1", format_canonical_integer(2**power)),
-                _rational("1", format_canonical_integer(5**power)),
+                _rational(1, 2**power),
+                _rational(1, 5**power),
             ]
         }
     )
@@ -38,7 +37,7 @@ def test_summatory_rejects_cross_denominator_growth() -> None:
 
 
 def test_convolution_accounts_for_numerator_products() -> None:
-    large = "1" + "0" * 20_000
+    large = 10**20_000
     request = DirichletConvolutionRequest.model_validate(
         {"f": [_rational(large)], "g": [_rational(large)]}
     )
@@ -54,8 +53,8 @@ def test_mobius_transform_accounts_for_signed_sums() -> None:
     request = MobiusTransformRequest.model_validate(
         {
             "values": [
-                _rational("1", format_canonical_integer(2**power)),
-                _rational("1", format_canonical_integer(5**power)),
+                _rational(1, 2**power),
+                _rational(1, 5**power),
             ]
         }
     )
@@ -67,9 +66,9 @@ def test_mobius_transform_accounts_for_signed_sums() -> None:
 
 
 def test_dirichlet_inverse_propagates_its_recurrence() -> None:
-    denominator = "1" + "0" * 20_000
+    denominator = 10**20_000
     request = DirichletInverseRequest.model_validate(
-        {"values": [_rational("1", denominator), _rational("1")]}
+        {"values": [_rational(1, denominator), _rational(1)]}
     )
     with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_dirichlet_inverse(request)
@@ -81,11 +80,11 @@ def test_dirichlet_inverse_propagates_its_recurrence() -> None:
 @pytest.mark.parametrize(
     "parsed_request",
     [
-        SummatoryFunctionRequest.model_validate({"values": [_rational("1", "2")]}),
-        MobiusTransformRequest.model_validate({"values": [_rational("1", "2")]}),
-        DirichletInverseRequest.model_validate({"values": [_rational("1", "2")]}),
+        SummatoryFunctionRequest.model_validate({"values": [_rational(1, 2)]}),
+        MobiusTransformRequest.model_validate({"values": [_rational(1, 2)]}),
+        DirichletInverseRequest.model_validate({"values": [_rational(1, 2)]}),
         DirichletConvolutionRequest.model_validate(
-            {"f": [_rational("1", "2")], "g": [_rational("1", "3")]}
+            {"f": [_rational(1, 2)], "g": [_rational(1, 3)]}
         ),
     ],
 )

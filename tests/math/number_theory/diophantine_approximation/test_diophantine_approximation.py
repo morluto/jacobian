@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import math
 
 import pytest
 from pydantic import ValidationError
 
-from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.diophantine_approximation import (
     continued_fraction,
@@ -71,8 +71,8 @@ def test_convergents_sqrt_2() -> None:
     assert len(result.convergents) == 5
     nums = [c.numerator for c in result.convergents]
     dens = [c.denominator for c in result.convergents]
-    assert nums == ["1", "3", "7", "17", "41"]
-    assert dens == ["1", "2", "5", "12", "29"]
+    assert nums == [1, 3, 7, 17, 41]
+    assert dens == [1, 2, 5, 12, 29]
 
 
 def test_convergents_repeat_period_beyond_fixed_window() -> None:
@@ -80,32 +80,32 @@ def test_convergents_repeat_period_beyond_fixed_window() -> None:
     result = compute_convergents(ConvergentRequest(discriminant=2, convergent_count=12))
     assert [c.index for c in result.convergents] == list(range(12))
     assert [c.numerator for c in result.convergents] == [
-        "1",
-        "3",
-        "7",
-        "17",
-        "41",
-        "99",
-        "239",
-        "577",
-        "1393",
-        "3363",
-        "8119",
-        "19601",
+        1,
+        3,
+        7,
+        17,
+        41,
+        99,
+        239,
+        577,
+        1393,
+        3363,
+        8119,
+        19601,
     ]
     assert [c.denominator for c in result.convergents] == [
-        "1",
-        "2",
-        "5",
-        "12",
-        "29",
-        "70",
-        "169",
-        "408",
-        "985",
-        "2378",
-        "5741",
-        "13860",
+        1,
+        2,
+        5,
+        12,
+        29,
+        70,
+        169,
+        408,
+        985,
+        2378,
+        5741,
+        13860,
     ]
 
 
@@ -124,81 +124,65 @@ def test_convergents_are_best_approximations() -> None:
         ConvergentRequest(discriminant=discriminant, convergent_count=10)
     )
     for conv in result.convergents:
-        p = parse_canonical_integer(conv.numerator)
-        q = parse_canonical_integer(conv.denominator)
+        p = conv.numerator
+        q = conv.denominator
         assert abs(p**2 - discriminant * q**2) < 2 * math.sqrt(discriminant)
 
 
 def test_pell_equation_sqrt_2() -> None:
     """x^2 - 2*y^2 = 1 has fundamental solution (3, 2)."""
     result = compute_pell_equation(PellEquationRequest(discriminant=2))
-    assert result.x == "3"
-    assert result.y == "2"
-    assert (
-        parse_canonical_integer(result.x) ** 2
-        - 2 * parse_canonical_integer(result.y) ** 2
-        == 1
-    )
+    assert result.x == 3
+    assert result.y == 2
+    assert result.x**2 - 2 * result.y**2 == 1
 
 
 def test_pell_equation_sqrt_3() -> None:
     """x^2 - 3*y^2 = 1 has fundamental solution (2, 1)."""
     result = compute_pell_equation(PellEquationRequest(discriminant=3))
-    assert result.x == "2"
-    assert result.y == "1"
-    assert (
-        parse_canonical_integer(result.x) ** 2
-        - 3 * parse_canonical_integer(result.y) ** 2
-        == 1
-    )
+    assert result.x == 2
+    assert result.y == 1
+    assert result.x**2 - 3 * result.y**2 == 1
 
 
 def test_pell_equation_sqrt_5() -> None:
     """x^2 - 5*y^2 = 1 has fundamental solution (9, 4)."""
     result = compute_pell_equation(PellEquationRequest(discriminant=5))
-    assert result.x == "9"
-    assert result.y == "4"
-    assert (
-        parse_canonical_integer(result.x) ** 2
-        - 5 * parse_canonical_integer(result.y) ** 2
-        == 1
-    )
+    assert result.x == 9
+    assert result.y == 4
+    assert result.x**2 - 5 * result.y**2 == 1
 
 
 def test_pell_equation_sqrt_13() -> None:
     """x^2 - 13*y^2 = 1 has fundamental solution (649, 180)."""
     result = compute_pell_equation(PellEquationRequest(discriminant=13))
-    assert result.x == "649"
-    assert result.y == "180"
-    assert (
-        parse_canonical_integer(result.x) ** 2
-        - 13 * parse_canonical_integer(result.y) ** 2
-        == 1
-    )
+    assert result.x == 649
+    assert result.y == 180
+    assert result.x**2 - 13 * result.y**2 == 1
 
 
 def test_pell_equation_all_verified() -> None:
     """Every Pell solution satisfies x^2 - D*y^2 = 1."""
     for discriminant in [2, 3, 5, 7, 11, 13, 17, 19, 23, 29]:
         result = compute_pell_equation(PellEquationRequest(discriminant=discriminant))
-        x = parse_canonical_integer(result.x)
-        y = parse_canonical_integer(result.y)
+        x = result.x
+        y = result.y
         assert x**2 - discriminant * y**2 == 1
 
 
 def test_pell_equation_large_discriminant() -> None:
     """The derived period bound reaches a large fundamental solution exactly."""
     result = compute_pell_equation(PellEquationRequest(discriminant=991))
-    x = parse_canonical_integer(result.x)
-    y = parse_canonical_integer(result.y)
+    x = result.x
+    y = result.y
     assert x**2 - 991 * y**2 == 1
 
 
 def test_pell_equation_long_period() -> None:
     """The longest period below the bound still reaches the fundamental solution."""
     result = compute_pell_equation(PellEquationRequest(discriminant=9949))
-    x = parse_canonical_integer(result.x)
-    y = parse_canonical_integer(result.y)
+    x = result.x
+    y = result.y
     assert x**2 - 9949 * y**2 == 1
 
 
@@ -239,10 +223,10 @@ def test_public_kernels_return_typed_values() -> None:
     assert [
         (value.index, value.numerator, value.denominator)
         for value in values.convergents
-    ] == [(0, "1", "1"), (1, "3", "2"), (2, "7", "5")]
+    ] == [(0, 1, 1), (1, 3, 2), (2, 7, 5)]
 
     pell = solve_pell(2)
-    assert (pell.x, pell.y) == ("3", "2")
+    assert (pell.x, pell.y) == (3, 2)
 
 
 # ---------------------------------------------------------------------------
@@ -339,17 +323,14 @@ def test_convergent_result_replays_recurrence_and_determinant() -> None:
 
     result = compute_convergents(ConvergentRequest(discriminant=2, convergent_count=6))
     assert [(c.index, c.numerator, c.denominator) for c in result.convergents] == [
-        (0, "1", "1"),
-        (1, "3", "2"),
-        (2, "7", "5"),
-        (3, "17", "12"),
-        (4, "41", "29"),
-        (5, "99", "70"),
+        (0, 1, 1),
+        (1, 3, 2),
+        (2, 7, 5),
+        (3, 17, 12),
+        (4, 41, 29),
+        (5, 99, 70),
     ]
-    parsed = [
-        (parse_canonical_integer(c.numerator), parse_canonical_integer(c.denominator))
-        for c in result.convergents
-    ]
+    parsed = [(c.numerator, c.denominator) for c in result.convergents]
     for n in range(1, len(parsed)):
         p_n, q_n = parsed[n]
         p_prev, q_prev = parsed[n - 1]
@@ -359,10 +340,7 @@ def test_convergent_result_replays_recurrence_and_determinant() -> None:
     assert parsed_result == result
 
     sqrt3 = compute_convergents(ConvergentRequest(discriminant=3, convergent_count=4))
-    parsed3 = [
-        (parse_canonical_integer(c.numerator), parse_canonical_integer(c.denominator))
-        for c in sqrt3.convergents
-    ]
+    parsed3 = [(c.numerator, c.denominator) for c in sqrt3.convergents]
     assert parsed3[:2] == [(1, 1), (2, 1)]
 
 
@@ -376,7 +354,7 @@ def test_convergent_result_rejects_mutations() -> None:
         ConvergentResult(
             discriminant=2,
             convergent_count=1,
-            convergents=(ConvergentValue(index=77, numerator="0", denominator="0"),),
+            convergents=(ConvergentValue(index=77, numerator=0, denominator=0),),
         )
     assert (
         exc_info.value.errors()[0]["type"]
@@ -415,21 +393,15 @@ def test_convergent_result_rejects_oversized_components_before_bigint_work() -> 
     long_numerator["convergents"] = [dict(item) for item in result["convergents"]]
     long_numerator["convergents"][3]["numerator"] = "9" * 100_000
     with pytest.raises(ValidationError) as exc_info:
-        ConvergentResult.model_validate(long_numerator)
-    assert (
-        exc_info.value.errors()[0]["type"]
-        == "diophantine_approximation.component_digit_bound_exceeded"
-    )
+        ConvergentResult.model_validate_json(json.dumps(long_numerator))
+    assert exc_info.value.errors()[0]["type"] == "string_type"
 
     long_denominator = dict(result)
     long_denominator["convergents"] = [dict(item) for item in result["convergents"]]
     long_denominator["convergents"][3]["denominator"] = "7" * 100_000
     with pytest.raises(ValidationError) as exc_info:
-        ConvergentResult.model_validate(long_denominator)
-    assert (
-        exc_info.value.errors()[0]["type"]
-        == "diophantine_approximation.component_digit_bound_exceeded"
-    )
+        ConvergentResult.model_validate_json(json.dumps(long_denominator))
+    assert exc_info.value.errors()[0]["type"] == "string_type"
 
 
 def test_convergent_digit_bound_admits_full_envelope() -> None:
@@ -443,7 +415,7 @@ def test_convergent_digit_bound_admits_full_envelope() -> None:
     )
     assert ConvergentResult.model_validate(result.model_dump()) == result
     widest = max(
-        max(len(c.numerator.lstrip("-")), len(c.denominator.lstrip("-")))
+        max(len(str(abs(c.numerator))), len(str(abs(c.denominator))))
         for c in result.convergents
     )
     assert widest > 100
@@ -464,8 +436,5 @@ def test_producer_to_convergent_composition() -> None:
         p_prev2, p_prev1 = p_prev1, coefficient * p_prev1 + p_prev2
         q_prev2, q_prev1 = q_prev1, coefficient * q_prev1 + q_prev2
         replayed.append((p_prev1, q_prev1))
-    claimed = [
-        (parse_canonical_integer(c.numerator), parse_canonical_integer(c.denominator))
-        for c in convs.convergents
-    ]
+    claimed = [(c.numerator, c.denominator) for c in convs.convergents]
     assert claimed == replayed

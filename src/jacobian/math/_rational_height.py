@@ -6,6 +6,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from jacobian._exact import CanonicalRational
+from jacobian.canonical import format_canonical_integer
 
 
 @dataclass(frozen=True)
@@ -17,7 +18,10 @@ class RationalHeight:
 
     @classmethod
     def from_canonical(cls, value: CanonicalRational) -> RationalHeight:
-        return cls(len(value.num.lstrip("-")), len(value.den))
+        return cls(
+            len(format_canonical_integer(abs(value.num))),
+            len(format_canonical_integer(value.den)),
+        )
 
     def product(self, other: RationalHeight) -> RationalHeight:
         return RationalHeight(

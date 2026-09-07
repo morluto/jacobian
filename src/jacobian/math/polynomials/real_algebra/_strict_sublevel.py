@@ -96,7 +96,7 @@ def _empty_payload() -> StrictSublevelPayload:
     return StrictSublevelPayload(
         components=(),
         measure=SourceBoundAlgebraicMeasure(
-            rational_part=CanonicalRational(num="0", den="1")
+            rational_part=CanonicalRational(num=0, den=1)
         ),
     )
 

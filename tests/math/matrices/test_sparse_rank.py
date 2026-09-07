@@ -326,8 +326,8 @@ def test_sparse_rank_rejects_above_the_intermediate_height_bound() -> None:
 @pytest.mark.scale
 def test_sparse_rank_accepts_the_structurally_bounded_source() -> None:
     value = CanonicalRational(
-        num="1" + "0" * (MAX_INPUT_SCALAR_DIGITS - 1),
-        den="9" * MAX_INPUT_SCALAR_DIGITS,
+        num=10 ** (MAX_INPUT_SCALAR_DIGITS - 1),
+        den=10**MAX_INPUT_SCALAR_DIGITS - 1,
     )
     matrix = SparseRationalMatrix(
         row_count=4,

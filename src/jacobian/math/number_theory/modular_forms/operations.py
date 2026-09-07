@@ -6,7 +6,6 @@ from fractions import Fraction
 from typing import Literal, cast
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import format_canonical_integer
 from jacobian.math.number_theory.modular_forms.kernel import (
     NamedLevelOneModularForm,
     eisenstein_coefficients,
@@ -24,8 +23,8 @@ def _series(coefficients: tuple[Fraction, ...]) -> TruncatedSeries:
         truncation_order=len(coefficients),
         coefficients=tuple(
             CanonicalRational(
-                num=format_canonical_integer(coefficient.numerator),
-                den=format_canonical_integer(coefficient.denominator),
+                num=coefficient.numerator,
+                den=coefficient.denominator,
             )
             for coefficient in coefficients
         ),

@@ -10,14 +10,17 @@ from typing import Annotated, Any, Literal, Self
 from pydantic import Field, StrictInt, ValidateAs, WithJsonSchema, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger, CanonicalRational
+from jacobian._exact import CanonicalRational, DecimalIntegerEncoding
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import parse_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 
 MAX_COMPLEX_ALGEBRAIC_DEGREE = 8
 MAX_COMPLEX_ALGEBRAIC_COEFFICIENT_DIGITS = 1_000
 MAX_COMPLEX_ISOLATOR_COMPONENT_DIGITS = 4_096
+ComplexAlgebraicInteger = Annotated[
+    int, DecimalIntegerEncoding(max_digits=MAX_COMPLEX_ALGEBRAIC_COEFFICIENT_DIGITS)
+]
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -25,13 +28,13 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 
 
 def _integer_coefficients(
-    coefficients: Sequence[CanonicalInteger],
+    coefficients: Sequence[int],
 ) -> tuple[int, ...]:
-    return tuple(parse_canonical_integer(coefficient) for coefficient in coefficients)
+    return tuple(coefficients)
 
 
 def algebraic_root_separation_denominator_bound(
-    coefficients: Sequence[CanonicalInteger],
+    coefficients: Sequence[int],
 ) -> int:
     """Return ``B`` such that distinct roots have distance greater than ``1/B``.
 
@@ -81,7 +84,7 @@ def _real_part_elimination_polynomial(
 
 
 def algebraic_real_part_separation_denominator_bound(
-    coefficients: Sequence[CanonicalInteger],
+    coefficients: Sequence[int],
 ) -> int:
     """Bound separation between distinct real coordinates of roots of ``f``."""
 
@@ -96,7 +99,7 @@ def algebraic_real_part_separation_denominator_bound(
 
 
 def algebraic_root_magnitude_numerator_bound(
-    coefficients: Sequence[CanonicalInteger],
+    coefficients: Sequence[int],
 ) -> int:
     """Return an integer strictly above every root magnitude (Cauchy's bound)."""
 
@@ -107,7 +110,7 @@ def algebraic_root_magnitude_numerator_bound(
 
 
 def complex_isolator_component_digit_bound(
-    coefficients: Sequence[CanonicalInteger],
+    coefficients: Sequence[int],
 ) -> int:
     """Bound decimal component digits of the dyadic evidence constructed here."""
 
@@ -163,8 +166,10 @@ class RationalComplexIsolatingRectangle(StrictModel):
     @model_validator(mode="after")
     def require_nonempty_rectangle(self) -> Self:
         if any(
-            len(component.num.lstrip("-")) > MAX_COMPLEX_ISOLATOR_COMPONENT_DIGITS
-            or len(component.den) > MAX_COMPLEX_ISOLATOR_COMPONENT_DIGITS
+            len(format_canonical_integer(abs(component.num)))
+            > MAX_COMPLEX_ISOLATOR_COMPONENT_DIGITS
+            or len(format_canonical_integer(abs(component.den)))
+            > MAX_COMPLEX_ISOLATOR_COMPONENT_DIGITS
             for component in (
                 self.real_lower,
                 self.real_upper,
@@ -220,7 +225,7 @@ class _ComplexAlgebraicValueShape(StrictModel):
     irreducibility and that the index selects a nonreal root.
     """
 
-    polynomial: tuple[CanonicalInteger, ...] = Field(
+    polynomial: tuple[ComplexAlgebraicInteger, ...] = Field(
         min_length=2,
         max_length=MAX_COMPLEX_ALGEBRAIC_DEGREE + 1,
         description=(
@@ -289,7 +294,7 @@ class ComplexAlgebraicValue(_ComplexAlgebraicValueShape):
     def _from_admitted_polynomial(
         cls,
         *,
-        polynomial: tuple[CanonicalInteger, ...],
+        polynomial: tuple[ComplexAlgebraicInteger, ...],
         root_index: int,
     ) -> ComplexAlgebraicValue:
         """Construct after an owner has admitted the canonical polynomial/root."""
@@ -306,7 +311,7 @@ def require_primitive_complex_algebraic_value(
 
     content = 0
     for coefficient in value.polynomial:
-        content = gcd(content, abs(parse_canonical_integer(coefficient)))
+        content = gcd(content, abs(coefficient))
     if content != 1:
         raise OperationDomainValidationError(
             location=location,

@@ -8,7 +8,7 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
-    CanonicalInteger,
+    ExactInteger,
     require_bounded_rational,
 )
 from jacobian._models import StrictModel
@@ -223,23 +223,12 @@ class LatticePolytopeRequest(StrictModel):
 class LatticePoint(StrictModel):
     """One lattice point, as a tuple of canonical integers."""
 
-    coordinates: tuple[CanonicalInteger, ...] = Field(
+    coordinates: tuple[ExactInteger, ...] = Field(
         min_length=1, max_length=MAX_DIMENSION
     )
 
-    @model_validator(mode="after")
-    def require_coordinate_digit_bound(self) -> Self:
-        for coordinate in self.coordinates:
-            if len(coordinate.lstrip("-")) > COORDINATE_DIGITS:
-                raise _validation_error(
-                    "lattice_point_coordinate_digit_bound",
-                    "lattice-point coordinate exceeds the "
-                    f"{COORDINATE_DIGITS}-digit bound",
-                )
-        return self
-
     @classmethod
-    def _from_kernel(cls, coordinates: tuple[CanonicalInteger, ...]) -> Self:
+    def _from_kernel(cls, coordinates: tuple[ExactInteger, ...]) -> Self:
         """Construct a lattice point from trusted canonical kernel output."""
         return cls.model_construct(coordinates=coordinates)
 

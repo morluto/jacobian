@@ -7,7 +7,6 @@ from typing import Self
 from pydantic import ConfigDict, Field, StrictInt, model_validator
 
 from jacobian._models import StrictModel
-from jacobian.canonical import parse_canonical_integer
 from jacobian.math.number_theory._models import (
     MAX_INTEGER_DIGITS,
     BoundedInteger,
@@ -59,8 +58,8 @@ class KSigmaPreimageResult(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_fiber_shape(self) -> Self:
-        target = parse_canonical_integer(self.target_value)
-        values = tuple(parse_canonical_integer(value) for value in self.preimages)
+        target = self.target_value
+        values = self.preimages
         if not 1 <= target <= MAX_KSIGMA_TARGET:
             raise _validation_error(
                 "ksigma_target_bound",
@@ -88,13 +87,13 @@ class KSigmaPreimageResult(StrictModel):
         cls,
         *,
         k: int,
-        target_value: BoundedInteger,
+        target_value: int,
         preimages: tuple[int, ...],
     ) -> Self:
         return cls.model_construct(
             k=k,
             target_value=target_value,
-            preimages=tuple(str(value) for value in preimages),
+            preimages=preimages,
             count=len(preimages),
         )
 
@@ -145,7 +144,7 @@ class PAdicIntervalProfileRow(StrictModel):
 
     @model_validator(mode="after")
     def require_positive_count(self) -> Self:
-        if parse_canonical_integer(self.count) < 1:
+        if self.count < 1:
             raise _validation_error(
                 "p_adic_interval_profile_count_must_be_positive",
                 "profile row counts must be positive",
@@ -167,8 +166,8 @@ class PAdicIntervalProfileResult(StrictModel):
 
     @model_validator(mode="after")
     def require_profile_shape(self) -> Self:
-        start = parse_canonical_integer(self.start)
-        length = parse_canonical_integer(self.length)
+        start = self.start
+        length = self.length
         if start < 0 or length < 1:
             raise _validation_error(
                 "p_adic_interval_profile_source_shape",
@@ -190,13 +189,13 @@ class PAdicIntervalProfileResult(StrictModel):
                 "p_adic_interval_profile_maximum_mismatch",
                 "an empty profile must have maximum_valuation zero",
             )
-        counts = tuple(parse_canonical_integer(row.count) for row in self.rows)
+        counts = tuple(row.count for row in self.rows)
         if sum(counts) != length:
             raise _validation_error(
                 "p_adic_interval_profile_count_sum_mismatch",
                 "profile row counts must sum to length",
             )
-        total_valuation = parse_canonical_integer(self.total_valuation)
+        total_valuation = self.total_valuation
         if total_valuation < 0:
             raise _validation_error(
                 "p_adic_interval_profile_total_must_be_nonnegative",
@@ -215,9 +214,9 @@ class PAdicIntervalProfileResult(StrictModel):
     def _from_kernel(
         cls,
         *,
-        start: BoundedInteger,
-        length: BoundedInteger,
-        prime: BoundedInteger,
+        start: int,
+        length: int,
+        prime: int,
         rows: tuple[PAdicIntervalProfileRow, ...],
         total_valuation: int,
         maximum_valuation: int,
@@ -227,7 +226,7 @@ class PAdicIntervalProfileResult(StrictModel):
             length=length,
             prime=prime,
             rows=rows,
-            total_valuation=str(total_valuation),
+            total_valuation=total_valuation,
             maximum_valuation=maximum_valuation,
         )
 

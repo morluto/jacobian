@@ -43,6 +43,9 @@ def require_independent_basis(subspace: FiniteDimensionalSubspace) -> None:
     The structural carrier bounds the flattened matrix by 256^2 cells and
     the number of basis vectors by 256; elimination is bounded by 256^3.
     """
+    if not subspace.basis:
+        return
+
     from flint import nmod_mat
 
     flattened = [

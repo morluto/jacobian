@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 import pytest
@@ -23,10 +24,12 @@ from jacobian.math.combinatorics._sidon_extension_models import (
 )
 
 
-def _extension(source: list[str], candidates: list[str]) -> SidonExtensionProfileResult:
+def _extension(
+    source: Sequence[int | str], candidates: Sequence[int | str]
+) -> SidonExtensionProfileResult:
     request = SidonExtensionProfileRequest(
-        source_elements=tuple(source),
-        candidate_elements=tuple(candidates),
+        source_elements=tuple(int(value) for value in source),
+        candidate_elements=tuple(int(value) for value in candidates),
     )
     return compute_sidon_extension_profile(request)
 
@@ -57,9 +60,9 @@ class TestSidonExtensionProfile:
     def test_basic_fixture(self) -> None:
         """With A={1,2}: candidate 3 fails (diff 1 repeats), candidate 4 succeeds."""
         result = _extension(["1", "2"], ["3", "4"])
-        assert result.admissible == ("4",)
+        assert result.admissible == (4,)
         assert len(result.rejected) == 1
-        assert result.rejected[0].candidate == "3"
+        assert result.rejected[0].candidate == 3
         assert not result.rejected[0].is_admissible
 
     def test_all_candidates_admissible(self) -> None:
@@ -73,7 +76,7 @@ class TestSidonExtensionProfile:
         result = _extension(["1", "2", "5"], ["3"])
         assert len(result.admissible) == 0
         assert len(result.rejected) == 1
-        assert result.rejected[0].candidate == "3"
+        assert result.rejected[0].candidate == 3
 
     def test_empty_candidates(self) -> None:
         """No candidates means no admissible and no rejected."""
@@ -118,7 +121,7 @@ class TestSidonExtensionProfile:
         """A 33-element source is admitted when its actual work is small."""
         source = [str(2**index) for index in range(33)]
         result = _extension(source, [])
-        assert result.source_elements == tuple(source)
+        assert result.source_elements == tuple(int(value) for value in source)
         assert result.admissible == ()
         assert result.rejected == ()
 
@@ -135,7 +138,7 @@ class TestSidonExtensionProfile:
 
         result = compute_sidon_extension_profile(
             SidonExtensionProfileRequest(
-                source_elements=source,
+                source_elements=tuple(int(value) for value in source),
                 candidate_elements=(),
             )
         )
@@ -143,7 +146,7 @@ class TestSidonExtensionProfile:
         assert result.rejected == ()
 
     def test_large_all_admissible_profile_fits_work_bound(self) -> None:
-        candidates = tuple(str(value) for value in range(250_000))
+        candidates = tuple(value for value in range(250_000))
         request = SidonExtensionProfileRequest(
             source_elements=(),
             candidate_elements=candidates,
@@ -154,7 +157,7 @@ class TestSidonExtensionProfile:
 
     def test_two_element_source_admits_attainable_profile(self) -> None:
         """A source of two elements can still have an all-admissible profile."""
-        candidates = tuple(str(value) for value in range(3, 100_003))
+        candidates = tuple(value for value in range(3, 100_003))
         result = _extension(["0", "1"], list(candidates))
 
         assert result.admissible == candidates
@@ -170,27 +173,27 @@ class TestSidonExtensionProfile:
     def test_result_rejects_an_incomplete_partition(self) -> None:
         with pytest.raises(ValidationError):
             SidonExtensionProfileResult(
-                source_elements=("1", "2"),
-                candidate_elements=("3", "4"),
-                admissible=("4",),
+                source_elements=(1, 2),
+                candidate_elements=(3, 4),
+                admissible=(4,),
                 rejected=(),
             )
 
     def test_result_rejects_an_unbound_obstruction(self) -> None:
         with pytest.raises(ValidationError):
             SidonExtensionProfileResult(
-                source_elements=("1", "2"),
-                candidate_elements=("3",),
+                source_elements=(1, 2),
+                candidate_elements=(3,),
                 admissible=(),
                 rejected=(
                     SidonExtensionCandidateResult(
-                        candidate="3",
+                        candidate=3,
                         is_admissible=False,
                         obstruction=SidonExtensionObstruction(
-                            candidate="3",
-                            repeated_difference="1",
-                            pair_a=("2", "1"),
-                            pair_b=("4", "3"),
+                            candidate=3,
+                            repeated_difference=1,
+                            pair_a=(2, 1),
+                            pair_b=(4, 3),
                         ),
                     ),
                 ),
@@ -200,7 +203,7 @@ class TestSidonExtensionProfile:
         """Admissible + rejected partition the candidates exactly."""
         result = _extension(["1", "2", "5"], ["3", "4", "6", "7", "10"])
         all_candidates = set(result.admissible) | {r.candidate for r in result.rejected}
-        assert all_candidates == {"3", "4", "6", "7", "10"}
+        assert all_candidates == {3, 4, 6, 7, 10}
         assert len(result.admissible) + len(result.rejected) == 5
 
     def test_translation_preserves_partition(self) -> None:
@@ -215,13 +218,13 @@ class TestSidonExtensionProfile:
         """For C = {1,...,N} minus A, empty admissibility means A is maximal."""
         # A = {1, 2} is not maximal in [1, 4] since 4 is admissible
         result = _extension(["1", "2"], ["3", "4"])
-        assert "4" in result.admissible
+        assert 4 in result.admissible
         # A = {1, 2, 4} should be Sidon and maximal in [1, 5]
         result2 = _extension(["1", "2", "4"], ["3", "5"])
         # Check: 3 should fail (1-2=-1, 4-3=1 but we need a repeated diff)
         # 3: differences of {1,2,4,3} = {1-2,1-4,1-3,2-1,2-4,2-3,4-1,4-2,4-3,3-1,3-2,3-4}
         # 1-2=-1, 4-3=1, no. Actually let's check: 2-1=1, 3-2=1 -> repeated! So 3 is rejected.
-        assert "3" not in result2.admissible
+        assert 3 not in result2.admissible
 
     def test_kernel_result_construction_does_not_replay_candidate_checks(
         self, monkeypatch: pytest.MonkeyPatch

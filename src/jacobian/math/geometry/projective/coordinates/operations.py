@@ -26,7 +26,7 @@ def _require_ratio_result_budget(
     coordinates: tuple[CanonicalRational, ...],
 ) -> None:
     if any(
-        len(component.lstrip("-")) > MAX_PROJECTIVE_COORDINATE_DIGITS
+        len(format_canonical_integer(abs(component))) > MAX_PROJECTIVE_COORDINATE_DIGITS
         for coordinate in coordinates
         for component in (coordinate.num, coordinate.den)
     ):
@@ -64,8 +64,8 @@ def _reject(reason: str, message: str, location: tuple[str, ...]) -> None:
 
 def _rational(frac: Fraction) -> CanonicalRational:
     return CanonicalRational(
-        num=format_canonical_integer(frac.numerator),
-        den=format_canonical_integer(frac.denominator),
+        num=frac.numerator,
+        den=frac.denominator,
     )
 
 

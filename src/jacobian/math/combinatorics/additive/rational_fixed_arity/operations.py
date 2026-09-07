@@ -281,8 +281,15 @@ def _admit(
         if arity <= source_size
         else 0
     )
+    fractions = tuple(value.as_fraction() for value in values)
     arithmetic_digits = max(
-        (max(len(value.num.lstrip("-")), len(value.den)) for value in values),
+        (
+            max(
+                len(format_canonical_integer(value.numerator)),
+                len(format_canonical_integer(value.denominator)),
+            )
+            for value in fractions
+        ),
         default=1,
     )
     work = candidate_count * max(arity, 1) * arithmetic_digits
@@ -292,17 +299,21 @@ def _admit(
             "rational_fixed_arity.work_bound",
             "fixed-arity enumeration exceeds the admitted work bound",
         )
-    fractions = tuple(value.as_fraction() for value in values)
-
     maximum_numerator_digits = max(
-        (len(value.num.lstrip("-")) for value in values),
+        (len(format_canonical_integer(value.numerator)) for value in fractions),
         default=1,
     )
     maximum_denominator_digits = max(
-        (len(value.den) for value in values if value.den != "1"),
+        (
+            len(format_canonical_integer(value.denominator))
+            for value in fractions
+            if value.denominator != 1
+        ),
         default=0,
     )
-    shared_denominator = len({value.den for value in values}) == 1 if values else True
+    shared_denominator = (
+        len({value.denominator for value in fractions}) == 1 if values else True
+    )
     common_denominator_digits = _common_denominator_digits(fractions)
     single_sum: Fraction | None = None
     if candidate_count == 1 and arity == 0:

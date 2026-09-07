@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from fractions import Fraction
 
 import pytest
@@ -20,15 +21,17 @@ def _wire_matrix(matrix: list[list[dict[str, str]]]) -> dict[str, object]:
 def _request(
     *, epsilon: tuple[int, int] = (1, 100), max_steps: int = 8
 ) -> MixingTimeRequest:
-    return MixingTimeRequest.model_validate(
-        {
-            "matrix": {
-                "domain": "QQ",
-                "entries": [[_r(1, 2), _r(1, 2)], [_r(1, 4), _r(3, 4)]],
-            },
-            "epsilon": _r(*epsilon),
-            "max_steps": max_steps,
-        }
+    return MixingTimeRequest.model_validate_json(
+        json.dumps(
+            {
+                "matrix": {
+                    "domain": "QQ",
+                    "entries": [[_r(1, 2), _r(1, 2)], [_r(1, 4), _r(3, 4)]],
+                },
+                "epsilon": _r(*epsilon),
+                "max_steps": max_steps,
+            }
+        )
     )
 
 
@@ -76,24 +79,28 @@ def test_found_mixing_time_is_the_first_satisfactory_step() -> None:
 def test_nonergodic_chains_return_typed_outcome(
     matrix: list[list[dict[str, str]]],
 ) -> None:
-    request = MixingTimeRequest.model_validate(
-        {"matrix": _wire_matrix(matrix), "epsilon": _r(1, 10), "max_steps": 4}
+    request = MixingTimeRequest.model_validate_json(
+        json.dumps(
+            {"matrix": _wire_matrix(matrix), "epsilon": _r(1, 10), "max_steps": 4}
+        )
     )
     assert compute_mixing_time(request).status == "NOT_ERGODIC"
 
 
 def test_search_bounds_reject_before_exact_matrix_powers() -> None:
-    request = MixingTimeRequest.model_validate(
-        {
-            "matrix": {
-                "domain": "QQ",
-                "entries": [
-                    [_r(1 if i == j else 0) for j in range(33)] for i in range(33)
-                ],
-            },
-            "epsilon": _r(1, 10),
-            "max_steps": 4,
-        }
+    request = MixingTimeRequest.model_validate_json(
+        json.dumps(
+            {
+                "matrix": {
+                    "domain": "QQ",
+                    "entries": [
+                        [_r(1 if i == j else 0) for j in range(33)] for i in range(33)
+                    ],
+                },
+                "epsilon": _r(1, 10),
+                "max_steps": 4,
+            }
+        )
     )
     with pytest.raises(OperationDomainValidationError) as error:
         compute_mixing_time(request)
@@ -117,12 +124,14 @@ def test_search_rejects_a_rational_height_that_cannot_fit_the_result() -> None:
         ]
         for row in range(8)
     ]
-    request = MixingTimeRequest.model_validate(
-        {
-            "matrix": _wire_matrix(matrix),
-            "epsilon": _r(1, 10),
-            "max_steps": 256,
-        }
+    request = MixingTimeRequest.model_validate_json(
+        json.dumps(
+            {
+                "matrix": _wire_matrix(matrix),
+                "epsilon": _r(1, 10),
+                "max_steps": 256,
+            }
+        )
     )
     with pytest.raises(OperationDomainValidationError) as error:
         compute_mixing_time(request)

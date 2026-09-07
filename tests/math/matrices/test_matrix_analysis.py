@@ -1,6 +1,7 @@
 """Tests for matrix analysis operations."""
 
 import copy
+import json
 from fractions import Fraction
 
 import pytest
@@ -36,7 +37,7 @@ from jacobian.math.matrices.values import (
 
 class TestInertia:
     def test_native_api_accepts_canonical_matrix(self) -> None:
-        matrix = RationalMatrix(entries=((CanonicalRational(num="1", den="1"),),))
+        matrix = RationalMatrix(entries=((CanonicalRational(num=1, den=1),),))
         result = compute_inertia_native(matrix)
         assert result.matrix == matrix
         assert (result.n_positive, result.n_negative, result.n_zero) == (1, 0, 0)
@@ -45,12 +46,12 @@ class TestInertia:
         matrix = RationalMatrix(
             entries=(
                 (
-                    CanonicalRational(num="1", den="1"),
-                    CanonicalRational(num="0", den="1"),
+                    CanonicalRational(num=1, den=1),
+                    CanonicalRational(num=0, den=1),
                 ),
                 (
-                    CanonicalRational(num="0", den="1"),
-                    CanonicalRational(num="-1", den="1"),
+                    CanonicalRational(num=0, den=1),
+                    CanonicalRational(num=-1, den=1),
                 ),
             )
         )
@@ -109,12 +110,12 @@ class TestInertia:
             matrix=RationalMatrix(
                 entries=(
                     (
-                        CanonicalRational(num="0", den="1"),
-                        CanonicalRational(num="1", den="1"),
+                        CanonicalRational(num=0, den=1),
+                        CanonicalRational(num=1, den=1),
                     ),
                     (
-                        CanonicalRational(num="2", den="1"),
-                        CanonicalRational(num="0", den="1"),
+                        CanonicalRational(num=2, den=1),
+                        CanonicalRational(num=0, den=1),
                     ),
                 )
             )
@@ -126,8 +127,8 @@ class TestInertia:
 
 class TestFarkas:
     def test_native_api_accepts_canonical_certificate_fields(self) -> None:
-        one = CanonicalRational(num="1", den="1")
-        negative_one = CanonicalRational(num="-1", den="1")
+        one = CanonicalRational(num=1, den=1)
+        negative_one = CanonicalRational(num=-1, den=1)
         result = check_farkas_certificate_native(
             RationalMatrix(entries=((one, one), (negative_one, negative_one))),
             (negative_one, negative_one),
@@ -136,8 +137,8 @@ class TestFarkas:
         assert result.valid is True
 
     def test_negative_multipliers_retain_source_and_exact_products(self) -> None:
-        one = CanonicalRational(num="1", den="1")
-        negative = CanonicalRational(num="-1", den="2")
+        one = CanonicalRational(num=1, den=1)
+        negative = CanonicalRational(num=-1, den=2)
         matrix = RationalMatrix(entries=((one, one),))
         result = check_farkas_certificate_native(matrix, (one,), (negative,))
         assert result.valid is False
@@ -149,8 +150,8 @@ class TestFarkas:
         assert type(result).model_validate_json(result.model_dump_json()) == result
 
     def test_rejects_unrepresentable_dot_product_before_expansion(self) -> None:
-        huge = CanonicalRational(num="9" * 20000, den="1")
-        one = CanonicalRational(num="1", den="1")
+        huge = CanonicalRational(num=10**20000 - 1, den=1)
+        one = CanonicalRational(num=1, den=1)
         with pytest.raises(OperationDomainValidationError, match="result envelope"):
             check_farkas_certificate_native(
                 RationalMatrix(entries=((huge,),)),
@@ -162,38 +163,13 @@ class TestFarkas:
         # System: x1 + x2 <= -1, x1 + x2 >= 1 is infeasible.
         # A = [[1, 1], [-1, -1]], b = [-1, -1]
         # y = (1, 1), y^T A = (1-1, 1-1) = (0, 0), y^T b = -1 + -1 = -2 < 0 => valid
-        req = FarkasCertificateRequest.model_validate(
-            {
-                "constraint_matrix": {
-                    "entries": [
-                        ({"num": "1", "den": "1"}, {"num": "1", "den": "1"}),
-                        ({"num": "-1", "den": "1"}, {"num": "-1", "den": "1"}),
-                    ]
-                },
-                "rhs_vector": (
-                    {"num": "-1", "den": "1"},
-                    {"num": "-1", "den": "1"},
-                ),
-                "multipliers": (
-                    {"num": "1", "den": "1"},
-                    {"num": "1", "den": "1"},
-                ),
-            }
-        )
-        result = check_farkas_certificate(req)
-        assert result.valid is True
-
-    def test_rejects_nonrectangular_matrix(self) -> None:
-        import pytest
-        from pydantic import ValidationError
-
-        with pytest.raises(ValidationError):
-            FarkasCertificateRequest.model_validate(
+        req = FarkasCertificateRequest.model_validate_json(
+            json.dumps(
                 {
                     "constraint_matrix": {
                         "entries": [
                             ({"num": "1", "den": "1"}, {"num": "1", "den": "1"}),
-                            ({"num": "-1", "den": "1"},),
+                            ({"num": "-1", "den": "1"}, {"num": "-1", "den": "1"}),
                         ]
                     },
                     "rhs_vector": (
@@ -206,6 +182,35 @@ class TestFarkas:
                     ),
                 }
             )
+        )
+        result = check_farkas_certificate(req)
+        assert result.valid is True
+
+    def test_rejects_nonrectangular_matrix(self) -> None:
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            FarkasCertificateRequest.model_validate_json(
+                json.dumps(
+                    {
+                        "constraint_matrix": {
+                            "entries": [
+                                ({"num": "1", "den": "1"}, {"num": "1", "den": "1"}),
+                                ({"num": "-1", "den": "1"},),
+                            ]
+                        },
+                        "rhs_vector": (
+                            {"num": "-1", "den": "1"},
+                            {"num": "-1", "den": "1"},
+                        ),
+                        "multipliers": (
+                            {"num": "1", "den": "1"},
+                            {"num": "1", "den": "1"},
+                        ),
+                    }
+                )
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -216,13 +221,10 @@ class TestFarkas:
 def _inertia_request(
     dimension: int, entries: dict[tuple[int, int], str]
 ) -> SymmetricMatrixRequest:
-    zero = CanonicalRational(num="0", den="1")
+    zero = CanonicalRational(num=0, den=1)
     dense = [[zero for _ in range(dimension)] for _ in range(dimension)]
     for (row, column), encoded in entries.items():
-        value = CanonicalRational(
-            num=encoded.split("/")[0],
-            den=encoded.split("/")[1] if "/" in encoded else "1",
-        )
+        value = CanonicalRational.from_fraction(Fraction(encoded))
         dense[row][column] = value
         dense[column][row] = value
     return SymmetricMatrixRequest(
@@ -262,7 +264,7 @@ def test_inertia_results_round_trip_known_answers(
     result = compute_inertia(request)
     assert (result.n_positive, result.n_negative, result.n_zero) == counts
     assert result.definiteness == label
-    assert InertiaResult.model_validate(result.model_dump()) == result
+    assert InertiaResult.model_validate_json(result.model_dump_json()) == result
 
 
 def test_serialized_inertia_claims_are_source_bound_and_verifiable() -> None:
@@ -286,23 +288,23 @@ def test_inertia_result_rejects_structural_mutations() -> None:
     count_sum = copy.deepcopy(dumped)
     count_sum["n_zero"] = 5
     with pytest.raises(ValidationError):
-        InertiaResult.model_validate(count_sum)
+        InertiaResult.model_validate_json(json.dumps(count_sum))
 
     wrong_label = copy.deepcopy(dumped)
     wrong_label["definiteness"] = "indefinite"
     with pytest.raises(ValidationError):
-        InertiaResult.model_validate(wrong_label)
+        InertiaResult.model_validate_json(json.dumps(wrong_label))
 
     foreign_source = copy.deepcopy(dumped)
     foreign_source["matrix"]["entries"][0][0] = {"num": "-1", "den": "1"}
-    supplied = InertiaResult.model_validate(foreign_source)
+    supplied = InertiaResult.model_validate_json(json.dumps(foreign_source))
     assert isinstance(supplied.matrix, RationalMatrix)
     assert supplied.matrix.entries[0][0].as_fraction() == Fraction(-1)
 
     asymmetric_source = copy.deepcopy(dumped)
     asymmetric_source["matrix"]["entries"][0][1] = {"num": "3", "den": "1"}
     with pytest.raises(ValidationError):
-        InertiaResult.model_validate(asymmetric_source)
+        InertiaResult.model_validate_json(json.dumps(asymmetric_source))
 
     nonsquare_source = copy.deepcopy(dumped)
     nonsquare_source["matrix"]["entries"] = (
@@ -354,8 +356,8 @@ def test_inertia_result_retains_domain_canonical_matrix() -> None:
     assert isinstance(result.matrix, RationalMatrix)
     assert result.matrix.domain == "QQ"
     assert result.matrix.entries == (
-        (CanonicalRational(num="3", den="2"), CanonicalRational(num="0", den="1")),
-        (CanonicalRational(num="0", den="1"), CanonicalRational(num="0", den="1")),
+        (CanonicalRational(num=3, den=2), CanonicalRational(num=0, den=1)),
+        (CanonicalRational(num=0, den=1), CanonicalRational(num=0, den=1)),
     )
 
 
@@ -382,7 +384,9 @@ def test_inertia_canonical_request_has_one_schema_truthful_matrix_field() -> Non
     assert not list(validator.iter_errors(valid))
     assert not list(validator.iter_errors(missing_discriminator))
     assert (
-        SymmetricMatrixRequest.model_validate(missing_discriminator).matrix.domain
+        SymmetricMatrixRequest.model_validate_json(
+            json.dumps(missing_discriminator)
+        ).matrix.domain
         == "QQ"
     )
 
@@ -398,11 +402,13 @@ def test_inertia_result_schema_matches_strict_discrimination_and_labels() -> Non
     validator = Draft202012Validator(InertiaResult.model_json_schema())
     assert not list(validator.iter_errors(payload))
     assert not list(validator.iter_errors(missing_discriminator))
-    assert InertiaResult.model_validate(missing_discriminator) == result
+    assert (
+        InertiaResult.model_validate_json(json.dumps(missing_discriminator)) == result
+    )
     for invalid in (unknown_label,):
         assert list(validator.iter_errors(invalid))
         with pytest.raises(ValidationError):
-            InertiaResult.model_validate(invalid)
+            InertiaResult.model_validate_json(json.dumps(invalid))
 
 
 def test_inertia_retained_matrix_reconstructs_the_source() -> None:
@@ -446,13 +452,15 @@ def test_inertia_accepts_diagonal_carrier_boundary() -> None:
 
 def test_inertia_rejects_request_above_digit_work_bound() -> None:
     value = {"num": "9" * 4096, "den": "1"}
-    request = SymmetricMatrixRequest.model_validate(
-        {
-            "matrix": {
-                "domain": "QQ",
-                "entries": [[value for _ in range(16)] for _ in range(16)],
+    request = SymmetricMatrixRequest.model_validate_json(
+        json.dumps(
+            {
+                "matrix": {
+                    "domain": "QQ",
+                    "entries": [[value for _ in range(16)] for _ in range(16)],
+                }
             }
-        }
+        )
     )
     with pytest.raises(OperationDomainValidationError, match="digit-work bound"):
         compute_inertia(request)

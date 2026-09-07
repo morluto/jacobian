@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -27,7 +26,6 @@ def _enumerate_r_full_admitted(
     *,
     plan: RFullFamilyPlan | None = None,
 ) -> RFullEnumerateResult:
-    canonical_cutoff = format_canonical_integer(cutoff)
     plan = plan or plan_r_full_family(minimum_exponent, cutoff)
     if plan.exceeded:
         if plan.reason == "planning":
@@ -44,7 +42,7 @@ def _enumerate_r_full_admitted(
     family = enumerate_r_full_kernel(
         cutoff, minimum_exponent, planned_family=plan.family
     )
-    return RFullEnumerateResult._from_kernel(minimum_exponent, canonical_cutoff, family)
+    return RFullEnumerateResult._from_kernel(minimum_exponent, cutoff, family)
 
 
 def enumerate_r_full_numbers(
@@ -53,7 +51,7 @@ def enumerate_r_full_numbers(
     """Return the complete ordered family of r-full integers up to the cutoff."""
     return _enumerate_r_full_admitted(
         request.minimum_exponent,
-        parse_canonical_integer(request.cutoff),
+        request.cutoff,
     )
 
 

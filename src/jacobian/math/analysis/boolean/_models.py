@@ -7,7 +7,7 @@ from typing import Literal, Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational, NativeInteger
+from jacobian._exact import CanonicalRational, ExactInteger
 from jacobian._models import StrictModel
 
 MAX_WALSH_VARIABLES = 12
@@ -42,46 +42,6 @@ class BooleanTruthTable(StrictModel):
         return self
 
 
-class BooleanRationalVector(StrictModel):
-    """Exact coefficient vector indexed by Boolean subset masks."""
-
-    values: tuple[CanonicalRational, ...] = Field(
-        min_length=1, max_length=MAX_TRUTH_TABLE_LENGTH
-    )
-
-    @property
-    def variable_count(self) -> int:
-        return len(self.values).bit_length() - 1
-
-    @model_validator(mode="after")
-    def require_cube_shape(self) -> Self:
-        if len(self.values) & (len(self.values) - 1):
-            raise _validation_error(
-                "coefficient_power", "coefficient vector length must be a power of two"
-            )
-        return self
-
-
-class BooleanIntegerVector(StrictModel):
-    """Exact integer vector indexed by Boolean subset masks."""
-
-    values: tuple[NativeInteger, ...] = Field(
-        min_length=1, max_length=MAX_TRUTH_TABLE_LENGTH
-    )
-
-    @property
-    def variable_count(self) -> int:
-        return len(self.values).bit_length() - 1
-
-    @model_validator(mode="after")
-    def require_cube_shape(self) -> Self:
-        if len(self.values) & (len(self.values) - 1):
-            raise _validation_error(
-                "spectrum_power", "spectrum length must be a power of two"
-            )
-        return self
-
-
 class BooleanTruthTableRequest(StrictModel):
     """A finite Boolean truth table indexed in natural (little-endian) order.
 
@@ -103,21 +63,39 @@ class BooleanWalshTransformResult(StrictModel):
     using the fast Walsh-Hadamard transform in Hadamard (natural) order.
     """
 
-    source: BooleanTruthTable
-    spectrum: BooleanIntegerVector
-
-    @property
-    def variable_count(self) -> int:
-        return self.source.variable_count
-
+    spectrum: tuple[ExactInteger, ...] = Field(
+        min_length=1,
+        max_length=MAX_TRUTH_TABLE_LENGTH,
+    )
+    variable_count: int = Field(ge=0, le=MAX_WALSH_VARIABLES)
     ordering: Literal["HADAMARD"] = "HADAMARD"
     convention: Literal["BOOLEAN_SIGN"] = "BOOLEAN_SIGN"
 
     @model_validator(mode="after")
     def require_spectrum_shape(self) -> Self:
-        if len(self.spectrum.values) != len(self.source.values):
+        if len(self.spectrum) != 1 << self.variable_count:
             raise _validation_error(
                 "spectrum_length_mismatch",
                 "spectrum length must equal 2 ** variable_count",
+            )
+        return self
+
+
+class BooleanRationalVector(StrictModel):
+    """Exact coefficient vector indexed by Boolean subset masks."""
+
+    values: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_TRUTH_TABLE_LENGTH
+    )
+
+    @property
+    def variable_count(self) -> int:
+        return len(self.values).bit_length() - 1
+
+    @model_validator(mode="after")
+    def require_cube_shape(self) -> Self:
+        if len(self.values) & (len(self.values) - 1):
+            raise _validation_error(
+                "coefficient_power", "coefficient vector length must be a power of two"
             )
         return self

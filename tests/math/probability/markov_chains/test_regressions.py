@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 import sys
 from fractions import Fraction
 from types import FrameType
+from typing import TypeVar
 
 import pytest
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.operations import product_result
@@ -24,6 +26,12 @@ from jacobian.math.probability.markov_chains._tools import (
     compute_ergodic_decision,
     compute_stationary_distribution,
 )
+
+ModelT = TypeVar("ModelT", bound=BaseModel)
+
+
+def _wire(model: type[ModelT], payload: object) -> ModelT:  # noqa: UP047
+    return model.model_validate_json(json.dumps(payload))
 
 
 def test_native_namespace_exposes_values_and_kernels_not_wire_requests() -> None:
@@ -49,12 +57,13 @@ def test_serialized_stationary_claim_is_checked_by_consumer() -> None:
         "num": "2",
         "den": "1",
     }
-    claim = type(result).model_validate(forged)
+    claim = type(result).model_validate_json(json.dumps(forged))
     assert not verify_stationary_distribution_result(claim)
 
 
 def test_markov_matrix_round_trips_through_shared_rational_matrix_wire() -> None:
-    request = TransitionMatrixRequest.model_validate(
+    request = _wire(
+        TransitionMatrixRequest,
         {
             "matrix": {
                 "domain": "QQ",
@@ -63,7 +72,7 @@ def test_markov_matrix_round_trips_through_shared_rational_matrix_wire() -> None
                     [{"num": "1", "den": "4"}, {"num": "3", "den": "4"}],
                 ],
             }
-        }
+        },
     )
     result = stationary_distribution_result(
         rational_matrix_from_fractions(
@@ -73,14 +82,16 @@ def test_markov_matrix_round_trips_through_shared_rational_matrix_wire() -> None
             )
         )
     )
-    restored = TransitionMatrixRequest.model_validate(
-        {"matrix": result.model_dump(mode="json")["transition_matrix"]}
+    restored = _wire(
+        TransitionMatrixRequest,
+        {"matrix": result.model_dump(mode="json")["transition_matrix"]},
     )
     assert restored.matrix == request.matrix
 
 
 def test_matrix_producer_composes_into_markov_and_back_through_wire() -> None:
-    request = TransitionMatrixRequest.model_validate(
+    request = _wire(
+        TransitionMatrixRequest,
         {
             "matrix": {
                 "domain": "QQ",
@@ -89,19 +100,21 @@ def test_matrix_producer_composes_into_markov_and_back_through_wire() -> None:
                     [{"num": "1", "den": "4"}, {"num": "3", "den": "4"}],
                 ],
             }
-        }
+        },
     )
     produced = product_result(request.matrix, request.matrix).product
     markov_result = stationary_distribution_result(produced)
-    restored = TransitionMatrixRequest.model_validate(
-        {"matrix": markov_result.model_dump(mode="json")["transition_matrix"]}
+    restored = _wire(
+        TransitionMatrixRequest,
+        {"matrix": markov_result.model_dump(mode="json")["transition_matrix"]},
     )
     assert restored.matrix == produced
 
 
 def test_ergodicity_uses_irreducibility_and_period_not_square_positivity() -> None:
     result = compute_ergodic_decision(
-        TransitionMatrixRequest.model_validate(
+        _wire(
+            TransitionMatrixRequest,
             {
                 "matrix": {
                     "domain": "QQ",
@@ -123,7 +136,7 @@ def test_ergodicity_uses_irreducibility_and_period_not_square_positivity() -> No
                         ],
                     ],
                 }
-            }
+            },
         )
     )
 
@@ -134,7 +147,8 @@ def test_ergodicity_uses_irreducibility_and_period_not_square_positivity() -> No
 
 def test_aperiodicity_is_checked_for_each_communicating_class() -> None:
     result = compute_ergodic_decision(
-        TransitionMatrixRequest.model_validate(
+        _wire(
+            TransitionMatrixRequest,
             {
                 "matrix": {
                     "domain": "QQ",
@@ -149,7 +163,7 @@ def test_aperiodicity_is_checked_for_each_communicating_class() -> None:
                         ],
                     ],
                 }
-            }
+            },
         )
     )
 
@@ -159,7 +173,8 @@ def test_aperiodicity_is_checked_for_each_communicating_class() -> None:
 
 
 def test_stationary_family_exposes_every_closed_class() -> None:
-    request = StationaryDistributionRequest.model_validate(
+    request = _wire(
+        StationaryDistributionRequest,
         {
             "matrix": {
                 "domain": "QQ",
@@ -181,7 +196,7 @@ def test_stationary_family_exposes_every_closed_class() -> None:
                     ],
                 ],
             }
-        }
+        },
     )
 
     result = compute_stationary_distribution(request)
@@ -197,7 +212,8 @@ def test_stationary_family_exposes_every_closed_class() -> None:
 
 
 def test_native_singular_stationary_helper_rejects_nonunique_chain() -> None:
-    request = StationaryDistributionRequest.model_validate(
+    request = _wire(
+        StationaryDistributionRequest,
         {
             "matrix": {
                 "domain": "QQ",
@@ -206,7 +222,7 @@ def test_native_singular_stationary_helper_rejects_nonunique_chain() -> None:
                     [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
                 ],
             }
-        }
+        },
     )
 
     with pytest.raises(ValueError, match="does not have a unique"):
@@ -221,7 +237,8 @@ def test_native_singular_stationary_helper_rejects_nonunique_chain() -> None:
 
 
 def test_native_markov_api_accepts_canonical_fraction_matrices() -> None:
-    request = StationaryDistributionRequest.model_validate(
+    request = _wire(
+        StationaryDistributionRequest,
         {
             "matrix": {
                 "domain": "QQ",
@@ -230,7 +247,7 @@ def test_native_markov_api_accepts_canonical_fraction_matrices() -> None:
                     [{"num": "1", "den": "2"}, {"num": "1", "den": "2"}],
                 ],
             }
-        }
+        },
     )
 
     matrix = rational_matrix_from_fractions(
@@ -263,7 +280,7 @@ def _lazy_cycle_request(size: int) -> dict[str, object]:
 
 def test_flint_stationary_solve_exceeds_the_previous_state_ceiling() -> None:
     size = 64
-    request = StationaryDistributionRequest.model_validate(_lazy_cycle_request(size))
+    request = _wire(StationaryDistributionRequest, _lazy_cycle_request(size))
 
     result = compute_stationary_distribution(request)
 
@@ -287,20 +304,21 @@ def test_flint_stationary_solve_exceeds_the_previous_state_ceiling() -> None:
 
 
 def test_stationary_solve_work_rejects_before_flint() -> None:
-    request = StationaryDistributionRequest.model_validate(_lazy_cycle_request(101))
+    request = _wire(StationaryDistributionRequest, _lazy_cycle_request(101))
 
     with pytest.raises(OperationDomainValidationError, match="solve-work bound"):
         compute_stationary_distribution(request)
 
 
 def test_generic_markov_requests_keep_the_32_state_carrier() -> None:
-    request = TransitionMatrixRequest.model_validate(_lazy_cycle_request(33))
+    request = _wire(TransitionMatrixRequest, _lazy_cycle_request(33))
     with pytest.raises(OperationDomainValidationError):
         compute_ergodic_decision(request)
 
 
 def test_stationary_family_solves_each_nonsingleton_closed_class_exactly() -> None:
-    request = StationaryDistributionRequest.model_validate(
+    request = _wire(
+        StationaryDistributionRequest,
         {
             "matrix": {
                 "domain": "QQ",
@@ -342,7 +360,7 @@ def test_stationary_family_solves_each_nonsingleton_closed_class_exactly() -> No
                     ],
                 ],
             }
-        }
+        },
     )
 
     result = compute_stationary_distribution(request)
@@ -383,10 +401,10 @@ def test_transition_contract_rejects_non_stochastic_matrices(
     wire = {"domain": "QQ", "entries": matrix}
     if error_code == "markov_chain.transition_matrix_not_square":
         with pytest.raises(ValidationError) as structural_error:
-            TransitionMatrixRequest.model_validate({"matrix": wire})
+            _wire(TransitionMatrixRequest, {"matrix": wire})
         assert structural_error.value.errors()[0]["type"] == error_code
     else:
-        request = TransitionMatrixRequest.model_validate({"matrix": wire})
+        request = _wire(TransitionMatrixRequest, {"matrix": wire})
         with pytest.raises(OperationDomainValidationError) as domain_error:
             compute_ergodic_decision(request)
         assert domain_error.value.errors()[0]["type"] == error_code

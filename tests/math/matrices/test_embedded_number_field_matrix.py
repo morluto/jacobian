@@ -51,7 +51,7 @@ def _element(
 
 def test_embedding_profile_composes_with_a_common_embedding_matrix() -> None:
     presentation = SimpleNumberFieldPresentation(
-        coefficients_descending=("1", "0", "0", "0", "-2")
+        coefficients_descending=(1, 0, 0, 0, -2)
     )
     profile = embeddings(presentation)
     embedding = profile.records[1].embedding
@@ -75,10 +75,8 @@ def test_embedding_profile_composes_with_a_common_embedding_matrix() -> None:
 
 
 def test_common_embedding_matrix_rejects_a_foreign_entry_presentation() -> None:
-    quartic = SimpleNumberFieldPresentation(
-        coefficients_descending=("1", "0", "0", "0", "-2")
-    )
-    quadratic = SimpleNumberFieldPresentation(coefficients_descending=("1", "0", "-2"))
+    quartic = SimpleNumberFieldPresentation(coefficients_descending=(1, 0, 0, 0, -2))
+    quadratic = SimpleNumberFieldPresentation(coefficients_descending=(1, 0, -2))
     embedding = embeddings(quartic).records[1].embedding
     assert isinstance(embedding, RealNumberFieldEmbedding)
 
@@ -92,9 +90,7 @@ def test_common_embedding_matrix_rejects_a_foreign_entry_presentation() -> None:
 
 
 def test_raw_embedded_matrix_rejects_deep_malformed_entries_without_recursing() -> None:
-    presentation = SimpleNumberFieldPresentation(
-        coefficients_descending=("1", "0", "-2")
-    )
+    presentation = SimpleNumberFieldPresentation(coefficients_descending=(1, 0, -2))
     embedding = embeddings(presentation).records[1].embedding
     assert isinstance(embedding, RealNumberFieldEmbedding)
     nested: object = None
@@ -116,13 +112,11 @@ def test_raw_embedded_matrix_rejects_deep_malformed_entries_without_recursing() 
 
 
 def test_raw_embedded_matrix_bounds_iterable_axes_before_nested_validation() -> None:
-    presentation = SimpleNumberFieldPresentation(
-        coefficients_descending=("1", "0", "-2")
-    )
+    presentation = SimpleNumberFieldPresentation(coefficients_descending=(1, 0, -2))
     embedding = embeddings(presentation).records[1].embedding
     assert isinstance(embedding, RealNumberFieldEmbedding)
     element = {
-        "presentation": presentation.model_dump(mode="json"),
+        "presentation": presentation.model_dump(),
         "coefficients_ascending": repeat({"num": "0", "den": "1"}),
     }
     payload = {
@@ -146,13 +140,11 @@ def test_raw_embedded_matrix_bounds_iterable_axes_before_nested_validation() -> 
 def test_raw_embedded_matrix_bounds_field_polynomial_iterables(
     location: str,
 ) -> None:
-    presentation = SimpleNumberFieldPresentation(
-        coefficients_descending=("1", "0", "-2")
-    )
+    presentation = SimpleNumberFieldPresentation(coefficients_descending=(1, 0, -2))
     embedding = embeddings(presentation).records[1].embedding
     assert isinstance(embedding, RealNumberFieldEmbedding)
     element = {
-        "presentation": presentation.model_dump(mode="json"),
+        "presentation": presentation.model_dump(),
         "coefficients_ascending": [{"num": "0", "den": "1"}],
     }
     payload: dict[str, Any] = {
@@ -193,9 +185,7 @@ def test_raw_embedded_matrix_validation_is_total_at_every_nested_axis(
     malformed_part: str,
     expected_type: str,
 ) -> None:
-    presentation = SimpleNumberFieldPresentation(
-        coefficients_descending=("1", "0", "-2")
-    )
+    presentation = SimpleNumberFieldPresentation(coefficients_descending=(1, 0, -2))
     embedding = embeddings(presentation).records[1].embedding
     assert isinstance(embedding, RealNumberFieldEmbedding)
     nested: object = "0"
@@ -205,7 +195,7 @@ def test_raw_embedded_matrix_validation_is_total_at_every_nested_axis(
     for _ in range(1_500):
         nested_list = [nested_list]
     element: dict[str, Any] = {
-        "presentation": presentation.model_dump(mode="json"),
+        "presentation": presentation.model_dump(),
         "coefficients_ascending": [
             {"num": "0", "den": "1"},
             {"num": "1", "den": "1"},
@@ -241,7 +231,7 @@ def test_raw_embedded_matrix_validation_is_total_at_every_nested_axis(
 
 def test_exact_inertia_distinguishes_the_two_real_quartic_embeddings() -> None:
     presentation = SimpleNumberFieldPresentation(
-        coefficients_descending=("1", "0", "0", "0", "-2")
+        coefficients_descending=(1, 0, 0, 0, -2)
     )
     profile = embeddings(presentation)
     alpha = _element(presentation, 0, 1, 0, 0)
@@ -294,12 +284,12 @@ def test_one_worker_handles_close_quartic_power_basis_signs(
 
     monkeypatch.setattr(process, "run_bounded_process", count_worker)
     presentation = SimpleNumberFieldPresentation(
-        coefficients_descending=("1", "0", "0", "0", "-2")
+        coefficients_descending=(1, 0, 0, 0, -2)
     )
     embedding = RealNumberFieldEmbedding.model_validate(
         {
             "kind": "REAL",
-            "presentation": presentation.model_dump(mode="json"),
+            "presentation": presentation.model_dump(),
             "root": {
                 "polynomial": presentation.coefficients_descending,
                 "real_root_index": 1,
@@ -327,12 +317,12 @@ def test_one_worker_handles_close_quartic_power_basis_signs(
 
 def test_exact_sign_isolation_handles_the_admitted_degree_boundary() -> None:
     presentation = SimpleNumberFieldPresentation(
-        coefficients_descending=("1", "0", "0", "0", "0", "0", "0", "0", "-2")
+        coefficients_descending=(1, 0, 0, 0, 0, 0, 0, 0, -2)
     )
     embedding = RealNumberFieldEmbedding.model_validate(
         {
             "kind": "REAL",
-            "presentation": presentation.model_dump(mode="json"),
+            "presentation": presentation.model_dump(),
             "root": {
                 "polynomial": presentation.coefficients_descending,
                 "real_root_index": 1,
@@ -361,9 +351,7 @@ def test_exact_sign_isolation_handles_the_admitted_degree_boundary() -> None:
 
 
 def test_exact_sign_isolation_handles_a_nonmonic_field_presentation() -> None:
-    presentation = SimpleNumberFieldPresentation(
-        coefficients_descending=("2", "0", "-1")
-    )
+    presentation = SimpleNumberFieldPresentation(coefficients_descending=(2, 0, -1))
     embedding = embeddings(presentation).records[1].embedding
     assert isinstance(embedding, RealNumberFieldEmbedding)
     positive = _element(presentation, -1, 2)
@@ -379,9 +367,7 @@ def test_exact_sign_isolation_handles_a_nonmonic_field_presentation() -> None:
 
 
 def test_algebraic_inertia_obeys_caller_cancellation() -> None:
-    presentation = SimpleNumberFieldPresentation(
-        coefficients_descending=("1", "0", "-2")
-    )
+    presentation = SimpleNumberFieldPresentation(coefficients_descending=(1, 0, -2))
     embedding = embeddings(presentation).records[1].embedding
     assert isinstance(embedding, RealNumberFieldEmbedding)
     matrix = EmbeddedRealSimpleNumberFieldMatrix(
@@ -398,9 +384,7 @@ def test_algebraic_inertia_obeys_caller_cancellation() -> None:
 
 
 def test_exact_algebraic_inertia_eliminates_a_hyperbolic_plane_with_tail() -> None:
-    presentation = SimpleNumberFieldPresentation(
-        coefficients_descending=("1", "0", "-2")
-    )
+    presentation = SimpleNumberFieldPresentation(coefficients_descending=(1, 0, -2))
     embedding = embeddings(presentation).records[1].embedding
     assert isinstance(embedding, RealNumberFieldEmbedding)
     zero = _element(presentation, 0, 0)
@@ -421,15 +405,13 @@ def test_exact_algebraic_inertia_eliminates_a_hyperbolic_plane_with_tail() -> No
 
 
 def test_inertia_rejects_a_structural_embedding_with_no_selected_real_root() -> None:
-    presentation = SimpleNumberFieldPresentation(
-        coefficients_descending=("1", "0", "1")
-    )
+    presentation = SimpleNumberFieldPresentation(coefficients_descending=(1, 0, 1))
     embedding = RealNumberFieldEmbedding.model_validate(
         {
             "kind": "REAL",
-            "presentation": presentation.model_dump(mode="json"),
+            "presentation": presentation.model_dump(),
             "root": {
-                "polynomial": ["1", "0", "1"],
+                "polynomial": [1, 0, 1],
                 "real_root_index": 0,
             },
         }

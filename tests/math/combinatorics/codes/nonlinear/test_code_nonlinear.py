@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from copy import deepcopy
 from math import comb
 from pathlib import Path
@@ -148,7 +149,7 @@ class TestCanonicalExplicitBinaryCode:
         self, payload: dict[str, object]
     ) -> None:
         with pytest.raises(ValidationError):
-            ExplicitBinaryCode.model_validate(payload)
+            ExplicitBinaryCode.model_validate_json(json.dumps(payload))
 
     def test_materialized_bit_boundary_is_immediate(self) -> None:
         accepted = ExplicitBinaryCode(
@@ -614,7 +615,7 @@ class TestCanonicalConsumers:
         assert wide.count == 24310
         assert all(sum(word) == 8 for word in wide.code.codewords)
         serialized = wide.model_dump(mode="json")
-        replayed = ConstantWeightResult.model_validate(serialized)
+        replayed = ConstantWeightResult.model_validate_json(json.dumps(serialized))
         assert replayed.code == wide.code
         axis = constant_weight_code(MAX_EXPLICIT_CODE_LENGTH, 0)
         assert axis.count == 1

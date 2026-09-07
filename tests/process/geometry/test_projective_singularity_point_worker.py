@@ -37,7 +37,7 @@ def _polynomial(
         polynomial=SparseRationalPolynomial(
             terms=tuple(
                 RationalPolynomialTerm(
-                    coefficient=CanonicalRational(num=str(coefficient), den="1"),
+                    coefficient=CanonicalRational(num=coefficient, den=1),
                     exponents=exponents,
                 )
                 for coefficient, exponents in terms
@@ -72,7 +72,7 @@ def test_point_worker_returns_one_exact_quadratic_residue_field_seed() -> None:
     assert result.kind == "complete"
     assert len(result.seeds) == 1
     seed = result.seeds[0]
-    assert seed.presentation.coefficients_descending == ("1", "0", "1")
+    assert seed.presentation.coefficients_descending == (1, 0, 1)
     assert tuple(
         tuple(
             coefficient.as_fraction()

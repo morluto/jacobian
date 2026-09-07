@@ -30,7 +30,7 @@ def _operation(operation_id: str) -> MathTool[Any, Any]:
     return next(tool for tool in TOOLS if tool.operation_id == operation_id)
 
 
-def _run_inverse(entries: list[list[str]]) -> MatrixInverseResult:
+def _run_inverse(entries: list[list[int]]) -> MatrixInverseResult:
     operation = _operation("matrix.inverse.compute")
     request = operation.request_type.model_validate({"matrix": {"entries": entries}})
     result = operation.run(request)
@@ -76,8 +76,8 @@ def _multiply(
     )
 
 
-def _fraction_entries(entries: list[list[str]]) -> tuple[tuple[Fraction, ...], ...]:
-    return tuple(tuple(Fraction(int(value)) for value in row) for row in entries)
+def _fraction_entries(entries: list[list[int]]) -> tuple[tuple[Fraction, ...], ...]:
+    return tuple(tuple(Fraction(value) for value in row) for row in entries)
 
 
 def _result_entries(result: MatrixInverseResult) -> tuple[tuple[Fraction, ...], ...]:
@@ -87,7 +87,7 @@ def _result_entries(result: MatrixInverseResult) -> tuple[tuple[Fraction, ...], 
 
 
 def test_inverse_operation_returns_exact_two_sided_inverse() -> None:
-    source = [["1", "1"], ["0", "1"]]
+    source = [[1, 1], [0, 1]]
     result = _run_inverse(source)
     inverse = _result_entries(result)
 
@@ -99,7 +99,7 @@ def test_inverse_operation_returns_exact_two_sided_inverse() -> None:
 
 
 def test_inverse_operation_accepts_determinant_minus_one() -> None:
-    source = [["0", "1"], ["1", "0"]]
+    source = [[0, 1], [1, 0]]
     result = _run_inverse(source)
     inverse = _result_entries(result)
 
@@ -111,7 +111,7 @@ def test_inverse_operation_accepts_determinant_minus_one() -> None:
 
 
 def test_inverse_operation_returns_rational_values_for_non_unimodular_matrix() -> None:
-    result = _run_inverse([["2", "0"], ["0", "1"]])
+    result = _run_inverse([[2, 0], [0, 1]])
 
     assert _result_entries(result) == (
         (Fraction(1, 2), Fraction(0)),
@@ -124,8 +124,7 @@ def test_inverse_operation_round_trips_random_unimodular_matrices(size: int) -> 
     random = Random(1127 + size)
     for _ in range(20):
         source = _random_unimodular(random, size)
-        source_wire = [[str(value) for value in row] for row in source]
-        inverse = _result_entries(_run_inverse(source_wire))
+        inverse = _result_entries(_run_inverse(source))
         source_fraction = tuple(
             tuple(Fraction(value) for value in row) for row in source
         )
@@ -143,8 +142,7 @@ def test_inverse_result_accepts_order_33_integer_matrix() -> None:
     matrix = IntegerMatrix(
         entries=tuple(
             tuple(
-                "1" if row == column else "0"
-                for column in range(MAX_MATRIX_DIMENSION + 1)
+                1 if row == column else 0 for column in range(MAX_MATRIX_DIMENSION + 1)
             )
             for row in range(MAX_MATRIX_DIMENSION + 1)
         )
@@ -162,18 +160,18 @@ def test_inverse_operation_rejects_empty_matrix() -> None:
 
 def test_inverse_operation_rejects_non_square_matrices() -> None:
     with pytest.raises(ValueError):
-        _run_inverse([["1", "0"]])
+        _run_inverse([[1, 0]])
 
 
 def test_inverse_operation_rejects_singular_matrices() -> None:
     with pytest.raises(ValueError):
-        _run_inverse([["1", "2"], ["2", "4"]])
+        _run_inverse([[1, 2], [2, 4]])
 
 
 def test_flint_inverse_exceeds_shared_integer_matrix_order() -> None:
     order = 80
     source = [
-        [str(int(row == column or column == row + 1)) for column in range(order)]
+        [int(row == column or column == row + 1) for column in range(order)]
         for row in range(order)
     ]
 
@@ -195,10 +193,8 @@ def test_flint_inverse_exceeds_shared_integer_matrix_order() -> None:
     assert _multiply(inverse, _fraction_entries(source)) == identity
 
 
-def _identity_entries(order: int) -> list[list[str]]:
-    return [
-        [str(int(row == column)) for column in range(order)] for row in range(order)
-    ]
+def _identity_entries(order: int) -> list[list[int]]:
+    return [[int(row == column) for column in range(order)] for row in range(order)]
 
 
 def test_inverse_admits_sparse_identity_with_tiny_output() -> None:
@@ -217,9 +213,9 @@ def test_inverse_admits_sparse_identity_with_tiny_output() -> None:
 
 def test_inverse_admits_diagonal_max_height_output() -> None:
     order = 100
-    diagonal = "1" + "0" * 255
+    diagonal = 10**255
     source = [
-        [diagonal if row == column else "0" for column in range(order)]
+        [diagonal if row == column else 0 for column in range(order)]
         for row in range(order)
     ]
 
@@ -239,7 +235,7 @@ def test_inverse_admits_bounded_rank_one_update() -> None:
     height = 10**255
     vector = tuple(height if index % 2 == 0 else -height for index in range(order))
     source = [
-        [str((1 if row == column else 0) + vector[column]) for column in range(order)]
+        [(1 if row == column else 0) + vector[column] for column in range(order)]
         for row in range(order)
     ]
 
@@ -257,7 +253,7 @@ def test_inverse_admits_bounded_rank_one_update() -> None:
 
 def test_inverse_rejects_dense_output_work_before_backend() -> None:
     order = 128
-    tall = "1" + "0" * 99
+    tall = 10**99
     source = [[tall] * order for _ in range(order)]
 
     with pytest.raises(ValueError, match="exact output budget"):
@@ -281,7 +277,7 @@ def test_inverse_reuses_canonical_integer_matrix() -> None:
     from jacobian.math.matrices._tools import compute_inverse
     from jacobian.math.matrices.values import IntegerMatrix
 
-    matrix = IntegerMatrix.model_validate({"entries": [["1", "0"], ["0", "1"]]})
+    matrix = IntegerMatrix.model_validate({"entries": [[1, 0], [0, 1]]})
     request = NonsingularIntegerMatrixRequest(matrix=matrix)
 
     assert request.matrix is matrix

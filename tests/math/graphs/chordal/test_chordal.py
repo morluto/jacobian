@@ -155,7 +155,7 @@ class TestContracts:
     def test_result_reparses(self) -> None:
         result = recognize_chordal(_graph(["a", "b", "c"], [("a", "b"), ("b", "c")]))
         assert (
-            ChordalRecognitionResult.model_validate(result.model_dump(mode="json"))
+            ChordalRecognitionResult.model_validate_json(result.model_dump_json())
             == result
         )
 

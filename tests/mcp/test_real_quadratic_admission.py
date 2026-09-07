@@ -1,6 +1,7 @@
 """Real owner diagnostics survive native, dispatch, and live MCP calls."""
 
 import asyncio
+import json
 
 import pytest
 from mcp.shared.exceptions import MCPError
@@ -34,14 +35,14 @@ def test_real_quadratic_rejection_and_recovery(overflow: bool) -> None:
             "radicand": 3,
         },
     }
-    valid = RealQuadraticOrderRequest.model_validate(
-        {**payload, "left": {**payload["left"], "radicand": 3}}
+    valid = RealQuadraticOrderRequest.model_validate_json(
+        json.dumps({**payload, "left": {**payload["left"], "radicand": 3}})
     )
     if overflow:
         payload = valid.model_dump(mode="json")
         payload["left"]["rational_part"] = {"num": "9" * 256, "den": "1"}
         payload["right"]["rational_part"] = {"num": "-" + "9" * 256, "den": "1"}
-    request = RealQuadraticOrderRequest.model_validate(payload)
+    request = RealQuadraticOrderRequest.model_validate_json(json.dumps(payload))
     with pytest.raises(OperationDomainValidationError) as native:
         real_quadratic_order(request.left, request.right)
     with pytest.raises(OperationDomainValidationError) as dispatch:

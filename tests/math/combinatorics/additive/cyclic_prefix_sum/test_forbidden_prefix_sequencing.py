@@ -8,6 +8,7 @@ from typing import cast
 import pytest
 from pydantic import ValidationError
 
+from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import MathTool
 from jacobian.math.combinatorics.additive.cyclic_prefix_sum import (
     search_forbidden_prefix_cyclic_ordering,
@@ -16,6 +17,7 @@ from jacobian.math.combinatorics.additive.cyclic_prefix_sum import (
 from jacobian.math.combinatorics.additive.cyclic_prefix_sum._models import (
     MAX_SEQUENCING_PERMUTATION_NODES,
     MAX_SEQUENCING_SOURCE_ITEMS,
+    FiniteAbelianSequencingSource,
     ForbiddenPrefixSequencingRequest,
     ForbiddenPrefixSequencingResult,
 )
@@ -23,6 +25,7 @@ from jacobian.math.combinatorics.additive.cyclic_prefix_sum._sequencing_kernel i
     search_forbidden_prefix_sequencing,
 )
 from jacobian.math.combinatorics.additive.cyclic_prefix_sum._tools import TOOLS
+from jacobian.math.groups.finite_abelian import FiniteAbelianProductGroup
 
 
 def _operation() -> MathTool[
@@ -46,19 +49,12 @@ def _request(
     first_element: tuple[int, ...] | None = None,
     forbidden_values: tuple[tuple[int, ...], ...] = (),
 ) -> ForbiddenPrefixSequencingRequest:
-    return ForbiddenPrefixSequencingRequest.model_validate(
-        {
-            "source": {
-                "group": {"moduli": list(moduli)},
-                "elements": [list(e) for e in elements],
-            },
-            **(
-                {"first_element": list(first_element)}
-                if first_element is not None
-                else {}
-            ),
-            "forbidden_values": [list(value) for value in forbidden_values],
-        }
+    return ForbiddenPrefixSequencingRequest(
+        source=FiniteAbelianSequencingSource(
+            group=FiniteAbelianProductGroup(moduli=moduli), elements=elements
+        ),
+        first_element=first_element,
+        forbidden_values=forbidden_values,
     )
 
 
@@ -203,8 +199,8 @@ def test_node_budget_returns_unknown_not_nonexistence() -> None:
 
     assert limited.status == "UNKNOWN"
     assert limited.ordering is None
-    replayed = ForbiddenPrefixSequencingResult.model_validate(
-        limited.model_dump(mode="json")
+    replayed = ForbiddenPrefixSequencingResult.model_validate_json(
+        encode_strict_json(limited.model_dump(mode="json"))
     )
     assert replayed == limited
 
@@ -264,18 +260,20 @@ def test_request_and_result_round_trip_canonically() -> None:
     )
     result = _operation().run(request)
 
-    assert request == ForbiddenPrefixSequencingRequest.model_validate(
-        request.model_dump(mode="json")
+    assert request == ForbiddenPrefixSequencingRequest.model_validate_json(
+        encode_strict_json(request.model_dump(mode="json"))
     )
-    assert result == ForbiddenPrefixSequencingResult.model_validate(
-        result.model_dump(mode="json")
+    assert result == ForbiddenPrefixSequencingResult.model_validate_json(
+        encode_strict_json(result.model_dump(mode="json"))
     )
 
 
 def test_catalog_example_is_negative_and_replays_through_public_operation() -> None:
     operation = _operation()
     assert len(operation.examples) == 1
-    request = operation.request_type.model_validate(operation.examples[0].input)
+    request = operation.request_type.model_validate_json(
+        encode_strict_json(operation.examples[0].input)
+    )
 
     result = operation.run(request)
 
@@ -299,37 +297,45 @@ def test_request_reduces_and_validates_canonical_sources() -> None:
     assert request.forbidden_values == ((1,), (2,))
 
     with pytest.raises(ValidationError, match="distinct and sorted"):
-        ForbiddenPrefixSequencingRequest.model_validate(
-            {
-                "source": {"group": {"moduli": [7]}, "elements": [[2], [2]]},
-                "forbidden_values": [],
-            }
+        ForbiddenPrefixSequencingRequest.model_validate_json(
+            encode_strict_json(
+                {
+                    "source": {"group": {"moduli": ["7"]}, "elements": [[2], [2]]},
+                    "forbidden_values": [],
+                }
+            )
         )
     with pytest.raises(ValidationError, match="match the group rank"):
-        ForbiddenPrefixSequencingRequest.model_validate(
-            {
-                "source": {"group": {"moduli": [7]}, "elements": [[1, 2]]},
-                "forbidden_values": [],
-            }
+        ForbiddenPrefixSequencingRequest.model_validate_json(
+            encode_strict_json(
+                {
+                    "source": {"group": {"moduli": ["7"]}, "elements": [[1, 2]]},
+                    "forbidden_values": [],
+                }
+            )
         )
     with pytest.raises(ValidationError, match="reduce to a source element"):
-        ForbiddenPrefixSequencingRequest.model_validate(
-            {
-                "source": {"group": {"moduli": [7]}, "elements": [[1]]},
-                "first_element": [2],
-                "forbidden_values": [],
-            }
+        ForbiddenPrefixSequencingRequest.model_validate_json(
+            encode_strict_json(
+                {
+                    "source": {"group": {"moduli": ["7"]}, "elements": [[1]]},
+                    "first_element": [2],
+                    "forbidden_values": [],
+                }
+            )
         )
 
 
 def test_admission_uses_source_search_work_not_group_order() -> None:
     assert (
         _run(
-            ForbiddenPrefixSequencingRequest.model_validate(
-                {
-                    "source": {"group": {"moduli": [4097]}, "elements": []},
-                    "forbidden_values": [],
-                }
+            ForbiddenPrefixSequencingRequest.model_validate_json(
+                encode_strict_json(
+                    {
+                        "source": {"group": {"moduli": ["4097"]}, "elements": []},
+                        "forbidden_values": [],
+                    }
+                )
             )
         ).status
         == "FOUND"
@@ -337,23 +343,27 @@ def test_admission_uses_source_search_work_not_group_order() -> None:
 
     with pytest.raises(ValidationError, match="at most 8 items"):
         _run(
-            ForbiddenPrefixSequencingRequest.model_validate(
-                {
-                    "source": {
-                        "group": {"moduli": [11]},
-                        "elements": [[value] for value in range(9)],
-                    },
-                    "forbidden_values": [],
-                }
+            ForbiddenPrefixSequencingRequest.model_validate_json(
+                encode_strict_json(
+                    {
+                        "source": {
+                            "group": {"moduli": ["11"]},
+                            "elements": [[value] for value in range(9)],
+                        },
+                        "forbidden_values": [],
+                    }
+                )
             )
         )
 
     with pytest.raises(ValidationError, match="less than or equal to 109601"):
-        ForbiddenPrefixSequencingRequest.model_validate(
-            {
-                **_request(((1,), (2,), (4,), (5,)), (7,)).model_dump(mode="json"),
-                "search_node_limit": MAX_SEQUENCING_PERMUTATION_NODES + 1,
-            }
+        ForbiddenPrefixSequencingRequest.model_validate_json(
+            encode_strict_json(
+                {
+                    **_request(((1,), (2,), (4,), (5,)), (7,)).model_dump(mode="json"),
+                    "search_node_limit": MAX_SEQUENCING_PERMUTATION_NODES + 1,
+                }
+            )
         )
 
 
@@ -387,10 +397,10 @@ def test_result_rejects_incomplete_or_forged_witness_shapes() -> None:
     payload = found.model_dump(mode="json")
 
     with pytest.raises(ValidationError):
-        ForbiddenPrefixSequencingResult.model_validate(
-            {**payload, "ordering": payload["ordering"][:1]}
+        ForbiddenPrefixSequencingResult.model_validate_json(
+            encode_strict_json({**payload, "ordering": payload["ordering"][:1]})
         )
     with pytest.raises(ValidationError):
-        ForbiddenPrefixSequencingResult.model_validate(
-            {**payload, "status": "EXHAUSTED"}
+        ForbiddenPrefixSequencingResult.model_validate_json(
+            encode_strict_json({**payload, "status": "EXHAUSTED"})
         )

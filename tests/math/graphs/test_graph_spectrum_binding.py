@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import json
 
 import pytest
 from pydantic import ValidationError
@@ -74,9 +75,9 @@ def test_producer_spectra_retain_source() -> None:
         (entry.value.polynomial, entry.value.real_root_index)
         for entry in adjacency.spectrum
     } == {
-        (("1", "0", "-2"), 0),
-        (("1", "0", "-2"), 1),
-        (("1", "0"), 0),
+        ((1, 0, -2), 0),
+        ((1, 0, -2), 1),
+        ((1, 0), 0),
     }
     assert adjacency.multiplicities == (1, 1, 1)
     assert GraphSpectrumResult.model_validate(adjacency.model_dump()) == adjacency
@@ -88,9 +89,9 @@ def test_producer_spectra_retain_source() -> None:
         (entry.value.polynomial, entry.value.real_root_index)
         for entry in laplacian.spectrum
     } == {
-        (("1", "0"), 0),
-        (("1", "-1"), 0),
-        (("1", "-3"), 0),
+        ((1, 0), 0),
+        ((1, -1), 0),
+        ((1, -3), 0),
     }
     assert GraphSpectrumResult.model_validate(laplacian.model_dump()) == laplacian
     assert verify_spectrum(laplacian)
@@ -153,7 +154,7 @@ def test_duplicate_eigenvalue_entries_are_rejected() -> None:
 
 def test_degenerate_and_repeated_spectra_stay_exact() -> None:
     empty = compute_adjacency_spectrum(GraphSpectrumRequest(graph=_graph(2, ())))
-    assert empty.eigenvalues[0].polynomial == ("1", "0")
+    assert empty.eigenvalues[0].polynomial == (1, 0)
     assert empty.multiplicities == (2,)
     assert GraphSpectrumResult.model_validate(empty.model_dump()) == empty
 
@@ -163,8 +164,8 @@ def test_degenerate_and_repeated_spectra_stay_exact() -> None:
         (entry.value.polynomial, entry.value.real_root_index): entry.multiplicity
         for entry in complete.spectrum
     } == {
-        (("1", "1"), 0): 3,
-        (("1", "-3"), 0): 1,
+        ((1, 1), 0): 3,
+        ((1, -3), 0): 1,
     }
 
     laplacian_complete = compute_laplacian_spectrum(
@@ -174,8 +175,8 @@ def test_degenerate_and_repeated_spectra_stay_exact() -> None:
         (entry.value.polynomial, entry.value.real_root_index): entry.multiplicity
         for entry in laplacian_complete.spectrum
     } == {
-        (("1", "0"), 0): 1,
-        (("1", "-4"), 0): 3,
+        ((1, 0), 0): 1,
+        ((1, -4), 0): 3,
     }
 
 
@@ -231,7 +232,7 @@ def test_forged_well_formed_algebraic_spectrum_is_rejected_by_verifier() -> None
         "polynomial": ["1", "-1"],
         "real_root_index": 0,
     }
-    decoded = GraphSpectrumResult.model_validate(forged)
+    decoded = GraphSpectrumResult.model_validate_json(json.dumps(forged))
     assert not verify_spectrum(decoded)
 
 

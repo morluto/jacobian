@@ -9,9 +9,9 @@ from typing import Annotated, Any, Literal, Self
 from pydantic import Field, StrictInt, ValidateAs, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger, CanonicalRational
+from jacobian._exact import CanonicalRational, DecimalIntegerEncoding
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import parse_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.number_theory.algebraic_numbers.complex import (
     ComplexAlgebraicValue,
     RationalComplexIsolatingRectangle,
@@ -29,6 +29,15 @@ MAX_NUMBER_FIELD_EMBEDDING_DEGREE = 8
 MAX_SIMPLE_NUMBER_FIELD_COEFFICIENT_DIGITS = 256
 MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS = 256
 MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS = 4_096
+MAX_NUMBER_FIELD_DISCRIMINANT_DIGITS = (
+    2 * MAX_SIMPLE_NUMBER_FIELD_DEGREE - 1
+) * MAX_SIMPLE_NUMBER_FIELD_COEFFICIENT_DIGITS + 4 * MAX_SIMPLE_NUMBER_FIELD_DEGREE
+NumberFieldInteger = Annotated[
+    int, DecimalIntegerEncoding(max_digits=MAX_SIMPLE_NUMBER_FIELD_COEFFICIENT_DIGITS)
+]
+NumberFieldDiscriminantInteger = Annotated[
+    int, DecimalIntegerEncoding(max_digits=MAX_NUMBER_FIELD_DISCRIMINANT_DIGITS)
+]
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -67,7 +76,7 @@ class SimpleNumberFieldPresentation(StrictModel):
     """
 
     domain: Literal["QQ"] = "QQ"
-    coefficients_descending: tuple[CanonicalInteger, ...] = Field(
+    coefficients_descending: tuple[NumberFieldInteger, ...] = Field(
         min_length=2,
         max_length=MAX_SIMPLE_NUMBER_FIELD_DEGREE + 1,
         description=(
@@ -104,10 +113,7 @@ class SimpleNumberFieldPresentation(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_polynomial(self) -> Self:
-        coefficients = tuple(
-            parse_canonical_integer(coefficient)
-            for coefficient in self.coefficients_descending
-        )
+        coefficients = self.coefficients_descending
         if coefficients[0] <= 0:
             raise _validation_error(
                 "leading_sign",
@@ -167,9 +173,10 @@ class SimpleNumberFieldElement(StrictModel):
             )
         for coefficient in self.coefficients_ascending:
             if (
-                len(coefficient.num.lstrip("-"))
+                len(format_canonical_integer(abs(coefficient.num)))
                 > MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS
-                or len(coefficient.den) > MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS
+                or len(format_canonical_integer(abs(coefficient.den)))
+                > MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS
             ):
                 raise _validation_error(
                     "element_coordinate_bound",
@@ -290,8 +297,10 @@ class RealNumberFieldEmbeddingRecord(StrictModel):
     @model_validator(mode="after")
     def require_canonical_isolator_bound(self) -> Self:
         if any(
-            len(endpoint.num.lstrip("-")) > MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS
-            or len(endpoint.den) > MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS
+            len(format_canonical_integer(abs(endpoint.num)))
+            > MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS
+            or len(format_canonical_integer(abs(endpoint.den)))
+            > MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS
             for endpoint in (
                 self.isolating_interval.lower,
                 self.isolating_interval.upper,
@@ -401,7 +410,7 @@ class NumberFieldEmbeddingProfile(StrictModel):
     complex_conjugate_pairs: tuple[NumberFieldConjugatePair, ...] = Field(
         max_length=MAX_NUMBER_FIELD_EMBEDDING_DEGREE // 2
     )
-    defining_polynomial_discriminant: CanonicalInteger
+    defining_polynomial_discriminant: NumberFieldDiscriminantInteger
     ordering: Literal["REAL_INCREASING_THEN_POSITIVE_REPRESENTATIVE_PAIRS_V1"] = (
         "REAL_INCREASING_THEN_POSITIVE_REPRESENTATIVE_PAIRS_V1"
     )
@@ -492,7 +501,7 @@ class NumberFieldEmbeddingProfile(StrictModel):
         ],
         signature: NumberFieldSignature,
         complex_conjugate_pairs: tuple[NumberFieldConjugatePair, ...],
-        defining_polynomial_discriminant: CanonicalInteger,
+        defining_polynomial_discriminant: NumberFieldDiscriminantInteger,
     ) -> Self:
         return cls.model_construct(
             field=field,
@@ -557,8 +566,10 @@ class NumberFieldRealValueEnclosure(StrictModel):
     @model_validator(mode="after")
     def require_closed_interval(self) -> Self:
         if any(
-            len(endpoint.num.lstrip("-")) > MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS
-            or len(endpoint.den) > MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS
+            len(format_canonical_integer(abs(endpoint.num)))
+            > MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS
+            or len(format_canonical_integer(abs(endpoint.den)))
+            > MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS
             for endpoint in (self.lower, self.upper)
         ):
             raise _validation_error(
@@ -658,8 +669,10 @@ class SimpleNumberFieldRealEmbeddingOrder(StrictModel):
         interval = self.difference_enclosure
         endpoints = (interval.lower, interval.upper)
         if any(
-            len(endpoint.num.lstrip("-")) > MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS
-            or len(endpoint.den) > MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS
+            len(format_canonical_integer(abs(endpoint.num)))
+            > MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS
+            or len(format_canonical_integer(abs(endpoint.den)))
+            > MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS
             for endpoint in endpoints
         ):
             raise _validation_error(

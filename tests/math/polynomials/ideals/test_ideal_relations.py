@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 from fractions import Fraction
 from typing import Literal, cast
@@ -166,7 +167,9 @@ def test_serialized_relation_verifiers_reject_forged_ledgers() -> None:
     containment_payload["ledger"]["normal_forms"][0] = _polynomial(
         ("x",), {(1,): 1}
     ).model_dump(mode="json")
-    forged_containment = type(containment).model_validate(containment_payload)
+    forged_containment = type(containment).model_validate_json(
+        json.dumps(containment_payload)
+    )
     assert not verify_ideal_containment(forged_containment)
 
     equality = ideal_equality(ideal, ideal)
@@ -180,7 +183,7 @@ def test_serialized_relation_verifiers_reject_forged_ledgers() -> None:
     equality_payload["right_in_left"]["normal_forms"][0] = _polynomial(
         ("x",), {(1,): 1}
     ).model_dump(mode="json")
-    forged_equality = type(equality).model_validate(equality_payload)
+    forged_equality = type(equality).model_validate_json(json.dumps(equality_payload))
     assert not verify_ideal_equality(forged_equality)
 
 

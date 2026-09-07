@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from fractions import Fraction
 
 import pytest
@@ -7,6 +8,7 @@ import pytest
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.posets.core._models import (
+    FinitePoset,
     PresentationPair,
     ReflexivePairPolicy,
     RelationInterpretation,
@@ -17,11 +19,11 @@ from jacobian.math.combinatorics.posets.weighted_antichain.operations import (
 )
 
 
-def _cr(num, den=1):
+def _cr(num: int, den: int = 1) -> CanonicalRational:
     return CanonicalRational.from_fraction(Fraction(num, den))
 
 
-def _chain_poset(elements):
+def _chain_poset(elements: Sequence[str]) -> FinitePoset:
     pairs = tuple(
         PresentationPair(lower=elements[i], upper=elements[i + 1])
         for i in range(len(elements) - 1)
@@ -34,7 +36,7 @@ def _chain_poset(elements):
     )
 
 
-def _antichain_poset(elements):
+def _antichain_poset(elements: Sequence[str]) -> FinitePoset:
     return materialize_finite_poset(
         elements=tuple(elements),
         relation=(),
@@ -104,9 +106,7 @@ def test_rational_arithmetic_work_is_admitted_separately() -> None:
     # Use two different denominators near the limit to trigger the
     # multi-denominator growth bound: width * max_digits + len(str(width)).
     weights = tuple(
-        CanonicalRational(
-            num="1", den="1" + "0" * 16_400 + ("3" if i % 2 == 0 else "7")
-        )
+        CanonicalRational(num=1, den=10**16_400 + (3 if i % 2 == 0 else 7))
         for i in range(20)
     )
     with pytest.raises(ValueError, match="rational growth exceeds"):
@@ -115,9 +115,7 @@ def test_rational_arithmetic_work_is_admitted_separately() -> None:
 
 def test_chain_growth_uses_width_not_carrier_size() -> None:
     digits = 16_384
-    weights = tuple(
-        CanonicalRational(num="1", den="1" + "0" * digits) for _ in range(2)
-    )
+    weights = tuple(CanonicalRational(num=1, den=10**digits) for _ in range(2))
     result = compute_maximum_weight_antichain(_chain_poset(["a", "b"]), weights)
     assert result.antichain in (("a",), ("b",))
 

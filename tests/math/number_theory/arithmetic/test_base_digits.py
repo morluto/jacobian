@@ -3,7 +3,6 @@
 import pytest
 from pydantic import ValidationError
 
-from jacobian.math.number_theory.arithmetic import operations as arithmetic_operations
 from jacobian.math.number_theory.arithmetic._integers import base_digits
 from jacobian.math.number_theory.arithmetic._models import (
     MAX_BASE_DIGITS,
@@ -15,22 +14,22 @@ from jacobian.math.number_theory.arithmetic._models import (
 @pytest.mark.parametrize(
     ("value", "base", "expected"),
     (
-        ("10", 2, IntegerBaseDigitsResult(sign=1, base=2, digits=("1", "0", "1", "0"))),
+        (10, 2, IntegerBaseDigitsResult(sign=1, base=2, digits=("1", "0", "1", "0"))),
         (
-            "-10",
+            -10,
             2,
             IntegerBaseDigitsResult(sign=-1, base=2, digits=("1", "0", "1", "0")),
         ),
-        ("0", 2, IntegerBaseDigitsResult(sign=0, base=2, digits=("0",))),
+        (0, 2, IntegerBaseDigitsResult(sign=0, base=2, digits=("0",))),
         (
-            "9999",
+            9999,
             10_000,
             IntegerBaseDigitsResult(sign=1, base=10_000, digits=("9999",)),
         ),
     ),
 )
 def test_base_digits_separates_sign_base_and_digits(
-    value: str,
+    value: int,
     base: int,
     expected: IntegerBaseDigitsResult,
 ) -> None:
@@ -59,17 +58,6 @@ def test_base_digits_result_rejects_noncanonical_separated_fields(
     }
 
 
-def test_base_digits_rejects_an_oversized_result_before_integer_conversion(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def unexpected_conversion(_: str) -> int:
-        raise AssertionError("base expansion must preflight before integer conversion")
-
-    monkeypatch.setattr(
-        arithmetic_operations, "parse_canonical_integer", unexpected_conversion
-    )
-
+def test_base_digits_rejects_an_oversized_result_before_integer_conversion() -> None:
     with pytest.raises(ValueError, match=rf"{MAX_BASE_DIGITS}-digit result bound"):
-        base_digits(
-            IntegerBaseDigitsRequest(value="1" + ("0" * MAX_BASE_DIGITS), base=10)
-        )
+        base_digits(IntegerBaseDigitsRequest(value=10**MAX_BASE_DIGITS, base=10))

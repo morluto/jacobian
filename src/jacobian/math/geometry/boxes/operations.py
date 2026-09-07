@@ -5,6 +5,7 @@ from __future__ import annotations
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.boxes._kernel import (
     complete_intersection_ledger,
@@ -46,15 +47,19 @@ def _digit_bounds(
     for axis in range(dimension):
         endpoints = _axis_endpoints(boxes, axis)
         numerator_digits = max(
-            (len(value.num.lstrip("-")) for value in endpoints), default=1
+            (len(format_canonical_integer(abs(value.num))) for value in endpoints),
+            default=1,
         )
-        denominator_digits = max((len(value.den) for value in endpoints), default=1)
+        denominator_digits = max(
+            (len(format_canonical_integer(value.den)) for value in endpoints), default=1
+        )
         maximum_numerator_digits = max(maximum_numerator_digits, numerator_digits)
         maximum_denominator_digits = max(maximum_denominator_digits, denominator_digits)
         volume_numerator_digits += numerator_digits + denominator_digits + 1
         volume_denominator_digits += 2 * denominator_digits
         common_denominator_digits += sum(
-            len(value) for value in {endpoint.den for endpoint in endpoints}
+            len(format_canonical_integer(value))
+            for value in {endpoint.den for endpoint in endpoints}
         )
     union_numerator_digits = (
         volume_numerator_digits

@@ -10,6 +10,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.matrices.values import (
     MAX_MATRIX_DIMENSION,
     RationalMatrix,
@@ -46,7 +47,13 @@ def _require_bounded_polynomial(
                 "degree_bound", f"{label} exceeds total-degree bound"
             )
         coeff = term.coefficient
-        if max(len(coeff.num.lstrip("-")), len(coeff.den)) > MAX_SOS_COEFF_DIGITS:
+        if (
+            max(
+                len(format_canonical_integer(abs(coeff.num))),
+                len(format_canonical_integer(coeff.den)),
+            )
+            > MAX_SOS_COEFF_DIGITS
+        ):
             raise _validation_error(
                 "coefficient_bound", f"{label} coefficient exceeds digit bound"
             )
@@ -100,7 +107,10 @@ def _require_bounded_sos_work(
     # polynomial merely to discover that its canonical result cannot fit.
     max_digits = max(
         (
-            max(len(term.coefficient.num.lstrip("-")), len(term.coefficient.den))
+            max(
+                len(format_canonical_integer(abs(term.coefficient.num))),
+                len(format_canonical_integer(term.coefficient.den)),
+            )
             for summand in summands
             for term in summand.polynomial.terms
         ),

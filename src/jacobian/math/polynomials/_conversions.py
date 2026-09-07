@@ -167,7 +167,7 @@ def rational_function_from_sympy(
             denominator=SparseRationalPolynomial(
                 terms=(
                     RationalPolynomialTerm(
-                        coefficient=CanonicalRational(num="1", den="1"),
+                        coefficient=CanonicalRational(num=1, den=1),
                         exponents=(),
                     ),
                 )

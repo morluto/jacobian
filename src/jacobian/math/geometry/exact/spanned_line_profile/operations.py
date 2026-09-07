@@ -8,6 +8,7 @@ from itertools import combinations
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.exact._models import PointConfiguration
 from jacobian.math.geometry.exact.spanned_line_profile._models import (
@@ -24,7 +25,10 @@ def _admit_line_key_growth(configuration: PointConfiguration) -> None:
     dimension = len(points[0].coordinates) if points else 0
     maximum_coordinate_digits = max(
         (
-            max(len(coordinate.num.lstrip("-")), len(coordinate.den))
+            max(
+                len(format_canonical_integer(abs(coordinate.num))),
+                len(format_canonical_integer(coordinate.den)),
+            )
             for point in points
             for coordinate in point.coordinates
         ),

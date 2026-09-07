@@ -246,7 +246,7 @@ def _admit_series(
     numerator: tuple[CanonicalRational, ...],
     denominator: tuple[CanonicalRational, ...],
     coefficient_convention: str,
-    expansion_point: str,
+    expansion_point: int,
     truncation_order: int,
 ) -> tuple[Fraction, ...]:
     """Prepare a rational-series prefix while checking its exact result envelope."""

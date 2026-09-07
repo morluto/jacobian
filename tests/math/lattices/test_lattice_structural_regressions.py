@@ -23,7 +23,7 @@ def _lattice(rows: list[list[int]]) -> IntegerLattice:
     return IntegerLattice.model_validate(
         {
             "ambient_dimension": len(rows[0]),
-            "basis": {"entries": [[str(value) for value in row] for row in rows]},
+            "basis": {"entries": [list(row) for row in rows]},
         }
     )
 

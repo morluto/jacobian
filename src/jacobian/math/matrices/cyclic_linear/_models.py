@@ -11,6 +11,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel, canonicalize_json_containers
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.matrices.values import (
     MAX_RATIONAL_MATRIX_ORDER,
     RationalVectorSpaceBasis,
@@ -201,8 +202,8 @@ class CyclicRationalBlockSymbol(StrictModel):
                 )
             if (
                 max(
-                    len(entry.coefficient.num.lstrip("-")),
-                    len(entry.coefficient.den),
+                    len(format_canonical_integer(abs(entry.coefficient.num))),
+                    len(format_canonical_integer(entry.coefficient.den)),
                 )
                 > MAX_CYCLIC_INPUT_DIGITS
             ):
@@ -309,7 +310,10 @@ class RationalCyclotomicElement(StrictModel):
                 "a cyclotomic element needs exactly phi(order) power-basis coordinates",
             )
         if any(
-            max(len(value.num.lstrip("-")), len(value.den))
+            max(
+                len(format_canonical_integer(abs(value.num))),
+                len(format_canonical_integer(value.den)),
+            )
             > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
             for value in self.coefficients_ascending
         ):
@@ -331,7 +335,7 @@ class RationalCyclotomicElement(StrictModel):
 
         variable = symbols("x")
         coefficients = tuple(
-            str(int(coefficient))
+            int(coefficient)
             for coefficient in Poly(
                 cyclotomic_poly(self.field.order, variable), variable
             ).all_coeffs()

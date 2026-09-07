@@ -11,6 +11,7 @@ from sympy.polys.matrices import DomainMatrix
 
 from jacobian._exact import CanonicalRational
 from jacobian._execution import OperationExecutionTimeoutError
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.discrepancy import _models as discrepancy_models
 from jacobian.math.combinatorics.discrepancy._models import (
@@ -64,10 +65,12 @@ def _require_admitted_step_height(
     """Admit the next common-denominator factor before an endpoint update."""
 
     direction_digits = max(
-        (len(str(abs(value))) for value in direction if value),
+        (len(format_canonical_integer(abs(value))) for value in direction if value),
         default=1,
     )
-    admitted_direction_digits = len(direction) * len(str(len(direction))) + 1
+    admitted_direction_digits = (
+        len(direction) * len(format_canonical_integer(len(direction))) + 1
+    )
     if direction_digits > admitted_direction_digits:
         raise RuntimeError("nullspace direction exceeds the admitted minor bound")
     next_digits = common_denominator_digits + direction_digits
@@ -83,7 +86,9 @@ def _floating_round(
 
     values = list(source_values)
     common_denominator_digits = 1 + sum(
-        len(value.den) for value in source.values if value.den != "1"
+        len(format_canonical_integer(value.den))
+        for value in source.values
+        if value.den != 1
     )
     coordinate_count = len(values)
     column_supports = tuple(set(column.coordinates) for column in source.columns)

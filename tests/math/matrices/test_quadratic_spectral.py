@@ -123,15 +123,15 @@ def test_pang_spectra_and_proof_critical_order_are_exact() -> None:
         (row.value.polynomial, row.value.real_root_index, row.multiplicity)
         for row in eigenvalues.values
     ) == (
-        (("400", "-400", "97"), 1, 1),
-        (("400", "-400", "97"), 0, 1),
+        ((400, -400, 97), 1, 1),
+        ((400, -400, 97), 0, 1),
     )
     assert tuple(
         (row.value.polynomial, row.value.real_root_index, row.multiplicity)
         for row in singular_values.values
     ) == (
-        (("64", "0", "-27"), 1, 1),
-        (("1", "0"), 0, 1),
+        ((64, 0, -27), 1, 1),
+        ((1, 0), 0, 1),
     )
     comparison = compare_real_algebraic(
         singular_values.values[0].value,
@@ -200,8 +200,8 @@ def test_symmetric_spectrum_can_return_quartic_values() -> None:
     assert tuple(
         (row.value.polynomial, row.value.real_root_index) for row in result.values
     ) == (
-        (("1", "0", "-4", "0", "1"), 3),
-        (("1", "0", "-4", "0", "1"), 1),
+        ((1, 0, -4, 0, 1), 3),
+        ((1, 0, -4, 0, 1), 1),
     )
 
 
@@ -215,7 +215,7 @@ def test_singular_spectrum_can_return_degree_eight_values() -> None:
 
     result = singular_spectrum(source)
 
-    polynomial = ("1", "0", "-10", "0", "23", "0", "-14", "0", "1")
+    polynomial = (1, 0, -10, 0, 23, 0, -14, 0, 1)
     assert tuple(
         (row.value.polynomial, row.value.real_root_index) for row in result.values
     ) == ((polynomial, 7), (polynomial, 5))
@@ -223,7 +223,7 @@ def test_singular_spectrum_can_return_degree_eight_values() -> None:
 
 def test_quadratic_spectrum_rejects_degree_sixteen_values() -> None:
     value = RealAlgebraicValue(
-        polynomial=("1",) + ("0",) * 15 + ("-2",),
+        polynomial=(1,) + (0,) * 15 + (-2,),
         real_root_index=0,
     )
 
@@ -242,7 +242,7 @@ def test_repeated_irrational_spectrum_keeps_multiplicity() -> None:
     result = symmetric_spectrum(source)
 
     assert len(result.values) == 1
-    assert result.values[0].value.polynomial == ("1", "0", "-24")
+    assert result.values[0].value.polynomial == (1, 0, -24)
     assert result.values[0].value.real_root_index == 1
     assert result.values[0].multiplicity == 2
 
@@ -258,7 +258,7 @@ def test_repeated_rational_singular_value_selects_nonnegative_root() -> None:
     result = singular_spectrum(identity)
 
     assert len(result.values) == 1
-    assert result.values[0].value.polynomial == ("1", "-1")
+    assert result.values[0].value.polynomial == (1, -1)
     assert result.values[0].value.real_root_index == 0
     assert result.values[0].multiplicity == 2
 

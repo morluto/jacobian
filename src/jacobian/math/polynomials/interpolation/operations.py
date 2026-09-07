@@ -8,6 +8,7 @@ from fractions import Fraction
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials.interpolation._kernel import (
     divided_difference_coefficients,
@@ -61,8 +62,10 @@ def _admit_samples(samples: InterpolationSamples) -> tuple[CanonicalRational, ..
     )
     for coefficient in coefficients:
         if (
-            len(coefficient.num.lstrip("-")) > MAX_CANONICAL_RATIONAL_DIGITS
-            or len(coefficient.den) > MAX_CANONICAL_RATIONAL_DIGITS
+            len(format_canonical_integer(abs(coefficient.num)))
+            > MAX_CANONICAL_RATIONAL_DIGITS
+            or len(format_canonical_integer(coefficient.den))
+            > MAX_CANONICAL_RATIONAL_DIGITS
         ):
             raise _validation_error(
                 "derived Newton coefficient exceeds the canonical digit bound"
@@ -76,8 +79,8 @@ def _admit_hermite(table: OrdinaryDerivativeJetTable) -> None:
 
 def _admit_newton_evaluate(evaluation_point: CanonicalRational) -> None:
     if (
-        len(evaluation_point.num.lstrip("-")) > _MAX_RATIONAL_DIGITS
-        or len(evaluation_point.den) > _MAX_RATIONAL_DIGITS
+        len(format_canonical_integer(abs(evaluation_point.num))) > _MAX_RATIONAL_DIGITS
+        or len(format_canonical_integer(evaluation_point.den)) > _MAX_RATIONAL_DIGITS
     ):
         raise _validation_error(
             f"evaluation point exceeds the {_MAX_RATIONAL_DIGITS}-digit bound"

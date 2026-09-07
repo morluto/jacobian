@@ -44,7 +44,7 @@ def test_control_expiry_after_real_response_validation(
         stderr_exceeded=False,
         timed_out=False,
     )
-    monkeypatch.setattr(module, "run_bounded_process", lambda *a, **kw: response)
+    monkeypatch.setattr(module, "run_bounded_process", lambda *a, **_kwargs: response)
     now = [0.0]
     event = Event()
     original = type(expected).model_validate
@@ -119,7 +119,7 @@ def test_hypergraph_response_validation_control_outcome(
     monkeypatch.setattr(
         module,
         "_run_independence_worker",
-        lambda *a, **kw: expected.model_dump(mode="json"),
+        lambda *a, **_kwargs: expected.model_dump(mode="json"),
     )
     now = [0.0]
     event = Event()
@@ -163,7 +163,7 @@ def test_hypergraph_worker_timeout_is_not_solver_error(
     monkeypatch.setattr(
         module,
         "run_bounded_process",
-        lambda *a, **kw: BoundedProcessResult(
+        lambda *a, **_kwargs: BoundedProcessResult(
             returncode=None,
             stdout=b"",
             stderr=b"",
@@ -193,7 +193,7 @@ def test_expiry_during_finite_graph_witness_check_precedes_invalid_witness(
     monkeypatch.setattr(
         module,
         "run_bounded_process",
-        lambda *a, **kw: BoundedProcessResult(
+        lambda *a, **_kwargs: BoundedProcessResult(
             returncode=0,
             stdout=expected.model_dump_json().encode(),
             stderr=b"",

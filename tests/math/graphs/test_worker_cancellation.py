@@ -31,11 +31,13 @@ def test_cancelled_worker_does_not_fall_back_or_return_unknown(
         timed_out=False,
         cancelled=True,
     )
-    monkeypatch.setattr(process, "run_bounded_process", lambda *a, **kw: completed)
+    monkeypatch.setattr(process, "run_bounded_process", lambda *a, **_kwargs: completed)
     monkeypatch.setattr(
-        _maximum_cut_process, "run_bounded_process", lambda *a, **kw: completed
+        _maximum_cut_process, "run_bounded_process", lambda *a, **_kwargs: completed
     )
-    monkeypatch.setattr(_unsat_core, "run_bounded_process", lambda *a, **kw: completed)
+    monkeypatch.setattr(
+        _unsat_core, "run_bounded_process", lambda *a, **_kwargs: completed
+    )
     with pytest.raises(OperationExecutionCancelledError):
         if kind == "maximum_cut":
             _maximum_cut_process.compute_maximum_cut_isolated(
@@ -66,7 +68,7 @@ def test_vf2_timeout_has_operation_execution_stage(
     monkeypatch.setattr(
         process,
         "run_bounded_process",
-        lambda *a, **kw: BoundedProcessResult(
+        lambda *a, **_kwargs: BoundedProcessResult(
             returncode=None,
             stdout=b"",
             stderr=b"",

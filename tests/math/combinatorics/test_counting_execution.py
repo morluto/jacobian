@@ -30,7 +30,7 @@ def test_counting_worker_control_outcomes(
     monkeypatch.setattr(
         _counting_process,
         "run_bounded_process",
-        lambda *a, **kw: BoundedProcessResult(
+        lambda *a, **_kwargs: BoundedProcessResult(
             returncode=-1,
             stdout=b"",
             stderr=b"",

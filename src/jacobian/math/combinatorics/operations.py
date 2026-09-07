@@ -484,18 +484,7 @@ def _canonical_fractions(
         if not isinstance(value, CanonicalRational):
             return None
         _require_bounded_rational(value, max_digits=max_digits, label=label)
-        if type(value.num) is not str or type(value.den) is not str:
-            return None
-        numerator = parse_canonical_integer(value.num)
-        denominator = parse_canonical_integer(value.den)
-        if denominator <= 0:
-            return None
-        fraction = Fraction(numerator, denominator)
-        if value.num != format_canonical_integer(
-            fraction.numerator
-        ) or value.den != format_canonical_integer(fraction.denominator):
-            return None
-        fractions.append(fraction)
+        fractions.append(value.as_fraction())
     return tuple(fractions)
 
 
@@ -779,7 +768,7 @@ def verify_rational_generating_function_coefficients(
             type(order) is not int
             or not 1 <= order <= MAX_RATIONAL_SERIES_TRUNCATION_ORDER
             or claim.coefficient_convention != "ASCENDING_POWERS_OF_X"
-            or claim.expansion_point != "0"
+            or claim.expansion_point != 0
             or not isinstance(series, TruncatedSeries)
             or series.variable != "x"
             or type(series.truncation_order) is not int

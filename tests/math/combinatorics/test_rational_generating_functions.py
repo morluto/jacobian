@@ -1,6 +1,5 @@
 """Canonical formal-series contracts for rational generating functions."""
 
-import json
 from fractions import Fraction
 
 import pytest
@@ -85,7 +84,9 @@ def test_degree_32_recurrence_returns_a_bound_canonical_series() -> None:
 
     forged = result.model_dump(mode="json")
     forged["series"]["coefficients"][0] = {"num": "2", "den": "1"}
-    decoded = RationalGeneratingFunctionCoefficientsResult.model_validate(forged)
+    decoded = RationalGeneratingFunctionCoefficientsResult.model_validate_json(
+        encode_strict_json(forged)
+    )
     assert not verify_rational_generating_function_coefficients(decoded)
 
 
@@ -94,11 +95,11 @@ def test_canonical_series_composes_into_formal_series_truncation() -> None:
         (ONE,),
         (ONE, MINUS_ONE),
         "ASCENDING_POWERS_OF_X",
-        "0",
+        0,
         6,
     )
     request = SeriesTruncateRequest.model_validate(
-        {"series": result.series.model_dump(mode="json"), "target_order": 3}
+        {"series": result.series.model_dump(), "target_order": 3}
     )
 
     truncated = truncate(request.series, request.target_order)
@@ -112,8 +113,8 @@ def test_canonical_series_composes_into_formal_series_truncation() -> None:
 
 def test_source_relation_survives_canonical_json_roundtrip() -> None:
     result = _expand((ONE, MINUS_ONE), 5)
-    wire = json.loads(encode_strict_json(result.model_dump(mode="json")))
-    decoded = RationalGeneratingFunctionCoefficientsResult.model_validate(wire)
+    wire = encode_strict_json(result.model_dump(mode="json"))
+    decoded = RationalGeneratingFunctionCoefficientsResult.model_validate_json(wire)
 
     assert decoded.numerator == (ONE,)
     assert decoded.denominator == (ONE, MINUS_ONE)

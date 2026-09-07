@@ -10,6 +10,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian.canonical import (
     CanonicalLimits,
+    format_canonical_integer,
 )
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive import _multiset_sum
@@ -405,8 +406,9 @@ def _admit_ordered_difference_entry(
             message="ordered-difference rows must match the source dimension",
         )
     if any(
-        not isinstance(coordinate, str)
-        or len(coordinate) > _MAX_VECTOR_COORDINATE_LENGTH
+        type(coordinate) is not int
+        or len(format_canonical_integer(abs(coordinate)))
+        > _MAX_VECTOR_COORDINATE_LENGTH - 1
         for coordinate in entry.difference.coordinates
     ):
         raise OperationDomainValidationError(
@@ -507,9 +509,8 @@ def _admit_ordered_difference_source(
                 message="ordered-difference source vectors have inconsistent dimensions",
             )
         if any(
-            not isinstance(coordinate, str)
-            or len(coordinate) > _MAX_VECTOR_COORDINATE_LENGTH
-            or len(coordinate.lstrip("-")) > _MAX_COORDINATE_DIGITS
+            type(coordinate) is not int
+            or len(format_canonical_integer(abs(coordinate))) > _MAX_COORDINATE_DIGITS
             for coordinate in vector.coordinates
         ):
             raise OperationDomainValidationError(

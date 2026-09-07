@@ -7,7 +7,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.graphs.values import (
-    MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
+    MAX_SIMPLE_GRAPH_VERTICES,
     SimpleUndirectedGraph,
 )
 
@@ -16,9 +16,7 @@ class NeighborhoodRequest(StrictModel):
     """Compute the exact open neighbourhood of a selected vertex set."""
 
     graph: SimpleUndirectedGraph
-    selected_vertices: tuple[str, ...] = Field(
-        max_length=MAX_INDEXED_SIMPLE_GRAPH_VERTICES
-    )
+    selected_vertices: tuple[str, ...] = Field(max_length=MAX_SIMPLE_GRAPH_VERTICES)
 
     @model_validator(mode="before")
     @classmethod
@@ -27,7 +25,7 @@ class NeighborhoodRequest(StrictModel):
             selected = value.get("selected_vertices")
             if (
                 isinstance(selected, (list, tuple))
-                and len(selected) > MAX_INDEXED_SIMPLE_GRAPH_VERTICES
+                and len(selected) > MAX_SIMPLE_GRAPH_VERTICES
             ):
                 raise PydanticCustomError(
                     "graph.selected_vertices_bound",

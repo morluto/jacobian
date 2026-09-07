@@ -30,6 +30,14 @@ Use these rules when designing or repairing an operation:
    the characteristic polynomial of A,” it must establish that additional
    relation under its own admission.
 
+Graph transforms return the same `IndexedSimpleUndirectedGraph` value that
+indexed graph operations consume, including the null graph and canonical
+`(left, right)` edge pairs with `left < right`. Its encoding envelope allows
+1,024 vertices and 65,536 edges so existing line-graph outputs remain
+representable. This is not a computational admission promise: each consumer
+retains its own work and size limits. Label-based `SimpleUndirectedGraph`
+values retain their separate 256-vertex envelope.
+
 ## Values, witnesses, and source binding
 
 | Need | Appropriate result |

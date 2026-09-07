@@ -4,9 +4,8 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.math.graphs.transforms._models import (
-    GraphResult,
     GraphTransformRequest,
-    ResultGraphEdge,
+    LineGraphRequest,
     SubgraphRequest,
 )
 from jacobian.math.graphs.transforms._tools import (
@@ -25,11 +24,8 @@ def _graph(vc: int, edges: list[tuple[int, int]]) -> IndexedSimpleUndirectedGrap
     )
 
 
-def _result_edges(result: GraphResult) -> frozenset[tuple[int, int]]:
-    return frozenset(
-        (e.source, e.target) if e.source < e.target else (e.target, e.source)
-        for e in result.edges
-    )
+def _result_edges(result: IndexedSimpleUndirectedGraph) -> frozenset[tuple[int, int]]:
+    return frozenset(result.edges)
 
 
 def test_complement_of_path_3() -> None:
@@ -51,7 +47,7 @@ def test_complement_of_complete_graph_is_empty() -> None:
 def test_line_graph_of_path() -> None:
     """Line graph of path 0-1-2 is a single edge between the two edges."""
     g = _graph(3, [(0, 1), (1, 2)])
-    result = compute_line_graph(GraphTransformRequest(graph=g))
+    result = compute_line_graph(LineGraphRequest(graph=g))
     assert result.vertex_count == 2  # two edges in original
     assert len(result.edges) == 1  # they share a vertex
 
@@ -59,7 +55,7 @@ def test_line_graph_of_path() -> None:
 def test_line_graph_of_triangle_is_triangle() -> None:
     """Line graph of K3 (triangle) is K3."""
     g = _graph(3, [(0, 1), (1, 2), (0, 2)])
-    result = compute_line_graph(GraphTransformRequest(graph=g))
+    result = compute_line_graph(LineGraphRequest(graph=g))
     assert result.vertex_count == 3
     assert len(result.edges) == 3
 
@@ -107,7 +103,7 @@ def test_complement_of_edgeless_graph_within_output_bounds() -> None:
 def test_line_graph_of_edgeless_graph_is_empty() -> None:
     """Line graph of an edgeless graph has zero vertices (empty result allowed)."""
     g = _graph(3, [])
-    result = compute_line_graph(GraphTransformRequest(graph=g))
+    result = compute_line_graph(LineGraphRequest(graph=g))
     assert result.vertex_count == 0
     assert len(result.edges) == 0
 
@@ -132,11 +128,9 @@ def test_line_graph_reindexes_endpoints_above_input_vertex_bound() -> None:
     """A line graph of more than 64 input edges reindexes endpoints above 63."""
     edges = [(0, i) for i in range(1, 64)] + [(1, 2), (1, 3)]
     g = _graph(64, edges)
-    result = compute_line_graph(GraphTransformRequest(graph=g))
+    result = compute_line_graph(LineGraphRequest(graph=g))
     assert result.vertex_count == 65
-    endpoints = {
-        endpoint for edge in result.edges for endpoint in (edge.source, edge.target)
-    }
+    endpoints = {endpoint for edge in result.edges for endpoint in edge}
     assert max(endpoints) >= 64
 
 
@@ -145,12 +139,48 @@ def test_input_edge_rejects_endpoint_at_or_above_vertex_bound() -> None:
         _graph(64, [(0, 64)])
 
 
-def test_result_edge_allows_endpoint_up_to_input_edge_bound() -> None:
-    edge = ResultGraphEdge(source=1023, target=1022)
-    assert edge.source == 1023
-    assert edge.target == 1022
+def test_line_graph_retains_maximum_input_edge_boundary() -> None:
+    edges = [(left, right) for left in range(32) for right in range(32, 64)]
+    result = compute_line_graph(LineGraphRequest(graph=_graph(64, edges)))
+    assert type(result) is IndexedSimpleUndirectedGraph
+    assert result.vertex_count == 1024
+    assert len(result.edges) == 32 * 32 * 62 // 2
+    assert (
+        IndexedSimpleUndirectedGraph.model_validate_json(result.model_dump_json())
+        == result
+    )
 
 
-def test_result_edge_rejects_endpoint_above_input_edge_bound() -> None:
-    with pytest.raises(ValidationError):
-        ResultGraphEdge(source=1024, target=0)
+def test_line_graph_preserves_its_expansion_admission() -> None:
+    edges = [(left, right) for left in range(32) for right in range(32, 64)]
+    edges.append((0, 1))
+    with pytest.raises(ValidationError, match="1024 input edges"):
+        LineGraphRequest(graph=_graph(64, edges))
+
+
+def test_reversed_induced_selection_has_canonical_edges() -> None:
+    result = compute_induced_subgraph(
+        SubgraphRequest(graph=_graph(2, [(0, 1)]), vertices=(1, 0))
+    )
+    assert result.edges == ((0, 1),)
+    assert (
+        IndexedSimpleUndirectedGraph.model_validate_json(result.model_dump_json())
+        == result
+    )
+
+
+def test_dense_complement_round_trip_needs_no_representation_adapter() -> None:
+    original = _graph(64, [])
+    complete = compute_complement(GraphTransformRequest(graph=original))
+    request = GraphTransformRequest.model_validate_json(
+        '{"graph":' + complete.model_dump_json() + "}"
+    )
+    assert compute_complement(request) == original
+
+
+def test_empty_transform_results_compose_unchanged() -> None:
+    empty = _graph(0, [])
+    assert compute_complement(GraphTransformRequest(graph=empty)) == empty
+    assert compute_graph_power(GraphTransformRequest(graph=empty)) == empty
+    assert compute_line_graph(LineGraphRequest(graph=empty)) == empty
+    assert compute_induced_subgraph(SubgraphRequest(graph=empty, vertices=())) == empty

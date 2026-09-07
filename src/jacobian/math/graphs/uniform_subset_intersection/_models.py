@@ -11,8 +11,8 @@ from pydantic import Field, StrictInt
 from jacobian._models import StrictModel
 from jacobian.math.graphs.values import (
     MAX_GRAPH_LABEL_BYTES,
-    MAX_INDEXED_SIMPLE_GRAPH_EDGES,
-    MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
+    MAX_SIMPLE_GRAPH_EDGES,
+    MAX_SIMPLE_GRAPH_VERTICES,
     SimpleUndirectedGraph,
 )
 
@@ -104,12 +104,12 @@ def _admit_uniform_subset_intersection(
     vertex_count = _combination_at_most(
         ground_set_size,
         subset_cardinality,
-        MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
+        MAX_SIMPLE_GRAPH_VERTICES,
     )
-    if vertex_count > MAX_INDEXED_SIMPLE_GRAPH_VERTICES:
+    if vertex_count > MAX_SIMPLE_GRAPH_VERTICES:
         raise ValueError(
             "the uniform subset family exceeds the "
-            f"{MAX_INDEXED_SIMPLE_GRAPH_VERTICES}-vertex graph bound"
+            f"{MAX_SIMPLE_GRAPH_VERTICES}-vertex graph bound"
         )
     if (
         _largest_subset_label_bytes(ground_set_size, subset_cardinality)
@@ -122,10 +122,10 @@ def _admit_uniform_subset_intersection(
     edge_count = _intersection_pair_count(
         ground_set_size, subset_cardinality, threshold, relation
     )
-    if edge_count > MAX_INDEXED_SIMPLE_GRAPH_EDGES:
+    if edge_count > MAX_SIMPLE_GRAPH_EDGES:
         raise ValueError(
             "the selected intersection relation exceeds the "
-            f"{MAX_INDEXED_SIMPLE_GRAPH_EDGES}-edge graph bound"
+            f"{MAX_SIMPLE_GRAPH_EDGES}-edge graph bound"
         )
     return _UniformSubsetIntersectionPlan(
         vertex_count=vertex_count,

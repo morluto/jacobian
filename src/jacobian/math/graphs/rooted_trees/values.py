@@ -11,12 +11,12 @@ from pydantic_core import PydanticCustomError
 from jacobian._models import StrictModel
 from jacobian.math.graphs.values import (
     MAX_GRAPH_LABEL_BYTES,
-    MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
+    MAX_SIMPLE_GRAPH_VERTICES,
     GraphVertexLabel,
     SimpleUndirectedGraph,
 )
 
-_MAX_TREE_EDGES = MAX_INDEXED_SIMPLE_GRAPH_VERTICES - 1
+_MAX_TREE_EDGES = MAX_SIMPLE_GRAPH_VERTICES - 1
 type _Edge = tuple[str, str]
 
 
@@ -77,13 +77,13 @@ class RootedTreeShrub(StrictModel):
     side of every boundary seed.
     """
 
-    index: StrictInt = Field(ge=0, le=MAX_INDEXED_SIMPLE_GRAPH_VERTICES - 1)
+    index: StrictInt = Field(ge=0, le=MAX_SIMPLE_GRAPH_VERTICES - 1)
     vertices: tuple[GraphVertexLabel, ...] = Field(
-        min_length=1, max_length=MAX_INDEXED_SIMPLE_GRAPH_VERTICES - 1
+        min_length=1, max_length=MAX_SIMPLE_GRAPH_VERTICES - 1
     )
     edges: tuple[_Edge, ...] = Field(max_length=_MAX_TREE_EDGES)
     boundary_seeds: tuple[GraphVertexLabel, ...] = Field(
-        min_length=1, max_length=MAX_INDEXED_SIMPLE_GRAPH_VERTICES
+        min_length=1, max_length=MAX_SIMPLE_GRAPH_VERTICES
     )
     boundary_edges: tuple[_Edge, ...] = Field(min_length=1, max_length=_MAX_TREE_EDGES)
     upper_seed: GraphVertexLabel
@@ -113,15 +113,11 @@ class RootedTreeFinePartitionConstructed(StrictModel):
     """The constructed seed sides and all source-bound shrubs."""
 
     status: Literal["CONSTRUCTED"] = "CONSTRUCTED"
-    seeds_x: tuple[GraphVertexLabel, ...] = Field(
-        max_length=MAX_INDEXED_SIMPLE_GRAPH_VERTICES
-    )
-    seeds_y: tuple[GraphVertexLabel, ...] = Field(
-        max_length=MAX_INDEXED_SIMPLE_GRAPH_VERTICES
-    )
+    seeds_x: tuple[GraphVertexLabel, ...] = Field(max_length=MAX_SIMPLE_GRAPH_VERTICES)
+    seeds_y: tuple[GraphVertexLabel, ...] = Field(max_length=MAX_SIMPLE_GRAPH_VERTICES)
     seed_edges: tuple[_Edge, ...] = Field(max_length=_MAX_TREE_EDGES)
     shrubs: tuple[RootedTreeShrub, ...] = Field(
-        max_length=MAX_INDEXED_SIMPLE_GRAPH_VERTICES - 1
+        max_length=MAX_SIMPLE_GRAPH_VERTICES - 1
     )
 
     @model_validator(mode="after")
@@ -148,7 +144,7 @@ class RootedTreeNotATree(StrictModel):
     status: Literal["NOT_A_TREE"] = "NOT_A_TREE"
     connected: StrictBool
     has_cycle: StrictBool
-    component_count: StrictInt = Field(ge=1, le=MAX_INDEXED_SIMPLE_GRAPH_VERTICES)
+    component_count: StrictInt = Field(ge=1, le=MAX_SIMPLE_GRAPH_VERTICES)
 
 
 RootedTreeFinePartitionOutcome = Annotated[
@@ -175,9 +171,7 @@ class RootedTreeFinePartition(StrictModel):
 
     graph: SimpleUndirectedGraph
     root: GraphVertexLabel
-    component_size_limit: StrictInt = Field(
-        ge=1, le=MAX_INDEXED_SIMPLE_GRAPH_VERTICES - 1
-    )
+    component_size_limit: StrictInt = Field(ge=1, le=MAX_SIMPLE_GRAPH_VERTICES - 1)
     outcome: RootedTreeFinePartitionOutcome
 
     @classmethod

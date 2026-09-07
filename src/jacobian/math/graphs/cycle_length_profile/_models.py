@@ -9,11 +9,11 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.graphs.values import (
-    MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
+    MAX_SIMPLE_GRAPH_VERTICES,
     SimpleUndirectedGraph,
 )
 
-MAX_VERTICES = MAX_INDEXED_SIMPLE_GRAPH_VERTICES
+MAX_VERTICES = MAX_SIMPLE_GRAPH_VERTICES
 
 
 class CycleLengthProfileRequest(StrictModel):

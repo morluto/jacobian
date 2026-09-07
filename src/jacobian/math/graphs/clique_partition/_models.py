@@ -10,8 +10,8 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.graphs.values import (
-    MAX_INDEXED_SIMPLE_GRAPH_EDGES,
-    MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
+    MAX_SIMPLE_GRAPH_EDGES,
+    MAX_SIMPLE_GRAPH_VERTICES,
     GraphVertexLabel,
     SimpleUndirectedGraph,
 )
@@ -19,12 +19,12 @@ from jacobian.math.graphs.values import (
 # Candidate parts are vertex subsets; pair work per part is quadratic in its
 # size. Both the part count and the aggregate pair checks are bounded before
 # any adjacency expansion.
-MAX_PARTITION_VERTEX_REFERENCES = 2 * MAX_INDEXED_SIMPLE_GRAPH_EDGES
+MAX_PARTITION_VERTEX_REFERENCES = 2 * MAX_SIMPLE_GRAPH_EDGES
 MAX_PARTITION_PARTS = MAX_PARTITION_VERTEX_REFERENCES // 2
 MAX_PARTITION_PAIR_WORK = 1_000_000
 PartitionPart = Annotated[
     tuple[GraphVertexLabel, ...],
-    Field(min_length=2, max_length=MAX_INDEXED_SIMPLE_GRAPH_VERTICES),
+    Field(min_length=2, max_length=MAX_SIMPLE_GRAPH_VERTICES),
 ]
 
 
@@ -64,7 +64,7 @@ class EdgeCliquePartitionRequest(StrictModel):
                 references = 0
                 for part in parts:
                     if isinstance(part, (list, tuple)):
-                        if len(part) > MAX_INDEXED_SIMPLE_GRAPH_VERTICES:
+                        if len(part) > MAX_SIMPLE_GRAPH_VERTICES:
                             raise _validation_error(
                                 "graph.clique_partition.part_too_large",
                                 "partition parts cannot exceed the graph vertex bound",
@@ -119,7 +119,7 @@ def _require_well_formed_parts(
                 "graph.clique_partition.part_vertex_unknown",
                 "every partition part must use declared graph vertices",
             )
-        if len(part) > MAX_INDEXED_SIMPLE_GRAPH_VERTICES:
+        if len(part) > MAX_SIMPLE_GRAPH_VERTICES:
             raise _validation_error(
                 "graph.clique_partition.part_too_large",
                 "partition parts cannot exceed the graph vertex bound",

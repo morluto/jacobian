@@ -7,13 +7,13 @@ from pydantic.json_schema import JsonSchemaValue
 
 from jacobian._models import StrictModel
 from jacobian.math.graphs.values import (
-    MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
+    MAX_SIMPLE_GRAPH_VERTICES,
     ColoredUndirectedGraph,
     SimpleUndirectedGraph,
 )
 
-MAX_HOST_VERTICES = MAX_INDEXED_SIMPLE_GRAPH_VERTICES
-MAX_PATTERN_VERTICES = MAX_INDEXED_SIMPLE_GRAPH_VERTICES
+MAX_HOST_VERTICES = MAX_SIMPLE_GRAPH_VERTICES
+MAX_PATTERN_VERTICES = MAX_SIMPLE_GRAPH_VERTICES
 
 
 def _bounded_graph_schema(

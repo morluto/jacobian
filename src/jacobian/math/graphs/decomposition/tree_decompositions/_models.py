@@ -13,7 +13,7 @@ from jacobian.math.graphs.decomposition.tree_decompositions.values import (
     MAX_TREE_NODES,
     TreeDecomposition,
 )
-from jacobian.math.graphs.values import MAX_INDEXED_SIMPLE_GRAPH_VERTICES
+from jacobian.math.graphs.values import MAX_SIMPLE_GRAPH_VERTICES
 
 
 def _normalized_tree_nodes(decomposition: TreeDecomposition) -> list[str]:
@@ -68,7 +68,7 @@ class VertexOccurrencesResult(StrictModel):
     decomposition: TreeDecomposition
 
     occurrences: tuple[OccurrenceSubtree, ...] = Field(
-        max_length=MAX_INDEXED_SIMPLE_GRAPH_VERTICES
+        max_length=MAX_SIMPLE_GRAPH_VERTICES
     )
 
     @model_validator(mode="after")

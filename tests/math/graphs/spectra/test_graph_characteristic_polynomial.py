@@ -10,6 +10,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.spectra import _tools as spectral_operations
 from jacobian.math.graphs.spectra import (
     adjacency_characteristic_polynomial,
@@ -281,8 +282,19 @@ def test_maximal_path_round_trips_through_serialization() -> None:
 def test_characteristic_polynomial_request_rejects_above_graph_carrier() -> None:
     with pytest.raises(ValidationError):
         GraphCharacteristicPolynomialRequest.model_validate(
-            {"graph": {"vertex_count": 257, "edges": []}}
+            {"graph": {"vertex_count": 1025, "edges": []}}
         )
+
+
+def test_characteristic_polynomial_native_admission_stays_below_carrier() -> None:
+    request = GraphCharacteristicPolynomialRequest.model_validate(
+        {"graph": {"vertex_count": 257, "edges": []}}
+    )
+    with pytest.raises(
+        OperationDomainValidationError,
+        match="characteristic-polynomial operations support at most 256 vertices",
+    ):
+        adjacency_characteristic_polynomial(request.graph)
 
 
 def test_native_adjacency_returns_canonical_polynomial() -> None:

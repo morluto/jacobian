@@ -9,7 +9,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.graphs.values import (
-    MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
+    MAX_SIMPLE_GRAPH_VERTICES,
     SimpleUndirectedGraph,
 )
 
@@ -76,7 +76,7 @@ class ChordalRecognitionResult(StrictModel):
                     "graph.chordal.cycle_shape",
                     "the induced cycle needs at least four distinct vertices",
                 )
-            if len(cycle) > MAX_INDEXED_SIMPLE_GRAPH_VERTICES:
+            if len(cycle) > MAX_SIMPLE_GRAPH_VERTICES:
                 raise _validation_error(
                     "graph.chordal.cycle_shape",
                     "the induced cycle cannot exceed the graph vertex bound",

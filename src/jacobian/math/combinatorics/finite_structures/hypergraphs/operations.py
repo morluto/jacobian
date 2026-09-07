@@ -38,7 +38,7 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
 )
 from jacobian.math.graphs.values import (
     MAX_GRAPH_LABEL_BYTES,
-    MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
+    MAX_SIMPLE_GRAPH_VERTICES,
     SimpleUndirectedGraph,
 )
 
@@ -149,13 +149,13 @@ def _admit_edge_intersection_graph(
             )
     # The edge-intersection graph maps each hyperedge to a graph vertex, so
     # the number of hyperedges must fit the SimpleUndirectedGraph carrier.
-    if len(hypergraph.edges) > MAX_INDEXED_SIMPLE_GRAPH_VERTICES:
+    if len(hypergraph.edges) > MAX_SIMPLE_GRAPH_VERTICES:
         raise OperationDomainValidationError(
             location=("hypergraph",),
             code="hypergraph.edge_intersection_graph.carrier_vertex_bound",
             message=(
                 "edge-intersection graph exceeds the "
-                f"{MAX_INDEXED_SIMPLE_GRAPH_VERTICES}-vertex graph carrier bound"
+                f"{MAX_SIMPLE_GRAPH_VERTICES}-vertex graph carrier bound"
             ),
         )
     # Vertex labels of the target graph are the edge IDs of the source

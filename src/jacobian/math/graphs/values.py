@@ -19,10 +19,14 @@ GraphCompositionOperation = Literal[
 
 MAX_GRAPH_LABEL_BYTES = 64
 MAX_GRAPH_COLOR_BYTES = 64
-MAX_INDEXED_SIMPLE_GRAPH_VERTICES = 256
-MAX_INDEXED_SIMPLE_GRAPH_EDGES = (
-    MAX_INDEXED_SIMPLE_GRAPH_VERTICES * (MAX_INDEXED_SIMPLE_GRAPH_VERTICES - 1) // 2
+MAX_SIMPLE_GRAPH_VERTICES = 256
+MAX_SIMPLE_GRAPH_EDGES = (
+    MAX_SIMPLE_GRAPH_VERTICES * (MAX_SIMPLE_GRAPH_VERTICES - 1) // 2
 )
+# Indexed values also carry line graphs. Computational admission belongs to
+# each consumer, not to the producer-independent value's encoding envelope.
+MAX_INDEXED_SIMPLE_GRAPH_VERTICES = 1024
+MAX_INDEXED_SIMPLE_GRAPH_EDGES = 65_536
 
 GraphVertexLabel = Annotated[
     str,
@@ -67,14 +71,14 @@ class SimpleUndirectedGraph(StrictModel):
     """Immutable canonical value for a finite simple undirected graph."""
 
     vertices: tuple[str, ...] = Field(
-        max_length=MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
+        max_length=MAX_SIMPLE_GRAPH_VERTICES,
         description=(
             "Unique Unicode NFC vertex labels containing valid Unicode scalar "
             "values. Vertex list order is preserved and need not be sorted."
         ),
     )
     edges: tuple[tuple[str, str], ...] = Field(
-        max_length=MAX_INDEXED_SIMPLE_GRAPH_EDGES,
+        max_length=MAX_SIMPLE_GRAPH_EDGES,
         description=(
             "Unique pairs of distinct declared vertices. Each pair must have "
             "left < right in lexicographic label order (Unicode code points, "

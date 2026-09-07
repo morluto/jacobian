@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.values import (
-    MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
+    MAX_SIMPLE_GRAPH_VERTICES,
     SimpleUndirectedGraph,
 )
 
@@ -30,13 +30,13 @@ def admit_open_neighborhood(
         not isinstance(vertex, str) for vertex in selected_vertices
     ):
         raise TypeError("selected_vertices must be a tuple of strings")
-    if len(selected_vertices) > MAX_INDEXED_SIMPLE_GRAPH_VERTICES:
+    if len(selected_vertices) > MAX_SIMPLE_GRAPH_VERTICES:
         raise OperationDomainValidationError(
             location=("selected_vertices",),
             code="graph.open_neighborhood.selected_vertices_bound",
             message=(
                 "open-neighbourhood selection supports at most "
-                f"{MAX_INDEXED_SIMPLE_GRAPH_VERTICES} raw vertices"
+                f"{MAX_SIMPLE_GRAPH_VERTICES} raw vertices"
             ),
         )
 

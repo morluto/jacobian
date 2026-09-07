@@ -9,11 +9,11 @@ from pydantic.json_schema import JsonSchemaValue
 
 from jacobian._models import StrictModel
 from jacobian.math.graphs.values import (
-    MAX_INDEXED_SIMPLE_GRAPH_EDGES,
+    MAX_SIMPLE_GRAPH_EDGES,
     SimpleUndirectedGraph,
 )
 
-MAX_DELETION_ORDER = MAX_INDEXED_SIMPLE_GRAPH_EDGES
+MAX_DELETION_ORDER = MAX_SIMPLE_GRAPH_EDGES
 
 
 def _edge_deletion_graph_schema() -> JsonSchemaValue:

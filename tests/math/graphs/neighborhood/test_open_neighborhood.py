@@ -15,7 +15,7 @@ from jacobian.math.graphs.neighborhood.operations import (
     verify_open_neighborhood,
 )
 from jacobian.math.graphs.values import (
-    MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
+    MAX_SIMPLE_GRAPH_VERTICES,
     SimpleUndirectedGraph,
 )
 
@@ -138,9 +138,9 @@ def test_native_operation_rejects_an_oversized_raw_selection_before_hashing() ->
     g = _graph(["a"], ())
     with pytest.raises(
         OperationDomainValidationError,
-        match=(f"at most {MAX_INDEXED_SIMPLE_GRAPH_VERTICES} raw vertices"),
+        match=(f"at most {MAX_SIMPLE_GRAPH_VERTICES} raw vertices"),
     ):
-        open_neighborhood(g, ("a",) * (MAX_INDEXED_SIMPLE_GRAPH_VERTICES + 1))
+        open_neighborhood(g, ("a",) * (MAX_SIMPLE_GRAPH_VERTICES + 1))
 
 
 def test_catalog_request_rejects_an_oversized_raw_selection() -> None:
@@ -148,7 +148,7 @@ def test_catalog_request_rejects_an_oversized_raw_selection() -> None:
     with pytest.raises(ValueError, match="raw tuple-length bound"):
         NeighborhoodRequest(
             graph=g,
-            selected_vertices=("a",) * (MAX_INDEXED_SIMPLE_GRAPH_VERTICES + 1),
+            selected_vertices=("a",) * (MAX_SIMPLE_GRAPH_VERTICES + 1),
         )
 
 

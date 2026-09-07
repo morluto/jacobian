@@ -9,9 +9,8 @@ from jacobian.math.graphs.transforms import (
     path_profile,
 )
 from jacobian.math.graphs.transforms._models import (
-    GraphResult,
     GraphTransformRequest,
-    ResultGraphEdge,
+    LineGraphRequest,
     SubgraphRequest,
 )
 from jacobian.math.graphs.transforms._path_profile_models import (
@@ -27,28 +26,30 @@ def _edges(graph: IndexedSimpleUndirectedGraph) -> list[tuple[int, int]]:
     return list(graph.edges)
 
 
-def _result(vertex_count: int, edges: list[tuple[int, int]]) -> GraphResult:
-    return GraphResult(
+def _result(
+    vertex_count: int, edges: list[tuple[int, int]]
+) -> IndexedSimpleUndirectedGraph:
+    return IndexedSimpleUndirectedGraph(
         vertex_count=vertex_count,
         edges=tuple(
-            ResultGraphEdge(source=source, target=target) for source, target in edges
+            (min(source, target), max(source, target)) for source, target in edges
         ),
     )
 
 
-def compute_complement(request: GraphTransformRequest) -> GraphResult:
+def compute_complement(request: GraphTransformRequest) -> IndexedSimpleUndirectedGraph:
     graph = request.graph
     vertex_count, edges = complement(graph.vertex_count, _edges(graph))
     return _result(vertex_count, edges)
 
 
-def compute_line_graph(request: GraphTransformRequest) -> GraphResult:
+def compute_line_graph(request: LineGraphRequest) -> IndexedSimpleUndirectedGraph:
     graph = request.graph
     vertex_count, edges = line_graph(graph.vertex_count, _edges(graph))
     return _result(vertex_count, edges)
 
 
-def compute_graph_power(request: GraphTransformRequest) -> GraphResult:
+def compute_graph_power(request: GraphTransformRequest) -> IndexedSimpleUndirectedGraph:
     graph = request.graph
     vertex_count, edges = graph_power(
         graph.vertex_count,
@@ -58,7 +59,7 @@ def compute_graph_power(request: GraphTransformRequest) -> GraphResult:
     return _result(vertex_count, edges)
 
 
-def compute_induced_subgraph(request: SubgraphRequest) -> GraphResult:
+def compute_induced_subgraph(request: SubgraphRequest) -> IndexedSimpleUndirectedGraph:
     graph = request.graph
     vertex_count, edges = induced_subgraph(
         graph.vertex_count,
@@ -89,7 +90,7 @@ TOOLS: MathTools = (
         title="Compute the complement of a graph",
         description="Compute the exact complement of a simple undirected graph. The complement has the same vertex set, with edges exactly where the original has no edge.",
         request_type=GraphTransformRequest,
-        result_type=GraphResult,
+        result_type=IndexedSimpleUndirectedGraph,
         run=compute_complement,
         tags=("graph", "complement", "exact"),
         examples=(
@@ -104,8 +105,8 @@ TOOLS: MathTools = (
         operation_id="graph.line_graph.compute",
         title="Compute the line graph of a graph",
         description="Compute the exact line graph L(G), whose vertices are edges of G and whose edges join pairs of incident edges.",
-        request_type=GraphTransformRequest,
-        result_type=GraphResult,
+        request_type=LineGraphRequest,
+        result_type=IndexedSimpleUndirectedGraph,
         run=compute_line_graph,
         tags=("graph", "line-graph", "exact"),
         examples=(
@@ -121,7 +122,7 @@ TOOLS: MathTools = (
         title="Compute the graph square",
         description="Compute the exact square G^2 of a simple undirected graph, joining vertices at distance at most two.",
         request_type=GraphTransformRequest,
-        result_type=GraphResult,
+        result_type=IndexedSimpleUndirectedGraph,
         run=compute_graph_power,
         tags=("graph", "graph-power", "exact"),
         examples=(
@@ -137,7 +138,7 @@ TOOLS: MathTools = (
         title="Extract an induced subgraph on a vertex subset",
         description="Compute the exact induced subgraph G[V'] and reindex its selected vertices from zero.",
         request_type=SubgraphRequest,
-        result_type=GraphResult,
+        result_type=IndexedSimpleUndirectedGraph,
         run=compute_induced_subgraph,
         tags=("graph", "induced-subgraph", "exact"),
         examples=(

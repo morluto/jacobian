@@ -11,7 +11,7 @@ from pydantic_core import PydanticCustomError
 from jacobian._models import StrictModel
 from jacobian.math._labels import OpaqueLabel
 from jacobian.math.graphs.values import (
-    MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
+    MAX_SIMPLE_GRAPH_VERTICES,
     IndexedSimpleUndirectedGraph,
     SimpleUndirectedGraph,
 )
@@ -20,7 +20,7 @@ from jacobian.math.graphs.values import (
 # most C(64, 2) edge variables.  Retain that formula/output envelope rather
 # than treating 64 vertices as the mathematical domain: sparse graphs on the
 # shared 256-vertex axis are no more expensive in the vertex-coloring formula.
-MAX_COLORING_VERTICES = MAX_INDEXED_SIMPLE_GRAPH_VERTICES
+MAX_COLORING_VERTICES = MAX_SIMPLE_GRAPH_VERTICES
 _DENSE_COLORING_REFERENCE_ORDER = 64
 MAX_COLORING_COLORS = _DENSE_COLORING_REFERENCE_ORDER
 MAX_EDGE_COLORING_EDGES = (
@@ -47,6 +47,11 @@ MAX_SOLVER_CONFLICT_BUDGET = 1_000_000
 
 
 def _require_indexed_coloring_graph(graph: IndexedSimpleUndirectedGraph) -> None:
+    if graph.vertex_count > MAX_COLORING_VERTICES:
+        raise PydanticCustomError(
+            "graph.coloring_vertex_count_exceeds_formula_bound",
+            f"coloring operations support at most {MAX_COLORING_VERTICES} vertices",
+        )
     if len(graph.edges) > MAX_EDGE_COLORING_EDGES:
         raise PydanticCustomError(
             "graph.coloring_edge_count_exceeds_formula_bound",

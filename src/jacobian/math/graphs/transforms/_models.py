@@ -12,50 +12,19 @@ from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 
 # Input graph bounds.
 MAX_VERTICES = 64
-MAX_EDGES = 1024
-
-# Result bounds derived from the worst-case transforms over the accepted
-# input domain. A line graph reindexes one vertex per input edge, so its
-# vertices reach the input edge bound (0..MAX_EDGES-1) rather than the input
-# vertex bound; every other transform keeps the input vertex set and stays
-# within MAX_VERTICES.
-MAX_RESULT_VERTICES = MAX_EDGES
-MAX_RESULT_EDGE_ENDPOINT = MAX_EDGES - 1
-
-# |E(L(G))| = sum_v C(deg(v), 2) <= (max_deg - 1) * |E(G)|
-#           <= (MAX_VERTICES - 2) * MAX_EDGES.
-# Complement, square, and induced subgraph produce at most C(MAX_VERTICES, 2)
-# = 2016 edges, so this line-graph bound covers every transform result.
-MAX_RESULT_EDGES = MAX_EDGES * (MAX_VERTICES - 2)
-
-
-class ResultGraphEdge(StrictModel):
-    """One undirected edge of a transformed graph.
-
-    Line graph vertices are reindexed input edges, so result endpoints may
-    reach the input edge bound, not just the input vertex bound.
-    """
-
-    source: int = Field(ge=0, le=MAX_RESULT_EDGE_ENDPOINT)
-    target: int = Field(ge=0, le=MAX_RESULT_EDGE_ENDPOINT)
-
-    @model_validator(mode="after")
-    def require_distinct(self) -> Self:
-        if self.source == self.target:
-            raise PydanticCustomError(
-                "graph.edge_endpoints_must_be_distinct",
-                "edge endpoints must be distinct",
-            )
-        return self
+MAX_EDGES = MAX_VERTICES * (MAX_VERTICES - 1) // 2
+# A line graph has one vertex per input edge and at most
+# (MAX_VERTICES - 2) * MAX_LINE_GRAPH_EDGES = 63,488 edges.
+MAX_LINE_GRAPH_EDGES = 1024
 
 
 def _require_transform_input_graph(
     graph: IndexedSimpleUndirectedGraph,
 ) -> IndexedSimpleUndirectedGraph:
-    if not 1 <= graph.vertex_count <= MAX_VERTICES:
+    if not 0 <= graph.vertex_count <= MAX_VERTICES:
         raise PydanticCustomError(
             "graph.transform_vertex_bound",
-            f"graph transforms require between 1 and {MAX_VERTICES} vertices",
+            f"graph transforms require between 0 and {MAX_VERTICES} vertices",
         )
     if len(graph.edges) > MAX_EDGES:
         raise PydanticCustomError(
@@ -68,6 +37,7 @@ def _require_transform_input_graph(
 _TransformInputGraph = Annotated[
     IndexedSimpleUndirectedGraph,
     AfterValidator(_require_transform_input_graph),
+    Field(description="Canonical graph with 0..64 vertices and at most 2016 edges."),
 ]
 
 
@@ -77,14 +47,21 @@ class GraphTransformRequest(StrictModel):
     graph: _TransformInputGraph
 
 
-class GraphResult(StrictModel):
-    """The result graph of a transform."""
+class LineGraphRequest(GraphTransformRequest):
+    """A line graph whose expanded output fits the canonical graph envelope."""
 
-    vertex_count: int = Field(ge=0, le=MAX_RESULT_VERTICES)
-    edges: tuple[ResultGraphEdge, ...] = Field(
-        default=(),
-        max_length=MAX_RESULT_EDGES,
+    graph: _TransformInputGraph = Field(
+        description="Canonical graph with 0..64 vertices and at most 1024 edges.",
     )
+
+    @model_validator(mode="after")
+    def require_line_graph_output_bound(self) -> Self:
+        if len(self.graph.edges) > MAX_LINE_GRAPH_EDGES:
+            raise PydanticCustomError(
+                "graph.line_graph_edge_bound",
+                f"line graphs support at most {MAX_LINE_GRAPH_EDGES} input edges",
+            )
+        return self
 
 
 class SubgraphRequest(StrictModel):

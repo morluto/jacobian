@@ -68,6 +68,7 @@ class RationalLinearOptimalityCandidate(StrictModel):
                 prepared.get(field),
                 maximum_length=limit,
                 label=field,
+                maximum_digits=MAX_CANONICAL_RATIONAL_DIGITS,
             )
         return canonicalize_json_containers(prepared)
 

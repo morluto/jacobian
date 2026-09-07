@@ -6,6 +6,7 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.optimization import check_linear_optimality, general_linear_program
 from jacobian.math.optimization._general_models import GeneralFormRationalLinearProgram
@@ -204,9 +205,66 @@ def test_large_shared_denominators_do_not_pay_independent_growth() -> None:
     assert check_linear_optimality(
         RationalLinearOptimalityCandidate.model_validate(payload)
     ).is_optimal
-    payload["primal_candidate"] = [{"num": "1" * 129, "den": "1"}]
-    with pytest.raises(ValidationError, match="128-digit"):
+    payload["primal_candidate"] = [
+        {"num": "1" * (MAX_CANONICAL_RATIONAL_DIGITS + 1), "den": "1"}
+    ]
+    with pytest.raises(ValidationError, match=f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit"):
         RationalLinearOptimalityCandidate.model_validate(payload)
+
+
+@pytest.mark.parametrize("serialized", [False, True])
+def test_solver_candidates_above_source_digit_limit_compose(serialized: bool) -> None:
+    coefficient = 10**100
+    program = GeneralFormRationalLinearProgram.model_validate(
+        {
+            "variables": [
+                {"name": name, "lower_bound": None, "upper_bound": None}
+                for name in ("x", "y")
+            ],
+            "objective": {"sense": "MINIMIZE", "coefficients": [_r(0), _r(0)]},
+            "constraints": [
+                {
+                    "label": "first",
+                    "coefficients": [_r(coefficient), _r(1)],
+                    "relation": "EQ",
+                    "rhs": _r(0),
+                },
+                {
+                    "label": "second",
+                    "coefficients": [_r(0), _r(coefficient)],
+                    "relation": "EQ",
+                    "rhs": _r(1),
+                },
+            ],
+        }
+    )
+    solved = general_linear_program(program)
+    assert solved.primal_candidate is not None
+    assert solved.primal_candidate[0].as_fraction() == Fraction(-1, coefficient**2)
+    fields = (
+        "program",
+        "primal_candidate",
+        "constraint_dual",
+        "lower_bound_dual",
+        "upper_bound_dual",
+    )
+    payload = (
+        {name: solved.model_dump(mode="json")[name] for name in fields}
+        if serialized
+        else {name: getattr(solved, name) for name in fields}
+    )
+    candidate = (
+        RationalLinearOptimalityCandidate.model_validate_json(json.dumps(payload))
+        if serialized
+        else RationalLinearOptimalityCandidate.model_validate(payload)
+    )
+    checked = check_linear_optimality(candidate)
+    assert checked.is_optimal
+    assert checked.stationarity_residuals == solved.stationarity_residuals
+    assert (
+        RationalLinearOptimalityResult.model_validate_json(checked.model_dump_json())
+        == checked
+    )
 
 
 @pytest.mark.parametrize("shared", [False, True])

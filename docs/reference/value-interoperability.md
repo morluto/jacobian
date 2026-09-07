@@ -141,6 +141,29 @@ and JSON-only serialization on the same annotated native type.
 | JSON validation | Accept canonical ASCII decimal strings, validate spelling and digit bounds before conversion, and decode to integers. Reject JSON numbers for these fields even at small magnitudes. |
 | `model_dump(mode="json")` and `model_dump_json()` | Encode integers as canonical decimal strings at every magnitude. |
 
+The encoding is selected for the field's complete admitted domain, not for the
+magnitude of each value. If a field can contain integers outside JSON's safe
+integer range, every instance uses the string form. Switching between a JSON
+number for `2` and a string for a larger value would give one field two wire
+types and make schemas and consumers branch on magnitude. For example:
+
+```python
+from jacobian.math.finite_fields import FiniteFieldPresentation
+
+field = FiniteFieldPresentation(
+    characteristic=2,
+    modulus_coefficients=(1, 1, 0, 1),
+    generator="a",
+)
+assert field.characteristic == 2
+assert field.model_dump()["characteristic"] == 2
+assert field.model_dump(mode="json")["characteristic"] == "2"
+```
+
+Accordingly, generated JSON Schema examples show strings even when their sample
+values are small. They describe the wire contract, not Python construction or
+the in-memory mathematical representation.
+
 For this split, `model_validate()` on an already-decoded wire dictionary is not
 equivalent to `model_validate_json()`: the former selects Python validation.
 Use the owning wire entry point for decoded transport payloads. Jacobian's
@@ -216,7 +239,7 @@ There are three separate questions:
 
 | Limit | What it protects | Where it belongs |
 | --- | --- | --- |
-| JSON safe-integer range | Exact exchange with ordinary JSON consumers | Scalar encoding; use canonical strings for larger mathematical integers. |
+| JSON safe-integer range | Exact exchange with ordinary JSON consumers | Scalar field encoding; if the field can exceed the range, use canonical strings for every value. |
 | Input bytes, decimal digits, collection size | Bounded parsing and materialization | Documented transport or structural guards, before expensive conversion/allocation. |
 | Arithmetic work, intermediate growth, memory, output size | A bounded exact computation | Admission for the actual operation and algorithm. |
 

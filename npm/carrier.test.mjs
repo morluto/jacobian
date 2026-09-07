@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 const require = createRequire(import.meta.url);
 const npmRoot = dirname(fileURLToPath(import.meta.url));
 const packageMetadata = require("./package.json");
+const TOML = require("@iarna/toml");
 const { pythonVersionFromNpmVersion, packageSpec } = require("./bin/jacobian.cjs");
 
 async function setupEnvironment(base) {
@@ -292,7 +293,7 @@ test("setup configures every supported client and preserves unrelated configurat
   }
 });
 
-test("setup protects an unmanaged Jacobian registration", async () => {
+test("setup refreshes a selected unmanaged Jacobian registration", async () => {
   const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-conflict-"));
   try {
     const env = await setupEnvironment(base);
@@ -303,10 +304,71 @@ test("setup protects an unmanaged Jacobian registration", async () => {
     await mkdir(dirname(configPath), { recursive: true });
     await writeFile(configPath, original, "utf8");
 
-    const result = runCarrier(["setup", "--claude", "--dry-run", "--json"], env);
-    assert.equal(result.status, 1);
-    assert.match(result.stderr, /refusing to replace an unmanaged Jacobian entry/);
-    assert.equal(await readFile(configPath, "utf8"), original);
+    const result = runCarrier(["setup", "--claude", "--yes", "--json"], env);
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(JSON.parse(await readFile(configPath, "utf8")).mcpServers.jacobian, {
+      command: "npx",
+      args: ["--yes", `jacobian@${packageMetadata.version}`, "mcp", "--managed-by-setup"],
+    });
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("setup migrates a Codex inline registration and preserves neighboring tables", async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-codex-inline-"));
+  try {
+    const env = await setupEnvironment(base);
+    const configPath = join(env.HOME, ".codex", "config.toml");
+    const original = `[mcp_servers]\njacobian = { command = "uv", args = ["run", "jacobian-mcp"] }\nother_inline = { command = "other-inline" }\n\n[mcp_servers.other]\ncommand = "other"\n`;
+    await mkdir(dirname(configPath), { recursive: true });
+    await writeFile(configPath, original, "utf8");
+
+    const result = runCarrier(["setup", "--codex", "--yes", "--json"], env);
+    assert.equal(result.status, 0, result.stderr);
+    const updated = await readFile(configPath, "utf8");
+    assert.match(updated, /# Managed by Jacobian setup\.\n\[mcp_servers\.jacobian\]/);
+    assert.match(updated, /\[mcp_servers\.other\]\ncommand = "other"/);
+    assert.match(updated, /^other_inline = \{ command = "other-inline" \}$/m);
+    assert.deepEqual(TOML.parse(updated).mcp_servers.other_inline, { command: "other-inline" });
+    assert.doesNotMatch(updated, /^jacobian =/m);
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("upgrade runs the pinned setup journey", async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-upgrade-"));
+  try {
+    const env = await setupEnvironment(base);
+    const result = runCarrier(["upgrade", "--codex", "--dry-run", "--json"], env);
+    assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.status, "planned");
+    assert.equal(report.launcher.args[1], `jacobian@${packageMetadata.version}`);
+    await assert.rejects(readFile(join(env.HOME, ".codex", "config.toml")), { code: "ENOENT" });
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("upgrade migrates a CRLF Codex registration", async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-upgrade-crlf-"));
+  try {
+    const env = await setupEnvironment(base);
+    const configPath = join(env.HOME, ".codex", "config.toml");
+    await mkdir(dirname(configPath), { recursive: true });
+    await writeFile(
+      configPath,
+      `[mcp_servers]\r\njacobian = { command = "uv", args = ["run", "jacobian-mcp"] }\r\nother = { command = "other" }\r\n`,
+      "utf8",
+    );
+
+    const result = runCarrier(["upgrade", "--codex", "--yes", "--json"], env);
+    assert.equal(result.status, 0, result.stderr);
+    const parsed = TOML.parse(await readFile(configPath, "utf8"));
+    assert.equal(parsed.mcp_servers.jacobian.args[1], `jacobian@${packageMetadata.version}`);
+    assert.deepEqual(parsed.mcp_servers.other, { command: "other" });
   } finally {
     await rm(base, { recursive: true, force: true });
   }

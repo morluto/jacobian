@@ -89,11 +89,12 @@ function exists(candidate) {
   }
 }
 
-function setupHelp() {
-  return `Jacobian setup — configure MCP clients with an exact Jacobian release.
+function setupHelp(command = "setup") {
+  const action = command === "upgrade" ? "update" : "configure";
+  return `Jacobian ${command} — ${action} MCP clients with an exact Jacobian release.
 
 Usage:
-  jacobian setup [options]
+  jacobian ${command} [options]
 
 Options:
   --claude, --opencode, --codex, --cursor, --gemini, --antigravity
@@ -101,11 +102,11 @@ Options:
   --all                  Select every supported client.
   --dry-run              Print the resolved plan without changing files.
   --yes                  Apply an explicit selection without prompting.
-  --force                Replace an existing unmanaged jacobian entry.
+  --force                Replace an existing unmanaged Jacobian skill.
   --json                 Emit the resolved report as JSON (requires explicit selection).
   -h, --help             Show this help.
 
-Setup never installs Node.js, uv, Python, or an MCP client. It writes the
+This command never installs Node.js, uv, Python, or an MCP client. It writes the
 selected client configuration entries and the Jacobian skill, both from the
 exact npm version that performed setup.\n`;
 }
@@ -179,21 +180,6 @@ function jsonEntry(client, runtime) {
   return { command: runtime.command, args: runtime.args };
 }
 
-function isManagedJsonEntry(client, entry) {
-  if (!entry || typeof entry !== "object" || Array.isArray(entry)) return false;
-  const command =
-    client.kind === "opencode"
-      ? entry.command
-      : typeof entry.command === "string" && Array.isArray(entry.args)
-        ? [entry.command, ...entry.args]
-        : [];
-  return (
-    Array.isArray(command) &&
-    command.includes(MANAGED_SETUP_ARGUMENT) &&
-    command.some((argument) => typeof argument === "string" && argument.startsWith("jacobian@"))
-  );
-}
-
 async function readOptional(filePath) {
   try {
     const stat = await fs.stat(filePath);
@@ -226,7 +212,7 @@ function sameJson(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-function planJsonEdit(client, filePath, original, runtime, force) {
+function planJsonEdit(client, filePath, original, runtime) {
   const source = original === null ? "{}\n" : original;
   const root = parseJson(source, filePath);
   const section = root[client.section];
@@ -234,11 +220,6 @@ function planJsonEdit(client, filePath, original, runtime, force) {
     throw new SetupError(`${client.section} must be an object: ${filePath}`);
   }
   const current = section && section[SERVER_NAME];
-  if (current !== undefined && !isManagedJsonEntry(client, current) && !force) {
-    throw new SetupError(
-      `refusing to replace an unmanaged Jacobian entry in ${filePath}; review it, then retry with --force`,
-    );
-  }
   const expected = jsonEntry(client, runtime);
   if (sameJson(current, expected)) return { action: "already current", updated: null };
   const edits = modify(source, [client.section, SERVER_NAME], expected, {
@@ -254,22 +235,32 @@ function tomlBlock(runtime) {
   return `${TOML_MARKER}\n[mcp_servers.${SERVER_NAME}]\ncommand = ${JSON.stringify(runtime.command)}\nargs = [${args}]\nstartup_timeout_sec = 30\n`;
 }
 
-function isManagedTomlEntry(entry) {
-  return (
-    entry &&
-    typeof entry === "object" &&
-    Array.isArray(entry.args) &&
-    entry.args.includes(MANAGED_SETUP_ARGUMENT) &&
-    entry.args.some((argument) => typeof argument === "string" && argument.startsWith("jacobian@"))
+function managedTomlBlock(source) {
+  const escapedMarker = TOML_MARKER.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(
+    `(^|\\r?\\n)${escapedMarker}\\r?\\n\\[mcp_servers\\.${SERVER_NAME}\\]\\r?\\n[\\s\\S]*?(?=\\r?\\n\\[|$)`,
   );
 }
 
-function managedTomlBlock(source) {
-  const escapedMarker = TOML_MARKER.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`(^|\\n)${escapedMarker}\\n\\[mcp_servers\\.${SERVER_NAME}\\]\\n[\\s\\S]*?(?=\\n\\[|$)`);
+function directTomlEntry(source) {
+  const section = /(^|\r?\n)\[mcp_servers\][ \t]*(?:\r?\n|$)/g.exec(source);
+  if (!section) return null;
+  const bodyStart = section.index + section[0].length;
+  const nextSection = /(^|\r?\n)\[[^\r\n]+\][ \t]*(?:\r?\n|$)/g;
+  nextSection.lastIndex = bodyStart;
+  const next = nextSection.exec(source);
+  const bodyEnd = next ? next.index + next[1].length : source.length;
+  const body = source.slice(bodyStart, bodyEnd);
+  const assignment = /^(?:jacobian|"jacobian"|'jacobian')[ \t]*=.*(?:\r?\n|$)/m.exec(body);
+  if (!assignment) return null;
+  return {
+    start: bodyStart + assignment.index,
+    end: bodyStart + assignment.index + assignment[0].length,
+    bodyEnd,
+  };
 }
 
-function planTomlEdit(filePath, original, runtime, force) {
+function planTomlEdit(filePath, original, runtime) {
   const source = original || "";
   let root;
   try {
@@ -278,20 +269,27 @@ function planTomlEdit(filePath, original, runtime, force) {
     throw new SetupError(`invalid TOML configuration at ${filePath}: ${error.message}`);
   }
   const current = root.mcp_servers && root.mcp_servers[SERVER_NAME];
-  if (current !== undefined && !isManagedTomlEntry(current) && !force) {
-    throw new SetupError(
-      `refusing to replace an unmanaged Jacobian entry in ${filePath}; review it, then retry with --force`,
-    );
-  }
   const block = tomlBlock(runtime);
   const expression = managedTomlBlock(source);
   if (current !== undefined) {
     const managedMatch = source.match(expression);
-    if (!managedMatch && !force) {
-      throw new SetupError(`managed Jacobian entry cannot be safely updated: ${filePath}`);
+    const table = new RegExp(
+      `(^|\\r?\\n)\\[mcp_servers\\.${SERVER_NAME}\\]\\r?\\n[\\s\\S]*?(?=\\r?\\n\\[|$)`,
+    );
+    const tableMatch = source.match(table);
+    const directEntry = directTomlEntry(source);
+    const replacement = managedMatch || tableMatch;
+    if (directEntry) {
+      const withoutEntry = `${source.slice(0, directEntry.start)}${source.slice(directEntry.end)}`;
+      const insertion = directEntry.bodyEnd - (directEntry.end - directEntry.start);
+      const updated = `${withoutEntry.slice(0, insertion)}${block}${withoutEntry.slice(insertion)}`;
+      try {
+        TOML.parse(updated);
+      } catch (error) {
+        throw new SetupError(`Jacobian entry cannot be safely updated in ${filePath}: ${error.message}`);
+      }
+      return { action: "update", updated };
     }
-    const table = new RegExp(`(^|\\n)\\[mcp_servers\\.${SERVER_NAME}\\]\\n[\\s\\S]*?(?=\\n\\[|$)`);
-    const replacement = managedMatch || source.match(table);
     if (!replacement) {
       throw new SetupError(`Jacobian entry cannot be safely updated in ${filePath}`);
     }
@@ -329,8 +327,8 @@ async function buildPlan(clientIds, home, version, force) {
     const original = await readOptional(filePath);
     const change =
       client.kind === "toml"
-        ? planTomlEdit(filePath, original, runtime, force)
-        : planJsonEdit(client, filePath, original, runtime, force);
+        ? planTomlEdit(filePath, original, runtime)
+        : planJsonEdit(client, filePath, original, runtime);
     const skillPath = path.join(home, client.skillPath);
     let skill = skillPlans.get(skillPath);
     if (!skill) {
@@ -432,7 +430,7 @@ function renderPreflight(plan, runtime, force) {
   for (const entry of plan) lines.push(`    ${entry.client.displayName}: ${entry.skill.path} — ${entry.skill.action}`);
   lines.push("", "  Setup writes the selected client configuration entries and Jacobian skill.");
   lines.push("  It does not install or update uv, Python, Node.js, or any agent.");
-  if (force) lines.push("  Explicit override: an unmanaged Jacobian entry may be replaced.");
+  if (force) lines.push("  Explicit override: an unmanaged Jacobian skill may be replaced.");
   return lines.join("\n");
 }
 
@@ -508,10 +506,10 @@ async function confirmPlan() {
   }
 }
 
-async function runSetup(args, version) {
+async function runSetup(args, version, command = "setup") {
   const options = parseArgs(args);
   if (options.help) {
-    process.stdout.write(setupHelp());
+    process.stdout.write(setupHelp(command));
     return;
   }
   const explicit = options.all ? CLIENTS.map((client) => client.id) : options.clients;

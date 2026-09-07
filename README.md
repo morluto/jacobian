@@ -54,6 +54,10 @@ does not install Node.js, Python, `uv`, or an agent. For automation, preview
 an explicit plan with `npx jacobian@latest setup --codex --dry-run`; use
 `--yes` only with explicit agent flags or `--all`.
 
+To refresh an existing registration explicitly, run
+`npx jacobian@latest upgrade` and select the agents to update. The generated
+launcher pins the exact release resolved by npm.
+
 Run the canonical Python MCP command without installing Jacobian globally:
 
 ```sh

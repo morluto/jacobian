@@ -28,6 +28,8 @@ Usage:
     Run the canonical Jacobian MCP server over stdio.
   jacobian setup [options]
     Configure selected agents to use the Jacobian MCP server.
+  jacobian upgrade [options]
+    Update selected agents to this exact Jacobian release (alias for setup).
 
 The carrier invokes the exact Python MCP command:
   uvx --from jacobian==<version> jacobian-mcp [args...]
@@ -137,8 +139,8 @@ async function main() {
     return;
   }
 
-  if (command === "setup") {
-    await runSetup(args.slice(1), require("../package.json").version);
+  if (command === "setup" || command === "upgrade") {
+    await runSetup(args.slice(1), require("../package.json").version, command);
     return;
   }
 

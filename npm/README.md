@@ -37,9 +37,9 @@ npx jacobian@latest setup
 ```
 
 Choose detected agents and review the changes before they are written. Setup
-writes a `jacobian` MCP entry and installs the `jacobian-math` skill for each
-selected agent. Existing unowned MCP entries and skills are protected unless
-you explicitly pass `--force`.
+writes or refreshes the selected `jacobian` MCP entry and installs the
+`jacobian-math` skill for each selected agent. Existing unmanaged skill files
+are protected unless you explicitly pass `--force`.
 
 The generated launcher pins the Jacobian version that ran setup. Setup itself
 does not install or upgrade Node.js, `uv`, Python, or an agent.
@@ -49,6 +49,7 @@ For automation, make selection and consent explicit:
 ```sh
 npx jacobian@latest setup --codex --dry-run
 npx jacobian@latest setup --codex --yes
+npx jacobian@latest upgrade --codex --yes
 ```
 
 ## Usage
@@ -59,6 +60,9 @@ jacobian mcp [args...]
 
 jacobian setup [options]
   Configure selected agents to use the Jacobian MCP server.
+
+jacobian upgrade [options]
+  Update selected agents to this exact Jacobian release (alias for setup).
 ```
 
 `jacobian mcp` execs the exact canonical command:

@@ -96,8 +96,10 @@ def _run_admission(admission: Any) -> None:
         ) from exc
 
 
-def _admit_pair(left: RationalPolynomial, right: RationalPolynomial) -> None:
-    _validate_multivariate_pair(left, right)
+def _admit_pair(
+    left: RationalPolynomial, right: RationalPolynomial, *, minimum_variables: int = 2
+) -> None:
+    _validate_multivariate_pair(left, right, minimum_variables=minimum_variables)
     for polynomial in (left, right):
         require_polynomial_budget(
             polynomial,
@@ -112,7 +114,7 @@ def _admit_gcd(left: RationalPolynomial, right: RationalPolynomial) -> None:
 
 
 def _admit_division(left: RationalPolynomial, right: RationalPolynomial) -> None:
-    _admit_pair(left, right)
+    _admit_pair(left, right, minimum_variables=1)
     if not right.polynomial.terms:
         raise _validation_error("divisor polynomial must be nonzero")
 

@@ -551,3 +551,28 @@ def test_restriction_rejects_degenerate_parent_and_child() -> None:
         restrict_bernstein(parent, point)
     parent_point = parent.model_copy(update={"box": point})
     assert not verify_bernstein_restriction(parent_point, parent)
+
+
+@pytest.mark.parametrize("identity", [False, True])
+def test_restriction_does_not_charge_unchanged_large_axis(identity: bool) -> None:
+    payload = _fixture()
+    payload["polynomial"]["polynomial"]["terms"] = [
+        {"coefficient": _q(1), "exponents": [1, 0]},
+        {"coefficient": _q(1), "exponents": [0, 1]},
+    ]
+    payload["multidegree"] = [4096, 1]
+    request = BernsteinRequest.model_validate_json(json.dumps(payload))
+    parent = bernstein_coefficients(
+        request.polynomial, request.box, request.multidegree
+    )
+    child_payload = deepcopy(payload["box"])
+    if not identity:
+        child_payload["intervals"][1]["upper"] = _q(1, 2)
+    child = RationalBox.model_validate_json(json.dumps(child_payload))
+    decoded = RationalBernsteinPolynomial.model_validate_json(parent.model_dump_json())
+    result = restrict_bernstein(decoded, child)
+    assert tuple(c.as_fraction() for c in result.coefficients) == tuple(
+        Fraction(k, 4096) + Fraction(j, 1 if identity else 2)
+        for k in range(4097)
+        for j in range(2)
+    )

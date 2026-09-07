@@ -151,10 +151,11 @@ def test_producer_isolates_once_and_result_parsing_stays_structural(
         threshold: CanonicalRational,
         lower: CanonicalRational,
         upper: CanonicalRational,
+        plan: kernel.StrictSublevelPlan | None = None,
     ) -> Any:
         nonlocal calls
         calls += 1
-        return original(polynomial, threshold, lower, upper)
+        return original(polynomial, threshold, lower, upper, plan)
 
     monkeypatch.setattr(operations, "compute_strict_sublevel_payload", counting)
     request = _request(_polynomial((1, 2)), threshold=2)
@@ -486,3 +487,20 @@ def test_result_bounds_raw_measure_before_source_replay() -> None:
 
     with pytest.raises(ValidationError):
         StrictSublevelMeasureResult.model_validate(payload)
+
+
+@pytest.mark.parametrize("degree", [8, 16])
+def test_chebyshev_extrema_split_strict_components(degree: int) -> None:
+    import sympy as sp
+
+    from jacobian.math.polynomials._conversions import rational_polynomial_from_sympy
+
+    x = sp.Symbol("x")
+    polynomial = rational_polynomial_from_sympy(
+        sp.Poly(sp.chebyshevt(degree, x), x, domain="QQ"), ("x",)
+    )
+    result = compute_strict_sublevel_measure(_request(polynomial, lower=-1, upper=1))
+    assert len(result.components) == degree
+    assert all(not c.left_included and not c.right_included for c in result.components)
+    assert result.measure.rational_part.as_fraction() == 2
+    assert result.measure.root_terms == ()

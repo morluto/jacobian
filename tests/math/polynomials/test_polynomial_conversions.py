@@ -261,3 +261,26 @@ def test_sparse_polynomial_schema_explains_canonical_term_order() -> None:
             },
         ]
     ]
+
+
+@pytest.mark.parametrize("degree", [126, 128])
+@pytest.mark.parametrize("denominator", [1, 6])
+def test_dense_resultant_retains_common_denominator(
+    degree: int, denominator: int
+) -> None:
+    from fractions import Fraction
+
+    x = sympy.Symbol("x")
+    f = sum(x**i for i in range(degree + 1))
+    left = rational_polynomial_from_sympy(
+        sympy.Poly(f / denominator, x, domain="QQ"), ("x",)
+    )
+    right = rational_polynomial_from_sympy(
+        sympy.Poly((f + 1) / denominator, x, domain="QQ"), ("x",)
+    )
+    result = polynomial_resultant(left, right, "x")
+    assert result.resultant.kind == "SCALAR"
+    # Res(f,f+1)=1 for monic f; scaling each degree-n input contributes D^-n.
+    assert result.resultant.value.as_fraction() == Fraction(
+        1, denominator ** (2 * degree)
+    )

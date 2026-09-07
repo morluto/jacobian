@@ -99,6 +99,11 @@ class _MembershipCertificatePlan:
     linear_plan: _LinearPlan
 
 
+@dataclass(frozen=True)
+class _ImmediateMembershipCertificate:
+    cofactors: tuple[RationalPolynomial, ...]
+
+
 def _run_admission[T](admission: Callable[[], T]) -> T:
     try:
         return admission()
@@ -276,11 +281,35 @@ def _admit_normal_form(
     )
 
 
+def _immediate_membership_certificate(
+    ideal: RationalPolynomialIdeal, polynomial: RationalPolynomial
+) -> _ImmediateMembershipCertificate | None:
+    if not polynomial.polynomial.terms or polynomial in ideal.generators:
+        zero = RationalPolynomial(
+            variables=ideal.variables, polynomial=SparseRationalPolynomial(terms=())
+        )
+        cofactors = [zero] * len(ideal.generators)
+        if polynomial.polynomial.terms:
+            cofactors[ideal.generators.index(polynomial)] = RationalPolynomial(
+                variables=ideal.variables,
+                polynomial=SparseRationalPolynomial(
+                    terms=(
+                        RationalPolynomialTerm(
+                            coefficient=CanonicalRational(num=1, den=1),
+                            exponents=(0,) * len(ideal.variables),
+                        ),
+                    )
+                ),
+            )
+        return _ImmediateMembershipCertificate(tuple(cofactors))
+    return None
+
+
 def _admit_membership_certificate(
     ideal: RationalPolynomialIdeal,
     polynomial: RationalPolynomial,
     cofactor_degree_bound: int,
-) -> _MembershipCertificatePlan | None:
+) -> _MembershipCertificatePlan | _ImmediateMembershipCertificate:
     if type(cofactor_degree_bound) is not int or not (
         0 <= cofactor_degree_bound <= MAX_CERTIFICATE_COFACTOR_DEGREE
     ):
@@ -328,6 +357,9 @@ def _admit_membership_certificate(
             code="polynomial.ideal_certificate.source_budget_exceeded",
             message=str(exc),
         ) from exc
+    immediate = _immediate_membership_certificate(ideal, polynomial)
+    if immediate is not None:
+        return immediate
     monomial_count = comb(
         len(ideal.variables) + cofactor_degree_bound,
         cofactor_degree_bound,
@@ -347,8 +379,6 @@ def _admit_membership_certificate(
                 f"{_MAX_CERTIFICATE_NONZEROS:,}-nonzero certificate envelope"
             ),
         )
-    if not polynomial.polynomial.terms:
-        return None
     monomials = _cofactor_monomials(len(ideal.variables), cofactor_degree_bound)
     columns = tuple(
         (generator_index, monomial)
@@ -450,18 +480,14 @@ def ideal_membership_certificate(
     plan = _run_admission(
         lambda: _admit_membership_certificate(ideal, polynomial, cofactor_degree_bound)
     )
-    if plan is None:
-        zero = RationalPolynomial(
-            variables=ideal.variables,
-            polynomial=SparseRationalPolynomial(terms=()),
-        )
+    if isinstance(plan, _ImmediateMembershipCertificate):
         return IdealMembershipCertificateResult._from_kernel(
             ideal=ideal,
             polynomial=polynomial,
             cofactor_degree_bound=cofactor_degree_bound,
             status="CERTIFICATE",
             multiplier=1,
-            cofactors=tuple(zero for _ in ideal.generators),
+            cofactors=plan.cofactors,
         )
 
     solution = _solve_admitted(plan.linear_plan)

@@ -131,7 +131,7 @@ def test_negative_result_is_limited_to_the_declared_cofactor_degree() -> None:
 def test_certificate_search_rejects_expansion_before_enumeration() -> None:
     variables = tuple(f"x{index}" for index in range(8))
     zero = _polynomial(variables, ())
-    request = _request((zero,), zero, 16)
+    request = _request((zero,), _polynomial(variables, ((1, (0,) * 8),)), 16)
 
     with pytest.raises(OperationDomainValidationError, match="column"):
         ideal_membership_certificate(
@@ -202,10 +202,24 @@ def test_membership_verifier_propagates_source_resource_admission() -> None:
     claim = result.model_copy(
         update={
             "ideal": oversized_ideal,
-            "polynomial": zero,
+            "polynomial": _polynomial(variables, ((1, (0,) * 8),)),
             "cofactor_degree_bound": 16,
         }
     )
 
     with pytest.raises(OperationResourceAdmissionError, match="column"):
         verify_ideal_membership_certificate(claim)
+
+
+@pytest.mark.parametrize("zero", [True, False])
+def test_immediate_certificate_precedes_full_cofactor_search(zero: bool) -> None:
+    variables = tuple("abcdefgh")
+    generator = _polynomial(variables, ((1, (0,) * 8),))
+    target = _polynomial(variables, ()) if zero else generator
+    request = _request((generator,), target, 16)
+    result = ideal_membership_certificate(request.ideal, target, 16)
+    assert result.status == "CERTIFICATE" and result.multiplier == 1
+    assert result.cofactor_degree_bound == 16
+    assert result.cofactors is not None
+    assert result.cofactors[0] == target
+    assert verify_ideal_membership_certificate(result)

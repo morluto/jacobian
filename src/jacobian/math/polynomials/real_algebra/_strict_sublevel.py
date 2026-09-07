@@ -23,6 +23,12 @@ from jacobian.math.polynomials.values import RationalPolynomial
 
 
 @dataclass(frozen=True)
+class StrictSublevelPlan:
+    minus_factors: tuple[tuple[Any, int], ...]
+    plus_factors: tuple[tuple[Any, int], ...]
+
+
+@dataclass(frozen=True)
 class StrictSublevelPayload:
     components: tuple[StrictSublevelComponent, ...]
     measure: SourceBoundAlgebraicMeasure
@@ -48,7 +54,25 @@ def _compare_level_roots(left: _RealLevelRoot, right: _RealLevelRoot) -> int:
     raise RuntimeError("distinct positive-threshold level equations shared a root")
 
 
-def _real_level_roots(polynomial: Any, equation: LevelEquation) -> list[_RealLevelRoot]:
+def _real_level_roots(
+    polynomial: Any,
+    equation: LevelEquation,
+    factors: tuple[tuple[Any, int], ...] | None = None,
+) -> list[_RealLevelRoot]:
+    roots = (
+        polynomial.real_roots(multiple=False, radicals=False)
+        if factors is None
+        else sorted(
+            (
+                (root, multiplicity * factor_multiplicity)
+                for factor, factor_multiplicity in factors
+                for root, multiplicity in factor.real_roots(
+                    multiple=False, radicals=False
+                )
+            ),
+            key=lambda pair: pair[0],
+        )
+    )
     return [
         _RealLevelRoot(
             value=root,
@@ -58,9 +82,7 @@ def _real_level_roots(polynomial: Any, equation: LevelEquation) -> list[_RealLev
                 multiplicity=int(multiplicity),
             ),
         )
-        for index, (root, multiplicity) in enumerate(
-            polynomial.real_roots(multiple=False, radicals=False)
-        )
+        for index, (root, multiplicity) in enumerate(roots)
     ]
 
 
@@ -153,6 +175,7 @@ def compute_strict_sublevel_payload(
     threshold_value: CanonicalRational,
     lower_scope: CanonicalRational,
     upper_scope: CanonicalRational,
+    plan: StrictSublevelPlan | None = None,
 ) -> StrictSublevelPayload:
     """Return every contributing cell and its exact endpoint-difference sum.
 
@@ -187,10 +210,12 @@ def compute_strict_sublevel_payload(
                 *_real_level_roots(
                     polynomial - threshold,
                     "F_MINUS_THRESHOLD",
+                    None if plan is None else plan.minus_factors,
                 ),
                 *_real_level_roots(
                     polynomial + threshold,
                     "F_PLUS_THRESHOLD",
+                    None if plan is None else plan.plus_factors,
                 ),
             ),
             key=cmp_to_key(_compare_level_roots),

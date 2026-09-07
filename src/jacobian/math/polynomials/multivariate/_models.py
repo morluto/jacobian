@@ -21,10 +21,12 @@ _MULTIVARIATE_MIN_VARIABLES = 2
 def _validate_multivariate_pair(
     left: RationalPolynomial,
     right: RationalPolynomial,
+    *,
+    minimum_variables: int = _MULTIVARIATE_MIN_VARIABLES,
 ) -> None:
     """Shared validation for two polynomials in the same declared ring."""
 
-    if len(left.variables) < _MULTIVARIATE_MIN_VARIABLES:
+    if len(left.variables) < minimum_variables:
         raise _validation_error(
             "multivariate operations require at least two variables"
         )

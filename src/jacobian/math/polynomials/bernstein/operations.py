@@ -343,7 +343,9 @@ def _restriction_admit(
     if child.variables != parent.box.variables:
         _reject("restriction child must follow the parent's complete ordered axes")
     ratios: list[tuple[Fraction, Fraction] | None] = []
-    split_parameter_height = 1
+    parameter_growth = 0
+    triangular_work = 0
+    active_sizes = []
     for degree, parent_interval, child_interval in zip(
         parent.multidegree, parent.box.intervals, child.intervals, strict=True
     ):
@@ -357,7 +359,7 @@ def _restriction_admit(
             _reject("restriction requires a nondegenerate child on every axis")
         if child_lower < parent_lower or child_upper > parent_upper:
             _reject("restriction child must be contained in the parent box")
-        if degree == 0:
+        if degree == 0 or (parent_lower == child_lower and parent_upper == child_upper):
             ratios.append(None)
             continue
         alpha_value = (child_lower - parent_lower) / (parent_upper - parent_lower)
@@ -365,16 +367,19 @@ def _restriction_admit(
         alpha = Fraction(int(alpha_value.numerator), int(alpha_value.denominator))
         beta = Fraction(int(beta_value.numerator), int(beta_value.denominator))
         ratios.append((alpha, beta))
-        split_parameter_height = max(
-            split_parameter_height,
-            _fraction_height(alpha),
-            _fraction_height(beta),
+        parameters = []
+        if alpha != 0:
+            parameters.append(alpha)
+        if beta != 1:
+            parameters.append((beta - alpha) / (1 - alpha))
+        parameter_growth += sum(
+            degree * (_fraction_height(parameter) + 1) for parameter in parameters
         )
-        if alpha != 0 and beta != 1:
-            split_parameter_height = max(
-                split_parameter_height,
-                _fraction_height((beta - alpha) / (1 - alpha)),
-            )
+        triangular_work += 3 * len(parameters) * (degree + 1)
+        active_sizes.append(degree + 1)
+
+    if not active_sizes:
+        return tuple(ratios)
 
     # All input coefficients can be lifted to one common denominator. Each
     # de Casteljau pass preserves that shared denominator apart from one
@@ -395,10 +400,7 @@ def _restriction_admit(
         - _denominator_digits(coefficient.den)
         for coefficient in parent.coefficients
     )
-    parameter_growth = sum(
-        2 * degree * (split_parameter_height + 1) for degree in parent.multidegree
-    )
-    summation_growth = _integer_digits(prod(m + 1 for m in parent.multidegree))
+    summation_growth = _integer_digits(prod(active_sizes))
     output_height = max(
         common_denominator_digits + parameter_growth,
         lifted_numerator_digits + parameter_growth + summation_growth,
@@ -408,7 +410,7 @@ def _restriction_admit(
     size = prod(m + 1 for m in parent.multidegree)
     # Two triangular passes per axis, each interpolation performing two
     # multiplications and one addition.
-    work = size * (6 * sum(m + 1 for m in parent.multidegree) + 1)
+    work = size * (triangular_work + 1)
     if work * (1 + output_height // 64) ** 2 > MAX_WEIGHTED_WORK:
         _reject("Bernstein restriction exceeds the height-weighted arithmetic budget")
     return tuple(ratios)

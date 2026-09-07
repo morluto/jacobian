@@ -106,10 +106,19 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         operation_id="polynomial.interpolation.divided_differences.compute",
         title="Compute Newton divided differences",
         description="Compute the divided differences table from sample points using "
-        "bounded exact rational arithmetic.",
+        "bounded exact rational arithmetic. On equally spaced nodes with spacing h, "
+        "column j equals the forward finite difference divided by j! h^j.",
         request_type=DividedDifferencesRequest,
         result_type=DividedDifferencesResult,
         run=_divided_differences,
+        discovery_terms=(
+            "forward finite differences",
+            "forward difference table",
+            "equally spaced nodes",
+            "consecutive integer nodes",
+            "falling factorial",
+            "binomial-basis coefficients",
+        ),
         tags=("polynomial", "interpolation", "exact"),
         examples=(
             OperationExample(
@@ -123,15 +132,24 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         operation_id="polynomial.interpolation.newton_form.compute",
         title="Compute Newton form of the interpolating polynomial",
         description="Compute the Newton form coefficients from sample points using "
-        "exact rational arithmetic.",
+        "exact rational arithmetic. On nodes 0,1,..., coefficient j multiplies the "
+        "falling factorial; multiply it by j! for the binomial-basis coefficient.",
         request_type=NewtonFormRequest,
         result_type=NewtonForm,
         run=_newton_form,
+        discovery_terms=(
+            "forward finite differences",
+            "forward difference table",
+            "equally spaced nodes",
+            "consecutive integer nodes",
+            "falling factorial",
+            "binomial-basis coefficients",
+        ),
         tags=("polynomial", "interpolation", "exact"),
         examples=(
             OperationExample(
                 name="three_points",
-                description="Newton form for points (0,1), (1,2), (2,5).",
+                description="Compute Newton coefficients (1,1,1) from values (1,2,5) at consecutive nodes (0,1,2); multiplying coefficient j by j! gives binomial-basis coefficients (1,1,2).",
                 input={"samples": _samples()},
             ),
         ),

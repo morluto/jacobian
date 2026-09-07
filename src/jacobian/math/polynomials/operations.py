@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from math import gcd
 from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic_core import PydanticCustomError
@@ -316,14 +317,43 @@ def _admit_discriminant(polynomial: RationalPolynomial, variable: str) -> None:
 
 def _coefficient_bounds(polynomial: RationalPolynomial) -> tuple[int, int]:
     terms = polynomial.polynomial.terms
-    denominator_digits = sum(
-        len(format_canonical_integer(term.coefficient.den)) for term in terms
+    denominators = {term.coefficient.den for term in terms}
+    common_denominator = 1
+    for denominator in denominators:
+        factor = denominator // gcd(common_denominator, denominator)
+        # Bound the allocation before multiplying. If clearing would exceed
+        # the scalar envelope, retain a conservative product bound instead.
+        if (
+            common_denominator.bit_length() + factor.bit_length()
+            > 4 * MAX_CANONICAL_RATIONAL_DIGITS
+        ):
+            denominator_digits = sum(
+                len(format_canonical_integer(d)) for d in denominators if d != 1
+            )
+            return denominator_digits, max(
+                (
+                    len(format_canonical_integer(abs(t.coefficient.num)))
+                    + denominator_digits
+                    for t in terms
+                ),
+                default=1,
+            )
+        common_denominator *= factor
+    denominator_digits = (
+        0
+        if common_denominator == 1
+        else len(format_canonical_integer(common_denominator))
     )
     cleared_height_digits = max(
         (
             len(format_canonical_integer(abs(term.coefficient.num)))
-            + denominator_digits
-            - len(format_canonical_integer(term.coefficient.den))
+            + (
+                0
+                if common_denominator == term.coefficient.den
+                else len(
+                    format_canonical_integer(common_denominator // term.coefficient.den)
+                )
+            )
             for term in terms
         ),
         default=1,

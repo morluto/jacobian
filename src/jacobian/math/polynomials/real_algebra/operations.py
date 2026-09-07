@@ -34,6 +34,7 @@ from jacobian.math.polynomials.real_algebra._plane_components import (
     compute_plane_component_profile,
 )
 from jacobian.math.polynomials.real_algebra._strict_sublevel import (
+    StrictSublevelPlan,
     compute_strict_sublevel_payload,
 )
 from jacobian.math.polynomials.real_algebra._strict_sublevel_models import (
@@ -175,7 +176,7 @@ def _admit_strict_sublevel(
     threshold: CanonicalRational,
     lower: CanonicalRational,
     upper: CanonicalRational,
-) -> None:
+) -> StrictSublevelPlan | None:
     if len(polynomial.variables) != 1:
         raise _validation_error(
             "variable_count", "strict sublevel measure requires one polynomial variable"
@@ -208,7 +209,7 @@ def _admit_strict_sublevel(
         or _polynomial_degree(polynomial) == 0
         or lower == upper
     ):
-        return
+        return None
     boundary_heights = []
     for subtract_threshold, label in ((True, "f-threshold"), (False, "f+threshold")):
         height_digits = _level_polynomial_height_digits(
@@ -222,14 +223,35 @@ def _admit_strict_sublevel(
                 f"primitive {label} height exceeds the {MAX_STRICT_SUBLEVEL_BOUNDARY_HEIGHT_DIGITS}-digit root-isolation bound",
             )
         boundary_heights.append(height_digits)
-    degree = _polynomial_degree(polynomial)
-    isolation_work = degree**5 * sum(boundary_heights)
+    from sympy import Rational
+
+    from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
+
+    source = rational_polynomial_to_sympy(polynomial)
+    threshold_value = Rational(*threshold.as_integer_ratio())
+    levels = (source - threshold_value, source + threshold_value)
+    factorizations = tuple(tuple(level.sqf_list()[1]) for level in levels)
+    # Square-free preprocessing is bounded by the already admitted degree
+    # (16) and primitive height (256 digits). Root isolation retains all
+    # multiplicities but only pays for the distinct-root polynomial.
+    isolation_work = 0
+    for factors in factorizations:
+        squarefree = source.one
+        for factor, _ in factors:
+            squarefree *= factor
+        _, primitive = squarefree.clear_denoms(convert=True)
+        _, primitive = primitive.primitive()
+        height = max((len(str(abs(int(c)))) for c in primitive.all_coeffs()), default=1)
+        isolation_work += int(squarefree.degree()) ** 5 * height
+
     if isolation_work > MAX_STRICT_SUBLEVEL_ISOLATION_WORK:
         raise _validation_error(
             "isolation_work",
             "strict sublevel exact-root isolation exceeds the work bound "
-            f"(degree^5*level-height-sum={isolation_work} > {MAX_STRICT_SUBLEVEL_ISOLATION_WORK}); reduce degree or coefficient/threshold height",
+            f"(squarefree-degree^5*level-height-sum={isolation_work} > {MAX_STRICT_SUBLEVEL_ISOLATION_WORK}); reduce degree or coefficient/threshold height",
         )
+
+    return StrictSublevelPlan(factorizations[0], factorizations[1])
 
 
 def _run_admission(
@@ -237,9 +259,9 @@ def _run_admission(
     threshold: CanonicalRational,
     lower: CanonicalRational,
     upper: CanonicalRational,
-) -> None:
+) -> StrictSublevelPlan | None:
     try:
-        _admit_strict_sublevel(polynomial, threshold, lower, upper)
+        return _admit_strict_sublevel(polynomial, threshold, lower, upper)
     except OperationDomainValidationError:
         raise
     except PydanticCustomError as exc:
@@ -358,8 +380,8 @@ def compute_strict_sublevel_measure(
     lower: CanonicalRational,
     upper: CanonicalRational,
 ) -> StrictSublevelMeasureResult:
-    _run_admission(polynomial, threshold, lower, upper)
-    payload = compute_strict_sublevel_payload(polynomial, threshold, lower, upper)
+    plan = _run_admission(polynomial, threshold, lower, upper)
+    payload = compute_strict_sublevel_payload(polynomial, threshold, lower, upper, plan)
     return StrictSublevelMeasureResult._from_kernel(
         polynomial,
         threshold,

@@ -170,7 +170,9 @@ def _require_binary_height(numerator: int, denominator: int, operation: str) -> 
     _require_height(RationalHeight(numerator // 3 + 1, denominator // 3 + 1), operation)
 
 
-def _cleared_series(series: TruncatedSeries) -> tuple[int, tuple[int, ...]]:
+def _cleared_series(
+    series: TruncatedSeries, operation: str = "inverse"
+) -> tuple[int, tuple[int, ...]]:
     """Bound denominator clearing before building P in A=P/D.
 
     At most N lcms are formed. Each temporary integer adds at most one
@@ -180,7 +182,7 @@ def _cleared_series(series: TruncatedSeries) -> tuple[int, tuple[int, ...]]:
     denominator = 1
     for value in series.coefficients:
         denominator = lcm(denominator, value.den)
-        _require_binary_height(0, denominator.bit_length(), "inverse")
+        _require_binary_height(0, denominator.bit_length(), operation)
     return denominator, tuple(
         value.num * (denominator // value.den) for value in series.coefficients
     )
@@ -342,17 +344,16 @@ def admit_native_power(series: TruncatedSeries, exponent: int) -> None:
         raise _validation_error(
             "power_exponent", f"exponent must be between 0 and {MAX_POWER_EXPONENT}"
         )
-    order = series.truncation_order
-    result = RationalHeight(1, 1)
-    base = _max_height(series.coefficients)
-    while exponent > 0:
-        if exponent & 1:
-            result = _convolution_height(result, base, order)
-            _require_height(result, "power")
-        exponent >>= 1
-        if exponent:
-            base = _convolution_height(base, base, order)
-            _require_height(base, "power")
+    if exponent == 0:
+        return
+    denominator, coefficients = _cleared_series(series, "power")
+    # Write f=A/D. The l1 norm is submultiplicative, even under
+    # truncation: every coefficient and partial convolution sum of A^j
+    # has magnitude <= max(1, ||A||_1)^e for 0 <= j <= e. Every
+    # denominator divides D^j. Binary powering never exceeds exponent e.
+    norm_bits = max(1, sum(abs(c) for c in coefficients)).bit_length()
+    denominator_bits = 0 if denominator == 1 else denominator.bit_length()
+    _require_binary_height(exponent * norm_bits, exponent * denominator_bits, "power")
 
 
 def admit_native_inverse(series: TruncatedSeries) -> None:

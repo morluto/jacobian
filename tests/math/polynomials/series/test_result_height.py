@@ -224,3 +224,33 @@ def test_all_zero_multiply_results_remain_representable_at_the_envelope_order() 
     }
     verdict = SeriesMultiplyResult.model_validate_json(json.dumps(payload))
     assert verdict.result.truncation_order == MAX_TRUNCATION_ORDER
+
+
+@pytest.mark.parametrize(
+    "order, exponent, factorial_input", [(64, 2, False), (64, 9, True), (128, 9, True)]
+)
+def test_power_shared_denominator_envelope(
+    order: int, exponent: int, factorial_input: bool
+) -> None:
+    from math import factorial
+
+    from jacobian._exact import CanonicalRational
+
+    coefficients = (
+        [factorial(j) for j in range(order)]
+        if factorial_input
+        else [1] + [0] * (order - 1)
+    )
+    series = TruncatedSeries(
+        variable="z",
+        truncation_order=order,
+        coefficients=tuple(CanonicalRational(num=c, den=1) for c in coefficients),
+    )
+    expected = [1] + [0] * (order - 1)
+    for _ in range(exponent):
+        expected = [
+            sum(expected[i] * coefficients[k - i] for i in range(k + 1))
+            for k in range(order)
+        ]
+    result = power(series, exponent)
+    assert [c.as_fraction() for c in result.result.coefficients] == expected

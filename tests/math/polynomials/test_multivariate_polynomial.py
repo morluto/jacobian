@@ -339,15 +339,12 @@ class TestMultivariateDivision:
         assert len(result.quotient.polynomial.terms) == 0
         assert len(result.remainder.polynomial.terms) == 0
 
-    def test_division_rejects_univariate(self) -> None:
-        """Univariate polynomials are rejected for multivariate operations."""
-
+    def test_division_accepts_univariate(self) -> None:
         left = _poly(("x",), (("1/1", (2,)),))
         right = _poly(("x",), (("1/1", (1,)),))
-        with pytest.raises(
-            OperationDomainValidationError, match="at least two variables"
-        ):
-            _compute_division(MultivariateDivisionRequest(left=left, right=right))
+        result = _compute_division(MultivariateDivisionRequest(left=left, right=right))
+        assert result.quotient == right
+        assert not result.remainder.polynomial.terms
 
     def test_division_rejects_mismatched_variables(self) -> None:
         """Polynomials must share the same ordered variable list."""
@@ -1326,3 +1323,32 @@ class TestMultivariateSubresultantSequence:
                     main_variable="x",
                 )
             )
+
+
+@pytest.mark.parametrize(
+    "left_expression,right_expression",
+    [("x**2-1", "x-1"), ("x**2+2", "x-1"), ("0", "x+1"), ("x**2+1", "2")],
+)
+def test_univariate_division_preserves_ring(
+    left_expression: str, right_expression: str
+) -> None:
+    import sympy as sp
+
+    from jacobian.math.polynomials._conversions import (
+        rational_polynomial_from_sympy,
+        rational_polynomial_to_sympy,
+    )
+    from jacobian.math.polynomials.multivariate.operations import multivariate_division
+
+    x = sp.Symbol("x")
+    left = sp.Poly(left_expression, x, domain="QQ")
+    right = sp.Poly(right_expression, x, domain="QQ")
+    result = multivariate_division(
+        rational_polynomial_from_sympy(left, ("x",)),
+        rational_polynomial_from_sympy(right, ("x",)),
+    )
+    quotient = rational_polynomial_to_sympy(result.quotient)
+    remainder = rational_polynomial_to_sympy(result.remainder)
+    assert left == quotient * right + remainder
+    assert remainder.is_zero or remainder.degree() < right.degree()
+    assert result.quotient.variables == result.remainder.variables == ("x",)

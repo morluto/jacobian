@@ -242,11 +242,12 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     ),
     MathTool(
         operation_id="polynomial.multivariate.divide.compute",
-        title="Divide multivariate polynomials with remainder",
+        title="Divide rational polynomials with remainder",
         description=(
             "Compute the quotient and remainder of one multivariate polynomial "
             "divided by another over QQ[x_1, ..., x_n] under a declared monomial "
-            "order.  Backed by SymPy's multivariate polynomial division."
+            "order. Accepts one or more variables in the same ordered ring. "
+            "Backed by SymPy's polynomial division."
         ),
         request_type=MultivariateDivisionRequest,
         result_type=MultivariateDivisionResult,

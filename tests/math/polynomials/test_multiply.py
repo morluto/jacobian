@@ -81,7 +81,7 @@ def test_accepts_dense_univariate_product_with_compact_support() -> None:
     assert len(result.polynomial.terms) == 129
 
 
-def test_rejects_excessive_convolution_work() -> None:
+def test_dense_backend_accepts_former_convolution_limit() -> None:
     terms = [
         {"coefficient": {"num": "1", "den": "1"}, "exponents": [index]}
         for index in range(1024, -1, -1)
@@ -95,8 +95,9 @@ def test_rejects_excessive_convolution_work() -> None:
     request = RationalPolynomialMultiplyRequest.model_validate_json(
         json.dumps({"left": polynomial, "right": polynomial})
     )
-    with pytest.raises(OperationDomainValidationError, match="convolution work limit"):
-        rational_polynomial_multiply(request)
+    result = rational_polynomial_multiply(request)
+    assert len(result.polynomial.terms) == 2049
+    assert result.polynomial.terms[1024].coefficient.num == 1025
 
 
 def test_rejects_accumulated_coefficient_growth() -> None:
@@ -262,3 +263,44 @@ def test_rejects_product_exponent_overflow() -> None:
         OperationDomainValidationError, match="canonical exponent limit"
     ):
         rational_polynomial_multiply(request)
+
+
+@pytest.mark.parametrize("denominator", [1, 6])
+def test_dense_sign_product_matches_integer_convolution(denominator: int) -> None:
+    from fractions import Fraction
+
+    n = 1001
+    coefficients = [-1 if j % 3 == 0 else 1 for j in range(n)]
+    polynomial = {
+        "variables": ["z"],
+        "polynomial": {
+            "terms": [
+                {
+                    "coefficient": {
+                        "num": str(coefficients[j]),
+                        "den": str(denominator),
+                    },
+                    "exponents": [j],
+                }
+                for j in range(n - 1, -1, -1)
+            ]
+        },
+    }
+    request = RationalPolynomialMultiplyRequest.model_validate_json(
+        json.dumps({"left": polynomial, "right": polynomial})
+    )
+    result = rational_polynomial_multiply(request)
+    actual = {
+        t.exponents[0]: t.coefficient.as_fraction() for t in result.polynomial.terms
+    }
+    expected = {
+        k: Fraction(
+            sum(
+                coefficients[i] * coefficients[k - i]
+                for i in range(max(0, k - n + 1), min(n - 1, k) + 1)
+            ),
+            denominator**2,
+        )
+        for k in range(2 * n - 1)
+    }
+    assert actual == {k: v for k, v in expected.items() if v}

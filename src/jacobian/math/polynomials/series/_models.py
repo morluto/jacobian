@@ -257,25 +257,8 @@ class TruncatedSeries(StrictModel):
         return self
 
 
-class InputTruncatedSeries(TruncatedSeries):
-    """A truncated series admitted as an operation input.
-
-    Operation kernels do work that grows with the truncation order, so the
-    input envelope keeps the shared order ceiling that the pure value carrier
-    does not impose.
-    """
-
-    truncation_order: StrictInt = Field(
-        ge=1,
-        description=(
-            "Truncation order N (coefficients a_0..a_{N-1}); bounded because "
-            "operation work scales with N."
-        ),
-    )
-
-
 # Native callers already hold the canonical carrier.  Keep their admission
-# separate from the JSON request models: rebuilding an InputTruncatedSeries or
+# separate from the JSON request models: rebuilding a TruncatedSeries or
 # an operation Request here would turn the native API into a wire adapter and
 # would make its public exceptions and coercions depend on Pydantic.
 def _require_native_scalar(value: int, label: str) -> None:
@@ -497,26 +480,6 @@ def admit_native_from_polynomial(series: TruncatedSeries) -> None:
     _require_native_input_series(series)
 
 
-class TruncateSourceSeries(TruncatedSeries):
-    """A truncated series admitted as a truncation source.
-
-    Request admission materializes and height-validates every source
-    coefficient before only the requested prefix is read, so admission work
-    and memory scale with the source order.  The order ceiling admits every
-    carrier current producers emit while bounding that admission; the kernel
-    itself still touches only the first ``target_order`` coefficients.
-    """
-
-    truncation_order: StrictInt = Field(
-        ge=1,
-        description=(
-            "Source truncation order N (coefficients a_0..a_{N-1}); bounded "
-            "because request admission validates all N coefficients before "
-            "the prefix is read."
-        ),
-    )
-
-
 # ---------------------------------------------------------------------------
 # Pair / single-series request helpers
 # ---------------------------------------------------------------------------
@@ -525,8 +488,8 @@ class TruncateSourceSeries(TruncatedSeries):
 class _SeriesPairRequest(StrictModel):
     """Base request with two series that must share variable and order."""
 
-    left: InputTruncatedSeries
-    right: InputTruncatedSeries
+    left: TruncatedSeries
+    right: TruncatedSeries
 
 
 class _SeriesAddSubtractRequest(_SeriesPairRequest):
@@ -607,7 +570,7 @@ class SeriesMultiplyResult(StrictModel):
 
 
 class SeriesScalarMultiplyRequest(StrictModel):
-    series: InputTruncatedSeries
+    series: TruncatedSeries
     scalar: CanonicalRational
 
 
@@ -621,7 +584,7 @@ class SeriesScalarMultiplyResult(StrictModel):
 
 
 class SeriesPowerRequest(StrictModel):
-    series: InputTruncatedSeries
+    series: TruncatedSeries
     exponent: StrictInt = Field(ge=0)
 
 
@@ -651,8 +614,8 @@ class SeriesInverseRequest(StrictModel):
         description="Exactly N rational coefficients with a nonzero constant term.",
     )
 
-    def as_series(self) -> InputTruncatedSeries:
-        return InputTruncatedSeries(
+    def as_series(self) -> TruncatedSeries:
+        return TruncatedSeries(
             variable=self.variable,
             truncation_order=self.truncation_order,
             coefficients=self.coefficients,
@@ -759,8 +722,8 @@ class SeriesDivideResult(StrictModel):
 
 
 class SeriesComposeRequest(StrictModel):
-    outer: InputTruncatedSeries
-    inner: InputTruncatedSeries
+    outer: TruncatedSeries
+    inner: TruncatedSeries
 
 
 class SeriesComposeResult(StrictModel):
@@ -780,8 +743,8 @@ class SeriesReversionRequest(StrictModel):
     truncation_order: StrictInt = Field(ge=2)
     coefficients: tuple[CanonicalRational, ...]
 
-    def as_series(self) -> InputTruncatedSeries:
-        return InputTruncatedSeries(
+    def as_series(self) -> TruncatedSeries:
+        return TruncatedSeries(
             variable=self.variable,
             truncation_order=self.truncation_order,
             coefficients=self.coefficients,
@@ -841,7 +804,7 @@ class SeriesDerivativeResult(StrictModel):
 
 
 class SeriesIntegralRequest(StrictModel):
-    series: InputTruncatedSeries
+    series: TruncatedSeries
     output_order: StrictInt = Field(ge=1)
 
 
@@ -857,7 +820,7 @@ class SeriesIntegralResult(StrictModel):
 class SeriesTruncateRequest(StrictModel):
     """Extract a prefix of at most the public order bound from one series."""
 
-    series: TruncateSourceSeries = Field(
+    series: TruncatedSeries = Field(
         description=(
             "Source series whose every coefficient request admission "
             "validates before only the first target_order entries are read."

@@ -221,8 +221,9 @@ def smith_reduce(
     and converts the result to native integer matrices.  The canonical diagonal
     and invariant factors are mathematical invariants; ``U`` and ``V`` are
     deterministic for the pinned SymPy version but may differ from other
-    backends.  Fail-closed checks verify ``D = U A V``, unimodularity, and the
-    positive divisibility chain before returning.
+    backends. The adapter checks the canonical diagonal encoding and retains
+    the determinant signs; the exact backend establishes ``D = U A V``.
+    Authored certificates are checked by the separate verification helper.
     """
 
     import sympy
@@ -266,11 +267,6 @@ def smith_reduce(
         right_factor % left_factor for left_factor, right_factor in pairwise(factors)
     ):
         raise ArithmeticError("Smith reduction did not produce a canonical diagonal")
-    if (
-        matrix_multiply(matrix_multiply(left_matrix, original), right_matrix)
-        != diagonal_matrix
-    ):
-        raise ArithmeticError("Smith transformations do not bind the source")
     left_determinant = int(left.det())
     right_determinant = int(right.det())
     if abs(left_determinant) != 1 or abs(right_determinant) != 1:

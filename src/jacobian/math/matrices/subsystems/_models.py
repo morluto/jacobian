@@ -149,7 +149,7 @@ def _psd_witness_digit_bound(
 def _require_psd_pair_admission(
     left: FactorizedHermitianMatrix,
     right: FactorizedHermitianMatrix,
-) -> None:
+) -> tuple[tuple[Fraction, ...], ...]:
     """Admit one ordered pair through the coupled PSD digit envelopes.
 
     The exact reduced right-minus-left components are measured before any
@@ -201,6 +201,8 @@ def _require_psd_pair_admission(
             "budget_exceeded",
             "PSD-order witness growth exceeds the canonical rational component bound",
         )
+
+    return difference_rows
 
 
 class SubsystemKroneckerProductRequest(StrictModel):

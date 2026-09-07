@@ -21,7 +21,7 @@ from jacobian.math.polynomials.values import RationalFunction
 def _hermite_parts(function: RationalFunction) -> tuple[Any, Any]:
     """Return the zero-constant rational part and square-free remainder."""
 
-    from sympy import Poly, cancel, diff, fraction
+    from sympy import Poly, cancel, fraction
     from sympy.integrals.rationaltools import ratint_ratpart
 
     (variable,) = symbols_for_variables(function.variables)
@@ -44,8 +44,6 @@ def _hermite_parts(function: RationalFunction) -> tuple[Any, Any]:
 
     rational_part = cancel(rational_part)
     remainder = cancel(remainder)
-    if cancel(diff(rational_part, variable) + remainder - source) != 0:
-        raise AssertionError("Hermite reduction failed exact reconstruction")
     return rational_part, remainder
 
 

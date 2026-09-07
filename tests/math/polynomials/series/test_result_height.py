@@ -7,7 +7,6 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials.series._models import (
     MAX_RATIONAL_DIGITS,
     MAX_TRUNCATION_ORDER,
-    InputTruncatedSeries,
     SeriesComposeRequest,
     SeriesDivideRequest,
     SeriesMultiplyResult,
@@ -138,7 +137,7 @@ def test_sparse_linear_reversion_remains_admitted() -> None:
 
 
 def test_small_requests_remain_admitted() -> None:
-    series = InputTruncatedSeries.model_validate_json(
+    series = TruncatedSeries.model_validate_json(
         json.dumps(_series(2, [_coefficient("1"), _coefficient("1")]))
     )
     assert SeriesPowerRequest(series=series, exponent=3)
@@ -153,7 +152,7 @@ def test_value_carrier_admits_compact_series_beyond_the_input_order_ceiling() ->
 
 
 def test_operation_inputs_keep_the_shared_order_ceiling() -> None:
-    series = InputTruncatedSeries.model_validate_json(
+    series = TruncatedSeries.model_validate_json(
         json.dumps(
             _series(
                 MAX_TRUNCATION_ORDER + 1,
@@ -169,7 +168,7 @@ def test_largest_multiplication_result_fits_shared_output_envelope() -> None:
     numerator = "9" * MAX_RATIONAL_DIGITS
     denominator = "1" + "0" * (MAX_RATIONAL_DIGITS - 1)
     coefficient = _coefficient(numerator, denominator)
-    series = InputTruncatedSeries.model_validate_json(
+    series = TruncatedSeries.model_validate_json(
         json.dumps(_series(MAX_TRUNCATION_ORDER, [coefficient] * MAX_TRUNCATION_ORDER))
     )
     with pytest.raises(OperationDomainValidationError):
@@ -196,7 +195,7 @@ def test_result_round_trips_remain_structural() -> None:
 
 
 def test_multiplication_result_rejects_structural_context_mismatch() -> None:
-    series = InputTruncatedSeries.model_validate_json(
+    series = TruncatedSeries.model_validate_json(
         json.dumps(_series(2, [_coefficient("1"), _coefficient("1")]))
     )
     payload = multiply(series, series).model_dump(mode="json")

@@ -348,3 +348,33 @@ def test_torsion_divisibility_remains_a_claim() -> None:
     assert not verify_solution_subgroup(
         AlgebraicTorusSolutionSubgroup.model_validate_json(json.dumps(payload))
     )
+
+
+def test_producer_does_not_recheck_computed_parameter_relations(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.algebraic_tori import operations
+
+    calls = 0
+    from jacobian.math.matrices.certified_snf.operations import matrix_multiply
+
+    original = matrix_multiply
+
+    def counted(
+        left: list[list[int]],
+        right: list[list[int]],
+        *,
+        right_columns_if_empty: int = 0,
+    ) -> list[list[int]]:
+        nonlocal calls
+        calls += 1
+        return original(left, right, right_columns_if_empty=right_columns_if_empty)
+
+    monkeypatch.setattr(operations, "matrix_multiply", counted)
+    result = homogeneous_monomial_solution_subgroup(_system([[2, 4, 6]]))
+    assert calls == 0
+    decoded = AlgebraicTorusSolutionSubgroup.model_validate_json(
+        result.model_dump_json()
+    )
+    assert operations.verify_solution_subgroup(decoded)
+    assert calls > 0

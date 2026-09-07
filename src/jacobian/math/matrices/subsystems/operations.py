@@ -9,9 +9,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math import matrices
 from jacobian.math._exact_linear_algebra import symmetric_inertia
-from jacobian.math.matrices import _conversions as conversions
 from jacobian.math.matrices.subsystems._models import (
     MAX_KRONECKER_RESULT_COMPONENT_DIGITS,
     NegativeQuadraticWitness,
@@ -32,7 +30,6 @@ from jacobian.math.matrices.subsystems.values import (
     MAX_SUBSYSTEM_FACTORS,
     FactorizedHermitianMatrix,
     MatrixSubsystem,
-    partial_trace_entries,
 )
 from jacobian.math.matrices.values import rational_matrix_from_fractions
 
@@ -44,12 +41,6 @@ __all__ = [
     "verify_psd_order",
     "verify_subsystem_kronecker_product",
 ]
-
-
-def _fractions(matrix: FactorizedHermitianMatrix) -> tuple[tuple[Fraction, ...], ...]:
-    return tuple(
-        tuple(entry.as_fraction() for entry in row) for row in matrix.matrix.entries
-    )
 
 
 def _factorized(
@@ -65,7 +56,7 @@ def _factorized(
 def _admit_kronecker(
     left: FactorizedHermitianMatrix,
     right: FactorizedHermitianMatrix,
-) -> None:
+) -> tuple[tuple[Fraction, ...], ...]:
     product_dimension = len(left.matrix.entries) * len(right.matrix.entries)
     if product_dimension > MAX_SUBSYSTEM_DIMENSION:
         raise _validation_error(
@@ -84,12 +75,15 @@ def _admit_kronecker(
         )
     left_entries = _entry_fractions(left)
     right_entries = _entry_fractions(right)
+    entries = []
     for left_row in left_entries:
-        for left_entry in left_row:
-            for right_row in right_entries:
+        for right_row in right_entries:
+            row = []
+            for left_entry in left_row:
                 for right_entry in right_row:
+                    value = left_entry * right_entry
                     if (
-                        max(_fraction_component_digits(left_entry * right_entry))
+                        max(_fraction_component_digits(value))
                         > MAX_KRONECKER_RESULT_COMPONENT_DIGITS
                     ):
                         raise _validation_error(
@@ -98,26 +92,30 @@ def _admit_kronecker(
                             f"{MAX_KRONECKER_RESULT_COMPONENT_DIGITS}-digit "
                             "result bound",
                         )
+                    row.append(value)
+            entries.append(tuple(row))
+    return tuple(entries)
 
 
 def _admit_partial_trace(
     matrix: FactorizedHermitianMatrix,
     traced_factor_labels: tuple[str, ...],
-) -> None:
+) -> tuple[tuple[Fraction, ...], ...]:
     expected_entries = _require_trace_work_envelope(matrix, traced_factor_labels)
     _require_trace_result_envelope(expected_entries)
+    return expected_entries
 
 
 def _admit_psd(
     left: FactorizedHermitianMatrix,
     right: FactorizedHermitianMatrix,
-) -> None:
-    _require_psd_pair_admission(left, right)
+) -> tuple[tuple[Fraction, ...], ...]:
+    return _require_psd_pair_admission(left, right)
 
 
-def _admit(check: Callable[..., object], *args: object) -> None:
+def _admit[T](check: Callable[..., T], *args: object) -> T:
     try:
-        check(*args)
+        return check(*args)
     except PydanticCustomError as exc:
         raise OperationDomainValidationError(
             location=("request",), code=exc.type, message=exc.message()
@@ -230,23 +228,8 @@ def kronecker_product(
 ) -> FactorizedHermitianMatrix:
     """Compute one exact product while concatenating the ordered factors."""
 
-    _admit(_admit_kronecker, left, right)
-    return _kronecker_product_kernel(left, right)
-
-
-def _kronecker_product_kernel(
-    left: FactorizedHermitianMatrix,
-    right: FactorizedHermitianMatrix,
-) -> FactorizedHermitianMatrix:
-    factors = (*left.factors, *right.factors)
-    product_matrix = matrices.kronecker_product(
-        conversions.rational_matrix_to_sympy(left.matrix),
-        conversions.rational_matrix_to_sympy(right.matrix),
-    )
-    return FactorizedHermitianMatrix(
-        matrix=conversions.rational_matrix_from_sympy(product_matrix),
-        factors=factors,
-    )
+    entries = _admit(_admit_kronecker, left, right)
+    return _factorized(entries, factors=(*left.factors, *right.factors))
 
 
 def partial_trace(
@@ -256,13 +239,14 @@ def partial_trace(
     """Trace named factors from a product basis, retaining source factor order."""
 
     _admit(_require_traceable_factors, matrix, traced_factor_labels)
-    _admit(_admit_partial_trace, matrix, traced_factor_labels)
-    return _partial_trace_kernel(matrix, traced_factor_labels)
+    entries = _admit(_admit_partial_trace, matrix, traced_factor_labels)
+    return _partial_trace_kernel(matrix, traced_factor_labels, entries)
 
 
 def _partial_trace_kernel(
     matrix: FactorizedHermitianMatrix,
     traced_factor_labels: tuple[str, ...],
+    entries: tuple[tuple[Fraction, ...], ...],
 ) -> FactorizedHermitianMatrix:
     kept_positions = tuple(
         position
@@ -270,7 +254,7 @@ def _partial_trace_kernel(
         if factor.label not in traced_factor_labels
     )
     return _factorized(
-        partial_trace_entries(matrix, traced_factor_labels),
+        entries,
         factors=tuple(matrix.factors[position] for position in kept_positions),
     )
 
@@ -281,21 +265,15 @@ def psd_order(
 ) -> PsdOrderResult:
     """Decide the exact rational Löwner order ``left <= right``."""
 
-    _admit(_admit_psd, left, right)
-    return _psd_order_kernel(left, right)
+    difference_entries = _admit(_admit_psd, left, right)
+    return _psd_order_kernel(left, right, difference_entries)
 
 
 def _psd_order_kernel(
     left: FactorizedHermitianMatrix,
     right: FactorizedHermitianMatrix,
+    difference_entries: tuple[tuple[Fraction, ...], ...],
 ) -> PsdOrderResult:
-    difference_entries = tuple(
-        tuple(
-            right_entry - left_entry
-            for left_entry, right_entry in zip(left_row, right_row, strict=True)
-        )
-        for left_row, right_row in zip(_fractions(left), _fractions(right), strict=True)
-    )
     difference = _factorized(difference_entries, factors=left.factors)
     positive, negative, zero = symmetric_inertia(difference_entries)
     is_less_or_equal = negative == 0

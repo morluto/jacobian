@@ -48,9 +48,8 @@ CrosscutCardinality = Annotated[
 def _admit_monomial_ideal(ideal: RationalPolynomialIdeal) -> None:
     """Validate that *ideal* is a canonical minimally-generated monomial ideal.
 
-    This shared admission runs for both the MCP request path (via
-    MonomialIdealBettiRequest) and the native Python API so that native and
-    MCP calls share the same contract.
+    The native operation owns this admission for both Python and MCP calls.
+    Request parsing retains only the canonical ideal structure.
     """
 
     if len(ideal.generators) > MAX_MONOMIAL_IDEAL_GENERATORS:
@@ -106,11 +105,6 @@ class MonomialIdealBettiRequest(StrictModel):
     """
 
     ideal: RationalPolynomialIdeal
-
-    @model_validator(mode="after")
-    def require_monomial_ideal(self) -> Self:
-        _admit_monomial_ideal(self.ideal)
-        return self
 
 
 class LcmLatticeHomologyEntry(StrictModel):

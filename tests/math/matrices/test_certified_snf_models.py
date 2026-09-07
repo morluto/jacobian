@@ -379,3 +379,33 @@ def test_inferred_integer_dimensions_do_not_advertise_literal_defaults() -> None
     Draft202012Validator(schema).validate(payload)
     matrix = IntegerMatrix.model_validate_json(__import__("json").dumps(payload))
     assert (matrix.row_count, matrix.column_count) == (1, 2)
+
+
+def test_smith_producer_leaves_relation_replay_to_claim_verifier(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.matrices.certified_snf import operations
+
+    calls = 0
+    original = operations.matrix_multiply
+
+    def counted(
+        left: list[list[int]],
+        right: list[list[int]],
+        *,
+        right_columns_if_empty: int = 0,
+    ) -> list[list[int]]:
+        nonlocal calls
+        calls += 1
+        return original(left, right, right_columns_if_empty=right_columns_if_empty)
+
+    monkeypatch.setattr(operations, "matrix_multiply", counted)
+    claim = smith_normal_form_certificate(IntegerMatrix(entries=((2, 4), (6, 8))))
+    assert calls == 0
+    decoded = SmithNormalFormCertificate.model_validate_json(claim.model_dump_json())
+    assert verify_smith_normal_form_certificate(decoded)
+    assert calls == 2
+    forged = decoded.model_copy(
+        update={"source": IntegerMatrix(entries=((3, 4), (6, 8)))}
+    )
+    assert not verify_smith_normal_form_certificate(forged)

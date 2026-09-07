@@ -1034,3 +1034,27 @@ def test_catalog_wrappers_run_the_single_parsed_request_without_revalidation(
         compute(build())
         monkeypatch.undo()
         assert len(parsed) == 1
+
+
+def test_partial_trace_reuses_admitted_contraction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.matrices.subsystems import _models, values
+
+    calls = 0
+    original = values.partial_trace_measured_entries
+
+    def counted(
+        matrix: FactorizedHermitianMatrix, labels: tuple[str, ...]
+    ) -> tuple[tuple[tuple[Fraction, ...], ...], int]:
+        nonlocal calls
+        calls += 1
+        return original(matrix, labels)
+
+    monkeypatch.setattr(values, "partial_trace_measured_entries", counted)
+    monkeypatch.setattr(_models, "partial_trace_measured_entries", counted)
+    matrix = _matrix([[1, 0], [0, 3]], (MatrixSubsystem(label="a", dimension=2),))
+    result = partial_trace(matrix, ("a",))
+    assert _entries(result) == ((Fraction(4),),)
+    assert result.factors == ()
+    assert calls == 1

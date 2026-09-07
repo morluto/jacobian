@@ -79,15 +79,8 @@ def _lll_free_basis(smith_free_map: Matrix) -> tuple[Matrix, Matrix]:
     transport_rows = [
         [int(value) for value in row] for row in row_transport.to_Matrix().tolist()
     ]
-    if matrix_multiply(transport_rows, smith_basis_rows) != reduced_rows:
-        raise ArithmeticError("LLL transport does not reconstruct the reduced basis")
-    if abs(matrix_determinant(transport_rows)) != 1:
-        raise ArithmeticError("LLL free-basis transport is not unimodular")
-
     reduced_map = _transpose(reduced_rows, rows_if_empty=coordinate_count)
     smith_parameters_from_reduced = _transpose(transport_rows, rows_if_empty=free_rank)
-    if matrix_multiply(smith_free_map, smith_parameters_from_reduced) != reduced_map:
-        raise ArithmeticError("free-parameter transport does not reconstruct the map")
     return reduced_map, smith_parameters_from_reduced
 
 
@@ -158,32 +151,6 @@ def homogeneous_monomial_solution_subgroup(
         reduction.right[coordinate][rank:] for coordinate in range(coordinate_count)
     ]
     reduced_free_map, smith_parameters_from_reduced = _lll_free_basis(smith_free_map)
-
-    if matrix_multiply(
-        source,
-        smith_free_map,
-        right_columns_if_empty=free_rank,
-    ) != [[0] * free_rank for _ in range(equation_count)]:
-        raise ArithmeticError("Smith free parameters do not satisfy the source system")
-    if matrix_multiply(
-        source,
-        reduced_free_map,
-        right_columns_if_empty=free_rank,
-    ) != [[0] * free_rank for _ in range(equation_count)]:
-        raise ArithmeticError(
-            "reduced free parameters do not satisfy the source system"
-        )
-    torsion_relations = matrix_multiply(
-        source,
-        torsion_map,
-        right_columns_if_empty=len(torsion_factors),
-    )
-    if any(
-        value % torsion_factors[column]
-        for row in torsion_relations
-        for column, value in enumerate(row)
-    ):
-        raise ArithmeticError("torsion characters do not satisfy the source system")
 
     return AlgebraicTorusSolutionSubgroup._from_kernel(
         source=system,

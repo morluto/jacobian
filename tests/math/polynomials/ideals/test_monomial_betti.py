@@ -5,8 +5,8 @@ from __future__ import annotations
 from itertools import combinations
 
 import pytest
-from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials.ideals import (
     MonomialIdealBettiResult,
     monomial_ideal_graded_betti_table,
@@ -212,21 +212,26 @@ def test_exact_result_round_trips_and_its_ideal_composes_unchanged() -> None:
 def test_monomial_ideal_rejects_noncanonical_presentations(
     generators: tuple[tuple[int, int], ...], message: str
 ) -> None:
-    with pytest.raises(ValidationError, match=message):
-        _monomial_ideal(("x", "y"), *generators)
+    with pytest.raises(OperationDomainValidationError, match=message):
+        monomial_ideal_graded_betti_table(
+            _monomial_ideal(("x", "y"), *generators).ideal
+        )
 
 
 def test_generator_and_exponent_boundaries_reject_before_kernel_work() -> None:
-    with pytest.raises(ValidationError, match="8-generator operation budget"):
-        _monomial_ideal(
+    with pytest.raises(
+        OperationDomainValidationError, match="8-generator operation budget"
+    ):
+        request = _monomial_ideal(
             tuple(f"x{index}" for index in range(8)),
             *tuple(
                 tuple(index + 1 if slot == 0 else 0 for slot in range(8))
                 for index in range(9)
             ),
         )
-    with pytest.raises(ValidationError, match="single monomial term"):
-        MonomialIdealBettiRequest(
+        monomial_ideal_graded_betti_table(request.ideal)
+    with pytest.raises(OperationDomainValidationError, match="single monomial term"):
+        request = MonomialIdealBettiRequest(
             ideal=RationalPolynomialIdeal.model_validate(
                 {
                     "variables": ("x",),
@@ -251,3 +256,28 @@ def test_generator_and_exponent_boundaries_reject_before_kernel_work() -> None:
                 }
             )
         )
+
+        monomial_ideal_graded_betti_table(request.ideal)
+
+
+def test_request_parsing_does_not_run_monomial_admission(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.polynomials.ideals import _models, operations
+
+    calls = 0
+    original = _models._admit_monomial_ideal
+
+    def counted(ideal: RationalPolynomialIdeal) -> None:
+        nonlocal calls
+        calls += 1
+        original(ideal)
+
+    monkeypatch.setattr(_models, "_admit_monomial_ideal", counted)
+    monkeypatch.setattr(operations, "_admit_monomial_ideal", counted)
+    request = _monomial_ideal(("x", "y"), (2, 0), (0, 2))
+    decoded = MonomialIdealBettiRequest.model_validate_json(request.model_dump_json())
+    assert calls == 0
+    result = monomial_ideal_graded_betti_table(decoded.ideal)
+    assert calls == 1
+    assert _graded(result) == ((0, 2, 2), (1, 4, 1))

@@ -1,5 +1,6 @@
 """Tests for truncated formal power series operations."""
 
+import json
 from typing import Any, cast
 
 from jacobian._exact import CanonicalRational
@@ -21,7 +22,6 @@ from jacobian.math.polynomials.series._models import (
     MAX_RATIONAL_DIGITS,
     MAX_TRUNCATE_SOURCE_ORDER,
     MAX_TRUNCATION_ORDER,
-    InputTruncatedSeries,
     SeriesInverseRequest,
     SeriesPowerRequest,
     SeriesTruncateRequest,
@@ -69,7 +69,7 @@ def test_power_rejects_result_digit_overflow() -> None:
 
     huge = 10 ** (MAX_RATIONAL_DIGITS - 1)
     request = SeriesPowerRequest(
-        series=InputTruncatedSeries(
+        series=TruncatedSeries(
             variable="x",
             truncation_order=1,
             coefficients=(_coeff(huge),),
@@ -108,7 +108,7 @@ def test_integral_rejects_oversized_output_order() -> None:
     from jacobian.math.polynomials.series._models import SeriesIntegralRequest
 
     request = SeriesIntegralRequest(
-        series=InputTruncatedSeries(
+        series=TruncatedSeries(
             variable="x",
             truncation_order=2,
             coefficients=(_coeff(1), _coeff(0)),
@@ -165,7 +165,7 @@ def test_input_series_rejects_oversized_coefficients() -> None:
     import pytest
 
     huge = 10**MAX_RATIONAL_DIGITS
-    oversized = InputTruncatedSeries(
+    oversized = TruncatedSeries(
         variable="x",
         truncation_order=1,
         coefficients=(_coeff(huge),),
@@ -424,7 +424,7 @@ def test_truncate_source_admission_bounds_the_request_before_parsing() -> None:
 
 def test_truncate_source_order_bound_is_schema_visible() -> None:
     schema = SeriesTruncateRequest.model_json_schema()
-    source_property = schema["$defs"]["TruncateSourceSeries"]["properties"][
+    source_property = schema["$defs"]["TruncatedSeries"]["properties"][
         "truncation_order"
     ]
     assert "maximum" not in source_property
@@ -473,3 +473,16 @@ def test_truncate_accepts_a_large_canonical_modular_series() -> None:
         prefix.result.coefficients[-1].as_fraction()
         == eisenstein_coefficients("E4", MAX_TRUNCATION_ORDER)[-1]
     )
+
+
+def test_all_formal_series_results_retain_canonical_types_after_json() -> None:
+    from jacobian.math.polynomials.series._tools import TOOLS
+
+    for tool in cast(tuple[MathTool[Any, Any], ...], TOOLS):
+        request = tool.request_type.model_validate_json(
+            json.dumps(tool.examples[0].input)
+        )
+        result = tool.run(request)
+        assert (
+            tool.result_type.model_validate_json(result.model_dump_json()) == result
+        ), tool.operation_id

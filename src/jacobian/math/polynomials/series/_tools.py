@@ -10,7 +10,6 @@ from jacobian.catalog.models import (
     OperationExample,
 )
 from jacobian.math.polynomials.series._models import (
-    InputTruncatedSeries,
     SeriesArithmeticResult,
     SeriesComposeRequest,
     SeriesComposeResult,
@@ -34,6 +33,7 @@ from jacobian.math.polynomials.series._models import (
     SeriesToPolynomialResult,
     SeriesTruncateRequest,
     SeriesTruncateResult,
+    TruncatedSeries,
     _SeriesAddSubtractRequest,
     _SeriesIdentityCheckRequest,
     _SeriesMultiplyRequest,
@@ -73,7 +73,7 @@ _X = {
 
 def _input_series_from_request(
     request: SeriesInverseRequest | SeriesReversionRequest,
-) -> InputTruncatedSeries:
+) -> TruncatedSeries:
     try:
         return request.as_series()
     except ValidationError as exc:
@@ -404,7 +404,7 @@ TOOLS = (
             "Compute the exact formal derivative of a truncated rational power "
             "series, retaining the documented output-order convention."
         ),
-        request_type=InputTruncatedSeries,
+        request_type=TruncatedSeries,
         result_type=SeriesDerivativeResult,
         run=derivative,
         tags=("formal-series", "calculus", "derivative", "rational", "exact"),
@@ -514,7 +514,7 @@ TOOLS = (
             "Return the exact sparse canonical QQ polynomial representative of the "
             "known coefficients below the truncation order."
         ),
-        request_type=InputTruncatedSeries,
+        request_type=TruncatedSeries,
         result_type=SeriesToPolynomialResult,
         run=to_polynomial,
         tags=("formal-series", "polynomial", "conversion", "rational", "exact"),

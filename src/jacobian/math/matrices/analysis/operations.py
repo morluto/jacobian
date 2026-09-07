@@ -55,6 +55,7 @@ from jacobian.math.matrices.values import (
     EmbeddedRealSimpleNumberFieldMatrix,
     ExactRealMatrix,
     RationalMatrix,
+    SparseRationalMatrix,
     require_matrix_scalar_digits,
 )
 from jacobian.math.number_theory.number_fields.values import (
@@ -900,46 +901,12 @@ def compute_inertia(matrix: ExactRealMatrix) -> InertiaResult:
         ) from exc
 
 
-def check_farkas_certificate(
-    constraint_matrix: RationalMatrix,
-    rhs_vector: tuple[CanonicalRational, ...],
-    multipliers: tuple[CanonicalRational, ...],
-) -> FarkasCertificateResult:
-    """Check a rational Farkas infeasibility certificate.
-
-    Given system Ax <= b and multiplier vector y >= 0, the certificate is
-    valid if y^T A = 0 and y^T b < 0.
-    """
-    entries = constraint_matrix.entries
-    n_constraints = len(entries)
-    if not n_constraints or any(not row for row in entries):
-        raise OperationDomainValidationError(
-            location=("constraint_matrix",),
-            code="matrix.shape_mismatch",
-            message="constraint matrix must have positive dimensions",
-        )
-    width = len(entries[0])
-    if any(len(row) != width for row in entries):
-        raise OperationDomainValidationError(
-            location=("constraint_matrix",),
-            code="matrix.shape_mismatch",
-            message="constraint matrix must be rectangular",
-        )
-    if len(rhs_vector) != n_constraints or len(multipliers) != n_constraints:
-        raise OperationDomainValidationError(
-            location=("rhs_vector", "multipliers"),
-            code="matrix.shape_mismatch",
-            message="rhs and multiplier lengths must match constraint count",
-        )
-    # Each output is a dot product. Bound a common denominator and the
-    # absolute numerator before multiplying any authored rational components.
-    for column in range(width + 1):
-        active = [
-            (yi, rhs_vector[i] if column == width else entries[i][column])
-            for i, yi in enumerate(multipliers)
-            if yi.num != 0
-            and (rhs_vector[i] if column == width else entries[i][column]).num != 0
-        ]
+def _admit_farkas_products(
+    products: list[list[tuple[CanonicalRational, CanonicalRational]]],
+) -> None:
+    # Each output is a dot product. Admit all numerator/denominator growth
+    # before multiplying any authored rational components.
+    for active in products:
         denominator_digits = sum(
             len(format_canonical_integer(q.den))
             for pair in active
@@ -962,15 +929,59 @@ def check_farkas_certificate(
                 code="matrix.farkas_growth",
                 message="Farkas dot products exceed the exact rational result envelope",
             )
-    y = [multiplier.as_fraction() for multiplier in multipliers]
-    b = [entry.as_fraction() for entry in rhs_vector]
-    yta = [
-        sum((yi * entries[i][j].as_fraction() for i, yi in enumerate(y)), Fraction(0))
-        for j in range(width)
+
+
+def check_farkas_certificate(
+    constraint_matrix: RationalMatrix | SparseRationalMatrix,
+    rhs_vector: tuple[CanonicalRational, ...],
+    multipliers: tuple[CanonicalRational, ...],
+) -> FarkasCertificateResult:
+    """Check a rational Farkas infeasibility certificate.
+
+    Given system Ax <= b and multiplier vector y >= 0, the certificate is
+    valid if y^T A = 0 and y^T b < 0.
+    """
+    n_constraints = constraint_matrix.row_count
+    width = constraint_matrix.column_count
+    if not n_constraints or not width:
+        raise OperationDomainValidationError(
+            location=("constraint_matrix",),
+            code="matrix.shape_mismatch",
+            message="constraint matrix must have positive dimensions",
+        )
+    if len(rhs_vector) != n_constraints or len(multipliers) != n_constraints:
+        raise OperationDomainValidationError(
+            location=("rhs_vector", "multipliers"),
+            code="matrix.shape_mismatch",
+            message="rhs and multiplier lengths must match constraint count",
+        )
+    # Retain only nonzero products, grouped by output column. Sparse input
+    # work is O(nnz + rows + columns); no dense zero matrix is constructed.
+    products: list[list[tuple[CanonicalRational, CanonicalRational]]] = [
+        [] for _ in range(width + 1)
     ]
-    ytb = sum((yi * bi for yi, bi in zip(y, b, strict=True)), Fraction(0))
+    if isinstance(constraint_matrix, SparseRationalMatrix):
+        for entry in constraint_matrix.entries:
+            multiplier = multipliers[entry.row]
+            if multiplier.num:
+                products[entry.column].append((multiplier, entry.value))
+    else:
+        for row, multiplier in zip(constraint_matrix.entries, multipliers, strict=True):
+            if multiplier.num:
+                for column, value in enumerate(row):
+                    if value.num:
+                        products[column].append((multiplier, value))
+    products[width] = [
+        (y, b) for y, b in zip(multipliers, rhs_vector, strict=True) if y.num and b.num
+    ]
+    _admit_farkas_products(products)
+    dot_products = [
+        sum((a.as_fraction() * b.as_fraction() for a, b in active), Fraction())
+        for active in products
+    ]
+    yta, ytb = dot_products[:-1], dot_products[-1]
     reasons = []
-    if any(yi < 0 for yi in y):
+    if any(yi.num < 0 for yi in multipliers):
         reasons.append("multiplier vector has a negative entry")
     if any(value != 0 for value in yta):
         reasons.append("y^T A != 0")

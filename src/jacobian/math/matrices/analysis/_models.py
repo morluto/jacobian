@@ -13,6 +13,7 @@ from jacobian.math.matrices.values import (
     MAX_RATIONAL_MATRIX_ORDER,
     ExactRealMatrix,
     RationalMatrix,
+    SparseRationalMatrix,
 )
 from jacobian.math.number_theory.number_fields.values import (
     MAX_NUMBER_FIELD_EMBEDDING_DEGREE,
@@ -260,13 +261,13 @@ class FarkasCertificateRequest(StrictModel):
     y^T A = 0 and y^T b < 0, proving the system is infeasible.
     """
 
-    constraint_matrix: RationalMatrix
+    constraint_matrix: RationalMatrix | SparseRationalMatrix
     rhs_vector: tuple[CanonicalRational, ...] = Field(min_length=1)
     multipliers: tuple[CanonicalRational, ...] = Field(min_length=1)
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
-        n_constraints = len(self.constraint_matrix.entries)
+        n_constraints = self.constraint_matrix.row_count
         if len(self.rhs_vector) != n_constraints:
             raise _validation_error(
                 "shape_mismatch", "rhs_vector length must match constraint count"
@@ -275,8 +276,10 @@ class FarkasCertificateRequest(StrictModel):
             raise _validation_error(
                 "shape_mismatch", "multipliers length must match constraint count"
             )
-        widths = {len(row) for row in self.constraint_matrix.entries}
-        if len(widths) != 1 or 0 in widths:
+        if (
+            self.constraint_matrix.row_count == 0
+            or self.constraint_matrix.column_count == 0
+        ):
             raise _validation_error(
                 "shape_mismatch",
                 "constraint matrix must be rectangular with positive row width",
@@ -287,7 +290,7 @@ class FarkasCertificateRequest(StrictModel):
 class FarkasCertificateResult(StrictModel):
     """Result of checking a Farkas infeasibility certificate."""
 
-    constraint_matrix: RationalMatrix
+    constraint_matrix: RationalMatrix | SparseRationalMatrix
     rhs_vector: tuple[CanonicalRational, ...]
     multipliers: tuple[CanonicalRational, ...]
     valid: bool
@@ -297,7 +300,7 @@ class FarkasCertificateResult(StrictModel):
 
     @model_validator(mode="after")
     def require_source_dimensions(self) -> Self:
-        rows = len(self.constraint_matrix.entries)
+        rows = self.constraint_matrix.row_count
         if (
             len(self.rhs_vector) != rows
             or len(self.multipliers) != rows

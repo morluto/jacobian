@@ -298,13 +298,12 @@ def symbolic_linear_system_solve(
     matrix = _matrix_from_values(entries)
     rhs_vec = sympy.Matrix([[rational_function_to_sympy(v) for v in rhs]]).T
 
-    rank_coeff = matrix.rank()
     aug = matrix.row_join(rhs_vec)
-    rank_aug = aug.rank()
+    rref_mat, pivots = aug.rref()
     n_cols = matrix.cols
-
-    if rank_aug > rank_coeff:
+    if n_cols in pivots:
         return "INCONSISTENT", None, None, None
+    rank_coeff = len(pivots)
 
     if rank_coeff == n_cols:
         # Unique solution. An exact backend failure here is an execution
@@ -314,7 +313,6 @@ def symbolic_linear_system_solve(
         # RREF of the augmented matrix, which handles any shape. With full
         # column rank and consistency already established, every coefficient
         # column is a pivot row and the augmented entry is the solution.
-        rref_mat, pivots = aug.rref()
         solution: dict[int, RationalFunction] = {}
         for i, pivot_col in enumerate(pivots):
             if pivot_col < n_cols:
@@ -337,7 +335,15 @@ def symbolic_linear_system_solve(
         )
 
     # Non-unique consistent system
-    null = matrix.nullspace()
+    null = []
+    for free_column in range(n_cols):
+        if free_column in pivots:
+            continue
+        vector = [sympy.Integer(0)] * n_cols
+        vector[free_column] = sympy.Integer(1)
+        for row, pivot_column in enumerate(pivots):
+            vector[pivot_column] = -rref_mat[row, free_column]
+        null.append(vector)
     nullspace_basis = RationalFunctionVectorBasis(
         variables=variables,
         vector_dimension=n_cols,
@@ -354,12 +360,7 @@ def symbolic_linear_system_solve(
         ),
     )
 
-    # Find a particular solution using the pseudo-inverse approach
-    # or least squares.  For now, use sympy's linear solve.
-    # Use the augmented matrix rref to find a particular solution
-    rref_mat, pivots = aug.rref()
-    # The particular solution: set free variables to 0
-    # Extract from the RREF of the augmented matrix
+    # Set free variables to zero in the same augmented reduction.
     particular = []
     for _j in range(n_cols):
         particular.append(rational_function_from_sympy(sympy.Integer(0), variables))

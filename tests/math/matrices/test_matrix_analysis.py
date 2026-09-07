@@ -464,3 +464,41 @@ def test_inertia_rejects_request_above_digit_work_bound() -> None:
     )
     with pytest.raises(OperationDomainValidationError, match="digit-work bound"):
         compute_inertia(request)
+
+
+@pytest.mark.parametrize("columns", [1, 32, 256])
+def test_sparse_farkas_preserves_source_and_checks_products(columns: int) -> None:
+    from jacobian._exact import CanonicalRational
+    from jacobian.math.matrices.analysis._models import FarkasCertificateResult
+    from jacobian.math.matrices.values import (
+        SparseRationalMatrix,
+        SparseRationalMatrixEntry,
+    )
+
+    q = CanonicalRational.from_integer_ratio
+    matrix = SparseRationalMatrix(
+        row_count=2 * columns,
+        column_count=columns,
+        entries=tuple(
+            SparseRationalMatrixEntry(
+                row=i, column=i // 2, value=q(1 if i % 2 == 0 else -1, 1)
+            )
+            for i in range(2 * columns)
+        ),
+    )
+    request = FarkasCertificateRequest(
+        constraint_matrix=matrix,
+        rhs_vector=(q(-1, 1),) + (q(0, 1),) * (2 * columns - 1),
+        multipliers=(q(1, 1),) * (2 * columns),
+    )
+    parsed = FarkasCertificateRequest.model_validate_json(request.model_dump_json())
+    result = check_farkas_certificate(parsed)
+    assert result.valid and result.y_t_b.as_fraction() == -1
+    assert all(v.num == 0 for v in result.y_t_a)
+    decoded = FarkasCertificateResult.model_validate_json(result.model_dump_json())
+    assert isinstance(decoded.constraint_matrix, SparseRationalMatrix)
+    assert decoded.constraint_matrix == matrix
+    bad = check_farkas_certificate(
+        request.model_copy(update={"multipliers": (q(0, 1), *request.multipliers[1:])})
+    )
+    assert not bad.valid and bad.y_t_a[0].as_fraction() == -1

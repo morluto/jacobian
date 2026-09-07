@@ -680,3 +680,58 @@ class TestRelayedPayloadShapeCaps:
     def _non_unique_payload() -> Payload:
         result = TestNonUniqueWitnessEquivalence._non_unique_result()
         return _payload(result.model_dump())
+
+
+@pytest.mark.parametrize("kind", ["unique", "nonunique", "inconsistent"])
+def test_linear_system_uses_one_augmented_reduction(
+    kind: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import sympy as sp
+
+    from jacobian.math.polynomials._conversions import rational_function_to_sympy
+
+    one, two = _rf(("t",), (1, (0,))), _rf(("t",), (2, (0,)))
+    t = _rf(("t",), (1, (1,)))
+    entries = (
+        ((one, t), (_rf(("t",)), one))
+        if kind == "unique"
+        else ((one, t), (two, _rf(("t",), (2, (1,)))))
+    )
+    rhs = (
+        one,
+        one
+        if kind == "unique"
+        else two
+        if kind == "nonunique"
+        else _rf(("t",), (3, (0,))),
+    )
+    original = sp.MatrixBase.rref
+    calls = []
+
+    def counted(matrix: object, *args: object, **kwargs: object) -> object:
+        calls.append(matrix)
+        return original(matrix, *args, **kwargs)
+
+    monkeypatch.setattr(sp.MatrixBase, "rref", counted)
+    result = _run_linear_system(
+        SymbolicLinearSystemRequest(matrix=_matrix(("t",), entries), rhs=rhs)
+    )
+    assert len(calls) == 1
+    assert (
+        result.classification
+        == {
+            "unique": "UNIQUE",
+            "nonunique": "NON_UNIQUE",
+            "inconsistent": "INCONSISTENT",
+        }[kind]
+    )
+    vector = result.solution or result.particular_solution
+    if vector is not None:
+        a = sp.Matrix([[rational_function_to_sympy(v) for v in row] for row in entries])
+        x = sp.Matrix([rational_function_to_sympy(v) for v in vector])
+        b = sp.Matrix([rational_function_to_sympy(v) for v in rhs])
+        assert (a * x - b).applyfunc(sp.cancel) == sp.zeros(2, 1)
+        if result.nullspace_basis is not None:
+            for basis in result.nullspace_basis:
+                z = sp.Matrix([rational_function_to_sympy(v) for v in basis])
+                assert (a * z).applyfunc(sp.cancel) == sp.zeros(2, 1)

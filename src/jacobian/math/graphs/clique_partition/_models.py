@@ -2,22 +2,30 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.graphs.values import (
+    MAX_INDEXED_SIMPLE_GRAPH_EDGES,
     MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
+    GraphVertexLabel,
     SimpleUndirectedGraph,
 )
 
 # Candidate parts are vertex subsets; pair work per part is quadratic in its
 # size. Both the part count and the aggregate pair checks are bounded before
 # any adjacency expansion.
-MAX_PARTITION_PARTS = 4_096
+MAX_PARTITION_VERTEX_REFERENCES = 2 * MAX_INDEXED_SIMPLE_GRAPH_EDGES
+MAX_PARTITION_PARTS = MAX_PARTITION_VERTEX_REFERENCES // 2
 MAX_PARTITION_PAIR_WORK = 1_000_000
+MAX_PARTITION_OUTPUT_BYTES = 4 * 1024 * 1024
+PartitionPart = Annotated[
+    tuple[GraphVertexLabel, ...],
+    Field(min_length=2, max_length=MAX_INDEXED_SIMPLE_GRAPH_VERTICES),
+]
 
 
 def _validation_error(code: str, message: str) -> PydanticCustomError:
@@ -34,7 +42,7 @@ class EdgeCliquePartitionRequest(StrictModel):
     """
 
     graph: SimpleUndirectedGraph
-    parts: tuple[tuple[str, ...], ...] = Field(
+    parts: tuple[PartitionPart, ...] = Field(
         max_length=MAX_PARTITION_PARTS,
         description=(
             "Candidate parts as vertex subsets in any order. Each part must "
@@ -50,7 +58,6 @@ class EdgeCliquePartitionRequest(StrictModel):
                 "graph.clique_partition.too_many_parts",
                 f"edge-clique partitions admit at most {MAX_PARTITION_PARTS} parts",
             )
-        pair_work = 0
         for part in self.parts:
             if len(part) < 2:
                 raise _validation_error(
@@ -73,13 +80,6 @@ class EdgeCliquePartitionRequest(StrictModel):
                     "graph.clique_partition.part_too_large",
                     "partition parts cannot exceed the graph vertex bound",
                 )
-            pair_work += len(part) * (len(part) - 1) // 2
-            if pair_work > MAX_PARTITION_PAIR_WORK:
-                raise _validation_error(
-                    "graph.clique_partition.pair_work_bound",
-                    "partition parts exceed the "
-                    f"{MAX_PARTITION_PAIR_WORK:,}-pair checking bound",
-                )
         return self
 
 
@@ -96,7 +96,7 @@ class EdgeCliquePartitionResult(StrictModel):
     """
 
     graph: SimpleUndirectedGraph
-    parts: tuple[tuple[str, ...], ...] = Field(max_length=MAX_PARTITION_PARTS)
+    parts: tuple[PartitionPart, ...] = Field(max_length=MAX_PARTITION_PARTS)
     is_partition: bool
     verdict: PartitionVerdict
     failing_part: StrictInt | None = Field(default=None, ge=0)

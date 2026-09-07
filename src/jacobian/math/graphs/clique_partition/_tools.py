@@ -30,7 +30,9 @@ TOOLS: MathTools = (
             "Returns the valid verdict or one concrete failure: a nonedge "
             "inside a part, an uncovered edge, or an edge covered by multiple "
             "identified parts. Certifies an upper bound on clique-partition "
-            "number, not minimality."
+            "number, not minimality. Admits at most 65,280 vertex references, "
+            "1,000,000 part pairs and 4 MiB of predicted output on the "
+            "256-vertex graph carrier."
         ),
         request_type=EdgeCliquePartitionRequest,
         result_type=EdgeCliquePartitionResult,

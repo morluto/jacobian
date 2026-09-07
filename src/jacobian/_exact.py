@@ -107,7 +107,14 @@ def require_bounded_rational(
 ) -> None:
     """Reject a canonical rational whose components exceed a domain bound."""
 
-    if abs(value.num) >= 10**max_digits or value.den >= 10**max_digits:
+    magnitude = max(abs(value.num), value.den)
+    # 2**(3*d) < 10**d for positive d. Most components are far below
+    # their domain ceiling; do not rebuild a many-thousand-digit power of
+    # ten for every scalar. Near the ceiling retain the exact comparison.
+    if magnitude.bit_length() <= 3 * max_digits:
+        return
+    limit = 10**max_digits
+    if magnitude >= limit:
         raise ValueError(f"{label} exceeds the {max_digits}-digit bound")
 
 

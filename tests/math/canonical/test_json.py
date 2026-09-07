@@ -145,6 +145,31 @@ def test_bounded_rational_rejects_oversized_canonical_components(
         )
 
 
+@pytest.mark.parametrize("digits", [1, 2, 17, 256])
+def test_rational_digit_bound_is_exact_across_binary_and_decimal_edges(
+    digits: int,
+) -> None:
+    for magnitude in (
+        1,
+        2 ** (3 * digits) - 1,
+        2 ** (3 * digits),
+        10**digits - 1,
+        10**digits,
+    ):
+        for value in (
+            CanonicalRational(num=magnitude, den=1),
+            CanonicalRational(num=-magnitude, den=1),
+            CanonicalRational(num=1, den=magnitude),
+        ):
+            if len(str(magnitude)) <= digits:
+                require_bounded_rational(value, max_digits=digits, label="component")
+            else:
+                with pytest.raises(ValueError, match="component exceeds"):
+                    require_bounded_rational(
+                        value, max_digits=digits, label="component"
+                    )
+
+
 def test_negative_zero_is_not_a_canonical_integer_encoding() -> None:
     with pytest.raises(CanonicalizationError, match=r"canonical decimal"):
         canonicalize_json({"num": "-0", "den": "1"})

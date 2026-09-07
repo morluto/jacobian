@@ -62,8 +62,9 @@ class IndexedIntegerSequence(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_items(self) -> Self:
+        limit = 10**MAX_SUBSET_SUM_ITEM_DIGITS
         for item in self.items:
-            if abs(item) >= 10**MAX_SUBSET_SUM_ITEM_DIGITS:
+            if abs(item) >= limit:
                 raise _validation_error(
                     "require_bounded_items",
                     f"indexed integer exceeds the "

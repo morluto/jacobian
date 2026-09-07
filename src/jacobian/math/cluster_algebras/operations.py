@@ -84,8 +84,8 @@ def mutate_seed(
     3. Leave diagonal entries at 0
 
     The formula is:
-    b'_{ij} = -sgn(i-k) * sgn(j-k) * b_{ij}  if i=k or j=k
-    b'_{ij} = b_{ij} + max(0, b_{ik}) * max(0, b_{kj}) + min(0, b_{ik}) * min(0, b_{kj})  otherwise
+    b'_{ij} = -b_{ij}  if i=k or j=k
+    b'_{ij} = b_{ij} + max(0, b_{ik}) * max(0, b_{kj}) - min(0, b_{ik}) * min(0, b_{kj})  otherwise
     """
     _admit_mutation(exchange_matrix, mutation_index)
     return SeedMutationResult._from_kernel(
@@ -112,8 +112,9 @@ def g_vectors(exchange_matrix: ExchangeMatrix) -> GVectorResult:
 def verify_g_vectors(claim: GVectorResult) -> bool:
     """Verify the initial g-vector identity on its retained seed."""
     try:
+        require_skew_symmetrizable(claim.exchange_matrix)
         return claim.g_matrix == _identity_matrix(claim.exchange_matrix.n)
-    except (TypeError, ValueError):
+    except PydanticCustomError:
         return False
 
 

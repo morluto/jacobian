@@ -133,7 +133,7 @@ def _require_dependency_occurrence_bound(substitution: Substitution) -> None:
 
 
 class ProlongableSubstitution(StrictModel):
-    """A substitution with a certified unbounded nested seed iterate."""
+    """A substitution claiming an unbounded nested seed iterate."""
 
     substitution: Substitution
     seed: Symbol
@@ -152,32 +152,37 @@ class ProlongableSubstitution(StrictModel):
             raise _validation_error(
                 "seed_outside_alphabet", "seed must belong to the substitution alphabet"
             )
-        seed_index = morphism.source_alphabet.index(self.seed)
-        seed_image = morphism.images[seed_index]
-        if not seed_image or seed_image[0] != self.seed:
-            raise _validation_error(
-                "seed_image_not_prolongable", "the seed image must begin with the seed"
-            )
-        if len(seed_image) == 1:
-            raise _validation_error(
-                "seed_image_not_growing",
-                "the seed image must contain a nonempty growing suffix",
-            )
-        image_map = dict(zip(morphism.source_alphabet, morphism.images, strict=True))
-        mortal = {symbol for symbol, image in image_map.items() if not image}
-        changed = True
-        while changed:
-            changed = False
-            for symbol, image in image_map.items():
-                if symbol not in mortal and all(letter in mortal for letter in image):
-                    mortal.add(symbol)
-                    changed = True
-        if all(letter in mortal for letter in seed_image[1:]):
-            raise _validation_error(
-                "seed_suffix_eventually_erases",
-                "the seed suffix must not eventually erase",
-            )
         return self
+
+
+def _require_growing_seed(source: ProlongableSubstitution) -> None:
+    """Establish the claimed unbounded seed orbit at execution admission."""
+    morphism = source.substitution.morphism
+    seed_index = morphism.source_alphabet.index(source.seed)
+    seed_image = morphism.images[seed_index]
+    if not seed_image or seed_image[0] != source.seed:
+        raise _validation_error(
+            "seed_image_not_prolongable", "the seed image must begin with the seed"
+        )
+    if len(seed_image) == 1:
+        raise _validation_error(
+            "seed_image_not_growing",
+            "the seed image must contain a nonempty growing suffix",
+        )
+    image_map = dict(zip(morphism.source_alphabet, morphism.images, strict=True))
+    mortal = {symbol for symbol, image in image_map.items() if not image}
+    changed = True
+    while changed:
+        changed = False
+        for symbol, image in image_map.items():
+            if symbol not in mortal and all(letter in mortal for letter in image):
+                mortal.add(symbol)
+                changed = True
+    if all(letter in mortal for letter in seed_image[1:]):
+        raise _validation_error(
+            "seed_suffix_eventually_erases",
+            "the seed suffix must not eventually erase",
+        )
 
 
 def _require_prolongable_source_occurrence_bound(value: object) -> None:

@@ -693,3 +693,20 @@ def test_exact_public_api_symbols() -> None:
     assert len(finite_fields.__all__) == len(set(finite_fields.__all__))
     assert all(not name.startswith("_") for name in finite_fields.__all__)
     assert all(hasattr(finite_fields, name) for name in finite_fields.__all__)
+
+
+def test_orbit_verifier_propagates_operational_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian._execution import OperationExecutionTimeoutError
+    from jacobian.math.finite_fields import operations
+
+    subspace, directions = _slice_a_values()
+    claim = orbit_distribution(direction_rank_ledger(subspace, directions))
+
+    def fail(ledger: DirectionRankLedger) -> None:
+        raise OperationExecutionTimeoutError("injected authentication timeout")
+
+    monkeypatch.setattr(operations, "_authenticate_orbit_ledger", fail)
+    with pytest.raises(OperationExecutionTimeoutError, match="authentication timeout"):
+        verify_orbit_distribution(claim)

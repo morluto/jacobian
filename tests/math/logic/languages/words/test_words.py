@@ -424,15 +424,21 @@ def test_fixed_point_generation_caps_the_intermediate_prefix() -> None:
     assert len(result.prefix.letters) == 500
 
 
-def test_prolongability_rejects_mortal_nongrowing_and_wrong_seed_images() -> None:
-    with _raises_code("word.seed_suffix_eventually_erases"):
-        ProlongableSubstitution(substitution=_substitution((("0", "1"), ())), seed="0")
-    with _raises_code("word.seed_image_not_growing"):
-        ProlongableSubstitution(substitution=_substitution((("0",), ("1",))), seed="0")
-    with _raises_code("word.seed_image_not_prolongable"):
-        ProlongableSubstitution(
-            substitution=_substitution((("1", "0"), ("1",))), seed="0"
-        )
+@pytest.mark.parametrize(
+    "images, message",
+    [
+        ((("0", "1"), ()), "eventually erase"),
+        ((("0",), ("1",)), "growing suffix"),
+        ((("1", "0"), ("1",)), "begin with the seed"),
+    ],
+)
+def test_prolongability_rejects_mortal_nongrowing_and_wrong_seed_images(
+    images: tuple[tuple[str, ...], ...],
+    message: str,
+) -> None:
+    source = ProlongableSubstitution(substitution=_substitution(images), seed="0")
+    with pytest.raises(ValueError, match=message):
+        fixed_point_prefix(source, 3)
 
 
 def test_prolongability_allows_erasing_outside_the_growing_seed_orbit() -> None:
@@ -673,3 +679,22 @@ def test_incidence_matrix_matches_independent_count_oracle() -> None:
                 tuple(image.count(target) for image in (left, right))
                 for target in alphabet
             )
+
+
+def test_serialized_prolongability_remains_a_claim() -> None:
+    source = ProlongableSubstitution.model_validate_json(
+        json.dumps(
+            {
+                "substitution": {
+                    "morphism": {
+                        "source_alphabet": ["0", "1"],
+                        "target_alphabet": ["0", "1"],
+                        "images": [["0", "1"], []],
+                    }
+                },
+                "seed": "0",
+            }
+        )
+    )
+    with pytest.raises(ValueError, match="eventually erase"):
+        fixed_point_prefix(source, 3)

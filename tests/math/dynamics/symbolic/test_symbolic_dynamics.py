@@ -765,3 +765,45 @@ def test_periodic_profile_returns_large_counts_as_canonical_integers() -> None:
         )
     )
     assert result.fixed_point_counts[-1] == 1000000000000000000
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        RuntimeError("backend failed"),
+        TimeoutError("deadline"),
+        MemoryError("allocation"),
+        ValueError("backend value failure"),
+    ],
+)
+def test_presentation_verification_propagates_execution_failure(
+    monkeypatch: pytest.MonkeyPatch, error: Exception
+) -> None:
+    from jacobian.math.dynamics.symbolic import operations
+
+    claim = finite_type_presentation(
+        ForbiddenBlockShift(alphabet=("a", "b"), forbidden_blocks=())
+    )
+
+    def fail(claim: BlockPresentation) -> tuple[tuple[str, ...], ...]:
+        raise error
+
+    monkeypatch.setattr(operations, "_expected_occurring_state_blocks", fail)
+    with pytest.raises(type(error), match=str(error)):
+        verify_block_presentation(claim)
+    with pytest.raises(type(error), match=str(error)):
+        adjacency_shift_from_presentation(claim)
+
+
+def test_presentation_verification_resource_limit_is_not_a_false_relation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.catalog.models import OperationResourceAdmissionError
+    from jacobian.math.dynamics.symbolic import _bounds
+
+    claim = finite_type_presentation(
+        ForbiddenBlockShift(alphabet=("a", "b"), forbidden_blocks=())
+    )
+    monkeypatch.setattr(_bounds, "MAX_PRESENTATION_VERIFICATION_WORK", 1)
+    with pytest.raises(OperationResourceAdmissionError, match="work bound"):
+        verify_block_presentation(claim)

@@ -642,3 +642,19 @@ class TestGreenRelations:
             == len(result.D)
             == len(result.J)
         )
+
+
+def test_generated_verifier_propagates_operational_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.finite_semigroups import operations
+
+    semigroup = _finite_semigroup(Z3)
+    claim = generated_subsemigroup(semigroup, ("1",))
+
+    def fail(semigroup: FiniteSemigroup) -> None:
+        raise RuntimeError("injected operational failure")
+
+    monkeypatch.setattr(operations, "_require_associative", fail)
+    with pytest.raises(RuntimeError, match="injected operational failure"):
+        verify_generated_subsemigroup(claim)

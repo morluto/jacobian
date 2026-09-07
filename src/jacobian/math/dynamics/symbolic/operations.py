@@ -9,7 +9,10 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     import networkx as nx
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.dynamics.symbolic._bounds import (
     MAX_PERIODIC_PROFILE_DIGITS,
     MAX_PERIODIC_PROFILE_WORK,
@@ -390,6 +393,8 @@ def _verify_presentation_carrier(claim: BlockPresentation) -> set[str] | None:
         return None
     try:
         require_bounded_presentation_verification(claim)
+    except OperationResourceAdmissionError:
+        raise
     except (TypeError, ValueError):
         return None
     alphabet_set = _verify_presentation_symbols(
@@ -507,35 +512,26 @@ def _expected_presentation_edges(
     return expected_edges
 
 
-def _verify_block_presentation(claim: BlockPresentation) -> bool:
-    """Check the complete serialized transition relation and its counts."""
+def verify_block_presentation(claim: BlockPresentation) -> bool:
+    """Check the source relation; execution failures do not disprove a claim."""
 
     if type(claim) is not BlockPresentation:
         return False
     try:
         alphabet_set = _verify_presentation_carrier(claim)
-        if alphabet_set is None:
-            return False
-        if claim.state_blocks != _expected_occurring_state_blocks(claim):
-            return False
-        actual = _actual_presentation_edges(claim, alphabet_set)
-        if actual is None:
-            return False
-        actual_edges, counts = actual
-        return actual_edges == _expected_presentation_edges(claim) and (
-            claim.adjacency_matrix == tuple(tuple(row) for row in counts)
-        )
-    except Exception:
+    except (AttributeError, TypeError):
         return False
-
-
-def verify_block_presentation(claim: BlockPresentation) -> bool:
-    """Verify all overlap transitions and their serialized adjacency counts."""
-
-    try:
-        return _verify_block_presentation(claim)
-    except Exception:
+    if alphabet_set is None:
         return False
+    if claim.state_blocks != _expected_occurring_state_blocks(claim):
+        return False
+    actual = _actual_presentation_edges(claim, alphabet_set)
+    if actual is None:
+        return False
+    actual_edges, counts = actual
+    return actual_edges == _expected_presentation_edges(claim) and (
+        claim.adjacency_matrix == tuple(tuple(row) for row in counts)
+    )
 
 
 def _mobius_sieve(limit: int) -> tuple[int, ...]:

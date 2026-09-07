@@ -542,3 +542,43 @@ class TestAugmentationEndpointFaces:
                 structure_constants=dual.structure_constants,
                 augmentation=(1,),
             )
+
+
+@pytest.mark.parametrize("homology", [False, True])
+def test_verification_propagates_backend_failure(
+    monkeypatch: pytest.MonkeyPatch, homology: bool
+) -> None:
+    import jacobian.math.topology.cohomology.hochschild.operations as operations
+
+    algebra = _coordinatewise_algebra(3, 1)
+    chain = hochschild_chain_complex(algebra, 1)
+    groups = hochschild_homology(algebra, 1)
+
+    def unavailable(*args: object, **kwargs: object) -> int:
+        raise RuntimeError("backend unavailable")
+
+    if homology:
+        monkeypatch.setattr(operations, "_boundary_rank", unavailable)
+        with pytest.raises(RuntimeError, match="backend unavailable"):
+            verify_hochschild_homology(groups)
+    else:
+        monkeypatch.setattr(operations, "bar_differential_entries", unavailable)
+        with pytest.raises(RuntimeError, match="backend unavailable"):
+            verify_hochschild_chain_complex(chain)
+
+
+def test_homology_verification_preserves_resource_refusal() -> None:
+    from jacobian.catalog.models import OperationResourceAdmissionError
+
+    claim = hochschild_homology(_coordinatewise_algebra(3, 2), 1)
+    authored = claim.model_copy(update={"max_degree": 20})
+    with pytest.raises(OperationResourceAdmissionError):
+        verify_hochschild_homology(authored)
+
+
+def test_homology_verification_rejects_composite_characteristic() -> None:
+    claim = hochschild_homology(_coordinatewise_algebra(3, 1), 1)
+    authored = claim.model_copy(
+        update={"algebra": claim.algebra.model_copy(update={"prime": 4})}
+    )
+    assert not verify_hochschild_homology(authored)

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections import deque
 from typing import Annotated, Self
 
 from pydantic import Field, StrictInt, model_validator
@@ -38,13 +37,13 @@ class GameMove(StrictModel):
 
 
 class ImpartialGame(StrictModel):
-    """A complete finite normal-play impartial game DAG."""
+    """A finite normal-play impartial game claiming an acyclic move relation."""
 
     positions: tuple[OpaqueLabel, ...] = Field(min_length=1, max_length=MAX_POSITIONS)
     moves: tuple[GameMove, ...] = Field(max_length=MAX_MOVES)
 
     @model_validator(mode="after")
-    def require_finite_dag(self) -> Self:
+    def require_game_structure(self) -> Self:
         if len(set(self.positions)) != len(self.positions):
             raise PydanticCustomError(
                 "impartial_game.positions_not_unique",
@@ -67,26 +66,6 @@ class ImpartialGame(StrictModel):
         if any(source == target for source, target in edge_pairs):
             raise PydanticCustomError(
                 "impartial_game.self_loop", "game moves cannot contain self-loops"
-            )
-        successors: dict[str, list[str]] = {position: [] for position in self.positions}
-        indegree = dict.fromkeys(self.positions, 0)
-        for source, target in edge_pairs:
-            successors[source].append(target)
-            indegree[target] += 1
-        queue = deque(
-            position for position in self.positions if indegree[position] == 0
-        )
-        visited = 0
-        while queue:
-            source = queue.popleft()
-            visited += 1
-            for target in successors[source]:
-                indegree[target] -= 1
-                if indegree[target] == 0:
-                    queue.append(target)
-        if visited != len(self.positions):
-            raise PydanticCustomError(
-                "impartial_game.cyclic", "impartial game must be acyclic"
             )
         return self
 

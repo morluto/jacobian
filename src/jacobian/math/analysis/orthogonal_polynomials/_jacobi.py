@@ -21,6 +21,10 @@ class JacobiMatrixAdmissionError(ValueError):
         self.reason = reason
 
 
+class IncompatibleRecurrenceError(ValueError):
+    """The supplied coefficients disprove the three-term relation."""
+
+
 def _from_fraction(value: Fraction) -> CanonicalRational:
     return CanonicalRational.from_fraction(value)
 
@@ -47,9 +51,11 @@ def require_three_term_identities(
     ]
     n = len(polys)
     if len(alphas) != max(n - 1, 0) or len(betas) < len(alphas):
-        raise ValueError("recurrence coefficient dimensions do not match the family")
+        raise IncompatibleRecurrenceError(
+            "recurrence coefficient dimensions do not match the family"
+        )
     if n >= 1 and len(betas) > 0 and betas[0] != Fraction(0):
-        raise ValueError("beta[0] must be the unused zero placeholder")
+        raise IncompatibleRecurrenceError("beta[0] must be the unused zero placeholder")
     for k in range(len(alphas)):
         p_k = polys[k]
         p_next = polys[k + 1]
@@ -74,7 +80,7 @@ def require_three_term_identities(
                 if i < width:
                     rhs[i] += beta_k * coefficient
         if lhs != rhs:
-            raise ValueError(
+            raise IncompatibleRecurrenceError(
                 f"family polynomials contradict the three-term recurrence at k={k}: "
                 "x*p_k - p_{k+1} differs from alpha_k*p_k + beta_k*p_{k-1}"
             )
@@ -115,80 +121,49 @@ def _derive_jacobi_coefficients(
     return alphas, betas
 
 
-def _require_compatible_or_raise(family: OrthogonalPolynomialFamily) -> None:
-    """Reject families whose coefficients contradict their norm ratios."""
+def require_jacobi_matrix_admission(
+    family: OrthogonalPolynomialFamily,
+) -> tuple[list[Fraction], list[Fraction]]:
+    """Establish applicability once and retain the bounded recurrence entries."""
 
-    if len(family.polynomials) < 2:
-        return
-    try:
-        alphas, betas = _derive_jacobi_coefficients(family)
-        require_three_term_identities(family, alphas, betas)
-    except ValueError as exc:
-        # Preserve zero-division diagnostics raised for vanishing norms;
-        # only compatibility failures are mapped here (admission already
-        # rejects undefined ratios above).
-        if "contradict" not in str(exc) and "dimensions" not in str(exc):
-            raise
-        raise JacobiMatrixAdmissionError(
-            "incompatible_family",
-            str(exc),
-        ) from None
-
-
-def require_jacobi_matrix_admission(family: OrthogonalPolynomialFamily) -> None:
-    """Bound every exact entry emitted by the Jacobi-matrix kernel.
-
-    The canonical family is intentionally accepted directly: this is the
-    owner-local mathematical admission shared by the MCP request validator and
-    the native API, not a request-envelope reconstruction.
-    """
     polys = family.polynomials
+    for k in range(1, len(polys)):
+        if polys[k - 1].squared_norm.num == 0:
+            raise JacobiMatrixAdmissionError(
+                "norm_ratio",
+                f"adjacent-norm ratio beta_{k} is undefined because squared "
+                f"norm h_{k - 1} vanishes; supply a "
+                "family with nonzero norms for every emitted ratio",
+            )
+    alphas, betas = _derive_jacobi_coefficients(family)
     digit_limit = 10**MAX_CANONICAL_RATIONAL_DIGITS
-    for k in range(len(polys) - 1):
-        p_k = [coefficient.as_fraction() for coefficient in polys[k].coefficients]
-        p_next = [
-            coefficient.as_fraction() for coefficient in polys[k + 1].coefficients
-        ]
-        if k == 0:
-            alpha_k = -p_next[0]
-        else:
-            x_pk = [Fraction(0)] * (len(p_k) + 1)
-            for i, coefficient in enumerate(p_k):
-                x_pk[i + 1] = coefficient
-            residual = [
-                x_pk[i] - p_next[i] if i < len(p_next) else x_pk[i]
-                for i in range(len(x_pk))
-            ]
-            alpha_k = residual[k] if k < len(residual) else Fraction(0)
-        if abs(alpha_k.numerator) >= digit_limit or alpha_k.denominator >= digit_limit:
+    for k, value in enumerate(alphas):
+        if abs(value.numerator) >= digit_limit or value.denominator >= digit_limit:
             raise JacobiMatrixAdmissionError(
                 "recurrence_height",
                 f"derived recurrence entry alpha_{k} exceeds the canonical "
                 "rational digit limit; supply a family whose coefficient "
                 "differences stay representable",
             )
-    for k in range(1, len(polys)):
-        h_k = polys[k].squared_norm.as_fraction()
-        h_prev = polys[k - 1].squared_norm.as_fraction()
-        if h_prev == 0:
-            raise JacobiMatrixAdmissionError(
-                "norm_ratio",
-                f"adjacent-norm ratio beta_{k} is undefined because squared "
-                f"norm h_{k - 1 if h_prev == 0 else k} vanishes; supply a "
-                "family with nonzero norms for every emitted ratio",
-            )
-        ratio = h_k / h_prev
-        if abs(ratio.numerator) >= digit_limit or ratio.denominator >= digit_limit:
+    for k, value in enumerate(betas[1:], start=1):
+        if abs(value.numerator) >= digit_limit or value.denominator >= digit_limit:
             raise JacobiMatrixAdmissionError(
                 "norm_ratio_height",
                 f"adjacent-norm ratio beta_{k} exceeds the canonical rational "
                 "digit limit; supply a family whose squared norm ratios stay "
                 "representable",
             )
-    _require_compatible_or_raise(family)
+    try:
+        require_three_term_identities(family, alphas, betas)
+    except IncompatibleRecurrenceError as exc:
+        raise JacobiMatrixAdmissionError("incompatible_family", str(exc)) from None
+    return alphas, betas
 
 
-def jacobi_matrix_from_family(family: OrthogonalPolynomialFamily) -> JacobiMatrix:
+def jacobi_matrix_from_family(
+    family: OrthogonalPolynomialFamily,
+    coefficients: tuple[list[Fraction], list[Fraction]],
+) -> JacobiMatrix:
     """Compute the exact finite Jacobi matrix of one admitted family."""
     polys = family.polynomials
     n = len(polys)
@@ -205,7 +180,7 @@ def jacobi_matrix_from_family(family: OrthogonalPolynomialFamily) -> JacobiMatri
             matrix=rational_matrix_from_fractions((), column_count=0),
         )
 
-    alphas, betas = _derive_jacobi_coefficients(family)
+    alphas, betas = coefficients
 
     matrix_size = n - 1
     matrix = [[Fraction(0)] * matrix_size for _ in range(matrix_size)]

@@ -140,20 +140,22 @@ class TestDisjunctiveSumValidation:
             )
 
     def test_cyclic_component_rejected(self) -> None:
-        with pytest.raises(ValidationError):
-            DisjunctiveSumRequest.model_validate(
-                {
-                    "components": [
-                        {
-                            "positions": ["a", "b"],
-                            "moves": [
-                                {"source": "a", "target": "b"},
-                                {"source": "b", "target": "a"},
-                            ],
-                        }
-                    ],
-                    "start_positions": ["a"],
-                }
+        with pytest.raises(ValueError, match="acyclic"):
+            compute_disjunctive_sum(
+                DisjunctiveSumRequest.model_validate(
+                    {
+                        "components": [
+                            {
+                                "positions": ["a", "b"],
+                                "moves": [
+                                    {"source": "a", "target": "b"},
+                                    {"source": "b", "target": "a"},
+                                ],
+                            }
+                        ],
+                        "start_positions": ["a"],
+                    }
+                )
             )
 
 

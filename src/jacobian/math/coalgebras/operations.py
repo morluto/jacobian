@@ -6,7 +6,10 @@ from itertools import product
 
 from pydantic_core import PydanticCustomError
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.coalgebras._models import (
     GROUP_LIKE_SCAN_WORK_BUDGET,
     Coalgebra,
@@ -22,7 +25,13 @@ def _admit_coalgebra(coalgebra: Coalgebra) -> None:
     try:
         require_coalgebra_admission(coalgebra)
     except PydanticCustomError as exc:
-        raise OperationDomainValidationError(
+        error_type = (
+            OperationResourceAdmissionError
+            if exc.type
+            in {"coalgebra.prime_digits_exceeded", "coalgebra.tensor_budget_exceeded"}
+            else OperationDomainValidationError
+        )
+        raise error_type(
             location=("coalgebra",),
             code=exc.type,
             message=str(exc),
@@ -170,7 +179,9 @@ def verify_group_like_element(coalgebra: Coalgebra, element: GroupLikeElement) -
             for row in range(dimension)
             for column in range(dimension)
         )
-    except Exception:
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 

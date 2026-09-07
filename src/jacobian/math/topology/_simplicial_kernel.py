@@ -75,8 +75,6 @@ def _admit_homology(
     prime: int,
     convention: HomologyConvention,
 ) -> None:
-    if not is_bounded_prime(prime):
-        raise ValueError("homology coefficients require a bounded prime")
     if any(size > MAX_INLINE_HOMOLOGY_CHAIN_GROUP for size in complex_.f_vector):
         raise ValueError(
             "inline homology bases require at most "
@@ -223,49 +221,31 @@ def _dense(
     return dense
 
 
-def _product_is_zero(
-    left: SparseBoundaryMatrix,
-    right: SparseBoundaryMatrix,
-    *,
-    modulus: int | None,
-) -> bool:
-    if left.columns != right.rows:
-        raise ValueError("boundary matrices are not composable")
-    left_dense = _dense(left, modulus=modulus)
-    right_dense = _dense(right, modulus=modulus)
-    for row in range(left.rows):
-        for column in range(right.columns):
-            total = sum(
-                left_dense[row][middle] * right_dense[middle][column]
-                for middle in range(left.columns)
-            )
-            if modulus is not None:
-                total %= modulus
-            if total != 0:
-                return False
-    return True
-
-
 def chain_complex(
     complex_: FiniteSimplicialComplex,
     coefficient_ring: ChainCoefficientRing,
     prime: int | None,
     convention: HomologyConvention,
-    *,
-    admitted: bool = False,
 ) -> ChainComplexResult:
-    if not admitted:
-        run_topology_admission(
-            lambda: _admit_chain(complex_, coefficient_ring, prime, convention),
-            location=("complex",),
-        )
+    run_topology_admission(
+        lambda: _admit_chain(complex_, coefficient_ring, prime, convention),
+        location=("complex",),
+    )
+    return _chain_complex_admitted(complex_, coefficient_ring, prime, convention)
+
+
+def _chain_complex_admitted(
+    complex_: FiniteSimplicialComplex,
+    coefficient_ring: ChainCoefficientRing,
+    prime: int | None,
+    convention: HomologyConvention,
+) -> ChainComplexResult:
     bases, boundaries, augmentation = _chain_parts(
         complex_,
         coefficient_ring,
         prime,
         convention,
     )
-    modulus = prime if coefficient_ring is ChainCoefficientRing.PRIME_FIELD else None
     ledger: list[BoundarySquareLedgerEntry] = []
     for upper_dimension in range(1, complex_.dimension + 1):
         lower = (
@@ -276,8 +256,6 @@ def chain_complex(
         if lower is None:
             raise ValueError("boundary for lower dimension is unexpectedly None")
         upper = boundaries[upper_dimension]
-        if not _product_is_zero(lower, upper, modulus=modulus):
-            raise ValueError("constructed simplicial boundary does not square to zero")
         ledger.append(
             BoundarySquareLedgerEntry(
                 upper_dimension=upper_dimension,
@@ -318,13 +296,6 @@ def _prime_matrix(
     )
 
 
-def _vector_rank(vectors: Sequence[Sequence[int]], *, prime: int) -> int:
-    if not vectors:
-        return 0
-    rows = [[vector[row] for vector in vectors] for row in range(len(vectors[0]))]
-    return prime_field.rank(_prime_matrix(rows, columns=len(vectors), prime=prime))
-
-
 def homology(
     complex_: FiniteSimplicialComplex,
     prime: int,
@@ -333,12 +304,11 @@ def homology(
     run_topology_admission(
         lambda: _admit_homology(complex_, prime, convention), location=("complex",)
     )
-    chain = chain_complex(
+    chain = _chain_complex_admitted(
         complex_,
         ChainCoefficientRing.PRIME_FIELD,
         prime,
         convention,
-        admitted=True,
     )
     boundaries = tuple(
         _dense(matrix, modulus=prime) for matrix in chain.boundary_matrices
@@ -359,28 +329,24 @@ def homology(
         if outgoing is None:
             raise ValueError("boundary for dimension is unexpectedly None")
         outgoing_matrix = _prime_matrix(outgoing, columns=chain_dimension, prime=prime)
-        cycles = prime_field.nullspace(outgoing_matrix)
-        outgoing_rank = prime_field.rank(outgoing_matrix)
+        cycles = prime_field._nullspace_admitted(outgoing_matrix)
+        outgoing_rank = chain_dimension - len(cycles)
         if dimension < complex_.dimension:
             incoming = boundaries[dimension + 1]
             incoming_columns = len(chain.simplex_bases[dimension + 1].simplices)
         else:
             incoming = [[] for _ in range(chain_dimension)]
             incoming_columns = 0
-        boundary_basis = prime_field.column_basis(
+        boundary_basis = prime_field._column_basis_admitted(
             _prime_matrix(
                 incoming,
                 columns=incoming_columns,
                 prime=prime,
             )
         )
-        homology_basis = prime_field.quotient_basis(
+        homology_basis, quotient_span_rank = prime_field._quotient_extension_admitted(
             cycles,
             boundary_basis,
-            prime=prime,
-        )
-        quotient_span_rank = _vector_rank(
-            (*boundary_basis, *homology_basis),
             prime=prime,
         )
         groups.append(

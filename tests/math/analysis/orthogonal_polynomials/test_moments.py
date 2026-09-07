@@ -1544,3 +1544,78 @@ class TestNativeAdmission:
         assert rec_native == rec_wire
         assert int(rec_wire.beta[1].num) == 1
         assert int(rec_wire.beta[1].den) == 3
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        RuntimeError("backend failed"),
+        TimeoutError("deadline"),
+        MemoryError("allocation"),
+        ValueError("backend value failure"),
+    ],
+)
+def test_hankel_verification_propagates_execution_failure(
+    monkeypatch: pytest.MonkeyPatch, error: Exception
+) -> None:
+    from jacobian.math.analysis.orthogonal_polynomials import operations
+
+    claim = compute_hankel_matrix(
+        HankelRequest(prefix=_prefix(_moments_uniform(3)), order=1)
+    )
+
+    def fail(*args: object, **kwargs: object) -> None:
+        raise error
+
+    monkeypatch.setattr(operations, "hankel_matrix_from_prefix", fail)
+    with pytest.raises(type(error), match=str(error)):
+        verify_hankel_matrix(claim)
+
+
+def test_jacobi_reuses_admitted_recurrence(monkeypatch: pytest.MonkeyPatch) -> None:
+    from jacobian.math.analysis.orthogonal_polynomials import _jacobi
+
+    family = compute_orthogonal_polynomials(
+        OrthogonalPolynomialRequest(prefix=_prefix(_moments_uniform(7)), max_degree=3)
+    )
+    calls = 0
+    original = _jacobi._derive_jacobi_coefficients
+
+    def counted(
+        family: OrthogonalPolynomialFamily,
+    ) -> tuple[list[Fraction], list[Fraction]]:
+        nonlocal calls
+        calls += 1
+        return original(family)
+
+    monkeypatch.setattr(_jacobi, "_derive_jacobi_coefficients", counted)
+    claim = compute_jacobi_matrix(JacobiMatrixRequest(family=family))
+    assert verify_jacobi_matrix(claim)
+    assert calls == 1
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        RuntimeError("backend failed"),
+        TimeoutError("deadline"),
+        MemoryError("allocation"),
+        ValueError("unexpected value failure"),
+    ],
+)
+def test_jacobi_verification_propagates_execution_failure(
+    monkeypatch: pytest.MonkeyPatch, error: Exception
+) -> None:
+    from jacobian.math.analysis.orthogonal_polynomials import operations
+
+    family = compute_orthogonal_polynomials(
+        OrthogonalPolynomialRequest(prefix=_prefix(_moments_uniform(7)), max_degree=3)
+    )
+    claim = compute_jacobi_matrix(JacobiMatrixRequest(family=family))
+
+    def fail(*args: object, **kwargs: object) -> None:
+        raise error
+
+    monkeypatch.setattr(operations, "require_three_term_identities", fail)
+    with pytest.raises(type(error), match=str(error)):
+        verify_jacobi_matrix(claim)

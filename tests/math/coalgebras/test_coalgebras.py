@@ -568,7 +568,6 @@ class TestNestedModulusPrevalidation:
             "coalgebra": ca.model_dump(),
             "element_index": 0,
             "matrix": {"prime": matrix_prime, "entries": [[1]], "columns": 1},
-            "dimension": 1,
         }
 
     def test_huge_nested_modulus_rejected_before_primality_test(self) -> None:
@@ -667,3 +666,29 @@ class TestPrimeDigitAdmission:
             ComultiplicationRequest(coalgebra=ca, element_index=0)
         )
         assert comult.matrix.entries == ((1,),)
+
+
+def test_group_like_verifier_propagates_operational_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.coalgebras import operations
+
+    coalgebra = _direct_sum_group_like_coalgebra(2)
+    element = GroupLikeElement(coefficients=(1, 0))
+    assert verify_group_like_element(coalgebra, element)
+
+    def fail(coalgebra: Coalgebra) -> None:
+        raise RuntimeError("injected operational failure")
+
+    monkeypatch.setattr(operations, "_admit_coalgebra", fail)
+    with pytest.raises(RuntimeError, match="injected operational failure"):
+        verify_group_like_element(coalgebra, element)
+
+
+def test_group_like_verifier_preserves_tensor_admission_failure() -> None:
+    from jacobian.catalog.models import OperationResourceAdmissionError
+
+    coalgebra = _direct_sum_group_like_coalgebra(17)
+    element = GroupLikeElement(coefficients=(1,) + (0,) * 16)
+    with pytest.raises(OperationResourceAdmissionError, match="structure constants"):
+        verify_group_like_element(coalgebra, element)

@@ -2,7 +2,10 @@
 
 from pydantic_core import PydanticCustomError
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.finite_categories._models import CategoryProfileResult
 from jacobian.math.finite_categories._product import product
 from jacobian.math.finite_categories.values import (
@@ -71,7 +74,9 @@ def verify_category_profile(claim: CategoryProfileResult) -> bool:
 
     try:
         return category_profile(claim.category) == claim
-    except Exception:
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 

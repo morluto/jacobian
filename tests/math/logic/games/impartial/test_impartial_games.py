@@ -83,16 +83,6 @@ class TestGrundyTable:
                 topological_order=("0",),
             )
 
-    def test_cycle_is_rejected_during_request_model_validation(self) -> None:
-        with pytest.raises(ValidationError):
-            ImpartialGame(
-                positions=("a", "b"),
-                moves=(
-                    GameMove(source="a", target="b"),
-                    GameMove(source="b", target="a"),
-                ),
-            )
-
     @pytest.mark.parametrize(
         "moves",
         [
@@ -184,3 +174,11 @@ class TestNativePortfolio:
 
     def test_native_birthdays_equal_public_kernel(self) -> None:
         assert birthdays(_game()) == (("0", 0), ("1", 1), ("2", 2), ("3", 3))
+
+
+def test_serialized_game_dag_is_admitted_by_consumers() -> None:
+    game = ImpartialGame.model_validate_json(
+        '{"positions":["a","b"],"moves":[{"source":"a","target":"b"},{"source":"b","target":"a"}]}'
+    )
+    with pytest.raises(ValueError, match="acyclic"):
+        grundy_table(game)

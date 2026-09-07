@@ -375,3 +375,32 @@ class TestHenselFactorLifting:
                 * _poly_value_at(result.lifted_h, x, modulus)
             ) % modulus
             assert product_mod == _poly_value_at(_wire_poly(*f_asc), x, modulus)
+
+
+def test_hensel_root_does_not_replay_admitted_root_relations(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.number_theory.p_adic import operations
+
+    evaluations: list[tuple[tuple[int, ...], int, int]] = []
+    original_admission = operations._poly_eval_mod_p
+    original_kernel = operations._eval_poly
+
+    def admission(coefficients: tuple[int, ...], x: int, modulus: int) -> int:
+        evaluations.append((coefficients, x, modulus))
+        return original_admission(coefficients, x, modulus)
+
+    def kernel(coefficients: tuple[int, ...], x: int, modulus: int) -> int:
+        evaluations.append((coefficients, x, modulus))
+        return original_kernel(coefficients, x, modulus)
+
+    monkeypatch.setattr(operations, "_poly_eval_mod_p", admission)
+    monkeypatch.setattr(operations, "_eval_poly", kernel)
+    result = hensel_lift_root(IntegerPolynomial(coefficients=(1, 0, 1)), 5, 2, 4)
+    assert (result.lifted_root**2 + 1) % 625 == 0
+    assert evaluations.count(((1, 0, 1), 2, 5)) == 1
+    evaluations.clear()
+    assert verify_hensel_root(
+        type(result).model_validate_json(result.model_dump_json())
+    )
+    assert evaluations.count(((1, 0, 1), 2, 5)) == 1

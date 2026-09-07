@@ -130,3 +130,16 @@ def test_exact_public_api_symbols() -> None:
         hasattr(prime_field_linear_algebra, name)
         for name in prime_field_linear_algebra.__all__
     )
+
+
+@pytest.mark.parametrize("cycles,boundaries", [(((1, 0),), ((0, 1),)), ((), ((1, 0),))])
+def test_quotient_rejects_boundary_outside_cycle_span(
+    cycles: tuple[tuple[int, ...], ...], boundaries: tuple[tuple[int, ...], ...]
+) -> None:
+    with pytest.raises(ValueError, match="contained"):
+        quotient_basis(cycles, boundaries, prime=3)
+
+
+def test_quotient_requires_canonical_residues() -> None:
+    with pytest.raises(ValueError, match="canonical"):
+        quotient_basis(((4, 0),), (), prime=3)

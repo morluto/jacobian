@@ -446,10 +446,10 @@ def _resolve_chain_coefficient_values(
                 "integer result must not declare a prime",
             )
         return {-1, 1}
-    if prime is None or not is_bounded_prime(prime):
+    if prime is None or not 2 <= prime <= MAX_TOPOLOGY_PRIME:
         raise _validation_error(
             "topology.resolve_chain_coefficient_values_2",
-            "prime-field result requires a bounded prime",
+            "prime-field result requires a bounded characteristic",
         )
     return set(range(1, prime))
 

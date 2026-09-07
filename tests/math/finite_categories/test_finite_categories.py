@@ -451,3 +451,18 @@ class TestProduct:
 
         with pytest.raises(ValueError, match="identifier-depth budget"):
             product(category, terminal)
+
+
+def test_profile_verifier_propagates_operational_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.finite_categories import operations
+
+    claim = operations.category_profile(FiniteCategory.model_validate(CATEGORY))
+
+    def fail(category: FiniteCategory) -> None:
+        raise RuntimeError("injected operational failure")
+
+    monkeypatch.setattr(operations, "_require_category_laws", fail)
+    with pytest.raises(RuntimeError, match="injected operational failure"):
+        verify_category_profile(claim)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.dynamics.symbolic.values import (
     MAX_ADJACENCY_STATES,
     MAX_ALPHABET_SIZE,
@@ -147,10 +148,19 @@ def require_bounded_presentation_verification(
     if presentation.memory < required_memory:
         raise ValueError("presentation memory cannot encode its forbidden rules")
 
-    candidate_states = enumeration_size(len(presentation.alphabet), presentation.memory)
-    candidate_extensions = enumeration_size(
-        len(presentation.alphabet), presentation.memory + 1
-    )
+    try:
+        candidate_states = enumeration_size(
+            len(presentation.alphabet), presentation.memory
+        )
+        candidate_extensions = enumeration_size(
+            len(presentation.alphabet), presentation.memory + 1
+        )
+    except ValueError as exc:
+        raise OperationResourceAdmissionError(
+            location=("presentation",),
+            code="symbolic_dynamics.presentation_verification_not_admitted",
+            message=str(exc),
+        ) from exc
 
     # Account for canonicalization and every forbidden-factor scan performed
     # while deriving support and labeled overlap edges.
@@ -194,7 +204,11 @@ def require_bounded_presentation_verification(
         + state_rule_work
     )
     if work > MAX_PRESENTATION_VERIFICATION_WORK:
-        raise ValueError("presentation verification exceeds the work bound")
+        raise OperationResourceAdmissionError(
+            location=("presentation",),
+            code="symbolic_dynamics.presentation_verification_not_admitted",
+            message="presentation verification exceeds the work bound",
+        )
 
 
 def require_zeta_budget(shift: AdjacencyShift) -> None:

@@ -6,7 +6,10 @@ from collections.abc import Callable
 
 from pydantic_core import PydanticCustomError
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
 from jacobian.math.topology.cohomology.hochschild._bar import bar_differential_entries
 from jacobian.math.topology.cohomology.hochschild._models import (
@@ -23,7 +26,18 @@ def _admit(operation: Callable[[], None], *, location: tuple[str, ...]) -> None:
     try:
         operation()
     except PydanticCustomError as exc:
-        raise OperationDomainValidationError(
+        error_type = (
+            OperationResourceAdmissionError
+            if exc.type
+            in {
+                "hochschild_complex.tensor_budget",
+                "hochschild_complex.matrix_budget",
+                "hochschild_complex.input_budget",
+                "hochschild_complex.associativity_budget",
+            }
+            else OperationDomainValidationError
+        )
+        raise error_type(
             location=location, code=exc.type, message=exc.message()
         ) from exc
     except ValueError as exc:
@@ -235,7 +249,9 @@ def verify_hochschild_chain_complex(claim: HochschildChainComplexResult) -> bool
             claim.algebra, len(claim.group_dimensions) - 1
         )
         return claim == expected
-    except Exception:
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
@@ -245,7 +261,9 @@ def verify_hochschild_homology(claim: HochschildHomologyResult) -> bool:
     try:
         expected = hochschild_homology(claim.algebra, claim.max_degree)
         return claim == expected
-    except Exception:
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 

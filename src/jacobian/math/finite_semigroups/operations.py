@@ -1,6 +1,9 @@
 """Exact bounded finite semigroup operations."""
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.finite_semigroups._models import (
     ElementPowerResult,
     FiniteSemigroup,
@@ -205,7 +208,9 @@ def verify_generated_subsemigroup(claim: GeneratedSubsemigroupResult) -> bool:
 
     try:
         return generated_subsemigroup(claim.semigroup, claim.generators) == claim
-    except Exception:
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 

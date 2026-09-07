@@ -259,7 +259,7 @@ def _lexicographical_topological_order(
             if indegree[target] == 0:
                 heappush(available, target)
     if len(order) != len(game.positions):
-        raise RuntimeError("validated impartial game unexpectedly contains a cycle")
+        raise ValueError("impartial game must be acyclic")
     return tuple(order)
 
 

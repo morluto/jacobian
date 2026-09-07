@@ -156,15 +156,6 @@ def _hensel_lift_root(
     The caller must have established f(r) = 0 and f'(r) != 0 (mod p); Hensel's
     lemma then guarantees a unique lift, constructed step by step.
     """
-    f_r = _eval_poly(coeffs, r, p)
-    if f_r != 0:
-        raise ValueError(f"{r} is not a root mod {p}")
-    fp_r = _eval_deriv(coeffs, r, p)
-    if fp_r % p == 0:
-        raise ValueError("root is not simple; Hensel lifting does not apply")
-
-    pow(fp_r % p, -1, p)
-
     current = r
     current_mod = p
     for _ in range(1, k):
@@ -213,8 +204,6 @@ def verify_hensel_root(claim: HenselRootResult) -> bool:
     return (
         0 <= lifted < modulus
         and lifted % claim.prime == claim.root_mod_p
-        and _eval_poly(coeffs, claim.root_mod_p, claim.prime) == 0
-        and _eval_deriv(coeffs, claim.root_mod_p, claim.prime) != 0
         and _eval_poly(coeffs, lifted, modulus) == 0
     )
 

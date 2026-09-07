@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from math import gcd
 from typing import Literal
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.math._rational_height import RationalHeight
 from jacobian.math.analysis.orthogonal_polynomials._jacobi import (
+    IncompatibleRecurrenceError,
     jacobi_matrix_from_family,
     require_jacobi_matrix_admission,
     require_three_term_identities,
@@ -702,10 +704,7 @@ def _is_canonical_rational(value: object) -> bool:
         or denominator >= limit
     ):
         return False
-    try:
-        return CanonicalRational.from_fraction(value.as_fraction()) == value
-    except Exception:
-        return False
+    return gcd(numerator, denominator) == 1
 
 
 def _is_ordered_axis(axis: object, size: int) -> bool:
@@ -855,15 +854,20 @@ def verify_hankel_matrix(claim: HankelMomentMatrix) -> bool:
             return False
         if not 0 <= claim.rank <= side:
             return False
+    except (AttributeError, TypeError):
+        return False
+    try:
         require_hankel_matrix_admission(
             claim.prefix, claim.order, shifted=bool(claim.shift)
         )
-        expected = hankel_matrix_from_prefix(
-            claim.prefix, claim.order, shifted=bool(claim.shift)
-        )
-        return expected == claim
-    except Exception:
+    except HankelMatrixAdmissionError as exc:
+        if exc.reason == "determinant_height":
+            raise
         return False
+    expected = hankel_matrix_from_prefix(
+        claim.prefix, claim.order, shifted=bool(claim.shift)
+    )
+    return expected == claim
 
 
 def verify_jacobi_matrix(claim: JacobiMatrix) -> bool:  # noqa: C901
@@ -901,35 +905,38 @@ def verify_jacobi_matrix(claim: JacobiMatrix) -> bool:  # noqa: C901
             return False
         if recurrence.variable != family.variable:
             return False
-        alphas = [value.as_fraction() for value in recurrence.alpha]
-        betas = [value.as_fraction() for value in recurrence.beta]
-        for index in range(1, size + 1):
-            previous_norm = family.polynomials[index - 1].squared_norm.as_fraction()
-            if previous_norm == 0:
-                return False
-            if betas[index] != (
-                family.polynomials[index].squared_norm.as_fraction() / previous_norm
-            ):
-                return False
-        require_three_term_identities(family, alphas, betas)
-        zero = Fraction(0)
-        one = Fraction(1)
-        for i, row in enumerate(matrix.entries):
-            for j, value in enumerate(row):
-                expected = (
-                    alphas[i]
-                    if i == j
-                    else one
-                    if i == j + 1
-                    else betas[i + 1]
-                    if j == i + 1
-                    else zero
-                )
-                if value.as_fraction() != expected:
-                    return False
-        return True
-    except Exception:
+    except (AttributeError, TypeError):
         return False
+    alphas = [value.as_fraction() for value in recurrence.alpha]
+    betas = [value.as_fraction() for value in recurrence.beta]
+    for index in range(1, size + 1):
+        previous_norm = family.polynomials[index - 1].squared_norm.as_fraction()
+        if previous_norm == 0:
+            return False
+        if betas[index] != (
+            family.polynomials[index].squared_norm.as_fraction() / previous_norm
+        ):
+            return False
+    try:
+        require_three_term_identities(family, alphas, betas)
+    except IncompatibleRecurrenceError:
+        return False
+    zero = Fraction(0)
+    one = Fraction(1)
+    for i, row in enumerate(matrix.entries):
+        for j, value in enumerate(row):
+            expected = (
+                alphas[i]
+                if i == j
+                else one
+                if i == j + 1
+                else betas[i + 1]
+                if j == i + 1
+                else zero
+            )
+            if value.as_fraction() != expected:
+                return False
+    return True
 
 
 def orthogonal_polynomials(
@@ -961,8 +968,8 @@ def christoffel_darboux_kernel(
 def jacobi_matrix(family: OrthogonalPolynomialFamily) -> JacobiMatrix:
     """Return the admitted finite Jacobi matrix of one orthogonal family."""
 
-    require_jacobi_matrix_admission(family)
-    return jacobi_matrix_from_family(family)
+    coefficients = require_jacobi_matrix_admission(family)
+    return jacobi_matrix_from_family(family, coefficients)
 
 
 def gaussian_quadrature_rule(

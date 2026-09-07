@@ -22,6 +22,7 @@ from jacobian.math.topology._models import (
     HomologyConvention,
     SimplicialComplexCanonicalizationResult,
     SimplicialComplexRequest,
+    SparseBoundaryMatrix,
 )
 from jacobian.math.topology._tools import TOOLS
 from jacobian.math.topology.chain_complexes.operations import (
@@ -299,3 +300,101 @@ def test_aggregate_canonical_cell_bound_allows_the_widened_profile() -> None:
     )
     assert result.canonical_value is not None
     assert result.canonical_value.basis_sizes == (40, 60, 40, 10)
+
+
+def test_chain_result_parse_is_structural_and_consumer_admits_field(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.topology._models as models
+
+    result = _prime_field_chain(_circle(), 2)
+    calls: list[int] = []
+    original = models.is_bounded_prime
+
+    def tracked(prime: int) -> bool:
+        calls.append(prime)
+        return original(prime)
+
+    monkeypatch.setattr(models, "is_bounded_prime", tracked)
+    decoded = ChainComplexResult.model_validate_json(result.model_dump_json())
+    assert decoded == result
+    assert calls == []
+    payload = result.model_dump(mode="json")
+    payload["prime"] = 4
+    payload["canonical_value"]["prime"] = 4
+    authored = ChainComplexResult.model_validate(payload)
+    with pytest.raises(ValueError, match="not prime"):
+        homology_groups(simplicial_chain_complex_value(authored))
+
+
+def test_simplicial_homology_admits_characteristic_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.topology._simplicial_kernel as kernel
+    from jacobian.math.matrices.finite_fields import linear_algebra
+
+    calls: list[int] = []
+    from jacobian.math.topology._models import is_bounded_prime
+
+    original = is_bounded_prime
+    original_matrix = linear_algebra._admit_prime
+
+    def tracked(prime: int) -> bool:
+        calls.append(prime)
+        return original(prime)
+
+    def tracked_matrix(prime: int) -> None:
+        calls.append(prime)
+        original_matrix(prime)
+
+    monkeypatch.setattr(kernel, "is_bounded_prime", tracked)
+    monkeypatch.setattr(linear_algebra, "_admit_prime", tracked_matrix)
+    result = kernel.homology(_circle(), 3, HomologyConvention.UNREDUCED)
+    assert tuple(group.betti_number for group in result.groups) == (1, 1)
+    assert calls == [3]
+
+
+def test_chain_producer_does_not_materialize_boundary_products(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.topology._simplicial_kernel as kernel
+    from jacobian.math.topology.chain_complexes.operations import (
+        differential_squares_to_zero,
+    )
+
+    original = kernel._dense
+    calls = 0
+
+    def tracked(
+        matrix: SparseBoundaryMatrix, *, modulus: int | None
+    ) -> list[list[int]]:
+        nonlocal calls
+        calls += 1
+        return original(matrix, modulus=modulus)
+
+    monkeypatch.setattr(kernel, "_dense", tracked)
+    result = _prime_field_chain(_circle(), 3)
+    assert differential_squares_to_zero(result.canonical_value).is_valid
+    assert calls == 0
+
+
+def test_field_homology_reuses_each_differential_rank(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from fractions import Fraction
+
+    import jacobian.math.topology.chain_complexes.operations as operations
+
+    original = operations._matrix_rank
+    calls = 0
+
+    def tracked(matrix: list[list[Fraction]], prime: int | None = None) -> int:
+        nonlocal calls
+        calls += 1
+        return original(matrix, prime)
+
+    monkeypatch.setattr(operations, "_matrix_rank", tracked)
+    value = _prime_field_chain(_circle(), 3).canonical_value
+    result = homology_groups(value)
+    assert [group.betti_number for group in _field_groups(result)] == [1, 1]
+    assert calls == len(value.differential_matrices)

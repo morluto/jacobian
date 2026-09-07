@@ -14,7 +14,10 @@ from jacobian._execution import (
     current_request_execution,
     request_checkpoint,
 )
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.finite_fields._admission import (
     require_field,
     require_independent_basis,
@@ -314,14 +317,14 @@ def paley_tournament(
 
     edge_count = order * (order - 1) // 2
     if edge_count > MAX_DIRECTED_GRAPH_PARSE_EDGES:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("presentation",),
             code="finite_field.paley_tournament_exceeds_graph_edge_envelope",
             message="Paley tournament exceeds the directed graph edge envelope",
         )
     work = order * presentation.degree + order + 2 * edge_count
     if work > _MAX_PALEY_TOURNAMENT_WORK:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("presentation",),
             code="finite_field.paley_tournament_exceeds_work_budget",
             message="Paley tournament construction exceeds the finite-field work budget",
@@ -369,7 +372,9 @@ def verify_paley_tournament(claim: PaleyTournamentResult) -> bool:
             and claim.graph == expected.graph
             and claim.orientation == expected.orientation
         )
-    except Exception:
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
@@ -380,7 +385,7 @@ def _admit_restriction_shape(subspace: FiniteDimensionalSubspace) -> None:
         rows > MAX_PRIME_FIELD_MATRIX_AXIS
         or rows * columns > MAX_PRIME_FIELD_MATRIX_CELLS
     ):
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("subspace",),
             code="finite_field.restriction_output_shape",
             message="restriction output exceeds the supported matrix axis or cell bound",
@@ -406,7 +411,7 @@ def restrict_scalars(
             message="direction axis must match the subspace matrix row axis",
         )
     if _direction_rank_work(subspace, 1) > _MAX_DIRECTION_RANK_WORK:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("subspace",),
             code="finite_field.restriction_exceeds_operation_work_budget",
             message="restriction exceeds the operation work budget",
@@ -772,7 +777,7 @@ def _admit_orbit_distribution(ledger: DirectionRankLedger) -> None:
         _direction_rank_work(ledger.subspace, len(ledger.entries))
         > _MAX_DIRECTION_RANK_WORK
     ):
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("ledger",),
             code="finite_field.orbit_ledger_exceeds_operation_work_budget",
             message="orbit ledger authentication exceeds the operation work budget",
@@ -783,7 +788,7 @@ def _admit_orbit_distribution(ledger: DirectionRankLedger) -> None:
     maximum_power_digits = _orbit_count_digit_bound(prime, target_dimension)
     maximum_count_digits = maximum_power_digits + len(str(len(ledger.entries))) + 1
     if maximum_count_digits > MAX_ORBIT_DISTRIBUTION_COUNT_DIGITS:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("ledger",),
             code="finite_field.orbit_distribution_count_digit_bound",
             message="orbit distribution counts exceed their exact output digit bound",
@@ -791,7 +796,7 @@ def _admit_orbit_distribution(ledger: DirectionRankLedger) -> None:
     possible_rows = min(len(ledger.entries) + 1, target_dimension + 1)
     total_digits = possible_rows * 2 * maximum_count_digits
     if total_digits > MAX_ORBIT_DISTRIBUTION_TOTAL_DIGITS:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("ledger",),
             code="finite_field.orbit_distribution_output_bound",
             message="orbit distribution count rows exceed their exact output bound",
@@ -844,14 +849,7 @@ def _require_orbit_ledger_structure(ledger: DirectionRankLedger) -> None:
             message="ledger presentation order exceeds its admitted bound",
         )
     field_order = characteristic ** (len(modulus_coefficients) - 1)
-    try:
-        expected_directions = (field_order ** len(labels) - 1) // (field_order - 1)
-    except Exception as exc:
-        raise OperationDomainValidationError(
-            location=("ledger", "entries"),
-            code="finite_field.direction_rank_ledger_direction_shape",
-            message="direction-rank ledger direction shape is invalid",
-        ) from exc
+    expected_directions = (field_order ** len(labels) - 1) // (field_order - 1)
     if len(entries) != expected_directions:
         raise OperationDomainValidationError(
             location=("ledger", "entries"),
@@ -937,7 +935,9 @@ def verify_orbit_distribution(claim: OrbitDistribution) -> bool:
         _admit_orbit_distribution(claim.ledger)
         _authenticate_orbit_ledger(claim.ledger)
         return claim.counts == _orbit_counts(claim.ledger)
-    except Exception:
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
@@ -1005,7 +1005,7 @@ def _admit_map_evaluation(
         * polynomial_map.domain.degree
     )
     if work > _MAX_FINITE_MAP_WORK:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=location,
             code="finite_field.finite_map_exceeds_operation_work_budget",
             message="finite map exceeds the operation work budget",
@@ -1075,7 +1075,9 @@ def verify_fiber_partition(claim: FiberPartition) -> bool:
     try:
         _authenticate_map_table(claim.table)
         return claim.fibers == _fibers_for_table(claim.table)
-    except Exception:
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
@@ -1109,7 +1111,9 @@ def verify_collisions(claim: CollisionResult) -> bool:
             and claim.right == expected.right
             and claim.image == expected.image
         )
-    except Exception:
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
@@ -1142,5 +1146,7 @@ def verify_permutation(claim: PermutationResult) -> bool:
             claim.status == expected.status
             and claim.inverse_entries == expected.inverse_entries
         )
-    except Exception:
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False

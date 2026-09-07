@@ -194,13 +194,16 @@ def _nullspace_admitted(matrix: PrimeFieldMatrix) -> tuple[tuple[int, ...], ...]
 def column_basis(matrix: PrimeFieldMatrix) -> tuple[tuple[int, ...], ...]:
     """Return the first independent columns in source order."""
 
+    _admit_prime(matrix.prime)
+    return _column_basis_admitted(matrix)
+
+
+def _column_basis_admitted(matrix: PrimeFieldMatrix) -> tuple[tuple[int, ...], ...]:
+    """Select source columns after the field characteristic was established."""
     if matrix.columns == 0 or not matrix.entries:
-        _admit_prime(matrix.prime)
         return ()
-    _, pivots = rref(matrix)
-    return tuple(
-        tuple(row[pivot] % matrix.prime for row in matrix.entries) for pivot in pivots
-    )
+    _, pivots = _rref_admitted(matrix)
+    return tuple(tuple(row[pivot] for row in matrix.entries) for pivot in pivots)
 
 
 def quotient_basis(
@@ -209,19 +212,54 @@ def quotient_basis(
     *,
     prime: int,
 ) -> tuple[tuple[int, ...], ...]:
-    """Extend a boundary basis by deterministic representatives of a quotient."""
+    """Return representatives for span(cycles)/span(boundaries) over GF(prime).
 
-    # Validate the prime even for the empty quotient.
+    Vectors use canonical residues. The boundary span must be contained in
+    the cycle span; neither generating family needs to be independent.
+    """
     dimension = len(cycles[0]) if cycles else (len(boundaries[0]) if boundaries else 0)
     if any(len(vector) != dimension for vector in (*cycles, *boundaries)):
         raise ValueError("basis vector has the wrong dimension")
-    PrimeFieldMatrix(prime=prime, entries=(), columns=dimension)
-    if dimension == 0 or not cycles:
-        _admit_prime(prime)
-        return ()
-    columns = tuple(
-        tuple(int(value) % prime for value in vector) for vector in boundaries
-    ) + tuple(tuple(int(value) % prime for value in vector) for vector in cycles)
+    # Validate all authored entries and the complete combined shape before
+    # field arithmetic. No implicit coercion or reduction of residues occurs.
+    PrimeFieldMatrix(
+        prime=prime,
+        entries=tuple(
+            tuple(vector[row] for vector in (*boundaries, *cycles))
+            for row in range(dimension)
+        ),
+        columns=len(boundaries) + len(cycles),
+    )
+    _admit_prime(prime)
+    representatives, combined_rank = _quotient_extension_admitted(
+        cycles, boundaries, prime=prime
+    )
+    cycle_matrix = PrimeFieldMatrix(
+        prime=prime,
+        entries=tuple(
+            tuple(vector[row] for vector in cycles) for row in range(dimension)
+        ),
+        columns=len(cycles),
+    )
+    _, cycle_pivots = _rref_admitted(cycle_matrix)
+    if combined_rank != len(cycle_pivots):
+        raise ValueError("boundary span must be contained in the cycle span")
+    return representatives
+
+
+def _quotient_extension_admitted(
+    cycles: Sequence[Sequence[int]],
+    boundaries: Sequence[Sequence[int]],
+    *,
+    prime: int,
+) -> tuple[tuple[tuple[int, ...], ...], int]:
+    """Extend the boundary span after canonical vectors and field admission.
+
+    This returns representatives and the combined span rank. Public callers
+    establish containment; a chain kernel already knows it from d squared zero.
+    """
+    dimension = len(cycles[0]) if cycles else (len(boundaries[0]) if boundaries else 0)
+    columns = (*boundaries, *cycles)
     stacked = PrimeFieldMatrix(
         prime=prime,
         entries=tuple(
@@ -229,10 +267,9 @@ def quotient_basis(
         ),
         columns=len(columns),
     )
-    _, pivots = rref(stacked)
-    boundary_count = len(boundaries)
+    _, pivots = _rref_admitted(stacked)
     return tuple(
-        tuple(cycles[pivot - boundary_count])
+        tuple(cycles[pivot - len(boundaries)])
         for pivot in pivots
-        if pivot >= boundary_count
-    )
+        if pivot >= len(boundaries)
+    ), len(pivots)

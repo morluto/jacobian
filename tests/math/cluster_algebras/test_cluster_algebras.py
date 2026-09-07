@@ -390,3 +390,16 @@ class TestCanonicalIntegers:
         )
         assert b.entries == ((0, 1), (-1, 0))
         assert b.model_dump()["entries"] == ((0, 1), (-1, 0))
+
+
+def test_g_vector_claim_rechecks_serialized_exchange_matrix_law() -> None:
+    import json
+
+    from jacobian.math.cluster_algebras.operations import g_vectors, verify_g_vectors
+
+    valid = ExchangeMatrix(n=2, entries=((0, 1), (-1, 0)), symmetrizer=(1, 1))
+    claim = g_vectors(valid)
+    wire = claim.model_dump(mode="json")
+    wire["exchange_matrix"]["entries"][1][0] = "1"
+    decoded = type(claim).model_validate_json(json.dumps(wire))
+    assert not verify_g_vectors(decoded)

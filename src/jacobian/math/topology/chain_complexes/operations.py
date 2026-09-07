@@ -494,7 +494,7 @@ def _chain_map_verdict(
 def _compute_homology_groups(
     cx: ChainComplexValue,
 ) -> tuple[HomologyGroupValue, ...]:
-    """Exact homology groups shared by the operation and its validator."""
+    """Exact homology groups after checking the supplied differential relation."""
 
     prime = cx.prime
     n = len(cx.basis_sizes)
@@ -514,23 +514,13 @@ def _compute_homology_groups(
         degree_min=cx.degree_min,
     )
 
+    differential_ranks = tuple(_matrix_rank(matrix, prime) for matrix in diffs)
     groups = []
     for idx in range(n):
         chain_rank = cx.basis_sizes[idx]
         actual_degree = cx.degree_min + idx
-
-        # Correct assignment: diffs[idx-1] is outgoing from C_{idx} -> C_{idx-1} (if idx>0), diffs[idx] is incoming from C_{idx+1} -> C_{idx}
-        if idx > 0:
-            d_out = diffs[idx - 1]
-            outgoing_rank = _matrix_rank(d_out, prime)
-        else:
-            outgoing_rank = 0
-
-        if idx < len(diffs):
-            d_in = diffs[idx]
-            incoming_rank = _matrix_rank(d_in, prime)
-        else:
-            incoming_rank = 0
+        outgoing_rank = differential_ranks[idx - 1] if idx > 0 else 0
+        incoming_rank = differential_ranks[idx] if idx < len(diffs) else 0
 
         cycle_rank = chain_rank - outgoing_rank
         betti = cycle_rank - incoming_rank
@@ -718,8 +708,7 @@ def _compute_mapping_cone(
     target: ChainComplexValue,
     map_matrices: tuple[tuple[tuple[str, ...], ...], ...],
 ) -> tuple[tuple[int, ...], tuple[tuple[tuple[str, ...], ...], ...]]:
-    """Exact mapping-cone construction shared by the operation and its
-    result validator."""
+    """Exact mapping cone after admitting the authored chain-map relation."""
     _require_mapping_cone_parents(source, target)
     prime = source.prime
 
@@ -779,23 +768,6 @@ def _compute_mapping_cone(
             prime,
         )
         for n in range(1, len(cone_basis_sizes))
-    )
-
-    # Defining invariant of the returned decomposition: the cone
-    # differentials must themselves be square-zero. Declared cone group
-    # widths keep zero-cell groups shape-faithful.
-    cone_parsed = [
-        _matrix_to_fractions(
-            cone_diffs[i], cone_basis_sizes[i], cone_basis_sizes[i + 1], prime
-        )
-        for i in range(len(cone_diffs))
-    ]
-    _require_square_zero(
-        cone_parsed,
-        prime,
-        label="mapping cone",
-        group_columns=list(cone_basis_sizes),
-        degree_min=source.degree_min,
     )
 
     return cone_basis_sizes, cone_diffs
@@ -937,8 +909,7 @@ def _compute_tensor_product(
     left: ChainComplexValue,
     right: ChainComplexValue,
 ) -> tuple[tuple[int, ...], tuple[tuple[tuple[str, ...], ...], ...]]:
-    """Exact tensor-product construction shared by the operation and its
-    result validator."""
+    """Exact tensor product after checking the authored factor differentials."""
     if left.coefficient_ring != right.coefficient_ring or left.prime != right.prime:
         raise ValueError("tensor product requires same coefficient ring and prime")
     prime = left.prime

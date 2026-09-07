@@ -14,6 +14,11 @@ from jacobian.math.optimization._models import (
     RationalLinearProgramRequest,
     RationalLinearProgramResult,
 )
+from jacobian.math.optimization._optimality import (
+    RationalLinearOptimalityRequest,
+    RationalLinearOptimalityResult,
+    check_linear_optimality,
+)
 from jacobian.math.optimization.operations import linear_program
 
 _BASIS_ENVELOPE = (
@@ -139,5 +144,50 @@ RATIONAL_LINEAR_OPERATIONS = (
     ),
 )
 
-TOOLS: MathTools = RATIONAL_LINEAR_OPERATIONS
+TOOLS: MathTools = (
+    *RATIONAL_LINEAR_OPERATIONS,
+    MathTool(
+        operation_id="optimization.linear.rational_optimality.check",
+        title="Check rational linear programming primal-dual optimality",
+        description=(
+            "Check supplied exact rational primal and dual candidates for a standard "
+            "or general linear program without solving. Establishes primal constraints "
+            "and bounds, dual signs, stationarity and equal objectives in the source "
+            "minimization or maximization convention, including free variables. "
+            "A failed candidate does not imply infeasibility. Admits at most 32 "
+            "variables, 64 rows, 128-digit candidate scalars, 20,000 scalar updates, "
+            "32,768 predicted intermediate digits and 8 MiB predicted output; "
+            "a shared 60-second safety deadline covers checking and result construction."
+        ),
+        request_type=RationalLinearOptimalityRequest,
+        result_type=RationalLinearOptimalityResult,
+        run=check_linear_optimality,
+        tags=(
+            "optimization",
+            "linear-programming",
+            "rational",
+            "optimality",
+            "primal-dual",
+        ),
+        discovery_terms=("verify supplied linear programming primal dual candidates",),
+        examples=(
+            OperationExample(
+                name="unit_primal_dual_pair",
+                description="Check x=1 and equality multiplier 1 for min x subject to x=1, x>=0; all candidate vectors use the source axes.",
+                input={
+                    "program": {
+                        "variables": ["x"],
+                        "objective": [{"num": "1", "den": "1"}],
+                        "coefficients": [[{"num": "1", "den": "1"}]],
+                        "rhs": [{"num": "1", "den": "1"}],
+                    },
+                    "primal_candidate": [{"num": "1", "den": "1"}],
+                    "constraint_dual": [{"num": "1", "den": "1"}],
+                    "lower_bound_dual": [{"num": "0", "den": "1"}],
+                    "upper_bound_dual": [{"num": "0", "den": "1"}],
+                },
+            ),
+        ),
+    ),
+)
 __all__ = ["TOOLS"]

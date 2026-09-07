@@ -41,5 +41,6 @@ def test_subject_operation_groups_preserve_wire_contracts() -> None:
         (
             "optimization.linear.rational_optimum.compute",
             "optimization.linear.rational_general_optimum.compute",
+            "optimization.linear.rational_optimality.check",
         ),
     )

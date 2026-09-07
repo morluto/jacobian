@@ -72,6 +72,7 @@ def test_quiver_result_parsing_checks_axes_without_proving_adjacency() -> None:
 
 def test_catalog_contains_only_audited_operations() -> None:
     assert {tool.operation_id for tool in TOOLS} == {
+        "graph.directed.euler_circuit.compute",
         "quiver.adjacency_matrices.compute",
         "quiver.paths.fixed_length.compute",
         "quiver.vertex_profiles.compute",

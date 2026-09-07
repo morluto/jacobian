@@ -12,7 +12,9 @@ from jacobian._models import StrictModel
 from jacobian.math.matrices.values import IntegerMatrix
 
 MAX_VERTICES = 128
-MAX_ARROWS = 1024
+# Explicit incidence storage; all consumers scan arrows or bound path growth
+# from their actual count (fixed_length_paths_envelope), not this old ceiling.
+MAX_ARROWS = 16_384
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:

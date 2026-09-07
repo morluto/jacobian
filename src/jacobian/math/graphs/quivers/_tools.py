@@ -3,6 +3,7 @@
 from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.math.graphs.quivers._eulerian import EULER_CIRCUIT
 from jacobian.math.graphs.quivers._models import (
     AdjacencyMatricesRequest,
     AdjacencyMatricesResult,
@@ -31,6 +32,7 @@ def _fixed_length_paths(request: FixedLengthPathsRequest) -> FixedLengthPathsRes
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    EULER_CIRCUIT,
     MathTool(
         operation_id="quiver.adjacency_matrices.compute",
         title="Compute adjacency matrix and transpose of a quiver",

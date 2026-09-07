@@ -88,7 +88,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         description=(
             "Select source edges of a bounded bipartite graph so every vertex "
             "has an exact required degree, or return a replayable Hall subset "
-            "obstruction. Uses an integral exact-flow kernel and keeps all "
+            "obstruction with capacity sum_v min(degree_requirement[v], edges_from_S[v]). "
+            "Uses an integral exact-flow kernel and keeps all "
             "vertices, edges, requirements, and selected-edge indices source-bound."
         ),
         request_type=BipartiteFactorRequest,

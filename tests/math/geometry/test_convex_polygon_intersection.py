@@ -13,7 +13,8 @@ from jacobian.math.geometry._convex_polygon_intersection import (
     ConvexRationalPolygon,
     convex_polygon_intersection,
 )
-from jacobian.math.geometry._models import RationalPoint2D
+from jacobian.math.geometry._models import GeometryConvexHullResult, RationalPoint2D
+from jacobian.math.geometry.operations import convex_hull_points
 
 
 def _pt(x: str, y: str) -> RationalPoint2D:
@@ -155,3 +156,29 @@ def test_json_round_trip() -> None:
     json_val = result.model_dump_json()
     replay = type(result).model_validate_json(json_val, strict=True)
     assert replay == result
+
+
+def test_serialized_hull_claim_is_checked_by_intersection_consumer() -> None:
+    claimed = GeometryConvexHullResult(
+        points=tuple(
+            _pt(x, y)
+            for x, y in [("0", "0"), ("2", "0"), ("1", "1"), ("2", "2"), ("0", "2")]
+        )
+    )
+    decoded = GeometryConvexHullResult.model_validate_json(claimed.model_dump_json())
+    polygon = ConvexRationalPolygon.from_convex_hull(decoded)
+    square = _poly([("0", "0"), ("3", "0"), ("3", "3"), ("0", "3")])
+    with pytest.raises(OperationDomainValidationError, match="strictly CCW and convex"):
+        public_convex_polygon_intersection(polygon, square)
+
+
+def test_empty_planar_hull_retains_canonical_carrier() -> None:
+    hull = convex_hull_points(())
+    assert hull.points == ()
+    decoded = GeometryConvexHullResult.model_validate_json(hull.model_dump_json())
+    assert decoded == hull
+    # The explicit conversion has a narrower polygon applicability domain.
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError, match="at least 3"):
+        ConvexRationalPolygon.from_convex_hull(decoded)

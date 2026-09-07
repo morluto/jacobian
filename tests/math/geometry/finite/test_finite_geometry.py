@@ -22,6 +22,7 @@ from jacobian.math.geometry.finite._models import (
     ProjectiveSpaceEnumerateRequest,
     ProjectiveSpaceEnumerateResult,
     SubspaceComputeRequest,
+    SubspaceComputeResult,
     SubspaceIntersectionRequest,
     SubspaceMembershipRequest,
     SubspaceSpanRequest,
@@ -474,3 +475,53 @@ def test_subspace_rref_is_an_explicit_claim() -> None:
     assert verify_linear_subspace(malformed) is False
     with pytest.raises(OperationDomainValidationError, match="reduced row"):
         subspace_membership(malformed, (0, 0))
+
+
+@pytest.mark.parametrize("axis", [(), ("x", "y")])
+def test_empty_generators_retain_parent_across_serialization(
+    axis: tuple[str, ...],
+) -> None:
+    space = _space(5, axis)
+    result = subspace_compute(space, ())
+    decoded = SubspaceComputeResult.model_validate_json(result.model_dump_json())
+    assert decoded == result
+    assert decoded.subspace.space == space
+    assert decoded.subspace.basis == ()
+    assert subspace_membership(decoded.subspace, (0,) * len(axis)).is_member
+    assert subspace_span(space, (), ()).subspace == decoded.subspace
+    assert (
+        subspace_intersection(decoded.subspace, decoded.subspace).subspace
+        == decoded.subspace
+    )
+
+
+def test_zero_dimensional_projective_space_has_empty_bound_sequence() -> None:
+    space = _space(3, ())
+    result = projective_space_enumerate(space)
+    decoded = ProjectiveSpaceEnumerateResult.model_validate_json(
+        result.model_dump_json()
+    )
+    assert decoded == result
+    assert decoded.sequence.space == space
+    assert decoded.sequence.coordinates == ()
+    assert tuple(decoded.sequence.points) == ()
+    assert verify_projective_point_sequence(decoded.sequence)
+    assert grassmannian_count(3, 0, 0).count == 1
+    with pytest.raises(OperationDomainValidationError, match="zero vector"):
+        projective_point_canonicalize(space, ())
+
+
+@pytest.mark.parametrize(
+    "parameters",
+    [(3, -1, 0), (3, 33, 0), (3, 2, -1), (3, 2, 33), (10007, 2, 1), (3, True, 0)],
+)
+def test_native_grassmannian_parameters_are_bounded(
+    parameters: tuple[int, int, int],
+) -> None:
+    with pytest.raises(OperationDomainValidationError):
+        grassmannian_count(*parameters)
+
+
+def test_native_subspace_compute_bounds_generator_count() -> None:
+    with pytest.raises(OperationDomainValidationError, match="generator count"):
+        subspace_compute(_space(2, ("x",)), ((1,),) * 33)

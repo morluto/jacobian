@@ -33,6 +33,7 @@ from jacobian.math.geometry.finite._models import (
 )
 from jacobian.math.geometry.finite.values import (
     MAX_DIM,
+    MAX_FIELD_ORDER,
     PrimeFieldVectorSpace,
     ProjectivePoint,
     ProjectivePointSequence,
@@ -166,12 +167,6 @@ def projective_point(
 def _admit_span(
     vectors: tuple[tuple[int, ...], ...], subspaces: tuple[LinearSubspace, ...]
 ) -> None:
-    if not vectors and not subspaces:
-        _domain_error(
-            ("vectors",),
-            "span_source_required",
-            "span requires at least one vector or subspace",
-        )
     if len(vectors) + sum(len(item.basis) for item in subspaces) > MAX_DIM:
         _domain_error(
             ("vectors",),
@@ -183,6 +178,17 @@ def _admit_span(
 def _admit_grassmannian(
     field_order: int, ambient_dimension: int, subspace_dimension: int
 ) -> None:
+    for name, value, lower, upper in (
+        ("field_order", field_order, 2, MAX_FIELD_ORDER),
+        ("ambient_dimension", ambient_dimension, 0, MAX_DIM),
+        ("subspace_dimension", subspace_dimension, 0, MAX_DIM),
+    ):
+        if type(value) is not int or not lower <= value <= upper:
+            _domain_error(
+                (name,),
+                "parameter_bound",
+                f"{name} must be an integer in [{lower}, {upper}]",
+            )
     if not isprime(field_order):
         _domain_error(
             ("field_order",), "field_order_not_prime", "field_order must be prime"
@@ -242,6 +248,7 @@ def subspace_compute(
     space: PrimeFieldVectorSpace,
     vectors: tuple[tuple[int, ...], ...],
 ) -> SubspaceComputeResult:
+    _admit_span(vectors, ())
     _admit_prime_field_space(space)
     for vector in vectors:
         _validate_vector(vector, space)

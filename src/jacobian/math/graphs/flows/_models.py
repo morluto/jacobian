@@ -286,14 +286,12 @@ class BipartiteFactorRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_source_bound_bipartition(self) -> Self:
-        if tuple(sorted(self.left)) != tuple(range(len(self.left))):
+        if self.left != tuple(range(len(self.left))):
             raise PydanticCustomError(
                 "graph.bipartite_factor_left_axis_must_be_0_len",
                 "left must be the complete ordered axis 0..len(left)-1",
             )
-        if tuple(sorted(self.right)) != tuple(
-            range(len(self.left), len(self.left) + len(self.right))
-        ):
+        if self.right != tuple(range(len(self.left), len(self.left) + len(self.right))):
             raise PydanticCustomError(
                 "graph.bipartite_factor_right_axis_must_follow_left",
                 "right must be the complete ordered axis "
@@ -392,7 +390,12 @@ class MinCostFlowResult(StrictModel):
 
 
 class BipartiteFactorObstruction(StrictModel):
-    """A replayable Hall obstruction in source vertex indices."""
+    """A generalized Hall obstruction in source vertex indices.
+
+    For the reported side subset S, required is its total prescribed degree.
+    Capacity is sum_v min(required_degree[v], number of source S-v edges)
+    over its opposite-side neighbors. The witness claims required > capacity.
+    """
 
     side: Literal["LEFT", "RIGHT"]
     vertices: tuple[int, ...] = Field(min_length=1, max_length=64)
@@ -439,6 +442,29 @@ class BipartiteFactorResult(StrictModel):
 
     @model_validator(mode="after")
     def require_outcome_witness(self) -> Self:
+        if (
+            self.left != tuple(range(len(self.left)))
+            or self.right != tuple(range(len(self.left), self.graph.vertex_count))
+            or len(self.requirements.left) != len(self.left)
+            or len(self.requirements.right) != len(self.right)
+        ):
+            raise PydanticCustomError(
+                "graph.bipartite_factor_result_axes",
+                "partition and requirement axes must cover source vertices in order",
+            )
+        if self.obstruction is not None:
+            side, opposite = (
+                (self.left, self.right)
+                if self.obstruction.side == "LEFT"
+                else (self.right, self.left)
+            )
+            if not set(self.obstruction.vertices) <= set(side) or not set(
+                self.obstruction.neighbors
+            ) <= set(opposite):
+                raise PydanticCustomError(
+                    "graph.bipartite_factor_obstruction_axes",
+                    "obstruction vertices and neighbors must use the declared side axes",
+                )
         if self.status == "FOUND":
             if self.obstruction is not None:
                 raise PydanticCustomError(

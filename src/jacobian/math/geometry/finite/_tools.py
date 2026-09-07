@@ -142,7 +142,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         operation_id="finite_geometry.subspace.compute",
         title="Compute the canonical basis of a subspace",
         description="Compute the canonical RREF basis, dimension, and ambient dimension "
-        "of the linear span of a family of vectors over a prime field.",
+        "of the linear span of a family of vectors over a prime field. The empty "
+        "family gives the zero subspace in the retained ambient field and axis.",
         request_type=SubspaceComputeRequest,
         result_type=SubspaceComputeResult,
         run=_compute_subspace_compute,
@@ -185,7 +186,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         operation_id="finite_geometry.subspace.span.compute",
         title="Compute the span of vectors",
         description="Return the exact linear span of labelled points/subspaces over a "
-        "prime field with canonical RREF basis and dimension.",
+        "prime field with canonical RREF basis and dimension. An empty family spans "
+        "the zero subspace of the explicitly supplied space.",
         request_type=SubspaceSpanRequest,
         result_type=SubspaceSpanResult,
         run=_compute_subspace_span,
@@ -255,7 +257,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         description="Enumerate all canonical representatives of the projective space PG(d, "
         "q) over a prime field as one typed point sequence that owns the "
         "declared parent space and serializes each point as a bare canonical "
-        "coordinate tuple relative to it.",
+        "coordinate tuple relative to it. The zero-dimensional vector space returns "
+        "an empty sequence that retains its field and empty axis.",
         request_type=ProjectiveSpaceEnumerateRequest,
         result_type=ProjectiveSpaceEnumerateResult,
         run=_compute_projective_space_enumerate,

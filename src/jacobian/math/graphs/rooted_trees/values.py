@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections import deque
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictBool, StrictInt, model_validator
@@ -38,35 +37,6 @@ def _require_sorted_unique_edges(values: tuple[_Edge, ...], *, field: str) -> No
             f"canonical_{field.replace(' ', '_')}",
             f"{field} must be unique and lexically sorted",
         )
-
-
-def _graph_topology(
-    graph: SimpleUndirectedGraph,
-    root: str,
-) -> tuple[bool, bool, int, dict[str, int]]:
-    adjacency = {vertex: set[str]() for vertex in graph.vertices}
-    for left, right in graph.edges:
-        adjacency[left].add(right)
-        adjacency[right].add(left)
-
-    component_count = 0
-    depths: dict[str, int] = {}
-    for start in (root, *graph.vertices):
-        if start in depths:
-            continue
-        component_count += 1
-        depths[start] = 0
-        queue = deque([start])
-        while queue:
-            vertex = queue.popleft()
-            for neighbor in adjacency[vertex]:
-                if neighbor not in depths:
-                    depths[neighbor] = depths[vertex] + 1
-                    queue.append(neighbor)
-
-    connected = component_count == 1
-    has_cycle = len(graph.edges) > len(graph.vertices) - component_count
-    return connected, has_cycle, component_count, depths
 
 
 class RootedTreeShrub(StrictModel):
@@ -166,7 +136,8 @@ class RootedTreeFinePartition(StrictModel):
     Seed and edge axes are lexically sorted. Shrubs are indexed by increasing
     root distance of ``root_vertex``, then by their complete vertex tuple. This
     is deterministic for the retained labels, not label-independent canonical
-    graph structure.
+    graph structure. Parsing checks source axes and partitions; connectivity,
+    rooted parity, parenthood, and root-distance ordering remain claims.
     """
 
     graph: SimpleUndirectedGraph
@@ -222,32 +193,23 @@ class RootedTreeFinePartition(StrictModel):
                     f"{MAX_GRAPH_LABEL_BYTES} UTF-8 bytes",
                 )
 
-        connected, has_cycle, component_count, depths = _graph_topology(
-            self.graph, self.root
-        )
         outcome = self.outcome
         if isinstance(outcome, RootedTreeNotATree):
-            if (
-                outcome.connected != connected
-                or outcome.has_cycle != has_cycle
-                or outcome.component_count != component_count
-            ):
-                raise _fine_partition_error(
-                    "non_tree_diagnostic",
-                    "the NOT_A_TREE diagnostic must match the retained graph",
-                )
-            if connected and not has_cycle:
+            if outcome.connected and not outcome.has_cycle:
                 raise _fine_partition_error(
                     "non_tree_status",
                     "a NOT_A_TREE outcome requires a disconnected or cyclic graph",
                 )
+            if outcome.connected != (outcome.component_count == 1):
+                raise _fine_partition_error(
+                    "non_tree_component_count",
+                    "connected must agree with the claimed component count",
+                )
+            if outcome.component_count > len(graph_vertices):
+                raise _fine_partition_error(
+                    "component_count", "component count cannot exceed graph order"
+                )
             return self
-
-        if not connected or has_cycle:
-            raise _fine_partition_error(
-                "constructed_graph_topology",
-                "a CONSTRUCTED outcome requires a connected acyclic graph",
-            )
 
         seeds_x = set(outcome.seeds_x)
         seeds_y = set(outcome.seeds_y)
@@ -260,13 +222,6 @@ class RootedTreeFinePartition(StrictModel):
         if self.root not in seeds_x:
             raise _fine_partition_error(
                 "root_seed", "the retained root must be an X seed"
-            )
-        if any(depths[seed] % 2 for seed in seeds_x) or any(
-            depths[seed] % 2 == 0 for seed in seeds_y
-        ):
-            raise _fine_partition_error(
-                "seed_parity",
-                "X and Y seeds must match their rooted graph depth parity",
             )
         if len(seeds_x) * self.component_size_limit > 12 * (
             len(graph_vertices) - 1
@@ -323,42 +278,11 @@ class RootedTreeFinePartition(StrictModel):
                     "shrub_size",
                     "a shrub must not exceed component_size_limit",
                 )
-            shrub_adjacency = {vertex: set[str]() for vertex in vertices}
-            for left, right in shrub.edges:
-                if left in vertices and right in vertices:
-                    shrub_adjacency[left].add(right)
-                    shrub_adjacency[right].add(left)
-            reached = {shrub.root_vertex}
-            queue = deque([shrub.root_vertex])
-            while queue:
-                vertex = queue.popleft()
-                for neighbor in shrub_adjacency[vertex]:
-                    if neighbor not in reached:
-                        reached.add(neighbor)
-                        queue.append(neighbor)
-            if reached != vertices:
-                raise _fine_partition_error(
-                    "shrub_connected",
-                    "each shrub must be one connected source component",
-                )
-            if shrub.root_vertex != min(
-                vertices, key=lambda vertex: (depths[vertex], vertex)
-            ):
-                raise _fine_partition_error(
-                    "shrub_root_vertex",
-                    "a shrub root_vertex must be its rootward vertex",
-                )
             if shrub.upper_seed not in seeds:
                 raise _fine_partition_error(
                     "shrub_upper_seed_membership",
                     "a shrub upper_seed must be a retained seed",
                 )
-            if depths[shrub.upper_seed] != depths[shrub.root_vertex] - 1:
-                raise _fine_partition_error(
-                    "shrub_upper_seed",
-                    "a shrub upper_seed must be the parent of root_vertex",
-                )
-
             for edge in shrub.edges:
                 report_edge(edge, field="shrub_edge")
                 if not set(edge) <= vertices:
@@ -412,15 +336,6 @@ class RootedTreeFinePartition(StrictModel):
                     "upper_seed_parent",
                     "a shrub upper_seed must be the parent of root_vertex",
                 )
-
-        shrub_order = tuple(
-            (depths[shrub.root_vertex], shrub.vertices) for shrub in outcome.shrubs
-        )
-        if shrub_order != tuple(sorted(shrub_order)):
-            raise _fine_partition_error(
-                "shrub_order",
-                "shrubs must be ordered by root distance and vertex tuple",
-            )
 
         if reported_vertices != graph_vertices - seeds:
             raise _fine_partition_error(

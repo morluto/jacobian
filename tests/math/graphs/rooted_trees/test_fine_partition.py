@@ -262,7 +262,7 @@ def test_result_parsing_rejects_constructed_rows_not_bound_to_source() -> None:
         RootedTreeFinePartition.model_validate_json(json.dumps(payload))
 
 
-def test_result_parsing_rejects_contradictory_non_tree_diagnostic() -> None:
+def test_result_parsing_preserves_unproved_non_tree_diagnostic() -> None:
     payload = {
         "graph": {"vertices": ["a", "b"], "edges": [["a", "b"]]},
         "root": "a",
@@ -275,8 +275,10 @@ def test_result_parsing_rejects_contradictory_non_tree_diagnostic() -> None:
         },
     }
 
-    with pytest.raises(ValidationError, match="diagnostic must match"):
-        RootedTreeFinePartition.model_validate_json(json.dumps(payload))
+    claim = RootedTreeFinePartition.model_validate_json(json.dumps(payload))
+    assert isinstance(claim.outcome, RootedTreeNotATree)
+    assert claim.outcome.has_cycle
+    assert nx.is_tree(_backend(claim.graph))
 
 
 def test_result_parsing_rejects_non_tree_status_for_a_tree() -> None:
@@ -449,3 +451,23 @@ def test_catalog_example_executes_and_round_trips() -> None:
 
     assert isinstance(result.outcome, RootedTreeFinePartitionConstructed)
     assert operation.result_type.model_validate_json(result.model_dump_json()) == result
+
+
+def test_result_parsing_preserves_unproved_seed_parity() -> None:
+    graph = SimpleUndirectedGraph(
+        vertices=("a", "b", "c"), edges=(("a", "b"), ("b", "c"))
+    )
+    payload = construct_fine_partition(graph, "a", 1).model_dump(mode="json")
+    # A complete singleton seed partition is structurally valid even when its
+    # declared bipartition does not agree with source-tree depth parity.
+    payload["outcome"] = {
+        "status": "CONSTRUCTED",
+        "seeds_x": ["a", "b", "c"],
+        "seeds_y": [],
+        "seed_edges": [["a", "b"], ["b", "c"]],
+        "shrubs": [],
+    }
+    claim = RootedTreeFinePartition.model_validate_json(json.dumps(payload))
+    assert isinstance(claim.outcome, RootedTreeFinePartitionConstructed)
+    assert "b" in claim.outcome.seeds_x
+    assert nx.shortest_path_length(_backend(claim.graph), "a", "b") == 1

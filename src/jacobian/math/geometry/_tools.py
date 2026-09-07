@@ -25,8 +25,8 @@ from jacobian.math.geometry._models import (
     PointSetRequest,
     PointTripleRequest,
     PolygonPointClassificationResult,
-    PolygonRequest,
     RationalLine2D,
+    RationalPolygon2D,
     SegmentIntersectionRequest,
     SegmentIntersectionResult,
     SimplePolygonDecisionResult,
@@ -85,11 +85,11 @@ def circumcircle(request: CircumcircleRequest) -> GeometryCircleResult:
     return _native.circumcircle(request.first, request.second, request.third)
 
 
-def signed_area(request: PolygonRequest) -> GeometryRationalResult:
+def signed_area(request: RationalPolygon2D) -> GeometryRationalResult:
     return _native.signed_area(request.points)
 
 
-def simple_polygon(request: PolygonRequest) -> SimplePolygonDecisionResult:
+def simple_polygon(request: RationalPolygon2D) -> SimplePolygonDecisionResult:
     return _native.simple_polygon(request.points)
 
 

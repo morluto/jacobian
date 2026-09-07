@@ -17,6 +17,7 @@ from jacobian.math.geometry._models import (
     MAX_EUCLIDEAN_TRIANGULATION_VERTICES,
     EuclideanConvexPolygonTriangulationRequest,
     EuclideanConvexPolygonTriangulationResult,
+    RationalPolygon2D,
 )
 
 
@@ -443,7 +444,7 @@ class TestEuclideanTriangulation:
         assert "simple" in points["description"]
         description = schema.get("description", "")
         assert f"4 to {MAX_EUCLIDEAN_TRIANGULATION_VERTICES} vertices" in description
-        assert "convexity and ring simplicity are enforced" in description
+        assert "convexity and ring simplicity are established" in description
 
     def test_certified_result_round_trips_through_model_validate(self) -> None:
         result = minimum_euclidean_weight_triangulation(
@@ -457,3 +458,22 @@ class TestEuclideanTriangulation:
 
         assert validated.status == "CERTIFIED_OPTIMUM"
         assert validated.optimum is not None
+
+
+def test_result_preserves_canonical_polygon_carrier_through_json() -> None:
+    request = EuclideanConvexPolygonTriangulationRequest.model_validate_json(
+        json.dumps(
+            {
+                "polygon": {
+                    "points": [_point(0, 0), _point(1, 0), _point(1, 1), _point(0, 1)]
+                }
+            }
+        )
+    )
+    result = minimum_euclidean_weight_triangulation(request)
+    decoded = EuclideanConvexPolygonTriangulationResult.model_validate_json(
+        result.model_dump_json()
+    )
+    assert type(result.polygon) is RationalPolygon2D
+    assert decoded == result
+    assert decoded.polygon.points == request.polygon.points

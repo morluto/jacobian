@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from itertools import combinations
+from itertools import combinations, product
 
 import pytest
 from pydantic import ValidationError
@@ -235,3 +235,95 @@ def test_public_example_and_serialization_round_trip() -> None:
 def test_admission_rejects_oversized_degree_before_flow() -> None:
     with pytest.raises(ValidationError, match=r"0\.\.1000000000"):
         _request(((0, 1),), 1, 1, (1_000_000_001, 0))
+
+
+@pytest.mark.parametrize(
+    ("edges", "requirements", "expected_vertices", "expected_capacity"),
+    [
+        (((0, 3), (0, 4), (1, 5), (2, 5)), (1, 1, 1, 1, 1, 1), (1, 2), 1),
+        (((0, 2), (0, 3), (1, 2), (1, 3)), (2, 0, 0, 2), (0,), 1),
+    ],
+)
+def test_residual_hall_obstruction_handles_nonprefix_and_edge_capacity_deficits(
+    edges: tuple[tuple[int, int], ...],
+    requirements: tuple[int, ...],
+    expected_vertices: tuple[int, ...],
+    expected_capacity: int,
+) -> None:
+    size = len(requirements) // 2
+    result = compute_bipartite_factor(_request(edges, size, size, requirements))
+    assert result.status == "INFEASIBLE"
+    assert result.obstruction is not None
+    witness = result.obstruction
+    assert witness.vertices == expected_vertices
+    assert witness.capacity == expected_capacity
+    incident = {
+        v: sum(u in witness.vertices and w == v for u, w in edges)
+        for v in range(size, 2 * size)
+    }
+    assert witness.neighbors == tuple(v for v, count in incident.items() if count)
+    assert witness.capacity == sum(
+        min(requirements[v], count) for v, count in incident.items()
+    )
+    assert witness.required == sum(requirements[u] for u in witness.vertices)
+    assert witness.required > witness.capacity
+    assert BipartiteFactorResult.model_validate_json(result.model_dump_json()) == result
+    # Independent defining oracle: every source edge subset misses a degree.
+    for count in range(len(edges) + 1):
+        for selected in combinations(edges, count):
+            degrees = tuple(
+                sum(v in edge for edge in selected) for v in range(2 * size)
+            )
+            assert degrees != requirements
+
+
+def test_all_two_by_two_factors_agree_with_edge_subset_oracle() -> None:
+    complete = ((0, 2), (0, 3), (1, 2), (1, 3))
+    for edge_count in range(5):
+        for edges in combinations(complete, edge_count):
+            source_degrees = tuple(sum(v in edge for edge in edges) for v in range(4))
+            feasible_degrees = {
+                tuple(sum(v in edge for edge in selected) for v in range(4))
+                for count in range(len(edges) + 1)
+                for selected in combinations(edges, count)
+            }
+            for requirements in product(
+                *(range(degree + 1) for degree in source_degrees)
+            ):
+                if sum(requirements[:2]) != sum(requirements[2:]):
+                    continue
+                result = compute_bipartite_factor(_request(edges, 2, 2, requirements))
+                assert (result.status == "FOUND") == (requirements in feasible_degrees)
+                if result.obstruction is not None:
+                    witness = result.obstruction
+                    capacity = sum(
+                        min(
+                            requirements[v],
+                            sum(u in witness.vertices and w == v for u, w in edges),
+                        )
+                        for v in (2, 3)
+                    )
+                    assert witness.required == sum(
+                        requirements[u] for u in witness.vertices
+                    )
+                    assert witness.capacity == capacity < witness.required
+
+
+def test_partition_permutation_requires_an_explicit_axis_change() -> None:
+    graph = IndexedSimpleUndirectedGraph(
+        vertex_count=4, edges=((0, 2), (0, 3), (1, 2), (1, 3))
+    )
+    with pytest.raises(ValidationError, match="complete ordered axis"):
+        BipartiteFactorRequest(
+            graph=graph, left=(1, 0), right=(2, 3), required_degrees=(2, 0, 1, 1)
+        )
+    with pytest.raises(OperationDomainValidationError, match="left must be"):
+        bipartite_degree_constrained_factor(graph, (1, 0), (2, 3), (2, 0, 1, 1))
+
+
+def test_serialized_factor_claim_rejects_misaligned_requirement_axes() -> None:
+    result = compute_bipartite_factor(_k33((1, 1, 1, 1, 1, 1)))
+    payload = result.model_dump(mode="json")
+    payload["requirements"]["left"] = [1, 1]
+    with pytest.raises(ValidationError, match="requirement axes"):
+        BipartiteFactorResult.model_validate_json(json.dumps(payload))

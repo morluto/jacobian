@@ -47,6 +47,14 @@ def minimum_weight_triangulation(
         )
         <= 0
         for index in range(count)
+    ) or any(
+        _cross(
+            _subtract(points[(index + 1) % count], points[index]),
+            _subtract(point, points[index]),
+        )
+        < 0
+        for index in range(count)
+        for point in points
     ):
         raise OperationDomainValidationError(
             location=("polygon", "points"),

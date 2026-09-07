@@ -107,31 +107,47 @@ def _build_factor_network(
 def _hall_obstruction(
     graph: IndexedSimpleUndirectedGraph,
     left: tuple[int, ...],
-    right: tuple[int, ...],
     requirements: tuple[int, ...],
-    *,
-    side: bool,
+    network: nx.DiGraph[int],
+    flow: dict[int, dict[int, int]],
 ) -> BipartiteFactorObstruction:
-    active = left if side else right
-    vertices: tuple[int, ...] = ()
-    neighbors: set[int] = set()
-    incidence = [edge for edge in graph.edges if edge[0] != edge[1]]
-    while vertices != active:
-        next_vertex = active[len(vertices)]
-        vertices = (*vertices, next_vertex)
-        neighbors.update(v for u, v in incidence if u in vertices)
-        neighbors.update(u for u, v in incidence if v in vertices)
-        required = sum(requirements[vertex] for vertex in vertices)
-        capacity = sum(requirements[neighbor] for neighbor in neighbors)
-        if required > capacity:
-            return BipartiteFactorObstruction(
-                side="LEFT" if side else "RIGHT",
-                vertices=vertices,
-                neighbors=tuple(sorted(neighbors)),
-                required=required,
-                capacity=capacity,
-            )
-    raise RuntimeError("flow infeasibility did not yield a Hall obstruction")
+    """Extract the deficient left set from this completed flow's residual cut.
+
+    For S on the left, each right vertex v can receive at most the smaller
+    of its demand and its number of incident S-edges. This generalized Hall
+    capacity includes unit edge capacities, unlike the sum of neighbor demands.
+    """
+    source = graph.vertex_count
+    residual = {vertex: set[int]() for vertex in network}
+    for start, end, data in network.edges(data=True):
+        amount = flow[start][end]
+        if amount < data["capacity"]:
+            residual[start].add(end)
+        if amount > 0:
+            residual[end].add(start)
+    reachable = {source}
+    pending = [source]
+    while pending:
+        for neighbor in residual[pending.pop()]:
+            if neighbor not in reachable:
+                reachable.add(neighbor)
+                pending.append(neighbor)
+    vertices = tuple(vertex for vertex in left if vertex in reachable)
+    incidence_counts: dict[int, int] = {}
+    for start, end in graph.edges:
+        if start in reachable:
+            incidence_counts[end] = incidence_counts.get(end, 0) + 1
+    required = sum(requirements[vertex] for vertex in vertices)
+    capacity = sum(
+        min(requirements[vertex], count) for vertex, count in incidence_counts.items()
+    )
+    return BipartiteFactorObstruction(
+        side="LEFT",
+        vertices=vertices,
+        neighbors=tuple(sorted(incidence_counts)),
+        required=required,
+        capacity=capacity,
+    )
 
 
 def bipartite_degree_constrained_factor(
@@ -143,7 +159,7 @@ def bipartite_degree_constrained_factor(
     """Return a spanning prescribed-degree factor or an exact obstruction."""
 
     left_set = set(left)
-    if tuple(sorted(left)) != tuple(range(len(left))) or tuple(sorted(right)) != tuple(
+    if left != tuple(range(len(left))) or right != tuple(
         range(len(left), len(left) + len(right))
     ):
         raise OperationDomainValidationError(
@@ -195,9 +211,9 @@ def bipartite_degree_constrained_factor(
     obstruction = _hall_obstruction(
         graph,
         left,
-        right,
         tuple(left_requirements) + tuple(right_requirements),
-        side=True,
+        network,
+        flow_dict,
     )
     return BipartiteFactorResult(
         graph=graph,

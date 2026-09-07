@@ -640,6 +640,14 @@ def verify_polygon_point_classification(
 def convex_hull_points(
     point_values: tuple[RationalPoint2D, ...],
 ) -> GeometryConvexHullResult:
+    if len(point_values) > 128:
+        raise OperationDomainValidationError(
+            location=("points",),
+            code="geometry.convex_hull.point_count",
+            message="convex hull admits at most 128 source points",
+        )
+    if not point_values:
+        return GeometryConvexHullResult(points=())
     from sympy.geometry import Line2D, Point2D, Polygon, Segment2D
     from sympy.geometry.util import convex_hull
 

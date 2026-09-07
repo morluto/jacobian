@@ -11,8 +11,8 @@ from jacobian._exact import CanonicalRational, canonical_rational_component_digi
 from jacobian._models import StrictModel
 from jacobian.math.geometry._models import (
     GeometryConvexHullResult,
-    PolygonRequest,
     RationalPoint2D,
+    RationalPolygon2D,
 )
 
 if TYPE_CHECKING:
@@ -32,10 +32,10 @@ MAX_INTERSECTION_COMPONENT_DIGITS = 2_056
 MAX_KERNEL_FEASIBILITY_WORK = 500_000_000
 
 
-class KernelPolygon(PolygonRequest):
+class KernelPolygon(RationalPolygon2D):
     """Operation-local bounded view of one simple CCW rational polygon.
 
-    The wire shape is exactly ``PolygonRequest``. The additional validation is
+    The wire shape is exactly ``RationalPolygon2D``. The additional validation is
     the visibility-kernel operation's execution envelope, not a second polygon
     representation.
     """
@@ -152,7 +152,7 @@ class KernelBoundaryIntersection(StrictModel):
 class PolygonKernelResult(StrictModel):
     """Source-bound exact half-plane reconstruction and rational area profile."""
 
-    polygon: KernelPolygon
+    polygon: RationalPolygon2D
     interior_half_plane_convention: Literal["a*x+b*y+c>=0"]
     half_planes: tuple[OrientedEdgeHalfPlane, ...] = Field(
         min_length=3,
@@ -234,7 +234,7 @@ class PolygonKernelResult(StrictModel):
         """Build a result after the admitted kernel established its values."""
 
         return cls.model_construct(
-            polygon=polygon,
+            polygon=RationalPolygon2D(points=polygon.points),
             interior_half_plane_convention=data.convention,
             half_planes=data.half_planes,
             vertex_turns=data.vertex_turns,

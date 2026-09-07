@@ -27,7 +27,7 @@ class PrimeFieldVectorSpace(StrictModel):
     """An ordered coordinate space over a named prime field."""
 
     field_order: int = Field(ge=2, le=MAX_FIELD_ORDER)
-    axis: tuple[AxisLabel, ...] = Field(min_length=1, max_length=MAX_DIM)
+    axis: tuple[AxisLabel, ...] = Field(max_length=MAX_DIM)
 
     @model_validator(mode="after")
     def require_structural(self) -> Self:
@@ -106,7 +106,7 @@ class ProjectivePointSequence(StrictModel):
     """
 
     space: PrimeFieldVectorSpace
-    coordinates: tuple[tuple[int, ...], ...] = Field(min_length=1)
+    coordinates: tuple[tuple[int, ...], ...]
 
     @model_validator(mode="after")
     def require_structural_coordinates(self) -> Self:

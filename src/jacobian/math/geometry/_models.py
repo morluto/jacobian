@@ -434,7 +434,7 @@ class PointQuadrupleRequest(PointTripleRequest):
 
 
 class PointSetRequest(StrictModel):
-    points: tuple[RationalPoint2D, ...] = Field(min_length=1, max_length=128)
+    points: tuple[RationalPoint2D, ...] = Field(max_length=128)
 
     @model_validator(mode="after")
     def require_unique_points(self) -> Self:
@@ -449,7 +449,13 @@ class PointSetRequest(StrictModel):
         return self
 
 
-class PolygonRequest(PointSetRequest):
+class RationalPolygon2D(PointSetRequest):
+    """A cyclic sequence of distinct rational planar vertices.
+
+    Vertex positions are the edge and vertex axes. Simplicity, orientation, and
+    convexity are established by admitted consumers, not by this carrier.
+    """
+
     points: tuple[RationalPoint2D, ...] = Field(min_length=3, max_length=128)
 
 
@@ -574,7 +580,7 @@ class SimplePolygonDecisionResult(StrictModel):
 
 
 class SimplePolygonPointRequest(StrictModel):
-    polygon: PolygonRequest
+    polygon: RationalPolygon2D
     point: RationalPoint2D
 
 
@@ -649,10 +655,12 @@ class GeometryLineIntersectionResult(StrictModel):
 
 
 class GeometryConvexHullResult(StrictModel):
-    points: tuple[RationalPoint2D, ...] = Field(min_length=1, max_length=128)
+    """Canonical planar hull coordinates; convexity is an operation-established claim."""
+
+    points: tuple[RationalPoint2D, ...] = Field(max_length=128)
 
     @model_validator(mode="after")
-    def require_canonical_strict_convex_boundary(self) -> Self:
+    def require_canonical_boundary_structure(self) -> Self:
         keys = tuple(_point_key(point) for point in self.points)
         if len(keys) != len(set(keys)):
             raise _validation_error(
@@ -669,18 +677,6 @@ class GeometryConvexHullResult(StrictModel):
             raise _validation_error(
                 "a_polygon_hull_begin_least_vertex",
                 "a polygon hull must begin at its least vertex",
-            )
-        turns = tuple(
-            _cross(
-                _subtract(keys[(index + 1) % len(keys)], keys[index]),
-                _subtract(keys[(index + 2) % len(keys)], keys[index]),
-            )
-            for index in range(len(keys))
-        )
-        if any(turn <= 0 for turn in turns):
-            raise _validation_error(
-                "a_polygon_hull_strictly_counterclockwise",
-                "a polygon hull must be strictly counterclockwise",
             )
         return self
 
@@ -839,7 +835,7 @@ class ConvexPolygonTriangulationRequest(StrictModel):
         },
     )
 
-    polygon: PolygonRequest
+    polygon: RationalPolygon2D
     diagonal_weights: tuple[WeightedPolygonDiagonal, ...] = Field(
         min_length=1,
         max_length=464,
@@ -884,7 +880,7 @@ EUCLIDEAN_TRIANGULATION_COMPARISON_PRECISION_BITS = 128
 
 
 def _require_euclidean_triangulation_envelope(
-    polygon: PolygonRequest,
+    polygon: RationalPolygon2D,
 ) -> tuple[tuple[Fraction, Fraction], ...]:
     """Validate the bounded exact source and return its rational coordinates.
 
@@ -1006,7 +1002,7 @@ def _compare_euclidean_root_sums(
         return 1 if difference > 0 else -1
 
 
-class EuclideanTriangulationPolygonRequest(PolygonRequest):
+class EuclideanTriangulationPolygonRequest(RationalPolygon2D):
     """Strict CCW convex simple rational ring admitted by Euclidean triangulation."""
 
     points: tuple[RationalPoint2D, ...] = Field(
@@ -1030,8 +1026,8 @@ class EuclideanConvexPolygonTriangulationRequest(StrictModel):
                 "Minimum Euclidean triangulation of one strict CCW convex "
                 "simple rational polygon. Admitted requests contain 4 to "
                 f"{MAX_EUCLIDEAN_TRIANGULATION_VERTICES} vertices; strict "
-                "counterclockwise convexity and ring simplicity are enforced "
-                "by the request validator after parsing."
+                "counterclockwise convexity and ring simplicity are established "
+                "by admitted execution after structural parsing."
             ),
         },
     )
@@ -1128,7 +1124,7 @@ class EuclideanConvexPolygonTriangulationResult(StrictModel):
     """A certified optimum, or an explicit unresolved exact comparison."""
 
     status: Literal["CERTIFIED_OPTIMUM", "COMPARISON_UNRESOLVED"]
-    polygon: PolygonRequest
+    polygon: RationalPolygon2D
     vertex_count: StrictInt = Field(ge=4, le=MAX_EUCLIDEAN_TRIANGULATION_VERTICES)
     objective: Literal["NON_HULL_EUCLIDEAN_LENGTH_SUM"] = (
         "NON_HULL_EUCLIDEAN_LENGTH_SUM"
@@ -1242,7 +1238,7 @@ class EuclideanConvexPolygonTriangulationResult(StrictModel):
         """Build a result after the admitted triangulation kernel established it."""
 
         return cls.model_construct(
-            polygon=request.polygon,
+            polygon=RationalPolygon2D(points=request.polygon.points),
             vertex_count=len(request.polygon.points),
             comparison_precision_bits=EUCLIDEAN_TRIANGULATION_COMPARISON_PRECISION_BITS,
             status=status,

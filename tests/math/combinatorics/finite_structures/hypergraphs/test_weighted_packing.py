@@ -274,3 +274,12 @@ def test_resource_dp_retains_zero_weight_lexicographic_witness() -> None:
     result = _pack(["x", "y"], edges, weights)
     assert result.packing == ("a", "c")
     assert result.total_weight.as_fraction() == 1
+
+
+def test_disconnected_zero_weight_ties_follow_component_contract() -> None:
+    result = _pack(["u", "v"], [("a", ("u",)), ("b", ("v",))], {"a": 0, "b": 1})
+    assert result.packing == ("b",)
+    assert result.total_weight.as_fraction() == 1
+    assert verify_weighted_packing(
+        WeightedPackingResult.model_validate_json(result.model_dump_json())
+    )

@@ -12,8 +12,9 @@ from jacobian.math.geometry._models import (
     CircumcircleRequest,
     ConvexPolygonTriangulationRequest,
     ConvexPolygonTriangulationResult,
-    PolygonRequest,
+    RationalPolygon2D,
     SimplePolygonPointRequest,
+    WeightedPolygonDiagonal,
 )
 from jacobian.math.geometry._models import (
     RationalPoint2D as GeometryRationalPoint2D,
@@ -105,7 +106,7 @@ def test_point_classification_rejects_non_simple_polygon_at_operation_boundary()
     None
 ):
     request = SimplePolygonPointRequest(
-        polygon=PolygonRequest(points=(_pt(0, 0), _pt(2, 2), _pt(0, 2), _pt(2, 0))),
+        polygon=RationalPolygon2D(points=(_pt(0, 0), _pt(2, 2), _pt(0, 2), _pt(2, 0))),
         point=_pt(1, 1),
     )
 
@@ -120,7 +121,9 @@ def test_point_classification_rejects_non_simple_polygon_at_operation_boundary()
 def test_polygon_point_claim_round_trips_and_rejects_a_forged_source() -> None:
     result = classify_polygon_point(
         SimplePolygonPointRequest(
-            polygon=PolygonRequest(points=(_pt(0, 0), _pt(2, 0), _pt(2, 2), _pt(0, 2))),
+            polygon=RationalPolygon2D(
+                points=(_pt(0, 0), _pt(2, 0), _pt(2, 2), _pt(0, 2))
+            ),
             point=_pt(1, 1),
         )
     )
@@ -701,3 +704,20 @@ class TestTriangleSimilarity:
         second = Triangle(a=_pt(0, 0), b=_pt(3, 0), c=_pt(0, 3))
 
         assert triangles_similar(first, second) is True
+
+
+def test_weighted_triangulation_rejects_positive_turn_self_intersection() -> None:
+    points = ((0, 0), (3, 2), (-1, 2), (2, 0), (1, 4))
+    request = ConvexPolygonTriangulationRequest(
+        polygon=RationalPolygon2D(points=tuple(_pt(x, y) for x, y in points)),
+        diagonal_weights=tuple(
+            WeightedPolygonDiagonal(
+                first=i, second=j, weight=CanonicalRational(num=1, den=1)
+            )
+            for i in range(5)
+            for j in range(i + 1, 5)
+            if j != i + 1 and (i, j) != (0, 4)
+        ),
+    )
+    with pytest.raises(OperationDomainValidationError, match="strict CCW convexity"):
+        minimum_weight_triangulation(request)

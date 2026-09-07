@@ -18,7 +18,7 @@ from jacobian.math.geometry._models import (
     EuclideanConvexPolygonTriangulationRequest,
     EuclideanConvexPolygonTriangulationResult,
     PolygonPointClassificationResult,
-    PolygonRequest,
+    RationalPolygon2D,
     SimplePolygonDecisionResult,
     SimplePolygonPointRequest,
 )
@@ -116,7 +116,7 @@ POLYGON_OPERATIONS: MathTools = (
             "Decide whether a bounded rational polygon ring is simple and "
             "preserve the first exact violating edge pair when it is not."
         ),
-        request_type=PolygonRequest,
+        request_type=RationalPolygon2D,
         result_type=SimplePolygonDecisionResult,
         run=simple_polygon,
         tags=("geometry", "polygon", "decision"),

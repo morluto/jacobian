@@ -67,7 +67,7 @@ class ProjectivePointEqualRequest(StrictModel):
 
 class SubspaceComputeRequest(StrictModel):
     space: PrimeFieldVectorSpace
-    vectors: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=MAX_DIM)
+    vectors: tuple[tuple[int, ...], ...] = Field(max_length=MAX_DIM)
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
@@ -119,7 +119,7 @@ class SubspaceIntersectionRequest(StrictModel):
 
 class GrassmannianCountRequest(StrictModel):
     field_order: int = Field(ge=2, le=MAX_FIELD_ORDER)
-    ambient_dimension: int = Field(ge=1, le=MAX_DIM)
+    ambient_dimension: int = Field(ge=0, le=MAX_DIM)
     subspace_dimension: int = Field(ge=0, le=MAX_DIM)
 
 

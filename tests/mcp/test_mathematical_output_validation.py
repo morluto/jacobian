@@ -10,6 +10,7 @@ import pytest
 from mcp.types import CallToolResult
 
 from jacobian.catalog.catalog import Catalog
+from jacobian.math.finite_fields import finite_field
 from jacobian.mcp.direct_tools import direct_operation_tools
 
 
@@ -49,10 +50,7 @@ from jacobian.mcp.direct_tools import direct_operation_tools
         (
             "finite_field.projective_line.enumerate",
             {
-                "presentation": {
-                    "characteristic": 2,
-                    "modulus_coefficients": [1, 1, 0, 1],
-                },
+                "presentation": finite_field(2, (1, 1, 0, 1)).model_dump(mode="json"),
                 "axis": {"name": "coordinates", "labels": ["x", "y"]},
             },
         ),

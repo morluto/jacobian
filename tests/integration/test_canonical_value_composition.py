@@ -201,7 +201,9 @@ def test_prime_field_matrix_coordinate_maps_retain_presentation_and_axes() -> No
         ).output["rank"]
         == 1
     )
-    restored = prime_matrix_coordinates(AxisBoundMatrix.model_validate(wire))
+    restored = prime_matrix_coordinates(
+        AxisBoundMatrix.model_validate_json(presented.model_dump_json())
+    )
     assert restored == matrix
     assert (
         bind_prime_matrix(

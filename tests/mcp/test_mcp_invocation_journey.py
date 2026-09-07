@@ -380,7 +380,7 @@ def test_mcp_composes_public_finite_field_values_with_native_projections() -> No
             assert "value_refs" not in table_output
             table_value = table_output
 
-            table = FiniteMapTable.model_validate(table_value)
+            table = FiniteMapTable.model_validate_json(json.dumps(table_value))
             fibers_call = await client.call_tool(
                 "math.run",
                 {
@@ -389,8 +389,8 @@ def test_mcp_composes_public_finite_field_values_with_native_projections() -> No
                 },
             )
             assert isinstance(fibers_call.structured_content, dict)
-            fibers = FiberPartition.model_validate(
-                fibers_call.structured_content["output"]
+            fibers = FiberPartition.model_validate_json(
+                json.dumps(fibers_call.structured_content["output"])
             )
             assert fibers == fiber_partition(table)
             assert fibers.table == table
@@ -429,7 +429,9 @@ def test_mcp_composes_public_finite_field_values_with_native_projections() -> No
             assert "value_refs" not in directions_output
             directions_value = directions_output
 
-            directions = ProjectiveLine.model_validate(directions_value)
+            directions = ProjectiveLine.model_validate_json(
+                json.dumps(directions_value)
+            )
             ledger = direction_rank_ledger(subspace, directions)
             assert len(ledger.entries) == 5
 

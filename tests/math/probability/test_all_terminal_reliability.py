@@ -75,7 +75,7 @@ def test_triangle_returns_exact_coefficient_vector_and_probability() -> None:
     )
 
     assert result.connected_spanning_subgraph_counts == (0, 0, 3, 1)
-    assert result.reliability_probability == Fraction(1, 2)
+    assert result.reliability_probability.as_fraction() == Fraction(1, 2)
     assert result.visited_states == 8
 
 
@@ -128,7 +128,7 @@ def test_rosenstock_canale_nine_vertex_profile() -> None:
         18,
         1,
     )
-    assert result.reliability_probability == Fraction(66329, 131072)
+    assert result.reliability_probability.as_fraction() == Fraction(66329, 131072)
 
 
 def test_all_terminal_event_differs_from_two_terminal_connectivity() -> None:
@@ -150,7 +150,7 @@ def test_all_terminal_event_differs_from_two_terminal_connectivity() -> None:
     all_terminal = all_terminal_reliability(graph, Fraction(1, 2))
 
     assert two_terminal.connection_probability.as_fraction() == Fraction(5, 8)
-    assert all_terminal.reliability_probability == Fraction(1, 2)
+    assert all_terminal.reliability_probability.as_fraction() == Fraction(1, 2)
 
 
 def test_native_kernel_matches_independent_powerset_oracle() -> None:
@@ -180,7 +180,7 @@ def test_native_kernel_matches_independent_powerset_oracle() -> None:
             )
 
             assert result.connected_spanning_subgraph_counts == expected_counts
-            assert result.reliability_probability == expected_probability
+            assert result.reliability_probability.as_fraction() == expected_probability
 
 
 @pytest.mark.parametrize(
@@ -211,7 +211,7 @@ def test_degenerate_and_boundary_conventions(
     result = all_terminal_reliability(graph, probability)
 
     assert result.connected_spanning_subgraph_counts == counts
-    assert result.reliability_probability == reliability
+    assert result.reliability_probability.as_fraction() == reliability
 
 
 @pytest.mark.parametrize("wire", (False, True), ids=("native", "wire"))
@@ -344,7 +344,7 @@ def test_native_boundary_rejects_huge_probability_components_preflight() -> None
     graph = _graph(("v",), ())
     at_limit = all_terminal_reliability(graph, Fraction(1, 10**127))
 
-    assert at_limit.reliability_probability == 1
+    assert at_limit.reliability_probability.as_fraction() == 1
     with pytest.raises(ValueError):
         all_terminal_reliability(graph, Fraction(1, 10**200_000 + 3))
 
@@ -370,3 +370,41 @@ def test_operation_declares_and_executes_copyable_example() -> None:
     )
     assert result.event == "ALL_VERTICES_CONNECTED"
     assert result.reliability_probability.as_fraction() == Fraction(1, 2)
+
+
+def test_native_and_wire_share_one_serializable_reliability_value() -> None:
+    from jacobian.math.probability import AllTerminalReliabilityResult
+
+    graph = _graph(("a", "isolated"), ())
+    native = all_terminal_reliability(graph, Fraction(1, 2))
+    wire = compute_all_terminal_reliability(
+        AllTerminalReliabilityRequest(
+            graph=graph,
+            open_probability=CanonicalRational(num=1, den=2),
+        )
+    )
+    assert type(native) is type(wire) is AllTerminalReliabilityResult
+    assert native == wire
+    decoded = AllTerminalReliabilityResult.model_validate_json(native.model_dump_json())
+    assert decoded == native
+    assert decoded.graph.vertices == ("a", "isolated")
+    assert decoded.connected_spanning_subgraph_counts == (0,)
+
+
+def test_wire_reliability_does_not_misclassify_unexpected_kernel_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = import_module("jacobian.math.probability.all_terminal_reliability")
+
+    def fail(graph: SimpleUndirectedGraph) -> tuple[int, ...]:
+        raise ValueError("unexpected enumeration failure")
+
+    monkeypatch.setattr(module, "_connected_spanning_subgraph_counts", fail)
+    with pytest.raises(ValueError, match="unexpected enumeration failure") as error:
+        compute_all_terminal_reliability(
+            AllTerminalReliabilityRequest(
+                graph=_graph(("a",), ()),
+                open_probability=CanonicalRational(num=1, den=2),
+            )
+        )
+    assert type(error.value) is ValueError

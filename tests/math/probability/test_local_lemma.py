@@ -5,19 +5,16 @@ from __future__ import annotations
 import json
 import sys
 from copy import deepcopy
-from dataclasses import replace
 from fractions import Fraction
 from math import prod
 
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.probability._local_lemma import (
     ASYMMETRIC_LOCAL_LEMMA_OPERATION,
-    AsymmetricLocalLemmaWitnessCheckResult,
-    AsymmetricLocalLemmaWitnessRequest,
-    compute_asymmetric_local_lemma_witness_check,
 )
 from jacobian.math.probability.local_lemma import (
     MAX_LOCAL_LEMMA_EVENTS,
@@ -25,6 +22,7 @@ from jacobian.math.probability.local_lemma import (
     MAX_LOCAL_LEMMA_INPUT_RATIONAL_DIGITS,
     MAX_LOCAL_LEMMA_RESULT_RATIONAL_DIGITS,
     AsymmetricLocalLemmaWitness,
+    AsymmetricLocalLemmaWitnessCheckResult,
     check_asymmetric_local_lemma_witness,
 )
 
@@ -49,10 +47,8 @@ def _payload(
 
 
 def _compute(payload: dict[str, object]) -> AsymmetricLocalLemmaWitnessCheckResult:
-    request = AsymmetricLocalLemmaWitnessRequest.model_validate_json(
-        json.dumps(payload)
-    )
-    return compute_asymmetric_local_lemma_witness_check(request)
+    request = AsymmetricLocalLemmaWitness.model_validate_json(json.dumps(payload))
+    return check_asymmetric_local_lemma_witness(request)
 
 
 def _assert_result_claim_invalid(payload: dict[str, object]) -> None:
@@ -62,8 +58,7 @@ def _assert_result_claim_invalid(payload: dict[str, object]) -> None:
         )
     except ValidationError:
         return
-    with pytest.raises(ValueError):
-        result.as_native()
+    assert check_asymmetric_local_lemma_witness(result.source) != result
 
 
 def test_source_backed_tangent_collision_numerics_reconstruct_exactly() -> None:
@@ -78,15 +73,15 @@ def test_source_backed_tangent_collision_numerics_reconstruct_exactly() -> None:
     )
 
     result = _compute(payload)
-    native = result.as_native()
+    native = result
 
     assert native.valid is True
     assert native.failed_event_indices == ()
-    assert native.witness_product == Fraction(27, 64)
+    assert native.witness_product.as_fraction() == Fraction(27, 64)
     for row in native.inequalities:
-        assert row.neighborhood_product == Fraction(9, 16)
-        assert row.right_hand_side == Fraction(9, 64)
-        assert row.slack == Fraction(1, 64)
+        assert row.neighborhood_product.as_fraction() == Fraction(9, 16)
+        assert row.right_hand_side.as_fraction() == Fraction(9, 64)
+        assert row.slack.as_fraction() == Fraction(1, 64)
         assert row.inequality_holds is True
 
     # Independent Fraction replay of the defining relation from retained source.
@@ -94,25 +89,28 @@ def test_source_backed_tangent_collision_numerics_reconstruct_exactly() -> None:
     for row in native.inequalities:
         expected_product = prod(
             (
-                1 - source.witness_parameters[index]
+                1 - source.witness_parameters[index].as_fraction()
                 for index in source.neighborhoods[row.event_index]
             ),
             start=Fraction(1),
         )
-        expected_rhs = source.witness_parameters[row.event_index] * expected_product
-        assert row.neighborhood_product == expected_product
-        assert row.right_hand_side == expected_rhs
-        assert row.slack == (
-            expected_rhs - source.probability_upper_bounds[row.event_index]
+        expected_rhs = (
+            source.witness_parameters[row.event_index].as_fraction() * expected_product
+        )
+        assert row.neighborhood_product.as_fraction() == expected_product
+        assert row.right_hand_side.as_fraction() == expected_rhs
+        assert row.slack.as_fraction() == (
+            expected_rhs
+            - source.probability_upper_bounds[row.event_index].as_fraction()
         )
 
 
 def test_empty_family_and_isolated_equality_are_exact() -> None:
-    empty = _compute(_payload((), (), (), ())).as_native()
+    empty = _compute(_payload((), (), (), ()))
     assert empty.valid is True
     assert empty.inequalities == ()
     assert empty.failed_event_indices == ()
-    assert empty.witness_product == 1
+    assert empty.witness_product.as_fraction() == 1
 
     isolated = _compute(
         _payload(
@@ -121,11 +119,11 @@ def test_empty_family_and_isolated_equality_are_exact() -> None:
             (Fraction(1, 3),),
             ((),),
         )
-    ).as_native()
+    )
     assert isolated.valid is True
-    assert isolated.inequalities[0].neighborhood_product == 1
-    assert isolated.inequalities[0].right_hand_side == Fraction(1, 3)
-    assert isolated.inequalities[0].slack == 0
+    assert isolated.inequalities[0].neighborhood_product.as_fraction() == 1
+    assert isolated.inequalities[0].right_hand_side.as_fraction() == Fraction(1, 3)
+    assert isolated.inequalities[0].slack.as_fraction() == 0
 
 
 def test_one_unit_rational_mutation_makes_the_boundary_fail() -> None:
@@ -136,7 +134,7 @@ def test_one_unit_rational_mutation_makes_the_boundary_fail() -> None:
             (Fraction(3, 8),),
             ((),),
         )
-    ).as_native()
+    )
     failed = _compute(
         _payload(
             ("A",),
@@ -144,13 +142,13 @@ def test_one_unit_rational_mutation_makes_the_boundary_fail() -> None:
             (Fraction(3, 8),),
             ((),),
         )
-    ).as_native()
+    )
 
     assert equal.valid is True
-    assert equal.inequalities[0].slack == 0
+    assert equal.inequalities[0].slack.as_fraction() == 0
     assert failed.valid is False
     assert failed.failed_event_indices == (0,)
-    assert failed.inequalities[0].slack == Fraction(-1, 8)
+    assert failed.inequalities[0].slack.as_fraction() == Fraction(-1, 8)
 
 
 def test_directed_neighborhood_reversal_changes_the_decision() -> None:
@@ -161,7 +159,7 @@ def test_directed_neighborhood_reversal_changes_the_decision() -> None:
             (Fraction(1, 2), Fraction(1, 2)),
             ((1,), ()),
         )
-    ).as_native()
+    )
     reversed_relation = _compute(
         _payload(
             ("A", "B"),
@@ -169,7 +167,7 @@ def test_directed_neighborhood_reversal_changes_the_decision() -> None:
             (Fraction(1, 2), Fraction(1, 2)),
             ((), (0,)),
         )
-    ).as_native()
+    )
 
     assert forward.valid is True
     assert reversed_relation.valid is False
@@ -184,11 +182,11 @@ def test_listed_self_neighbor_is_included_once() -> None:
             (Fraction(1, 2),),
             ((0,),),
         )
-    ).as_native()
+    )
 
     assert result.valid is True
-    assert result.inequalities[0].neighborhood_product == Fraction(1, 2)
-    assert result.inequalities[0].right_hand_side == Fraction(1, 4)
+    assert result.inequalities[0].neighborhood_product.as_fraction() == Fraction(1, 2)
+    assert result.inequalities[0].right_hand_side.as_fraction() == Fraction(1, 4)
 
 
 @pytest.mark.parametrize(
@@ -203,7 +201,7 @@ def test_listed_self_neighbor_is_included_once() -> None:
 def test_neighborhoods_must_be_canonical_axis_subsets(
     neighborhoods: tuple[tuple[int, ...], ...],
 ) -> None:
-    with pytest.raises(OperationDomainValidationError):
+    with pytest.raises(ValidationError):
         _compute(
             _payload(
                 ("A", "B"),
@@ -229,20 +227,18 @@ def test_probability_and_witness_domains_are_admitted_before_multiplication(
     witness: Fraction,
     message: str,
 ) -> None:
-    with pytest.raises(OperationDomainValidationError, match=message):
+    with pytest.raises(ValidationError, match=message):
         _compute(_payload(("A",), (probability,), (witness,), ((),)))
 
 
 def test_zero_witness_has_the_exact_expected_boundary_behavior() -> None:
-    valid = _compute(_payload(("A",), (Fraction(),), (Fraction(),), ((),))).as_native()
-    invalid = _compute(
-        _payload(("A",), (Fraction(1, 10),), (Fraction(),), ((),))
-    ).as_native()
+    valid = _compute(_payload(("A",), (Fraction(),), (Fraction(),), ((),)))
+    invalid = _compute(_payload(("A",), (Fraction(1, 10),), (Fraction(),), ((),)))
 
     assert valid.valid is True
-    assert valid.inequalities[0].right_hand_side == 0
+    assert valid.inequalities[0].right_hand_side.as_fraction() == 0
     assert invalid.valid is False
-    assert invalid.inequalities[0].slack == Fraction(-1, 10)
+    assert invalid.inequalities[0].slack.as_fraction() == Fraction(-1, 10)
 
 
 def test_axis_aligned_fields_and_labels_are_canonical() -> None:
@@ -254,12 +250,12 @@ def test_axis_aligned_fields_and_labels_are_canonical() -> None:
     )
     misaligned = deepcopy(base)
     misaligned["witness_parameters"] = [_rational(Fraction())]
-    with pytest.raises(OperationDomainValidationError):
+    with pytest.raises(ValidationError):
         _compute(misaligned)
 
     duplicated = deepcopy(base)
     duplicated["event_labels"] = ["A", "A"]
-    with pytest.raises(OperationDomainValidationError):
+    with pytest.raises(ValidationError):
         _compute(duplicated)
 
     non_nfc = _payload(
@@ -268,7 +264,7 @@ def test_axis_aligned_fields_and_labels_are_canonical() -> None:
         (Fraction(),),
         ((),),
     )
-    with pytest.raises(OperationDomainValidationError):
+    with pytest.raises(ValidationError):
         _compute(non_nfc)
 
 
@@ -316,8 +312,8 @@ def test_numerical_validity_is_not_labeled_dependency_graph_correctness() -> Non
 def test_native_function_returns_the_source_bound_canonical_value() -> None:
     source = AsymmetricLocalLemmaWitness(
         event_labels=("A",),
-        probability_upper_bounds=(Fraction(1, 4),),
-        witness_parameters=(Fraction(1, 2),),
+        probability_upper_bounds=(CanonicalRational(num=1, den=4),),
+        witness_parameters=(CanonicalRational(num=1, den=2),),
         neighborhoods=((0,),),
     )
 
@@ -325,20 +321,22 @@ def test_native_function_returns_the_source_bound_canonical_value() -> None:
 
     assert result.source is source
     assert result.valid is True
-    assert result.inequalities[0].slack == 0
+    assert result.inequalities[0].slack.as_fraction() == 0
 
 
 def test_native_result_rejects_boolean_failure_index_alias() -> None:
     source = AsymmetricLocalLemmaWitness(
         event_labels=("A",),
-        probability_upper_bounds=(Fraction(1, 2),),
-        witness_parameters=(Fraction(1, 3),),
+        probability_upper_bounds=(CanonicalRational(num=1, den=2),),
+        witness_parameters=(CanonicalRational(num=1, den=3),),
         neighborhoods=((),),
     )
     result = check_asymmetric_local_lemma_witness(source)
 
-    with pytest.raises(TypeError):
-        replace(result, failed_event_indices=(False,))
+    with pytest.raises(ValidationError):
+        type(result).model_validate(
+            {**result.model_dump(), "failed_event_indices": (False,)}
+        )
 
 
 def test_raw_input_rational_digit_bound_precedes_canonical_integer_parsing() -> None:
@@ -352,9 +350,7 @@ def test_raw_input_rational_digit_bound_precedes_canonical_integer_parsing() -> 
             payload = _payload(("A",), (Fraction(),), (Fraction(),), ((),))
             payload["probability_upper_bounds"] = [{"num": oversized, "den": "1"}]
             with pytest.raises(ValidationError):
-                AsymmetricLocalLemmaWitnessRequest.model_validate_json(
-                    json.dumps(payload)
-                )
+                AsymmetricLocalLemmaWitness.model_validate_json(json.dumps(payload))
     finally:
         sys.set_int_max_str_digits(previous_limit)
 
@@ -409,7 +405,7 @@ def test_preflight_rejects_one_overgrown_exact_result_component() -> None:
         (tuple(range(1, event_count)),) + ((),) * (event_count - 1),
     )
 
-    with pytest.raises(OperationDomainValidationError):
+    with pytest.raises(OperationResourceAdmissionError):
         _compute(payload)
 
 
@@ -423,7 +419,7 @@ def test_preflight_rejects_overgrown_complete_result_ledger() -> None:
         (tuple(range(8)),) * event_count,
     )
 
-    with pytest.raises(OperationDomainValidationError):
+    with pytest.raises(OperationResourceAdmissionError):
         _compute(payload)
 
 
@@ -431,9 +427,73 @@ def test_operation_declares_the_exact_public_contract() -> None:
     assert ASYMMETRIC_LOCAL_LEMMA_OPERATION.operation_id == (
         "probability.local_lemma.asymmetric_witness.check"
     )
-    example_request = AsymmetricLocalLemmaWitnessRequest.model_validate_json(
+    example_request = AsymmetricLocalLemmaWitness.model_validate_json(
         json.dumps(ASYMMETRIC_LOCAL_LEMMA_OPERATION.examples[0].input),
     )
     example_result = ASYMMETRIC_LOCAL_LEMMA_OPERATION.run(example_request)
     assert isinstance(example_result, AsymmetricLocalLemmaWitnessCheckResult)
     assert example_result.valid is True
+
+
+def test_source_and_result_parsing_do_not_replay_local_lemma_computation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.probability.local_lemma as operations
+
+    original = operations._inequalities
+    calls = 0
+
+    def counted(
+        source: AsymmetricLocalLemmaWitness,
+        probabilities: tuple[Fraction, ...],
+        witnesses: tuple[Fraction, ...],
+        complements: tuple[Fraction, ...],
+    ) -> tuple[operations.AsymmetricLocalLemmaInequality, ...]:
+        nonlocal calls
+        calls += 1
+        return original(source, probabilities, witnesses, complements)
+
+    monkeypatch.setattr(operations, "_inequalities", counted)
+    source = AsymmetricLocalLemmaWitness.model_validate_json(
+        json.dumps(
+            _payload(
+                ("A",),
+                (Fraction(1, 4),),
+                (Fraction(1, 2),),
+                ((0,),),
+            )
+        )
+    )
+    assert calls == 0
+    result = check_asymmetric_local_lemma_witness(source)
+    assert calls == 1
+    restored = AsymmetricLocalLemmaWitnessCheckResult.model_validate_json(
+        result.model_dump_json()
+    )
+    assert restored == result
+    assert calls == 1
+    assert ASYMMETRIC_LOCAL_LEMMA_OPERATION.request_type is AsymmetricLocalLemmaWitness
+    assert (
+        ASYMMETRIC_LOCAL_LEMMA_OPERATION.result_type
+        is AsymmetricLocalLemmaWitnessCheckResult
+    )
+
+
+def test_unadmitted_witness_can_be_structurally_parsed_without_expansion() -> None:
+    count = 130
+    source = AsymmetricLocalLemmaWitness.model_validate_json(
+        json.dumps(
+            _payload(
+                tuple(f"E{i}" for i in range(count)),
+                (Fraction(),) * count,
+                (Fraction(1, 10**255),) * count,
+                (tuple(range(1, count)),) + ((),) * (count - 1),
+            )
+        )
+    )
+    assert (
+        AsymmetricLocalLemmaWitness.model_validate_json(source.model_dump_json())
+        == source
+    )
+    with pytest.raises(OperationResourceAdmissionError):
+        check_asymmetric_local_lemma_witness(source)

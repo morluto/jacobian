@@ -2,37 +2,23 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from math import comb
-from typing import Annotated, Any, Literal, Self
+from typing import Literal
 
-from pydantic import ConfigDict, Field, StrictInt, model_validator
-from pydantic_core import PydanticCustomError
+from pydantic import ConfigDict, Field
 
 from jacobian._exact import (
     CanonicalRational,
-    DecimalIntegerEncoding,
-    require_bounded_rational,
 )
-from jacobian._models import StrictModel, canonicalize_json_containers
+from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     MathTool,
-    OperationDomainValidationError,
     OperationExample,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.probability.all_terminal_reliability import (
-    MAX_ALL_TERMINAL_RELIABILITY_EDGES,
-    MAX_ALL_TERMINAL_RELIABILITY_INPUT_DIGITS,
-    MAX_ALL_TERMINAL_RELIABILITY_RESULT_DIGITS,
-    MAX_ALL_TERMINAL_RELIABILITY_STATES,
-    _compute_all_terminal_reliability,
-    _require_bounded_problem,
+    AllTerminalReliabilityResult,
+    all_terminal_reliability,
 )
-
-
-def _validation_error(message: str) -> PydanticCustomError:
-    return PydanticCustomError("probability.reliability_invariant", message)
 
 
 class AllTerminalReliabilityRequest(StrictModel):
@@ -68,148 +54,11 @@ class AllTerminalReliabilityRequest(StrictModel):
     event: Literal["ALL_VERTICES_CONNECTED"] = "ALL_VERTICES_CONNECTED"
 
 
-class AllTerminalReliabilityWireResult(StrictModel):
-    """Exact probability with its bounded connected-subgraph profile.
-
-    Deserialization checks the structural result envelope. The kernel uses
-    ``_from_kernel`` after its one complete enumeration.
-    """
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "description": (
-                "Exact all-terminal reliability bound to the retained graph and "
-                "uniform edge probability. Entry k of "
-                "`connected_spanning_subgraph_counts` is the number of connected "
-                "spanning edge subsets containing exactly k edges."
-            )
-        }
-    )
-
-    graph: SimpleUndirectedGraph
-    open_probability: CanonicalRational
-    connected_spanning_subgraph_counts: tuple[
-        Annotated[int, DecimalIntegerEncoding(max_digits=7)], ...
-    ] = Field(
-        min_length=1,
-        max_length=MAX_ALL_TERMINAL_RELIABILITY_EDGES + 1,
-        description=(
-            "Counts indexed by open-edge cardinality k=0..m. They reconstruct "
-            "R_G(p)=sum_k c_k p^k (1-p)^(m-k)."
-        ),
-    )
-    reliability_probability: CanonicalRational
-    visited_states: StrictInt = Field(
-        ge=1,
-        le=MAX_ALL_TERMINAL_RELIABILITY_STATES,
-        description="The number of edge-subset states exhaustively visited, 2^m.",
-    )
-    event: Literal["ALL_VERTICES_CONNECTED"] = "ALL_VERTICES_CONNECTED"
-
-    @model_validator(mode="before")
-    @classmethod
-    def bound_raw_coefficients(cls, value: Any) -> Any:
-        value = canonicalize_json_containers(value)
-        if not isinstance(value, Mapping):
-            return value
-        raw_counts = value.get("connected_spanning_subgraph_counts")
-        if isinstance(raw_counts, (list, tuple)):
-            if len(raw_counts) > MAX_ALL_TERMINAL_RELIABILITY_EDGES + 1:
-                raise _validation_error(
-                    "connected-spanning-subgraph profile exceeds the edge bound"
-                )
-            max_digits = len(str(MAX_ALL_TERMINAL_RELIABILITY_STATES))
-            if any(
-                isinstance(item, str) and len(item.lstrip("-")) > max_digits
-                for item in raw_counts
-            ):
-                raise _validation_error(
-                    "connected-spanning-subgraph count exceeds the state bound"
-                )
-        return value
-
-    @model_validator(mode="after")
-    def require_bounded_shape(self) -> Self:
-        require_bounded_rational(
-            self.open_probability,
-            max_digits=MAX_ALL_TERMINAL_RELIABILITY_INPUT_DIGITS,
-            label="all-terminal reliability open probability",
-        )
-        require_bounded_rational(
-            self.reliability_probability,
-            max_digits=MAX_ALL_TERMINAL_RELIABILITY_RESULT_DIGITS,
-            label="all-terminal reliability result probability",
-        )
-        if not 0 <= self.open_probability.as_fraction() <= 1:
-            raise _validation_error(
-                "all-terminal reliability open probability must lie in [0, 1]"
-            )
-        actual_counts = tuple(
-            value for value in self.connected_spanning_subgraph_counts
-        )
-        if len(actual_counts) != len(self.graph.edges) + 1:
-            raise _validation_error(
-                "connected-spanning-subgraph counts must cover edge counts 0..m"
-            )
-        for open_edges, count in enumerate(actual_counts):
-            if not 0 <= count <= comb(len(self.graph.edges), open_edges):
-                raise _validation_error(
-                    "connected-spanning-subgraph count lies outside its subset class"
-                )
-            if open_edges < len(self.graph.vertices) - 1 and count:
-                raise _validation_error(
-                    "a connected spanning subgraph has at least n-1 edges"
-                )
-        if self.visited_states != 1 << len(self.graph.edges):
-            raise _validation_error(
-                "visited_states does not match the complete edge powerset"
-            )
-        if not 0 <= self.reliability_probability.as_fraction() <= 1:
-            raise _validation_error(
-                "all-terminal reliability result probability must lie in [0, 1]"
-            )
-        return self
-
-    @classmethod
-    def _from_kernel(
-        cls,
-        request: AllTerminalReliabilityRequest,
-        counts: tuple[int, ...],
-        reliability_probability: CanonicalRational,
-        visited_states: int,
-    ) -> Self:
-        """Build trusted kernel output without replaying the enumeration."""
-
-        return cls.model_construct(
-            graph=request.graph,
-            open_probability=request.open_probability,
-            connected_spanning_subgraph_counts=tuple(count for count in counts),
-            reliability_probability=reliability_probability,
-            visited_states=visited_states,
-            event="ALL_VERTICES_CONNECTED",
-        )
-
-
 def compute_all_terminal_reliability(
     request: AllTerminalReliabilityRequest,
-) -> AllTerminalReliabilityWireResult:
-    probability = request.open_probability.as_fraction()
-    try:
-        _require_bounded_problem(request.graph, probability)
-    except (TypeError, ValueError) as exc:
-        raise OperationDomainValidationError(
-            location=("graph", "open_probability"),
-            code="probability.all_terminal_reliability_not_admitted",
-            message=str(exc),
-        ) from None
-    counts, reliability_probability, visited_states = _compute_all_terminal_reliability(
-        request.graph, probability
-    )
-    return AllTerminalReliabilityWireResult._from_kernel(
-        request,
-        counts,
-        CanonicalRational.from_fraction(reliability_probability),
-        visited_states,
+) -> AllTerminalReliabilityResult:
+    return all_terminal_reliability(
+        request.graph, request.open_probability.as_fraction()
     )
 
 
@@ -223,7 +72,7 @@ ALL_TERMINAL_RELIABILITY_OPERATION = MathTool(
         "subgraph count vector as a source-bound reconstruction value."
     ),
     request_type=AllTerminalReliabilityRequest,
-    result_type=AllTerminalReliabilityWireResult,
+    result_type=AllTerminalReliabilityResult,
     run=compute_all_terminal_reliability,
     tags=(
         "probability",

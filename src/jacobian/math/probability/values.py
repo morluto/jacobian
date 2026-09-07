@@ -1,10 +1,15 @@
-"""Provider-independent native values for finite-table probability."""
+"""Canonical exact values for finite-table probability."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from fractions import Fraction
-from typing import Literal
+from collections.abc import Mapping
+from typing import Annotated, Any, Literal, Self
+
+from pydantic import Field, StrictInt, StringConstraints, model_validator
+from pydantic_core import PydanticCustomError
+
+from jacobian._exact import CanonicalRational, ExactInteger
+from jacobian._models import StrictModel, canonicalize_json_containers
 
 MAX_FINITE_JOINT_TABLE_ROWS = 16
 MAX_FINITE_JOINT_TABLE_COLUMNS = 16
@@ -28,13 +33,152 @@ MAX_MUTUAL_INFORMATION_LIKELIHOOD_RATIO_DIGITS = (
 _MAX_INPUT_RATIONAL_MAGNITUDE = 10**MAX_INPUT_RATIONAL_DIGITS
 
 
-def _require_native_labels(labels: tuple[str, ...], maximum: int, axis: str) -> None:
-    if not 1 <= len(labels) <= maximum:
-        raise ValueError(f"joint-table {axis} count lies outside the supported bound")
-    if any(type(label) is not str or not label for label in labels):
-        raise ValueError(f"joint-table {axis} labels must be nonempty strings")
-    if len(set(labels)) != len(labels):
-        raise ValueError(f"joint-table {axis} labels must be unique")
+def _validation_error(message: str) -> PydanticCustomError:
+    return PydanticCustomError("probability.mutual_information_invariant", message)
+
+
+FiniteJointLabel = Annotated[
+    str,
+    StringConstraints(min_length=1, max_length=128, strict=True),
+]
+FiniteJointProbabilityRow = Annotated[
+    tuple[CanonicalRational, ...],
+    Field(
+        min_length=1,
+        max_length=MAX_FINITE_JOINT_TABLE_COLUMNS,
+    ),
+]
+FiniteJointRowMarginals = Annotated[
+    tuple[CanonicalRational, ...],
+    Field(
+        min_length=1,
+        max_length=MAX_FINITE_JOINT_TABLE_ROWS,
+    ),
+]
+FiniteJointColumnMarginals = Annotated[
+    tuple[CanonicalRational, ...],
+    Field(
+        min_length=1,
+        max_length=MAX_FINITE_JOINT_TABLE_COLUMNS,
+    ),
+]
+
+
+def _bound_raw_probability_cell(cell: object) -> None:
+    if not isinstance(cell, Mapping):
+        return
+    for component in ("num", "den"):
+        raw_component = cell.get(component)
+        if (
+            isinstance(raw_component, str)
+            and len(raw_component.lstrip("-")) > MAX_INPUT_RATIONAL_DIGITS
+        ) or (
+            type(raw_component) is int
+            and abs(raw_component) >= 10**MAX_INPUT_RATIONAL_DIGITS
+        ):
+            raise _validation_error(
+                "joint-table probability exceeds the "
+                f"{MAX_INPUT_RATIONAL_DIGITS}-digit bound"
+            )
+
+
+def _bound_raw_probability_row(row: object) -> int:
+    if not isinstance(row, (list, tuple)):
+        return 0
+    if len(row) > MAX_FINITE_JOINT_TABLE_COLUMNS:
+        raise _validation_error("joint table exceeds the bounded column count")
+    for cell in row:
+        _bound_raw_probability_cell(cell)
+    return len(row)
+
+
+def _bound_raw_probability_matrix(value: Any) -> Any:
+    if not isinstance(value, Mapping):
+        return value
+    raw_table = value.get("probabilities")
+    if not isinstance(raw_table, (list, tuple)):
+        return value
+    if len(raw_table) > MAX_FINITE_JOINT_TABLE_ROWS:
+        raise _validation_error("joint table exceeds the bounded row count")
+    cell_count = 0
+    for row in raw_table:
+        cell_count += _bound_raw_probability_row(row)
+        if cell_count > MAX_FINITE_JOINT_TABLE_CELLS:
+            raise _validation_error("joint table exceeds the bounded cell count")
+    prepared = dict(value)
+    for field_name in ("row_labels", "column_labels"):
+        raw_labels = prepared.get(field_name)
+        if isinstance(raw_labels, list):
+            prepared[field_name] = tuple(raw_labels)
+    prepared["probabilities"] = tuple(
+        tuple(row) if isinstance(row, list) else row for row in raw_table
+    )
+    return prepared
+
+
+def _bound_raw_rational(
+    value: object,
+    *,
+    max_digits: int,
+    label: str,
+) -> None:
+    if not isinstance(value, Mapping):
+        return
+    for component in ("num", "den"):
+        raw_component = value.get(component)
+        if (
+            isinstance(raw_component, str)
+            and len(raw_component.lstrip("-")) > max_digits
+        ) or (type(raw_component) is int and abs(raw_component) >= 10**max_digits):
+            raise _validation_error(f"{label} exceeds the {max_digits}-digit bound")
+
+
+def _bound_raw_result_rationals(value: Mapping[str, object]) -> None:
+    for field_name in ("row_marginals", "column_marginals"):
+        raw_values = value.get(field_name)
+        if isinstance(raw_values, (list, tuple)):
+            for index, raw_value in enumerate(raw_values):
+                _bound_raw_rational(
+                    raw_value,
+                    max_digits=MAX_MUTUAL_INFORMATION_MARGINAL_DIGITS,
+                    label=f"{field_name}[{index}]",
+                )
+    raw_support = value.get("positive_support")
+    if isinstance(raw_support, (list, tuple)):
+        for index, raw_term in enumerate(raw_support):
+            if not isinstance(raw_term, Mapping):
+                continue
+            for field_name in (
+                "probability",
+                "row_marginal",
+                "column_marginal",
+                "likelihood_ratio",
+            ):
+                _bound_raw_rational(
+                    raw_term.get(field_name),
+                    max_digits=(
+                        MAX_INPUT_RATIONAL_DIGITS
+                        if field_name == "probability"
+                        else (
+                            MAX_MUTUAL_INFORMATION_LIKELIHOOD_RATIO_DIGITS
+                            if field_name == "likelihood_ratio"
+                            else MAX_MUTUAL_INFORMATION_MARGINAL_DIGITS
+                        )
+                    ),
+                    label=f"positive_support[{index}].{field_name}",
+                )
+    logarithmic_value = value.get("exact_logarithmic_value")
+    if isinstance(logarithmic_value, Mapping):
+        _bound_raw_rational(
+            logarithmic_value.get("product"),
+            max_digits=MAX_MUTUAL_INFORMATION_PRODUCT_DIGITS,
+            label="mutual-information logarithmic value product",
+        )
+    _bound_raw_rational(
+        value.get("exact_value"),
+        max_digits=MAX_MUTUAL_INFORMATION_PRODUCT_DIGITS,
+        label="mutual-information exact value",
+    )
 
 
 def _require_native_probability_shape(
@@ -43,258 +187,199 @@ def _require_native_probability_shape(
     probabilities: tuple[tuple[object, ...], ...],
 ) -> None:
     if len(probabilities) != len(row_labels):
-        raise ValueError("joint-table row count must match row labels")
+        raise _validation_error("joint-table row count must match row labels")
     if any(len(row) != len(column_labels) for row in probabilities):
-        raise ValueError("joint-table rows must match column labels")
+        raise _validation_error("joint-table rows must match column labels")
     if len(row_labels) * len(column_labels) > MAX_FINITE_JOINT_TABLE_CELLS:
-        raise ValueError("joint table exceeds the bounded cell count")
+        raise _validation_error("joint table exceeds the bounded cell count")
 
 
-def _require_native_probability_values(
-    probabilities: tuple[tuple[object, ...], ...],
-) -> None:
-    total = Fraction()
-    for row in probabilities:
-        for probability in row:
-            if type(probability) is not Fraction:
-                raise TypeError("native joint-table probabilities must use Fractions")
-            if (
-                abs(probability.numerator) >= _MAX_INPUT_RATIONAL_MAGNITUDE
-                or probability.denominator >= _MAX_INPUT_RATIONAL_MAGNITUDE
-            ):
-                raise ValueError(
-                    "joint-table probability exceeds the "
-                    f"{MAX_INPUT_RATIONAL_DIGITS}-digit bound"
-                )
-            if probability < 0:
-                raise ValueError("joint-table probabilities must be nonnegative")
-            total += probability
-    if total != 1:
-        raise ValueError("joint-table probabilities must sum exactly to 1")
+class FiniteJointTable(StrictModel):
+    """One canonical labelled rational joint table; normalization is admitted by consumers."""
 
-
-@dataclass(frozen=True, slots=True)
-class FiniteJointTable:
-    """One bounded normalized joint table over native ``Fraction`` values."""
-
-    row_labels: tuple[str, ...]
-    column_labels: tuple[str, ...]
-    probabilities: tuple[tuple[Fraction, ...], ...]
-    log_base: int = 2
-
-    def __post_init__(self) -> None:
-        _require_native_labels(self.row_labels, MAX_FINITE_JOINT_TABLE_ROWS, "row")
-        _require_native_labels(
-            self.column_labels,
-            MAX_FINITE_JOINT_TABLE_COLUMNS,
-            "column",
-        )
-        _require_native_probability_shape(
-            self.row_labels,
-            self.column_labels,
-            self.probabilities,
-        )
-        if type(self.log_base) is not int or not 2 <= self.log_base <= 36:
-            raise ValueError("mutual-information log base must lie from 2 through 36")
-        _require_native_probability_values(self.probabilities)
-
-
-@dataclass(frozen=True, slots=True)
-class MutualInformationTerm:
-    """One positive joint-mass contribution and its exact likelihood ratio."""
-
-    row_index: int
-    column_index: int
-    probability: Fraction
-    row_marginal: Fraction
-    column_marginal: Fraction
-    likelihood_ratio: Fraction
-
-    def __post_init__(self) -> None:
-        if type(self.row_index) is not int or self.row_index < 0:
-            raise ValueError("mutual-information row index must be nonnegative")
-        if type(self.column_index) is not int or self.column_index < 0:
-            raise ValueError("mutual-information column index must be nonnegative")
-        values = (
-            self.probability,
-            self.row_marginal,
-            self.column_marginal,
-            self.likelihood_ratio,
-        )
-        if any(type(value) is not Fraction for value in values):
-            raise TypeError("native mutual-information terms must use Fractions")
-        if self.probability <= 0:
-            raise ValueError("mutual-information support contains nonpositive mass")
-        if self.row_marginal <= 0 or self.column_marginal <= 0:
-            raise ValueError("positive joint mass must have positive marginal support")
-        expected = self.probability / (self.row_marginal * self.column_marginal)
-        if self.likelihood_ratio != expected:
-            raise ValueError("mutual-information likelihood ratio is inconsistent")
-
-
-def _require_native_result_shape(
-    row_marginals: tuple[Fraction, ...],
-    column_marginals: tuple[Fraction, ...],
-    positive_support: tuple[MutualInformationTerm, ...],
-) -> None:
-    if not 1 <= len(row_marginals) <= MAX_FINITE_JOINT_TABLE_ROWS:
-        raise ValueError("row marginals lie outside the supported bound")
-    if not 1 <= len(column_marginals) <= MAX_FINITE_JOINT_TABLE_COLUMNS:
-        raise ValueError("column marginals lie outside the supported bound")
-    if not 1 <= len(positive_support) <= MAX_FINITE_JOINT_TABLE_CELLS:
-        raise ValueError("positive support lies outside the supported bound")
-    if any(type(value) is not Fraction for value in row_marginals):
-        raise TypeError("native row marginals must be Fractions")
-    if any(type(value) is not Fraction for value in column_marginals):
-        raise TypeError("native column marginals must be Fractions")
-
-
-def _small_prime_factorization(value: int) -> dict[int, int]:
-    remaining = value
-    factors: dict[int, int] = {}
-    prime = 2
-    while prime * prime <= remaining:
-        while remaining % prime == 0:
-            factors[prime] = factors.get(prime, 0) + 1
-            remaining //= prime
-        prime += 1
-    if remaining > 1:
-        factors[remaining] = factors.get(remaining, 0) + 1
-    return factors
-
-
-def _valuations(value: int, primes: tuple[int, ...]) -> tuple[dict[int, int], int]:
-    remaining = value
-    exponents: dict[int, int] = {}
-    for prime in primes:
-        exponent = 0
-        while remaining > 1 and remaining % prime == 0:
-            remaining //= prime
-            exponent += 1
-        exponents[prime] = exponent
-    return exponents, remaining
-
-
-def _rational_base_exponent(value: Fraction, base: int) -> Fraction | None:
-    """Return ``q`` exactly when ``value == base**q`` for rational ``q``."""
-
-    base_factors = _small_prime_factorization(base)
-    primes = tuple(base_factors)
-    numerator_exponents, numerator_remainder = _valuations(value.numerator, primes)
-    denominator_exponents, denominator_remainder = _valuations(
-        value.denominator,
-        primes,
+    row_labels: tuple[FiniteJointLabel, ...] = Field(
+        min_length=1,
+        max_length=MAX_FINITE_JOINT_TABLE_ROWS,
     )
-    if numerator_remainder != 1 or denominator_remainder != 1:
-        return None
-    exponent: Fraction | None = None
-    for prime, base_exponent in base_factors.items():
-        current = Fraction(
-            numerator_exponents[prime] - denominator_exponents[prime],
-            base_exponent,
-        )
-        if exponent is None:
-            exponent = current
-        elif current != exponent:
-            return None
-    return exponent if exponent is not None else Fraction()
+    column_labels: tuple[FiniteJointLabel, ...] = Field(
+        min_length=1,
+        max_length=MAX_FINITE_JOINT_TABLE_COLUMNS,
+    )
+    probabilities: tuple[FiniteJointProbabilityRow, ...] = Field(
+        min_length=1,
+        max_length=MAX_FINITE_JOINT_TABLE_ROWS,
+    )
+    log_base: StrictInt = Field(default=2, ge=2, le=36)
 
-
-def _require_bounded_product(
-    scale: int,
-    weighted_ratios: list[tuple[Fraction, Fraction]],
-) -> None:
-    if scale.bit_length() > MAX_MUTUAL_INFORMATION_SCALE_BITS:
-        raise ValueError(
-            "mutual-information logarithmic representation scale exceeds the bound"
-        )
-    power_cost = 0
-    for probability, ratio in weighted_ratios:
-        scaled_probability = scale * probability
-        if scaled_probability.denominator != 1:
-            raise ValueError(
-                "mutual-information logarithmic representation scale does not clear support masses"
-            )
-        exponent = scaled_probability.numerator
-        if ratio == 1:
-            continue
-        power_cost += exponent * (
-            ratio.numerator.bit_length() + ratio.denominator.bit_length()
-        )
-        if power_cost > MAX_MUTUAL_INFORMATION_POWER_COST_BITS:
-            raise ValueError(
-                "mutual-information logarithmic representation product exceeds the output-cost bound"
-            )
-
-
-@dataclass(frozen=True, slots=True)
-class MutualInformationLogRepresentation:
-    """Exact finite representation of ``scale * I = log_base(product)``."""
-
-    scale: int
-    product: Fraction
-
-    def __post_init__(self) -> None:
-        if type(self.scale) is not int or self.scale <= 0:
-            raise ValueError(
-                "mutual-information logarithmic representation scale must be positive"
-            )
-        if self.scale.bit_length() > MAX_MUTUAL_INFORMATION_SCALE_BITS:
-            raise ValueError(
-                "mutual-information logarithmic representation scale exceeds the bound"
-            )
-        if type(self.product) is not Fraction or self.product <= 0:
-            raise ValueError(
-                "mutual-information logarithmic representation product must be positive"
-            )
-
-
-@dataclass(frozen=True, slots=True)
-class MutualInformationResult:
-    """Exact native marginals, support terms, log representation, and value."""
-
-    row_marginals: tuple[Fraction, ...]
-    column_marginals: tuple[Fraction, ...]
-    positive_support: tuple[MutualInformationTerm, ...]
-    log_base: int
-    logarithmic_value: MutualInformationLogRepresentation
-    exact_value: Fraction | None
-    sign: Literal["ZERO", "POSITIVE"]
-
-    def __post_init__(self) -> None:
-        """Check only native representation shape; the producer owns the identity."""
-
-        _require_native_result_shape(
-            self.row_marginals,
-            self.column_marginals,
-            self.positive_support,
-        )
-        if type(self.log_base) is not int or not 2 <= self.log_base <= 36:
-            raise ValueError("mutual-information log base must lie from 2 through 36")
-
+    @model_validator(mode="before")
     @classmethod
-    def _computed_from_kernel(
-        cls,
-        *,
-        row_marginals: tuple[Fraction, ...],
-        column_marginals: tuple[Fraction, ...],
-        positive_support: tuple[MutualInformationTerm, ...],
-        log_base: int,
-        logarithmic_value: MutualInformationLogRepresentation,
-        exact_value: Fraction | None,
-        sign: Literal["ZERO", "POSITIVE"],
-    ) -> MutualInformationResult:
-        """Build the value after the kernel established its exact identity."""
+    def bound_raw_probability_matrix(cls, value: Any) -> Any:
+        """Reject oversized collections before parsing any rational cell model."""
 
-        return cls(
-            row_marginals=row_marginals,
-            column_marginals=column_marginals,
-            positive_support=positive_support,
-            log_base=log_base,
-            logarithmic_value=logarithmic_value,
-            exact_value=exact_value,
-            sign=sign,
+        value = canonicalize_json_containers(value)
+        return _bound_raw_probability_matrix(value)
+
+    @model_validator(mode="after")
+    def require_structural_table(self) -> Self:
+        _require_native_probability_shape(
+            self.row_labels, self.column_labels, self.probabilities
         )
+        if len(set(self.row_labels)) != len(self.row_labels) or len(
+            set(self.column_labels)
+        ) != len(self.column_labels):
+            raise _validation_error("joint-table labels must be unique on each axis")
+        for row in self.probabilities:
+            for value in row:
+                if value.num < 0:
+                    raise _validation_error(
+                        "joint-table probabilities must be nonnegative"
+                    )
+                if (
+                    abs(value.num) >= _MAX_INPUT_RATIONAL_MAGNITUDE
+                    or value.den >= _MAX_INPUT_RATIONAL_MAGNITUDE
+                ):
+                    raise _validation_error(
+                        "joint-table probability exceeds the 256-digit bound"
+                    )
+        return self
+
+
+class MutualInformationTerm(StrictModel):
+    """One claimed positive-support contribution on the result's labelled axes."""
+
+    row_index: StrictInt = Field(ge=0, lt=MAX_FINITE_JOINT_TABLE_ROWS)
+    column_index: StrictInt = Field(ge=0, lt=MAX_FINITE_JOINT_TABLE_COLUMNS)
+    probability: CanonicalRational
+    row_marginal: CanonicalRational
+    column_marginal: CanonicalRational
+    likelihood_ratio: CanonicalRational
+
+
+class MutualInformationLogRepresentation(StrictModel):
+    """Canonical wire form of ``scale * I = log_base(product)``."""
+
+    scale: ExactInteger
+    product: CanonicalRational
+    identity: Literal["SCALE_TIMES_I_EQUALS_LOG_BASE_OF_PRODUCT"] = (
+        "SCALE_TIMES_I_EQUALS_LOG_BASE_OF_PRODUCT"
+    )
+
+    @model_validator(mode="after")
+    def require_positive_scale_and_product(self) -> Self:
+        if self.scale.bit_length() > MAX_MUTUAL_INFORMATION_SCALE_BITS:
+            raise _validation_error(
+                "mutual-information logarithmic value scale exceeds the bound"
+            )
+        if self.scale <= 0:
+            raise _validation_error(
+                "mutual-information logarithmic value scale must be positive"
+            )
+        if self.product.as_fraction() <= 0:
+            raise _validation_error(
+                "mutual-information logarithmic value product must be positive"
+            )
+        return self
+
+
+FiniteJointPositiveSupport = Annotated[
+    tuple[MutualInformationTerm, ...],
+    Field(
+        min_length=1,
+        max_length=MAX_FINITE_JOINT_TABLE_CELLS,
+    ),
+]
+
+
+class MutualInformationResult(StrictModel):
+    """Exact mutual information retaining both ordered axes, including zero marginals."""
+
+    row_labels: tuple[FiniteJointLabel, ...] = Field(
+        min_length=1, max_length=MAX_FINITE_JOINT_TABLE_ROWS
+    )
+    column_labels: tuple[FiniteJointLabel, ...] = Field(
+        min_length=1, max_length=MAX_FINITE_JOINT_TABLE_COLUMNS
+    )
+    row_marginals: FiniteJointRowMarginals
+    column_marginals: FiniteJointColumnMarginals
+    positive_support: FiniteJointPositiveSupport
+    log_base: StrictInt = Field(ge=2, le=36)
+    exact_logarithmic_value: MutualInformationLogRepresentation
+    exact_value: CanonicalRational | None = None
+    sign: Literal["ZERO", "POSITIVE"]
+    zero_cell_convention: Literal["ZERO_MASS_TERMS_OMITTED"] = "ZERO_MASS_TERMS_OMITTED"
+
+    @model_validator(mode="before")
+    @classmethod
+    def bound_raw_result_collections(cls, value: Any) -> Any:
+        """Reject impossible candidates before parsing their nested item models."""
+
+        value = canonicalize_json_containers(value)
+
+        if not isinstance(value, Mapping):
+            return value
+        bounds = {
+            "row_marginals": MAX_FINITE_JOINT_TABLE_ROWS,
+            "column_marginals": MAX_FINITE_JOINT_TABLE_COLUMNS,
+            "positive_support": MAX_FINITE_JOINT_TABLE_CELLS,
+        }
+        for field_name, maximum in bounds.items():
+            raw = value.get(field_name)
+            if isinstance(raw, (list, tuple)) and len(raw) > maximum:
+                raise _validation_error(
+                    f"{field_name} exceeds the bounded result cardinality"
+                )
+        _bound_raw_result_rationals(value)
+        logarithmic_value = value.get("exact_logarithmic_value")
+        if isinstance(logarithmic_value, Mapping):
+            scale = logarithmic_value.get("scale")
+            if isinstance(scale, str) and len(scale.lstrip("-")) > 309:
+                raise _validation_error(
+                    "mutual-information logarithmic value scale exceeds the bound"
+                )
+        return value
+
+    @model_validator(mode="after")
+    def require_structural_consistency(self) -> Self:
+        if len(self.row_labels) != len(self.row_marginals) or len(
+            self.column_labels
+        ) != len(self.column_marginals):
+            raise _validation_error("marginals must retain one entry per axis label")
+        if len(set(self.row_labels)) != len(self.row_labels) or len(
+            set(self.column_labels)
+        ) != len(self.column_labels):
+            raise _validation_error("result labels must be unique on each axis")
+        positions = tuple(
+            (term.row_index, term.column_index) for term in self.positive_support
+        )
+        if positions != tuple(sorted(set(positions))):
+            raise _validation_error(
+                "positive support must be unique and row-major ordered"
+            )
+        for term in self.positive_support:
+            if term.row_index >= len(self.row_marginals):
+                raise _validation_error(
+                    "positive support row index lies outside the result"
+                )
+            if term.column_index >= len(self.column_marginals):
+                raise _validation_error(
+                    "positive support column index lies outside the result"
+                )
+            if term.row_marginal != self.row_marginals[term.row_index]:
+                raise _validation_error("positive support row marginal is inconsistent")
+            if term.column_marginal != self.column_marginals[term.column_index]:
+                raise _validation_error(
+                    "positive support column marginal is inconsistent"
+                )
+        product = self.exact_logarithmic_value.product.as_fraction()
+        if self.sign != ("ZERO" if product == 1 else "POSITIVE"):
+            raise _validation_error(
+                "mutual-information sign must match the exact product"
+            )
+        if product < 1:
+            raise _validation_error(
+                "mutual-information product contradicts nonnegativity"
+            )
+        return self
 
 
 __all__ = [

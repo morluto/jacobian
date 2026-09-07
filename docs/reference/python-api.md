@@ -69,6 +69,18 @@ type directly. Operation-specific request and result models may contain a
 canonical value alongside genuine operation parameters, but must not reproduce
 it as a parallel set of fields.
 
+Finite probability uses this same rule. `FiniteJointTable`,
+`MutualInformationResult`, and the asymmetric local-lemma witness and result
+values are the same canonical types in native calls and JSON transport. Their
+rational fields use `CanonicalRational`; use `from_fraction(...)` and
+`as_fraction()` for explicit scalar conversion. Mutual-information results
+retain both ordered label axes, including rows and columns of zero mass.
+Joint-table normalization and local-lemma result-growth admission run when the
+operation executes, while parsing retains structure and authored claims.
+`all_terminal_reliability(graph, probability)` still accepts a native `Fraction`
+probability and returns the same `AllTerminalReliabilityResult` as MCP, with
+canonical rational probability fields.
+
 For example, the finite-field API follows this ownership chain:
 
 ```text

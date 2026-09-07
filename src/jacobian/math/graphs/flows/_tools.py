@@ -128,6 +128,11 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         request_type=MaxFlowRequest,
         result_type=MaxFlowResult,
         run=compute_max_flow,
+        discovery_terms=(
+            "maximum flow",
+            "integer capacities",
+            "maximum flow minimum cut",
+        ),
         tags=("graph", "flow", "max-flow", "exact"),
         examples=(
             OperationExample(
@@ -190,6 +195,12 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         request_type=MinCutRequest,
         result_type=MinCutResult,
         run=compute_min_cut,
+        discovery_terms=(
+            "minimum cut",
+            "minimum s-t cut",
+            "integer capacities",
+            "maximum flow minimum cut",
+        ),
         tags=("graph", "cut", "min-cut", "exact"),
         examples=(
             OperationExample(
@@ -278,7 +289,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         title="Compute minimum-cost flow with demands",
         description="Compute the minimum-cost flow satisfying vertex demands in a "
         "directed graph with capacities and per-unit costs, using "
-        "NetworkX's network simplex algorithm.",
+        "NetworkX's network simplex algorithm. Supports up to 128 vertices and 512 edges "
+        "when n*(n+m) <= 36864; rational scaling and output height are bounded separately.",
         request_type=MinCostFlowRequest,
         result_type=MinCostFlowResult,
         run=compute_min_cost_flow,

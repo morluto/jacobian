@@ -58,7 +58,7 @@ class FlowGraph(StrictModel):
     """A directed capacitated graph for flow problems."""
 
     vertex_count: int = Field(ge=2, le=64)
-    edges: tuple[CapacitatedEdge, ...] = Field(min_length=1, max_length=512)
+    edges: tuple[CapacitatedEdge, ...] = Field(max_length=512)
 
     @model_validator(mode="after")
     def require_valid_vertices(self) -> Self:
@@ -195,17 +195,21 @@ class EdgeDisjointPathsResult(EdgeDisjointPathsRequest):
 class CostedFlowEdge(StrictModel):
     """One directed edge with a capacity and a cost per unit of flow."""
 
-    source: int = Field(ge=0, le=63)
-    target: int = Field(ge=0, le=63)
+    source: int = Field(ge=0, le=127)
+    target: int = Field(ge=0, le=127)
     capacity: CanonicalRational
     cost: CanonicalRational
 
 
 class CostedFlowGraph(StrictModel):
-    """A directed graph with capacities and per-unit costs for flow problems."""
+    """A costed directed network with at most 128 vertices and 512 edges.
 
-    vertex_count: int = Field(ge=2, le=64)
-    edges: tuple[CostedFlowEdge, ...] = Field(min_length=1, max_length=512)
+    Admission additionally bounds n*(n+m) by 36,864, retaining the previous
+    64-vertex/512-edge maximum scan and storage envelope for sparse networks.
+    """
+
+    vertex_count: int = Field(ge=2, le=128)
+    edges: tuple[CostedFlowEdge, ...] = Field(max_length=512)
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
@@ -236,7 +240,7 @@ class CostedFlowGraph(StrictModel):
 
 class MinCostFlowRequest(StrictModel):
     graph: CostedFlowGraph
-    demands: tuple[int, ...] = Field(default=(), max_length=64)
+    demands: tuple[int, ...] = Field(default=(), max_length=128)
 
 
 class BipartiteDegreeRequirements(StrictModel):
@@ -331,8 +335,8 @@ class BipartiteFactorRequest(StrictModel):
 class FlowEdgeResult(StrictModel):
     """The flow assigned to one directed edge."""
 
-    source: int = Field(ge=0, le=63)
-    target: int = Field(ge=0, le=63)
+    source: int = Field(ge=0, le=127)
+    target: int = Field(ge=0, le=127)
     flow: CanonicalRational
 
 
@@ -346,7 +350,7 @@ class MinCostFlowResult(StrictModel):
     """
 
     graph: CostedFlowGraph
-    demands: tuple[int, ...] = Field(default=(), max_length=64)
+    demands: tuple[int, ...] = Field(default=(), max_length=128)
     total_cost: CanonicalRational
     flow_edges: tuple[FlowEdgeResult, ...] = Field(default=())
     feasible: bool

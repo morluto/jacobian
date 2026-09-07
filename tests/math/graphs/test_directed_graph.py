@@ -622,3 +622,24 @@ class TestCrossConsistency:
         scc_as_sets = {frozenset(c) for c in scc_result.components}
         cond_as_sets = {frozenset(c) for c in cond_result.components}
         assert scc_as_sets == cond_as_sets
+
+
+def test_singleton_condensation_composes_with_directed_operations() -> None:
+    source = DirectedGraph(vertex_count=3, edges=((0, 1), (1, 2), (2, 0)))
+    condensed = condensation(source)
+    graph = DirectedGraph.model_validate_json(
+        json.dumps(
+            {
+                "vertex_count": condensed.vertex_count,
+                "edges": [(edge.source, edge.target) for edge in condensed.edges],
+            }
+        )
+    )
+    assert condensed.components == ((0, 1, 2),)
+    order = acyclic_order(graph)
+    assert order.acyclic and order.order == (0,)
+    assert strongly_connected_components(graph).components == ((0,),)
+    assert condensation(graph).components == ((0,),)
+    reached = reachability(graph, 0)
+    assert reached.reachable == (0,) and reached.unreachable == ()
+    assert dag_longest_path(graph).path == (0,)

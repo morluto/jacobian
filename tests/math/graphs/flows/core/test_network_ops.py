@@ -375,3 +375,79 @@ def test_min_cost_flow_derived_scale_admission_fails_closed() -> None:
     request = MinCostFlowRequest(graph=graph, demands=tuple([0] * 64))
     with pytest.raises(OperationDomainValidationError, match="derived-scale"):
         compute_min_cost_flow(request)
+
+
+@pytest.mark.parametrize("demands, feasible", [((0, 0), True), ((-1, 1), False)])
+def test_edgeless_min_cost_flow(demands: tuple[int, ...], feasible: bool) -> None:
+    request = MinCostFlowRequest(
+        graph=CostedFlowGraph(vertex_count=2, edges=()), demands=demands
+    )
+    result = compute_min_cost_flow(request)
+    assert result.feasible is feasible
+    assert result.total_cost.as_fraction() == 0
+    assert result.flow_edges == ()
+
+
+def test_min_cost_flow_backend_error_is_not_infeasibility(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import networkx as nx
+
+    graph = CostedFlowGraph(
+        vertex_count=2,
+        edges=(
+            CostedFlowEdge(
+                source=0,
+                target=1,
+                capacity=CanonicalRational(num=1, den=1),
+                cost=CanonicalRational(num=1, den=1),
+            ),
+        ),
+    )
+    request = MinCostFlowRequest(graph=graph, demands=(-1, 1))
+    assert compute_min_cost_flow(request).feasible
+
+    def fail(*args: object, **kwargs: object) -> object:
+        raise nx.NetworkXError("injected backend failure")
+
+    monkeypatch.setattr(nx, "network_simplex", fail)
+    with pytest.raises(nx.NetworkXError, match="injected backend failure"):
+        compute_min_cost_flow(request)
+
+
+@pytest.mark.parametrize("side", [31, 32, 40])
+def test_sparse_capacity_matching_beyond_64_vertices(side: int) -> None:
+    q = CanonicalRational.from_integer_ratio
+    edges = []
+
+    def edge(u: int, v: int, cap: int, cost: int) -> None:
+        edges.append(
+            CostedFlowEdge(source=u, target=v, capacity=q(cap, 1), cost=q(cost, 1))
+        )
+
+    for i in range(side):
+        edge(0, 1 + i, 2, 0)
+        edge(1 + side + i, 2 * side + 1, 2, 0)
+        for j in range(4):
+            edge(1 + i, 1 + side + (i + j) % side, 1, -(4 - j))
+    edge(0, 2 * side + 1, 2 * side, 0)
+    request = MinCostFlowRequest(
+        graph=CostedFlowGraph(vertex_count=2 * side + 2, edges=tuple(edges)),
+        demands=(-2 * side,) + (0,) * (2 * side) + (2 * side,),
+    )
+    result = compute_min_cost_flow(
+        MinCostFlowRequest.model_validate_json(request.model_dump_json())
+    )
+    assert result.feasible and result.total_cost.as_fraction() == -7 * side
+    balance = [Fraction()] * (2 * side + 2)
+    capacities = {(e.source, e.target): e.capacity.as_fraction() for e in edges}
+    for flow in result.flow_edges:
+        amount = flow.flow.as_fraction()
+        assert 0 <= amount <= capacities[flow.source, flow.target]
+        balance[flow.source] -= amount
+        balance[flow.target] += amount
+    assert tuple(balance) == request.demands
+    assert (
+        MinCostFlowResult.model_validate_json(result.model_dump_json()).graph
+        == request.graph
+    )

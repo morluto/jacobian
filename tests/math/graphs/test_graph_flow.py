@@ -564,3 +564,15 @@ class TestCrossConsistency:
         flow = _max_flow(graph, 0, 4)
         cut = _min_cut(graph, 0, 4)
         assert flow.flow_value.as_fraction() == cut.cut_value.as_fraction()
+
+
+@pytest.mark.parametrize("vertex_count", [2, 5])
+def test_edgeless_flow_and_cut(vertex_count: int) -> None:
+    graph = {"vertex_count": vertex_count, "edges": []}
+    flow = _max_flow(graph, 0, vertex_count - 1)
+    cut = _min_cut(graph, 0, vertex_count - 1)
+    assert flow.flow_value.as_fraction() == cut.cut_value.as_fraction() == 0
+    assert flow.flow_edges == ()
+    assert 0 in cut.reachable
+    assert vertex_count - 1 in cut.unreachable
+    assert sorted((*cut.reachable, *cut.unreachable)) == list(range(vertex_count))

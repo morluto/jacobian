@@ -235,6 +235,12 @@ def _admit_terminals(
 
 
 def _admit_min_cost_flow(graph: CostedFlowGraph, demands: tuple[int, ...]) -> None:
+    if graph.vertex_count * (graph.vertex_count + len(graph.edges)) > 64 * (64 + 512):
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="graph.flow.network_work_bound",
+            message="min-cost flow requires n*(n+m) <= 36864 for vertices n and edges m",
+        )
     if len(demands) != graph.vertex_count:
         raise OperationDomainValidationError(
             location=("demands",),
@@ -351,7 +357,7 @@ def min_cost_flow(
         )
     try:
         flow_cost_int, flow_dict = nx.network_simplex(network)
-    except (nx.NetworkXUnfeasible, nx.NetworkXError):
+    except nx.NetworkXUnfeasible:
         return _rational(0), False, ()
     flow_edges = tuple(
         FlowEdgeResult(

@@ -24,7 +24,7 @@ MAX_DIRECTED_GRAPH_PARSE_EDGES = 163_840
 class DirectedGraph(StrictModel):
     """A structurally valid finite simple directed graph."""
 
-    vertex_count: int = Field(ge=2)
+    vertex_count: int = Field(ge=1)
     edges: tuple[tuple[int, int], ...] = Field()
 
     @field_validator("edges", mode="before")

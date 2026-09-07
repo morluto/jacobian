@@ -47,3 +47,20 @@ def test_path_profile_rejects_unbounded_dense_search() -> None:
     request = PathProfileRequest(graph=graph, path_length=10)
     with pytest.raises(OperationDomainValidationError, match="work budget"):
         path_profile(request.graph, request.path_length)
+
+
+@pytest.mark.parametrize("length", [0, 2, 5])
+def test_star_profile_is_admitted_by_unique_paths(length: int) -> None:
+    vertices = tuple(f"{i:02d}" for i in range(64))
+    graph = SimpleUndirectedGraph(
+        vertices=vertices, edges=tuple((vertices[0], v) for v in vertices[1:])
+    )
+    result = path_profile(graph, length)
+    expected_count = {0: 64, 2: 63 * 62, 5: 0}[length]
+    assert len(result.rows) == expected_count
+    assert all(row.path_count == 1 for row in result.rows)
+    if length == 2:
+        assert all(
+            row.source != "00" and row.target != "00" and row.source != row.target
+            for row in result.rows
+        )

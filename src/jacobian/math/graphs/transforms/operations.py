@@ -9,7 +9,6 @@ from jacobian.math.graphs.transforms._path_profile_models import (
     MAX_PATH_PROFILE_SEARCH_WORK,
     PathProfileResult,
     PathProfileRow,
-    _canonical_max_degree,
     _path_prefix_work_bound,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
@@ -91,12 +90,30 @@ def graph_power(
     return _from_networkx(nx.power(graph, power))
 
 
-def _admit_path_profile(graph: SimpleUndirectedGraph, path_length: int) -> None:
-    vertex_count = len(graph.vertices)
-    degree_bound = _canonical_max_degree(graph)
-    work = vertex_count * _path_prefix_work_bound(
-        vertex_count, degree_bound, path_length
-    )
+def _admit_path_profile(
+    graph: SimpleUndirectedGraph, path_length: int
+) -> dict[str, set[str]]:
+    import networkx as nx
+
+    if type(path_length) is not int or not 0 <= path_length <= 10:
+        raise ValueError("path_length must be between 0 and 10")
+    network: nx.Graph[str] = nx.Graph()
+    network.add_nodes_from(graph.vertices)
+    network.add_edges_from(graph.edges)
+    adjacency: dict[str, set[str]] = {}
+    work = 0
+    for component in nx.connected_components(network):
+        size = len(component)
+        if size <= path_length:
+            continue
+        degrees = [network.degree(vertex) for vertex in component]
+        # A connected component with |V|-1 edges is a tree. Each DFS
+        # source then visits each vertex at most once, regardless of degree.
+        if sum(degrees) == 2 * (size - 1):
+            work += size * size
+        else:
+            work += size * _path_prefix_work_bound(size, max(degrees), path_length)
+        adjacency.update((v, set(network[v])) for v in component)
     if work > MAX_PATH_PROFILE_SEARCH_WORK:
         raise OperationDomainValidationError(
             location=("graph", "path_length"),
@@ -107,16 +124,14 @@ def _admit_path_profile(graph: SimpleUndirectedGraph, path_length: int) -> None:
             ),
         )
 
+    return adjacency
+
 
 def path_profile(graph: SimpleUndirectedGraph, path_length: int) -> PathProfileResult:
     """Count simple paths of a fixed length for every ordered endpoint pair."""
 
-    _admit_path_profile(graph, path_length)
-    vertices = list(graph.vertices)
-    adjacency: dict[str, set[str]] = {vertex: set() for vertex in vertices}
-    for left, right in graph.edges:
-        adjacency[left].add(right)
-        adjacency[right].add(left)
+    adjacency = _admit_path_profile(graph, path_length)
+    vertices = [v for v in graph.vertices if v in adjacency]
 
     rows: list[PathProfileRow] = []
     for source in vertices:

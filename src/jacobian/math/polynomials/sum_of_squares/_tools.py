@@ -105,7 +105,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         title="Check a rational sum-of-squares decomposition by exact coefficient identity",
         description="Given a polynomial p and zero or more summands q_1, ..., q_r, check that "
         "p = q_1^2 + ... + q_r^2 by exact coefficient identity over QQ "
-        "(the empty sum is zero). "
+        "(the empty sum is zero). Sparse checking admits 256 target terms, "
+        "64 summands of at most 64 terms, and 4096 predicted term products; "
+        "summand exponents are at most 16384 per variable so the returned sum "
+        "fits the canonical polynomial carrier. "
         "This is the trust-critical boundary: a floating comparison or "
         "solver status is not a mathematical certificate.",
         request_type=SOSDecompositionCheckRequest,

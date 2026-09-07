@@ -3,24 +3,41 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 import sympy
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
+from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.values import RationalMatrix
-from jacobian.math.polynomials._conversions import (
-    rational_polynomial_from_sympy,
-    rational_polynomial_to_sympy,
-)
 from jacobian.math.polynomials.sum_of_squares._models import (
     GramCertificateResult,
     SOSDecompositionCheckResult,
     _require_bounded_gram_admission,
     _require_bounded_sos_work,
 )
-from jacobian.math.polynomials.values import RationalPolynomial
+from jacobian.math.polynomials.values import (
+    RationalPolynomial,
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
+)
+
+if TYPE_CHECKING:
+    from flint import fmpq_mpoly
+
+
+def _sparse_polynomial(polynomial: RationalPolynomial) -> fmpq_mpoly:
+    from flint import fmpq, fmpq_mpoly_ctx
+
+    context = fmpq_mpoly_ctx.get(polynomial.variables, "lex")
+    return context.from_dict(
+        {
+            term.exponents: fmpq(term.coefficient.num, term.coefficient.den)
+            for term in polynomial.polynomial.terms
+        }
+    )
 
 
 def _admit(operation: Callable[[], None]) -> None:
@@ -37,20 +54,32 @@ def _compute_sos_sum(
     summands: tuple[RationalPolynomial, ...],
 ) -> tuple[bool, RationalPolynomial]:
     """Compute the exact sum and coefficient-identity outcome."""
-    p_sympy = rational_polynomial_to_sympy(polynomial).as_expr()
-    sum_expr = sympy.Integer(0)
+    from flint import fmpq_mpoly_ctx
+
+    context = fmpq_mpoly_ctx.get(polynomial.variables, "lex")
+    total = context.constant(0)
     for summand in summands:
-        q_sympy = rational_polynomial_to_sympy(summand).as_expr()
-        sum_expr += q_sympy * q_sympy
-    is_valid = sympy.expand(p_sympy - sum_expr) == 0
+        request_checkpoint("during sparse sum-of-squares reconstruction")
+        value = _sparse_polynomial(summand)
+        total += value * value
+    is_valid = _sparse_polynomial(polynomial) == total
     if is_valid:
         computed_sum = polynomial
     else:
-        variables = polynomial.variables
-        computed_poly = sympy.Poly(
-            sum_expr, *sympy.symbols(list(variables)), domain=sympy.QQ
+        computed_sum = RationalPolynomial(
+            variables=polynomial.variables,
+            polynomial=SparseRationalPolynomial(
+                terms=tuple(
+                    RationalPolynomialTerm(
+                        coefficient=CanonicalRational.from_integer_ratio(
+                            int(coefficient.p), int(coefficient.q)
+                        ),
+                        exponents=exponents,
+                    )
+                    for exponents, coefficient in total.terms()
+                )
+            ),
         )
-        computed_sum = rational_polynomial_from_sympy(computed_poly, variables)
     return is_valid, computed_sum
 
 
@@ -79,12 +108,19 @@ def _compute_gram_checks(
         [[sympy.Rational(c.as_fraction()) for c in row] for row in gram_matrix]
     )
     is_symmetric = matrix == matrix.T
-    z = sympy.Matrix(
-        [[rational_polynomial_to_sympy(m).as_expr() for m in monomial_basis]]
-    ).T
-    reconstructed = (z.T * matrix * z)[0, 0]
-    p_sympy = rational_polynomial_to_sympy(polynomial).as_expr()
-    reconstructs = sympy.expand(reconstructed - p_sympy) == 0
+    from flint import fmpq, fmpq_mpoly_ctx
+
+    context = fmpq_mpoly_ctx.get(polynomial.variables, "lex")
+    basis = tuple(_sparse_polynomial(m) for m in monomial_basis)
+    reconstructed = context.constant(0)
+    for i, row in enumerate(gram_matrix):
+        request_checkpoint("during sparse Gram reconstruction")
+        for j, coefficient in enumerate(row):
+            if coefficient.num:
+                reconstructed += (
+                    fmpq(coefficient.num, coefficient.den) * basis[i] * basis[j]
+                )
+    reconstructs = reconstructed == _sparse_polynomial(polynomial)
     eigen_matrix = matrix if is_symmetric else (matrix + matrix.T) / 2
     is_psd = _exact_psd(eigen_matrix)
     return is_symmetric, reconstructs, is_psd

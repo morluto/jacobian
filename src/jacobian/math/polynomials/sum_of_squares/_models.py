@@ -16,11 +16,10 @@ from jacobian.math.matrices.values import (
     RationalMatrix,
     require_matrix_scalar_digits,
 )
-from jacobian.math.polynomials.values import RationalPolynomial
+from jacobian.math.polynomials.values import MAX_POLYNOMIAL_EXPONENT, RationalPolynomial
 
 MAX_SOS_TERMS = 256
 MAX_SOS_SUMMAND_TERMS = 64
-MAX_SOS_DEGREE = 12
 MAX_SOS_COEFF_DIGITS = 128
 MAX_SOS_PREDICTED_TERMS = 4096
 # The monomial basis fixes the Gram side, so the basis length shares the
@@ -33,18 +32,23 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 
 
 def _require_bounded_polynomial(
-    poly: RationalPolynomial, label: str, *, max_terms: int
+    poly: RationalPolynomial,
+    label: str,
+    *,
+    max_terms: int,
+    max_exponent: int = MAX_POLYNOMIAL_EXPONENT,
 ) -> None:
-    """Bound one input polynomial's terms, total degree, and coefficients."""
+    """Bound sparse support, coefficient height and representable exponents."""
     terms = poly.polynomial.terms
     if len(terms) > max_terms:
         raise _validation_error(
             "term_bound", f"{label} exceeds the {max_terms}-term bound"
         )
     for term in terms:
-        if sum(term.exponents) > MAX_SOS_DEGREE:
+        if any(exponent > max_exponent for exponent in term.exponents):
             raise _validation_error(
-                "degree_bound", f"{label} exceeds total-degree bound"
+                "degree_bound",
+                f"{label} exceeds the {max_exponent}-exponent reconstruction bound",
             )
         coeff = term.coefficient
         if (
@@ -84,12 +88,19 @@ def _require_bounded_sos_work(
     summands: tuple[RationalPolynomial, ...],
 ) -> None:
     """Apply the request admission contract to a retained SOS source."""
+    if len(summands) > 64:
+        raise _validation_error(
+            "summand_bound", "SOS checking admits at most 64 summands"
+        )
     # The target polynomial is consumed linearly, so it takes the wider
     # target budget; only the squared summands take the narrower budget.
     _require_bounded_polynomial(polynomial, "polynomial", max_terms=MAX_SOS_TERMS)
     for idx, summand in enumerate(summands):
         _require_bounded_polynomial(
-            summand, f"summand[{idx}]", max_terms=MAX_SOS_SUMMAND_TERMS
+            summand,
+            f"summand[{idx}]",
+            max_terms=MAX_SOS_SUMMAND_TERMS,
+            max_exponent=MAX_POLYNOMIAL_EXPONENT // 2,
         )
         if summand.variables != polynomial.variables:
             raise _validation_error(

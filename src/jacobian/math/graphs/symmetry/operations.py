@@ -2,14 +2,20 @@
 
 from __future__ import annotations
 
+import json
 import unicodedata
 
 from pydantic_core import PydanticCustomError
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian._execution import request_checkpoint
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.graphs.symmetry._models import (
     _UNCOLORED,
     MAX_GRAPH_SYMMETRY_EDGES,
+    MAX_GRAPH_SYMMETRY_GENERATORS,
     MAX_GRAPH_SYMMETRY_VERTICES,
     GraphAutomorphismGenerator,
     GraphEdgeOrbit,
@@ -28,6 +34,33 @@ def _admit_graph_symmetry_orbit(
     """Admit graph, generator, and retained-result execution bounds."""
     vertices = graph.graph.vertices
     edges = graph.graph.edges
+    if len(generators) > MAX_GRAPH_SYMMETRY_GENERATORS:
+        raise OperationResourceAdmissionError(
+            location=("generators",),
+            code="graph.symmetry.generator_bound",
+            message="declared symmetry admits at most 64 generators",
+        )
+    # Preserve the old worst-case action-table envelope while admitting
+    # larger graphs with fewer generators. No group elements are enumerated.
+    action_entries = len(generators) * (len(vertices) + len(edges))
+    # A singleton orbit is the largest projection per element: source,
+    # ordered carrier, representative and member, plus bounded orbit keys.
+    output_bytes = len(graph.model_dump_json().encode("utf-8")) + 4096
+    output_bytes += sum(
+        len(g.model_dump_json().encode("utf-8")) + 256 for g in generators
+    )
+    output_bytes += 3 * sum(
+        len(json.dumps(e, ensure_ascii=False).encode("utf-8")) + 1
+        for e in (*vertices, *edges)
+    )
+    output_bytes += 128 * (len(vertices) + len(edges))
+    if action_entries > 64 * (4096 + 256) or output_bytes > 8 * 1024 * 1024:
+        raise OperationResourceAdmissionError(
+            location=("generators",),
+            code="graph.symmetry.work_bound",
+            message=f"symmetry action entries={action_entries}, predicted output bytes={output_bytes}; limits 278528 and 8388608",
+        )
+    request_checkpoint("before declared graph symmetry checking")
     try:
         if len(vertices) > MAX_GRAPH_SYMMETRY_VERTICES:
             raise PydanticCustomError(
@@ -66,6 +99,7 @@ def _admit_graph_symmetry_orbit(
             else dict.fromkeys(edges, _UNCOLORED)
         )
         for generator in generators:
+            request_checkpoint("during declared graph symmetry checking")
             _validate_automorphism_generator(
                 generator,
                 vertices,

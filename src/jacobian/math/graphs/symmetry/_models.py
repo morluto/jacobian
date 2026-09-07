@@ -12,7 +12,9 @@ from jacobian.math.graphs.symmetry._edges import canonical_edge
 from jacobian.math.graphs.values import ColoredUndirectedGraph
 
 MAX_GRAPH_SYMMETRY_VERTICES = 256
-MAX_GRAPH_SYMMETRY_EDGES = 4_096
+MAX_GRAPH_SYMMETRY_EDGES = (
+    MAX_GRAPH_SYMMETRY_VERTICES * (MAX_GRAPH_SYMMETRY_VERTICES - 1) // 2
+)
 MAX_GRAPH_SYMMETRY_GENERATORS = 64
 _UNCOLORED = "__UNCOLORED__"
 

@@ -24,6 +24,7 @@ class TransitionParikhAdmissionPlan:
     """One admitted transition-profile execution envelope."""
 
     expected_path_count: int
+    transition_count: int
     outgoing: tuple[tuple[AutomatonTransition, ...], ...]
 
 
@@ -34,6 +35,61 @@ def _outgoing(
     for transition in automaton.transitions:
         result[transition.source].append(transition)
     return tuple(tuple(transitions) for transitions in result)
+
+
+def _relevant_outgoing(
+    automaton: FiniteLabeledAutomaton, source: int, target: int
+) -> tuple[tuple[AutomatonTransition, ...], ...]:
+    outgoing = _outgoing(automaton)
+    incoming: list[list[int]] = [[] for _ in outgoing]
+    for transition in automaton.transitions:
+        incoming[transition.target].append(transition.source)
+    reaches_target = {target}
+    pending = [target]
+    while pending:
+        for state in incoming[pending.pop()]:
+            if state not in reaches_target:
+                reaches_target.add(state)
+                pending.append(state)
+    reachable = {source} if source in reaches_target else set()
+    pending = list(reachable)
+    while pending:
+        for transition in outgoing[pending.pop()]:
+            state = transition.target
+            if state in reaches_target and state not in reachable:
+                reachable.add(state)
+                pending.append(state)
+    return tuple(
+        tuple(t for t in row if t.target in reachable) if state in reachable else ()
+        for state, row in enumerate(outgoing)
+    )
+
+
+def _forced_state_bounds(
+    outgoing: tuple[tuple[AutomatonTransition, ...], ...], source: int, length: int
+) -> tuple[int, int] | None:
+    # When each state's arrows share a target, the state sequence is forced.
+    # With v visits and k outgoing arrows, its count coordinates have at most
+    # C(v+k-1,k-1) compositions. Multiply these independent upper bounds
+    # across states, and charge each layer's actual outgoing multiplicity.
+    if any(len({t.target for t in row}) > 1 for row in outgoing):
+        return None
+    visits = [0] * len(outgoing)
+    cells = maximum = 1
+    updates = 0
+    state = source
+    for _ in range(length):
+        row = outgoing[state]
+        if not row:
+            break
+        updates = min(_MAX_DP_UPDATES + 1, updates + cells * len(row))
+        cells = cells * (visits[state] + len(row)) // (visits[state] + 1)
+        visits[state] += 1
+        maximum = max(maximum, cells)
+        if maximum > _MAX_COMPOSITION_CELLS:
+            return _MAX_COMPOSITION_CELLS + 1, _MAX_DP_UPDATES + 1
+        state = row[0].target
+    return maximum, updates
 
 
 def _capped_combination(n: int, k: int, cap: int) -> int:
@@ -114,10 +170,15 @@ def admit_transition_profile(
             "path_length exceeds the transition-Parikh preflight length bound"
         )
     transition_count = len(automaton.transitions)
-    outgoing = _outgoing(automaton)
+    outgoing = _relevant_outgoing(automaton, source_state, target_state)
+    active_transition_count = sum(map(len, outgoing))
     composition_cells, composition_updates = _composition_bounds(
-        transition_count, path_length
+        active_transition_count, path_length
     )
+    forced = _forced_state_bounds(outgoing, source_state, path_length)
+    if forced is not None:
+        composition_cells = min(composition_cells, forced[0])
+        composition_updates = min(composition_updates, forced[1])
     target_count, walk_updates, max_layer_paths = _path_count_and_walk_bound(
         outgoing, source_state, target_state, path_length, composition_updates
     )
@@ -156,6 +217,7 @@ def admit_transition_profile(
         )
     return TransitionParikhAdmissionPlan(
         expected_path_count=target_count,
+        transition_count=transition_count,
         outgoing=outgoing,
     )
 

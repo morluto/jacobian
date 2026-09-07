@@ -451,7 +451,7 @@ def _loop_automaton(
     )
 
 
-def test_owner_rejects_excessive_dp_work_even_when_target_is_unreachable() -> None:
+def test_owner_prunes_work_when_target_is_unreachable() -> None:
     automaton = _loop_automaton(3, state_count=2)
     TransitionParikhProfileRequest(
         automaton=automaton,
@@ -465,8 +465,8 @@ def test_owner_rejects_excessive_dp_work_even_when_target_is_unreachable() -> No
         target_state=1,
         path_length=158,
     )
-    with pytest.raises(ValueError, match="transition-update bound"):
-        compute_transition_parikh_profile(request)
+    result = compute_transition_parikh_profile(request)
+    assert result.entries == () and result.total_path_count == 0
 
 
 def test_request_preflight_scans_only_reachable_outgoing_transitions() -> None:
@@ -485,7 +485,7 @@ def test_request_preflight_scans_only_reachable_outgoing_transitions() -> None:
     )
 
 
-def test_owner_rejects_excessive_dense_vector_update_work() -> None:
+def test_unreachable_target_avoids_dense_vector_update_work() -> None:
     automaton = _loop_automaton(11, state_count=2)
     TransitionParikhProfileRequest(
         automaton=automaton,
@@ -499,8 +499,8 @@ def test_owner_rejects_excessive_dense_vector_update_work() -> None:
         target_state=1,
         path_length=10,
     )
-    with pytest.raises(ValueError, match="dense-vector update-work bound"):
-        compute_transition_parikh_profile(request)
+    result = compute_transition_parikh_profile(request)
+    assert result.entries == () and result.total_path_count == 0
 
 
 def test_owner_rejects_excessive_profile_cell_count() -> None:
@@ -521,7 +521,7 @@ def test_owner_rejects_excessive_profile_cell_count() -> None:
         compute_transition_parikh_profile(request)
 
 
-def test_owner_rejects_excessive_intermediate_vector_coordinates() -> None:
+def test_unreachable_target_avoids_intermediate_vector_coordinates() -> None:
     automaton = _loop_automaton(159, state_count=2)
     request = TransitionParikhProfileRequest(
         automaton=automaton,
@@ -529,8 +529,8 @@ def test_owner_rejects_excessive_intermediate_vector_coordinates() -> None:
         target_state=1,
         path_length=2,
     )
-    with pytest.raises(ValueError, match="vector-coordinate bound"):
-        compute_transition_parikh_profile(request)
+    result = compute_transition_parikh_profile(request)
+    assert result.entries == () and result.total_path_count == 0
     TransitionParikhProfileRequest(
         automaton=_loop_automaton(158, state_count=2),
         source_state=0,
@@ -678,3 +678,25 @@ def test_atlas_nine_port_clock_is_unreachable_while_seven_port_clock_is_reachabl
         sum(transition.target == 0 for transition in seven_port_clock.transitions) == 7
     )
     assert _states_reachable_through_length_three(seven_port_clock) == {0, 1, 2}
+
+
+def test_target_irrelevant_branch_keeps_original_transition_axis() -> None:
+    automaton = _automaton(
+        3, 2, ((0, 0, 1), (1, 0, 1), (0, 1, 2), (2, 0, 2), (2, 1, 2))
+    )
+    profile = transition_parikh_profile(automaton, 0, 1, 100)
+    assert _profile_map(profile) == {(1, 99, 0, 0, 0): 1}
+    assert profile.automaton == automaton
+
+
+def test_alternating_profile_uses_forced_state_visits() -> None:
+    from math import comb
+
+    automaton = _automaton(2, 2, ((0, 0, 1), (0, 1, 1), (1, 0, 0), (1, 1, 0)))
+    profile = transition_parikh_profile(automaton, 0, 0, 100)
+    assert _profile_map(profile) == {
+        (i, 50 - i, j, 50 - j): comb(50, i) * comb(50, j)
+        for i in range(51)
+        for j in range(51)
+    }
+    assert profile.total_path_count == 2**100

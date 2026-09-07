@@ -298,11 +298,13 @@ def test_sat_solver_invalid_model_cannot_outlive_request_deadline(
         ),
     )
 
-    real_monotonic = sat.time.monotonic
+    import time
+
+    real_monotonic = time.monotonic
 
     def expiring_check(request: SatAssignmentCheckRequest) -> SatAssignmentCheckResult:
         # Model the parent-side assignment scan consuming the remaining budget.
-        monkeypatch.setattr(sat.time, "monotonic", lambda: real_monotonic() + 3_600.0)
+        monkeypatch.setattr(time, "monotonic", lambda: real_monotonic() + 3_600.0)
         return original_check(request)
 
     monkeypatch.setattr(sat, "check_sat_assignment", expiring_check)
@@ -1587,3 +1589,23 @@ def test_result_models_bind_exhausted_budgets_to_unknown_outcomes() -> None:
         )
     with pytest.raises(ValueError, match="exhausted budget"):
         SmtSolveResult(source=smt_source, outcome="UNSAT", exhausted="memory")
+
+
+def test_unsupported_smt_command_identifies_source_field() -> None:
+    from pydantic import ValidationError
+
+    from jacobian.math.logic._smt import SmtSolveRequest
+
+    with pytest.raises(ValidationError) as error:
+        SmtSolveRequest.model_validate(
+            {
+                "logic": "QF_LIA",
+                "smtlib": "(set-logic QF_LIA)\n(declare-const x Int)\n(define-fun positive () Bool (> x 0))\n(assert positive)\n(check-sat)",
+            }
+        )
+    detail = error.value.errors()[0]
+    assert detail["loc"] == ("smtlib",)
+    assert detail["type"] == "logic.smtlib_command"
+    for command in ("set-logic", "declare-const", "declare-fun", "assert", "check-sat"):
+        assert command in detail["msg"]
+    assert "Inline" in detail["msg"]

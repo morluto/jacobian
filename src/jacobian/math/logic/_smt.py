@@ -15,6 +15,7 @@ from typing import Any, Literal, NamedTuple, Self
 from pydantic import (
     Field,
     StrictInt,
+    ValidationError,
     model_validator,
 )
 from pydantic_core import PydanticCustomError
@@ -527,10 +528,19 @@ class SmtSolveRequest(StrictModel):
             )
         for command in commands:
             if command and command[0] not in _SUPPORTED_SMTLIB_COMMANDS:
-                raise _validation_error(
-                    "logic.smtlib_command",
-                    f"unsupported SMT-LIB command: {command[0]}; supported commands are "
-                    f"{_SUPPORTED_SMTLIB_COMMANDS_DESCRIPTION}",
+                raise ValidationError.from_exception_data(
+                    type(self).__name__,
+                    [
+                        {
+                            "type": _validation_error(
+                                "logic.smtlib_command",
+                                f"unsupported SMT-LIB command: {command[0]}; supported commands are "
+                                f"{_SUPPORTED_SMTLIB_COMMANDS_DESCRIPTION}. Inline definitions in assertions.",
+                            ),
+                            "loc": ("smtlib",),
+                            "input": self.smtlib,
+                        }
+                    ],
                 )
         return self
 

@@ -554,3 +554,36 @@ def test_contract_rejects_review_missing_edge_example() -> None:
             accepting_states=(0,),
         )
     assert _error_type(exc_info) == "regular_language.dfa_not_total"
+
+
+def test_accepted_count_is_not_recomputed_after_admission(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.logic.languages.regular import _flint, operations
+
+    original_admission = operations._powered_count_admission
+    original_kernel = _flint.accepted_word_count
+    counts = [0, 0]
+
+    def admission(
+        matrix: tuple[tuple[int, ...], ...],
+        accepting: tuple[int, ...],
+        exponent: int,
+        cap: int,
+    ) -> tuple[int, int]:
+        counts[0] += 1
+        return original_admission(matrix, accepting, exponent, cap)
+
+    def kernel(
+        matrix: tuple[tuple[int, ...], ...],
+        initial: int,
+        accepting: tuple[int, ...],
+        exponent: int,
+    ) -> int:
+        counts[1] += 1
+        return original_kernel(matrix, initial, accepting, exponent)
+
+    monkeypatch.setattr(operations, "_powered_count_admission", admission)
+    monkeypatch.setattr(_flint, "accepted_word_count", kernel)
+    assert count_accepted_words(_dfa_ends_in_1(), 100) == 2**99
+    assert counts == [1, 0]

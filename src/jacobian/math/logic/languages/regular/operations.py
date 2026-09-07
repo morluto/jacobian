@@ -104,14 +104,9 @@ def count_accepted_words(dfa: DFA, word_length: int) -> int:
             code="regular_language.count_work_bound",
             message="DFA matrix powering exceeds the exact work bound",
         )
-    from jacobian.math.logic.languages.regular._flint import accepted_word_count
-
-    return accepted_word_count(
-        matrix,
-        0,
-        accepting_states,
-        word_length,
-    )
+    # Neither saturation bound was reached, so the admitted selected entry
+    # is already exact. Reuse it instead of powering the matrix a second time.
+    return selected_count
 
 
 def _accepted_path_matrix(
@@ -242,7 +237,9 @@ def _transition_parikh_profile_data(
 ) -> tuple[tuple[tuple[tuple[int, ...], int], ...], int]:
     """Compute canonical profile entries inside one admitted envelope."""
 
-    transition_count = sum(len(transitions) for transitions in plan.outgoing)
+    if plan.expected_path_count == 0:
+        return (), 0
+    transition_count = plan.transition_count
     zero_vector = tuple(0 for _ in range(transition_count))
     layer: dict[tuple[int, tuple[int, ...]], int] = {(source_state, zero_vector): 1}
     for _ in range(path_length):

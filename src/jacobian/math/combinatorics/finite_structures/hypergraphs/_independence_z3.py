@@ -10,6 +10,11 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any, cast
 
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+    request_checkpoint,
+)
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
     HypergraphIndependenceBudget,
@@ -344,10 +349,15 @@ def _run_independence_worker(
             )
     except OSError:
         return None
+    request_checkpoint("after hypergraph independence worker")
+    if completed.cancelled:
+        raise OperationExecutionCancelledError(
+            "hypergraph independence worker cancelled"
+        )
+    if completed.timed_out:
+        raise OperationExecutionTimeoutError("hypergraph independence worker expired")
     if (
-        completed.timed_out
-        or completed.cancelled
-        or completed.stdout_exceeded
+        completed.stdout_exceeded
         or completed.stderr_exceeded
         or completed.returncode != 0
     ):
@@ -381,15 +391,31 @@ def solve_independence_number(
             termination_reason="WALL_TIME",
             detail="the hypergraph independence request expired before worker startup",
         )
-    response = _run_independence_worker(
-        {
-            "kind": "solve",
-            "hypergraph": source.model_dump(mode="json"),
-            "resource_budget": resource_budget.model_dump(mode="json"),
-        },
-        timeout_seconds=remaining_seconds,
-    )
-    if not isinstance(response, dict):
+    try:
+        response = _run_independence_worker(
+            {
+                "kind": "solve",
+                "hypergraph": source.model_dump(mode="json"),
+                "resource_budget": resource_budget.model_dump(mode="json"),
+            },
+            timeout_seconds=remaining_seconds,
+        )
+    except OperationExecutionTimeoutError:
+        return _result(
+            source,
+            resource_budget,
+            status="UNKNOWN",
+            independence_number=None,
+            incumbent=incumbent,
+            upper_bound=source_upper_bound,
+            solver_calls=0,
+            wall_budget_exhausted=True,
+            termination_reason="WALL_TIME",
+            detail="the hypergraph independence worker expired",
+        )
+    request_checkpoint("after hypergraph independence worker response")
+    remaining = _remaining_ms(started, resource_budget.wall_seconds)
+    if not isinstance(response, dict) and remaining > 0:
         return _result(
             source,
             resource_budget,
@@ -402,7 +428,7 @@ def solve_independence_number(
             termination_reason="SOLVER_ERROR",
             detail="the bounded hypergraph independence worker did not establish an outcome",
         )
-    if _remaining_ms(started, resource_budget.wall_seconds) <= 0:
+    if remaining <= 0:
         return _result(
             source,
             resource_budget,
@@ -415,6 +441,7 @@ def solve_independence_number(
             termination_reason="WALL_TIME",
             detail="the hypergraph independence request expired before response validation",
         )
+    assert isinstance(response, dict)
     try:
         # The worker returns only its bounded outcome projection.  Retained
         # source data belongs to this parent request and must not consume the
@@ -426,10 +453,9 @@ def solve_independence_number(
                 "resource_budget": resource_budget.model_dump(mode="json"),
             }
         )
-        if _remaining_ms(started, resource_budget.wall_seconds) > 0:
-            return result
-        raise ValueError("request expired during response validation")
     except (TypeError, ValueError):
+        request_checkpoint("during hypergraph independence response validation")
+        expired = _remaining_ms(started, resource_budget.wall_seconds) <= 0
         return _result(
             source,
             resource_budget,
@@ -438,10 +464,29 @@ def solve_independence_number(
             incumbent=incumbent,
             upper_bound=source_upper_bound,
             solver_calls=0,
-            wall_budget_exhausted=False,
-            termination_reason="SOLVER_ERROR",
-            detail="the bounded hypergraph independence worker returned malformed output",
+            wall_budget_exhausted=expired,
+            termination_reason="WALL_TIME" if expired else "SOLVER_ERROR",
+            detail=(
+                "the hypergraph independence request expired during response validation"
+                if expired
+                else "the bounded hypergraph independence worker returned malformed output"
+            ),
         )
+    request_checkpoint("after hypergraph independence response validation")
+    if _remaining_ms(started, resource_budget.wall_seconds) <= 0:
+        return _result(
+            source,
+            resource_budget,
+            status="UNKNOWN",
+            independence_number=None,
+            incumbent=incumbent,
+            upper_bound=source_upper_bound,
+            solver_calls=0,
+            wall_budget_exhausted=True,
+            termination_reason="WALL_TIME",
+            detail="the hypergraph independence request expired during response validation",
+        )
+    return result
 
 
 __all__: list[str] = []

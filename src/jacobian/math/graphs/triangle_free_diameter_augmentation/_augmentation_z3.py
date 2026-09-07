@@ -10,7 +10,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
 
-from jacobian._execution import OperationExecutionCancelledError
+from jacobian._execution import OperationExecutionCancelledError, request_checkpoint
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.triangle_free_diameter_augmentation._models import (
     TriangleFreeDiameterAugmentationBudget,
@@ -531,6 +531,7 @@ def solve_triangle_free_diameter_augmentation_values(  # noqa: C901
     """Run bounded augmentation in owner worker and decode result."""
 
     deadline = time.monotonic() + budget.wall_seconds
+    request_checkpoint("before augmentation presolve")
 
     if target_diameter < 1 or target_diameter > HARD_MAX_TARGET_DIAMETER:
         raise OperationDomainValidationError(
@@ -543,9 +544,17 @@ def solve_triangle_free_diameter_augmentation_values(  # noqa: C901
     # is admitted independently of the backend order envelope.
     if _is_connected(graph) and _is_triangle_free(graph):
         original_diameter = _diameter(graph)
+        request_checkpoint("after augmentation presolve")
         if original_diameter is not None and original_diameter <= target_diameter:
             if time.monotonic() >= deadline:
-                raise TimeoutError("augmentation request expired during no-op presolve")
+                return TriangleFreeDiameterAugmentationResult._from_kernel(
+                    graph=graph,
+                    target_diameter=target_diameter,
+                    status="SOLVER_BUDGET_EXCEEDED",
+                    added_edges=(),
+                    augmented_diameter=None,
+                    detail="augmentation request expired during no-op presolve",
+                )
             return TriangleFreeDiameterAugmentationResult._from_kernel(
                 graph=graph,
                 target_diameter=target_diameter,
@@ -659,12 +668,16 @@ def solve_triangle_free_diameter_augmentation_values(  # noqa: C901
                 "detail": detail,
             }
         )
+        request_checkpoint("after augmentation response validation")
         return (
             result
             if time.monotonic() < deadline
             else fallback("request expired during validation")
         )
     except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
+        request_checkpoint("during augmentation response validation")
+        if time.monotonic() >= deadline:
+            return fallback("augmentation request expired during response validation")
         raise RuntimeError(
             "bounded augmentation worker returned malformed output"
         ) from exc

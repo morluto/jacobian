@@ -15,6 +15,7 @@ from typing import Any, Literal, NamedTuple, Self
 from pydantic import ConfigDict, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._execution import OperationExecutionCancelledError, request_checkpoint
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
@@ -1363,6 +1364,7 @@ def _run_unsat_core_worker(
 ) -> dict[str, object] | None:
     """Execute one semantic core phase in an isolated, bounded Z3 worker."""
 
+    request_checkpoint("before SMT unsat-core worker")
     payload: dict[str, object] = {
         "request": source.model_dump(mode="json"),
         "selected_indices": list(selected_indices)
@@ -1387,9 +1389,11 @@ def _run_unsat_core_worker(
             )
     except OSError:
         return None
+    request_checkpoint("after SMT unsat-core worker")
+    if completed.cancelled:
+        raise OperationExecutionCancelledError("SMT unsat-core worker cancelled")
     if (
         completed.timed_out
-        or completed.cancelled
         or completed.stdout_exceeded
         or completed.stderr_exceeded
         or completed.returncode != 0
@@ -1398,7 +1402,9 @@ def _run_unsat_core_worker(
     try:
         response = json.loads(completed.stdout.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError):
+        request_checkpoint("during SMT unsat-core response validation")
         return None
+    request_checkpoint("after SMT unsat-core response validation")
     return response if isinstance(response, dict) else None
 
 

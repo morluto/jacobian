@@ -11,6 +11,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any, cast
 
+from jacobian._execution import OperationExecutionCancelledError, request_checkpoint
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     MathTool,
@@ -123,6 +124,8 @@ def _fallback_unknown[ResultT: StrictModel](
     request: GraphOptimizationRequest,
     result_type: type[ResultT],
     detail: str,
+    *,
+    wall_time: bool = False,
 ) -> ResultT:
     """Return a source-derived feasible incumbent without an optimum claim."""
 
@@ -132,7 +135,7 @@ def _fallback_unknown[ResultT: StrictModel](
         "order": len(vertices),
         "optimum_value": None,
         "tested": (),
-        "termination_reason": "SOLVER_UNKNOWN",
+        "termination_reason": "WALL_TIME" if wall_time else "SOLVER_UNKNOWN",
         "detail": detail,
     }
     if result_type is GraphDominationMinimumOutput:
@@ -198,6 +201,7 @@ def _execute[ResultT: StrictModel](
                     request,
                     result_type,
                     "the graph optimization request expired before worker startup",
+                    wall_time=True,
                 )
             completed = run_bounded_process(
                 [sys.executable, str(_OPTIMIZATION_WORKER)],
@@ -226,10 +230,19 @@ def _execute[ResultT: StrictModel](
             result_type,
             "the bounded graph optimization worker could not be started",
         )
+    request_checkpoint("after graph optimization worker")
+    if completed.cancelled:
+        raise OperationExecutionCancelledError("graph optimization worker cancelled")
+    if completed.timed_out:
+        return _fallback_unknown(
+            graph,
+            request,
+            result_type,
+            "the graph optimization worker expired",
+            wall_time=True,
+        )
     if (
-        completed.timed_out
-        or completed.cancelled
-        or completed.stdout_exceeded
+        completed.stdout_exceeded
         or completed.stderr_exceeded
         or completed.returncode != 0
     ):
@@ -245,33 +258,42 @@ def _execute[ResultT: StrictModel](
             request,
             result_type,
             "the graph optimization request expired before response validation",
+            wall_time=True,
         )
     try:
         result = result_type.model_validate(
             json.loads(completed.stdout.decode("utf-8"))
         )
     except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
+        request_checkpoint("during graph optimization response validation")
+        expired = time.monotonic() >= deadline
         return _fallback_unknown(
             graph,
             request,
             result_type,
-            "the bounded graph optimization worker returned malformed output",
+            "the graph optimization request expired during response validation"
+            if expired
+            else "the bounded graph optimization worker returned malformed output",
+            wall_time=expired,
         )
-    if getattr(result, "order", None) != len(
+    valid_witness = getattr(result, "order", None) == len(
         request.graph.vertices
-    ) or not _valid_witness(graph, result):
-        return _fallback_unknown(
-            graph,
-            request,
-            result_type,
-            "the bounded graph optimization worker returned an invalid witness",
-        )
+    ) and _valid_witness(graph, result)
+    request_checkpoint("after graph optimization response validation")
     if time.monotonic() >= deadline:
         return _fallback_unknown(
             graph,
             request,
             result_type,
             "the graph optimization request expired during response validation",
+            wall_time=True,
+        )
+    if not valid_witness:
+        return _fallback_unknown(
+            graph,
+            request,
+            result_type,
+            "the bounded graph optimization worker returned an invalid witness",
         )
     return result
 

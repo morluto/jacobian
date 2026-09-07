@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from jacobian._execution import OperationExecutionCancelledError, request_checkpoint
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.graphs.optimization._chromatic_kernel import (
     build_simple_graph,
@@ -117,10 +118,13 @@ def _search_chromatic_number(
         return _chromatic_worker_failure(
             request, "the bounded chromatic-number worker could not be started"
         )
+    request_checkpoint("after chromatic-number worker")
+    if completed.cancelled:
+        raise OperationExecutionCancelledError("chromatic-number worker cancelled")
+    if completed.timed_out:
+        return _chromatic_worker_failure(request, "the chromatic-number worker expired")
     if (
-        completed.timed_out
-        or completed.cancelled
-        or completed.stdout_exceeded
+        completed.stdout_exceeded
         or completed.stderr_exceeded
         or completed.returncode != 0
     ):
@@ -146,13 +150,22 @@ def _search_chromatic_number(
             )
         ):
             raise ValueError("worker result is not bound to the submitted graph")
-        if time.monotonic() < deadline:
-            return result
-        raise ValueError("request expired during response validation")
     except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
+        request_checkpoint("during chromatic-number response validation")
+        if time.monotonic() >= deadline:
+            return _chromatic_worker_failure(
+                request,
+                "the chromatic-number request expired during response validation",
+            )
         return _chromatic_worker_failure(
             request, "the bounded chromatic-number worker returned malformed output"
         )
+    request_checkpoint("after chromatic-number response validation")
+    if time.monotonic() >= deadline:
+        return _chromatic_worker_failure(
+            request, "the chromatic-number request expired during response validation"
+        )
+    return result
 
 
 CHROMATIC_NUMBER_OPERATION = MathTool(

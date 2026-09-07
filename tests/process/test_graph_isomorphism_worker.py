@@ -3,6 +3,7 @@
 import pytest
 
 from jacobian import process as process_runtime
+from jacobian._execution import OperationExecutionTimeoutError
 from jacobian.math.graphs.isomorphism import _vf2_process as isomorphism_operations
 from jacobian.math.graphs.isomorphism._models import GraphIsomorphismRequest
 from jacobian.math.graphs.isomorphism._vf2_process import decide_graph_isomorphism
@@ -41,7 +42,7 @@ def test_timed_out_vf2_worker_is_an_operational_failure(
         ),
     )
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(OperationExecutionTimeoutError):
         decide_graph_isomorphism(
             GraphIsomorphismRequest.model_validate(
                 {

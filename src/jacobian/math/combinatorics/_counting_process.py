@@ -9,7 +9,13 @@ import time
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from jacobian._execution import bind_request_deadline, current_request_execution
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+    bind_request_deadline,
+    current_request_execution,
+    request_checkpoint,
+)
 from jacobian.process import (
     ProcessResourceLimits,
     run_bounded_process,
@@ -42,9 +48,12 @@ def evaluate_count(operation: str, n: int, k: int) -> str:
         else started + _COUNTING_WALL_SECONDS
     )
     bind_request_deadline(deadline)
+    request_checkpoint("before exact counting")
     remaining = deadline - time.monotonic()
     if remaining <= 0:
-        raise TimeoutError("request deadline expired before exact counting")
+        raise OperationExecutionTimeoutError(
+            "request deadline expired before exact counting"
+        )
 
     try:
         with TemporaryDirectory(prefix="jacobian-counting-") as worker_directory:
@@ -68,10 +77,15 @@ def evaluate_count(operation: str, n: int, k: int) -> str:
     except OSError as exc:
         raise RuntimeError("bounded counting worker could not be started") from exc
 
+    request_checkpoint("after exact counting worker")
     if completed.cancelled:
-        raise InterruptedError("request cancelled during exact counting")
+        raise OperationExecutionCancelledError(
+            "request cancelled during exact counting"
+        )
     if completed.timed_out:
-        raise TimeoutError("request deadline expired during exact counting")
+        raise OperationExecutionTimeoutError(
+            "request deadline expired during exact counting"
+        )
     if (
         completed.stdout_exceeded
         or completed.stderr_exceeded
@@ -85,6 +99,11 @@ def evaluate_count(operation: str, n: int, k: int) -> str:
         raise RuntimeError("bounded counting worker returned malformed output") from exc
     if not text or not text.isdigit():
         raise RuntimeError("bounded counting worker returned malformed output")
+    request_checkpoint("after exact counting")
+    if time.monotonic() >= deadline:
+        raise OperationExecutionTimeoutError(
+            "request deadline expired during exact counting"
+        )
     return text
 
 

@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from jacobian._execution import OperationExecutionCancelledError, request_checkpoint
 from jacobian.math.graphs.optimization._maximum_cut import (
     GraphMaximumCutRequest,
     GraphMaximumCutResult,
@@ -53,6 +54,7 @@ def compute_maximum_cut_isolated(
     """Run Z3 outside the host and retain the admitted exact fallback."""
 
     deadline = time.monotonic() + _MAXIMUM_CUT_WORKER_WALL_SECONDS
+    request_checkpoint("before maximum-cut acceleration")
     try:
         with TemporaryDirectory(prefix="jacobian-maximum-cut-") as directory:
             payload = json.dumps(
@@ -79,9 +81,11 @@ def compute_maximum_cut_isolated(
             )
     except OSError:
         return _compute_maximum_cut_without_z3(request)
+    request_checkpoint("after maximum-cut acceleration")
+    if completed.cancelled:
+        raise OperationExecutionCancelledError("maximum-cut worker cancelled")
     if (
         completed.timed_out
-        or completed.cancelled
         or completed.stdout_exceeded
         or completed.stderr_exceeded
         or completed.returncode != 0
@@ -94,6 +98,8 @@ def compute_maximum_cut_isolated(
         )
         if result.graph != request.graph:
             raise ValueError("worker result is not bound to the submitted graph")
+        request_checkpoint("after maximum-cut response validation")
         return result
     except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
+        request_checkpoint("during maximum-cut response validation")
         return _compute_maximum_cut_without_z3(request)

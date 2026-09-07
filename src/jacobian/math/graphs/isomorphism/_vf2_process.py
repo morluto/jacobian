@@ -10,6 +10,11 @@ from tempfile import TemporaryDirectory
 
 from pydantic_core import PydanticCustomError
 
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+    request_checkpoint,
+)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.isomorphism._models import (
     ColoredGraphCanonicalizationRequest,
@@ -53,9 +58,8 @@ def _vertex_mapping(
     """Return a worker-derived witness, or ``None`` when absent.
 
     VF2 is deliberately isolated because its search cannot be interrupted in
-    the host process.  A stopped or malformed worker has no mathematical
-    conclusion and is represented by ``None`` only through the separate
-    ``UNKNOWN`` outcome in :func:`decide_graph_isomorphism`.
+    the host process. A stopped or malformed worker raises an operational
+    exception; only a completed negative decision returns ``None``.
     """
     from jacobian.process import (
         ProcessResourceLimits,
@@ -63,6 +67,7 @@ def _vertex_mapping(
         worker_environment,
     )
 
+    request_checkpoint("before graph isomorphism")
     request = {
         "graph_a": {
             "vertex_count": graph_a.vertex_count,
@@ -93,16 +98,20 @@ def _vertex_mapping(
             )
     except OSError as exc:
         raise RuntimeError("bounded VF2 worker could not be started") from exc
+    request_checkpoint("after graph isomorphism worker")
+    if completed.cancelled:
+        raise OperationExecutionCancelledError("graph isomorphism worker cancelled")
+    if completed.timed_out:
+        raise OperationExecutionTimeoutError("graph isomorphism worker expired")
     if (
-        completed.timed_out
-        or completed.cancelled
-        or completed.stdout_exceeded
+        completed.stdout_exceeded
         or completed.stderr_exceeded
         or completed.returncode != 0
     ):
         raise RuntimeError("bounded VF2 worker did not establish an outcome")
     try:
         response = json.loads(completed.stdout.decode("utf-8"))
+        request_checkpoint("during graph isomorphism response validation")
         mapping = response["mapping"] if response["ok"] is True else None
         if mapping is None:
             if response.get("ok") is True:
@@ -138,6 +147,7 @@ def _vertex_mapping(
         for source, target in graph_a.edges
     } != edges_b:
         raise ValueError("worker mapping does not preserve adjacency")
+    request_checkpoint("after graph isomorphism response validation")
     return [VertexMappingPair(from_vertex=src, to_vertex=dst) for src, dst in pairs]
 
 

@@ -164,7 +164,6 @@ def test_core_worker_bounds_parsing_and_solving_in_one_parent_envelope(
 @pytest.mark.parametrize(
     ("completed", "detail"),
     (
-        (_core_worker_result(cancelled=True, returncode=None), "did not establish"),
         (
             _core_worker_result(stdout_exceeded=True, returncode=None),
             "did not establish",

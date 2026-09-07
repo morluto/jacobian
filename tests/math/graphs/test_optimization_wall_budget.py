@@ -6,7 +6,7 @@ from typing import Any, cast
 
 import networkx as nx
 import pytest
-import z3  # type: ignore[import-untyped]
+import z3
 
 from jacobian.math.graphs import _independence_z3
 from jacobian.math.graphs.independence import (
@@ -201,7 +201,7 @@ def test_graph_optimization_worker_failure_cannot_claim_an_optimum(
 
     assert result.status == "UNKNOWN"
     assert result.optimum_value is None
-    assert result.termination_reason == "SOLVER_UNKNOWN"
+    assert result.termination_reason == "WALL_TIME"
 
 
 def test_threshold_solver_does_not_start_or_finish_after_encoding_expires(

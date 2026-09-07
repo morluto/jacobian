@@ -10,6 +10,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any, Literal
 
+from jacobian._execution import OperationExecutionCancelledError, request_checkpoint
 from jacobian.math.graphs.independence import (
     IndependenceNumberBudget,
     IndependenceNumberResult,
@@ -170,14 +171,14 @@ def solve_independence_number_values(
 
     incumbent = () if not graph.vertices else (min(graph.vertices),)
 
-    def fallback(detail: str) -> IndependenceNumberResult:
+    def fallback(detail: str, *, wall_time: bool = False) -> IndependenceNumberResult:
         return IndependenceNumberResult._from_kernel(
             graph=graph,
             status="UNKNOWN",
             optimum_value=None,
             upper_bound=len(graph.vertices),
             incumbent_vertices=incumbent,
-            termination_reason="SOLVER_UNKNOWN",
+            termination_reason="WALL_TIME" if wall_time else "SOLVER_UNKNOWN",
             detail=detail,
         )
 
@@ -187,7 +188,8 @@ def solve_independence_number_values(
             remaining_seconds = deadline - time.monotonic()
             if remaining_seconds <= 0:
                 return fallback(
-                    "the graph independence request expired before worker startup"
+                    "the graph independence request expired before worker startup",
+                    wall_time=True,
                 )
             completed = run_bounded_process(
                 [sys.executable, str(_INDEPENDENCE_WORKER)],
@@ -212,10 +214,13 @@ def solve_independence_number_values(
             )
     except OSError:
         return fallback("the bounded graph independence worker could not be started")
+    request_checkpoint("after graph independence worker")
+    if completed.cancelled:
+        raise OperationExecutionCancelledError("graph independence worker cancelled")
+    if completed.timed_out:
+        return fallback("the graph independence worker expired", wall_time=True)
     if (
-        completed.timed_out
-        or completed.cancelled
-        or completed.stdout_exceeded
+        completed.stdout_exceeded
         or completed.stderr_exceeded
         or completed.returncode != 0
     ):
@@ -224,7 +229,8 @@ def solve_independence_number_values(
         )
     if time.monotonic() >= deadline:
         return fallback(
-            "the graph independence request expired before response validation"
+            "the graph independence request expired before response validation",
+            wall_time=True,
         )
     try:
         result = IndependenceNumberResult.model_validate(
@@ -233,14 +239,21 @@ def solve_independence_number_values(
                 "graph": graph.model_dump(mode="json"),
             }
         )
+        request_checkpoint("after graph independence response validation")
         return (
             result
             if time.monotonic() < deadline
             else fallback(
-                "the graph independence request expired during response validation"
+                "the graph independence request expired during response validation",
+                wall_time=True,
             )
         )
     except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
+        request_checkpoint("during graph independence response validation")
+        expired = time.monotonic() >= deadline
         return fallback(
-            "the bounded graph independence worker returned malformed output"
+            "the graph independence request expired during response validation"
+            if expired
+            else "the bounded graph independence worker returned malformed output",
+            wall_time=expired,
         )

@@ -12,6 +12,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any, cast
 
+from jacobian._execution import OperationExecutionCancelledError, request_checkpoint
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     MathTool,
@@ -386,7 +387,10 @@ def _clique_execute_kernel(
 
 
 def _clique_worker_failure(
-    request: GraphOptimizationRequest, detail: str
+    request: GraphOptimizationRequest,
+    detail: str,
+    *,
+    wall_time: bool = False,
 ) -> GraphCliqueNumberResult:
     """Return a source-derived unknown result when the isolated worker fails."""
 
@@ -402,7 +406,7 @@ def _clique_worker_failure(
         upper_bound=len(vertices),
         witness_vertices=witness,
         tested=(),
-        termination_reason="SOLVER_UNKNOWN",
+        termination_reason="WALL_TIME" if wall_time else "SOLVER_UNKNOWN",
         detail=detail,
     )
 
@@ -424,7 +428,9 @@ def _clique_execute(
             remaining_seconds = deadline - time.monotonic()
             if remaining_seconds <= 0:
                 return _clique_worker_failure(
-                    request, "the clique request expired before worker startup"
+                    request,
+                    "the clique request expired before worker startup",
+                    wall_time=True,
                 )
             completed = run_bounded_process(
                 [sys.executable, str(_INVARIANTS_WORKER)],
@@ -446,10 +452,15 @@ def _clique_execute(
         return _clique_worker_failure(
             request, "the bounded clique worker could not be started"
         )
+    request_checkpoint("after clique worker")
+    if completed.cancelled:
+        raise OperationExecutionCancelledError("clique worker cancelled")
+    if completed.timed_out:
+        return _clique_worker_failure(
+            request, "the clique worker expired", wall_time=True
+        )
     if (
-        completed.timed_out
-        or completed.cancelled
-        or completed.stdout_exceeded
+        completed.stdout_exceeded
         or completed.stderr_exceeded
         or completed.returncode != 0
     ):
@@ -458,7 +469,9 @@ def _clique_execute(
         )
     if time.monotonic() >= deadline:
         return _clique_worker_failure(
-            request, "the clique request expired before response validation"
+            request,
+            "the clique request expired before response validation",
+            wall_time=True,
         )
     try:
         result = GraphCliqueNumberResult.model_validate(
@@ -476,13 +489,25 @@ def _clique_execute(
             )
         ):
             raise ValueError("worker result is not bound to the submitted graph")
-        if time.monotonic() < deadline:
-            return result
-        raise ValueError("request expired during response validation")
     except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
+        request_checkpoint("during clique response validation")
+        if time.monotonic() >= deadline:
+            return _clique_worker_failure(
+                request,
+                "the clique request expired during response validation",
+                wall_time=True,
+            )
         return _clique_worker_failure(
             request, "the bounded clique worker returned malformed output"
         )
+    request_checkpoint("after clique response validation")
+    if time.monotonic() >= deadline:
+        return _clique_worker_failure(
+            request,
+            "the clique request expired during response validation",
+            wall_time=True,
+        )
+    return result
 
 
 CLIQUE_NUMBER_OPERATION = MathTool(

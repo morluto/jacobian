@@ -48,8 +48,13 @@ def test_counting_worker_control_outcomes(
     assert raised.value.stage == "operation_execution"
 
 
-def test_expired_counting_request_before_startup() -> None:
-    with request_execution(0), pytest.raises(OperationExecutionTimeoutError):
+@pytest.mark.parametrize("now", [-1000.0, 0.0, 60.0, 1_000_000.0])
+def test_expired_counting_request_before_startup(
+    monkeypatch: pytest.MonkeyPatch, now: float
+) -> None:
+    monkeypatch.setattr(_counting_process.time, "monotonic", lambda: now)
+    started = now - _counting_process._COUNTING_WALL_SECONDS - 1
+    with request_execution(started), pytest.raises(OperationExecutionTimeoutError):
         _counting_process.evaluate_count("comb", 4, 2)
 
 

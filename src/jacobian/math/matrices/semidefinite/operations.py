@@ -36,7 +36,7 @@ def _reject(message: str) -> None:
 
 def _admit(
     system: RationalSemidefiniteSystem, multipliers: tuple[CanonicalRational, ...]
-) -> None:
+) -> bool:
     n, m = system.order, len(system.matrices)
     if len(multipliers) != m:
         raise OperationDomainValidationError(
@@ -58,6 +58,54 @@ def _admit(
         *system.rhs,
         *multipliers,
     )
+    diagonal = all(
+        not entry.num
+        for matrix in system.matrices
+        for i, row in enumerate(matrix.entries)
+        for j, entry in enumerate(row)
+        if i != j
+    )
+    if diagonal:
+        # A diagonal exposing matrix selects coordinate axes: no elimination,
+        # division or matrix products are needed. Charge only the scalar dot
+        # products and retained source/selected submatrices, including y^T b.
+        exposing_bounds = tuple(
+            _dot_product_bits(
+                tuple(
+                    (y, matrix.entries[i][i])
+                    for y, matrix in zip(multipliers, system.matrices, strict=True)
+                )
+            )
+            for i in range(n)
+        )
+        result_bits = max(
+            max(
+                (max(abs(q.num).bit_length(), q.den.bit_length()) for q in scalars),
+                default=1,
+            ),
+            _dot_product_bits(tuple(zip(multipliers, system.rhs, strict=True))),
+            max(exposing_bounds, default=1),
+        )
+        # Copies keep their own scalar heights; a single large diagonal does
+        # not enlarge the many zero entries in the retained dense matrices.
+        copied_digits = 2 * sum(
+            _component_digits(abs(component).bit_length())
+            for q in scalars
+            for component in (q.num, q.den)
+        )
+        output_digits = (
+            copied_digits
+            + 4 * n * n
+            + sum(2 * _component_digits(bits) for bits in exposing_bounds)
+        )
+        _check_budgets(
+            cells,
+            result_bits,
+            4 * result_bits,
+            cells + m * (n + 1),
+            output_digits=output_digits,
+        )
+        return True
     # Clear all input denominators by one common Q. Its bit length is bounded
     # without constructing Q. Repeated denominators are counted once.
     denominator_bits = sum(
@@ -80,12 +128,48 @@ def _admit(
     # Congruence Schur entries are ratios of bordered minors; factor four
     # covers unreduced multiply/add operands in 1x1 and 2x2 pivot updates.
     intermediate_bits = 4 * max(result_bits, minor_bits)
-    digits = (result_bits * 30103 + 99999) // 100000 + 1
+    work = (2 * m + 4) * n**3 + m * n * n + m
+    _check_budgets(cells, result_bits, intermediate_bits, work)
+    return False
+
+
+def _dot_product_bits(
+    pairs: tuple[tuple[CanonicalRational, CanonicalRational], ...],
+) -> int:
+    active = tuple((a, b) for a, b in pairs if a.num and b.num)
+    if not active:
+        return 1
+    # The product of every operand denominator is a common denominator for
+    # every partial sum. Each scaled numerator is bounded by that denominator
+    # times the largest numerator product; summing k terms adds ceil(log2 k).
+    denominator_bits = sum(
+        (a.den - 1).bit_length() + (b.den - 1).bit_length() for a, b in active
+    )
+    numerator_bits = max(
+        abs(a.num).bit_length() + abs(b.num).bit_length() for a, b in active
+    )
+    return denominator_bits + numerator_bits + (len(active) - 1).bit_length() + 1
+
+
+def _component_digits(bits: int) -> int:
+    return max(1, (bits * 30103 + 99999) // 100000)
+
+
+def _check_budgets(
+    cells: int,
+    result_bits: int,
+    intermediate_bits: int,
+    work: int,
+    *,
+    output_digits: int | None = None,
+) -> None:
+    digits = _component_digits(result_bits)
     if digits > MAX_CANONICAL_RATIONAL_DIGITS:
         _reject("exact compression exceeds the canonical rational height envelope")
-    if cells * 2 * digits > _MAX_OUTPUT_DIGITS:
+    if (
+        cells * 2 * digits if output_digits is None else output_digits
+    ) > _MAX_OUTPUT_DIGITS:
         _reject("source-bound reduction exceeds the exact output digit envelope")
-    work = (2 * m + 4) * n**3 + m * n * n + m
     if work * intermediate_bits > _MAX_BIT_WORK:
         _reject("rational elimination and compression exceed the bit-work envelope")
 
@@ -121,7 +205,7 @@ def reduce_exposed_face(
             )
 
     checkpoint("before face reduction admission")
-    _admit(system, multipliers)
+    diagonal = _admit(system, multipliers)
     checkpoint("after face reduction admission")
     n = system.order
     y = tuple(q.as_fraction() for q in multipliers)
@@ -135,7 +219,9 @@ def reduce_exposed_face(
     )
     exposing = tuple(
         tuple(
-            sum(
+            Fraction()
+            if diagonal and i != j
+            else sum(
                 (a * matrix[i][j] for a, matrix in zip(y, matrices, strict=True)),
                 Fraction(),
             )
@@ -146,17 +232,26 @@ def reduce_exposed_face(
     checkpoint("after exposing matrix construction")
     if not any(entry for row in exposing for entry in row):
         _invalid_relation("the exposing matrix must be nonzero")
-    _, negative, _ = _symmetric_inertia(
-        [list(row) for row in exposing], checkpoint=checkpoint
-    )
-    if negative:
-        _invalid_relation("the exposing matrix must be positive semidefinite")
-    reduced_rows, rank = rational_rref(exposing)
-    checkpoint("after exposing kernel elimination")
-    pivots = tuple(
-        next(j for j, q in enumerate(row) if q) for row in reduced_rows[:rank]
-    )
-    free = tuple(j for j in range(n) if j not in pivots)
+    pivots: tuple[int, ...]
+    reduced_rows: tuple[tuple[Fraction, ...], ...]
+    if diagonal:
+        if any(exposing[i][i] < 0 for i in range(n)):
+            _invalid_relation("the exposing matrix must be positive semidefinite")
+        free = tuple(i for i in range(n) if not exposing[i][i])
+        pivots = ()
+        reduced_rows = ()
+    else:
+        _, negative, _ = _symmetric_inertia(
+            [list(row) for row in exposing], checkpoint=checkpoint
+        )
+        if negative:
+            _invalid_relation("the exposing matrix must be positive semidefinite")
+        reduced_rows, rank = rational_rref(exposing)
+        pivots = tuple(
+            next(j for j, q in enumerate(row) if q) for row in reduced_rows[:rank]
+        )
+        free = tuple(j for j in range(n) if j not in pivots)
+    checkpoint("after exposing kernel computation")
     width = len(free)
     basis = [[Fraction(int(i == j)) for j in free] for i in range(n)]
     for row, pivot in enumerate(pivots):
@@ -167,11 +262,15 @@ def reduce_exposed_face(
     for matrix in matrices:
         checkpoint("before equality compression")
         entries = (
-            rational_matrix_product(
-                rational_matrix_product(transposed, matrix), embedding_entries
+            tuple(tuple(matrix[i][j] for j in free) for i in free)
+            if diagonal
+            else (
+                rational_matrix_product(
+                    rational_matrix_product(transposed, matrix), embedding_entries
+                )
+                if width
+                else ()
             )
-            if width
-            else ()
         )
         compressed.append(rational_matrix_from_fractions(entries, column_count=width))
     checkpoint("before face reduction result construction")

@@ -187,13 +187,47 @@ def test_dense_rank_one_exposure_at_useful_order() -> None:
 
 
 def test_excessive_height_and_dense_output_are_rejected() -> None:
-    huge = _matrix([[Fraction(1, 10**16000 + 1)]])
+    # The exposing entry itself would have 40,001 digits, beyond the scalar
+    # codomain. Rejection is necessary, rather than an inflated minor bound.
+    large = 10**20000 + 1
+    huge = _matrix([[large]])
     with pytest.raises(OperationResourceAdmissionError):
-        reduce_exposed_face(_system((huge,), (0,)), (_q(1),))
+        reduce_exposed_face(_system((huge,), (0,)), (_q(large),))
     n = 164
     dense = _matrix([[int(i == j) for j in range(n)] for i in range(n)])
     with pytest.raises(OperationResourceAdmissionError):
         reduce_exposed_face(_system((dense,), (0,)), (_q(1),))
+
+
+def test_large_scalar_exposure_needs_no_elimination_growth() -> None:
+    matrix = _matrix([[Fraction(1, 10**20000 + 1)]])
+    system = _system((matrix,), (0,))
+    result = reduce_exposed_face(system, (_q(1),))
+    assert result.exposing_matrix == matrix
+    assert result.embedding.row_count == 1
+    assert result.embedding.column_count == result.reduced.order == 0
+    assert (
+        SemidefiniteFaceReduction.model_validate_json(result.model_dump_json())
+        == result
+    )
+
+
+def test_diagonal_exposure_has_coordinate_kernel_and_independent_denominators() -> None:
+    n = 128
+    diagonal = [Fraction(1, 2**128 + i + 1) if i % 2 else Fraction() for i in range(n)]
+    matrix = _matrix(
+        [[diagonal[i] if i == j else 0 for j in range(n)] for i in range(n)]
+    )
+    result = reduce_exposed_face(_system((matrix,), (0,)), (_q(1),))
+    assert result.exposing_matrix == matrix
+    assert result.reduced.order == n // 2
+    assert all(
+        not q.num for a in result.reduced.matrices for row in a.entries for q in row
+    )
+    for i, row in enumerate(result.embedding.entries):
+        assert [q.as_fraction() for q in row] == [
+            Fraction(int(i == 2 * j)) for j in range(n // 2)
+        ]
 
 
 def test_shape_validation_and_zero_cone_has_no_proper_exposure() -> None:

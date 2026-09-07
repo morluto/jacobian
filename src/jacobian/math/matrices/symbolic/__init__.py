@@ -12,12 +12,14 @@ from jacobian.math.matrices.symbolic.values import (
     RationalFunctionMatrix,
     RationalFunctionVector,
     RationalFunctionVectorBasis,
+    RationalPolynomialMatrix,
 )
 
 __all__ = [
     "RationalFunctionMatrix",
     "RationalFunctionVector",
     "RationalFunctionVectorBasis",
+    "RationalPolynomialMatrix",
     "symbolic_characteristic_polynomial",
     "symbolic_determinant",
     "symbolic_linear_system_solve",

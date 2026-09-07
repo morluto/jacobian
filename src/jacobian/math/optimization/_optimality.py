@@ -37,7 +37,7 @@ type LinearProgram = (
 )
 
 
-class RationalLinearOptimalityRequest(StrictModel):
+class RationalLinearOptimalityCandidate(StrictModel):
     """Candidates in the source axes and source objective sign convention.
 
     For minimization, GE/lower multipliers are nonnegative and LE/upper
@@ -93,6 +93,10 @@ class RationalLinearOptimalityRequest(StrictModel):
         return self
 
 
+class RationalLinearOptimalityRequest(RationalLinearOptimalityCandidate):
+    """Wire projection of a supplied source-coordinate primal-dual pair."""
+
+
 class RationalLinearOptimalityResult(StrictModel):
     """Whether this supplied pair establishes optimality of its retained LP.
 
@@ -101,7 +105,7 @@ class RationalLinearOptimalityResult(StrictModel):
     feasibility and objective arithmetic.
     """
 
-    candidate: RationalLinearOptimalityRequest
+    candidate: RationalLinearOptimalityCandidate
     is_optimal: bool
     primal_feasible: bool
     dual_feasible: bool
@@ -138,7 +142,8 @@ def _general_source(program: LinearProgram) -> GeneralFormRationalLinearProgram:
 
 
 def _admit(
-    candidate: RationalLinearOptimalityRequest, source: GeneralFormRationalLinearProgram
+    candidate: RationalLinearOptimalityCandidate,
+    source: GeneralFormRationalLinearProgram,
 ) -> None:
     scalars = (
         *source.objective.coefficients,
@@ -178,25 +183,22 @@ def _admit(
         result_digits, 2 * denominator_digits + 2 * digits + len(str(m + 3 * n + 1)) + 4
     )
     scalar_updates = 8 * (m * n + m + n + 1)
-    output_bytes = (
-        2 * result_digits * (m + n + 3)
-        + len(candidate.model_dump_json().encode("utf-8"))
-        + 4096
-    )
+    retained_digits = 2 * result_digits * (m + n + 3) + 2 * digits * len(scalars)
     if (
         result_digits > MAX_CANONICAL_RATIONAL_DIGITS
-        or output_bytes > 8 * 1024 * 1024
+        or retained_digits > 8 * 1024 * 1024
         or scalar_updates > 20_000
     ):
         raise OperationResourceAdmissionError(
             location=("program",),
             code="optimization.linear.optimality_check_bound",
-            message=f"candidate check predicts {scalar_updates} scalar updates, {result_digits} rational digits and {output_bytes} output bytes; limits 20000, {MAX_CANONICAL_RATIONAL_DIGITS}, 8388608",
+            message=f"candidate check predicts {scalar_updates} scalar updates, {result_digits} rational digits and {retained_digits} retained scalar digits; limits 20000, {MAX_CANONICAL_RATIONAL_DIGITS}, 8388608",
         )
 
 
 def _check(
-    candidate: RationalLinearOptimalityRequest, source: GeneralFormRationalLinearProgram
+    candidate: RationalLinearOptimalityCandidate,
+    source: GeneralFormRationalLinearProgram,
 ) -> RationalLinearOptimalityResult:
     x, y, lower, upper = (
         tuple(v.as_fraction() for v in vector)
@@ -283,7 +285,7 @@ def _check(
 
 
 def check_linear_optimality(
-    candidate: RationalLinearOptimalityRequest,
+    candidate: RationalLinearOptimalityCandidate,
 ) -> RationalLinearOptimalityResult:
     """Check feasibility, multiplier signs, stationarity and objective equality.
 
@@ -309,6 +311,7 @@ def check_linear_optimality(
 
 
 __all__ = [
+    "RationalLinearOptimalityCandidate",
     "RationalLinearOptimalityRequest",
     "RationalLinearOptimalityResult",
     "check_linear_optimality",

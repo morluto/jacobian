@@ -15,6 +15,7 @@ from jacobian.math.optimization._models import (
     RationalLinearProgramResult,
 )
 from jacobian.math.optimization._optimality import (
+    RationalLinearOptimalityCandidate,
     RationalLinearOptimalityRequest,
     RationalLinearOptimalityResult,
     check_linear_optimality,
@@ -144,6 +145,21 @@ RATIONAL_LINEAR_OPERATIONS = (
     ),
 )
 
+
+def _check_linear_optimality_request(
+    request: RationalLinearOptimalityRequest,
+) -> RationalLinearOptimalityResult:
+    return check_linear_optimality(
+        RationalLinearOptimalityCandidate(
+            program=request.program,
+            primal_candidate=request.primal_candidate,
+            constraint_dual=request.constraint_dual,
+            lower_bound_dual=request.lower_bound_dual,
+            upper_bound_dual=request.upper_bound_dual,
+        )
+    )
+
+
 TOOLS: MathTools = (
     *RATIONAL_LINEAR_OPERATIONS,
     MathTool(
@@ -156,12 +172,12 @@ TOOLS: MathTools = (
             "minimization or maximization convention, including free variables. "
             "A failed candidate does not imply infeasibility. Admits at most 32 "
             "variables, 64 rows, 128-digit candidate scalars, 20,000 scalar updates, "
-            "32,768 predicted intermediate digits and 8 MiB predicted output; "
+            "32,768 predicted intermediate digits and 8,388,608 retained scalar digits; "
             "a shared 60-second safety deadline covers checking and result construction."
         ),
         request_type=RationalLinearOptimalityRequest,
         result_type=RationalLinearOptimalityResult,
-        run=check_linear_optimality,
+        run=_check_linear_optimality_request,
         tags=(
             "optimization",
             "linear-programming",

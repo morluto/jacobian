@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import unicodedata
 
 from pydantic_core import PydanticCustomError
@@ -43,22 +42,14 @@ def _admit_graph_symmetry_orbit(
     # Preserve the old worst-case action-table envelope while admitting
     # larger graphs with fewer generators. No group elements are enumerated.
     action_entries = len(generators) * (len(vertices) + len(edges))
-    # A singleton orbit is the largest projection per element: source,
-    # ordered carrier, representative and member, plus bounded orbit keys.
-    output_bytes = len(graph.model_dump_json().encode("utf-8")) + 4096
-    output_bytes += sum(
-        len(g.model_dump_json().encode("utf-8")) + 256 for g in generators
-    )
-    output_bytes += 3 * sum(
-        len(json.dumps(e, ensure_ascii=False).encode("utf-8")) + 1
-        for e in (*vertices, *edges)
-    )
-    output_bytes += 128 * (len(vertices) + len(edges))
-    if action_entries > 64 * (4096 + 256) or output_bytes > 8 * 1024 * 1024:
+    # Orbit members partition the bounded vertex/edge carriers. There is at
+    # most one representative and orbit record per carrier element, so the
+    # result cardinality is linear even for the trivial group.
+    if action_entries > 64 * (4096 + 256):
         raise OperationResourceAdmissionError(
             location=("generators",),
             code="graph.symmetry.work_bound",
-            message=f"symmetry action entries={action_entries}, predicted output bytes={output_bytes}; limits 278528 and 8388608",
+            message=f"symmetry action entries={action_entries}; limit 278528",
         )
     request_checkpoint("before declared graph symmetry checking")
     try:

@@ -31,7 +31,7 @@ TOOLS: MathTools = (
             "inside a part, an uncovered edge, or an edge covered by multiple "
             "identified parts. Certifies an upper bound on clique-partition "
             "number, not minimality. Admits at most 65,280 vertex references, "
-            "1,000,000 part pairs and 4 MiB of predicted output on the "
+            "1,000,000 part pairs and at most 32,640 covering indices on the "
             "256-vertex graph carrier."
         ),
         request_type=EdgeCliquePartitionRequest,

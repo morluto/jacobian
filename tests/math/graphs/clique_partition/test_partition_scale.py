@@ -1,10 +1,14 @@
 """Admission follows certificate references, pair visits and retained output."""
 
 from itertools import combinations
+from typing import cast
 
 import pytest
 
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.graphs.clique_partition._models import (
     EdgeCliquePartitionRequest,
     EdgeCliquePartitionResult,
@@ -52,3 +56,15 @@ def test_native_admission_rejects_excess_pair_or_reference_work(parts: int) -> N
     graph = _complete(256)
     with pytest.raises(OperationResourceAdmissionError):
         check_edge_clique_partition(graph, (graph.vertices,) * parts)
+
+
+@pytest.mark.parametrize(
+    "parts",
+    ["ab", ("ab",), (("a", 1),), (("a",),), (("a", "a"),), (("a", "z"),)],
+)
+def test_native_malformed_parts_cannot_produce_unserializable_results(
+    parts: object,
+) -> None:
+    graph = SimpleUndirectedGraph(vertices=("a", "b"), edges=(("a", "b"),))
+    with pytest.raises(OperationDomainValidationError):
+        check_edge_clique_partition(graph, cast(tuple[tuple[str, ...], ...], parts))

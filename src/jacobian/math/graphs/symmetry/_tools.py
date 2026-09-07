@@ -32,7 +32,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "The result retains its complete declared source action and returns "
             "the bounded vertex and edge orbit partitions directly. Admits "
             "the 256-vertex graph carrier, at most 64 generators, 278,528 "
-            "generator actions on vertices/edges and 8 MiB predicted output."
+            "generator actions on vertices/edges, and at most one orbit record "
+            "per vertex or edge."
         ),
         request_type=GraphSymmetryOrbitRequest,
         result_type=GraphSymmetryOrbitResult,

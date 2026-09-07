@@ -10,7 +10,7 @@ from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.optimization import check_linear_optimality, general_linear_program
 from jacobian.math.optimization._general_models import GeneralFormRationalLinearProgram
 from jacobian.math.optimization._optimality import (
-    RationalLinearOptimalityRequest,
+    RationalLinearOptimalityCandidate,
     RationalLinearOptimalityResult,
 )
 from jacobian.math.optimization._tools import TOOLS
@@ -22,8 +22,8 @@ def _r(value: int) -> dict[str, int]:
 
 def _candidate(
     *, sense: str = "MINIMIZE", x: int = 1, y: int = 1, free: bool = False
-) -> RationalLinearOptimalityRequest:
-    return RationalLinearOptimalityRequest.model_validate(
+) -> RationalLinearOptimalityCandidate:
+    return RationalLinearOptimalityCandidate.model_validate(
         {
             "program": {
                 "variables": [
@@ -107,7 +107,7 @@ def test_active_bounds_have_source_multipliers(
         _r(multiplier)
     ]
     result = check_linear_optimality(
-        RationalLinearOptimalityRequest.model_validate(payload)
+        RationalLinearOptimalityCandidate.model_validate(payload)
     )
     assert result.is_optimal
 
@@ -116,7 +116,7 @@ def test_absent_bound_multiplier_cannot_fake_stationarity() -> None:
     payload = _candidate(free=True, y=0).model_dump()
     payload["lower_bound_dual"] = [_r(1)]
     result = check_linear_optimality(
-        RationalLinearOptimalityRequest.model_validate(payload)
+        RationalLinearOptimalityCandidate.model_validate(payload)
     )
     assert not result.dual_feasible
     assert "dual_bound_signs" in result.failed_conditions
@@ -127,7 +127,7 @@ def test_wrong_dual_sign_is_rejected_even_with_equal_objectives() -> None:
     payload["program"]["constraints"][0]["rhs"] = _r(0)
     payload["program"]["objective"]["coefficients"] = [_r(-1)]
     result = check_linear_optimality(
-        RationalLinearOptimalityRequest.model_validate(payload)
+        RationalLinearOptimalityCandidate.model_validate(payload)
     )
     assert result.primal_feasible and result.objectives_equal
     assert not result.dual_feasible
@@ -136,7 +136,7 @@ def test_wrong_dual_sign_is_rejected_even_with_equal_objectives() -> None:
 
 def test_checker_accepts_a_certificate_beyond_normalized_solver_envelope() -> None:
     n = 32
-    candidate = RationalLinearOptimalityRequest.model_validate(
+    candidate = RationalLinearOptimalityCandidate.model_validate(
         {
             "program": {
                 "variables": [{"name": f"x{i}"} for i in range(n)],
@@ -180,14 +180,21 @@ def test_standard_form_public_example_checks_without_solving(
     request = operation.request_type.model_validate_json(
         json.dumps(operation.examples[0].input)
     )
-    assert operation.run(request).is_optimal
+    result = operation.run(request)
+    assert result.is_optimal
+    assert type(result.candidate) is RationalLinearOptimalityCandidate
+    decoded = RationalLinearOptimalityResult.model_validate_json(
+        result.model_dump_json()
+    )
+    assert decoded == result
+    assert check_linear_optimality(decoded.candidate).is_optimal
 
 
 def test_malformed_axes_and_ingestion_are_not_negative_verdicts() -> None:
     payload = _candidate().model_dump()
     payload["primal_candidate"] = []
     with pytest.raises(ValidationError, match="source"):
-        RationalLinearOptimalityRequest.model_validate(payload)
+        RationalLinearOptimalityCandidate.model_validate(payload)
 
 
 def test_large_shared_denominators_do_not_pay_independent_growth() -> None:
@@ -195,11 +202,11 @@ def test_large_shared_denominators_do_not_pay_independent_growth() -> None:
     payload["program"]["objective"]["coefficients"] = [{"num": 1, "den": 10**127 + 1}]
     payload["constraint_dual"] = [{"num": 1, "den": 10**127 + 1}]
     assert check_linear_optimality(
-        RationalLinearOptimalityRequest.model_validate(payload)
+        RationalLinearOptimalityCandidate.model_validate(payload)
     ).is_optimal
     payload["primal_candidate"] = [{"num": "1" * 129, "den": "1"}]
     with pytest.raises(ValidationError, match="128-digit"):
-        RationalLinearOptimalityRequest.model_validate(payload)
+        RationalLinearOptimalityCandidate.model_validate(payload)
 
 
 @pytest.mark.parametrize("shared", [False, True])
@@ -212,7 +219,7 @@ def test_gap_admission_accounts_for_all_primal_and_dual_products(shared: bool) -
         offset += 1
         return {"num": 1, "den": 10**127 + (1 if shared else offset)}
 
-    candidate = RationalLinearOptimalityRequest.model_validate(
+    candidate = RationalLinearOptimalityCandidate.model_validate(
         {
             "program": {
                 "variables": [

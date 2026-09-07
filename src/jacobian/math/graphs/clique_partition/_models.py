@@ -21,7 +21,6 @@ from jacobian.math.graphs.values import (
 MAX_PARTITION_VERTEX_REFERENCES = 2 * MAX_INDEXED_SIMPLE_GRAPH_EDGES
 MAX_PARTITION_PARTS = MAX_PARTITION_VERTEX_REFERENCES // 2
 MAX_PARTITION_PAIR_WORK = 1_000_000
-MAX_PARTITION_OUTPUT_BYTES = 4 * 1024 * 1024
 PartitionPart = Annotated[
     tuple[GraphVertexLabel, ...],
     Field(min_length=2, max_length=MAX_INDEXED_SIMPLE_GRAPH_VERTICES),
@@ -52,35 +51,51 @@ class EdgeCliquePartitionRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_well_formed_parts(self) -> Self:
-        carrier = set(self.graph.vertices)
-        if len(self.parts) > MAX_PARTITION_PARTS:
-            raise _validation_error(
-                "graph.clique_partition.too_many_parts",
-                f"edge-clique partitions admit at most {MAX_PARTITION_PARTS} parts",
-            )
-        for part in self.parts:
-            if len(part) < 2:
-                raise _validation_error(
-                    "graph.clique_partition.part_too_small",
-                    "every partition part must hold at least two vertices",
-                )
-            if len(set(part)) != len(part):
-                raise _validation_error(
-                    "graph.clique_partition.part_members_not_unique",
-                    "every partition part must hold distinct vertices",
-                )
-            unknown = set(part) - carrier
-            if unknown:
-                raise _validation_error(
-                    "graph.clique_partition.part_vertex_unknown",
-                    "every partition part must use declared graph vertices",
-                )
-            if len(part) > MAX_INDEXED_SIMPLE_GRAPH_VERTICES:
-                raise _validation_error(
-                    "graph.clique_partition.part_too_large",
-                    "partition parts cannot exceed the graph vertex bound",
-                )
+        _require_well_formed_parts(self.graph, self.parts)
         return self
+
+
+def _require_well_formed_parts(
+    graph: SimpleUndirectedGraph, parts: tuple[tuple[str, ...], ...]
+) -> None:
+    if not isinstance(parts, tuple):
+        raise _validation_error(
+            "graph.clique_partition.parts_type",
+            "partition parts must be a tuple of vertex tuples",
+        )
+    carrier = set(graph.vertices)
+    if len(parts) > MAX_PARTITION_PARTS:
+        raise _validation_error(
+            "graph.clique_partition.too_many_parts",
+            f"edge-clique partitions admit at most {MAX_PARTITION_PARTS} parts",
+        )
+    for part in parts:
+        if not isinstance(part, tuple) or any(type(v) is not str for v in part):
+            raise _validation_error(
+                "graph.clique_partition.part_type",
+                "every partition part must be a tuple of string vertex labels",
+            )
+        if len(part) < 2:
+            raise _validation_error(
+                "graph.clique_partition.part_too_small",
+                "every partition part must hold at least two vertices",
+            )
+        if len(set(part)) != len(part):
+            raise _validation_error(
+                "graph.clique_partition.part_members_not_unique",
+                "every partition part must hold distinct vertices",
+            )
+        unknown = set(part) - carrier
+        if unknown:
+            raise _validation_error(
+                "graph.clique_partition.part_vertex_unknown",
+                "every partition part must use declared graph vertices",
+            )
+        if len(part) > MAX_INDEXED_SIMPLE_GRAPH_VERTICES:
+            raise _validation_error(
+                "graph.clique_partition.part_too_large",
+                "partition parts cannot exceed the graph vertex bound",
+            )
 
 
 PartitionVerdict = Literal["VALID", "INVALID"]

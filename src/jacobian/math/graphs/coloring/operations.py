@@ -137,6 +137,12 @@ def _admit_precoloring_edge_repair(
             code="graph.precoloring_fixed_color_out_of_range",
             message="every fixed color must be in 0..colors-1",
         )
+    if tuple(sorted(fixed_vertices)) != fixed_vertices:
+        raise OperationDomainValidationError(
+            location=("fixed_colors",),
+            code="graph.precoloring_fixed_colors_must_be_strictly_increasing",
+            message="fixed_colors must use strictly increasing source vertices",
+        )
 
 
 def _admit_edge_coloring_graph(graph: SimpleUndirectedGraph) -> None:

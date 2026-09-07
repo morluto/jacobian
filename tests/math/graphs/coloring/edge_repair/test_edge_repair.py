@@ -130,6 +130,41 @@ def test_duplicate_fixed_vertices_fail_closed() -> None:
         )
 
 
+def test_unsorted_fixed_vertices_fail_closed() -> None:
+    with pytest.raises(ValidationError, match="strictly increasing"):
+        PrecoloringEdgeRepairRequest(
+            graph=IndexedSimpleUndirectedGraph(vertex_count=2, edges=()),
+            colors=2,
+            fixed_colors=((1, 0), (0, 1)),
+        )
+
+
+def _result_with_fixed_colors(
+    fixed_colors: tuple[tuple[int, int], ...],
+) -> dict[str, object]:
+    base = compute_precoloring_edge_repair(_request(((0, 1),), 2, 1))
+    payload = json.loads(base.model_dump_json())
+    payload["fixed_colors"] = [list(pair) for pair in fixed_colors]
+    return payload
+
+
+@pytest.mark.parametrize(
+    ("fixed_colors", "message"),
+    [
+        (((0, 0), (0, 0)), "one color per vertex"),
+        (((7, 0),), "source graph axis"),
+        (((0, 5),), "0..colors-1"),
+    ],
+)
+def test_result_fixed_precolouring_context_fails_closed(
+    fixed_colors: tuple[tuple[int, int], ...], message: str
+) -> None:
+    with pytest.raises(ValidationError, match=message):
+        PrecoloringEdgeRepairResult.model_validate(
+            _result_with_fixed_colors(fixed_colors)
+        )
+
+
 def test_public_example_and_serialization_round_trip() -> None:
     operation = next(
         tool
@@ -162,6 +197,10 @@ def test_native_and_catalog_paths_share_the_result() -> None:
     [
         (((9, 0),), "graph.precoloring_fixed_vertex_out_of_range"),
         (((0, 2),), "graph.precoloring_fixed_color_out_of_range"),
+        (
+            ((1, 0), (0, 1)),
+            "graph.precoloring_fixed_colors_must_be_strictly_increasing",
+        ),
     ],
 )
 def test_native_fixed_precolouring_admission_matches_wire_envelope(

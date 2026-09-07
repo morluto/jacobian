@@ -310,6 +310,11 @@ class PrecoloringEdgeRepairRequest(StrictModel):
                 "graph.precoloring_fixed_colors_must_assign_one_color_per_vertex",
                 "fixed_colors must assign one color per vertex",
             )
+        if tuple(sorted(fixed_vertices)) != fixed_vertices:
+            raise PydanticCustomError(
+                "graph.precoloring_fixed_colors_must_be_strictly_increasing",
+                "fixed_colors must use strictly increasing source vertices",
+            )
         return self
 
 
@@ -356,6 +361,25 @@ class PrecoloringEdgeRepairResult(StrictModel):
             raise PydanticCustomError(
                 "graph.precoloring_witness_must_bind_source_and_palette",
                 "coloring must bind the result graph and palette",
+            )
+        result_vertices = tuple(vertex for vertex, _ in self.fixed_colors)
+        if len(set(result_vertices)) != len(result_vertices):
+            raise PydanticCustomError(
+                "graph.precoloring_fixed_colors_must_assign_one_color_per_vertex",
+                "fixed_colors must assign one color per vertex",
+            )
+        if any(
+            vertex < 0 or vertex >= self.graph.vertex_count
+            for vertex, _ in self.fixed_colors
+        ):
+            raise PydanticCustomError(
+                "graph.precoloring_fixed_vertex_out_of_range",
+                "every fixed-color vertex must use the source graph axis",
+            )
+        if any(color < 0 or color >= self.colors for _, color in self.fixed_colors):
+            raise PydanticCustomError(
+                "graph.precoloring_fixed_color_out_of_range",
+                "every fixed color must be in 0..colors-1",
             )
         fixed: dict[int, int] = dict(self.fixed_colors)
         if any(

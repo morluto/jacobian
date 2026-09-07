@@ -9,14 +9,23 @@ import networkx as nx
 from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.graphs.enumeration._models import (
+    ColorPairCost,
     ConnectedColoredGraphFamily,
-    ConnectedColoredGraphsRequest,
+    _EnumerationParameters,
 )
-from jacobian.math.graphs.values import ColoredUndirectedGraph, SimpleUndirectedGraph
+from jacobian.math.graphs.values import (
+    ColoredUndirectedGraph,
+    GraphColor,
+    SimpleUndirectedGraph,
+)
 
 
 def connected_colored_graphs(
-    source: ConnectedColoredGraphsRequest,
+    palette: tuple[GraphColor, ...],
+    edge_costs: tuple[ColorPairCost, ...],
+    *,
+    vertex_bound: int,
+    cost_bound: int,
 ) -> ConnectedColoredGraphFamily:
     """Enumerate complete colored families from the maintained seven-vertex atlas.
 
@@ -27,6 +36,12 @@ def connected_colored_graphs(
     for each coloring, and colors themselves are never renamed.
     """
     request_checkpoint("before colored graph enumeration")
+    source = _EnumerationParameters(
+        palette=palette,
+        edge_costs=edge_costs,
+        vertex_bound=vertex_bound,
+        cost_bound=cost_bound,
+    )
     costs = {entry.colors: entry.cost for entry in source.edge_costs}
     minimum_cost = min(costs.values(), default=source.cost_bound + 1)
     graphs: list[Any] = [

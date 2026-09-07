@@ -9,6 +9,16 @@ from jacobian.math.graphs.enumeration._models import (
 )
 from jacobian.math.graphs.enumeration.operations import connected_colored_graphs
 
+
+def _run(request: ConnectedColoredGraphsRequest) -> ConnectedColoredGraphFamily:
+    return connected_colored_graphs(
+        request.palette,
+        request.edge_costs,
+        vertex_bound=request.vertex_bound,
+        cost_bound=request.cost_bound,
+    )
+
+
 TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="graph.colored.connected_family.enumerate",
@@ -16,7 +26,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         description="Return one representative of every color-preserving isomorphism class of connected simple graphs with 2 through vertex_bound vertices and total edge cost at most cost_bound. Singletons are excluded; unused palette colors are allowed. Missing unordered color pairs forbid edges. Uses the complete atlas through seven vertices and exact coloring orbits; at most 20000 candidate colorings and 150000000 search units. Colors retain their exact names; output is never truncated.",
         request_type=ConnectedColoredGraphsRequest,
         result_type=ConnectedColoredGraphFamily,
-        run=connected_colored_graphs,
+        run=_run,
         tags=(
             "graph",
             "enumeration",

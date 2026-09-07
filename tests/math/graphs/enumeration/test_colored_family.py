@@ -8,9 +8,19 @@ import networkx as nx
 
 from jacobian.math.graphs.enumeration import (
     ColorPairCost,
+    ConnectedColoredGraphFamily,
     ConnectedColoredGraphsRequest,
     connected_colored_graphs,
 )
+
+
+def _native(request: ConnectedColoredGraphsRequest) -> ConnectedColoredGraphFamily:
+    return connected_colored_graphs(
+        request.palette,
+        request.edge_costs,
+        vertex_bound=request.vertex_bound,
+        cost_bound=request.cost_bound,
+    )
 
 
 def _request(vertices: int, cost: int) -> ConnectedColoredGraphsRequest:
@@ -58,7 +68,7 @@ def test_small_family_equals_exhaustive_labeled_generation() -> None:
                 cost = sum(2 if colors[a] == colors[b] else 1 for a, b in edges)
                 if cost <= 3:
                     expected.add(_key(colors, edges))
-    result = connected_colored_graphs(_request(4, 3))
+    result = _native(_request(4, 3))
     actual = {
         _key(
             g.vertex_colors,
@@ -73,7 +83,7 @@ def test_small_family_equals_exhaustive_labeled_generation() -> None:
 
 
 def test_cost_six_family_and_independent_chordality_composition() -> None:
-    result = connected_colored_graphs(_request(7, 6))
+    result = _native(_request(7, 6))
     assert len(result.graphs) == 111
     counts: Counter[int] = Counter()
     for colored in result.graphs:
@@ -102,15 +112,11 @@ def test_single_color_and_forbidden_edges() -> None:
         vertex_bound=3,
         cost_bound=3,
     )
-    result = connected_colored_graphs(request)
+    result = _native(request)
     assert [len(g.graph.edges) for g in result.graphs] == [1, 2, 3]
     assert all(set(g.vertex_colors) == {"red"} for g in result.graphs)
-    assert not connected_colored_graphs(
-        request.model_copy(update={"edge_costs": ()})
-    ).graphs
-    assert not connected_colored_graphs(
-        request.model_copy(update={"cost_bound": 0})
-    ).graphs
+    assert not _native(request.model_copy(update={"edge_costs": ()})).graphs
+    assert not _native(request.model_copy(update={"cost_bound": 0})).graphs
 
 
 def test_excessive_coloring_family_is_rejected() -> None:
@@ -131,4 +137,28 @@ def test_excessive_coloring_family_is_rejected() -> None:
         cost_bound=21,
     )
     with pytest.raises(OperationResourceAdmissionError, match="search units"):
-        connected_colored_graphs(request)
+        _native(request)
+
+
+def test_native_parameters_preserve_wire_result() -> None:
+    from jacobian.catalog.catalog import Catalog
+    from jacobian.dispatch import invoke_operation
+
+    request = _request(4, 3)
+    native = _native(request)
+    wire = invoke_operation(
+        "graph.colored.connected_family.enumerate",
+        request.model_dump(mode="json"),
+        Catalog.open(),
+    ).output
+    assert ConnectedColoredGraphFamily.model_validate(wire) == native
+
+
+def test_native_invalid_bounds_fail_before_enumeration() -> None:
+    import pytest
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError, match="less than or equal to 7"):
+        connected_colored_graphs(("red",), (), vertex_bound=8, cost_bound=1)
+    with pytest.raises(ValidationError, match="distinct and increasing"):
+        connected_colored_graphs(("red", "red"), (), vertex_bound=2, cost_bound=1)

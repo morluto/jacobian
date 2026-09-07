@@ -13,7 +13,7 @@ class ColorPairCost(StrictModel):
     cost: int = Field(ge=1, le=1_000_000)
 
 
-class ConnectedColoredGraphsRequest(StrictModel):
+class _EnumerationParameters(StrictModel):
     """Enumerate connected graphs with 2..vertex_bound vertices (no singletons).
 
     Palette names are distinct and sorted; allowed unordered color pairs are
@@ -40,7 +40,11 @@ class ConnectedColoredGraphsRequest(StrictModel):
         return self
 
 
-class ConnectedColoredGraphFamily(ConnectedColoredGraphsRequest):
+class ConnectedColoredGraphsRequest(_EnumerationParameters):
+    """Wire parameters for connected colored graph enumeration."""
+
+
+class ConnectedColoredGraphFamily(_EnumerationParameters):
     """One representative per color-preserving isomorphism class, without truncation."""
 
     graphs: tuple[ColoredUndirectedGraph, ...] = Field(max_length=20_000)

@@ -147,6 +147,45 @@ def test_flint_gram_reconstructs_dot_products_and_quadratic_form() -> None:
     assert quadratic == sum(entry * entry for entry in combined) >= 0
 
 
+def test_repeated_basis_retains_exact_frame_results_and_wire_values() -> None:
+    vectors = _repeated_standard_basis(dimension=2, repeats=2)
+    result = gram(VectorFamily(vectors=vectors))
+    assert result.gram == ((1, 0, 1, 0), (0, 1, 0, 1), (1, 0, 1, 0), (0, 1, 0, 1))
+    potential = _frame_potential(FiniteFrameRequest(vectors=vectors))
+    assert potential.potential == 8
+    coherence = _coherence(CoherenceRequest(vectors=vectors))
+    assert coherence.coherence_squared.as_integer_ratio() == (1, 1)
+    assert coherence.maximizing_pair == (1, 3)
+    assert (
+        GramResult.model_validate_json(
+            encode_strict_json(result.model_dump(mode="json"))
+        )
+        == result
+    )
+    assert type(potential).model_validate_json(potential.model_dump_json()) == potential
+
+
+def test_sparse_high_height_gram_retains_zero_and_repeated_dot_products() -> None:
+    vectors = ((1_000, 0), (0, 1_000)) * 2
+    result = gram(VectorFamily(vectors=vectors))
+    assert result.gram == (
+        (1_000_000, 0, 1_000_000, 0),
+        (0, 1_000_000, 0, 1_000_000),
+        (1_000_000, 0, 1_000_000, 0),
+        (0, 1_000_000, 0, 1_000_000),
+    )
+    assert GramResult.model_validate_json(result.model_dump_json()) == result
+
+
+def test_high_coefficients_retain_exact_gram_entries() -> None:
+    vectors = ((70_000_000, 70_000_000),) * 2
+    result = _gram(VectorFamilyRequest(vectors=vectors))
+    expected = 2 * 70_000_000**2
+    assert expected > 2**53
+    assert result.gram == ((expected, expected), (expected, expected))
+
+
+@pytest.mark.scale
 def test_result_sensitive_operations_diverge_at_full_carrier_boundary() -> None:
     dimension = 512
     vectors = _repeated_standard_basis(dimension=dimension, repeats=2)
@@ -168,6 +207,7 @@ def test_result_sensitive_operations_diverge_at_full_carrier_boundary() -> None:
     assert encode_strict_json(potential.model_dump(mode="json"))
 
 
+@pytest.mark.scale
 def test_sparse_high_height_gram_is_admitted_by_occupancy() -> None:
     dimension = 512
     vectors = tuple(
@@ -194,6 +234,7 @@ def test_sparse_row_norm_controls_gram_entry_admission() -> None:
     assert result.gram == ((4_900_000_000_000_000,),)
 
 
+@pytest.mark.scale
 def test_dense_high_height_gram_uses_the_structural_work_bound() -> None:
     dimension = 512
     basis = tuple(
@@ -211,6 +252,7 @@ def test_dense_high_height_gram_uses_the_structural_work_bound() -> None:
     assert potential.potential == expected
 
 
+@pytest.mark.scale
 def test_high_coefficients_remain_exact_within_the_cell_bound() -> None:
     dimension = 512
     vectors = ((4_000_000,) * dimension,) * (MAX_VECTOR_CELLS // dimension)

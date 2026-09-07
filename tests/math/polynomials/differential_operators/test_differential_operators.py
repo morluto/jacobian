@@ -1368,10 +1368,8 @@ def test_candidate_output_term_boundary_is_admitted_then_rejected() -> None:
         operator=operator,
         iterations=3,
     )
-    assert isinstance(
-        compute_differential_operator_application(accepted),
-        DifferentialOperatorApplyResult,
-    )
+    result = compute_differential_operator_application(accepted)
+    assert isinstance(result, DifferentialOperatorApplyResult)
     expected_terms: dict[tuple[int, ...], int] = {}
     for index in range(1_024):
         exponent = 4 * index + 3
@@ -1380,7 +1378,6 @@ def test_candidate_output_term_boundary_is_admitted_then_rejected() -> None:
             expected_terms[key] = expected_terms.get(key, 0) + math.comb(
                 3, order
             ) * math.perm(exponent, order)
-    result = compute_differential_operator_application(accepted)
     assert result.output == _polynomial(variables, expected_terms)
 
     with pytest.raises(OperationDomainValidationError):

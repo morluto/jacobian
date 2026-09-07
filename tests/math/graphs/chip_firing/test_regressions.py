@@ -125,21 +125,43 @@ def test_reduction_subset_definition_and_equivalence(g: SimpleUndirectedGraph) -
 
 
 @pytest.mark.parametrize("g", [TRIANGLE, CYCLE, COMPLETE])
+@pytest.mark.exhaustive
 def test_every_principal_generator_maps_to_zero(g: SimpleUndirectedGraph) -> None:
     n = len(g.vertices)
+    principals = tuple(
+        transport(g, (0,) * n, tuple(int(i == j) for i in range(n))) for j in range(n)
+    )
     for sink in g.vertices:
-        for j in range(n):
-            principal = transport(g, (0,) * n, tuple(int(i == j) for i in range(n)))
+        for principal in principals:
             assert not any(abel_jacobi(g, principal, sink).coordinates)
 
 
+@pytest.mark.parametrize("g", [TRIANGLE, CYCLE, COMPLETE])
+def test_principal_divisor_maps_to_zero_at_a_nondefault_sink(
+    g: SimpleUndirectedGraph,
+) -> None:
+    n = len(g.vertices)
+    principal = transport(g, (0,) * n, tuple(2**i for i in range(n)))
+    assert any(principal)
+    assert not any(abel_jacobi(g, principal, g.vertices[-1]).coordinates)
+
+
+def _assert_abel_jacobi_addition(sink: str) -> None:
+    images = [abel_jacobi(TRIANGLE, (k, -k, 0), sink).coordinates for k in range(3)]
+    assert len(set(images)) == 3
+    assert images[2] == tuple(2 * c % 3 for c in images[1])
+    shifted = transport(TRIANGLE, (1, -1, 0), (7, -11, 23))
+    assert abel_jacobi(TRIANGLE, shifted, sink).coordinates == images[1]
+
+
+def test_abel_jacobi_addition_at_a_nondefault_sink() -> None:
+    _assert_abel_jacobi_addition(TRIANGLE.vertices[-1])
+
+
+@pytest.mark.exhaustive
 def test_abel_jacobi_separates_classes_and_preserves_addition() -> None:
     for sink in TRIANGLE.vertices:
-        images = [abel_jacobi(TRIANGLE, (k, -k, 0), sink).coordinates for k in range(3)]
-        assert len(set(images)) == 3
-        assert images[2] == tuple(2 * c % 3 for c in images[1])
-        shifted = transport(TRIANGLE, (1, -1, 0), (7, -11, 23))
-        assert abel_jacobi(TRIANGLE, shifted, sink).coordinates == images[1]
+        _assert_abel_jacobi_addition(sink)
 
 
 @pytest.mark.parametrize("g", [graph(3, ((1, 2),)), graph(2, ())])

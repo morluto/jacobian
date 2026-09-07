@@ -22,6 +22,8 @@ def _determinant(entries: tuple[tuple[int, ...], ...]) -> Fraction:
         p = a[j][j]
         det *= p
         for i in range(j + 1, len(a)):
+            if not a[i][j]:
+                continue
             q = a[i][j] / p
             for k in range(j + 1, len(a)):
                 a[i][k] -= q * a[j][k]
@@ -29,7 +31,17 @@ def _determinant(entries: tuple[tuple[int, ...], ...]) -> Fraction:
 
 
 @pytest.mark.parametrize(
-    "shape", [(61, 25), (25, 61), (33, 33), (64, 64), (128, 25), (128, 128)]
+    "shape",
+    [
+        (61, 25),
+        (25, 61),
+        (33, 33),
+        (64, 64),
+        pytest.param((128, 25), marks=pytest.mark.scale),
+        pytest.param((128, 128), marks=pytest.mark.scale),
+        (3, 5),
+        (5, 3),
+    ],
 )
 def test_rectangular_coefficient_lattice(shape: tuple[int, int]) -> None:
     rows, cols = shape
@@ -69,10 +81,11 @@ def test_rectangular_coefficient_lattice(shape: tuple[int, int]) -> None:
 @pytest.mark.parametrize(
     "entries",
     [
-        [[0] for _ in range(128)],
+        pytest.param([[0] for _ in range(128)], marks=pytest.mark.scale),
         [[i % 7, 2 * (i % 7)] for i in range(61)],
         [[0, 0, 0]],
         [[-7]],
+        [[0], [0], [0]],
     ],
 )
 def test_degenerate_inputs_and_native_parity(entries: list[list[int]]) -> None:

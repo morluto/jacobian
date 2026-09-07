@@ -60,6 +60,21 @@ def test_frame_operations_reject_undercomplete_families_before_rank(
     assert error.value.errors()[0]["type"] == "frames.frame_does_not_span"
 
 
+def test_native_and_catalog_dense_gram_and_potential_are_exact() -> None:
+    family = VectorFamily(vectors=((1_000, 999), (999, 1_000)) * 2)
+    result = gram(family)
+    diagonal, off_diagonal = 1_998_001, 1_998_000
+    assert result.gram == (
+        (diagonal, off_diagonal, diagonal, off_diagonal),
+        (off_diagonal, diagonal, off_diagonal, diagonal),
+        (diagonal, off_diagonal, diagonal, off_diagonal),
+        (off_diagonal, diagonal, off_diagonal, diagonal),
+    )
+    assert _gram(VectorFamilyRequest(vectors=family.vectors)) == result
+    assert frame_potential(family).potential == 8 * (diagonal**2 + off_diagonal**2)
+
+
+@pytest.mark.scale
 def test_native_and_catalog_gram_return_the_same_large_exact_matrix() -> None:
     dimension = 512
     basis = tuple(

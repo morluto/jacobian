@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import random
+from bisect import bisect_right
 from copy import deepcopy
 from fractions import Fraction
 from math import ceil, comb, log10, prod
@@ -78,7 +79,7 @@ def _first_primes(count: int) -> list[int]:
     candidate = 2
     while len(primes) < count:
         limit = int(candidate**0.5)
-        if all(candidate % prime for prime in primes if prime <= limit):
+        if all(candidate % prime for prime in primes[: bisect_right(primes, limit)]):
             primes.append(candidate)
         candidate += 1 if candidate == 2 else 2
     return primes

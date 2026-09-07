@@ -23,6 +23,8 @@ from jacobian.math.polynomials.ideals._singular import (
     run_bounded_stdin_python_kernel,
 )
 from jacobian.math.polynomials.ideals.operations import (
+    _ResultLimitExceededError,
+    _SympyKernelCancelledError,
     _SympyKernelError,
     _SympyKernelTimeoutError,
     elimination_ideal,
@@ -352,6 +354,32 @@ class TestKernelFailures:
         g = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 2)))
         with pytest.raises(RuntimeError, match="worker crashed"):
             _run_groebner(GroebnerBasisRequest(ideal=_ideal(("x", "y"), (g,))))
+
+    @pytest.mark.parametrize(
+        "failure",
+        (
+            _SympyKernelTimeoutError,
+            _SympyKernelCancelledError,
+            _SympyKernelError,
+            _ResultLimitExceededError,
+        ),
+    )
+    def test_verifier_propagates_kernel_noncompletion(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        failure: type[Exception],
+    ) -> None:
+        g = _poly(("x",), (1, 1, (1,)))
+        result = _run_groebner(
+            GroebnerBasisRequest(ideal=_ideal(("x",), (g,)), monomial_order="lex")
+        )
+
+        def failing_kernel(*args: object, **kwargs: object) -> NoReturn:
+            raise failure("worker did not produce a result")
+
+        monkeypatch.setattr(operations, "_run_sympy_kernel", failing_kernel)
+        with pytest.raises(failure, match="worker did not produce a result"):
+            verify_groebner_basis(result)
 
 
 class TestKillableWorkerContract:

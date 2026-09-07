@@ -274,7 +274,8 @@ structurally invalid payload raises `OperationRequestValidationError`. A
 structurally valid payload rejected by native mathematical admission raises
 `OperationDomainValidationError`; where practical, assert that
 native and dispatch calls preserve the same structured owner error code. MCP
-projects both validation classes as `INVALID_PARAMS`. Timeout, cancellation,
+projects both validation classes through the model-visible tool-error channel
+with bounded structured diagnostics. Timeout, cancellation,
 host or worker failure, and unexpected backend failures remain
 operational errors and project as agent-visible tool failures. Test that these
 paths establish no mathematical result and do not become invalid-parameter

@@ -1,10 +1,12 @@
 """Process-boundary behavior for number-field discriminant workers."""
 
 import hashlib
+import time
 
 import pytest
 
 from jacobian import process as process_runtime
+from jacobian._execution import OperationExecutionTimeoutError, request_execution
 from jacobian.math.number_theory.number_fields import (
     SimpleNumberFieldPresentation,
 )
@@ -22,6 +24,15 @@ def _number_field(*coefficients: str) -> SimpleNumberFieldPresentation:
     return SimpleNumberFieldPresentation(
         coefficients_descending=tuple(int(coefficient) for coefficient in coefficients)
     )
+
+
+def test_number_field_budget_includes_prior_request_work() -> None:
+    request = NumberFieldRequest(field=_number_field("1", "0", "-2"))
+    with (
+        request_execution(time.monotonic() - 61),
+        pytest.raises(OperationExecutionTimeoutError, match="deadline expired"),
+    ):
+        compute_nf_discriminant(request)
 
 
 def test_timed_out_number_field_worker_is_an_operational_failure(

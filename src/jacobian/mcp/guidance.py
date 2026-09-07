@@ -20,14 +20,15 @@ MATH_FIND_DESCRIPTION = """\
 Find or inspect public Jacobian MCP operations.
 
 Forms:
-- `request.op="match"`: describe one local mathematical need in ordinary language.
+- `query`: describe one local mathematical need in ordinary language. `namespace`,
+  `limit`, and `cursor` are optional search controls.
   Preserve established mathematical names from the task, the supplied objects and
   constraints, the requested computation or decision, the full scalar, batch, or
   exhaustive scope, and whether the requested result is a value, witness,
   certificate, obstruction, profile, or complete enumeration. Do not replace a
   supplied named property only with its expanded definition, translate the need into
   catalog tags, or submit the surrounding proof goal.
-- `request.op="inspect"`: pass one exact `operation_id` to receive its authoritative
+- `operation_id`: pass one exact operation ID to receive its authoritative
   input and output schemas, operator-authored examples, and current optional
   backend availability. Matches expose static `runtime_requirements`; inspection
   checks these runtimes in the server environment.
@@ -40,8 +41,8 @@ applicability claims; inspect a promising operation before math.run. Read
 `operation://catalog` only when the complete bulk catalog is genuinely needed.
 
 Examples:
-- `{"request":{"op":"match","need":"exact determinant of a rational matrix","namespace":"matrix","limit":3}}`
-- `{"request":{"op":"inspect","operation_id":"polynomial.compute.gcd"}}`
+- `{"query":"exact determinant of a rational matrix","namespace":"matrix","limit":3}`
+- `{"operation_id":"polynomial.compute.gcd"}`
 """
 
 MATH_RUN_DESCRIPTION = """\

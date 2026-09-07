@@ -8,7 +8,10 @@ from typing import Any
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.polynomials.real_algebra._common_interlacing import (
     common_interlacing_profile as _common_interlacing_profile,
 )
@@ -80,7 +83,9 @@ def verify_common_interlacing_profile(claim: CommonInterlacingProfile) -> bool:
 
     try:
         return common_interlacing_profile(claim.family) == claim
-    except (OperationDomainValidationError, ValueError, TypeError, RuntimeError):
+    except OperationResourceAdmissionError:
+        raise
+    except (OperationDomainValidationError, ValueError, TypeError):
         return False
 
 
@@ -378,7 +383,9 @@ def verify_strict_sublevel_measure(claim: StrictSublevelMeasureResult) -> bool:
             )
             == claim
         )
-    except (OperationDomainValidationError, ValueError, TypeError, RuntimeError):
+    except OperationResourceAdmissionError:
+        raise
+    except (OperationDomainValidationError, ValueError, TypeError):
         return False
 
 
@@ -393,5 +400,7 @@ def verify_plane_component_profile(claim: PlaneComponentProfileResult) -> bool:
             )
             == claim
         )
-    except (OperationDomainValidationError, ValueError, TypeError, RuntimeError):
+    except OperationResourceAdmissionError:
+        raise
+    except (OperationDomainValidationError, ValueError, TypeError):
         return False

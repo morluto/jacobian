@@ -50,10 +50,7 @@ def test_missing_singular_is_inspectable_and_actionable(
             inspection = await client.call_tool(
                 "math.find",
                 {
-                    "request": {
-                        "op": "inspect",
-                        "operation_id": operation_id,
-                    }
+                    "operation_id": operation_id,
                 },
             )
             assert inspection.structured_content is not None

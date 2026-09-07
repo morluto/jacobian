@@ -2,9 +2,6 @@
 
 import asyncio
 
-import pytest
-from mcp.shared.exceptions import MCPError
-
 from jacobian.math.polynomials.series import inverse
 from jacobian.math.polynomials.series._models import TruncatedSeries
 from jacobian.mcp.server import create_server
@@ -13,24 +10,23 @@ from mcp import Client
 
 def test_inverse_native_mcp_parity_after_growth_rejection() -> None:
     async def scenario() -> None:
-        async with Client(create_server(), raise_exceptions=True) as client:
-            with pytest.raises(MCPError) as error:
-                await client.call_tool(
-                    "math.run",
-                    {
-                        "operation_id": "formal_series.rational.inverse.compute",
-                        "payload": {
-                            "variable": "x",
-                            "truncation_order": 20,
-                            "coefficients": [
-                                {"num": "1", "den": "1"},
-                                {"num": str(10**255), "den": "1"},
-                                *[{"num": "0", "den": "1"}] * 18,
-                            ],
-                        },
+        async with Client(create_server(), raise_exceptions=False) as client:
+            error = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "formal_series.rational.inverse.compute",
+                    "payload": {
+                        "variable": "x",
+                        "truncation_order": 20,
+                        "coefficients": [
+                            {"num": "1", "den": "1"},
+                            {"num": str(10**255), "den": "1"},
+                            *[{"num": "0", "den": "1"}] * 18,
+                        ],
                     },
-                )
-            assert error.value.code == -32602
+                },
+            )
+            assert error.is_error is True
             source = TruncatedSeries.model_validate(
                 {
                     "variable": "x",

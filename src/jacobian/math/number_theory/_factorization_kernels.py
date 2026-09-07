@@ -14,6 +14,10 @@ from typing import Literal
 from jacobian._execution import (
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
+    bind_request_deadline,
+    current_request_execution,
+    request_checkpoint,
+    request_execution,
 )
 from jacobian.canonical import (
     CanonicalizationError,
@@ -270,6 +274,19 @@ def factorize_certified(
 ) -> CertifiedFactorizationResult:
     """Factor through a killable worker; a stop establishes no factor claim."""
 
+    execution = current_request_execution()
+    if execution is None:
+        with request_execution(monotonic()):
+            return factorize_certified(request)
+    owner_deadline = execution.started_at + _FACTORIZATION_WORKER_TIMEOUT_SECONDS
+    deadline = (
+        min(execution.deadline, owner_deadline)
+        if execution.deadline is not None
+        else owner_deadline
+    )
+    bind_request_deadline(deadline)
+    request_checkpoint("before certified factorization preparation")
+
     from jacobian.process import (
         ProcessResourceLimits,
         run_bounded_process,
@@ -298,7 +315,9 @@ def factorize_certified(
                 cwd=worker_directory,
             )
     except OSError as exc:
+        request_checkpoint("during certified factorization worker startup")
         raise RuntimeError("bounded factorization worker could not be started") from exc
+    request_checkpoint("after certified factorization worker")
     if completed.cancelled:
         raise OperationExecutionCancelledError("factorization worker was cancelled")
     if completed.timed_out:
@@ -322,10 +341,13 @@ def factorize_certified(
             raise ValueError("worker failure")
         if response["request_digest"] != hashlib.sha256(input_bytes).hexdigest():
             raise ValueError("worker response is not bound to its request")
-        return CertifiedFactorizationResult.model_validate_json(
+        result = CertifiedFactorizationResult.model_validate_json(
             encode_strict_json(response["result"]), strict=True
         )
+        request_checkpoint("after certified factorization result construction")
+        return result
     except (KeyError, TypeError, ValueError, CanonicalizationError) as exc:
+        request_checkpoint("during certified factorization response validation")
         raise RuntimeError(
             "bounded factorization worker returned malformed output"
         ) from exc

@@ -11,7 +11,6 @@ import json
 import threading
 
 import pytest
-from mcp.shared.exceptions import MCPError
 from mcp.types import ContentBlock, TextContent
 
 from jacobian.mcp.server import create_server
@@ -97,14 +96,11 @@ def test_mcp_describes_and_invokes_operations() -> None:
     async def scenario() -> None:
         from mcp import Client
 
-        async with Client(create_server(), raise_exceptions=True) as client:
+        async with Client(create_server(), raise_exceptions=False) as client:
             described = await client.call_tool(
                 "math.find",
                 {
-                    "request": {
-                        "op": "inspect",
-                        "operation_id": "integer.compute.extended_gcd",
-                    }
+                    "operation_id": "integer.compute.extended_gcd",
                 },
             )
             assert isinstance(described.structured_content, dict)
@@ -165,21 +161,23 @@ def test_mcp_describes_and_invokes_operations() -> None:
                 "first_unsatisfied_clause": None,
             }
 
-            with pytest.raises(MCPError) as invalid_error:
-                await client.call_tool(
-                    "math.run",
-                    {
-                        "operation_id": "integer.compute.extended_gcd",
-                        "payload": {
-                            "left": "84",
-                            "right": "30",
-                            "private": "reject-this-private-value",
-                        },
+            invalid_error = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "integer.compute.extended_gcd",
+                    "payload": {
+                        "left": "84",
+                        "right": "30",
+                        "private": "reject-this-private-value",
                     },
+                },
+            )
+            invalid_data = json.loads(
+                _text_content(invalid_error.content[0]).removeprefix(
+                    "Error executing tool math.run: "
                 )
-            assert invalid_error.value.code == -32602
-            assert invalid_error.value.message == "operation payload failed validation"
-            assert invalid_error.value.data == {
+            )
+            assert invalid_data == {
                 "code": "INVALID_REQUEST",
                 "stage": "operation_validation",
                 "operation_id": "integer.compute.extended_gcd",
@@ -194,19 +192,25 @@ def test_mcp_describes_and_invokes_operations() -> None:
                     "Inspect the operation with math.find and correct the fields at "
                     "the reported locations before retrying."
                 ),
+                "message": "operation payload failed validation",
             }
-            assert "reject-this-private-value" not in invalid_error.value.message
+            assert "reject-this-private-value" not in _text_content(
+                invalid_error.content[0]
+            )
 
-            with pytest.raises(MCPError) as noncanonical_error:
-                await client.call_tool(
-                    "math.run",
-                    {
-                        "operation_id": "integer.compute.extended_gcd",
-                        "payload": {"left": 1.5, "right": "30"},
-                    },
+            noncanonical_error = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "integer.compute.extended_gcd",
+                    "payload": {"left": 1.5, "right": "30"},
+                },
+            )
+            noncanonical_data = json.loads(
+                _text_content(noncanonical_error.content[0]).removeprefix(
+                    "Error executing tool math.run: "
                 )
-            assert noncanonical_error.value.code == -32602
-            assert noncanonical_error.value.data["errors"] == [
+            )
+            assert noncanonical_data["errors"] == [
                 {
                     "location": [],
                     "code": "canonicalization_error",
@@ -214,35 +218,38 @@ def test_mcp_describes_and_invokes_operations() -> None:
                 }
             ]
 
-            with pytest.raises(MCPError) as semantic_error:
-                await client.call_tool(
-                    "math.run",
-                    {
-                        "operation_id": "universal_algebra.term.evaluate.compute",
-                        "payload": {
-                            "algebra": {
-                                "carrier": ["0", "1"],
-                                "operations": [{"operation_id": "and", "arity": 2}],
-                                "tables": [[0, 0, 0, 1]],
-                            },
-                            "term": {
-                                "nodes": [
-                                    {"kind": "variable", "variable_id": 0},
-                                    {"kind": "variable", "variable_id": 1},
-                                    {
-                                        "kind": "application",
-                                        "operation": 0,
-                                        "children": [0, 1],
-                                    },
-                                ],
-                                "root": 2,
-                            },
-                            "assignment": [0],
+            semantic_error = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "universal_algebra.term.evaluate.compute",
+                    "payload": {
+                        "algebra": {
+                            "carrier": ["0", "1"],
+                            "operations": [{"operation_id": "and", "arity": 2}],
+                            "tables": [[0, 0, 0, 1]],
                         },
+                        "term": {
+                            "nodes": [
+                                {"kind": "variable", "variable_id": 0},
+                                {"kind": "variable", "variable_id": 1},
+                                {
+                                    "kind": "application",
+                                    "operation": 0,
+                                    "children": [0, 1],
+                                },
+                            ],
+                            "root": 2,
+                        },
+                        "assignment": [0],
                     },
+                },
+            )
+            semantic_data = json.loads(
+                _text_content(semantic_error.content[0]).removeprefix(
+                    "Error executing tool math.run: "
                 )
-            assert semantic_error.value.code == -32602
-            assert semantic_error.value.data["errors"] == [
+            )
+            assert semantic_data["errors"] == [
                 {
                     "location": ["assignment"],
                     "code": "universal_algebra.assignment_coverage",
@@ -250,41 +257,46 @@ def test_mcp_describes_and_invokes_operations() -> None:
                 }
             ]
 
-            with pytest.raises(MCPError) as oversized_error:
-                await client.call_tool(
-                    "math.run",
-                    {
-                        "operation_id": "universal_algebra.term.evaluate.compute",
-                        "payload": {
-                            "term": {
-                                "nodes": [{"kind": "x" * 4_096}],
-                                "root": 0,
-                            }
-                        },
+            oversized_error = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "universal_algebra.term.evaluate.compute",
+                    "payload": {
+                        "term": {
+                            "nodes": [{"kind": "x" * 4_096}],
+                            "root": 0,
+                        }
                     },
+                },
+            )
+            oversized_data = json.loads(
+                _text_content(oversized_error.content[0]).removeprefix(
+                    "Error executing tool math.run: "
                 )
-            assert oversized_error.value.code == -32602
+            )
             assert all(
-                len(issue["message"]) <= 1_024
-                for issue in oversized_error.value.data["errors"]
+                len(issue["message"]) <= 1_024 for issue in oversized_data["errors"]
             )
 
             oversized_fields = {
                 f"{'x' * 4_096}{index}": "y" * 2_000 for index in range(64)
             }
-            with pytest.raises(MCPError) as bounded_locations_error:
-                await client.call_tool(
-                    "math.run",
-                    {
-                        "operation_id": "integer.compute.extended_gcd",
-                        "payload": {
-                            "left": "84",
-                            "right": "30",
-                            **oversized_fields,
-                        },
+            bounded_locations_error = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "integer.compute.extended_gcd",
+                    "payload": {
+                        "left": "84",
+                        "right": "30",
+                        **oversized_fields,
                     },
+                },
+            )
+            bounded_data = json.loads(
+                _text_content(bounded_locations_error.content[0]).removeprefix(
+                    "Error executing tool math.run: "
                 )
-            bounded_data = bounded_locations_error.value.data
+            )
             assert all(
                 len(component) <= 128
                 for issue in bounded_data["errors"]
@@ -292,25 +304,26 @@ def test_mcp_describes_and_invokes_operations() -> None:
                 if isinstance(component, str)
             )
 
-            with pytest.raises(MCPError) as multiple_errors:
-                await client.call_tool(
-                    "math.run",
-                    {
-                        "operation_id": "integer.compute.extended_gcd",
-                        "payload": {"left": "01", "right": "not-an-integer"},
-                    },
-                )
+            multiple_errors = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "integer.compute.extended_gcd",
+                    "payload": {"left": "01", "right": "not-an-integer"},
+                },
+            )
             assert [
-                error["location"] for error in multiple_errors.value.data["errors"]
+                error["location"]
+                for error in json.loads(
+                    _text_content(multiple_errors.content[0]).removeprefix(
+                        "Error executing tool math.run: "
+                    )
+                )["errors"]
             ] == [["left"], ["right"]]
 
             matching_description = await client.call_tool(
                 "math.find",
                 {
-                    "request": {
-                        "op": "inspect",
-                        "operation_id": ("graph.invariant.maximum_matching.compute"),
-                    }
+                    "operation_id": "graph.invariant.maximum_matching.compute",
                 },
             )
             assert isinstance(matching_description.structured_content, dict)

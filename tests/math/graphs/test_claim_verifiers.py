@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+from itertools import combinations
+
+import pytest
 
 from jacobian.math.graphs.coloring import (
     verify_k_colorability,
@@ -33,8 +36,12 @@ from jacobian.math.graphs.symmetry import (
     graph_symmetry_orbits,
     verify_graph_symmetry_orbits,
 )
-from jacobian.math.graphs.symmetry._models import GraphSymmetryOrbitRequest
+from jacobian.math.graphs.symmetry._models import (
+    GraphAutomorphismGenerator,
+    GraphSymmetryOrbitRequest,
+)
 from jacobian.math.graphs.values import (
+    ColoredUndirectedGraph,
     IndexedSimpleUndirectedGraph,
     SimpleUndirectedGraph,
 )
@@ -112,6 +119,33 @@ def test_symmetry_verifier_rejects_arbitrary_complete_partition() -> None:
     assert not verify_graph_symmetry_orbits(
         type(result).model_validate_json(forged.model_dump_json())
     )
+
+
+def test_symmetry_verifier_propagates_action_resource_admission() -> None:
+    vertices = tuple(sorted(str(index) for index in range(100)))
+    graph = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(
+            vertices=vertices,
+            edges=tuple(combinations(vertices, 2)),
+        )
+    )
+    generators = tuple(
+        GraphAutomorphismGenerator(
+            generator_id=f"g{index}",
+            mapping=tuple((vertex, vertex) for vertex in graph.graph.vertices),
+        )
+        for index in range(64)
+    )
+    source = GraphSymmetryOrbitRequest(graph=graph, generators=generators)
+    base = graph_symmetry_orbits(
+        GraphSymmetryOrbitRequest(graph=graph, generators=()).graph, ()
+    )
+    claim = base.model_copy(update={"source": source})
+
+    from jacobian.catalog.models import OperationResourceAdmissionError
+
+    with pytest.raises(OperationResourceAdmissionError, match="action entries"):
+        verify_graph_symmetry_orbits(claim)
 
 
 def test_multigraph_flow_checker_diagnoses_invalid_candidate_and_verifies_roundtrip() -> (

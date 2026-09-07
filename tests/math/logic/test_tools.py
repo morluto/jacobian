@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
 import sys
+import threading
+import time
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from pathlib import Path
@@ -10,6 +13,13 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+    request_cancellation,
+    request_execution,
+)
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic import _sat as sat
 from jacobian.math.logic import _smt as smt
 from jacobian.math.logic._cnf import (
@@ -122,6 +132,58 @@ def test_logic_bundle_exposes_only_atomic_inline_operations() -> None:
     )
 
 
+def test_smt_schema_publishes_commands_and_unsat_core_limits() -> None:
+    tools_by_id = {operation.operation_id: operation for operation in TOOLS}
+    solve_schema = tools_by_id["smt.solve"].request_type.model_json_schema()
+    core_schema = tools_by_id["smt.unsat_core"].request_type.model_json_schema()
+
+    solve_description = solve_schema["properties"]["smtlib"]["description"]
+    core_description = core_schema["properties"]["smtlib"]["description"]
+    assert (
+        "set-logic, declare-const, declare-fun, assert, and check-sat"
+        in solve_description
+    )
+    assert "define-fun are not accepted" in solve_description
+    assert "nesting depth 256" in core_description
+    assert "512 source assertions" in core_description
+    assert "256 digits" in core_description
+
+
+@pytest.mark.parametrize("clauses, outcome", (((), "SAT"), (((),), "UNSAT")))
+def test_sat_solver_preserves_empty_formula_semantics(
+    clauses: tuple[tuple[int, ...], ...], outcome: str
+) -> None:
+    result = solve_sat(SatSolveRequest(cnf=CanonicalCnf(variables=(), clauses=clauses)))
+    assert result.outcome == outcome
+    assert result.assignment == (() if outcome == "SAT" else None)
+
+
+def test_sat_solver_checks_assignment_once_at_parent_boundary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.logic._cnf import (
+        SatAssignmentCheckResult,
+    )
+    from jacobian.math.logic._cnf import check_sat_assignment as original_check
+
+    checks = 0
+
+    def counting_check(request: SatAssignmentCheckRequest) -> SatAssignmentCheckResult:
+        nonlocal checks
+        checks += 1
+        return original_check(request)
+
+    monkeypatch.setattr(sat, "check_sat_assignment", counting_check)
+    request = SatSolveRequest(cnf=CanonicalCnf(variables=("x",), clauses=((1,),)))
+    candidate = sat._solve_sat_kernel(cnf=request.cnf, timeout_ms=request.timeout_ms)
+    assert candidate["outcome"] == "SAT"
+    assert checks == 0
+    result = solve_sat(request)
+    assert result.outcome == "SAT"
+    assert result.assignment == (True,)
+    assert checks == 1
+
+
 def test_canonical_cnf_can_be_passed_directly_to_assignment_and_solver() -> None:
     canonical = canonicalize_cnf(
         CnfCanonicalizeRequest(
@@ -143,14 +205,19 @@ def test_canonical_cnf_can_be_passed_directly_to_assignment_and_solver() -> None
     ).satisfies
 
 
-def test_sat_result_rejects_a_witness_or_source_mutation() -> None:
+def test_sat_result_keeps_witness_validation_at_the_worker_boundary() -> None:
     positive = SatSolveRequest(cnf=CanonicalCnf(variables=("x",), clauses=((1,),)))
     negative = SatSolveRequest(cnf=CanonicalCnf(variables=("x",), clauses=((-1,),)))
 
+    assert SatSolveResult(
+        source=positive, outcome="SAT", assignment=(False,)
+    ).assignment == (False,)
+    assert SatSolveResult(
+        source=negative, outcome="SAT", assignment=(True,)
+    ).assignment == (True,)
+
     with raises_logic_validation():
-        SatSolveResult(source=positive, outcome="SAT", assignment=(False,))
-    with raises_logic_validation():
-        SatSolveResult(source=negative, outcome="SAT", assignment=(True,))
+        SatSolveResult(source=positive, outcome="SAT", assignment=())
 
 
 def test_tautological_cnf_is_a_typed_invalid_request() -> None:
@@ -198,15 +265,22 @@ def test_sat_solver_does_not_promote_a_malformed_backend_model(
             return SimpleNamespace(eval=lambda _variable, **_kwargs: z3.BoolVal(False))
 
     monkeypatch.setattr(z3, "Solver", MisreportingSolver)
+    monkeypatch.setattr(
+        sat,
+        "run_bounded_process",
+        lambda *_args, **_kwargs: _sat_worker_result(
+            stdout=b'{"outcome":"SAT","assignment":[false],"exhausted":null,"detail":null}'
+        ),
+    )
 
-    result = _solve_sat_kernel(
+    result = solve_sat(
         SatSolveRequest(cnf=CanonicalCnf(variables=("x",), clauses=((1,),)))
     )
 
     assert result.outcome == "UNKNOWN"
     assert result.assignment is None
     assert result.detail == (
-        "the Z3 backend returned a model that does not satisfy the canonical CNF"
+        "the Z3 worker returned an assignment that does not satisfy the canonical CNF"
     )
 
 
@@ -544,22 +618,37 @@ def test_smt_request_rejects_an_indexed_bit_vector_value_beyond_the_digit_budget
         )
 
 
-def test_smt_request_structurally_admits_an_ill_sorted_expression() -> None:
-    """Well-sortedness is a bounded execution concern, not model validation."""
+@pytest.mark.parametrize(
+    ("logic", "declarations", "assertion"),
+    (
+        ("QF_LIA", "(declare-const x Int)", "(assert (= (* x x) 2))"),
+        ("QF_UF", "(declare-const x Int)", "(assert (= x x))"),
+        ("QF_LIA", "", "(assert (forall ((x Int)) (= x x)))"),
+    ),
+)
+def test_smt_solver_rejects_terms_outside_declared_fragment(
+    logic: str, declarations: str, assertion: str
+) -> None:
+    source = "\n".join((f"(set-logic {logic})", declarations, assertion, "(check-sat)"))
 
+    with pytest.raises(OperationDomainValidationError, match="declared"):
+        solve_smt(SmtSolveRequest(logic=SmtLogic(logic), smtlib=source))
+
+
+def test_smt_solver_accepts_exact_closed_linear_coefficients() -> None:
     result = solve_smt(
         SmtSolveRequest(
             logic=SmtLogic.QF_LIA,
             smtlib=(
                 "(set-logic QF_LIA)\n"
                 "(declare-const x Int)\n"
-                f"(assert (= x (_ bv{'9' * 4_096} 8)))\n"
+                "(assert (= (* 12345678901234567890 x) "
+                "12345678901234567890))\n"
                 "(check-sat)\n"
             ),
         )
     )
-
-    assert result.outcome == "UNKNOWN"
+    assert result.outcome == "SAT"
 
 
 def test_smt_request_admits_a_bv_named_symbol_outside_index_context_and_solves() -> (
@@ -771,14 +860,12 @@ def test_worker_response_conversion_cannot_outlive_request_deadline(
         module, "run_bounded_process", lambda *_args, **_kwargs: response
     )
 
-    result = (
-        module.solve_smt(solve_request)
-        if module is smt
-        else module.solve_sat(solve_request)
-    )
-
-    assert result.outcome == "UNKNOWN"
-    assert result.exhausted == "time"
+    with pytest.raises(OperationExecutionTimeoutError, match="deadline expired"):
+        (
+            module.solve_smt(solve_request)
+            if module is smt
+            else module.solve_sat(solve_request)
+        )
 
 
 @pytest.mark.parametrize(
@@ -787,6 +874,12 @@ def test_worker_response_conversion_cannot_outlive_request_deadline(
         (_sat_worker_result(cancelled=True, returncode=None), "was cancelled"),
         (_sat_worker_result(stdout_exceeded=True, returncode=None), "output limit"),
         (_sat_worker_result(stdout=b"not JSON"), "malformed output"),
+        (
+            _sat_worker_result(
+                stdout=b'{"source":{},"outcome":"UNSAT","assignment":null,"exhausted":null,"detail":null}'
+            ),
+            "malformed output",
+        ),
     ),
 )
 def test_sat_worker_never_projects_transport_failure_as_a_math_verdict(
@@ -796,13 +889,18 @@ def test_sat_worker_never_projects_transport_failure_as_a_math_verdict(
 ) -> None:
     monkeypatch.setattr(sat, "run_bounded_process", lambda *_args, **_kwargs: completed)
 
-    result = solve_sat(
-        SatSolveRequest(cnf=CanonicalCnf(variables=("x",), clauses=((1,),)))
-    )
-
-    assert result.outcome == "UNKNOWN"
-    assert result.exhausted is None
-    assert detail in (result.detail or "")
+    if completed.cancelled:
+        with pytest.raises(OperationExecutionCancelledError, match="cancelled"):
+            solve_sat(
+                SatSolveRequest(cnf=CanonicalCnf(variables=("x",), clauses=((1,),)))
+            )
+    else:
+        result = solve_sat(
+            SatSolveRequest(cnf=CanonicalCnf(variables=("x",), clauses=((1,),)))
+        )
+        assert result.outcome == "UNKNOWN"
+        assert result.exhausted is None
+        assert detail in (result.detail or "")
 
 
 def test_sat_worker_start_failure_is_a_typed_unknown(
@@ -828,6 +926,12 @@ def test_sat_worker_start_failure_is_a_typed_unknown(
         (_worker_result(cancelled=True, returncode=None), "was cancelled"),
         (_worker_result(stdout_exceeded=True, returncode=None), "output limit"),
         (_worker_result(stdout=b"not JSON"), "malformed output"),
+        (
+            _worker_result(
+                stdout=b'{"source":{},"outcome":"UNSAT","model_smtlib":null,"exhausted":null,"detail":null}'
+            ),
+            "malformed output",
+        ),
     ),
 )
 def test_smt_worker_never_projects_transport_failure_as_a_math_verdict(
@@ -837,16 +941,24 @@ def test_smt_worker_never_projects_transport_failure_as_a_math_verdict(
 ) -> None:
     monkeypatch.setattr(smt, "run_bounded_process", lambda *_args, **_kwargs: completed)
 
-    result = solve_smt(
-        SmtSolveRequest(
-            logic=SmtLogic.QF_LIA,
-            smtlib="(set-logic QF_LIA)\n(declare-const x Int)\n(check-sat)",
+    if completed.cancelled:
+        with pytest.raises(OperationExecutionCancelledError, match="cancelled"):
+            solve_smt(
+                SmtSolveRequest(
+                    logic=SmtLogic.QF_LIA,
+                    smtlib="(set-logic QF_LIA)\n(declare-const x Int)\n(check-sat)",
+                )
+            )
+    else:
+        result = solve_smt(
+            SmtSolveRequest(
+                logic=SmtLogic.QF_LIA,
+                smtlib="(set-logic QF_LIA)\n(declare-const x Int)\n(check-sat)",
+            )
         )
-    )
-
-    assert result.outcome == "UNKNOWN"
-    assert result.exhausted is None
-    assert detail in (result.detail or "")
+        assert result.outcome == "UNKNOWN"
+        assert result.exhausted is None
+        assert detail in (result.detail or "")
 
 
 def test_smt_worker_start_failure_is_a_typed_unknown(
@@ -879,17 +991,46 @@ def test_smt_parse_stage_expiry_is_a_typed_unknown(
         "run_bounded_process",
         lambda *_args, **_kwargs: _worker_result(timed_out=True, returncode=None),
     )
-    result = solve_smt(
-        SmtSolveRequest(
-            logic=SmtLogic.QF_LIA,
-            smtlib="(set-logic QF_LIA)\n(declare-const x Int)\n(check-sat)",
-            timeout_ms=1,
+    with pytest.raises(OperationExecutionTimeoutError, match="deadline expired"):
+        solve_smt(
+            SmtSolveRequest(
+                logic=SmtLogic.QF_LIA,
+                smtlib="(set-logic QF_LIA)\n(declare-const x Int)\n(check-sat)",
+                timeout_ms=1,
+            )
         )
-    )
 
-    assert result.outcome == "UNKNOWN"
-    assert result.exhausted == "time"
-    assert result.detail == smt._EXHAUSTION_DETAILS["time"]
+
+def test_native_sat_caller_does_not_restart_an_expired_request_deadline() -> None:
+    request = SatSolveRequest(
+        cnf=CanonicalCnf(variables=("x",), clauses=((1,),)), timeout_ms=1_000
+    )
+    with (
+        request_execution(time.monotonic() - 2.0),
+        pytest.raises(OperationExecutionTimeoutError, match="deadline expired"),
+    ):
+        solve_sat(request)
+
+
+def test_native_smt_caller_cancellation_stops_before_worker_launch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    event = threading.Event()
+    event.set()
+    monkeypatch.setattr(
+        smt,
+        "run_bounded_process",
+        lambda *_args, **_kwargs: pytest.fail("cancelled request launched worker"),
+    )
+    request = SmtSolveRequest(
+        logic=SmtLogic.QF_LIA,
+        smtlib="(set-logic QF_LIA)\n(check-sat)",
+    )
+    with (
+        request_cancellation(event),
+        pytest.raises(OperationExecutionCancelledError, match="cancelled"),
+    ):
+        solve_smt(request)
 
 
 def test_smt_solver_projects_exhausted_work_budget_as_typed_unknown(
@@ -1219,22 +1360,20 @@ def test_smt_request_does_not_parse_before_execution(
 def test_smt_execution_reports_undeclared_identifiers_without_resource_claims(
     identifier: str,
 ) -> None:
-    """Located parser diagnostics never fabricate an exhausted-resource claim."""
+    """Located parser diagnostics become source-domain errors, never exhaustion."""
 
-    result = solve_smt(
-        SmtSolveRequest(
-            logic=SmtLogic.QF_LIA,
-            smtlib=(
-                "(set-logic QF_LIA)\n"
-                "(declare-const x Int)\n"
-                f"(assert (> {identifier} 0))\n"
-                "(check-sat)"
-            ),
+    with pytest.raises(OperationDomainValidationError, match="could not be parsed"):
+        solve_smt(
+            SmtSolveRequest(
+                logic=SmtLogic.QF_LIA,
+                smtlib=(
+                    "(set-logic QF_LIA)\n"
+                    "(declare-const x Int)\n"
+                    f"(assert (> {identifier} 0))\n"
+                    "(check-sat)"
+                ),
+            )
         )
-    )
-
-    assert result.outcome == "UNKNOWN"
-    assert result.exhausted is None
 
 
 def test_smt_solver_types_parse_stage_backend_failures_as_unknown(
@@ -1280,11 +1419,14 @@ def test_smt_solver_never_classifies_located_source_text_as_exhaustion(
     )
     monkeypatch.setattr(z3, "parse_smt2_string", diagnosing_parser)
 
-    result = _solve_smt_kernel(admitted)
+    result = smt._solve_smt_kernel(
+        logic=admitted.logic.value,
+        smtlib=admitted.smtlib,
+        timeout_ms=admitted.timeout_ms,
+    )
 
-    assert result.outcome == "UNKNOWN"
-    assert result.exhausted is None
-    assert result.detail is not None and "bounded solve" in result.detail
+    assert result["kind"] == "invalid"
+    assert result["detail"] == "SMT-LIB source could not be parsed as SMT-LIB"
 
 
 def test_smt_execution_projects_located_parser_diagnostics(
@@ -1298,20 +1440,53 @@ def test_smt_execution_projects_located_parser_diagnostics(
         raise z3.Z3Exception(b'(error "line 2 column 11: unknown constant y")\n')
 
     monkeypatch.setattr(z3, "parse_smt2_string", diagnosing_parser)
-    result = _solve_smt_kernel(
-        SmtSolveRequest(
-            logic=SmtLogic.QF_LIA,
-            smtlib=(
-                "(set-logic QF_LIA)\n"
-                "(declare-const x Int)\n"
-                "(assert (> y 0))\n"
-                "(check-sat)"
-            ),
-        )
+    request = SmtSolveRequest(
+        logic=SmtLogic.QF_LIA,
+        smtlib=(
+            "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> y 0))\n(check-sat)"
+        ),
     )
 
+    result = smt._solve_smt_kernel(
+        logic=request.logic.value,
+        smtlib=request.smtlib,
+        timeout_ms=request.timeout_ms,
+    )
+
+    assert result["kind"] == "invalid"
+    assert result["detail"] == "SMT-LIB source could not be parsed as SMT-LIB"
+
+
+@pytest.mark.parametrize(
+    "response",
+    (
+        {"kind": "invalid"},
+        {"kind": "invalid", "detail": 123},
+        {
+            "kind": "invalid",
+            "detail": "SMT-LIB source could not be parsed as SMT-LIB",
+            "outcome": "SAT",
+        },
+    ),
+)
+def test_smt_rejects_malformed_invalid_worker_envelopes_as_unknown(
+    monkeypatch: pytest.MonkeyPatch, response: dict[str, object]
+) -> None:
+    monkeypatch.setattr(
+        smt,
+        "run_bounded_process",
+        lambda *_args, **_kwargs: _worker_result(
+            stdout=json.dumps(response).encode("utf-8")
+        ),
+    )
+    result = solve_smt(
+        SmtSolveRequest(
+            logic=SmtLogic.QF_LIA,
+            smtlib="(set-logic QF_LIA)\n(check-sat)",
+        )
+    )
     assert result.outcome == "UNKNOWN"
-    assert result.exhausted is None
+    assert result.detail == "the bounded Z3 worker returned malformed output"
 
 
 def test_smt_request_admission_defers_parse_stage_os_errors(

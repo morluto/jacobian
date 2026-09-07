@@ -13,6 +13,11 @@ from typing import Never
 
 import pytest
 
+from jacobian._execution import (
+    bind_request_deadline,
+    request_cancellation,
+    request_execution,
+)
 from jacobian.process import (
     ProcessPlatformTools,
     ProcessResourceLimits,
@@ -43,6 +48,74 @@ def test_expired_input_spooling_does_not_launch_a_worker(
 
     assert completed.timed_out
     assert not completed.cancelled
+    assert completed.returncode is None
+
+
+def test_expired_request_envelope_does_not_launch_a_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_to_launch(*_args: object, **_kwargs: object) -> Never:
+        raise AssertionError("expired request must not launch a worker")
+
+    monkeypatch.setattr("jacobian.process.subprocess.Popen", fail_to_launch)
+
+    with request_execution(0.0):
+        bind_request_deadline(0.0)
+        completed = run_bounded_process(
+            [sys.executable, "-c", "raise SystemExit(0)"],
+            input_bytes=b"input",
+            timeout_seconds=30,
+            environment=dict(os.environ),
+            stdout_limit=4096,
+            stderr_limit=4096,
+        )
+
+    assert completed.timed_out
+    assert not completed.cancelled
+    assert completed.returncode is None
+
+
+def test_request_envelope_caps_worker_wall_time() -> None:
+    started = time.monotonic()
+    with request_execution(started):
+        bind_request_deadline(started + 0.2)
+        completed = run_bounded_process(
+            [sys.executable, "-c", "import time; time.sleep(30)"],
+            input_bytes=b"",
+            timeout_seconds=30,
+            environment=dict(os.environ),
+            stdout_limit=4096,
+            stderr_limit=4096,
+        )
+
+    assert completed.timed_out
+    assert not completed.cancelled
+    assert completed.returncode is not None
+    assert time.monotonic() - started < 3
+
+
+def test_cancelled_request_envelope_does_not_launch_a_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_to_launch(*_args: object, **_kwargs: object) -> Never:
+        raise AssertionError("cancelled request must not launch a worker")
+
+    monkeypatch.setattr("jacobian.process.subprocess.Popen", fail_to_launch)
+    cancellation_event = threading.Event()
+    cancellation_event.set()
+
+    with request_cancellation(cancellation_event):
+        completed = run_bounded_process(
+            [sys.executable, "-c", "raise SystemExit(0)"],
+            input_bytes=b"input",
+            timeout_seconds=30,
+            environment=dict(os.environ),
+            stdout_limit=4096,
+            stderr_limit=4096,
+        )
+
+    assert completed.cancelled
+    assert not completed.timed_out
     assert completed.returncode is None
 
 

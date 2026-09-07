@@ -9,7 +9,10 @@ from typing import NoReturn
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import format_canonical_integer
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.geometry.exact._models import PointConfiguration
 from jacobian.math.geometry.exact.pinned_distance._models import (
     DistanceClass,
@@ -126,7 +129,9 @@ def verify_pinned_distance_support_profile(
     """Verify a serialized support profile against its retained configuration."""
     try:
         return compute_pinned_distance_support_profile(claim.configuration) == claim
-    except (OperationDomainValidationError, ValueError, RuntimeError):
+    except OperationResourceAdmissionError:
+        raise
+    except (OperationDomainValidationError, ValueError):
         return False
 
 

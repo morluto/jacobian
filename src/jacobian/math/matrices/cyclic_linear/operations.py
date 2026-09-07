@@ -933,11 +933,8 @@ def cyclic_rational_rank_kernel_profile(
 def verify_cyclic_rational_rank_kernel_profile(
     claim: CyclicRationalRankKernelProfile,
 ) -> bool:
-    """Verify a serialized profile by recomputing its retained source claim."""
-    try:
-        return cyclic_rational_rank_kernel_profile(claim.symbol) == claim
-    except (CyclicRankKernelAdmissionError, ValueError, RuntimeError, TimeoutError):
-        return False
+    """Compare a claim with its recomputation; non-completion propagates."""
+    return cyclic_rational_rank_kernel_profile(claim.symbol) == claim
 
 
 def _cyclic_rational_rank_kernel_profile_in_request(

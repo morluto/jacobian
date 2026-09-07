@@ -9,7 +9,10 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import format_canonical_integer
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.geometry.exact._models import PointConfiguration
 from jacobian.math.geometry.exact.triangle_area_profile._models import (
     TriangleAreaEntry,
@@ -141,5 +144,7 @@ def verify_triangle_area_profile(claim: TriangleAreaProfileResult) -> bool:
     """Verify a serialized triangle-area profile against its source."""
     try:
         return compute_triangle_area_profile(claim.configuration) == claim
-    except (OperationDomainValidationError, ValueError, RuntimeError):
+    except OperationResourceAdmissionError:
+        raise
+    except (OperationDomainValidationError, ValueError):
         return False

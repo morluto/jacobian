@@ -64,6 +64,16 @@ OperationCursor = Annotated[
     ),
 ]
 
+OperationFindOperationId = Annotated[
+    OperationId,
+    Field(
+        description=(
+            "Exact public operation ID returned by a prior math.find match or "
+            "listed in operation://catalog."
+        )
+    ),
+]
+
 
 class OperationMatchRequest(StrictModel):
     op: Literal["match"]
@@ -172,6 +182,7 @@ __all__ = [
     "OperationCursor",
     "OperationDiscoveryError",
     "OperationDiscoveryErrorDetail",
+    "OperationFindOperationId",
     "OperationFindRequest",
     "OperationFindResponse",
     "OperationFindResult",

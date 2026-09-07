@@ -202,6 +202,55 @@ def test_agent_telemetry_does_not_count_unknown_exact_inspection(
     assert telemetry["operation_descriptions"] == []
 
 
+def test_agent_telemetry_recognizes_flat_discovery_and_inspection(
+    tmp_path: Path,
+) -> None:
+    events = [
+        _tool_event(
+            "math.find",
+            {"query": "polynomial symbolic expand", "limit": 2},
+            {
+                "kind": "matches",
+                "matches": [{"operation_id": "polynomial.expand.compute"}],
+            },
+        ),
+        _tool_event(
+            "math.find",
+            {"operation_id": "polynomial.expand.compute"},
+            {
+                "kind": "operation",
+                "operation": {"operation_id": "polynomial.expand.compute"},
+            },
+        ),
+    ]
+    transcript = tmp_path / "transcript.jsonl"
+    transcript.write_text(
+        "\n".join(json.dumps(event) for event in events) + "\n",
+        encoding="utf-8",
+    )
+
+    telemetry = parse_agent_transcript(transcript)
+
+    assert telemetry["operation_describe_index_calls"] == 1
+    assert telemetry["operation_describe_exact_calls"] == 1
+    assert telemetry["operation_descriptions"] == [
+        {
+            "kind": "matches",
+            "need": "polynomial symbolic expand",
+            "namespace": None,
+            "operation_id": None,
+            "match_ids": ["polynomial.expand.compute"],
+        },
+        {
+            "kind": "operation",
+            "need": None,
+            "namespace": None,
+            "operation_id": "polynomial.expand.compute",
+            "match_ids": [],
+        },
+    ]
+
+
 def test_agent_telemetry_records_current_inline_math_run_result(
     tmp_path: Path,
 ) -> None:

@@ -240,10 +240,8 @@ def test_discovery_probe_paginates_to_its_declared_limit() -> None:
             self, name: str, arguments: dict[str, object]
         ) -> SimpleNamespace:
             assert name == "math.find"
-            request = arguments["request"]
-            assert isinstance(request, dict)
-            self.requests.append(request)
-            start = 0 if "cursor" not in request else 10
+            self.requests.append(arguments)
+            start = 0 if "cursor" not in arguments else 10
             payload: dict[str, object] = {
                 "matches": [
                     {"operation_id": f"example.operation.{index:02d}"}

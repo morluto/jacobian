@@ -12,7 +12,10 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.logic.games.finite._models import (
     MAX_EXACT_EQUILIBRIUM_WORK,
     BestResponseResult,
@@ -399,7 +402,9 @@ def verify_best_response(claim: BestResponseResult) -> bool:
 def verify_nash_equilibrium(claim: NashEquilibriumResult) -> bool:
     try:
         return nash_equilibrium(claim.payoff_matrix) == claim
-    except (OperationDomainValidationError, TypeError, ValueError, RuntimeError):
+    except OperationResourceAdmissionError:
+        raise
+    except (OperationDomainValidationError, TypeError, ValueError):
         return False
 
 

@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.groups._models import (
     MAX_GROUP_DEGREE,
     GroupConjugacyClassesResult,
@@ -371,5 +374,7 @@ def subgroup_lattice(group: PermutationGroup) -> list[SubgroupEntry]:
 def verify_subgroup_lattice(claim: GroupSubgroupLatticeResult) -> bool:
     try:
         return tuple(subgroup_lattice(claim.source)) == claim.subgroups
-    except (OperationDomainValidationError, RuntimeError, TypeError, ValueError):
+    except OperationResourceAdmissionError:
+        raise
+    except (OperationDomainValidationError, TypeError, ValueError):
         return False

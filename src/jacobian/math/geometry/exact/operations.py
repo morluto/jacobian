@@ -9,7 +9,10 @@ from itertools import combinations, permutations
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.geometry.exact._line_arithmetic import (
     canonical_line_coefficients,
     squared_point_line_distance,
@@ -98,7 +101,9 @@ def verify_distance_profile(claim: DistanceProfileResult) -> bool:
     """Verify a serialized distance profile against its retained source."""
     try:
         return distance_profile(claim.configuration) == claim
-    except (OperationDomainValidationError, ValueError, RuntimeError):
+    except OperationResourceAdmissionError:
+        raise
+    except (OperationDomainValidationError, ValueError):
         return False
 
 
@@ -108,7 +113,9 @@ def verify_distance_graph(claim: DistanceGraphResult) -> bool:
         return (
             distance_graph(claim.configuration, claim.target_squared_distance) == claim
         )
-    except (OperationDomainValidationError, ValueError, RuntimeError):
+    except OperationResourceAdmissionError:
+        raise
+    except (OperationDomainValidationError, ValueError):
         return False
 
 
@@ -191,7 +198,9 @@ def verify_euclidean_orbit_profile(claim: EuclideanOrbitProfileResult) -> bool:
     """Verify canonical orbit forms and relabelings against their source."""
     try:
         return euclidean_orbit_profile(claim.configuration) == claim
-    except (OperationDomainValidationError, ValueError, RuntimeError):
+    except OperationResourceAdmissionError:
+        raise
+    except (OperationDomainValidationError, ValueError):
         return False
 
 
@@ -267,7 +276,9 @@ def verify_pinned_line_distance_profile(claim: PinnedLineDistanceResult) -> bool
     """Verify the pinned line profile against its retained source and anchor."""
     try:
         return pinned_line_distance_profile(claim.configuration, claim.anchor) == claim
-    except (OperationDomainValidationError, ValueError, RuntimeError):
+    except OperationResourceAdmissionError:
+        raise
+    except (OperationDomainValidationError, ValueError):
         return False
 
 

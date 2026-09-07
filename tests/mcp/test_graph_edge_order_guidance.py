@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 import asyncio
+import json
 
-import pytest
-from mcp.shared.exceptions import MCPError
+from mcp.types import ContentBlock, TextContent
 
 from jacobian.mcp.server import create_server
 from mcp import Client
+
+
+def _content_text(block: ContentBlock) -> str:
+    assert isinstance(block, TextContent)
+    return block.text
 
 
 def test_graph_inspection_and_error_explain_endpoint_order_before_recovery() -> None:
@@ -34,10 +39,10 @@ def test_graph_inspection_and_error_explain_endpoint_order_before_recovery() -> 
             "vertices": ["x", "y", "z", "r", "u", "v", "w"],
             "edges": edges,
         }
-        async with Client(create_server(), raise_exceptions=True) as client:
+        async with Client(create_server(), raise_exceptions=False) as client:
             inspected = await client.call_tool(
                 "math.find",
-                {"request": {"op": "inspect", "operation_id": operation_id}},
+                {"operation_id": operation_id},
             )
             contract = inspected.structured_content["operation"]
             schema = contract["input_schema"]["$defs"]["SimpleUndirectedGraph"]
@@ -51,12 +56,15 @@ def test_graph_inspection_and_error_explain_endpoint_order_before_recovery() -> 
             )
             assert example_result.structured_content["output"]["clique_count"] == 2
 
-            with pytest.raises(MCPError) as rejected:
-                await client.call_tool(
-                    "math.run",
-                    {"operation_id": operation_id, "payload": {"graph": graph}},
+            rejected = await client.call_tool(
+                "math.run",
+                {"operation_id": operation_id, "payload": {"graph": graph}},
+            )
+            error = json.loads(
+                _content_text(rejected.content[0]).removeprefix(
+                    "Error executing tool math.run: "
                 )
-            error = rejected.value.data["errors"][0]
+            )["errors"][0]
             assert error["location"] == ["graph"]
             assert "lexicographic label order" in error["message"]
             assert "not positions in vertices" in error["message"]

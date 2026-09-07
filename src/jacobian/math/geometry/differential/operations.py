@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.geometry.differential._bounds import (
     build_lie_derivative_plan,
 )
@@ -68,7 +69,9 @@ def verify_lie_derivative(claim: RationalLieDerivativeProfile) -> bool:
     try:
         expected = lie_derivative(claim.vector_field, claim.source)
         return expected.lie_derivative == claim.lie_derivative
-    except (ValueError, TypeError, ArithmeticError, RuntimeError):
+    except OperationResourceAdmissionError:
+        raise
+    except (ValueError, TypeError, ArithmeticError):
         return False
 
 

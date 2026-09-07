@@ -10,7 +10,7 @@ import time
 from enum import StrEnum
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Literal, NamedTuple, Self
+from typing import Any, Literal, NamedTuple, Self
 
 from pydantic import (
     Field,
@@ -19,7 +19,15 @@ from pydantic import (
 )
 from pydantic_core import PydanticCustomError
 
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+    bind_request_deadline,
+    current_request_execution,
+    request_checkpoint,
+)
 from jacobian._models import StrictModel
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.process import (
     ProcessResourceLimits,
     run_bounded_process,
@@ -39,6 +47,11 @@ _MAX_SMTLIB_DEPTH = 512
 _MAX_SMTLIB_TERMS = 32_768
 _MAX_SMTLIB_DECLARATIONS = 4_096
 _MAX_SMTLIB_NUMERAL_DIGITS = 4_096
+# Parsed closed arithmetic may grow beyond one literal (a product of two
+# admitted literals is roughly twice as wide), but repeated DAG multiplication
+# must not be allowed to expand without an owner-level envelope.
+_MAX_SMTLIB_ARITHMETIC_BITS = _MAX_SMTLIB_NUMERAL_DIGITS * 16
+_MAX_SMTLIB_ARITHMETIC_WORK = _MAX_SMTLIB_NUMERAL_DIGITS**2 * 64
 # Request-scoped solver budgets beyond wall time. Z3 rlimit is a deterministic
 # work measure: identical requests cut off identically regardless of host load
 # or speed. The ceiling is orders of magnitude above admitted easy queries
@@ -62,7 +75,31 @@ _SMT_WORKER_FILE_SIZE_BYTES = 1_024 * 1_024
 _SUPPORTED_SMTLIB_COMMANDS = frozenset(
     {"set-logic", "declare-const", "declare-fun", "assert", "check-sat"}
 )
+_SUPPORTED_SMTLIB_COMMANDS_DESCRIPTION = (
+    "set-logic, declare-const, declare-fun, assert, and check-sat"
+)
 _UnknownResource = Literal["time", "work", "memory"]
+
+
+def _execution_deadline(timeout_ms: int, stage: str) -> float:
+    now = time.monotonic()
+    execution = current_request_execution()
+    started_at = execution.started_at if execution is not None else now
+    owner_deadline = started_at + (timeout_ms / 1_000)
+    deadline = (
+        min(owner_deadline, execution.deadline)
+        if execution is not None and execution.deadline is not None
+        else owner_deadline
+    )
+    bind_request_deadline(deadline)
+    _require_execution_deadline(deadline, stage)
+    return deadline
+
+
+def _require_execution_deadline(deadline: float, stage: str) -> None:
+    request_checkpoint(stage)
+    if time.monotonic() >= deadline:
+        raise OperationExecutionTimeoutError(f"request deadline expired {stage}")
 
 
 def _validation_error(code: str, message: str) -> PydanticCustomError:
@@ -73,6 +110,156 @@ class SmtLogic(StrEnum):
     QF_UF = "QF_UF"
     QF_LIA = "QF_LIA"
     QF_LRA = "QF_LRA"
+
+
+class _ArithmeticBound(NamedTuple):
+    numerator_bits: int
+    denominator_bits: int
+
+
+def _saturating_add(*values: int) -> int:
+    return min(_MAX_SMTLIB_ARITHMETIC_BITS + 1, sum(values))
+
+
+def _saturating_work_add(total: int, amount: int) -> int:
+    return min(_MAX_SMTLIB_ARITHMETIC_WORK + 1, total + amount)
+
+
+def _check_arithmetic_bound(bound: _ArithmeticBound) -> None:
+    if (
+        bound.numerator_bits > _MAX_SMTLIB_ARITHMETIC_BITS
+        or bound.denominator_bits > _MAX_SMTLIB_ARITHMETIC_BITS
+    ):
+        raise ValueError("SMT closed arithmetic exceeds the admitted growth bound")
+
+
+def _literal_arithmetic_bound(expression: Any, z3: Any) -> _ArithmeticBound | None:
+    if z3.is_int_value(expression):
+        return _ArithmeticBound(max(1, abs(expression.as_long()).bit_length()), 1)
+    if z3.is_rational_value(expression):
+        value = expression.as_fraction()
+        return _ArithmeticBound(
+            max(1, abs(value.numerator).bit_length()),
+            max(1, value.denominator.bit_length()),
+        )
+    return None
+
+
+def _sum_arithmetic_bounds(
+    bounds: tuple[_ArithmeticBound, ...], *, extra_terms: int = 0
+) -> _ArithmeticBound:
+    denominator_bits = _saturating_add(*(bound.denominator_bits for bound in bounds))
+    numerator_bits = _saturating_add(
+        max(
+            bound.numerator_bits + denominator_bits - bound.denominator_bits
+            for bound in bounds
+        ),
+        max(1, extra_terms.bit_length()),
+    )
+    return _ArithmeticBound(numerator_bits, denominator_bits)
+
+
+def _multiply_arithmetic_bounds(
+    bounds: tuple[_ArithmeticBound, ...],
+) -> _ArithmeticBound:
+    return _ArithmeticBound(
+        _saturating_add(*(bound.numerator_bits for bound in bounds)),
+        _saturating_add(*(bound.denominator_bits for bound in bounds)),
+    )
+
+
+def _arithmetic_node_bound(
+    expression: Any, bounds: tuple[_ArithmeticBound, ...], z3: Any
+) -> _ArithmeticBound:
+    """Bound coefficient height, treating variables as unit formal terms.
+
+    Addition and multiplication bound the common denominator and the sum of
+    absolute numerator coefficients. The same bound therefore covers closed
+    constants, affine expressions, and mixtures of the two without evaluating
+    them. The fragment probe still owns linearity and theory membership.
+    """
+
+    kind = expression.decl().kind()
+    if kind in (z3.Z3_OP_ADD, z3.Z3_OP_SUB):
+        return _sum_arithmetic_bounds(bounds, extra_terms=len(bounds))
+    if kind == z3.Z3_OP_MUL:
+        return _multiply_arithmetic_bounds(bounds)
+    if kind == z3.Z3_OP_DIV:
+        left, right = bounds
+        return _ArithmeticBound(
+            _saturating_add(left.numerator_bits, right.denominator_bits),
+            _saturating_add(left.denominator_bits, right.numerator_bits),
+        )
+    if kind in (z3.Z3_OP_IDIV, z3.Z3_OP_MOD, z3.Z3_OP_REM):
+        # Integer quotient and signed remainder do not have rational quotient
+        # heights. In particular, mod(-1, b) can be b-1, not a small numerator
+        # over a large denominator. Retain both operand heights conservatively.
+        return _ArithmeticBound(
+            _saturating_add(max(bound.numerator_bits for bound in bounds), 1), 1
+        )
+    if kind == z3.Z3_OP_TO_INT:
+        return _ArithmeticBound(_saturating_add(bounds[0].numerator_bits, 1), 1)
+    if kind in (z3.Z3_OP_TO_REAL, z3.Z3_OP_UMINUS):
+        return bounds[0]
+    if kind == z3.Z3_OP_ITE:
+        return _ArithmeticBound(
+            max(bound.numerator_bits for bound in bounds),
+            max(bound.denominator_bits for bound in bounds),
+        )
+    raise ValueError("unsupported arithmetic operator in SMT fragment")
+
+
+def _require_closed_arithmetic_growth(assertions: tuple[Any, ...], z3: Any) -> None:
+    """Bound parsed arithmetic before simplification, without expanding its DAG."""
+
+    memo: dict[int, _ArithmeticBound | None] = {}
+    pending: list[tuple[Any, bool]] = [(assertion, False) for assertion in assertions]
+    work = 0
+    while pending:
+        expression, expanded = pending.pop()
+        expression_id = expression.get_id()
+        if expression_id in memo:
+            continue
+        literal = _literal_arithmetic_bound(expression, z3)
+        if literal is not None:
+            _check_arithmetic_bound(literal)
+            memo[expression_id] = literal
+            continue
+        children = expression.children()
+        if not expanded and children:
+            pending.append((expression, True))
+            pending.extend(
+                (child, False) for child in children if child.get_id() not in memo
+            )
+            continue
+        if not z3.is_arith(expression):
+            memo[expression_id] = None
+            continue
+        if not children:
+            memo[expression_id] = _ArithmeticBound(1, 1)
+            continue
+        # The condition of a numeric ite is Boolean, not an arithmetic operand.
+        operands = children[1:] if z3.is_app_of(expression, z3.Z3_OP_ITE) else children
+        bounds = tuple(memo[child.get_id()] for child in operands)
+        if any(bound is None for bound in bounds):
+            raise ValueError("unsupported arithmetic operand in SMT fragment")
+        numeric_bounds = tuple(bound for bound in bounds if bound is not None)
+        bound = _arithmetic_node_bound(expression, numeric_bounds, z3)
+        _check_arithmetic_bound(bound)
+        # A sum of operand widths squared bounds schoolbook cross-products,
+        # products and quotient work for this parsed arithmetic node. Reused
+        # children are visited once but counted at every parent occurrence.
+        work = _saturating_work_add(
+            work,
+            sum(
+                value.numerator_bits + value.denominator_bits
+                for value in numeric_bounds
+            )
+            ** 2,
+        )
+        if work > _MAX_SMTLIB_ARITHMETIC_WORK:
+            raise ValueError("SMT arithmetic exceeds the admitted work bound")
+        memo[expression_id] = bound
 
 
 def _consume_smtlib_string(source: str, position: int) -> int:
@@ -265,8 +452,14 @@ class SmtSolveRequest(StrictModel):
             f"{_MAX_SMTLIB_DEPTH}, compound terms at most {_MAX_SMTLIB_TERMS}, declared "
             f"symbols at most {_MAX_SMTLIB_DECLARATIONS}, and any one numeral, decimal, "
             f"or indexed bit-vector spelling at most {_MAX_SMTLIB_NUMERAL_DIGITS} digits. "
+            "Closed arithmetic and coefficient-only linear scaling are also bounded "
+            f"at {_MAX_SMTLIB_ARITHMETIC_BITS} bits per numerator or denominator and "
+            f"{_MAX_SMTLIB_ARITHMETIC_WORK:,} units of aggregate arithmetic work. "
             "The source is structurally admitted before execution; Z3 parsing and "
-            "solving occur within the operation's bounded execution envelope."
+            "solving occur within the operation's bounded execution envelope. "
+            "The only accepted top-level commands are "
+            f"{_SUPPORTED_SMTLIB_COMMANDS_DESCRIPTION}; definitions such as "
+            "define-fun are not accepted."
         ),
         examples=[
             "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)"
@@ -335,7 +528,9 @@ class SmtSolveRequest(StrictModel):
         for command in commands:
             if command and command[0] not in _SUPPORTED_SMTLIB_COMMANDS:
                 raise _validation_error(
-                    "logic.smtlib_command", f"unsupported SMT-LIB command: {command[0]}"
+                    "logic.smtlib_command",
+                    f"unsupported SMT-LIB command: {command[0]}; supported commands are "
+                    f"{_SUPPORTED_SMTLIB_COMMANDS_DESCRIPTION}",
                 )
         return self
 
@@ -424,6 +619,98 @@ def _solver_settings(timeout_ms: int) -> dict[str, int]:
     }
 
 
+def _require_supported_fragment_nodes(
+    assertions: tuple[Any, ...], logic: str, z3: Any
+) -> None:
+    """Reject theory sorts and applications outside the advertised fragment."""
+
+    if logic == SmtLogic.QF_UF.value:
+        allowed_sort_kinds = frozenset({z3.Z3_BOOL_SORT, z3.Z3_UNINTERPRETED_SORT})
+    elif logic == SmtLogic.QF_LIA.value:
+        allowed_sort_kinds = frozenset({z3.Z3_BOOL_SORT, z3.Z3_INT_SORT})
+    else:
+        allowed_sort_kinds = frozenset({z3.Z3_BOOL_SORT, z3.Z3_REAL_SORT})
+
+    stack = list(assertions)
+    seen: set[int] = set()
+    while stack:
+        expression = stack.pop()
+        expression_id = expression.get_id()
+        if expression_id in seen:
+            continue
+        seen.add(expression_id)
+        if expression.sort().kind() not in allowed_sort_kinds:
+            raise ValueError(f"SMT terms must belong to the declared {logic} fragment")
+        if (
+            logic != SmtLogic.QF_UF.value
+            and z3.is_app(expression)
+            and expression.decl().kind() == z3.Z3_OP_UNINTERPRETED
+            and expression.decl().arity() != 0
+        ):
+            raise ValueError(f"SMT terms must belong to the declared {logic} fragment")
+        stack.extend(expression.children())
+
+
+def _probe_declared_logic(
+    assertions: Any, logic: str, z3: Any, *, simplify_arithmetic: bool = True
+) -> None:
+    """Reject parsed assertions outside the advertised quantifier-free fragment."""
+
+    assertion_tuple = tuple(assertions)
+    if not assertion_tuple:
+        return
+    _require_supported_fragment_nodes(assertion_tuple, logic, z3)
+    if logic in (SmtLogic.QF_LIA.value, SmtLogic.QF_LRA.value):
+        _require_closed_arithmetic_growth(assertion_tuple, z3)
+    if logic == SmtLogic.QF_UF.value:
+        allowed_kinds = frozenset(
+            {
+                z3.Z3_OP_TRUE,
+                z3.Z3_OP_FALSE,
+                z3.Z3_OP_EQ,
+                z3.Z3_OP_DISTINCT,
+                z3.Z3_OP_ITE,
+                z3.Z3_OP_AND,
+                z3.Z3_OP_OR,
+                z3.Z3_OP_XOR,
+                z3.Z3_OP_NOT,
+                z3.Z3_OP_IMPLIES,
+                z3.Z3_OP_UNINTERPRETED,
+            }
+        )
+        stack = list(assertion_tuple)
+        seen: set[int] = set()
+        while stack:
+            expression = stack.pop()
+            if expression.get_id() in seen:
+                continue
+            seen.add(expression.get_id())
+            if (
+                not z3.is_app(expression)
+                or not z3.is_bool(expression)
+                or expression.decl().kind() not in allowed_kinds
+            ):
+                raise ValueError("SMT terms must belong to the declared QF_UF fragment")
+            stack.extend(expression.children())
+        return
+
+    raw_goal = z3.Goal(ctx=assertion_tuple[0].ctx)
+    raw_goal.add(*assertion_tuple)
+    has_quantifiers = float(
+        z3.Probe("has-quantifiers", ctx=assertion_tuple[0].ctx)(raw_goal)
+    )
+    goal = z3.Goal(ctx=assertion_tuple[0].ctx)
+    goal.add(
+        *(z3.simplify(assertion) for assertion in assertion_tuple)
+        if simplify_arithmetic
+        else assertion_tuple
+    )
+    probe_name = "is-lia" if logic == SmtLogic.QF_LIA.value else "is-lra"
+    belongs_to_fragment = float(z3.Probe(probe_name, ctx=assertion_tuple[0].ctx)(goal))
+    if has_quantifiers != 0.0 or belongs_to_fragment != 1.0:
+        raise ValueError(f"SMT terms must belong to the declared {logic} fragment")
+
+
 def _result(request: SmtSolveRequest, **values: object) -> SmtSolveResult:
     """Bind every projected worker outcome to its exact admitted source."""
 
@@ -460,6 +747,10 @@ def _solve_smt_kernel(
 
     try:
         assertions = z3.parse_smt2_string(smtlib)
+        try:
+            _probe_declared_logic(assertions, logic, z3)
+        except ValueError as exc:
+            return {"kind": "invalid", "detail": str(exc)[:1_024]}
         solver = z3.SolverFor(logic)
         solver.add(assertions)
         solver.set(**_solver_settings(timeout_ms))
@@ -501,6 +792,11 @@ def _solve_smt_kernel(
                 "detail": None,
             }
     except (OSError, z3.Z3Exception) as exc:
+        if isinstance(exc, z3.Z3Exception) and _is_smtlib_source_diagnostic(exc):
+            return {
+                "kind": "invalid",
+                "detail": "SMT-LIB source could not be parsed as SMT-LIB",
+            }
         exhausted = _classify_exhaustion(str(exc))
         if exhausted is not None:
             return {
@@ -528,7 +824,7 @@ def _solve_smt_kernel(
 def _run_smt_worker(request: SmtSolveRequest) -> SmtSolveResult:
     """Project one killable worker invocation onto the public typed result."""
 
-    deadline = time.monotonic() + (request.timeout_ms / 1_000)
+    deadline = _execution_deadline(request.timeout_ms, "before SMT worker")
     try:
         # The isolated worker has no reason to inherit the checkout as its
         # current directory.  Its input arrives only through stdin and its
@@ -536,7 +832,9 @@ def _run_smt_worker(request: SmtSolveRequest) -> SmtSolveResult:
         with TemporaryDirectory(prefix="jacobian-smt-") as worker_directory:
             remaining_seconds = deadline - time.monotonic()
             if remaining_seconds <= 0:
-                return _time_exhausted_result(request)
+                raise OperationExecutionTimeoutError(
+                    "request deadline expired before SMT worker"
+                )
             completed = run_bounded_process(
                 [sys.executable, str(_SMT_WORKER)],
                 input_bytes=json.dumps(
@@ -558,18 +856,21 @@ def _run_smt_worker(request: SmtSolveRequest) -> SmtSolveResult:
                 ),
                 cwd=worker_directory,
             )
+    except (OperationExecutionCancelledError, OperationExecutionTimeoutError):
+        raise
     except OSError:
+        _require_execution_deadline(deadline, "after SMT worker startup")
         return _result(
             request,
             outcome="UNKNOWN",
             detail="the bounded Z3 worker could not be started",
         )
     if completed.timed_out:
-        return _time_exhausted_result(request)
-    if completed.cancelled:
-        return _result(
-            request, outcome="UNKNOWN", detail="the bounded Z3 worker was cancelled"
+        raise OperationExecutionTimeoutError(
+            "request deadline expired during SMT worker"
         )
+    if completed.cancelled:
+        raise OperationExecutionCancelledError("request cancelled during SMT worker")
     if completed.stdout_exceeded or completed.stderr_exceeded:
         return _result(
             request,
@@ -582,16 +883,31 @@ def _run_smt_worker(request: SmtSolveRequest) -> SmtSolveResult:
             outcome="UNKNOWN",
             detail="the bounded Z3 worker failed before returning a result",
         )
-    if time.monotonic() >= deadline:
-        return _time_exhausted_result(request)
+    _require_execution_deadline(deadline, "after SMT worker")
     try:
         response = json.loads(completed.stdout.decode("utf-8"))
+        if not isinstance(response, dict):
+            raise TypeError("worker response must be an object")
+        if "source" in response:
+            raise TypeError("worker response must not replace the retained source")
+        if (
+            set(response) == {"kind", "detail"}
+            and response.get("kind") == "invalid"
+            and isinstance(response.get("detail"), str)
+            and 0 < len(response["detail"]) <= 1_024
+        ):
+            raise OperationDomainValidationError(
+                location=("smtlib",),
+                code="logic.smtlib_source",
+                message=response["detail"],
+            )
         result = SmtSolveResult.model_validate(
             {"source": request.model_dump(mode="json"), **response}
         )
-        return (
-            result if time.monotonic() < deadline else _time_exhausted_result(request)
-        )
+        _require_execution_deadline(deadline, "after SMT result projection")
+        return result
+    except OperationDomainValidationError:
+        raise
     except (TypeError, ValueError, UnicodeDecodeError, json.JSONDecodeError):
         return _result(
             request,
@@ -613,8 +929,10 @@ __all__ = [
     "SmtSolveResult",
     "_UnknownResource",
     "_classify_exhaustion",
+    "_execution_deadline",
     "_is_smtlib_source_diagnostic",
     "_project_unknown",
+    "_require_execution_deadline",
     "_run_smt_worker",
     "_solve_smt_kernel",
     "_solver_settings",

@@ -18,6 +18,10 @@ from pydantic import (
 )
 from pydantic_core import PydanticCustomError
 
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+)
 from jacobian._models import StrictModel
 from jacobian.math.logic._cnf import (
     _MAX_VARIABLES,
@@ -28,7 +32,9 @@ from jacobian.math.logic._cnf import (
 from jacobian.math.logic._smt import (
     _EXHAUSTION_DETAILS,
     _classify_exhaustion,
+    _execution_deadline,
     _project_unknown,
+    _require_execution_deadline,
     _solver_settings,
     _UnknownResource,
 )
@@ -72,23 +78,13 @@ class SatSolveResult(StrictModel):
                 "logic.sat_assignment_outcome",
                 "only a SAT result may carry an assignment",
             )
-        if self.assignment is not None:
-            if len(self.assignment) != len(self.source.cnf.variables):
-                raise _validation_error(
-                    "logic.sat_assignment_length",
-                    "a SAT assignment must cover the source CNF variable axis",
-                )
-            if not all(
-                any(
-                    self.assignment[abs(literal) - 1] == (literal > 0)
-                    for literal in clause
-                )
-                for clause in self.source.cnf.clauses
-            ):
-                raise _validation_error(
-                    "logic.sat_assignment_unsatisfied",
-                    "a SAT assignment must satisfy every source CNF clause",
-                )
+        if self.assignment is not None and len(self.assignment) != len(
+            self.source.cnf.variables
+        ):
+            raise _validation_error(
+                "logic.sat_assignment_length",
+                "a SAT assignment must cover the source CNF variable axis",
+            )
         if self.exhausted is not None and self.outcome != "UNKNOWN":
             raise _validation_error(
                 "logic.unknown_exhaustion",
@@ -129,19 +125,6 @@ def _solve_sat_kernel(*, cnf: CanonicalCnf, timeout_ms: int) -> dict[str, object
                 z3.is_true(model.eval(variable, model_completion=True))
                 for variable in variables
             )
-            checked_assignment = check_sat_assignment(
-                SatAssignmentCheckRequest(cnf=cnf, assignment=assignment)
-            )
-            if not checked_assignment.satisfies:
-                return {
-                    "outcome": "UNKNOWN",
-                    "assignment": None,
-                    "exhausted": None,
-                    "detail": (
-                        "the Z3 backend returned a model that does not satisfy the "
-                        "canonical CNF"
-                    ),
-                }
             return {
                 "outcome": "SAT",
                 "assignment": list(assignment),
@@ -200,12 +183,14 @@ def _time_exhausted_result(request: SatSolveRequest) -> SatSolveResult:
 def _run_sat_worker(request: SatSolveRequest) -> SatSolveResult:
     """Project one killable SAT worker invocation onto the public result."""
 
-    deadline = time.monotonic() + (request.timeout_ms / 1_000)
+    deadline = _execution_deadline(request.timeout_ms, "before SAT worker")
     try:
         with tempfile.TemporaryDirectory(prefix="jacobian-sat-") as worker_directory:
             remaining_seconds = deadline - time.monotonic()
             if remaining_seconds <= 0:
-                return _time_exhausted_result(request)
+                raise OperationExecutionTimeoutError(
+                    "request deadline expired before SAT worker"
+                )
             completed = run_bounded_process(
                 [sys.executable, str(_SAT_WORKER)],
                 input_bytes=json.dumps(
@@ -222,18 +207,21 @@ def _run_sat_worker(request: SatSolveRequest) -> SatSolveResult:
                 ),
                 cwd=worker_directory,
             )
+    except (OperationExecutionCancelledError, OperationExecutionTimeoutError):
+        raise
     except OSError:
+        _require_execution_deadline(deadline, "after SAT worker startup")
         return _result(
             request,
             outcome="UNKNOWN",
             detail="the bounded Z3 worker could not be started",
         )
     if completed.timed_out:
-        return _time_exhausted_result(request)
-    if completed.cancelled:
-        return _result(
-            request, outcome="UNKNOWN", detail="the bounded Z3 worker was cancelled"
+        raise OperationExecutionTimeoutError(
+            "request deadline expired during SAT worker"
         )
+    if completed.cancelled:
+        raise OperationExecutionCancelledError("request cancelled during SAT worker")
     if completed.stdout_exceeded or completed.stderr_exceeded:
         return _result(
             request,
@@ -246,18 +234,30 @@ def _run_sat_worker(request: SatSolveRequest) -> SatSolveResult:
             outcome="UNKNOWN",
             detail="the bounded Z3 worker failed before returning a result",
         )
-    if time.monotonic() >= deadline:
-        return _time_exhausted_result(request)
+    _require_execution_deadline(deadline, "after SAT worker")
     try:
+        response = json.loads(completed.stdout.decode("utf-8"))
+        if not isinstance(response, dict) or "source" in response:
+            raise TypeError("worker response must not replace the retained source")
         result = SatSolveResult.model_validate(
-            {
-                "source": request.model_dump(mode="json"),
-                **json.loads(completed.stdout.decode("utf-8")),
-            }
+            {"source": request.model_dump(mode="json"), **response}
         )
-        return (
-            result if time.monotonic() < deadline else _time_exhausted_result(request)
-        )
+        if (
+            result.assignment is not None
+            and not check_sat_assignment(
+                SatAssignmentCheckRequest(cnf=request.cnf, assignment=result.assignment)
+            ).satisfies
+        ):
+            return _result(
+                request,
+                outcome="UNKNOWN",
+                detail=(
+                    "the Z3 worker returned an assignment that does not satisfy "
+                    "the canonical CNF"
+                ),
+            )
+        _require_execution_deadline(deadline, "after SAT result projection")
+        return result
     except (TypeError, ValueError, UnicodeDecodeError, json.JSONDecodeError):
         return _result(
             request,

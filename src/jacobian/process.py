@@ -35,6 +35,7 @@ from typing import BinaryIO, Never, cast
 from jacobian._execution import (
     RequestCancellationSignal,
     current_request_cancellation,
+    current_request_execution,
     request_cancellation,
 )
 
@@ -715,12 +716,32 @@ def run_bounded_process(
     if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
         raise ValueError("subprocess timeout must be positive")
 
+    if cancellation_event is None:
+        cancellation_event = current_request_cancellation()
+    execution = current_request_execution()
+
     # This envelope includes input spooling, process setup, execution, result
     # capture, and reaping.  Keep a finite portion for teardown so a timeout
     # cannot acquire a second, fresh cleanup clock after the admitted lifetime.
     started = time.monotonic()
     absolute_deadline = started + timeout_seconds
-    cleanup_allowance = min(_PIPE_DRAIN_GRACE_SECONDS, timeout_seconds / 100)
+    if execution is not None and execution.deadline is not None:
+        absolute_deadline = min(absolute_deadline, execution.deadline)
+    effective_timeout = absolute_deadline - started
+    cancelled_before_start = (
+        cancellation_event is not None and cancellation_event.is_set()
+    )
+    if cancelled_before_start or effective_timeout <= 0:
+        return BoundedProcessResult(
+            returncode=None,
+            stdout=b"",
+            stderr=b"",
+            stdout_exceeded=False,
+            stderr_exceeded=False,
+            timed_out=not cancelled_before_start,
+            cancelled=cancelled_before_start,
+        )
+    cleanup_allowance = min(_PIPE_DRAIN_GRACE_SECONDS, effective_timeout / 100)
     execution_deadline = absolute_deadline - cleanup_allowance
 
     start_new_session = os.name == "posix"
@@ -734,9 +755,6 @@ def run_bounded_process(
     stderr = bytearray()
     stdout_exceeded = threading.Event()
     stderr_exceeded = threading.Event()
-    if cancellation_event is None:
-        cancellation_event = current_request_cancellation()
-
     prlimit_executable = (
         platform_tools.prlimit_executable if platform_tools is not None else None
     )

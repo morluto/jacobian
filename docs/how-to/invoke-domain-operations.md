@@ -20,11 +20,11 @@ For example, search for a small number of matrix operations, then inspect an
 exact candidate:
 
 ```json
-{"request":{"op":"match","need":"exact determinant of a rational matrix","namespace":"matrix","limit":3}}
+{"query":"exact determinant of a rational matrix","namespace":"matrix","limit":3}
 ```
 
 ```json
-{"request":{"op":"inspect","operation_id":"matrix.determinant.compute"}}
+{"operation_id":"matrix.determinant.compute"}
 ```
 
 The optional `namespace` filter matches only the first segment of an operation

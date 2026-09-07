@@ -8,7 +8,10 @@ from math import gcd
 from typing import TYPE_CHECKING, Literal
 
 from jacobian._flint import flint_workprec
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math._root_isolation import strict_root_count
 from jacobian.math.matrices.quadratic_spectral._bounds import (
     annihilating_coefficients,
@@ -614,7 +617,9 @@ def verify_symmetric_spectrum(claim: RealQuadraticSpectrum) -> bool:
         return False
     try:
         return symmetric_spectrum(claim.matrix) == claim
-    except (OperationDomainValidationError, ValueError, RuntimeError):
+    except OperationResourceAdmissionError:
+        raise
+    except (OperationDomainValidationError, ValueError):
         return False
 
 
@@ -624,7 +629,9 @@ def verify_singular_spectrum(claim: RealQuadraticSpectrum) -> bool:
         return False
     try:
         return singular_spectrum(claim.matrix) == claim
-    except (OperationDomainValidationError, ValueError, RuntimeError):
+    except OperationResourceAdmissionError:
+        raise
+    except (OperationDomainValidationError, ValueError):
         return False
 
 
@@ -632,7 +639,9 @@ def verify_inertia(claim: RealQuadraticInertia) -> bool:
     """Verify serialized inertia counts and definiteness against the source."""
     try:
         return inertia(claim.matrix) == claim
-    except (OperationDomainValidationError, ValueError, RuntimeError):
+    except OperationResourceAdmissionError:
+        raise
+    except (OperationDomainValidationError, ValueError):
         return False
 
 

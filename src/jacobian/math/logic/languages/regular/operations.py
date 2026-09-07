@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.logic.languages.regular._models import CountResult, RunResult
 from jacobian.math.logic.languages.regular._profile_admission import (
     TransitionParikhAdmissionPlan,
@@ -341,5 +344,7 @@ def verify_transition_parikh_profile(claim: TransitionParikhProfile) -> bool:
             )
             == claim
         )
-    except (OperationDomainValidationError, ValueError, TypeError, RuntimeError):
+    except OperationResourceAdmissionError:
+        raise
+    except (OperationDomainValidationError, ValueError, TypeError):
         return False

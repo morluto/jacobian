@@ -1,5 +1,6 @@
 """Exact operations on finite context-free grammars."""
 
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.logic.languages.context_free._models import (
     DependencyGraphResult,
     FiniteCFGO,
@@ -83,7 +84,9 @@ def verify_symbol_profiles(claim: SymbolProfilesResult) -> bool:
         return tuple(nullable_nonterminals(claim.grammar)) == claim.nullable and len(
             claim.nullable
         ) == len(claim.grammar.nonterminals)
-    except (TypeError, ValueError, RuntimeError):
+    except OperationResourceAdmissionError:
+        raise
+    except (TypeError, ValueError):
         return False
 
 
@@ -91,7 +94,9 @@ def verify_dependency_graph(claim: DependencyGraphResult) -> bool:
     """Verify dependency edges against the retained grammar."""
     try:
         return dependency_edges(claim.grammar) == claim.edges
-    except (TypeError, ValueError, RuntimeError):
+    except OperationResourceAdmissionError:
+        raise
+    except (TypeError, ValueError):
         return False
 
 
@@ -99,7 +104,9 @@ def verify_first_sets(claim: FirstSetsResult) -> bool:
     """Verify FIRST sets against the retained grammar and terminal axis."""
     try:
         return first_sets(claim.grammar) == claim.first_sets
-    except (TypeError, ValueError, RuntimeError):
+    except OperationResourceAdmissionError:
+        raise
+    except (TypeError, ValueError):
         return False
 
 

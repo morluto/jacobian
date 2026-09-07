@@ -5,7 +5,7 @@ import json
 from itertools import combinations
 
 import pytest
-from mcp.shared.exceptions import MCPError
+from mcp.types import ContentBlock, TextContent
 from tests.support.rationals import rational_payload as q
 
 from jacobian.catalog.catalog import Catalog
@@ -16,6 +16,12 @@ from jacobian.math.optimization._tools import TOOLS
 from jacobian.mcp.runtime import AppState
 from jacobian.mcp.server import _build_server
 from mcp import Client
+
+
+def _content_text(block: ContentBlock) -> str:
+    assert isinstance(block, TextContent)
+    return block.text
+
 
 OPERATION = "optimization.linear.rational_general_optimum.compute"
 
@@ -64,18 +70,17 @@ def test_lp_inspection_explains_derived_admission(
                 ],
             }
         }
-        async with Client(server, raise_exceptions=True) as client:
+        async with Client(server, raise_exceptions=False) as client:
             inspection = await client.call_tool(
-                "math.find", {"request": {"op": "inspect", "operation_id": OPERATION}}
+                "math.find", {"operation_id": OPERATION}
             )
             text = json.dumps(inspection.structured_content)
             assert "Normalized limits are 32 columns and 64 rows" in text
             assert "C(n+1,r)" in text and "50000000" in text
             if expect_rejection:
-                with pytest.raises(MCPError) as caught:
-                    await client.call_tool(
-                        "math.run", {"operation_id": OPERATION, "payload": payload}
-                    )
+                caught = await client.call_tool(
+                    "math.run", {"operation_id": OPERATION, "payload": payload}
+                )
             else:
                 result = await client.call_tool(
                     "math.run", {"operation_id": OPERATION, "payload": payload}
@@ -89,7 +94,11 @@ def test_lp_inspection_explains_derived_admission(
                 assert parsed.primal_objective is not None
                 assert parsed.primal_objective.as_fraction() == m
                 return
-        diagnostic = caught.value.data
+        diagnostic = json.loads(
+            _content_text(caught.content[0]).removeprefix(
+                "Error executing tool math.run: "
+            )
+        )
         assert diagnostic["code"] == "RESOURCE_ADMISSION_REJECTED"
         assert diagnostic["stage"] == "resource_admission"
         assert diagnostic["errors"][0]["code"] == f"optimization.linear.{code}"

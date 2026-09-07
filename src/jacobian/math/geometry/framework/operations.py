@@ -9,7 +9,10 @@ from typing import NoReturn
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.geometry.exact._models import PointConfiguration
 from jacobian.math.geometry.framework._bounds import (
     MAX_FRAMEWORK_COORDINATE_WORK,
@@ -211,7 +214,9 @@ def verify_planar_rigidity_profile(claim: PlanarRigidityProfile) -> bool:
             and claim.maximal_infinitesimal_rigidity_rank == maximal_rank
             and claim.is_infinitesimally_rigid == (expected_rank.rank == maximal_rank)
         )
-    except (OperationDomainValidationError, ValueError, RuntimeError):
+    except OperationResourceAdmissionError:
+        raise
+    except (OperationDomainValidationError, ValueError):
         return False
 
 

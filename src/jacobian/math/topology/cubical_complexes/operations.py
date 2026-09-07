@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.topology.cubical_complexes._models import (
     CubicalCell,
     CubicalComplex,
@@ -96,7 +97,9 @@ def verify_f_vector(claim: FVectorResult) -> bool:
     """Verify f-vector and Euler claims against retained source cells."""
     try:
         return f_vector(claim.source_cells) == claim
-    except (TypeError, ValueError, RuntimeError):
+    except OperationResourceAdmissionError:
+        raise
+    except (TypeError, ValueError):
         return False
 
 
@@ -104,7 +107,9 @@ def verify_face_closure(claim: FaceClosureResult) -> bool:
     """Verify the canonical face closure and count summary."""
     try:
         return face_closure(claim.source_cells) == claim
-    except (TypeError, ValueError, RuntimeError):
+    except OperationResourceAdmissionError:
+        raise
+    except (TypeError, ValueError):
         return False
 
 

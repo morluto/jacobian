@@ -8,8 +8,7 @@ import json
 from typing import Any, Self, cast
 
 import pytest
-from mcp.shared.exceptions import MCPError
-from mcp.types import INVALID_PARAMS, TextContent
+from mcp.types import ContentBlock, TextContent
 from pydantic import model_validator
 
 from jacobian._execution import (
@@ -34,6 +33,11 @@ from jacobian.mcp.server import _build_server, create_server
 from jacobian.mcp.tools import _invalid_request_error
 
 _FIXED_TOOLS = {"math.find", "math.run"}
+
+
+def _content_text(block: ContentBlock) -> str:
+    assert isinstance(block, TextContent)
+    return block.text
 
 
 def _operations(*operation_ids: str) -> tuple[MathTool[Any, Any], ...]:
@@ -279,56 +283,55 @@ def test_direct_calls_preserve_strict_and_domain_invalid_params() -> None:
     async def scenario() -> None:
         from mcp import Client
 
-        async with Client(_server(*operation_ids), raise_exceptions=True) as client:
-            try:
-                await client.call_tool(
-                    "integer.compute.extended_gcd",
-                    {"left": "84", "right": "30", "private": secret},
+        async with Client(_server(*operation_ids), raise_exceptions=False) as client:
+            invalid = await client.call_tool(
+                "integer.compute.extended_gcd",
+                {"left": "84", "right": "30", "private": secret},
+            )
+            invalid_data = json.loads(
+                _content_text(invalid.content[0]).removeprefix(
+                    "Error executing tool integer.compute.extended_gcd: "
                 )
-            except MCPError as invalid:
-                assert invalid.code == INVALID_PARAMS
-                assert invalid.data["errors"] == [
-                    {
-                        "location": ["private"],
-                        "code": "extra_forbidden",
-                        "message": "Extra inputs are not permitted",
-                    }
-                ]
-                assert secret not in invalid.message
-                assert secret not in str(invalid.data)
-            else:  # pragma: no cover - regression assertion
-                raise AssertionError("extra direct argument was accepted")
+            )
+            assert invalid_data["errors"] == [
+                {
+                    "location": ["private"],
+                    "code": "extra_forbidden",
+                    "message": "Extra inputs are not permitted",
+                }
+            ]
+            assert secret not in _content_text(invalid.content[0])
 
-            try:
-                await client.call_tool(
-                    "integer.compute.extended_gcd",
-                    {"left": 1.5, "right": "30"},
+            noncanonical = await client.call_tool(
+                "integer.compute.extended_gcd",
+                {"left": 1.5, "right": "30"},
+            )
+            noncanonical_data = json.loads(
+                _content_text(noncanonical.content[0]).removeprefix(
+                    "Error executing tool integer.compute.extended_gcd: "
                 )
-            except MCPError as noncanonical:
-                assert noncanonical.code == INVALID_PARAMS
-                assert noncanonical.data["errors"] == [
-                    {
-                        "location": [],
-                        "code": "canonicalization_error",
-                        "message": "JSON floating-point numbers are not allowed",
-                    }
-                ]
-            else:  # pragma: no cover - regression assertion
-                raise AssertionError("floating-point direct argument was accepted")
+            )
+            assert noncanonical_data["errors"] == [
+                {
+                    "location": [],
+                    "code": "canonicalization_error",
+                    "message": "JSON floating-point numbers are not allowed",
+                }
+            ]
 
-            try:
-                await client.call_tool(universal.operation_id, invalid_domain)
-            except MCPError as domain:
-                assert domain.code == INVALID_PARAMS
-                assert domain.data["errors"] == [
-                    {
-                        "location": ["assignment"],
-                        "code": "universal_algebra.assignment_coverage",
-                        "message": "assignment must cover exactly the referenced variables",
-                    }
-                ]
-            else:  # pragma: no cover - regression assertion
-                raise AssertionError("domain-invalid direct argument was accepted")
+            domain = await client.call_tool(universal.operation_id, invalid_domain)
+            domain_data = json.loads(
+                _content_text(domain.content[0]).removeprefix(
+                    f"Error executing tool {universal.operation_id}: "
+                )
+            )
+            assert domain_data["errors"] == [
+                {
+                    "location": ["assignment"],
+                    "code": "universal_algebra.assignment_coverage",
+                    "message": "assignment must cover exactly the referenced variables",
+                }
+            ]
 
     asyncio.run(scenario())
 
@@ -362,10 +365,10 @@ def test_direct_calls_do_not_expose_unexpected_owner_failures() -> None:
         assert result.is_error is True
         assert result.structured_content is None
         assert result.content and isinstance(result.content[0], TextContent)
-        assert result.content[0].text == (
+        assert _content_text(result.content[0]) == (
             "Error executing tool test.direct.crash: operation execution failed"
         )
-        assert "private backend value" not in result.content[0].text
+        assert "private backend value" not in _content_text(result.content[0])
 
     asyncio.run(scenario())
 
@@ -399,11 +402,11 @@ def test_direct_calls_preserve_owner_cancellation_diagnosis() -> None:
         assert result.is_error is True
         assert result.structured_content is None
         assert result.content and isinstance(result.content[0], TextContent)
-        assert result.content[0].text == (
+        assert _content_text(result.content[0]) == (
             "Error executing tool test.direct.cancel: operation cancelled"
         )
-        assert "private cancellation detail" not in result.content[0].text
-        assert "operation execution failed" not in result.content[0].text
+        assert "private cancellation detail" not in _content_text(result.content[0])
+        assert "operation execution failed" not in _content_text(result.content[0])
 
     asyncio.run(scenario())
 
@@ -453,14 +456,16 @@ def test_math_run_preserves_bounded_operation_failure_context(
         assert result.is_error is True
         assert result.content and isinstance(result.content[0], TextContent)
         diagnostic = json.loads(
-            result.content[0].text.removeprefix("Error executing tool math.run: ")
+            _content_text(result.content[0]).removeprefix(
+                "Error executing tool math.run: "
+            )
         )
         assert diagnostic == {
             "code": code,
             "operation_id": operation.operation_id,
             "stage": "operation_execution",
         }
-        assert "private" not in result.content[0].text
+        assert "private" not in _content_text(result.content[0])
 
     asyncio.run(scenario())
 
@@ -492,19 +497,22 @@ def test_math_run_reports_resource_admission_separately_from_invalid_payload() -
         from mcp import Client
 
         async with Client(
-            _direct_server(Catalog((operation,))), raise_exceptions=True
+            _direct_server(Catalog((operation,))), raise_exceptions=False
         ) as client:
-            with pytest.raises(MCPError) as error:
-                await client.call_tool(
-                    "math.run",
-                    {"operation_id": operation.operation_id, "payload": {"value": 1}},
-                )
+            error = await client.call_tool(
+                "math.run",
+                {"operation_id": operation.operation_id, "payload": {"value": 1}},
+            )
 
-        assert error.value.code == INVALID_PARAMS
-        assert error.value.data["code"] == "RESOURCE_ADMISSION_REJECTED"
-        assert error.value.data["stage"] == "resource_admission"
-        assert error.value.data["operation_id"] == operation.operation_id
-        assert "correct the fields" not in error.value.data["hint"]
+        diagnostic = json.loads(
+            _content_text(error.content[0]).removeprefix(
+                "Error executing tool math.run: "
+            )
+        )
+        assert diagnostic["code"] == "RESOURCE_ADMISSION_REJECTED"
+        assert diagnostic["stage"] == "resource_admission"
+        assert diagnostic["operation_id"] == operation.operation_id
+        assert "correct the fields" not in diagnostic["hint"]
 
     asyncio.run(scenario())
 
@@ -518,7 +526,7 @@ def test_budget_named_mathematical_precondition_remains_invalid_payload() -> Non
 
     projected = _invalid_request_error("matrix.determinant.compute", error)
 
-    assert projected.data["code"] == "INVALID_REQUEST"
+    assert json.loads(str(projected))["code"] == "INVALID_REQUEST"
 
 
 @pytest.mark.parametrize("direct", [False, True])

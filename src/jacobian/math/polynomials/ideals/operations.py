@@ -1324,7 +1324,9 @@ def verify_ideal_membership_certificate(
                 rational_polynomial_to_sympy(generator).as_expr()
             )
         return bool(sympy.expand(identity - claim.multiplier * target) == 0)
-    except Exception:
+    except OperationResourceAdmissionError:
+        raise
+    except (AttributeError, KeyError, TypeError, ValueError, sympy.SympifyError):
         return False
 
 
@@ -1347,7 +1349,11 @@ def verify_groebner_basis(claim: GroebnerBasisResult) -> bool:
             ],
         }
         return bool(_run_sympy_kernel(payload, 10).get("equal", False))
-    except Exception:
+    except OperationResourceAdmissionError:
+        raise
+    except _ResultLimitExceededError:
+        raise
+    except (AttributeError, KeyError, TypeError, ValueError, sympy.SympifyError):
         return False
 
 

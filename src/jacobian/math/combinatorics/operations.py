@@ -163,7 +163,13 @@ def _falling_factorial_digit_bound(n: int, k: int) -> int:
 def _bind_counting_deadline() -> None:
     execution = current_request_execution()
     started = execution.started_at if execution is not None else time.monotonic()
-    bind_request_deadline(started + 120.0)
+    owner_deadline = started + 120.0
+    deadline = (
+        min(execution.deadline, owner_deadline)
+        if execution is not None and execution.deadline is not None
+        else owner_deadline
+    )
+    bind_request_deadline(deadline)
 
 
 def _canonical_count(operation: str, n: int, k: int) -> int:

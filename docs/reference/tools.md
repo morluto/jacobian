@@ -56,7 +56,8 @@ operational failure, not a mathematical conclusion.
 ## Execution non-completion and recovery
 
 MCP distinguishes an invalid request from a valid call that could not complete.
-Structural or mathematical admission failures use `INVALID_PARAMS`. Timeout,
+Structural or mathematical admission failures use the model-visible tool error
+channel with a bounded structured diagnostic. Timeout,
 cancellation, configured worker or host capacity exhaustion, backend failure,
 and delivery failure return an agent-visible tool error (`is_error=true`). The
 error is not a mathematical result and must not be interpreted as `False`,
@@ -69,11 +70,11 @@ An agent can retry with a smaller request, a more compact representation,
 another backend, or a deployment with more capacity. Diagnostics may name the
 exhausted boundary, but exact results are never truncated.
 
-Use `math.find` with `request.op="match"` and a short description of the local
-result needed. Its compact matches retain `catalog_resource` as an explicit
-pointer to the bulk catalog export. Then call `math.find` with
-`request.op="inspect"` to obtain the selected operation's exact input/output
-schemas and valid examples.
+Use `math.find` with `query` and a short description of the local result needed.
+Its compact matches retain `catalog_resource` as an explicit pointer to the bulk
+catalog export. Then call `math.find` with `operation_id` to obtain the selected
+operation's exact input/output schemas and valid examples. Provide exactly one of
+`query` and `operation_id`; `namespace`, `limit`, and `cursor` are search-only.
 
 ## Form a payload from an inspected contract
 
@@ -81,7 +82,7 @@ Inspect an operation before constructing an unfamiliar payload. Start from one
 of its valid examples, when it has one, and adapt it to the mathematical input.
 Otherwise form the payload from the input schema and field descriptions. They
 state the required representation, including units, bounds, and canonical
-encodings or ordering where they matter. An `INVALID_PARAMS` response from
+encodings or ordering where they matter. An invalid-request tool error from
 `math.run` means either that the payload was structurally malformed or that the
 operation's mathematical admission rejected an otherwise well-formed request.
 Use its structured diagnostic to make the smallest correction before drawing a

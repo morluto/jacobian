@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.number_theory.sequences.recurrence_solving._models import (
     _MAX_FIELD_PRIME,
     _MAX_FIELD_SEQUENCE_LENGTH,
@@ -170,6 +171,8 @@ def verify_recurrence(claim: RecurrenceFindResult) -> bool:
     """Verify a fitted rational recurrence against its retained sequence."""
     try:
         expected = find_recurrence(claim.sequence)
+    except OperationResourceAdmissionError:
+        raise
     except (TypeError, ValueError):
         return False
     return (
@@ -183,7 +186,9 @@ def verify_closed_form(claim: ClosedFormResult) -> bool:
     """Verify the displayed closed form against its retained recurrence source."""
     try:
         expected = closed_form(claim.characteristic_coefficients, claim.initial_values)
-    except (TypeError, ValueError, RuntimeError):
+    except OperationResourceAdmissionError:
+        raise
+    except (TypeError, ValueError):
         return False
     return claim.expression.value == expected.expression
 
@@ -192,7 +197,9 @@ def verify_prime_field_recurrence(claim: PrimeFieldRecurrenceFindResult) -> bool
     """Verify a prime-field recurrence against its retained source sequence."""
     try:
         expected = berlekamp_massey(list(claim.sequence), claim.recurrence.prime)
-    except (TypeError, ValueError, RuntimeError):
+    except OperationResourceAdmissionError:
+        raise
+    except (TypeError, ValueError):
         return False
     return claim.recurrence == expected
 

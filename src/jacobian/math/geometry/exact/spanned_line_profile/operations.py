@@ -9,7 +9,10 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
 from jacobian.canonical import format_canonical_integer
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.geometry.exact._models import PointConfiguration
 from jacobian.math.geometry.exact.spanned_line_profile._models import (
     SpannedLineEntry,
@@ -101,7 +104,9 @@ def verify_spanned_line_profile(claim: SpannedLineProfileResult) -> bool:
     """Verify a serialized line profile against its retained configuration."""
     try:
         return compute_spanned_line_profile(claim.configuration) == claim
-    except (OperationDomainValidationError, ValueError, RuntimeError):
+    except OperationResourceAdmissionError:
+        raise
+    except (OperationDomainValidationError, ValueError):
         return False
 
 

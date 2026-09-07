@@ -5,12 +5,17 @@ from __future__ import annotations
 import hashlib
 import math
 import sys
+import time
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from jacobian._execution import (
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
+    bind_request_deadline,
+    current_request_execution,
+    request_checkpoint,
+    request_execution,
 )
 from jacobian.canonical import (
     CanonicalizationError,
@@ -35,6 +40,19 @@ _WORKER_STDERR_BYTES = 64 * 1024
 def compute_nf_discriminant(
     request: NumberFieldRequest,
 ) -> NumberFieldDiscriminantResult:
+    execution = current_request_execution()
+    if execution is None:
+        with request_execution(time.monotonic()):
+            return compute_nf_discriminant(request)
+    owner_deadline = execution.started_at + _WORKER_TIMEOUT_SECONDS
+    deadline = (
+        min(execution.deadline, owner_deadline)
+        if execution.deadline is not None
+        else owner_deadline
+    )
+    bind_request_deadline(deadline)
+    request_checkpoint("before number-field discriminant preparation")
+
     from jacobian.process import (
         ProcessResourceLimits,
         run_bounded_process,
@@ -77,7 +95,9 @@ def compute_nf_discriminant(
                 cwd=worker_directory,
             )
     except OSError as exc:
+        request_checkpoint("during number-field worker startup")
         raise RuntimeError("bounded number-field worker could not be started") from exc
+    request_checkpoint("after number-field discriminant worker")
     if completed.cancelled:
         raise OperationExecutionCancelledError(
             "number-field discriminant computation cancelled"
@@ -105,10 +125,13 @@ def compute_nf_discriminant(
             if set(response) != {"kind", "discriminant", "request_digest"}:
                 raise ValueError("complete worker response has invalid fields")
             discriminant = parse_canonical_integer(response["discriminant"])
-            return NumberFieldDiscriminantResult(
+            result = NumberFieldDiscriminantResult(
                 field=request.field, discriminant=discriminant
             )
+            request_checkpoint("after number-field discriminant result construction")
+            return result
     except (KeyError, TypeError, ValueError, CanonicalizationError):
+        request_checkpoint("during number-field discriminant response validation")
         response = None
     if (
         isinstance(response, dict)

@@ -257,15 +257,14 @@ async def _run_discovery(
     cursor: str | None = None
     while len(match_ids) < limit:
         request: dict[str, Any] = {
-            "op": "match",
-            "need": query,
+            "query": query,
             "limit": min(10, limit - len(match_ids)),
         }
         if namespace is not None:
             request["namespace"] = namespace
         if cursor is not None:
             request["cursor"] = cursor
-        result = await client.call_tool("math.find", {"request": request})
+        result = await client.call_tool("math.find", request)
         payload = result.structured_content
         if not isinstance(payload, dict):
             raise RuntimeError("math.find omitted structured discovery output")

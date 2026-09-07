@@ -1,12 +1,17 @@
 """Live MCP projection of chip-firing defining regressions and rejection."""
 
 import asyncio
+import json
 
-from mcp.shared.exceptions import MCPError
-from mcp.types import INVALID_PARAMS
+from mcp.types import ContentBlock, TextContent
 
 from jacobian.mcp.server import create_server
 from mcp import Client
+
+
+def _content_text(block: ContentBlock) -> str:
+    assert isinstance(block, TextContent)
+    return block.text
 
 
 def test_chip_firing_regressions_through_live_mcp() -> None:
@@ -47,7 +52,7 @@ def test_chip_firing_regressions_through_live_mcp() -> None:
                 [0],
             ),
         ]
-        async with Client(create_server(), raise_exceptions=True) as client:
+        async with Client(create_server(), raise_exceptions=False) as client:
             for name, payload, field, expected in cases:
                 result = await client.call_tool(
                     "math.run",
@@ -100,8 +105,8 @@ def test_chip_firing_regressions_through_live_mcp() -> None:
                 assert output["invariant_factors"] == [1, 1, 1, 1, 1, 2520]
                 assert (output["coordinates"] == [0]) == principal
             disconnected = {"vertices": ["a", "b", "c"], "edges": [["b", "c"]]}
-            # INVALID_PARAMS is a protocol exception, distinct from a
-            # successful mathematical result or an execution tool error.
+            # Invalid owner requests are model-visible tool errors, distinct
+            # from a successful mathematical result or execution failure.
             for name in ("stabilize", "q_reduced"):
                 payload = {"graph": disconnected, "sink": "a"}
                 payload = (
@@ -109,21 +114,21 @@ def test_chip_firing_regressions_through_live_mcp() -> None:
                     if name == "stabilize"
                     else {**payload, "divisor": [0, 1, 1]}
                 )
-                try:
-                    await client.call_tool(
-                        "math.run",
-                        {
-                            "operation_id": f"graph.chip_firing.{name}.compute",
-                            "payload": payload,
-                        },
+                result = await client.call_tool(
+                    "math.run",
+                    {
+                        "operation_id": f"graph.chip_firing.{name}.compute",
+                        "payload": payload,
+                    },
+                )
+                diagnostic = json.loads(
+                    _content_text(result.content[0]).removeprefix(
+                        "Error executing tool math.run: "
                     )
-                except MCPError as exc:
-                    assert exc.code == INVALID_PARAMS
-                    assert (
-                        exc.data["errors"][0]["code"]
-                        == "chip_firing.requires_connected_graph"
-                    )
-                else:
-                    raise AssertionError("MCP admitted a disconnected sink graph")
+                )
+                assert (
+                    diagnostic["errors"][0]["code"]
+                    == "chip_firing.requires_connected_graph"
+                )
 
     asyncio.run(scenario())

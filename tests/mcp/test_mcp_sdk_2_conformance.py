@@ -5,11 +5,11 @@ from __future__ import annotations
 import asyncio
 import importlib.metadata
 import inspect
+import json
 from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
-from mcp.shared.exceptions import MCPError
 from mcp.types import ContentBlock, TextContent, TextResourceContents
 from mcp.types.methods import serialize_server_result
 
@@ -196,28 +196,31 @@ def test_math_run_projects_forged_character_as_invalid_request() -> None:
     async def scenario() -> None:
         from mcp import Client
 
-        async with Client(create_server(), raise_exceptions=True) as client:
-            with pytest.raises(MCPError) as error:
-                await client.call_tool(
-                    "math.run",
-                    {
-                        "operation_id": "dirichlet_character.principal.value.compute",
-                        "payload": {
-                            "character": {
-                                "modulus": 4,
-                                "unit_residues": [1],
-                                "values": [0, 1, 0, 0],
-                            },
-                            "integer": "1",
+        async with Client(create_server(), raise_exceptions=False) as client:
+            error = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "dirichlet_character.principal.value.compute",
+                    "payload": {
+                        "character": {
+                            "modulus": 4,
+                            "unit_residues": [1],
+                            "values": [0, 1, 0, 0],
                         },
+                        "integer": "1",
                     },
-                )
+                },
+            )
 
-        assert error.value.code == -32602
-        assert error.value.message == "operation payload failed validation"
-        assert error.value.data["code"] == "INVALID_REQUEST"
-        assert error.value.data["stage"] == "operation_validation"
-        assert error.value.data["errors"] == [
+        assert error.is_error is True
+        diagnostic = json.loads(
+            _content_text(error.content[0]).removeprefix(
+                "Error executing tool math.run: "
+            )
+        )
+        assert diagnostic["code"] == "INVALID_REQUEST"
+        assert diagnostic["stage"] == "operation_validation"
+        assert diagnostic["errors"] == [
             {
                 "location": ["character", "unit_residues"],
                 "code": "dirichlet_character.unit_residues_mismatch",
@@ -257,26 +260,27 @@ def test_mcp_v2_uses_sdk_typed_tools_lifespan_and_structured_resources() -> None
             assert find.annotations is not None
             assert find.annotations.read_only_hint is True
             assert find.annotations.idempotent_hint is True
-            assert set(find.input_schema["properties"]) == {"request"}
-            assert find.input_schema["properties"]["request"]["discriminator"] == {
-                "mapping": {
-                    "inspect": "#/$defs/OperationInspectRequest",
-                    "match": "#/$defs/OperationMatchRequest",
-                },
-                "propertyName": "op",
+            assert set(find.input_schema["properties"]) == {
+                "query",
+                "operation_id",
+                "namespace",
+                "limit",
+                "cursor",
             }
-            assert find.input_schema["required"] == ["request"]
-            need_description = find.input_schema["$defs"]["OperationMatchRequest"][
-                "properties"
-            ]["need"]["description"]
+            assert not find.input_schema.get("required")
+            query_schema = find.input_schema["properties"]["query"]
+            need_description = query_schema["anyOf"][0]["description"]
             assert "established mathematical names" in need_description
             assert "full scalar, batch, or exhaustive scope" in need_description
             assert "requested result" in need_description
-            limit_schema = find.input_schema["$defs"]["OperationMatchRequest"][
-                "properties"
-            ]["limit"]
-            assert limit_schema["default"] == 10
-            assert limit_schema["maximum"] == 20
+            operation_id_schema = find.input_schema["properties"]["operation_id"]
+            assert (
+                "Exact public operation ID"
+                in operation_id_schema["anyOf"][0]["description"]
+            )
+            limit_schema = find.input_schema["properties"]["limit"]
+            assert limit_schema["default"] is None
+            assert any(item.get("maximum") == 20 for item in limit_schema["anyOf"])
             assert find.output_schema is not None
             assert find.output_schema["type"] == "object"
 
@@ -293,14 +297,21 @@ def test_mcp_v2_uses_sdk_typed_tools_lifespan_and_structured_resources() -> None
             assert invalid_request.is_error is True
             assert invalid_request.content, "error responses must carry diagnostic text"
             assert any(
-                "request" in item.text
+                "query or operation_id" in item.text
                 for item in invalid_request.content
                 if isinstance(item, TextContent)
-            ), "error text must identify the missing request field"
+            ), "error text must identify the required discovery selector"
 
-            blank_need = await client.call_tool(
-                "math.find", {"request": {"op": "match", "need": "   "}}
+            flat_query = await client.call_tool(
+                "math.find",
+                {"query": "polynomial symbolic expand", "limit": 2},
             )
+            assert flat_query.is_error is False
+            assert isinstance(flat_query.structured_content, dict)
+            assert flat_query.structured_content["kind"] == "matches"
+            assert len(flat_query.structured_content["matches"]) <= 2
+
+            blank_need = await client.call_tool("math.find", {"query": "   "})
             assert blank_need.is_error is True
             assert any(
                 "non-whitespace" in item.text
@@ -308,13 +319,46 @@ def test_mcp_v2_uses_sdk_typed_tools_lifespan_and_structured_resources() -> None
                 if isinstance(item, TextContent)
             )
 
-            contract_result = await client.call_tool(
+            both_selectors = await client.call_tool(
+                "math.find",
+                {
+                    "query": "exact determinant",
+                    "operation_id": "matrix.determinant.compute",
+                },
+            )
+            assert both_selectors.is_error is True
+            assert any(
+                "exactly one" in item.text
+                for item in both_selectors.content
+                if isinstance(item, TextContent)
+            )
+
+            inspect_with_search_option = await client.call_tool(
+                "math.find",
+                {"operation_id": "matrix.determinant.compute", "limit": 2},
+            )
+            assert inspect_with_search_option.is_error is True
+            assert any(
+                "only valid with query" in item.text
+                for item in inspect_with_search_option.content
+                if isinstance(item, TextContent)
+            )
+
+            legacy_wrapper = await client.call_tool(
                 "math.find",
                 {
                     "request": {
                         "op": "inspect",
                         "operation_id": "matrix.determinant.compute",
                     }
+                },
+            )
+            assert legacy_wrapper.is_error is True
+
+            contract_result = await client.call_tool(
+                "math.find",
+                {
+                    "operation_id": "matrix.determinant.compute",
                 },
             )
             assert isinstance(contract_result.structured_content, dict)

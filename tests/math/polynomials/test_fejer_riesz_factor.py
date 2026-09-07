@@ -8,6 +8,7 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
+import jacobian.math.polynomials.unit_circle.operations as unit_circle_operations
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -116,7 +117,7 @@ def test_operation_admits_only_real_symmetric_sources() -> None:
 def test_verifier_rejects_reciprocal_and_source_forgeries() -> None:
     result = real_symmetric_degree_one_fejer_riesz_factor(laurent(3, -1))
     assert not verify_real_symmetric_degree_one_fejer_riesz_factor(
-        result.model_copy(update={"source": None})  # type: ignore[arg-type]
+        result.model_copy(update={"source": None})
     )
     payload = json.loads(result.model_dump_json())
     coefficients = payload["conclusion"]["factor"]["coefficients_ascending"]
@@ -177,3 +178,29 @@ def test_every_admitted_factor_remains_inside_the_verifier_envelope() -> None:
     )
     with pytest.raises(OperationResourceAdmissionError, match="32-digit"):
         real_symmetric_degree_one_fejer_riesz_factor(outside)
+
+
+def test_fejer_riesz_verifier_propagates_operational_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    result = real_symmetric_degree_one_fejer_riesz_factor(laurent(2, -1))
+
+    def fail(_value: object) -> object:
+        raise RuntimeError("embedding backend failed")
+
+    monkeypatch.setattr(
+        unit_circle_operations,
+        "recognize_real_simple_number_field",
+        fail,
+    )
+    with pytest.raises(RuntimeError, match="embedding backend failed"):
+        verify_real_symmetric_degree_one_fejer_riesz_factor(result)
+
+
+def test_fejer_riesz_verifier_propagates_source_resource_admission() -> None:
+    result = real_symmetric_degree_one_fejer_riesz_factor(laurent(2, -1))
+    oversized_source = laurent(2 * 10**32, -(10**32))
+    claim = result.model_copy(update={"source": oversized_source})
+
+    with pytest.raises(OperationResourceAdmissionError, match="32-digit"):
+        verify_real_symmetric_degree_one_fejer_riesz_factor(claim)

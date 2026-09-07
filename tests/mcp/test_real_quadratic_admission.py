@@ -4,8 +4,7 @@ import asyncio
 import json
 
 import pytest
-from mcp.shared.exceptions import MCPError
-from mcp.types import INVALID_PARAMS
+from mcp.types import ContentBlock, TextContent
 
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
@@ -16,6 +15,11 @@ from jacobian.math.number_theory.arithmetic._real_quadratic import (
 )
 from jacobian.mcp.server import create_server
 from mcp import Client
+
+
+def _content_text(block: ContentBlock) -> str:
+    assert isinstance(block, TextContent)
+    return block.text
 
 
 @pytest.mark.parametrize(
@@ -50,19 +54,22 @@ def test_real_quadratic_rejection_and_recovery(overflow: bool) -> None:
     assert dispatch.value.errors() == native.value.errors()
 
     async def scenario() -> None:
-        async with Client(create_server(), raise_exceptions=True) as client:
-            with pytest.raises(MCPError) as rejected:
-                await client.call_tool(
-                    "math.run", {"operation_id": operation_id, "payload": payload}
+        async with Client(create_server(), raise_exceptions=False) as client:
+            rejected = await client.call_tool(
+                "math.run", {"operation_id": operation_id, "payload": payload}
+            )
+            diagnostic = json.loads(
+                _content_text(rejected.content[0]).removeprefix(
+                    "Error executing tool math.run: "
                 )
-            assert rejected.value.code == INVALID_PARAMS
-            assert rejected.value.data["code"] == (
+            )
+            assert diagnostic["code"] == (
                 "RESOURCE_ADMISSION_REJECTED" if overflow else "INVALID_REQUEST"
             )
-            assert rejected.value.data["stage"] == (
+            assert diagnostic["stage"] == (
                 "resource_admission" if overflow else "operation_validation"
             )
-            assert rejected.value.data["errors"] == [
+            assert diagnostic["errors"] == [
                 {
                     "location": list(error["loc"]),
                     "code": error["type"],

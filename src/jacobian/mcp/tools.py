@@ -14,7 +14,6 @@ from typing import Any
 from mcp.server.mcpserver import Context
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.shared.exceptions import MCPError
-from mcp.types import INVALID_PARAMS
 
 from jacobian._execution import (
     OperationExecutionCancelledError,
@@ -34,13 +33,16 @@ from jacobian.dispatch import (
     execute_operation,
 )
 from jacobian.mcp.models import (
+    OperationCursor,
     OperationDiscoveryError,
     OperationDiscoveryErrorDetail,
-    OperationFindRequest,
+    OperationFindOperationId,
     OperationFindResponse,
     OperationInspectionResult,
     OperationInvalidRequestData,
-    OperationMatchRequest,
+    OperationMatchLimit,
+    OperationNamespace,
+    OperationNeed,
     OperationResourceAdmissionData,
     OperationValidationIssue,
 )
@@ -60,29 +62,73 @@ _FIND_QUERY_LOG_KEY = secrets.token_bytes(32)
 logger = logging.getLogger(__name__)
 
 
+def _find_invalid_request_error(
+    message: str, *, hint: str, locations: tuple[str, ...]
+) -> ToolError:
+    diagnostic = {
+        "code": "INVALID_REQUEST",
+        "stage": "operation_discovery",
+        "errors": [
+            {
+                "location": list(locations),
+                "code": "invalid_request",
+                "message": message,
+            }
+        ],
+        "hint": hint,
+        "message": message,
+    }
+    return ToolError(json.dumps(diagnostic, separators=(",", ":")))
+
+
 def math_find(
-    request: OperationFindRequest,
+    query: OperationNeed | None = None,
+    operation_id: OperationFindOperationId | None = None,
+    namespace: OperationNamespace = None,
+    limit: OperationMatchLimit | None = None,
+    cursor: OperationCursor = None,
     *,
     ctx: Context[AppState, Any],
 ) -> OperationFindResponse:
+    if query is None and operation_id is None:
+        raise _find_invalid_request_error(
+            "Provide exactly one of query or operation_id.",
+            hint="Use query to search, or operation_id to inspect one operation.",
+            locations=("query", "operation_id"),
+        )
+    if query is not None and operation_id is not None:
+        raise _find_invalid_request_error(
+            "Provide exactly one of query or operation_id, not both.",
+            hint="Remove operation_id for a search, or remove query for inspection.",
+            locations=("query", "operation_id"),
+        )
+    if operation_id is not None and (
+        namespace is not None or limit is not None or cursor is not None
+    ):
+        raise _find_invalid_request_error(
+            "namespace, limit, and cursor are only valid with query.",
+            hint="Remove search options when inspecting an operation_id.",
+            locations=("namespace", "limit", "cursor"),
+        )
+
     active_catalog = _catalog(ctx)
-    if isinstance(request, OperationMatchRequest):
+    if query is not None:
         # The process-local HMAC key prevents log readers from recovering a
         # short caller need through an offline digest lookup.
         need_hash = hmac.new(
-            _FIND_QUERY_LOG_KEY, request.need.encode("utf-8"), hashlib.sha256
+            _FIND_QUERY_LOG_KEY, query.encode("utf-8"), hashlib.sha256
         ).hexdigest()[:_FIND_QUERY_HASH_HEX_LENGTH]
         logger.info("math.find query_hash=%s", need_hash)
         match_response = _operation_match_response(
             active_catalog,
-            need=request.need,
-            namespace=request.namespace,
-            limit=request.limit,
-            cursor=request.cursor,
+            need=query,
+            namespace=namespace,
+            limit=limit if limit is not None else 10,
+            cursor=cursor,
         )
         return OperationFindResponse(root=match_response)
 
-    operation_id = request.operation_id
+    assert operation_id is not None
     descriptor = active_catalog.inspect(operation_id)
     if descriptor is None:
         hint = (
@@ -159,7 +205,7 @@ def math_run(
 def _invalid_request_error(
     operation_id: OperationId,
     error: OperationRequestValidationError | OperationDomainValidationError,
-) -> MCPError:
+) -> ToolError:
     """Project one owner-bound rejection without reflecting caller values."""
 
     issues = _bounded_validation_issues(error.errors())
@@ -171,11 +217,9 @@ def _invalid_request_error(
     else:
         data = OperationInvalidRequestData(operation_id=operation_id, errors=issues)
         message = "operation payload failed validation"
-    return MCPError(
-        code=INVALID_PARAMS,
-        message=message,
-        data=data.model_dump(mode="json"),
-    )
+    diagnostic = data.model_dump(mode="json")
+    diagnostic["message"] = message
+    return ToolError(json.dumps(diagnostic, separators=(",", ":"), sort_keys=True))
 
 
 def _backend_unavailable_error(

@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import sympy
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.geometry.algebraic_curves._conic import (
     ConicParametrizationData,
     derive_rational_conic_parametrization,
@@ -251,7 +254,9 @@ def verify_projective_plane_curve_singularity_profile(
 
     try:
         return singularity_profile(claim.source_polynomial) == claim
-    except (OperationDomainValidationError, ValueError, TypeError, RuntimeError):
+    except OperationResourceAdmissionError:
+        raise
+    except (OperationDomainValidationError, ValueError, TypeError):
         return False
 
 

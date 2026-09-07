@@ -66,6 +66,19 @@ def test_determinant_need_ranks_determinants_before_charpolys() -> None:
     )
 
 
+def test_smt_model_query_discovers_the_solver_operation() -> None:
+    result = Catalog.open().match(
+        OperationMatchRequest(
+            need="Find a satisfying model for quantifier-free linear integer constraints.",
+            namespace="smt",
+            limit=5,
+        )
+    )
+
+    assert result.matches
+    assert result.matches[0].operation_id == "smt.solve"
+
+
 @pytest.mark.parametrize(
     "query",
     (

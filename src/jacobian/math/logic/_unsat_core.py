@@ -24,9 +24,11 @@ from jacobian.catalog.models import (
     OperationExample,
 )
 from jacobian.math.logic._smt import (
+    _MAX_SMTLIB_BYTES,
     SmtLogic,
     SmtSolveRequest,
     _is_smtlib_source_diagnostic,
+    _probe_declared_logic,
     _tokenize_smtlib,
     _top_level_smtlib_commands,
 )
@@ -186,6 +188,26 @@ class SmtUnsatCoreRequest(SmtSolveRequest):
                 }
             ]
         }
+    )
+
+    smtlib: str = Field(
+        min_length=1,
+        max_length=_MAX_SMTLIB_BYTES,
+        description=(
+            "ASCII SMT-LIB using set-logic, declare-const, declare-fun, assert, "
+            "and check-sat; the source must end with exactly one check-sat. "
+            "For UNSAT-core requests, the effective limits are at most 32,768 "
+            "tokens, nesting depth 256, 512 source assertions, 4,096 declared "
+            "symbols, and 256 digits per numeral or normalized coefficient. "
+            "Definitions such as define-fun are not accepted."
+        ),
+        examples=[
+            "(set-logic QF_LIA)\n"
+            "(declare-const x Int)\n"
+            "(assert (>= x 1))\n"
+            "(assert (<= x 0))\n"
+            "(check-sat)"
+        ],
     )
 
     logic: SmtLogic = Field(
@@ -411,24 +433,14 @@ def _require_declared_logic(
 
     try:
         if logic is SmtLogic.QF_UF:
-            if not _is_boolean_uninterpreted_fragment(assertions):
-                raise _logic_error(
-                    "SMT core terms must belong to the declared QF_UF fragment"
-                )
+            _probe_declared_logic(assertions, logic.value, z3)
             return
-
         classified_assertions = _normalize_closed_coefficients(assertions)
-        goal = z3.Goal(ctx=assertions[0].ctx)
-        goal.add(*classified_assertions)
-        probe_name = "is-lia" if logic is SmtLogic.QF_LIA else "is-lra"
-        has_quantifiers = float(
-            z3.Probe("has-quantifiers", ctx=assertions[0].ctx)(goal)
+        _probe_declared_logic(
+            classified_assertions, logic.value, z3, simplify_arithmetic=False
         )
-        belongs_to_fragment = float(z3.Probe(probe_name, ctx=assertions[0].ctx)(goal))
-        if has_quantifiers != 0.0 or belongs_to_fragment != 1.0:
-            raise _logic_error(
-                f"SMT core terms must belong to the declared {logic.value} fragment"
-            )
+    except ValueError as exc:
+        raise _logic_error(str(exc)) from exc
     except z3.Z3Exception as exc:
         raise _logic_error(
             f"SMT core terms could not be classified as {logic.value}"
@@ -1460,6 +1472,10 @@ SMT_UNSAT_CORE_OPERATION = MathTool(
     result_type=SmtUnsatCoreResult,
     run=compute_smt_unsat_core,
     tags=("smt", "unsat", "core", "constraints", "z3"),
+    discovery_terms=(
+        "unsatisfiable core",
+        "contradictory constraints",
+    ),
     examples=(
         OperationExample(
             name="contradictory_integer_bounds",

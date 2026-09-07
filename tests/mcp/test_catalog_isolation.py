@@ -11,7 +11,6 @@ import pytest
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationMatchResult
 from jacobian.mcp import tools
-from jacobian.mcp.models import OperationInspectRequest, OperationMatchRequest
 from jacobian.mcp.runtime import AppState
 from jacobian.mcp.tools import math_find
 
@@ -35,9 +34,7 @@ def test_math_find_does_not_acquire_an_execution_runtime() -> None:
     context = SimpleNamespace(request_context=SimpleNamespace(lifespan_context=state))
 
     result = math_find(
-        OperationMatchRequest(
-            op="match", need="compute an exact greatest common divisor"
-        ),
+        query="compute an exact greatest common divisor",
         ctx=cast(Any, context),
     )
 
@@ -54,9 +51,7 @@ def test_math_find_inspection_does_not_log_a_query_or_acquire_a_runtime(
 
     with caplog.at_level(logging.INFO, logger="jacobian.mcp.tools"):
         result = math_find(
-            OperationInspectRequest(
-                op="inspect", operation_id="integer.compute.unknown"
-            ),
+            operation_id="integer.compute.unknown",
             ctx=cast(Any, context),
         )
 
@@ -77,10 +72,7 @@ def test_math_find_logs_a_hashed_match_query(
 
     with caplog.at_level(logging.INFO, logger="jacobian.mcp.tools"):
         math_find(
-            OperationMatchRequest(
-                op="match",
-                need=need,
-            ),
+            query=need,
             ctx=cast(Any, context),
         )
 

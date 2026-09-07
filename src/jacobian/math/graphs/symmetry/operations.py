@@ -162,6 +162,8 @@ def verify_graph_symmetry_orbits(claim: GraphSymmetryOrbitResult) -> bool:
         expected_vertex_members, expected_edge_members = _declared_orbit_partitions(
             graph, source.generators
         )
+    except OperationResourceAdmissionError:
+        raise
     except (OperationDomainValidationError, PydanticCustomError, KeyError):
         return False
 

@@ -154,6 +154,30 @@ def test_serialized_profile_verifier_rejects_forged_crt_claim() -> None:
     assert not verify_cyclic_rational_rank_kernel_profile(forged)
 
 
+def test_profile_verifier_propagates_expired_request() -> None:
+    claim = cyclic_rational_rank_kernel_profile(_symbol(period=1, entries=()))
+    started = time.monotonic()
+    with request_execution(started):
+        bind_request_deadline(started - 1)
+        with pytest.raises(OperationExecutionTimeoutError, match="deadline expired"):
+            verify_cyclic_rational_rank_kernel_profile(claim)
+
+
+def test_profile_verifier_propagates_backend_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.matrices.cyclic_linear import _kernel_process
+
+    claim = cyclic_rational_rank_kernel_profile(_symbol(period=1, entries=()))
+
+    def unavailable_worker(*args: Any, **kwargs: Any) -> Any:
+        raise RuntimeError("cyclic worker unavailable")
+
+    monkeypatch.setattr(_kernel_process, "run_cyclotomic_kernels", unavailable_worker)
+    with pytest.raises(RuntimeError, match="cyclic worker unavailable"):
+        verify_cyclic_rational_rank_kernel_profile(claim)
+
+
 def _rational_rowspace(
     vectors: tuple[tuple[Fraction, ...], ...],
 ) -> tuple[tuple[Fraction, ...], ...]:

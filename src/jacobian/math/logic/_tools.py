@@ -69,12 +69,19 @@ TOOLS: MathTools = (
     ),
     MathTool(
         operation_id="smt.solve",
-        title="Solve a bounded SMT-LIB query",
-        description="Run the maintained Z3 Python binding on one QF SMT-LIB query.",
+        title="Find a model or decide a bounded SMT-LIB query",
+        description=(
+            "Decide one bounded quantifier-free SMT-LIB query and return SAT, "
+            "UNSAT, or UNKNOWN; SAT includes a satisfying model projection."
+        ),
         request_type=SmtSolveRequest,
         result_type=SmtSolveResult,
         run=solve_smt,
         tags=("smt", "solve", "smtlib", "z3"),
+        discovery_terms=(
+            "satisfying model",
+            "quantifier-free linear integer constraints",
+        ),
         examples=(
             OperationExample(
                 name="positive_integer",

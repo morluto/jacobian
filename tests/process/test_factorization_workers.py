@@ -1,8 +1,11 @@
 """Process-boundary behavior for integer-factorization workers."""
 
+import time
+
 import pytest
 
 from jacobian import process as process_runtime
+from jacobian._execution import OperationExecutionTimeoutError, request_execution
 from jacobian.math.number_theory._certification_models import (
     CertifiedFactorizationRequest,
 )
@@ -28,6 +31,15 @@ def _timed_out_worker(*_args: object, **_kwargs: object) -> BoundedProcessResult
         stderr_exceeded=False,
         timed_out=True,
     )
+
+
+def test_certified_factorization_budget_includes_prior_request_work() -> None:
+    request = CertifiedFactorizationRequest(value=2)
+    with (
+        request_execution(time.monotonic() - 61),
+        pytest.raises(OperationExecutionTimeoutError, match="deadline expired"),
+    ):
+        factorize_certified(request)
 
 
 def test_timed_out_certified_factorization_raises_timeout(

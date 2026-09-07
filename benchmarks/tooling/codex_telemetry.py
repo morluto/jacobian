@@ -336,9 +336,17 @@ def _record_describe_and_attempt(
     direct_operation_ids: Set[str],
 ) -> None:
     if tool == "math.find":
-        request = arguments.get("request") if isinstance(arguments, Mapping) else None
-        if isinstance(request, Mapping) and request.get("op") == "inspect":
-            requested_operation_id = request.get("operation_id")
+        wrapped_request = (
+            arguments.get("request") if isinstance(arguments, Mapping) else None
+        )
+        if isinstance(wrapped_request, Mapping):
+            discovery_request = wrapped_request
+            is_inspection = wrapped_request.get("op") == "inspect"
+        else:
+            discovery_request = arguments if isinstance(arguments, Mapping) else {}
+            is_inspection = isinstance(discovery_request.get("operation_id"), str)
+        if is_inspection:
+            requested_operation_id = discovery_request.get("operation_id")
             inspected_operation = (
                 response.get("operation") if isinstance(response, Mapping) else None
             )
@@ -550,15 +558,16 @@ def _build_operation_description(
     cards = None
     if isinstance(response, Mapping):
         cards = response.get("matches", response.get("operations"))
-    request = arguments.get("request")
-    request = request if isinstance(request, Mapping) else {}
+    wrapped_request = arguments.get("request")
+    request = wrapped_request if isinstance(wrapped_request, Mapping) else arguments
+    query = request.get("need", request.get("query"))
     return {
         "kind": (
             response.get("kind")
             if isinstance(response, Mapping) and isinstance(response.get("kind"), str)
             else None
         ),
-        "need": (request.get("need") if isinstance(request.get("need"), str) else None),
+        "need": query if isinstance(query, str) else None,
         "namespace": (
             request.get("namespace")
             if isinstance(request.get("namespace"), str)

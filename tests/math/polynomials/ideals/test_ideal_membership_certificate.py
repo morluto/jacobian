@@ -17,7 +17,10 @@ from jacobian.math.polynomials.ideals._models import (
     IdealMembershipCertificateRequest,
     IdealMembershipCertificateResult,
 )
-from jacobian.math.polynomials.ideals.operations import ideal_membership_certificate
+from jacobian.math.polynomials.ideals.operations import (
+    ideal_membership_certificate,
+    verify_ideal_membership_certificate,
+)
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
     RationalPolynomialIdeal,
@@ -183,3 +186,26 @@ def test_generated_linear_work_is_rejected_at_the_certificate_boundary() -> None
 
     assert error.value.errors()[0]["loc"] == ("cofactor_degree_bound",)
     assert "linear" in error.value.errors()[0]["type"]
+
+
+def test_membership_verifier_propagates_source_resource_admission() -> None:
+    result = ideal_membership_certificate(
+        _request(
+            (_polynomial(("x",), ((1, (1,)),)),), _polynomial(("x",), ()), 0
+        ).ideal,
+        _polynomial(("x",), ()),
+        0,
+    )
+    variables = tuple(f"x{index}" for index in range(8))
+    zero = _polynomial(variables, ())
+    oversized_ideal = RationalPolynomialIdeal(variables=variables, generators=(zero,))
+    claim = result.model_copy(
+        update={
+            "ideal": oversized_ideal,
+            "polynomial": zero,
+            "cofactor_degree_bound": 16,
+        }
+    )
+
+    with pytest.raises(OperationResourceAdmissionError, match="column"):
+        verify_ideal_membership_certificate(claim)

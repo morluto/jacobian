@@ -1,5 +1,6 @@
 """Boolean-analysis operation ownership."""
 
+from jacobian.math.analysis.boolean.fourier._fixed_weight import fixed_weight_moment
 from jacobian.math.analysis.boolean.fourier._pullback import affine_pullback
 from jacobian.math.analysis.boolean.fourier.operations import (
     erasure_noise,
@@ -22,6 +23,7 @@ __all__ = [
     "WalshTerm",
     "affine_pullback",
     "erasure_noise",
+    "fixed_weight_moment",
     "fourier_spectrum",
     "multilinear_extension",
     "truth_table",

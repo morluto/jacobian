@@ -3,6 +3,7 @@
 from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.math.analysis.boolean.fourier._fixed_weight import FIXED_WEIGHT_MOMENT
 from jacobian.math.analysis.boolean.fourier._models import (
     ErasureNoiseRequest,
     ErasureNoiseResult,
@@ -46,6 +47,7 @@ def _z(n: str) -> dict[str, str]:
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
     WALSH_PULLBACK,
+    FIXED_WEIGHT_MOMENT,
     MathTool(
         operation_id="boolean.truth_table.compute",
         title="Evaluate a Boolean function over all 2^n inputs",

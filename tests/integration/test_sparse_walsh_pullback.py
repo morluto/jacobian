@@ -64,3 +64,41 @@ def test_pullback_to_point_and_zero_polynomial_retain_zero_axes() -> None:
         "terms": [],
         "convention": "BOOLEAN_CHARACTERS",
     }
+
+
+@pytest.mark.parametrize("permuted", [False, True])
+def test_256_coordinate_sparse_pullback(permuted: bool) -> None:
+    n = 256
+    polynomial = {
+        "variable_count": n,
+        "terms": [{"character": [], "coefficient": _q(1)}]
+        + [{"character": [i], "coefficient": _q(1)} for i in range(n)],
+    }
+    result = invoke_operation(
+        "boolean.walsh_polynomial.affine_pullback.compute",
+        {
+            "polynomial": polynomial,
+            "affine_map": {
+                "target_dimension": n,
+                "rows": [[(i + 1) % n if permuted else i] for i in range(n)],
+                "offset": [i % 2 if permuted else 0 for i in range(n)],
+            },
+        },
+        Catalog.open(),
+    ).output
+    actual = {
+        tuple(t["character"]): Fraction(
+            int(t["coefficient"]["num"]), int(t["coefficient"]["den"])
+        )
+        for t in result["terms"]
+    }
+    expected: dict[tuple[int, ...], Fraction] = {
+        (): Fraction(1),
+        **{
+            ((i + 1) % n if permuted else i,): Fraction(
+                (-1) ** (i % 2) if permuted else 1
+            )
+            for i in range(n)
+        },
+    }
+    assert actual == expected

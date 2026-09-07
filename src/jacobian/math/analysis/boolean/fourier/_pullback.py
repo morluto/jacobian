@@ -35,10 +35,13 @@ def affine_pullback(
     # work is sparse incidence work; sorting emits at most target_dimension
     # coordinates per surviving term. A common denominator divides the product
     # of source denominators, so summed input digit heights bound all sums.
-    work = sum(
-        len(affine_map.rows[i]) for term in polynomial.terms for i in term.character
-    )
-    output_incidences = len(polynomial.terms) * affine_map.target_dimension
+    work = 0
+    output_incidences = 0
+    for term in polynomial.terms:
+        incidences = sum(len(affine_map.rows[i]) for i in term.character)
+        work += incidences
+        # XOR cancellations and collisions can only shrink this support.
+        output_incidences += min(affine_map.target_dimension, incidences)
     digits = sum(
         max(
             len(format_canonical_integer(term.coefficient.num)),

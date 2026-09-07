@@ -90,3 +90,56 @@ def test_dirichlet_inverse_propagates_its_recurrence() -> None:
 )
 def test_ordinary_requests_remain_admitted(parsed_request: object) -> None:
     assert parsed_request is not None
+
+
+@pytest.mark.parametrize("length", [900, 1000])
+def test_summatory_shared_denominator_prefixes(length: int) -> None:
+    from fractions import Fraction
+
+    request = SummatoryFunctionRequest.model_validate(
+        {"values": [_rational(1, 10**32)] * length}
+    )
+    result = compute_summatory_function(request)
+    assert tuple(v.as_fraction() for v in result.values) == tuple(
+        Fraction(k, 10**32) for k in range(1, length + 1)
+    )
+
+
+def test_summatory_alternating_simplex_moments() -> None:
+    from fractions import Fraction
+    from itertools import accumulate
+    from math import factorial
+
+    # Independent repeated integer convolution defines the ninth power.
+    order = 257
+    factorials = [factorial(j) for j in range(order)]
+    coefficients = [1] + [0] * (order - 1)
+    for _ in range(9):
+        coefficients = [
+            sum(coefficients[i] * factorials[k - i] for i in range(k + 1))
+            for k in range(order)
+        ]
+    values = [
+        Fraction((-1) ** j * coefficients[j], factorial(j + 8)) for j in range(order)
+    ]
+    request = SummatoryFunctionRequest.model_validate(
+        {"values": [_rational(v.numerator, v.denominator) for v in values]}
+    )
+    result = compute_summatory_function(request)
+    assert [v.as_fraction() for v in result.values] == list(accumulate(values))
+
+
+def test_one_digit_inverse_can_have_multidigit_coefficients() -> None:
+    from fractions import Fraction
+
+    values = [_rational(2)] + [_rational(9)] * 127
+    request = DirichletInverseRequest.model_validate({"values": values})
+    result = compute_dirichlet_inverse(request)
+    assert any(abs(value.num) >= 10 for value in result.values)
+    convolution = compute_dirichlet_convolution(
+        DirichletConvolutionRequest(f=request.values, g=result.values)
+    )
+    assert (
+        tuple(value.as_fraction() for value in convolution.values)
+        == (Fraction(1),) + (Fraction(0),) * 127
+    )

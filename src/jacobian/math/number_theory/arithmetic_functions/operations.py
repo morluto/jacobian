@@ -56,9 +56,7 @@ def _divisor_incidence_count(length: int, *, minimum_divisor: int = 1) -> int:
     return sum(length // divisor for divisor in range(minimum_divisor, length + 1))
 
 
-def _require_divisor_incidences(
-    length: int, *, minimum_divisor: int = 1
-) -> tuple[tuple[int, int], ...]:
+def _require_divisor_incidence_budget(length: int, *, minimum_divisor: int = 1) -> None:
     if _divisor_incidence_count(length, minimum_divisor=minimum_divisor) > (
         MAX_DIVISOR_INCIDENCES
     ):
@@ -70,6 +68,12 @@ def _require_divisor_incidences(
                 f"{MAX_DIVISOR_INCIDENCES}-incidence divisor-sieve budget"
             ),
         )
+
+
+def _require_divisor_incidences(
+    length: int, *, minimum_divisor: int = 1
+) -> tuple[tuple[int, int], ...]:
+    _require_divisor_incidence_budget(length, minimum_divisor=minimum_divisor)
     return _divisor_incidences(length, minimum_divisor=minimum_divisor)
 
 
@@ -367,7 +371,7 @@ def _admit_inverse(values: tuple[CanonicalRational, ...]) -> None:
     _require_length(values, "values", _MAX_DIVISOR_PREFIX_LENGTH)
     if values[0].as_fraction() == 0:
         raise ValueError("f(1) must be nonzero")
-    _require_divisor_incidences(len(values))
+    _require_divisor_incidence_budget(len(values))
     source = _heights(values)
     if (
         all(
@@ -376,10 +380,19 @@ def _admit_inverse(values: tuple[CanonicalRational, ...]) -> None:
         )
         and source[0].numerator_digits == 1
     ):
-        # Unit-height prefixes invert to Möbius-scale values (±1, 0, 1).
-        _require_result_envelope(
-            tuple(RationalHeight(1, 1) for _ in source), "Dirichlet inverse"
+        # Clear one-digit denominators with D=lcm(1,...,9)=2520:
+        # f(d)=a_d/D, |a_d|<=22680. An ordered factorization of n has
+        # at most K=floor(log2 N) factors and there are fewer than
+        # (N+1)^(K+1) such chains. Lift every inverse term to a_1^(K+1).
+        # Its numerator is bounded by D*22680^K. Extra margin covers
+        # recurrence products (5 digits), at most N summands (5 digits),
+        # and multiplication by D when dividing by f(1) (4 digits).
+        depth = len(values).bit_length() - 1
+        height = RationalHeight(
+            4 + 5 * (depth + 4) + (depth + 1) * len(str(len(values) + 1)),
+            4 + 5 * (depth + 2),
         )
+        _require_result_envelope((height,) * len(source), "Dirichlet inverse")
         return
     inverse = [RationalHeight(1, 1)] * len(source)
     inverse[0] = RationalHeight(1, 1).quotient(source[0])
@@ -505,7 +518,17 @@ def summatory_function(
 ) -> tuple[CanonicalRational, ...]:
     """Compute ``S(K) = sum_{i=1}^{K} f(i)`` for K = 1..n."""
     _require_length(values, "values", _MAX_SUMMATORY_LENGTH)
-    _require_result_height(sum_heights(_heights(values)), "summatory function")
+    shared_lcm = _shared_denominator_lcm(values)
+    if shared_lcm is None:
+        height = sum_heights(_heights(values))
+    else:
+        # The absolute sum over all lifted numerators bounds every prefix,
+        # including intermediate sums; no cancellation is assumed.
+        sums = _HeightSums(1, shared_lcm=shared_lcm)
+        for value in values:
+            sums.add(0, RationalHeight.from_canonical(value), denominator=value.den)
+        height = sums.height(0)
+    _require_result_height(height, "summatory function")
     n = len(values)
     fraction_values = [v.as_fraction() for v in values]
     result_values: list[Fraction] = [Fraction(0)] * n

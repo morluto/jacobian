@@ -57,8 +57,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         tags=("arithmetic", "dirichlet-convolution", "exact"),
         examples=(
             OperationExample(
-                name="identity_convolution",
-                description="Dirichlet convolution of the identity function with the constant-one function gives the divisor-count function tau.",
+                name="divisor_sum_convolution",
+                description="Compute the divisor-sum function sigma by convolving id(n)=n with the constant-one function; both prefixes cover the same indices 1 through 4.",
                 input={
                     "f": [
                         {"num": "1", "den": "1"},

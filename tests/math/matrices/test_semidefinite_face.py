@@ -1,5 +1,6 @@
 """Defining feasible-set and reconstruction identities for exposed faces."""
 
+from collections import UserDict
 from collections.abc import Sequence
 from fractions import Fraction
 
@@ -249,6 +250,43 @@ def test_raw_request_preflight_rejects_over_budget_cells() -> None:
                 "multipliers": [{"num": "1", "den": "1"}] * 128,
             }
         )
+
+
+def test_raw_request_preflight_scans_mapping_wrapped_system() -> None:
+    payload = UserDict(
+        {
+            "system": UserDict(
+                {
+                    "order": 128,
+                    "matrices": [{}] * 128,
+                    "rhs": [{"num": "0", "den": "1"}] * 128,
+                }
+            ),
+            "multipliers": [{"num": "1", "den": "1"}] * 128,
+        }
+    )
+    with pytest.raises(ValidationError, match="dense cell envelope"):
+        SemidefiniteFaceReductionRequest.model_validate(payload)
+    request = SemidefiniteFaceReductionRequest.model_validate(
+        UserDict(
+            {
+                "system": UserDict(
+                    {
+                        "order": 2,
+                        "matrices": [
+                            UserDict({"entries": ((_q(1), _q(0)), (_q(0), _q(0)))}),
+                            UserDict({"entries": ((_q(1), _q(0)), (_q(0), _q(1)))}),
+                        ],
+                        "rhs": (_q(0), _q(1)),
+                    }
+                ),
+                "multipliers": (_q(1), _q(0)),
+            }
+        )
+    )
+    result = reduce_exposed_face(request.system, request.multipliers)
+    _identities(result)
+    assert _sympy(result.embedding) == Matrix([[0], [1]])
 
 
 def test_raw_request_preflight_counts_actual_nested_cells() -> None:

@@ -206,9 +206,11 @@ def test_wall_expiry_after_real_solver_discards_mathematical_result(
 
 def test_invalid_bounds_reject_before_budget_short_circuit() -> None:
     source = FiniteSetSystem(ground_set_size=1, sets=((0,),))
-    with request_execution(monotonic() - 100):
-        with pytest.raises(OperationDomainValidationError, match="absolute bounds"):
-            decide(source, (2,))
+    with (
+        request_execution(monotonic() - 100),
+        pytest.raises(OperationDomainValidationError, match="absolute bounds"),
+    ):
+        decide(source, (2,))
 
 
 def test_elapsed_request_start_exhausts_own_wall_budget() -> None:

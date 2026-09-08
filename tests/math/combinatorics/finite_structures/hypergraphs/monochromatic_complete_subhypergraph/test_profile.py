@@ -1,8 +1,10 @@
 """Behavioral tests for complete monochromatic uniform-subhypergraph profiles."""
 
 from itertools import combinations
+from math import comb as ncr
 
 import pytest
+from tests.fixtures.accounting import assert_charged_work_parity
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -16,6 +18,9 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs.colorings import 
 from jacobian.math.combinatorics.finite_structures.hypergraphs.monochromatic_complete_subhypergraph import (
     MonochromaticCompleteSubhypergraphProfile,
     construct,
+)
+from jacobian.math.combinatorics.finite_structures.hypergraphs.monochromatic_complete_subhypergraph import (
+    operations as monochromatic_operations,
 )
 
 
@@ -250,3 +255,31 @@ def test_long_source_labels_remain_native_admissible() -> None:
 
     result = construct(source, 2, 11)
     assert len(result.hypergraph.edges) == 12
+
+
+def test_target_and_lookup_units_fit_the_admission_charge(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    vertices = ("0", "1", "2", "3")
+    source = make_coloring(vertices, complete_edges(vertices, 2), [0] * 6)
+    executed = {"targets": 0, "lookups": 0}
+    original = monochromatic_operations.combinations
+
+    def counted(seq: object, size: int):
+        items = tuple(seq)
+        rows = list(original(items, size))
+        if size == 3:
+            executed["targets"] += len(rows)
+        elif size == 2 and len(items) == 3:
+            executed["lookups"] += len(rows)
+        return rows
+
+    monkeypatch.setattr(monochromatic_operations, "combinations", counted)
+    result = monochromatic_operations.construct(source, 2, 3)
+    assert result.hypergraph.edges
+    charged = {
+        "targets": ncr(4, 3),
+        "lookups": ncr(4, 3) * ncr(3, 2),
+    }
+    assert_charged_work_parity(charged=charged, executed=executed)
+

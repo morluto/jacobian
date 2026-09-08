@@ -204,6 +204,13 @@ def test_wall_expiry_after_real_solver_discards_mathematical_result(
     assert result.outcome.model_dump() == {"status": "BUDGET_EXCEEDED"}
 
 
+def test_invalid_bounds_reject_before_budget_short_circuit() -> None:
+    source = FiniteSetSystem(ground_set_size=1, sets=((0,),))
+    with request_execution(monotonic() - 100):
+        with pytest.raises(OperationDomainValidationError, match="absolute bounds"):
+            decide(source, (2,))
+
+
 def test_elapsed_request_start_exhausts_own_wall_budget() -> None:
     source = FiniteSetSystem(ground_set_size=0, sets=())
     with request_execution(monotonic() - 100):
@@ -211,11 +218,8 @@ def test_elapsed_request_start_exhausts_own_wall_budget() -> None:
     assert result.outcome.model_dump() == {"status": "BUDGET_EXCEEDED"}
 
 
-def test_expired_wall_budget_does_not_replay_bound_validation() -> None:
+def test_parsed_budget_result_still_rejects_invalid_bounds() -> None:
     source = FiniteSetSystem(ground_set_size=1, sets=((0,),))
-    with request_execution(monotonic() - 100):
-        result = decide(source, (2,))
-    assert result.outcome.model_dump() == {"status": "BUDGET_EXCEEDED"}
     with pytest.raises(ValidationError, match="set size"):
         BoundedColoringResult.model_validate(
             {

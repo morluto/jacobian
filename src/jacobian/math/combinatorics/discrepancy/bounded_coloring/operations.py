@@ -109,22 +109,27 @@ def decide(
     """Decide whether one signed coloring satisfies every indexed set bound."""
     budget = resource_budget or BoundedColoringBudget()
     execution = current_request_execution()
+    started = execution.started_at if execution is not None else monotonic()
+    wall_deadline = started + budget.wall_seconds
+    caller_deadline = execution.deadline if execution is not None else None
     deadline = (
-        execution.started_at if execution is not None else monotonic()
-    ) + budget.wall_seconds
-    if execution is not None and execution.deadline is not None:
-        deadline = min(deadline, execution.deadline)
+        min(wall_deadline, caller_deadline)
+        if caller_deadline is not None
+        else wall_deadline
+    )
+    caller_limited = caller_deadline is not None and deadline >= caller_deadline
     # Keep the caller envelope intact: its timeout/cancellation are operational
     # errors; this operation's explicit wall budget has a claim-free outcome.
     try:
-        _checkpoint(deadline, "before discrepancy admission")
         constraints = _admit(set_system, absolute_bounds)
+        _checkpoint(deadline, "before discrepancy admission")
         if constraints:
             reply = run_solver(
                 set_system.ground_set_size,
                 constraints,
                 budget.solver_work_limit,
                 deadline,
+                caller_limited=caller_limited,
             )
         else:
             reply = {

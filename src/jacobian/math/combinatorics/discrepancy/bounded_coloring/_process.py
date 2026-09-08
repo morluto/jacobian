@@ -7,7 +7,11 @@ from pathlib import Path
 from time import monotonic
 from typing import cast
 
-from jacobian._execution import OperationExecutionCancelledError, request_checkpoint
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+    request_checkpoint,
+)
 from jacobian.math.combinatorics.discrepancy.bounded_coloring._z3 import (
     BackendReply,
     BackendStatus,
@@ -55,11 +59,20 @@ def decode_reply(data: bytes, variable_count: int) -> BackendReply:
 
 
 def run_solver(
-    variable_count: int, constraints: Constraints, work_limit: int, deadline: float
+    variable_count: int,
+    constraints: Constraints,
+    work_limit: int,
+    deadline: float,
+    *,
+    caller_limited: bool = False,
 ) -> BackendReply:
     request_checkpoint("before discrepancy worker startup")
     remaining = deadline - monotonic()
     if remaining <= 0:
+        if caller_limited:
+            raise OperationExecutionTimeoutError(
+                "discrepancy decision deadline expired before the solver worker"
+            )
         return {"status": "BUDGET_EXCEEDED", "coloring": None}
     payload = json.dumps(
         {
@@ -91,6 +104,10 @@ def run_solver(
     if completed.cancelled:
         raise OperationExecutionCancelledError("discrepancy decision cancelled")
     if completed.timed_out:
+        if caller_limited:
+            raise OperationExecutionTimeoutError(
+                "discrepancy decision deadline expired during the solver worker"
+            )
         return {"status": "BUDGET_EXCEEDED", "coloring": None}
     if (
         completed.returncode != 0

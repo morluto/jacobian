@@ -77,3 +77,22 @@ def test_exponential_search_is_rejected_before_backtracking() -> None:
 
     with pytest.raises(OperationDomainValidationError, match="search bound"):
         decide_equitable_k_coloring(graph, 2)
+
+
+def test_one_edge_k1_is_decided_without_recursion() -> None:
+    boundary = _graph([f"{index:04d}" for index in range(256)], [["0000", "0001"]])
+    result = decide_equitable_k_coloring(boundary, 1)
+    assert result.colorable is False
+    assert result.coloring is None
+    type(result).model_validate(result.model_dump())
+
+    oversized = _graph([f"{index:04d}" for index in range(1100)], [["0000", "0001"]])
+    oversized_result = decide_equitable_k_coloring(oversized, 1)
+    assert oversized_result.colorable is False
+    type(oversized_result).model_validate(oversized_result.model_dump())
+
+
+def test_search_depth_bound_rejects_before_backtracking() -> None:
+    graph = _graph([f"{index:03d}" for index in range(257)], [["000", "001"]])
+    with pytest.raises(OperationDomainValidationError, match="search bound"):
+        decide_equitable_k_coloring(graph, 2)

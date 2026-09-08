@@ -6,9 +6,10 @@ from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.graphs.values import MAX_SIMPLE_GRAPH_VERTICES, SimpleUndirectedGraph
 
 MAX_EQUITABLE_COLORING_SEARCH_NODES = 1_000_000
+MAX_EQUITABLE_COLORING_SEARCH_DEPTH = MAX_SIMPLE_GRAPH_VERTICES
 
 
 def _is_complete(graph: SimpleUndirectedGraph) -> bool:
@@ -75,6 +76,7 @@ class EquitableColoringResult(StrictModel):
 
 
 __all__ = [
+    "MAX_EQUITABLE_COLORING_SEARCH_DEPTH",
     "MAX_EQUITABLE_COLORING_SEARCH_NODES",
     "EquitableColoringAssignment",
     "EquitableColoringRequest",

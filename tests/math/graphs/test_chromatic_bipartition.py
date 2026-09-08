@@ -4,6 +4,9 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.math.graphs.optimization import _chromatic_bipartition as operation
+from jacobian.math.graphs.optimization import (
+    _chromatic_bipartition_process as process_owner,
+)
 from jacobian.math.graphs.optimization._chromatic_bipartition import (
     ChromaticBipartitionRequest,
     find_chromatic_bipartition,
@@ -76,7 +79,7 @@ def test_worker_noncompletion_is_unknown(monkeypatch: pytest.MonkeyPatch) -> Non
         stderr = b""
 
     monkeypatch.setattr(
-        operation, "run_bounded_process", lambda *_args, **_kwargs: TimedOut()
+        process_owner, "run_bounded_process", lambda *_args, **_kwargs: TimedOut()
     )
     result = operation.find_chromatic_bipartition(
         ChromaticBipartitionRequest(graph=source, s=1, t=1)

@@ -164,17 +164,13 @@ def test_deserialized_provenance_must_be_complete_and_name_unions() -> None:
 
 
 def test_deserialized_conflict_hypergraph_cannot_contain_unreferenced_edges() -> None:
-    result = check_oracle(
-        coloring(("a", "b"), [("a",), ("b",)], [0, 1])
-    )
+    result = check_oracle(coloring(("a", "b"), [("a",), ("b",)], [0, 1]))
     assert result.provenance == ()
     extra = result.model_dump()
     extra["hypergraph"]["edges"] = [("c0", ["a", "b"])]
     with pytest.raises(ValidationError, match="distinct referenced unions"):
         SameColorConflictsResult.model_validate(extra)
-    result = check_oracle(
-        coloring(("a", "b"), [("a",), ("b",)], [0, 0])
-    )
+    result = check_oracle(coloring(("a", "b"), [("a",), ("b",)], [0, 0]))
     renamed = result.model_dump()
     renamed["hypergraph"]["edges"] = [("extra", list(result.hypergraph.edges[0][1]))]
     renamed["provenance"][0]["conflict_edge_id"] = "extra"

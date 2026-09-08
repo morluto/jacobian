@@ -264,4 +264,3 @@ def test_surrogate_point_label_is_rejected_before_distances() -> None:
     )
     with pytest.raises(OperationDomainValidationError, match="UTF-8"):
         compute_distance_edge_coloring(forged)
-

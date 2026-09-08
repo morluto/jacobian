@@ -14,6 +14,7 @@ from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive.finite_abelian_subset_sum._models import (
+    MAX_FINITE_ABELIAN_SUBSET_SUM_ORDER,
     FiniteAbelianSubsetSumRow,
 )
 from jacobian.math.combinatorics.additive.values import (
@@ -187,7 +188,7 @@ class SubsetSumResidueProfileRequest(StrictModel):
             "admitted; every integer carries at most 32,768 digits, and the "
             "derived DP, witness, and result budgets are checked jointly with "
             "the modulus."
-        )
+        ),
     )
     modulus: int = Field(
         default=1,
@@ -250,13 +251,26 @@ class SubsetSumResidueProfileRequest(StrictModel):
         product_mode = self.group is not None or self.sequence is not None
         if product_mode:
             if self.group is None or self.sequence is None:
-                raise _validation_error("request_shape", "group and sequence are required together")
+                raise _validation_error(
+                    "request_shape", "group and sequence are required together"
+                )
+            if self.include_witnesses:
+                raise _validation_error(
+                    "witness_domain", "product-group profiles do not support witnesses"
+                )
             if self.source.items or self.modulus != 1:
-                raise _validation_error("request_shape", "product and cyclic inputs cannot be mixed")
+                raise _validation_error(
+                    "request_shape", "product and cyclic inputs cannot be mixed"
+                )
             if any(element.group != self.group for element in self.sequence):
-                raise _validation_error("group_binding", "every sequence element must use the supplied group")
+                raise _validation_error(
+                    "group_binding",
+                    "every sequence element must use the supplied group",
+                )
         elif self.source is None or self.modulus is None:
-            raise _validation_error("request_shape", "cyclic requests require source and modulus")
+            raise _validation_error(
+                "request_shape", "cyclic requests require source and modulus"
+            )
         return self
 
 
@@ -290,7 +304,11 @@ class SubsetSumResidueProfileResult(StrictModel):
     sequence: tuple[FiniteAbelianGroupElement, ...] | None = Field(
         default=None, max_length=MAX_RESIDUE_PROFILE_ITEMS
     )
-    group_rows: tuple[FiniteAbelianSubsetSumRow, ...] | None = None
+    support_size: int | None = Field(default=None, ge=0, le=4096)
+    covers_group: StrictBool | None = None
+    group_rows: tuple[FiniteAbelianSubsetSumRow, ...] | None = Field(
+        default=None, max_length=MAX_FINITE_ABELIAN_SUBSET_SUM_ORDER
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -358,14 +376,56 @@ class SubsetSumResidueProfileResult(StrictModel):
 
     @model_validator(mode="after")
     def require_structural_shape(self) -> Self:
-        if self.group is not None or self.sequence is not None or self.group_rows is not None:
+        if (
+            self.group is not None
+            or self.sequence is not None
+            or self.group_rows is not None
+        ):
             if self.group is None or self.sequence is None or self.group_rows is None:
-                raise _validation_error("result_shape", "product result fields are required together")
-            if self.residue_counts:
-                raise _validation_error("result_shape", "product results cannot contain cyclic fields")
+                raise _validation_error(
+                    "result_shape", "product result fields are required together"
+                )
+            if (
+                self.residue_counts
+                or self.source.items
+                or self.modulus != 1
+                or self.residue_witnesses is not None
+                or self.include_witnesses
+            ):
+                raise _validation_error(
+                    "result_shape",
+                    "product results cannot contain cyclic fields or witnesses",
+                )
+            if any(element.group != self.group for element in self.sequence) or any(
+                row.element.group != self.group for row in self.group_rows
+            ):
+                raise _validation_error(
+                    "group_binding", "all profile elements must use the supplied group"
+                )
+            if self.support_size is None or self.covers_group is None:
+                raise _validation_error(
+                    "result_shape", "product results require support size and coverage"
+                )
+            if self.support_size != sum(
+                row.multiplicity > 0 for row in self.group_rows
+            ) or self.covers_group != (self.support_size == self.group.order):
+                raise _validation_error(
+                    "result_shape",
+                    "support and coverage must agree with complete row counts",
+                )
+            coordinates = tuple(row.element.coordinates for row in self.group_rows)
+            if len(coordinates) != self.group.order or coordinates != tuple(
+                sorted(set(coordinates))
+            ):
+                raise _validation_error(
+                    "result_shape",
+                    "product rows must enumerate the group in canonical order",
+                )
             return self
         if self.source is None or self.modulus is None:
-            raise _validation_error("result_shape", "cyclic result fields are required together")
+            raise _validation_error(
+                "result_shape", "cyclic result fields are required together"
+            )
         if self.include_witnesses != (self.residue_witnesses is not None):
             raise _validation_error(
                 "result_shape",
@@ -495,7 +555,12 @@ def subset_sum_residue_profile(
 ) -> SubsetSumResidueProfileResult:
     """Return every exact indexed-subset multiplicity modulo ``m``."""
     if group is not None or sequence is not None:
-        if group is None or sequence is None or source is not None or modulus is not None:
+        if (
+            group is None
+            or sequence is None
+            or source is not None
+            or modulus is not None
+        ):
             raise OperationDomainValidationError(
                 location=("group", "sequence"),
                 code="additive_combinatorics.subset_sum_residue.group_shape",
@@ -505,10 +570,16 @@ def subset_sum_residue_profile(
             finite_abelian_subset_sum_profile,
         )
 
+        if type(include_witnesses) is not bool or include_witnesses:
+            raise OperationDomainValidationError(
+                location=("include_witnesses",),
+                code="additive_combinatorics.subset_sum_residue.witness_domain",
+                message="product-group profiles require include_witnesses=False",
+            )
         product_result = finite_abelian_subset_sum_profile(
             group, sequence, include_empty_subset
         )
-        return SubsetSumResidueProfileResult.model_construct(
+        return SubsetSumResidueProfileResult(
             source=IndexedIntegerSequence(items=()),
             modulus=1,
             include_empty_subset=include_empty_subset,
@@ -518,6 +589,8 @@ def subset_sum_residue_profile(
             group=group,
             sequence=sequence,
             group_rows=product_result.rows,
+            support_size=product_result.support_size,
+            covers_group=product_result.covers_group,
         )
     if source is None or modulus is None:
         raise OperationDomainValidationError(

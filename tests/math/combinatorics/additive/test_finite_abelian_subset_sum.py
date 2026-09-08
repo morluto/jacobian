@@ -23,9 +23,7 @@ def _run(
         FiniteAbelianGroupElement(group=group, coordinates=coordinate)
         for coordinate in coordinates
     )
-    return subset_sum_residue_profile(
-        None, None, True, group=group, sequence=sequence
-    )
+    return subset_sum_residue_profile(None, None, True, group=group, sequence=sequence)
 
 
 def _counts(result: SubsetSumResidueProfileResult) -> dict[tuple[int, ...], int]:
@@ -37,6 +35,9 @@ def test_klein_four_fixture_covers_every_element_once() -> None:
     result = _run((2, 2), ((1, 0), (0, 1)))
 
     assert _counts(result) == dict.fromkeys(product(range(2), repeat=2), 1)
+    assert result.support_size == 4
+    assert result.covers_group is True
+    assert _counts(_run((4,), ((1,), (2,)))) == {(i,): 1 for i in range(4)}
     assert result.group_rows is not None
     assert sum(row.multiplicity > 0 for row in result.group_rows) == 4
 
@@ -118,3 +119,26 @@ def test_zero_source_compression_accepts_large_indexed_input() -> None:
     )
     assert result.group_rows is not None
     assert result.group_rows[0].multiplicity == 1 << 4095
+
+
+@pytest.mark.parametrize("source", [(), ((1,),), ((0,), (1,), (1,))])
+def test_nonempty_profile_matches_indexed_enumeration(
+    source: tuple[tuple[int, ...], ...],
+) -> None:
+    group = FiniteAbelianProductGroup(moduli=(3,))
+    sequence = tuple(
+        FiniteAbelianGroupElement(group=group, coordinates=c) for c in source
+    )
+    result = subset_sum_residue_profile(
+        None, None, False, group=group, sequence=sequence
+    )
+    expected = dict.fromkeys(((0,), (1,), (2,)), 0)
+    for mask in range(1, 1 << len(source)):
+        expected[
+            (sum(source[i][0] for i in range(len(source)) if mask >> i & 1) % 3,)
+        ] += 1
+    assert _counts(result) == expected
+    assert (
+        SubsetSumResidueProfileResult.model_validate_json(result.model_dump_json())
+        == result
+    )

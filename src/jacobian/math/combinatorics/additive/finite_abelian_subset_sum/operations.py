@@ -47,7 +47,9 @@ def finite_abelian_subset_sum_profile(
     execution = current_request_execution()
     if execution is None:
         with request_execution(time.monotonic()):
-            return finite_abelian_subset_sum_profile(group, sequence, include_empty_subset)
+            return finite_abelian_subset_sum_profile(
+                group, sequence, include_empty_subset
+            )
     deadline = execution.started_at + 60.0
     if execution.deadline is not None:
         deadline = min(deadline, execution.deadline)
@@ -76,7 +78,9 @@ def finite_abelian_subset_sum_profile(
         )
     if len(sequence) > MAX_FINITE_ABELIAN_SUBSET_SUM_ITEMS:
         _reject("input_length", "finite abelian subset-sum sequence is too long")
-    zero_count = sum(element.coordinates == (0,) * len(group.moduli) for element in sequence)
+    zero_count = sum(
+        element.coordinates == (0,) * len(group.moduli) for element in sequence
+    )
     active_sequence = tuple(
         element
         for element in sequence
@@ -85,10 +89,14 @@ def finite_abelian_subset_sum_profile(
     transitions = len(active_sequence) * order
     if transitions > MAX_FINITE_ABELIAN_SUBSET_SUM_TRANSITIONS:
         _reject("work", "finite abelian subset-sum DP exceeds its transition bound")
-    ranked_work = transitions * len(group.moduli)
+    ranked_work = transitions * (len(group.moduli) + (len(active_sequence) + 63) // 64)
     if ranked_work > MAX_FINITE_ABELIAN_SUBSET_SUM_RANKED_WORK:
-        _reject("ranked_work", "finite abelian subset-sum coordinate work exceeds its bound")
-    output_bits = order * (len(group.moduli) * 64 + len(sequence) + 1)
+        _reject(
+            "ranked_work", "finite abelian subset-sum coordinate work exceeds its bound"
+        )
+    output_bits = (order + len(sequence)) * len(group.moduli) * 128 + order * (
+        len(sequence) + 1
+    )
     if output_bits > MAX_FINITE_ABELIAN_SUBSET_SUM_OUTPUT_BITS:
         _reject("output", "finite abelian subset-sum output exceeds its bit bound")
     elements = tuple(
@@ -97,7 +105,7 @@ def finite_abelian_subset_sum_profile(
     )
     index = {element.coordinates: position for position, element in enumerate(elements)}
     counts = [0] * order
-    counts[0] = 1 if include_empty_subset or not active_sequence else 0
+    counts[0] = 1
     for position, element in enumerate(active_sequence):
         request_checkpoint(f"during finite abelian subset-sum transition {position}")
         next_counts = counts.copy()

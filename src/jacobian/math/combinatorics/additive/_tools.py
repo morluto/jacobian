@@ -376,11 +376,12 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         operation_id="additive.subset_sum.residue_profile.compute",
         title="Compute an exact modular subset-sum profile",
         description=(
-            "Given either a materialized indexed integer tuple and positive modulus m, "
-            "or indexed elements of a finite abelian product group, return exact "
-            "subset multiplicities for every residue/group element. Repeated values "
-            "and zeros remain distinct positions; "
-            "the empty-subset convention is explicit. Optional witnesses are "
+            "Given a materialized indexed integer tuple and a positive modulus m, "
+            "return the exact number of permitted index subsets in every residue "
+            "class of Z/mZ. Alternatively, use parent-bound elements of a product "
+            "of cyclic groups and obtain a complete coordinate-indexed count table. "
+            "Repeated values and zeros remain distinct positions; "
+            "the empty-subset convention is explicit. Cyclic integer witnesses are "
             "canonical by minimizing sum(2**i for i in I). The dense recurrence "
             f"visits at most {MAX_RESIDUE_PROFILE_DP_CELLS:,} item-residue cells, "
             "with modulus at most "

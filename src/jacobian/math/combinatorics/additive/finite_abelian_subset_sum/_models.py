@@ -25,7 +25,9 @@ MAX_FINITE_ABELIAN_SUBSET_SUM_MULTIPLICITY_DIGITS = (
 ) // 100_000 + 1
 SubsetMultiplicity = Annotated[
     int,
-    DecimalIntegerEncoding(max_digits=MAX_FINITE_ABELIAN_SUBSET_SUM_MULTIPLICITY_DIGITS),
+    DecimalIntegerEncoding(
+        max_digits=MAX_FINITE_ABELIAN_SUBSET_SUM_MULTIPLICITY_DIGITS
+    ),
 ]
 
 
@@ -37,11 +39,9 @@ class FiniteAbelianSubsetSumRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_group_bound(self) -> Self:
-        if (
-            self.group.order > MAX_FINITE_ABELIAN_SUBSET_SUM_ORDER
-        ):
+        if self.group.order > MAX_FINITE_ABELIAN_SUBSET_SUM_ORDER:
             raise ValueError(
-                "finite abelian subset-sum group order must be between 2 and 4,096"
+                "finite abelian subset-sum group order must be between 1 and 4,096"
             )
         if len(self.sequence) > MAX_FINITE_ABELIAN_SUBSET_SUM_ITEMS:
             raise ValueError("finite abelian subset-sum sequence is too long")
@@ -65,7 +65,7 @@ class FiniteAbelianSubsetSumResult(StrictModel):
     )
     support_size: int = Field(ge=0)
     covers_group: bool
-    total_subsets: SubsetMultiplicity = Field(ge=1)
+    total_subsets: SubsetMultiplicity = Field(ge=0)
 
     @model_validator(mode="after")
     def require_complete_profile(self) -> Self:
@@ -76,9 +76,15 @@ class FiniteAbelianSubsetSumResult(StrictModel):
         if (len(self.sequence) + self.group.order) * len(self.group.moduli) > (
             MAX_FINITE_ABELIAN_SUBSET_SUM_COORDINATE_SLOTS
         ):
-            raise ValueError("finite abelian subset-sum result exceeds coordinate bound")
+            raise ValueError(
+                "finite abelian subset-sum result exceeds coordinate bound"
+            )
         coordinates = tuple(row.element.coordinates for row in self.rows)
-        if len(self.rows) != self.group.order or coordinates != tuple(sorted(coordinates)) or len(set(coordinates)) != len(coordinates):
+        if (
+            len(self.rows) != self.group.order
+            or coordinates != tuple(sorted(coordinates))
+            or len(set(coordinates)) != len(coordinates)
+        ):
             raise ValueError(
                 "finite abelian subset-sum rows must enumerate the group canonically"
             )

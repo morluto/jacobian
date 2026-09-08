@@ -1,5 +1,72 @@
 # Changelog
 
+## [0.20.0](https://github.com/morluto/jacobian/compare/jacobian-v0.19.0...jacobian-v0.20.0) (2026-09-08)
+
+
+### Features
+
+* **approximation:** compute exact Lebesgue interval profiles ([#3541](https://github.com/morluto/jacobian/issues/3541)) ([b52596c](https://github.com/morluto/jacobian/commit/b52596cfa3b2e081b9cfa4ce34e3eaa89b292586))
+* **combinatorics:** accept hypergraphs in containment profiles ([#3549](https://github.com/morluto/jacobian/issues/3549)) ([db4239c](https://github.com/morluto/jacobian/commit/db4239c4366998f1702847dcb191ffa552fcd920))
+* **discrepancy:** decide per-set coloring bounds ([#3534](https://github.com/morluto/jacobian/issues/3534)) ([74564be](https://github.com/morluto/jacobian/commit/74564be226c6e497aa1eac752a8847475e46940f))
+* **geometry:** construct exact distance edge colorings ([#3530](https://github.com/morluto/jacobian/issues/3530)) ([33e1d31](https://github.com/morluto/jacobian/commit/33e1d31c926ddab4e46a4cddc7a37fc8bf313195))
+* **geometry:** extend distance profiles to real quadratic coordinates ([#3543](https://github.com/morluto/jacobian/issues/3543)) ([2ff62c2](https://github.com/morluto/jacobian/commit/2ff62c214b2168c0b5e9c008fa6b4177b976372d))
+* **geometry:** partition finite subsets by subspace cosets ([#3529](https://github.com/morluto/jacobian/issues/3529)) ([d819058](https://github.com/morluto/jacobian/commit/d8190586c87e744c31dd251f46e79bc4cfc65fed))
+* **graph:** add fixed-side Dulmage-Mendelsohn decomposition ([#3524](https://github.com/morluto/jacobian/issues/3524)) ([3c6bab4](https://github.com/morluto/jacobian/commit/3c6bab42c9c5072e9dd6ccc33f1cd2281ca6757c))
+* **graphs:** add exact bipartite degree factors ([#3485](https://github.com/morluto/jacobian/issues/3485)) ([0c89999](https://github.com/morluto/jacobian/commit/0c899997496d6cc633cf1c02c8b0e7ff9dfeccb8))
+* **graphs:** add precoloring edge repair ([#3486](https://github.com/morluto/jacobian/issues/3486)) ([a7dd05e](https://github.com/morluto/jacobian/commit/a7dd05e9fb195273d58b8c4db0930b8d85b4abac))
+* **graphs:** draft chromatic bipartition feasibility ([#3551](https://github.com/morluto/jacobian/issues/3551)) ([279b89d](https://github.com/morluto/jacobian/commit/279b89d5453d5c7cd3a6ac1cbc8331a8836624bb))
+* **graphs:** find edge-color-preserving subgraph embeddings ([#3550](https://github.com/morluto/jacobian/issues/3550)) ([d348e6c](https://github.com/morluto/jacobian/commit/d348e6c8eed294b8965e1c5253e5719aa99420cb))
+* **hypergraphs:** construct monochromatic uniform-subhypergraph profiles ([#3542](https://github.com/morluto/jacobian/issues/3542)) ([fa789e3](https://github.com/morluto/jacobian/commit/fa789e3502402ed49042f0248b7b4d07e3cff061))
+* **math:** construct deletion partition compatibility closures ([#3528](https://github.com/morluto/jacobian/issues/3528)) ([137c7aa](https://github.com/morluto/jacobian/commit/137c7aa0091d91384aff1045c6c386379fc3f839))
+* **math:** extend subset-sum profiles to finite abelian groups ([#3546](https://github.com/morluto/jacobian/issues/3546)) ([1a9d6f3](https://github.com/morluto/jacobian/commit/1a9d6f3c2441dcacda4d23c39d586e1fb4083aae))
+* **math:** widen exact computation envelopes and repair operation contracts ([#3520](https://github.com/morluto/jacobian/issues/3520)) ([921baba](https://github.com/morluto/jacobian/commit/921babaed53223d321cb21406bdf521f4cede690))
+* **matrices:** compute Smith decomposition over QQ[t] ([#3526](https://github.com/morluto/jacobian/issues/3526)) ([f1d49d8](https://github.com/morluto/jacobian/commit/f1d49d8f78ff661b8aba949fd48d78a445685f23))
+* **matrices:** decompose chordal PSD matrices into exact clique terms ([#3522](https://github.com/morluto/jacobian/issues/3522)) ([01e6e7e](https://github.com/morluto/jacobian/commit/01e6e7e32110747e3f87a4eff7e59cd68af90371))
+* **matrices:** reduce rational semidefinite exposed faces ([#3521](https://github.com/morluto/jacobian/issues/3521)) ([4863bf9](https://github.com/morluto/jacobian/commit/4863bf91c5fcd13a74064b2be2f43b135829541f))
+* **matrix:** complete rational PSD matrices on chordal patterns ([#3523](https://github.com/morluto/jacobian/issues/3523)) ([1b9a58c](https://github.com/morluto/jacobian/commit/1b9a58c890967eaec66cbdb6f77718d69679944b))
+* **polynomials:** compute exact rational function gradients ([#3535](https://github.com/morluto/jacobian/issues/3535)) ([13a23f8](https://github.com/morluto/jacobian/commit/13a23f8861e353fb3132f3f59c0592ff112e626d))
+* **polynomials:** count exact roots relative to the unit disk ([#3531](https://github.com/morluto/jacobian/issues/3531)) ([c088aaf](https://github.com/morluto/jacobian/commit/c088aaf0dc1786ac552cc3451fa37636bc4fcb74))
+* **probability:** exact hypergraph edge-count moments ([#3545](https://github.com/morluto/jacobian/issues/3545)) ([d8fa24f](https://github.com/morluto/jacobian/commit/d8fa24f1c893d252e908081371081f5b0a161f71))
+* **tooling:** expose validation reproduction and phase timings ([fd8966b](https://github.com/morluto/jacobian/commit/fd8966b68d5244de9d5599b58a87ea83955527e1))
+
+
+### Bug Fixes
+
+* **ci:** sync developer command contract to landed Makefile ([1d03cd7](https://github.com/morluto/jacobian/commit/1d03cd7cab4616f187a165086eee719a60f58f3e))
+* **graphs:** bind repair witness to proven bound; canonical result order ([38ef521](https://github.com/morluto/jacobian/commit/38ef52176f539a2a19748c1bf9c4559d12113fc9))
+* **hypergraph:** namespace incidence graph vertices ([#3547](https://github.com/morluto/jacobian/issues/3547)) ([7f14f25](https://github.com/morluto/jacobian/commit/7f14f25b033146b4969e6d9f5861f81230a34799))
+* **logic:** check deadline before SAT invalid-model fallback ([c1aa8da](https://github.com/morluto/jacobian/commit/c1aa8da38a6b971e9e0bb0acbb2424aaf0b0d502))
+* **math:** preserve canonical values and admit mathematical claims once ([#3525](https://github.com/morluto/jacobian/issues/3525)) ([53d0ca0](https://github.com/morluto/jacobian/commit/53d0ca0a2a9774630947b7119e47f6cc9dab233b))
+* **math:** preserve native contracts and admit tractable exact workloads ([#3533](https://github.com/morluto/jacobian/issues/3533)) ([e1b2115](https://github.com/morluto/jacobian/commit/e1b21155cce6a9e82552ed8da7b38826febc38c7))
+* **npm:** make setup refresh existing registrations ([847f02b](https://github.com/morluto/jacobian/commit/847f02b96ecd3fe666ff46d6cfc787f8d0c83fe1))
+* **polynomials:** skip zero partial workers and checkpoint DAG decode ([#3557](https://github.com/morluto/jacobian/issues/3557)) ([d32675f](https://github.com/morluto/jacobian/commit/d32675fbbe84798e68037dbde9e16a565500cd2f))
+* preserve MCP contracts and exact-value composition ([#3517](https://github.com/morluto/jacobian/issues/3517)) ([ed190f4](https://github.com/morluto/jacobian/commit/ed190f4eb7fa8cae5be8182a4ed14d6d4dbc8c3e))
+* **probability:** keep edge-count moment request off the public math surface ([#3552](https://github.com/morluto/jacobian/issues/3552)) ([50c96c2](https://github.com/morluto/jacobian/commit/50c96c20469ef3295d263c2374a13f9675944c70))
+* **semidefinite:** bound scalar lists and inactive off-diagonals ([#3556](https://github.com/morluto/jacobian/issues/3556)) ([f794c41](https://github.com/morluto/jacobian/commit/f794c41541c2d97bdbdb12d1279b969c3ed008d9))
+
+
+### Performance Improvements
+
+* **math:** admit structured exact workloads before expansion ([#3538](https://github.com/morluto/jacobian/issues/3538)) ([f61ac69](https://github.com/morluto/jacobian/commit/f61ac69d4df31c11ee5457da7b45f610473d9858))
+* **math:** reduce test feedback cost and isolate worker imports ([#3474](https://github.com/morluto/jacobian/issues/3474)) ([d8b557c](https://github.com/morluto/jacobian/commit/d8b557c58fc30c3f76653f866c04a5225945cfca))
+* streamline local validation and default math to two workers ([016e014](https://github.com/morluto/jacobian/commit/016e014d5afa1a6dc120aafa66a2889f212b3257))
+
+
+### Dependencies
+
+* **deps-dev:** bump types-networkx ([#3480](https://github.com/morluto/jacobian/issues/3480)) ([06293f3](https://github.com/morluto/jacobian/commit/06293f354a61c3cb9b555ee9a6cccf14a8fa88f7))
+* **deps:** bump @inquirer/prompts from 8.6.0 to 8.7.1 in /npm ([#3477](https://github.com/morluto/jacobian/issues/3477)) ([291a2fb](https://github.com/morluto/jacobian/commit/291a2fbe25151d8e345735161891a8fca4619e64))
+* **deps:** bump aws-actions/configure-aws-credentials ([#3478](https://github.com/morluto/jacobian/issues/3478)) ([a993783](https://github.com/morluto/jacobian/commit/a993783079b307c413133c71094610a1f02b1f37))
+* **deps:** bump click from 8.4.2 to 8.5.0 ([#3481](https://github.com/morluto/jacobian/issues/3481)) ([3999185](https://github.com/morluto/jacobian/commit/3999185403fc9665ac77fde55466edb821908aa2))
+* **deps:** bump cryptography from 50.0.0 to 50.0.1 ([#3482](https://github.com/morluto/jacobian/issues/3482)) ([3f16dda](https://github.com/morluto/jacobian/commit/3f16ddaf3dfc402169d4872a7568cb434aaa68ac))
+* **deps:** bump msgpack from 1.2.1 to 1.2.2 ([#3483](https://github.com/morluto/jacobian/issues/3483)) ([2fd5c55](https://github.com/morluto/jacobian/commit/2fd5c55e4d6faf0c1e60f32facac7af453c40a96))
+
+
+### Documentation
+
+* clarify focused validation command roles ([810a4ea](https://github.com/morluto/jacobian/commit/810a4ea33a43ffdc3fd3d30a203abc5967c1e856))
+* clarify operation scale and contract validation workflow ([aac5c36](https://github.com/morluto/jacobian/commit/aac5c36a73f011640ba1be7e0169c60153158d1b))
+
 ## [0.19.0](https://github.com/morluto/jacobian/compare/jacobian-v0.18.0...jacobian-v0.19.0) (2026-09-07)
 
 

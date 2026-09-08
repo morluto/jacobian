@@ -188,12 +188,14 @@ def pullback_metric(
             variable_count=n,
         ),
     )
-    return RationalMetricPullbackProfile(
+    profile = RationalMetricPullbackProfile(
         metric=metric,
         map=map_value,
         pullback=tensor,
         pullback_locus_guard=tensor.retained_nonzero_denominators,
     )
+    request_checkpoint("after rational metric pullback construction")
+    return profile
 
 
 __all__ = ["pullback_metric"]

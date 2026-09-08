@@ -60,7 +60,9 @@ def test_conflicts_native_schema_and_complete_distance_chain() -> None:
             validate(output, tool.result_type.model_json_schema())
             assert output == native.model_dump(mode="json")
             geometry = compute_distance_edge_coloring(
-                DistanceEdgeColoringRequest.model_validate(_UNIT_SQUARE).configuration
+                DistanceEdgeColoringRequest.model_validate_json(
+                    json.dumps(_UNIT_SQUARE)
+                ).configuration
             ).model_dump(mode="json")
             conflicts = await client.call_tool(
                 "math.run",

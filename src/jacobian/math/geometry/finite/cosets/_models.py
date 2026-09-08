@@ -41,6 +41,8 @@ class CosetIntersection(StrictModel):
     def require_cardinality_matches_members(self) -> Self:
         if self.cardinality != len(self.members):
             raise ValueError("cardinality must equal the number of retained members")
+        if any(a >= b for a, b in zip(self.members, self.members[1:], strict=False)):
+            raise ValueError("members must be strictly lexicographically ordered")
         return self
 
 
@@ -59,4 +61,9 @@ class CosetIntersectionProfile(CosetIntersectionSource):
             _validate_vector(row.representative, self.space)
             for vector in row.members:
                 _validate_vector(vector, self.space)
+        collected = tuple(
+            sorted(member for row in self.rows for member in row.members)
+        )
+        if collected != self.subset:
+            raise ValueError("row members must be the complete retained subset")
         return self

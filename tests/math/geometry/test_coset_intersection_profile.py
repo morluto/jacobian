@@ -142,6 +142,27 @@ def test_intersection_row_rejects_cardinality_mismatch() -> None:
         CosetIntersection(representative=(0,), members=((0,),), cardinality=2)
 
 
+def test_intersection_row_requires_canonical_member_order() -> None:
+    with pytest.raises(ValidationError, match="lexicographically"):
+        CosetIntersection(representative=(0,), members=((1,), (0,)), cardinality=2)
+    with pytest.raises(ValidationError, match="lexicographically"):
+        CosetIntersection(representative=(0,), members=((0,), (0,)), cardinality=2)
+
+
+def test_profile_rows_must_cover_the_retained_subset() -> None:
+    space = PrimeFieldVectorSpace(field_order=3, axis=("x",))
+    with pytest.raises(ValidationError, match="complete retained subset"):
+        CosetIntersectionProfile(
+            space=space,
+            subspace=LinearSubspace(space=space, basis=()),
+            subset=((0,), (1,)),
+            rows=(
+                CosetIntersection(representative=(0,), members=((0,),), cardinality=1),
+            ),
+        )
+
+
+
 @pytest.mark.parametrize("subset", [((0,), (0,)), ((1,), (0,)), ((3,),), ((0, 0),)])
 def test_noncanonical_subset_is_rejected(subset: tuple[tuple[int, ...], ...]) -> None:
     space = PrimeFieldVectorSpace(field_order=3, axis=("x",))

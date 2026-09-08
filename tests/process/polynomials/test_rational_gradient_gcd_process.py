@@ -76,8 +76,10 @@ def test_gcd_worker_timeout_uses_the_remaining_request_deadline(
     assert resource_limits.cpu_seconds is not None
     assert resource_limits.address_space_bytes is not None
     assert resource_limits.file_size_bytes is not None
-    assert str(observed["cwd"]).split("/")[-1].startswith(
-        "jacobian-rational-gradient-gcd-"
+    assert (
+        str(observed["cwd"])
+        .split("/")[-1]
+        .startswith("jacobian-rational-gradient-gcd-")
     )
 
 

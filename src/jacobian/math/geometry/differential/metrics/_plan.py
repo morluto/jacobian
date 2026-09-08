@@ -102,7 +102,8 @@ def build_connection_plan(metric: RationalCoordinateMetric) -> ConnectionPlan:
                 dag,
                 entries,
                 n,
-                tuple(k for k in axes if k != j), tuple(k for k in axes if k != i)
+                tuple(k for k in axes if k != j),
+                tuple(k for k in axes if k != i),
             ),
             dag.inverse(det),
         )

@@ -516,4 +516,3 @@ def _potential_locus_keys(
             else:
                 keys.update(_source_guard_keys(source, multiplicity))
     return keys
-

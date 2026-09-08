@@ -662,7 +662,9 @@ def compose_maps(  # noqa: C901
         )
     inner_den = []
     for component in inner_components:
-        request_checkpoint("before rational map composition inner denominator conversion")
+        request_checkpoint(
+            "before rational map composition inner denominator conversion"
+        )
         inner_den.append(
             sparse_rational_polynomial_to_sympy(component.denominator, xvars)
         )

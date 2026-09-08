@@ -47,8 +47,8 @@ from jacobian.math.polynomials.real_algebra._common_interlacing_models import (
 )
 from jacobian.math.polynomials.real_algebra._common_interlacing_process import (
     _profile_from_worker,
+    _require_declared_factor_structure,
     _root_profile_from_worker,
-    _verify_declared_factors,
     run_common_interlacing_profile,
 )
 from jacobian.math.polynomials.real_algebra._common_interlacing_worker import (
@@ -410,14 +410,14 @@ def test_worker_factor_multiplicity_is_capped_before_expansion() -> None:
     source = _source("linear", (1, 1), (-1, 0))
 
     with pytest.raises(ValueError, match="multiplicity exceeds source degree"):
-        _verify_declared_factors(source, [(["1", "0"], 10**100)])
+        _require_declared_factor_structure(source, [(["1", "0"], 10**100)])
 
 
 def test_worker_factor_declarations_require_positive_primitive_form() -> None:
     source = _source("quadratic", (1, 2), (-1, 0))
 
     with pytest.raises(ValueError, match="non-positive leading coefficient"):
-        _verify_declared_factors(
+        _require_declared_factor_structure(
             source,
             [(["-1", "1"], 1), (["-1", "-1"], 1)],
         )
@@ -427,7 +427,7 @@ def test_worker_factor_declarations_require_canonical_coefficients() -> None:
     source = _source("quadratic", (1, 2), (-1, 0))
 
     with pytest.raises(ValueError, match="factor coefficient is not canonical"):
-        _verify_declared_factors(
+        _require_declared_factor_structure(
             source,
             [(["01", "0", "-1"], 1)],
         )
@@ -435,7 +435,7 @@ def test_worker_factor_declarations_require_canonical_coefficients() -> None:
 
 def test_worker_root_intervals_are_bounded_before_model_validation() -> None:
     factor = ["1", "0", "-1"]
-    oversized_endpoint = "9" * 26
+    oversized_endpoint = "9" * 31
 
     with pytest.raises(ValueError, match="isolating interval endpoint exceeds"):
         _root_profile_from_worker(
@@ -995,3 +995,16 @@ def test_small_split_quadratics_match_the_gap_criterion_exhaustively() -> None:
             right_lower,
             right_upper,
         )
+
+
+def test_worker_factor_structure_does_not_reprove_source_factorization() -> None:
+    source = _source("quadratic", (1, 2), (-1, 0))
+    # This is a trusted-worker decoding boundary. Source reconstruction is
+    # established in the worker and independently checked in producer tests.
+    _require_declared_factor_structure(source, [(["1", "0", "1"], 1)])
+
+
+def test_worker_factor_structure_retains_total_degree() -> None:
+    source = _source("quadratic", (1, 2), (-1, 0))
+    with pytest.raises(ValueError, match="degrees differ"):
+        _require_declared_factor_structure(source, [(["1", "0"], 1)])

@@ -10,7 +10,10 @@ from typing import Any
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.matrices.canonical_forms._models import (
     MATRIX_POLYNOMIAL_EVALUATION_PASSES,
     MAX_CANONICAL_FORM_DIMENSION,
@@ -251,9 +254,8 @@ def minimal_polynomial(entries: RationalEntries) -> CoefficientList:
     Returns the monic minimal polynomial as coefficient list [a_0, ..., a_n].
     """
 
-    from sympy import Matrix, Poly, Symbol, eye
+    from sympy import Matrix, eye
 
-    x = Symbol("x")
     n = _square_dimension(entries)
     matrix = _sympy_matrix(entries)
 
@@ -264,23 +266,19 @@ def minimal_polynomial(entries: RationalEntries) -> CoefficientList:
     rows = [[mat[i, j] for i in range(n) for j in range(n)] for mat in powers]
     stacked = Matrix(rows).T
 
-    _reduced, pivots = stacked.rref()
+    reduced, pivots = stacked.rref()
     degree = next((index for index in range(n + 1) if index not in pivots), None)
     if degree is None:
         raise ArithmeticError("Krylov subspace exceeded the Cayley-Hamilton bound")
     if degree == 0:
         return (Fraction(1),)
 
-    submatrix = stacked[:, : degree + 1]
-    null_vectors = submatrix.nullspace()
-    if not null_vectors:
-        raise ArithmeticError(
-            "Krylov subspace produced no minimal polynomial dependency"
-        )
-
-    coefficients = null_vectors[0]
-    dependency = sum(coefficients[index] * x**index for index in range(degree + 1))
-    return _coefficients(Poly(dependency, x).monic())
+    # All earlier power columns are pivots. The first free column gives the
+    # unique monic dependence directly in the already-reduced Krylov matrix.
+    return (
+        *(Fraction(-reduced[index, degree]) for index in range(degree)),
+        Fraction(1),
+    )
 
 
 def invariant_factors(entries: RationalEntries) -> tuple[CoefficientList, ...]:
@@ -543,6 +541,8 @@ def _primary_decomposition_components(
 def verify_minimal_polynomial(claim: MinimalPolynomialResult) -> bool:
     """Verify minimal and characteristic polynomials against the matrix."""
 
+    if not isinstance(claim, MinimalPolynomialResult):
+        return False
     try:
         minimal, characteristic = _minimal_polynomial_components(claim.matrix)
         expected = MinimalPolynomialResult._from_kernel(
@@ -551,13 +551,17 @@ def verify_minimal_polynomial(claim: MinimalPolynomialResult) -> bool:
             characteristic_polynomial=characteristic,
         )
         return expected == claim
-    except (OperationDomainValidationError, ValueError, TypeError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
 def verify_rational_canonical_form(claim: RationalCanonicalFormResult) -> bool:
     """Verify invariant factors and derived polynomials against the matrix."""
 
+    if not isinstance(claim, RationalCanonicalFormResult):
+        return False
     try:
         factors, characteristic, minimal = _rational_canonical_components(claim.matrix)
         expected = RationalCanonicalFormResult._from_kernel(
@@ -567,13 +571,17 @@ def verify_rational_canonical_form(claim: RationalCanonicalFormResult) -> bool:
             minimal_polynomial=minimal,
         )
         return expected == claim
-    except (OperationDomainValidationError, ValueError, TypeError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
 def verify_primary_decomposition(claim: PrimaryDecompositionResult) -> bool:
     """Verify primary components and their product against the matrix."""
 
+    if not isinstance(claim, PrimaryDecompositionResult):
+        return False
     try:
         components, minimal = _primary_decomposition_components(claim.matrix)
         expected = PrimaryDecompositionResult._from_kernel(
@@ -582,5 +590,7 @@ def verify_primary_decomposition(claim: PrimaryDecompositionResult) -> bool:
             minimal_polynomial=minimal,
         )
         return expected == claim
-    except (OperationDomainValidationError, ValueError, TypeError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False

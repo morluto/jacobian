@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.geometry.arrangements._models import (
     MAX_GENERIC_FORMULA_INDEX,
     ChamberCountResult,
@@ -15,7 +18,12 @@ MAX_GENERIC_FORMULA_WORK = 100_000
 
 
 def _reject(location: tuple[str | int, ...], code: str, message: str) -> None:
-    raise OperationDomainValidationError(
+    error_type = (
+        OperationResourceAdmissionError
+        if code.endswith("work_exceeded")
+        else OperationDomainValidationError
+    )
+    raise error_type(
         location=location,
         code=f"hyperplane_arrangement.{code}",
         message=message,
@@ -246,12 +254,16 @@ def chamber_count(ambient_dimension: int, hyperplane_count: int) -> ChamberCount
 def verify_arrangement(claim: HyperplaneArrangementResult) -> bool:
     """Verify centrality against the retained hyperplane arrangement."""
 
+    if not isinstance(claim, HyperplaneArrangementResult):
+        return False
     try:
         return (
             arrangement(claim.ambient_dimension, claim.hyperplanes).is_central
             == claim.is_central
         )
-    except Exception:
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
@@ -260,21 +272,29 @@ def verify_characteristic_polynomial(
 ) -> bool:
     """Verify generic characteristic coefficients against their source axes."""
 
+    if not isinstance(claim, CharacteristicPolynomialResult):
+        return False
     try:
         return (
             characteristic_polynomial(claim.ambient_dimension, claim.hyperplane_count)
             == claim
         )
-    except Exception:
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
 def verify_chamber_count(claim: ChamberCountResult) -> bool:
     """Verify a generic chamber count against its source axes."""
 
+    if not isinstance(claim, ChamberCountResult):
+        return False
     try:
         return chamber_count(claim.ambient_dimension, claim.hyperplane_count) == claim
-    except Exception:
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 

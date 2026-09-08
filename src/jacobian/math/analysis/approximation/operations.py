@@ -8,7 +8,10 @@ from fractions import Fraction
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.analysis.approximation._models import (
     LagrangeBasisPolynomial,
     LagrangeBasisResult,
@@ -170,6 +173,8 @@ def lagrange_basis(nodes: RationalNodeSet) -> LagrangeBasisResult:
 def verify_lagrange_basis(claim: LagrangeBasisResult) -> bool:
     """Verify basis polynomials, cardinality, partition, and weights."""
 
+    if not isinstance(claim, LagrangeBasisResult):
+        return False
     try:
         expected = lagrange_basis(claim.nodes)
         if expected != claim:
@@ -186,13 +191,17 @@ def verify_lagrange_basis(claim: LagrangeBasisResult) -> bool:
             == 1
             for point in points
         )
-    except (OperationDomainValidationError, ValueError, TypeError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
 def verify_lagrange_interpolation(claim: LagrangeInterpolationResult) -> bool:
     """Verify an interpolant against its retained node and value axes."""
 
+    if not isinstance(claim, LagrangeInterpolationResult):
+        return False
     try:
         if lagrange_interpolation(claim.source) != claim:
             return False
@@ -203,7 +212,9 @@ def verify_lagrange_interpolation(claim: LagrangeInterpolationResult) -> bool:
                 claim.source.nodes.nodes, claim.source.values, strict=True
             )
         )
-    except (OperationDomainValidationError, ValueError, TypeError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 

@@ -313,7 +313,7 @@ def nash_equilibrium(payoff_matrix: PayoffMatrix) -> NashEquilibriumResult:
     elimination_dimension = max(matrix_value.n_rows, matrix_value.n_cols) + 2
     work = elimination_dimension * (denominator_digits + numerator_digits)
     if work > MAX_EXACT_EQUILIBRIUM_WORK:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("payoff_matrix",),
             code="finite_game.exact_equilibrium_budget",
             message="payoffs exceed the published exact-equilibrium work bound",
@@ -393,19 +393,56 @@ def nash_equilibrium(payoff_matrix: PayoffMatrix) -> NashEquilibriumResult:
 
 
 def verify_best_response(claim: BestResponseResult) -> bool:
-    try:
-        return best_response(claim.payoff_matrix) == claim
-    except (OperationDomainValidationError, TypeError, ValueError):
+    """Check a maximizing row, including any row tied for the maximin value."""
+    if not 0 <= claim.best_row < claim.payoff_matrix.n_rows:
         return False
+    matrix = _payoff_matrix(claim.payoff_matrix)
+    row_values = tuple(min(row) for row in matrix)
+    value = claim.value.as_fraction()
+    return row_values[claim.best_row] == value == max(row_values)
 
 
 def verify_nash_equilibrium(claim: NashEquilibriumResult) -> bool:
-    try:
-        return nash_equilibrium(claim.payoff_matrix) == claim
-    except OperationResourceAdmissionError:
-        raise
-    except (OperationDomainValidationError, TypeError, ValueError):
+    """Check the authored simplex strategies and saddle inequalities directly."""
+    payoffs = claim.payoff_matrix
+    if (
+        len(claim.row_strategy) != payoffs.n_rows
+        or len(claim.col_strategy) != payoffs.n_cols
+    ):
         return False
+    scalars = (*payoffs.entries, *claim.row_strategy, *claim.col_strategy, claim.value)
+    # Every checked dot product is a sum of at most max(rows, columns)
+    # pair products. Total input height bounds the common denominator and
+    # numerator growth; multiply by the scalar-work count before arithmetic.
+    height = sum(
+        abs(value.num).bit_length() + value.den.bit_length() for value in scalars
+    )
+    work = (
+        2 * payoffs.n_rows * payoffs.n_cols + payoffs.n_rows + payoffs.n_cols
+    ) * max(1, height)
+    if work > MAX_EXACT_EQUILIBRIUM_WORK * 16:
+        raise OperationResourceAdmissionError(
+            location=("claim",),
+            code="finite_game.equilibrium_check_budget",
+            message="equilibrium relation exceeds its exact arithmetic work bound",
+        )
+    rows = tuple(value.as_fraction() for value in claim.row_strategy)
+    columns = tuple(value.as_fraction() for value in claim.col_strategy)
+    if (
+        any(weight < 0 for weight in (*rows, *columns))
+        or sum(rows) != 1
+        or sum(columns) != 1
+    ):
+        return False
+    value = claim.value.as_fraction()
+    matrix = _payoff_matrix(payoffs)
+    return all(
+        sum(rows[i] * matrix[i][j] for i in range(payoffs.n_rows)) >= value
+        for j in range(payoffs.n_cols)
+    ) and all(
+        sum(matrix[i][j] * columns[j] for j in range(payoffs.n_cols)) <= value
+        for i in range(payoffs.n_rows)
+    )
 
 
 __all__ = [

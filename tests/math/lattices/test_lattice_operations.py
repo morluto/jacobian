@@ -460,3 +460,48 @@ def test_lattice_wire_parsing_does_not_prove_rank(
         lambda *_: pytest.fail("parsing must not compute rank"),
     )
     assert IntegerLattice.model_validate_json(lattice.model_dump_json()) == lattice
+
+
+def test_native_lll_uses_the_same_envelope_as_the_published_operation() -> None:
+    from jacobian.math.lattices import reduce_basis
+
+    with pytest.raises(OperationDomainValidationError, match="32"):
+        reduce_basis(_identity_entries(33))
+    with pytest.raises(OperationDomainValidationError, match="256"):
+        reduce_basis([[10**256]])
+
+
+@pytest.mark.parametrize("hermite", [False, True])
+def test_lattice_transform_results_retain_their_source_through_serialization(
+    hermite: bool,
+) -> None:
+    matrix = IntegerMatrix(entries=((2, 3, 1), (5, 7, 2)))
+    if hermite:
+        hnf_result = compute_hermite_normal_form(
+            HermiteNormalFormRequest(matrix=matrix)
+        )
+        restored_hnf = type(hnf_result).model_validate_json(
+            hnf_result.model_dump_json()
+        )
+        assert restored_hnf.matrix == matrix
+        left = restored_hnf.normal_form.entries
+        transformation = restored_hnf.transformation
+    else:
+        lll_result = reduce_lattice_basis(LatticeReductionRequest(basis=matrix))
+        restored_lll = type(lll_result).model_validate_json(
+            lll_result.model_dump_json()
+        )
+        assert restored_lll.basis == matrix
+        left = restored_lll.reduced_basis.entries
+        transformation = restored_lll.transformation
+    transformed = tuple(
+        tuple(
+            sum(
+                transformation.entries[i][k] * matrix.entries[k][j]
+                for k in range(matrix.row_count)
+            )
+            for j in range(matrix.column_count)
+        )
+        for i in range(matrix.row_count)
+    )
+    assert left == transformed

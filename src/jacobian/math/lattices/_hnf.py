@@ -28,6 +28,7 @@ def compute_hermite_normal_form(
     integer_entries = [list(row) for row in request.matrix.entries]
     normal_form, transformation = hermite_normal_form(integer_entries)
     return HermiteNormalFormResult(
+        matrix=request.matrix,
         normal_form=_matrix(normal_form),
         transformation=_matrix(transformation),
     )

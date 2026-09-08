@@ -97,6 +97,7 @@ class HermiteNormalFormRequest(StrictModel):
 class HermiteNormalFormResult(StrictModel):
     """Exact row HNF and its left unimodular transformation."""
 
+    matrix: IntegerMatrix
     normal_form: IntegerMatrix
     transformation: IntegerMatrix
     relation: Literal["NORMAL_FORM_EQUALS_TRANSFORMATION_TIMES_MATRIX"] = (
@@ -106,6 +107,14 @@ class HermiteNormalFormResult(StrictModel):
     @model_validator(mode="after")
     def require_compatible_shapes(self) -> Self:
         rows = len(self.normal_form.entries)
+        if (
+            self.matrix.row_count != rows
+            or self.matrix.column_count != self.normal_form.column_count
+        ):
+            raise _validation_error(
+                "hnf_source_shape",
+                "normal form must retain the source matrix dimensions",
+            )
         if len(self.transformation.entries) != rows:
             raise _validation_error(
                 "hnf_transformation_rows",
@@ -143,6 +152,7 @@ class LatticeReductionRequest(StrictModel):
 class LatticeReductionResult(StrictModel):
     """An exact reduced basis and its left transformation."""
 
+    basis: IntegerMatrix
     reduced_basis: IntegerMatrix
     transformation: IntegerMatrix
     rank: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
@@ -157,6 +167,14 @@ class LatticeReductionResult(StrictModel):
     @model_validator(mode="after")
     def require_transformation_shape(self) -> Self:
         rows = len(self.reduced_basis.entries)
+        if (
+            self.basis.row_count != rows
+            or self.basis.column_count != self.reduced_basis.column_count
+        ):
+            raise _validation_error(
+                "lll_source_shape",
+                "reduced basis must retain the source basis dimensions",
+            )
         if len(self.transformation.entries) != rows:
             raise _validation_error(
                 "lll_transformation_rows",

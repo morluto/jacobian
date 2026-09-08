@@ -2,11 +2,14 @@
 
 from typing import Any, NoReturn
 
+from pydantic import ValidationError
+
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
     OperationExample,
+    OperationResourceAdmissionError,
 )
 from jacobian.math.dynamics.arithmetic._models import (
     MAX_DEGREE,
@@ -21,6 +24,8 @@ from jacobian.math.dynamics.arithmetic._models import (
     OrbitPrefixRequest,
     OrbitPrefixResult,
     OrbitRepeatEvidence,
+    _ArithmeticInputError,
+    _ArithmeticResourceError,
     _validation_code,
 )
 from jacobian.math.dynamics.arithmetic.operations import (
@@ -44,7 +49,12 @@ from jacobian.math.finite_fields.values import (
 def _translate_value_error(
     exc: ValueError, location: tuple[str | int, ...]
 ) -> NoReturn:
-    raise OperationDomainValidationError(
+    error_type = (
+        OperationResourceAdmissionError
+        if isinstance(exc, _ArithmeticResourceError)
+        else OperationDomainValidationError
+    )
+    raise error_type(
         location=location,
         code=f"arithmetic_dynamics.{_validation_code(str(exc))}",
         message=str(exc),
@@ -75,7 +85,7 @@ def _finite_map_example(prime: int, coefficients: tuple[int, ...]) -> dict[str, 
 def compute_map_iterate(request: MapIterateRequest) -> MapIterateResult:
     try:
         result = iterate_polynomial(request.polynomial, request.n)
-    except ValueError as exc:
+    except _ArithmeticInputError as exc:
         location = ("polynomial",) if "polynomial" in str(exc) else ("n",)
         _translate_value_error(exc, location)
     return MapIterateResult._from_kernel(
@@ -91,7 +101,7 @@ def compute_map_iterate(request: MapIterateRequest) -> MapIterateResult:
 def compute_orbit_prefix(request: OrbitPrefixRequest) -> OrbitPrefixResult:
     try:
         result = orbit_prefix(request.polynomial, request.start, request.max_steps)
-    except ValueError as exc:
+    except _ArithmeticInputError as exc:
         location = ("start",) if "orbit start" in str(exc) else ("polynomial",)
         _translate_value_error(exc, location)
     repeat = (
@@ -119,7 +129,7 @@ def compute_dynatomic_polynomial(
 ) -> DynatomicPolynomialResult:
     try:
         result = dynatomic_polynomial(request.polynomial, request.n)
-    except ValueError as exc:
+    except _ArithmeticInputError as exc:
         location = ("polynomial",) if "polynomial" in str(exc) else ("n",)
         _translate_value_error(exc, location)
     return DynatomicPolynomialResult._from_kernel(
@@ -137,7 +147,7 @@ def compute_cycle_multiplier(
 ) -> CycleMultiplierResult:
     try:
         multiplier = cycle_multiplier(request.polynomial, request.cycle)
-    except ValueError as exc:
+    except _ArithmeticInputError as exc:
         location = ("cycle",) if "cycle" in str(exc) else ("polynomial",)
         _translate_value_error(exc, location)
     return CycleMultiplierResult._from_kernel(
@@ -170,7 +180,7 @@ def compute_finite_field_map(request: FiniteFieldMapRequest) -> FiniteFieldMapRe
         graph = finite_field_functional_graph(
             tuple(values), polynomial_map.domain.characteristic
         )
-    except ValueError as exc:
+    except _ArithmeticInputError as exc:
         _translate_value_error(exc, ("polynomial_map",))
     return FiniteFieldMapResult._from_kernel(
         polynomial_map=polynomial_map,
@@ -185,7 +195,9 @@ def verify_finite_field_map(claim: FiniteFieldMapResult) -> bool:
         expected = compute_finite_field_map(
             FiniteFieldMapRequest(polynomial_map=claim.polynomial_map)
         )
-    except (TypeError, ValueError, OperationDomainValidationError):
+    except OperationResourceAdmissionError:
+        raise
+    except (ValidationError, OperationDomainValidationError):
         return False
     return claim == expected
 
@@ -195,7 +207,9 @@ def verify_map_iterate(claim: MapIterateResult) -> bool:
         expected = compute_map_iterate(
             MapIterateRequest(polynomial=claim.source_polynomial, n=claim.n)
         )
-    except (TypeError, ValueError, OperationDomainValidationError):
+    except OperationResourceAdmissionError:
+        raise
+    except (ValidationError, OperationDomainValidationError):
         return False
     return claim == expected
 
@@ -209,7 +223,9 @@ def verify_orbit_prefix(claim: OrbitPrefixResult) -> bool:
                 max_steps=claim.requested_steps,
             )
         )
-    except (TypeError, ValueError, OperationDomainValidationError):
+    except OperationResourceAdmissionError:
+        raise
+    except (ValidationError, OperationDomainValidationError):
         return False
     return claim == expected
 
@@ -219,7 +235,9 @@ def verify_dynatomic_polynomial(claim: DynatomicPolynomialResult) -> bool:
         expected = compute_dynatomic_polynomial(
             DynatomicPolynomialRequest(polynomial=claim.source_polynomial, n=claim.n)
         )
-    except (TypeError, ValueError, OperationDomainValidationError):
+    except OperationResourceAdmissionError:
+        raise
+    except (ValidationError, OperationDomainValidationError):
         return False
     return claim == expected
 
@@ -231,7 +249,9 @@ def verify_cycle_multiplier(claim: CycleMultiplierResult) -> bool:
                 polynomial=claim.source_polynomial, cycle=claim.cycle
             )
         )
-    except (TypeError, ValueError, OperationDomainValidationError):
+    except OperationResourceAdmissionError:
+        raise
+    except (ValidationError, OperationDomainValidationError):
         return False
     return claim == expected
 

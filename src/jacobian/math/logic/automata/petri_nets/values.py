@@ -8,6 +8,10 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 
 MAX_PETRI_PLACES = 64
 MAX_PETRI_TRANSITIONS = 64
@@ -144,15 +148,33 @@ class FiringSequence(StrictModel):
 
 def require_reachability_bounds(net: PetriNet, max_states: int) -> None:
     """Admit BFS work jointly with state, place, and transition dimensions."""
+    if type(max_states) is not int or not 1 <= max_states <= MAX_REACHABILITY_STATES:
+        raise OperationDomainValidationError(
+            location=("max_states",),
+            code="petri_net.reachability_states",
+            message="max_states must be within 1..100000",
+        )
     state_cells = max_states * net.place_count
     firing_records = max_states * net.transition_count
     exploration_work = 2 * firing_records * net.place_count
     if state_cells > MAX_REACHABILITY_STATE_TOKEN_CELLS:
-        raise ValueError("reachability state-token cells exceed the work bound")
+        raise OperationResourceAdmissionError(
+            location=("net", "max_states"),
+            code="petri_net.reachability_bound",
+            message="reachability state-token cells exceed the work bound",
+        )
     if firing_records > MAX_REACHABILITY_FIRING_RECORDS:
-        raise ValueError("reachability firing records exceed the work bound")
+        raise OperationResourceAdmissionError(
+            location=("net", "max_states"),
+            code="petri_net.reachability_bound",
+            message="reachability firing records exceed the work bound",
+        )
     if exploration_work > MAX_REACHABILITY_EXPLORATION_WORK:
-        raise ValueError("reachability exploration exceeds the work bound")
+        raise OperationResourceAdmissionError(
+            location=("net", "max_states"),
+            code="petri_net.reachability_bound",
+            message="reachability exploration exceeds the work bound",
+        )
 
 
 __all__ = [

@@ -172,7 +172,7 @@ def inverse_unimodular(matrix: Matrix) -> Matrix:
     if size == 0:
         return []
 
-    from sympy import ZZ, eye
+    from sympy import ZZ
     from sympy.polys.matrices import DomainMatrix
     from sympy.polys.matrices.exceptions import DMNonInvertibleMatrixError
 
@@ -184,8 +184,6 @@ def inverse_unimodular(matrix: Matrix) -> Matrix:
     numerator, denominator = numerator.cancel_denom(denominator)
     if denominator != ZZ.one:
         raise ValueError("matrix is not unimodular")
-    if domain.matmul(numerator).to_Matrix() != eye(size):
-        raise ArithmeticError("unimodular inverse does not recover the identity")
     return [[int(value) for value in row] for row in numerator.to_Matrix().tolist()]
 
 
@@ -343,18 +341,15 @@ def verify_smith_normal_form_certificate(
     diagonal = [list(row) for row in certificate.diagonal.entries]
     left = [list(row) for row in certificate.left_transformation.entries]
     right = [list(row) for row in certificate.right_transformation.entries]
-    try:
-        if matrix_multiply(matrix_multiply(left, source), right) != diagonal:
-            return False
-        return all(
-            matrix_determinant(transformation) == int(determinant)
-            for transformation, determinant in (
-                (left, certificate.left_determinant),
-                (right, certificate.right_determinant),
-            )
-        )
-    except (ArithmeticError, ValueError):
+    if matrix_multiply(matrix_multiply(left, source), right) != diagonal:
         return False
+    return all(
+        matrix_determinant(transformation) == int(determinant)
+        for transformation, determinant in (
+            (left, certificate.left_determinant),
+            (right, certificate.right_determinant),
+        )
+    )
 
 
 __all__ = [

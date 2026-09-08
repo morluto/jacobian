@@ -36,6 +36,8 @@ def integer_gram(
 
 def integer_gram_and_rank(
     vectors: tuple[tuple[int, ...], ...],
+    *,
+    dimension: int,
 ) -> tuple[int, tuple[tuple[int, ...], ...] | None]:
     """Return rank and, only when admitted, the Gram matrix from one source."""
 
@@ -43,7 +45,7 @@ def integer_gram_and_rank(
 
     source = fmpz_mat(vectors)
     rank = int(source.rank())
-    if rank != len(vectors[0]):
+    if rank != dimension:
         return rank, None
     return rank, _canonical_rows(source * source.transpose())
 

@@ -38,6 +38,18 @@ representable. This is not a computational admission promise: each consumer
 retains its own work and size limits. Label-based `SimpleUndirectedGraph`
 values retain their separate 256-vertex envelope.
 
+Frame operations share `VectorFamily`, whose required `dimension` retains the
+standard Euclidean ambient space even when `vectors` is empty. Coordinates are
+integers. Gram computation accepts empty families in any admitted dimension;
+frame potential and coherence additionally require spanning. The empty family
+spans dimension zero, with potential and squared coherence zero and no
+maximizing pair. Coherence rejects any zero vector.
+
+Cubical face closure separates its source-cell envelope from its exact result
+envelope. A full cube at the largest supported ambient dimension remains
+representable; distinct generated faces share one bounded admission set, so
+repeated source cubes do not multiply the output estimate.
+
 ## Values, witnesses, and source binding
 
 | Need | Appropriate result |

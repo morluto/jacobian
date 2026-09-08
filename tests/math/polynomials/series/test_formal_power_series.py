@@ -5,7 +5,11 @@ from typing import Any, cast
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
-from jacobian.catalog.models import MathTool, OperationDomainValidationError
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.polynomials.series import (
     compose,
     derivative,
@@ -170,9 +174,9 @@ def test_input_series_rejects_oversized_coefficients() -> None:
         truncation_order=1,
         coefficients=(_coeff(huge),),
     )
-    with pytest.raises(OperationDomainValidationError) as error:
+    with pytest.raises(OperationResourceAdmissionError) as error:
         derivative(oversized)
-    assert error.value.errors()[0]["type"] == "formal_power_series.admission"
+    assert error.value.errors()[0]["type"] == "formal_power_series.input_coefficient"
 
 
 def test_product_can_exceed_input_digit_bound() -> None:

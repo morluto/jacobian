@@ -6,7 +6,10 @@ from fractions import Fraction
 from typing import Any
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.analysis.convex._models import (
     AffinePiece,
     MaxAffineEvalResult,
@@ -102,9 +105,13 @@ def max_affine_subdifferential(
 def verify_max_affine_evaluation(claim: MaxAffineEvalResult) -> bool:
     """Verify value, active-piece IDs, and per-piece values against the source."""
 
+    if not isinstance(claim, MaxAffineEvalResult):
+        return False
     try:
         return max_affine_evaluation(claim.function, claim.point) == claim
-    except (OperationDomainValidationError, ValueError, TypeError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
@@ -113,9 +120,13 @@ def verify_max_affine_subdifferential(
 ) -> bool:
     """Verify active gradients against the retained function and point."""
 
+    if not isinstance(claim, MaxAffineSubdifferentialResult):
+        return False
     try:
         return max_affine_subdifferential(claim.function, claim.point) == claim
-    except (OperationDomainValidationError, ValueError, TypeError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 

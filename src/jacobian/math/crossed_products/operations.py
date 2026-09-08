@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.crossed_products._budget import require_multiplication_budget
 from jacobian.math.crossed_products._models import CrossedProductMultiplyResult
 from jacobian.math.crossed_products.values import (
@@ -107,6 +110,8 @@ def verify_multiply(claim: CrossedProductMultiplyResult) -> bool:
         ):
             return False
         return multiply(claim.left, claim.right) == claim.product
+    except OperationResourceAdmissionError:
+        raise
     except (AttributeError, TypeError, ValueError, OperationDomainValidationError):
         return False
 

@@ -8,7 +8,10 @@ import sympy
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.polynomials._conversions import (
     rational_polynomial_from_sympy,
     rational_polynomial_to_sympy,
@@ -208,47 +211,67 @@ def directional_derivative(
 
 
 def verify_gradient(claim: VectorResult) -> bool:
+    if not isinstance(claim, VectorResult):
+        return False
     try:
         if claim.source_polynomial is None:
             return False
         return gradient(claim.source_polynomial) == claim
-    except (AttributeError, TypeError, ValueError, OperationDomainValidationError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
 def verify_divergence(claim: ScalarResult) -> bool:
+    if not isinstance(claim, ScalarResult):
+        return False
     try:
         if claim.source_components is None:
             return False
         return divergence(claim.source_components) == claim
-    except (AttributeError, TypeError, ValueError, OperationDomainValidationError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
 def verify_curl(claim: VectorResult) -> bool:
+    if not isinstance(claim, VectorResult):
+        return False
     try:
         if claim.source_components is None:
             return False
         return curl(claim.source_components) == claim
-    except (AttributeError, TypeError, ValueError, OperationDomainValidationError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
 def verify_laplacian(claim: ScalarResult) -> bool:
+    if not isinstance(claim, ScalarResult):
+        return False
     try:
         if claim.source_polynomial is None:
             return False
         return laplacian(claim.source_polynomial) == claim
-    except (AttributeError, TypeError, ValueError, OperationDomainValidationError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
 def verify_directional_derivative(claim: ScalarResult) -> bool:
+    if not isinstance(claim, ScalarResult):
+        return False
     try:
         if claim.source_polynomial is None or claim.direction is None:
             return False
         return directional_derivative(claim.source_polynomial, claim.direction) == claim
-    except (AttributeError, TypeError, ValueError, OperationDomainValidationError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 

@@ -698,3 +698,74 @@ def test_serialized_prolongability_remains_a_claim() -> None:
     )
     with pytest.raises(ValueError, match="eventually erase"):
         fixed_point_prefix(source, 3)
+
+
+def test_primitivity_rejects_missing_dependency_support() -> None:
+    source = _substitution((("0", "1"), ("0",)))
+    graph = substitution_dependency_graph(source)
+    assert substitution_primitivity_profile(graph).primitive
+    payload = graph.model_dump(mode="json")
+    payload["edges"] = []
+    authored = SubstitutionDependencyGraph.model_validate(payload)
+    with pytest.raises(ValueError, match=r"dependency.*support"):
+        substitution_primitivity_profile(authored)
+
+
+def test_composition_admits_length_before_expansion() -> None:
+    import tracemalloc
+
+    morphism = WordMorphism(
+        source_alphabet=("x",),
+        target_alphabet=("x",),
+        images=(("x",) * 1000,),
+    )
+    tracemalloc.start()
+    try:
+        with pytest.raises(ValueError, match="composed morphism image"):
+            compose_morphisms(morphism, morphism)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert peak < 1_000_000
+
+
+def test_dependency_verification_preserves_resource_refusal() -> None:
+    from jacobian.catalog.models import OperationResourceAdmissionError
+    from jacobian.math.logic.languages.words.operations import (
+        verify_substitution_primitivity_profile,
+    )
+
+    graph = substitution_dependency_graph(_substitution((("0", "1"), ("0",))))
+    claim = compute_substitution_primitivity_profile(
+        SubstitutionPrimitivityProfileRequest(dependency_graph=graph)
+    )
+    oversized = SubstitutionDependencyGraph(
+        substitution=_substitution((("0",) * 5001, ("1",) * 5000)), edges=()
+    )
+    authored = claim.model_copy(update={"dependency_graph": oversized})
+    with pytest.raises(OperationResourceAdmissionError):
+        verify_substitution_primitivity_profile(authored)
+
+
+def test_primitivity_verifier_preserves_backend_value_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import networkx as nx
+
+    from jacobian.math.logic.languages.words.operations import (
+        verify_substitution_primitivity_profile,
+    )
+
+    graph = substitution_dependency_graph(_substitution((("0", "1"), ("0",))))
+    request = SubstitutionPrimitivityProfileRequest(dependency_graph=graph)
+    claim = compute_substitution_primitivity_profile(request)
+
+    def fail(*args: object, **kwargs: object) -> bool:
+        raise ValueError("backend failed")
+
+    monkeypatch.setattr(nx, "is_aperiodic", fail)
+    with pytest.raises(ValueError, match="backend failed"):
+        verify_substitution_primitivity_profile(claim)
+    with pytest.raises(ValueError, match="backend failed") as error:
+        compute_substitution_primitivity_profile(request)
+    assert not isinstance(error.value, OperationDomainValidationError)

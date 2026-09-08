@@ -63,6 +63,8 @@ class BooleanWalshTransformResult(StrictModel):
     using the fast Walsh-Hadamard transform in Hadamard (natural) order.
     """
 
+    source: BooleanTruthTable
+
     spectrum: tuple[ExactInteger, ...] = Field(
         min_length=1,
         max_length=MAX_TRUTH_TABLE_LENGTH,
@@ -73,6 +75,11 @@ class BooleanWalshTransformResult(StrictModel):
 
     @model_validator(mode="after")
     def require_spectrum_shape(self) -> Self:
+        if self.variable_count != self.source.variable_count:
+            raise _validation_error(
+                "source_dimension_mismatch",
+                "source and spectrum must retain the same Boolean cube",
+            )
         if len(self.spectrum) != 1 << self.variable_count:
             raise _validation_error(
                 "spectrum_length_mismatch",

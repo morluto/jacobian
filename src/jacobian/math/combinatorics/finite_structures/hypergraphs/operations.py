@@ -5,7 +5,10 @@ from fractions import Fraction
 from math import lcm
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     MAX_HYPERGRAPH_INDEPENDENCE_INCIDENCES,
     MAX_HYPERGRAPH_INDEPENDENCE_VERTICES,
@@ -84,7 +87,7 @@ def _admit_independence(hypergraph: FiniteHypergraph) -> tuple[str, ...] | None:
             vertex for vertex in hypergraph.vertices if vertex not in forbidden
         )
     if len(hypergraph.vertices) > MAX_HYPERGRAPH_INDEPENDENCE_VERTICES:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("hypergraph",),
             code="hypergraph.independence_number.vertex_bound",
             message=(
@@ -93,7 +96,7 @@ def _admit_independence(hypergraph: FiniteHypergraph) -> tuple[str, ...] | None:
             ),
         )
     if total_incidences > MAX_HYPERGRAPH_INDEPENDENCE_INCIDENCES:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("hypergraph",),
             code="hypergraph.independence_number.incidence_bound",
             message=(
@@ -261,7 +264,7 @@ def _admit_maximum_edge_matching(
     plan = _matching_search_plan(hypergraph)
     _, _, components, search_work = plan
     if any(len(component) > MAX_MATCHING_EDGES for component in components):
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("hypergraph",),
             code="hypergraph.maximum_edge_matching.search_bound",
             message=(
@@ -270,7 +273,7 @@ def _admit_maximum_edge_matching(
             ),
         )
     if search_work > MAX_MATCHING_SEARCH_WORK:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("hypergraph",),
             code="hypergraph.maximum_edge_matching.search_bound",
             message=(
@@ -332,15 +335,25 @@ def verify_independence_number(claim: HypergraphIndependenceResult) -> bool:
         if claim.status == "UNKNOWN":
             return False
 
-        expected = independence_number(claim.hypergraph, claim.resource_budget)
-        return (
-            expected.status == "EXACT"
-            and claim.independence_number == expected.independence_number
-            and claim.lower_bound == expected.lower_bound
-            and claim.upper_bound == expected.upper_bound
-        )
-    except Exception:
+    except (AttributeError, TypeError):
         return False
+    try:
+        expected = independence_number(claim.hypergraph, claim.resource_budget)
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
+        return False
+    if expected.status != "EXACT":
+        raise OperationResourceAdmissionError(
+            location=("claim",),
+            code="hypergraph.independence_number.verification_incomplete",
+            message="verification could not establish the claimed independence optimum",
+        )
+    return (
+        claim.independence_number == expected.independence_number
+        and claim.lower_bound == expected.lower_bound
+        and claim.upper_bound == expected.upper_bound
+    )
 
 
 def _canonical_edges(
@@ -742,7 +755,7 @@ def _admit_minimum_transversal(
         )
     plan = _minimum_transversal_search_plan(hypergraph)
     if plan.search_work > MAX_TRANSVERSAL_SEARCH_WORK:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("hypergraph",),
             code="hypergraph.minimum_transversal.search_bound",
             message=(
@@ -785,10 +798,15 @@ def verify_minimum_transversal(claim: MinimumTransversalResult) -> bool:
             )
         ):
             return False
-        expected = minimum_transversal(claim.hypergraph)
-        return claim.cardinality == expected.cardinality
-    except Exception:
+    except (AttributeError, TypeError):
         return False
+    try:
+        expected = minimum_transversal(claim.hypergraph)
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
+        return False
+    return claim.cardinality == expected.cardinality
 
 
 def _maximum_component_matching(
@@ -888,10 +906,15 @@ def verify_maximum_edge_matching(claim: MaximumEdgeMatchingResult) -> bool:
             for right in range(left + 1, len(member_sets))
         ):
             return False
-        expected = maximum_edge_matching(claim.hypergraph)
-        return claim.count == expected.count
-    except Exception:
+    except (AttributeError, TypeError):
         return False
+    try:
+        expected = maximum_edge_matching(claim.hypergraph)
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
+        return False
+    return claim.count == expected.count
 
 
 def _weighted_packing_plan(
@@ -1028,7 +1051,7 @@ def maximum_weight_packing(
     for entry in weights:
         denominator = lcm(denominator, entry.weight.den)
         if denominator.bit_length() > 96_000:
-            raise OperationDomainValidationError(
+            raise OperationResourceAdmissionError(
                 location=("weights",),
                 code="hypergraph.weighted_packing.growth",
                 message="packing weight common denominator exceeds the exact height envelope",
@@ -1042,7 +1065,7 @@ def maximum_weight_packing(
         default=1,
     )
     if numerator_bits + max(1, len(weights)).bit_length() > 96_000:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("weights",),
             code="hypergraph.weighted_packing.growth",
             message="packing weight sums exceed the exact height envelope",
@@ -1054,7 +1077,7 @@ def maximum_weight_packing(
         len(component) > MAX_MATCHING_EDGES and axis is None
         for component, axis in zip(components, resources, strict=True)
     ):
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("hypergraph",),
             code="hypergraph.weighted_packing.search_bound",
             message=(
@@ -1063,7 +1086,7 @@ def maximum_weight_packing(
             ),
         )
     if search_work > MAX_WEIGHTED_PACKING_SEARCH_WORK:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("hypergraph",),
             code="hypergraph.weighted_packing.search_bound",
             message=(
@@ -1127,7 +1150,12 @@ def verify_weighted_packing(claim: WeightedPackingResult) -> bool:
         )
         if claim.total_weight.as_fraction() != selected_weight:
             return False
-        expected = maximum_weight_packing(claim.hypergraph, claim.weights)
-        return claim == expected
-    except Exception:
+    except (AttributeError, TypeError):
         return False
+    try:
+        expected = maximum_weight_packing(claim.hypergraph, claim.weights)
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
+        return False
+    return claim == expected

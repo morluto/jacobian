@@ -18,7 +18,10 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import format_canonical_integer
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.matrices import _conversions as conversions
 from jacobian.math.matrices._operation_models import (
     MAX_CHARACTERISTIC_POLYNOMIAL_ORDER,
@@ -1334,6 +1337,8 @@ def nullspace_result(matrix: RationalMatrix | SparseRationalMatrix) -> Nullspace
 
 def verify_nullspace(claim: NullspaceResult) -> bool:
     """Check a serialized fundamental nullspace claim against its source."""
+    if not isinstance(claim, NullspaceResult):
+        return False
     try:
         source_rank = rank_result(claim.matrix)
         if source_rank.rank != claim.rank:
@@ -1377,7 +1382,9 @@ def verify_nullspace(claim: NullspaceResult) -> bool:
             ):
                 return False
         return True
-    except (AttributeError, IndexError, OperationDomainValidationError, ValueError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 

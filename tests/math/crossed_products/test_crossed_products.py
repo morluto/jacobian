@@ -530,3 +530,26 @@ def test_published_example_is_valid_and_runs() -> None:
             exponents=(-1,),
         ),
     )
+
+
+def test_product_claim_verifier_does_not_refute_unadmitted_convolution() -> None:
+    from jacobian.catalog.models import OperationResourceAdmissionError
+
+    presentation = _c2_presentation()
+    side = isqrt(MAX_CONVOLUTION_PAIRS) + 1
+    operand = _element(presentation, {"e": {(i,) for i in range(side)}})
+    # Independent triangular convolution for (1+t+...+t^(side-1))^2 over F_5.
+    product = FiniteCosetCrossedProductElement(
+        presentation=presentation,
+        terms=tuple(
+            FiniteCosetCrossedProductTerm(
+                coefficient=coefficient, coset="e", exponents=(i,)
+            )
+            for i in range(2 * side - 1)
+            if (coefficient := min(i + 1, 2 * side - 1 - i, side) % 5)
+        ),
+    )
+    claim = CrossedProductMultiplyResult(left=operand, right=operand, product=product)
+    decoded = CrossedProductMultiplyResult.model_validate_json(claim.model_dump_json())
+    with pytest.raises(OperationResourceAdmissionError, match="convolution budget"):
+        verify_multiply(decoded)

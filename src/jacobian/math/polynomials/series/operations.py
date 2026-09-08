@@ -14,7 +14,10 @@ from fractions import Fraction
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.polynomials.series._models import (
     MAX_TRUNCATION_ORDER,
     SeriesArithmeticResult,
@@ -32,6 +35,7 @@ from jacobian.math.polynomials.series._models import (
     SeriesToPolynomialResult,
     SeriesTruncateResult,
     TruncatedSeries,
+    _has_degree_at_most,
     admit_native_add_subtract,
     admit_native_compose,
     admit_native_divide,
@@ -119,6 +123,10 @@ def _cauchy_convolve(
     a: Sequence[Fraction], b: Sequence[Fraction], n: int
 ) -> list[Fraction]:
     """c_k = sum_{i=0}^{k} a_i * b_{k-i} for 0 <= k < n."""
+    if n and not any(a[1:n]):
+        return [a[0] * b[k] for k in range(n)]
+    if n and not any(b[1:n]):
+        return [b[0] * a[k] for k in range(n)]
     return [
         sum((a[i] * b[k - i] for i in range(k + 1)), start=Fraction()) for k in range(n)
     ]
@@ -222,6 +230,8 @@ def _inverse_coefficients(series: TruncatedSeries) -> list[Fraction]:
         raise ValueError("series with zero constant term is not a unit")
     inverse = [Fraction(0)] * n
     inverse[0] = Fraction(1) / a[0]
+    if not any(a[1:]):
+        return inverse
     for degree in range(1, n):
         recurrence_sum = sum(
             (a[index] * inverse[degree - index] for index in range(1, degree + 1)),
@@ -255,23 +265,25 @@ def verify_inverse(claim: SeriesInverseResult) -> bool:
     """Verify an inverse claim, including its serialized residual ledger."""
     try:
         admit_native_inverse(claim.source)
-        if (
-            claim.source.variable != claim.result.variable
-            or claim.source.truncation_order != claim.result.truncation_order
-        ):
-            return False
-        product = _cauchy_convolve(
-            _series_fractions(claim.source),
-            _series_fractions(claim.result),
-            claim.source.truncation_order,
-        )
-        product[0] -= Fraction(1)
-        return (
-            all(value == 0 for value in product)
-            and tuple(_wire(value) for value in product) == claim.residual_coefficients
-        )
+    except OperationResourceAdmissionError:
+        raise
     except (TypeError, ValueError):
         return False
+    if (
+        claim.source.variable != claim.result.variable
+        or claim.source.truncation_order != claim.result.truncation_order
+    ):
+        return False
+    product = _cauchy_convolve(
+        _series_fractions(claim.source),
+        _series_fractions(claim.result),
+        claim.source.truncation_order,
+    )
+    product[0] -= Fraction(1)
+    return (
+        all(value == 0 for value in product)
+        and tuple(_wire(value) for value in product) == claim.residual_coefficients
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -304,31 +316,32 @@ def verify_divide(claim: SeriesDivideResult) -> bool:
     """Verify a quotient claim, including its serialized residual ledger."""
     try:
         admit_native_divide(claim.numerator, claim.denominator)
-        if not (
-            claim.numerator.variable
-            == claim.denominator.variable
-            == claim.quotient.variable
-            and claim.numerator.truncation_order
-            == claim.denominator.truncation_order
-            == claim.quotient.truncation_order
-        ):
-            return False
-        residual = _cauchy_convolve(
-            _series_fractions(claim.denominator),
-            _series_fractions(claim.quotient),
-            claim.numerator.truncation_order,
-        )
-        numerator = _series_fractions(claim.numerator)
-        differences = tuple(
-            left - right for left, right in zip(residual, numerator, strict=True)
-        )
-        return (
-            all(value == 0 for value in differences)
-            and tuple(_wire(value) for value in differences)
-            == claim.residual_coefficients
-        )
+    except OperationResourceAdmissionError:
+        raise
     except (TypeError, ValueError):
         return False
+    if not (
+        claim.numerator.variable
+        == claim.denominator.variable
+        == claim.quotient.variable
+        and claim.numerator.truncation_order
+        == claim.denominator.truncation_order
+        == claim.quotient.truncation_order
+    ):
+        return False
+    residual = _cauchy_convolve(
+        _series_fractions(claim.denominator),
+        _series_fractions(claim.quotient),
+        claim.numerator.truncation_order,
+    )
+    numerator = _series_fractions(claim.numerator)
+    differences = tuple(
+        left - right for left, right in zip(residual, numerator, strict=True)
+    )
+    return (
+        all(value == 0 for value in differences)
+        and tuple(_wire(value) for value in differences) == claim.residual_coefficients
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -343,6 +356,11 @@ def _compose_coefficients(
     n = outer.truncation_order
     outer_coefficients = _series_fractions(outer)
     inner_coefficients = _series_fractions(inner)
+    if not any(outer_coefficients[2:]):
+        slope = outer_coefficients[1] if n > 1 else Fraction(0)
+        result = [slope * value for value in inner_coefficients]
+        result[0] += outer_coefficients[0]
+        return result
     inner_power = [Fraction(1)] + [Fraction(0)] * (n - 1)
     result = [outer_coefficients[0] * value for value in inner_power]
     for outer_degree in range(1, n):
@@ -392,7 +410,7 @@ def reversion(series: TruncatedSeries) -> SeriesReversionResult:
     g = [Fraction(0)] * n
     g[1] = Fraction(1) / f[1]
     # Compute G powers up to N-1 and solve for g_k one at a time
-    for k in range(2, n):
+    for k in range(2, n if any(f[2:]) else 2):
         target = Fraction(0)
         # For j = 2 to k:
         #   compute G^j using g_0..g_{k-1} and read off coefficient of x^k
@@ -438,30 +456,43 @@ def verify_reversion(claim: SeriesReversionResult) -> bool:
     """Verify both composition identities and their serialized ledgers."""
     try:
         admit_native_reversion(claim.source)
-        if (
-            claim.source.variable != claim.result.variable
-            or claim.source.truncation_order != claim.result.truncation_order
-        ):
-            return False
-        order = claim.source.truncation_order
-        left = _compose_coefficients(claim.source, claim.result)
-        right = _compose_coefficients(claim.result, claim.source)
-        target = [Fraction(1) if index == 1 else Fraction(0) for index in range(order)]
-        left_differences = tuple(
-            value - expected for value, expected in zip(left, target, strict=True)
-        )
-        right_differences = tuple(
-            value - expected for value, expected in zip(right, target, strict=True)
-        )
-        return (
-            all(value == 0 for value in left_differences)
-            and all(value == 0 for value in right_differences)
-            and tuple(_wire(value) for value in left_differences) == claim.left_residual
-            and tuple(_wire(value) for value in right_differences)
-            == claim.right_residual
-        )
+    except OperationResourceAdmissionError:
+        raise
     except (TypeError, ValueError):
         return False
+    if (
+        claim.source.variable != claim.result.variable
+        or claim.source.truncation_order != claim.result.truncation_order
+    ):
+        return False
+    order = claim.source.truncation_order
+    if _has_degree_at_most(claim.source, 1):
+        return (
+            claim.result.coefficients[0].num == 0
+            and all(value.num == 0 for value in claim.result.coefficients[2:])
+            and claim.source.coefficients[1].as_fraction()
+            * claim.result.coefficients[1].as_fraction()
+            == 1
+            and all(
+                value.num == 0
+                for value in (*claim.left_residual, *claim.right_residual)
+            )
+        )
+    left = _compose_coefficients(claim.source, claim.result)
+    right = _compose_coefficients(claim.result, claim.source)
+    target = [Fraction(1) if index == 1 else Fraction(0) for index in range(order)]
+    left_differences = tuple(
+        value - expected for value, expected in zip(left, target, strict=True)
+    )
+    right_differences = tuple(
+        value - expected for value, expected in zip(right, target, strict=True)
+    )
+    return (
+        all(value == 0 for value in left_differences)
+        and all(value == 0 for value in right_differences)
+        and tuple(_wire(value) for value in left_differences) == claim.left_residual
+        and tuple(_wire(value) for value in right_differences) == claim.right_residual
+    )
 
 
 # ---------------------------------------------------------------------------

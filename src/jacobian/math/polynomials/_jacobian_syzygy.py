@@ -293,7 +293,7 @@ def _compute_graded_jacobian_syzygy(
             multiplier_degree,
             source_degree,
         )
-        _, pivot_columns = matrix.rref()
+        reduced, pivot_columns = matrix.rref()
         rank = len(pivot_columns)
         rank_minor: GradedJacobianRankMinor | None = None
         if rank:
@@ -346,7 +346,14 @@ def _compute_graded_jacobian_syzygy(
         )
         if nullity:
             first_degree = multiplier_degree
-            vector = _primitive_kernel(matrix.nullspace()[0])
+            free_column = next(
+                index for index in range(matrix.cols) if index not in pivot_columns
+            )
+            dependence = [Fraction(0)] * matrix.cols
+            dependence[free_column] = Fraction(1)
+            for row, pivot in enumerate(pivot_columns):
+                dependence[pivot] = Fraction(-reduced[row, free_column])
+            vector = _primitive_kernel(dependence)
             block_size = len(source_basis)
             multipliers = tuple(
                 _multiplier_polynomial(

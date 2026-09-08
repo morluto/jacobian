@@ -85,6 +85,9 @@ def test_derived_line_key_growth_is_rejected_before_pair_enumeration() -> None:
         LabelledRationalPoint(
             label="b", coordinates=(CanonicalRational(num=0, den=1),) * 20
         ),
+        LabelledRationalPoint(
+            label="c", coordinates=(wide,) + (CanonicalRational(num=0, den=1),) * 19
+        ),
     )
     with pytest.raises(ValueError, match="line keys exceed"):
         compute_spanned_line_profile(PointConfiguration(points=points))

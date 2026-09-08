@@ -1300,21 +1300,21 @@ def verify_ideal_membership_certificate(
 ) -> bool:
     """Verify a serialized ideal-membership identity against its sources."""
 
+    if claim.status == "NO_CERTIFICATE_WITHIN_BOUND":
+        return (
+            ideal_membership_certificate(
+                claim.ideal,
+                claim.polynomial,
+                claim.cofactor_degree_bound,
+            )
+            == claim
+        )
     try:
         _admit_membership_certificate(
             claim.ideal,
             claim.polynomial,
             claim.cofactor_degree_bound,
         )
-        if claim.status == "NO_CERTIFICATE_WITHIN_BOUND":
-            return (
-                ideal_membership_certificate(
-                    claim.ideal,
-                    claim.polynomial,
-                    claim.cofactor_degree_bound,
-                )
-                == claim
-            )
         if claim.multiplier is None or claim.cofactors is None:
             return False
         cofactor_terms = 0
@@ -1341,19 +1341,19 @@ def verify_ideal_membership_certificate(
             for term in cofactor.polynomial.terms
         ):
             return False
-        target = rational_polynomial_to_sympy(claim.polynomial).as_expr()
-        identity = sympy.Integer(0)
-        for cofactor, generator in zip(
-            claim.cofactors, claim.ideal.generators, strict=True
-        ):
-            identity += rational_polynomial_to_sympy(cofactor).as_expr() * (
-                rational_polynomial_to_sympy(generator).as_expr()
-            )
-        return bool(sympy.expand(identity - claim.multiplier * target) == 0)
     except OperationResourceAdmissionError:
         raise
     except (AttributeError, KeyError, TypeError, ValueError, sympy.SympifyError):
         return False
+    target = rational_polynomial_to_sympy(claim.polynomial).as_expr()
+    identity = sympy.Integer(0)
+    for cofactor, generator in zip(
+        claim.cofactors, claim.ideal.generators, strict=True
+    ):
+        identity += rational_polynomial_to_sympy(cofactor).as_expr() * (
+            rational_polynomial_to_sympy(generator).as_expr()
+        )
+    return bool(sympy.expand(identity - claim.multiplier * target) == 0)
 
 
 def verify_groebner_basis(claim: GroebnerBasisResult) -> bool:
@@ -1374,13 +1374,19 @@ def verify_groebner_basis(claim: GroebnerBasisResult) -> bool:
                 for generator in claim.basis.generators
             ],
         }
-        return bool(_run_sympy_kernel(payload, 10).get("equal", False))
     except OperationResourceAdmissionError:
         raise
     except _ResultLimitExceededError:
         raise
     except (AttributeError, KeyError, TypeError, ValueError, sympy.SympifyError):
         return False
+
+    equal = _run_sympy_kernel(payload, 10).get("equal")
+    if type(equal) is not bool:
+        raise RuntimeError(
+            "the Groebner verification worker omitted its Boolean result"
+        )
+    return equal
 
 
 def verify_ideal_normal_form(claim: IdealNormalFormResult) -> bool:
@@ -1395,7 +1401,9 @@ def verify_ideal_normal_form(claim: IdealNormalFormResult) -> bool:
             )
             == claim
         )
-    except Exception:
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
@@ -1411,7 +1419,9 @@ def verify_ideal_containment(claim: IdealContainmentResult) -> bool:
             )
             == claim
         )
-    except Exception:
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
@@ -1427,7 +1437,9 @@ def verify_ideal_equality(claim: IdealEqualityResult) -> bool:
             )
             == claim
         )
-    except Exception:
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 

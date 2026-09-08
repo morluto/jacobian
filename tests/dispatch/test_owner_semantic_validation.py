@@ -27,8 +27,8 @@ def test_universal_algebra_assignment_admission_is_typed() -> None:
     assert caught.value.errors() == (
         {
             "loc": ("assignment",),
-            "type": "universal_algebra.assignment_coverage",
-            "msg": "assignment must cover exactly the referenced variables",
+            "type": "universal_algebra.assignment_variable_axis",
+            "msg": "assignment keys must cover exactly the term variable axis 0..variable_count-1",
         },
     )
 

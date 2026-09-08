@@ -12,7 +12,10 @@ from jacobian._execution import (
     request_checkpoint,
     request_execution,
 )
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.additive.zero_sum_atoms._models import (
     MAX_ATOM_EDGES,
     MAX_ATOM_INCIDENCES,
@@ -35,7 +38,12 @@ _OWNER_DEADLINE_SECONDS = 3600.0
 
 
 def _reject(location: tuple[str | int, ...], code: str, message: str) -> None:
-    raise OperationDomainValidationError(location=location, code=code, message=message)
+    error_type = (
+        OperationDomainValidationError
+        if code == "zero_sum_atom.source_domain"
+        else OperationResourceAdmissionError
+    )
+    raise error_type(location=location, code=code, message=message)
 
 
 def _add(
@@ -192,6 +200,8 @@ def verify_zero_sum_atom_hypergraph(
     result: ZeroSumAtomHypergraphResult,
 ) -> bool:
     """Verify atom zero-sum, minimality, and completeness for the source."""
+    if not isinstance(result, ZeroSumAtomHypergraphResult):
+        return False
     try:
         expected = construct_zero_sum_atom_hypergraph(result.source)
         return (
@@ -200,7 +210,9 @@ def verify_zero_sum_atom_hypergraph(
             and expected.atom_count == result.atom_count
             and expected.total_incidences == result.total_incidences
         )
-    except Exception:
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
@@ -235,5 +247,7 @@ def verify_zero_sum_atom(
                 if subset_sum == zero:
                     return False
         return True
-    except Exception:
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False

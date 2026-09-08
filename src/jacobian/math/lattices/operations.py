@@ -50,6 +50,8 @@ from jacobian.math.lattices._models import (
     RankGramResult,
     SaturationResult,
     SublatticeIndexResult,
+    _require_lattice_matrix_envelope,
+    _run_admission,
 )
 from jacobian.math.matrices.values import (
     MAX_MATRIX_DIMENSION,
@@ -101,6 +103,11 @@ def reduce_basis(
     transformation.
     """
 
+    basis = IntegerMatrix(entries=tuple(tuple(row) for row in entries))
+    _run_admission(
+        lambda: _require_lattice_matrix_envelope(basis, label="basis input"),
+        location=("basis",),
+    )
     import flint
 
     source = flint.fmpz_mat(entries)

@@ -11,7 +11,10 @@ from jacobian._exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
     CanonicalRational,
 )
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.additive.rational_subset_sum._models import (
     MAX_SEQUENCE_LENGTH,
     RationalSubsetSumResult,
@@ -30,7 +33,12 @@ class _RationalSubsetSumPlan:
 
 
 def _reject(code: str, message: str) -> NoReturn:
-    raise OperationDomainValidationError(
+    error_type = (
+        OperationDomainValidationError
+        if code == "invalid_values"
+        else OperationResourceAdmissionError
+    )
+    raise error_type(
         location=("values",), code=f"rational_subset_sum.{code}", message=message
     )
 
@@ -190,8 +198,12 @@ def compute_rational_subset_sum_profile(
 
 def verify_rational_subset_sum_profile(result: RationalSubsetSumResult) -> bool:
     """Verify the complete subset-sum profile against its retained sequence."""
+    if not isinstance(result, RationalSubsetSumResult):
+        return False
     try:
         expected = compute_rational_subset_sum_profile(result.values)
         return expected.rows == result.rows
-    except Exception:
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False

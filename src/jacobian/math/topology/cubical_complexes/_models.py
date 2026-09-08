@@ -11,6 +11,8 @@ from jacobian._models import StrictModel
 
 MAX_DIM = 10
 MAX_CELLS = 5000
+MAX_FACE_CELLS = 3**MAX_DIM
+"""Enough distinct faces for a full cube at every supported ambient dimension."""
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -59,7 +61,7 @@ class CubicalComplex(StrictModel):
     """
 
     ambient_dimension: int = Field(ge=1, le=MAX_DIM)
-    cells: tuple[CubicalCell, ...] = Field(min_length=1, max_length=MAX_CELLS)
+    cells: tuple[CubicalCell, ...] = Field(min_length=1, max_length=MAX_FACE_CELLS)
 
     @model_validator(mode="after")
     def require_structural_cells(self) -> Self:

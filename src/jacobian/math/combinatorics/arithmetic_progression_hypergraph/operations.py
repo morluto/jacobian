@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.arithmetic_progression_hypergraph._models import (
     ArithmeticProgressionHypergraphResult,
     _admission_error,
@@ -30,7 +33,12 @@ def construct_arithmetic_progression_hypergraph(
     failure = _admission_error(lower, upper, k)
     if failure is not None:
         field, code, message = failure
-        raise OperationDomainValidationError(
+        error_type = (
+            OperationDomainValidationError
+            if code in {"invalid_integer", "empty_interval", "invalid_arity"}
+            else OperationResourceAdmissionError
+        )
+        raise error_type(
             location=(field,),
             code=f"hypergraph.arithmetic_progression.{code}",
             message=message,
@@ -62,12 +70,16 @@ def verify_arithmetic_progression_hypergraph(
 ) -> bool:
     """Verify interval vertices and every ``(a, d)`` progression edge."""
 
+    if not isinstance(claim, ArithmeticProgressionHypergraphResult):
+        return False
     try:
         expected = construct_arithmetic_progression_hypergraph(
             claim.lower, claim.upper, claim.k
         )
         return claim.hypergraph == expected.hypergraph
-    except Exception:
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 

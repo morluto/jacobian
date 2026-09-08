@@ -2,7 +2,12 @@
 
 from typing import Any
 
-from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.discrepancy._models import (
     DiscrepancyEvalRequest,
     DiscrepancyEvalResult,
@@ -40,14 +45,13 @@ def compute_discrepancy(request: DiscrepancyEvalRequest) -> DiscrepancyEvalResul
 
 
 def verify_discrepancy(claim: DiscrepancyEvalResult) -> bool:
+    if not isinstance(claim, DiscrepancyEvalResult):
+        return False
     try:
-        expected = compute_discrepancy(
-            DiscrepancyEvalRequest(
-                set_system=claim.set_system,
-                coloring=claim.coloring,
-            )
-        )
-    except Exception:
+        expected = _compute_discrepancy_native(claim.set_system, claim.coloring)
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
     return (
         claim.signed_sums == expected.signed_sums

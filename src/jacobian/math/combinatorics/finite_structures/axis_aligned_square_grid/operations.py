@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.finite_structures.axis_aligned_square_grid._models import (
     MAX_SIDE_LENGTH,
     AxisAlignedSquareGridResult,
@@ -36,13 +39,13 @@ def _admit_side_length(side_length: int) -> int:
     edge_count = n * (n - 1) * (2 * n - 1) // 6
     incidence_count = 4 * edge_count
     if edge_count > MAX_EDGES:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("side_length",),
             code="square_grid.edge_bound",
             message=f"the grid would contain {edge_count} edges, over the {MAX_EDGES}-edge bound",
         )
     if incidence_count > MAX_TOTAL_INCIDENCES:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("side_length",),
             code="square_grid.incidence_bound",
             message=(
@@ -98,8 +101,12 @@ def construct_axis_aligned_square_grid(
 def verify_axis_aligned_square_grid(claim: AxisAlignedSquareGridResult) -> bool:
     """Verify the complete square-grid vertex and edge construction claim."""
 
+    if not isinstance(claim, AxisAlignedSquareGridResult):
+        return False
     try:
         expected = construct_axis_aligned_square_grid(claim.side_length)
         return claim.hypergraph == expected.hypergraph
-    except Exception:
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False

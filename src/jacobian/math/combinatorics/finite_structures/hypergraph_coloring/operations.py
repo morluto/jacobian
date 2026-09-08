@@ -12,11 +12,15 @@ from jacobian._execution import (
     bind_request_deadline,
     current_request_execution,
 )
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.finite_structures.hypergraph_coloring._models import (
     ColoringWitness,
     NonmonochromaticColoringResult,
     _validate_coloring_envelope,
+    _validate_coloring_source,
 )
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
@@ -28,6 +32,21 @@ __all__ = [
     "verify_non_colorable",
     "verify_nonmonochromatic_coloring",
 ]
+
+
+def _coloring_admission_error(
+    error: PydanticCustomError,
+) -> OperationDomainValidationError:
+    error_type = (
+        OperationDomainValidationError
+        if error.type
+        in {
+            "hypergraph_coloring.palette_type",
+            "hypergraph_coloring.palette_out_of_range",
+        }
+        else OperationResourceAdmissionError
+    )
+    return error_type(location=(), code=error.type, message=str(error))
 
 
 def decide_nonmonochromatic_coloring(
@@ -42,9 +61,7 @@ def decide_nonmonochromatic_coloring(
     try:
         admission = _validate_coloring_envelope(hypergraph, palette_size)
     except PydanticCustomError as error:
-        raise OperationDomainValidationError(
-            location=(), code=error.type, message=str(error)
-        ) from error
+        raise _coloring_admission_error(error) from error
 
     # Establish the operation-owned deadline before any presolve return so
     # native and dispatched calls cover result construction on every path.
@@ -142,8 +159,11 @@ def verify_coloring_witness(claim: NonmonochromaticColoringResult) -> bool:
     if claim.outcome != "COLORABLE" or claim.witness is None:
         return False
     try:
-        _validate_coloring_envelope(claim.hypergraph, claim.palette_size)
-    except (PydanticCustomError, TypeError, ValueError):
+        _validate_coloring_source(claim.hypergraph, claim.palette_size)
+    except PydanticCustomError as error:
+        failure = _coloring_admission_error(error)
+        if isinstance(failure, OperationResourceAdmissionError):
+            raise failure from error
         return False
     vertices = tuple(claim.hypergraph.vertices)
     assignments = claim.witness.assignments
@@ -177,7 +197,9 @@ def verify_non_colorable(claim: NonmonochromaticColoringResult) -> bool:
             ).outcome
             == "NOT_COLORABLE"
         )
-    except (OperationDomainValidationError, TypeError, ValueError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 

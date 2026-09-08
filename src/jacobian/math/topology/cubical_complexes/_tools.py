@@ -4,7 +4,6 @@ from typing import Any
 
 from jacobian.catalog.models import (
     MathTool,
-    OperationDomainValidationError,
     OperationExample,
 )
 from jacobian.math.topology.cubical_complexes._models import (
@@ -20,25 +19,11 @@ from jacobian.math.topology.cubical_complexes.operations import (
 
 
 def _f_vector(request: CubicalComplexRequest) -> FVectorResult:
-    try:
-        return f_vector(request.cells)
-    except ValueError as exc:
-        raise OperationDomainValidationError(
-            location=("cells",),
-            code="cubical_complex.invalid_ambient_axis",
-            message=str(exc),
-        ) from exc
+    return f_vector(request.cells)
 
 
 def _face_closure(request: FaceClosureRequest) -> FaceClosureResult:
-    try:
-        return face_closure(request.cells)
-    except ValueError as exc:
-        raise OperationDomainValidationError(
-            location=("cells",),
-            code="cubical_complex.invalid_ambient_axis",
-            message=str(exc),
-        ) from exc
+    return face_closure(request.cells)
 
 
 # A single 2D square: [(0,1),(0,1)] + [(0,1),(1,2)] + [(1,2),(0,1)] + [(1,2),(1,2)]

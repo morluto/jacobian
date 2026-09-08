@@ -89,9 +89,19 @@ def _minimal_neighbourhoods(
     )
 
 
+def _admit_subset(space: FiniteTopologicalSpace, subset: frozenset[int]) -> None:
+    if any(not 0 <= point < len(space.points) for point in subset):
+        raise OperationDomainValidationError(
+            location=("subset",),
+            code="finite_topology_space.subset_index_range",
+            message="subset index out of range",
+        )
+
+
 def interior(space: FiniteTopologicalSpace, subset: frozenset[int]) -> frozenset[int]:
     """Return the interior of a subset (largest open set contained in it)."""
     _admit_space(space)
+    _admit_subset(space, subset)
     return _interior(space, subset)
 
 
@@ -107,14 +117,13 @@ def _interior(space: FiniteTopologicalSpace, subset: frozenset[int]) -> frozense
 def closure(space: FiniteTopologicalSpace, subset: frozenset[int]) -> frozenset[int]:
     """Return the closure of a subset (smallest closed set containing it)."""
     _admit_space(space)
+    _admit_subset(space, subset)
     return _closure(space, subset)
 
 
 def _closure(space: FiniteTopologicalSpace, subset: frozenset[int]) -> frozenset[int]:
     result: set[int] = set()
     for i in subset:
-        if not 0 <= i < len(space.points):
-            raise ValueError("subset index out of range")
         result.update(space.preorder[i])
     return frozenset(result)
 
@@ -122,6 +131,7 @@ def _closure(space: FiniteTopologicalSpace, subset: frozenset[int]) -> frozenset
 def boundary(space: FiniteTopologicalSpace, subset: frozenset[int]) -> frozenset[int]:
     """Return the boundary of a subset: closure minus interior."""
     _admit_space(space)
+    _admit_subset(space, subset)
     cl = _closure(space, subset)
     inter = _interior(space, subset)
     return frozenset(cl - inter)
@@ -208,45 +218,39 @@ def verify_continuity(claim: ContinuousCheckResult) -> bool:
 
 def verify_interior(claim: InteriorResult) -> bool:
     """Verify an interior claim against its retained finite space and subset."""
+    if claim.subset.space != claim.space or claim.interior.space != claim.space:
+        return False
     try:
         _admit_space(claim.space)
         expected = _interior(claim.space, frozenset(claim.subset.indices))
-    except (OperationDomainValidationError, ValueError, TypeError):
+    except OperationDomainValidationError:
         return False
-    return (
-        claim.subset.space == claim.space
-        and claim.interior.space == claim.space
-        and tuple(sorted(expected)) == claim.interior.indices
-    )
+    return tuple(sorted(expected)) == claim.interior.indices
 
 
 def verify_closure(claim: ClosureResult) -> bool:
     """Verify a closure claim against its retained finite space and subset."""
+    if claim.subset.space != claim.space or claim.closure.space != claim.space:
+        return False
     try:
         _admit_space(claim.space)
         expected = _closure(claim.space, frozenset(claim.subset.indices))
-    except (OperationDomainValidationError, ValueError, TypeError):
+    except OperationDomainValidationError:
         return False
-    return (
-        claim.subset.space == claim.space
-        and claim.closure.space == claim.space
-        and tuple(sorted(expected)) == claim.closure.indices
-    )
+    return tuple(sorted(expected)) == claim.closure.indices
 
 
 def verify_boundary(claim: BoundaryResult) -> bool:
     """Verify a boundary claim against its retained finite space and subset."""
+    if claim.subset.space != claim.space or claim.boundary.space != claim.space:
+        return False
     try:
         _admit_space(claim.space)
         subset = frozenset(claim.subset.indices)
         expected = _closure(claim.space, subset) - _interior(claim.space, subset)
-    except (OperationDomainValidationError, ValueError, TypeError):
+    except OperationDomainValidationError:
         return False
-    return (
-        claim.subset.space == claim.space
-        and claim.boundary.space == claim.space
-        and tuple(sorted(expected)) == claim.boundary.indices
-    )
+    return tuple(sorted(expected)) == claim.boundary.indices
 
 
 def verify_kolmogorov_quotient(claim: KolmogorovQuotientResult) -> bool:

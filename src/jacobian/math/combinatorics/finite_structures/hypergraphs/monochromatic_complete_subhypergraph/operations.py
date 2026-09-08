@@ -35,6 +35,7 @@ class _Admission:
     target_uniformity: int
     target_vertices: tuple[str, ...]
     source_lookup: dict[frozenset[str], tuple[str, int]]
+    shortcut: str | None = None
 
 
 def _domain(location: tuple[str, ...], code: str, message: str) -> None:
@@ -173,8 +174,25 @@ def _admit(
     _validate_uniformities(source_uniformity, target_uniformity, len(source.vertices))
     source_lookup = _build_source_lookup(coloring, source_uniformity)
     vertex_count = len(source.vertices)
+    source_edges = source.edges
     candidate_count = comb(vertex_count, target_uniformity)
     required_edges = comb(target_uniformity, source_uniformity)
+    if source_uniformity == target_uniformity:
+        return _Admission(
+            source_uniformity=source_uniformity,
+            target_uniformity=target_uniformity,
+            target_vertices=tuple(sorted(source.vertices)),
+            source_lookup=source_lookup,
+            shortcut="source_edges",
+        )
+    if len(source_edges) < required_edges:
+        return _Admission(
+            source_uniformity=source_uniformity,
+            target_uniformity=target_uniformity,
+            target_vertices=tuple(sorted(source.vertices)),
+            source_lookup=source_lookup,
+            shortcut="empty",
+        )
     _preflight_result(
         coloring,
         source_uniformity,
@@ -199,29 +217,54 @@ def construct(
     """Return every complete monochromatic target subset with provenance."""
 
     admission = _admit(coloring, source_uniformity, target_uniformity)
-    target_edges: list[tuple[str, tuple[str, ...]]] = []
-    candidate_colors: list[int] = []
-    source_witnesses: list[tuple[str, ...]] = []
-    for target in combinations(admission.target_vertices, admission.target_uniformity):
-        request_checkpoint("during monochromatic target enumeration")
-        witness: list[str] = []
-        candidate_color: int | None = None
-        for required in combinations(target, admission.source_uniformity):
-            source_entry = admission.source_lookup.get(frozenset(required))
-            if source_entry is None:
-                break
-            edge_id, color = source_entry
-            if candidate_color is None:
-                candidate_color = color
-            elif candidate_color != color:
-                break
-            witness.append(edge_id)
-        else:
-            if candidate_color is None:
-                raise AssertionError("positive source uniformity requires a witness")
-            target_edges.append((f"c{len(target_edges)}", target))
-            candidate_colors.append(candidate_color)
-            source_witnesses.append(tuple(witness))
+    target_edges: tuple[tuple[str, tuple[str, ...]], ...]
+    candidate_colors: tuple[int, ...]
+    source_witnesses: tuple[tuple[str, ...], ...]
+    if admission.shortcut == "source_edges":
+        source_edges = sorted(coloring.hypergraph.edges, key=lambda edge: edge[1])
+        target_edges = tuple(
+            (f"c{index}", members) for index, (_, members) in enumerate(source_edges)
+        )
+        candidate_colors = tuple(
+            admission.source_lookup[frozenset(members)][1]
+            for _, members in source_edges
+        )
+        source_witnesses = tuple((edge_id,) for edge_id, _ in source_edges)
+    elif admission.shortcut == "empty":
+        target_edges = ()
+        candidate_colors = ()
+        source_witnesses = ()
+    else:
+        target_edges_list: list[tuple[str, tuple[str, ...]]] = []
+        candidate_colors_list: list[int] = []
+        source_witnesses_list: list[tuple[str, ...]] = []
+        for target in combinations(
+            admission.target_vertices, admission.target_uniformity
+        ):
+            request_checkpoint("during monochromatic target enumeration")
+            witness: list[str] = []
+            candidate_color: int | None = None
+            for required in combinations(target, admission.source_uniformity):
+                source_entry = admission.source_lookup.get(frozenset(required))
+                if source_entry is None:
+                    break
+                edge_id, color = source_entry
+                if candidate_color is None:
+                    candidate_color = color
+                elif candidate_color != color:
+                    break
+                witness.append(edge_id)
+            else:
+                if candidate_color is None:
+                    raise AssertionError(
+                        "positive source uniformity requires a witness"
+                    )
+                target_edges_list.append((f"c{len(target_edges_list)}", target))
+                candidate_colors_list.append(candidate_color)
+                source_witnesses_list.append(tuple(witness))
+        target_edges = tuple(target_edges_list)
+        candidate_colors = tuple(candidate_colors_list)
+        source_witnesses = tuple(source_witnesses_list)
 
     request_checkpoint("before monochromatic profile construction")
     return MonochromaticCompleteSubhypergraphProfile(
@@ -230,8 +273,8 @@ def construct(
         target_uniformity=admission.target_uniformity,
         hypergraph=FiniteHypergraph(
             vertices=coloring.hypergraph.vertices,
-            edges=tuple(target_edges),
+            edges=target_edges,
         ),
-        candidate_colors=tuple(candidate_colors),
-        source_edge_witnesses=tuple(source_witnesses),
+        candidate_colors=candidate_colors,
+        source_edge_witnesses=source_witnesses,
     )

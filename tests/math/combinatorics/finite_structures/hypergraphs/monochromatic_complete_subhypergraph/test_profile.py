@@ -128,6 +128,32 @@ def test_target_equal_source_uniformity_returns_each_source_edge() -> None:
     assert result.source_edge_witnesses == (("e0",), ("e1",))
 
 
+def test_sparse_256_vertex_source_uses_target_equal_uniformity_fastpath() -> None:
+    vertices = tuple(str(index) for index in range(256))
+    members = tuple(str(index) for index in range(128))
+    source = make_coloring(vertices, [members], [0])
+
+    result = construct(source, 128, 128)
+
+    assert result.hypergraph.edges == (("c0", tuple(sorted(members))),)
+    assert result.candidate_colors == (0,)
+    assert result.source_edge_witnesses == (("e0",),)
+
+
+@pytest.mark.parametrize("source_edges", [[], [(tuple(str(i) for i in range(128)))]])
+def test_fewer_source_edges_than_required_returns_exact_empty_profile(
+    source_edges: list[tuple[str, ...]],
+) -> None:
+    vertices = tuple(str(index) for index in range(256))
+    source = make_coloring(vertices, source_edges, [0] * len(source_edges))
+
+    result = construct(source, 128, 129)
+
+    assert result.hypergraph.edges == ()
+    assert result.candidate_colors == ()
+    assert result.source_edge_witnesses == ()
+
+
 def test_source_edge_storage_permutation_preserves_target_profile() -> None:
     vertices = ("0", "1", "2", "3")
     members = complete_edges(vertices, 3)

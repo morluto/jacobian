@@ -205,6 +205,36 @@ def test_serialized_diagonal_is_an_unchanged_polynomial_matrix_input() -> None:
     _identities(restored, second)
 
 
+def test_empty_matrix_at_dense_cell_boundary_needs_only_identity_terms() -> None:
+    source = _matrix([], columns=128)
+    result = polynomial_smith_decomposition(source)
+    assert result.diagonal == source
+    assert _sympy(result.right_transformation) == Matrix.eye(128)
+
+
+def test_sparse_coefficients_exceeding_total_integer_storage_are_rejected() -> None:
+    coefficient = CanonicalRational(num=2**2200 + 1, den=1)
+    polynomial = RationalPolynomial(
+        variables=("t",),
+        polynomial=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=1, den=1), exponents=(4095,)
+                ),
+                *(
+                    RationalPolynomialTerm(coefficient=coefficient, exponents=(degree,))
+                    for degree in range(4094, -1, -1)
+                ),
+            )
+        ),
+    )
+    source = RationalPolynomialMatrix(
+        variables=("t",), row_count=1, column_count=1, entries=((polynomial,),)
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="coefficient storage"):
+        polynomial_smith_decomposition(source)
+
+
 def test_proportional_sparse_polynomial_entries_retain_the_common_factor() -> None:
     p = t**32768 + 1
     source = _matrix([[2 * p, p], [p, 3 * p]])

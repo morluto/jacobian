@@ -27,7 +27,9 @@ from jacobian.math.polynomials.values import (
 )
 
 _WALL_SECONDS = 60.0
-_MAX_SERIALIZED_BYTES = 8 * 1024 * 1024
+_MAX_MATRIX_CELLS = 16_384
+_MAX_TOTAL_TERMS = 16_384
+_MAX_COEFFICIENT_BITS = 8 * 1024 * 1024
 
 
 class PolynomialSmithDecomposition(StrictModel):
@@ -63,6 +65,19 @@ def _reject(message: str) -> None:
     raise OperationResourceAdmissionError(
         location=("matrix",), code="matrix.polynomial_smith_budget", message=message
     )
+
+
+def _admit_result_allocation(term_count: int, coefficient_bits: int) -> None:
+    """Bound polynomial objects and aggregate integer coefficient storage.
+
+    Numerator/denominator bit lengths measure mathematical integer payload,
+    independently of an encoder, field spelling, or transport byte allowance.
+    The separate matrix-cell and term counts bound container/object allocation.
+    """
+    if term_count > _MAX_TOTAL_TERMS or coefficient_bits > _MAX_COEFFICIENT_BITS:
+        _reject(
+            "Smith polynomial terms or aggregate coefficient storage exceed the allocation envelope"
+        )
 
 
 type _AffinePivot = tuple[bool, int, int, Fraction]
@@ -165,7 +180,6 @@ def _affine_pivot(
 def _admit_sparse_diagonal(
     matrix: RationalPolynomialMatrix,
     nonzero: list[tuple[int, int, int]],
-    cells: int,
 ) -> _SmithPlan:
     # A monomial weighted partial permutation is already Smith after
     # ordering its exponents and scaling rational units. The maintained
@@ -201,10 +215,11 @@ def _admit_sparse_diagonal(
                 + abs(lead.num).bit_length()
                 + lead.den.bit_length()
             )
-    if (
-        cells + extra_terms
-    ) * 512 + 2 * coefficient_bits + 1024 > _MAX_SERIALIZED_BYTES:
-        _reject("sparse Smith output exceeds the serialization envelope")
+    identity_terms = matrix.row_count + matrix.column_count
+    _admit_result_allocation(
+        len(nonzero) + extra_terms + identity_terms,
+        coefficient_bits + 2 * (len(nonzero) + identity_terms),
+    )
     ordered = sorted(nonzero)
     return _SmithPlan(tuple(i for _, i, _ in ordered), tuple(j for _, _, j in ordered))
 
@@ -214,7 +229,7 @@ def _admit(
 ) -> _SmithPlan:
     rows, columns = matrix.row_count, matrix.column_count
     cells = rows * columns + rows * rows + columns * columns
-    if cells > 16_384 or cells * 512 + 1024 > _MAX_SERIALIZED_BYTES:
+    if cells > _MAX_MATRIX_CELLS:
         _reject("dense source and full transformation output exceed the cell envelope")
     row_order = [
         i
@@ -238,7 +253,7 @@ def _admit(
         len(nonzero) == 1
         or all(len(matrix.entries[i][j].polynomial.terms) == 1 for _, i, j in nonzero)
     ):
-        return _admit_sparse_diagonal(matrix, nonzero, cells)
+        return _admit_sparse_diagonal(matrix, nonzero)
     pivot_degree, pivot_row, pivot_column = min(nonzero)
     # Permutations put a smallest-degree source entry first. This preserves
     # Smith semantics and allows constant pivots to use scalar-division bounds.
@@ -252,14 +267,14 @@ def _admit(
         row_order = [i for _, i, _ in ordered]
         column_order = [j for _, _, j in ordered]
     terms = [t for row in matrix.entries for p in row for t in p.polynomial.terms]
-    if len(terms) > 16_384:
+    if len(terms) > _MAX_TOTAL_TERMS:
         _reject("source polynomial support exceeds the term envelope")
     if (
         sum(
             abs(term.coefficient.num).bit_length() + term.coefficient.den.bit_length()
             for term in terms
         )
-        > _MAX_SERIALIZED_BYTES
+        > _MAX_COEFFICIENT_BITS
     ):
         _reject("source coefficient inspection exceeds the rational work envelope")
     denominator_bits = sum(
@@ -309,22 +324,24 @@ def _admit(
     )
     if output_bits > 100_000:
         _reject("monic normalization exceeds the rational coefficient envelope")
-    output_bytes = cells * (bound.degree + 1) * (2 * output_bits + 512) + 1024
+    result_terms = cells * (bound.degree + 1)
+    result_coefficient_bits = 2 * result_terms * output_bits
     if common_factor is not None:
-        factor_bytes = sum(
-            512
-            + abs(term.coefficient.num).bit_length()
-            + term.coefficient.den.bit_length()
+        factor_bits = sum(
+            abs(term.coefficient.num).bit_length() + term.coefficient.den.bit_length()
             for term in common_factor.polynomial.terms
         )
-        output_bytes = (
-            (rows * rows + columns * columns) * (2 * output_bits + 512)
-            + rows * columns * 512
-            + min(rows, columns) * factor_bytes
-            + 1024
+        # The retained factor appears only on D's nonzero diagonal; both
+        # transformation matrices are constant after rational elimination.
+        transform_terms = rows * rows + columns * columns
+        diagonal_count = min(rows, columns)
+        result_terms = transform_terms + diagonal_count * len(
+            common_factor.polynomial.terms
         )
-    if output_bytes > _MAX_SERIALIZED_BYTES:
-        _reject("serialized Smith matrices exceed the exact output envelope")
+        result_coefficient_bits = (
+            transform_terms * 2 * output_bits + diagonal_count * factor_bits
+        )
+    _admit_result_allocation(result_terms, result_coefficient_bits)
     return _SmithPlan(
         tuple(row_order), tuple(column_order), affine, shift, common_factor
     )

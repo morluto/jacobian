@@ -121,7 +121,7 @@ def _admit_outputs(
         )
 
     dimension = dag.dimension
-    source = [
+    source_allocations = [
         _source_allocation(polynomial, dimension)
         for coordinate_tensor in (metric.tensor, tensor)
         for component in coordinate_tensor.components
@@ -137,7 +137,9 @@ def _admit_outputs(
         + determinant_allocations
         + [sizes[value] for value in sizes if value.denominator]
     )
-    allocations = source + inherited + [sizes[value] for value in outputs] + guards
+    allocations = (
+        source_allocations + inherited + [sizes[value] for value in outputs] + guards
+    )
     terms, coefficient_bits, coordinate_slots = (
         sum(allocation[index] for allocation in allocations) for index in range(3)
     )

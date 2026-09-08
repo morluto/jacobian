@@ -10,7 +10,6 @@ variation on a division-free Berkowitz characteristic polynomial.
 from __future__ import annotations
 
 import time
-from itertools import pairwise
 from math import gcd, lcm
 
 from pydantic import Field, StrictInt
@@ -25,6 +24,9 @@ from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
+)
+from jacobian.math.polynomials.unit_circle._root_profile_process import (
+    count_reduced_roots,
 )
 from jacobian.math.polynomials.values import RationalPolynomial
 
@@ -143,57 +145,6 @@ def _admit(polynomial: RationalPolynomial) -> tuple[int, int, list[int]]:
     return valuation, stride, [value // content for value in coefficients]
 
 
-def _signature(matrix: list[list[int]]) -> int:
-    from sympy.polys.domains import ZZ
-    from sympy.polys.matrices.ddm import DDM
-
-    order = len(matrix)
-    if not order:
-        return 0
-    # DDM explicitly selects the maintained division-free dense Berkowitz
-    # algorithm, avoiding a backend-dependent modular charpoly dispatcher.
-    characteristic = DDM(
-        [[ZZ(value) for value in row] for row in matrix], (order, order), ZZ
-    ).charpoly()
-    positive = [1 if value > 0 else -1 for value in characteristic if value]
-    negative = [
-        (1 if value > 0 else -1) * (-1 if index % 2 else 1)
-        for index, value in enumerate(characteristic)
-        if value
-    ]
-    return sum(a != b for a, b in pairwise(positive)) - sum(
-        a != b for a, b in pairwise(negative)
-    )
-
-
-def _schur_signature(coefficients: list[int]) -> int:
-    n = len(coefficients) - 1
-    matrix = [[0] * n for _ in range(n)]
-    for i in range(n):
-        for j in range(n):
-            matrix[i][j] = sum(
-                coefficients[n - i + k] * coefficients[n - j + k]
-                - coefficients[i - k] * coefficients[j - k]
-                for k in range(min(i, j) + 1)
-            )
-    return _signature(matrix)
-
-
-def _real_root_count(coefficients: list[int]) -> int:
-    """Hermite's Bezoutian signature counts distinct real roots."""
-    n = len(coefficients) - 1
-    derivative = [(i + 1) * coefficients[i + 1] for i in range(n)] + [0]
-    matrix = [[0] * n for _ in range(n)]
-    for a in range(1, n + 1):
-        for b in range(a):
-            coefficient = (
-                coefficients[a] * derivative[b] - derivative[a] * coefficients[b]
-            )
-            for k in range(a - b):
-                matrix[a - 1 - k][b + k] += coefficient
-    return _signature(matrix)
-
-
 def unit_disk_profile(polynomial: RationalPolynomial) -> UnitDiskProfile:
     """Count all roots inside, on and outside |z|=1, including multiplicity."""
     execution = current_request_execution()
@@ -212,46 +163,12 @@ def unit_disk_profile(polynomial: RationalPolynomial) -> UnitDiskProfile:
     bind_request_deadline(deadline)
     checkpoint()
     valuation, stride, coefficients = _admit(polynomial)
-    from flint import fmpz_poly
-
-    source = fmpz_poly(coefficients)
-    inside, boundary, outside = valuation, 0, 0
-    _, factors = source.factor_squarefree()
-    for factor, multiplicity in factors:
-        checkpoint()
-        a = [int(value) for value in factor.coeffs()]
-        n = len(a) - 1
-        difference = _schur_signature(a)
-        # Homogeneous Horner evaluation of (1-s)^n p((1+s)/(1-s)).
-        plus, minus = fmpz_poly([1, 1]), fmpz_poly([1, -1])
-        transformed = fmpz_poly([a[-1]])
-        power = fmpz_poly([1])
-        for coefficient in reversed(a[:-1]):
-            power *= minus
-            transformed = transformed * plus + coefficient * power
-        q = [int(value) for value in transformed.coeffs()]
-        real = fmpz_poly(
-            [value * (-1) ** (i // 2) if i % 2 == 0 else 0 for i, value in enumerate(q)]
-        )
-        imaginary = fmpz_poly(
-            [value * (-1) ** (i // 2) if i % 2 else 0 for i, value in enumerate(q)]
-        )
-        common = real.gcd(imaginary)
-        # A squarefree factor stays squarefree under the Mobius map;
-        # hence the real gcd is squarefree as well. Missing degree is -1.
-        on = (
-            n
-            - int(transformed.degree())
-            + _real_root_count([int(value) for value in common.coeffs()])
-        )
-        inside += stride * multiplicity * ((n - on + difference) // 2)
-        boundary += stride * multiplicity * on
-        outside += stride * multiplicity * ((n - on - difference) // 2)
+    inside, boundary, outside = count_reduced_roots(coefficients, deadline=deadline)
     checkpoint()
     return UnitDiskProfile(
         polynomial=polynomial,
         degree=polynomial.polynomial.terms[0].exponents[0],
-        inside=inside,
-        on=boundary,
-        outside=outside,
+        inside=valuation + stride * inside,
+        on=stride * boundary,
+        outside=stride * outside,
     )

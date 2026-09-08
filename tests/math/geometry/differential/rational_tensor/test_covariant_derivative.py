@@ -146,3 +146,26 @@ def test_rank_four_output_is_rejected_before_backend_execution(
     )
     with pytest.raises(OperationResourceAdmissionError, match="component"):
         covariant_derivative(metric, source)
+
+
+def test_rank_eight_source_is_rejected_before_rank_nine_result() -> None:
+    metric = RationalCoordinateMetric(
+        tensor=tensor([1], ("COVARIANT", "COVARIANT"), axis=("x",))
+    )
+    source = tensor([1], ("COVARIANT",) * 8, axis=("x",))
+    with pytest.raises(OperationResourceAdmissionError, match="rank-8"):
+        covariant_derivative(metric, source)
+
+
+def test_determinant_guards_are_capped_before_backend_expansion() -> None:
+    x, y = symbols("x y")
+    axis = ("x", "y")
+    metric = RationalCoordinateMetric(
+        tensor=tensor(
+            [x**64, 1, 1, x**64],
+            ("COVARIANT", "COVARIANT"),
+            axis=axis,
+        )
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="determinant locus"):
+        covariant_derivative(metric, tensor([1], (), axis=axis))

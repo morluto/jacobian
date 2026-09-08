@@ -13,7 +13,11 @@ from jacobian.math.geometry.differential.metrics._plan import (
     build_connection_plan,
 )
 from jacobian.math.geometry.differential.values import (
+    MAX_RATIONAL_TENSOR_COEFFICIENT_DIGITS,
     MAX_RATIONAL_TENSOR_COMPONENTS,
+    MAX_RATIONAL_TENSOR_EXPONENT,
+    MAX_RATIONAL_TENSOR_POLYNOMIAL_TERMS,
+    MAX_RATIONAL_TENSOR_RANK,
     RationalCoordinateTensor,
 )
 from jacobian.math.polynomials.values import SparseRationalPolynomial
@@ -60,6 +64,15 @@ def _admit_outputs(
     determinant_allocations = []
     for index in set(determinant.numerator):
         bound = dag.nodes[index].bound
+        if (
+            bound.terms > MAX_RATIONAL_TENSOR_POLYNOMIAL_TERMS
+            or max(bound.degrees, default=0) > MAX_RATIONAL_TENSOR_EXPONENT
+            or bound.coefficient_digits > MAX_RATIONAL_TENSOR_COEFFICIENT_DIGITS
+        ):
+            reject(
+                "determinant_locus",
+                "determinant locus factors exceed canonical polynomial bounds",
+            )
         determinant_allocations.append(
             (
                 bound.terms,
@@ -125,6 +138,11 @@ def build_plan(
 ) -> Plan:
     dimension = len(metric.tensor.coordinate_axis)
     tensor_rank = len(tensor.variance)
+    if tensor_rank + 1 > MAX_RATIONAL_TENSOR_RANK:
+        reject(
+            "shape",
+            "covariant derivative exceeds the rank-8 representation budget",
+        )
     if dimension ** (tensor_rank + 1) > MAX_RATIONAL_TENSOR_COMPONENTS:
         reject(
             "shape",

@@ -107,7 +107,7 @@ def _admit_outputs(
             else ("determinant", index)
         )
     output_keys = {
-        ("canonical-result-denominator", value.numerator, value.denominator)
+        ("canonical-result-denominator", value.denominator)
         for value in outputs
         if any(
             any(degree for degree in dag.nodes[index].bound.degrees)

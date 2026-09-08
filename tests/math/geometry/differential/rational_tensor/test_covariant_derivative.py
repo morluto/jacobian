@@ -24,6 +24,7 @@ from jacobian.math.geometry.differential.values import (
 from jacobian.math.polynomials._conversions import (
     rational_function_from_sympy,
     rational_function_to_sympy,
+    sparse_rational_polynomial_to_sympy,
 )
 
 r, theta = symbols("r theta")
@@ -254,3 +255,37 @@ def test_oversized_determinant_is_rejected_during_admission() -> None:
     ) as rejected:
         covariant_derivative(metric, tensor([1], (), axis=("x", "y")))
     assert rejected.value.errors()[0]["type"].endswith("determinant_locus")
+
+
+def test_covariant_result_denominators_deduplicate_by_value() -> None:
+    x, y = symbols("x y")
+    axis = ("x", "y")
+    identity = RationalCoordinateMetric(
+        tensor=tensor([1, 0, 0, 1], ("COVARIANT", "COVARIANT"), axis=axis)
+    )
+    field = tensor([x * y / (x + y)], (), axis=axis)
+    result = covariant_derivative(identity, field)
+    dens = {
+        sparse_rational_polynomial_to_sympy(guard, axis).as_expr()
+        for guard in result.covariant_derivative.retained_nonzero_denominators
+    }
+    assert dens == {x + y, (x + y) ** 2}
+
+    extras = canonical_locus_guards(
+        (
+            rational_function_from_sympy(x + y, axis).numerator,
+            *(
+                rational_function_from_sympy(x + offset, axis).numerator
+                for offset in range(1, 767)
+            ),
+        ),
+        variable_count=2,
+    )
+    source = RationalCoordinateTensor(
+        coordinate_axis=axis,
+        variance=(),
+        components=field.components,
+        retained_nonzero_denominators=extras,
+    )
+    admitted = covariant_derivative(identity, source)
+    assert len(admitted.covariant_derivative.retained_nonzero_denominators) == 768

@@ -31,6 +31,7 @@ from jacobian.math.geometry.differential.values import (
 from jacobian.math.polynomials._conversions import (
     rational_function_from_sympy,
     rational_function_to_sympy,
+    sparse_rational_polynomial_to_sympy,
 )
 from jacobian.math.polynomials.values import RationalFunction
 
@@ -408,3 +409,50 @@ def test_nonmonic_determinant_unions_with_inherited_monic_guards() -> None:
     result = curvature_profile(source)
     assert len(result.inverse_metric.retained_nonzero_denominators) == 768
     replay(result)
+
+
+def test_conformal_flat_metric_counts_complete_denominator_powers() -> None:
+    conformal = 1 + x**2 + y**2
+    source = metric([conformal, 0, 0, conformal])
+    result = curvature_profile(source)
+    dens = {
+        sparse_rational_polynomial_to_sympy(guard, ("x", "y")).as_expr()
+        for guard in result.inverse_metric.retained_nonzero_denominators
+    }
+    assert dens == {conformal, conformal**2, conformal**3}
+    replay(result)
+
+    extra = tuple(
+        rational_function_from_sympy(x + offset, ("x", "y")).numerator
+        for offset in range(1, 766)
+    )
+    admitted = RationalCoordinateMetric(
+        tensor=RationalCoordinateTensor(
+            coordinate_axis=source.tensor.coordinate_axis,
+            variance=source.tensor.variance,
+            components=source.tensor.components,
+            retained_nonzero_denominators=canonical_locus_guards(
+                extra, variable_count=2
+            ),
+        )
+    )
+    admitted_profile = curvature_profile(admitted)
+    assert len(admitted_profile.inverse_metric.retained_nonzero_denominators) == 768
+    replay(admitted_profile)
+
+    saturated = RationalCoordinateMetric(
+        tensor=RationalCoordinateTensor(
+            coordinate_axis=source.tensor.coordinate_axis,
+            variance=source.tensor.variance,
+            components=source.tensor.components,
+            retained_nonzero_denominators=canonical_locus_guards(
+                extra
+                + (
+                    rational_function_from_sympy(x + 766, ("x", "y")).numerator,
+                ),
+                variable_count=2,
+            ),
+        )
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="768 guards"):
+        curvature_profile(saturated)

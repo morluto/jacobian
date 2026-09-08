@@ -1,5 +1,6 @@
 """Complete metric, inverse, connection and curvature DAG admission."""
 
+from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
 from fractions import Fraction
@@ -171,8 +172,11 @@ def _monic_polynomial_key(
     )
 
 
-def _source_guard_keys(source: SparseRationalPolynomial) -> set[object]:
-    keys: set[object] = {_monic_polynomial_key(source)}
+def _source_guard_keys(
+    source: SparseRationalPolynomial, multiplicity: int = 1
+) -> set[object]:
+    monic = _monic_polynomial_key(source)
+    keys: set[object] = {monic if multiplicity == 1 else (monic, multiplicity)}
     if len(source.terms) != 1:
         return keys
     exponents = source.terms[0].exponents
@@ -202,12 +206,12 @@ def _potential_locus_keys(
     for value in outputs:
         if not _has_nonconstant_denominator(dag, value):
             continue
-        for index in set(value.denominator):
+        for index, multiplicity in Counter(value.denominator).items():
             source = dag.nodes[index].source
             if source is None:
-                keys.add(("canonical-result-denominator", index))
+                keys.add(("canonical-result-denominator", index, multiplicity))
             else:
-                keys.update(_source_guard_keys(source))
+                keys.update(_source_guard_keys(source, multiplicity))
     return keys
 
 

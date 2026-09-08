@@ -16,6 +16,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.matrices.values import IntegerMatrix
+from jacobian.math.combinatorics.finite_structures.hypergraphs._models import FiniteHypergraph, MAX_EDGES as MAX_HYPERGRAPH_EDGES
 
 MAX_POINTS = 100
 MAX_BLOCKS = 100
@@ -115,25 +116,31 @@ def _subset_count(point_count: int, order: int) -> int:
     return comb(point_count, order) if order <= point_count else 0
 
 
-def _profile_work_units(incidence: IncidenceStructure, order: int) -> int:
-    subset_count = _subset_count(len(incidence.points), order)
-    generated_block_subsets = sum(
-        _subset_count(len(block), order) for block in incidence.blocks
-    )
-    canonicalization_units = len(incidence.points) * len(incidence.blocks)
-    return canonicalization_units + order * (subset_count + generated_block_subsets)
+def _containment_axes(incidence: IncidenceStructure | FiniteHypergraph) -> tuple[tuple[str, ...], tuple[tuple[str, ...], ...]]:
+    if isinstance(incidence, FiniteHypergraph):
+        return incidence.vertices, tuple(members for _, members in incidence.edges)
+    return incidence.points, incidence.blocks
+
+
+def _profile_work_units(incidence: IncidenceStructure | FiniteHypergraph, order: int) -> int:
+    points, blocks = _containment_axes(incidence)
+    subset_count = _subset_count(len(points), order)
+    generated_block_subsets = sum(_subset_count(len(block), order) for block in blocks)
+    canonicalization_units = len(points) * len(blocks) + sum(map(len, blocks))
+    return canonicalization_units + max(1, order) * (subset_count + generated_block_subsets)
 
 
 def _require_containment_profile_admitted(
-    incidence: IncidenceStructure,
+    incidence: IncidenceStructure | FiniteHypergraph,
     order: int,
 ) -> None:
-    if not 1 <= order <= MAX_T:
+    if not 0 <= order <= MAX_T:
         raise IncidenceStructureAdmissionError(
             "containment_order_out_of_range",
-            f"containment-profile order must be between 1 and {MAX_T}",
+            f"containment-profile order must be between 0 and {MAX_T}",
         )
-    subset_count = _subset_count(len(incidence.points), order)
+    points, _ = _containment_axes(incidence)
+    subset_count = _subset_count(len(points), order)
     if subset_count > MAX_SUBSETS:
         raise IncidenceStructureAdmissionError(
             "containment_subset_budget_exceeded",
@@ -231,14 +238,14 @@ class ContainmentProfileRequest(StrictModel):
         }
     )
 
-    incidence: IncidenceStructure = Field(
+    incidence: IncidenceStructure | FiniteHypergraph = Field(
         description=(
             "Indexed finite block family. Equal blocks with different IDs are "
             "counted separately."
         )
     )
     t: StrictInt = Field(
-        ge=1,
+        ge=0,
         le=MAX_T,
         description="Subset order for the complete containment profile.",
     )
@@ -247,19 +254,19 @@ class ContainmentProfileRequest(StrictModel):
 class ContainmentProfileResult(StrictModel):
     """One complete fixed-order profile bound to its indexed block family."""
 
-    incidence: IncidenceStructure
-    t: StrictInt = Field(ge=1, le=MAX_T)
+    incidence: IncidenceStructure | FiniteHypergraph
+    t: StrictInt = Field(ge=0, le=MAX_T)
     subset_profile: tuple[tuple[tuple[str, ...], StrictInt], ...] = Field(
         max_length=MAX_SUBSETS
     )
     histogram: tuple[tuple[StrictInt, StrictInt], ...] = Field(
-        max_length=MAX_BLOCKS + 1
+        max_length=MAX_HYPERGRAPH_EDGES + 1
     )
     total_multiplicity: StrictInt = Field(ge=0)
-    min_multiplicity: StrictInt = Field(ge=0, le=MAX_BLOCKS)
-    max_multiplicity: StrictInt = Field(ge=0, le=MAX_BLOCKS)
+    min_multiplicity: StrictInt = Field(ge=0, le=MAX_HYPERGRAPH_EDGES)
+    max_multiplicity: StrictInt = Field(ge=0, le=MAX_HYPERGRAPH_EDGES)
     is_constant: StrictBool
-    constant_lambda: StrictInt | None = Field(default=None, ge=0, le=MAX_BLOCKS)
+    constant_lambda: StrictInt | None = Field(default=None, ge=0, le=MAX_HYPERGRAPH_EDGES)
 
     @model_validator(mode="after")
     def require_structural_summary_consistency(self) -> Self:
@@ -280,7 +287,7 @@ class ContainmentProfileResult(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        incidence: IncidenceStructure,
+        incidence: IncidenceStructure | FiniteHypergraph,
         order: int,
         data: tuple[
             tuple[tuple[tuple[str, ...], int], ...],

@@ -29,15 +29,16 @@ from jacobian.math.combinatorics.designs.incidence_structures._models import (
     _require_incidence_trade_admitted,
 )
 from jacobian.math.matrices.values import IntegerMatrix
+from jacobian.math.combinatorics.finite_structures.hypergraphs._models import FiniteHypergraph
 
 
 def containment_profile(
-    incidence: IncidenceStructure, order: int
+    incidence: IncidenceStructure | FiniteHypergraph, order: int
 ) -> ContainmentProfileResult:
     """Return every fixed-order subset containment multiplicity exactly."""
 
-    if not isinstance(incidence, IncidenceStructure):
-        raise TypeError("incidence must be an IncidenceStructure")
+    if not isinstance(incidence, (IncidenceStructure, FiniteHypergraph)):
+        raise TypeError("incidence must be an IncidenceStructure or FiniteHypergraph")
     if type(order) is not int:
         raise TypeError("containment-profile order must be an integer")
     try:

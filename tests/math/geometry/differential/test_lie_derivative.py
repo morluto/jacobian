@@ -53,6 +53,7 @@ from jacobian.math.polynomials._conversions import (
     rational_function_to_sympy,
     sparse_rational_polynomial_to_sympy,
 )
+from jacobian.math.polynomials.rational_functions import _bounds as rational_bounds
 from jacobian.math.polynomials.values import RationalFunction, SparseRationalPolynomial
 
 type Coefficient = int | tuple[int, int]
@@ -715,8 +716,8 @@ class _SourceConversionObserver:
         self.executed = executed
         self.calls = calls
         self.observing_bound = False
-        self.original_fraction_bound = lie_bounds._fraction_bound
-        self.original_polynomial_bound = lie_bounds._polynomial_bound
+        self.original_fraction_bound = rational_bounds._fraction_bound
+        self.original_polynomial_bound = rational_bounds._polynomial_bound
         self.original_fraction = Fraction
         self.original_gcd = gcd
         self.original_lcm = lcm
@@ -889,11 +890,11 @@ def test_work_categories_cover_observed_backend_primitives_and_detect_mutations(
     )
     monkeypatch.setattr(lie_bounds, "_fraction_bound", source_observer.bound)
     monkeypatch.setattr(
-        lie_bounds, "_polynomial_bound", source_observer.polynomial_bound
+        rational_bounds, "_polynomial_bound", source_observer.polynomial_bound
     )
-    monkeypatch.setattr(lie_bounds, "Fraction", source_observer.fraction)
-    monkeypatch.setattr(lie_bounds, "gcd", source_observer.gcd)
-    monkeypatch.setattr(lie_bounds, "lcm", source_observer.lcm)
+    monkeypatch.setattr(rational_bounds, "Fraction", source_observer.fraction)
+    monkeypatch.setattr(rational_bounds, "gcd", source_observer.gcd)
+    monkeypatch.setattr(rational_bounds, "lcm", source_observer.lcm)
     monkeypatch.setattr(
         lie_backend,
         "sparse_rational_polynomial_to_sympy",
@@ -954,7 +955,9 @@ def test_source_conversion_is_precharged_before_content_arithmetic(
         raise AssertionError("unadmitted source reached coefficient arithmetic")
 
     monkeypatch.setattr(lie_bounds, "MAX_LIE_DERIVATIVE_WORK_UNITS", 1)
-    monkeypatch.setattr(lie_bounds, "_polynomial_bound", forbidden_content_arithmetic)
+    monkeypatch.setattr(
+        rational_bounds, "_polynomial_bound", forbidden_content_arithmetic
+    )
 
     with pytest.raises(OperationDomainValidationError) as error:
         build_lie_derivative_plan(vector, scalar)

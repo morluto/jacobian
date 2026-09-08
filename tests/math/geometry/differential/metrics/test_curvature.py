@@ -416,10 +416,10 @@ def test_conformal_flat_metric_counts_complete_denominator_powers() -> None:
     source = metric([conformal, 0, 0, conformal])
     result = curvature_profile(source)
     dens = {
-        sparse_rational_polynomial_to_sympy(guard, ("x", "y")).as_expr()
+        sparse_rational_polynomial_to_sympy(guard, ("x", "y")).as_expr().expand()
         for guard in result.inverse_metric.retained_nonzero_denominators
     }
-    assert dens == {conformal, conformal**2, conformal**3}
+    assert dens == {conformal.expand(), (conformal**2).expand(), (conformal**3).expand()}
     replay(result)
 
     extra = tuple(

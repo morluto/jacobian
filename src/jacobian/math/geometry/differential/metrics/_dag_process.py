@@ -88,9 +88,7 @@ def _node_payload(node: Node) -> dict[str, object]:
     return payload
 
 
-def _poly_from_payload(
-    records: object, symbols: tuple[Any, ...], *, kind: str
-) -> Any:
+def _poly_from_payload(records: object, symbols: tuple[Any, ...], *, kind: str) -> Any:
     if not isinstance(records, list):
         raise ValueError(f"malformed {kind} polynomial")
     coefficients: dict[tuple[int, ...], Any] = {}

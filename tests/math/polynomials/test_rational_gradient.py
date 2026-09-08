@@ -18,7 +18,9 @@ from jacobian.math.polynomials.rational_functions.gradient import (
     RationalFunctionGradient,
     gradient,
 )
-from jacobian.math.polynomials.rational_functions.gradient import operations as gradient_ops
+from jacobian.math.polynomials.rational_functions.gradient import (
+    operations as gradient_ops,
+)
 from jacobian.math.polynomials.values import (
     RationalFunction,
     RationalPolynomialTerm,

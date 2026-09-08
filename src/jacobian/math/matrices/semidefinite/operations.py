@@ -113,12 +113,7 @@ def _admit(
         if multiplier.num
     )
     exposing_scalars = (
-        *(
-            entry
-            for _, matrix in active
-            for row in matrix.entries
-            for entry in row
-        ),
+        *(entry for _, matrix in active for row in matrix.entries for entry in row),
         *(multiplier for multiplier, _ in active),
         *(
             rhs

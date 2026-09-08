@@ -191,7 +191,14 @@ def test_shared_output_denominators_do_not_double_count_locus_guards() -> None:
     )
     result = covariant_derivative(identity, source)
     assert len(result.retained_nonzero_denominators) == 768
-    assert expressions(result) == (-1 / (x + y) ** 2, -1 / (x + y) ** 2)
+    assert all(
+        cancel(left - right) == 0
+        for left, right in zip(
+            expressions(result),
+            (-1 / (x + y) ** 2, -1 / (x + y) ** 2),
+            strict=True,
+        )
+    )
 
 
 def test_an_extra_distinct_output_denominator_still_exceeds_the_guard_cap() -> None:

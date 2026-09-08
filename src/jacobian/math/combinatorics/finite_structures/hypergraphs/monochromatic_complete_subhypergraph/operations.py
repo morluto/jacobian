@@ -256,7 +256,13 @@ def construct(
     candidate_colors: tuple[int, ...]
     source_witnesses: tuple[tuple[str, ...], ...]
     if admission.shortcut == "source_edges":
-        source_edges = sorted(coloring.hypergraph.edges, key=lambda edge: edge[1])
+        vertex_index = {
+            vertex: index for index, vertex in enumerate(coloring.hypergraph.vertices)
+        }
+        source_edges = sorted(
+            coloring.hypergraph.edges,
+            key=lambda edge: tuple(vertex_index[member] for member in edge[1]),
+        )
         target_edges = tuple(
             (f"c{index}", members) for index, (_, members) in enumerate(source_edges)
         )
@@ -279,7 +285,9 @@ def construct(
             request_checkpoint("during monochromatic target enumeration")
             witness: list[str] = []
             candidate_color: int | None = None
-            for required in combinations(target, admission.source_uniformity):
+            for required in combinations(
+                tuple(sorted(target)), admission.source_uniformity
+            ):
                 source_entry = admission.source_lookup.get(frozenset(required))
                 if source_entry is None:
                     break

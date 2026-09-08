@@ -131,7 +131,7 @@ def curvature_profile(
 
     axis = metric.tensor.coordinate_axis
     symbols = symbols_for_variables(axis)
-    cache: dict[int, Any] = {
+    cache: dict[int | str, Any] = {
         0: Poly(0, *symbols, domain=QQ),
         1: Poly(1, *symbols, domain=QQ),
     }

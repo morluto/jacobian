@@ -16,6 +16,7 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive.finite_abelian_subset_sum._models import (
     MAX_FINITE_ABELIAN_SUBSET_SUM_ORDER,
     FiniteAbelianSubsetSumRow,
+    bounded_finite_abelian_subset_sum_order,
 )
 from jacobian.math.combinatorics.additive.values import (
     IndexedIntegerSequence,
@@ -419,15 +420,21 @@ class SubsetSumResidueProfileResult(StrictModel):
                 raise _validation_error(
                     "result_shape", "product results require support size and coverage"
                 )
+            order = bounded_finite_abelian_subset_sum_order(self.group)
+            if order is None:
+                raise _validation_error(
+                    "result_shape",
+                    "product result group order exceeds 4,096",
+                )
             if self.support_size != sum(
                 row.multiplicity > 0 for row in self.group_rows
-            ) or self.covers_group != (self.support_size == self.group.order):
+            ) or self.covers_group != (self.support_size == order):
                 raise _validation_error(
                     "result_shape",
                     "support and coverage must agree with complete row counts",
                 )
             coordinates = tuple(row.element.coordinates for row in self.group_rows)
-            if len(coordinates) != self.group.order or coordinates != tuple(
+            if len(coordinates) != order or coordinates != tuple(
                 sorted(set(coordinates))
             ):
                 raise _validation_error(

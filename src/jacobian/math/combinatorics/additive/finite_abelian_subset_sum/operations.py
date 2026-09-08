@@ -26,6 +26,7 @@ from jacobian.math.combinatorics.additive.finite_abelian_subset_sum._models impo
     MAX_FINITE_ABELIAN_SUBSET_SUM_RANKED_WORK,
     MAX_FINITE_ABELIAN_SUBSET_SUM_TRANSITIONS,
     FiniteAbelianSubsetSumRow,
+    bounded_finite_abelian_subset_sum_order,
 )
 from jacobian.math.combinatorics.additive.values import IndexedIntegerSequence
 from jacobian.math.groups.finite_abelian import (
@@ -45,11 +46,9 @@ def _reject(code: str, message: str) -> None:
 def _admitted_group_order(group: FiniteAbelianProductGroup) -> int:
     if len(group.moduli) > MAX_FINITE_ABELIAN_SUBSET_SUM_ORDER:
         _reject("group_rank", "finite abelian group rank exceeds 4,096")
-    order = 1
-    for modulus in group.moduli:
-        order *= modulus
-        if order > MAX_FINITE_ABELIAN_SUBSET_SUM_ORDER:
-            _reject("group_order", "finite abelian group order exceeds 4,096")
+    order = bounded_finite_abelian_subset_sum_order(group)
+    if order is None:
+        _reject("group_order", "finite abelian group order exceeds 4,096")
     return order
 
 
@@ -70,6 +69,8 @@ def finite_abelian_subset_sum_profile(
     bind_request_deadline(deadline)
     request_checkpoint("before finite abelian subset-sum admission")
     order = _admitted_group_order(group)
+    if len(sequence) > MAX_FINITE_ABELIAN_SUBSET_SUM_ITEMS:
+        _reject("input_length", "finite abelian subset-sum sequence is too long")
     if any(element.group != group for element in sequence):
         raise OperationDomainValidationError(
             location=("sequence",),
@@ -88,8 +89,6 @@ def finite_abelian_subset_sum_profile(
             "coordinates",
             "finite abelian subset-sum coordinates exceed their admitted bound",
         )
-    if len(sequence) > MAX_FINITE_ABELIAN_SUBSET_SUM_ITEMS:
-        _reject("input_length", "finite abelian subset-sum sequence is too long")
     zero_count = sum(
         element.coordinates == (0,) * len(group.moduli) for element in sequence
     )

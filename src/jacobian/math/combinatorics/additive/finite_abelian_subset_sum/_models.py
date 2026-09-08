@@ -23,6 +23,27 @@ MAX_FINITE_ABELIAN_SUBSET_SUM_MULTIPLICITY_BITS = MAX_FINITE_ABELIAN_SUBSET_SUM_
 MAX_FINITE_ABELIAN_SUBSET_SUM_MULTIPLICITY_DIGITS = (
     MAX_FINITE_ABELIAN_SUBSET_SUM_MULTIPLICITY_BITS * 30_103 + 99_999
 ) // 100_000 + 1
+
+
+def bounded_finite_abelian_subset_sum_order(
+    group: FiniteAbelianProductGroup,
+) -> int | None:
+    """Return the product order when rank and order stay within 4,096.
+
+    Multiplication stops as soon as the running product exceeds the bound, so a
+    long tuple of small moduli cannot force a full ``group.order`` bigint.
+    """
+
+    if len(group.moduli) > MAX_FINITE_ABELIAN_SUBSET_SUM_ORDER:
+        return None
+    order = 1
+    for modulus in group.moduli:
+        order *= modulus
+        if order > MAX_FINITE_ABELIAN_SUBSET_SUM_ORDER:
+            return None
+    return order
+
+
 SubsetMultiplicity = Annotated[
     int,
     DecimalIntegerEncoding(
@@ -135,4 +156,5 @@ __all__ = [
     "FiniteAbelianSubsetSumRequest",
     "FiniteAbelianSubsetSumResult",
     "FiniteAbelianSubsetSumRow",
+    "bounded_finite_abelian_subset_sum_order",
 ]

@@ -3,11 +3,21 @@
 from itertools import product
 
 import pytest
+from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.combinatorics.additive._subset_sum_residue import (
     SubsetSumResidueProfileRequest,
     SubsetSumResidueProfileResult,
     subset_sum_residue_profile,
+)
+from jacobian.math.combinatorics.additive.finite_abelian_subset_sum._models import (
+    MAX_FINITE_ABELIAN_SUBSET_SUM_ITEMS,
+    MAX_FINITE_ABELIAN_SUBSET_SUM_ORDER,
+    bounded_finite_abelian_subset_sum_order,
+)
+from jacobian.math.combinatorics.additive.finite_abelian_subset_sum.operations import (
+    finite_abelian_subset_sum_profile,
 )
 from jacobian.math.groups.finite_abelian import (
     FiniteAbelianGroupElement,
@@ -142,3 +152,82 @@ def test_nonempty_profile_matches_indexed_enumeration(
         SubsetSumResidueProfileResult.model_validate_json(result.model_dump_json())
         == result
     )
+
+
+def test_bounded_order_short_circuits_rank_and_running_product() -> None:
+    high_rank = FiniteAbelianProductGroup.model_construct(
+        moduli=(2,) * (MAX_FINITE_ABELIAN_SUBSET_SUM_ORDER + 1)
+    )
+    assert bounded_finite_abelian_subset_sum_order(high_rank) is None
+    binary = FiniteAbelianProductGroup(moduli=(2,) * MAX_FINITE_ABELIAN_SUBSET_SUM_ORDER)
+    assert bounded_finite_abelian_subset_sum_order(binary) is None
+    assert (
+        bounded_finite_abelian_subset_sum_order(FiniteAbelianProductGroup(moduli=(2, 2)))
+        == 4
+    )
+
+
+def test_overlong_sequence_rejects_before_group_binding_scan() -> None:
+    group = FiniteAbelianProductGroup(moduli=(2,))
+    other = FiniteAbelianProductGroup(moduli=(4,))
+    mismatched = FiniteAbelianGroupElement(group=other, coordinates=(1,))
+    with pytest.raises(OperationResourceAdmissionError) as caught:
+        finite_abelian_subset_sum_profile(
+            group, (mismatched,) * (MAX_FINITE_ABELIAN_SUBSET_SUM_ITEMS + 1)
+        )
+    assert caught.value.errors()[0]["type"] == (
+        "additive.finite_abelian_subset_sum.input_length"
+    )
+
+
+def test_forged_result_rejects_high_rank_before_group_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def explode(self: FiniteAbelianProductGroup) -> int:
+        raise AssertionError("group.order must not be evaluated")
+
+    monkeypatch.setattr(FiniteAbelianProductGroup, "order", property(explode))
+    moduli = (2,) * (MAX_FINITE_ABELIAN_SUBSET_SUM_ORDER + 1)
+    group = FiniteAbelianProductGroup(moduli=moduli)
+    zero = FiniteAbelianGroupElement(group=group, coordinates=(0,) * len(moduli))
+    with pytest.raises(ValidationError, match="group order exceeds"):
+        SubsetSumResidueProfileResult.model_validate(
+            {
+                "source": {"items": []},
+                "modulus": 1,
+                "include_empty_subset": True,
+                "include_witnesses": False,
+                "residue_counts": [],
+                "group": group,
+                "sequence": (zero,),
+                "group_rows": ({"element": zero, "multiplicity": 1},),
+                "support_size": 1,
+                "covers_group": False,
+            }
+        )
+
+
+def test_forged_result_rejects_oversized_order_before_full_product(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def explode(self: FiniteAbelianProductGroup) -> int:
+        raise AssertionError("group.order must not be evaluated")
+
+    monkeypatch.setattr(FiniteAbelianProductGroup, "order", property(explode))
+    group = FiniteAbelianProductGroup(moduli=(2,) * 13)
+    zero = FiniteAbelianGroupElement(group=group, coordinates=(0,) * 13)
+    with pytest.raises(ValidationError, match="group order exceeds"):
+        SubsetSumResidueProfileResult.model_validate(
+            {
+                "source": {"items": []},
+                "modulus": 1,
+                "include_empty_subset": True,
+                "include_witnesses": False,
+                "residue_counts": [],
+                "group": group,
+                "sequence": (),
+                "group_rows": ({"element": zero, "multiplicity": 1},),
+                "support_size": 1,
+                "covers_group": False,
+            }
+        )

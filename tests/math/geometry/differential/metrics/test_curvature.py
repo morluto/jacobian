@@ -243,6 +243,23 @@ def test_shape_singularity_and_authored_nonreduced_source_rejections() -> None:
         curvature_profile(
             RationalCoordinateMetric.model_validate_json(json.dumps(source))
         )
+    unreduced = RationalFunction(
+        variables=("x",),
+        numerator=rational_function_from_sympy(x**64 - 1, ("x",)).numerator,
+        denominator=rational_function_from_sympy(x**32 - 1, ("x",)).numerator,
+    )
+    with pytest.raises(OperationDomainValidationError) as rejected:
+        curvature_profile(
+            RationalCoordinateMetric(
+                tensor=RationalCoordinateTensor(
+                    coordinate_axis=("x",),
+                    variance=("COVARIANT", "COVARIANT"),
+                    components=(unreduced,),
+                    retained_nonzero_denominators=(unreduced.denominator,),
+                )
+            )
+        )
+    assert rejected.value.errors()[0]["type"].endswith("noncanonical_source")
 
 
 def test_expansion_rejection_and_earlier_deadline() -> None:

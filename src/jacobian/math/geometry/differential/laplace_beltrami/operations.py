@@ -13,12 +13,17 @@ from jacobian._execution import (
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.differential._recognition_process import (
     RationalFunctionRecognitionCandidate,
+    gcd_recognition_values,
     recognize_canonical_rational_functions,
 )
 from jacobian.math.geometry.differential.laplace_beltrami._models import (
     RationalLaplaceBeltramiResult,
 )
-from jacobian.math.geometry.differential.laplace_beltrami._plan import build_plan
+from jacobian.math.geometry.differential.laplace_beltrami._plan import (
+    _laplace_reject,
+    build_plan,
+)
+from jacobian.math.geometry.differential.metrics._dag import admit_recognition_work
 from jacobian.math.geometry.differential.metrics._dag_evaluate_process import (
     evaluate_admitted_dag,
 )
@@ -38,12 +43,20 @@ def _singular_metric() -> OperationDomainValidationError:
 def _recognize_source(
     metric: RationalCoordinateMetric, scalar: RationalFunction, deadline: float
 ) -> None:
+    sources = gcd_recognition_values((*metric.tensor.components, scalar))
+    admit_recognition_work(
+        sources,
+        reject=_laplace_reject,
+        label="Laplace--Beltrami",
+    )
     candidates = tuple(
         RationalFunctionRecognitionCandidate(
             owner="tensor", component=index, value=source
         )
-        for index, source in enumerate((*metric.tensor.components, scalar))
+        for index, source in enumerate(sources)
     )
+    if not candidates:
+        return
     recognition = recognize_canonical_rational_functions(candidates, deadline=deadline)
     if recognition.non_coprime is not None:
         raise OperationDomainValidationError(

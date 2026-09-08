@@ -6,6 +6,7 @@ from time import monotonic
 import pytest
 from sympy import cancel, symbols
 
+from jacobian._exact import CanonicalRational
 from jacobian._execution import OperationExecutionTimeoutError, request_execution
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -24,7 +25,11 @@ from jacobian.math.polynomials._conversions import (
     rational_function_from_sympy,
     rational_function_to_sympy,
 )
-from jacobian.math.polynomials.values import RationalFunction
+from jacobian.math.polynomials.values import (
+    RationalFunction,
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
+)
 
 
 def _metric(
@@ -187,6 +192,57 @@ def test_nonreduced_scalar_is_a_domain_error_before_admission() -> None:
     with pytest.raises(OperationDomainValidationError) as rejected:
         laplace_beltrami(metric, scalar)
     assert rejected.value.errors()[0]["type"].endswith("noncanonical_source")
+
+
+def test_monic_powered_result_denominator_reuses_inherited_guards() -> None:
+    x = symbols("x")
+    axis = ("x",)
+    x_poly = _scalar(x, axis).numerator
+    x2_poly = _scalar(x**2, axis).numerator
+    fillers = tuple(_scalar(x + offset, axis).numerator for offset in range(1, 767))
+    guards = canonical_locus_guards((x_poly, x2_poly, *fillers), variable_count=1)
+    assert len(guards) == 768
+    metric = RationalCoordinateMetric(
+        tensor=RationalCoordinateTensor(
+            coordinate_axis=axis,
+            variance=("COVARIANT", "COVARIANT"),
+            components=_metric((2 * x,), axis).tensor.components,
+            retained_nonzero_denominators=guards,
+        )
+    )
+    result = laplace_beltrami(metric, _scalar(x, axis))
+    assert len(result.retained_nonzero_denominators) == 768
+    assert rational_function_to_sympy(result.value) == -1 / (4 * x**2)
+
+
+def test_recognition_work_is_rejected_before_the_gcd_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    axis = ("x", "y", "z", "w")
+    high = SparseRationalPolynomial(
+        terms=(
+            RationalPolynomialTerm(
+                coefficient=CanonicalRational(num=1, den=1),
+                exponents=(64, 64, 64, 64),
+            ),
+            RationalPolynomialTerm(
+                coefficient=CanonicalRational(num=1, den=1),
+                exponents=(0, 0, 0, 0),
+            ),
+        )
+    )
+    scalar = RationalFunction(variables=axis, numerator=high, denominator=high)
+    metric = _metric(
+        tuple(1 if i == j else 0 for i in range(4) for j in range(4)), axis
+    )
+    monkeypatch.setattr(
+        "jacobian.math.geometry.differential.laplace_beltrami.operations.recognize_canonical_rational_functions",
+        lambda *args, **kwargs: pytest.fail(
+            "recognition worker must follow work admission"
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="work"):
+        laplace_beltrami(metric, scalar)
 
 
 def test_result_locus_guard_budget_is_bounded() -> None:

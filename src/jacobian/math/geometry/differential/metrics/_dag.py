@@ -23,6 +23,7 @@ from jacobian.math.polynomials.rational_functions._bounds import (
     _one_polynomial,
     _polynomial_admission_work_units,
     _polynomial_backend_conversion_work_units,
+    _fraction_bound,
     _polynomial_bound,
     _recognition_work_units,
     _remove_guaranteed_common_monomial,
@@ -63,6 +64,26 @@ class Ledger:
                 "work",
                 f"complete {self.limits.label} DAG exceeds 50,000,000 work units",
             )
+
+
+def admit_recognition_work(
+    values: tuple[RationalFunction, ...],
+    *,
+    reject: Callable[[str, str], NoReturn] | None = None,
+    label: str | None = None,
+) -> None:
+    """Charge coprimality work against the shared 50,000,000-unit envelope."""
+
+    ledger = Ledger()
+    if reject is not None or label is not None:
+        ledger.limits = replace(
+            ledger.limits,
+            reject=reject or ledger.limits.reject,
+            label=label or ledger.limits.label,
+        )
+    for value in dict.fromkeys(values):
+        bound = _fraction_bound(value, ledger)
+        ledger.charge("recognition", _recognition_work_units(bound))
 
 
 @dataclass(frozen=True)

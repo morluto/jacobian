@@ -107,6 +107,7 @@ def _denominator_guard_identity(dag: Dag, value: Expression) -> object | None:
             remaining.degrees == raw.degrees
             and remaining.minimum_exponents == raw.minimum_exponents
             and not cancelled_shared
+            and not remaining_numerator_identity
         ):
             return _node_guard_key(dag, index)
         return (
@@ -116,7 +117,7 @@ def _denominator_guard_identity(dag: Dag, value: Expression) -> object | None:
             remaining.degrees,
             remaining_numerator_identity,
         )
-    identity: tuple[object, ...] = (
+    return (
         "canonical-result-denominator",
         tuple(
             (_node_guard_key(dag, index), multiplicity)
@@ -124,10 +125,8 @@ def _denominator_guard_identity(dag: Dag, value: Expression) -> object | None:
         ),
         remaining.minimum_exponents,
         remaining.degrees,
+        remaining_numerator_identity,
     )
-    if remaining_numerator_identity:
-        identity = (*identity, remaining_numerator_identity)
-    return identity
 
 
 def potential_locus_guard_keys(
@@ -424,14 +423,7 @@ def _powered_monomial_key(
     if len(source.terms) != 1 or multiplicity < 1:
         return None
     exponents = tuple(degree * multiplicity for degree in source.terms[0].exponents)
-    coefficient = source.terms[0].coefficient.as_fraction() ** multiplicity
-    return (
-        (
-            exponents,
-            format_canonical_integer(coefficient.numerator),
-            format_canonical_integer(coefficient.denominator),
-        ),
-    )
+    return ((exponents, "1", "1"),)
 
 
 def _complete_result_denominator_keys(dag: Dag, value: Expression) -> set[object]:

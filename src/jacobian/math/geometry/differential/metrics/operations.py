@@ -13,9 +13,13 @@ from jacobian._execution import (
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.differential._recognition_process import (
     RationalFunctionRecognitionCandidate,
+    gcd_recognition_values,
     recognize_canonical_rational_functions,
 )
-from jacobian.math.geometry.differential.metrics._dag import Expression
+from jacobian.math.geometry.differential.metrics._dag import (
+    Expression,
+    admit_recognition_work,
+)
 from jacobian.math.geometry.differential.metrics._dag_evaluate_process import (
     evaluate_admitted_dag,
 )
@@ -51,33 +55,26 @@ def curvature_profile(
         deadline = min(deadline, execution.deadline)
     bind_request_deadline(deadline)
     request_checkpoint("before curvature admission")
-    plan = build_plan(metric)
-    request_checkpoint("after complete curvature admission")
+    sources = gcd_recognition_values(metric.tensor.components)
+    admit_recognition_work(sources)
     candidates = tuple(
         RationalFunctionRecognitionCandidate(
             owner="tensor", component=index, value=component
         )
-        for index, component in enumerate(dict.fromkeys(metric.tensor.components))
-        if component.numerator.terms
-        and component.variables
-        and not (
-            len(component.numerator.terms) == 1
-            and not any(component.numerator.terms[0].exponents)
-        )
-        and not (
-            len(component.denominator.terms) == 1
-            and component.denominator.terms[0].coefficient.as_fraction() == 1
-            and component.denominator.terms[0].exponents
-            == (0,) * len(component.variables)
-        )
+        for index, component in enumerate(sources)
     )
-    recognition = recognize_canonical_rational_functions(candidates, deadline=deadline)
-    if recognition.non_coprime is not None:
-        raise OperationDomainValidationError(
-            location=("metric",),
-            code="differential_geometry.curvature.noncanonical_source",
-            message="metric component must be a reduced canonical rational function",
+    if candidates:
+        recognition = recognize_canonical_rational_functions(
+            candidates, deadline=deadline
         )
+        if recognition.non_coprime is not None:
+            raise OperationDomainValidationError(
+                location=("metric",),
+                code="differential_geometry.curvature.noncanonical_source",
+                message="metric component must be a reduced canonical rational function",
+            )
+    plan = build_plan(metric)
+    request_checkpoint("after complete curvature admission")
     axis = metric.tensor.coordinate_axis
     unique_outputs = tuple(
         dict.fromkeys(

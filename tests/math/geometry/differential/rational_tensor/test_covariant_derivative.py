@@ -263,14 +263,13 @@ def test_covariant_result_denominators_deduplicate_by_value() -> None:
     identity = RationalCoordinateMetric(
         tensor=tensor([1, 0, 0, 1], ("COVARIANT", "COVARIANT"), axis=axis)
     )
+    component = rational_function_from_sympy(x * y / (x + y), axis)
     field = RationalCoordinateTensor(
         coordinate_axis=axis,
         variance=(),
-        components=tensor([x * y / (x + y)], (), axis=axis).components,
+        components=(component,),
         retained_nonzero_denominators=canonical_locus_guards(
-            component_denominators=(
-                rational_function_from_sympy(x * y / (x + y), axis).denominator,
-            ),
+            component_denominators=(component.denominator,),
             variable_count=2,
         ),
     )

@@ -42,14 +42,14 @@ class ChordalPSDCompletionRequest(StrictModel):
 class CompletedChordalPSDCompletion(StrictModel):
     """A completed rational PSD matrix on the retained source axes."""
 
-    status: Literal["COMPLETED"] = "COMPLETED"
+    status: Literal["COMPLETED"]
     completion: RationalMatrix
 
 
 class InfeasibleChordalPSDCompletion(StrictModel):
     """A specified non-PSD principal clique of the retained source pattern."""
 
-    status: Literal["INFEASIBLE"] = "INFEASIBLE"
+    status: Literal["INFEASIBLE"]
     obstruction_clique: tuple[int, ...] = Field(min_length=1, max_length=1024)
 
 

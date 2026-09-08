@@ -135,12 +135,27 @@ def test_result_schema_rejects_completed_without_completion() -> None:
         ChordalPSDCompletionResult.model_validate(payload)
 
 
+def test_outcome_discriminator_is_required_in_schema() -> None:
+    completed = CompletedChordalPSDCompletion.model_json_schema()
+    infeasible = InfeasibleChordalPSDCompletion.model_json_schema()
+    assert "status" in completed.get("required", [])
+    assert "status" in infeasible.get("required", [])
+    payload = {
+        "matrix": partial([[1]]).model_dump(mode="json"),
+        "outcome": {"completion": partial([[1]]).model_dump(mode="json")},
+    }
+    with pytest.raises(ValidationError):
+        ChordalPSDCompletionResult.model_validate(payload)
+
+
 def test_authored_obstruction_must_be_a_specified_clique() -> None:
     source = partial([[1, 1, None], [1, 1, 1], [None, 1, 1]])
     with pytest.raises(ValidationError, match="specified graph edges"):
         ChordalPSDCompletionResult(
             matrix=source,
-            outcome=InfeasibleChordalPSDCompletion(obstruction_clique=(0, 2)),
+            outcome=InfeasibleChordalPSDCompletion(
+                status="INFEASIBLE", obstruction_clique=(0, 2)
+            ),
         )
 
 

@@ -9,6 +9,7 @@ solution works, including the RREF solution with free coordinates zero.
 """
 
 import time
+from collections.abc import Callable
 from fractions import Fraction
 from math import lcm
 
@@ -68,7 +69,9 @@ def _numeric_components(matrix: PartialSymmetricRationalMatrix) -> list[int]:
 
 
 def _component_budget(
-    values: list[CanonicalRational], sizes: list[int]
+    values: list[CanonicalRational],
+    sizes: list[int],
+    checkpoint: Callable[[str], None],
 ) -> tuple[int, int]:
     # Clearing denominators is bounded by the admitted source component bits.
     # For |B_ij| < 2**h every k-minor is below
@@ -76,6 +79,7 @@ def _component_budget(
     # pivot-minor denominator, even when the separator is singular.
     denominator = 1
     for q in values:
+        checkpoint("during chordal completion denominator clearing")
         denominator = lcm(denominator, q.den)
     h = max(
         abs(q.num).bit_length() + (denominator // q.den).bit_length() for q in values
@@ -145,7 +149,10 @@ def _admit(
             grouped[component[e.row]].append(e.value)
     for v, separator in separators.items():
         sizes[component[v]].append(len(separator))
-    budgets = [_component_budget(values, sizes[c]) for c, values in grouped.items()]
+    budgets = [
+        _component_budget(values, sizes[c], request_checkpoint)
+        for c, values in grouped.items()
+    ]
     if n * n + sum(bits for bits, _ in budgets) > 64_000_000:
         raise _resource("exact completion exceeds dense-output bit budget")
     if sum(work for _, work in budgets) > 1_000_000_000_000:
@@ -197,7 +204,9 @@ def complete_chordal_psd(
         if negative:
             obstruction = ChordalPSDCompletionResult(
                 matrix=matrix,
-                outcome=InfeasibleChordalPSDCompletion(obstruction_clique=clique),
+                outcome=InfeasibleChordalPSDCompletion(
+                    status="INFEASIBLE", obstruction_clique=clique
+                ),
             )
             checkpoint("after obstruction construction")
             return obstruction
@@ -237,7 +246,9 @@ def complete_chordal_psd(
     completion = rational_matrix_from_fractions(result)
     answer = ChordalPSDCompletionResult(
         matrix=matrix,
-        outcome=CompletedChordalPSDCompletion(completion=completion),
+        outcome=CompletedChordalPSDCompletion(
+            status="COMPLETED", completion=completion
+        ),
     )
     checkpoint("after completion serialization")
     return answer

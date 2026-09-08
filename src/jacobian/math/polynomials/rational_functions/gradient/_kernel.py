@@ -1,20 +1,38 @@
 """Admitted exact quotient differentiation and owner-canonical normalization."""
 
+from typing import Any
+
 from jacobian._execution import request_checkpoint
-from jacobian.math.polynomials.rational_functions.gradient._normalize_process import (
-    normalize_partial,
+from jacobian.math.polynomials.rational_functions.gradient._gcd_process import (
+    normalize_admitted_fraction,
 )
-from jacobian.math.polynomials.values import RationalFunction
+
+
+def _differentiate_fraction(
+    numerator: Any, denominator: Any, axis: int
+) -> tuple[Any, Any]:
+    """Return the raw quotient-rule pair after the caller admits its entire DAG.
+
+    Inputs are exact SymPy QQ Poly values on identical ordered generators.
+    Keeping normalization separate lets a tensor owner share its own complete
+    arithmetic ledger, rather than invoking independent scalar admissions.
+    """
+    return (
+        numerator.diff(axis) * denominator - numerator * denominator.diff(axis),
+        denominator * denominator,
+    )
 
 
 def _normalize_fraction(
-    source: RationalFunction,
-    axis: int,
-    *,
-    deadline: float,
-) -> RationalFunction:
-    """Normalize one admitted partial; preserve canonical field representation."""
+    numerator: Any,
+    denominator: Any,
+    variables: tuple[str, ...],
+    factor_records: tuple[list[Any], ...] = (),
+) -> Any:
+    """Normalize an admitted pair; reuse any retained derivative factor."""
     request_checkpoint("before rational gradient normalization")
-    result = normalize_partial(source, axis, deadline=deadline)
+    result = normalize_admitted_fraction(
+        numerator, denominator, variables, factor_records
+    )
     request_checkpoint("after rational gradient normalization")
     return result

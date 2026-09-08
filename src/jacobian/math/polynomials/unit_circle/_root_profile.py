@@ -56,8 +56,11 @@ def _resource(message: str) -> OperationResourceAdmissionError:
 def _admit(polynomial: RationalPolynomial) -> tuple[int, int, list[int]]:
     """Inspect once, then expand only the exponent-compressed integer source.
 
-    Let h bound the cleared source coefficients and n its reduced degree.
-    Mignotte bounds each primitive squarefree factor by 2**n ||p||_2.
+    Let h bound the primitive integer coefficients after removing rational
+    content, and n the reduced degree. Multiplication by a nonzero rational
+    scalar does not change the root profile, so height and work use that
+    primitive source. Mignotte bounds each primitive squarefree factor by
+    2**n ||p||_2.
     Cayley substitution adds n+log2(n+1) bits; its real gcd gains the same
     factor bound. Derivatives and Bezoutian sums add at most 2log2(n+1)
     to twice that height. Berkowitz intermediates are sums of products of
@@ -97,18 +100,33 @@ def _admit(polynomial: RationalPolynomial) -> tuple[int, int, list[int]]:
         # the root multiset, including arbitrarily large rational scalars.
         return valuation, 1, [1]
     values = [term.coefficient.as_fraction() for term in terms]
-    denominator_bits = sum(value.denominator.bit_length() for value in values)
-    numerator_bits = max(abs(value.numerator).bit_length() for value in values)
-    if denominator_bits + numerator_bits > 65_536:
-        raise _resource("cleared coefficient height exceeds 65,536 bits")
     stride = 0
     for term in terms:
         stride = gcd(stride, term.exponents[0] - valuation)
     stride = stride or 1
     degree = (terms[0].exponents[0] - valuation) // stride
+    numerator_content = 0
+    denominator = 1
+    for value in values:
+        numerator_content = gcd(numerator_content, value.numerator)
+        denominator = lcm(denominator, value.denominator)
+        # Bound lcm expansion of distinct denominators, not a shared scalar.
+        if denominator.bit_length() > 262_144:
+            raise _resource(
+                "derived exact-arithmetic work or intermediate height exceeds the envelope"
+            )
+    coefficients = [0] * (degree + 1)
+    for term, value in zip(terms, values, strict=True):
+        coefficients[(term.exponents[0] - valuation) // stride] = (
+            value.numerator // numerator_content
+        ) * (denominator // value.denominator)
+    content = gcd(*coefficients)
+    coefficients = [value // content for value in coefficients]
+    height = max(abs(value).bit_length() for value in coefficients)
+    if height > 65_536:
+        raise _resource("cleared coefficient height exceeds 65,536 bits")
     if degree:
         log = (degree + 1).bit_length()
-        height = denominator_bits + numerator_bits
         factor_height = height + degree + log
         cayley_height = factor_height + degree + log
         boundary_height = cayley_height + degree + log
@@ -133,16 +151,7 @@ def _admit(polynomial: RationalPolynomial) -> tuple[int, int, list[int]]:
             raise _resource(
                 "derived characteristic-polynomial allocation exceeds the envelope"
             )
-    denominator = 1
-    for value in values:
-        denominator = lcm(denominator, value.denominator)
-    coefficients = [0] * (degree + 1)
-    for term, value in zip(terms, values, strict=True):
-        coefficients[(term.exponents[0] - valuation) // stride] = value.numerator * (
-            denominator // value.denominator
-        )
-    content = gcd(*coefficients)
-    return valuation, stride, [value // content for value in coefficients]
+    return valuation, stride, coefficients
 
 
 def unit_disk_profile(polynomial: RationalPolynomial) -> UnitDiskProfile:

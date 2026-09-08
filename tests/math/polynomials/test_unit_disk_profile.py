@@ -127,6 +127,16 @@ def test_single_term_large_scalar_needs_no_coefficient_arithmetic(shift: int) ->
     assert counts(source) == (shift, 0, 0)
 
 
+def test_removable_scalar_is_normalized_before_coefficient_height() -> None:
+    # Primitive kernel is 1+z; the huge rational content is immaterial.
+    assert counts(polynomial([10**20000, 10**20000])) == (0, 1, 0)
+    assert counts(
+        polynomial([Fraction(1, 10**20000), Fraction(1, 10**20000)])
+    ) == (0, 1, 0)
+    with pytest.raises(OperationResourceAdmissionError, match="cleared coefficient height"):
+        unit_disk_profile(polynomial([2**70_000, 2**70_000 + 1]))
+
+
 def test_independent_exact_rectangle_winding_oracle() -> None:
     from sympy import Poly, Symbol
     from sympy.polys.domains import QQ

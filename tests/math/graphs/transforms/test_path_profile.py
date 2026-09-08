@@ -1,6 +1,9 @@
 """Tests for fixed-length simple path profiles."""
 
+from itertools import combinations
+
 import pytest
+from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.transforms import path_profile
@@ -64,3 +67,26 @@ def test_star_profile_is_admitted_by_unique_paths(length: int) -> None:
             row.source != "00" and row.target != "00" and row.source != row.target
             for row in result.rows
         )
+
+
+def test_path_profile_admits_256_vertices_and_rejects_orders_above_row_bound() -> None:
+    vertices = tuple(f"{index:03d}" for index in range(256))
+    edges = tuple((left, right) for left, right in combinations(vertices, 2))
+    graph = SimpleUndirectedGraph(vertices=vertices, edges=edges)
+    result = path_profile(graph, 1)
+    assert len(result.rows) == 256 * 255
+    restored = type(result).model_validate(result.model_dump())
+    assert restored == result
+    PathProfileRequest(graph=graph, path_length=1)
+
+    oversized = SimpleUndirectedGraph(
+        vertices=tuple(f"{index:03d}" for index in range(257)),
+        edges=tuple(
+            (f"{left:03d}", f"{right:03d}")
+            for left, right in combinations(range(257), 2)
+        ),
+    )
+    with pytest.raises(ValidationError, match="at most 256 vertices"):
+        PathProfileRequest(graph=oversized, path_length=1)
+    with pytest.raises(OperationDomainValidationError, match="at most 256 vertices"):
+        path_profile(oversized, 1)

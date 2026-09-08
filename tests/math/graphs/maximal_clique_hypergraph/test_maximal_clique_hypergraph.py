@@ -78,6 +78,22 @@ def test_edgeless_graph() -> None:
     assert len(result.hypergraph.edges) == 0
 
 
+def test_admits_256_vertex_edgeless_source_and_rejects_larger_order() -> None:
+    boundary = _graph([str(index) for index in range(256)], [])
+    result = construct_maximal_clique_hypergraph(boundary)
+    assert result.hypergraph.vertices == boundary.vertices
+    assert result.hypergraph.edges == ()
+    MaximalCliqueHypergraphRequest(graph=boundary)
+    restored = MaximalCliqueHypergraphResult.model_validate(result.model_dump())
+    assert restored == result
+
+    oversized = _graph([str(index) for index in range(257)], [])
+    with pytest.raises(ValidationError, match="at most 256 vertices"):
+        MaximalCliqueHypergraphRequest(graph=oversized)
+    with pytest.raises(OperationDomainValidationError, match="at most 256 vertices"):
+        construct_maximal_clique_hypergraph(oversized)
+
+
 def test_single_edge() -> None:
     """Single edge is the only maximal clique."""
     g = _graph(["a", "b"], [("a", "b")])

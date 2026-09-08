@@ -6,12 +6,16 @@ import networkx as nx
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.chordal._models import (
     ChordalRecognitionRequest,
     ChordalRecognitionResult,
 )
 from jacobian.math.graphs.chordal.operations import recognize_chordal
-from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.graphs.values import (
+    MAX_ENCODED_SIMPLE_GRAPH_VERTICES,
+    SimpleUndirectedGraph,
+)
 
 
 def _graph(vertices: list[str], edges: list[tuple[str, str]]) -> SimpleUndirectedGraph:
@@ -176,3 +180,21 @@ class TestContracts:
                     "induced_cycle": ["a", "b", "a", "b"],
                 }
             )
+
+
+def test_edgeless_encoded_order_is_charged_in_chordal_admission() -> None:
+    graph = _graph([f"v{i}" for i in range(MAX_ENCODED_SIMPLE_GRAPH_VERTICES)], [])
+    with pytest.raises(OperationDomainValidationError, match="ordering verification"):
+        recognize_chordal(graph)
+
+
+def test_encoded_cycle_certificate_matches_the_widened_carrier() -> None:
+    order = 257
+    vertices = [f"v{i:03d}" for i in range(order)]
+    edges = [(vertices[i], vertices[(i + 1) % order]) for i in range(order)]
+    result = recognize_chordal(_graph(vertices, edges))
+    assert result.status == "NONCHORDAL"
+    assert len(result.induced_cycle) == order
+    assert (
+        ChordalRecognitionResult.model_validate_json(result.model_dump_json()) == result
+    )

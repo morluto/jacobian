@@ -7,6 +7,7 @@ from typing import Annotated, Self
 
 from pydantic import Field, StrictInt, WithJsonSchema, model_validator
 from pydantic.json_schema import JsonSchemaValue
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
@@ -14,7 +15,7 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationExample,
 )
-from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.graphs.values import MAX_SIMPLE_GRAPH_VERTICES, SimpleUndirectedGraph
 
 MAXIMUM_CUT_CANDIDATE_PARTITIONS = 1_048_576
 """Maximum reduced component assignments admitted by one exact request."""
@@ -221,6 +222,15 @@ def _analyze_graph(graph: SimpleUndirectedGraph) -> _MaximumCutAnalysis:
 
 
 def _require_graph_envelope(graph: SimpleUndirectedGraph) -> _MaximumCutAnalysis:
+    if len(graph.vertices) > MAX_SIMPLE_GRAPH_VERTICES:
+        raise OperationDomainValidationError(
+            location=("graph", "vertices"),
+            code="graph.maximum_cut.vertex_bound",
+            message=(
+                "maximum-cut computation supports at most "
+                f"{MAX_SIMPLE_GRAPH_VERTICES} vertices"
+            ),
+        )
     source_label_characters = sum(map(len, graph.vertices)) + sum(
         len(left) + len(right) for left, right in graph.edges
     )
@@ -279,6 +289,16 @@ class GraphMaximumCutRequest(StrictModel):
     """One materialized graph inside the complete exact search envelope."""
 
     graph: MaximumCutGraph
+
+    @model_validator(mode="after")
+    def require_supported_order(self) -> Self:
+        if len(self.graph.vertices) > MAX_SIMPLE_GRAPH_VERTICES:
+            raise PydanticCustomError(
+                "graph.maximum_cut.vertex_bound",
+                "maximum-cut computation supports at most "
+                f"{MAX_SIMPLE_GRAPH_VERTICES} vertices",
+            )
+        return self
 
 
 class GraphMaximumCutResult(StrictModel):

@@ -108,6 +108,13 @@ def _validation_error(message: str) -> PydanticCustomError:
         ("intersection_size", "entry_size"),
         ("intersection vertices", "entry_order"),
         ("canonical source ledger", "ledger"),
+        ("vertex_labels", "incidence_graph"),
+        ("edge_labels", "incidence_graph"),
+        ("incidence graph vertices", "incidence_graph"),
+        ("graph edges", "incidence_graph"),
+        ("vertex_incidence", "incidence_graph"),
+        ("edge_incidence", "incidence_graph"),
+        ("incidence entries", "incidence_graph"),
         ("intersection-size histogram", "histogram"),
         ("edge-pair count", "pair_count"),
         ("maximum_intersection_size", "maximum_intersection"),
@@ -811,6 +818,9 @@ class IncidenceGraphResult(StrictModel):
         max_length=MAX_EDGES
     )
     edges: tuple[tuple[str, str], ...] = Field(max_length=MAX_TOTAL_INCIDENCES)
+    graph: SimpleUndirectedGraph
+    vertex_labels: tuple[tuple[str, str], ...] = Field(max_length=MAX_VERTICES)
+    edge_labels: tuple[tuple[str, str], ...] = Field(max_length=MAX_EDGES)
 
     @model_validator(mode="after")
     def bind_incidence_graph(self) -> Self:
@@ -829,6 +839,22 @@ class IncidenceGraphResult(StrictModel):
         vertex_set = set(self.hypergraph.vertices)
         edge_id_set = set(edge_ids)
         if (
+            tuple(source for source, _ in self.vertex_labels)
+            != self.hypergraph.vertices
+        ):
+            raise _validation_error("vertex_labels must retain source vertex order")
+        if tuple(source for source, _ in self.edge_labels) != edge_ids:
+            raise _validation_error("edge_labels must retain source edge order")
+        graph_vertices = tuple(label for _, label in self.vertex_labels) + tuple(
+            label for _, label in self.edge_labels
+        )
+        if self.graph.vertices != graph_vertices or len(set(graph_vertices)) != len(
+            graph_vertices
+        ):
+            raise _validation_error(
+                "incidence graph vertices must match injective namespace maps"
+            )
+        if (
             any(
                 vertex not in vertex_set or edge_id not in edge_id_set
                 for vertex, edge_ids_for_vertex in self.vertex_incidence
@@ -845,6 +871,38 @@ class IncidenceGraphResult(StrictModel):
             )
         ):
             raise _validation_error("incidence entries must use source labels")
+        vertex_map = dict(self.vertex_labels)
+        edge_map = dict(self.edge_labels)
+        expected_incidences = tuple(
+            (vertex, edge_id)
+            for vertex, edge_ids_for_vertex in self.vertex_incidence
+            for edge_id in edge_ids_for_vertex
+        )
+        if self.edges != expected_incidences:
+            raise _validation_error(
+                "incidence pairs must equal the published vertex-incidence ledger"
+            )
+        grouped: dict[str, list[str]] = {edge_id: [] for edge_id in edge_ids}
+        for vertex, edge_id in self.edges:
+            grouped[edge_id].append(vertex)
+        expected_edge_incidence = tuple(
+            (
+                edge_id,
+                tuple(sorted(grouped[edge_id])),
+            )
+            for edge_id in edge_ids
+        )
+        if self.edge_incidence != expected_edge_incidence:
+            raise _validation_error(
+                "edge_incidence must match the published incidence pairs"
+            )
+        expected_edges = tuple(
+            sorted(tuple(sorted((vertex_map[v], edge_map[e]))) for v, e in self.edges)
+        )
+        if self.graph.edges != expected_edges:
+            raise _validation_error(
+                "graph edges must equal the complete incidence relation"
+            )
         return self
 
 

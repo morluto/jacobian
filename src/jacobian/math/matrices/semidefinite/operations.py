@@ -167,7 +167,7 @@ def _admit(
         _component_digits(abs(component).bit_length())
         for q in retained_scalars
         for component in (q.num, q.den)
-    ) + 2 * n * n * _component_digits(result_bits)
+    ) + 2 * m * n * n * _component_digits(result_bits)
     _check_budgets(
         cells, result_bits, intermediate_bits, work, output_digits=output_digits
     )

@@ -1,5 +1,7 @@
 """Requests for a single rational exposed-face reduction."""
 
+from collections.abc import Iterable, Mapping, Sequence
+
 from pydantic import Field, model_validator
 
 from jacobian._exact import CanonicalRational
@@ -31,24 +33,43 @@ def _raw_rational_digits(value: object) -> int:
     return 0
 
 
+def _materialize_sequence(value: object, *, limit: int) -> list[object] | None:
+    if isinstance(value, (str, bytes, bytearray, Mapping)):
+        return None
+    if isinstance(value, Sequence):
+        return list(value)
+    if isinstance(value, Iterable):
+        collected: list[object] = []
+        for item in value:
+            collected.append(item)
+            if len(collected) > limit:
+                break
+        return collected
+    return None
+
+
 def _scan_matrix_entries(matrices: object) -> tuple[int, int]:
-    if not isinstance(matrices, (list, tuple)):
+    matrix_list = _materialize_sequence(matrices, limit=MAX_SEMIDEFINITE_CELLS)
+    if matrix_list is None:
         return 0, 0
     cells = 0
     digits = 0
-    for matrix in matrices:
+    for matrix in matrix_list:
         entries = matrix.get("entries") if isinstance(matrix, dict) else None
         if entries is None and hasattr(matrix, "entries"):
             entries = matrix.entries
-        if not isinstance(entries, (list, tuple)):
+        row_list = _materialize_sequence(entries, limit=MAX_SEMIDEFINITE_CELLS)
+        if row_list is None:
             continue
-        for row in entries:
+        for row in row_list:
             if isinstance(row, (list, tuple)):
                 cells += len(row)
                 digits += sum(_raw_rational_digits(entry) for entry in row)
             else:
                 cells += 1
                 digits += _raw_rational_digits(row)
+            if cells > MAX_SEMIDEFINITE_CELLS:
+                return cells, digits
     return cells, digits
 
 
@@ -71,8 +92,9 @@ def _count_raw_cells_and_digits(data: dict[str, object]) -> tuple[int, int, int]
             raise ValueError(
                 "source and reduced matrices exceed the dense cell envelope"
             )
-        if isinstance(matrices, (list, tuple)):
-            declared = len(matrices) * order * order
+        matrix_list = _materialize_sequence(matrices, limit=8192)
+        if matrix_list is not None:
+            declared = len(matrix_list) * order * order
     return cells, declared, digits
 
 

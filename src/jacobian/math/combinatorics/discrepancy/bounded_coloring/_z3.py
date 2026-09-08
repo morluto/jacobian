@@ -3,6 +3,8 @@
 from time import monotonic
 from typing import Literal, TypedDict
 
+from jacobian._execution import OperationExecutionTimeoutError
+
 Constraints = tuple[tuple[tuple[int, ...], int, int], ...]
 BackendStatus = Literal[
     "SATISFIABLE", "UNSATISFIABLE", "BUDGET_EXCEEDED", "EXECUTION_FAILED"
@@ -14,11 +16,19 @@ class BackendReply(TypedDict):
     coloring: tuple[int, ...] | None
 
 
+def _deadline_reply(caller_limited: bool, message: str) -> BackendReply:
+    if caller_limited:
+        raise OperationExecutionTimeoutError(message)
+    return {"status": "BUDGET_EXCEEDED", "coloring": None}
+
+
 def solve(
     variable_count: int,
     constraints: Constraints,
     work_limit: int,
     deadline: float,
+    *,
+    caller_limited: bool = False,
 ) -> BackendReply:
     """Decide exact unit-weight PB constraints using Z3 5.1's resource limit.
 
@@ -36,7 +46,10 @@ def solve(
         bits = [z3.Bool(f"bounded_color_{index}") for index in range(variable_count)]
         for subset, lower, upper in constraints:
             if monotonic() >= deadline:
-                return {"status": "BUDGET_EXCEEDED", "coloring": None}
+                return _deadline_reply(
+                    caller_limited,
+                    "discrepancy decision deadline expired while encoding constraints",
+                )
             weighted = [(bits[index], 1) for index in subset]
             solver.add(z3.PbGe(weighted, lower), z3.PbLe(weighted, upper))
         # All absolute-sum bounds are invariant under global sign reversal.
@@ -44,11 +57,17 @@ def solve(
             solver.add(bits[0])
         remaining_ms = int((deadline - monotonic()) * 1000)
         if remaining_ms <= 0:
-            return {"status": "BUDGET_EXCEEDED", "coloring": None}
+            return _deadline_reply(
+                caller_limited,
+                "discrepancy decision deadline expired before the Z3 check",
+            )
         solver.set(timeout=remaining_ms)
         status = solver.check()
         if monotonic() >= deadline:
-            return {"status": "BUDGET_EXCEEDED", "coloring": None}
+            return _deadline_reply(
+                caller_limited,
+                "discrepancy decision deadline expired during the Z3 check",
+            )
         if status == z3.unsat:
             return {"status": "UNSATISFIABLE", "coloring": None}
         if status == z3.sat:
@@ -64,6 +83,10 @@ def solve(
         if any(
             word in reason for word in ("timeout", "resource", "memory", "canceled")
         ):
+            if caller_limited and "timeout" in reason:
+                raise OperationExecutionTimeoutError(
+                    "discrepancy decision deadline expired during the Z3 check"
+                )
             return {"status": "BUDGET_EXCEEDED", "coloring": None}
         return {"status": "EXECUTION_FAILED", "coloring": None}
     except (z3.Z3Exception, MemoryError):

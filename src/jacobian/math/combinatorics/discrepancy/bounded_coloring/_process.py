@@ -80,6 +80,7 @@ def run_solver(
             "constraints": constraints,
             "work_limit": work_limit,
             "deadline": deadline,
+            "caller_limited": caller_limited,
         },
         separators=(",", ":"),
     ).encode()
@@ -109,6 +110,10 @@ def run_solver(
                 "discrepancy decision deadline expired during the solver worker"
             )
         return {"status": "BUDGET_EXCEEDED", "coloring": None}
+    if completed.returncode == 3 and caller_limited:
+        raise OperationExecutionTimeoutError(
+            "discrepancy decision deadline expired during the Z3 check"
+        )
     if (
         completed.returncode != 0
         or completed.stdout_exceeded

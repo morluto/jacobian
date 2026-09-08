@@ -15,6 +15,9 @@ from jacobian.math.geometry.differential.metrics._dag import (
 )
 from jacobian.math.geometry.differential.metrics._models import RationalCoordinateMetric
 from jacobian.math.geometry.differential.values import _polynomial_key
+from jacobian.math.polynomials.rational_functions._bounds import (
+    _remove_guaranteed_common_monomial,
+)
 from jacobian.math.polynomials.values import SparseRationalPolynomial
 
 
@@ -36,13 +39,21 @@ def _has_nonconstant_denominator(dag: Dag, value: Expression) -> bool:
 
 
 def _denominator_guard_identity(dag: Dag, value: Expression) -> object | None:
-    """Identify one retained output denominator without its numerator DAG.
+    """Identify one retained output denominator after guaranteed monomial cancel.
 
-    A single sourced factor matches the inherited polynomial key. A repeated
-    or composite denominator keeps a distinct identity, matching the cancelled
-    component denominator that result construction retains.
+    A single sourced factor matches the inherited polynomial key. Shared raw
+    ``D^2`` identities still split when axis-specific numerators cancel to
+    distinct remaining valuations, matching the guards result construction
+    retains. Identical remaining valuations keep one identity so cheap cases
+    such as ``1/(x+y)`` stay inside the cap.
     """
 
+    if not _has_nonconstant_denominator(dag, value):
+        return None
+    cancelled = _remove_guaranteed_common_monomial(dag.bound(value))
+    remaining = cancelled.denominator
+    if not any(remaining.degrees):
+        return None
     factors: list[tuple[object, int]] = []
     for index, multiplicity in sorted(Counter(value.denominator).items()):
         if not any(dag.nodes[index].bound.degrees):
@@ -56,7 +67,12 @@ def _denominator_guard_identity(dag: Dag, value: Expression) -> object | None:
         return None
     if len(factors) == 1 and factors[0][1] == 1:
         return factors[0][0]
-    return ("canonical-result-denominator", tuple(factors))
+    return (
+        "canonical-result-denominator",
+        tuple(factors),
+        remaining.minimum_exponents,
+        remaining.degrees,
+    )
 
 
 def potential_locus_guard_keys(

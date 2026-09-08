@@ -226,6 +226,66 @@ def test_an_extra_distinct_output_denominator_still_exceeds_the_guard_cap() -> N
         covariant_derivative(identity, source)
 
 
+def test_axis_specific_cancelled_denominators_are_counted_separately() -> None:
+    x, y = symbols("x y")
+    axis = ("x", "y")
+    denominator = rational_function_from_sympy(x**2 * y, axis).numerator
+    inherited = canonical_locus_guards(
+        tuple(
+            rational_function_from_sympy(x + offset, axis).numerator
+            for offset in range(1, 767)
+        ),
+        (denominator,),
+        variable_count=2,
+    )
+    assert len(inherited) == 767
+    identity = RationalCoordinateMetric(
+        tensor=tensor([1, 0, 0, 1], ("COVARIANT", "COVARIANT"), axis=axis)
+    )
+    source = RationalCoordinateTensor(
+        coordinate_axis=axis,
+        variance=(),
+        components=(rational_function_from_sympy(1 / (x**2 * y), axis),),
+        retained_nonzero_denominators=inherited,
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="768 guards"):
+        covariant_derivative(identity, source)
+
+
+def test_axis_specific_cancelled_denominators_admit_at_the_exact_cap() -> None:
+    x, y = symbols("x y")
+    axis = ("x", "y")
+    denominator = rational_function_from_sympy(x**2 * y, axis).numerator
+    inherited = canonical_locus_guards(
+        tuple(
+            rational_function_from_sympy(x + offset, axis).numerator
+            for offset in range(1, 766)
+        ),
+        (denominator,),
+        variable_count=2,
+    )
+    assert len(inherited) == 766
+    identity = RationalCoordinateMetric(
+        tensor=tensor([1, 0, 0, 1], ("COVARIANT", "COVARIANT"), axis=axis)
+    )
+    source = RationalCoordinateTensor(
+        coordinate_axis=axis,
+        variance=(),
+        components=(rational_function_from_sympy(1 / (x**2 * y), axis),),
+        retained_nonzero_denominators=inherited,
+    )
+    result = covariant_derivative(identity, source)
+    assert len(result.retained_nonzero_denominators) == 768
+    assert all(
+        cancel(left - right) == 0
+        for left, right in zip(
+            expressions(result),
+            (-2 / (x**3 * y), -1 / (x**2 * y**2)),
+            strict=True,
+        )
+    )
+
+
 def test_package_exports_the_derivative_tensor_not_a_source_bound_profile() -> None:
     from jacobian.math.geometry.differential.rational_tensor import (
         covariant_derivative as package,

@@ -10,7 +10,6 @@ from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.geometry.differential.metrics._dag import (
     Dag,
     Expression,
-    reject,
 )
 from jacobian.math.geometry.differential.metrics._models import RationalCoordinateMetric
 from jacobian.math.geometry.differential.metrics._plan import (
@@ -112,7 +111,7 @@ def build_plan(metric: RationalCoordinateMetric, scalar: RationalFunction) -> Pl
             or max(bound.degrees) > MAX_RATIONAL_TENSOR_EXPONENT
             or bound.coefficient_digits > MAX_RATIONAL_TENSOR_COEFFICIENT_DIGITS
         ):
-            reject(
+            _laplace_reject(
                 "determinant_locus",
                 "determinant locus factors exceed canonical polynomial bounds",
             )
@@ -132,7 +131,7 @@ def build_plan(metric: RationalCoordinateMetric, scalar: RationalFunction) -> Pl
         )
     guard_keys.update(extra_keys)
     if len(guard_keys) > MAX_RATIONAL_TENSOR_LOCUS_GUARDS:
-        reject(
+        _laplace_reject(
             "locus",
             "complete retained Laplace--Beltrami locus exceeds 768 guards",
         )
@@ -162,7 +161,7 @@ def build_plan(metric: RationalCoordinateMetric, scalar: RationalFunction) -> Pl
         or bits > MAX_LAPLACE_OUTPUT_BITS
         or slots > MAX_LAPLACE_OUTPUT_SLOTS
     ):
-        reject(
+        _laplace_reject(
             "output",
             "Laplace--Beltrami source and result exceed polynomial term, "
             "coefficient-bit, or coordinate allocation bounds",

@@ -12,6 +12,7 @@ from typing import Any
 from jacobian._execution import (
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
+    request_checkpoint,
 )
 from jacobian.canonical import (
     CanonicalizationError,
@@ -69,6 +70,7 @@ def cancel_fraction(
         raise OperationExecutionTimeoutError(
             "metric curvature deadline expired before cancellation"
         )
+    request_checkpoint("before metric-curvature cancellation payload encoding")
     payload = encode_strict_json(
         {
             "variable_count": len(numerator.gens),
@@ -76,6 +78,12 @@ def cancel_fraction(
             "denominator": _poly_payload(denominator),
         }
     )
+    request_checkpoint("after metric-curvature cancellation payload encoding")
+    remaining = deadline - monotonic() - _PARENT_FINALIZATION_SECONDS
+    if remaining <= 0:
+        raise OperationExecutionTimeoutError(
+            "metric curvature deadline expired after cancellation payload encoding"
+        )
     try:
         with TemporaryDirectory(prefix="jacobian-metric-cancel-") as worker_directory:
             completed = run_bounded_process(

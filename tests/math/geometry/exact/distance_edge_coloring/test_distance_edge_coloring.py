@@ -88,7 +88,6 @@ def test_pythagorean_pair_admits_reduced_unit_distance() -> None:
     assert result.squared_distances[0].as_fraction() == 1
 
 
-
 @pytest.mark.parametrize(
     "rows",
     [

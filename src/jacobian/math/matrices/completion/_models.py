@@ -1,5 +1,6 @@
 """Partial symmetric rational matrices and their chordal completions."""
 
+from itertools import combinations
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
@@ -64,4 +65,12 @@ class ChordalPSDCompletionResult(StrictModel):
             raise ValueError("obstruction axes must be distinct and sorted")
         if any(not 0 <= i < n for i in self.obstruction_clique):
             raise ValueError("obstruction axes must belong to the source")
+        specified_edges = set(self.matrix.graph.edges)
+        if any(
+            (i, j) not in specified_edges
+            for i, j in combinations(self.obstruction_clique, 2)
+        ):
+            raise ValueError(
+                "obstruction axes must form a clique of specified graph edges"
+            )
         return self

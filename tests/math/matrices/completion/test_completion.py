@@ -121,7 +121,14 @@ def test_degenerate_and_obstructed_patterns(rows: list[list[int | None]]) -> Non
         assert obstruction.is_positive_semidefinite is False
 
 
-def test_nonchordal_is_unsupported_not_infeasible() -> None:
+def test_authored_obstruction_must_be_a_specified_clique() -> None:
+    source = partial([[1, 1, None], [1, 1, 1], [None, 1, 1]])
+    with pytest.raises(ValidationError, match="specified graph edges"):
+        ChordalPSDCompletionResult(
+            matrix=source,
+            outcome="INFEASIBLE",
+            obstruction_clique=(0, 2),
+        )
     source = partial(
         [[1, 0, None, 0], [0, 1, 0, None], [None, 0, 1, 0], [0, None, 0, 1]]
     )

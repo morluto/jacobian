@@ -29,8 +29,15 @@ def _variable_count(truth_table_len: int) -> int:
 
 
 def _rational(value: Fraction | int) -> CanonicalRational:
-    """Convert an exact Fraction or int to a CanonicalRational."""
-    return CanonicalRational.from_fraction(Fraction(value))
+    """Convert an exact Fraction or int to a CanonicalRational.
+
+    Kernel outputs are plain ints; constructing those directly skips the
+    intermediate Fraction allocation. Canonical inputs make this exactly
+    equivalent to ``from_fraction``.
+    """
+    if isinstance(value, int):
+        return CanonicalRational(num=value, den=1)
+    return CanonicalRational.from_fraction(value)
 
 
 def _admit_truth_table(
@@ -53,7 +60,10 @@ def _admit_truth_table(
             code="boolean_analysis.variable_count",
             message=(f"variable count must be between {minimum} and {maximum}"),
         )
-    if any(entry.as_fraction() not in (0, 1) for entry in truth_table):
+    # Canonical rationals are validated reduced with a positive denominator,
+    # so the 0/1 check below is exactly ``as_fraction() in (0, 1)`` without
+    # allocating a Fraction per entry.
+    if any((entry.num, entry.den) not in ((0, 1), (1, 1)) for entry in truth_table):
         raise OperationDomainValidationError(
             location=("truth_table",),
             code="boolean_analysis.truth_table_boolean",
@@ -146,12 +156,14 @@ def erasure_noise(
             one_mask |= 1 << bit_idx
 
     p = probability
+    powers = [Fraction(1)] * (n + 1)
+    for degree in range(1, n + 1):
+        powers[degree] = powers[degree - 1] * p
     result = Fraction(0)
     for subset_mask in range(total):
-        subset_size = bin(subset_mask).count("1")
-        sign = -1 if (bin(subset_mask & one_mask).count("1") % 2) else 1
+        sign = -1 if (subset_mask & one_mask).bit_count() % 2 else 1
         fourier_coeff = Fraction(spectrum[subset_mask], total)
-        result += sign * fourier_coeff * (p**subset_size)
+        result += sign * fourier_coeff * powers[subset_mask.bit_count()]
 
     return ErasureNoiseResult(
         source=BooleanTruthTable(values=values),
@@ -204,7 +216,8 @@ def verify_erasure_noise(claim: ErasureNoiseResult) -> bool:
 
 
 def _truth_values(values: tuple[CanonicalRational, ...]) -> list[int]:
-    return [int(entry.as_fraction()) for entry in values]
+    # Callers admit 0/1 canonical entries first, so the numerator is the value.
+    return [entry.num for entry in values]
 
 
 def _fast_walsh_hadamard_transform(values: list[int]) -> list[int]:

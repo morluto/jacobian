@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from fractions import Fraction
-from math import gcd
+from math import gcd, lcm
 from typing import TYPE_CHECKING, Literal
 
 from jacobian._flint import flint_workprec
@@ -40,6 +40,8 @@ if TYPE_CHECKING:
     from sympy.core.numbers import Rational as SympyRational
 
 type Quadratic = tuple[Fraction, Fraction]
+type IntegralQuadratic = tuple[int, int]
+type QuadraticEntry = Quadratic | IntegralQuadratic
 type FractionPolynomial = tuple[Fraction, ...]
 Branch = Literal["UPPER", "LOWER", "REPEATED"]
 
@@ -91,7 +93,7 @@ def _scale(value: Quadratic, scalar: Fraction) -> Quadratic:
     return value[0] * scalar, value[1] * scalar
 
 
-def _is_zero(value: Quadratic) -> bool:
+def _is_zero(value: QuadraticEntry) -> bool:
     return value == _ZERO
 
 
@@ -435,7 +437,9 @@ def singular_spectrum(matrix: RealQuadraticMatrix) -> RealQuadraticSpectrum:
     )
 
 
-def _swap_symmetric(matrix: list[list[Quadratic]], left: int, right: int) -> None:
+def _swap_symmetric[PairT: QuadraticEntry](
+    matrix: list[list[PairT]], left: int, right: int
+) -> None:
     if left == right:
         return
     matrix[left], matrix[right] = matrix[right], matrix[left]
@@ -443,8 +447,8 @@ def _swap_symmetric(matrix: list[list[Quadratic]], left: int, right: int) -> Non
         row[left], row[right] = row[right], row[left]
 
 
-def _find_off_diagonal(
-    matrix: list[list[Quadratic]], index: int
+def _find_off_diagonal[PairT: QuadraticEntry](
+    matrix: list[list[PairT]], index: int
 ) -> tuple[int, int] | None:
     for row in range(index, len(matrix)):
         for column in range(row + 1, len(matrix)):
@@ -453,56 +457,142 @@ def _find_off_diagonal(
     return None
 
 
-def _two_by_two_inertia(
-    aa: Quadratic,
-    bb: Quadratic,
-    cc: Quadratic,
-    radicand: int,
-) -> tuple[int, int, int]:
-    determinant = _subtract(
-        _multiply(aa, cc, radicand),
-        _multiply(bb, bb, radicand),
+def _pair_add(left: IntegralQuadratic, right: IntegralQuadratic) -> IntegralQuadratic:
+    return left[0] + right[0], left[1] + right[1]
+
+
+def _pair_neg(value: IntegralQuadratic) -> IntegralQuadratic:
+    return -value[0], -value[1]
+
+
+def _pair_sub(left: IntegralQuadratic, right: IntegralQuadratic) -> IntegralQuadratic:
+    return left[0] - right[0], left[1] - right[1]
+
+
+def _pair_mul(
+    left: IntegralQuadratic, right: IntegralQuadratic, radicand: int
+) -> IntegralQuadratic:
+    return (
+        left[0] * right[0] + radicand * left[1] * right[1],
+        left[0] * right[1] + left[1] * right[0],
     )
-    determinant_sign = _sign(determinant, radicand)
-    if determinant_sign < 0:
-        return 1, 1, 0
-    trace_sign = _sign(_add(aa, cc), radicand)
-    if determinant_sign > 0:
-        return (2, 0, 0) if trace_sign > 0 else (0, 2, 0)
-    if trace_sign > 0:
-        return 1, 0, 1
-    if trace_sign < 0:
-        return 0, 1, 1
-    return 0, 0, 2
 
 
-def _eliminate_one(
-    matrix: list[list[Quadratic]],
+def _pair_exact_div(
+    numerator: IntegralQuadratic, denominator: IntegralQuadratic, radicand: int
+) -> IntegralQuadratic:
+    """Divide in ``ZZ[sqrt(d)]``, which is exact for Bareiss elimination steps.
+
+    Sylvester's determinant identity keeps every such quotient integral over
+    any integral domain; a remainder here would refute the elimination
+    invariant rather than a caller input.
+    """
+
+    num_real, num_imag = numerator
+    den_real, den_imag = denominator
+    norm = den_real * den_real - radicand * den_imag * den_imag
+    if norm == 0:
+        raise RuntimeError("fraction-free inertia elimination divided by zero")
+    real = num_real * den_real - radicand * num_imag * den_imag
+    imag = num_imag * den_real - num_real * den_imag
+    quotient_real, real_reminder = divmod(real, norm)
+    quotient_imag, imag_reminder = divmod(imag, norm)
+    if real_reminder or imag_reminder:
+        raise RuntimeError("fraction-free inertia elimination met an inexact division")
+    return quotient_real, quotient_imag
+
+
+def _clear_quadratic_denominators(
+    entries: list[list[Quadratic]],
+) -> list[list[IntegralQuadratic]]:
+    """Scale by a positive diagonal congruence to integral pairs.
+
+    With ``D[i]`` a common multiple of the denominators in row and column
+    ``i``, ``diag(D) * M * diag(D)`` is integral and, by Sylvester's law of
+    inertia, has the same inertia as ``M``. Zero patterns are preserved, so
+    pivot selection is unchanged.
+    """
+
+    order = len(entries)
+    scales: list[int] = []
+    for index in range(order):
+        scale = 1
+        for other in range(order):
+            for part in (
+                entries[index][other][0],
+                entries[index][other][1],
+                entries[other][index][0],
+                entries[other][index][1],
+            ):
+                scale = lcm(scale, part.denominator)
+        scales.append(scale)
+    cleared: list[list[IntegralQuadratic]] = []
+    for row in range(order):
+        cleared_row: list[IntegralQuadratic] = []
+        for column in range(order):
+            factor = scales[row] * scales[column]
+            rational, radical = entries[row][column]
+            cleared_row.append(
+                (
+                    rational.numerator * (factor // rational.denominator),
+                    radical.numerator * (factor // radical.denominator),
+                )
+            )
+        cleared.append(cleared_row)
+    return cleared
+
+
+def _bareiss_eliminate_one(
+    matrix: list[list[IntegralQuadratic]],
     index: int,
     pivot: int,
+    previous: IntegralQuadratic,
     radicand: int,
-) -> int:
+) -> tuple[int, IntegralQuadratic]:
+    """Eliminate below a 1x1 Bareiss pivot, returning its congruence sign."""
+
     _swap_symmetric(matrix, index, pivot)
     diagonal = matrix[index][index]
+    # The Bareiss diagonal holds the minor ratio whose sign, divided by the
+    # previous pivot's sign, is the congruence-diagonal sign: for -I the raw
+    # diagonal reads (+1) while the true second pivot is (-1).
+    sign = _sign(
+        (Fraction(diagonal[0]), Fraction(diagonal[1])), radicand
+    ) * _sign((Fraction(previous[0]), Fraction(previous[1])), radicand)
+    # Unlike field elimination, rows with a zero multiplier must still be
+    # scaled by pivot/previous: the Bareiss update is (m*p - l*t)/prev, not
+    # m - (l/p)*t, so skipping them would miss the exact p/prev scaling (and
+    # its sign when that ratio is negative).
     for row in range(index + 1, len(matrix)):
-        if _is_zero(matrix[row][index]):
-            continue
-        factor = _divide(matrix[row][index], diagonal, radicand)
-        for column in range(index, len(matrix)):
-            matrix[row][column] = _subtract(
-                matrix[row][column],
-                _multiply(factor, matrix[index][column], radicand),
+        for column in range(index + 1, len(matrix)):
+            matrix[row][column] = _pair_exact_div(
+                _pair_sub(
+                    _pair_mul(matrix[row][column], diagonal, radicand),
+                    _pair_mul(matrix[row][index], matrix[index][column], radicand),
+                ),
+                previous,
+                radicand,
             )
-        for column in range(index, len(matrix)):
-            matrix[column][row] = matrix[row][column]
-    return _sign(diagonal, radicand)
+    # Zero the eliminated cross only after every row has read the pivot row.
+    for row in range(index + 1, len(matrix)):
+        matrix[row][index] = (0, 0)
+        matrix[index][row] = (0, 0)
+    return sign, diagonal
 
 
-def _eliminate_two(
-    matrix: list[list[Quadratic]],
+def _bareiss_eliminate_two(
+    matrix: list[list[IntegralQuadratic]],
     index: int,
+    previous: IntegralQuadratic,
     radicand: int,
-) -> tuple[int, int, int]:
+) -> IntegralQuadratic:
+    """Eliminate below a 2x2 Bareiss pivot block; returns its determinant.
+
+    The pivot search guarantees every remaining diagonal is zero (the
+    maintained sibling kernel records the same invariant), so the block is
+    ``[[0, b], [b, 0]]`` with determinant ``-b*b`` and inertia ``(1, 1, 0)``.
+    """
+
     off_diagonal = _find_off_diagonal(matrix, index)
     if off_diagonal is None:  # pragma: no cover
         raise RuntimeError("2 by 2 pivot requested without an off-diagonal entry")
@@ -511,75 +601,96 @@ def _eliminate_two(
     if second == index:
         second = first
     _swap_symmetric(matrix, index + 1, second)
-    aa = matrix[index][index]
-    bb = matrix[index][index + 1]
-    cc = matrix[index + 1][index + 1]
-    counts = _two_by_two_inertia(aa, bb, cc, radicand)
-    determinant = _subtract(
-        _multiply(aa, cc, radicand),
-        _multiply(bb, bb, radicand),
-    )
+    if matrix[index][index] != (0, 0) or matrix[index + 1][index + 1] != (0, 0):
+        raise RuntimeError("fraction-free 2 by 2 pivot met a nonzero diagonal")
+    pivot = matrix[index][index + 1]
+    determinant = _pair_neg(_pair_mul(pivot, pivot, radicand))
+    adjoint_00 = (0, 0)
+    adjoint_01 = _pair_neg(pivot)
+    adjoint_11 = (0, 0)
     if index + 2 < len(matrix):
-        inverse_00 = _divide(cc, determinant, radicand)
-        inverse_01 = _divide(_negate(bb), determinant, radicand)
-        inverse_11 = _divide(aa, determinant, radicand)
         for row in range(index + 2, len(matrix)):
             left = matrix[row][index]
             right = matrix[row][index + 1]
-            coefficient_0 = _add(
-                _multiply(left, inverse_00, radicand),
-                _multiply(right, inverse_01, radicand),
+            coefficient_0 = _pair_add(
+                _pair_mul(left, adjoint_00, radicand),
+                _pair_mul(right, adjoint_01, radicand),
             )
-            coefficient_1 = _add(
-                _multiply(left, inverse_01, radicand),
-                _multiply(right, inverse_11, radicand),
+            coefficient_1 = _pair_add(
+                _pair_mul(left, adjoint_01, radicand),
+                _pair_mul(right, adjoint_11, radicand),
             )
-            for column in range(index, len(matrix)):
-                matrix[row][column] = _subtract(
-                    matrix[row][column],
-                    _add(
-                        _multiply(coefficient_0, matrix[index][column], radicand),
-                        _multiply(
-                            coefficient_1,
-                            matrix[index + 1][column],
-                            radicand,
+            for column in range(index + 2, len(matrix)):
+                top = matrix[index][column]
+                bottom = matrix[index + 1][column]
+                matrix[row][column] = _pair_exact_div(
+                    _pair_sub(
+                        _pair_mul(matrix[row][column], determinant, radicand),
+                        _pair_add(
+                            _pair_mul(coefficient_0, top, radicand),
+                            _pair_mul(coefficient_1, bottom, radicand),
                         ),
                     ),
+                    previous,
+                    radicand,
                 )
-            for column in range(index, len(matrix)):
-                matrix[column][row] = matrix[row][column]
-    return counts
+        # Zero the eliminated cross only after every row has read the pivots.
+        for row in range(index + 2, len(matrix)):
+            matrix[row][index] = (0, 0)
+            matrix[row][index + 1] = (0, 0)
+            matrix[index][row] = (0, 0)
+            matrix[index + 1][row] = (0, 0)
+    return determinant
+
+
+def _bareiss_inertia_counts(
+    pairs: list[list[IntegralQuadratic]], radicand: int
+) -> tuple[int, int, int]:
+    """Count inertia by fraction-free symmetric elimination over ``ZZ[√d]``.
+
+    Entries stay integral: every update is a ratio of minors, hence exactly
+    divisible by the previous pivot (Sylvester's identity over an integral
+    domain). Hadamard's bound controls intermediate growth, replacing the
+    per-operation Fraction normalization of field elimination.
+    """
+
+    matrix = [row[:] for row in pairs]
+    positive = negative = zero = 0
+    index = 0
+    previous: IntegralQuadratic = (1, 0)
+    while index < len(matrix):
+        pivot = next(
+            (
+                row
+                for row in range(index, len(matrix))
+                if matrix[row][row] != (0, 0)
+            ),
+            None,
+        )
+        if pivot is not None:
+            sign, previous = _bareiss_eliminate_one(
+                matrix, index, pivot, previous, radicand
+            )
+            positive += sign > 0
+            negative += sign < 0
+            index += 1
+            continue
+        if _find_off_diagonal(matrix, index) is None:
+            zero += len(matrix) - index
+            break
+        previous = _bareiss_eliminate_two(matrix, index, previous, radicand)
+        positive += 1
+        negative += 1
+        index += 2
+    return positive, negative, zero
 
 
 def _inertia_counts(matrix: RealQuadraticMatrix) -> tuple[int, int, int]:
     radicand = matrix.radicand
     reduced = _matrix_entries(matrix)
-    positive = negative = zero = 0
-    index = 0
-    while index < len(reduced):
-        pivot = next(
-            (
-                row
-                for row in range(index, len(reduced))
-                if not _is_zero(reduced[row][row])
-            ),
-            None,
-        )
-        if pivot is not None:
-            sign = _eliminate_one(reduced, index, pivot, radicand)
-            positive += sign > 0
-            negative += sign < 0
-            index += 1
-            continue
-        if _find_off_diagonal(reduced, index) is None:
-            zero += len(reduced) - index
-            break
-        row_positive, row_negative, row_zero = _eliminate_two(reduced, index, radicand)
-        positive += row_positive
-        negative += row_negative
-        zero += row_zero
-        index += 2
-    return positive, negative, zero
+    return _bareiss_inertia_counts(
+        _clear_quadratic_denominators(reduced), radicand
+    )
 
 
 def inertia_data(

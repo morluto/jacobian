@@ -13,7 +13,7 @@ from jacobian.math.number_theory.algebraic_numbers.quadratic import RealQuadrati
 type Quadratic = tuple[Fraction, Fraction]
 type FractionPolynomial = tuple[Fraction, ...]
 
-MAX_INERTIA_DIMENSION = 4
+MAX_INERTIA_DIMENSION = 16
 MAX_SPECTRAL_ANNIHILATING_COEFFICIENT_DIGITS = 996
 
 

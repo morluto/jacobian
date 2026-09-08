@@ -98,8 +98,60 @@ def test_permanent_request_rejects_order_above_the_ryser_work_budget() -> None:
     oversized = RationalMatrix(
         entries=_identity_entries(MAX_PERMANENT_MATRIX_ORDER + 1)
     )
-    with pytest.raises(ValidationError, match="limited to 12 rows and columns"):
+    with pytest.raises(
+        ValidationError,
+        match=f"limited to {MAX_PERMANENT_MATRIX_ORDER} rows and columns",
+    ):
         MatrixPermanentRequest(matrix=oversized)
+
+
+def test_permanent_admits_fourteen_by_fourteen_all_ones() -> None:
+    """Ryser envelope reaches order 14: 14! via the owner-local Gray-code kernel."""
+
+    from jacobian.math.matrices._operation_models import MAX_PERMANENT_MATRIX_ORDER
+
+    assert MAX_PERMANENT_MATRIX_ORDER == 14
+    entries = [[q(1) for _ in range(14)] for _ in range(14)]
+    result = compute_permanent(_permanent_request(entries))
+    assert result.permanent == _cr(87178291200)
+
+
+def test_gray_code_ryser_matches_direct_definition() -> None:
+    """The Gray-code kernel agrees with the Leibniz definition on rationals."""
+
+    import itertools
+    from fractions import Fraction
+
+    from jacobian.math.matrices.operations import _permanent_of_fractions
+
+    entries = (
+        (Fraction(1, 2), Fraction(-1, 3), Fraction(2)),
+        (Fraction(3), Fraction(1, 4), Fraction(-2, 5)),
+        (Fraction(-1, 6), Fraction(5), Fraction(1, 7)),
+    )
+    expected = sum(
+        entries[0][p[0]] * entries[1][p[1]] * entries[2][p[2]]
+        for p in itertools.permutations(range(3))
+    )
+    assert _permanent_of_fractions(entries) == expected
+
+
+def test_gray_code_ryser_fallback_handles_oversized_cleared_entries() -> None:
+    """Denominator-clearing overflow uses the entrywise Fraction accumulation."""
+
+    from fractions import Fraction
+
+    from jacobian.math.matrices.operations import (
+        MAX_RYSER_CLEARED_ENTRY_DIGITS,
+        _permanent_of_fractions,
+        _ryser_instrument_digits,
+    )
+
+    entries = tuple(
+        tuple(Fraction(10**2000, 3) for _ in range(3)) for _ in range(3)
+    )
+    assert _ryser_instrument_digits(entries) > MAX_RYSER_CLEARED_ENTRY_DIGITS
+    assert _permanent_of_fractions(entries) == Fraction(2 * 10**6000, 9)
 
 
 def test_permanent_request_admits_the_ryser_work_boundary() -> None:
@@ -107,6 +159,18 @@ def test_permanent_request_admits_the_ryser_work_boundary() -> None:
 
     boundary = RationalMatrix(entries=_identity_entries(MAX_PERMANENT_MATRIX_ORDER))
     assert MatrixPermanentRequest(matrix=boundary).matrix == boundary
+
+
+def test_native_permanent_applies_the_ryser_order_admission() -> None:
+    """The native SymPy entry point must share the typed exponential bound."""
+
+    import sympy
+
+    from jacobian.math.matrices.operations import permanent
+
+    oversized = sympy.eye(15)
+    with pytest.raises(ValueError, match="Ryser work budget"):
+        permanent(oversized)
 
 
 def test_kronecker_request_rejects_operands_above_the_computation_dimension() -> None:

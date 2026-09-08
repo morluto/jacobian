@@ -547,7 +547,7 @@ TOOLS = (
     MathTool(
         operation_id="matrix.permanent.compute",
         title="Compute an exact matrix permanent",
-        description="Compute the permanent (sign-free determinant analogue) of a square rational matrix over QQ through order 12. The owner charges SymPy's Ryser algorithm against its 4,096-subset budget.",
+        description="Compute the permanent (sign-free determinant analogue) of a square rational matrix over QQ through order 14. The owner charges its Gray-code Ryser kernel against the 16,384-subset budget.",
         request_type=MatrixPermanentRequest,
         result_type=MatrixPermanentResult,
         run=compute_permanent,

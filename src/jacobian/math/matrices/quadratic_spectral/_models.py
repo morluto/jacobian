@@ -33,11 +33,11 @@ class RealQuadraticSingularSpectrumRequest(StrictModel):
 
 
 class RealQuadraticInertiaRequest(StrictModel):
-    """One symmetric matrix of dimension at most four over a quadratic field."""
+    """One symmetric matrix of dimension at most sixteen over a quadratic field."""
 
     matrix: RealQuadraticMatrix = Field(
         description=(
-            "An exact symmetric matrix of dimension at most four over one "
+            "An exact symmetric matrix of dimension at most sixteen over one "
             "shared Q(sqrt(d))."
         )
     )

@@ -35,7 +35,13 @@ class BooleanTruthTable(StrictModel):
             raise _validation_error(
                 "truth_table_power", "truth table length must be a power of two"
             )
-        if any(value.as_fraction() not in (0, 1) for value in self.values):
+        # Canonical rationals are validated reduced with a positive
+        # denominator, so this is exactly ``as_fraction() in (0, 1)`` without
+        # allocating a Fraction per entry.
+        if any(
+            (value.num, value.den) not in ((0, 1), (1, 1))
+            for value in self.values
+        ):
             raise _validation_error(
                 "truth_table_boolean", "truth table entries must be 0 or 1"
             )

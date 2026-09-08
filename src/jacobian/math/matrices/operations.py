@@ -8,7 +8,7 @@ lazily so importing ``jacobian.math`` does not eagerly load packaged backends.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from fractions import Fraction
 from math import lcm
@@ -366,13 +366,165 @@ def partial_trace(
     return accumulator
 
 
+def _gray_code_subset_steps(count: int) -> Iterator[tuple[int, bool]]:
+    """Yield ``(column, entering)`` visiting every nonempty subset once.
+
+    Binary-reflected Gray-code order changes exactly one column per step; the
+    changed column is ``ctz(step)`` and it enters the subset exactly when
+    ``step >> (column + 1)`` is even.
+    """
+
+    for step in range(1, 1 << count):
+        column = (step & -step).bit_length() - 1
+        yield column, ((step >> (column + 1)) & 1) == 0
+
+
+def _ryser_permanent_integers(entries: tuple[tuple[int, ...], ...]) -> int:
+    """Exact permanent of an integer matrix via Gray-code Ryser (Nijenhuis-Wilf).
+
+    Each step updates the ``n`` row sums in place instead of recomputing
+    them: ``n`` integer additions plus one ``n``-factor product per nonempty
+    subset, i.e. ``O(n * 2**n)`` integer operations.
+    """
+
+    n = len(entries)
+    if n == 0:
+        return 1
+    columns = [tuple(row[j] for row in entries) for j in range(n)]
+    rowsum = [0] * n
+    total = 0
+    sign = 1  # (-1)**|S|; |S| changes by one at every step
+    for column, entering in _gray_code_subset_steps(n):
+        values = columns[column]
+        if entering:
+            for index in range(n):
+                rowsum[index] += values[index]
+        else:
+            for index in range(n):
+                rowsum[index] -= values[index]
+        sign = -sign
+        product = 1
+        for value in rowsum:
+            product *= value
+            if product == 0:
+                break
+        total += sign * product
+    if n & 1:
+        total = -total
+    return total
+
+
+def _ryser_permanent_fractions(
+    entries: tuple[tuple[Fraction, ...], ...],
+) -> Fraction:
+    """Exact permanent of a rational matrix via Gray-code Ryser.
+
+    Row denominators are cleared once by congruence-free row scaling:
+    with ``D[i]`` the denominator lcm of row ``i``,
+    ``perm(A) = perm(B) / prod(D)`` for the integer matrix ``B``. The caller
+    guarantees the cleared matrix stays within the exact-output envelope.
+    """
+
+    n = len(entries)
+    if n == 0:
+        return Fraction(1)
+    scales: list[int] = []
+    scaled: list[list[int]] = []
+    for row in entries:
+        scale = 1
+        for value in row:
+            scale = lcm(scale, value.denominator)
+        scales.append(scale)
+        scaled.append(
+            [value.numerator * (scale // value.denominator) for value in row]
+        )
+    numerator = _ryser_permanent_integers(tuple(tuple(row) for row in scaled))
+    denominator = 1
+    for scale in scales:
+        denominator *= scale
+    return Fraction(numerator, denominator)
+
+
+def _ryser_instrument_digits(entries: tuple[tuple[Fraction, ...], ...]) -> int:
+    """Bound the decimal digits of the row-cleared integer permanent inputs."""
+
+    width = 1
+    for row in entries:
+        scale = 1
+        for value in row:
+            scale = lcm(scale, value.denominator)
+        width = max(
+            width,
+            len(format_canonical_integer(scale))
+            + max(len(format_canonical_integer(abs(value.numerator))) for value in row),
+        )
+    return width
+
+
+# The integer Gray-code kernel keeps cleared entries small for ordinary
+# inputs; fall back to entrywise Fraction accumulation when row-denominator
+# clearing would itself build oversized intermediates.
+MAX_RYSER_CLEARED_ENTRY_DIGITS = 1_024
+
+
+def _permanent_of_fractions(entries: tuple[tuple[Fraction, ...], ...]) -> Fraction:
+    n = len(entries)
+    if n == 0:
+        return Fraction(1)
+    if _ryser_instrument_digits(entries) <= MAX_RYSER_CLEARED_ENTRY_DIGITS:
+        return _ryser_permanent_fractions(entries)
+    columns = [tuple(row[j] for row in entries) for j in range(n)]
+    rowsum = [Fraction(0)] * n
+    total = Fraction(0)
+    sign = 1
+    for column, entering in _gray_code_subset_steps(n):
+        values = columns[column]
+        if entering:
+            for index in range(n):
+                rowsum[index] += values[index]
+        else:
+            for index in range(n):
+                rowsum[index] -= values[index]
+        sign = -sign
+        product = Fraction(1)
+        for value in rowsum:
+            product *= value
+            if product == 0:
+                break
+        total += sign * product
+    if n & 1:
+        total = -total
+    return total
+
+
 def permanent(matrix: MatrixBase) -> Any:
-    from sympy import Permanent
+    import sympy
 
     source = _exact_matrix(matrix, maximum_dimension=64)
     if source.rows != source.cols:
         raise ValueError("permanent requires a square matrix")
-    return Permanent(source).doit()
+    entries = tuple(
+        tuple(
+            _sympy_scalar_to_fraction(source[row, column])
+            for column in range(source.cols)
+        )
+        for row in range(source.rows)
+    )
+    # Native callers bypass the typed request model, so apply the same
+    # square/order/scalar admission before entering the exponential kernel.
+    _admit(_admit_permanent, rational_matrix_from_fractions(entries))
+    value = _permanent_of_fractions(entries)
+    return sympy.Rational(value.numerator, value.denominator)
+
+
+def _sympy_scalar_to_fraction(value: Any) -> Fraction:
+    import sympy
+
+    if isinstance(value, sympy.Rational):
+        return Fraction(int(value.p), int(value.q))
+    if isinstance(value, sympy.Integer | int):
+        return Fraction(int(value), 1)
+    raise ValueError("permanent requires an exact rational matrix")
 
 
 def _admit[T](
@@ -1564,9 +1716,12 @@ def permanent_result(matrix: RationalMatrix) -> MatrixPermanentResult:
     _admit(_admit_permanent, matrix)
     if matrix.row_count == 0:
         return MatrixPermanentResult(permanent=CanonicalRational(num=1, den=1))
-    value = permanent(conversions.rational_matrix_to_sympy(matrix))
+    entries = tuple(
+        tuple(value.as_fraction() for value in row) for row in matrix.entries
+    )
+    value = _permanent_of_fractions(entries)
     return MatrixPermanentResult(
-        permanent=conversions.rational_from_sympy(value),
+        permanent=CanonicalRational.from_fraction(value),
     )
 
 

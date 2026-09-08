@@ -279,6 +279,29 @@ def test_ten_variable_parity_has_all_closed_form_multilinear_coefficients() -> N
     ]
 
 
+def test_twelve_variable_parity_multilinear_and_erasure_are_admitted() -> None:
+    """Scale regression: 12-variable dense cube (~30ms) was rejected at 10."""
+
+    from jacobian.math.analysis.boolean.fourier._models import MAX_VARIABLES
+
+    assert MAX_VARIABLES == 12
+    truth = [index.bit_count() % 2 for index in range(4096)]
+    table = _truth_table(truth)
+    extension = multilinear_extension(table)
+    assert extension.variable_count == 12
+    assert [c.as_fraction() for c in extension.coefficients.values][:4] == [
+        0,
+        1,
+        1,
+        -2,
+    ]
+    spectrum = fourier_spectrum(table)
+    assert spectrum.variable_count == 12
+    assert len(spectrum.spectrum.values) == 4096
+    noise = erasure_noise(table, _rational(1, 2), tuple([0] * 12))
+    assert noise.variable_count == 12
+
+
 # ---------------------------------------------------------------------------
 # Erasure noise
 # ---------------------------------------------------------------------------

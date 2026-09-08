@@ -15,7 +15,7 @@ from jacobian.math.analysis.boolean._models import (
     BooleanTruthTable,
 )
 
-MAX_VARIABLES = 10
+MAX_VARIABLES = 12
 MIN_VARIABLES = 1
 
 
@@ -28,7 +28,7 @@ class TruthTableRequest(StrictModel):
 
     The truth table is a tuple of ``0``/``1`` values given as canonical
     rationals whose length must be exactly ``2 ** n`` for some ``n`` in
-    ``[1, 10]``.  Entry ``i`` is the value of the Boolean function at the row
+    ``[1, 12]``.  Entry ``i`` is the value of the Boolean function at the row
     whose integer index is ``i`` (little-endian / natural ordering).
     """
 

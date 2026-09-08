@@ -361,9 +361,11 @@ def test_operation_specific_shape_and_work_bounds_are_preflighted() -> None:
             RealQuadraticSymmetricSpectrumRequest(matrix=nonsymmetric)
         )
 
-    five = tuple(tuple(_q(radicand=2) for _ in range(5)) for _ in range(5))
+    seventeen = tuple(
+        tuple(_q(radicand=2) for _ in range(17)) for _ in range(17)
+    )
     with pytest.raises(OperationDomainValidationError):
-        compute_inertia(RealQuadraticInertiaRequest(matrix=_matrix(five)))
+        compute_inertia(RealQuadraticInertiaRequest(matrix=_matrix(seventeen)))
 
     huge = _q(10**255, 0, 2)
     large_diagonal = _matrix(((huge, _q(radicand=2)), (_q(radicand=2), huge)))
@@ -371,6 +373,120 @@ def test_operation_specific_shape_and_work_bounds_are_preflighted() -> None:
         compute_singular_spectrum(
             RealQuadraticSingularSpectrumRequest(matrix=large_diagonal)
         )
+
+
+def test_bareiss_sign_rule_survives_negative_divisors() -> None:
+    """The congruence sign divides by the previous pivot's sign.
+
+    A naive diagonal-sign reading reports (1, 1) for -I_2 because the second
+    Bareiss diagonal is (+1); the true second congruence pivot is (+1)/(-1).
+    """
+
+    result = inertia(_matrix(((_q(-1), _q()), (_q(), _q(-1)))))
+    assert (result.n_positive, result.n_negative, result.n_zero) == (0, 2, 0)
+    assert result.definiteness == "negative_definite"
+
+
+def test_bareiss_two_by_two_and_singular_blocks() -> None:
+    off_diagonal = inertia(_matrix(((_q(), _q(1)), (_q(1), _q()))))
+    assert (off_diagonal.n_positive, off_diagonal.n_negative, off_diagonal.n_zero) == (
+        1,
+        1,
+        0,
+    )
+    singular = inertia(_matrix(((_q(1), _q(1)), (_q(1), _q(1)))))
+    assert (singular.n_positive, singular.n_negative, singular.n_zero) == (1, 0, 1)
+
+
+def test_bareiss_mixed_sign_definite_case() -> None:
+    """Eigenvalues (+9.41, -20.53, -6.95) independently give (1, 2, 0)."""
+
+    source = _matrix(
+        (
+            (_q(-5, 2), _q(-8, -3), _q(8, -3)),
+            (_q(-8, -3), _q(2, -4), _q(7, -1)),
+            (_q(8, -3), _q(7, -1), _q(-8, -3)),
+        )
+    )
+    result = inertia(source)
+    assert (result.n_positive, result.n_negative, result.n_zero) == (1, 2, 0)
+    assert result.definiteness == "indefinite"
+
+
+def test_inertia_invariant_under_positive_diagonal_congruence() -> None:
+    """Sylvester's law: inertia(diag(D) M diag(D)) == inertia(M), D > 0."""
+
+    import random
+    from fractions import Fraction
+
+    rng = random.Random(20260908)
+    for _ in range(10):
+        order = rng.randint(2, 5)
+        rows: list[list[RealQuadraticValue]] = []
+        for row_index in range(order):
+            row: list[RealQuadraticValue] = []
+            for column_index in range(order):
+                if column_index < row_index:
+                    row.append(rows[column_index][row_index])
+                    continue
+                row.append(
+                    _q(
+                        Fraction(rng.randint(-9, 9), rng.randint(1, 9)),
+                        Fraction(rng.randint(-9, 9), rng.randint(1, 9)),
+                    )
+                )
+            rows.append(row)
+        source = _matrix(tuple(tuple(row) for row in rows))
+        expected = inertia(source)
+        scales = [rng.randint(1, 9) for _ in range(order)]
+        scaled = _matrix(
+            tuple(
+                tuple(
+                    _q(
+                        rows[row][column].rational_part.as_fraction()
+                        * scales[row]
+                        * scales[column],
+                        rows[row][column].radical_coefficient.as_fraction()
+                        * scales[row]
+                        * scales[column],
+                    )
+                    for column in range(order)
+                )
+                for row in range(order)
+            )
+        )
+        actual = inertia(scaled)
+        assert (
+            actual.n_positive,
+            actual.n_negative,
+            actual.n_zero,
+        ) == (
+            expected.n_positive,
+            expected.n_negative,
+            expected.n_zero,
+        )
+
+
+def test_inertia_admits_sixteen_dimensional_identity() -> None:
+    """Scale regression: 16x16 identity inertia in milliseconds (was rejected at 5)."""
+
+    from jacobian.math.matrices.quadratic_spectral._bounds import (
+        MAX_INERTIA_DIMENSION,
+    )
+
+    assert MAX_INERTIA_DIMENSION == 16
+    entries = tuple(
+        tuple(
+            _q(1, 0, 2) if index == column else _q(0, 0, 2)
+            for column in range(16)
+        )
+        for index in range(16)
+    )
+    result = compute_inertia(
+        RealQuadraticInertiaRequest(matrix=_matrix(entries))
+    )
+    assert (result.n_positive, result.n_negative, result.n_zero) == (16, 0, 0)
+    assert result.definiteness == "positive_definite"
 
 
 def test_quadratic_spectral_public_api_and_catalog_are_exact() -> None:

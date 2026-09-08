@@ -4,12 +4,19 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from jacobian.catalog.models import MathTool, OperationExample
+from pydantic_core import PydanticCustomError
+
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.graphs.optimization._chromatic_kernel import build_simple_graph
 from jacobian.math.graphs.optimization._distance_models import (
     GraphDistanceMatrixRequest,
     GraphDistanceMatrixResult,
     GraphDistanceRow,
+    _require_distance_matrix_order,
 )
 
 
@@ -24,6 +31,14 @@ def compute_distance_matrix(
 
     import networkx as nx
 
+    try:
+        _require_distance_matrix_order(request.graph)
+    except PydanticCustomError as error:
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code=error.type,
+            message=str(error),
+        ) from error
     graph = cast(Any, build_simple_graph(request.graph))
     vertices = tuple(sorted(graph.nodes))
     shortest_paths = {
@@ -52,7 +67,7 @@ DISTANCE_MATRIX_OPERATION = MathTool(
     title="All-pairs distance matrix",
     description=(
         "Compute every exact unweighted shortest-path distance in a finite "
-        "simple graph of at most 64 vertices, using JSON null for unreachable "
+        "simple graph of at most 256 vertices, using JSON null for unreachable "
         "vertex pairs."
     ),
     request_type=GraphDistanceMatrixRequest,

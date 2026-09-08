@@ -24,7 +24,8 @@ TOOLS: MathTools = (
             "Its sorted rational palette contains every distinct squared Euclidean "
             "distance; edge colour indices agree exactly when lengths agree. "
             "Coincident points retain zero-distance edges. The indexed colouring "
-            "composes with same-colour union conflicts and rainbow subsets. "
+            "is a FiniteHypergraph together with a total edge-colour partition "
+            "consumed by same-colour union conflicts. "
             "Admits 2-64 points in 1-20 dimensions, at most 2016 edges, 8 million "
             "source coefficient bits, 64 million source/palette bits and 10^13 "
             "bit-arithmetic work units; exact growth must fit rational carriers."
@@ -36,7 +37,11 @@ TOOLS: MathTools = (
         examples=(
             OperationExample(
                 name="unit_square",
-                description="Four sides have squared distance 1; two diagonals have 2.",
+                description=(
+                    "Compute the distance-coloured complete graph on the unit "
+                    "square; point labels must be unique and every point must "
+                    "share one dimension."
+                ),
                 input={
                     "configuration": {
                         "points": [

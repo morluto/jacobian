@@ -37,7 +37,12 @@ TOOLS: MathTools = (
         examples=(
             OperationExample(
                 name="repeated_triangle_edges",
-                description="Three equally coloured edges produce one triangle conflict.",
+                description=(
+                    "Compute the same-colour union-conflict hypergraph of three "
+                    "equally coloured triangle edges; assignments must cover every "
+                    "source edge ID exactly once with a contiguous 0..color_count-1 "
+                    "palette."
+                ),
                 input={
                     "coloring": {
                         "hypergraph": {

@@ -35,6 +35,54 @@ def _dump(polynomial: Any) -> list[list[Any]]:
     ]
 
 
+def _apply_operation(
+    operation: object,
+    arguments: list[int],
+    node: dict[str, Any],
+    cache: list[Any],
+    generators: tuple[Any, ...],
+    variable_count: int,
+) -> Any:
+    from sympy import QQ
+
+    if operation == "ZERO":
+        return cache[0]
+    if operation == "ONE":
+        return cache[1]
+    if operation == "SOURCE":
+        source = node.get("source")
+        if not isinstance(source, list):
+            raise ValueError("malformed SOURCE node")
+        return _polynomial(source, generators)
+    if operation == "SCALE":
+        scalar = node.get("scalar")
+        if (
+            not isinstance(scalar, list)
+            or len(scalar) != 2
+            or not isinstance(scalar[0], str)
+            or not isinstance(scalar[1], str)
+            or len(arguments) != 1
+        ):
+            raise ValueError("malformed SCALE node")
+        return cache[arguments[0]].mul_ground(QQ(int(scalar[0]), int(scalar[1])))
+    if operation == "MULTIPLY":
+        if len(arguments) != 2:
+            raise ValueError("malformed MULTIPLY node")
+        return cache[arguments[0]] * cache[arguments[1]]
+    if operation == "ADD":
+        return sum((cache[argument] for argument in arguments), cache[0])
+    if operation == "DERIVATIVE":
+        if len(arguments) != 2:
+            raise ValueError("malformed DERIVATIVE node")
+        axis = node.get("axis")
+        if type(axis) is not int or not 0 <= axis < variable_count:
+            raise ValueError("malformed DERIVATIVE node")
+        numerator = cache[arguments[0]]
+        denominator = cache[arguments[1]]
+        return numerator.diff(axis) * denominator - numerator * denominator.diff(axis)
+    raise ValueError("unknown DAG operation")
+
+
 def _run(payload: dict[str, Any]) -> dict[str, Any]:
     from sympy import QQ, Poly, Symbol
 
@@ -56,52 +104,20 @@ def _run(payload: dict[str, Any]) -> dict[str, Any]:
     for index, node in enumerate(nodes):
         if not isinstance(node, dict):
             raise ValueError("malformed DAG node")
-        operation = node.get("operation")
         arguments = node.get("arguments")
         if not isinstance(arguments, list) or any(
             type(argument) is not int or argument < 0 or argument >= index
             for argument in arguments
         ):
             raise ValueError("malformed DAG node")
-        if operation == "ZERO":
-            result = cache[0]
-        elif operation == "ONE":
-            result = cache[1]
-        elif operation == "SOURCE":
-            source = node.get("source")
-            if not isinstance(source, list):
-                raise ValueError("malformed SOURCE node")
-            result = _polynomial(source, generators)
-        elif operation == "SCALE":
-            scalar = node.get("scalar")
-            if (
-                not isinstance(scalar, list)
-                or len(scalar) != 2
-                or not isinstance(scalar[0], str)
-                or not isinstance(scalar[1], str)
-                or len(arguments) != 1
-            ):
-                raise ValueError("malformed SCALE node")
-            result = cache[arguments[0]].mul_ground(QQ(int(scalar[0]), int(scalar[1])))
-        elif operation == "MULTIPLY":
-            if len(arguments) != 2:
-                raise ValueError("malformed MULTIPLY node")
-            result = cache[arguments[0]] * cache[arguments[1]]
-        elif operation == "ADD":
-            result = sum((cache[argument] for argument in arguments), cache[0])
-        elif operation == "DERIVATIVE":
-            if len(arguments) != 2:
-                raise ValueError("malformed DERIVATIVE node")
-            axis = node.get("axis")
-            if type(axis) is not int or not 0 <= axis < variable_count:
-                raise ValueError("malformed DERIVATIVE node")
-            numerator = cache[arguments[0]]
-            denominator = cache[arguments[1]]
-            result = numerator.diff(axis) * denominator - numerator * denominator.diff(
-                axis
-            )
-        else:
-            raise ValueError("unknown DAG operation")
+        result = _apply_operation(
+            node.get("operation"),
+            arguments,
+            node,
+            cache,
+            generators,
+            variable_count,
+        )
         if index < 2:
             continue
         cache.append(result)

@@ -122,11 +122,12 @@ def covariant_derivative(
         request_checkpoint("after covariant-derivative component normalization")
         return normalized[value]
 
+    determinant_guards = _determinant_guards(plan, axis, cache)
     components = tuple(convert(value) for value in plan.derivative)
     guards = canonical_locus_guards(
         metric.tensor.retained_nonzero_denominators,
         tensor.retained_nonzero_denominators,
-        _determinant_guards(plan, axis, cache),
+        determinant_guards,
         component_denominators=tuple(value.denominator for value in components),
         variable_count=len(axis),
     )

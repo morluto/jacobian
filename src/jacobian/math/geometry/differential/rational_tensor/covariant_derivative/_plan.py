@@ -19,6 +19,7 @@ from jacobian.math.geometry.differential.values import (
     MAX_RATIONAL_TENSOR_POLYNOMIAL_TERMS,
     MAX_RATIONAL_TENSOR_RANK,
     RationalCoordinateTensor,
+    _polynomial_key,
 )
 from jacobian.math.polynomials.values import SparseRationalPolynomial
 
@@ -80,9 +81,13 @@ def _admit_outputs(
                 dag.dimension * (bound.terms + 1),
             )
         )
+    inherited_keys = {
+        _polynomial_key(guard)
+        for coordinate_tensor in (metric.tensor, tensor)
+        for guard in coordinate_tensor.retained_nonzero_denominators
+    }
     potential_guards = (
-        len(metric.tensor.retained_nonzero_denominators)
-        + len(tensor.retained_nonzero_denominators)
+        len(inherited_keys)
         + len(set(determinant.numerator))
         + len(
             {

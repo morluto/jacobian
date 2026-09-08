@@ -71,11 +71,11 @@ def find_chromatic_bipartition(
         raise RuntimeError(
             "bounded chromatic bipartition worker could not be started"
         ) from exc
-    request_checkpoint("after chromatic bipartition worker")
     if completed.cancelled:
         raise OperationExecutionCancelledError("chromatic bipartition worker cancelled")
     if completed.timed_out:
         return _unknown_result(request)
+    request_checkpoint("after chromatic bipartition worker")
     if completed.stdout_exceeded or completed.stderr_exceeded:
         raise RuntimeError(
             "bounded chromatic bipartition worker exceeded an output cap"

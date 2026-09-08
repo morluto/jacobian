@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from jacobian.math.graphs.coloring._models import _require_indexed_coloring_graph
 from jacobian.math.graphs.values import (
+    MAX_ENCODED_SIMPLE_GRAPH_VERTICES,
     IndexedSimpleUndirectedGraph,
     SimpleUndirectedGraph,
 )
@@ -23,11 +24,19 @@ def test_indexed_graph_rejects_vertices_above_line_graph_bound() -> None:
         IndexedSimpleUndirectedGraph(vertex_count=1025, edges=())
 
 
-def test_simple_graph_retains_256_vertex_bound() -> None:
+def test_simple_graph_encoding_admits_incidence_graph_vertex_bound() -> None:
     SimpleUndirectedGraph(vertices=tuple(str(i) for i in range(256)), edges=())
+    SimpleUndirectedGraph(vertices=tuple(str(i) for i in range(257)), edges=())
+    SimpleUndirectedGraph(
+        vertices=tuple(str(i) for i in range(MAX_ENCODED_SIMPLE_GRAPH_VERTICES)),
+        edges=(),
+    )
 
     with pytest.raises(ValidationError):
-        SimpleUndirectedGraph(vertices=tuple(str(i) for i in range(257)), edges=())
+        SimpleUndirectedGraph(
+            vertices=tuple(str(i) for i in range(MAX_ENCODED_SIMPLE_GRAPH_VERTICES + 1)),
+            edges=(),
+        )
 
 
 def test_coloring_admission_retains_256_vertex_bound() -> None:

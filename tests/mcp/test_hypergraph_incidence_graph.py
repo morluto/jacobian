@@ -10,6 +10,8 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
 from jacobian.math.combinatorics.finite_structures.hypergraphs.operations import (
     incidence_graph,
 )
+from jacobian.math.graphs.cycle_length_profile._models import CycleLengthProfileRequest
+from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.mcp.server import create_server
 from mcp import Client
 
@@ -75,5 +77,33 @@ def test_incidence_graph_round_trips_into_cycle_profile() -> None:
             assert not consumed_boundary.is_error
             assert consumed_boundary.structured_content is not None
             assert consumed_boundary.structured_content["output"]["rows"] == []
+
+            over_payload = {
+                "hypergraph": {
+                    "vertices": [str(index) for index in range(256)],
+                    "edges": [["edge", []]],
+                }
+            }
+            over = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "hypergraph.incidence_graph.compute",
+                    "payload": over_payload,
+                },
+            )
+            assert not over.is_error
+            assert over.structured_content is not None
+            over_graph = over.structured_content["output"]["graph"]
+            assert len(over_graph["vertices"]) == 257
+            assert SimpleUndirectedGraph.model_validate(over_graph)
+            CycleLengthProfileRequest.model_validate({"graph": over_graph})
+            consumed_over = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "graph.invariant.cycle_length_profile.compute",
+                    "payload": {"graph": over_graph},
+                },
+            )
+            assert consumed_over.is_error
 
     asyncio.run(scenario())

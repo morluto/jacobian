@@ -799,31 +799,6 @@ class IncidenceGraphRequest(StrictModel):
     hypergraph: FiniteHypergraph
 
 
-class NamespacedIncidenceGraph(SimpleUndirectedGraph):
-    """Levi graph on disjoint indexed vertex and edge namespaces.
-
-    A finite hypergraph may have 256 vertices and 12,000 edges, so the
-    incidence graph exceeds the 256-vertex simple-graph carrier used by
-    ordinary graph operations. This value keeps the same edge orientation
-    rules with a source-sized envelope.
-    """
-
-    vertices: tuple[str, ...] = Field(
-        max_length=MAX_VERTICES + MAX_EDGES,
-        description=(
-            "Unique Unicode NFC vertex labels containing valid Unicode scalar "
-            "values. Vertex list order is preserved and need not be sorted."
-        ),
-    )
-    edges: tuple[tuple[str, str], ...] = Field(
-        max_length=MAX_TOTAL_INCIDENCES,
-        description=(
-            "Unique pairs of distinct declared vertices. Each pair must have "
-            "left < right in lexicographic label order."
-        ),
-    )
-
-
 class IncidenceGraphResult(StrictModel):
     """The bipartite incidence graph (Levi graph) of a finite hypergraph.
 
@@ -843,7 +818,7 @@ class IncidenceGraphResult(StrictModel):
         max_length=MAX_EDGES
     )
     edges: tuple[tuple[str, str], ...] = Field(max_length=MAX_TOTAL_INCIDENCES)
-    graph: NamespacedIncidenceGraph
+    graph: SimpleUndirectedGraph
     vertex_labels: tuple[tuple[str, str], ...] = Field(max_length=MAX_VERTICES)
     edge_labels: tuple[tuple[str, str], ...] = Field(max_length=MAX_EDGES)
 

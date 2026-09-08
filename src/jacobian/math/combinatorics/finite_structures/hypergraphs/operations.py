@@ -31,7 +31,6 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     InducedTypeProfileResult,
     MaximumEdgeMatchingResult,
     MinimumTransversalResult,
-    NamespacedIncidenceGraph,
     ParametersResult,
     VertexDegreesResult,
     WeightedPackingResult,
@@ -622,7 +621,7 @@ def incidence_graph(hypergraph: FiniteHypergraph) -> IncidenceGraphResult:
             for left, right in ((vertex_map[v], edge_map[e]) for v, e in edges)
         )
     )
-    graph = NamespacedIncidenceGraph(
+    graph = SimpleUndirectedGraph(
         vertices=tuple(label for _, label in vertex_labels)
         + tuple(label for _, label in edge_labels),
         edges=graph_edges,

@@ -287,6 +287,8 @@ class TestIncidenceGraph:
         result = incidence_graph(over_boundary)
         assert len(result.graph.vertices) == 257
         assert result.edge_labels == (("edge", "e0"),)
+        dumped = result.graph.model_dump(mode="json")
+        assert SimpleUndirectedGraph.model_validate(dumped) == result.graph
 
     def test_forged_namespace_or_graph_edge_is_rejected_as_domain_validation(
         self,

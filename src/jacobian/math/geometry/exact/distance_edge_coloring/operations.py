@@ -34,8 +34,6 @@ __all__ = ["compute_distance_edge_coloring"]
 _MAX_SOURCE_BITS = 8_000_000
 _MAX_RESULT_BITS = 64_000_000
 _MAX_WORK = 10**13
-# A component below 2**_RATIONAL_BITS fits the canonical decimal carrier.
-_RATIONAL_BITS = (10**MAX_CANONICAL_RATIONAL_DIGITS).bit_length() - 1
 
 
 def _reject(reason: str) -> None:
@@ -130,17 +128,22 @@ def _plan(
                 numerator_bits,
                 2 * (common_denominator.bit_length() - 1) + 2,
             )
+            budget.charge(16 * len(differences) * unreduced_height * unreduced_height)
             squared = fmpq(0)
             for value in differences:
                 squared += value * value
+            numerator = abs(int(squared.numerator))
+            denominator = int(squared.denominator)
+            if (
+                numerator >= 10**MAX_CANONICAL_RATIONAL_DIGITS
+                or denominator >= 10**MAX_CANONICAL_RATIONAL_DIGITS
+            ):
+                _reject("squared-distance coefficient growth exceeds the exact carrier")
             reduced_height = max(
                 1,
-                abs(int(squared.numerator)).bit_length(),
-                int(squared.denominator).bit_length(),
+                numerator.bit_length(),
+                denominator.bit_length(),
             )
-            if reduced_height > _RATIONAL_BITS:
-                _reject("squared-distance coefficient growth exceeds the exact carrier")
-            budget.charge(16 * len(differences) * unreduced_height * unreduced_height)
             result_bits += 2 * reduced_height
             maximum_height = max(maximum_height, reduced_height)
             plans.append(differences)

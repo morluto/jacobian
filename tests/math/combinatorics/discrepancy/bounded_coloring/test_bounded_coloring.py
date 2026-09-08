@@ -211,6 +211,21 @@ def test_elapsed_request_start_exhausts_own_wall_budget() -> None:
     assert result.outcome.model_dump() == {"status": "BUDGET_EXCEEDED"}
 
 
+def test_expired_wall_budget_does_not_replay_bound_validation() -> None:
+    source = FiniteSetSystem(ground_set_size=1, sets=((0,),))
+    with request_execution(monotonic() - 100):
+        result = decide(source, (2,))
+    assert result.outcome.model_dump() == {"status": "BUDGET_EXCEEDED"}
+    with pytest.raises(ValidationError, match="set size"):
+        BoundedColoringResult.model_validate(
+            {
+                "set_system": source.model_dump(mode="json"),
+                "absolute_bounds": [2],
+                "outcome": {"status": "BUDGET_EXCEEDED"},
+            }
+        )
+
+
 @pytest.mark.parametrize(
     "payload",
     [

@@ -134,14 +134,14 @@ def decide(
         _checkpoint(deadline, "before discrepancy witness replay")
         outcome = _outcome(set_system, absolute_bounds, reply)
         _checkpoint(deadline, "before discrepancy result construction")
-        result = BoundedColoringResult(
+        result = BoundedColoringResult._from_kernel(
             set_system=set_system, absolute_bounds=absolute_bounds, outcome=outcome
         )
         _checkpoint(deadline, "after discrepancy result construction")
         return result
     except _WallBudgetExceededError:
         # Only bounded source copying remains; no solver evidence is promoted.
-        result = BoundedColoringResult(
+        result = BoundedColoringResult._from_kernel(
             set_system=set_system,
             absolute_bounds=absolute_bounds,
             outcome=BoundedColoringBudgetExceeded(),

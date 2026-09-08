@@ -112,3 +112,19 @@ class BoundedColoringResult(StrictModel):
                     "signed-sum ledger must cover every indexed source set"
                 )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        set_system: FiniteSetSystem,
+        absolute_bounds: tuple[int, ...],
+        outcome: BoundedColoringOutcome,
+    ) -> Self:
+        """Construct after admission; parsing still replays bound-axis checks."""
+
+        return cls.model_construct(
+            set_system=set_system,
+            absolute_bounds=absolute_bounds,
+            outcome=outcome,
+        )

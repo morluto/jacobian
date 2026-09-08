@@ -25,6 +25,8 @@ TOOLS: MathTools = (
             "exactly when its induced source hypergraph is rainbow. Equal member "
             "sets with different source IDs remain distinct; duplicate unions "
             "share one conflict edge. Nonuniform and empty source edges are allowed. "
+            "Two same-coloured empty source edges are rejected because their union "
+            "is an empty hyperedge outside the carrier and independence_number. "
             "The conflict FiniteHypergraph composes with structural and independence "
             "operations (the independence consumer excludes empty hyperedges). "
             "Admits at most 65536 source pairs, 12000 distinct unions and 36000 "

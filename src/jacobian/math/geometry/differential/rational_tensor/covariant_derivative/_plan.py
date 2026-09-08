@@ -16,6 +16,7 @@ from jacobian.math.geometry.differential.metrics._models import RationalCoordina
 from jacobian.math.geometry.differential.metrics._plan import (
     ConnectionPlan,
     _denominator_guard_identity,
+    _node_guard_key,
     build_connection_plan,
     potential_locus_guard_keys,
 )
@@ -86,7 +87,13 @@ def _admit_outputs(
     outputs: tuple[Expression, ...],
 ) -> dict[Expression, tuple[int, int, int]]:
     sizes = {value: dag.admit_output(value) for value in dict.fromkeys(outputs)}
-    determinant_allocations = []
+    unique_inherited: dict[object, tuple[int, int, int]] = {}
+    for coordinate_tensor in (metric.tensor, tensor):
+        for guard in coordinate_tensor.retained_nonzero_denominators:
+            unique_inherited.setdefault(
+                _polynomial_key(guard), _source_allocation(guard, dag.dimension)
+            )
+    unique_determinant: dict[object, tuple[int, int, int]] = {}
     for index in set(determinant.numerator):
         bound = dag.nodes[index].bound
         if (
@@ -98,12 +105,16 @@ def _admit_outputs(
                 "determinant_locus",
                 "determinant locus factors exceed canonical polynomial bounds",
             )
-        determinant_allocations.append(
+        key = _node_guard_key(dag, index)
+        if key in unique_inherited:
+            continue
+        unique_determinant.setdefault(
+            key,
             (
                 bound.terms,
                 8 * bound.coefficient_digits * bound.terms,
                 dag.dimension * (bound.terms + 1),
-            )
+            ),
         )
     potential_guards = len(
         potential_locus_guard_keys(
@@ -134,12 +145,6 @@ def _admit_outputs(
         for coordinate_tensor in (metric.tensor, tensor)
         for guard in coordinate_tensor.retained_nonzero_denominators
     ]
-    unique_inherited: dict[object, tuple[int, int, int]] = {}
-    for coordinate_tensor in (metric.tensor, tensor):
-        for guard in coordinate_tensor.retained_nonzero_denominators:
-            unique_inherited.setdefault(
-                _polynomial_key(guard), _source_allocation(guard, dimension)
-            )
     unique_output_guards: dict[object, tuple[int, int, int]] = {}
     for value, size in sizes.items():
         identity = _denominator_guard_identity(dag, value)
@@ -147,7 +152,7 @@ def _admit_outputs(
             unique_output_guards.setdefault(identity, size)
     guards = (
         list(unique_inherited.values())
-        + determinant_allocations
+        + list(unique_determinant.values())
         + list(unique_output_guards.values())
     )
     allocations = source + inherited + [sizes[value] for value in outputs] + guards

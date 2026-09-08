@@ -305,7 +305,10 @@ def build_plan(metric: RationalCoordinateMetric) -> Plan:
     # Retain the determinant numerator as its already-shared factors. Their
     # conjunction equals det(g)!=0 on the source denominator locus. This
     # avoids expanding an unnecessary determinant product in diagonal charts.
-    determinant_allocations: list[tuple[int, int, int]] = []
+    inherited_keys = {
+        _polynomial_key(guard) for guard in metric.tensor.retained_nonzero_denominators
+    }
+    unique_determinant: dict[object, tuple[int, int, int]] = {}
     for index in set(det.numerator):
         bound = dag.nodes[index].bound
         if (
@@ -318,12 +321,16 @@ def build_plan(metric: RationalCoordinateMetric) -> Plan:
                 "determinant locus factors exceed canonical polynomial bounds",
             )
         dag.ledger.charge("normalization", bound.terms * bound.coefficient_digits)
-        determinant_allocations.append(
+        key = _node_guard_key(dag, index)
+        if key in inherited_keys:
+            continue
+        unique_determinant.setdefault(
+            key,
             (
                 bound.terms,
                 8 * bound.coefficient_digits * bound.terms,
                 n * (bound.terms + 1),
-            )
+            ),
         )
     outputs = (*inverse, *connection, *riemann, *ricci, scalar)
     sizes = {value: dag.admit_output(value) for value in dict.fromkeys(outputs)}
@@ -363,7 +370,7 @@ def build_plan(metric: RationalCoordinateMetric) -> Plan:
     ]
     guards = (
         inherited
-        + determinant_allocations
+        + list(unique_determinant.values())
         + [sizes[value] for value in sizes if value.denominator]
     )
     allocations = source + inherited + [sizes[value] for value in outputs] + 5 * guards

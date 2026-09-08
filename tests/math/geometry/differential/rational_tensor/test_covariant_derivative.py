@@ -456,6 +456,43 @@ def test_cancelled_factor_of_a_generated_determinant_admits_at_the_exact_cap() -
     )
 
 
+def test_inherited_determinant_factors_are_not_charged_twice() -> None:
+    x, y, z, w = symbols("x y z w")
+    axis = ("x", "y", "z", "w")
+    factors = tuple(
+        rational_function_from_sympy(symbol, axis).numerator for symbol in (x, y, z, w)
+    )
+    inherited = canonical_locus_guards(
+        factors,
+        tuple(
+            rational_function_from_sympy(x + offset, axis).numerator
+            for offset in range(1, 765)
+        ),
+        variable_count=4,
+    )
+    assert len(inherited) == 768
+    metric = RationalCoordinateMetric(
+        tensor=RationalCoordinateTensor(
+            coordinate_axis=axis,
+            variance=("COVARIANT", "COVARIANT"),
+            components=tuple(
+                rational_function_from_sympy(value, axis)
+                for value in (x, 0, 0, 0, 0, y, 0, 0, 0, 0, z, 0, 0, 0, 0, w)
+            ),
+            retained_nonzero_denominators=inherited,
+        )
+    )
+    source = RationalCoordinateTensor(
+        coordinate_axis=axis,
+        variance=(),
+        components=(rational_function_from_sympy(1, axis),),
+        retained_nonzero_denominators=inherited,
+    )
+    result = covariant_derivative(metric, source)
+    assert len(result.retained_nonzero_denominators) == 768
+    assert expressions(result.covariant_derivative) == (0, 0, 0, 0)
+
+
 def test_structurally_zero_metric_uses_the_covariant_derivative_domain_code() -> None:
     metric = RationalCoordinateMetric(
         tensor=tensor([0], ("COVARIANT", "COVARIANT"), axis=("x",))

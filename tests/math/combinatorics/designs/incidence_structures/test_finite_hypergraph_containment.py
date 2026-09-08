@@ -29,3 +29,12 @@ def test_hypergraph_source_bound_refusal():
     h=FiniteHypergraph(vertices=tuple(f"v{i}" for i in range(100)), edges=tuple((f"e{i}",(f"v{i % 100}",)) for i in range(12000)))
     with pytest.raises(OperationDomainValidationError):
         containment_profile(h,10)
+
+def test_large_indexed_hypergraph_with_cheap_order_is_accepted():
+    vertices = tuple(f"v{i}" for i in range(256))
+    hypergraph = FiniteHypergraph(
+        vertices=vertices,
+        edges=tuple((f"e{i}", (vertices[i % 256],)) for i in range(12000)),
+    )
+    result = containment_profile(hypergraph, 1)
+    assert result.total_multiplicity == 12000

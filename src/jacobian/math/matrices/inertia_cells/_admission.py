@@ -144,6 +144,13 @@ def admit(
             )
     if total_bits > 1_000_000:
         raise reject_budget("source coefficients exceed one million component bits")
+    total_terms = sum(
+        len(entry.polynomial.terms) for row in matrix.entries for entry in row
+    )
+    if total_terms > 65_536:
+        raise reject_budget(
+            "source polynomial terms exceed the echoed-matrix allocation envelope"
+        )
     working = (
         specialize(matrix, interval.lower.as_fraction())
         if interval.lower == interval.upper

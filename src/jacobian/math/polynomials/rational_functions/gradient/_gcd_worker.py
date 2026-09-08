@@ -68,7 +68,9 @@ def _factor_payload(factor: Any, variable_count: int) -> dict[str, Any]:
     }
 
 
-def _remove_common_monomial(numerator: Any, denominator: Any, variable_count: int) -> Any:
+def _remove_common_monomial(
+    numerator: Any, denominator: Any, variable_count: int
+) -> Any:
     from sympy import Poly
 
     if numerator.is_zero:
@@ -87,7 +89,9 @@ def _remove_common_monomial(numerator: Any, denominator: Any, variable_count: in
     def divide(value: Any) -> Any:
         return Poly.from_dict(
             {
-                tuple(e - c for e, c in zip(exponents, common, strict=True)): coefficient
+                tuple(
+                    e - c for e, c in zip(exponents, common, strict=True)
+                ): coefficient
                 for exponents, coefficient in value.terms()
             },
             value.gens,
@@ -114,9 +118,7 @@ def _run(payload: dict[str, Any]) -> dict[str, Any]:
         denominator = _polynomial(records, variable_count, generators)
         return {
             "factors": [
-                _factor_payload(
-                    denominator.gcd(denominator.diff(axis)), variable_count
-                )
+                _factor_payload(denominator.gcd(denominator.diff(axis)), variable_count)
                 for axis in range(variable_count)
             ]
         }

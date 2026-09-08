@@ -153,8 +153,10 @@ class TestVertexOccurrences:
                 (oversized_nodes[index], oversized_nodes[index + 1])
                 for index in range(255)
             ),
-            bags=tuple((oversized_vertices[index],) for index in range(255))
-            + ((oversized_vertices[255], oversized_vertices[256]),),
+            bags=(
+                *((oversized_vertices[index],) for index in range(255)),
+                (oversized_vertices[255], oversized_vertices[256]),
+            ),
         )
         with pytest.raises(ValidationError, match="at most 256 source vertices"):
             VertexOccurrencesRequest(decomposition=oversized)

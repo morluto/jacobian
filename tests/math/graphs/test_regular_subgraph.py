@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import pytest
+
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.graphs.regular_subgraph._models import RegularSubgraphResult
 from jacobian.math.graphs.regular_subgraph.operations import (
     find_k_regular_subgraph,
@@ -101,3 +104,11 @@ def test_serialized_witness_claim_is_verified_against_its_graph() -> None:
     forged = result.model_dump(mode="json")
     forged["edges"] = [["a", "b"], ["b", "c"]]
     assert not verify_k_regular_subgraph(RegularSubgraphResult.model_validate(forged))
+
+
+def test_widened_path_is_refused_before_edge_subset_enumeration() -> None:
+    vertices = tuple(f"v{index:03d}" for index in range(257))
+    edges = [(vertices[index], vertices[index + 1]) for index in range(256)]
+    graph = _graph(list(vertices), edges)
+    with pytest.raises(OperationResourceAdmissionError, match="16 edges"):
+        find_k_regular_subgraph(graph, 2)

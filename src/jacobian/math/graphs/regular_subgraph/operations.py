@@ -4,11 +4,16 @@ from __future__ import annotations
 
 from itertools import combinations
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.graphs.regular_subgraph._models import (
     RegularSubgraphResult,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
+
+MAX_REGULAR_SUBGRAPH_EDGES = 16
 
 
 def find_k_regular_subgraph(
@@ -38,6 +43,15 @@ def find_k_regular_subgraph(
         )
     edges = list(graph.edges)
     n_edges = len(edges)
+    if n_edges > MAX_REGULAR_SUBGRAPH_EDGES:
+        raise OperationResourceAdmissionError(
+            location=("graph",),
+            code="graphs.regular_subgraph.edge_subset_work",
+            message=(
+                "k-regular subgraph search exceeds the admitted complete-search "
+                f"bound of {MAX_REGULAR_SUBGRAPH_EDGES} edges"
+            ),
+        )
 
     vertex_to_idx = {v: i for i, v in enumerate(vertices)}
 
@@ -104,7 +118,7 @@ def verify_k_regular_subgraph(claim: RegularSubgraphResult) -> bool:
     if not claim.found:
         try:
             return not find_k_regular_subgraph(claim.graph, claim.k).found
-        except OperationDomainValidationError:
+        except (OperationDomainValidationError, OperationResourceAdmissionError):
             return False
     vertices = set(claim.vertices)
     if not vertices or len(vertices) != len(claim.vertices):

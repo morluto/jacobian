@@ -157,8 +157,9 @@ def test_rank_eight_source_is_rejected_before_the_result_schema() -> None:
     source = tensor([0], ("COVARIANT",) * 8, axis=axis)
     with pytest.raises(OperationResourceAdmissionError, match="rank-8") as rejected:
         covariant_derivative(metric, source)
-    assert "covariant_derivative" in rejected.value.code
-    assert "curvature" not in rejected.value.code
+    assert rejected.value.errors()[0]["type"].endswith(
+        "covariant_derivative.shape"
+    )
 
 
 def test_singular_metric_after_expansion_is_a_domain_error() -> None:
@@ -208,10 +209,11 @@ def test_shared_inherited_guards_are_capped_on_their_union() -> None:
 
 def test_oversized_determinant_is_rejected_during_admission() -> None:
     x, y = symbols("x y")
-    dense = sum(x**power for power in range(20))
+    dense_x = sum(x**power for power in range(17))
+    dense_y = sum(y**power for power in range(17))
     metric = RationalCoordinateMetric(
         tensor=tensor(
-            [dense, y, y, dense],
+            [dense_x, 1, y, dense_y],
             ("COVARIANT", "COVARIANT"),
             axis=("x", "y"),
         )
@@ -220,5 +222,5 @@ def test_oversized_determinant_is_rejected_during_admission() -> None:
         OperationResourceAdmissionError, match="determinant locus"
     ) as rejected:
         covariant_derivative(metric, tensor([1], (), axis=("x", "y")))
-    assert rejected.value.code.endswith("determinant_locus")
+    assert rejected.value.errors()[0]["type"].endswith("determinant_locus")
 

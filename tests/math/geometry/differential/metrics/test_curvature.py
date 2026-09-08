@@ -340,7 +340,7 @@ def test_complete_locus_admitted_before_curvature_expansion() -> None:
     guards = canonical_locus_guards(
         tuple(
             rational_function_from_sympy(x + c, ("x", "y")).numerator
-            for c in range(1, 765)
+            for c in range(1, 769)
         ),
         variable_count=2,
     )
@@ -352,8 +352,9 @@ def test_complete_locus_admitted_before_curvature_expansion() -> None:
             retained_nonzero_denominators=guards,
         )
     )
-    # Shared formal denominator factors can reduce to distinct canonical
-    # denominators for different numerators. The complete locus has 769 guards.
+        # Shared formal denominator factors can reduce to distinct canonical
+        # denominators. The inherited family already saturates the 768-guard
+        # budget, so the independent xy determinant cannot be retained.
     with pytest.raises(OperationResourceAdmissionError, match="768 guards"):
         curvature_profile(source)
 

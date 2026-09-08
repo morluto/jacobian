@@ -1,5 +1,6 @@
 """Complete metric, inverse, connection and curvature DAG admission."""
 
+from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
 from fractions import Fraction
@@ -227,13 +228,20 @@ def build_plan(metric: RationalCoordinateMetric) -> Plan:
     for value in outputs:
         if not _has_nonconstant_denominator(dag, value):
             continue
-        for index in value.denominator:
+        for index, multiplicity in Counter(value.denominator).items():
             source = dag.nodes[index].source
-            output_keys.add(
-                _polynomial_key(source)
-                if source is not None
-                else ("canonical-result-denominator", index)
-            )
+            if source is None:
+                output_keys.add(("canonical-result-denominator", index, multiplicity))
+                continue
+            output_keys.add((_polynomial_key(source), multiplicity))
+            if len(source.terms) == 1:
+                exponents = source.terms[0].exponents
+                for axis, degree in enumerate(exponents):
+                    if degree:
+                        axis_exponents = tuple(
+                            int(i == axis) for i in range(len(exponents))
+                        )
+                        output_keys.add(((axis_exponents, "1", "1"),))
     potential_guards = len(inherited_keys | determinant_keys | output_keys)
     if potential_guards > 768:
         reject("locus", "complete retained curvature locus exceeds 768 guards")

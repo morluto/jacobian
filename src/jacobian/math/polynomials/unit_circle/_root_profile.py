@@ -1,0 +1,183 @@
+"""Exact root counts from Schur and real Hermite forms.
+
+Schur's signature is inside minus outside even for singular forms; its
+nullity is deliberately unused.  Cayley transformation and a real gcd
+identify the boundary separately.  See Heinig--Rost, *Bezoutians* (2008),
+Theorems 10.4 and 10.9. All matrix signatures use real-rooted Descartes
+variation on a division-free Berkowitz characteristic polynomial.
+"""
+
+from __future__ import annotations
+
+import time
+from math import gcd, lcm
+
+from pydantic import Field, StrictInt
+
+from jacobian._execution import (
+    OperationExecutionTimeoutError,
+    bind_request_deadline,
+    current_request_execution,
+    request_checkpoint,
+)
+from jacobian._models import StrictModel
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
+from jacobian.math.polynomials.unit_circle._root_profile_process import (
+    count_reduced_roots,
+)
+from jacobian.math.polynomials.values import RationalPolynomial
+
+
+class UnitDiskProfileRequest(StrictModel):
+    polynomial: RationalPolynomial
+
+
+class UnitDiskProfile(StrictModel):
+    """Root multiplicities in the three regions relative to the unit circle."""
+
+    polynomial: RationalPolynomial
+    degree: StrictInt = Field(ge=0)
+    inside: StrictInt = Field(ge=0)
+    on: StrictInt = Field(ge=0)
+    outside: StrictInt = Field(ge=0)
+
+
+def _resource(message: str) -> OperationResourceAdmissionError:
+    return OperationResourceAdmissionError(
+        location=("polynomial",),
+        code="polynomial.unit_disk.resource_admission",
+        message=message,
+    )
+
+
+def _admit(polynomial: RationalPolynomial) -> tuple[int, int, list[int]]:
+    """Inspect once, then expand only the exponent-compressed integer source.
+
+    Let h bound the primitive integer coefficients after removing rational
+    content, and n the reduced degree. Multiplication by a nonzero rational
+    scalar does not change the root profile, so height and work use that
+    primitive source. Mignotte bounds each primitive squarefree factor by
+    2**n ||p||_2.
+    Cayley substitution adds n+log2(n+1) bits; its real gcd gains the same
+    factor bound. Derivatives and Bezoutian sums add at most 2log2(n+1)
+    to twice that height. Berkowitz intermediates are sums of products of
+    at most n matrix entries, bounded by 2n(b+2log2(n+1)+2) bits.
+
+    In FLINT's squarefree loop, v is a primitive integer divisor of p.
+    Its w/s auxiliaries are weighted derivative sums, with weights <=n:
+    sum_j m_j f_j' product_{k!=j} f_k. Their coefficients are bounded by
+    n**2 * 2**n * M(v), and M(v)<=M(p)<=sqrt(n+1)*2**h. Thus the
+    factor height plus 2log2(n+1)+2 bounds every such auxiliary. Also the
+    sum of active v degrees across the loop is <=n (each factor appears
+    once per multiplicity), bounding the total modular gcd work by cubic
+    degree times operand height. The gcd dispatcher uses
+    bounded heuristic attempts then subresultant/modular gcd. The modular
+    termination bound is (n+3)*max(norm_squared_bits)+(n+1), including
+    unlucky primes; subresultant pseudo-division temporaries are bounded
+    by 4(n+1)**2 times operand height. This larger ceiling also covers
+    exact-division temporaries. No root separation or tolerance is used.
+
+    Work is a coefficient-operation/word-height proxy, not a bit-operation
+    claim. Sum of squarefree factor degrees is <=n, so their matrix work
+    is bounded by two order-n Berkowitz calls. Integer payload and dense
+    matrix allocations are admitted separately from transport policy.
+    """
+    terms = polynomial.polynomial.terms
+    if len(polynomial.variables) != 1 or not terms:
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="polynomial.unit_disk.nonzero_univariate_required",
+            message="a nonzero univariate rational polynomial is required",
+        )
+    if len(terms) > 4096:
+        raise _resource("source support exceeds 4096 terms")
+    valuation = terms[-1].exponents[0]
+    if len(terms) == 1:
+        # Canonical terms are nonzero. The coefficient is immaterial to
+        # the root multiset, including arbitrarily large rational scalars.
+        return valuation, 1, [1]
+    values = [term.coefficient.as_fraction() for term in terms]
+    stride = 0
+    for term in terms:
+        stride = gcd(stride, term.exponents[0] - valuation)
+    stride = stride or 1
+    degree = (terms[0].exponents[0] - valuation) // stride
+    numerator_content = 0
+    denominator = 1
+    for value in values:
+        numerator_content = gcd(numerator_content, value.numerator)
+        denominator = lcm(denominator, value.denominator)
+        # Bound lcm expansion of distinct denominators, not a shared scalar.
+        if denominator.bit_length() > 262_144:
+            raise _resource(
+                "derived exact-arithmetic work or intermediate height exceeds the envelope"
+            )
+    coefficients = [0] * (degree + 1)
+    for term, value in zip(terms, values, strict=True):
+        coefficients[(term.exponents[0] - valuation) // stride] = (
+            value.numerator // numerator_content
+        ) * (denominator // value.denominator)
+    content = gcd(*coefficients)
+    coefficients = [value // content for value in coefficients]
+    height = max(abs(value).bit_length() for value in coefficients)
+    if height > 65_536:
+        raise _resource("cleared coefficient height exceeds 65,536 bits")
+    if degree:
+        log = (degree + 1).bit_length()
+        factor_height = height + degree + log
+        cayley_height = factor_height + degree + log
+        boundary_height = cayley_height + degree + log
+        matrix_height = 2 * boundary_height + 2 * log + 2
+        characteristic_height = 2 * degree * (matrix_height + 2 * log + 2)
+        auxiliary_height = factor_height + 2 * log + 2
+        gcd_height = max(auxiliary_height, cayley_height)
+        intermediate_height = 4 * (degree + 1) ** 2 * (gcd_height + log + 64)
+        work = 16 * (degree + 1) ** 4 + 16 * (degree + 1) ** 3 * (
+            (gcd_height + 63) // 64
+        )
+        if work > 100_000_000 or intermediate_height > 16_777_216:
+            raise _resource(
+                "derived exact-arithmetic work or intermediate height exceeds the envelope"
+            )
+        # Recursive source submatrices coexist, but each Toeplitz product
+        # workspace is allocated only after its recursive child has returned.
+        allocation = (degree + 1) ** 3 * matrix_height + 4 * (
+            degree + 1
+        ) ** 2 * characteristic_height
+        if allocation > 268_435_456:
+            raise _resource(
+                "derived characteristic-polynomial allocation exceeds the envelope"
+            )
+    return valuation, stride, coefficients
+
+
+def unit_disk_profile(polynomial: RationalPolynomial) -> UnitDiskProfile:
+    """Count all roots inside, on and outside |z|=1, including multiplicity."""
+    execution = current_request_execution()
+    started = execution.started_at if execution is not None else time.monotonic()
+    deadline = started + 60.0
+    if execution is not None and execution.deadline is not None:
+        deadline = min(deadline, execution.deadline)
+
+    def checkpoint() -> None:
+        request_checkpoint("computing unit-disk root profile")
+        if time.monotonic() >= deadline:
+            raise OperationExecutionTimeoutError(
+                "unit-disk root profile deadline expired"
+            )
+
+    bind_request_deadline(deadline)
+    checkpoint()
+    valuation, stride, coefficients = _admit(polynomial)
+    inside, boundary, outside = count_reduced_roots(coefficients, deadline=deadline)
+    checkpoint()
+    return UnitDiskProfile(
+        polynomial=polynomial,
+        degree=polynomial.polynomial.terms[0].exponents[0],
+        inside=valuation + stride * inside,
+        on=stride * boundary,
+        outside=stride * outside,
+    )

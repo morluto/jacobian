@@ -232,6 +232,7 @@ ignore_imports = [
     "jacobian.math.topology.chain_complexes._smith_process -> jacobian.process",
     "jacobian.math.combinatorics.finite_structures.hypergraphs._independence_z3 -> jacobian.process",
     "jacobian.math.combinatorics.discrepancy._optimum_process -> jacobian.process",
+    "jacobian.math.combinatorics.discrepancy.bounded_coloring._process -> jacobian.process",
     "jacobian.math.combinatorics._counting_process -> jacobian.process",
     "jacobian.math.number_theory.galois._factor_process -> jacobian.process",
     "jacobian.math.number_theory.number_fields._discriminant_process -> jacobian.process",
@@ -261,9 +262,13 @@ ignore_imports = [
     "jacobian.math.geometry.differential.metrics._normalize_process -> jacobian.process",
     # Metric and covariant DAGs expand in one deadline-bound worker.
     "jacobian.math.geometry.differential.metrics._dag_evaluate_process -> jacobian.process",
+    # Metric DAG expansion and fraction normalization run in killable workers.
+    "jacobian.math.geometry.differential.metrics._dag_process -> jacobian.process",
+    "jacobian.math.polynomials.rational_functions.gradient._normalize_process -> jacobian.process",
     # Exact common-interlacing factorization and isolation run in one bounded worker.
     "jacobian.math.graphs.triangle_free_diameter_augmentation._augmentation_z3 -> jacobian.process",
     "jacobian.math.polynomials.real_algebra._common_interlacing_process -> jacobian.process",
+    "jacobian.math.polynomials.unit_circle._root_profile_process -> jacobian.process",
 ]
 
 [[tool.importlinter.contracts]]

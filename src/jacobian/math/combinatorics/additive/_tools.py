@@ -101,6 +101,14 @@ def _run_subset_sum_target(request: SubsetSumTargetRequest) -> SubsetSumTargetRe
 def _run_subset_sum_residue(
     request: SubsetSumResidueProfileRequest,
 ) -> SubsetSumResidueProfileResult:
+    if request.group is not None:
+        return subset_sum_residue_profile(
+            None,
+            None,
+            request.include_empty_subset,
+            group=request.group,
+            sequence=request.sequence,
+        )
     return subset_sum_residue_profile(
         request.source,
         request.modulus,
@@ -370,8 +378,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         description=(
             "Given a materialized indexed integer tuple and a positive modulus m, "
             "return the exact number of permitted index subsets in every residue "
-            "class of Z/mZ. Repeated values and zeros remain distinct positions; "
-            "the empty-subset convention is explicit. Optional witnesses are "
+            "class of Z/mZ. Alternatively, use parent-bound elements of a product "
+            "of cyclic groups and obtain a complete coordinate-indexed count table. "
+            "Repeated values and zeros remain distinct positions; "
+            "the empty-subset convention is explicit. Cyclic integer witnesses are "
             "canonical by minimizing sum(2**i for i in I). The dense recurrence "
             f"visits at most {MAX_RESIDUE_PROFILE_DP_CELLS:,} item-residue cells, "
             "with modulus at most "
@@ -402,6 +412,21 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "modulus": 5,
                     "include_empty_subset": False,
                     "include_witnesses": True,
+                },
+            ),
+            OperationExample(
+                name="klein_four_product_group",
+                description=(
+                    "The same indexed profile over C2 x C2, with complete rows for "
+                    "every coordinate and exact multiplicities."
+                ),
+                input={
+                    "group": {"moduli": ["2", "2"]},
+                    "sequence": [
+                        {"group": {"moduli": ["2", "2"]}, "coordinates": [1, 0]},
+                        {"group": {"moduli": ["2", "2"]}, "coordinates": [0, 1]},
+                    ],
+                    "include_empty_subset": True,
                 },
             ),
         ),

@@ -18,6 +18,9 @@ from jacobian.math.polynomials.rational_functions.gradient import (
     RationalFunctionGradient,
     gradient,
 )
+from jacobian.math.polynomials.rational_functions.gradient._kernel import (
+    _normalize_fraction,
+)
 from jacobian.math.polynomials.values import (
     RationalFunction,
     RationalPolynomialTerm,
@@ -186,7 +189,34 @@ def test_true_output_coefficient_boundary() -> None:
         gradient(_monomial_source(("x",), (64,), (0,), 10**127))
 
 
-def test_authored_common_factor_is_rejected() -> None:
+def test_repeated_linear_denominator_cancels_before_result_exponent() -> None:
+    x = symbols("x")
+    source = rational_function_from_sympy(1 / (x + 1) ** 33, ("x",))
+    result = _identity(source)
+    assert result.partial_derivatives[0] == rational_function_from_sympy(
+        -33 / (x + 1) ** 34, ("x",)
+    )
+    source = rational_function_from_sympy(1 / (x + 1) ** 35, ("x",))
+    result = _identity(source)
+    assert result.partial_derivatives[0] == rational_function_from_sympy(
+        -35 / (x + 1) ** 36, ("x",)
+    )
+    source = rational_function_from_sympy(1 / ((x + 1) ** 20 * (x + 2) ** 20), ("x",))
+    result = _identity(source)
+    assert result.partial_derivatives[0] == rational_function_from_sympy(
+        -20 * (2 * x + 3) / ((x + 1) ** 21 * (x + 2) ** 21), ("x",)
+    )
+    source = rational_function_from_sympy(1 / ((x + 1) ** 33 * (x + 2)), ("x",))
+    result = _identity(source)
+    assert result.partial_derivatives[0] == rational_function_from_sympy(
+        -(34 * x + 67) / ((x + 1) ** 34 * (x + 2) ** 2), ("x",)
+    )
+    x, y = symbols("x y")
+    source = rational_function_from_sympy(1 / (x + y) ** 33, ("x", "y"))
+    result = _identity(source)
+    assert result.partial_derivatives[0] == rational_function_from_sympy(
+        -33 / (x + y) ** 34, ("x", "y")
+    )
     source = _monomial_source(("x", "y"), (1, 1), (1, 0))
     with pytest.raises(OperationDomainValidationError, match="coprime"):
         gradient(source)
@@ -198,6 +228,23 @@ def test_authored_common_factor_is_rejected() -> None:
     )
     with pytest.raises(OperationDomainValidationError, match="coprime"):
         gradient(authored)
+
+
+def test_univariate_binomial_power_cancellation() -> None:
+    x = symbols("x")
+    source = rational_function_from_sympy(1 / (x**2 + 1) ** 17, ("x",))
+    result = gradient(source)
+    expected = rational_function_from_sympy(-34 * x / (x**2 + 1) ** 18, ("x",))
+    assert result.partial_derivatives == (expected,)
+    x, y = symbols("x y")
+    numerator = sum(x ** (2 * i) for i in range(32)) * sum(y**j for j in range(5))
+    source = rational_function_from_sympy(numerator / (x + 1) ** 33, ("x", "y"))
+    with pytest.raises(OperationResourceAdmissionError, match="term"):
+        gradient(source)
+    even_grid = sum(x ** (2 * a) * y ** (2 * b) for a in range(16) for b in range(16))
+    source = rational_function_from_sympy(even_grid / (x + y) ** 33, ("x", "y"))
+    with pytest.raises(OperationResourceAdmissionError, match="term"):
+        gradient(source)
 
 
 def test_shared_request_deadline() -> None:
@@ -221,18 +268,19 @@ def test_polar_metric_component_gradient() -> None:
 def test_general_branch_uses_the_bounded_cancellation_worker(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from jacobian.math.polynomials.rational_functions.gradient import _kernel
+    calls: list[int] = []
+    original = _normalize_fraction
 
-    calls: list[str] = []
-    original = _kernel.cancel_fraction
+    def wrapped(
+        source: RationalFunction, axis: int, *, deadline: float
+    ) -> RationalFunction:
+        calls.append(axis)
+        return original(source, axis, deadline=deadline)
 
-    def wrapped(*args: object, **kwargs: object) -> object:
-        owner = kwargs.get("owner")
-        assert owner == "rational gradient"
-        calls.append(str(owner))
-        return original(*args, **kwargs)
-
-    monkeypatch.setattr(_kernel, "cancel_fraction", wrapped)
+    monkeypatch.setattr(
+        "jacobian.math.polynomials.rational_functions.gradient.operations._normalize_fraction",
+        wrapped,
+    )
     x, y = symbols("x y")
     _identity(rational_function_from_sympy((x * x + y) / (x + y + 1), ("x", "y")))
-    assert calls
+    assert calls == [0, 1]

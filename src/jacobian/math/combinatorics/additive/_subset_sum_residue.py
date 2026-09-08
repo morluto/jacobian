@@ -178,10 +178,13 @@ def _bound_raw_witnesses(
 class SubsetSumResidueProfileRequest(StrictModel):
     """Request a complete indexed-subset multiplicity profile in ``Z/mZ``."""
 
-    source: Annotated[
-        IndexedIntegerSequence,
-        WithJsonSchema(indexed_sequence_item_ceiling(MAX_RESIDUE_PROFILE_ITEMS)),
-    ] | None = Field(
+    source: (
+        Annotated[
+            IndexedIntegerSequence,
+            WithJsonSchema(indexed_sequence_item_ceiling(MAX_RESIDUE_PROFILE_ITEMS)),
+        ]
+        | None
+    ) = Field(
         default=None,
         description=(
             "A materialized indexed integer tuple for cyclic Z/mZ requests. "

@@ -157,7 +157,7 @@ class Dag:
 
         # Recognition sees the authored numerator and denominator separately.
         # Preserve those raw bounds before structural factor cancellation can
-        # make a presentation such as x**2/x look constant. Source conversion
+        # make a presentation such as x/x look constant. Source conversion
         # is charged again here for the recognition backend; ``source`` owns
         # the separate conversion reservation used by the executor.
         raw_numerator = self.nodes[

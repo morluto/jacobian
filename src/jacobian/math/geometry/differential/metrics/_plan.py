@@ -1,5 +1,6 @@
 """Complete metric, inverse, connection and curvature DAG admission."""
 
+from collections import Counter
 from dataclasses import dataclass
 from fractions import Fraction
 from itertools import permutations, product
@@ -13,6 +14,7 @@ from jacobian.math.geometry.differential.metrics._dag import (
     reject,
 )
 from jacobian.math.geometry.differential.metrics._models import RationalCoordinateMetric
+from jacobian.math.geometry.differential.values import _polynomial_key
 from jacobian.math.polynomials.values import SparseRationalPolynomial
 
 
@@ -25,17 +27,59 @@ def singular() -> OperationDomainValidationError:
 
 
 def _has_nonconstant_denominator(dag: Dag, value: Expression) -> bool:
-    """Return whether an expression carries a genuine polynomial denominator.
-
-    Guard admission works on complete expressions, since distinct numerators
-    can canonicalize to distinct denominator factors even when the DAG shares
-    one denominator node.
-    """
+    """Return whether an expression carries a genuine polynomial denominator."""
 
     return any(
         any(degree for degree in dag.nodes[index].bound.degrees)
         for index in value.denominator
     )
+
+
+def _denominator_guard_identity(dag: Dag, value: Expression) -> object | None:
+    """Identify one retained output denominator without its numerator DAG.
+
+    A single sourced factor matches the inherited polynomial key. A repeated
+    or composite denominator keeps a distinct identity, matching the cancelled
+    component denominator that result construction retains.
+    """
+
+    factors: list[tuple[object, int]] = []
+    for index, multiplicity in sorted(Counter(value.denominator).items()):
+        if not any(dag.nodes[index].bound.degrees):
+            continue
+        source = dag.nodes[index].source
+        factor_key: object = (
+            _polynomial_key(source) if source is not None else ("dag-node", index)
+        )
+        factors.append((factor_key, multiplicity))
+    if not factors:
+        return None
+    if len(factors) == 1 and factors[0][1] == 1:
+        return factors[0][0]
+    return ("canonical-result-denominator", tuple(factors))
+
+
+def potential_locus_guard_keys(
+    dag: Dag,
+    inherited: tuple[SparseRationalPolynomial, ...],
+    determinant: Expression,
+    outputs: tuple[Expression, ...],
+) -> set[object]:
+    """Return the polynomial identities counted against the 768-guard cap."""
+
+    keys: set[object] = {_polynomial_key(guard) for guard in inherited}
+    for index in set(determinant.numerator):
+        source = dag.nodes[index].source
+        keys.add(
+            _polynomial_key(source) if source is not None else ("determinant", index)
+        )
+    for value in outputs:
+        if not _has_nonconstant_denominator(dag, value):
+            continue
+        identity = _denominator_guard_identity(dag, value)
+        if identity is not None:
+            keys.add(identity)
+    return keys
 
 
 @dataclass(frozen=True)
@@ -205,13 +249,13 @@ def build_plan(metric: RationalCoordinateMetric) -> Plan:
         )
     outputs = (*inverse, *connection, *riemann, *ricci, scalar)
     sizes = {value: dag.admit_output(value) for value in dict.fromkeys(outputs)}
-    potential_guard_expressions = {
-        value for value in outputs if _has_nonconstant_denominator(dag, value)
-    }
-    potential_guards = (
-        len(metric.tensor.retained_nonzero_denominators)
-        + len(set(det.numerator))
-        + len(potential_guard_expressions)
+    potential_guards = len(
+        potential_locus_guard_keys(
+            dag,
+            metric.tensor.retained_nonzero_denominators,
+            det,
+            outputs,
+        )
     )
     if potential_guards > 768:
         reject("locus", "complete retained curvature locus exceeds 768 guards")

@@ -1,4 +1,4 @@
-"""Standalone SymPy worker for admitted covariant-derivative DAG arithmetic."""
+"""Standalone SymPy worker for admitted rational metric DAG arithmetic."""
 
 from __future__ import annotations
 
@@ -184,7 +184,7 @@ def _run(payload: dict[str, Any]) -> dict[str, Any]:
         "determinants",
         "sources",
     }:
-        raise ValueError("malformed covariant-derivative request")
+        raise ValueError("malformed metric DAG request")
     from sympy import Symbol
 
     variables = payload["variables"]
@@ -236,7 +236,7 @@ def main() -> int:
     try:
         payload = json.loads(sys.stdin.buffer.read().decode("utf-8"))
         if not isinstance(payload, dict):
-            raise ValueError("malformed covariant-derivative request")
+            raise ValueError("malformed metric DAG request")
         response = _run(payload)
     except Exception:
         return 1

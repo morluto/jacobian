@@ -336,14 +336,15 @@ def test_four_dimensional_hyperbolic_metric() -> None:
 
 
 def test_complete_locus_admitted_before_curvature_expansion() -> None:
-    source = metric([x * y, 0, 0, x * y])
+    source = metric([x], ("x",))
     guards = canonical_locus_guards(
         tuple(
-            rational_function_from_sympy(x + c, ("x", "y")).numerator
-            for c in range(1, 765)
+            rational_function_from_sympy(x + offset, ("x",)).numerator
+            for offset in range(768)
         ),
-        variable_count=2,
+        variable_count=1,
     )
+    assert len(guards) == 768
     source = RationalCoordinateMetric(
         tensor=RationalCoordinateTensor(
             coordinate_axis=source.tensor.coordinate_axis,
@@ -352,7 +353,44 @@ def test_complete_locus_admitted_before_curvature_expansion() -> None:
             retained_nonzero_denominators=guards,
         )
     )
-    # Shared formal denominator factors can reduce to distinct canonical
-    # denominators for different numerators. The complete locus has 769 guards.
+    result = curvature_profile(source)
+    assert len(result.inverse_metric.retained_nonzero_denominators) == 768
+
+
+def test_a_new_metric_denominator_still_exceeds_the_curvature_guard_cap() -> None:
+    source = metric([x], ("x",))
+    guards = canonical_locus_guards(
+        tuple(
+            rational_function_from_sympy(x + offset, ("x",)).numerator
+            for offset in range(1, 769)
+        ),
+        variable_count=1,
+    )
+    assert len(guards) == 768
+    source = RationalCoordinateMetric(
+        tensor=RationalCoordinateTensor(
+            coordinate_axis=source.tensor.coordinate_axis,
+            variance=source.tensor.variance,
+            components=source.tensor.components,
+            retained_nonzero_denominators=guards,
+        )
+    )
     with pytest.raises(OperationResourceAdmissionError, match="768 guards"):
         curvature_profile(source)
+
+
+def test_curvature_expansion_runs_in_the_bounded_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.geometry.differential.metrics import operations as curvature_ops
+
+    def fail_closed(*args: Any, **kwargs: Any) -> None:
+        raise OperationExecutionTimeoutError(
+            "curvature deadline expired during polynomial DAG expansion"
+        )
+
+    monkeypatch.setattr(curvature_ops, "evaluate_admitted_rational_dag", fail_closed)
+    with pytest.raises(
+        OperationExecutionTimeoutError, match="during polynomial DAG expansion"
+    ):
+        curvature_profile(metric([1, 0, 0, 1]))

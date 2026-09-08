@@ -19,11 +19,11 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         operation_id="rational_function.gradient.compute",
         title="Differentiate a rational function in every coordinate",
         description=(
-            "Return the complete exact partial-derivative profile of a canonical "
-            "multivariate QQ rational function, retaining its source and ordered "
-            "coordinate axis. Normalize quotient-rule derivatives in the same "
-            "rational-function field. Constants on empty axes have empty gradients; "
-            "zero components retain all declared coordinates."
+            "Return the complete exact partial derivatives of a canonical "
+            "multivariate QQ rational function on its ordered coordinate axis. "
+            "Normalize quotient-rule derivatives in the same rational-function "
+            "field. Constants on empty axes have empty gradients; zero "
+            "components retain all declared coordinates."
         ),
         request_type=RationalGradientRequest,
         result_type=RationalFunctionGradient,

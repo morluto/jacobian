@@ -18,6 +18,7 @@ from jacobian.math.geometry.differential.rational_tensor.covariant_derivative im
 from jacobian.math.geometry.differential.values import (
     RationalCoordinateTensor,
     TensorVariance,
+    canonical_locus_guards,
 )
 from jacobian.math.polynomials._conversions import (
     rational_function_from_sympy,
@@ -165,3 +166,63 @@ def test_determinant_guards_are_capped_before_backend_expansion() -> None:
     )
     with pytest.raises(OperationResourceAdmissionError, match="determinant locus"):
         covariant_derivative(metric, tensor([1], (), axis=axis))
+
+
+def test_shared_output_denominators_do_not_double_count_locus_guards() -> None:
+    x, y = symbols("x y")
+    axis = ("x", "y")
+    inherited = canonical_locus_guards(
+        tuple(
+            rational_function_from_sympy(x + offset, axis).numerator
+            for offset in range(1, 767)
+        ),
+        (rational_function_from_sympy(x + y, axis).numerator,),
+        variable_count=2,
+    )
+    assert len(inherited) == 767
+    identity = RationalCoordinateMetric(
+        tensor=tensor([1, 0, 0, 1], ("COVARIANT", "COVARIANT"), axis=axis)
+    )
+    source = RationalCoordinateTensor(
+        coordinate_axis=axis,
+        variance=(),
+        components=(rational_function_from_sympy(1 / (x + y), axis),),
+        retained_nonzero_denominators=inherited,
+    )
+    result = covariant_derivative(identity, source)
+    assert len(result.retained_nonzero_denominators) == 768
+    assert expressions(result) == (-1 / (x + y) ** 2, -1 / (x + y) ** 2)
+
+
+def test_an_extra_distinct_output_denominator_still_exceeds_the_guard_cap() -> None:
+    x, y = symbols("x y")
+    axis = ("x", "y")
+    inherited = canonical_locus_guards(
+        tuple(
+            rational_function_from_sympy(x + offset, axis).numerator
+            for offset in range(1, 768)
+        ),
+        (rational_function_from_sympy(x + y, axis).numerator,),
+        variable_count=2,
+    )
+    assert len(inherited) == 768
+    identity = RationalCoordinateMetric(
+        tensor=tensor([1, 0, 0, 1], ("COVARIANT", "COVARIANT"), axis=axis)
+    )
+    source = RationalCoordinateTensor(
+        coordinate_axis=axis,
+        variance=(),
+        components=(rational_function_from_sympy(1 / (x + y), axis),),
+        retained_nonzero_denominators=inherited,
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="768 guards"):
+        covariant_derivative(identity, source)
+
+
+def test_package_exports_the_derivative_tensor_not_a_source_bound_profile() -> None:
+    from jacobian.math.geometry.differential.rational_tensor import (
+        covariant_derivative as package,
+    )
+
+    assert package.__all__ == ["covariant_derivative"]
+    assert not hasattr(package, "RationalCovariantDerivativeProfile")

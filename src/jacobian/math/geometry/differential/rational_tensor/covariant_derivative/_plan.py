@@ -13,6 +13,7 @@ from jacobian.math.geometry.differential.metrics._models import RationalCoordina
 from jacobian.math.geometry.differential.metrics._plan import (
     ConnectionPlan,
     build_connection_plan,
+    potential_locus_guard_keys,
 )
 from jacobian.math.geometry.differential.values import (
     MAX_RATIONAL_TENSOR_COEFFICIENT_DIGITS,
@@ -21,7 +22,6 @@ from jacobian.math.geometry.differential.values import (
     MAX_RATIONAL_TENSOR_POLYNOMIAL_TERMS,
     MAX_RATIONAL_TENSOR_RANK,
     RationalCoordinateTensor,
-    _polynomial_key,
 )
 from jacobian.math.polynomials.values import SparseRationalPolynomial
 
@@ -92,26 +92,18 @@ def _admit_outputs(
                 dag.dimension * (bound.terms + 1),
             )
         )
-    inherited_keys = {
-        _polynomial_key(guard)
-        for coordinate_tensor in (metric.tensor, tensor)
-        for guard in coordinate_tensor.retained_nonzero_denominators
-    }
-    determinant_keys: set[object] = set()
-    for index in set(determinant.numerator):
-        source = dag.nodes[index].source
-        determinant_keys.add(
-            _polynomial_key(source) if source is not None else ("determinant", index)
+    potential_guards = len(
+        potential_locus_guard_keys(
+            dag,
+            tuple(
+                guard
+                for coordinate_tensor in (metric.tensor, tensor)
+                for guard in coordinate_tensor.retained_nonzero_denominators
+            ),
+            determinant,
+            outputs,
         )
-    output_keys = {
-        ("canonical-result-denominator", value.numerator, value.denominator)
-        for value in outputs
-        if any(
-            any(degree for degree in dag.nodes[index].bound.degrees)
-            for index in value.denominator
-        )
-    }
-    potential_guards = len(inherited_keys | determinant_keys | output_keys)
+    )
     if potential_guards > 768:
         _covariant_reject(
             "locus", "complete covariant-derivative locus exceeds 768 guards"

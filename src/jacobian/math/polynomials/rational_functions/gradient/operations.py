@@ -18,7 +18,6 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.math.polynomials._conversions import sparse_rational_polynomial_to_sympy
 from jacobian.math.polynomials.rational_functions._bounds import (
     BoundsLedger,
     BoundWorkCategory,
@@ -33,12 +32,11 @@ from jacobian.math.polynomials.rational_functions._bounds import (
 from jacobian.math.polynomials.rational_functions._bounds import (
     _differentiate_fraction as _derivative_bound,
 )
-from jacobian.math.polynomials.rational_functions.gradient._kernel import (
-    _differentiate_fraction,
-    _normalize_fraction,
-)
 from jacobian.math.polynomials.rational_functions.gradient._models import (
     RationalFunctionGradient,
+)
+from jacobian.math.polynomials.rational_functions.gradient._process import (
+    evaluate_admitted_general_gradient,
 )
 from jacobian.math.polynomials.values import (
     RationalFunction,
@@ -206,28 +204,8 @@ def _admit_general_gradient(
     return tuple(components)
 
 
-def _general_gradient_admitted(
-    function: RationalFunction,
-) -> tuple[RationalFunction, ...]:
-    """Recognize and differentiate after the caller's whole-profile admission."""
-    _recognize_source(function)
-    request_checkpoint("after rational gradient source recognition")
-    numerator = sparse_rational_polynomial_to_sympy(
-        function.numerator, function.variables
-    )
-    denominator = sparse_rational_polynomial_to_sympy(
-        function.denominator, function.variables
-    )
-    return tuple(
-        _normalize_fraction(
-            *_differentiate_fraction(numerator, denominator, axis), function.variables
-        )
-        for axis in range(len(function.variables))
-    )
-
-
 def gradient(function: RationalFunction) -> RationalFunctionGradient:
-    """Return every exact coordinate partial derivative with its retained source."""
+    """Return every exact coordinate partial derivative on the declared axis."""
     execution = current_request_execution()
     if execution is None:
         with request_execution(time.monotonic()):
@@ -244,9 +222,9 @@ def gradient(function: RationalFunction) -> RationalFunctionGradient:
     else:
         ledger = _Ledger()
         _admit_general_gradient(function, ledger)
-        derivatives = _general_gradient_admitted(function)
+        derivatives = evaluate_admitted_general_gradient(function, deadline=deadline)
     result = RationalFunctionGradient(
-        source=function, variables=function.variables, partial_derivatives=derivatives
+        variables=function.variables, partial_derivatives=derivatives
     )
     request_checkpoint("after rational gradient construction")
     return result

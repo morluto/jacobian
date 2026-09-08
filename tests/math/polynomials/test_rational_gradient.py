@@ -59,7 +59,7 @@ def _derivative(a: Coefficients, axis: int) -> Coefficients:
 
 def _identity(source: RationalFunction) -> RationalFunctionGradient:
     result = gradient(source)
-    assert result.source == source
+    assert "source" not in result.model_dump()
     assert result.variables == source.variables
     p, q = _coefficients(source.numerator), _coefficients(source.denominator)
     for axis, component in enumerate(result.partial_derivatives):
@@ -216,3 +216,16 @@ def test_polar_metric_component_gradient() -> None:
         2 * r, ("r", "theta")
     )
     assert not result.partial_derivatives[1].numerator.terms
+
+
+def test_general_gradient_recognizes_and_cancels_in_the_bounded_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.polynomials.rational_functions.gradient import operations as ops
+
+    def fail_server_gcd(value: RationalFunction) -> RationalFunction:
+        raise AssertionError("general-gradient gcd must not run in the server process")
+
+    monkeypatch.setattr(ops, "require_canonical_rational_function", fail_server_gcd)
+    x, y = symbols("x y")
+    _identity(rational_function_from_sympy((x * x + y) / (x - y), ("x", "y")))

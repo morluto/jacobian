@@ -132,7 +132,7 @@ def _admit(
     exposing_bits = 2 * input_bits + max(1, max(len(active), 1).bit_length())
     minor_bits = max(1, n * (exposing_bits + n.bit_length()))
     matrix_bits = []
-    for matrix, multiplier in zip(system.matrices, multipliers, strict=True):
+    for matrix in system.matrices:
         dens = {entry.den for row in matrix.entries for entry in row}
         aggregate_denominators = sum((den - 1).bit_length() for den in dens if den != 1)
         entry_bits = max(

@@ -22,8 +22,24 @@ def require_edge_colors(value: ColoredUndirectedGraph) -> None:
 
 
 class EdgeColoredPatternRequest(StrictModel):
-    pattern: ColoredUndirectedGraph
-    host: ColoredUndirectedGraph
+    """An edge-color-preserving embedding request.
+
+    Both sources require a nonempty total edge coloring (a bijection from
+    the nonempty edge set onto its color set) and the empty vertex coloring.
+    """
+
+    pattern: ColoredUndirectedGraph = Field(
+        description=(
+            "Pattern graph. The total edge coloring is a bijection from the "
+            "nonempty edge set onto its colors, and vertex colors must be empty."
+        ),
+    )
+    host: ColoredUndirectedGraph = Field(
+        description=(
+            "Host graph. The total edge coloring is a bijection from the "
+            "nonempty edge set onto its colors, and vertex colors must be empty."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_color_domain(self) -> Self:

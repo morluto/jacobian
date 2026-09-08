@@ -294,9 +294,7 @@ def _admit_unit_threshold_chromatic(request: ChromaticBipartitionRequest) -> Non
     vertices = request.graph.vertices
     for index in range(len(vertices)):
         _, side_b = _unit_threshold_remainder(vertices, index)
-        if _unit_threshold_core_is_admitted(
-            _induced_edge_core(request.graph, side_b)
-        ):
+        if _unit_threshold_core_is_admitted(_induced_edge_core(request.graph, side_b)):
             return
     _refuse_chromatic_bipartition_work()
 

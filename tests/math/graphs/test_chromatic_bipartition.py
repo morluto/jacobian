@@ -197,7 +197,7 @@ def test_unit_threshold_triangle_plus_isolates_is_exact_without_backend_overflow
     None
 ):
     isolates = tuple(f"u{i:02d}" for i in range(31))
-    source = graph(isolates + ("x", "y", "z"), (("x", "y"), ("x", "z"), ("y", "z")))
+    source = graph((*isolates, "x", "y", "z"), (("x", "y"), ("x", "z"), ("y", "z")))
     result = find_chromatic_bipartition(
         ChromaticBipartitionRequest(graph=source, s=1, t=1)
     )
@@ -208,15 +208,31 @@ def test_unit_threshold_triangle_plus_isolates_is_exact_without_backend_overflow
     assert result.model_validate_json(result.model_dump_json()) == result
 
 
-def test_unit_threshold_core_above_backend_order_is_refused() -> None:
+def test_unit_threshold_tries_another_singleton_before_backend_overflow() -> None:
     isolated = "iso"
     cycle = tuple(f"c{i:02d}" for i in range(33))
-    edges = tuple((cycle[index], cycle[index + 1]) for index in range(32)) + (
+    edges = (
+        *((cycle[index], cycle[index + 1]) for index in range(32)),
         (cycle[0], cycle[32]),
     )
-    request = ChromaticBipartitionRequest(
-        graph=graph((isolated,) + cycle, edges), s=1, t=1
+    result = find_chromatic_bipartition(
+        ChromaticBipartitionRequest(graph=graph((isolated, *cycle), edges), s=1, t=1)
     )
+    assert result.status == "SPLIT"
+    assert result.chromatic_a == 1
+    assert result.chromatic_b == 2
+    assert len(result.side_a) == 1
+    assert result.model_validate_json(result.model_dump_json()) == result
+
+
+def test_unit_threshold_nonbipartite_core_above_backend_order_is_refused() -> None:
+    vertices = tuple(f"v{i:02d}" for i in range(34))
+    edges = tuple(
+        (vertices[left], vertices[right])
+        for left in range(34)
+        for right in range(left + 1, 34)
+    )
+    request = ChromaticBipartitionRequest(graph=graph(vertices, edges), s=1, t=1)
     with pytest.raises(OperationResourceAdmissionError, match="complete-search work"):
         find_chromatic_bipartition(request)
 

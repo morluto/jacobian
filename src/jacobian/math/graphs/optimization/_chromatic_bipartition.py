@@ -227,33 +227,52 @@ def _exact_induced_chromatic(
     return _chromatic_number(core, request, started)
 
 
+def _unit_threshold_remainder(
+    vertices: tuple[str, ...], index: int
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    side_a = (vertices[index],)
+    side_b = vertices[:index] + vertices[index + 1 :]
+    return side_a, side_b
+
+
+def _unit_threshold_core_is_admitted(core: SimpleUndirectedGraph) -> bool:
+    if not core.edges or _is_bipartite(core):
+        return True
+    if len(core.vertices) > MAX_CHROMATIC_BACKEND_ORDER:
+        return False
+    return _chromatic_search_work(len(core.vertices), len(core.edges)) <= (
+        MAX_CHROMATIC_BIPARTITION_WORK
+    )
+
+
 def _unit_threshold_bipartition(
     request: ChromaticBipartitionRequest,
 ) -> ChromaticBipartitionResult:
-    """Split off a singleton and report exact induced chromatic numbers."""
+    """Split off a singleton whose remainder has an exact cheap chromatic number."""
 
     vertices = request.graph.vertices
-    side_a = (vertices[0],)
-    side_b = vertices[1:]
     started = time.monotonic()
-    chromatic_b = _exact_induced_chromatic(request.graph, side_b, request, started)
-    if chromatic_b is None:
+    for index in range(len(vertices)):
+        side_a, side_b = _unit_threshold_remainder(vertices, index)
+        chromatic_b = _exact_induced_chromatic(request.graph, side_b, request, started)
+        if chromatic_b is None:
+            continue
         return ChromaticBipartitionResult(
             graph=request.graph,
             s=request.s,
             t=request.t,
-            status="UNKNOWN",
+            status="SPLIT",
+            side_a=side_a,
+            side_b=side_b,
+            chromatic_a=1,
+            chromatic_b=chromatic_b,
             checked_partitions=0,
         )
     return ChromaticBipartitionResult(
         graph=request.graph,
         s=request.s,
         t=request.t,
-        status="SPLIT",
-        side_a=side_a,
-        side_b=side_b,
-        chromatic_a=1,
-        chromatic_b=chromatic_b,
+        status="UNKNOWN",
         checked_partitions=0,
     )
 
@@ -270,16 +289,16 @@ def _refuse_chromatic_bipartition_work() -> None:
 
 
 def _admit_unit_threshold_chromatic(request: ChromaticBipartitionRequest) -> None:
-    """Charge the singleton-versus-rest coloring search before the worker."""
+    """Admit a singleton split whose remainder is cheaply colorable."""
 
-    core = _induced_edge_core(request.graph, request.graph.vertices[1:])
-    if not core.edges or _is_bipartite(core):
-        return
-    if len(core.vertices) > MAX_CHROMATIC_BACKEND_ORDER:
-        _refuse_chromatic_bipartition_work()
-    work = _chromatic_search_work(len(core.vertices), len(core.edges))
-    if work > MAX_CHROMATIC_BIPARTITION_WORK:
-        _refuse_chromatic_bipartition_work()
+    vertices = request.graph.vertices
+    for index in range(len(vertices)):
+        _, side_b = _unit_threshold_remainder(vertices, index)
+        if _unit_threshold_core_is_admitted(
+            _induced_edge_core(request.graph, side_b)
+        ):
+            return
+    _refuse_chromatic_bipartition_work()
 
 
 def _admit_chromatic_bipartition(request: ChromaticBipartitionRequest) -> None:

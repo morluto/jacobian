@@ -313,6 +313,25 @@ def test_canonical_labels_stay_sorted_across_the_three_digit_boundary() -> None:
     ColoredGraphCanonicalizationResult.model_validate_json(result.model_dump_json())
 
 
+def test_canonicalization_preserves_256_vertex_relabeling_envelope() -> None:
+    vertices = tuple(f"w{index:03d}" for index in range(256))
+    colors = tuple(f"c{index:03d}" for index in range(256))
+    result = _canonicalize(_graph(vertices, (), vertex_colors=colors))
+    assert len(result.relabeling) == 256
+    ColoredGraphCanonicalizationResult.model_validate_json(result.model_dump_json())
+    ColoredGraphCanonicalizationRequest(
+        colored_graph=_graph(vertices, (), vertex_colors=colors)
+    )
+
+    oversized_vertices = tuple(f"w{index:03d}" for index in range(257))
+    oversized_colors = tuple(f"c{index:03d}" for index in range(257))
+    oversized = _graph(oversized_vertices, (), vertex_colors=oversized_colors)
+    with pytest.raises(ValidationError, match="at most 256 vertices"):
+        ColoredGraphCanonicalizationRequest(colored_graph=oversized)
+    with pytest.raises(ValidationError, match="at most 256 vertices"):
+        canonicalize_colored_graph(oversized)
+
+
 def test_request_rejects_edge_key_work_before_enumeration() -> None:
     eight_vertices = tuple(f"v{index:02d}" for index in range(8))
     nine_vertices = tuple(f"v{index:02d}" for index in range(9))

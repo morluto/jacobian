@@ -6,7 +6,12 @@ from typing import Any, cast
 
 import networkx as nx
 
-from jacobian.math.graphs.values import GraphCompositionOperation, SimpleUndirectedGraph
+from jacobian.math.graphs.values import (
+    MAX_ENCODED_SIMPLE_GRAPH_EDGES,
+    MAX_ENCODED_SIMPLE_GRAPH_VERTICES,
+    GraphCompositionOperation,
+    SimpleUndirectedGraph,
+)
 
 
 def simple_graph(graph: nx.Graph[Any]) -> nx.Graph[Any]:
@@ -66,6 +71,62 @@ def is_eulerian(graph: nx.Graph[Any]) -> bool:
     return bool(nx.is_eulerian(g))
 
 
+def _composition_result_size(
+    operation: GraphCompositionOperation,
+    left: SimpleUndirectedGraph,
+    right: SimpleUndirectedGraph | None,
+) -> tuple[int, int]:
+    """Return the exact vertex and edge counts of one composition result."""
+
+    left_order = len(left.vertices)
+    left_edges = len(left.edges)
+    if operation == "COMPLEMENT":
+        if right is not None:
+            raise ValueError("complement does not accept a right graph")
+        return left_order, left_order * (left_order - 1) // 2 - left_edges
+    if right is None:
+        if operation == "DISJOINT_UNION":
+            raise ValueError("disjoint union requires a right graph")
+        if operation == "JOIN":
+            raise ValueError("join requires a right graph")
+        if operation == "LEXICOGRAPHIC_PRODUCT":
+            raise ValueError("lexicographic product requires a right graph")
+        raise ValueError(f"unsupported composition operation: {operation}")
+    right_order = len(right.vertices)
+    right_edges = len(right.edges)
+    if operation == "DISJOINT_UNION":
+        return left_order + right_order, left_edges + right_edges
+    if operation == "JOIN":
+        return (
+            left_order + right_order,
+            left_edges + right_edges + left_order * right_order,
+        )
+    if operation == "LEXICOGRAPHIC_PRODUCT":
+        return (
+            left_order * right_order,
+            left_order * right_edges + left_edges * right_order * right_order,
+        )
+    raise ValueError(f"unsupported composition operation: {operation}")
+
+
+def _admit_composition_result(
+    operation: GraphCompositionOperation,
+    left: SimpleUndirectedGraph,
+    right: SimpleUndirectedGraph | None,
+) -> None:
+    order, edges = _composition_result_size(operation, left, right)
+    if order > MAX_ENCODED_SIMPLE_GRAPH_VERTICES:
+        raise ValueError(
+            "composition result exceeds the "
+            f"{MAX_ENCODED_SIMPLE_GRAPH_VERTICES}-vertex graph encoding bound"
+        )
+    if edges > MAX_ENCODED_SIMPLE_GRAPH_EDGES:
+        raise ValueError(
+            "composition result exceeds the "
+            f"{MAX_ENCODED_SIMPLE_GRAPH_EDGES}-edge graph encoding bound"
+        )
+
+
 def compose_graphs(
     operation: GraphCompositionOperation,
     left_value: SimpleUndirectedGraph,
@@ -73,6 +134,7 @@ def compose_graphs(
 ) -> SimpleUndirectedGraph:
     """Apply one composition and return its canonical semantic graph value."""
 
+    _admit_composition_result(operation, left_value, right_value)
     left = graph_from_value(left_value)
     right = graph_from_value(right_value) if right_value is not None else None
     if operation == "DISJOINT_UNION":

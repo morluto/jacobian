@@ -15,7 +15,11 @@ from jacobian.math.graphs.rooted_trees.values import (
     RootedTreeNotATree,
     RootedTreeShrub,
 )
-from jacobian.math.graphs.values import MAX_GRAPH_LABEL_BYTES, SimpleUndirectedGraph
+from jacobian.math.graphs.values import (
+    MAX_GRAPH_LABEL_BYTES,
+    MAX_SIMPLE_GRAPH_VERTICES,
+    SimpleUndirectedGraph,
+)
 
 type _Adjacency = dict[str, tuple[str, ...]]
 
@@ -35,6 +39,15 @@ def _plan_request(
             location=("graph", "vertices"),
             code="graph.rooted_tree.fine_partition.nonempty_graph",
             message="fine-partition construction requires a nonempty graph",
+        )
+    if len(graph.vertices) > MAX_SIMPLE_GRAPH_VERTICES:
+        raise OperationDomainValidationError(
+            location=("graph", "vertices"),
+            code="graph.rooted_tree.fine_partition.vertex_bound",
+            message=(
+                "fine-partition construction supports at most "
+                f"{MAX_SIMPLE_GRAPH_VERTICES} vertices"
+            ),
         )
     if root not in graph.vertices:
         raise OperationDomainValidationError(
@@ -76,7 +89,7 @@ def _plan_request(
                 ),
             )
 
-    # The canonical graph owner bounds n by 256 and m by n-choose-2. A tree
+    # Computational admission retains the 256-vertex result envelope: a tree
     # result has m=n-1, at most n-1 shrubs, exactly n seed-or-shrub vertex rows,
     # exactly m classified edge rows, and at most m boundary-seed incidences.
     # Graph scans and materialized intermediates are O(n+m); lexical canonical
@@ -381,8 +394,7 @@ def construct_fine_partition(
     plan = _plan_request(graph, root, component_size_limit)
 
     if not plan.connected or plan.has_cycle:
-        non_tree_outcome = RootedTreeNotATree.model_construct(
-            status="NOT_A_TREE",
+        non_tree_outcome = RootedTreeNotATree(
             connected=plan.connected,
             has_cycle=plan.has_cycle,
             component_count=plan.component_count,

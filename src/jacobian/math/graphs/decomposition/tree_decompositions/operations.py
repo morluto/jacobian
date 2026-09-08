@@ -13,7 +13,7 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.graphs.values import MAX_SIMPLE_GRAPH_VERTICES, SimpleUndirectedGraph
 
 from ._models import (
     Adhesion,
@@ -132,6 +132,15 @@ def vertex_occurrences(
     """Return per-source-vertex occurrence subtree node set, induced tree edges,
     occurrence counts, and leaf/extremal nodes."""
     _admit_decomposition(td)
+    if len(td.graph.vertices) > MAX_SIMPLE_GRAPH_VERTICES:
+        raise OperationDomainValidationError(
+            location=("decomposition", "graph", "vertices"),
+            code="graph.tree_decomposition.vertex_occurrences.vertex_bound",
+            message=(
+                "vertex-occurrence profiles support at most "
+                f"{MAX_SIMPLE_GRAPH_VERTICES} source vertices"
+            ),
+        )
     int_edges = _int_edges(td)
     adjacency: dict[int, list[int]] = {i: [] for i in range(len(td.tree_nodes))}
     for a, b in int_edges:

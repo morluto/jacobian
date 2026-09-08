@@ -8,7 +8,10 @@ from jacobian.math.graphs.isomorphism._canonicalization import (
     canonical_permutation_count,
     canonicalization_work,
 )
-from jacobian.math.graphs.values import ColoredUndirectedGraph
+from jacobian.math.graphs.values import (
+    MAX_SIMPLE_GRAPH_VERTICES,
+    ColoredUndirectedGraph,
+)
 
 
 def require_admitted_colored_graph_canonicalization(
@@ -16,6 +19,12 @@ def require_admitted_colored_graph_canonicalization(
 ) -> None:
     """Check the full execution and canonical-result envelope for ``graph``."""
 
+    if len(graph.graph.vertices) > MAX_SIMPLE_GRAPH_VERTICES:
+        raise PydanticCustomError(
+            "graph.colored_canonicalization.vertex_bound",
+            "colored-graph canonicalization supports at most "
+            f"{MAX_SIMPLE_GRAPH_VERTICES} vertices",
+        )
     candidate_count = canonical_permutation_count(graph)
     if candidate_count > MAX_CANONICAL_PERMUTATIONS:
         raise PydanticCustomError(

@@ -2,7 +2,7 @@
 
 from typing import Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StrictInt, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
@@ -17,7 +17,7 @@ class HyperedgeColorAssignment(StrictModel):
     """A colour index attached to an explicit source hyperedge identity."""
 
     edge_id: str = Field(max_length=64)
-    color_index: int = Field(ge=0, lt=MAX_EDGES)
+    color_index: StrictInt = Field(ge=0, lt=MAX_EDGES)
 
 
 class IndexedHyperedgeColoring(StrictModel):
@@ -31,7 +31,7 @@ class IndexedHyperedgeColoring(StrictModel):
     """
 
     hypergraph: FiniteHypergraph
-    color_count: int = Field(ge=0, le=MAX_EDGES)
+    color_count: StrictInt = Field(ge=0, le=MAX_EDGES)
     assignments: tuple[HyperedgeColorAssignment, ...] = Field(max_length=MAX_EDGES)
 
     @model_validator(mode="after")

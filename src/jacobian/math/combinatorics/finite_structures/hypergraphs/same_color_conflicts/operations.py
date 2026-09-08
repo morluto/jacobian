@@ -11,7 +11,10 @@ from jacobian._execution import (
     current_request_execution,
     request_checkpoint,
 )
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     MAX_EDGES,
     MAX_TOTAL_INCIDENCES,
@@ -73,9 +76,6 @@ def _admit(coloring: IndexedHyperedgeColoring, deadline: float) -> _Plan:
     groups: list[list[int]] = [[] for _ in range(coloring.color_count)]
     for index, assignment in enumerate(coloring.assignments):
         groups[assignment.color_index].append(index)
-    pair_count = sum(len(group) * (len(group) - 1) // 2 for group in groups)
-    if pair_count > MAX_CONFLICT_PAIRS:
-        _reject("complete same-colour source-pair provenance exceeds 65536 rows")
     positions = {
         label: index for index, label in enumerate(coloring.hypergraph.vertices)
     }
@@ -83,6 +83,21 @@ def _admit(coloring: IndexedHyperedgeColoring, deadline: float) -> _Plan:
         sum(1 << positions[label] for label in members)
         for _, members in coloring.hypergraph.edges
     )
+    for group in groups:
+        empty = sum(1 for index in group if masks[index] == 0)
+        if empty >= 2:
+            raise OperationDomainValidationError(
+                location=("coloring",),
+                code="same_color_conflicts.empty_source_pair",
+                message=(
+                    "two same-coloured empty source edges yield an empty conflict "
+                    "edge, which the hypergraph carrier and independence_number "
+                    "do not represent"
+                ),
+            )
+    pair_count = sum(len(group) * (len(group) - 1) // 2 for group in groups)
+    if pair_count > MAX_CONFLICT_PAIRS:
+        _reject("complete same-colour source-pair provenance exceeds 65536 rows")
     candidates: list[int] = []
     for group in groups:
         _checkpoint(deadline, "during compressed union planning")
@@ -90,7 +105,9 @@ def _admit(coloring: IndexedHyperedgeColoring, deadline: float) -> _Plan:
             (mask, len(tuple(duplicates)))
             for mask, duplicates in groupby(sorted(masks[index] for index in group))
         )
-        candidates.extend(mask for mask, multiplicity in types if multiplicity > 1)
+        candidates.extend(
+            mask for mask, multiplicity in types if multiplicity > 1 and mask
+        )
         candidates.extend(left[0] | right[0] for left, right in combinations(types, 2))
     unions = tuple(mask for mask, _ in groupby(sorted(candidates)))
     if len(unions) > MAX_EDGES:
@@ -122,6 +139,7 @@ def construct(coloring: IndexedHyperedgeColoring) -> SameColorConflictsResult:
         (left, right, color)
         for color, group in enumerate(plan.groups)
         for left, right in combinations(group, 2)
+        if plan.masks[left] | plan.masks[right]
     )
     provenance: list[SameColorConflictProvenance] = []
     for left, right, color in pairs:

@@ -393,5 +393,7 @@ def test_widened_path_is_refused_before_diameter_presolve() -> None:
     vertices = tuple(f"v{index:05d}" for index in range(257))
     edges = tuple((vertices[index], vertices[index + 1]) for index in range(256))
     source = SimpleUndirectedGraph(vertices=vertices, edges=edges)
-    with pytest.raises(OperationDomainValidationError, match="order at most 12"):
+    with pytest.raises(
+        OperationDomainValidationError, match="declared max_order budget"
+    ):
         triangle_free_diameter_augmentation(source, 12)

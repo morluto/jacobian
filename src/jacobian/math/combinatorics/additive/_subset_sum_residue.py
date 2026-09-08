@@ -350,9 +350,6 @@ class SubsetSumResidueProfileResult(StrictModel):
                     witnesses.append(raw_witness)
             prepared["residue_witnesses"] = tuple(witnesses)
 
-        if prepared.get("group") is not None or prepared.get("group_rows") is not None:
-            return prepared
-
         source_shape = _raw_source_shape(prepared.get("source"))
         item_count = (
             source_shape
@@ -366,14 +363,23 @@ class SubsetSumResidueProfileResult(StrictModel):
             and 1 <= raw_modulus <= MAX_RESIDUE_PROFILE_MODULUS
             else None
         )
+        product_mode = (
+            prepared.get("group") is not None or prepared.get("group_rows") is not None
+        )
+        counts = prepared.get("residue_counts")
+        witnesses = prepared.get("residue_witnesses")
+        if product_mode and not (
+            (isinstance(counts, (list, tuple)) and counts) or witnesses is not None
+        ):
+            return prepared
 
         _bound_raw_counts(
-            prepared.get("residue_counts"),
+            counts,
             expected_rows=expected_rows,
             item_count=item_count,
         )
         _bound_raw_witnesses(
-            prepared.get("residue_witnesses"),
+            witnesses,
             expected_rows=expected_rows,
             item_count=item_count,
         )

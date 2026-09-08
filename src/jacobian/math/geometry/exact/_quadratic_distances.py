@@ -70,7 +70,9 @@ def _admit(
     # bounded before polynomial field multiplication, and is retained rather
     # than repeated. This accepts a large common translation of small points.
     request_checkpoint("before quadratic distance admission")
-    require_square_free_radicand(configuration.radicand)
+    require_square_free_radicand(
+        configuration.radicand, location=("configuration", "radicand")
+    )
     rows = []
     output_bits = 0
     for i, j in combinations(range(len(configuration.points)), 2):
@@ -176,7 +178,9 @@ def quadratic_distance_graph(
             message="target and coordinates must use the same quadratic field",
         )
     with _deadline():
-        plan = _admit(configuration, retain_values=False)
+        require_square_free_radicand(
+            configuration.radicand, location=("configuration", "radicand")
+        )
         wanted = (
             target.rational_part.as_fraction(),
             target.radical_coefficient.as_fraction(),
@@ -188,6 +192,7 @@ def quadratic_distance_graph(
                 code="geometry.squared_distance_target_nonnegative",
                 message="squared distance target must be nonnegative",
             )
+        plan = _admit(configuration, retain_values=False)
         edges = []
         for row in plan:
             request_checkpoint("during exact quadratic distance selection")

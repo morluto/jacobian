@@ -184,6 +184,17 @@ def test_mixed_and_non_square_free_fields_reject() -> None:
         distance_graph(source, value(1, d=2))
     with pytest.raises(OperationDomainValidationError, match="nonnegative"):
         distance_graph(source, value(-1))
+    heavy = configuration(
+        tuple(
+            (
+                value(Fraction(1, 10**250 + i + 3)),
+                value(Fraction(1, 10**249 + i + 5)),
+            )
+            for i in range(64)
+        )
+    )
+    with pytest.raises(OperationDomainValidationError, match="nonnegative"):
+        distance_graph(heavy, value(-1))
 
 
 def test_existing_operation_ids_accept_quadratic_sources_and_retain_types() -> None:

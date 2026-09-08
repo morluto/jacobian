@@ -7,6 +7,7 @@ from fractions import Fraction
 from itertools import permutations, product
 from typing import NoReturn
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.differential.metrics._dag import (
     ONE,
@@ -45,6 +46,81 @@ def _has_nonconstant_denominator(dag: Dag, value: Expression) -> bool:
     )
 
 
+def _generated_polynomial_key(
+    dag: Dag, index: int
+) -> tuple[tuple[tuple[int, ...], str, str], ...] | None:
+    """Recognize small linear combinations of source polynomials before caps.
+
+    Products and derivatives retain their opaque DAG identity. This optional
+    presolve admits its entire traversal and rational arithmetic before work;
+    it does not expand the general metric computation in the parent process.
+    """
+    pending = [index]
+    needed: set[int] = set()
+    work = 0
+    while pending:
+        current = pending.pop()
+        if current in needed:
+            continue
+        node = dag.nodes[current]
+        if node.operation not in {"SOURCE", "ZERO", "ONE", "ADD", "SCALE"}:
+            return None
+        needed.add(current)
+        content = node.bound.rational_content
+        digits = (
+            node.bound.coefficient_digits
+            + len(format_canonical_integer(abs(content.numerator)))
+            + len(format_canonical_integer(content.denominator))
+        )
+        # Include coefficient addition/scaling, rational normalization, and
+        # the final monic-key division. Oversized presolves keep the old key.
+        work += 4 * max(1, node.bound.terms) * (digits + 1) ** 2
+        if len(needed) > 64 or node.bound.terms > 256 or work > 100_000:
+            return None
+        pending.extend(node.arguments)
+    dag.ledger.charge("recognition", work)
+    values: dict[int, dict[tuple[int, ...], Fraction]] = {}
+    for current in sorted(needed):
+        node = dag.nodes[current]
+        if node.source is not None:
+            terms = {
+                term.exponents: term.coefficient.as_fraction()
+                for term in node.source.terms
+            }
+        elif node.operation == "ONE":
+            terms = {(0,) * dag.dimension: Fraction(1)}
+        elif node.operation == "ZERO":
+            terms = {}
+        elif node.operation == "SCALE":
+            terms = {
+                exponents: node.scalar * coefficient
+                for exponents, coefficient in values[node.arguments[0]].items()
+            }
+        else:
+            terms = {}
+            for argument in node.arguments:
+                for exponents, coefficient in values[argument].items():
+                    terms[exponents] = terms.get(exponents, Fraction(0)) + coefficient
+            terms = {exponents: value for exponents, value in terms.items() if value}
+        values[current] = terms
+    terms = values[index]
+    if not terms:
+        return ()
+    leading = terms[max(terms)]
+    monic = (
+        (exponents, value / leading)
+        for exponents, value in sorted(terms.items(), reverse=True)
+    )
+    return tuple(
+        (
+            exponents,
+            format_canonical_integer(value.numerator),
+            format_canonical_integer(value.denominator),
+        )
+        for exponents, value in monic
+    )
+
+
 def _node_guard_key(dag: Dag, index: int) -> object:
     """Identify one DAG polynomial node for locus-cap accounting.
 
@@ -52,10 +128,15 @@ def _node_guard_key(dag: Dag, index: int) -> object:
     a determinant factor or as an inverse denominator.
     """
 
+    if index in dag.guard_keys:
+        return dag.guard_keys[index]
     source = dag.nodes[index].source
     if source is not None:
         return _polynomial_key(source)
-    return ("dag-node", index)
+    generated = _generated_polynomial_key(dag, index)
+    key = generated if generated is not None else ("dag-node", index)
+    dag.guard_keys[index] = key
+    return key
 
 
 def _denominator_guard_identity(dag: Dag, value: Expression) -> object | None:

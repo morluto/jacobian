@@ -87,13 +87,12 @@ def _admit_outputs(
     outputs: tuple[Expression, ...],
 ) -> dict[Expression, tuple[int, int, int]]:
     sizes = {value: dag.admit_output(value) for value in dict.fromkeys(outputs)}
-    unique_inherited: dict[object, tuple[int, int, int]] = {}
+    guard_allocations: dict[object, tuple[int, int, int]] = {}
     for coordinate_tensor in (metric.tensor, tensor):
         for guard in coordinate_tensor.retained_nonzero_denominators:
-            unique_inherited.setdefault(
+            guard_allocations.setdefault(
                 _polynomial_key(guard), _source_allocation(guard, dag.dimension)
             )
-    unique_determinant: dict[object, tuple[int, int, int]] = {}
     for index in set(determinant.numerator):
         bound = dag.nodes[index].bound
         if (
@@ -106,9 +105,9 @@ def _admit_outputs(
                 "determinant locus factors exceed canonical polynomial bounds",
             )
         key = _node_guard_key(dag, index)
-        if key in unique_inherited:
+        if key in guard_allocations:
             continue
-        unique_determinant.setdefault(
+        guard_allocations.setdefault(
             key,
             (
                 bound.terms,
@@ -145,16 +144,11 @@ def _admit_outputs(
         for coordinate_tensor in (metric.tensor, tensor)
         for guard in coordinate_tensor.retained_nonzero_denominators
     ]
-    unique_output_guards: dict[object, tuple[int, int, int]] = {}
     for value, size in sizes.items():
         identity = _denominator_guard_identity(dag, value)
         if identity is not None:
-            unique_output_guards.setdefault(identity, size)
-    guards = (
-        list(unique_inherited.values())
-        + list(unique_determinant.values())
-        + list(unique_output_guards.values())
-    )
+            guard_allocations.setdefault(identity, size)
+    guards = list(guard_allocations.values())
     allocations = source + inherited + [sizes[value] for value in outputs] + guards
     terms, coefficient_bits, coordinate_slots = (
         sum(allocation[index] for allocation in allocations) for index in range(3)

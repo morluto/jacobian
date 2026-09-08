@@ -516,3 +516,57 @@ def test_singular_metric_uses_the_covariant_derivative_domain_code() -> None:
     assert rejected.value.errors()[0]["type"].endswith(
         "covariant_derivative.singular_metric"
     )
+
+
+@pytest.mark.parametrize("extra_terms", (0, 1))
+def test_output_denominator_shared_with_inherited_locus_is_allocated_once(
+    extra_terms: int,
+) -> None:
+    from jacobian._exact import CanonicalRational
+    from jacobian.math.polynomials.values import (
+        RationalPolynomialTerm,
+        SparseRationalPolynomial,
+    )
+
+    axis = ("x", "y")
+    x = symbols("x")
+    one = CanonicalRational(num=1, den=1)
+    support = tuple(
+        RationalPolynomialTerm(coefficient=one, exponents=(i, j))
+        for i in range(15, -1, -1)
+        for j in range(15, -1, -1)
+    )
+    guards = tuple(
+        SparseRationalPolynomial(
+            terms=(
+                *support[:-1],
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=offset, den=1), exponents=(0, 0)
+                ),
+            )
+        )
+        for offset in range(1, 512)
+    )
+    inherited = canonical_locus_guards(
+        guards,
+        (SparseRationalPolynomial(terms=support[: 247 + extra_terms]),),
+        (rational_function_from_sympy(x, axis).numerator,),
+        variable_count=2,
+    )
+    assert sum(len(guard.terms) for guard in inherited) == 131_064 + extra_terms
+    metric = RationalCoordinateMetric(
+        tensor=tensor([x, 0, 0, 1], ("COVARIANT", "COVARIANT"), axis=axis)
+    )
+    source = RationalCoordinateTensor(
+        coordinate_axis=axis,
+        variance=("CONTRAVARIANT",),
+        components=tuple(rational_function_from_sympy(value, axis) for value in (1, 0)),
+        retained_nonzero_denominators=inherited,
+    )
+    if extra_terms:
+        with pytest.raises(OperationResourceAdmissionError, match="allocation bounds"):
+            covariant_derivative(metric, source)
+        return
+    result = covariant_derivative(metric, source)
+    assert result.retained_nonzero_denominators == inherited
+    assert expressions(result) == (1 / (2 * x), 0, 0, 0)

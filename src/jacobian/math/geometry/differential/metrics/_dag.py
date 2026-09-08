@@ -105,6 +105,7 @@ class Dag:
             Node("ONE", (), _one_polynomial(dimension)),
         ]
         self.keys: dict[tuple[object, ...], int] = {}
+        self.guard_keys: dict[int, object] = {}
 
     def intern(self, key: tuple[object, ...], node: Node) -> int:
         if key in self.keys:

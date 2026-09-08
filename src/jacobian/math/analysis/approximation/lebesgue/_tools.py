@@ -34,7 +34,7 @@ TOOLS: MathTools = (
         examples=(
             OperationExample(
                 name="three_nodes",
-                description="Nodes -1, 0, 1 on [-1,1] give maximum 5/4 at both -1/2 and 1/2.",
+                description="Nodes -1, 0, 1 on [-1,1] give maximum 5/4 at both -1/2 and 1/2. Nodes must be distinct and strictly increasing, and the query interval endpoints must be ordered.",
                 input={
                     "source": {
                         "nodes": {

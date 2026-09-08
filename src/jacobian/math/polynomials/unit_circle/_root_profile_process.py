@@ -91,7 +91,9 @@ def count_reduced_roots(
     if (
         not isinstance(response, dict)
         or response.get("status") != "ok"
-        or any(type(response.get(key)) is not int for key in ("inside", "on", "outside"))
+        or any(
+            type(response.get(key)) is not int for key in ("inside", "on", "outside")
+        )
     ):
         raise RuntimeError("bounded unit-disk kernel worker returned malformed output")
     inside = response["inside"]

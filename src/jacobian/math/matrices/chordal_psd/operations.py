@@ -40,6 +40,14 @@ _RESULT_ENVELOPE_BITS = 8_192
 _MAX_ARITHMETIC_WORK = 1_000_000_000_000
 _MAX_SCALAR_BITS = 65_536
 _WALL_SECONDS = 60.0
+_JSON_HEIGHT_NUMERATOR = 12
+_JSON_HEIGHT_DENOMINATOR = 5
+
+
+def _json_scaled_bits(bits: int) -> int:
+    """Bound decimal JSON digits of a binary integer (log10(2) < 12/25, so 2.4 bits)."""
+
+    return (bits * _JSON_HEIGHT_NUMERATOR) // _JSON_HEIGHT_DENOMINATOR
 
 
 def _reject(code: str, message: str) -> OperationDomainValidationError:
@@ -167,14 +175,16 @@ def _admit(
             "output_bound", "total local matrix entries exceed the admitted bound"
         )
     output_bits = sum(
-        2 * len(support) ** 2 * heights[component[v]]
+        2 * len(support) ** 2 * _json_scaled_bits(heights[component[v]])
         for v, support in zip(order, supports, strict=True)
     )
     n = matrix.row_count
     source_bits = n * n * _SOURCE_CELL_JSON_BITS + n * 64 + _RESULT_ENVELOPE_BITS
     for row in matrix.entries:
         for value in row:
-            source_bits += abs(value.num).bit_length() + value.den.bit_length()
+            source_bits += _json_scaled_bits(
+                abs(value.num).bit_length()
+            ) + _json_scaled_bits(value.den.bit_length())
     graph_bits = 64 + 2 * len(graph.edges) * max(n.bit_length(), 1)
     output_bits += source_bits + graph_bits
     arithmetic_work = sum(

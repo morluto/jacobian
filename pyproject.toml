@@ -232,6 +232,7 @@ ignore_imports = [
     "jacobian.math.topology.chain_complexes._smith_process -> jacobian.process",
     "jacobian.math.combinatorics.finite_structures.hypergraphs._independence_z3 -> jacobian.process",
     "jacobian.math.combinatorics.discrepancy._optimum_process -> jacobian.process",
+    "jacobian.math.combinatorics.discrepancy.bounded_coloring._process -> jacobian.process",
     "jacobian.math.combinatorics._counting_process -> jacobian.process",
     "jacobian.math.number_theory.galois._factor_process -> jacobian.process",
     "jacobian.math.number_theory.number_fields._discriminant_process -> jacobian.process",

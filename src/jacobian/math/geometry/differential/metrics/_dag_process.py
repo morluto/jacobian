@@ -10,7 +10,7 @@ from tempfile import TemporaryDirectory
 from time import monotonic
 from typing import Any
 
-from sympy import Poly, Rational
+from sympy import QQ, Poly, Rational
 
 from jacobian._execution import (
     OperationExecutionCancelledError,

@@ -421,4 +421,4 @@ def test_curvature_expansion_runs_in_the_bounded_worker(
     with pytest.raises(
         OperationExecutionTimeoutError, match="during polynomial DAG expansion"
     ):
-        curvature_profile(metric([1, 0, 0, 1]))
+        curvature_profile(metric([1, 0, 0, x * x]))

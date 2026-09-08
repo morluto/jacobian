@@ -168,6 +168,13 @@ def _admit(
         2 * len(support) ** 2 * heights[component[v]]
         for v, support in zip(order, supports, strict=True)
     )
+    n = matrix.row_count
+    source_bits = n * n * 160
+    for row in matrix.entries:
+        for value in row:
+            source_bits += abs(value.num).bit_length() + value.den.bit_length()
+    graph_bits = 64 + 2 * len(graph.edges) * max(n.bit_length(), 1)
+    output_bits += source_bits + graph_bits
     arithmetic_work = sum(
         len(support) ** 2 * heights[component[v]] ** 2
         for v, support in zip(order, supports, strict=True)

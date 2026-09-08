@@ -22,7 +22,6 @@ from jacobian.math.geometry.differential._recognition_process import (
     RationalFunctionRecognitionCandidate,
     recognize_canonical_rational_functions,
 )
-from jacobian.math.polynomials._conversions import sparse_rational_polynomial_to_sympy
 from jacobian.math.polynomials.rational_functions._bounds import (
     BoundsLedger,
     BoundWorkCategory,
@@ -39,7 +38,6 @@ from jacobian.math.polynomials.rational_functions._bounds import (
     _differentiate_fraction as _derivative_bound,
 )
 from jacobian.math.polynomials.rational_functions.gradient._kernel import (
-    _differentiate_fraction,
     _normalize_fraction,
 )
 from jacobian.math.polynomials.rational_functions.gradient._models import (
@@ -242,18 +240,8 @@ def _general_gradient_admitted(
     """Recognize and differentiate after the caller's whole-profile admission."""
     _recognize_source(function, deadline)
     request_checkpoint("after rational gradient source recognition")
-    numerator = sparse_rational_polynomial_to_sympy(
-        function.numerator, function.variables
-    )
-    denominator = sparse_rational_polynomial_to_sympy(
-        function.denominator, function.variables
-    )
     return tuple(
-        _normalize_fraction(
-            *_differentiate_fraction(numerator, denominator, axis),
-            function.variables,
-            deadline=deadline,
-        )
+        _normalize_fraction(function, axis, deadline=deadline)
         for axis in range(len(function.variables))
     )
 

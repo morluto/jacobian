@@ -1,4 +1,4 @@
-"""Killable SymPy cancellation for admitted rational-gradient components."""
+"""Killable SymPy quotient-rule expansion and cancellation for gradients."""
 
 from __future__ import annotations
 
@@ -9,8 +9,7 @@ from tempfile import TemporaryDirectory
 from time import monotonic
 from typing import Any
 
-from sympy import QQ, Poly, Rational
-
+from jacobian._exact import CanonicalRational
 from jacobian._execution import (
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
@@ -19,7 +18,13 @@ from jacobian.canonical import (
     CanonicalizationError,
     CanonicalLimits,
     encode_strict_json,
+    format_canonical_integer,
     loads_strict_json,
+)
+from jacobian.math.polynomials.values import (
+    RationalFunction,
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
 )
 from jacobian.process import (
     ProcessResourceLimits,
@@ -32,20 +37,26 @@ _STDOUT_BYTES = 8 * 1024 * 1024
 _STDERR_BYTES = 64 * 1024
 _ADDRESS_SPACE_BYTES = 1024 * 1024 * 1024
 _PARENT_FINALIZATION_SECONDS = 1.0
+_MAX_RESULT_TERMS = 256
 
 
-def _poly_payload(polynomial: Any) -> list[list[Any]]:
+def _poly_payload(polynomial: SparseRationalPolynomial) -> list[list[Any]]:
     return [
-        [*exponents, str(coefficient.p), str(coefficient.q)]
-        for exponents, coefficient in polynomial.terms()
+        [
+            *term.exponents,
+            format_canonical_integer(term.coefficient.num),
+            format_canonical_integer(term.coefficient.den),
+        ]
+        for term in polynomial.terms
     ]
 
 
-def _poly_from_payload(records: object, symbols: tuple[Any, ...]) -> Any:
+def _poly_from_payload(
+    records: object, variable_count: int
+) -> SparseRationalPolynomial:
     if not isinstance(records, list):
         raise ValueError("malformed cancelled polynomial")
-    coefficients: dict[tuple[int, ...], Any] = {}
-    variable_count = len(symbols)
+    terms: list[RationalPolynomialTerm] = []
     for record in records:
         if not isinstance(record, list) or len(record) != variable_count + 2:
             raise ValueError("malformed cancelled polynomial")
@@ -55,25 +66,34 @@ def _poly_from_payload(records: object, symbols: tuple[Any, ...]) -> Any:
         numerator, denominator = record[-2], record[-1]
         if not isinstance(numerator, str) or not isinstance(denominator, str):
             raise ValueError("malformed cancelled polynomial")
-        coefficients[exponents] = Rational(int(numerator), int(denominator))
-    return Poly.from_dict(coefficients, *symbols, domain=QQ)
+        terms.append(
+            RationalPolynomialTerm(
+                coefficient=CanonicalRational(num=int(numerator), den=int(denominator)),
+                exponents=exponents,
+            )
+        )
+    if len(terms) > _MAX_RESULT_TERMS:
+        raise ValueError("cancelled polynomial exceeds the canonical term bound")
+    return SparseRationalPolynomial(terms=tuple(terms))
 
 
-def cancel_fraction(
-    numerator: Any, denominator: Any, *, deadline: float
-) -> tuple[Any, Any]:
-    """Cancel one admitted pair in a killable worker under the shared deadline."""
+def normalize_partial(
+    source: RationalFunction, axis: int, *, deadline: float
+) -> RationalFunction:
+    """Expand and cancel one admitted partial in a killable worker."""
 
     remaining = deadline - monotonic() - _PARENT_FINALIZATION_SECONDS
     if remaining <= 0:
         raise OperationExecutionTimeoutError(
-            "rational gradient deadline expired before fraction cancellation"
+            "rational gradient deadline expired before the gradient kernel"
         )
+    variable_count = len(source.variables)
     payload = encode_strict_json(
         {
-            "variable_count": len(numerator.gens),
-            "numerator": _poly_payload(numerator),
-            "denominator": _poly_payload(denominator),
+            "variable_count": variable_count,
+            "axis": axis,
+            "numerator": _poly_payload(source.numerator),
+            "denominator": _poly_payload(source.denominator),
         }
     )
     try:
@@ -94,15 +114,15 @@ def cancel_fraction(
             )
     except OSError as exc:
         raise RuntimeError(
-            "bounded rational-gradient cancellation worker could not be started"
+            "bounded rational-gradient kernel worker could not be started"
         ) from exc
     if completed.cancelled:
         raise OperationExecutionCancelledError(
-            "rational gradient cancelled during fraction cancellation"
+            "rational gradient cancelled during the gradient kernel"
         )
     if completed.timed_out:
         raise OperationExecutionTimeoutError(
-            "rational gradient deadline expired during fraction cancellation"
+            "rational gradient deadline expired during the gradient kernel"
         )
     if (
         completed.stdout_exceeded
@@ -110,7 +130,7 @@ def cancel_fraction(
         or completed.returncode != 0
     ):
         raise RuntimeError(
-            "bounded rational-gradient cancellation worker did not return a fraction"
+            "bounded rational-gradient kernel worker did not return a fraction"
         )
     try:
         response = loads_strict_json(
@@ -122,7 +142,7 @@ def cancel_fraction(
         )
     except CanonicalizationError as exc:
         raise RuntimeError(
-            "bounded rational-gradient cancellation worker returned malformed output"
+            "bounded rational-gradient kernel worker returned malformed output"
         ) from exc
     if (
         not isinstance(response, dict)
@@ -131,10 +151,17 @@ def cancel_fraction(
         or "denominator" not in response
     ):
         raise RuntimeError(
-            "bounded rational-gradient cancellation worker returned malformed output"
+            "bounded rational-gradient kernel worker returned malformed output"
         )
-    symbols = tuple(numerator.gens)
-    return (
-        _poly_from_payload(response["numerator"], symbols),
-        _poly_from_payload(response["denominator"], symbols),
+    try:
+        numerator = _poly_from_payload(response["numerator"], variable_count)
+        denominator = _poly_from_payload(response["denominator"], variable_count)
+    except ValueError as exc:
+        raise RuntimeError(
+            "bounded rational-gradient kernel worker returned malformed output"
+        ) from exc
+    return RationalFunction._from_kernel(
+        variables=source.variables,
+        numerator=numerator,
+        denominator=denominator,
     )

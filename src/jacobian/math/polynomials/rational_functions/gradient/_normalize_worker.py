@@ -1,4 +1,4 @@
-"""Standalone SymPy worker for admitted rational-gradient cancellation."""
+"""Standalone SymPy worker for admitted rational-gradient quotient rule."""
 
 from __future__ import annotations
 
@@ -42,27 +42,35 @@ def _dump(polynomial: Any) -> list[list[Any]]:
 def _run(payload: dict[str, Any]) -> dict[str, Any]:
     from sympy import symbols
 
-    if set(payload) != {"variable_count", "numerator", "denominator"}:
-        raise ValueError("malformed cancellation request")
+    if set(payload) != {"variable_count", "axis", "numerator", "denominator"}:
+        raise ValueError("malformed gradient kernel request")
     variable_count = payload["variable_count"]
+    axis = payload["axis"]
     if (
         type(variable_count) is not int
         or variable_count < 1
+        or type(axis) is not int
+        or not 0 <= axis < variable_count
         or not isinstance(payload["numerator"], list)
         or not isinstance(payload["denominator"], list)
     ):
-        raise ValueError("malformed cancellation request")
+        raise ValueError("malformed gradient kernel request")
     generators = symbols(f"x0:{variable_count}")
     numerator = _polynomial(payload["numerator"], generators)
     denominator = _polynomial(payload["denominator"], generators)
+    generator = generators[axis]
+    numerator = numerator.diff(generator) * denominator - numerator * denominator.diff(
+        generator
+    )
+    denominator = denominator * denominator
     if not numerator.is_zero:
         numerator_terms, denominator_terms = numerator.terms(), denominator.terms()
         common = tuple(
             min(
-                min(exponents[axis] for exponents, _ in numerator_terms),
-                min(exponents[axis] for exponents, _ in denominator_terms),
+                min(exponents[index] for exponents, _ in numerator_terms),
+                min(exponents[index] for exponents, _ in denominator_terms),
             )
-            for axis in range(variable_count)
+            for index in range(variable_count)
         )
         if any(common):
             from sympy import Poly
@@ -96,7 +104,7 @@ def main() -> int:
     try:
         payload = json.loads(sys.stdin.buffer.read().decode("utf-8"))
         if not isinstance(payload, dict):
-            raise ValueError("malformed cancellation request")
+            raise ValueError("malformed gradient kernel request")
         response = _run(payload)
     except Exception:
         return 1

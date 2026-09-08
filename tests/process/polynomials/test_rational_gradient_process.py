@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from time import monotonic
 from typing import Any
 
@@ -86,11 +87,17 @@ def test_cancellation_worker_timeout_uses_remaining_request_deadline(
         request_execution(started),
         pytest.raises(
             OperationExecutionTimeoutError,
-            match="during fraction cancellation",
+            match="during the gradient kernel",
         ),
     ):
         bind_request_deadline(started + 8.0)
         gradient(_general_source())
+
+    payload = json.loads(observed["input_bytes"])
+    assert payload["axis"] in (0, 1)
+    assert payload["variable_count"] == 2
+    assert len(payload["numerator"]) == 2
+    assert len(payload["denominator"]) == 2
 
     assert 0 < observed["timeout_seconds"] <= 8.0
     resource_limits = observed["resource_limits"]

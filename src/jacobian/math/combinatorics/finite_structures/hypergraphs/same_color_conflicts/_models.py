@@ -67,10 +67,15 @@ class SameColorConflictsResult(StrictModel):
                 raise ValueError("provenance must reference two distinct source IDs")
             if row.conflict_edge_id not in result_ids:
                 raise ValueError("provenance must reference a declared conflict edge")
-            if row.color_index >= self.coloring.color_count:
-                raise ValueError("provenance colour must belong to the source palette")
             left_pos = positions[left]
             right_pos = positions[right]
+            if (
+                self.coloring.assignments[left_pos].color_index != row.color_index
+                or self.coloring.assignments[right_pos].color_index != row.color_index
+            ):
+                raise ValueError(
+                    "provenance colour must match both referenced source edges"
+                )
             if left_pos > right_pos:
                 left, right = right, left
                 left_pos, right_pos = right_pos, left_pos

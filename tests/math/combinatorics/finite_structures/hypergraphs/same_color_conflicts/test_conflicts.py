@@ -138,6 +138,22 @@ def test_deserialized_provenance_uses_source_axis_order() -> None:
         SameColorConflictsResult.model_validate(payload)
 
 
+def test_deserialized_provenance_must_match_source_edge_colors() -> None:
+    result = check_oracle(
+        coloring(("a", "b"), [("a",), ("b",), ("a",), ("b",)], [0, 0, 1, 1])
+    )
+    mismatched = result.model_dump()
+    mismatched["provenance"][0]["color_index"] = 1
+    with pytest.raises(ValidationError, match="match both referenced source edges"):
+        SameColorConflictsResult.model_validate(mismatched)
+    mixed = result.model_dump()
+    mixed["provenance"] = [
+        {**mixed["provenance"][0], "source_edge_ids": ("e0", "e2")}
+    ]
+    with pytest.raises(ValidationError, match="match both referenced source edges"):
+        SameColorConflictsResult.model_validate(mixed)
+
+
 def test_multiple_colors_can_produce_the_same_union() -> None:
     result = check_oracle(
         coloring(("a", "b"), [("a",), ("b",), ("a",), ("b",)], [0, 0, 1, 1])

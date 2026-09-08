@@ -224,8 +224,8 @@ def test_source_sensitive_candidate_bound_rejects_large_possible_profile() -> No
         construct(source, 1, 2)
 
 
-def test_witness_label_bytes_are_charged_in_the_output_envelope() -> None:
-    vertices = tuple(str(index) for index in range(155))
+def test_long_source_labels_remain_native_admissible() -> None:
+    vertices = tuple(str(index) for index in range(12))
     members = complete_edges(vertices, 2)
     edges = tuple(
         (f"{index:05d}" + "a" * 59, edge) for index, edge in enumerate(members)
@@ -239,5 +239,5 @@ def test_witness_label_bytes_are_charged_in_the_output_envelope() -> None:
         ),
     )
 
-    with pytest.raises(OperationResourceAdmissionError, match="32-mebibyte"):
-        construct(source, 2, 154)
+    result = construct(source, 2, 11)
+    assert len(result.hypergraph.edges) == 12

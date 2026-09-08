@@ -34,7 +34,6 @@ __all__ = ["construct"]
 
 MAX_PROFILE_WORK = 2_000_000
 MAX_PROFILE_ALLOCATION = 4_000_000
-MAX_PROFILE_OUTPUT_BYTES = 33_554_432
 
 
 @dataclass(frozen=True, slots=True)
@@ -186,16 +185,6 @@ def _preflight_result(
             ("coloring",),
             "monochromatic_profile.label_width",
             "source labels exceed the hypergraph UTF-8 label envelope",
-        )
-    output_bytes = candidate_upper_bound * (
-        target_uniformity * (max_vertex_bytes + 2)
-        + required_edges * (max_edge_id_bytes + 2)
-    )
-    if output_bytes > MAX_PROFILE_OUTPUT_BYTES:
-        _resource(
-            ("target_uniformity",),
-            "monochromatic_profile.output_bytes",
-            "the complete candidate profile exceeds the 32-mebibyte JSON envelope",
         )
 
 

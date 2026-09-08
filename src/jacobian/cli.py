@@ -10,7 +10,11 @@ import typer
 from typer import _click
 from typer.core import TyperGroup
 
-from jacobian.canonical import loads_strict_json
+from jacobian.canonical import CanonicalizationError, loads_strict_json
+
+
+class _InvalidArgumentError(ValueError):
+    """An invalid CLI argument or payload source."""
 
 
 class JacobianGroup(TyperGroup):
@@ -22,9 +26,30 @@ class JacobianGroup(TyperGroup):
         except (_click.ClickException, typer.Abort, typer.Exit):
             raise
         except Exception as exc:
-            code = (
-                "INVALID_ARGUMENT" if isinstance(exc, ValueError) else "COMMAND_FAILED"
+            from jacobian.catalog.models import (
+                OperationDomainValidationError,
+                OperationResourceAdmissionError,
             )
+            from jacobian.dispatch import (
+                OperationRequestValidationError,
+                _OperationResolutionError,
+            )
+
+            if isinstance(exc, OperationResourceAdmissionError):
+                code = "RESOURCE_NOT_ADMITTED"
+            elif isinstance(
+                exc,
+                (
+                    _InvalidArgumentError,
+                    CanonicalizationError,
+                    OperationRequestValidationError,
+                    OperationDomainValidationError,
+                    _OperationResolutionError,
+                ),
+            ):
+                code = "INVALID_ARGUMENT"
+            else:
+                code = "COMMAND_FAILED"
             typer.echo(
                 json.dumps(
                     {
@@ -57,7 +82,7 @@ def inspect_operation(operation_id: str) -> None:
 
     descriptor = Catalog.open().inspect(operation_id)
     if descriptor is None:
-        raise ValueError(f"operation {operation_id!r} is not installed")
+        raise _InvalidArgumentError(f"operation {operation_id!r} is not installed")
     _emit(descriptor.model_dump(mode="json"))
 
 
@@ -75,16 +100,17 @@ def run_operation(
     """Run one installed operation with one parsed JSON payload."""
 
     if (json_payload is None) == (file is None):
-        raise ValueError("pass exactly one of --json or --file")
+        raise _InvalidArgumentError("pass exactly one of --json or --file")
+    source: str | bytes
     if json_payload is not None:
-        source = json_payload.encode("utf-8")
+        source = json_payload
     elif file is not None:
         source = file.read_bytes()
     else:
-        raise ValueError("pass exactly one of --json or --file")
+        raise _InvalidArgumentError("pass exactly one of --json or --file")
     payload = loads_strict_json(source)
     if not isinstance(payload, dict):
-        raise ValueError("operation payload must be a JSON object")
+        raise _InvalidArgumentError("operation payload must be a JSON object")
     from jacobian.catalog.catalog import Catalog
     from jacobian.dispatch import invoke_operation
 

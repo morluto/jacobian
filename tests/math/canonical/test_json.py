@@ -233,3 +233,26 @@ def test_scaled_rationals_have_the_same_canonical_bytes(
     )
 
     assert scaled == reduced
+
+
+def test_strict_decoder_enforces_its_configured_depth() -> None:
+    from jacobian.canonical import loads_strict_json
+
+    limits = CanonicalLimits(max_depth=2)
+    assert loads_strict_json("[[0]]", limits=limits) == [[0]]
+    with pytest.raises(CanonicalizationError, match="depth"):
+        loads_strict_json("[[[0]]]", limits=limits)
+
+
+def test_strict_decoder_reports_oversized_numeric_literals_as_encoding_errors() -> None:
+    from jacobian.canonical import loads_strict_json
+
+    with pytest.raises(CanonicalizationError):
+        loads_strict_json("9" * 5000)
+
+
+def test_strict_decoder_reports_invalid_unicode_as_encoding_error() -> None:
+    from jacobian.canonical import loads_strict_json
+
+    with pytest.raises(CanonicalizationError, match="UTF-8"):
+        loads_strict_json('"\ud800"')

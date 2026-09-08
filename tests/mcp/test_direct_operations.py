@@ -402,9 +402,16 @@ def test_direct_calls_preserve_owner_cancellation_diagnosis() -> None:
         assert result.is_error is True
         assert result.structured_content is None
         assert result.content and isinstance(result.content[0], TextContent)
-        assert _content_text(result.content[0]) == (
-            "Error executing tool test.direct.cancel: operation cancelled"
+        diagnostic = json.loads(
+            _content_text(result.content[0]).removeprefix(
+                "Error executing tool test.direct.cancel: "
+            )
         )
+        assert diagnostic == {
+            "code": "OPERATION_CANCELLED",
+            "operation_id": operation.operation_id,
+            "stage": "operation_execution",
+        }
         assert "private cancellation detail" not in _content_text(result.content[0])
         assert "operation execution failed" not in _content_text(result.content[0])
 
@@ -421,8 +428,9 @@ def test_direct_calls_preserve_owner_cancellation_diagnosis() -> None:
         ),
     ),
 )
-def test_math_run_preserves_bounded_operation_failure_context(
-    exception: Exception, code: str
+@pytest.mark.parametrize("direct", [False, True])
+def test_calls_preserve_bounded_operation_failure_context(
+    exception: Exception, code: str, direct: bool
 ) -> None:
     class Request(StrictModel):
         value: int
@@ -449,15 +457,17 @@ def test_math_run_preserves_bounded_operation_failure_context(
             _direct_server(Catalog((operation,))), raise_exceptions=False
         ) as client:
             result = await client.call_tool(
-                "math.run",
-                {"operation_id": operation.operation_id, "payload": {"value": 1}},
+                operation.operation_id if direct else "math.run",
+                {"value": 1}
+                if direct
+                else {"operation_id": operation.operation_id, "payload": {"value": 1}},
             )
 
         assert result.is_error is True
         assert result.content and isinstance(result.content[0], TextContent)
         diagnostic = json.loads(
             _content_text(result.content[0]).removeprefix(
-                "Error executing tool math.run: "
+                f"Error executing tool {operation.operation_id if direct else 'math.run'}: "
             )
         )
         assert diagnostic == {

@@ -13,8 +13,8 @@ from jacobian.math.graphs.optimization._models import (
     OptimizationStatus,
     OptimizationTermination,
 )
-from jacobian.math.graphs.values import GraphVertexLabel as GraphVertex
 from jacobian.math.graphs.values import MAX_SIMPLE_GRAPH_VERTICES, SimpleUndirectedGraph
+from jacobian.math.graphs.values import GraphVertexLabel as GraphVertex
 
 
 def _require_invariant_graph_order(graph: SimpleUndirectedGraph) -> None:

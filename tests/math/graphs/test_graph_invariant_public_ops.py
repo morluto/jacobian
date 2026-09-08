@@ -94,9 +94,7 @@ def test_invariant_requests_retain_256_vertex_result_envelope() -> None:
 
     oversized_matching = {
         "vertices": [f"{index:03d}" for index in range(258)],
-        "edges": [
-            [f"{2 * index:03d}", f"{2 * index + 1:03d}"] for index in range(129)
-        ],
+        "edges": [[f"{2 * index:03d}", f"{2 * index + 1:03d}"] for index in range(129)],
     }
     with pytest.raises(ValidationError, match="at most 256 vertices"):
         matching.request_type.model_validate({"graph": oversized_matching})

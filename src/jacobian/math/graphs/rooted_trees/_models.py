@@ -6,7 +6,6 @@ from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-
 from jacobian.math.graphs.values import (
     MAX_SIMPLE_GRAPH_VERTICES,
     GraphVertexLabel,

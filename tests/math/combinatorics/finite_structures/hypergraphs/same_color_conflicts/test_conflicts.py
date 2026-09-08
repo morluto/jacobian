@@ -278,4 +278,3 @@ def test_native_all_distinct_distances_compose_to_full_independent_set() -> None
     assert result.hypergraph.edges == ()
     independent = independence_number(result.hypergraph)
     assert independent.independence_number == 4
-

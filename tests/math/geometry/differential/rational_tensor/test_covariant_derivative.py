@@ -213,7 +213,7 @@ def test_oversized_determinant_is_rejected_during_admission() -> None:
     dense_y = sum(y**power for power in range(17))
     metric = RationalCoordinateMetric(
         tensor=tensor(
-            [dense_x, 1, y, dense_y],
+            [dense_x, y, y, dense_y],
             ("COVARIANT", "COVARIANT"),
             axis=("x", "y"),
         )

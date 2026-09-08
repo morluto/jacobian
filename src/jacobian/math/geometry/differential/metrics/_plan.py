@@ -1,6 +1,5 @@
 """Complete metric, inverse, connection and curvature DAG admission."""
 
-from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
 from fractions import Fraction
@@ -228,18 +227,18 @@ def build_plan(metric: RationalCoordinateMetric) -> Plan:
     for value in outputs:
         if not _has_nonconstant_denominator(dag, value):
             continue
-        for index, multiplicity in Counter(value.denominator).items():
+        for index in set(value.denominator):
             source = dag.nodes[index].source
             if source is None:
-                output_keys.add(("canonical-result-denominator", index, multiplicity))
+                output_keys.add(("canonical-result-denominator", index))
                 continue
-            output_keys.add((_polynomial_key(source), multiplicity))
+            output_keys.add(_polynomial_key(source))
             if len(source.terms) == 1:
                 exponents = source.terms[0].exponents
-                for axis, degree in enumerate(exponents):
+                for axis_index, degree in enumerate(exponents):
                     if degree:
                         axis_exponents = tuple(
-                            int(i == axis) for i in range(len(exponents))
+                            int(i == axis_index) for i in range(len(exponents))
                         )
                         output_keys.add(((axis_exponents, "1", "1"),))
     potential_guards = len(inherited_keys | determinant_keys | output_keys)

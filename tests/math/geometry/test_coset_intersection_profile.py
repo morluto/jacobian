@@ -16,6 +16,7 @@ from jacobian.math.geometry.finite import (
 )
 from jacobian.math.geometry.finite._models import LinearSubspace
 from jacobian.math.geometry.finite.cosets import (
+    CosetIntersection,
     CosetIntersectionProfile,
     coset_intersection_profile,
 )
@@ -134,6 +135,11 @@ def test_composite_field_is_rejected_even_when_subset_empty() -> None:
     space = PrimeFieldVectorSpace(field_order=9, axis=("x",))
     with pytest.raises(OperationDomainValidationError, match="prime"):
         coset_intersection_profile(space, LinearSubspace(space=space, basis=()), ())
+
+
+def test_intersection_row_rejects_cardinality_mismatch() -> None:
+    with pytest.raises(ValidationError, match="cardinality"):
+        CosetIntersection(representative=(0,), members=((0,),), cardinality=2)
 
 
 @pytest.mark.parametrize("subset", [((0,), (0,)), ((1,), (0,)), ((3,),), ((0, 0),)])

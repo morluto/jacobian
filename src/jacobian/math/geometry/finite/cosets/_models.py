@@ -37,6 +37,12 @@ class CosetIntersection(StrictModel):
     members: Vectors = Field(min_length=1)
     cardinality: int = Field(ge=1, le=65_536)
 
+    @model_validator(mode="after")
+    def require_cardinality_matches_members(self) -> Self:
+        if self.cardinality != len(self.members):
+            raise ValueError("cardinality must equal the number of retained members")
+        return self
+
 
 class CosetIntersectionProfile(CosetIntersectionSource):
     """Complete partition with zero pivot coordinates in each representative.

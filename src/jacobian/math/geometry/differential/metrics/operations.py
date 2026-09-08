@@ -19,6 +19,9 @@ from jacobian.math.geometry.differential._recognition_process import (
     recognize_canonical_rational_functions,
 )
 from jacobian.math.geometry.differential.metrics._dag import Expression, Node
+from jacobian.math.geometry.differential.metrics._dag_process import (
+    evaluate_polynomial_dag,
+)
 from jacobian.math.geometry.differential.metrics._models import (
     RationalCoordinateConnection,
     RationalCoordinateMetric,
@@ -35,7 +38,6 @@ from jacobian.math.geometry.differential.values import (
 )
 from jacobian.math.polynomials._conversions import (
     sparse_rational_polynomial_from_sympy,
-    sparse_rational_polynomial_to_sympy,
     symbols_for_variables,
 )
 from jacobian.math.polynomials.values import (
@@ -47,43 +49,18 @@ from jacobian.math.polynomials.values import (
 def _evaluate_node(
     index: int, nodes: list[Node], axis: tuple[str, ...], cache: dict[int, Any]
 ) -> Any:
-    from sympy import QQ
-
-    from jacobian.math.polynomials.rational_functions.gradient._kernel import (
-        _differentiate_fraction,
-    )
-
     if index in cache:
         return cache[index]
     request_checkpoint("before curvature polynomial arithmetic")
-    node = nodes[index]
-    if node.operation == "SOURCE":
-        assert node.source is not None
-        result = sparse_rational_polynomial_to_sympy(node.source, axis)
-    elif node.operation == "SCALE":
-        result = _evaluate_node(node.arguments[0], nodes, axis, cache).mul_ground(
-            QQ(node.scalar.numerator, node.scalar.denominator)
-        )
-    elif node.operation == "MULTIPLY":
-        result = _evaluate_node(node.arguments[0], nodes, axis, cache) * _evaluate_node(
-            node.arguments[1], nodes, axis, cache
-        )
-    elif node.operation == "ADD":
-        result = sum(
-            (_evaluate_node(arg, nodes, axis, cache) for arg in node.arguments),
-            cache[0],
-        )
-    elif node.operation == "DERIVATIVE":
-        result, _ = _differentiate_fraction(
-            _evaluate_node(node.arguments[0], nodes, axis, cache),
-            _evaluate_node(node.arguments[1], nodes, axis, cache),
-            node.axis,
-        )
-    else:
-        raise AssertionError("unknown admitted curvature polynomial node")
-    cache[index] = result
+    execution = current_request_execution()
+    deadline = (
+        execution.deadline
+        if execution is not None and execution.deadline is not None
+        else time.monotonic() + 120.0
+    )
+    cache.update(evaluate_polynomial_dag(nodes, axis, deadline=deadline))
     request_checkpoint("after curvature polynomial arithmetic")
-    return result
+    return cache[index]
 
 
 def curvature_profile(

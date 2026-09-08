@@ -118,6 +118,21 @@ def test_full_rank_face_retains_contradictory_equalities_and_empty_axes() -> Non
     )
 
 
+def test_inactive_off_diagonal_constraint_keeps_the_diagonal_regime() -> None:
+    huge = Fraction(1, 10**20_000)
+    system = RationalSemidefiniteSystem(
+        order=2,
+        matrices=(
+            _matrix([[1, 0], [0, 1]]),
+            rational_matrix_from_fractions(((0, huge), (huge, 0))),
+        ),
+        rhs=(_q(0), _q(0)),
+    )
+    result = reduce_exposed_face(system, (_q(1), _q(0)))
+    _identities(result)
+    assert result.reduced.order == 0
+
+
 def test_serialized_reduced_system_supports_another_supplied_step() -> None:
     system = _system(
         (
@@ -248,6 +263,21 @@ def test_raw_request_preflight_rejects_over_budget_cells() -> None:
                     "rhs": [{"num": "0", "den": "1"}] * 128,
                 },
                 "multipliers": [{"num": "1", "den": "1"}] * 128,
+            }
+        )
+
+
+def test_raw_request_preflight_rejects_oversized_scalar_lists() -> None:
+    zero = {"num": "0", "den": "1"}
+    with pytest.raises(ValidationError, match="8192-item"):
+        SemidefiniteFaceReductionRequest.model_validate(
+            {
+                "system": {
+                    "order": 1,
+                    "matrices": [{"entries": [[zero]]}],
+                    "rhs": [zero] * 10_000,
+                },
+                "multipliers": [zero],
             }
         )
 

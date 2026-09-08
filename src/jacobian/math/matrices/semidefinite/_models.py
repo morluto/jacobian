@@ -114,6 +114,10 @@ def _scan_and_install_scalars(
         collected.append(item)
         extra += _raw_rational_digits(item)
         if extra > remaining or len(collected) > _MAX_EQUALITIES:
+            if isinstance(value, (list, tuple)):
+                raise ValueError(
+                    "source equalities exceed the admitted 8192-item envelope"
+                )
             break
     if not isinstance(value, (list, tuple)):
         container[key] = collected

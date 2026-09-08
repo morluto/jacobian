@@ -59,9 +59,14 @@ def _admit(
         *system.rhs,
         *multipliers,
     )
-    diagonal = all(
+    exposing = tuple(
+        matrix
+        for multiplier, matrix in zip(multipliers, system.matrices, strict=True)
+        if multiplier.num
+    )
+    diagonal = bool(exposing) and all(
         not entry.num
-        for matrix in system.matrices
+        for matrix in exposing
         for i, row in enumerate(matrix.entries)
         for j, entry in enumerate(row)
         if i != j

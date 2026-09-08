@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from itertools import product
+from typing import NoReturn
 
 from jacobian._execution import (
     bind_request_deadline,
@@ -35,7 +36,7 @@ from jacobian.math.groups.finite_abelian import (
 )
 
 
-def _reject(code: str, message: str) -> None:
+def _reject(code: str, message: str) -> NoReturn:
     raise OperationResourceAdmissionError(
         location=("group", "sequence"),
         code=f"additive.finite_abelian_subset_sum.{code}",

@@ -24,7 +24,9 @@ def test_public_completion_native_parity_and_matrix_composition() -> None:
     assert wire.output == native
     validate(wire.output, ChordalPSDCompletionResult.model_json_schema())
     inertia = invoke_operation(
-        "matrix.inertia.compute", {"matrix": wire.output["completion"]}, catalog
+        "matrix.inertia.compute",
+        {"matrix": wire.output["outcome"]["completion"]},
+        catalog,
     )
     assert inertia.output["n_positive"] == 3
     assert inertia.output["n_negative"] == 0

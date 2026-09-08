@@ -12,6 +12,8 @@ from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.completion import (
     ChordalPSDCompletionResult,
+    CompletedChordalPSDCompletion,
+    InfeasibleChordalPSDCompletion,
     PartialSymmetricRationalMatrix,
     complete_chordal_psd,
 )
@@ -46,10 +48,12 @@ def partial(
 
 
 def exact(result: ChordalPSDCompletionResult) -> Matrix:
-    assert result.outcome == "COMPLETED"
-    assert result.completion is not None
+    assert isinstance(result.outcome, CompletedChordalPSDCompletion)
     answer = Matrix(
-        [[Rational(q.num, q.den) for q in row] for row in result.completion.entries]
+        [
+            [Rational(q.num, q.den) for q in row]
+            for row in result.outcome.completion.entries
+        ]
     )
     for e in result.matrix.specified_entries:
         assert answer[e.row, e.column] == Rational(e.value.num, e.value.den)
@@ -69,8 +73,9 @@ def test_missing_path_entry_is_not_zero() -> None:
     assert completed.det() == Rational(81, 625)
     source_zero = partial([[1, q, 0], [q, 1, q], [0, q, 1]])
     rejected = complete_chordal_psd(source_zero)
-    assert rejected.outcome == "INFEASIBLE"
-    assert rejected.obstruction_clique == (0, 1, 2)
+    assert rejected.outcome.status == "INFEASIBLE"
+    assert isinstance(rejected.outcome, InfeasibleChordalPSDCompletion)
+    assert rejected.outcome.obstruction_clique == (0, 1, 2)
     for item in (source, source_zero):
         assert (
             PartialSymmetricRationalMatrix.model_validate_json(item.model_dump_json())
@@ -113,12 +118,21 @@ def test_singular_separator_all_axis_permutations() -> None:
 )
 def test_degenerate_and_obstructed_patterns(rows: list[list[int | None]]) -> None:
     result = complete_chordal_psd(partial(rows))
-    if result.outcome == "COMPLETED":
+    if isinstance(result.outcome, CompletedChordalPSDCompletion):
         exact(result)
     else:
-        axes = result.obstruction_clique
+        axes = result.outcome.obstruction_clique
         obstruction = Matrix([[rows[i][j] for j in axes] for i in axes])
         assert obstruction.is_positive_semidefinite is False
+
+
+def test_result_schema_rejects_completed_without_completion() -> None:
+    payload = {
+        "matrix": partial([[1]]).model_dump(mode="json"),
+        "outcome": {"status": "COMPLETED"},
+    }
+    with pytest.raises(ValidationError):
+        ChordalPSDCompletionResult.model_validate(payload)
 
 
 def test_authored_obstruction_must_be_a_specified_clique() -> None:
@@ -126,9 +140,11 @@ def test_authored_obstruction_must_be_a_specified_clique() -> None:
     with pytest.raises(ValidationError, match="specified graph edges"):
         ChordalPSDCompletionResult(
             matrix=source,
-            outcome="INFEASIBLE",
-            obstruction_clique=(0, 2),
+            outcome=InfeasibleChordalPSDCompletion(obstruction_clique=(0, 2)),
         )
+
+
+def test_nonchordal_is_unsupported_not_infeasible() -> None:
     source = partial(
         [[1, 0, None, 0], [0, 1, 0, None], [None, 0, 1, 0], [0, None, 0, 1]]
     )
@@ -165,9 +181,9 @@ def test_useful_sparse_path_scale() -> None:
         ]
     )
     result = complete_chordal_psd(source)
-    assert result.completion is not None
+    assert isinstance(result.outcome, CompletedChordalPSDCompletion)
     # This Toeplitz covariance has LDL pivots 1, 1-q², ..., 1-q².
-    for i, row in enumerate(result.completion.entries):
+    for i, row in enumerate(result.outcome.completion.entries):
         assert all(
             value.as_fraction() == q ** abs(i - j) for j, value in enumerate(row)
         )
@@ -195,8 +211,8 @@ def test_overlapping_gram_cliques_with_negative_correlations() -> None:
 def test_large_singleton_has_no_separator_growth() -> None:
     source = partial([[10**3000]])
     result = complete_chordal_psd(source)
-    assert result.completion is not None
-    assert result.completion.entries[0][0].num == 10**3000
+    assert isinstance(result.outcome, CompletedChordalPSDCompletion)
+    assert result.outcome.completion.entries[0][0].num == 10**3000
 
 
 def test_independent_diagonal_denominators_do_not_accumulate() -> None:
@@ -206,9 +222,10 @@ def test_independent_diagonal_denominators_do_not_accumulate() -> None:
         [[diagonal[i] if i == j else None for j in range(n)] for i in range(n)]
     )
     result = complete_chordal_psd(source)
-    assert result.completion is not None
+    assert isinstance(result.outcome, CompletedChordalPSDCompletion)
     assert all(
-        result.completion.entries[i][i].as_fraction() == diagonal[i] for i in range(n)
+        result.outcome.completion.entries[i][i].as_fraction() == diagonal[i]
+        for i in range(n)
     )
 
 

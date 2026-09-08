@@ -31,6 +31,8 @@ from jacobian.math.matrices._flint import rational_rref
 from jacobian.math.matrices.analysis.operations import _symmetric_inertia
 from jacobian.math.matrices.completion._models import (
     ChordalPSDCompletionResult,
+    CompletedChordalPSDCompletion,
+    InfeasibleChordalPSDCompletion,
     PartialSymmetricRationalMatrix,
 )
 from jacobian.math.matrices.values import rational_matrix_from_fractions
@@ -194,7 +196,8 @@ def complete_chordal_psd(
         )
         if negative:
             obstruction = ChordalPSDCompletionResult(
-                matrix=matrix, outcome="INFEASIBLE", obstruction_clique=clique
+                matrix=matrix,
+                outcome=InfeasibleChordalPSDCompletion(obstruction_clique=clique),
             )
             checkpoint("after obstruction construction")
             return obstruction
@@ -233,7 +236,8 @@ def complete_chordal_psd(
     checkpoint("before completion serialization")
     completion = rational_matrix_from_fractions(result)
     answer = ChordalPSDCompletionResult(
-        matrix=matrix, outcome="COMPLETED", completion=completion
+        matrix=matrix,
+        outcome=CompletedChordalPSDCompletion(completion=completion),
     )
     checkpoint("after completion serialization")
     return answer

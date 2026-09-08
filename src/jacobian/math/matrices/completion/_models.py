@@ -1,7 +1,7 @@
 """Partial symmetric rational matrices and their chordal completions."""
 
 from itertools import combinations
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, model_validator
 
@@ -39,6 +39,26 @@ class ChordalPSDCompletionRequest(StrictModel):
     matrix: PartialSymmetricRationalMatrix
 
 
+class CompletedChordalPSDCompletion(StrictModel):
+    """A completed rational PSD matrix on the retained source axes."""
+
+    status: Literal["COMPLETED"] = "COMPLETED"
+    completion: RationalMatrix
+
+
+class InfeasibleChordalPSDCompletion(StrictModel):
+    """A specified non-PSD principal clique of the retained source pattern."""
+
+    status: Literal["INFEASIBLE"] = "INFEASIBLE"
+    obstruction_clique: tuple[int, ...] = Field(min_length=1, max_length=1024)
+
+
+ChordalPSDCompletionOutcome = Annotated[
+    CompletedChordalPSDCompletion | InfeasibleChordalPSDCompletion,
+    Field(discriminator="status"),
+]
+
+
 class ChordalPSDCompletionResult(StrictModel):
     """One exact completion, or a specified non-PSD principal clique.
 
@@ -47,29 +67,23 @@ class ChordalPSDCompletionResult(StrictModel):
     """
 
     matrix: PartialSymmetricRationalMatrix
-    outcome: Literal["COMPLETED", "INFEASIBLE"]
-    completion: RationalMatrix | None = None
-    obstruction_clique: tuple[int, ...] = Field(default=(), max_length=1024)
+    outcome: ChordalPSDCompletionOutcome
 
     @model_validator(mode="after")
     def require_result_shape(self) -> Self:
         n = self.matrix.graph.vertex_count
-        if self.outcome == "COMPLETED":
-            if self.completion is None or self.obstruction_clique:
-                raise ValueError("COMPLETED requires only a completion")
-            if (self.completion.row_count, self.completion.column_count) != (n, n):
+        if isinstance(self.outcome, CompletedChordalPSDCompletion):
+            completion = self.outcome.completion
+            if (completion.row_count, completion.column_count) != (n, n):
                 raise ValueError("completion must retain the source axes")
-        elif self.completion is not None or not self.obstruction_clique:
-            raise ValueError("INFEASIBLE requires only an obstruction clique")
-        if self.obstruction_clique != tuple(sorted(set(self.obstruction_clique))):
+            return self
+        clique = self.outcome.obstruction_clique
+        if clique != tuple(sorted(set(clique))):
             raise ValueError("obstruction axes must be distinct and sorted")
-        if any(not 0 <= i < n for i in self.obstruction_clique):
+        if any(not 0 <= i < n for i in clique):
             raise ValueError("obstruction axes must belong to the source")
         specified_edges = set(self.matrix.graph.edges)
-        if any(
-            (i, j) not in specified_edges
-            for i, j in combinations(self.obstruction_clique, 2)
-        ):
+        if any((i, j) not in specified_edges for i, j in combinations(clique, 2)):
             raise ValueError(
                 "obstruction axes must form a clique of specified graph edges"
             )

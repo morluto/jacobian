@@ -320,6 +320,21 @@ def require_canonical_rational_function(
     if not value.numerator.terms or not value.variables:
         return value
 
+    # A monic monomial denominator has only coordinate-variable factors.
+    # Recognize their common valuations directly, without materializing a
+    # dense multivariate backend polynomial for an otherwise sparse value.
+    if len(value.denominator.terms) == 1:
+        powers = value.denominator.terms[0].exponents
+        if any(
+            exponent and all(term.exponents[axis] for term in value.numerator.terms)
+            for axis, exponent in enumerate(powers)
+        ):
+            raise _validation_error(
+                "not_coprime",
+                "rational-function numerator and denominator must be coprime",
+            )
+        return value
+
     # Construct exact polynomials from already structurally validated term
     # data. No caller text is parsed or evaluated at this semantic boundary.
     from jacobian.math.polynomials._conversions import (

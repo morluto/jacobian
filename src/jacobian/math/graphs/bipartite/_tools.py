@@ -43,7 +43,7 @@ TOOLS: MathTools = (
         examples=(
             OperationExample(
                 name="triangular_pattern",
-                description="The 2-by-2 triangular pattern has two balanced blocks and the arc 0→1.",
+                description="Compute the Dulmage-Mendelsohn decomposition of the 2-by-2 triangular pattern, yielding two balanced blocks and the arc 0→1; the declared sides must partition every vertex and every edge must cross those sides.",
                 input={
                     "graph": {
                         "graph": {"vertex_count": 4, "edges": [[0, 2], [0, 3], [1, 3]]},

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from fractions import Fraction
-from typing import NoReturn
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.geometry.differential.metrics._dag import (
     Dag,
@@ -32,7 +32,25 @@ MAX_LAPLACE_OUTPUT_BITS = 268_435_456
 MAX_LAPLACE_OUTPUT_SLOTS = 1_048_576
 
 
-def _laplace_reject(reason: str, message: str) -> NoReturn:
+def _monic_polynomial_key(polynomial: SparseRationalPolynomial) -> object:
+    if not polynomial.terms:
+        return _polynomial_key(polynomial)
+    leading = polynomial.terms[0].coefficient.as_fraction()
+    return tuple(
+        (
+            term.exponents,
+            format_canonical_integer(
+                (term.coefficient.as_fraction() / leading).numerator
+            ),
+            format_canonical_integer(
+                (term.coefficient.as_fraction() / leading).denominator
+            ),
+        )
+        for term in polynomial.terms
+    )
+
+
+def _laplace_reject(reason: str, message: str) -> None:
     location = ("scalar",) if reason == "result_exponent" else ("metric",)
     raise OperationResourceAdmissionError(
         location=location,
@@ -118,7 +136,7 @@ def build_plan(metric: RationalCoordinateMetric, scalar: RationalFunction) -> Pl
         determinant_sizes.append(_bound_allocation(bound, dimension))
     extra_keys: set[object] = set()
     if not _is_unit_polynomial(scalar.denominator, dimension):
-        extra_keys.add(_polynomial_key(scalar.denominator))
+        extra_keys.add(_monic_polynomial_key(scalar.denominator))
     if _has_nonconstant_denominator(dag, value):
         extra_keys.add(("canonical-result-denominator",))
     guard_keys = {
@@ -126,9 +144,10 @@ def build_plan(metric: RationalCoordinateMetric, scalar: RationalFunction) -> Pl
     }
     for index in set(connection_plan.determinant.numerator):
         source = dag.nodes[index].source
-        guard_keys.add(
-            _polynomial_key(source) if source is not None else ("determinant", index)
-        )
+        if source is not None:
+            guard_keys.add(_monic_polynomial_key(source))
+        else:
+            guard_keys.add(("determinant", index))
     guard_keys.update(extra_keys)
     if len(guard_keys) > MAX_RATIONAL_TENSOR_LOCUS_GUARDS:
         _laplace_reject(

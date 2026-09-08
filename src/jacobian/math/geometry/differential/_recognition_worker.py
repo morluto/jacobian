@@ -48,7 +48,7 @@ def _run(payload: dict[str, Any]) -> dict[str, Any]:
         component = candidate["component"]
         variable_count = candidate["variable_count"]
         if (
-            owner not in ("vector_field", "tensor")
+            owner not in ("vector_field", "tensor", "metric", "scalar")
             or type(component) is not int
             or component < 0
             or type(variable_count) is not int

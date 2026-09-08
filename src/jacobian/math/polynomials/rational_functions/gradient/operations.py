@@ -18,6 +18,10 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.geometry.differential._recognition_process import (
+    RationalFunctionRecognitionCandidate,
+    recognize_canonical_rational_functions,
+)
 from jacobian.math.polynomials._conversions import sparse_rational_polynomial_to_sympy
 from jacobian.math.polynomials.rational_functions._bounds import (
     BoundsLedger,
@@ -85,17 +89,41 @@ type _MonomialGradientPlan = tuple[
 ]
 
 
-def _recognize_source(source: RationalFunction) -> None:
+def _recognize_source(source: RationalFunction, deadline: float) -> None:
     """Recognize the authored field presentation at the admitted owner boundary."""
-    try:
-        require_canonical_rational_function(source)
-    except PydanticCustomError as exc:
+    if (
+        not source.numerator.terms
+        or not source.variables
+        or len(source.denominator.terms) == 1
+    ):
+        try:
+            require_canonical_rational_function(source)
+        except PydanticCustomError as exc:
+            raise OperationDomainValidationError(
+                location=(), code=exc.type, message=exc.message()
+            ) from exc
+        return
+    recognition = recognize_canonical_rational_functions(
+        (
+            RationalFunctionRecognitionCandidate(
+                owner="tensor",
+                component=0,
+                value=source,
+            ),
+        ),
+        deadline=deadline,
+    )
+    if recognition.non_coprime is not None:
         raise OperationDomainValidationError(
-            location=(), code=exc.type, message=exc.message()
-        ) from exc
+            location=(),
+            code="not_coprime",
+            message="rational-function numerator and denominator must be coprime",
+        )
 
 
-def _prepare_monomial_gradient(source: RationalFunction) -> _MonomialGradientPlan:
+def _prepare_monomial_gradient(
+    source: RationalFunction, deadline: float
+) -> _MonomialGradientPlan:
     """Differentiate finite Laurent support without a dense polynomial expansion.
 
     The canonical carrier bounds this phase by 8*256 coefficient scalings of
@@ -103,7 +131,7 @@ def _prepare_monomial_gradient(source: RationalFunction) -> _MonomialGradientPla
     normalization only shifts the unchanged surviving support. All component
     supports, exponents and scalar sizes are checked before result construction.
     """
-    _recognize_source(source)
+    _recognize_source(source, deadline)
     variables = source.variables
     denominator_powers = source.denominator.terms[0].exponents
     plans: list[
@@ -209,10 +237,10 @@ def _admit_general_gradient(
 
 
 def _general_gradient_admitted(
-    function: RationalFunction,
+    function: RationalFunction, deadline: float
 ) -> tuple[RationalFunction, ...]:
     """Recognize and differentiate after the caller's whole-profile admission."""
-    _recognize_source(function)
+    _recognize_source(function, deadline)
     request_checkpoint("after rational gradient source recognition")
     numerator = sparse_rational_polynomial_to_sympy(
         function.numerator, function.variables
@@ -222,7 +250,9 @@ def _general_gradient_admitted(
     )
     return tuple(
         _normalize_fraction(
-            *_differentiate_fraction(numerator, denominator, axis), function.variables
+            *_differentiate_fraction(numerator, denominator, axis),
+            function.variables,
+            deadline=deadline,
         )
         for axis in range(len(function.variables))
     )
@@ -241,12 +271,12 @@ def gradient(function: RationalFunction) -> RationalFunctionGradient:
     request_checkpoint("before rational gradient admission")
     if len(function.denominator.terms) == 1:
         derivatives = _build_monomial_gradient(
-            function.variables, _prepare_monomial_gradient(function)
+            function.variables, _prepare_monomial_gradient(function, deadline)
         )
     else:
         ledger = _Ledger()
         _admit_general_gradient(function, ledger)
-        derivatives = _general_gradient_admitted(function)
+        derivatives = _general_gradient_admitted(function, deadline)
     result = RationalFunctionGradient(
         source=function, variables=function.variables, partial_derivatives=derivatives
     )

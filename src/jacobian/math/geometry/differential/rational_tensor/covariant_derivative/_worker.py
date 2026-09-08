@@ -131,7 +131,10 @@ def _expand_nodes(payload: dict[str, Any]) -> tuple[list[Any], int]:
         raise ValueError("malformed DAG request")
     variable_count = len(variables)
     generators = tuple(Symbol(name) for name in variables)
-    cache: list[Any] = [Poly(0, *generators, domain=QQ), Poly(1, *generators, domain=QQ)]
+    cache: list[Any] = [
+        Poly(0, *generators, domain=QQ),
+        Poly(1, *generators, domain=QQ),
+    ]
     for index, node in enumerate(nodes):
         if not isinstance(node, dict):
             raise ValueError("malformed DAG node")

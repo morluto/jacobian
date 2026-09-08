@@ -111,8 +111,7 @@ def test_mixed_tensor_formula_replays_exactly() -> None:
 def test_tensor_serialization_and_axis_mismatch() -> None:
     result = covariant_derivative(polar_metric(), tensor([r**2], ()))
     assert (
-        RationalCoordinateTensor.model_validate_json(result.model_dump_json())
-        == result
+        RationalCoordinateTensor.model_validate_json(result.model_dump_json()) == result
     )
     with pytest.raises(OperationDomainValidationError, match="same coordinate axis"):
         covariant_derivative(polar_metric(), tensor([r**2], (), axis=("theta", "r")))

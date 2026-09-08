@@ -113,7 +113,9 @@ def _admit_outputs(
     }
     potential_guards = len(inherited_keys | determinant_keys | output_keys)
     if potential_guards > 768:
-        _covariant_reject("locus", "complete covariant-derivative locus exceeds 768 guards")
+        _covariant_reject(
+            "locus", "complete covariant-derivative locus exceeds 768 guards"
+        )
 
     dimension = dag.dimension
     source = [

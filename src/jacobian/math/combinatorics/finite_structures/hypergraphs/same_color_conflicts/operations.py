@@ -53,7 +53,8 @@ class _Plan:
 def _admit(coloring: IndexedHyperedgeColoring, deadline: float) -> _Plan:
     """Admit pairs, compute compressed unions, then admit exact output size.
 
-    P=sum_c choose(|E_c|,2) bounds provenance and original pair expansion.
+    P counts nonempty same-colour unions: C(|E_c|,2) minus C(|empty_c|,2).
+    That bounds provenance and original pair expansion.
     Source incidences are <=36000, masks have <=256 bits, and P<=65536.
     Duplicate member sets within each colour are grouped before union planning:
     distinct-type pairs and repeated types together number at most P. Sorting

@@ -14,6 +14,7 @@ from jacobian.math.polynomials.rational_functions._bounds import (
     BoundWorkCategory,
     FractionBound,
     RationalFunctionBoundLimits,
+    _canonical_coefficient_digits,
     _dense_term_bound,
 )
 from jacobian.math.polynomials.rational_functions.gradient.operations import (
@@ -23,6 +24,7 @@ from jacobian.math.polynomials.rational_functions.gradient.operations import (
     _general_gradient_admitted,
     _MonomialGradientPlan,
     _prepare_monomial_gradient,
+    _validate_admitted_factors,
 )
 from jacobian.math.polynomials.rational_functions.maps._models import (
     RationalFunctionMapJacobian,
@@ -122,6 +124,7 @@ def jacobian_matrix(source: RationalFunctionMap) -> RationalFunctionMapJacobian:
         )
     output_allocation = source_allocation
     plans: list[_MonomialGradientPlan | None] = []
+    general_bounds: list[tuple[FractionBound, ...] | None] = []
     for component in source.components:
         if len(component.denominator.terms) == 1:
             # Bounded sparse presolve: at most n*s rational scalings and n*n*s
@@ -148,20 +151,25 @@ def jacobian_matrix(source: RationalFunctionMap) -> RationalFunctionMapJacobian:
                     ),
                 )
             plans.append(plan)
+            general_bounds.append(None)
         else:
-            components = _admit_general_gradient(component, ledger)
-            for bound, digits in components:
+            bounds = _admit_general_gradient(component, ledger)
+            for bound in bounds:
+                digits = 1 if bound.is_zero else _canonical_coefficient_digits(bound)
                 output_allocation.charge(*_general_allocation(bound, digits))
             plans.append(None)
-    # No result construction or general polynomial backend work starts until
-    # every row's arithmetic and the complete matrix allocation are admitted.
+            general_bounds.append(bounds)
     entries = []
-    for component, monomial_plan in zip(source.components, plans, strict=True):
+    for component, monomial_plan, admitted_bounds in zip(
+        source.components, plans, general_bounds, strict=True
+    ):
         request_checkpoint("during rational map Jacobian row construction")
         if monomial_plan is None:
-            entries.append(
-                _general_gradient_admitted(component, _admit_general_factors(component))
-            )
+            if admitted_bounds is None:
+                raise RuntimeError("admitted Jacobian row is missing derivative bounds")
+            factors = _admit_general_factors(component)
+            _validate_admitted_factors(admitted_bounds, factors, ledger)
+            entries.append(_general_gradient_admitted(component, factors))
         else:
             entries.append(
                 _build_monomial_gradient(source.source_variables, monomial_plan)

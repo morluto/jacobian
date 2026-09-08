@@ -27,6 +27,7 @@ from jacobian.math.polynomials.rational_functions._bounds import (
     _fraction_bound,
     _polynomial_backend_conversion_work_units,
     _recognition_work_units,
+    _remove_exact_common_factor,
     _remove_guaranteed_common_monomial,
     _validate_canonical_result_bound,
 )
@@ -229,7 +230,7 @@ def _build_monomial_gradient(
 
 def _admit_general_gradient(
     function: RationalFunction, ledger: BoundsLedger
-) -> tuple[tuple[FractionBound, int], ...]:
+) -> tuple[FractionBound, ...]:
     """Admit one row's derivative bounds without launching GCD workers."""
     source_bound = _fraction_bound(function, ledger)
     ledger.charge("recognition", _recognition_work_units(source_bound))
@@ -259,8 +260,7 @@ def _admit_general_gradient(
         bound = _remove_guaranteed_common_monomial(
             _derivative_bound(function, source_bound, axis, ledger)
         )
-        digits = _validate_canonical_result_bound(bound, ledger)
-        components.append((bound, digits))
+        components.append(bound)
     return tuple(components)
 
 
@@ -272,6 +272,20 @@ def _admit_general_factors(
     return forced_denominator_derivative_gcds(
         function.denominator, len(function.variables)
     )
+
+
+def _validate_admitted_factors(
+    bounds: tuple[FractionBound, ...],
+    factors: tuple[DerivativeGcdFactor, ...],
+    ledger: BoundsLedger,
+) -> None:
+    for bound, factor in zip(bounds, factors, strict=True):
+        _validate_canonical_result_bound(
+            _remove_guaranteed_common_monomial(
+                _remove_exact_common_factor(bound, factor.bound)
+            ),
+            ledger,
+        )
 
 
 def _general_gradient_admitted(
@@ -313,8 +327,9 @@ def gradient(function: RationalFunction) -> RationalFunctionGradient:
         )
     else:
         ledger = _Ledger()
-        _admit_general_gradient(function, ledger)
+        bounds = _admit_general_gradient(function, ledger)
         factors = _admit_general_factors(function)
+        _validate_admitted_factors(bounds, factors, ledger)
         derivatives = _general_gradient_admitted(function, factors)
     result = RationalFunctionGradient(
         source=function, variables=function.variables, partial_derivatives=derivatives

@@ -302,7 +302,7 @@ def construct(
         source_witnesses = tuple(source_witnesses_list)
 
     request_checkpoint("before monochromatic profile construction")
-    return MonochromaticCompleteSubhypergraphProfile(
+    result = MonochromaticCompleteSubhypergraphProfile(
         coloring=coloring,
         source_uniformity=admission.source_uniformity,
         target_uniformity=admission.target_uniformity,
@@ -313,3 +313,5 @@ def construct(
         candidate_colors=candidate_colors,
         source_edge_witnesses=source_witnesses,
     )
+    request_checkpoint("after monochromatic profile construction")
+    return result

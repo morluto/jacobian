@@ -181,23 +181,25 @@ class SubsetSumResidueProfileRequest(StrictModel):
     source: Annotated[
         IndexedIntegerSequence,
         WithJsonSchema(indexed_sequence_item_ceiling(MAX_RESIDUE_PROFILE_ITEMS)),
-    ] = Field(
-        default_factory=lambda: IndexedIntegerSequence(items=()),
+    ] | None = Field(
+        default=None,
         description=(
-            "A materialized indexed integer tuple. At most 4,095 positions are "
-            "admitted; every integer carries at most 32,768 digits, and the "
-            "derived DP, witness, and result budgets are checked jointly with "
-            "the modulus."
+            "A materialized indexed integer tuple for cyclic Z/mZ requests. "
+            "At most 4,095 positions are admitted; every integer carries at most "
+            "32,768 digits, and the derived DP, witness, and result budgets are "
+            "checked jointly with the modulus. Omit this field for product-group "
+            "requests."
         ),
     )
-    modulus: int = Field(
-        default=1,
+    modulus: int | None = Field(
+        default=None,
         ge=1,
         le=MAX_RESIDUE_PROFILE_MODULUS,
         strict=True,
         description=(
-            "Positive modulus. The complete result has exactly this many "
-            "residue counts, in order from residue 0 through modulus-1."
+            "Positive modulus for cyclic Z/mZ requests. The complete result "
+            "has exactly this many residue counts, in order from residue 0 "
+            "through modulus-1. Omit this field for product-group requests."
         ),
     )
     include_empty_subset: StrictBool = Field(
@@ -258,7 +260,7 @@ class SubsetSumResidueProfileRequest(StrictModel):
                 raise _validation_error(
                     "witness_domain", "product-group profiles do not support witnesses"
                 )
-            if self.source.items or self.modulus != 1:
+            if self.source is not None or self.modulus is not None:
                 raise _validation_error(
                     "request_shape", "product and cyclic inputs cannot be mixed"
                 )

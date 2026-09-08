@@ -128,7 +128,7 @@ def finite_abelian_subset_sum_profile(
         for element, multiplicity in zip(elements, counts, strict=True)
     )
     support_size = sum(multiplicity > 0 for multiplicity in counts)
-    return FiniteAbelianSubsetSumResult(
+    return FiniteAbelianSubsetSumResult._from_kernel(
         group=group,
         sequence=sequence,
         rows=rows,

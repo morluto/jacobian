@@ -100,6 +100,28 @@ class FiniteAbelianSubsetSumResult(StrictModel):
             raise ValueError("profile multiplicities must sum to total subsets")
         return self
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        group: FiniteAbelianProductGroup,
+        sequence: tuple[FiniteAbelianGroupElement, ...],
+        rows: tuple[FiniteAbelianSubsetSumRow, ...],
+        support_size: int,
+        covers_group: bool,
+        total_subsets: int,
+    ) -> Self:
+        """Construct after the DP; parsing still replays the complete-profile check."""
+
+        return cls.model_construct(
+            group=group,
+            sequence=sequence,
+            rows=rows,
+            support_size=support_size,
+            covers_group=covers_group,
+            total_subsets=total_subsets,
+        )
+
 
 __all__ = [
     "MAX_FINITE_ABELIAN_SUBSET_SUM_COORDINATE_SLOTS",

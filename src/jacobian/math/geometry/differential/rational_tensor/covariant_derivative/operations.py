@@ -14,9 +14,6 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.differential.metrics._models import (
     RationalCoordinateMetric,
 )
-from jacobian.math.geometry.differential.rational_tensor.covariant_derivative._models import (
-    RationalCovariantDerivativeProfile,
-)
 from jacobian.math.geometry.differential.rational_tensor.covariant_derivative._plan import (
     build_plan,
 )
@@ -32,7 +29,7 @@ from jacobian.math.geometry.differential.values import (
 def covariant_derivative(
     metric: RationalCoordinateMetric,
     tensor: RationalCoordinateTensor,
-) -> RationalCovariantDerivativeProfile:
+) -> RationalCoordinateTensor:
     """Return the exact covariant derivative with one leading covariant axis."""
     execution = current_request_execution()
     if execution is None:
@@ -65,15 +62,12 @@ def covariant_derivative(
         component_denominators=tuple(value.denominator for value in components),
         variable_count=len(axis),
     )
-    result = RationalCoordinateTensor(
+    request_checkpoint("after covariant-derivative result construction")
+    return RationalCoordinateTensor(
         coordinate_axis=axis,
         variance=("COVARIANT", *tensor.variance),
         components=components,
         retained_nonzero_denominators=guards,
-    )
-    request_checkpoint("after covariant-derivative result construction")
-    return RationalCovariantDerivativeProfile._from_kernel(
-        metric=metric, source=tensor, covariant_derivative=result
     )
 
 

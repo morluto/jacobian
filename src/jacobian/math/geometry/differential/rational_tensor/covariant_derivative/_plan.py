@@ -16,8 +16,9 @@ from jacobian.math.geometry.differential.metrics._models import RationalCoordina
 from jacobian.math.geometry.differential.metrics._plan import (
     ConnectionPlan,
     _denominator_guard_identity,
-    _monic_polynomial_key,
+    _node_guard_key,
     build_connection_plan,
+    potential_locus_guard_keys,
 )
 from jacobian.math.geometry.differential.values import (
     MAX_RATIONAL_TENSOR_COEFFICIENT_DIGITS,
@@ -86,7 +87,13 @@ def _admit_outputs(
     outputs: tuple[Expression, ...],
 ) -> dict[Expression, tuple[int, int, int]]:
     sizes = {value: dag.admit_output(value) for value in dict.fromkeys(outputs)}
-    determinant_allocations = []
+    unique_inherited: dict[object, tuple[int, int, int]] = {}
+    for coordinate_tensor in (metric.tensor, tensor):
+        for guard in coordinate_tensor.retained_nonzero_denominators:
+            unique_inherited.setdefault(
+                _polynomial_key(guard), _source_allocation(guard, dag.dimension)
+            )
+    unique_determinant: dict[object, tuple[int, int, int]] = {}
     for index in set(determinant.numerator):
         bound = dag.nodes[index].bound
         if (
@@ -98,39 +105,36 @@ def _admit_outputs(
                 "determinant_locus",
                 "determinant locus factors exceed canonical polynomial bounds",
             )
-        determinant_allocations.append(
+        key = _node_guard_key(dag, index)
+        if key in unique_inherited:
+            continue
+        unique_determinant.setdefault(
+            key,
             (
                 bound.terms,
                 8 * bound.coefficient_digits * bound.terms,
                 dag.dimension * (bound.terms + 1),
-            )
+            ),
         )
-    inherited_keys = {
-        _polynomial_key(guard)
-        for coordinate_tensor in (metric.tensor, tensor)
-        for guard in coordinate_tensor.retained_nonzero_denominators
-    }
-    determinant_keys: set[object] = set()
-    for index in set(determinant.numerator):
-        source = dag.nodes[index].source
-        determinant_keys.add(
-            _monic_polynomial_key(source)
-            if source is not None
-            else ("determinant", index)
+    potential_guards = len(
+        potential_locus_guard_keys(
+            dag,
+            tuple(
+                guard
+                for coordinate_tensor in (metric.tensor, tensor)
+                for guard in coordinate_tensor.retained_nonzero_denominators
+            ),
+            determinant,
+            outputs,
         )
-    output_keys = {
-        identity
-        for value in outputs
-        if (identity := _denominator_guard_identity(dag, value)) is not None
-    }
-    potential_guards = len(inherited_keys | determinant_keys | output_keys)
+    )
     if potential_guards > 768:
         _covariant_reject(
             "locus", "complete covariant-derivative locus exceeds 768 guards"
         )
 
     dimension = dag.dimension
-    source_allocations = [
+    source = [
         _source_allocation(polynomial, dimension)
         for coordinate_tensor in (metric.tensor, tensor)
         for component in coordinate_tensor.components
@@ -141,12 +145,6 @@ def _admit_outputs(
         for coordinate_tensor in (metric.tensor, tensor)
         for guard in coordinate_tensor.retained_nonzero_denominators
     ]
-    unique_inherited: dict[object, tuple[int, int, int]] = {}
-    for coordinate_tensor in (metric.tensor, tensor):
-        for guard in coordinate_tensor.retained_nonzero_denominators:
-            unique_inherited.setdefault(
-                _polynomial_key(guard), _source_allocation(guard, dimension)
-            )
     unique_output_guards: dict[object, tuple[int, int, int]] = {}
     for value, size in sizes.items():
         identity = _denominator_guard_identity(dag, value)
@@ -154,12 +152,10 @@ def _admit_outputs(
             unique_output_guards.setdefault(identity, size)
     guards = (
         list(unique_inherited.values())
-        + determinant_allocations
+        + list(unique_determinant.values())
         + list(unique_output_guards.values())
     )
-    allocations = (
-        source_allocations + inherited + [sizes[value] for value in outputs] + guards
-    )
+    allocations = source + inherited + [sizes[value] for value in outputs] + guards
     terms, coefficient_bits, coordinate_slots = (
         sum(allocation[index] for allocation in allocations) for index in range(3)
     )
@@ -194,7 +190,7 @@ def build_plan(
         )
     connection_plan: ConnectionPlan = build_connection_plan(
         metric,
-        admission_reject=_covariant_reject,
+        reject=_covariant_reject,
         label="covariant derivative",
         singular_metric=_covariant_singular_metric,
     )

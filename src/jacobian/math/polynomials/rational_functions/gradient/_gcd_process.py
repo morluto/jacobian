@@ -35,6 +35,11 @@ from jacobian.math.polynomials.values import (
     RationalPolynomialTerm,
     SparseRationalPolynomial,
 )
+from jacobian.process import (
+    ProcessResourceLimits,
+    run_bounded_process,
+    worker_environment,
+)
 
 _WORKER_PATH = Path(__file__).resolve().with_name("_gcd_worker.py")
 _GCD_STDOUT_BYTES = 256 * 1024
@@ -168,12 +173,6 @@ def _request_deadline(*, stage: str) -> float:
 
 
 def _run_kernel_worker(payload: dict[str, Any], *, stage: str) -> dict[str, Any]:
-    from jacobian.process import (
-        ProcessResourceLimits,
-        run_bounded_process,
-        worker_environment,
-    )
-
     deadline = _request_deadline(stage=stage)
     request_checkpoint(f"before {stage} encoding")
     encoded = encode_strict_json(payload)

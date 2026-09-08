@@ -454,3 +454,16 @@ def test_cancelled_factor_of_a_generated_determinant_admits_at_the_exact_cap() -
         cancel(sparse_rational_polynomial_to_sympy(guard, axis) - (x - y)) == 0
         for guard in result.retained_nonzero_denominators
     )
+
+
+def test_singular_metric_uses_the_covariant_derivative_domain_code() -> None:
+    x = symbols("x")
+    metric = RationalCoordinateMetric(
+        tensor=tensor([1, x, x, x**2], ("COVARIANT", "COVARIANT"), axis=("x", "y"))
+    )
+    source = tensor([1, 0], ("COVARIANT",), axis=("x", "y"))
+    with pytest.raises(OperationDomainValidationError) as rejected:
+        covariant_derivative(metric, source)
+    assert rejected.value.errors()[0]["type"].endswith(
+        "covariant_derivative.singular_metric"
+    )

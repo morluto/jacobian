@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.differential.metrics._dag_process import (
     RationalDagWorkerMessages,
     evaluate_admitted_rational_dag,
@@ -12,6 +13,15 @@ from jacobian.math.geometry.differential.rational_tensor.covariant_derivative._p
     Plan,
 )
 from jacobian.math.polynomials.values import RationalFunction
+
+
+def _singular_metric() -> OperationDomainValidationError:
+    return OperationDomainValidationError(
+        location=("metric",),
+        code="differential_geometry.covariant_derivative.singular_metric",
+        message="metric determinant is identically zero",
+    )
+
 
 _MESSAGES = RationalDagWorkerMessages(
     timeout_before="covariant derivative deadline expired before DAG expansion",
@@ -27,6 +37,7 @@ _MESSAGES = RationalDagWorkerMessages(
     noncanonical_message=(
         "metric and tensor components must be reduced canonical rational functions"
     ),
+    singular_metric=_singular_metric,
 )
 
 

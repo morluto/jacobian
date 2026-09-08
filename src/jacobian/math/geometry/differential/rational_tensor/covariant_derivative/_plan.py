@@ -12,6 +12,7 @@ from jacobian.math.geometry.differential.metrics._dag import Dag, Expression
 from jacobian.math.geometry.differential.metrics._models import RationalCoordinateMetric
 from jacobian.math.geometry.differential.metrics._plan import (
     ConnectionPlan,
+    _denominator_guard_identity,
     build_connection_plan,
     potential_locus_guard_keys,
 )
@@ -22,6 +23,7 @@ from jacobian.math.geometry.differential.values import (
     MAX_RATIONAL_TENSOR_POLYNOMIAL_TERMS,
     MAX_RATIONAL_TENSOR_RANK,
     RationalCoordinateTensor,
+    _polynomial_key,
 )
 from jacobian.math.polynomials.values import SparseRationalPolynomial
 
@@ -121,10 +123,21 @@ def _admit_outputs(
         for coordinate_tensor in (metric.tensor, tensor)
         for guard in coordinate_tensor.retained_nonzero_denominators
     ]
+    unique_inherited: dict[object, tuple[int, int, int]] = {}
+    for coordinate_tensor in (metric.tensor, tensor):
+        for guard in coordinate_tensor.retained_nonzero_denominators:
+            unique_inherited.setdefault(
+                _polynomial_key(guard), _source_allocation(guard, dimension)
+            )
+    unique_output_guards: dict[object, tuple[int, int, int]] = {}
+    for value, size in sizes.items():
+        identity = _denominator_guard_identity(dag, value)
+        if identity is not None:
+            unique_output_guards.setdefault(identity, size)
     guards = (
-        inherited
+        list(unique_inherited.values())
         + determinant_allocations
-        + [sizes[value] for value in sizes if value.denominator]
+        + list(unique_output_guards.values())
     )
     allocations = source + inherited + [sizes[value] for value in outputs] + guards
     terms, coefficient_bits, coordinate_slots = (

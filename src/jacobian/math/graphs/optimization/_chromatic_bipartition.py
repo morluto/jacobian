@@ -254,6 +254,9 @@ def _unit_threshold_bipartition(
     started = time.monotonic()
     for index in range(len(vertices)):
         side_a, side_b = _unit_threshold_remainder(vertices, index)
+        core = _induced_edge_core(request.graph, side_b)
+        if not _unit_threshold_core_is_admitted(core):
+            continue
         chromatic_b = _exact_induced_chromatic(request.graph, side_b, request, started)
         if chromatic_b is None:
             continue

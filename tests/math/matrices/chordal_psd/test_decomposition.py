@@ -154,6 +154,13 @@ def test_retained_source_counts_toward_output_bits() -> None:
         decompose_chordal_psd(matrix, graph)
 
 
+def test_serialized_zero_matrix_scaffolding_is_bounded() -> None:
+    n = 875
+    matrix, graph = _case([[0] * n for _ in range(n)], ())
+    with pytest.raises(OperationDomainValidationError, match="output bit"):
+        decompose_chordal_psd(matrix, graph)
+
+
 def test_height_bound() -> None:
     # The nontrivial Schur denominator grows beyond 65,536 bits, although
     # each input scalar is below that limit.

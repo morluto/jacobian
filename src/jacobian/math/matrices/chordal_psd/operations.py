@@ -35,6 +35,8 @@ from jacobian.math.matrices.values import RationalMatrix, rational_matrix_from_f
 _MAX_GRAPH_WORK = 16_777_216
 _MAX_OUTPUT_ENTRIES = 131_072
 _MAX_OUTPUT_BITS = 128_000_000
+_SOURCE_CELL_JSON_BITS = 192
+_RESULT_ENVELOPE_BITS = 8_192
 _MAX_ARITHMETIC_WORK = 1_000_000_000_000
 _MAX_SCALAR_BITS = 65_536
 _WALL_SECONDS = 60.0
@@ -169,7 +171,7 @@ def _admit(
         for v, support in zip(order, supports, strict=True)
     )
     n = matrix.row_count
-    source_bits = n * n * 160
+    source_bits = n * n * _SOURCE_CELL_JSON_BITS + n * 64 + _RESULT_ENVELOPE_BITS
     for row in matrix.entries:
         for value in row:
             source_bits += abs(value.num).bit_length() + value.den.bit_length()

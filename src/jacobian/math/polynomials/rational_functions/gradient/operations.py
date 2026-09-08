@@ -4,6 +4,8 @@ import time
 from fractions import Fraction
 from typing import NoReturn
 
+from pydantic_core import PydanticCustomError
+
 from jacobian._exact import CanonicalRational
 from jacobian._execution import (
     bind_request_deadline,
@@ -12,7 +14,10 @@ from jacobian._execution import (
     request_execution,
 )
 from jacobian.canonical import format_canonical_integer
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.polynomials._conversions import sparse_rational_polynomial_to_sympy
 from jacobian.math.polynomials.rational_functions._bounds import (
     BoundsLedger,
@@ -79,6 +84,16 @@ type _MonomialGradientPlan = tuple[
 ]
 
 
+def _recognize_source(source: RationalFunction) -> None:
+    """Recognize the authored field presentation at the admitted owner boundary."""
+    try:
+        require_canonical_rational_function(source)
+    except PydanticCustomError as exc:
+        raise OperationDomainValidationError(
+            location=(), code=exc.type, message=exc.message()
+        ) from exc
+
+
 def _prepare_monomial_gradient(source: RationalFunction) -> _MonomialGradientPlan:
     """Differentiate finite Laurent support without a dense polynomial expansion.
 
@@ -87,7 +102,7 @@ def _prepare_monomial_gradient(source: RationalFunction) -> _MonomialGradientPla
     normalization only shifts the unchanged surviving support. All component
     supports, exponents and scalar sizes are checked before result construction.
     """
-    require_canonical_rational_function(source)
+    _recognize_source(source)
     variables = source.variables
     denominator_powers = source.denominator.terms[0].exponents
     plans: list[
@@ -195,7 +210,7 @@ def _general_gradient_admitted(
     function: RationalFunction,
 ) -> tuple[RationalFunction, ...]:
     """Recognize and differentiate after the caller's whole-profile admission."""
-    require_canonical_rational_function(function)
+    _recognize_source(function)
     request_checkpoint("after rational gradient source recognition")
     numerator = sparse_rational_polynomial_to_sympy(
         function.numerator, function.variables

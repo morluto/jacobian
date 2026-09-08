@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from fractions import Fraction
 from typing import NoReturn
@@ -18,6 +19,7 @@ from jacobian.math.polynomials.rational_functions._bounds import (
     _add_polynomials,
     _check_raw_polynomial,
     _differentiate_polynomial,
+    _fraction_bound,
     _multiply_polynomials,
     _one_polynomial,
     _polynomial_admission_work_units,
@@ -53,15 +55,35 @@ class Ledger:
     def __init__(self) -> None:
         self.work = 0
         self.allocation_bits = 0
-        self.limits = Ledger.limits
 
     def charge(self, category: BoundWorkCategory, amount: int) -> None:
-        request_checkpoint(f"admitting metric curvature {category}")
+        request_checkpoint(f"admitting {self.limits.label} {category}")
         self.work += amount
         if self.work > 50_000_000:
             self.limits.reject(
-                "work", "complete curvature DAG exceeds 50,000,000 work units"
+                "work",
+                f"complete {self.limits.label} DAG exceeds 50,000,000 work units",
             )
+
+
+def admit_recognition_work(
+    values: tuple[RationalFunction, ...],
+    *,
+    reject: Callable[[str, str], NoReturn] | None = None,
+    label: str | None = None,
+) -> None:
+    """Charge coprimality work against the shared 50,000,000-unit envelope."""
+
+    ledger = Ledger()
+    if reject is not None or label is not None:
+        ledger.limits = replace(
+            ledger.limits,
+            reject=reject or ledger.limits.reject,
+            label=label or ledger.limits.label,
+        )
+    for value in dict.fromkeys(values):
+        bound = _fraction_bound(value, ledger)
+        ledger.charge("recognition", _recognition_work_units(bound))
 
 
 @dataclass(frozen=True)
@@ -97,9 +119,21 @@ class Dag:
     complete inverse/connection/curvature formula.
     """
 
-    def __init__(self, dimension: int) -> None:
+    def __init__(
+        self,
+        dimension: int,
+        *,
+        reject: Callable[[str, str], NoReturn] | None = None,
+        label: str | None = None,
+    ) -> None:
         self.dimension = dimension
         self.ledger = Ledger()
+        if reject is not None or label is not None:
+            self.ledger.limits = replace(
+                self.ledger.limits,
+                reject=reject or self.ledger.limits.reject,
+                label=label or self.ledger.limits.label,
+            )
         self.nodes = [
             Node("ZERO", (), _zero_polynomial(dimension)),
             Node("ONE", (), _one_polynomial(dimension)),
@@ -123,7 +157,8 @@ class Dag:
         )
         if len(self.nodes) >= 16384 or self.ledger.allocation_bits > 268_435_456:
             self.ledger.limits.reject(
-                "allocation", "curvature DAG exceeds node or coefficient allocation"
+                "allocation",
+                f"{self.ledger.limits.label} DAG exceeds node or coefficient allocation",
             )
         result = len(self.nodes)
         self.nodes.append(node)
@@ -345,7 +380,7 @@ class Dag:
                 len(format_canonical_integer(value.scalar.denominator)),
             )
             if digits > 128:
-                reject(
+                self.ledger.limits.reject(
                     "result_height", "constant result exceeds 128 coefficient digits"
                 )
             self.ledger.charge("normalization", 1)

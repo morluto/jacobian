@@ -11,10 +11,17 @@ from jacobian._execution import (
     request_execution,
 )
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.geometry.differential._recognition_process import (
+    RationalFunctionRecognitionCandidate,
+    gcd_recognition_values,
+    recognize_canonical_rational_functions,
+)
+from jacobian.math.geometry.differential.metrics._dag import admit_recognition_work
 from jacobian.math.geometry.differential.metrics._models import (
     RationalCoordinateMetric,
 )
 from jacobian.math.geometry.differential.rational_tensor.covariant_derivative._plan import (
+    _covariant_reject,
     build_plan,
 )
 from jacobian.math.geometry.differential.rational_tensor.covariant_derivative._process import (
@@ -46,13 +53,38 @@ def covariant_derivative(
             code="differential_geometry.covariant_derivative.axis_mismatch",
             message="metric and tensor must use the same coordinate axis",
         )
+    sources = gcd_recognition_values((*metric.tensor.components, *tensor.components))
+    admit_recognition_work(
+        sources,
+        reject=_covariant_reject,
+        label="covariant derivative",
+    )
+    candidates = tuple(
+        RationalFunctionRecognitionCandidate(
+            owner="tensor", component=index, value=source
+        )
+        for index, source in enumerate(sources)
+    )
+    if candidates:
+        recognition = recognize_canonical_rational_functions(
+            candidates, deadline=deadline
+        )
+        if recognition.non_coprime is not None:
+            raise OperationDomainValidationError(
+                location=("covariant_derivative",),
+                code="differential_geometry.covariant_derivative.noncanonical_source",
+                message=(
+                    "metric and tensor components must be reduced canonical "
+                    "rational functions"
+                ),
+            )
     plan = build_plan(metric, tensor)
     request_checkpoint("after covariant-derivative admission")
     axis = metric.tensor.coordinate_axis
     components, determinant_guards = evaluate_admitted_covariant_derivative(
         plan,
         axis,
-        sources=(*metric.tensor.components, *tensor.components),
+        sources=(),
         deadline=deadline,
     )
     guards = canonical_locus_guards(

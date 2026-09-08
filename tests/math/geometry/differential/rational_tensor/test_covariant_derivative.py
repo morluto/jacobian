@@ -25,6 +25,7 @@ from jacobian.math.polynomials._conversions import (
     rational_function_to_sympy,
     sparse_rational_polynomial_to_sympy,
 )
+from jacobian.math.polynomials.values import RationalFunction
 
 r, theta = symbols("r theta")
 
@@ -491,6 +492,80 @@ def test_inherited_determinant_factors_are_not_charged_twice() -> None:
     result = covariant_derivative(metric, source)
     assert len(result.retained_nonzero_denominators) == 768
     assert expressions(result) == (0, 0, 0, 0)
+
+
+def test_nonreduced_tensor_is_a_domain_error_before_admission() -> None:
+    x = symbols("x")
+    axis = ("x",)
+    metric = RationalCoordinateMetric(
+        tensor=tensor([1], ("COVARIANT", "COVARIANT"), axis=axis)
+    )
+    unreduced = RationalFunction(
+        variables=axis,
+        numerator=rational_function_from_sympy(x**64 - 1, axis).numerator,
+        denominator=rational_function_from_sympy(x**32 - 1, axis).numerator,
+    )
+    source = RationalCoordinateTensor(
+        coordinate_axis=axis,
+        variance=(),
+        components=(unreduced,),
+        retained_nonzero_denominators=(unreduced.denominator,),
+    )
+    with pytest.raises(OperationDomainValidationError) as rejected:
+        covariant_derivative(metric, source)
+    assert rejected.value.errors()[0]["type"].endswith("noncanonical_source")
+
+
+def test_repeated_binomial_axis_cancellations_are_counted_separately() -> None:
+    x, y = symbols("x y")
+    axis = ("x", "y")
+    denominator = rational_function_from_sympy((x + 1) ** 2 * (y + 1), axis).numerator
+    inherited = canonical_locus_guards(
+        tuple(
+            rational_function_from_sympy(x + offset, axis).numerator
+            for offset in range(1, 767)
+        ),
+        (denominator,),
+        variable_count=2,
+    )
+    assert len(inherited) == 767
+    identity = RationalCoordinateMetric(
+        tensor=tensor([1, 0, 0, 1], ("COVARIANT", "COVARIANT"), axis=axis)
+    )
+    source = RationalCoordinateTensor(
+        coordinate_axis=axis,
+        variance=(),
+        components=(rational_function_from_sympy(1 / ((x + 1) ** 2 * (y + 1)), axis),),
+        retained_nonzero_denominators=inherited,
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="768 guards"):
+        covariant_derivative(identity, source)
+
+
+def test_two_term_denominator_axis_cancellations_are_counted_separately() -> None:
+    x, y = symbols("x y")
+    axis = ("x", "y")
+    denominator = rational_function_from_sympy(x**2 + x * y, axis).numerator
+    inherited = canonical_locus_guards(
+        tuple(
+            rational_function_from_sympy(x + offset, axis).numerator
+            for offset in range(1, 767)
+        ),
+        (denominator,),
+        variable_count=2,
+    )
+    assert len(inherited) == 767
+    identity = RationalCoordinateMetric(
+        tensor=tensor([1, 0, 0, 1], ("COVARIANT", "COVARIANT"), axis=axis)
+    )
+    source = RationalCoordinateTensor(
+        coordinate_axis=axis,
+        variance=(),
+        components=(rational_function_from_sympy(1 / (x**2 + x * y), axis),),
+        retained_nonzero_denominators=inherited,
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="768 guards"):
+        covariant_derivative(identity, source)
 
 
 def test_structurally_zero_metric_uses_the_covariant_derivative_domain_code() -> None:

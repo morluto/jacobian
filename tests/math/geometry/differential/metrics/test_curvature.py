@@ -31,6 +31,7 @@ from jacobian.math.geometry.differential.values import (
 from jacobian.math.polynomials._conversions import (
     rational_function_from_sympy,
     rational_function_to_sympy,
+    sparse_rational_polynomial_to_sympy,
 )
 from jacobian.math.polynomials.values import RationalFunction
 
@@ -242,6 +243,23 @@ def test_shape_singularity_and_authored_nonreduced_source_rejections() -> None:
         curvature_profile(
             RationalCoordinateMetric.model_validate_json(json.dumps(source))
         )
+    unreduced = RationalFunction(
+        variables=("x",),
+        numerator=rational_function_from_sympy(x**64 - 1, ("x",)).numerator,
+        denominator=rational_function_from_sympy(x**32 - 1, ("x",)).numerator,
+    )
+    with pytest.raises(OperationDomainValidationError) as rejected:
+        curvature_profile(
+            RationalCoordinateMetric(
+                tensor=RationalCoordinateTensor(
+                    coordinate_axis=("x",),
+                    variance=("COVARIANT", "COVARIANT"),
+                    components=(unreduced,),
+                    retained_nonzero_denominators=(unreduced.denominator,),
+                )
+            )
+        )
+    assert rejected.value.errors()[0]["type"].endswith("noncanonical_source")
 
 
 def test_expansion_rejection_and_earlier_deadline() -> None:
@@ -314,12 +332,8 @@ def test_oversized_raw_pair_rejected_before_backend_execution(
         }
     )
     monkeypatch.setattr(
-        "jacobian.math.geometry.differential.metrics.operations.evaluate_polynomial_dag",
+        "jacobian.math.geometry.differential.metrics.operations.recognize_canonical_rational_functions",
         lambda *args, **kwargs: pytest.fail("backend execution must follow admission"),
-    )
-    monkeypatch.setattr(
-        "jacobian.math.geometry.differential.metrics.operations.require_canonical_rational_function",
-        lambda *args: pytest.fail("backend execution must follow admission"),
     )
     with pytest.raises(OperationResourceAdmissionError, match=r"allocation|work"):
         curvature_profile(source)
@@ -340,55 +354,11 @@ def test_four_dimensional_hyperbolic_metric() -> None:
 
 
 def test_complete_locus_admitted_before_curvature_expansion() -> None:
-    source = metric([x], ("x",))
-    guards = canonical_locus_guards(
-        tuple(
-            rational_function_from_sympy(x + offset, ("x",)).numerator
-            for offset in range(768)
-        ),
-        variable_count=1,
-    )
-    assert len(guards) == 768
-    source = RationalCoordinateMetric(
-        tensor=RationalCoordinateTensor(
-            coordinate_axis=source.tensor.coordinate_axis,
-            variance=source.tensor.variance,
-            components=source.tensor.components,
-            retained_nonzero_denominators=guards,
-        )
-    )
-    result = curvature_profile(source)
-    assert len(result.inverse_metric.retained_nonzero_denominators) == 768
-
-
-def test_a_new_metric_denominator_still_exceeds_the_curvature_guard_cap() -> None:
-    source = metric([x], ("x",))
-    guards = canonical_locus_guards(
-        tuple(
-            rational_function_from_sympy(x + offset, ("x",)).numerator
-            for offset in range(1, 769)
-        ),
-        variable_count=1,
-    )
-    assert len(guards) == 768
-    source = RationalCoordinateMetric(
-        tensor=RationalCoordinateTensor(
-            coordinate_axis=source.tensor.coordinate_axis,
-            variance=source.tensor.variance,
-            components=source.tensor.components,
-            retained_nonzero_denominators=guards,
-        )
-    )
-    with pytest.raises(OperationResourceAdmissionError, match="768 guards"):
-        curvature_profile(source)
-
-
-def test_shared_formal_denominators_still_exceed_the_curvature_guard_cap() -> None:
     source = metric([x * y, 0, 0, x * y])
     guards = canonical_locus_guards(
         tuple(
             rational_function_from_sympy(x + c, ("x", "y")).numerator
-            for c in range(1, 765)
+            for c in range(1, 769)
         ),
         variable_count=2,
     )
@@ -401,24 +371,109 @@ def test_shared_formal_denominators_still_exceed_the_curvature_guard_cap() -> No
         )
     )
     # Shared formal denominator factors can reduce to distinct canonical
-    # denominators for different numerators. The complete locus has 769 guards.
+    # denominators. The inherited family already saturates the 768-guard
+    # budget, so the independent xy determinant cannot be retained.
     with pytest.raises(OperationResourceAdmissionError, match="768 guards"):
         curvature_profile(source)
 
 
-def test_curvature_expansion_runs_in_the_bounded_worker(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def fail_closed(*args: Any, **kwargs: Any) -> None:
-        raise OperationExecutionTimeoutError(
-            "curvature deadline expired during polynomial DAG expansion"
-        )
-
-    monkeypatch.setattr(
-        "jacobian.math.geometry.differential.metrics.operations.evaluate_polynomial_dag",
-        fail_closed,
+def test_inherited_determinant_and_inverse_guards_are_unioned_before_the_cap() -> None:
+    axis = ("x",)
+    guards = canonical_locus_guards(
+        (
+            rational_function_from_sympy(x**2, axis).numerator,
+            rational_function_from_sympy(x, axis).numerator,
+            *(
+                rational_function_from_sympy(x + offset, axis).numerator
+                for offset in range(1, 767)
+            ),
+        ),
+        variable_count=1,
     )
-    with pytest.raises(
-        OperationExecutionTimeoutError, match="during polynomial DAG expansion"
-    ):
-        curvature_profile(metric([1, 0, 0, x * x]))
+    source = RationalCoordinateMetric(
+        tensor=RationalCoordinateTensor(
+            coordinate_axis=axis,
+            variance=("COVARIANT", "COVARIANT"),
+            components=(rational_function_from_sympy(x**2, axis),),
+            retained_nonzero_denominators=guards,
+        )
+    )
+    result = curvature_profile(source)
+    assert len(result.inverse_metric.retained_nonzero_denominators) == 768
+    replay(result)
+
+
+def test_nonmonic_determinant_unions_with_inherited_monic_guards() -> None:
+    axis = ("x",)
+    guards = canonical_locus_guards(
+        (
+            rational_function_from_sympy(x, axis).numerator,
+            *(
+                rational_function_from_sympy(x + offset, axis).numerator
+                for offset in range(1, 768)
+            ),
+        ),
+        variable_count=1,
+    )
+    source = RationalCoordinateMetric(
+        tensor=RationalCoordinateTensor(
+            coordinate_axis=axis,
+            variance=("COVARIANT", "COVARIANT"),
+            components=(rational_function_from_sympy(2 * x, axis),),
+            retained_nonzero_denominators=guards,
+        )
+    )
+    result = curvature_profile(source)
+    assert len(result.inverse_metric.retained_nonzero_denominators) == 768
+    replay(result)
+
+
+def test_conformal_flat_metric_counts_complete_denominator_powers() -> None:
+    conformal = 1 + x**2 + y**2
+    source = metric([conformal, 0, 0, conformal])
+    result = curvature_profile(source)
+    dens = {
+        sparse_rational_polynomial_to_sympy(guard, ("x", "y")).as_expr().expand()
+        for guard in result.inverse_metric.retained_nonzero_denominators
+    }
+    assert dens == {
+        conformal.expand(),
+        (conformal**2).expand(),
+        (conformal**3).expand(),
+    }
+    replay(result)
+
+    extra = tuple(
+        rational_function_from_sympy(x + offset, ("x", "y")).numerator
+        for offset in range(1, 766)
+    )
+    admitted = RationalCoordinateMetric(
+        tensor=RationalCoordinateTensor(
+            coordinate_axis=source.tensor.coordinate_axis,
+            variance=source.tensor.variance,
+            components=source.tensor.components,
+            retained_nonzero_denominators=canonical_locus_guards(
+                extra, variable_count=2
+            ),
+        )
+    )
+    admitted_profile = curvature_profile(admitted)
+    assert len(admitted_profile.inverse_metric.retained_nonzero_denominators) == 768
+    replay(admitted_profile)
+
+    saturated = RationalCoordinateMetric(
+        tensor=RationalCoordinateTensor(
+            coordinate_axis=source.tensor.coordinate_axis,
+            variance=source.tensor.variance,
+            components=source.tensor.components,
+            retained_nonzero_denominators=canonical_locus_guards(
+                (
+                    *extra,
+                    rational_function_from_sympy(x + 766, ("x", "y")).numerator,
+                ),
+                variable_count=2,
+            ),
+        )
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="768 guards"):
+        curvature_profile(saturated)

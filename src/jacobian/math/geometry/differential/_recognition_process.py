@@ -96,6 +96,24 @@ def canonical_recognition_candidates(
     return tuple(candidates)
 
 
+def gcd_recognition_values(
+    values: tuple[RationalFunction, ...],
+) -> tuple[RationalFunction, ...]:
+    """Return authored fractions whose coprimality is not a constant witness."""
+
+    recognized: list[RationalFunction] = []
+    for value in dict.fromkeys(values):
+        if (
+            not value.numerator.terms
+            or not value.variables
+            or _is_nonzero_constant(value.numerator)
+            or _is_unit_polynomial(value.denominator, len(value.variables))
+        ):
+            continue
+        recognized.append(value)
+    return tuple(recognized)
+
+
 def _polynomial_payload(polynomial: SparseRationalPolynomial) -> list[list[Any]]:
     return [
         [
@@ -251,5 +269,6 @@ __all__ = [
     "RationalFunctionRecognitionCandidate",
     "RationalFunctionRecognitionResult",
     "canonical_recognition_candidates",
+    "gcd_recognition_values",
     "recognize_canonical_rational_functions",
 ]

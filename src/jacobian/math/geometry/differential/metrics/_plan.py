@@ -189,13 +189,15 @@ def _denominator_guard_identity(dag: Dag, value: Expression) -> object | None:
             and not cancelled_shared
         ):
             return _node_guard_key(dag, index)
-        return (
+        identity = (
             "canonical-result-denominator",
             (_node_guard_key(dag, index), 1),
             remaining.minimum_exponents,
             remaining.degrees,
-            remaining_numerator_identity,
         )
+        if remaining_numerator_identity:
+            identity = (*identity, remaining_numerator_identity)
+        return identity
     identity: tuple[object, ...] = (
         "canonical-result-denominator",
         tuple(
@@ -282,15 +284,17 @@ def build_connection_plan(
     metric: RationalCoordinateMetric,
     *,
     reject: Callable[[str, str], NoReturn] | None = None,
+    admission_reject: Callable[[str, str], NoReturn] | None = None,
     label: str | None = None,
     singular_metric: Callable[[], OperationDomainValidationError] | None = None,
 ) -> ConnectionPlan:
     n = len(metric.tensor.coordinate_axis)
     dag = Dag(n)
-    if reject is not None:
+    owner_reject = admission_reject or reject
+    if owner_reject is not None:
         dag.ledger.limits = replace(
             dag.ledger.limits,
-            reject=reject,
+            reject=owner_reject,
             label=label or dag.ledger.limits.label,
         )
     entries = tuple(dag.fraction(value) for value in metric.tensor.components)
@@ -415,14 +419,7 @@ def build_plan(metric: RationalCoordinateMetric) -> Plan:
         )
     outputs = (*inverse, *connection, *riemann, *ricci, scalar)
     sizes = {value: dag.admit_output(value) for value in dict.fromkeys(outputs)}
-    potential_guards = len(
-        potential_locus_guard_keys(
-            dag,
-            metric.tensor.retained_nonzero_denominators,
-            det,
-            outputs,
-        )
-    )
+    potential_guards = len(_potential_locus_keys(dag, metric, det, outputs))
     if potential_guards > 768:
         reject("locus", "complete retained curvature locus exceeds 768 guards")
 
@@ -478,3 +475,119 @@ def build_plan(metric: RationalCoordinateMetric) -> Plan:
         for value in sizes
     }
     return Plan(dag, fractions, det, inverse, connection, riemann, ricci, scalar)
+
+
+def _remaining_denominator_factors(
+    dag: Dag, value: Expression
+) -> tuple[list[tuple[int, int]], list[tuple[int, int]]]:
+    numerators = Counter(value.numerator)
+    remaining: list[tuple[int, int]] = []
+    remaining_numerator: list[tuple[int, int]] = []
+    for index, multiplicity in sorted(Counter(value.denominator).items()):
+        if not any(dag.nodes[index].bound.degrees):
+            continue
+        leftover = multiplicity - min(multiplicity, numerators.get(index, 0))
+        if leftover:
+            remaining.append((index, leftover))
+    for index, multiplicity in sorted(numerators.items()):
+        if not any(dag.nodes[index].bound.degrees):
+            continue
+        leftover = multiplicity - min(
+            multiplicity, Counter(value.denominator).get(index, 0)
+        )
+        if leftover:
+            remaining_numerator.append((index, leftover))
+    return remaining, remaining_numerator
+
+
+def _powered_monomial_key(
+    source: SparseRationalPolynomial, multiplicity: int
+) -> object | None:
+    if len(source.terms) != 1 or multiplicity < 1:
+        return None
+    exponents = tuple(degree * multiplicity for degree in source.terms[0].exponents)
+    return ((exponents, "1", "1"),)
+
+
+def _complete_result_denominator_keys(dag: Dag, value: Expression) -> set[object]:
+    """Identities that may already appear in an inherited locus family."""
+
+    identity = _denominator_guard_identity(dag, value)
+    if identity is None:
+        return set()
+    keys: set[object] = {identity}
+    factors, _remaining_numerator = _remaining_denominator_factors(dag, value)
+    if len(factors) != 1:
+        return keys
+    index, multiplicity = factors[0]
+    source = dag.nodes[index].source
+    if source is None:
+        return keys
+    for power in (multiplicity, multiplicity - 1):
+        powered = _powered_monomial_key(source, power)
+        if powered is not None:
+            keys.add(powered)
+    return keys
+
+
+def _monic_polynomial_key(
+    polynomial: SparseRationalPolynomial,
+) -> tuple[tuple[tuple[int, ...], str, str], ...]:
+    if not polynomial.terms:
+        return _polynomial_key(polynomial)
+    leading = polynomial.terms[0].coefficient.as_fraction()
+    return tuple(
+        (
+            term.exponents,
+            format_canonical_integer(
+                (term.coefficient.as_fraction() / leading).numerator
+            ),
+            format_canonical_integer(
+                (term.coefficient.as_fraction() / leading).denominator
+            ),
+        )
+        for term in polynomial.terms
+    )
+
+
+def _source_guard_keys(
+    source: SparseRationalPolynomial, multiplicity: int = 1
+) -> set[object]:
+    monic = _monic_polynomial_key(source)
+    keys: set[object] = {monic if multiplicity == 1 else (monic, multiplicity)}
+    if len(source.terms) != 1:
+        return keys
+    exponents = source.terms[0].exponents
+    for axis_index, degree in enumerate(exponents):
+        if degree:
+            axis_exponents = tuple(int(i == axis_index) for i in range(len(exponents)))
+            keys.add(((axis_exponents, "1", "1"),))
+    return keys
+
+
+def _potential_locus_keys(
+    dag: Dag,
+    metric: RationalCoordinateMetric,
+    determinant: Expression,
+    outputs: tuple[Expression, ...],
+) -> set[object]:
+    keys: set[object] = {
+        _polynomial_key(guard) for guard in metric.tensor.retained_nonzero_denominators
+    }
+    for index in set(determinant.numerator):
+        source = dag.nodes[index].source
+        keys.add(
+            _monic_polynomial_key(source)
+            if source is not None
+            else ("determinant", index)
+        )
+    for value in outputs:
+        if not _has_nonconstant_denominator(dag, value):
+            continue
+        for index, multiplicity in Counter(value.denominator).items():
+            source = dag.nodes[index].source
+            if source is None:
+                keys.add(("canonical-result-denominator", index, multiplicity))
+            else:
+                keys.update(_source_guard_keys(source, multiplicity))
+    return keys

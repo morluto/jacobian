@@ -208,7 +208,7 @@ def _admit(
         return _Admission(
             source_uniformity=source_uniformity,
             target_uniformity=target_uniformity,
-            target_vertices=tuple(sorted(source.vertices)),
+            target_vertices=source.vertices,
             source_lookup=source_lookup,
             shortcut="source_edges",
         )
@@ -216,7 +216,7 @@ def _admit(
         return _Admission(
             source_uniformity=source_uniformity,
             target_uniformity=target_uniformity,
-            target_vertices=tuple(sorted(source.vertices)),
+            target_vertices=source.vertices,
             source_lookup=source_lookup,
             shortcut="empty",
         )
@@ -231,7 +231,7 @@ def _admit(
     return _Admission(
         source_uniformity=source_uniformity,
         target_uniformity=target_uniformity,
-        target_vertices=tuple(sorted(source.vertices)),
+        target_vertices=source.vertices,
         source_lookup=source_lookup,
     )
 

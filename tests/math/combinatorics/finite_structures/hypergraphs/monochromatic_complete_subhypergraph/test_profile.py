@@ -284,3 +284,10 @@ def test_target_and_lookup_units_fit_the_admission_charge(
         "lookups": ncr(4, 3) * ncr(3, 2),
     }
     assert_charged_work_parity(charged=charged, executed=executed)
+
+
+def test_complete_target_ids_follow_retained_vertex_order() -> None:
+    vertices = ("d", "a", "c", "b")
+    source = make_coloring(vertices, complete_edges(vertices, 2), [0] * 6)
+    result = construct(source, 2, 3)
+    assert result.hypergraph.edges[0] == ("c0", ("a", "c", "d"))

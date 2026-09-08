@@ -127,7 +127,15 @@ def _preflight_result(
     source = coloring.hypergraph
     source_edges = source.edges
     vertex_count = len(source.vertices)
-    work = candidate_count * required_edges
+    candidate_upper_bound = min(
+        candidate_count,
+        len(source_edges)
+        * comb(vertex_count - source_uniformity, target_uniformity - source_uniformity)
+        // required_edges,
+    )
+    if len(source_edges) == required_edges:
+        candidate_upper_bound = min(candidate_upper_bound, 1)
+    work = candidate_upper_bound * required_edges
     if work > MAX_PROFILE_WORK:
         _resource(
             ("target_uniformity",),
@@ -138,12 +146,6 @@ def _preflight_result(
     # Each emitted candidate contributes q source-edge incidences.  A source
     # edge belongs to exactly C(n-r, s-r) target subsets, giving a sound,
     # source-sensitive upper bound before the candidate enumeration starts.
-    candidate_upper_bound = min(
-        candidate_count,
-        len(source_edges)
-        * comb(vertex_count - source_uniformity, target_uniformity - source_uniformity)
-        // required_edges,
-    )
     if candidate_upper_bound > MAX_EDGES:
         _resource(
             ("target_uniformity",),

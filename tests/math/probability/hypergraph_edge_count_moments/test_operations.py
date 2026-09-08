@@ -127,9 +127,9 @@ def test_pair_work_is_refused_before_overlap_expansion() -> None:
 
 
 def test_schema_documents_the_closed_probability_interval() -> None:
-    description = HypergraphEdgeCountMomentsRequest.model_json_schema()[
-        "properties"
-    ]["retention_probability"]["description"]
+    description = HypergraphEdgeCountMomentsRequest.model_json_schema()["properties"][
+        "retention_probability"
+    ]["description"]
     assert "[0, 1]" in description
 
 

@@ -8,7 +8,10 @@ from sympy import cancel, symbols
 
 from jacobian._execution import OperationExecutionTimeoutError, request_execution
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.geometry.differential.laplace_beltrami import laplace_beltrami
+from jacobian.math.geometry.differential.laplace_beltrami import (
+    RationalLaplaceBeltramiResult,
+    laplace_beltrami,
+)
 from jacobian.math.geometry.differential.metrics import RationalCoordinateMetric
 from jacobian.math.geometry.differential.values import RationalCoordinateTensor
 from jacobian.math.polynomials._conversions import (
@@ -102,3 +105,19 @@ def test_shared_deadline_is_honored() -> None:
         pytest.raises(OperationExecutionTimeoutError),
     ):
         laplace_beltrami(metric, _scalar(x**2, ("x",)))
+
+
+def test_result_locus_guard_budget_is_bounded() -> None:
+    x = symbols("x")
+    axis = ("x",)
+    metric = _metric((1,), axis)
+    one = _scalar(1, axis)
+    guards = tuple(_scalar(x + offset, axis).numerator for offset in range(1, 770))
+
+    with pytest.raises(ValueError, match="at most 768"):
+        RationalLaplaceBeltramiResult(
+            metric=metric,
+            scalar=one,
+            value=one,
+            retained_nonzero_denominators=guards,
+        )

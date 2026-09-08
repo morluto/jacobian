@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.math.geometry.differential.metrics._models import (
@@ -41,7 +41,9 @@ class RationalLaplaceBeltramiResult(StrictModel):
     metric: RationalCoordinateMetric
     scalar: RationalFunction
     value: RationalFunction
-    retained_nonzero_denominators: tuple[SparseRationalPolynomial, ...] = ()
+    retained_nonzero_denominators: tuple[SparseRationalPolynomial, ...] = Field(
+        default=(), max_length=768
+    )
 
     @model_validator(mode="after")
     def require_result_axes(self) -> Self:

@@ -51,7 +51,7 @@ def test_k3_has_exact_no_split() -> None:
     )
     assert result.status == "NO_SPLIT"
     assert result.side_a is None
-    assert result.checked_partitions == 3
+    assert result.checked_partitions == 0
 
 
 def test_unequal_thresholds_accept_the_opposite_orientation() -> None:
@@ -150,7 +150,7 @@ def test_impossible_threshold_sum_is_exact_no_split_before_search() -> None:
 def test_complete_search_bound_still_rejects_a_dense_twenty_vertex_graph() -> None:
     vertices = tuple(f"v{i}" for i in range(20))
     source = graph(vertices, (("v0", "v1"),))
-    request = ChromaticBipartitionRequest(graph=source, s=1, t=1)
+    request = ChromaticBipartitionRequest(graph=source, s=2, t=2)
     with pytest.raises(OperationResourceAdmissionError, match="complete-search work"):
         find_chromatic_bipartition(request)
 

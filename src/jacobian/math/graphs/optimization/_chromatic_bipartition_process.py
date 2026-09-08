@@ -33,32 +33,7 @@ _WORKER_ERROR_BYTES = 16_384
 _WORKER_FILE_SIZE_BYTES = 1_024 * 1_024
 
 
-def _chromatic_bipartition_worker_stdout_limit(
-    request: ChromaticBipartitionRequest,
-) -> int:
-    """Measure the largest admitted canonical worker result for this request."""
-
-    vertices = request.graph.vertices
-    if len(vertices) < 2:
-        result = ChromaticBipartitionResult(
-            graph=request.graph,
-            s=request.s,
-            t=request.t,
-            status="NO_SPLIT",
-            checked_partitions=0,
-        )
-    else:
-        result = ChromaticBipartitionResult(
-            graph=request.graph,
-            s=request.s,
-            t=request.t,
-            status="SPLIT",
-            side_a=(vertices[0],),
-            side_b=vertices[1:],
-            chromatic_a=request.s,
-            chromatic_b=request.t,
-            checked_partitions=_unordered_partition_count(len(vertices)),
-        )
+def _serialized_result_bytes(result: ChromaticBipartitionResult) -> int:
     return len(
         json.dumps(
             result.model_dump(mode="json"),
@@ -66,6 +41,46 @@ def _chromatic_bipartition_worker_stdout_limit(
             ensure_ascii=False,
         ).encode("utf-8")
     )
+
+
+def _chromatic_bipartition_worker_stdout_limit(
+    request: ChromaticBipartitionRequest,
+) -> int:
+    """Measure the largest admitted canonical worker result for this request."""
+
+    vertices = request.graph.vertices
+    checked = _unordered_partition_count(len(vertices))
+    envelopes = [
+        ChromaticBipartitionResult(
+            graph=request.graph,
+            s=request.s,
+            t=request.t,
+            status="NO_SPLIT",
+            checked_partitions=checked,
+        ),
+        ChromaticBipartitionResult(
+            graph=request.graph,
+            s=request.s,
+            t=request.t,
+            status="UNKNOWN",
+            checked_partitions=checked,
+        ),
+    ]
+    if len(vertices) >= 2:
+        envelopes.append(
+            ChromaticBipartitionResult(
+                graph=request.graph,
+                s=request.s,
+                t=request.t,
+                status="SPLIT",
+                side_a=(vertices[0],),
+                side_b=vertices[1:],
+                chromatic_a=request.s,
+                chromatic_b=request.t,
+                checked_partitions=checked,
+            )
+        )
+    return max(_serialized_result_bytes(result) for result in envelopes)
 
 
 def find_chromatic_bipartition(

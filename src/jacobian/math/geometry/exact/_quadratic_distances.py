@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from fractions import Fraction
 from functools import cmp_to_key
 from itertools import combinations
-from math import lcm
 
 from jacobian._exact import CanonicalRational
 from jacobian._execution import (
@@ -87,35 +86,30 @@ def _admit(
             )
         )
         a, b, c, e = differences
-        denominator = lcm(*(v.denominator for v in differences))
-        # Bring all four differences to one positive denominator D. These
-        # integer component bit bounds price the sum of squares and the two
-        # cross terms before either is expanded.
-        bits = tuple(
-            0
-            if not v
-            else abs(v.numerator).bit_length()
-            + (denominator // v.denominator).bit_length()
-            for v in differences
+        # Reduced squared-distance coefficients are admitted after cancellation,
+        # not the unreduced common-denominator expansion.
+        rational = (
+            a * a
+            + configuration.radicand * b * b
+            + c * c
+            + configuration.radicand * e * e
         )
-        terms = [
-            2 * k + (configuration.radicand.bit_length() if index in (1, 3) else 0)
-            for index, k in enumerate(bits)
-            if k
-        ]
-        rational_bits = max(terms, default=0) + max(1, len(terms)).bit_length()
-        products = [
-            bits[i] + bits[j] + 1 for i, j in ((0, 1), (2, 3)) if bits[i] and bits[j]
-        ]
-        radical_bits = max(products, default=0) + max(1, len(products)).bit_length()
-        denominator_bits = 2 * denominator.bit_length()
-        if retain_values and any(
-            (bound * 30103 + 99999) // 100000 > 256
-            for bound in (rational_bits, radical_bits, denominator_bits)
-        ):
-            _reject()
+        radical = 2 * (a * b + c * e)
         if retain_values:
-            output_bits += rational_bits + radical_bits + 2 * denominator_bits
+            rational_bits = max(
+                abs(rational.numerator).bit_length(),
+                rational.denominator.bit_length(),
+            )
+            radical_bits = max(
+                abs(radical.numerator).bit_length(),
+                radical.denominator.bit_length(),
+            )
+            if any(
+                (bound * 30103 + 99999) // 100000 > 256
+                for bound in (rational_bits, radical_bits)
+            ):
+                _reject()
+            output_bits += rational_bits + radical_bits
         rows.append(_Pair((i, j), (a, b, c, e)))
     if retain_values and output_bits > 16_777_216:
         raise OperationResourceAdmissionError(

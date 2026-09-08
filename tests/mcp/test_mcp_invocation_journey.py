@@ -252,8 +252,8 @@ def test_mcp_describes_and_invokes_operations() -> None:
             assert semantic_data["errors"] == [
                 {
                     "location": ["assignment"],
-                    "code": "universal_algebra.assignment_coverage",
-                    "message": "assignment must cover exactly the referenced variables",
+                    "code": "universal_algebra.assignment_variable_axis",
+                    "message": "assignment keys must cover exactly the term variable axis 0..variable_count-1",
                 }
             ]
 

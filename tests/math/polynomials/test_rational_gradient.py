@@ -5,12 +5,14 @@ from random import Random
 from time import monotonic
 
 import pytest
-from pydantic_core import PydanticCustomError
 from sympy import symbols
 
 from jacobian._exact import CanonicalRational
 from jacobian._execution import OperationExecutionTimeoutError, request_execution
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.polynomials._conversions import rational_function_from_sympy
 from jacobian.math.polynomials.rational_functions.gradient import (
     RationalFunctionGradient,
@@ -186,7 +188,7 @@ def test_true_output_coefficient_boundary() -> None:
 
 def test_authored_common_factor_is_rejected() -> None:
     source = _monomial_source(("x", "y"), (1, 1), (1, 0))
-    with pytest.raises(PydanticCustomError, match="coprime"):
+    with pytest.raises(OperationDomainValidationError, match="coprime"):
         gradient(source)
     x, y = symbols("x y")
     p = rational_function_from_sympy((x - y) * (x + 1), ("x", "y"))
@@ -194,7 +196,7 @@ def test_authored_common_factor_is_rejected() -> None:
     authored = RationalFunction(
         variables=("x", "y"), numerator=p.numerator, denominator=q.numerator
     )
-    with pytest.raises(PydanticCustomError, match="coprime"):
+    with pytest.raises(OperationDomainValidationError, match="coprime"):
         gradient(authored)
 
 

@@ -255,6 +255,21 @@ def test_raw_request_preflight_rejects_over_budget_cells() -> None:
         )
 
 
+def test_raw_request_preflight_counts_actual_nested_cells() -> None:
+    row = [{"num": "0", "den": "1"}] * 128
+    with pytest.raises(ValidationError, match="dense cell envelope"):
+        SemidefiniteFaceReductionRequest.model_validate(
+            {
+                "system": {
+                    "order": 1,
+                    "matrices": [{"entries": [row] * 128}] * 9,
+                    "rhs": [{"num": "0", "den": "1"}] * 9,
+                },
+                "multipliers": [{"num": "1", "den": "1"}] * 9,
+            }
+        )
+
+
 def test_inactive_large_denominator_does_not_block_exposing_matrix() -> None:
     huge = Fraction(1, 10**20_001)
     system = _system(

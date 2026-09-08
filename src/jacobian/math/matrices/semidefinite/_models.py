@@ -30,9 +30,30 @@ class SemidefiniteFaceReductionRequest(StrictModel):
             return data
         order = system.get("order")
         matrices = system.get("matrices")
-        if type(order) is not int or not isinstance(matrices, (list, tuple)):
+        if not isinstance(matrices, (list, tuple)):
             return data
-        if order < 0 or len(matrices) * max(order, 0) ** 2 > MAX_SEMIDEFINITE_CELLS:
+        cells = 0
+        for matrix in matrices:
+            entries = None
+            if isinstance(matrix, dict):
+                entries = matrix.get("entries")
+            elif hasattr(matrix, "entries"):
+                entries = matrix.entries
+            if not isinstance(entries, (list, tuple)):
+                continue
+            for row in entries:
+                if isinstance(row, (list, tuple)):
+                    cells += len(row)
+                else:
+                    cells += 1
+        declared = 0
+        if type(order) is int:
+            if order < 0:
+                raise ValueError(
+                    "source and reduced matrices exceed the dense cell envelope"
+                )
+            declared = len(matrices) * order * order
+        if cells > MAX_SEMIDEFINITE_CELLS or declared > MAX_SEMIDEFINITE_CELLS:
             raise ValueError(
                 "source and reduced matrices exceed the dense cell envelope"
             )

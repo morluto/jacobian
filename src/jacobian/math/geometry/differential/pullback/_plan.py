@@ -1,6 +1,6 @@
 """Backend-free whole-request admission for metric pullbacks."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, NoReturn
 
 from jacobian._execution import request_checkpoint
@@ -103,6 +103,14 @@ def _substitute_bound_only(
         for _ in range(degree):
             numerator = _multiply_polynomials(numerator, bound.numerator, ledger)
             denominator = _multiply_polynomials(denominator, bound.denominator, ledger)
+    if polynomial.terms > 1:
+        numerator = replace(
+            numerator,
+            terms=min(4096, numerator.terms * polynomial.terms),
+            coefficient_digits=numerator.coefficient_digits
+            + polynomial.coefficient_digits
+            + polynomial.terms.bit_length(),
+        )
     return FractionBound(numerator, denominator)
 
 

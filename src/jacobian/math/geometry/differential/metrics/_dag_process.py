@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -26,7 +27,6 @@ from jacobian.canonical import (
 )
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.differential.metrics._dag import Node
-from jacobian.math.geometry.differential.metrics._plan import singular
 from jacobian.math.polynomials._conversions import (
     sparse_rational_polynomial_from_sympy,
     symbols_for_variables,
@@ -58,6 +58,7 @@ class RationalDagWorkerMessages:
     noncanonical_location: tuple[str, ...]
     noncanonical_code: str
     noncanonical_message: str
+    singular_metric: Callable[[], OperationDomainValidationError]
 
 
 def _source_payload(polynomial: SparseRationalPolynomial) -> list[list[object]]:
@@ -88,12 +89,24 @@ def _node_payload(node: Node) -> dict[str, object]:
     return payload
 
 
-def _poly_from_payload(records: object, symbols: tuple[Any, ...], *, kind: str) -> Any:
+def _poly_from_payload(
+    records: object,
+    symbols: tuple[Any, ...],
+    *,
+    kind: str,
+    deadline: float,
+    checkpoint: str = "during curvature DAG polynomial decode",
+    timeout: str = "metric curvature deadline expired during polynomial DAG decoding",
+) -> Any:
     if not isinstance(records, list):
         raise ValueError(f"malformed {kind} polynomial")
     coefficients: dict[tuple[int, ...], Any] = {}
     variable_count = len(symbols)
-    for record in records:
+    for index, record in enumerate(records):
+        if index % 256 == 0:
+            request_checkpoint(checkpoint)
+            if monotonic() >= deadline:
+                raise OperationExecutionTimeoutError(timeout)
         if not isinstance(record, list) or len(record) != variable_count + 2:
             raise ValueError(f"malformed {kind} polynomial")
         exponents = tuple(record[:variable_count])
@@ -208,7 +221,7 @@ def evaluate_admitted_rational_dag(
     if not isinstance(response, dict):
         raise RuntimeError(messages.malformed)
     if response.get("status") == "singular":
-        raise singular()
+        raise messages.singular_metric()
     if response.get("status") == "noncanonical":
         raise OperationDomainValidationError(
             location=messages.noncanonical_location,
@@ -233,9 +246,21 @@ def evaluate_admitted_rational_dag(
             or "denominator" not in record
         ):
             raise RuntimeError(messages.malformed)
-        numerator = _poly_from_payload(record["numerator"], symbols, kind="cancelled")
+        numerator = _poly_from_payload(
+            record["numerator"],
+            symbols,
+            kind="cancelled",
+            deadline=deadline,
+            checkpoint=f"during {messages.checkpoint_prefix} polynomial decode",
+            timeout=messages.timeout_during,
+        )
         denominator = _poly_from_payload(
-            record["denominator"], symbols, kind="cancelled"
+            record["denominator"],
+            symbols,
+            kind="cancelled",
+            deadline=deadline,
+            checkpoint=f"during {messages.checkpoint_prefix} polynomial decode",
+            timeout=messages.timeout_during,
         )
         components.append(
             RationalFunction(
@@ -250,7 +275,14 @@ def evaluate_admitted_rational_dag(
         )
     guards = tuple(
         sparse_rational_polynomial_from_sympy(
-            _poly_from_payload(record, symbols, kind="cancelled").monic(),
+            _poly_from_payload(
+                record,
+                symbols,
+                kind="cancelled",
+                deadline=deadline,
+                checkpoint=f"during {messages.checkpoint_prefix} polynomial decode",
+                timeout=messages.timeout_during,
+            ).monic(),
             axis,
             maximum_terms=256,
         )
@@ -293,6 +325,7 @@ def evaluate_polynomial_dag(
             "bounded metric-curvature DAG worker did not return expanded polynomials"
         ),
     )
+    request_checkpoint("after curvature DAG decode")
     if (
         not isinstance(response, dict)
         or response.get("status") != "ok"
@@ -315,7 +348,7 @@ def materialize_expanded_polynomial(
         raise OperationExecutionTimeoutError(
             "metric curvature deadline expired during polynomial DAG decoding"
         )
-    return _poly_from_payload(records, symbols, kind="expanded")
+    return _poly_from_payload(records, symbols, kind="expanded", deadline=deadline)
 
 
 __all__ = [

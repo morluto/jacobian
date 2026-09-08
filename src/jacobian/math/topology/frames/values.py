@@ -19,14 +19,15 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 
 
 class VectorFamily(StrictModel):
-    """A bounded family in the standard ordered coordinate space.
+    """A bounded family of integer vectors in Euclidean coordinate space.
 
     Spanning and nonzero-vector requirements are operation-specific admission
     decisions made by the native kernels.
     """
 
+    dimension: int = Field(ge=0, le=MAX_DIM)
     vectors: tuple[tuple[int, ...], ...] = Field(
-        min_length=1,
+        max_length=MAX_VECTOR_CELLS,
         description=(
             "Ordered vectors with len(vectors) * dimension <= "
             f"{MAX_VECTOR_CELLS} materialized cells."
@@ -35,12 +36,7 @@ class VectorFamily(StrictModel):
 
     @model_validator(mode="after")
     def require_rectangular_family(self) -> Self:
-        dimension = len(self.vectors[0])
-        if not 1 <= dimension <= MAX_DIM:
-            raise _validation_error(
-                "vector_dimension_out_of_range",
-                f"vector dimension must be between 1 and {MAX_DIM}",
-            )
+        dimension = self.dimension
         if any(len(vector) != dimension for vector in self.vectors):
             raise _validation_error(
                 "vector_dimension_mismatch", "all vectors must have equal dimension"

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import Field, model_validator
+from pydantic import model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, ExactInteger
@@ -16,28 +16,13 @@ from jacobian.math.topology.frames.values import (
 )
 
 
-class VectorFamilyRequest(VectorFamily):
-    """A bounded family in the standard ordered coordinate space."""
-
-
-class FiniteFrameRequest(VectorFamilyRequest):
-    """Wire request for an operation whose input must span its ambient space."""
-
-
-class CoherenceRequest(FiniteFrameRequest):
-    """Wire request for the normalized pairwise coherence operation."""
-
-
-class GramResult(VectorFamilyRequest):
+class GramResult(VectorFamily):
     gram: IntegerMatrix
-    dimension: int = Field(ge=1)
 
     @model_validator(mode="after")
     def require_source_shape(self) -> Self:
-        if (
-            self.gram.row_count != len(self.vectors)
-            or self.gram.column_count != len(self.vectors)
-            or self.dimension != len(self.vectors[0])
+        if self.gram.row_count != len(self.vectors) or self.gram.column_count != len(
+            self.vectors
         ):
             raise PydanticCustomError(
                 "frames.gram_shape",
@@ -50,16 +35,17 @@ class GramResult(VectorFamilyRequest):
         cls,
         *,
         vectors: tuple[tuple[int, ...], ...],
+        dimension: int,
         gram: IntegerMatrix,
     ) -> Self:
         return cls.model_construct(
             vectors=vectors,
             gram=gram,
-            dimension=len(vectors[0]),
+            dimension=dimension,
         )
 
 
-class CoherenceResult(CoherenceRequest):
+class CoherenceResult(VectorFamily):
     coherence_squared: CanonicalRational
     maximizing_pair: tuple[int, int] | None
 
@@ -68,25 +54,32 @@ class CoherenceResult(CoherenceRequest):
         cls,
         *,
         vectors: tuple[tuple[int, ...], ...],
+        dimension: int,
         coherence_squared: CanonicalRational,
         maximizing_pair: tuple[int, int] | None,
     ) -> Self:
         return cls.model_construct(
             vectors=vectors,
+            dimension=dimension,
             coherence_squared=coherence_squared,
             maximizing_pair=maximizing_pair,
         )
 
 
-class FramePotentialResult(FiniteFrameRequest):
+class FramePotentialResult(VectorFamily):
     potential: ExactInteger
 
     @classmethod
     def _from_kernel(
-        cls, *, vectors: tuple[tuple[int, ...], ...], potential: ExactInteger
+        cls,
+        *,
+        vectors: tuple[tuple[int, ...], ...],
+        dimension: int,
+        potential: ExactInteger,
     ) -> Self:
         return cls.model_construct(
             vectors=vectors,
+            dimension=dimension,
             potential=potential,
         )
 
@@ -94,10 +87,7 @@ class FramePotentialResult(FiniteFrameRequest):
 __all__ = [
     "MAX_DIM",
     "MAX_VECTOR_CELLS",
-    "CoherenceRequest",
     "CoherenceResult",
-    "FiniteFrameRequest",
     "FramePotentialResult",
     "GramResult",
-    "VectorFamilyRequest",
 ]

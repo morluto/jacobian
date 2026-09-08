@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.topology.cubical_complexes._models import (
+    MAX_CELLS,
+    MAX_FACE_CELLS,
     CubicalCell,
     CubicalComplex,
     FaceClosureResult,
@@ -19,6 +24,12 @@ def _face_cells(cells: tuple[CubicalCell, ...]) -> tuple[CubicalCell, ...]:
     def add_faces(intervals: tuple[tuple[int, int], ...]) -> None:
         if intervals in all_cells:
             return
+        if len(all_cells) >= MAX_FACE_CELLS:
+            raise OperationResourceAdmissionError(
+                location=("cells",),
+                code="cubical_complex.face_output_budget",
+                message="cubical face closure exceeds the cell output bound",
+            )
         all_cells.add(intervals)
         for i, (a, b) in enumerate(intervals):
             if b > a:
@@ -36,10 +47,24 @@ def _canonical_complex(
     cells: tuple[CubicalCell, ...],
 ) -> tuple[CubicalComplex, tuple[CubicalCell, ...]]:
     if not cells:
-        raise ValueError("at least one cell is required")
+        raise OperationDomainValidationError(
+            location=("cells",),
+            code="cubical_complex.invalid_ambient_axis",
+            message="at least one cell is required",
+        )
     ambient_dimension = len(cells[0].intervals)
     if any(len(cell.intervals) != ambient_dimension for cell in cells):
-        raise ValueError("all cells must use one ambient coordinate axis")
+        raise OperationDomainValidationError(
+            location=("cells",),
+            code="cubical_complex.invalid_ambient_axis",
+            message="all cells must use one ambient coordinate axis",
+        )
+    if len(cells) > MAX_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("cells",),
+            code="cubical_complex.source_cell_budget",
+            message="cubical source exceeds the cell input bound",
+        )
     source_cells = tuple(sorted(set(cells), key=lambda cell: cell.intervals))
     closed_cells = _face_cells(source_cells)
     return (
@@ -99,7 +124,7 @@ def verify_f_vector(claim: FVectorResult) -> bool:
         return f_vector(claim.source_cells) == claim
     except OperationResourceAdmissionError:
         raise
-    except (TypeError, ValueError):
+    except OperationDomainValidationError:
         return False
 
 
@@ -109,7 +134,7 @@ def verify_face_closure(claim: FaceClosureResult) -> bool:
         return face_closure(claim.source_cells) == claim
     except OperationResourceAdmissionError:
         raise
-    except (TypeError, ValueError):
+    except OperationDomainValidationError:
         return False
 
 

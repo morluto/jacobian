@@ -16,7 +16,10 @@ from jacobian.math.geometry.differential.rational_tensor.covariant_derivative im
     RationalCovariantDerivativeProfile,
     covariant_derivative,
 )
-from jacobian.math.geometry.differential.values import RationalCoordinateTensor
+from jacobian.math.geometry.differential.values import (
+    RationalCoordinateTensor,
+    TensorVariance,
+)
 from jacobian.math.polynomials._conversions import (
     rational_function_from_sympy,
     rational_function_to_sympy,
@@ -26,7 +29,9 @@ r, theta = symbols("r theta")
 
 
 def tensor(
-    values: list[Any], variance: tuple[str, ...], axis: tuple[str, ...] = ("r", "theta")
+    values: list[Any],
+    variance: tuple[TensorVariance, ...],
+    axis: tuple[str, ...] = ("r", "theta"),
 ) -> RationalCoordinateTensor:
     return RationalCoordinateTensor(
         coordinate_axis=axis,

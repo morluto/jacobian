@@ -100,6 +100,7 @@ def _denominator_guard_identity(dag: Dag, value: Expression) -> object | None:
             and len(source.terms) > 2
             and remaining_numerator_identity
         )
+        key: object
         if source is not None and not factorizable:
             key = _polynomial_key(source)
             return key if multiplicity == 1 else (key, multiplicity)

@@ -15,6 +15,9 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.combinatorics.additive._subset_sum_residue import (
+    SubsetSumResidueProfileResult,
+)
 from jacobian.math.combinatorics.additive.finite_abelian_subset_sum._models import (
     MAX_FINITE_ABELIAN_SUBSET_SUM_COORDINATE_SLOTS,
     MAX_FINITE_ABELIAN_SUBSET_SUM_ITEMS,
@@ -43,7 +46,7 @@ def finite_abelian_subset_sum_profile(
     group: FiniteAbelianProductGroup,
     sequence: tuple[FiniteAbelianGroupElement, ...],
     include_empty_subset: bool = True,
-):
+) -> SubsetSumResidueProfileResult:
     execution = current_request_execution()
     if execution is None:
         with request_execution(time.monotonic()):
@@ -128,10 +131,6 @@ def finite_abelian_subset_sum_profile(
         for element, multiplicity in zip(elements, counts, strict=True)
     )
     support_size = sum(multiplicity > 0 for multiplicity in counts)
-    from jacobian.math.combinatorics.additive._subset_sum_residue import (
-        SubsetSumResidueProfileResult,
-    )
-
     return SubsetSumResidueProfileResult(
         source=IndexedIntegerSequence(items=()),
         modulus=1,

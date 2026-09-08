@@ -338,17 +338,17 @@ class SubsetSumResidueProfileResult(StrictModel):
             prepared["residue_counts"] = tuple(raw_counts)
         raw_witnesses = prepared.get("residue_witnesses")
         if isinstance(raw_witnesses, list):
-            witnesses: list[object] = []
+            normalized_witnesses: list[object] = []
             for raw_witness in raw_witnesses:
                 if isinstance(raw_witness, Mapping):
                     witness = dict(raw_witness)
                     raw_indices = witness.get("indices")
                     if isinstance(raw_indices, list):
                         witness["indices"] = tuple(raw_indices)
-                    witnesses.append(witness)
+                    normalized_witnesses.append(witness)
                 else:
-                    witnesses.append(raw_witness)
-            prepared["residue_witnesses"] = tuple(witnesses)
+                    normalized_witnesses.append(raw_witness)
+            prepared["residue_witnesses"] = tuple(normalized_witnesses)
 
         source_shape = _raw_source_shape(prepared.get("source"))
         item_count = (

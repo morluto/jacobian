@@ -4,11 +4,13 @@ from time import monotonic
 
 import pytest
 from pydantic import ValidationError
-from pydantic_core import PydanticCustomError
 from sympy import QQ, Poly, symbols
 
 from jacobian._execution import OperationExecutionTimeoutError, request_execution
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.polynomials._conversions import rational_function_from_sympy
 from jacobian.math.polynomials.rational_functions import RationalFunctionMap
 from jacobian.math.polynomials.rational_functions.maps import (
@@ -126,7 +128,7 @@ def test_authored_noncanonical_component_and_malformed_axes() -> None:
     source = RationalFunctionMap(
         source_variables=("x",), target_coordinates=("u",), components=(invalid,)
     )
-    with pytest.raises(PydanticCustomError, match="coprime"):
+    with pytest.raises(OperationDomainValidationError, match="coprime"):
         jacobian_matrix(source)
     with pytest.raises(ValidationError, match="ordered source axis"):
         RationalFunctionMap(

@@ -53,6 +53,7 @@ from jacobian.math.polynomials._conversions import (
     rational_function_to_sympy,
     sparse_rational_polynomial_to_sympy,
 )
+from jacobian.math.polynomials.rational_functions import _bounds as rational_bounds
 from jacobian.math.polynomials.values import RationalFunction, SparseRationalPolynomial
 
 type Coefficient = int | tuple[int, int]
@@ -715,8 +716,8 @@ class _SourceConversionObserver:
         self.executed = executed
         self.calls = calls
         self.observing_bound = False
-        self.original_fraction_bound = lie_bounds._fraction_bound
-        self.original_polynomial_bound = lie_bounds._polynomial_bound
+        self.original_fraction_bound = rational_bounds._fraction_bound
+        self.original_polynomial_bound = rational_bounds._polynomial_bound
         self.original_fraction = Fraction
         self.original_gcd = gcd
         self.original_lcm = lcm
@@ -889,11 +890,11 @@ def test_work_categories_cover_observed_backend_primitives_and_detect_mutations(
     )
     monkeypatch.setattr(lie_bounds, "_fraction_bound", source_observer.bound)
     monkeypatch.setattr(
-        lie_bounds, "_polynomial_bound", source_observer.polynomial_bound
+        rational_bounds, "_polynomial_bound", source_observer.polynomial_bound
     )
-    monkeypatch.setattr(lie_bounds, "Fraction", source_observer.fraction)
-    monkeypatch.setattr(lie_bounds, "gcd", source_observer.gcd)
-    monkeypatch.setattr(lie_bounds, "lcm", source_observer.lcm)
+    monkeypatch.setattr(rational_bounds, "Fraction", source_observer.fraction)
+    monkeypatch.setattr(rational_bounds, "gcd", source_observer.gcd)
+    monkeypatch.setattr(rational_bounds, "lcm", source_observer.lcm)
     monkeypatch.setattr(
         lie_backend,
         "sparse_rational_polynomial_to_sympy",
@@ -954,7 +955,9 @@ def test_source_conversion_is_precharged_before_content_arithmetic(
         raise AssertionError("unadmitted source reached coefficient arithmetic")
 
     monkeypatch.setattr(lie_bounds, "MAX_LIE_DERIVATIVE_WORK_UNITS", 1)
-    monkeypatch.setattr(lie_bounds, "_polynomial_bound", forbidden_content_arithmetic)
+    monkeypatch.setattr(
+        rational_bounds, "_polynomial_bound", forbidden_content_arithmetic
+    )
 
     with pytest.raises(OperationDomainValidationError) as error:
         build_lie_derivative_plan(vector, scalar)
@@ -1127,6 +1130,48 @@ def test_expired_dispatch_deadline_stops_before_semantic_preflight() -> None:
         lie_derivative(vector, scalar)
 
 
+def test_cancellation_support_growth_is_rejected_before_conversion() -> None:
+    """Quotient support can exceed the raw sum; reject at admission, not convert."""
+
+    axis = ("x", "y", "z")
+    x, y, z = sympy.symbols("x y z")
+    power_x, power_y, power_z = x**7, y**7, z**7
+    denominator = (x - 1) * (y - 1) * (z - 1)
+    first_numerator = (
+        power_x * power_y * power_z
+        - power_x * power_y
+        - power_x * power_z
+        - power_y * power_z
+    )
+    second_numerator = power_x + power_y + power_z - 1
+    first = rational_function_from_sympy(first_numerator / denominator, axis)
+    second = rational_function_from_sympy(second_numerator / denominator, axis)
+    zero = rational_function_from_sympy(0, axis)
+    vector = _tensor(
+        axis,
+        ("CONTRAVARIANT",),
+        (first, second, zero),
+        guards=tuple(
+            polynomial.model_dump()
+            for polynomial in canonical_locus_guards(
+                component_denominators=(
+                    first.denominator,
+                    second.denominator,
+                    zero.denominator,
+                ),
+                variable_count=3,
+            )
+        ),
+    )
+    scalar = _tensor(axis, (), (rational_function_from_sympy(x + y, axis),))
+    with pytest.raises(
+        OperationDomainValidationError,
+        match="256-term",
+    ) as error:
+        lie_derivative(vector, scalar)
+    assert error.value.errors()[0]["type"].endswith("result_support")
+
+
 def test_result_exponent_admission_has_an_accepted_and_rejected_edge() -> None:
     variables = ("x",)
 
@@ -1229,3 +1274,52 @@ def test_profile_rejects_a_forged_result_that_drops_an_inherited_guard() -> None
             source=scalar,
             lie_derivative=forged_result,
         )
+
+
+def test_polynomial_cancellation_support_growth_is_rejected_before_conversion() -> None:
+    """Division can increase support; admission must not min against raw terms."""
+
+    from jacobian.catalog.models import OperationDomainValidationError
+
+    variables = ("x", "y", "z")
+    denominator = (
+        (1, (1, 1, 1)),
+        (-1, (1, 1, 0)),
+        (-1, (1, 0, 1)),
+        (1, (1, 0, 0)),
+        (-1, (0, 1, 1)),
+        (1, (0, 1, 0)),
+        (1, (0, 0, 1)),
+        (-1, (0, 0, 0)),
+    )
+    vector = _tensor(
+        variables,
+        ("CONTRAVARIANT",),
+        (
+            _function(
+                variables,
+                (1, (7, 7, 7)),
+                (-1, (7, 7, 0)),
+                (-1, (7, 0, 7)),
+                (-1, (0, 7, 7)),
+                denominator=denominator,
+            ),
+            _function(
+                variables,
+                (1, (7, 0, 0)),
+                (1, (0, 7, 0)),
+                (1, (0, 0, 7)),
+                (-1, (0, 0, 0)),
+                denominator=denominator,
+            ),
+            _zero(variables),
+        ),
+        guards=(_guard(*denominator),),
+    )
+    scalar = _tensor(
+        variables,
+        (),
+        (_function(variables, (1, (1, 0, 0)), (1, (0, 1, 0))),),
+    )
+    with pytest.raises(OperationDomainValidationError, match="256-term"):
+        lie_derivative(vector, scalar)

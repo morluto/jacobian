@@ -13,7 +13,10 @@ from jacobian._execution import (
     current_request_execution,
     request_checkpoint,
 )
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
 )
@@ -143,6 +146,20 @@ def _plan(
     return tuple(plans)
 
 
+def _require_result_compatible_labels(configuration: PointConfiguration) -> None:
+    """Reject labels the FiniteHypergraph result carrier cannot represent."""
+
+    for point in configuration.points:
+        try:
+            point.label.encode("utf-8")
+        except UnicodeEncodeError as exc:
+            raise OperationDomainValidationError(
+                location=("configuration", "points"),
+                code="distance_edge_coloring.label_encoding",
+                message="point labels must be valid UTF-8",
+            ) from exc
+
+
 def compute_distance_edge_coloring(
     configuration: PointConfiguration,
 ) -> DistanceEdgeColoringResult:
@@ -152,6 +169,7 @@ def compute_distance_edge_coloring(
     if execution is not None and execution.deadline is not None:
         deadline = min(deadline, execution.deadline)
     bind_request_deadline(deadline)
+    _require_result_compatible_labels(configuration)
     budget = _Budget(deadline)
     budget.charge(stage="before distance admission")
     plans = _plan(configuration, budget)

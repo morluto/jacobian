@@ -9,7 +9,10 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.finite_structures.hypergraphs import FiniteHypergraph
 from jacobian.math.combinatorics.finite_structures.hypergraphs.colorings import (
     HyperedgeColorAssignment,
@@ -216,3 +219,17 @@ def test_colliding_numeric_hashes_retain_distance_classes() -> None:
     result = assert_reconstructs(configuration([(i * modulus,) for i in range(64)]))
     assert len(result.squared_distances) == 63
     assert all(hash(value.as_fraction()) == 0 for value in result.squared_distances)
+
+
+def test_surrogate_point_label_is_rejected_before_distances() -> None:
+    source = configuration([(0,), (1,)])
+    forged = source.model_copy(
+        update={
+            "points": (
+                source.points[0],
+                source.points[1].model_copy(update={"label": "\ud800"}),
+            )
+        }
+    )
+    with pytest.raises(OperationDomainValidationError, match="UTF-8"):
+        compute_distance_edge_coloring(forged)

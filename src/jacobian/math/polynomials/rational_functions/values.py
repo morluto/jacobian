@@ -33,7 +33,11 @@ def _raw_coefficient_bits(coefficient: object) -> int:
                 bits += max(1, abs(component).bit_length())
         return bits
     if hasattr(coefficient, "num") and hasattr(coefficient, "den"):
-        return abs(coefficient.num).bit_length() + coefficient.den.bit_length()
+        numerator = coefficient.num
+        denominator = coefficient.den
+        if type(numerator) is int and type(denominator) is int:
+            return abs(numerator).bit_length() + denominator.bit_length()
+        return 0
     return 0
 
 

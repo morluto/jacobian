@@ -27,7 +27,6 @@ from jacobian.math.polynomials.rational_functions._bounds import (
     _fraction_bound,
     _polynomial_backend_conversion_work_units,
     _recognition_work_units,
-    _remove_exact_common_factor,
     _remove_guaranteed_common_monomial,
     _validate_canonical_result_bound,
 )
@@ -230,12 +229,10 @@ def _build_monomial_gradient(
 
 def _admit_general_gradient(
     function: RationalFunction, ledger: BoundsLedger
-) -> tuple[tuple[tuple[FractionBound, int], ...], tuple[DerivativeGcdFactor, ...]]:
-    """Admit one row into a caller-owned complete scalar or matrix ledger."""
+) -> tuple[tuple[FractionBound, int], ...]:
+    """Admit one row's derivative bounds without launching GCD workers."""
     source_bound = _fraction_bound(function, ledger)
     ledger.charge("recognition", _recognition_work_units(source_bound))
-    # Source recognition constructs its own exact pair; account for the
-    # additional conversion used to retain the pair through differentiation.
     ledger.charge(
         "source_conversion",
         sum(
@@ -243,7 +240,6 @@ def _admit_general_gradient(
             for bound in (source_bound.numerator, source_bound.denominator)
         ),
     )
-    _recognize_source(function)
     variable_count = len(function.variables)
     if function.denominator.terms:
         ledger.charge(
@@ -258,18 +254,24 @@ def _admit_general_gradient(
             )
             * max(variable_count, 1),
         )
-    factors = forced_denominator_derivative_gcds(function.denominator, variable_count)
     components = []
     for axis in range(variable_count):
         bound = _remove_guaranteed_common_monomial(
-            _remove_exact_common_factor(
-                _derivative_bound(function, source_bound, axis, ledger),
-                factors[axis].bound,
-            )
+            _derivative_bound(function, source_bound, axis, ledger)
         )
         digits = _validate_canonical_result_bound(bound, ledger)
         components.append((bound, digits))
-    return tuple(components), factors
+    return tuple(components)
+
+
+def _admit_general_factors(
+    function: RationalFunction,
+) -> tuple[DerivativeGcdFactor, ...]:
+    """Run source coprimality and denominator-derivative GCDs after admission."""
+    _recognize_source(function)
+    return forced_denominator_derivative_gcds(
+        function.denominator, len(function.variables)
+    )
 
 
 def _general_gradient_admitted(
@@ -311,7 +313,8 @@ def gradient(function: RationalFunction) -> RationalFunctionGradient:
         )
     else:
         ledger = _Ledger()
-        _, factors = _admit_general_gradient(function, ledger)
+        _admit_general_gradient(function, ledger)
+        factors = _admit_general_factors(function)
         derivatives = _general_gradient_admitted(function, factors)
     result = RationalFunctionGradient(
         source=function, variables=function.variables, partial_derivatives=derivatives

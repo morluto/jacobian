@@ -194,6 +194,21 @@ def test_conic_parametrization_components_compose_unchanged() -> None:
     assert all(len(row) == 1 for row in result.entries)
 
 
+def test_inactive_coordinate_of_a_nonmonomial_row_is_canonical_zero() -> None:
+    x, y = symbols("x y")
+    source = RationalFunctionMap(
+        source_variables=("x", "y"),
+        target_coordinates=("u",),
+        components=(rational_function_from_sympy(1 / (x + 1), ("x", "y")),),
+    )
+    result = jacobian_matrix(source)
+    assert not result.entries[0][1].numerator.terms
+    assert (
+        RationalFunctionMapJacobian.model_validate_json(result.model_dump_json())
+        == result
+    )
+
+
 def test_quotient_rule_by_independent_exact_coefficient_convolution() -> None:
     from fractions import Fraction
     from random import Random

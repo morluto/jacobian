@@ -162,8 +162,13 @@ def _run(payload: dict[str, Any]) -> dict[str, Any]:
         numerator, denominator = _remove_common_monomial(
             numerator, denominator, variable_count
         )
-        if not numerator.is_zero:
-            numerator, denominator = numerator.cancel(denominator, include=True)
+        if numerator.is_zero:
+            one = [0] * variable_count + ["1", "1"]
+            return {
+                "numerator": [],
+                "denominator": [one],
+            }
+        numerator, denominator = numerator.cancel(denominator, include=True)
         leading = denominator.LC()
         numerator = numerator.mul_ground(1 / leading)
         denominator = denominator.mul_ground(1 / leading)

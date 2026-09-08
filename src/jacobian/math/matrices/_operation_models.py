@@ -35,7 +35,7 @@ MAX_MATRIX_PRODUCT_OUTPUT_DIGIT_WORK = 3_000_000
 MAX_INVERSE_MATRIX_ORDER = 128
 MAX_INVERSE_OUTPUT_DIGIT_WORK = 3_000_000
 MAX_PERMANENT_RYSER_SUBSETS = 16_384
-MAX_PERMANENT_MATRIX_ORDER = MAX_PERMANENT_RYSER_SUBSETS.bit_length() - 1
+MAX_PERMANENT_MATRIX_ORDER = MAX_RATIONAL_MATRIX_ORDER
 # The canonical dense rational matrix carries determinant inputs through
 # order 128, but Kronecker admission was established only for product axes
 # through order 50. Pin each admitted output axis to that envelope.

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from math import gcd, lcm
+from math import factorial, gcd, lcm
 
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.matrices.quadratic_spectral.values import SpectrumKind
@@ -14,6 +14,11 @@ type Quadratic = tuple[Fraction, Fraction]
 type FractionPolynomial = tuple[Fraction, ...]
 
 MAX_INERTIA_DIMENSION = 16
+# Fraction-free congruence elimination can carry a denominator-cleared entry
+# through several determinant minors.  This is a decimal-digit budget for the
+# conservative preflight estimate below; diagonal forms use a direct sign
+# path and do not pay this bound.
+MAX_INERTIA_INTERMEDIATE_DIGITS = 200_000
 MAX_SPECTRAL_ANNIHILATING_COEFFICIENT_DIGITS = 996
 
 
@@ -155,10 +160,53 @@ def require_inertia_matrix(matrix: RealQuadraticMatrix) -> None:
         raise ValueError(
             f"exact quadratic inertia supports dimension at most {MAX_INERTIA_DIMENSION}"
         )
+    if all(
+        matrix.entries[row][column].rational_part.num == 0
+        and matrix.entries[row][column].radical_coefficient.num == 0
+        for row in range(len(matrix.entries))
+        for column in range(row + 1, len(matrix.entries))
+    ):
+        return
+    order = len(matrix.entries)
+    maximum_source_digits = max(
+        len(format_canonical_integer(abs(component.num)))
+        for row in matrix.entries
+        for value in row
+        for component in (value.rational_part, value.radical_coefficient)
+    )
+    maximum_scale_digits = 0
+    for index in range(order):
+        scale = lcm(
+            *(
+                component.den
+                for other in range(order)
+                for value in (matrix.entries[index][other],)
+                for component in (value.rational_part, value.radical_coefficient)
+            )
+        )
+        scale_digits = 0 if scale == 1 else len(format_canonical_integer(scale))
+        maximum_scale_digits = max(maximum_scale_digits, scale_digits)
+    cleared_entry_digits = maximum_source_digits + 2 * maximum_scale_digits
+    radicand_digits = len(format_canonical_integer(matrix.radicand))
+    # Bound both real embeddings of an entry, then each determinant by n!
+    # products. Recovering either integral pair coefficient from the two
+    # embeddings does not increase this bound (d >= 2). The block update
+    # multiplies three minors; exact division multiplies once more by the
+    # conjugate prior minor. Include the quadratic-product radicand factors.
+    minor_digits = order * (
+        cleared_entry_digits + (radicand_digits + 1) // 2 + 1
+    ) + len(str(factorial(order)))
+    estimated_digits = 4 * minor_digits + 4 * radicand_digits + 8
+    if estimated_digits > MAX_INERTIA_INTERMEDIATE_DIGITS:
+        raise ValueError(
+            "quadratic inertia intermediate integer growth exceeds the "
+            f"{MAX_INERTIA_INTERMEDIATE_DIGITS}-digit bound"
+        )
 
 
 __all__ = [
     "MAX_INERTIA_DIMENSION",
+    "MAX_INERTIA_INTERMEDIATE_DIGITS",
     "MAX_SPECTRAL_ANNIHILATING_COEFFICIENT_DIGITS",
     "annihilating_coefficients",
     "require_inertia_matrix",

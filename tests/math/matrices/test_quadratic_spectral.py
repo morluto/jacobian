@@ -361,9 +361,7 @@ def test_operation_specific_shape_and_work_bounds_are_preflighted() -> None:
             RealQuadraticSymmetricSpectrumRequest(matrix=nonsymmetric)
         )
 
-    seventeen = tuple(
-        tuple(_q(radicand=2) for _ in range(17)) for _ in range(17)
-    )
+    seventeen = tuple(tuple(_q(radicand=2) for _ in range(17)) for _ in range(17))
     with pytest.raises(OperationDomainValidationError):
         compute_inertia(RealQuadraticInertiaRequest(matrix=_matrix(seventeen)))
 
@@ -396,6 +394,44 @@ def test_bareiss_two_by_two_and_singular_blocks() -> None:
     )
     singular = inertia(_matrix(((_q(1), _q(1)), (_q(1), _q(1)))))
     assert (singular.n_positive, singular.n_negative, singular.n_zero) == (1, 0, 1)
+
+
+def test_bareiss_handles_nonunit_pivot_then_residual_two_by_two_block() -> None:
+    """A nonunit first pivot must preserve a later hyperbolic block.
+
+    The source is ``C.T * D * C`` for unimodular ``C`` and
+    ``D = diag(2) + [[0, 1], [1, 0]] + diag(3)``.  Sylvester's law therefore
+    gives (3, 1, 0), while the elimination must divide the residual block by
+    the nonunit previous pivot before selecting its next 2 by 2 pivot.
+    """
+
+    source = _matrix(
+        (
+            (_q(2), _q(2), _q(), _q(2)),
+            (_q(2), _q(2), _q(1), _q(3)),
+            (_q(), _q(1), _q(2), _q(1)),
+            (_q(2), _q(3), _q(1), _q(5)),
+        )
+    )
+    result = inertia(source)
+    assert (result.n_positive, result.n_negative, result.n_zero) == (3, 1, 0)
+
+
+def test_bareiss_preserves_minor_scaling_across_multiple_two_by_two_blocks() -> None:
+    """Repeated hyperbolic pivots retain exact divisibility and inertia."""
+
+    source = _matrix(
+        (
+            (_q(2), _q(), _q(), _q(), _q(), _q()),
+            (_q(), _q(), _q(1), _q(), _q(), _q()),
+            (_q(), _q(1), _q(), _q(), _q(), _q()),
+            (_q(), _q(), _q(), _q(), _q(2), _q()),
+            (_q(), _q(), _q(), _q(2), _q(), _q()),
+            (_q(), _q(), _q(), _q(), _q(), _q(3)),
+        )
+    )
+    result = inertia(source)
+    assert (result.n_positive, result.n_negative, result.n_zero) == (4, 2, 0)
 
 
 def test_bareiss_mixed_sign_definite_case() -> None:
@@ -476,17 +512,74 @@ def test_inertia_admits_sixteen_dimensional_identity() -> None:
 
     assert MAX_INERTIA_DIMENSION == 16
     entries = tuple(
-        tuple(
-            _q(1, 0, 2) if index == column else _q(0, 0, 2)
-            for column in range(16)
-        )
+        tuple(_q(1, 0, 2) if index == column else _q(0, 0, 2) for column in range(16))
         for index in range(16)
     )
-    result = compute_inertia(
-        RealQuadraticInertiaRequest(matrix=_matrix(entries))
-    )
+    result = compute_inertia(RealQuadraticInertiaRequest(matrix=_matrix(entries)))
     assert (result.n_positive, result.n_negative, result.n_zero) == (16, 0, 0)
     assert result.definiteness == "positive_definite"
+
+
+def test_inertia_diagonal_fastpath_accepts_large_exact_scalars() -> None:
+    """Diagonal signs do not require denominator clearing or minor growth."""
+
+    huge = 10**255
+    source = _matrix(
+        tuple(
+            tuple(_q(huge if row == column else 0) for column in range(16))
+            for row in range(16)
+        )
+    )
+    result = inertia(source)
+    assert (result.n_positive, result.n_negative, result.n_zero) == (16, 0, 0)
+
+
+def test_inertia_rejects_unbounded_denominator_clearing_before_kernel() -> None:
+    """A dense high denominator source is rejected before huge integer minors."""
+
+    from sympy import nextprime
+
+    primes = []
+    prime = 10**30
+    for _ in range(120):
+        prime = int(nextprime(prime))
+        primes.append(prime)
+    denominators = iter(prime**8 for prime in primes)
+    denominator_matrix = [[1] * 16 for _ in range(16)]
+    for row in range(16):
+        for column in range(row + 1, 16):
+            denominator_matrix[row][column] = denominator_matrix[column][row] = next(
+                denominators
+            )
+    source = _matrix(
+        tuple(
+            tuple(
+                _q(Fraction(1, denominator_matrix[row][column]))
+                if row != column
+                else _q(1)
+                for column in range(16)
+            )
+            for row in range(16)
+        )
+    )
+    with pytest.raises(ValueError, match="intermediate integer growth"):
+        inertia(source)
+
+
+def test_inertia_accepts_dense_large_shared_denominators() -> None:
+    denominator = 10**255 + 1
+    # (I + J)/d has eigenvalues 17/d once and 1/d fifteen times.
+    source = _matrix(
+        tuple(
+            tuple(
+                _q(Fraction(2 if row == column else 1, denominator))
+                for column in range(16)
+            )
+            for row in range(16)
+        )
+    )
+    result = inertia(source)
+    assert (result.n_positive, result.n_negative, result.n_zero) == (16, 0, 0)
 
 
 def test_quadratic_spectral_public_api_and_catalog_are_exact() -> None:

@@ -556,9 +556,9 @@ def _bareiss_eliminate_one(
     # The Bareiss diagonal holds the minor ratio whose sign, divided by the
     # previous pivot's sign, is the congruence-diagonal sign: for -I the raw
     # diagonal reads (+1) while the true second pivot is (-1).
-    sign = _sign(
-        (Fraction(diagonal[0]), Fraction(diagonal[1])), radicand
-    ) * _sign((Fraction(previous[0]), Fraction(previous[1])), radicand)
+    sign = _sign((Fraction(diagonal[0]), Fraction(diagonal[1])), radicand) * _sign(
+        (Fraction(previous[0]), Fraction(previous[1])), radicand
+    )
     # Unlike field elimination, rows with a zero multiplier must still be
     # scaled by pivot/previous: the Bareiss update is (m*p - l*t)/prev, not
     # m - (l/p)*t, so skipping them would miss the exact p/prev scaling (and
@@ -623,14 +623,15 @@ def _bareiss_eliminate_two(
             for column in range(index + 2, len(matrix)):
                 top = matrix[index][column]
                 bottom = matrix[index + 1][column]
-                matrix[row][column] = _pair_exact_div(
-                    _pair_sub(
-                        _pair_mul(matrix[row][column], determinant, radicand),
-                        _pair_add(
-                            _pair_mul(coefficient_0, top, radicand),
-                            _pair_mul(coefficient_1, bottom, radicand),
-                        ),
+                numerator = _pair_sub(
+                    _pair_mul(matrix[row][column], determinant, radicand),
+                    _pair_add(
+                        _pair_mul(coefficient_0, top, radicand),
+                        _pair_mul(coefficient_1, bottom, radicand),
                     ),
+                )
+                matrix[row][column] = _pair_exact_div(
+                    _pair_exact_div(numerator, previous, radicand),
                     previous,
                     radicand,
                 )
@@ -640,7 +641,10 @@ def _bareiss_eliminate_two(
             matrix[row][index + 1] = (0, 0)
             matrix[index][row] = (0, 0)
             matrix[index + 1][row] = (0, 0)
-    return determinant
+    # The block determinant is itself still scaled by the prior pivot.  Carry
+    # the normalized determinant as the next Bareiss divisor so that a later
+    # block receives the same minor invariant as a sequence of 1x1 pivots.
+    return _pair_exact_div(determinant, previous, radicand)
 
 
 def _bareiss_inertia_counts(
@@ -660,11 +664,7 @@ def _bareiss_inertia_counts(
     previous: IntegralQuadratic = (1, 0)
     while index < len(matrix):
         pivot = next(
-            (
-                row
-                for row in range(index, len(matrix))
-                if matrix[row][row] != (0, 0)
-            ),
+            (row for row in range(index, len(matrix)) if matrix[row][row] != (0, 0)),
             None,
         )
         if pivot is not None:
@@ -688,9 +688,20 @@ def _bareiss_inertia_counts(
 def _inertia_counts(matrix: RealQuadraticMatrix) -> tuple[int, int, int]:
     radicand = matrix.radicand
     reduced = _matrix_entries(matrix)
-    return _bareiss_inertia_counts(
-        _clear_quadratic_denominators(reduced), radicand
-    )
+    if all(
+        reduced[row][column] == _ZERO
+        for row in range(len(reduced))
+        for column in range(row + 1, len(reduced))
+    ):
+        signs = [
+            _sign(reduced[index][index], radicand) for index in range(len(reduced))
+        ]
+        return (
+            sum(sign > 0 for sign in signs),
+            sum(sign < 0 for sign in signs),
+            sum(sign == 0 for sign in signs),
+        )
+    return _bareiss_inertia_counts(_clear_quadratic_denominators(reduced), radicand)
 
 
 def inertia_data(

@@ -36,6 +36,7 @@ from jacobian.math.matrices._operation_models import (
     MAX_MATRIX_PRODUCT_AXIS,
     MAX_MATRIX_PRODUCT_MULTIPLY_ADDS,
     MAX_MATRIX_PRODUCT_OUTPUT_DIGIT_WORK,
+    MAX_PERMANENT_MATRIX_ORDER,
     MAX_PERMANENT_RYSER_SUBSETS,
     MAX_SPARSE_RANK_INTERMEDIATE_CELLS,
     CharacteristicPolynomialResult,
@@ -435,9 +436,7 @@ def _ryser_permanent_fractions(
         for value in row:
             scale = lcm(scale, value.denominator)
         scales.append(scale)
-        scaled.append(
-            [value.numerator * (scale // value.denominator) for value in row]
-        )
+        scaled.append([value.numerator * (scale // value.denominator) for value in row])
     numerator = _ryser_permanent_integers(tuple(tuple(row) for row in scaled))
     denominator = 1
     for scale in scales:
@@ -500,7 +499,7 @@ def _permanent_of_fractions(entries: tuple[tuple[Fraction, ...], ...]) -> Fracti
 def permanent(matrix: MatrixBase) -> Any:
     import sympy
 
-    source = _exact_matrix(matrix, maximum_dimension=64)
+    source = _exact_matrix(matrix, maximum_dimension=MAX_PERMANENT_MATRIX_ORDER)
     if source.rows != source.cols:
         raise ValueError("permanent requires a square matrix")
     entries = tuple(
@@ -512,8 +511,8 @@ def permanent(matrix: MatrixBase) -> Any:
     )
     # Native callers bypass the typed request model, so apply the same
     # square/order/scalar admission before entering the exponential kernel.
-    _admit(_admit_permanent, rational_matrix_from_fractions(entries))
-    value = _permanent_of_fractions(entries)
+    blocks = _admit(_admit_permanent, rational_matrix_from_fractions(entries))
+    value = _permanent_of_blocks(blocks)
     return sympy.Rational(value.numerator, value.denominator)
 
 
@@ -1021,19 +1020,84 @@ def _rank_one_inverse_digit_work(
     return order * order + order * order * component_digits
 
 
-def _admit_permanent(matrix: RationalMatrix) -> None:
-    _admit_rational_matrix(matrix)
+def _admit_permanent(
+    matrix: RationalMatrix,
+) -> tuple[tuple[tuple[Fraction, ...], ...], ...] | None:
+    from jacobian.math.matrices.values import require_matrix_scalar_digits
+
+    require_matrix_scalar_digits(
+        matrix.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
+    )
     order = len(matrix.entries)
     if order != matrix.column_count:
         raise _validation_error(
             "budget_exceeded", "permanent computation requires a square matrix"
         )
-    if (1 << order) > MAX_PERMANENT_RYSER_SUBSETS:
+    if order > MAX_PERMANENT_MATRIX_ORDER:
+        raise _validation_error(
+            "budget_exceeded", "permanent matrix axis bound exceeded"
+        )
+    components = _sparse_rank_components(
+        tuple(
+            SparseRationalMatrixEntry(row=i, column=j, value=value)
+            for i, row in enumerate(matrix.entries)
+            for j, value in enumerate(row)
+            if value.num != 0
+        )
+    )
+    # A perfect matching cannot cross support components. An unbalanced
+    # component or isolated row rules one out without any subset expansion.
+    if sum(len(component.rows) for component in components) != order or any(
+        len(component.rows) != len(component.columns) for component in components
+    ):
+        return None
+    if (
+        sum(1 << len(component.rows) for component in components)
+        > MAX_PERMANENT_RYSER_SUBSETS
+    ):
         raise _validation_error(
             "budget_exceeded",
             "permanent computation exceeds the "
             f"{MAX_PERMANENT_RYSER_SUBSETS}-subset Ryser work budget",
         )
+    # Clear denominators row by row. Every Ryser partial sum has denominator
+    # dividing prod(D_i), and numerator bounded by 2**n prod(n max|B_ij|).
+    # Use actual LCMs so shared and unit denominators are not charged repeatedly.
+    denominator_bits = 0
+    numerator_bits = order + 1
+    for row in matrix.entries:
+        scale = lcm(*(value.den for value in row))
+        denominator_bits += (scale - 1).bit_length()
+        entry_bits = max(
+            abs(value.num).bit_length() + (scale // value.den).bit_length()
+            for value in row
+        )
+        numerator_bits += entry_bits + (order - 1).bit_length()
+    if _bit_bound_decimal_digits(max(numerator_bits, denominator_bits)) > (
+        MAX_CANONICAL_RATIONAL_DIGITS
+    ):
+        raise _validation_error(
+            "budget_exceeded",
+            "permanent rational growth exceeds the exact scalar digit bound",
+        )
+    return tuple(
+        tuple(
+            tuple(matrix.entries[i][j].as_fraction() for j in component.columns)
+            for i in component.rows
+        )
+        for component in components
+    )
+
+
+def _permanent_of_blocks(
+    blocks: tuple[tuple[tuple[Fraction, ...], ...], ...] | None,
+) -> Fraction:
+    if blocks is None:
+        return Fraction(0)
+    value = Fraction(1)
+    for block in blocks:
+        value *= _permanent_of_fractions(block)
+    return value
 
 
 def _denominator_digits(denominator: int) -> int:
@@ -1713,13 +1777,8 @@ def adjugate_result(matrix: IntegerMatrix) -> MatrixAdjugateResult:
 
 
 def permanent_result(matrix: RationalMatrix) -> MatrixPermanentResult:
-    _admit(_admit_permanent, matrix)
-    if matrix.row_count == 0:
-        return MatrixPermanentResult(permanent=CanonicalRational(num=1, den=1))
-    entries = tuple(
-        tuple(value.as_fraction() for value in row) for row in matrix.entries
-    )
-    value = _permanent_of_fractions(entries)
+    blocks = _admit(_admit_permanent, matrix)
+    value = _permanent_of_blocks(blocks)
     return MatrixPermanentResult(
         permanent=CanonicalRational.from_fraction(value),
     )

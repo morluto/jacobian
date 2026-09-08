@@ -32,7 +32,7 @@ _WORKER_PATH = Path(__file__).resolve().with_name("_dag_worker.py")
 _STDOUT_BYTES = 64 * 1024 * 1024
 _STDERR_BYTES = 64 * 1024
 _ADDRESS_SPACE_BYTES = 1024 * 1024 * 1024
-_PARENT_FINALIZATION_SECONDS = 1.0
+_PARENT_FINALIZATION_SECONDS = 0.05
 
 
 def _source_payload(polynomial: SparseRationalPolynomial) -> list[list[object]]:
@@ -81,8 +81,12 @@ def _poly_from_payload(records: object, symbols: tuple[Any, ...]) -> Any:
 
 def evaluate_polynomial_dag(
     nodes: list[Node], axis: tuple[str, ...], *, deadline: float
-) -> dict[int, Any]:
-    """Expand one admitted DAG in a killable worker under the shared deadline."""
+) -> tuple[list[Any], tuple[Any, ...]]:
+    """Expand one admitted DAG in a killable worker under the shared deadline.
+
+    Expanded polynomials remain as worker term dumps. The parent materializes
+    only the nodes later consumed, under the remaining request deadline.
+    """
 
     remaining = deadline - monotonic() - _PARENT_FINALIZATION_SECONDS
     if remaining <= 0:
@@ -153,7 +157,16 @@ def evaluate_polynomial_dag(
             "bounded metric-curvature DAG worker returned malformed output"
         )
     generators = symbols_for_variables(axis)
-    return {
-        index: _poly_from_payload(record, generators)
-        for index, record in enumerate(response["values"])
-    }
+    return response["values"], generators
+
+
+def materialize_expanded_polynomial(
+    records: object, symbols: tuple[Any, ...], *, deadline: float
+) -> Any:
+    """Decode one worker polynomial under the remaining request deadline."""
+
+    if monotonic() >= deadline:
+        raise OperationExecutionTimeoutError(
+            "metric curvature deadline expired during polynomial DAG decoding"
+        )
+    return _poly_from_payload(records, symbols)

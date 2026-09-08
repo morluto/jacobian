@@ -21,6 +21,7 @@ from jacobian.math.geometry.differential._recognition_process import (
 from jacobian.math.geometry.differential.metrics._dag import Expression, Node
 from jacobian.math.geometry.differential.metrics._dag_process import (
     evaluate_polynomial_dag,
+    materialize_expanded_polynomial,
 )
 from jacobian.math.geometry.differential.metrics._models import (
     RationalCoordinateConnection,
@@ -47,19 +48,27 @@ from jacobian.math.polynomials.values import (
 
 
 def _evaluate_node(
-    index: int, nodes: list[Node], axis: tuple[str, ...], cache: dict[int, Any]
+    index: int, nodes: list[Node], axis: tuple[str, ...], cache: dict[int | str, Any]
 ) -> Any:
     if index in cache:
         return cache[index]
-    request_checkpoint("before curvature polynomial arithmetic")
     execution = current_request_execution()
     deadline = (
         execution.deadline
         if execution is not None and execution.deadline is not None
         else time.monotonic() + 120.0
     )
-    cache.update(evaluate_polynomial_dag(nodes, axis, deadline=deadline))
-    request_checkpoint("after curvature polynomial arithmetic")
+    records = cache.get("records")
+    symbols = cache.get("symbols")
+    if records is None or symbols is None:
+        request_checkpoint("before curvature polynomial arithmetic")
+        records, symbols = evaluate_polynomial_dag(nodes, axis, deadline=deadline)
+        cache["records"] = records
+        cache["symbols"] = symbols
+        request_checkpoint("after curvature polynomial arithmetic")
+    cache[index] = materialize_expanded_polynomial(
+        records[index], symbols, deadline=deadline
+    )
     return cache[index]
 
 

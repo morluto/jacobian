@@ -490,7 +490,7 @@ def test_inherited_determinant_factors_are_not_charged_twice() -> None:
     )
     result = covariant_derivative(metric, source)
     assert len(result.retained_nonzero_denominators) == 768
-    assert expressions(result.covariant_derivative) == (0, 0, 0, 0)
+    assert expressions(result) == (0, 0, 0, 0)
 
 
 def test_structurally_zero_metric_uses_the_covariant_derivative_domain_code() -> None:

@@ -23,7 +23,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         operation_id="rational_function_map.compose.compute",
         title="Compose two rational coordinate maps",
         description=(
-            "Compose compatible canonical rational coordinate maps exactly. The "
+            "Compose two canonical rational coordinate maps when "
+            "inner.target_coordinates equals outer.source_variables. The "
             "result retains both maps, the inner source and outer target axes, and "
             "the complete pre-cancellation construction locus."
         ),

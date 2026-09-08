@@ -19,8 +19,23 @@ def guard_key(guard: RationalPolynomial) -> bytes:
 
 
 class RationalMapCompositionRequest(StrictModel):
-    outer: RationalFunctionMap
-    inner: RationalFunctionMap
+    """Request the exact composite of two rational coordinate maps.
+
+    ``inner.target_coordinates`` must equal ``outer.source_variables``.
+    """
+
+    outer: RationalFunctionMap = Field(
+        description=(
+            "The outer map. inner.target_coordinates must equal "
+            "outer.source_variables."
+        )
+    )
+    inner: RationalFunctionMap = Field(
+        description=(
+            "The inner map. inner.target_coordinates must equal "
+            "outer.source_variables."
+        )
+    )
 
     @model_validator(mode="after")
     def require_intermediate_axis(self) -> Self:

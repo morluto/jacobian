@@ -110,16 +110,29 @@ def _run(payload: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("malformed kernel request")
     generators = symbols(f"x0:{variable_count}")
     if task == "derivative_gcds":
-        if set(payload) != {"task", "variable_count", "terms"}:
+        if set(payload) not in (
+            {"task", "variable_count", "terms"},
+            {"task", "variable_count", "terms", "axes"},
+        ):
             raise ValueError("malformed kernel request")
         records = payload["terms"]
         if not isinstance(records, list):
+            raise ValueError("malformed kernel request")
+        axes = payload.get("axes", list(range(variable_count)))
+        if (
+            not isinstance(axes, list)
+            or any(
+                type(axis) is not int or axis < 0 or axis >= variable_count
+                for axis in axes
+            )
+            or len(set(axes)) != len(axes)
+        ):
             raise ValueError("malformed kernel request")
         denominator = _polynomial(records, variable_count, generators)
         return {
             "factors": [
                 _factor_payload(denominator.gcd(denominator.diff(axis)), variable_count)
-                for axis in range(variable_count)
+                for axis in axes
             ]
         }
     if task == "coprime":

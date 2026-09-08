@@ -243,18 +243,30 @@ def _run_kernel_worker(payload: dict[str, Any], *, stage: str) -> dict[str, Any]
 def forced_denominator_derivative_gcds(
     denominator: SparseRationalPolynomial,
     variable_count: int,
+    *,
+    axes: tuple[int, ...] | None = None,
 ) -> tuple[DerivativeGcdFactor, ...]:
-    """Return ``gcd(q, ∂q/∂x_i)`` under the request deadline."""
+    """Return ``gcd(q, ∂q/∂x_i)`` under the request deadline.
 
+    Axes whose admitted derivative bounds are identically zero skip the
+    worker and receive a unit factor.
+    """
+
+    unit = DerivativeGcdFactor(bound=_one_polynomial(variable_count), records=())
     if variable_count == 0 or not denominator.terms:
-        unit = _one_polynomial(variable_count)
-        return tuple(
-            DerivativeGcdFactor(bound=unit, records=()) for _ in range(variable_count)
+        return tuple(unit for _ in range(variable_count))
+    active = tuple(range(variable_count)) if axes is None else axes
+    if any(axis < 0 or axis >= variable_count for axis in active):
+        raise RuntimeError(
+            "bounded denominator-derivative gcd worker returned malformed output"
         )
+    if not active:
+        return tuple(unit for _ in range(variable_count))
     response = _run_kernel_worker(
         {
             "task": "derivative_gcds",
             "variable_count": variable_count,
+            "axes": list(active),
             "terms": _polynomial_payload(denominator),
         },
         stage="denominator-derivative gcd",
@@ -264,11 +276,14 @@ def forced_denominator_derivative_gcds(
             "bounded denominator-derivative gcd worker returned malformed output"
         )
     factors = response["factors"]
-    if not isinstance(factors, list) or len(factors) != variable_count:
+    if not isinstance(factors, list) or len(factors) != len(active):
         raise RuntimeError(
             "bounded denominator-derivative gcd worker returned malformed output"
         )
-    return tuple(_bound_from_payload(factor, variable_count) for factor in factors)
+    result = [unit] * variable_count
+    for axis, payload in zip(active, factors, strict=True):
+        result[axis] = _bound_from_payload(payload, variable_count)
+    return tuple(result)
 
 
 def source_is_coprime(function: RationalFunction) -> bool:

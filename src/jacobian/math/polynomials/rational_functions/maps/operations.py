@@ -107,7 +107,7 @@ def _charge_and_build_general_row(
 ) -> tuple[object, ...]:
     factors = factor_cache.get(key)
     if factors is None:
-        factors = _admit_general_factors(component)
+        factors = _admit_general_factors(component, admitted_bounds)
         factor_cache[key] = factors
     _validate_admitted_factors(admitted_bounds, factors, ledger)
     for bound, factor in zip(admitted_bounds, factors, strict=True):

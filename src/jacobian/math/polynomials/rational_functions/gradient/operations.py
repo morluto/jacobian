@@ -268,11 +268,14 @@ def _admit_general_gradient(
 
 def _admit_general_factors(
     function: RationalFunction,
+    bounds: tuple[FractionBound, ...],
 ) -> tuple[DerivativeGcdFactor, ...]:
     """Run source coprimality and denominator-derivative GCDs after admission."""
     _recognize_source(function)
     return forced_denominator_derivative_gcds(
-        function.denominator, len(function.variables)
+        function.denominator,
+        len(function.variables),
+        axes=tuple(axis for axis, bound in enumerate(bounds) if not bound.is_zero),
     )
 
 
@@ -352,7 +355,7 @@ def gradient(function: RationalFunction) -> RationalFunctionGradient:
     else:
         ledger = _Ledger()
         bounds = _admit_general_gradient(function, ledger)
-        factors = _admit_general_factors(function)
+        factors = _admit_general_factors(function, bounds)
         _validate_admitted_factors(bounds, factors, ledger)
         derivatives = _general_gradient_admitted(function, factors, bounds)
     result = RationalFunctionGradient(

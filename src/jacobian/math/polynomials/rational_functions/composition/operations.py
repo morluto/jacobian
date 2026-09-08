@@ -652,18 +652,23 @@ def compose_maps(  # noqa: C901
             for component in outer_components
         ]
     xvars = inner.source_variables
-    inner_num = tuple(
-        sparse_rational_polynomial_to_sympy(c.numerator, xvars)
-        for c in inner_components
-    )
-    inner_den = tuple(
-        sparse_rational_polynomial_to_sympy(c.denominator, xvars)
-        for c in inner_components
-    )
+    inner_num = []
+    for component in inner_components:
+        request_checkpoint("before rational map composition inner numerator conversion")
+        inner_num.append(
+            sparse_rational_polynomial_to_sympy(component.numerator, xvars)
+        )
+    inner_den = []
+    for component in inner_components:
+        request_checkpoint("before rational map composition inner denominator conversion")
+        inner_den.append(
+            sparse_rational_polynomial_to_sympy(component.denominator, xvars)
+        )
 
     def substitute(polynomial: SparseRationalPolynomial) -> tuple[Any, Any]:
         from sympy import Poly
 
+        request_checkpoint("before rational map composition substitution")
         xgens = symbols_for_variables(xvars)
         if not polynomial.terms:
             one = Poly(1, *xgens, domain="QQ")
@@ -677,6 +682,7 @@ def compose_maps(  # noqa: C901
             common_denominator *= denominator**exponent
         numerator = Poly(0, *xgens, domain="QQ")
         for term in polynomial.terms:
+            request_checkpoint("during rational map composition substitution term")
             value = Poly(term.coefficient.as_fraction(), *xgens, domain="QQ")
             for num, den, exponent, max_exponent in zip(
                 inner_num, inner_den, term.exponents, powers, strict=True
@@ -689,6 +695,7 @@ def compose_maps(  # noqa: C901
     for outer_component, prepared_component in zip(
         outer_components, prepared, strict=True
     ):
+        request_checkpoint("before rational map composition output row")
         if use_monomial_path:
             assert (
                 prepared_component.numerator is not None

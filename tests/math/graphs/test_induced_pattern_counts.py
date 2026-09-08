@@ -293,7 +293,7 @@ def test_canonical_graph_size_bound_rejects_257_vertices() -> None:
         InducedVertexSubsetPatternCountRequest.model_validate(
             {
                 "host": {
-                    "vertices": [f"h{index:03d}" for index in range(257)],
+                    "vertices": [f"h{index:05d}" for index in range(12257)],
                     "edges": [],
                 },
                 "pattern": {"vertices": [], "edges": []},

@@ -10,12 +10,19 @@ from pydantic_core import PydanticCustomError
 from jacobian._models import StrictModel
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     MAX_LABEL_LENGTH,
+    MAX_VERTICES,
     FiniteHypergraph,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
 def _require_hypergraph_compatible_labels(graph: SimpleUndirectedGraph) -> None:
+    if len(graph.vertices) > MAX_VERTICES:
+        raise PydanticCustomError(
+            "graph.maximal_clique_hypergraph.vertex_bound",
+            "maximal-clique hypergraph construction supports at most "
+            f"{MAX_VERTICES} vertices",
+        )
     for label in graph.vertices:
         if len(label) > MAX_LABEL_LENGTH:
             raise PydanticCustomError(

@@ -12,6 +12,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any, cast
 
+from pydantic_core import PydanticCustomError
+
 from jacobian._execution import OperationExecutionCancelledError, request_checkpoint
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
@@ -37,6 +39,7 @@ from jacobian.math.graphs.optimization._invariant_models import (
     GraphTriangleCountResult,
     GraphTutteBergeCertificate,
     GraphVertexConnectivityResult,
+    _require_invariant_graph_order,
 )
 from jacobian.math.graphs.optimization._models import (
     GraphOptimizationRequest,
@@ -71,6 +74,14 @@ def _computed[
     def implementation(
         request: GraphInvariantRequest,
     ) -> ResultT:
+        try:
+            _require_invariant_graph_order(request.graph)
+        except PydanticCustomError as error:
+            raise OperationDomainValidationError(
+                location=("graph",),
+                code=error.type,
+                message=str(error),
+            ) from error
         graph = cast(Any, build_simple_graph(request.graph))
         return operation(graph, request.graph)
 
@@ -235,6 +246,14 @@ def _maximum_matching(
 def _maximum_matching_execute(
     request: GraphMaximumMatchingRequest,
 ) -> GraphMaximumMatchingResult:
+    try:
+        _require_invariant_graph_order(request.graph)
+    except PydanticCustomError as error:
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code=error.type,
+            message=str(error),
+        ) from error
     graph = cast(Any, build_simple_graph(request.graph))
     return _maximum_matching(graph, request.graph)
 

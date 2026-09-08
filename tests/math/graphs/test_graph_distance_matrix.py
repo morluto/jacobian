@@ -121,6 +121,25 @@ def test_empty_graph_returns_empty_labelled_matrix() -> None:
     assert result.connected is False
 
 
+def test_distance_matrix_admits_256_vertex_sources_and_rejects_larger_order() -> None:
+    boundary = SimpleUndirectedGraph(
+        vertices=tuple(f"{index:03d}" for index in range(256)),
+        edges=(),
+    )
+    result = compute_distance_matrix(GraphDistanceMatrixRequest(graph=boundary))
+    assert len(result.rows) == 256
+    assert all(len(row.distances) == 256 for row in result.rows)
+    restored = GraphDistanceMatrixResult.model_validate(result.model_dump())
+    assert restored == result
+
+    oversized = SimpleUndirectedGraph(
+        vertices=tuple(f"{index:03d}" for index in range(257)),
+        edges=(),
+    )
+    with pytest.raises(ValidationError, match="at most 256 vertices"):
+        GraphDistanceMatrixRequest(graph=oversized)
+
+
 def test_arbitrary_string_identifiers_remain_deterministic() -> None:
     result = compute_distance_matrix(
         _request(["root", "leaf-2", "10", "1"], [["1", "10"]])

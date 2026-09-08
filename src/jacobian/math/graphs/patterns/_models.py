@@ -12,8 +12,8 @@ from jacobian._exact import DecimalIntegerEncoding, ExactInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.graphs.values import (
-    MAX_SIMPLE_GRAPH_EDGES,
-    MAX_SIMPLE_GRAPH_VERTICES,
+    MAX_ENCODED_SIMPLE_GRAPH_EDGES,
+    MAX_ENCODED_SIMPLE_GRAPH_VERTICES,
     SimpleUndirectedGraph,
 )
 
@@ -116,9 +116,9 @@ class InducedVertexSubsetPatternCountRequest(StrictModel):
             "description": (
                 "Count vertex subsets S of the canonical host for which host[S] "
                 "is isomorphic to the canonical pattern. Graphs use the shared "
-                f"SimpleUndirectedGraph bounds (at most "
-                f"{MAX_SIMPLE_GRAPH_VERTICES:,} vertices and "
-                f"{MAX_SIMPLE_GRAPH_EDGES:,} edges). Admission "
+                f"SimpleUndirectedGraph encoding bounds (at most "
+                f"{MAX_ENCODED_SIMPLE_GRAPH_VERTICES:,} vertices and "
+                f"{MAX_ENCODED_SIMPLE_GRAPH_EDGES:,} edges). Admission "
                 "preflights the exact candidate count "
                 "C(|V(host)|, |V(pattern)|), graph records, and explicit candidate construction from "
                 "C(|V(pattern)|, 2) direct host-edge probes per subset, local "

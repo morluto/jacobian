@@ -237,8 +237,9 @@ def test_full_vertex_envelope_path_is_admitted_and_over_envelope_is_rejected() -
     assert result.independence_number == 128
     assert len(result.coefficients) == 129
     assert result.coefficients[-1] == math.comb(256 - 128 + 1, 128)
-    with pytest.raises(ValidationError):
-        TreeIndependencePolynomialRequest(graph=_path(257))
+    over = TreeIndependencePolynomialRequest(graph=_path(257))
+    with pytest.raises(OperationDomainValidationError):
+        _run_independence(over)
 
 
 def test_rejects_excessive_retained_label_allocation() -> None:
@@ -258,7 +259,7 @@ def test_request_schema_exposes_tree_and_work_preconditions() -> None:
     assert "acyclic" in schema["description"]
     assert "convolution-work" in schema["properties"]["graph"]["description"]
     graph_schema = schema["$defs"]["SimpleUndirectedGraph"]
-    assert graph_schema["properties"]["vertices"]["maxItems"] == 256
+    assert graph_schema["properties"]["vertices"]["maxItems"] == 12256
 
 
 def test_result_rejects_a_polynomial_inconsistent_with_dense_coefficients() -> None:

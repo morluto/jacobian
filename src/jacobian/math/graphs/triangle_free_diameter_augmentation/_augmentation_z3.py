@@ -529,6 +529,19 @@ def solve_triangle_free_diameter_augmentation_values(  # noqa: C901
 
     deadline = time.monotonic() + budget.wall_seconds
     request_checkpoint("before augmentation presolve")
+    order = len(graph.vertices)
+    if order > budget.max_order:
+        raise OperationDomainValidationError(
+            location=("resource_budget", "max_order"),
+            code="graph.triangle_free_diameter_augmentation.max_order_budget",
+            message="graph order exceeds the declared max_order budget",
+        )
+    if order > HARD_MAX_ORDER:
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="graph.triangle_free_diameter_augmentation.order_bound",
+            message=f"augmentation supports order at most {HARD_MAX_ORDER}",
+        )
 
     if target_diameter < 1 or target_diameter > HARD_MAX_TARGET_DIAMETER:
         raise OperationDomainValidationError(

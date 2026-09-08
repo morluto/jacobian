@@ -16,10 +16,30 @@ MAX_GRAPH_DISTANCE_MATRIX_EDGES = 32_640
 MAX_GRAPH_DISTANCE = MAX_GRAPH_DISTANCE_MATRIX_ORDER - 1
 
 
+def _require_distance_matrix_order(graph: SimpleUndirectedGraph) -> None:
+    if len(graph.vertices) > MAX_GRAPH_DISTANCE_MATRIX_ORDER:
+        raise PydanticCustomError(
+            "graph.distance_matrix.vertex_bound",
+            "distance-matrix computation supports at most "
+            f"{MAX_GRAPH_DISTANCE_MATRIX_ORDER} vertices",
+        )
+    if len(graph.edges) > MAX_GRAPH_DISTANCE_MATRIX_EDGES:
+        raise PydanticCustomError(
+            "graph.distance_matrix.edge_bound",
+            "distance-matrix computation supports at most "
+            f"{MAX_GRAPH_DISTANCE_MATRIX_EDGES} edges",
+        )
+
+
 class GraphDistanceMatrixRequest(StrictModel):
     """One complete graph input for an exact distance matrix."""
 
     graph: SimpleUndirectedGraph
+
+    @model_validator(mode="after")
+    def require_supported_order(self) -> Self:
+        _require_distance_matrix_order(self.graph)
+        return self
 
 
 GraphDistance = (

@@ -5,7 +5,10 @@ from typing import TypedDict
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     CliqueExpansionRequest,
     CliqueExpansionResult,
@@ -242,6 +245,48 @@ class TestIncidenceGraph:
             ("d", "e2"),
             ("d", "e3"),
         }
+        assert r.graph.vertices == ("v0", "v1", "v2", "v3", "e0", "e1", "e2")
+        assert set(r.graph.edges) == {
+            ("e0", "v0"),
+            ("e0", "v1"),
+            ("e0", "v2"),
+            ("e1", "v1"),
+            ("e1", "v2"),
+            ("e1", "v3"),
+            ("e2", "v0"),
+            ("e2", "v3"),
+        }
+
+    def test_namespace_disambiguates_equal_source_labels(self) -> None:
+        result = incidence_graph(
+            _hypergraph({"vertices": ["same"], "edges": [["same", ["same"]]]})
+        )
+        assert result.vertex_labels == (("same", "v0"),)
+        assert result.edge_labels == (("same", "e0"),)
+        assert result.graph.vertices == ("v0", "e0")
+        assert result.graph.edges == (("e0", "v0"),)
+
+    def test_utf8_label_collision_and_graph_vertex_boundary(self) -> None:
+        label = "é" * 32  # 64 UTF-8 bytes, at the source label limit.
+        result = incidence_graph(
+            _hypergraph({"vertices": [label], "edges": [[label, [label]]]})
+        )
+        assert result.vertex_labels == ((label, "v0"),)
+        assert result.edge_labels == ((label, "e0"),)
+
+        boundary = _hypergraph(
+            {"vertices": [str(index) for index in range(256)], "edges": []}
+        )
+        assert len(incidence_graph(boundary).graph.vertices) == 256
+
+        over_boundary = _hypergraph(
+            {
+                "vertices": [str(index) for index in range(256)],
+                "edges": [["edge", []]],
+            }
+        )
+        with pytest.raises(OperationResourceAdmissionError, match="257"):
+            incidence_graph(over_boundary)
 
     def test_no_edges(self) -> None:
         r = incidence_graph(_hypergraph(NO_EDGES))

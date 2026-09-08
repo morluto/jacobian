@@ -73,9 +73,6 @@ def _admit(coloring: IndexedHyperedgeColoring, deadline: float) -> _Plan:
     groups: list[list[int]] = [[] for _ in range(coloring.color_count)]
     for index, assignment in enumerate(coloring.assignments):
         groups[assignment.color_index].append(index)
-    pair_count = sum(len(group) * (len(group) - 1) // 2 for group in groups)
-    if pair_count > MAX_CONFLICT_PAIRS:
-        _reject("complete same-colour source-pair provenance exceeds 65536 rows")
     positions = {
         label: index for index, label in enumerate(coloring.hypergraph.vertices)
     }
@@ -83,6 +80,13 @@ def _admit(coloring: IndexedHyperedgeColoring, deadline: float) -> _Plan:
         sum(1 << positions[label] for label in members)
         for _, members in coloring.hypergraph.edges
     )
+    pair_count = 0
+    for group in groups:
+        total = len(group) * (len(group) - 1) // 2
+        empty = sum(1 for index in group if masks[index] == 0)
+        pair_count += total - empty * (empty - 1) // 2
+    if pair_count > MAX_CONFLICT_PAIRS:
+        _reject("complete same-colour source-pair provenance exceeds 65536 rows")
     candidates: list[int] = []
     for group in groups:
         _checkpoint(deadline, "during compressed union planning")
@@ -90,7 +94,9 @@ def _admit(coloring: IndexedHyperedgeColoring, deadline: float) -> _Plan:
             (mask, len(tuple(duplicates)))
             for mask, duplicates in groupby(sorted(masks[index] for index in group))
         )
-        candidates.extend(mask for mask, multiplicity in types if multiplicity > 1)
+        candidates.extend(
+            mask for mask, multiplicity in types if multiplicity > 1 and mask
+        )
         candidates.extend(left[0] | right[0] for left, right in combinations(types, 2))
     unions = tuple(mask for mask, _ in groupby(sorted(candidates)))
     if len(unions) > MAX_EDGES:
@@ -122,6 +128,7 @@ def construct(coloring: IndexedHyperedgeColoring) -> SameColorConflictsResult:
         (left, right, color)
         for color, group in enumerate(plan.groups)
         for left, right in combinations(group, 2)
+        if plan.masks[left] | plan.masks[right]
     )
     provenance: list[SameColorConflictProvenance] = []
     for left, right, color in pairs:

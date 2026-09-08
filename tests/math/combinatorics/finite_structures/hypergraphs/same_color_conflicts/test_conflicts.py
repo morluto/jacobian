@@ -51,16 +51,18 @@ def check_oracle(source: IndexedHyperedgeColoring) -> SameColorConflictsResult:
     edges = source.hypergraph.edges
     for left, right in combinations(range(len(edges)), 2):
         color = source.assignments[left].color_index
-        if color == source.assignments[right].color_index:
-            expected[edges[left][0], edges[right][0]] = (
-                frozenset(edges[left][1]) | frozenset(edges[right][1]),
-                color,
-            )
+        if color != source.assignments[right].color_index:
+            continue
+        union = frozenset(edges[left][1]) | frozenset(edges[right][1])
+        if not union:
+            continue
+        expected[edges[left][0], edges[right][0]] = (union, color)
     conflicts = {
         edge_id: frozenset(members) for edge_id, members in result.hypergraph.edges
     }
     assert len(set(conflicts.values())) == len(conflicts)
     assert set(conflicts.values()) == {union for union, _ in expected.values()}
+    assert not any(not members for members in conflicts.values())
     assert {
         row.source_edge_ids: (conflicts[row.conflict_edge_id], row.color_index)
         for row in result.provenance
@@ -76,14 +78,20 @@ def check_oracle(source: IndexedHyperedgeColoring) -> SameColorConflictsResult:
         for size in range(len(source.hypergraph.vertices) + 1):
             for subset in combinations(source.hypergraph.vertices, size):
                 selected = set(subset)
-                contained_colors = [
-                    entry.color_index
+                contained = [
+                    (set(members), entry.color_index)
                     for (_, members), entry in zip(
                         edges, source.assignments, strict=True
                     )
                     if set(members) <= selected
                 ]
-                rainbow = len(contained_colors) == len(set(contained_colors))
+                rainbow = not any(
+                    (left_members | right_members) and left_color == right_color
+                    for (left_members, left_color), (
+                        right_members,
+                        right_color,
+                    ) in combinations(contained, 2)
+                )
                 independent = not any(union <= selected for union in conflicts.values())
                 assert rainbow == independent
     return result
@@ -159,6 +167,15 @@ def test_all_source_edges_with_distinct_colors_are_accepted() -> None:
     assert result.hypergraph.edges == ()
     assert result.provenance == ()
     assert independence_number(result.hypergraph).independence_number == 1
+
+
+def test_two_same_colored_empty_source_edges_compose_with_independence() -> None:
+    result = check_oracle(coloring(("a",), [(), ()], [0, 0]))
+    assert result.hypergraph.edges == ()
+    assert result.provenance == ()
+    independent = independence_number(result.hypergraph)
+    assert independent.status == "EXACT"
+    assert independent.independence_number == 1
 
 
 def test_many_duplicate_sources_fit_one_union_at_pair_boundary() -> None:

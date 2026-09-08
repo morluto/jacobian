@@ -40,9 +40,9 @@ class SameColorConflictsResult(StrictModel):
     Vertices retain the source order. Conflict edges follow increasing bitmask
     of source vertex positions, with IDs c0,c1,...; this transports unchanged
     under coherent relabelling. Provenance follows lexicographic source-edge
-    position pairs, across all colours. Empty unions are retained as empty
-    hyperedges: then no vertex subset, including the empty one, is independent.
-    The existing independence-number consumer admits only nonempty hyperedges.
+    position pairs, across all colours. Empty unions (two empty same-coloured
+    source edges) are omitted so the conflict hypergraph composes unchanged
+    with independence_number, which rejects empty hyperedges.
     """
 
     coloring: IndexedHyperedgeColoring

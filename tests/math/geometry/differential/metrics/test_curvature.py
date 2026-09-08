@@ -419,7 +419,11 @@ def test_conformal_flat_metric_counts_complete_denominator_powers() -> None:
         sparse_rational_polynomial_to_sympy(guard, ("x", "y")).as_expr().expand()
         for guard in result.inverse_metric.retained_nonzero_denominators
     }
-    assert dens == {conformal.expand(), (conformal**2).expand(), (conformal**3).expand()}
+    assert dens == {
+        conformal.expand(),
+        (conformal**2).expand(),
+        (conformal**3).expand(),
+    }
     replay(result)
 
     extra = tuple(

@@ -16,6 +16,9 @@ from jacobian.math.polynomials.rational_functions._bounds import (
     RationalFunctionBoundLimits,
     _dense_term_bound,
 )
+from jacobian.math.polynomials.rational_functions.gradient._gcd_process import (
+    DerivativeGcdFactor,
+)
 from jacobian.math.polynomials.rational_functions.gradient.operations import (
     _admit_general_gradient,
     _build_monomial_gradient,
@@ -121,6 +124,7 @@ def jacobian_matrix(source: RationalFunctionMap) -> RationalFunctionMapJacobian:
         )
     output_allocation = source_allocation
     plans: list[_MonomialGradientPlan | None] = []
+    general_factors: list[tuple[DerivativeGcdFactor, ...] | None] = []
     for component in source.components:
         if len(component.denominator.terms) == 1:
             # Bounded sparse presolve: at most n*s rational scalings and n*n*s
@@ -147,18 +151,23 @@ def jacobian_matrix(source: RationalFunctionMap) -> RationalFunctionMapJacobian:
                     ),
                 )
             plans.append(plan)
+            general_factors.append(None)
         else:
-            for bound, digits in _admit_general_gradient(component, ledger):
+            components, factors = _admit_general_gradient(component, ledger)
+            for bound, digits in components:
                 output_allocation.charge(*_general_allocation(bound, digits))
             plans.append(None)
+            general_factors.append(factors)
     # No result construction or general polynomial backend work starts until
     # every row's arithmetic and the complete matrix allocation are admitted.
     entries = []
-    for component, plan in zip(source.components, plans, strict=True):
+    for component, plan, factors in zip(
+        source.components, plans, general_factors, strict=True
+    ):
         request_checkpoint("during rational map Jacobian row construction")
         entries.append(
-            _general_gradient_admitted(component)
-            if plan is None
+            _general_gradient_admitted(component, factors)
+            if plan is None and factors is not None
             else _build_monomial_gradient(source.source_variables, plan)
         )
     result = RationalFunctionMapJacobian(

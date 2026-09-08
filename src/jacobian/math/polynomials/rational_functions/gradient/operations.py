@@ -35,7 +35,9 @@ from jacobian.math.polynomials.rational_functions._bounds import (
     _differentiate_fraction as _derivative_bound,
 )
 from jacobian.math.polynomials.rational_functions.gradient._gcd_process import (
+    DerivativeGcdFactor,
     forced_denominator_derivative_gcds,
+    source_is_coprime,
 )
 from jacobian.math.polynomials.rational_functions.gradient._kernel import (
     _differentiate_fraction,
@@ -45,10 +47,15 @@ from jacobian.math.polynomials.rational_functions.gradient._models import (
     RationalFunctionGradient,
 )
 from jacobian.math.polynomials.values import (
+    MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS,
+    MAX_RATIONAL_FUNCTION_EXPONENT,
+    MAX_RATIONAL_FUNCTION_TERMS,
     RationalFunction,
     RationalPolynomialTerm,
     SparseRationalPolynomial,
-    require_canonical_rational_function,
+    _require_rational_function_shapes,
+    _require_rational_function_structural_normal_form,
+    require_sparse_polynomial_budget,
 )
 
 
@@ -91,11 +98,47 @@ type _MonomialGradientPlan = tuple[
 def _recognize_source(source: RationalFunction) -> None:
     """Recognize the authored field presentation at the admitted owner boundary."""
     try:
-        require_canonical_rational_function(source)
-    except PydanticCustomError as exc:
+        _require_rational_function_shapes(source)
+        _require_rational_function_structural_normal_form(source)
+        for part, polynomial in (
+            ("numerator", source.numerator),
+            ("denominator", source.denominator),
+        ):
+            require_sparse_polynomial_budget(
+                polynomial,
+                maximum_terms=MAX_RATIONAL_FUNCTION_TERMS,
+                maximum_exponent=MAX_RATIONAL_FUNCTION_EXPONENT,
+                maximum_coefficient_digits=MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS,
+                label=f"rational function {part}",
+            )
+    except (PydanticCustomError, ValueError) as exc:
+        if isinstance(exc, PydanticCustomError):
+            raise OperationDomainValidationError(
+                location=(), code=exc.type, message=exc.message()
+            ) from exc
         raise OperationDomainValidationError(
-            location=(), code=exc.type, message=exc.message()
+            location=(), code="polynomial.budget", message=str(exc)
         ) from exc
+    if not source.numerator.terms or not source.variables:
+        return
+    if len(source.denominator.terms) == 1:
+        powers = source.denominator.terms[0].exponents
+        if any(
+            exponent and all(term.exponents[axis] for term in source.numerator.terms)
+            for axis, exponent in enumerate(powers)
+        ):
+            raise OperationDomainValidationError(
+                location=(),
+                code="polynomial.not_coprime",
+                message="rational-function numerator and denominator must be coprime",
+            )
+        return
+    if not source_is_coprime(source):
+        raise OperationDomainValidationError(
+            location=(),
+            code="polynomial.not_coprime",
+            message="rational-function numerator and denominator must be coprime",
+        )
 
 
 def _prepare_monomial_gradient(source: RationalFunction) -> _MonomialGradientPlan:
@@ -187,8 +230,9 @@ def _build_monomial_gradient(
 
 def _admit_general_gradient(
     function: RationalFunction, ledger: BoundsLedger
-) -> tuple[tuple[FractionBound, int], ...]:
+) -> tuple[tuple[tuple[FractionBound, int], ...], tuple[DerivativeGcdFactor, ...]]:
     """Admit one row into a caller-owned complete scalar or matrix ledger."""
+    _recognize_source(function)
     source_bound = _fraction_bound(function, ledger)
     ledger.charge("recognition", _recognition_work_units(source_bound))
     # Source recognition constructs its own exact pair; account for the
@@ -220,19 +264,19 @@ def _admit_general_gradient(
         bound = _remove_guaranteed_common_monomial(
             _remove_exact_common_factor(
                 _derivative_bound(function, source_bound, axis, ledger),
-                factors[axis],
+                factors[axis].bound,
             )
         )
         digits = _validate_canonical_result_bound(bound, ledger)
         components.append((bound, digits))
-    return tuple(components)
+    return tuple(components), factors
 
 
 def _general_gradient_admitted(
     function: RationalFunction,
+    factors: tuple[DerivativeGcdFactor, ...],
 ) -> tuple[RationalFunction, ...]:
     """Recognize and differentiate after the caller's whole-profile admission."""
-    _recognize_source(function)
     request_checkpoint("after rational gradient source recognition")
     numerator = sparse_rational_polynomial_to_sympy(
         function.numerator, function.variables
@@ -242,7 +286,9 @@ def _general_gradient_admitted(
     )
     return tuple(
         _normalize_fraction(
-            *_differentiate_fraction(numerator, denominator, axis), function.variables
+            *_differentiate_fraction(numerator, denominator, axis),
+            function.variables,
+            factors[axis].records,
         )
         for axis in range(len(function.variables))
     )
@@ -265,8 +311,8 @@ def gradient(function: RationalFunction) -> RationalFunctionGradient:
         )
     else:
         ledger = _Ledger()
-        _admit_general_gradient(function, ledger)
-        derivatives = _general_gradient_admitted(function)
+        _, factors = _admit_general_gradient(function, ledger)
+        derivatives = _general_gradient_admitted(function, factors)
     result = RationalFunctionGradient(
         source=function, variables=function.variables, partial_derivatives=derivatives
     )

@@ -18,6 +18,7 @@ from jacobian.math.geometry.differential.metrics._models import RationalCoordina
 from jacobian.math.geometry.differential.metrics._plan import (
     _denominator_guard_identity,
     _monic_polynomial_key,
+    _sourced_denominator_keys,
     build_connection_plan,
 )
 from jacobian.math.geometry.differential.values import (
@@ -121,12 +122,17 @@ def build_plan(metric: RationalCoordinateMetric, scalar: RationalFunction) -> Pl
     extra_keys: set[_GuardKey] = set()
     if not _is_unit_polynomial(scalar.denominator, dimension):
         extra_keys.add(_monic_polynomial_key(scalar.denominator))
-    result_identity = _denominator_guard_identity(dag, value)
-    if result_identity is not None:
-        extra_keys.add(result_identity)
     guard_keys: set[_GuardKey] = {
         _polynomial_key(guard) for guard in metric.tensor.retained_nonzero_denominators
     }
+    sourced_keys = _sourced_denominator_keys(dag, value)
+    inherited_matches = sourced_keys & guard_keys
+    result_identity = _denominator_guard_identity(dag, value)
+    if inherited_matches:
+        extra_keys.update(inherited_matches)
+        result_identity = None
+    elif result_identity is not None:
+        extra_keys.add(result_identity)
     returned: dict[_GuardKey, tuple[int, int, int]] = {
         _polynomial_key(guard): _source_allocation(guard, dimension)
         for guard in metric.tensor.retained_nonzero_denominators

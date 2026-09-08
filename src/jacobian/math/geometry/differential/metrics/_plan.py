@@ -61,30 +61,13 @@ def _remaining_denominator_factors(
     return remaining, remaining_numerator
 
 
-def _powered_monomial_key(
-    source: SparseRationalPolynomial, multiplicity: int
-) -> object | None:
-    if len(source.terms) != 1:
-        return None
-    exponents = tuple(degree * multiplicity for degree in source.terms[0].exponents)
-    coefficient = source.terms[0].coefficient.as_fraction() ** multiplicity
-    return (
-        (
-            exponents,
-            format_canonical_integer(coefficient.numerator),
-            format_canonical_integer(coefficient.denominator),
-        ),
-    )
-
-
 def _denominator_guard_identity(dag: Dag, value: Expression) -> object | None:
     """Identify one retained output denominator after cancelling shared nodes.
 
-    Sourced remaining factors reuse inherited polynomial keys, including a
-    monomial raised to its leftover multiplicity so ``1/x`` mapping to
-    ``2/x³`` can share the inherited ``x³`` guard. Remaining numerator nodes
-    keep independently normalized outputs distinct when the worker cancels
-    different algebraic factors from the same DAG denominator copies.
+    A single sourced remaining factor with no leftover numerator reuses the
+    inherited polynomial key. Remaining numerator nodes keep independently
+    normalized outputs distinct when the worker cancels different algebraic
+    factors from the same DAG denominator copies.
     """
 
     if not _has_nonconstant_denominator(dag, value):
@@ -94,16 +77,17 @@ def _denominator_guard_identity(dag: Dag, value: Expression) -> object | None:
         return None
     remaining_numerator_identity = tuple(remaining_numerator)
     if len(factors) == 1:
-        index, multiplicity = factors[0]
+        index, _multiplicity = factors[0]
         source = dag.nodes[index].source
-        if source is not None:
-            powered = _powered_monomial_key(source, multiplicity)
-            if powered is not None:
-                return powered
-            if multiplicity == 1:
-                return _polynomial_key(source)
-            return (_polynomial_key(source), multiplicity)
-        return _node_guard_key(dag, index)
+        factorizable = (
+            source is not None
+            and len(source.terms) > 2
+            and remaining_numerator_identity
+        )
+        if source is not None and not factorizable:
+            return _polynomial_key(source)
+        if not factorizable:
+            return _node_guard_key(dag, index)
     return (
         "canonical-result-denominator",
         tuple(
@@ -270,6 +254,20 @@ def _source_guard_keys(
         if degree:
             axis_exponents = tuple(int(i == axis_index) for i in range(len(exponents)))
             keys.add(((axis_exponents, "1", "1"),))
+    return keys
+
+
+def _sourced_denominator_keys(dag: Dag, value: Expression) -> set[object]:
+    """Return inherited-matching keys for remaining sourced denominator nodes."""
+
+    factors, _remaining_numerator = _remaining_denominator_factors(dag, value)
+    keys: set[object] = set()
+    for index, _multiplicity in factors:
+        source = dag.nodes[index].source
+        if source is None:
+            continue
+        keys.add(_polynomial_key(source))
+        keys.update(_source_guard_keys(source))
     return keys
 
 

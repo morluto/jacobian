@@ -375,6 +375,7 @@ def _constant_map_composition(
     allocation: _Allocation,
 ) -> RationalFunctionMapComposition:
     for component in (*outer.components, *inner.components):
+        request_checkpoint("before constant-map source recognition")
         _recognize_source(component)
     values = tuple(_constant_fraction(component) for component in inner.components)
     guards: tuple[RationalPolynomial, ...] = ()
@@ -609,6 +610,7 @@ def compose_maps(  # noqa: C901
         component for component in (*outer.components, *inner.components)
     )
     for component in require_canonical:
+        request_checkpoint("before composition source recognition")
         _recognize_source(component)
     outer_components = require_canonical[: len(outer.components)]
     inner_components = require_canonical[len(outer.components) :]

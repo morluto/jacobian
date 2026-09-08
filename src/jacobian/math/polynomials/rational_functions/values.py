@@ -23,8 +23,11 @@ def _raw_coefficient_bits(coefficient: object) -> int:
             component = coefficient.get(key)
             if isinstance(component, str):
                 digits = component.lstrip("-") or "0"
-                # log2(10) < 333/100; JSON decimal length must match native bit_length.
-                bits += max(1, (len(digits) * 333 + 99) // 100)
+                if not digits.isdigit():
+                    return 0
+                if len(digits) > MAX_RATIONAL_MAP_SOURCE_BITS:
+                    return MAX_RATIONAL_MAP_SOURCE_BITS + 1
+                bits += max(1, int(digits).bit_length())
             elif type(component) is int:
                 bits += max(1, abs(component).bit_length())
         return bits

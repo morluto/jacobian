@@ -1,6 +1,9 @@
 """Bounded graph-optimization operations."""
 
 from jacobian.catalog.models import MathTools
+from jacobian.math.graphs.optimization._chromatic_bipartition import (
+    CHROMATIC_BIPARTITION_OPERATION,
+)
 from jacobian.math.graphs.optimization._chromatic_number import (
     CHROMATIC_NUMBER_OPERATION,
 )
@@ -28,6 +31,7 @@ from jacobian.math.graphs.optimization._minimum_spanning_tree import (
 __all__ = ["TOOLS"]
 
 TOOLS: MathTools = (
+    CHROMATIC_BIPARTITION_OPERATION,
     CHROMATIC_NUMBER_OPERATION,
     MAXIMUM_CUT_OPERATION,
     *FINITE_GRAPH_OPTIMIZATION_OPERATIONS,

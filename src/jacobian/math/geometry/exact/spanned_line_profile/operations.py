@@ -23,9 +23,11 @@ from jacobian.math.geometry.exact.spanned_line_profile._models import (
 __all__ = ["compute_spanned_line_profile", "verify_spanned_line_profile"]
 
 
-def _admit_line_key_growth(configuration: PointConfiguration) -> None:
+def _admit_line_key_growth(
+    configuration: PointConfiguration, varying_axes: tuple[int, ...]
+) -> None:
     points = configuration.points
-    dimension = len(points[0].coordinates) if points else 0
+    dimension = len(varying_axes)
     maximum_coordinate_digits = max(
         (
             max(
@@ -33,13 +35,14 @@ def _admit_line_key_growth(configuration: PointConfiguration) -> None:
                 len(format_canonical_integer(coordinate.den)),
             )
             for point in points
-            for coordinate in point.coordinates
+            for axis in varying_axes
+            for coordinate in (point.coordinates[axis],)
         ),
         default=1,
     )
     derived_digits = dimension * (2 * maximum_coordinate_digits + 2)
     if derived_digits > MAX_CANONICAL_RATIONAL_DIGITS:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("configuration",),
             code="geometry.spanned_line_profile.result_bound",
             message="spanned-line keys exceed the canonical rational digit bound",
@@ -56,12 +59,41 @@ def compute_spanned_line_profile(
         raise OperationDomainValidationError(
             location=("configuration",), code=exc.type, message=exc.message()
         ) from exc
-    _admit_line_key_growth(configuration)
     points = configuration.points
     n = len(points)
-
+    # Two distinct points determine one line. More generally, if only one
+    # coordinate axis varies, all source pairs determine that same axis line.
+    # Neither case needs the private normalized-direction/anchor keys; the
+    # complete result has at most C(64, 2) source pairs by the source carrier.
+    varying_axes = (
+        tuple(
+            axis
+            for axis in range(len(points[0].coordinates))
+            if any(
+                point.coordinates[axis] != points[0].coordinates[axis]
+                for point in points[1:]
+            )
+        )
+        if n > 2
+        else ()
+    )
+    if n == 2 or len(varying_axes) <= 1:
+        return SpannedLineProfileResult(
+            configuration=configuration,
+            lines=(
+                SpannedLineEntry(
+                    source_pairs=tuple(combinations(range(n), 2)), point_count=n
+                ),
+            ),
+            line_count=1,
+        )
+    # Removing coordinates common to every point is an affine bijection onto
+    # the projected source span, so it preserves exactly which pairs span
+    # the same line. Keys are private; results retain the full source axes.
+    _admit_line_key_growth(configuration, varying_axes)
     point_coords = tuple(
-        tuple(c.as_fraction() for c in point.coordinates) for point in points
+        tuple(point.coordinates[axis].as_fraction() for axis in varying_axes)
+        for point in points
     )
 
     line_to_pairs: dict[
@@ -102,11 +134,13 @@ def compute_spanned_line_profile(
 
 def verify_spanned_line_profile(claim: SpannedLineProfileResult) -> bool:
     """Verify a serialized line profile against its retained configuration."""
+    if not isinstance(claim, SpannedLineProfileResult):
+        return False
     try:
         return compute_spanned_line_profile(claim.configuration) == claim
     except OperationResourceAdmissionError:
         raise
-    except (OperationDomainValidationError, ValueError):
+    except OperationDomainValidationError:
         return False
 
 

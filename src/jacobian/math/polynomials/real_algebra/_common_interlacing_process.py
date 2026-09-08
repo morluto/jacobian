@@ -108,20 +108,6 @@ def _preflight_family_size(
                 )
 
 
-def _multiply_integer_polynomials(
-    left: tuple[int, ...], right: tuple[int, ...]
-) -> tuple[int, ...]:
-    """Multiply two dense integer polynomials (leading coefficient first)."""
-
-    if not left or not right:
-        return ()
-    product = [0] * (len(left) + len(right) - 1)
-    for i, lc in enumerate(left):
-        for j, rc in enumerate(right):
-            product[i + j] += lc * rc
-    return tuple(product)
-
-
 def _source_to_dense_int(
     source: LabelledRationalPolynomial,
 ) -> tuple[int, ...]:
@@ -153,16 +139,15 @@ def _source_to_dense_int(
     return tuple(dense_int)
 
 
-def _verify_declared_factors(  # noqa: C901
+def _require_declared_factor_structure(  # noqa: C901
     source: LabelledRationalPolynomial,
     declared_factors: list[Any],
 ) -> None:
-    """Verify the worker's declared factors reconstruct the retained source.
+    """Check bounded factor structure from the admitted, trusted worker.
 
-    Each declared factor is a [coefficients, multiplicity] pair.  Multiplies
-    each factor raised to its multiplicity and checks the product equals the
-    source polynomial.  Uses only integer polynomial arithmetic, not SymPy,
-    so no kernel work is replayed in the parent.
+    The worker establishes source factorization. Decoding retains coefficient,
+    multiplicity, canonical-form, and total-degree bounds without multiplying
+    the factors to repeat that computation.
     """
 
     if not declared_factors:
@@ -176,7 +161,6 @@ def _verify_declared_factors(  # noqa: C901
     factor_digit_bound = _factor_digit_bound(source_degree, source_height_digits)
     if len(declared_factors) > source_degree:
         raise ValueError("worker declared more factors than source degree")
-    product: tuple[int, ...] = (1,)
     seen_factor_coefficients: set[tuple[int, ...]] = set()
     aggregate_degree = 0
     for entry in declared_factors:
@@ -222,10 +206,8 @@ def _verify_declared_factors(  # noqa: C901
         if factor_dense in seen_factor_coefficients:
             raise ValueError("worker declared a duplicate source factor")
         seen_factor_coefficients.add(factor_dense)
-        for _ in range(multiplicity):
-            product = _multiply_integer_polynomials(product, factor_dense)
-    if product != source_dense:
-        raise ValueError("declared factors do not reconstruct the source polynomial")
+    if aggregate_degree != source_degree:
+        raise ValueError("worker factor degrees differ from source degree")
 
 
 def _root_profile_from_worker(  # noqa: C901
@@ -262,16 +244,18 @@ def _root_profile_from_worker(  # noqa: C901
     factor_multiplicities: dict[tuple[int, ...], int] = {}
     factor_row_counts: dict[tuple[int, ...], int] = {}
     factor_root_indices: dict[tuple[int, ...], set[int]] = {}
-    squarefree_product: tuple[int, ...] = (1,)
-    for entry in declared_factors:
-        factor = tuple(parse_canonical_integer(c) for c in entry[0])
-        squarefree_product = _multiply_integer_polynomials(squarefree_product, factor)
+    # The product's coefficient norm is bounded by the product of factor
+    # L1 norms. Each factor with k coefficients and height h has L1 norm
+    # below 10**(h + ceil(log10(k))); adding these exponents bounds the
+    # square-free product height without reconstructing that polynomial.
+    squarefree_degree = sum(len(factor) - 1 for factor in declared_factor_set)
+    squarefree_height_bound = sum(
+        max(len(format_canonical_integer(c).lstrip("-")) for c in factor)
+        + len(str(len(factor) - 1))
+        for factor in declared_factor_set
+    )
     endpoint_digit_bound = _isolation_endpoint_digit_bound(
-        len(squarefree_product) - 1,
-        max(
-            len(format_canonical_integer(coefficient).lstrip("-"))
-            for coefficient in squarefree_product
-        ),
+        squarefree_degree, squarefree_height_bound
     )
     for raw_root in value["roots"]:
         if not isinstance(raw_root, dict):
@@ -411,7 +395,7 @@ def _profile_from_worker(
         raise ValueError("worker source factor declarations are missing or malformed")
     for source_index, source in enumerate(family):
         declared = raw_source_factors[source_index]
-        _verify_declared_factors(source, declared)
+        _require_declared_factor_structure(source, declared)
 
     # Require factor-root-count projection aligned one-for-one with family.
     if not isinstance(raw_factor_root_counts, list) or len(

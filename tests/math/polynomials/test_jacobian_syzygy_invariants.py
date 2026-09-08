@@ -402,3 +402,33 @@ def test_result_rejects_labelled_provenance_off_three_variables() -> None:
         payload["source_kind"] = "LABELLED_LINEAR_FACTOR_PRODUCT"
         with polynomial_validation_error():
             GradedJacobianSyzygyResult.model_validate_json(json.dumps(payload))
+
+
+def test_syzygy_witness_reuses_coefficient_map_reduction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from sympy.matrices.matrixbase import MatrixBase
+
+    calls = 0
+    original = MatrixBase.nullspace
+
+    def counted(self: MatrixBase, *args: object, **kwargs: object) -> object:
+        nonlocal calls
+        calls += 1
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(MatrixBase, "nullspace", counted)
+    result = compute_graded_jacobian_syzygy(
+        GradedJacobianSyzygyRequest(
+            polynomial=_sparse_polynomial(
+                ("x", "y", "z"), {(2, 0, 2): 1, (1, 1, 2): -2, (0, 2, 2): 1}
+            ),
+            max_degree=0,
+        )
+    )
+    assert result.status == "FOUND"
+    assert result.kernel_witness is not None
+    assert tuple(
+        value.as_fraction() for value in result.kernel_witness.coefficient_vector
+    ) == (Fraction(1), Fraction(1), Fraction(0))
+    assert calls == 0

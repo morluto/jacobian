@@ -99,23 +99,27 @@ def distance_graph(
 
 def verify_distance_profile(claim: DistanceProfileResult) -> bool:
     """Verify a serialized distance profile against its retained source."""
+    if not isinstance(claim, DistanceProfileResult):
+        return False
     try:
         return distance_profile(claim.configuration) == claim
     except OperationResourceAdmissionError:
         raise
-    except (OperationDomainValidationError, ValueError):
+    except OperationDomainValidationError:
         return False
 
 
 def verify_distance_graph(claim: DistanceGraphResult) -> bool:
     """Verify a serialized distance graph against its source and target."""
+    if not isinstance(claim, DistanceGraphResult):
+        return False
     try:
         return (
             distance_graph(claim.configuration, claim.target_squared_distance) == claim
         )
     except OperationResourceAdmissionError:
         raise
-    except (OperationDomainValidationError, ValueError):
+    except OperationDomainValidationError:
         return False
 
 
@@ -196,11 +200,13 @@ def euclidean_orbit_profile(
 
 def verify_euclidean_orbit_profile(claim: EuclideanOrbitProfileResult) -> bool:
     """Verify canonical orbit forms and relabelings against their source."""
+    if not isinstance(claim, EuclideanOrbitProfileResult):
+        return False
     try:
         return euclidean_orbit_profile(claim.configuration) == claim
     except OperationResourceAdmissionError:
         raise
-    except (OperationDomainValidationError, ValueError):
+    except OperationDomainValidationError:
         return False
 
 
@@ -274,11 +280,13 @@ def pinned_line_distance_profile(
 
 def verify_pinned_line_distance_profile(claim: PinnedLineDistanceResult) -> bool:
     """Verify the pinned line profile against its retained source and anchor."""
+    if not isinstance(claim, PinnedLineDistanceResult):
+        return False
     try:
         return pinned_line_distance_profile(claim.configuration, claim.anchor) == claim
     except OperationResourceAdmissionError:
         raise
-    except (OperationDomainValidationError, ValueError):
+    except OperationDomainValidationError:
         return False
 
 

@@ -12,7 +12,10 @@ from jacobian.canonical import (
     CanonicalLimits,
     format_canonical_integer,
 )
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.additive import _multiset_sum
 from jacobian.math.combinatorics.additive._models import (
     _MAX_COORDINATE_DIGITS,
@@ -80,7 +83,7 @@ def _parse_set(spec: FiniteIntegerSet) -> frozenset[int]:
         abs(element) >= 10 ** CanonicalLimits().max_integer_digits
         for element in spec.elements
     ):
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("left", "right"),
             code="additive_combinatorics.integer_digit_bound",
             message="finite-set operands exceed the canonical integer digit bound",
@@ -112,7 +115,7 @@ def _admit_direct_sum(
             ),
         )
     if modulus > MAX_DIRECT_SUM_DIAGNOSTIC_ENTRIES:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("modulus",),
             code="additive_combinatorics.direct_sum.result_cardinality_exceeded",
             message=(
@@ -123,7 +126,7 @@ def _admit_direct_sum(
     try:
         _require_bounded_cartesian_product(left, right)
     except PydanticCustomError as exc:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("left", "right"), code=exc.type, message=exc.message()
         ) from None
 
@@ -136,7 +139,7 @@ def representation_profile(
     try:
         _require_bounded_cartesian_product(left, right)
     except PydanticCustomError as exc:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("left", "right"), code=exc.type, message=exc.message()
         ) from None
     counts = _representation_function(_parse_set(left), _parse_set(right))
@@ -206,7 +209,12 @@ def additive_energy(
     left: FiniteIntegerSet, right: FiniteIntegerSet
 ) -> AdditiveEnergyResult:
     """Compute ``E(A, B) = sum_x r_{A+B}(x)^2``."""
-    _require_bounded_cartesian_product(left, right)
+    try:
+        _require_bounded_cartesian_product(left, right)
+    except PydanticCustomError as exc:
+        raise OperationResourceAdmissionError(
+            location=("left", "right"), code=exc.type, message=exc.message()
+        ) from exc
     counts = _representation_function(_parse_set(left), _parse_set(right))
     decomposition = tuple(
         RepresentationProfileEntry(sum=value, multiplicity=counts[value])
@@ -224,13 +232,18 @@ def sumset_cardinality(
     left: FiniteIntegerSet, right: FiniteIntegerSet
 ) -> SumsetCardinalityResult:
     """Compute ``|A + B|`` (the support cardinality of ``r_{A+B}``)."""
-    _require_bounded_cartesian_product(left, right)
+    try:
+        _require_bounded_cartesian_product(left, right)
+    except PydanticCustomError as exc:
+        raise OperationResourceAdmissionError(
+            location=("left", "right"), code=exc.type, message=exc.message()
+        ) from exc
     counts = _representation_function(_parse_set(left), _parse_set(right))
     support_values = _sorted_sums(counts)
     try:
         support = FiniteIntegerSet(elements=tuple(support_values))
     except ValidationError as exc:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("left", "right"),
             code="additive_combinatorics.sumset_support_not_composable",
             message="the produced support exceeds the canonical finite-set envelope",
@@ -269,43 +282,59 @@ def direct_sum_predicate(
 
 def verify_representation_profile(result: RepresentationProfileResult) -> bool:
     """Verify a serialized representation profile against its source sets."""
+    if not isinstance(result, RepresentationProfileResult):
+        return False
     try:
         expected = representation_profile(result.left, result.right)
         return expected.entries == result.entries
-    except Exception:
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
 def verify_additive_energy(result: AdditiveEnergyResult) -> bool:
     """Verify additive energy and its decomposition against source sets."""
+    if not isinstance(result, AdditiveEnergyResult):
+        return False
     try:
         expected = additive_energy(result.left, result.right)
         return (
             expected.energy == result.energy
             and expected.decomposition == result.decomposition
         )
-    except Exception:
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
 def verify_sumset_cardinality(result: SumsetCardinalityResult) -> bool:
     """Verify sumset support and cardinality against source sets."""
+    if not isinstance(result, SumsetCardinalityResult):
+        return False
     try:
         expected = sumset_cardinality(result.left, result.right)
         return (
             expected.cardinality == result.cardinality
             and expected.support == result.support
         )
-    except Exception:
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
 def verify_direct_sum_predicate(result: DirectSumPredicateResult) -> bool:
     """Verify direct-sum diagnostics and conclusion against source sets."""
+    if not isinstance(result, DirectSumPredicateResult):
+        return False
     try:
         expected = direct_sum_predicate(result.modulus, result.left, result.right)
         return expected == result
-    except Exception:
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
@@ -318,7 +347,7 @@ def ordered_difference_profile(
     ordered_pairs = set_size * (set_size - 1)
     coordinate_work = ordered_pairs * dimension
     if coordinate_work > MAX_ORDERED_DIFFERENCE_COORDINATE_WORK:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("vectors",),
             code="additive_combinatorics.ordered_difference_work_exceeded",
             message=(
@@ -328,7 +357,7 @@ def ordered_difference_profile(
         )
     output_cells = set_size * dimension + ordered_pairs * (dimension + 2)
     if output_cells > MAX_ORDERED_DIFFERENCE_OUTPUT_CELLS:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("vectors",),
             code="additive_combinatorics.ordered_difference_output_exceeded",
             message=(
@@ -542,7 +571,7 @@ def _admit_ordered_difference_claim(
     ordered_pairs = set_size * (set_size - 1)
     coordinate_work = ordered_pairs * dimension
     if coordinate_work > MAX_ORDERED_DIFFERENCE_COORDINATE_WORK:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("claim", "vectors"),
             code="additive_combinatorics.ordered_difference_work_exceeded",
             message=(
@@ -552,7 +581,7 @@ def _admit_ordered_difference_claim(
         )
     output_cells = set_size * dimension + ordered_pairs * (dimension + 2)
     if output_cells > MAX_ORDERED_DIFFERENCE_OUTPUT_CELLS:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("claim",),
             code="additive_combinatorics.ordered_difference_output_exceeded",
             message=(
@@ -617,7 +646,7 @@ def _admit_ordered_difference_claim(
         for entry in claim.entries
     )
     if claimed_cells > MAX_ORDERED_DIFFERENCE_OUTPUT_CELLS:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("claim", "entries"),
             code="additive_combinatorics.ordered_difference_output_exceeded",
             message=(
@@ -693,7 +722,9 @@ def verify_ordered_difference_profile(
             and claim.first_collision == expected_collision
             and total == set_size * (set_size - 1)
         )
-    except Exception:
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 

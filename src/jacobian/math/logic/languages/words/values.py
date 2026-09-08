@@ -9,6 +9,7 @@ from pydantic import AfterValidator, Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel, canonicalize_json_containers
+from jacobian.catalog.models import OperationResourceAdmissionError
 
 MAX_WORD_LENGTH = 500
 MAX_ALPHABET_SIZE = 50
@@ -126,9 +127,11 @@ class Substitution(StrictModel):
 def _require_dependency_occurrence_bound(substitution: Substitution) -> None:
     occurrence_count = sum(len(image) for image in substitution.morphism.images)
     if occurrence_count > MAX_SUBSTITUTION_DEPENDENCY_OCCURRENCES:
-        raise ValueError(
-            "dependency occurrence output exceeds the aggregate bound "
-            f"({occurrence_count} > {MAX_SUBSTITUTION_DEPENDENCY_OCCURRENCES})"
+        raise OperationResourceAdmissionError(
+            location=("substitution",),
+            code="words.dependency_occurrence_budget",
+            message="dependency occurrence output exceeds the aggregate bound "
+            f"({occurrence_count} > {MAX_SUBSTITUTION_DEPENDENCY_OCCURRENCES})",
         )
 
 

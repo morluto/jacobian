@@ -44,7 +44,17 @@ class _FrameworkAdmission:
 
 
 def _reject(location: tuple[str | int, ...], code: str, message: str) -> NoReturn:
-    raise OperationDomainValidationError(
+    error_type = (
+        OperationResourceAdmissionError
+        if code
+        in {
+            "coordinate_work_exceeds_bound",
+            "rigidity_matrix_scalar_exceeds_rank_bound",
+            "rigidity_matrix_rank_admission_failed",
+        }
+        else OperationDomainValidationError
+    )
+    raise error_type(
         location=location,
         code=(
             code
@@ -202,6 +212,8 @@ def planar_rigidity_profile(
 
 def verify_planar_rigidity_profile(claim: PlanarRigidityProfile) -> bool:
     """Verify the canonical rigidity matrix and rank claim for a framework."""
+    if not isinstance(claim, PlanarRigidityProfile):
+        return False
     try:
         admission = _admit_framework(claim.configuration, claim.graph)
         matrix = _rigidity_matrix(admission)
@@ -216,7 +228,7 @@ def verify_planar_rigidity_profile(claim: PlanarRigidityProfile) -> bool:
         )
     except OperationResourceAdmissionError:
         raise
-    except (OperationDomainValidationError, ValueError):
+    except OperationDomainValidationError:
         return False
 
 

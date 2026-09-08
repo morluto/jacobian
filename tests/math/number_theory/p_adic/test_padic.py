@@ -404,3 +404,78 @@ def test_hensel_root_does_not_replay_admitted_root_relations(
         type(result).model_validate_json(result.model_dump_json())
     )
     assert evaluations.count(((1, 0, 1), 2, 5)) == 1
+
+
+def test_factor_lift_producer_does_not_reprove_its_completed_product(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from collections.abc import Sequence
+
+    from jacobian.math.number_theory.p_adic import operations
+
+    products: list[tuple[tuple[int, ...], tuple[int, ...], int]] = []
+    original = operations._poly_mul_exact_mod
+
+    def counted(a: Sequence[int], b: Sequence[int], modulus: int) -> list[int]:
+        products.append((tuple(a), tuple(b), modulus))
+        return original(a, b, modulus)
+
+    monkeypatch.setattr(operations, "_poly_mul_exact_mod", counted)
+    result = hensel_lift_factors(
+        IntegerPolynomial(coefficients=(1, 0, 1)),
+        IntegerPolynomial(coefficients=(1, 3)),
+        IntegerPolynomial(coefficients=(1, 2)),
+        5,
+        4,
+    )
+    final_product = (
+        tuple(reversed(result.lifted_g.coefficients)),
+        tuple(reversed(result.lifted_h.coefficients)),
+        625,
+    )
+    assert final_product not in products
+    assert verify_hensel_factor_lift(
+        type(result).model_validate_json(result.model_dump_json())
+    )
+    assert final_product in products
+
+
+@pytest.mark.parametrize("prime", [2, 3, 5, 7])
+def test_factor_lifting_preserves_product_and_residue_for_nonmonic_factors(
+    prime: int,
+) -> None:
+    from itertools import permutations
+
+    for root_g, root_h in permutations(range(prime), 2):
+        g = (-root_g * (prime - 1), prime - 1)
+        h = (-root_h, 1)
+        product = [
+            sum(g[i] * h[k - i] for i in range(2) if 0 <= k - i < 2) for k in range(3)
+        ]
+        # A leading coefficient divisible by p exercises degree growth in h.
+        f = tuple(
+            (product[k] if k < 3 else 0) + prime * (k + root_g + 1) for k in range(4)
+        )
+        for precision in (1, 2, 4):
+            result = hensel_lift_factors(
+                IntegerPolynomial(coefficients=tuple(reversed(f))),
+                IntegerPolynomial(coefficients=tuple(reversed(g))),
+                IntegerPolynomial(coefficients=tuple(reversed(h))),
+                prime,
+                precision,
+            )
+            lifted_g = tuple(reversed(result.lifted_g.coefficients))
+            lifted_h = tuple(reversed(result.lifted_h.coefficients))
+            modulus = prime**precision
+            for k in range(max(len(f), len(lifted_g) + len(lifted_h) - 1)):
+                coefficient = sum(
+                    lifted_g[i] * lifted_h[k - i]
+                    for i in range(len(lifted_g))
+                    if 0 <= k - i < len(lifted_h)
+                )
+                assert (coefficient - (f[k] if k < len(f) else 0)) % modulus == 0
+            for source, lifted in ((g, lifted_g), (h, lifted_h)):
+                assert all(
+                    (value - (source[i] if i < len(source) else 0)) % prime == 0
+                    for i, value in enumerate(lifted)
+                )

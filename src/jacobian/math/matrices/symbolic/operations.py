@@ -10,9 +10,13 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, Literal
 
+from pydantic import ValidationError
 from pydantic_core import PydanticCustomError
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.matrices.symbolic._models import (
     RationalFunctionMatrix,
     RationalFunctionVector,
@@ -51,7 +55,7 @@ def _validate_matrix_carrier(value: object) -> RationalFunctionMatrix:
         raise ValueError("symbolic matrix must be a RationalFunctionMatrix carrier")
     try:
         return RationalFunctionMatrix.model_validate(value.model_dump(warnings="none"))
-    except Exception as exc:
+    except ValidationError as exc:
         raise ValueError(
             "symbolic matrix carrier failed structural validation"
         ) from exc
@@ -224,11 +228,16 @@ def verify_symbolic_eigenvalues(claim: SymbolicEigenvaluesResult) -> bool:
             return False
         normalized = SymbolicEigenvaluesResult.model_validate(claim.model_dump())
         matrix = _validate_matrix_carrier(normalized.matrix)
+    except (AttributeError, TypeError, ValueError):
+        return False
+    try:
         degree, coefficients = symbolic_characteristic_polynomial(
             matrix.entries,
             matrix.variables,
         )
-    except Exception:
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
     return (
         degree == normalized.degree

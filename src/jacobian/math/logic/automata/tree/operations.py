@@ -7,6 +7,10 @@ from collections.abc import Iterator
 from itertools import product
 from math import prod
 
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.logic.automata.tree._models import (
     AcceptedTreeCountResult,
     TreeRunResult,
@@ -18,6 +22,7 @@ from jacobian.math.logic.automata.tree.values import (
     TreeAutomatonTransition,
     TreeStateChartEntry,
     _build_reachable_state_profile,
+    _reject_tree,
     accepted_tree_count_work_bound,
     validate_ranked_tree,
 )
@@ -97,9 +102,29 @@ def accepted_tree_count(
 ) -> int:
     """Count distinct accepted ranked trees, not accepting runs."""
 
+    if type(tree_size) is not int:
+        _reject_tree("tree size must be an integer", resource=False)
     if tree_size < 1:
         return 0
     accepted_tree_count_work_bound(automaton, tree_size)
+    return _accepted_tree_count_admitted(automaton, tree_size)
+
+
+def _accepted_tree_count_admitted(
+    automaton: BottomUpTreeAutomaton, tree_size: int
+) -> int:
+    if not any(transition.child_states for transition in automaton.transitions):
+        # Only leaves can have a run. Count symbols, not nondeterministic runs.
+        if tree_size != 1:
+            return 0
+        finals = set(automaton.final_states)
+        return len(
+            {
+                transition.symbol
+                for transition in automaton.transitions
+                if transition.target_state in finals
+            }
+        )
     transitions_by_symbol = {
         symbol: tuple(
             transition
@@ -197,7 +222,9 @@ def verify_tree_run(claim: TreeRunResult) -> bool:
             and claim.accepted == accepted
             and claim.node_count == len(chart)
         )
-    except (TypeError, ValueError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
@@ -206,7 +233,9 @@ def verify_reachable_state_profile(claim: ReachableStateProfile) -> bool:
 
     try:
         return reachable_state_profile(claim.automaton) == claim
-    except (TypeError, ValueError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
@@ -215,5 +244,7 @@ def verify_accepted_tree_count(claim: AcceptedTreeCountResult) -> bool:
 
     try:
         return accepted_tree_count(claim.automaton, claim.tree_size) == claim.count
-    except (TypeError, ValueError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False

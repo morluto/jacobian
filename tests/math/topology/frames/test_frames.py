@@ -8,10 +8,7 @@ from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.values import IntegerMatrix
 from jacobian.math.topology.frames._models import (
-    CoherenceRequest,
-    FiniteFrameRequest,
     GramResult,
-    VectorFamilyRequest,
 )
 from jacobian.math.topology.frames._tools import _coherence, _frame_potential, _gram
 from jacobian.math.topology.frames.operations import gram, verify_gram
@@ -33,7 +30,9 @@ def _repeated_standard_basis(
 
 def test_gram_accepts_nonspanning_vector_family() -> None:
     assert _gram(
-        VectorFamilyRequest.model_validate({"vectors": [[1, 0], [2, 0]]})
+        VectorFamily.model_validate(
+            {"dimension": len(([[1, 0], [2, 0]])[0]), "vectors": [[1, 0], [2, 0]]}
+        )
     ).gram == (
         (1, 2),
         (2, 4),
@@ -41,7 +40,7 @@ def test_gram_accepts_nonspanning_vector_family() -> None:
 
 
 def test_decoded_gram_rejects_shape_forgery() -> None:
-    result = gram(VectorFamily(vectors=((1, 0), (0, 1))))
+    result = gram(VectorFamily(dimension=2, vectors=((1, 0), (0, 1))))
     payload = result.model_dump()
     payload["gram"]["row_count"] = 1
     with pytest.raises(ValueError, match="shape"):
@@ -66,7 +65,7 @@ def test_vector_family_schema_advertises_cell_budget() -> None:
 
 def test_gram_accepts_a_single_vector_beyond_the_old_side_cap() -> None:
     vector = (1,) * 513
-    result = gram(VectorFamily(vectors=(vector,)))
+    result = gram(VectorFamily(dimension=len(vector), vectors=(vector,)))
 
     assert result.dimension == 513
     assert result.gram == ((513,),)
@@ -75,26 +74,33 @@ def test_gram_accepts_a_single_vector_beyond_the_old_side_cap() -> None:
 def test_frame_operations_admit_shape_sensitive_vector_count() -> None:
     vectors = ((1,),) * 1_025
 
-    result = _frame_potential(FiniteFrameRequest(vectors=vectors))
+    result = _frame_potential(VectorFamily(dimension=len(vectors[0]), vectors=vectors))
 
     assert result.potential == 1_025**2
 
 
 def test_frame_operations_admit_coefficient_beyond_the_old_value_cap() -> None:
-    result = _frame_potential(FiniteFrameRequest(vectors=((1_001,),)))
+    result = _frame_potential(VectorFamily(dimension=1, vectors=((1_001,),)))
 
     assert result.potential == 1004006004001
 
 
 def test_frame_requires_full_ambient_span() -> None:
-    request = FiniteFrameRequest.model_validate({"vectors": [[1, 0], [2, 0]]})
+    request = VectorFamily.model_validate(
+        {"dimension": len(([[1, 0], [2, 0]])[0]), "vectors": [[1, 0], [2, 0]]}
+    )
     with pytest.raises(OperationDomainValidationError) as error:
         _frame_potential(request)
     assert error.value.errors()[0]["type"] == "frames.frame_does_not_span"
 
 
 def test_coherence_rejects_zero_vector() -> None:
-    request = CoherenceRequest.model_validate({"vectors": [[0, 0], [1, 0], [0, 1]]})
+    request = VectorFamily.model_validate(
+        {
+            "dimension": len(([[0, 0], [1, 0], [0, 1]])[0]),
+            "vectors": [[0, 0], [1, 0], [0, 1]],
+        }
+    )
     with pytest.raises(OperationDomainValidationError) as error:
         _coherence(request)
     assert error.value.errors()[0]["type"] == "frames.zero_vector"
@@ -102,7 +108,12 @@ def test_coherence_rejects_zero_vector() -> None:
 
 def test_coherence_is_exact_and_carries_canonical_maximizer() -> None:
     result = _coherence(
-        CoherenceRequest.model_validate({"vectors": [[1, 1], [1, 0], [0, 1]]})
+        VectorFamily.model_validate(
+            {
+                "dimension": len(([[1, 1], [1, 0], [0, 1]])[0]),
+                "vectors": [[1, 1], [1, 0], [0, 1]],
+            }
+        )
     )
     assert result.coherence_squared.as_integer_ratio() == (1, 2)
     assert result.maximizing_pair == (0, 2)
@@ -114,7 +125,11 @@ def test_potential_remains_exact_above_json_safe_integer() -> None:
     vectors = (
         [repeated] * 5 + [final] + [[int(i == j) for j in range(16)] for i in range(16)]
     )
-    result = _frame_potential(FiniteFrameRequest.model_validate({"vectors": vectors}))
+    result = _frame_potential(
+        VectorFamily.model_validate(
+            {"dimension": len((vectors)[0]), "vectors": vectors}
+        )
+    )
     expected = sum(
         sum(a * b for a, b in zip(left, right, strict=True)) ** 2
         for left in result.vectors
@@ -128,7 +143,7 @@ def test_flint_gram_reconstructs_dot_products_and_quadratic_form() -> None:
         tuple(((row * 17 + column * 31) % 11) - 5 for column in range(128))
         for row in range(256)
     )
-    result = gram(VectorFamily(vectors=vectors))
+    result = gram(VectorFamily(dimension=len(vectors[0]), vectors=vectors))
 
     assert result.gram[17][203] == sum(
         left * right for left, right in zip(vectors[17], vectors[203], strict=True)
@@ -149,11 +164,13 @@ def test_flint_gram_reconstructs_dot_products_and_quadratic_form() -> None:
 
 def test_repeated_basis_retains_exact_frame_results_and_wire_values() -> None:
     vectors = _repeated_standard_basis(dimension=2, repeats=2)
-    result = gram(VectorFamily(vectors=vectors))
+    result = gram(VectorFamily(dimension=len(vectors[0]), vectors=vectors))
     assert result.gram == ((1, 0, 1, 0), (0, 1, 0, 1), (1, 0, 1, 0), (0, 1, 0, 1))
-    potential = _frame_potential(FiniteFrameRequest(vectors=vectors))
+    potential = _frame_potential(
+        VectorFamily(dimension=len(vectors[0]), vectors=vectors)
+    )
     assert potential.potential == 8
-    coherence = _coherence(CoherenceRequest(vectors=vectors))
+    coherence = _coherence(VectorFamily(dimension=len(vectors[0]), vectors=vectors))
     assert coherence.coherence_squared.as_integer_ratio() == (1, 1)
     assert coherence.maximizing_pair == (1, 3)
     assert (
@@ -167,7 +184,7 @@ def test_repeated_basis_retains_exact_frame_results_and_wire_values() -> None:
 
 def test_sparse_high_height_gram_retains_zero_and_repeated_dot_products() -> None:
     vectors = ((1_000, 0), (0, 1_000)) * 2
-    result = gram(VectorFamily(vectors=vectors))
+    result = gram(VectorFamily(dimension=len(vectors[0]), vectors=vectors))
     assert result.gram == (
         (1_000_000, 0, 1_000_000, 0),
         (0, 1_000_000, 0, 1_000_000),
@@ -179,7 +196,7 @@ def test_sparse_high_height_gram_retains_zero_and_repeated_dot_products() -> Non
 
 def test_high_coefficients_retain_exact_gram_entries() -> None:
     vectors = ((70_000_000, 70_000_000),) * 2
-    result = _gram(VectorFamilyRequest(vectors=vectors))
+    result = _gram(VectorFamily(dimension=len(vectors[0]), vectors=vectors))
     expected = 2 * 70_000_000**2
     assert expected > 2**53
     assert result.gram == ((expected, expected), (expected, expected))
@@ -189,12 +206,14 @@ def test_high_coefficients_retain_exact_gram_entries() -> None:
 def test_result_sensitive_operations_diverge_at_full_carrier_boundary() -> None:
     dimension = 512
     vectors = _repeated_standard_basis(dimension=dimension, repeats=2)
-    family = VectorFamily(vectors=vectors)
+    family = VectorFamily(dimension=len(vectors[0]), vectors=vectors)
 
     assert len(vectors) == MAX_VECTOR_CELLS // dimension
     gram_result = gram(family)
-    potential = _frame_potential(FiniteFrameRequest(vectors=vectors))
-    coherence = _coherence(CoherenceRequest(vectors=vectors))
+    potential = _frame_potential(
+        VectorFamily(dimension=len(vectors[0]), vectors=vectors)
+    )
+    coherence = _coherence(VectorFamily(dimension=len(vectors[0]), vectors=vectors))
     assert len(gram_result.gram) == MAX_VECTOR_CELLS // dimension
     assert gram_result.gram[0][dimension] == 1
     assert potential.potential == 2 * (MAX_VECTOR_CELLS // dimension)
@@ -214,7 +233,7 @@ def test_sparse_high_height_gram_is_admitted_by_occupancy() -> None:
         tuple(1_000 * entry for entry in vector)
         for vector in _repeated_standard_basis(dimension=dimension, repeats=2)
     )
-    family = VectorFamily(vectors=vectors)
+    family = VectorFamily(dimension=len(vectors[0]), vectors=vectors)
     naive_entry_bound = 512 * 1_000**2
     naive_chars = len(str(naive_entry_bound)) + int(naive_entry_bound > 0)
     assert naive_chars > 0
@@ -227,9 +246,9 @@ def test_sparse_high_height_gram_is_admitted_by_occupancy() -> None:
 
 
 def test_sparse_row_norm_controls_gram_entry_admission() -> None:
-    family = VectorFamily(vectors=((70_000_000, 0),))
+    family = VectorFamily(dimension=2, vectors=((70_000_000, 0),))
 
-    result = _gram(VectorFamilyRequest(vectors=family.vectors))
+    result = _gram(VectorFamily(dimension=family.dimension, vectors=family.vectors))
 
     assert result.gram == ((4_900_000_000_000_000,),)
 
@@ -242,9 +261,11 @@ def test_dense_high_height_gram_uses_the_structural_work_bound() -> None:
         for row in range(dimension)
     )
     vectors = basis * 2
-    result = _gram(VectorFamilyRequest(vectors=vectors))
+    result = _gram(VectorFamily(dimension=len(vectors[0]), vectors=vectors))
 
-    potential = _frame_potential(FiniteFrameRequest(vectors=vectors))
+    potential = _frame_potential(
+        VectorFamily(dimension=len(vectors[0]), vectors=vectors)
+    )
     diagonal = 1_000**2 + (dimension - 1) * 999**2
     off_diagonal = 2 * 1_000 * 999 + (dimension - 2) * 999**2
     expected = 4 * dimension * (diagonal**2 + (dimension - 1) * off_diagonal**2)
@@ -257,14 +278,14 @@ def test_high_coefficients_remain_exact_within_the_cell_bound() -> None:
     dimension = 512
     vectors = ((4_000_000,) * dimension,) * (MAX_VECTOR_CELLS // dimension)
 
-    result = _gram(VectorFamilyRequest(vectors=vectors))
+    result = _gram(VectorFamily(dimension=len(vectors[0]), vectors=vectors))
 
     assert result.gram[0][0] == dimension * 4_000_000**2
 
 
 def test_flint_rank_rejects_nonspanning_family_above_previous_boundary() -> None:
     vector = (1,) * 32
-    request = FiniteFrameRequest(vectors=(vector,) * 64)
+    request = VectorFamily(dimension=len(vector), vectors=(vector,) * 64)
 
     with pytest.raises(OperationDomainValidationError) as error:
         _frame_potential(request)
@@ -273,8 +294,8 @@ def test_flint_rank_rejects_nonspanning_family_above_previous_boundary() -> None
 
 def test_coherence_maximizer_matches_complete_exact_profile() -> None:
     vectors = _repeated_standard_basis(dimension=32, repeats=2)
-    result = _coherence(CoherenceRequest(vectors=vectors))
-    gram_result = _gram(VectorFamilyRequest(vectors=vectors)).gram
+    result = _coherence(VectorFamily(dimension=len(vectors[0]), vectors=vectors))
+    gram_result = _gram(VectorFamily(dimension=len(vectors[0]), vectors=vectors)).gram
     candidates = (
         (
             Fraction(
@@ -293,3 +314,20 @@ def test_coherence_maximizer_matches_complete_exact_profile() -> None:
         maximum.denominator,
     )
     assert result.maximizing_pair == pair
+
+
+def test_gram_verifier_propagates_unexpected_kernel_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.topology.frames import operations
+
+    claim = gram(VectorFamily(dimension=1, vectors=((1,),)))
+
+    def unavailable(
+        vectors: tuple[tuple[int, ...], ...],
+    ) -> tuple[tuple[int, ...], ...]:
+        raise ValueError("backend arithmetic unavailable")
+
+    monkeypatch.setattr(operations, "integer_gram", unavailable)
+    with pytest.raises(ValueError, match="backend arithmetic unavailable"):
+        verify_gram(claim)

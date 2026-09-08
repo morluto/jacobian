@@ -3,6 +3,8 @@
 from collections.abc import Callable
 from typing import Any
 
+from pydantic_core import PydanticCustomError
+
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -40,7 +42,7 @@ def _admit[T](
 ) -> T:
     try:
         return admission()
-    except ValueError as exc:
+    except PydanticCustomError as exc:
         raise OperationDomainValidationError(
             location=location,
             code=code,

@@ -65,3 +65,35 @@ def test_cli_run_requires_exactly_one_payload_source(
     error = json.loads(result.stderr)["error"]
     assert error["code"] == "INVALID_ARGUMENT"
     assert error["message"] == ("pass exactly one of --json or --file")
+
+
+def test_cli_backend_value_error_is_command_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.dispatch as dispatch
+
+    def fail(*args: object, **kwargs: object) -> None:
+        raise ValueError("backend failed")
+
+    monkeypatch.setattr(dispatch, "invoke_operation", fail)
+    result = CliRunner().invoke(
+        app, ["run", "integer.compute.extended_gcd", "--json", "{}"]
+    )
+    assert result.exit_code == 1
+    assert json.loads(result.stderr)["error"]["code"] == "COMMAND_FAILED"
+
+
+def test_cli_resource_refusal_is_not_invalid_argument() -> None:
+    result = CliRunner().invoke(
+        app,
+        [
+            "run",
+            "cubical.face_closure.compute",
+            "--json",
+            json.dumps(
+                {"cells": [{"intervals": [[0, 1]] * 10}, {"intervals": [[3, 4]] * 10}]}
+            ),
+        ],
+    )
+    assert result.exit_code == 1
+    assert json.loads(result.stderr)["error"]["code"] == "RESOURCE_NOT_ADMITTED"

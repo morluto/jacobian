@@ -5,7 +5,10 @@ from __future__ import annotations
 from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.matrices.values import IntegerMatrix
 from jacobian.math.topology.frames._flint import integer_gram, integer_gram_and_rank
 from jacobian.math.topology.frames._models import (
@@ -22,22 +25,18 @@ MAX_FRAME_GRAM_ENTRIES = 2_097_152
 MAX_FRAME_GRAM_MULTIPLY_ADDS = 536_870_912
 
 
-def _coefficient_height(value: VectorFamily) -> int:
-    return max(abs(entry) for vector in value.vectors for entry in vector)
-
-
 def _require_gram_work_budget(value: VectorFamily) -> None:
     vector_count = len(value.vectors)
-    dimension = len(value.vectors[0])
+    dimension = value.dimension
     gram_entries = vector_count**2
     if gram_entries > MAX_FRAME_GRAM_ENTRIES:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("vectors",),
             code="frames.gram_intermediate_budget",
             message="frame Gram intermediate exceeds its entry budget",
         )
     if gram_entries * dimension > MAX_FRAME_GRAM_MULTIPLY_ADDS:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("vectors",),
             code="frames.gram_work_budget",
             message="frame Gram computation exceeds its multiply-add work budget",
@@ -48,6 +47,7 @@ def _gram_result(value: VectorFamily) -> GramResult:
     matrix = integer_gram(value.vectors)
     return GramResult._from_kernel(
         vectors=value.vectors,
+        dimension=value.dimension,
         gram=IntegerMatrix(
             row_count=len(matrix),
             column_count=len(matrix[0]) if matrix else len(value.vectors),
@@ -57,7 +57,7 @@ def _gram_result(value: VectorFamily) -> GramResult:
 
 
 def _admit_frame(value: VectorFamily, *, rank: int) -> None:
-    if rank != len(value.vectors[0]):
+    if rank != value.dimension:
         raise OperationDomainValidationError(
             location=("vectors",),
             code="frames.frame_does_not_span",
@@ -66,7 +66,7 @@ def _admit_frame(value: VectorFamily, *, rank: int) -> None:
 
 
 def _admit_frame_shape(value: VectorFamily) -> None:
-    if len(value.vectors) < len(value.vectors[0]):
+    if len(value.vectors) < value.dimension:
         raise OperationDomainValidationError(
             location=("vectors",),
             code="frames.frame_does_not_span",
@@ -86,20 +86,13 @@ def verify_gram(claim: GramResult) -> bool:
         if (
             claim.gram.row_count != len(claim.vectors)
             or claim.gram.column_count != len(claim.vectors)
-            or claim.dimension != len(claim.vectors[0])
+            or any(len(vector) != claim.dimension for vector in claim.vectors)
         ):
             return False
-        _require_gram_work_budget(claim)
-        expected = integer_gram(claim.vectors)
-        return claim.gram.entries == expected
-    except (
-        AttributeError,
-        IndexError,
-        TypeError,
-        ValueError,
-        OperationDomainValidationError,
-    ):
+    except (AttributeError, IndexError, TypeError):
         return False
+    _require_gram_work_budget(claim)
+    return claim.gram.entries == integer_gram(claim.vectors)
 
 
 def coherence(value: VectorFamily) -> CoherenceResult:
@@ -112,7 +105,7 @@ def coherence(value: VectorFamily) -> CoherenceResult:
             message="coherence requires every vector to be nonzero",
         )
     _admit_frame_shape(value)
-    rank, matrix = integer_gram_and_rank(value.vectors)
+    rank, matrix = integer_gram_and_rank(value.vectors, dimension=value.dimension)
     _admit_frame(value, rank=rank)
     assert matrix is not None
     maximum_numerator = 0
@@ -135,6 +128,7 @@ def coherence(value: VectorFamily) -> CoherenceResult:
                 pair = candidate_pair
     return CoherenceResult._from_kernel(
         vectors=value.vectors,
+        dimension=value.dimension,
         coherence_squared=CanonicalRational.from_fraction(
             Fraction(maximum_numerator, maximum_denominator)
         ),
@@ -146,8 +140,10 @@ def frame_potential(value: VectorFamily) -> FramePotentialResult:
     """Compute the exact frame potential of a finite frame."""
     _require_gram_work_budget(value)
     _admit_frame_shape(value)
-    rank, matrix = integer_gram_and_rank(value.vectors)
+    rank, matrix = integer_gram_and_rank(value.vectors, dimension=value.dimension)
     _admit_frame(value, rank=rank)
     assert matrix is not None
     total = sum(entry**2 for row in matrix for entry in row)
-    return FramePotentialResult._from_kernel(vectors=value.vectors, potential=total)
+    return FramePotentialResult._from_kernel(
+        vectors=value.vectors, dimension=value.dimension, potential=total
+    )

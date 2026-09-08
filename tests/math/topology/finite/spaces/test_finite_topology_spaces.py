@@ -330,10 +330,12 @@ class TestSerializedSubsetClaims:
     def test_subset_indices_are_canonical(self) -> None:
         space = _sierpinski()
         with pytest.raises(ValidationError) as error:
-            InteriorResult(
-                space=space,
-                subset={"space": space, "indices": (1, 0)},
-                interior={"space": space, "indices": ()},
+            InteriorResult.model_validate(
+                {
+                    "space": space,
+                    "subset": {"space": space, "indices": (1, 0)},
+                    "interior": {"space": space, "indices": ()},
+                }
             )
         assert (
             error.value.errors()[0]["type"]
@@ -356,3 +358,31 @@ class TestSerializedSubsetClaims:
         payload = result.model_dump(mode="json")
         payload["quotient_map"]["target"]["preorder"] = [[0], [1]]
         assert not verify_kolmogorov_quotient(type(result).model_validate(payload))
+
+
+def test_native_interior_rejects_subset_outside_carrier() -> None:
+    import pytest
+
+    from jacobian.catalog.models import OperationDomainValidationError
+    from jacobian.math.topology.finite.spaces.operations import from_preorder, interior
+
+    space = from_preorder(("a",), ((0,),))
+    with pytest.raises(OperationDomainValidationError, match="subset"):
+        interior(space, frozenset({1}))
+
+
+@pytest.mark.parametrize("kind", ["interior", "closure", "boundary"])
+def test_subset_claim_checks_retained_space_before_indexing(kind: str) -> None:
+    from jacobian.math.topology.finite.spaces import _models, operations
+    from jacobian.math.topology.finite.spaces.values import FiniteTopologicalSubset
+
+    source = operations.from_preorder(("a",), ((0,),))
+    other = operations.from_preorder(("a", "b"), ((0,), (1,)))
+    claim_type = getattr(_models, kind.capitalize() + "Result")
+    claim = claim_type(
+        space=source,
+        subset=FiniteTopologicalSubset(space=other, indices=(1,)),
+        **{kind: FiniteTopologicalSubset(space=source, indices=())},
+    )
+    restored = claim_type.model_validate_json(claim.model_dump_json())
+    assert not getattr(operations, "verify_" + kind)(restored)

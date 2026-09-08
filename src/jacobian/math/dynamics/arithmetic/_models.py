@@ -27,6 +27,14 @@ MAX_FIELD_PRIME = 10_000
 CoefficientHeight = RationalHeight | None
 
 
+class _ArithmeticInputError(ValueError):
+    """A native caller violates an explicit mathematical input condition."""
+
+
+class _ArithmeticResourceError(_ArithmeticInputError):
+    """Admitted exact computation exceeds a bounded execution envelope."""
+
+
 _VALIDATION_CODES = {
     "iterate output degree exceeds bound": "iterate_degree_exceeds_bound",
     f"iterate coefficient growth exceeds the {MAX_POLYNOMIAL_OUTPUT_DIGITS}-digit output bound": "iterate_coefficient_growth_exceeds_bound",
@@ -151,7 +159,7 @@ def _require_polynomial_height(
         height is not None and height.exceeds(MAX_POLYNOMIAL_OUTPUT_DIGITS)
         for height in coefficients
     ):
-        raise ValueError(
+        raise _ArithmeticResourceError(
             f"{operation} coefficient growth exceeds the "
             f"{MAX_POLYNOMIAL_OUTPUT_DIGITS}-digit output bound"
         )

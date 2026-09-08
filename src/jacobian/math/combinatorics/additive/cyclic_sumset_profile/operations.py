@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.additive.cyclic_sumset_profile._models import (
     MAX_CYCLIC_SUMSET_PAIRS,
     CyclicSumsetEntry,
@@ -25,7 +28,7 @@ def compute_cyclic_sumset_profile(
             message="cyclic sumset modulus must be positive",
         )
     if len(left) * len(right) > MAX_CYCLIC_SUMSET_PAIRS:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("left", "right"),
             code="cyclic_sumset.pair_work_exceeded",
             message="cyclic sumset exceeds the 100000-pair work bound",
@@ -63,6 +66,8 @@ def compute_cyclic_sumset_profile(
 
 def verify_cyclic_sumset_profile(result: CyclicSumsetResult) -> bool:
     """Verify cyclic representation counts against modulus and source sets."""
+    if not isinstance(result, CyclicSumsetResult):
+        return False
     try:
         expected = compute_cyclic_sumset_profile(
             result.modulus, result.left, result.right
@@ -71,5 +76,7 @@ def verify_cyclic_sumset_profile(result: CyclicSumsetResult) -> bool:
             expected.entries == result.entries
             and expected.support_cardinality == result.support_cardinality
         )
-    except Exception:
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False

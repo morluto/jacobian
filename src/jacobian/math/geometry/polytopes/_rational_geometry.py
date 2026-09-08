@@ -152,8 +152,10 @@ def vertices_from_halfspaces(
             if matrix.det() == 0:
                 continue
             solution = matrix.solve(rhs)
-        except (NonInvertibleMatrixError, ValueError):
+        except NonInvertibleMatrixError:
             continue
+        except ValueError as exc:
+            raise RuntimeError("exact vertex enumeration computation failed") from exc
         point = tuple(Rational(solution[axis, 0]) for axis in range(dimension))
         if all(
             sum(

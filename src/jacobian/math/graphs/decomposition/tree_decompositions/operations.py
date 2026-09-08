@@ -9,7 +9,10 @@ from collections import deque
 
 from pydantic_core import PydanticCustomError
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 from ._models import (
@@ -229,7 +232,11 @@ def reroot(td: TreeDecomposition, root: str) -> RerootResult:
     _admit_decomposition(td)
     idx = _index_of(td)
     if root not in idx:
-        raise ValueError("root must be a declared tree node")
+        raise OperationDomainValidationError(
+            location=("root",),
+            code="graph.tree_decomposition.root_not_declared",
+            message="root must be a declared tree node",
+        )
     int_edges = _int_edges(td)
     adjacency: dict[int, list[int]] = {i: [] for i in range(len(td.tree_nodes))}
     for a, b in int_edges:
@@ -379,15 +386,9 @@ def verify_width(claim: WidthResult) -> bool:
         if not isinstance(claim, WidthResult):
             return False
         return width(claim.decomposition) == claim
-    except (
-        AttributeError,
-        IndexError,
-        KeyError,
-        OperationDomainValidationError,
-        RuntimeError,
-        TypeError,
-        ValueError,
-    ):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
@@ -397,15 +398,9 @@ def verify_vertex_occurrences(claim: VertexOccurrencesResult) -> bool:
         if not isinstance(claim, VertexOccurrencesResult):
             return False
         return vertex_occurrences(claim.decomposition) == claim
-    except (
-        AttributeError,
-        IndexError,
-        KeyError,
-        OperationDomainValidationError,
-        RuntimeError,
-        TypeError,
-        ValueError,
-    ):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
@@ -415,15 +410,9 @@ def verify_adhesions(claim: AdhesionsResult) -> bool:
         if not isinstance(claim, AdhesionsResult):
             return False
         return adhesions(claim.decomposition) == claim
-    except (
-        AttributeError,
-        IndexError,
-        KeyError,
-        OperationDomainValidationError,
-        RuntimeError,
-        TypeError,
-        ValueError,
-    ):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
@@ -433,15 +422,9 @@ def verify_reroot(claim: RerootResult) -> bool:
         if not isinstance(claim, RerootResult):
             return False
         return reroot(claim.decomposition, claim.root) == claim
-    except (
-        AttributeError,
-        IndexError,
-        KeyError,
-        OperationDomainValidationError,
-        RuntimeError,
-        TypeError,
-        ValueError,
-    ):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
@@ -451,13 +434,7 @@ def verify_bag_intersection_graph(claim: BagIntersectionGraphResult) -> bool:
         if not isinstance(claim, BagIntersectionGraphResult):
             return False
         return bag_intersection_graph(claim.decomposition) == claim
-    except (
-        AttributeError,
-        IndexError,
-        KeyError,
-        OperationDomainValidationError,
-        RuntimeError,
-        TypeError,
-        ValueError,
-    ):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False

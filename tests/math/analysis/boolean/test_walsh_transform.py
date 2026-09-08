@@ -153,3 +153,15 @@ def test_walsh_transform_kernel_rejects_non_binary_values() -> None:
 
     with pytest.raises(OperationDomainValidationError, match="0 or 1"):
         walsh_hadamard_transform([0, 1, 1, 2])
+
+
+def test_walsh_result_round_trip_composes_with_its_native_verifier() -> None:
+    from jacobian.math.analysis.boolean import verify_walsh_transform
+    from jacobian.math.analysis.boolean._models import BooleanWalshTransformResult
+
+    result = _walsh_hadamard_transform(_request([0, 1]))
+    claim = BooleanWalshTransformResult.model_validate_json(result.model_dump_json())
+    assert verify_walsh_transform(claim)
+    assert tuple(v.as_integer_ratio() for v in claim.source.values) == ((0, 1), (1, 1))
+    forged = claim.model_copy(update={"spectrum": (2, 0)})
+    assert not verify_walsh_transform(forged)

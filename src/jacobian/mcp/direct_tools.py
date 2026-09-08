@@ -28,6 +28,7 @@ from jacobian.dispatch import (
 from jacobian.mcp.runtime import AppState, _authorize
 from jacobian.mcp.tools import (
     _backend_unavailable_error,
+    _execution_tool_error,
     _invalid_request_error,
     _request_cancellation,
 )
@@ -96,9 +97,13 @@ def _direct_operation_tool(
         except (OperationRequestValidationError, OperationDomainValidationError) as exc:
             raise _invalid_request_error(operation_id, exc) from exc
         except OperationExecutionTimeoutError as exc:
-            raise ToolError("operation execution deadline expired") from exc
+            raise _execution_tool_error(
+                code="OPERATION_TIMEOUT", operation_id=operation_id, stage=exc.stage
+            ) from exc
         except OperationExecutionCancelledError as exc:
-            raise ToolError("operation cancelled") from exc
+            raise _execution_tool_error(
+                code="OPERATION_CANCELLED", operation_id=operation_id, stage=exc.stage
+            ) from exc
         except BackendUnavailableError as exc:
             raise _backend_unavailable_error(operation_id, exc) from exc
         except (MCPError, ToolError):

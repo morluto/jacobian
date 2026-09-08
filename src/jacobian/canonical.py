@@ -71,6 +71,16 @@ def _reject_constant(_value: str) -> NoReturn:
     raise CanonicalizationError("non-finite JSON value is not allowed")
 
 
+def _parse_json_integer(value: str) -> int:
+    if len(value.lstrip("-")) > 16:
+        raise CanonicalizationError(
+            "JSON integers outside the interoperable range must be encoded as strings"
+        )
+    integer = int(value)
+    _validate_json_integer(integer)
+    return integer
+
+
 def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key, value in pairs:
@@ -90,7 +100,10 @@ def loads_strict_json(
     """Parse JSON while rejecting duplicate keys, floats, and oversized input."""
 
     active_limits = limits or CanonicalLimits()
-    raw = value.encode("utf-8") if isinstance(value, str) else bytes(value)
+    try:
+        raw = value.encode("utf-8") if isinstance(value, str) else bytes(value)
+    except UnicodeEncodeError as exc:
+        raise CanonicalizationError("JSON input must be valid UTF-8") from exc
     if len(raw) > active_limits.max_input_bytes:
         raise CanonicalizationError("JSON input exceeds the configured size limit")
     try:
@@ -100,9 +113,10 @@ def loads_strict_json(
     if text.startswith("\ufeff"):
         raise CanonicalizationError("JSON input must not contain a UTF-8 BOM")
     try:
-        return json.loads(
+        parsed = json.loads(
             text,
             object_pairs_hook=_unique_object,
+            parse_int=_parse_json_integer,
             parse_float=_reject_float,
             parse_constant=_reject_constant,
         )
@@ -110,6 +124,8 @@ def loads_strict_json(
         raise
     except (json.JSONDecodeError, RecursionError) as exc:
         raise CanonicalizationError("invalid or excessively nested JSON") from exc
+    _validate_json_value(parsed, limits=active_limits, depth=0)
+    return parsed
 
 
 def _normalize_rational(

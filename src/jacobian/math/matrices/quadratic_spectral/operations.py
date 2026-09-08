@@ -613,35 +613,41 @@ def inertia(matrix: RealQuadraticMatrix) -> RealQuadraticInertia:
 
 def verify_symmetric_spectrum(claim: RealQuadraticSpectrum) -> bool:
     """Verify a serialized exact symmetric spectrum against its source."""
+    if not isinstance(claim, RealQuadraticSpectrum):
+        return False
     if claim.spectrum_kind != "SYMMETRIC_EIGENVALUES":
         return False
     try:
         return symmetric_spectrum(claim.matrix) == claim
     except OperationResourceAdmissionError:
         raise
-    except (OperationDomainValidationError, ValueError):
+    except OperationDomainValidationError:
         return False
 
 
 def verify_singular_spectrum(claim: RealQuadraticSpectrum) -> bool:
     """Verify a serialized exact singular spectrum against its source."""
+    if not isinstance(claim, RealQuadraticSpectrum):
+        return False
     if claim.spectrum_kind != "SINGULAR_VALUES":
         return False
     try:
         return singular_spectrum(claim.matrix) == claim
     except OperationResourceAdmissionError:
         raise
-    except (OperationDomainValidationError, ValueError):
+    except OperationDomainValidationError:
         return False
 
 
 def verify_inertia(claim: RealQuadraticInertia) -> bool:
     """Verify serialized inertia counts and definiteness against the source."""
+    if not isinstance(claim, RealQuadraticInertia):
+        return False
     try:
         return inertia(claim.matrix) == claim
     except OperationResourceAdmissionError:
         raise
-    except (OperationDomainValidationError, ValueError):
+    except OperationDomainValidationError:
         return False
 
 

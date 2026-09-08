@@ -4,7 +4,9 @@ import pytest
 
 from jacobian.math.topology.edge_paths._models import (
     EdgePathConcatenateRequest,
+    EdgePathConcatenateResult,
     EdgePathWordRequest,
+    EdgePathWordResult,
     OrientedEdge,
 )
 from jacobian.math.topology.edge_paths._tools import TOOLS
@@ -16,13 +18,13 @@ from jacobian.math.topology.edge_paths.operations import (
 )
 
 
-def _word(request: EdgePathWordRequest):
+def _word(request: EdgePathWordRequest) -> EdgePathWordResult:
     return edge_path_word(
         request.vertex_count, request.edges, request.start_vertex, request.path
     )
 
 
-def _concatenate(request: EdgePathConcatenateRequest):
+def _concatenate(request: EdgePathConcatenateRequest) -> EdgePathConcatenateResult:
     return concatenate_edge_paths(request.vertex_count, request.path_a, request.path_b)
 
 
@@ -137,3 +139,33 @@ def test_edge_path_concatenate_rejects_discontinuous() -> None:
                 path_b=(2, 0),
             )
         )
+
+
+def test_stationary_path_on_singleton_graph_round_trips() -> None:
+    from jacobian.math.topology.edge_paths._models import (
+        EdgePathWordRequest,
+        EdgePathWordResult,
+    )
+    from jacobian.math.topology.edge_paths._tools import _word
+
+    request = EdgePathWordRequest(vertex_count=1, edges=(), start_vertex=0, path=())
+    result = _word(request)
+    assert result.word == ()
+    assert result.graph.vertex_count == 1
+    assert EdgePathWordResult.model_validate_json(result.model_dump_json()) == result
+
+
+def test_single_vertex_paths_are_concatenation_identities() -> None:
+    from jacobian.math.topology.edge_paths.operations import concatenate_edge_paths
+
+    result = concatenate_edge_paths(1, (0,), (0,))
+    assert result.path == (0,)
+    assert result.length == 1
+
+
+def test_native_concatenation_rejects_missing_endpoint_before_indexing() -> None:
+    from jacobian.catalog.models import OperationDomainValidationError
+    from jacobian.math.topology.edge_paths.operations import concatenate_edge_paths
+
+    with pytest.raises(OperationDomainValidationError):
+        concatenate_edge_paths(2, (), (0, 1))

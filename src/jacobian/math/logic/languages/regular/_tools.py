@@ -63,19 +63,12 @@ def compute_complement(request: ComplementRequest) -> ComplementResult:
 def compute_transition_parikh_profile(
     request: TransitionParikhProfileRequest,
 ) -> TransitionParikhProfile:
-    try:
-        return transition_parikh_profile(
-            request.automaton,
-            request.source_state,
-            request.target_state,
-            request.path_length,
-        )
-    except ValueError as exc:
-        raise OperationDomainValidationError(
-            location=("automaton", "source_state", "target_state", "path_length"),
-            code="regular_language.transition_profile_not_admitted",
-            message=str(exc),
-        ) from exc
+    return transition_parikh_profile(
+        request.automaton,
+        request.source_state,
+        request.target_state,
+        request.path_length,
+    )
 
 
 _DFA_EXAMPLE = {

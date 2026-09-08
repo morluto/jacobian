@@ -102,11 +102,11 @@ def test_zero_code_uses_length_convention_for_minimum_distance() -> None:
     assert minimum_distance(_encoder((), 2, width=4)) == 4
 
 
-def test_native_code_api_rejects_empty_generator_matrix_structurally() -> None:
-    with pytest.raises(OperationDomainValidationError) as error:
-        minimum_distance(_encoder((), 2, width=0))
-    assert (
-        error.value.errors()[0]["type"] == "code_theory.generator_width_out_of_bounds"
+def test_zero_length_code_keeps_the_prime_field_contract() -> None:
+    assert minimum_distance(_encoder((), 2, width=0)) == 0
+    _assert_operation_error(
+        lambda: minimum_distance(_encoder((), 4, width=0)),
+        "code_theory.field_order_not_prime",
     )
 
 

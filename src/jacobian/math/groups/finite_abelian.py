@@ -27,7 +27,10 @@ from jacobian._execution import (
 )
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import format_canonical_integer
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 
 if TYPE_CHECKING:
     from sympy import Poly, Symbol
@@ -876,6 +879,8 @@ class FiniteAbelianCharacterSumIntervalProfileResult(StrictModel):
 @dataclass(frozen=True, slots=True)
 class _CharacterSumIntervalProfileWork:
     group_exponent: int
+    squarefree_exponent: int
+    inflation: int
     cyclotomic_degree: int
     cells: int
     total_visits: int
@@ -884,6 +889,35 @@ class _CharacterSumIntervalProfileWork:
     cyclotomic_coefficient_bits: int
     cyclotomic_intermediate_bits: int
     remainder_coefficient_bits: int
+
+
+def _character_sum_conductor(exponent: int) -> tuple[int, int, int]:
+    """Admit the output degree and retain squarefree conductor and inflation."""
+    # phi(N)^2 >= N/2: in its prime-factor product only p=2, a=1
+    # contributes less than one. This bounds trial division before factoring.
+    if exponent > 2 * MAX_CHARACTER_SUM_CYCLOTOMIC_DEGREE**2:
+        raise ValueError(
+            "character-sum cyclotomic degree exceeds the exact reduction bound"
+        )
+    remaining = exponent
+    radical = 1
+    degree = exponent
+    prime = 2
+    while prime * prime <= remaining:
+        if remaining % prime == 0:
+            radical *= prime
+            degree -= degree // prime
+            while remaining % prime == 0:
+                remaining //= prime
+        prime += 1
+    if remaining > 1:
+        radical *= remaining
+        degree -= degree // remaining
+    if degree > MAX_CHARACTER_SUM_CYCLOTOMIC_DEGREE:
+        raise ValueError(
+            "character-sum cyclotomic degree exceeds the exact reduction bound"
+        )
+    return radical, degree, exponent // radical
 
 
 def _character_sum_interval_profile_work(
@@ -912,8 +946,13 @@ def _character_sum_interval_profile_work(
         raise ValueError("character-sum interval count exceeds its bound")
 
     exponent = source.group.exponent
-    cyclotomic_dense_ops = 10 * exponent.bit_length() * (exponent + 1) * (exponent + 1)
-    cyclotomic_intermediate_bits = 2 * exponent + (exponent + 1).bit_length() + 1
+    radical, degree, inflation = _character_sum_conductor(exponent)
+    base_degree = degree // inflation
+    # Phi_N(x) = Phi_rad(N)(x^(N/rad(N))). Construct only the squarefree
+    # polynomial; reduction below treats each residue class modulo inflation
+    # independently. Coefficient heights and elimination chains use rad(N).
+    cyclotomic_dense_ops = 10 * radical.bit_length() * (radical + 1) ** 2
+    cyclotomic_intermediate_bits = 2 * radical + (radical + 1).bit_length() + 1
     if cyclotomic_dense_ops > MAX_CHARACTER_SUM_CYCLOTOMIC_DENSE_OPS:
         raise ValueError(
             "character-sum cyclotomic construction work exceeds its dense-op bound"
@@ -922,13 +961,7 @@ def _character_sum_interval_profile_work(
         raise ValueError(
             "character-sum cyclotomic construction intermediate exceeds its bit bound"
         )
-
-    degree = _euler_totient(exponent)
-    if degree > MAX_CHARACTER_SUM_CYCLOTOMIC_DEGREE:
-        raise ValueError(
-            "character-sum cyclotomic degree exceeds the exact reduction bound"
-        )
-    if degree > MAX_CHARACTER_SUM_CYCLOTOMIC_COEFFICIENT_BITS - 1:
+    if base_degree + 1 > MAX_CHARACTER_SUM_CYCLOTOMIC_COEFFICIENT_BITS:
         raise ValueError("character-sum cyclotomic coefficient exceeds its bit bound")
 
     cells = frequency_count * interval_count
@@ -949,25 +982,30 @@ def _character_sum_interval_profile_work(
     retained_source_work = rank * (sequence_length + frequency_count)
     if retained_source_work > MAX_CHARACTER_SUM_PREFIX_WORK:
         raise ValueError("character-sum retained source coordinates exceed their bound")
-    prefix_work = frequency_count * sequence_length * rank + cells * degree
+    reduction_work = cells * inflation * (radical - base_degree) * base_degree
+    prefix_work = (
+        frequency_count * sequence_length * rank + cells * degree + reduction_work
+    )
     if prefix_work > MAX_CHARACTER_SUM_PREFIX_WORK:
         raise ValueError("character-sum prefix-table work exceeds its bound")
 
     max_interval_length = max((b - a for a, b in source.intervals), default=0)
-    remainder_coefficient_bits = max_interval_length.bit_length() + (degree + 1) * (
-        exponent - degree
-    )
+    remainder_coefficient_bits = max_interval_length.bit_length() + (
+        base_degree + 1
+    ) * (radical - base_degree)
     if remainder_coefficient_bits > MAX_CHARACTER_SUM_REMAINDER_COEFFICIENT_BITS:
         raise ValueError("character-sum remainder intermediate exceeds its bit bound")
 
     return _CharacterSumIntervalProfileWork(
         group_exponent=exponent,
+        squarefree_exponent=radical,
+        inflation=inflation,
         cyclotomic_degree=degree,
         cells=cells,
         total_visits=total_visits,
         prefix_work=prefix_work,
         cyclotomic_dense_ops=cyclotomic_dense_ops,
-        cyclotomic_coefficient_bits=degree + 1,
+        cyclotomic_coefficient_bits=base_degree + 1,
         cyclotomic_intermediate_bits=cyclotomic_intermediate_bits,
         remainder_coefficient_bits=remainder_coefficient_bits,
     )
@@ -994,7 +1032,14 @@ def _finite_abelian_character_sum_interval_profile_data(
     """Compute all exact interval remainders after admission."""
 
     request_checkpoint("before character-sum admission")
-    work = _character_sum_interval_profile_work(source)
+    try:
+        work = _character_sum_interval_profile_work(source)
+    except ValueError as exc:
+        raise OperationResourceAdmissionError(
+            location=("source",),
+            code="finite_abelian_group.character_sum_not_admitted",
+            message=str(exc),
+        ) from exc
     request_checkpoint("after character-sum admission")
     degree = work.cyclotomic_degree
     exponent = work.group_exponent
@@ -1005,9 +1050,13 @@ def _finite_abelian_character_sum_interval_profile_data(
     generator = Symbol("_finite_abelian_character")
     cyclotomic = cast(
         "Poly",
-        cyclotomic_poly(exponent, generator, polys=True),
+        cyclotomic_poly(work.squarefree_exponent, generator, polys=True),
     )
-    if cyclotomic.domain != ZZ or cyclotomic.LC() != 1 or cyclotomic.degree() != degree:
+    if (
+        cyclotomic.domain != ZZ
+        or cyclotomic.LC() != 1
+        or cyclotomic.degree() != degree // work.inflation
+    ):
         raise RuntimeError("SymPy returned an incompatible cyclotomic polynomial")
 
     # Precompute powers of zeta_N for each frequency across the labelled sequence.
@@ -1041,16 +1090,26 @@ def _finite_abelian_character_sum_interval_profile_data(
             if not interval_powers:
                 coefficients = (0,) * degree
             else:
-                counts: Counter[int] = Counter(interval_powers)
-                polynomial = Poly.from_dict(
-                    {(int(power),): int(coeff) for power, coeff in counts.items()},
-                    generator,
-                    domain=ZZ,
-                )
-                remainder = polynomial.rem(cyclotomic, auto=False)
-                coefficients = tuple(
-                    int(remainder.nth(power)) for power in range(degree)
-                )
+                residue_counts: dict[int, Counter[int]] = {}
+                for power in interval_powers:
+                    quotient, residue = divmod(power, work.inflation)
+                    residue_counts.setdefault(residue, Counter())[quotient] += 1
+                reduced = [0] * degree
+                for residue, counts in residue_counts.items():
+                    polynomial = Poly.from_dict(
+                        {
+                            (power,): coefficient
+                            for power, coefficient in counts.items()
+                        },
+                        generator,
+                        domain=ZZ,
+                    )
+                    remainder = polynomial.rem(cyclotomic, auto=False)
+                    for power in range(degree // work.inflation):
+                        reduced[residue + work.inflation * power] = int(
+                            remainder.nth(power)
+                        )
+                coefficients = tuple(reduced)
             cells.append(
                 FiniteAbelianCharacterSumCell(
                     frequency=frequency,
@@ -1072,14 +1131,7 @@ def compute_finite_abelian_character_sum_interval_profile(
             return compute_finite_abelian_character_sum_interval_profile(source)
 
     _character_sum_execution_deadline()
-    try:
-        work, cells = _finite_abelian_character_sum_interval_profile_data(source)
-    except ValueError as exc:
-        raise OperationDomainValidationError(
-            location=("source",),
-            code="finite_abelian_group.character_sum_not_admitted",
-            message=str(exc),
-        ) from exc
+    work, cells = _finite_abelian_character_sum_interval_profile_data(source)
     request_checkpoint("after character-sum result")
     return FiniteAbelianCharacterSumIntervalProfileResult._from_kernel(
         source,

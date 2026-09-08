@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from collections import deque
 
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.logic.automata.petri_nets._models import (
     MAX_SIPHON_TRAP_PLACES,
     MAX_SIPHON_TRAP_WORK,
@@ -44,7 +48,11 @@ def _require_marking_size(net: PetriNet, marking: Marking) -> None:
     """Require one token count for each place in the net."""
 
     if len(marking.tokens) != net.place_count:
-        raise ValueError("marking length must match place_count")
+        raise OperationDomainValidationError(
+            location=("marking",),
+            code="petri_net.marking_axis",
+            message="marking length must match place_count",
+        )
 
 
 def _enabled_transition_indices(net: PetriNet, marking: Marking) -> list[int]:
@@ -81,7 +89,11 @@ def _fire_transition_tokens(
 
     _require_marking_size(net, marking)
     if not 0 <= transition < net.transition_count:
-        raise ValueError("transition index out of range")
+        raise OperationDomainValidationError(
+            location=("transition",),
+            code="petri_net.transition_axis",
+            message="transition index out of range",
+        )
     for p in range(net.place_count):
         if marking.tokens[p] < net.pre[p][transition]:
             return (False, marking.tokens)
@@ -223,6 +235,8 @@ def find_minimal_siphons(net: PetriNet) -> list[frozenset[int]]:
     from itertools import combinations
 
     n = net.place_count
+    if net.transition_count == 0:
+        return [frozenset((place,)) for place in range(n)]
     if n == 0:
         return []
 
@@ -262,6 +276,8 @@ def find_minimal_traps(net: PetriNet) -> list[frozenset[int]]:
     from itertools import combinations
 
     n = net.place_count
+    if net.transition_count == 0:
+        return [frozenset((place,)) for place in range(n)]
     if n == 0:
         return []
 
@@ -290,16 +306,27 @@ def find_minimal_traps(net: PetriNet) -> list[frozenset[int]]:
 def siphon_trap(net: PetriNet) -> SiphonTrapResult:
     """Return all inclusion-minimal siphons and traps within the exact bound."""
 
+    if net.transition_count == 0:
+        # Every nonempty subset satisfies both implications vacuously; its
+        # inclusion-minimal members are precisely the singletons.
+        singletons = tuple(
+            PetriPlaceSubset(places=(place,)) for place in range(net.place_count)
+        )
+        return SiphonTrapResult(net=net, siphons=singletons, traps=singletons)
     if net.place_count > MAX_SIPHON_TRAP_PLACES:
-        raise ValueError(
-            "siphon/trap check supports at most "
-            f"{MAX_SIPHON_TRAP_PLACES} places for exact enumeration"
+        raise OperationResourceAdmissionError(
+            location=("net",),
+            code="petri_net.siphon_trap_place_bound",
+            message="siphon/trap check supports at most "
+            f"{MAX_SIPHON_TRAP_PLACES} places for exact enumeration",
         )
     candidates = (1 << net.place_count) - 1
     work = 2 * candidates * (net.transition_count + net.place_count)
     if work > MAX_SIPHON_TRAP_WORK:
-        raise ValueError(
-            "siphon/trap candidate and transition-scan work exceeds the admitted bound"
+        raise OperationResourceAdmissionError(
+            location=("net",),
+            code="petri_net.siphon_trap_work_bound",
+            message="siphon/trap candidate and transition-scan work exceeds the admitted bound",
         )
     return SiphonTrapResult(
         net=net,
@@ -317,7 +344,9 @@ def verify_enabled_transitions(claim: EnabledTransitionsResult) -> bool:
 
     try:
         return enabled_transitions(claim.net, claim.marking) == claim
-    except (TypeError, ValueError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
@@ -326,7 +355,9 @@ def verify_fire_transition(claim: FireTransitionResult) -> bool:
 
     try:
         return fire_transition(claim.net, claim.marking, claim.transition) == claim
-    except (TypeError, ValueError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
@@ -335,7 +366,9 @@ def verify_incidence_matrix(claim: IncidenceMatrixResult) -> bool:
 
     try:
         return compute_incidence_matrix(claim.net) == claim
-    except (TypeError, ValueError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
@@ -347,7 +380,9 @@ def verify_reachability_graph(claim: ReachabilityResult) -> bool:
             reachability_graph(claim.net, claim.initial_marking, claim.max_states)
             == claim
         )
-    except (TypeError, ValueError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
@@ -356,5 +391,7 @@ def verify_siphon_trap(claim: SiphonTrapResult) -> bool:
 
     try:
         return siphon_trap(claim.net) == claim
-    except (TypeError, ValueError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False

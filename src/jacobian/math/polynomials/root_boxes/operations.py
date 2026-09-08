@@ -9,7 +9,10 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian.canonical import format_canonical_integer
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.analysis.intervals import ClosedRationalInterval, RationalBox
 from jacobian.math.matrices.values import rational_matrix_from_fractions
 from jacobian.math.polynomials.intervals._kernel import natural_interval_extension
@@ -498,7 +501,9 @@ def verify_real_root_box(claim: PolynomialSystemRootBoxResult) -> bool:
 
     try:
         expected = certify_real_root_box(claim.polynomial_map, claim.box)
-    except Exception:
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
     return claim.conclusion == expected.conclusion
 

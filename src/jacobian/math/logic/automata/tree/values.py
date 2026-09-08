@@ -5,12 +5,16 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 from math import comb
-from typing import Annotated, Self
+from typing import Annotated, NoReturn, Self
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 
 MAX_TA_STATES = 64
 MAX_TA_SYMBOLS = 32
@@ -140,6 +144,15 @@ class BottomUpTreeAutomaton(StrictModel):
                 raise ValueError("final state out of range")
 
 
+def _reject_tree(message: str, *, resource: bool = True) -> NoReturn:
+    error_type = (
+        OperationResourceAdmissionError if resource else OperationDomainValidationError
+    )
+    raise error_type(
+        location=("automaton", "tree"), code="tree_automata.admission", message=message
+    )
+
+
 def validate_ranked_tree(
     automaton: BottomUpTreeAutomaton,
     tree: RankedTree,
@@ -152,19 +165,19 @@ def validate_ranked_tree(
         node, depth = stack.pop()
         node_count += 1
         if node_count > MAX_RUN_TREE_NODES:
-            raise ValueError("tree node count exceeds bound")
+            _reject_tree("tree node count exceeds bound")
         if depth > MAX_RUN_TREE_DEPTH:
-            raise ValueError("tree depth exceeds bound")
+            _reject_tree("tree depth exceeds bound")
         if node.symbol >= len(automaton.arity):
-            raise ValueError("tree symbol out of ranked alphabet")
+            _reject_tree("tree symbol out of ranked alphabet", resource=False)
         if len(node.children) != automaton.arity[node.symbol]:
-            raise ValueError("every tree node must match its symbol arity")
+            _reject_tree("every tree node must match its symbol arity", resource=False)
         stack.extend((child, depth + 1) for child in node.children)
 
     arity_factor = max(1, max(automaton.arity))
     estimated_work = node_count * max(1, len(automaton.transitions)) * arity_factor
     if estimated_work > MAX_TREE_AUTOMATON_WORK:
-        raise ValueError("tree run work bound exceeded")
+        _reject_tree("tree run work bound exceeded")
     return node_count
 
 
@@ -177,9 +190,9 @@ def ranked_tree_node_count(tree: RankedTree) -> int:
         node, depth = stack.pop()
         node_count += 1
         if node_count > MAX_RUN_TREE_NODES:
-            raise ValueError("tree node count exceeds bound")
+            _reject_tree("tree node count exceeds bound")
         if depth > MAX_RUN_TREE_DEPTH:
-            raise ValueError("tree depth exceeds bound")
+            _reject_tree("tree depth exceeds bound")
         stack.extend((child, depth + 1) for child in node.children)
     return node_count
 
@@ -344,7 +357,7 @@ def _build_reachable_state_profile(
     if sort_work + scan_rounds * per_scan_work + 3 * MAX_REACHABILITY_WITNESS_NODES > (
         MAX_TREE_AUTOMATON_REACHABILITY_WORK
     ):
-        raise ValueError("tree automaton reachability work bound exceeded")
+        _reject_tree("tree automaton reachability work bound exceeded")
     reachable_choices = tuple(
         (state, choice) for state, choice in enumerate(choices) if choice is not None
     )
@@ -352,7 +365,7 @@ def _build_reachable_state_profile(
     if sum(choice.node_count for _, choice in reachable_choices) > (
         MAX_REACHABILITY_WITNESS_NODES
     ):
-        raise ValueError("reachable-state witness output exceeds the node bound")
+        _reject_tree("reachable-state witness output exceeds the node bound")
     return ReachableStateProfile._from_kernel(
         automaton,
         reachable_states=reachable_states,
@@ -448,6 +461,12 @@ def accepted_tree_count_work_bound(
 ) -> int:
     """Return a conservative bound for subset-DP transition checks."""
 
+    if type(tree_size) is not int:
+        _reject_tree("tree size must be an integer", resource=False)
+    if not any(transition.child_states for transition in automaton.transitions):
+        return len(automaton.transitions)
+    if not 0 <= tree_size <= 100:
+        _reject_tree("tree size exceeds the supported 0..100 bound")
     transition_counts = Counter(
         transition.symbol for transition in automaton.transitions
     )
@@ -461,7 +480,7 @@ def accepted_tree_count_work_bound(
             compositions = comb(tree_size - 1, arity)
             work += compositions * subset_count**arity * transition_count
         if work > MAX_TREE_AUTOMATON_WORK:
-            raise ValueError("accepted-tree count work bound exceeded")
+            _reject_tree("accepted-tree count work bound exceeded")
     return work
 
 

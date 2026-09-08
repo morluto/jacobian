@@ -77,7 +77,7 @@ def count_accepted_words(dfa: DFA, word_length: int) -> int:
         result_cap,
     )
     if selected_count >= result_cap:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("dfa", "word_length"),
             code="regular_language.count_result_bound",
             message="accepted-word count exceeds the canonical result digit bound",
@@ -85,7 +85,7 @@ def count_accepted_words(dfa: DFA, word_length: int) -> int:
     if max_intermediate >= result_cap:
         # FLINT powers the full matrix. Unused entries can explode while the
         # selected count stays tiny; do not cap that growth at the result limit.
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("dfa", "word_length"),
             code="regular_language.count_intermediate_bound",
             message="DFA matrix-power intermediates exceed the canonical digit bound",
@@ -99,7 +99,7 @@ def count_accepted_words(dfa: DFA, word_length: int) -> int:
         * max(1, coefficient_bound.bit_length())
     )
     if matrix_bit_work > MAX_COUNT_MATRIX_BIT_WORK:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("dfa", "word_length"),
             code="regular_language.count_work_bound",
             message="DFA matrix powering exceeds the exact work bound",
@@ -324,7 +324,9 @@ def verify_accepted_word_count(claim: CountResult) -> bool:
 
     try:
         return count_accepted_words(claim.dfa, claim.word_length) == claim.count
-    except (OperationDomainValidationError, ValueError, TypeError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
@@ -343,5 +345,5 @@ def verify_transition_parikh_profile(claim: TransitionParikhProfile) -> bool:
         )
     except OperationResourceAdmissionError:
         raise
-    except (OperationDomainValidationError, ValueError, TypeError):
+    except OperationDomainValidationError:
         return False

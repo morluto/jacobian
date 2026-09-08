@@ -8,7 +8,10 @@ from fractions import Fraction
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math._exact_linear_algebra import symmetric_inertia
 from jacobian.math.matrices.subsystems._models import (
     MAX_KRONECKER_RESULT_COMPONENT_DIGITS,
@@ -130,28 +133,40 @@ def verify_subsystem_kronecker_product(
     claim: SubsystemKroneckerProductResult,
 ) -> bool:
     """Verify a source-bound Kronecker product claim."""
+    if not isinstance(claim, SubsystemKroneckerProductResult):
+        return False
     try:
         return kronecker_product(claim.left, claim.right) == claim.product
-    except (AttributeError, TypeError, ValueError, OperationDomainValidationError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
 def verify_partial_trace(claim: SubsystemPartialTraceResult) -> bool:
     """Verify a source-bound partial-trace contraction claim."""
+    if not isinstance(claim, SubsystemPartialTraceResult):
+        return False
     try:
         return (
             partial_trace(claim.source_matrix, claim.traced_factor_labels)
             == claim.reduced_matrix
         )
-    except (AttributeError, TypeError, ValueError, OperationDomainValidationError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
 def verify_psd_order(claim: PsdOrderResult) -> bool:
     """Verify a source-bound PSD-order decision and witness."""
+    if not isinstance(claim, PsdOrderResult):
+        return False
     try:
         return psd_order(claim.left, claim.right) == claim
-    except (AttributeError, TypeError, ValueError, OperationDomainValidationError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 

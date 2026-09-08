@@ -637,3 +637,32 @@ def test_serialization_round_trip_preserves_source_and_axis() -> None:
         restored = type(result).model_validate_json(result.model_dump_json())
         assert restored == result
         assert restored.matrix == req
+
+
+def test_minimal_polynomial_reuses_krylov_reduction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from sympy.matrices.matrixbase import MatrixBase
+
+    calls = 0
+    original = MatrixBase.nullspace
+
+    def counted(self: MatrixBase, *args: object, **kwargs: object) -> object:
+        nonlocal calls
+        calls += 1
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(MatrixBase, "nullspace", counted)
+    entries = (
+        (Fraction(2), Fraction(1), Fraction(0)),
+        (Fraction(0), Fraction(2), Fraction(0)),
+        (Fraction(0), Fraction(0), Fraction(3)),
+    )
+    # A size-two Jordan block at2 and an independent eigenvalue3.
+    assert minimal_polynomial(entries) == (
+        Fraction(-12),
+        Fraction(16),
+        Fraction(-7),
+        Fraction(1),
+    )
+    assert calls == 0

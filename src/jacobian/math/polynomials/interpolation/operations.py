@@ -9,7 +9,10 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import format_canonical_integer
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.polynomials.interpolation._kernel import (
     divided_difference_coefficients,
     evaluate_newton_form,
@@ -122,27 +125,39 @@ def evaluate_newton(
 def verify_divided_differences(claim: DividedDifferencesResult) -> bool:
     """Verify divided-difference coefficients against retained samples."""
 
+    if not isinstance(claim, DividedDifferencesResult):
+        return False
     try:
         return divided_differences(claim.samples) == claim
-    except (OperationDomainValidationError, ValueError, TypeError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
 def verify_newton_evaluation(claim: NewtonEvaluateResult) -> bool:
     """Verify a Newton evaluation against its retained form and point."""
 
+    if not isinstance(claim, NewtonEvaluateResult):
+        return False
     try:
         return evaluate_newton(claim.newton_form, claim.evaluation_point) == claim
-    except (OperationDomainValidationError, ValueError, TypeError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
 def verify_hermite_interpolation(claim: HermiteInterpolationResult) -> bool:
     """Verify all Hermite polynomial, degree, leading, and replay claims."""
 
+    if not isinstance(claim, HermiteInterpolationResult):
+        return False
     try:
         return hermite_interpolation(claim.source) == claim
-    except (OperationDomainValidationError, ValueError, TypeError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 

@@ -11,10 +11,15 @@ from jacobian.math.geometry.differential.metrics._models import (
     RationalCoordinateMetric,
 )
 from jacobian.math.geometry.differential.values import (
+    _is_unit_polynomial,
     _polynomial_key,
     canonical_locus_guards,
 )
-from jacobian.math.polynomials.values import RationalFunction, SparseRationalPolynomial
+from jacobian.math.polynomials.values import (
+    RationalFunction,
+    SparseRationalPolynomial,
+    require_sparse_polynomial_budget,
+)
 
 
 class RationalLaplaceBeltramiRequest(StrictModel):
@@ -43,6 +48,23 @@ class RationalLaplaceBeltramiResult(StrictModel):
         axis = self.metric.tensor.coordinate_axis
         if self.scalar.variables != axis or self.value.variables != axis:
             raise ValueError("metric, scalar, and value must share the coordinate axis")
+        for guard in self.retained_nonzero_denominators:
+            if (
+                not guard.terms
+                or any(len(term.exponents) != len(axis) for term in guard.terms)
+                or guard.terms[0].coefficient.as_fraction() != 1
+                or _is_unit_polynomial(guard, len(axis))
+            ):
+                raise ValueError(
+                    "result locus guards must be monic nonconstant polynomials"
+                )
+            require_sparse_polynomial_budget(
+                guard,
+                maximum_terms=256,
+                maximum_exponent=64,
+                maximum_coefficient_digits=128,
+                label="Laplace--Beltrami locus guard",
+            )
         expected = canonical_locus_guards(
             self.metric.tensor.retained_nonzero_denominators,
             component_denominators=(self.value.denominator,),

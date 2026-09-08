@@ -121,12 +121,7 @@ def build_plan(metric: RationalCoordinateMetric, scalar: RationalFunction) -> Pl
     if not _is_unit_polynomial(scalar.denominator, dimension):
         extra_keys.add(_polynomial_key(scalar.denominator))
     if _has_nonconstant_denominator(dag, value):
-        extra_keys.update(
-            _polynomial_key(dag.nodes[index].source)
-            if dag.nodes[index].source is not None
-            else ("value-denominator", index)
-            for index in value.denominator
-        )
+        extra_keys.add(("canonical-result-denominator",))
     guard_keys = {
         _polynomial_key(guard) for guard in metric.tensor.retained_nonzero_denominators
     }

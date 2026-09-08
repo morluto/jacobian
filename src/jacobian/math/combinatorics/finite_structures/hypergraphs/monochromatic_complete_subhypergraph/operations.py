@@ -7,7 +7,6 @@ from itertools import combinations
 from math import comb
 
 from jacobian._execution import request_checkpoint
-from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -27,8 +26,7 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs.monochromatic_com
 __all__ = ["construct"]
 
 MAX_PROFILE_WORK = 2_000_000
-MAX_PROFILE_RESULT_BYTES = 10 * 1024 * 1024
-MAX_PROFILE_LOOKUP_BYTES = 4 * 1024 * 1024
+MAX_PROFILE_ALLOCATION = 4_000_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,18 +104,6 @@ def _build_source_lookup(
                     "source vertex sets must occur once for an unambiguous lookup",
                 )
             source_lookup[key] = (edge_id, coloring.assignments[index].color_index)
-    source_lookup_bytes = sum(
-        32
-        + len(edge_id.encode("utf-8"))
-        + sum(len(vertex.encode("utf-8")) for vertex in members)
-        for edge_id, members in source_edges
-    )
-    if source_lookup_bytes > MAX_PROFILE_LOOKUP_BYTES:
-        _resource(
-            ("coloring",),
-            "monochromatic_profile.lookup_bound",
-            "source edge lookup exceeds the 4 MiB admission bound",
-        )
     return source_lookup
 
 
@@ -163,40 +149,15 @@ def _preflight_result(
             "the complete candidate profile exceeds the 36000-incidence bound",
         )
 
-    try:
-        source_bytes = len(
-            encode_strict_json(coloring.model_dump(mode="json"), limits=None)
-        )
-        label_bytes = sorted(
-            (len(vertex.encode("utf-8")) for vertex in source.vertices), reverse=True
-        )
-        target_label_bytes = sum(label_bytes[:target_uniformity])
-        source_id_bytes = max(
-            (len(edge_id.encode("utf-8")) for edge_id, _ in source_edges),
-            default=0,
-        )
-    except (UnicodeError, ValueError) as exc:
-        _domain(
-            ("coloring",),
-            "monochromatic_profile.source_encoding",
-            "the source colouring cannot be represented in canonical JSON",
-        )
-        raise AssertionError("unreachable") from exc
-    # This conservative row envelope includes target labels, one colour, q
-    # source IDs, and JSON punctuation/field names.  It admits sparse sources
-    # even when C is large, while rejecting a profile that cannot fit the wire.
-    row_bytes = 256 + target_label_bytes + required_edges * (source_id_bytes + 8)
-    if source_bytes + candidate_upper_bound * row_bytes > MAX_PROFILE_RESULT_BYTES:
+    # The retained profile allocates one target row, target incidence tuple,
+    # and q source-ID witness entries per emitted candidate.  This cardinality
+    # envelope is independent of JSON transport limits and is checked before
+    # any target subset is enumerated.
+    allocation = candidate_upper_bound * (target_uniformity + required_edges)
+    if allocation > MAX_PROFILE_ALLOCATION:
         _resource(
             ("target_uniformity",),
-            "monochromatic_profile.result_bytes",
-            "the complete candidate profile exceeds the 10 MiB result bound",
-        )
-    if source_bytes > MAX_PROFILE_RESULT_BYTES:
-        _resource(
-            ("coloring",),
-            "monochromatic_profile.source_bytes",
-            "the retained source colouring exceeds the 10 MiB result bound",
+            "the complete candidate profile exceeds the 4000000-entry allocation bound",
         )
 
 

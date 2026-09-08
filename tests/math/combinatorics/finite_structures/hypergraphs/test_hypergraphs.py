@@ -300,6 +300,11 @@ class TestIncidenceGraph:
         payload["graph"]["edges"] = []
         with pytest.raises(ValidationError, match="incidence_graph"):
             type(result).model_validate(payload)
+        payload = result.model_dump()
+        payload["edges"] = []
+        payload["graph"]["edges"] = []
+        with pytest.raises(ValidationError, match="incidence"):
+            type(result).model_validate(payload)
 
     def test_no_edges(self) -> None:
         r = incidence_graph(_hypergraph(NO_EDGES))

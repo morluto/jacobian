@@ -873,8 +873,21 @@ class IncidenceGraphResult(StrictModel):
             raise _validation_error("incidence entries must use source labels")
         vertex_map = dict(self.vertex_labels)
         edge_map = dict(self.edge_labels)
+        expected_incidences = tuple(
+            (vertex, edge_id)
+            for vertex in self.hypergraph.vertices
+            for edge_id, members in self.hypergraph.edges
+            if vertex in members
+        )
+        if self.edges != expected_incidences:
+            raise _validation_error(
+                "incidence pairs must equal the retained hypergraph incidences"
+            )
         expected_edges = tuple(
-            sorted(tuple(sorted((vertex_map[v], edge_map[e]))) for v, e in self.edges)
+            sorted(
+                tuple(sorted((vertex_map[v], edge_map[e])))
+                for v, e in expected_incidences
+            )
         )
         if self.graph.edges != expected_edges:
             raise _validation_error(

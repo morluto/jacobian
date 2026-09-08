@@ -34,7 +34,8 @@ TOOLS = (
             "completely decides whether f has a rational primitive; a nonzero "
             "H does not rule out a formal primitive involving logarithms. The "
             "current conservative envelope admits numerator degree 6, denominator "
-            "degree 3, and 127-digit rational components for polynomial inputs "
+            "degree 3 for general rational inputs; polynomial inputs allow degree 63 "
+            "and 128-digit rational components subject to primitive denominator growth "
             "or two-digit components for other rational functions."
         ),
         request_type=HermiteReductionRequest,
@@ -44,7 +45,7 @@ TOOLS = (
         examples=(
             OperationExample(
                 name="simple_and_repeated_poles",
-                description="Use canonical univariate QQ(x), one variable x, numerator degree at most 6 and denominator degree at most 3. Polynomial inputs allow 127-digit rational coefficient components; other inputs require two-digit rational coefficient components.",
+                description="Use canonical univariate QQ(x), one variable x. General inputs: numerator degree 6, denominator degree 3, two-digit rational coefficient components. Polynomial inputs: degree 63, 128-digit components with admitted primitive denominator growth.",
                 input={
                     "function": {
                         "variables": ["x"],

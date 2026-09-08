@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from bisect import bisect_left
 from math import lcm
 from typing import Literal, Self
 
@@ -19,6 +20,7 @@ from jacobian.math.polynomials.values import PolynomialVariable, RationalPolynom
 # ---------------------------------------------------------------------------
 
 MAX_TRUNCATION_ORDER = 512
+MAX_MULTIPLY_INCIDENCES = MAX_TRUNCATION_ORDER * (MAX_TRUNCATION_ORDER + 1) // 2
 MAX_RATIONAL_DIGITS = 256
 MAX_RESULT_RATIONAL_DIGITS = 4_096
 MAX_POWER_EXPONENT = 1_000
@@ -322,15 +324,29 @@ def admit_native_add_subtract(left: TruncatedSeries, right: TruncatedSeries) -> 
 
 
 def admit_native_multiply(left: TruncatedSeries, right: TruncatedSeries) -> None:
-    _require_native_pair(left, right)
-    _require_height(
-        _convolution_height(
-            _max_height(left.coefficients),
-            _max_height(right.coefficients),
-            left.truncation_order,
-        ),
-        "multiplication",
-    )
+    _require_native_pair(left, right, maximum_order=MAX_TRUNCATE_SOURCE_ORDER)
+    order = left.truncation_order
+    left_support = [i for i, value in enumerate(left.coefficients) if value.num]
+    right_support = [i for i, value in enumerate(right.coefficients) if value.num]
+    # Count before allocating incidences; pairs outside the retained prefix
+    # perform no rational arithmetic in the sparse convolution kernel.
+    incidences = sum(bisect_left(right_support, order - i) for i in left_support)
+    if incidences > MAX_MULTIPLY_INCIDENCES:
+        raise _resource_error(
+            "multiplication_work",
+            f"retained convolution incidences exceed {MAX_MULTIPLY_INCIDENCES}",
+        )
+    terms: dict[int, list[RationalHeight]] = {}
+    for i in left_support:
+        left_height = _height(left.coefficients[i])
+        for j in right_support:
+            if i + j >= order:
+                break
+            terms.setdefault(i + j, []).append(
+                left_height.product(_height(right.coefficients[j]))
+            )
+    for coefficient_terms in terms.values():
+        _require_height(sum_heights(coefficient_terms), "multiplication")
 
 
 def admit_native_scalar_multiply(

@@ -108,7 +108,7 @@ def test_adding_exact_derivative_preserves_remainder() -> None:
 @pytest.mark.parametrize(
     ("expression", "message"),
     [
-        (x**7, "numerator exponent"),
+        (x**64, "numerator exponent"),
         (1 / (x**4 + 1), "denominator exponent"),
         (100 / (x + 1), "numerator coefficient"),
     ],

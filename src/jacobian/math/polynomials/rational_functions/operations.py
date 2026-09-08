@@ -6,6 +6,7 @@ from typing import Any
 
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -19,7 +20,11 @@ from jacobian.math.polynomials.rational_functions._models import (
     HermiteReductionResult,
     require_hermite_reduction_budget,
 )
-from jacobian.math.polynomials.values import RationalFunction
+from jacobian.math.polynomials.values import (
+    RationalFunction,
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
+)
 
 
 def _hermite_parts(function: RationalFunction) -> tuple[Any, Any]:
@@ -57,8 +62,9 @@ def hermite_reduction(
     """Compute canonical ``f = R' + H`` over the admitted subset of ``QQ(x)``.
 
     The current native envelope matches the catalog operation: numerator degree
-    at most 6 and denominator degree at most 3. Polynomial inputs allow
-    127-digit rational components; other inputs allow two-digit components. ``H`` is proper with square-free
+    at most 6 and denominator degree at most 3 for nonpolynomial sources.
+    Polynomial inputs allow degree 63 and 128-digit rational components when
+    primitive denominators fit the same carrier. ``H`` is proper with square-free
     denominator. ``R`` has zero additive constant, so the pair is unique.
     """
 
@@ -82,6 +88,30 @@ def _hermite_reduction_admitted(
 ) -> tuple[RationalFunction, RationalFunction]:
     """Compute after the shared owner admission has succeeded."""
 
+    if all(not any(term.exponents) for term in function.denominator.terms):
+        primitive = SparseRationalPolynomial(
+            terms=tuple(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational.from_fraction(
+                        term.coefficient.as_fraction() / (term.exponents[0] + 1)
+                    ),
+                    exponents=(term.exponents[0] + 1,),
+                )
+                for term in function.numerator.terms
+            )
+        )
+        return (
+            RationalFunction(
+                variables=function.variables,
+                numerator=primitive,
+                denominator=function.denominator,
+            ),
+            RationalFunction(
+                variables=function.variables,
+                numerator=SparseRationalPolynomial(),
+                denominator=function.denominator,
+            ),
+        )
     rational_part, remainder = _hermite_parts(function)
     return (
         rational_function_from_sympy(rational_part, function.variables),

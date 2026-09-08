@@ -203,7 +203,7 @@ def test_native_exports_admit_inputs_before_kernel_work() -> None:
     wide = _ascending(513)
     with pytest.raises(OperationDomainValidationError) as error:
         multiply(wide, wide)
-    assert error.value.errors()[0]["type"] == "formal_power_series.input_order"
+    assert error.value.errors()[0]["type"] == "formal_power_series.multiplication_work"
     with pytest.raises(OperationDomainValidationError) as error:
         power(wide, 2)
     assert error.value.errors()[0]["type"] == "formal_power_series.input_order"

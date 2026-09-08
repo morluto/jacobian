@@ -128,8 +128,10 @@ TOOLS = (
         title="Multiply two truncated formal power series",
         description=(
             "Compute the exact Cauchy convolution of two truncated series in "
-            "QQ[[x]]/(x^N).  Both operands must share the same variable and "
-            "truncation order."
+            "QQ[[x]]/(x^N). Both operands must share the same variable and "
+            "truncation order. Admit prefixes through order 25280 with at most "
+            "131328 retained nonzero coefficient products and bounded exact "
+            "coefficient growth."
         ),
         request_type=_SeriesMultiplyRequest,
         result_type=SeriesMultiplyResult,

@@ -11,6 +11,8 @@ from jacobian._models import StrictModel
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.polynomials.values import (
     RationalFunction,
+    _require_rational_function_shapes,
+    _require_rational_function_structural_normal_form,
     require_canonical_rational_function,
     require_sparse_polynomial_budget,
 )
@@ -20,6 +22,7 @@ def _validation_error(message: str) -> PydanticCustomError:
     return PydanticCustomError("polynomial.rational_function_contract", message)
 
 
+MAX_HERMITE_POLYNOMIAL_DEGREE = 63
 MAX_HERMITE_NUMERATOR_DEGREE = 6
 MAX_HERMITE_DENOMINATOR_DEGREE = 3
 MAX_HERMITE_COEFFICIENT_DIGITS = 2
@@ -35,17 +38,20 @@ def require_hermite_reduction_budget(function: RationalFunction) -> None:
         not any(term.exponents) for term in function.denominator.terms
     )
     coefficient_digits = (
-        MAX_HERMITE_RESULT_COEFFICIENT_DIGITS - 1
+        MAX_HERMITE_RESULT_COEFFICIENT_DIGITS
         if polynomial_source
         else MAX_HERMITE_COEFFICIENT_DIGITS
     )
-    # Integrating a degree-six polynomial only divides coefficients by 1..7;
-    # one extra denominator digit bounds its degree-seven primitive.
+    numerator_degree = (
+        MAX_HERMITE_POLYNOMIAL_DEGREE
+        if polynomial_source
+        else MAX_HERMITE_NUMERATOR_DEGREE
+    )
     try:
         require_sparse_polynomial_budget(
             function.numerator,
-            maximum_terms=MAX_HERMITE_NUMERATOR_DEGREE + 1,
-            maximum_exponent=MAX_HERMITE_NUMERATOR_DEGREE,
+            maximum_terms=numerator_degree + 1,
+            maximum_exponent=numerator_degree,
             maximum_coefficient_digits=coefficient_digits,
             label="Hermite-reduction numerator",
         )
@@ -62,6 +68,23 @@ def require_hermite_reduction_budget(function: RationalFunction) -> None:
             code="polynomial.hermite_reduction_budget",
             message=str(exc),
         ) from exc
+    if polynomial_source:
+        _require_rational_function_shapes(function)
+        _require_rational_function_structural_normal_form(function)
+        # The canonical unit denominator makes coprimality immediate. Each
+        # primitive coefficient divides a source coefficient by its new degree;
+        # its numerator cannot grow and this unreduced denominator is a bound.
+        if any(
+            term.coefficient.den * (term.exponents[0] + 1)
+            >= 10**MAX_HERMITE_RESULT_COEFFICIENT_DIGITS
+            for term in function.numerator.terms
+        ):
+            raise OperationResourceAdmissionError(
+                location=("function",),
+                code="polynomial.hermite_reduction_budget",
+                message="Hermite polynomial primitive denominator exceeds the 128-digit bound",
+            )
+        return
     require_canonical_rational_function(
         function,
         maximum_terms=MAX_HERMITE_NUMERATOR_DEGREE + 1,
@@ -77,16 +100,14 @@ def _require_hermite_result_budget(
 ) -> None:
     """Bound the retained exact Hermite-reduction result.
 
-    A degree-six numerator over a degree-three denominator yields a
-    zero-constant rational part with numerator degree at most seven and
-    denominator degree at most two. The degree-seven case integrates a
-    polynomial source and has at most seven nonzero terms. The square-free residual denominator has
-    degree at most three and its numerator is proper.  These derived limits
-    keep every retained result within the operation's exact envelope.
+    Polynomial inputs yield at most 64 nonzero primitive terms of degree
+    at most 64. General rational inputs retain the degree-six/degree-three
+    envelope, with rational-part denominator degree at most two and proper
+    remainder denominator degree at most three.
     """
 
     for label, polynomial, maximum_terms, maximum_exponent in (
-        ("Hermite rational-part numerator", rational_part.numerator, 7, 7),
+        ("Hermite rational-part numerator", rational_part.numerator, 64, 64),
         ("Hermite rational-part denominator", rational_part.denominator, 3, 2),
         ("Hermite remainder numerator", remainder.numerator, 3, 2),
         ("Hermite remainder denominator", remainder.denominator, 4, 3),
@@ -105,17 +126,19 @@ class HermiteReductionRequest(StrictModel):
 
     The present envelope bounds polynomial division, denominator GCD, and a
     three-variable Horowitz--Ostrogradsky linear system before backend
-    expansion. Polynomial sources permit 127-digit components, reserving one
-    digit for integration denominators. For other rational functions, two-digit
-    components bound the Cramer/factor growth inside the 128-digit result carrier.
+    expansion. Polynomial sources permit degree 63 and 128-digit components
+    when coefficientwise integration stays within the result carrier. For other
+    rational functions, two-digit components bound Cramer/factor growth inside
+    the 128-digit result carrier.
     This is a scale limit, not a restriction on the mathematical domain.
     """
 
     function: RationalFunction = Field(
         description=(
-            "A canonical univariate QQ(x) value with numerator degree at most 6, "
-            "denominator degree at most 3, at most 7/4 respective terms, and "
-            "127-digit rational components for polynomial inputs, otherwise two-digit components."
+            "A canonical univariate QQ(x) value. General rational inputs allow "
+            "numerator degree 6, denominator degree 3 and two-digit components. "
+            "Polynomial inputs allow degree 63 and 128-digit components subject "
+            "to primitive denominator growth."
         )
     )
 

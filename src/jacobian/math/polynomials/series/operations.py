@@ -123,13 +123,15 @@ def _cauchy_convolve(
     a: Sequence[Fraction], b: Sequence[Fraction], n: int
 ) -> list[Fraction]:
     """c_k = sum_{i=0}^{k} a_i * b_{k-i} for 0 <= k < n."""
-    if n and not any(a[1:n]):
-        return [a[0] * b[k] for k in range(n)]
-    if n and not any(b[1:n]):
-        return [b[0] * a[k] for k in range(n)]
-    return [
-        sum((a[i] * b[k - i] for i in range(k + 1)), start=Fraction()) for k in range(n)
-    ]
+    left = [(i, value) for i, value in enumerate(a[:n]) if value]
+    right = [(i, value) for i, value in enumerate(b[:n]) if value]
+    result = [Fraction() for _ in range(n)]
+    for i, left_value in left:
+        for j, right_value in right:
+            if i + j >= n:
+                break
+            result[i + j] += left_value * right_value
+    return result
 
 
 # ---------------------------------------------------------------------------

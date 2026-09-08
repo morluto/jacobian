@@ -68,6 +68,9 @@ def test_k4_unit_thresholds_report_the_induced_k3_chromatic_number() -> None:
     assert result.side_a == ("a",)
     assert result.side_b == ("b", "c", "d")
     assert (result.chromatic_a, result.chromatic_b) == (1, 3)
+
+
+def test_k3_has_exact_no_split() -> None:
     source = graph(("a", "b", "c"), (("a", "b"), ("a", "c"), ("b", "c")))
     result = find_chromatic_bipartition(
         ChromaticBipartitionRequest(graph=source, s=2, t=2)
@@ -174,6 +177,46 @@ def test_complete_search_bound_still_rejects_a_dense_twenty_vertex_graph() -> No
     vertices = tuple(f"v{i}" for i in range(20))
     source = graph(vertices, (("v0", "v1"),))
     request = ChromaticBipartitionRequest(graph=source, s=2, t=2)
+    with pytest.raises(OperationResourceAdmissionError, match="complete-search work"):
+        find_chromatic_bipartition(request)
+
+
+def test_unit_threshold_dense_thirty_two_vertex_graph_is_admitted_as_work() -> None:
+    vertices = tuple(f"v{i:02d}" for i in range(32))
+    edges = tuple(
+        (vertices[left], vertices[right])
+        for left in range(32)
+        for right in range(left + 1, 32)
+    )
+    request = ChromaticBipartitionRequest(graph=graph(vertices, edges), s=1, t=1)
+    with pytest.raises(OperationResourceAdmissionError, match="complete-search work"):
+        find_chromatic_bipartition(request)
+
+
+def test_unit_threshold_triangle_plus_isolates_is_exact_without_backend_overflow() -> (
+    None
+):
+    isolates = tuple(f"u{i:02d}" for i in range(31))
+    source = graph(isolates + ("x", "y", "z"), (("x", "y"), ("x", "z"), ("y", "z")))
+    result = find_chromatic_bipartition(
+        ChromaticBipartitionRequest(graph=source, s=1, t=1)
+    )
+    assert result.status == "SPLIT"
+    assert result.side_a == ("u00",)
+    assert result.chromatic_a == 1
+    assert result.chromatic_b == 3
+    assert result.model_validate_json(result.model_dump_json()) == result
+
+
+def test_unit_threshold_core_above_backend_order_is_refused() -> None:
+    isolated = "iso"
+    cycle = tuple(f"c{i:02d}" for i in range(33))
+    edges = tuple((cycle[index], cycle[index + 1]) for index in range(32)) + (
+        (cycle[0], cycle[32]),
+    )
+    request = ChromaticBipartitionRequest(
+        graph=graph((isolated,) + cycle, edges), s=1, t=1
+    )
     with pytest.raises(OperationResourceAdmissionError, match="complete-search work"):
         find_chromatic_bipartition(request)
 

@@ -23,6 +23,7 @@ from jacobian.math.graphs.optimization._coloring_models import ChromaticNumberBu
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 MAX_CHROMATIC_BIPARTITION_WORK = 2_000_000
+MAX_CHROMATIC_BACKEND_ORDER = 32
 
 
 class ChromaticBipartitionRequest(StrictModel):
@@ -189,18 +190,41 @@ def _is_bipartite(graph: SimpleUndirectedGraph) -> bool:
     return True
 
 
+def _chromatic_search_work(order: int, edge_count: int) -> int:
+    """Charge one bounded k-colorability sweep of an induced core."""
+
+    encoding = order * order + edge_count * order * order
+    return order * (encoding + order + edge_count + 1)
+
+
+def _induced_edge_core(
+    graph: SimpleUndirectedGraph, vertices: tuple[str, ...]
+) -> SimpleUndirectedGraph:
+    """Drop isolates; they do not change chromatic number of a nonempty side."""
+
+    induced = _induced_graph(graph, vertices)
+    if not induced.edges:
+        return induced
+    support = {endpoint for edge in induced.edges for endpoint in edge}
+    return _induced_graph(
+        induced, tuple(vertex for vertex in vertices if vertex in support)
+    )
+
+
 def _exact_induced_chromatic(
     graph: SimpleUndirectedGraph,
     vertices: tuple[str, ...],
     request: ChromaticBipartitionRequest,
     started: float,
 ) -> int | None:
-    induced = _induced_graph(graph, vertices)
-    if len(vertices) <= 1 or not induced.edges:
+    core = _induced_edge_core(graph, vertices)
+    if len(core.vertices) <= 1 or not core.edges:
         return 1
-    if _is_bipartite(induced):
+    if _is_bipartite(core):
         return 2
-    return _chromatic_number(induced, request, started)
+    if len(core.vertices) > MAX_CHROMATIC_BACKEND_ORDER:
+        return None
+    return _chromatic_number(core, request, started)
 
 
 def _unit_threshold_bipartition(
@@ -234,32 +258,47 @@ def _unit_threshold_bipartition(
     )
 
 
+def _refuse_chromatic_bipartition_work() -> None:
+    raise OperationResourceAdmissionError(
+        location=("graph",),
+        code="graph.chromatic_bipartition_exact_work_exceeds",
+        message=(
+            "chromatic bipartition search exceeds the admitted complete-search "
+            "work bound"
+        ),
+    )
+
+
+def _admit_unit_threshold_chromatic(request: ChromaticBipartitionRequest) -> None:
+    """Charge the singleton-versus-rest coloring search before the worker."""
+
+    core = _induced_edge_core(request.graph, request.graph.vertices[1:])
+    if not core.edges or _is_bipartite(core):
+        return
+    if len(core.vertices) > MAX_CHROMATIC_BACKEND_ORDER:
+        _refuse_chromatic_bipartition_work()
+    work = _chromatic_search_work(len(core.vertices), len(core.edges))
+    if work > MAX_CHROMATIC_BIPARTITION_WORK:
+        _refuse_chromatic_bipartition_work()
+
+
 def _admit_chromatic_bipartition(request: ChromaticBipartitionRequest) -> None:
     """Charge every unordered partition and its inner k-colorability encodings."""
 
     order = len(request.graph.vertices)
-    if (
-        not request.graph.edges
-        or _threshold_sum_exceeds_order(request)
-        or (request.s == 1 and request.t == 1 and order >= 2)
-    ):
+    if not request.graph.edges or _threshold_sum_exceeds_order(request):
+        return
+    if request.s == 1 and request.t == 1 and order >= 2:
+        _admit_unit_threshold_chromatic(request)
         return
     n = len(request.graph.vertices)
     m = len(request.graph.edges)
     partitions = _unordered_partition_count(n)
     # Two induced graphs, each trying up to n color counts. One encoding of
     # order n and k<=n uses n*k vertex literals plus m*k^2 edge separations.
-    encoding = n * n + m * n * n
-    work = partitions * 2 * n * (encoding + n + m + 1)
+    work = partitions * 2 * _chromatic_search_work(n, m)
     if work > MAX_CHROMATIC_BIPARTITION_WORK:
-        raise OperationResourceAdmissionError(
-            location=("graph",),
-            code="graph.chromatic_bipartition_exact_work_exceeds",
-            message=(
-                "chromatic bipartition search exceeds the admitted complete-search "
-                "work bound"
-            ),
-        )
+        _refuse_chromatic_bipartition_work()
 
 
 def _find_chromatic_bipartition_kernel(

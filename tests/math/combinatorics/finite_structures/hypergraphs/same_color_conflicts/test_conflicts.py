@@ -135,9 +135,7 @@ def test_multiple_colors_can_produce_the_same_union() -> None:
 
 
 def test_deserialized_provenance_rejects_coerced_color_indices() -> None:
-    result = check_oracle(
-        coloring(("a", "b"), [("a",), ("b",)], [0, 0])
-    )
+    result = check_oracle(coloring(("a", "b"), [("a",), ("b",)], [0, 0]))
     payload = result.model_dump()
     for coerced in ("0", 0.0, False):
         forged = dict(payload)

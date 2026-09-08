@@ -6,7 +6,10 @@ import pytest
 from sympy import QQ, Matrix, Poly, Rational, Symbol, gcd
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.matrices.certified_snf import polynomial_smith_decomposition
 from jacobian.math.matrices.certified_snf.polynomial import PolynomialSmithDecomposition
 from jacobian.math.matrices.symbolic import RationalPolynomialMatrix
@@ -245,3 +248,10 @@ def test_proportional_sparse_polynomial_entries_retain_the_common_factor() -> No
     )
     assert (u * _sympy(source) * v).applyfunc(lambda value: value.expand()) == d
     assert d == Matrix.diag(p, p)
+
+
+def test_copied_inconsistent_axes_are_rejected_before_admission() -> None:
+    source = _matrix([[t]])
+    forged = source.model_copy(update={"row_count": 0})
+    with pytest.raises(OperationDomainValidationError, match="structural"):
+        polynomial_smith_decomposition(forged)

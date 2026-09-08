@@ -60,7 +60,11 @@ TOOLS: MathTools = (
         examples=(
             OperationExample(
                 name="polynomial_torsion",
-                description="The map t: QQ[t] to QQ[t] has cokernel QQ[t]/(t).",
+                description=(
+                    "Compute the Smith decomposition D=UAV of the 1-by-1 matrix "
+                    "[t] over QQ[t]; every entry must be univariate in the same "
+                    "declared ring variable."
+                ),
                 input={
                     "matrix": {
                         "variables": ["t"],

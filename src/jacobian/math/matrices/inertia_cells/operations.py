@@ -19,6 +19,7 @@ from jacobian._execution import (
     request_checkpoint,
     request_execution,
 )
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math._root_isolation import strict_root_count
 from jacobian.math.analysis.intervals import ClosedRationalInterval
 from jacobian.math.matrices.inertia_cells._admission import BlockPlan, admit
@@ -196,6 +197,29 @@ def _inertia(
     return {"n_positive": counts[0], "n_negative": counts[1], "n_zero": counts[2]}
 
 
+def _require_inertia_inputs(
+    matrix: object, interval: object
+) -> tuple[RationalPolynomialMatrix, ClosedRationalInterval]:
+    if not isinstance(matrix, RationalPolynomialMatrix) or not isinstance(
+        interval, ClosedRationalInterval
+    ):
+        raise TypeError("expected RationalPolynomialMatrix and ClosedRationalInterval")
+    try:
+        validated_matrix = RationalPolynomialMatrix.model_validate(
+            matrix.model_dump(warnings="none")
+        )
+        validated_interval = ClosedRationalInterval.model_validate(
+            interval.model_dump(warnings="none")
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=(),
+            code="matrix.inertia_cells_domain",
+            message="inertia cell carriers failed structural validation",
+        ) from exc
+    return validated_matrix, validated_interval
+
+
 def compute_inertia_cells(
     matrix: RationalPolynomialMatrix, interval: ClosedRationalInterval
 ) -> InertiaCellsResult:
@@ -206,14 +230,11 @@ def compute_inertia_cells(
     intervening interval. Point cells are evaluated exactly, including nullity
     increases without sign changes and identically singular matrix families.
     """
-    if not isinstance(matrix, RationalPolynomialMatrix) or not isinstance(
-        interval, ClosedRationalInterval
-    ):
-        raise TypeError("expected RationalPolynomialMatrix and ClosedRationalInterval")
+    validated_matrix, validated_interval = _require_inertia_inputs(matrix, interval)
     if current_request_execution() is None:
         with request_execution(time.monotonic()):
-            return _compute(matrix, interval)
-    return _compute(matrix, interval)
+            return _compute(validated_matrix, validated_interval)
+    return _compute(validated_matrix, validated_interval)
 
 
 def _compute(

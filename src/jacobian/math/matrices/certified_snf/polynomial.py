@@ -15,7 +15,10 @@ from jacobian._execution import (
     request_execution,
 )
 from jacobian._models import StrictModel
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.matrices.certified_snf._polynomial_bounds import (
     polynomial_smith_bound,
 )
@@ -408,6 +411,31 @@ def _encode_polynomial(value: RationalPolynomial, plan: _SmithPlan, ring: Any) -
     )
 
 
+def _require_polynomial_matrix(matrix: object) -> RationalPolynomialMatrix:
+    """Revalidate a native carrier before trusting axes or entries.
+
+    ``model_copy(update=...)`` bypasses Pydantic validators, so class checks
+    alone do not establish the rectangular QQ[t] invariant.
+    """
+
+    if not isinstance(matrix, RationalPolynomialMatrix):
+        raise OperationDomainValidationError(
+            location=("matrix",),
+            code="matrix.polynomial_smith_domain",
+            message="polynomial Smith expects a RationalPolynomialMatrix",
+        )
+    try:
+        return RationalPolynomialMatrix.model_validate(
+            matrix.model_dump(warnings="none")
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("matrix",),
+            code="matrix.polynomial_smith_domain",
+            message="polynomial matrix carrier failed structural validation",
+        ) from exc
+
+
 def polynomial_smith_decomposition(
     matrix: RationalPolynomialMatrix,
 ) -> PolynomialSmithDecomposition:
@@ -421,6 +449,7 @@ def polynomial_smith_decomposition(
         deadline = min(deadline, execution.deadline)
     bind_request_deadline(deadline)
     request_checkpoint("before polynomial Smith admission")
+    matrix = _require_polynomial_matrix(matrix)
     plan = _admit(matrix)
     row_order, column_order, affine, shift = (
         plan.row_order,

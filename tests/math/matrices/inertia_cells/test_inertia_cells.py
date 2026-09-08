@@ -247,3 +247,16 @@ def test_singleton_specialization_of_high_degree_nondiagonal_matrix() -> None:
         result.cells[0].n_negative,
         result.cells[0].n_zero,
     ) == (1, 1, 0)
+
+
+def test_copied_inconsistent_inertia_carriers_are_rejected() -> None:
+    source = _source(sp.Matrix([[1]]))
+    forged_matrix = source.model_copy(update={"row_count": 0})
+    with pytest.raises(OperationDomainValidationError, match="structural"):
+        compute_inertia_cells(forged_matrix, _interval(0, 1))
+    reversed_interval = ClosedRationalInterval.model_construct(
+        lower=CanonicalRational(num=1, den=1),
+        upper=CanonicalRational(num=0, den=1),
+    )
+    with pytest.raises(OperationDomainValidationError, match="structural"):
+        compute_inertia_cells(source, reversed_interval)

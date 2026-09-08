@@ -157,6 +157,7 @@ def _preflight_result(
     if allocation > MAX_PROFILE_ALLOCATION:
         _resource(
             ("target_uniformity",),
+            "monochromatic_profile.allocation_bound",
             "the complete candidate profile exceeds the 4000000-entry allocation bound",
         )
 

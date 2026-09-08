@@ -20,6 +20,9 @@ from jacobian.math.geometry.differential.metrics._models import (
     RationalCoordinateMetric,
     RationalMetricCurvatureProfile,
 )
+from jacobian.math.geometry.differential.metrics._normalize_process import (
+    cancel_fraction,
+)
 from jacobian.math.geometry.differential.metrics._plan import build_plan, singular
 from jacobian.math.geometry.differential.values import (
     RationalCoordinateTensor,
@@ -113,10 +116,6 @@ def curvature_profile(
             ) from exc
     from sympy import QQ, Poly
 
-    from jacobian.math.polynomials.rational_functions.gradient._kernel import (
-        _normalize_fraction,
-    )
-
     axis = metric.tensor.coordinate_axis
     symbols = symbols_for_variables(axis)
     cache: dict[int, Any] = {
@@ -148,7 +147,18 @@ def curvature_profile(
             request_checkpoint("before curvature component normalization")
             if value not in normalized:
                 numerator, denominator = raw(value)
-                normalized[value] = _normalize_fraction(numerator, denominator, axis)
+                cancelled_num, cancelled_den = cancel_fraction(
+                    numerator, denominator, deadline=deadline
+                )
+                normalized[value] = RationalFunction._from_kernel(
+                    variables=axis,
+                    numerator=sparse_rational_polynomial_from_sympy(
+                        cancelled_num, axis, maximum_terms=256
+                    ),
+                    denominator=sparse_rational_polynomial_from_sympy(
+                        cancelled_den, axis, maximum_terms=256
+                    ),
+                )
             results.append(normalized[value])
             request_checkpoint("after curvature component normalization")
         return tuple(results)

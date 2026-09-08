@@ -5,6 +5,7 @@ from itertools import combinations, product
 from time import monotonic
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian._execution import (
     OperationExecutionTimeoutError,
@@ -113,6 +114,28 @@ def test_empty_duplicate_sources_and_duplicate_unions(
     vertices: tuple[str, ...], members: list[tuple[str, ...]], colors: list[int]
 ) -> None:
     check_oracle(coloring(vertices, members, colors))
+
+
+def test_deserialized_provenance_uses_source_axis_order() -> None:
+    result = check_oracle(
+        coloring(("a", "b", "c"), [("a",), ("b",), ("c",)], [0, 0, 0])
+    )
+    payload = result.model_dump()
+    payload["provenance"] = [
+        {
+            **row,
+            "source_edge_ids": (row["source_edge_ids"][1], row["source_edge_ids"][0]),
+        }
+        for row in reversed(payload["provenance"])
+    ]
+    payload["provenance"].append(payload["provenance"][0])
+    assert SameColorConflictsResult.model_validate(payload) == result
+    payload["provenance"][0] = {
+        **payload["provenance"][0],
+        "conflict_edge_id": result.provenance[0].conflict_edge_id,
+    }
+    with pytest.raises(ValidationError, match="conflicting duplicate"):
+        SameColorConflictsResult.model_validate(payload)
 
 
 def test_multiple_colors_can_produce_the_same_union() -> None:

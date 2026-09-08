@@ -2,17 +2,24 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from itertools import combinations
 from math import comb
 
-from jacobian._execution import request_checkpoint
+from jacobian._execution import (
+    bind_request_deadline,
+    current_request_execution,
+    request_checkpoint,
+    request_execution,
+)
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     MAX_EDGES,
+    MAX_LABEL_LENGTH,
     MAX_TOTAL_INCIDENCES,
     FiniteHypergraph,
 )
@@ -27,6 +34,7 @@ __all__ = ["construct"]
 
 MAX_PROFILE_WORK = 2_000_000
 MAX_PROFILE_ALLOCATION = 4_000_000
+MAX_PROFILE_OUTPUT_BYTES = 33_554_432
 
 
 @dataclass(frozen=True, slots=True)
@@ -162,6 +170,34 @@ def _preflight_result(
             "the complete candidate profile exceeds the 4000000-entry allocation bound",
         )
 
+    max_vertex_bytes = max(
+        (len(vertex.encode("utf-8")) for vertex in source.vertices),
+        default=0,
+    )
+    max_edge_id_bytes = max(
+        (len(edge_id.encode("utf-8")) for edge_id, _ in source_edges),
+        default=0,
+    )
+    if (
+        max_vertex_bytes > MAX_LABEL_LENGTH * 4
+        or max_edge_id_bytes > MAX_LABEL_LENGTH * 4
+    ):
+        _resource(
+            ("coloring",),
+            "monochromatic_profile.label_width",
+            "source labels exceed the hypergraph UTF-8 label envelope",
+        )
+    output_bytes = candidate_upper_bound * (
+        target_uniformity * (max_vertex_bytes + 2)
+        + required_edges * (max_edge_id_bytes + 2)
+    )
+    if output_bytes > MAX_PROFILE_OUTPUT_BYTES:
+        _resource(
+            ("target_uniformity",),
+            "monochromatic_profile.output_bytes",
+            "the complete candidate profile exceeds the 32-mebibyte JSON envelope",
+        )
+
 
 def _admit(
     coloring: IndexedHyperedgeColoring,
@@ -216,6 +252,14 @@ def construct(
 ) -> MonochromaticCompleteSubhypergraphProfile:
     """Return every complete monochromatic target subset with provenance."""
 
+    execution = current_request_execution()
+    if execution is None:
+        with request_execution(time.monotonic()):
+            return construct(coloring, source_uniformity, target_uniformity)
+    deadline = execution.started_at + 120.0
+    if execution.deadline is not None:
+        deadline = min(deadline, execution.deadline)
+    bind_request_deadline(deadline)
     admission = _admit(coloring, source_uniformity, target_uniformity)
     target_edges: tuple[tuple[str, tuple[str, ...]], ...]
     candidate_colors: tuple[int, ...]

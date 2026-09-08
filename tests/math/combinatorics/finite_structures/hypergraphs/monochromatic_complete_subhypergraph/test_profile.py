@@ -222,3 +222,22 @@ def test_source_sensitive_candidate_bound_rejects_large_possible_profile() -> No
 
     with pytest.raises(OperationResourceAdmissionError, match="12000-edge"):
         construct(source, 1, 2)
+
+
+def test_witness_label_bytes_are_charged_in_the_output_envelope() -> None:
+    vertices = tuple(str(index) for index in range(155))
+    members = complete_edges(vertices, 2)
+    edges = tuple(
+        (f"{index:05d}" + "a" * 59, edge) for index, edge in enumerate(members)
+    )
+    source = IndexedHyperedgeColoring(
+        hypergraph=FiniteHypergraph(vertices=vertices, edges=edges),
+        color_count=1,
+        assignments=tuple(
+            HyperedgeColorAssignment(edge_id=edge_id, color_index=0)
+            for edge_id, _ in edges
+        ),
+    )
+
+    with pytest.raises(OperationResourceAdmissionError, match="32-mebibyte"):
+        construct(source, 2, 154)

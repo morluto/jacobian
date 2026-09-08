@@ -97,7 +97,7 @@ def _plan(
                     budget.charge(
                         8 * height if a.den == b.den == 1 else 8 * height * height
                     )
-    plans: list[tuple[fmpq, ...]] = []
+    plans: list[tuple[tuple[fmpq, ...], fmpq]] = []
     result_bits = source_bits
     maximum_height = 1
     for i, left in enumerate(points):
@@ -146,7 +146,7 @@ def _plan(
             )
             result_bits += 2 * reduced_height
             maximum_height = max(maximum_height, reduced_height)
-            plans.append(differences)
+            plans.append((differences, squared))
     # Every edge can have its own palette row; source axes, assignments and
     # graph incidences have independently bounded counts from PointConfiguration.
     if result_bits > _MAX_RESULT_BITS:
@@ -184,9 +184,9 @@ def compute_distance_edge_coloring(
     budget.charge(stage="before distance admission")
     plans = _plan(configuration, budget)
     distances: list[fmpq] = []
-    for differences in plans:
+    for _differences, squared in plans:
         budget.charge()
-        distances.append(sum((value * value for value in differences), fmpq(0)))
+        distances.append(squared)
     palette: list[fmpq] = []
     indices = [0] * len(distances)
     # Sorting and adjacent equality give O(E log E) comparisons even for

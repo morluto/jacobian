@@ -136,9 +136,9 @@ def construct(coloring: IndexedHyperedgeColoring) -> SameColorConflictsResult:
             )
         )
     _checkpoint(deadline, "before conflict result construction")
-    result = SameColorConflictsResult(
+    result = SameColorConflictsResult.model_construct(
         coloring=coloring,
-        hypergraph=FiniteHypergraph(vertices=vertices, edges=edges),
+        hypergraph=FiniteHypergraph.model_construct(vertices=vertices, edges=edges),
         provenance=tuple(provenance),
     )
     _checkpoint(deadline, "after conflict result construction")

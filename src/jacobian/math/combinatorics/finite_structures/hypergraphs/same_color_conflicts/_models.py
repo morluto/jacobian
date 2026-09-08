@@ -4,7 +4,7 @@ from collections import Counter
 from math import comb
 from typing import Annotated, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StrictInt, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
@@ -33,7 +33,7 @@ class SameColorConflictProvenance(StrictModel):
     source_edge_ids: tuple[
         Annotated[str, Field(max_length=64)], Annotated[str, Field(max_length=64)]
     ]
-    color_index: int = Field(ge=0, lt=12_000)
+    color_index: StrictInt = Field(ge=0, lt=12_000)
 
 
 class SameColorConflictsResult(StrictModel):
@@ -115,5 +115,13 @@ class SameColorConflictsResult(StrictModel):
         )
         if len(canonical) != expected_pairs:
             raise ValueError("provenance must include every same-colour source pair")
+        referenced = {row.conflict_edge_id for row in canonical}
+        ledger_ids = tuple(edge_id for edge_id, _ in self.hypergraph.edges)
+        expected_ids = tuple(f"c{index}" for index in range(len(ledger_ids)))
+        if ledger_ids != expected_ids or set(ledger_ids) != referenced:
+            raise ValueError(
+                "conflict hypergraph must be the distinct referenced unions "
+                "with canonical c0,c1,... identifiers"
+            )
         object.__setattr__(self, "provenance", tuple(canonical))
         return self

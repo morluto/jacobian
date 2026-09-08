@@ -163,6 +163,25 @@ def test_deserialized_provenance_must_be_complete_and_name_unions() -> None:
         SameColorConflictsResult.model_validate(swapped)
 
 
+def test_deserialized_conflict_hypergraph_cannot_contain_unreferenced_edges() -> None:
+    result = check_oracle(
+        coloring(("a", "b"), [("a",), ("b",)], [0, 1])
+    )
+    assert result.provenance == ()
+    extra = result.model_dump()
+    extra["hypergraph"]["edges"] = [("c0", ["a", "b"])]
+    with pytest.raises(ValidationError, match="distinct referenced unions"):
+        SameColorConflictsResult.model_validate(extra)
+    result = check_oracle(
+        coloring(("a", "b"), [("a",), ("b",)], [0, 0])
+    )
+    renamed = result.model_dump()
+    renamed["hypergraph"]["edges"] = [("extra", list(result.hypergraph.edges[0][1]))]
+    renamed["provenance"][0]["conflict_edge_id"] = "extra"
+    with pytest.raises(ValidationError, match="canonical c0,c1"):
+        SameColorConflictsResult.model_validate(renamed)
+
+
 def test_multiple_colors_can_produce_the_same_union() -> None:
     result = check_oracle(
         coloring(("a", "b"), [("a",), ("b",), ("a",), ("b",)], [0, 0, 1, 1])

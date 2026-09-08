@@ -1,10 +1,5 @@
 """Supported native additive-combinatorics API."""
 
-from jacobian.math.combinatorics.additive.finite_abelian_subset_sum import (
-    FiniteAbelianSubsetSumRequest,
-    FiniteAbelianSubsetSumResult,
-    finite_abelian_subset_sum_profile,
-)
 from jacobian.math.combinatorics.additive.operations import (
     additive_energy,
     direct_sum_predicate,
@@ -25,15 +20,12 @@ from jacobian.math.combinatorics.additive.values import (
 )
 
 __all__ = [
-    "FiniteAbelianSubsetSumRequest",
-    "FiniteAbelianSubsetSumResult",
     "IndexSubset",
     "IndexedIntegerSequence",
     "SubsetSumProfile",
     "SubsetSumProfileEntry",
     "additive_energy",
     "direct_sum_predicate",
-    "finite_abelian_subset_sum_profile",
     "representation_profile",
     "subset_sum_profile",
     "sumset_cardinality",

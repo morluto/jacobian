@@ -13,10 +13,17 @@ from jacobian._exact import DecimalIntegerEncoding
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.combinatorics.additive.finite_abelian_subset_sum._models import (
+    FiniteAbelianSubsetSumRow,
+)
 from jacobian.math.combinatorics.additive.values import (
     IndexedIntegerSequence,
     IndexSubset,
     indexed_sequence_item_ceiling,
+)
+from jacobian.math.groups.finite_abelian import (
+    FiniteAbelianGroupElement,
+    FiniteAbelianProductGroup,
 )
 
 # The dense residue recurrence visits exactly n*m cells. Counts never exceed
@@ -174,6 +181,7 @@ class SubsetSumResidueProfileRequest(StrictModel):
         IndexedIntegerSequence,
         WithJsonSchema(indexed_sequence_item_ceiling(MAX_RESIDUE_PROFILE_ITEMS)),
     ] = Field(
+        default_factory=lambda: IndexedIntegerSequence(items=()),
         description=(
             "A materialized indexed integer tuple. At most 4,095 positions are "
             "admitted; every integer carries at most 32,768 digits, and the "
@@ -182,6 +190,7 @@ class SubsetSumResidueProfileRequest(StrictModel):
         )
     )
     modulus: int = Field(
+        default=1,
         ge=1,
         le=MAX_RESIDUE_PROFILE_MODULUS,
         strict=True,
@@ -203,6 +212,10 @@ class SubsetSumResidueProfileRequest(StrictModel):
             "residue, minimizing sum(2**i for i in I); witness-bearing requests "
             "use a stricter output budget."
         ),
+    )
+    group: FiniteAbelianProductGroup | None = None
+    sequence: tuple[FiniteAbelianGroupElement, ...] | None = Field(
+        default=None, max_length=MAX_RESIDUE_PROFILE_ITEMS
     )
 
     @model_validator(mode="before")
@@ -232,6 +245,20 @@ class SubsetSumResidueProfileRequest(StrictModel):
         _raw_source_shape(prepared.get("source"))
         return prepared
 
+    @model_validator(mode="after")
+    def require_one_domain(self) -> Self:
+        product_mode = self.group is not None or self.sequence is not None
+        if product_mode:
+            if self.group is None or self.sequence is None:
+                raise _validation_error("request_shape", "group and sequence are required together")
+            if self.source.items or self.modulus != 1:
+                raise _validation_error("request_shape", "product and cyclic inputs cannot be mixed")
+            if any(element.group != self.group for element in self.sequence):
+                raise _validation_error("group_binding", "every sequence element must use the supplied group")
+        elif self.source is None or self.modulus is None:
+            raise _validation_error("request_shape", "cyclic requests require source and modulus")
+        return self
+
 
 class SubsetSumResidueProfileResult(StrictModel):
     """A complete exact residue profile bound to its indexed source."""
@@ -239,12 +266,13 @@ class SubsetSumResidueProfileResult(StrictModel):
     source: Annotated[
         IndexedIntegerSequence,
         WithJsonSchema(indexed_sequence_item_ceiling(MAX_RESIDUE_PROFILE_ITEMS)),
-    ]
-    modulus: int = Field(ge=1, le=MAX_RESIDUE_PROFILE_MODULUS, strict=True)
+    ] = Field(default_factory=lambda: IndexedIntegerSequence(items=()))
+    modulus: int = Field(default=1, ge=1, le=MAX_RESIDUE_PROFILE_MODULUS, strict=True)
     include_empty_subset: StrictBool
     include_witnesses: StrictBool
     residue_counts: tuple[ResidueMultiplicity, ...] = Field(
-        min_length=1,
+        default=(),
+        min_length=0,
         max_length=MAX_RESIDUE_PROFILE_MODULUS,
         description=(
             "Exact subset multiplicities indexed by residues 0 through modulus-1."
@@ -258,6 +286,11 @@ class SubsetSumResidueProfileResult(StrictModel):
             "unreachable residue."
         ),
     )
+    group: FiniteAbelianProductGroup | None = None
+    sequence: tuple[FiniteAbelianGroupElement, ...] | None = Field(
+        default=None, max_length=MAX_RESIDUE_PROFILE_ITEMS
+    )
+    group_rows: tuple[FiniteAbelianSubsetSumRow, ...] | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -294,6 +327,9 @@ class SubsetSumResidueProfileResult(StrictModel):
                     witnesses.append(raw_witness)
             prepared["residue_witnesses"] = tuple(witnesses)
 
+        if prepared.get("group") is not None or prepared.get("group_rows") is not None:
+            return prepared
+
         source_shape = _raw_source_shape(prepared.get("source"))
         item_count = (
             source_shape
@@ -322,6 +358,14 @@ class SubsetSumResidueProfileResult(StrictModel):
 
     @model_validator(mode="after")
     def require_structural_shape(self) -> Self:
+        if self.group is not None or self.sequence is not None or self.group_rows is not None:
+            if self.group is None or self.sequence is None or self.group_rows is None:
+                raise _validation_error("result_shape", "product result fields are required together")
+            if self.residue_counts:
+                raise _validation_error("result_shape", "product results cannot contain cyclic fields")
+            return self
+        if self.source is None or self.modulus is None:
+            raise _validation_error("result_shape", "cyclic result fields are required together")
         if self.include_witnesses != (self.residue_witnesses is not None):
             raise _validation_error(
                 "result_shape",
@@ -441,12 +485,46 @@ def _compute_residue_profile(
 
 
 def subset_sum_residue_profile(
-    source: IndexedIntegerSequence,
-    modulus: int,
+    source: IndexedIntegerSequence | None,
+    modulus: int | None,
     include_empty_subset: bool,
     include_witnesses: bool = False,
+    *,
+    group: FiniteAbelianProductGroup | None = None,
+    sequence: tuple[FiniteAbelianGroupElement, ...] | None = None,
 ) -> SubsetSumResidueProfileResult:
     """Return every exact indexed-subset multiplicity modulo ``m``."""
+    if group is not None or sequence is not None:
+        if group is None or sequence is None or source is not None or modulus is not None:
+            raise OperationDomainValidationError(
+                location=("group", "sequence"),
+                code="additive_combinatorics.subset_sum_residue.group_shape",
+                message="finite abelian requests require group and sequence only",
+            )
+        from jacobian.math.combinatorics.additive.finite_abelian_subset_sum.operations import (
+            finite_abelian_subset_sum_profile,
+        )
+
+        product_result = finite_abelian_subset_sum_profile(
+            group, sequence, include_empty_subset
+        )
+        return SubsetSumResidueProfileResult.model_construct(
+            source=IndexedIntegerSequence(items=()),
+            modulus=1,
+            include_empty_subset=include_empty_subset,
+            include_witnesses=False,
+            residue_counts=(),
+            residue_witnesses=None,
+            group=group,
+            sequence=sequence,
+            group_rows=product_result.rows,
+        )
+    if source is None or modulus is None:
+        raise OperationDomainValidationError(
+            location=("source", "modulus"),
+            code="additive_combinatorics.subset_sum_residue.request_shape",
+            message="cyclic requests require source and modulus",
+        )
     _admit_subset_sum_residue_profile(
         source, modulus, include_empty_subset, include_witnesses
     )

@@ -57,16 +57,12 @@ def _output_denominator_identity(dag: Dag, value: Expression) -> object | None:
     """
 
     denominators = Counter(
-        index
-        for index in value.denominator
-        if any(dag.nodes[index].bound.degrees)
+        index for index in value.denominator if any(dag.nodes[index].bound.degrees)
     )
     if not denominators:
         return None
     numerators = Counter(
-        index
-        for index in value.numerator
-        if any(dag.nodes[index].bound.degrees)
+        index for index in value.numerator if any(dag.nodes[index].bound.degrees)
     )
     remaining = denominators - numerators or denominators
     return ("canonical-result-denominator", tuple(sorted(remaining.items())))

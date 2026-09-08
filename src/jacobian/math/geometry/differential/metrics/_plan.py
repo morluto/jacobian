@@ -189,16 +189,16 @@ def _denominator_guard_identity(dag: Dag, value: Expression) -> object | None:
             and not cancelled_shared
         ):
             return _node_guard_key(dag, index)
-        identity = (
+        factor_identity = (
             "canonical-result-denominator",
             (_node_guard_key(dag, index), 1),
             remaining.minimum_exponents,
             remaining.degrees,
         )
         if remaining_numerator_identity:
-            identity = (*identity, remaining_numerator_identity)
-        return identity
-    identity: tuple[object, ...] = (
+            return (*factor_identity, remaining_numerator_identity)
+        return factor_identity
+    multi_identity = (
         "canonical-result-denominator",
         tuple(
             (_node_guard_key(dag, index), multiplicity)
@@ -208,8 +208,8 @@ def _denominator_guard_identity(dag: Dag, value: Expression) -> object | None:
         remaining.degrees,
     )
     if remaining_numerator_identity:
-        identity = (*identity, remaining_numerator_identity)
-    return identity
+        return (*multi_identity, remaining_numerator_identity)
+    return multi_identity
 
 
 def potential_locus_guard_keys(

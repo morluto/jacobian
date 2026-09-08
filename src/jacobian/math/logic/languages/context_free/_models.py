@@ -29,7 +29,7 @@ class FiniteCFGO(StrictModel):
 
     nonterminals: tuple[str, ...] = Field(min_length=1, max_length=MAX_NONTERMINALS)
     terminals: tuple[str, ...] = Field(min_length=0, max_length=MAX_NONTERMINALS)
-    rules: tuple[GrammarRule, ...] = Field(min_length=1, max_length=MAX_RULES)
+    rules: tuple[GrammarRule, ...] = Field(min_length=0, max_length=MAX_RULES)
     start_symbol: str = Field(min_length=1, max_length=64)
 
     @model_validator(mode="after")
@@ -40,6 +40,12 @@ class FiniteCFGO(StrictModel):
             )
         nonterminal_set = set(self.nonterminals)
         terminal_set = set(self.terminals)
+        if len(nonterminal_set) != len(self.nonterminals) or len(terminal_set) != len(
+            self.terminals
+        ):
+            raise _validation_error(
+                "duplicate_symbols", "grammar symbol axes must be unique"
+            )
         disjoint = nonterminal_set & terminal_set
         if disjoint:
             raise _validation_error(

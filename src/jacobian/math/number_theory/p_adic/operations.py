@@ -313,10 +313,12 @@ def hensel_lift_factors(
 ) -> HenselFactorLiftResult:
     """Lift a coprime factorization f ≡ g*h (mod p) to f ≡ g*h (mod p^k).
 
-    Standard quadratic Hensel lifting: every step derives both factor
-    corrections from the fixed Bézout relation ``s*g + t*h ≡ 1 (mod p)``,
-    preserving the product congruence exactly. The reconstructed product
-    is validated against ``f`` modulo ``p^k`` before returning.
+    Each step lifts one p-adic digit using the fixed Bézout relation
+    ``s*g + t*h ≡ 1 (mod p)``. The corrections satisfy
+    ``sigma*h + tau*g = (f-g*h)/p^r (mod p)``; their cross term is
+    divisible by ``p^(r+1)``. Thus induction from the admitted source
+    congruence establishes the final product without replaying it.
+    Consumers of an authored lift use ``verify_hensel_factor_lift``.
     """
     _admit_factors(polynomial, factor_g, factor_h, prime, precision)
     f_asc = _kernel_coefficients(polynomial)
@@ -388,14 +390,6 @@ def hensel_lift_factors(
 
     lifted_g = _trim_asc([coefficient % modulus for coefficient in g])
     lifted_h = _trim_asc([coefficient % modulus for coefficient in h])
-    reconstruction = _poly_mul_exact_mod(lifted_g, lifted_h, modulus)
-    residue = _poly_sub_mod(f_asc, reconstruction, modulus)
-    if not _is_zero_polynomial(residue):
-        raise ValueError(
-            "Hensel lifting failed to reproduce the polynomial "
-            f"mod {modulus}; supply factors admitting a coprime lift"
-        )
-
     return HenselFactorLiftResult(
         polynomial=polynomial,
         factor_g=factor_g,

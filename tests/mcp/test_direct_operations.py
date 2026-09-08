@@ -328,8 +328,8 @@ def test_direct_calls_preserve_strict_and_domain_invalid_params() -> None:
             assert domain_data["errors"] == [
                 {
                     "location": ["assignment"],
-                    "code": "universal_algebra.assignment_coverage",
-                    "message": "assignment must cover exactly the referenced variables",
+                    "code": "universal_algebra.assignment_variable_axis",
+                    "message": "assignment keys must cover exactly the term variable axis 0..variable_count-1",
                 }
             ]
 

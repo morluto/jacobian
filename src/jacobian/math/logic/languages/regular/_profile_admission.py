@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import NoReturn
 
 from jacobian.canonical import format_canonical_integer
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.logic.languages.regular.values import (
     MAX_TRANSITION_PROFILE_COUNT_DIGITS,
     MAX_TRANSITION_PROFILE_ENTRIES,
@@ -12,6 +17,18 @@ from jacobian.math.logic.languages.regular.values import (
     AutomatonTransition,
     FiniteLabeledAutomaton,
 )
+
+
+def _reject(message: str, *, resource: bool = True) -> NoReturn:
+    error_type = (
+        OperationResourceAdmissionError if resource else OperationDomainValidationError
+    )
+    raise error_type(
+        location=("automaton", "source_state", "target_state", "path_length"),
+        code="regular_language.transition_profile_not_admitted",
+        message=message,
+    )
+
 
 _MAX_DP_UPDATES = 2_000_000
 _MAX_VECTOR_UPDATE_WORK = 20_000_000
@@ -140,7 +157,7 @@ def _path_count_and_walk_bound(
                     next_counts.get(transition.target, 0) + multiplicity
                 )
         if updates > _MAX_DP_UPDATES and composition_updates > _MAX_DP_UPDATES:
-            raise ValueError(
+            _reject(
                 "transition-Parikh DP transition-update bound exceeded; reduce the "
                 "path length or transition branching"
             )
@@ -160,15 +177,13 @@ def admit_transition_profile(
     """Admit one exact transition-profile computation and retain its plan."""
 
     if not 0 <= source_state < automaton.state_count:
-        raise ValueError("source_state must be in 0..state_count-1")
+        _reject("source_state must be in 0..state_count-1", resource=False)
     if not 0 <= target_state < automaton.state_count:
-        raise ValueError("target_state must be in 0..state_count-1")
+        _reject("target_state must be in 0..state_count-1", resource=False)
     if path_length < 0:
-        raise ValueError("path_length must be nonnegative")
+        _reject("path_length must be nonnegative", resource=False)
     if path_length > MAX_TRANSITION_PROFILE_PATH_LENGTH:
-        raise ValueError(
-            "path_length exceeds the transition-Parikh preflight length bound"
-        )
+        _reject("path_length exceeds the transition-Parikh preflight length bound")
     transition_count = len(automaton.transitions)
     outgoing = _relevant_outgoing(automaton, source_state, target_state)
     active_transition_count = sum(map(len, outgoing))
@@ -184,18 +199,18 @@ def admit_transition_profile(
     )
     updates = min(walk_updates, composition_updates)
     if updates > _MAX_DP_UPDATES:
-        raise ValueError(
+        _reject(
             "transition-Parikh DP transition-update bound exceeded; reduce the "
             "path length or transition branching"
         )
     profile_cells = min(target_count, composition_cells)
     if profile_cells > MAX_TRANSITION_PROFILE_ENTRIES:
-        raise ValueError(
+        _reject(
             "transition-Parikh profile-cell bound exceeded; reduce the path length "
             "or transition dimension"
         )
     if updates * transition_count > _MAX_VECTOR_UPDATE_WORK:
-        raise ValueError(
+        _reject(
             "transition-Parikh dense-vector update-work bound exceeded; reduce "
             "the transition axis or path branching"
         )
@@ -205,13 +220,13 @@ def admit_transition_profile(
         updates + 1,
     )
     if layer_cells * transition_count > _MAX_VECTOR_COORDINATES:
-        raise ValueError(
+        _reject(
             "transition-Parikh intermediate vector-coordinate bound exceeded; "
             "reduce the transition axis or path branching"
         )
     count_digits = len(format_canonical_integer(max(1, target_count)))
     if count_digits > MAX_TRANSITION_PROFILE_COUNT_DIGITS:
-        raise ValueError(
+        _reject(
             "transition-Parikh multiplicity digit bound exceeded; reduce the path "
             "length or transition branching"
         )

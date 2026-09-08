@@ -671,3 +671,14 @@ class TestValidation:
         assert (
             error.value.errors()[0]["type"] == "universal_algebra.table_cells_exceeded"
         )
+
+
+def test_native_evaluation_binds_assignment_keys_to_the_term_variable_axis() -> None:
+    from jacobian.catalog.models import OperationDomainValidationError
+    from jacobian.math.universal_algebra import evaluate_term
+
+    algebra = _boolean_algebra()
+    term = _variable_term(2)
+    assert evaluate_term(algebra, term, {2: 1, 1: 0, 0: 0}) == 1
+    with pytest.raises(OperationDomainValidationError, match="variable axis"):
+        evaluate_term(algebra, term, {2: 1, 3: 0, 4: 0})

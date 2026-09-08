@@ -4,7 +4,6 @@ from typing import Any
 
 from jacobian.catalog.models import (
     MathTool,
-    OperationDomainValidationError,
     OperationExample,
 )
 from jacobian.math.logic.automata.tree._models import (
@@ -15,8 +14,8 @@ from jacobian.math.logic.automata.tree._models import (
     TreeRunResult,
 )
 from jacobian.math.logic.automata.tree.operations import (
+    _accepted_tree_count_admitted,
     _tree_state_chart_unchecked,
-    accepted_tree_count,
     reachable_state_profile,
 )
 from jacobian.math.logic.automata.tree.values import (
@@ -28,14 +27,7 @@ from jacobian.math.logic.automata.tree.values import (
 
 
 def compute_tree_run(request: TreeRunRequest) -> TreeRunResult:
-    try:
-        node_count = validate_ranked_tree(request.automaton, request.tree)
-    except ValueError as exc:
-        raise OperationDomainValidationError(
-            location=("tree",),
-            code="tree_automata.ranked_tree_domain",
-            message=str(exc),
-        ) from exc
+    node_count = validate_ranked_tree(request.automaton, request.tree)
     chart = _tree_state_chart_unchecked(request.automaton, request.tree)
     states = set(chart[-1][1])
     accepting = set(states) & set(request.automaton.final_states)
@@ -54,19 +46,12 @@ def compute_tree_run(request: TreeRunRequest) -> TreeRunResult:
 def compute_accepted_tree_count(
     request: AcceptedTreeCountRequest,
 ) -> AcceptedTreeCountResult:
-    try:
-        estimated_work_bound = accepted_tree_count_work_bound(
-            request.automaton, request.tree_size
-        )
-    except ValueError as exc:
-        raise OperationDomainValidationError(
-            location=("tree_size",),
-            code="tree_automata.accepted_tree_count_work_bound",
-            message=str(exc),
-        ) from exc
+    estimated_work_bound = accepted_tree_count_work_bound(
+        request.automaton, request.tree_size
+    )
     return AcceptedTreeCountResult._from_kernel(
         request,
-        count=accepted_tree_count(request.automaton, request.tree_size),
+        count=_accepted_tree_count_admitted(request.automaton, request.tree_size),
         estimated_work_bound=estimated_work_bound,
     )
 

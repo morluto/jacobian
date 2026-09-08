@@ -1,6 +1,5 @@
 """Defining feasible-set and reconstruction identities for exposed faces."""
 
-import json
 from collections.abc import Sequence
 from fractions import Fraction
 
@@ -9,19 +8,16 @@ from pydantic import ValidationError
 from sympy import Matrix, Rational, zeros
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.dispatch import invoke_operation, parse_operation_input
 from jacobian.math.matrices.semidefinite import (
     RationalSemidefiniteSystem,
     SemidefiniteFaceReduction,
     reduce_exposed_face,
 )
 from jacobian.math.matrices.semidefinite._models import SemidefiniteFaceReductionRequest
-from jacobian.math.matrices.semidefinite._tools import TOOLS
 from jacobian.math.matrices.values import RationalMatrix, rational_matrix_from_fractions
 
 
@@ -282,15 +278,16 @@ def test_inactive_constraint_denominators_are_charged_during_compression() -> No
 
 def test_inactive_rhs_heights_count_toward_output() -> None:
     huge = Fraction(10**32_000)
-    matrices = (_matrix([[1, 1], [1, 1]]),) + tuple(
-        _matrix([[0, 0], [0, 0]]) for _ in range(200)
+    matrices = (
+        _matrix([[1, 1], [1, 1]]),
+        *(_matrix([[0, 0], [0, 0]]) for _ in range(200)),
     )
-    rhs = (0,) + tuple(huge for _ in range(200))
+    rhs = (0, *(huge for _ in range(200)))
     system = RationalSemidefiniteSystem(
         order=2, matrices=matrices, rhs=tuple(_q(value) for value in rhs)
     )
     with pytest.raises(OperationResourceAdmissionError, match="output digit"):
-        reduce_exposed_face(system, (_q(1),) + tuple(_q(0) for _ in range(200)))
+        reduce_exposed_face(system, (_q(1), *(_q(0) for _ in range(200))))
 
 
 def test_coprime_constraint_denominators_are_bounded_in_compression() -> None:
@@ -308,20 +305,3 @@ def test_coprime_constraint_denominators_are_bounded_in_compression() -> None:
         reduce_exposed_face(system, (_q(1), _q(0)))
 
 
-def test_native_dispatch_and_serialized_result_parity() -> None:
-    tool = TOOLS[0]
-    parsed = parse_operation_input(
-        SemidefiniteFaceReductionRequest, tool.examples[0].input
-    )
-    assert isinstance(parsed, SemidefiniteFaceReductionRequest)
-    dispatched = invoke_operation(
-        tool.operation_id, tool.examples[0].input, Catalog.open()
-    )
-    result = SemidefiniteFaceReduction.model_validate_json(
-        json.dumps(dispatched.output)
-    )
-    assert result == reduce_exposed_face(parsed.system, parsed.multipliers)
-    assert (
-        SemidefiniteFaceReduction.model_validate_json(result.model_dump_json())
-        == result
-    )

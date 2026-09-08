@@ -81,9 +81,10 @@ def _component_budget(
     for q in values:
         checkpoint("during chordal completion denominator clearing")
         denominator = lcm(denominator, q.den)
-    h = max(
-        abs(q.num).bit_length() + (denominator // q.den).bit_length() for q in values
-    )
+    h = 1
+    for q in values:
+        checkpoint("during chordal completion denominator scaling")
+        h = max(h, abs(q.num).bit_length() + (denominator // q.den).bit_length())
     numerator_bits = max(abs(q.num).bit_length() for q in values)
     minors = [k * (h + k.bit_length()) for k in sizes if k]
     # The common output denominator divides D times the product of the

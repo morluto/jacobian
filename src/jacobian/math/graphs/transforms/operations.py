@@ -6,6 +6,7 @@ from typing import Any
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.transforms._path_profile_models import (
+    MAX_PATH_PROFILE_ORDER,
     MAX_PATH_PROFILE_SEARCH_WORK,
     PathProfileResult,
     PathProfileRow,
@@ -97,6 +98,16 @@ def _admit_path_profile(
 
     if type(path_length) is not int or not 0 <= path_length <= 10:
         raise ValueError("path_length must be between 0 and 10")
+    order = len(graph.vertices)
+    if order > MAX_PATH_PROFILE_ORDER:
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="graph.path_profile.row_bound",
+            message=(
+                "path-profile computation supports at most "
+                f"{MAX_PATH_PROFILE_ORDER} vertices"
+            ),
+        )
     network: nx.Graph[str] = nx.Graph()
     network.add_nodes_from(graph.vertices)
     network.add_edges_from(graph.edges)

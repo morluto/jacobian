@@ -491,8 +491,9 @@ def _incidence_graph_data(
 
     ``vertex_incidence`` maps each vertex to the edge ids containing it in
     declared edge order.  ``edge_incidence`` maps each edge id to the
-    vertices it contains in declared vertex order.  ``edges`` is the list of
-    ``(vertex, edge_id)`` incidence pairs sorted by vertex then edge id.
+    vertices it contains in canonical lexical member order.  ``edges`` is
+    the list of ``(vertex, edge_id)`` incidence pairs sorted by vertex then
+    edge id.
     """
 
     edges = _canonical_edges(hypergraph)
@@ -607,11 +608,33 @@ def incidence_graph(hypergraph: FiniteHypergraph) -> IncidenceGraphResult:
     """Compute the bipartite incidence graph (Levi graph) of a hypergraph."""
 
     vertex_incidence, edge_incidence, edges = _incidence_graph_data(hypergraph)
+    vertex_labels = tuple(
+        (vertex, f"v{index}") for index, vertex in enumerate(hypergraph.vertices)
+    )
+    edge_labels = tuple(
+        (edge_id, f"e{index}") for index, (edge_id, _) in enumerate(hypergraph.edges)
+    )
+    vertex_map = dict(vertex_labels)
+    edge_map = dict(edge_labels)
+    graph_edges = tuple(
+        sorted(
+            (left, right) if left < right else (right, left)
+            for left, right in ((vertex_map[v], edge_map[e]) for v, e in edges)
+        )
+    )
+    graph = SimpleUndirectedGraph(
+        vertices=tuple(label for _, label in vertex_labels)
+        + tuple(label for _, label in edge_labels),
+        edges=graph_edges,
+    )
     return IncidenceGraphResult(
         hypergraph=hypergraph,
         vertex_incidence=vertex_incidence,
         edge_incidence=edge_incidence,
         edges=edges,
+        graph=graph,
+        vertex_labels=vertex_labels,
+        edge_labels=edge_labels,
     )
 
 

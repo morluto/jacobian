@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
-from pydantic import Field
+from typing import Self
+
+from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 MAX_PATH_PROFILE_SEARCH_WORK = 10_000_000
-_MAX_PATH_PROFILE_ROWS = 256 * 256
+MAX_PATH_PROFILE_ORDER = 256
+_MAX_PATH_PROFILE_ROWS = MAX_PATH_PROFILE_ORDER * MAX_PATH_PROFILE_ORDER
 
 
 def _canonical_max_degree(graph: SimpleUndirectedGraph) -> int:
@@ -36,6 +40,17 @@ class PathProfileRequest(StrictModel):
     graph: SimpleUndirectedGraph
     path_length: int = Field(ge=0, le=10)
 
+    @model_validator(mode="after")
+    def require_row_envelope(self) -> Self:
+        order = len(self.graph.vertices)
+        if order > MAX_PATH_PROFILE_ORDER:
+            raise PydanticCustomError(
+                "graph.path_profile.row_bound",
+                "path-profile computation supports at most "
+                f"{MAX_PATH_PROFILE_ORDER} vertices",
+            )
+        return self
+
 
 class PathProfileRow(StrictModel):
     """One (source, target, count) triple in a path profile."""
@@ -54,6 +69,7 @@ class PathProfileResult(StrictModel):
 
 
 __all__ = [
+    "MAX_PATH_PROFILE_ORDER",
     "MAX_PATH_PROFILE_SEARCH_WORK",
     "PathProfileRequest",
     "PathProfileResult",

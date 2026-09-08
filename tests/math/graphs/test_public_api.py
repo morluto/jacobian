@@ -7,7 +7,10 @@ from jacobian.math.graphs.independence import IndependenceNumberRequest
 from jacobian.math.graphs.optimization._independence import (
     INDEPENDENCE_NUMBER_OPERATION,
 )
-from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.graphs.values import (
+    MAX_ENCODED_SIMPLE_GRAPH_EDGES,
+    SimpleUndirectedGraph,
+)
 
 
 def test_graph_algorithms_use_networkx_objects() -> None:
@@ -40,6 +43,27 @@ def test_graph_construction_functions_use_immutable_graph_values() -> None:
     assert complement.vertices == ("v0", "v1", "v2")
     assert complement.edges == (("v0", "v2"),)
     assert type(explicit) is SimpleUndirectedGraph
+
+
+def test_compose_graphs_preflights_encoded_edge_envelope() -> None:
+    admitted_order = 268
+    admitted = SimpleUndirectedGraph(
+        vertices=tuple(f"{index:03d}" for index in range(admitted_order)),
+        edges=(),
+    )
+    complement = graphs.compose_graphs("COMPLEMENT", admitted)
+    expected_edges = admitted_order * (admitted_order - 1) // 2
+    assert expected_edges <= MAX_ENCODED_SIMPLE_GRAPH_EDGES
+    assert len(complement.vertices) == admitted_order
+    assert len(complement.edges) == expected_edges
+    assert SimpleUndirectedGraph.model_validate(complement.model_dump()) == complement
+
+    oversized = SimpleUndirectedGraph(
+        vertices=tuple(f"{index:03d}" for index in range(269)),
+        edges=(),
+    )
+    with pytest.raises(ValueError, match="36000-edge graph encoding bound"):
+        graphs.compose_graphs("COMPLEMENT", oversized)
 
 
 def test_independence_number_accepts_the_canonical_graph_value() -> None:

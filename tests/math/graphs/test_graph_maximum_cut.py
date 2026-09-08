@@ -325,6 +325,19 @@ def test_large_bipartite_graph_is_not_rejected_by_a_coarse_order_cap() -> None:
     assert result.cut_value == 255
 
 
+def test_maximum_cut_preserves_256_vertex_partition_envelope() -> None:
+    vertices = tuple(f"{index:03d}" for index in range(256))
+    result = _validated_result(_graph(vertices, ()))
+    assert result.left_vertices == vertices or result.right_vertices == vertices
+    assert len(result.left_vertices) + len(result.right_vertices) == 256
+
+    oversized = _graph(tuple(f"{index:03d}" for index in range(257)), ())
+    with pytest.raises(ValidationError, match="at most 256 vertices"):
+        GraphMaximumCutRequest(graph=oversized)
+    with pytest.raises(OperationDomainValidationError, match="at most 256 vertices"):
+        compute_maximum_cut(GraphMaximumCutRequest.model_construct(graph=oversized))
+
+
 def test_public_contract_explains_bounds_without_private_kernel_details() -> None:
     graph_schema = GraphMaximumCutRequest.model_json_schema()["properties"]["graph"]
     description = graph_schema["description"]

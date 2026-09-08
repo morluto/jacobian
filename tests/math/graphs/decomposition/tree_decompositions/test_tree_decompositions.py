@@ -129,6 +129,42 @@ class TestVertexOccurrences:
         assert per_vertex["c"].nodes == ("t1",)
         assert per_vertex["c"].count == 1
 
+    def test_occurrences_preserve_256_vertex_result_envelope(self) -> None:
+        vertices = tuple(f"v{index:03d}" for index in range(256))
+        nodes = tuple(f"t{index:03d}" for index in range(256))
+        td = TreeDecomposition(
+            graph=SimpleUndirectedGraph(vertices=vertices, edges=()),
+            tree_nodes=nodes,
+            tree_edges=tuple((nodes[index], nodes[index + 1]) for index in range(255)),
+            bags=tuple((vertices[index],) for index in range(256)),
+        )
+        result = compute_vertex_occurrences(VertexOccurrencesRequest(decomposition=td))
+        assert len(result.occurrences) == 256
+        type(result).model_validate(result.model_dump())
+
+        oversized_vertices = tuple(f"v{index:03d}" for index in range(257))
+        oversized_nodes = tuple(f"t{index:03d}" for index in range(256))
+        oversized = TreeDecomposition(
+            graph=SimpleUndirectedGraph(vertices=oversized_vertices, edges=()),
+            tree_nodes=oversized_nodes,
+            tree_edges=tuple(
+                (oversized_nodes[index], oversized_nodes[index + 1])
+                for index in range(255)
+            ),
+            bags=(
+                *((oversized_vertices[index],) for index in range(255)),
+                (oversized_vertices[255], oversized_vertices[256]),
+            ),
+        )
+        with pytest.raises(ValidationError, match="at most 256 source vertices"):
+            VertexOccurrencesRequest(decomposition=oversized)
+        with pytest.raises(
+            OperationDomainValidationError, match="at most 256 source vertices"
+        ):
+            compute_vertex_occurrences(
+                VertexOccurrencesRequest.model_construct(decomposition=oversized)
+            )
+
 
 # ---------------------------------------------------------------------------
 # Adhesions

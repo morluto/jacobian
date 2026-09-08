@@ -12,6 +12,7 @@ from typing import Any
 from jacobian._execution import (
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
+    request_checkpoint,
 )
 from jacobian.canonical import (
     CanonicalizationError,
@@ -64,14 +65,22 @@ def _node_payload(node: Node) -> dict[str, object]:
     return payload
 
 
-def _poly_from_payload(records: object, symbols: tuple[Any, ...]) -> Any:
+def _poly_from_payload(
+    records: object, symbols: tuple[Any, ...], *, deadline: float
+) -> Any:
     from sympy import QQ, Poly, Rational
 
     if not isinstance(records, list):
         raise ValueError("malformed expanded polynomial")
     coefficients: dict[tuple[int, ...], Any] = {}
     variable_count = len(symbols)
-    for record in records:
+    for index, record in enumerate(records):
+        if index % 256 == 0:
+            request_checkpoint("during curvature DAG polynomial decode")
+            if monotonic() >= deadline:
+                raise OperationExecutionTimeoutError(
+                    "metric curvature deadline expired during polynomial DAG decoding"
+                )
         if not isinstance(record, list) or len(record) != variable_count + 2:
             raise ValueError("malformed expanded polynomial")
         exponents = tuple(record[:variable_count])
@@ -140,6 +149,11 @@ def evaluate_polynomial_dag(
         raise RuntimeError(
             "bounded metric-curvature DAG worker did not return expanded polynomials"
         )
+    request_checkpoint("before curvature DAG decode")
+    if monotonic() >= deadline:
+        raise OperationExecutionTimeoutError(
+            "metric curvature deadline expired during polynomial DAG decoding"
+        )
     try:
         response = loads_strict_json(
             completed.stdout,
@@ -152,6 +166,11 @@ def evaluate_polynomial_dag(
         raise RuntimeError(
             "bounded metric-curvature DAG worker returned malformed output"
         ) from exc
+    request_checkpoint("after curvature DAG decode")
+    if monotonic() >= deadline:
+        raise OperationExecutionTimeoutError(
+            "metric curvature deadline expired during polynomial DAG decoding"
+        )
     if (
         not isinstance(response, dict)
         or response.get("status") != "ok"
@@ -174,4 +193,4 @@ def materialize_expanded_polynomial(
         raise OperationExecutionTimeoutError(
             "metric curvature deadline expired during polynomial DAG decoding"
         )
-    return _poly_from_payload(records, symbols)
+    return _poly_from_payload(records, symbols, deadline=deadline)

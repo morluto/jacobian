@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from fractions import Fraction
+from typing import NoReturn
 
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationResourceAdmissionError
@@ -32,7 +33,11 @@ MAX_LAPLACE_OUTPUT_BITS = 268_435_456
 MAX_LAPLACE_OUTPUT_SLOTS = 1_048_576
 
 
-def _monic_polynomial_key(polynomial: SparseRationalPolynomial) -> object:
+_PolynomialKey = tuple[tuple[tuple[int, ...], str, str], ...]
+_GuardKey = _PolynomialKey | tuple[str, ...] | tuple[str, int]
+
+
+def _monic_polynomial_key(polynomial: SparseRationalPolynomial) -> _PolynomialKey:
     if not polynomial.terms:
         return _polynomial_key(polynomial)
     leading = polynomial.terms[0].coefficient.as_fraction()
@@ -50,7 +55,7 @@ def _monic_polynomial_key(polynomial: SparseRationalPolynomial) -> object:
     )
 
 
-def _laplace_reject(reason: str, message: str) -> None:
+def _laplace_reject(reason: str, message: str) -> NoReturn:
     location = ("scalar",) if reason == "result_exponent" else ("metric",)
     raise OperationResourceAdmissionError(
         location=location,
@@ -134,18 +139,18 @@ def build_plan(metric: RationalCoordinateMetric, scalar: RationalFunction) -> Pl
                 "determinant locus factors exceed canonical polynomial bounds",
             )
         determinant_sizes.append(_bound_allocation(bound, dimension))
-    extra_keys: set[object] = set()
+    extra_keys: set[_GuardKey] = set()
     if not _is_unit_polynomial(scalar.denominator, dimension):
         extra_keys.add(_monic_polynomial_key(scalar.denominator))
     if _has_nonconstant_denominator(dag, value):
         extra_keys.add(("canonical-result-denominator",))
-    guard_keys = {
+    guard_keys: set[_GuardKey] = {
         _polynomial_key(guard) for guard in metric.tensor.retained_nonzero_denominators
     }
     for index in set(connection_plan.determinant.numerator):
-        source = dag.nodes[index].source
-        if source is not None:
-            guard_keys.add(_monic_polynomial_key(source))
+        node_source = dag.nodes[index].source
+        if node_source is not None:
+            guard_keys.add(_monic_polynomial_key(node_source))
         else:
             guard_keys.add(("determinant", index))
     guard_keys.update(extra_keys)
@@ -154,7 +159,7 @@ def build_plan(metric: RationalCoordinateMetric, scalar: RationalFunction) -> Pl
             "locus",
             "complete retained Laplace--Beltrami locus exceeds 768 guards",
         )
-    source = [
+    source_sizes = [
         _source_allocation(polynomial, dimension)
         for polynomial in (
             *(
@@ -170,7 +175,7 @@ def build_plan(metric: RationalCoordinateMetric, scalar: RationalFunction) -> Pl
         _source_allocation(guard, dimension)
         for guard in metric.tensor.retained_nonzero_denominators
     ]
-    allocations = source + inherited + determinant_sizes + [size]
+    allocations = source_sizes + inherited + determinant_sizes + [size]
     terms, bits, slots = (
         sum(allocation[index] for allocation in allocations) for index in range(3)
     )

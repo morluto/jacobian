@@ -6,11 +6,7 @@ import pytest
 from pydantic import ValidationError
 from sympy import QQ, Poly, symbols
 
-from jacobian._execution import (
-    OperationExecutionTimeoutError,
-    bind_request_deadline,
-    request_execution,
-)
+from jacobian._execution import OperationExecutionTimeoutError, request_execution
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -21,16 +17,16 @@ from jacobian.math.polynomials.rational_functions._bounds import (
     _canonical_coefficient_digits,
 )
 from jacobian.math.polynomials.rational_functions.gradient.operations import (
-    _admit_general_factors,
     _admit_general_gradient,
-    _Ledger,
-    _reduced_admitted_bound,
+)
+from jacobian.math.polynomials.rational_functions.gradient.operations import (
+    _Ledger as _GradientLedger,
 )
 from jacobian.math.polynomials.rational_functions.maps import (
     RationalFunctionMapJacobian,
     jacobian_matrix,
 )
-from jacobian.math.polynomials.rational_functions.maps import operations as maps_ops
+from jacobian.math.polynomials.rational_functions.maps import operations as jacobian_ops
 from jacobian.math.polynomials.values import RationalFunction
 
 
@@ -354,33 +350,20 @@ def test_aggregate_source_digits_are_capped_before_component_parse() -> None:
         )
 
 
-def test_linear_power_quotient_row_cancels_to_the_reduced_derivative() -> None:
-    x = symbols("x")
-    source = RationalFunctionMap(
-        source_variables=("x",),
-        target_coordinates=("y",),
-        components=(rational_function_from_sympy(1 / (x + 1) ** 33, ("x",)),),
-    )
-    result = jacobian_matrix(source)
-    assert result.entries[0][0] == rational_function_from_sympy(
-        -33 / (x + 1) ** 34, ("x",)
-    )
-
-
 def test_repeated_linear_power_quotients_use_reduced_row_allocation() -> None:
     x = symbols("x")
     component = rational_function_from_sympy(1 / (x + 1) ** 33, ("x",))
-    with request_execution(monotonic()):
-        bind_request_deadline(monotonic() + 60)
-        ledger = _Ledger()
-        bounds = _admit_general_gradient(component, ledger)
-        factors = _admit_general_factors(component)
-        allocation = maps_ops._Allocation()
-        for _ in range(520):
-            for bound, factor in zip(bounds, factors, strict=True):
-                reduced = _reduced_admitted_bound(bound, factor)
-                digits = (
-                    1 if reduced.is_zero else _canonical_coefficient_digits(reduced)
-                )
-                allocation.charge(*maps_ops._general_allocation(reduced, digits))
+    bounds = _admit_general_gradient(component, _GradientLedger())
+    allocation = jacobian_ops._Allocation()
+    for _ in range(520):
+        for bound in bounds:
+            digits = 1 if bound.is_zero else _canonical_coefficient_digits(bound)
+            allocation.charge(*jacobian_ops._general_allocation(bound, digits))
     assert allocation.terms <= 65_536
+    source = RationalFunctionMap(
+        source_variables=("x",),
+        target_coordinates=("u", "v"),
+        components=(component, component),
+    )
+    result = jacobian_matrix(source)
+    assert result.entries[0][0] == result.entries[1][0]

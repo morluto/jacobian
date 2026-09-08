@@ -12,6 +12,9 @@ from jacobian.math.probability.hypergraph_edge_count_moments import (
     HypergraphEdgeCountMomentsResult,
     compute_hypergraph_edge_count_moments,
 )
+from jacobian.math.probability.hypergraph_edge_count_moments._models import (
+    HypergraphEdgeCountMomentsRequest,
+)
 from jacobian.math.probability.operations import raw_moment
 
 
@@ -121,6 +124,13 @@ def test_pair_work_is_refused_before_overlap_expansion() -> None:
     )
     with pytest.raises(OperationResourceAdmissionError, match="overlap work"):
         run(vertices, edges, Fraction(1, 2))
+
+
+def test_schema_documents_the_closed_probability_interval() -> None:
+    description = HypergraphEdgeCountMomentsRequest.model_json_schema()[
+        "properties"
+    ]["retention_probability"]["description"]
+    assert "[0, 1]" in description
 
 
 def test_rational_height_and_shared_deadline_are_admitted_before_execution() -> None:

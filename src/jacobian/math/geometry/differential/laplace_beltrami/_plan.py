@@ -6,14 +6,17 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import NoReturn
 
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.geometry.differential.metrics._dag import (
     Dag,
     Expression,
 )
 from jacobian.math.geometry.differential.metrics._models import RationalCoordinateMetric
 from jacobian.math.geometry.differential.metrics._plan import (
-    _has_nonconstant_denominator,
+    _denominator_guard_identity,
     _monic_polynomial_key,
     build_connection_plan,
 )
@@ -33,8 +36,15 @@ MAX_LAPLACE_OUTPUT_BITS = 268_435_456
 MAX_LAPLACE_OUTPUT_SLOTS = 1_048_576
 
 
-_PolynomialKey = tuple[tuple[tuple[int, ...], str, str], ...]
-_GuardKey = _PolynomialKey | tuple[str, ...] | tuple[str, int]
+_GuardKey = object
+
+
+def _laplace_singular_metric() -> OperationDomainValidationError:
+    return OperationDomainValidationError(
+        location=("metric",),
+        code="differential_geometry.laplace_beltrami.singular_metric",
+        message="metric determinant is identically zero",
+    )
 
 
 def _laplace_reject(reason: str, message: str) -> NoReturn:
@@ -79,7 +89,10 @@ def _bound_allocation(bound: PolynomialBound, dimension: int) -> tuple[int, int,
 def build_plan(metric: RationalCoordinateMetric, scalar: RationalFunction) -> Plan:
     dimension = len(metric.tensor.coordinate_axis)
     connection_plan = build_connection_plan(
-        metric, admission_reject=_laplace_reject, label="Laplace--Beltrami"
+        metric,
+        admission_reject=_laplace_reject,
+        label="Laplace--Beltrami",
+        singular_metric=_laplace_singular_metric,
     )
     dag = connection_plan.dag
     field = dag.fraction(scalar)
@@ -108,8 +121,9 @@ def build_plan(metric: RationalCoordinateMetric, scalar: RationalFunction) -> Pl
     extra_keys: set[_GuardKey] = set()
     if not _is_unit_polynomial(scalar.denominator, dimension):
         extra_keys.add(_monic_polynomial_key(scalar.denominator))
-    if _has_nonconstant_denominator(dag, value):
-        extra_keys.add(("canonical-result-denominator",))
+    result_identity = _denominator_guard_identity(dag, value)
+    if result_identity is not None:
+        extra_keys.add(result_identity)
     guard_keys: set[_GuardKey] = {
         _polynomial_key(guard) for guard in metric.tensor.retained_nonzero_denominators
     }
@@ -118,8 +132,9 @@ def build_plan(metric: RationalCoordinateMetric, scalar: RationalFunction) -> Pl
         for guard in metric.tensor.retained_nonzero_denominators
     }
     if not _is_unit_polynomial(scalar.denominator, dimension):
-        returned[_monic_polynomial_key(scalar.denominator)] = _source_allocation(
-            scalar.denominator, dimension
+        returned.setdefault(
+            _monic_polynomial_key(scalar.denominator),
+            _source_allocation(scalar.denominator, dimension),
         )
     for index in set(connection_plan.determinant.numerator):
         bound = dag.nodes[index].bound
@@ -138,11 +153,11 @@ def build_plan(metric: RationalCoordinateMetric, scalar: RationalFunction) -> Pl
         else:
             key = ("determinant", index)
         guard_keys.add(key)
-        returned[key] = _bound_allocation(bound, dimension)
-    if _has_nonconstant_denominator(dag, value):
+        returned.setdefault(key, _bound_allocation(bound, dimension))
+    if result_identity is not None:
         denominator_bound = dag.nodes[dag.polynomial(value.denominator)].bound
-        returned[("canonical-result-denominator",)] = _bound_allocation(
-            denominator_bound, dimension
+        returned.setdefault(
+            result_identity, _bound_allocation(denominator_bound, dimension)
         )
     guard_keys.update(extra_keys)
     if len(guard_keys) > MAX_RATIONAL_TENSOR_LOCUS_GUARDS:

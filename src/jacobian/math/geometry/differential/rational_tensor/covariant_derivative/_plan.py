@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
-from collections import Counter
 from dataclasses import dataclass
 from fractions import Fraction
 from itertools import product
 from typing import NoReturn
 
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.geometry.differential.metrics._dag import Dag, Expression
 from jacobian.math.geometry.differential.metrics._models import RationalCoordinateMetric
 from jacobian.math.geometry.differential.metrics._plan import (
     ConnectionPlan,
+    _denominator_guard_identity,
     _monic_polynomial_key,
     build_connection_plan,
 )
@@ -26,6 +29,14 @@ from jacobian.math.geometry.differential.values import (
     _polynomial_key,
 )
 from jacobian.math.polynomials.values import SparseRationalPolynomial
+
+
+def _covariant_singular_metric() -> OperationDomainValidationError:
+    return OperationDomainValidationError(
+        location=("metric",),
+        code="differential_geometry.covariant_derivative.singular_metric",
+        message="metric determinant is identically zero",
+    )
 
 
 def _covariant_reject(reason: str, message: str) -> NoReturn:
@@ -45,28 +56,6 @@ class Plan:
     connection: tuple[Expression, ...]
     derivative: tuple[Expression, ...]
     fractions: dict[Expression, tuple[int, int]]
-
-
-def _output_denominator_identity(dag: Dag, value: Expression) -> object | None:
-    """Identify one retained output denominator after cancelling shared factors.
-
-    Axis-specific remaining denominators stay distinct, so
-    ``1/((x+1)^2 (y+1))`` and ``1/((x+1)(y+1)^2)`` are separate keys. A
-    cofactor over the same remaining denominator keeps the determinant
-    identity, so ``1/D`` and ``adj/D`` share one guard.
-    """
-
-    numerators = Counter(value.numerator)
-    remaining: list[tuple[int, int]] = []
-    for index, multiplicity in sorted(Counter(value.denominator).items()):
-        if not any(dag.nodes[index].bound.degrees):
-            continue
-        leftover = multiplicity - min(multiplicity, numerators.get(index, 0))
-        if leftover:
-            remaining.append((index, leftover))
-    if not remaining:
-        return None
-    return ("canonical-result-denominator", tuple(remaining))
 
 
 def _flatten(indices: tuple[int, ...], dimension: int) -> int:
@@ -132,7 +121,7 @@ def _admit_outputs(
     output_keys = {
         identity
         for value in outputs
-        if (identity := _output_denominator_identity(dag, value)) is not None
+        if (identity := _denominator_guard_identity(dag, value)) is not None
     }
     potential_guards = len(inherited_keys | determinant_keys | output_keys)
     if potential_guards > 768:
@@ -160,7 +149,7 @@ def _admit_outputs(
             )
     unique_output_guards: dict[object, tuple[int, int, int]] = {}
     for value, size in sizes.items():
-        identity = _output_denominator_identity(dag, value)
+        identity = _denominator_guard_identity(dag, value)
         if identity is not None:
             unique_output_guards.setdefault(identity, size)
     guards = (
@@ -204,7 +193,10 @@ def build_plan(
             "covariant derivative exceeds the dense component representation budget",
         )
     connection_plan: ConnectionPlan = build_connection_plan(
-        metric, admission_reject=_covariant_reject, label="covariant derivative"
+        metric,
+        admission_reject=_covariant_reject,
+        label="covariant derivative",
+        singular_metric=_covariant_singular_metric,
     )
     dag = connection_plan.dag
     axes = tuple(range(dimension))

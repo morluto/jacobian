@@ -29,6 +29,91 @@ def singular() -> OperationDomainValidationError:
     )
 
 
+def _node_guard_key(dag: Dag, index: int) -> object:
+    """Identify one DAG polynomial node for locus-cap accounting."""
+
+    source = dag.nodes[index].source
+    if source is not None:
+        return _polynomial_key(source)
+    return ("dag-node", index)
+
+
+def _remaining_denominator_factors(
+    dag: Dag, value: Expression
+) -> tuple[list[tuple[int, int]], list[tuple[int, int]]]:
+    numerators = Counter(value.numerator)
+    remaining: list[tuple[int, int]] = []
+    remaining_numerator: list[tuple[int, int]] = []
+    for index, multiplicity in sorted(Counter(value.denominator).items()):
+        if not any(dag.nodes[index].bound.degrees):
+            continue
+        leftover = multiplicity - min(multiplicity, numerators.get(index, 0))
+        if leftover:
+            remaining.append((index, leftover))
+    for index, multiplicity in sorted(numerators.items()):
+        if not any(dag.nodes[index].bound.degrees):
+            continue
+        leftover = multiplicity - min(
+            multiplicity, Counter(value.denominator).get(index, 0)
+        )
+        if leftover:
+            remaining_numerator.append((index, leftover))
+    return remaining, remaining_numerator
+
+
+def _powered_monomial_key(
+    source: SparseRationalPolynomial, multiplicity: int
+) -> object | None:
+    if len(source.terms) != 1:
+        return None
+    exponents = tuple(degree * multiplicity for degree in source.terms[0].exponents)
+    coefficient = source.terms[0].coefficient.as_fraction() ** multiplicity
+    return (
+        (
+            exponents,
+            format_canonical_integer(coefficient.numerator),
+            format_canonical_integer(coefficient.denominator),
+        ),
+    )
+
+
+def _denominator_guard_identity(dag: Dag, value: Expression) -> object | None:
+    """Identify one retained output denominator after cancelling shared nodes.
+
+    Sourced remaining factors reuse inherited polynomial keys, including a
+    monomial raised to its leftover multiplicity so ``1/x`` mapping to
+    ``2/x³`` can share the inherited ``x³`` guard. Remaining numerator nodes
+    keep independently normalized outputs distinct when the worker cancels
+    different algebraic factors from the same DAG denominator copies.
+    """
+
+    if not _has_nonconstant_denominator(dag, value):
+        return None
+    factors, remaining_numerator = _remaining_denominator_factors(dag, value)
+    if not factors:
+        return None
+    remaining_numerator_identity = tuple(remaining_numerator)
+    if len(factors) == 1:
+        index, multiplicity = factors[0]
+        source = dag.nodes[index].source
+        if source is not None:
+            powered = _powered_monomial_key(source, multiplicity)
+            if powered is not None:
+                return powered
+            if multiplicity == 1:
+                return _polynomial_key(source)
+            return (_polynomial_key(source), multiplicity)
+        return _node_guard_key(dag, index)
+    return (
+        "canonical-result-denominator",
+        tuple(
+            (_node_guard_key(dag, index), multiplicity)
+            for index, multiplicity in factors
+        ),
+        remaining_numerator_identity,
+    )
+
+
 def _has_nonconstant_denominator(dag: Dag, value: Expression) -> bool:
     """Return whether an expression carries a genuine polynomial denominator.
 
@@ -97,6 +182,7 @@ def build_connection_plan(
     *,
     admission_reject: Callable[[str, str], NoReturn] | None = None,
     label: str | None = None,
+    singular_metric: Callable[[], OperationDomainValidationError] | None = None,
 ) -> ConnectionPlan:
     n = len(metric.tensor.coordinate_axis)
     dag = Dag(n, reject=admission_reject, label=label)
@@ -104,7 +190,7 @@ def build_connection_plan(
     axes = tuple(range(n))
     det = _determinant(dag, entries, n, axes, axes)
     if not det.scalar:
-        raise singular()
+        raise (singular_metric or singular)()
     inverse = tuple(
         dag.multiply(
             Expression(Fraction((-1) ** (i + j))),

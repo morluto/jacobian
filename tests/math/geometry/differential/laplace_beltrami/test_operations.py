@@ -13,7 +13,10 @@ from jacobian.math.geometry.differential.laplace_beltrami import (
     laplace_beltrami,
 )
 from jacobian.math.geometry.differential.metrics import RationalCoordinateMetric
-from jacobian.math.geometry.differential.values import RationalCoordinateTensor
+from jacobian.math.geometry.differential.values import (
+    RationalCoordinateTensor,
+    canonical_locus_guards,
+)
 from jacobian.math.polynomials._conversions import (
     rational_function_from_sympy,
     rational_function_to_sympy,
@@ -110,8 +113,45 @@ def test_shared_deadline_is_honored() -> None:
 def test_identically_singular_metric_rejects_before_cancellation() -> None:
     x = symbols("x")
     metric = _metric((1, x, x, x**2), ("x", "y"))
-    with pytest.raises(OperationDomainValidationError, match="identically zero"):
+    with pytest.raises(
+        OperationDomainValidationError, match="identically zero"
+    ) as rejected:
         laplace_beltrami(metric, _scalar(x, ("x", "y")))
+    assert rejected.value.errors()[0]["type"].endswith(
+        "laplace_beltrami.singular_metric"
+    )
+
+
+def test_structurally_zero_metric_uses_the_laplace_domain_code() -> None:
+    metric = _metric((0,), ("x",))
+    with pytest.raises(
+        OperationDomainValidationError, match="identically zero"
+    ) as rejected:
+        laplace_beltrami(metric, _scalar(1, ("x",)))
+    assert rejected.value.errors()[0]["type"].endswith(
+        "laplace_beltrami.singular_metric"
+    )
+
+
+def test_result_denominator_reuses_inherited_monomial_guards() -> None:
+    x = symbols("x")
+    axis = ("x",)
+    x_poly = _scalar(x, axis).numerator
+    x3_poly = _scalar(x**3, axis).numerator
+    fillers = tuple(_scalar(x + offset, axis).numerator for offset in range(1, 767))
+    guards = canonical_locus_guards((x_poly, x3_poly, *fillers), variable_count=1)
+    assert len(guards) == 768
+    metric = RationalCoordinateMetric(
+        tensor=RationalCoordinateTensor(
+            coordinate_axis=axis,
+            variance=("COVARIANT", "COVARIANT"),
+            components=_metric((1,), axis).tensor.components,
+            retained_nonzero_denominators=guards,
+        )
+    )
+    result = laplace_beltrami(metric, _scalar(1 / x, axis))
+    assert len(result.retained_nonzero_denominators) == 768
+    assert rational_function_to_sympy(result.value) == 2 / x**3
 
 
 def test_nonreduced_scalar_is_a_domain_error_before_admission() -> None:

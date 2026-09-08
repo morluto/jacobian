@@ -16,7 +16,10 @@ from jacobian.math.polynomials.rational_functions._bounds import (
     FractionBound,
     RationalFunctionBoundLimits,
     _canonical_coefficient_digits,
-    _dense_term_bound,
+    _total_degree_term_bound,
+)
+from jacobian.math.polynomials.rational_functions.gradient._gcd_process import (
+    DerivativeGcdFactor,
 )
 from jacobian.math.polynomials.rational_functions.gradient.operations import (
     _admit_general_factors,
@@ -32,6 +35,7 @@ from jacobian.math.polynomials.rational_functions.maps._models import (
     RationalFunctionMapJacobian,
 )
 from jacobian.math.polynomials.rational_functions.values import RationalFunctionMap
+from jacobian.math.polynomials.values import RationalFunction
 
 
 def _reject(reason: str, message: str) -> NoReturn:
@@ -89,7 +93,9 @@ def _general_allocation(bound: FractionBound, digits: int) -> tuple[int, int]:
     terms = sum(
         polynomial.terms
         if denominator_is_unit
-        else _dense_term_bound(polynomial.degrees)
+        else min(polynomial.terms, _total_degree_term_bound(polynomial))
+        if polynomial.proven_cancellation_support
+        else _total_degree_term_bound(polynomial)
         for polynomial in (bound.numerator, bound.denominator)
     )
     # A rational coefficient has two integers; log2(10) < 4.
@@ -97,14 +103,14 @@ def _general_allocation(bound: FractionBound, digits: int) -> tuple[int, int]:
 
 
 def _charge_and_build_general_row(
-    component: object,
+    component: RationalFunction,
     admitted_bounds: tuple[FractionBound, ...],
     ledger: _Ledger,
     output_allocation: _Allocation,
-    factor_cache: dict[bytes, object],
-    general_rows: dict[bytes, tuple[object, ...]],
+    factor_cache: dict[bytes, tuple[DerivativeGcdFactor, ...]],
+    general_rows: dict[bytes, tuple[RationalFunction, ...]],
     key: bytes,
-) -> tuple[object, ...]:
+) -> tuple[RationalFunction, ...]:
     factors = factor_cache.get(key)
     if factors is None:
         factors = _admit_general_factors(component, admitted_bounds)
@@ -184,9 +190,9 @@ def jacobian_matrix(source: RationalFunctionMap) -> RationalFunctionMapJacobian:
             plans.append(None)
             general_bounds.append(bounds)
     entries = []
-    general_rows: dict[bytes, tuple[object, ...]] = {}
-    monomial_rows: dict[bytes, tuple[object, ...]] = {}
-    factor_cache: dict[bytes, object] = {}
+    general_rows: dict[bytes, tuple[RationalFunction, ...]] = {}
+    monomial_rows: dict[bytes, tuple[RationalFunction, ...]] = {}
+    factor_cache: dict[bytes, tuple[DerivativeGcdFactor, ...]] = {}
     for component, monomial_plan, admitted_bounds in zip(
         source.components, plans, general_bounds, strict=True
     ):

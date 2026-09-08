@@ -87,26 +87,73 @@ def _component_identity(component: RationalFunction) -> bytes:
 def _equal_inner_substitution_vanishes(
     polynomial: SparseRationalPolynomial,
     inner_components: tuple[RationalFunction, ...],
+    ledger: _Ledger,
 ) -> bool:
-    """Return whether identifying equal inner coordinates cancels the polynomial."""
+    """Return whether scalar-equivalent inner coordinates cancel the polynomial."""
 
     if not polynomial.terms or len(inner_components) != len(
         polynomial.terms[0].exponents
     ):
         return False
-    identities = [_component_identity(component) for component in inner_components]
-    representative = {}
+    identities: list[tuple[bytes, object]] = []
+    factors: list[Fraction] = []
+    for component in inner_components:
+        numerator = component.numerator
+        denominator = encode_strict_json(component.denominator.model_dump(mode="json"))
+        key: tuple[bytes, object]
+        if not numerator.terms:
+            key = (denominator, ())
+            factor = Fraction(1)
+        else:
+            pivot = numerator.terms[0].coefficient.as_fraction()
+            pivot_bits = _bits_for_fraction(pivot)
+            source_bits = sum(
+                _bits_for_fraction(term.coefficient.as_fraction())
+                for term in numerator.terms
+            )
+            estimated = source_bits + pivot_bits
+            estimated += sum(
+                _bits_for_fraction(term.coefficient.as_fraction()) + pivot_bits + 1
+                for term in numerator.terms
+            )
+            if ledger.work + estimated > MAX_COMPOSITION_WORK:
+                identities.append((denominator, _component_identity(component)))
+                factors.append(Fraction(1))
+                continue
+            ledger.charge("multiplication", estimated)
+            shape = tuple(
+                (
+                    term.exponents,
+                    term.coefficient.as_fraction() / pivot,
+                )
+                for term in numerator.terms
+            )
+            key = (denominator, shape)
+            factor = pivot
+        identities.append(key)
+        factors.append(factor)
+        ledger.charge("recognition", max(1, len(numerator.terms)))
+    representative: dict[tuple[bytes, object], int] = {}
     for index, identity in enumerate(identities):
         representative.setdefault(identity, index)
     collapsed: dict[tuple[int, ...], Fraction] = {}
     for term in polynomial.terms:
         exponents = [0] * len(term.exponents)
+        coefficient = term.coefficient.as_fraction()
         for axis, degree in enumerate(term.exponents):
-            exponents[representative[identities[axis]]] += degree
+            representative_axis = representative[identities[axis]]
+            exponents[representative_axis] += degree
+            if degree:
+                coefficient_bits = _bits_for_fraction(coefficient)
+                factor_bits = _bits_for_fraction(factors[axis])
+                ledger.charge(
+                    "multiplication",
+                    degree * (coefficient_bits + factor_bits + 1),
+                )
+            coefficient *= factors[axis] ** degree
         slot = tuple(exponents)
-        collapsed[slot] = (
-            collapsed.get(slot, Fraction(0)) + term.coefficient.as_fraction()
-        )
+        ledger.charge("addition", _bits_for_fraction(coefficient) + 1)
+        collapsed[slot] = collapsed.get(slot, Fraction(0)) + coefficient
     return all(coefficient == 0 for coefficient in collapsed.values())
 
 
@@ -567,7 +614,7 @@ def compose_maps(  # noqa: C901
             ledger,
         )
         if _equal_inner_substitution_vanishes(
-            outer_component.denominator, inner.components
+            outer_component.denominator, inner.components, ledger
         ):
             _reject_undefined_outer_denominator()
         _check_raw_exponents(raw_denominator_bound)

@@ -101,6 +101,35 @@ def _remove_common_monomial(
     return divide(numerator), divide(denominator)
 
 
+def _normalize_pair(
+    numerator: Any,
+    denominator: Any,
+    factor: Any,
+    variable_count: int,
+) -> dict[str, Any]:
+    """Cancel an admitted derivative factor and return a canonical pair."""
+    if factor is not None and not factor.is_zero and not factor.is_one:
+        numerator = numerator.exquo(factor)
+        denominator = denominator.exquo(factor)
+    numerator, denominator = _remove_common_monomial(
+        numerator, denominator, variable_count
+    )
+    if numerator.is_zero:
+        one = [0] * variable_count + ["1", "1"]
+        return {
+            "numerator": [],
+            "denominator": [one],
+        }
+    numerator, denominator = numerator.cancel(denominator, include=True)
+    leading = denominator.LC()
+    numerator = numerator.mul_ground(1 / leading)
+    denominator = denominator.mul_ground(1 / leading)
+    return {
+        "numerator": _records(numerator, variable_count),
+        "denominator": _records(denominator, variable_count),
+    }
+
+
 def _run(payload: dict[str, Any]) -> dict[str, Any]:
     from sympy import symbols
 
@@ -167,28 +196,52 @@ def _run(payload: dict[str, Any]) -> dict[str, Any]:
             raise ValueError("malformed kernel request")
         numerator = _polynomial(numerator_records, variable_count, generators)
         denominator = _polynomial(denominator_records, variable_count, generators)
-        if factor_records:
-            factor = _polynomial(factor_records, variable_count, generators)
-            if not factor.is_zero and not factor.is_one:
-                numerator = numerator.exquo(factor)
-                denominator = denominator.exquo(factor)
-        numerator, denominator = _remove_common_monomial(
-            numerator, denominator, variable_count
+        factor = (
+            _polynomial(factor_records, variable_count, generators)
+            if factor_records
+            else None
         )
-        if numerator.is_zero:
-            one = [0] * variable_count + ["1", "1"]
-            return {
-                "numerator": [],
-                "denominator": [one],
-            }
-        numerator, denominator = numerator.cancel(denominator, include=True)
-        leading = denominator.LC()
-        numerator = numerator.mul_ground(1 / leading)
-        denominator = denominator.mul_ground(1 / leading)
-        return {
-            "numerator": _records(numerator, variable_count),
-            "denominator": _records(denominator, variable_count),
-        }
+        return _normalize_pair(numerator, denominator, factor, variable_count)
+    if task == "differentiate":
+        if set(payload) != {
+            "task",
+            "variable_count",
+            "axis",
+            "numerator",
+            "denominator",
+            "factor",
+        }:
+            raise ValueError("malformed kernel request")
+        axis = payload["axis"]
+        numerator_records = payload["numerator"]
+        denominator_records = payload["denominator"]
+        factor_records = payload["factor"]
+        if (
+            type(axis) is not int
+            or not 0 <= axis < variable_count
+            or not isinstance(numerator_records, list)
+            or not isinstance(denominator_records, list)
+            or not isinstance(factor_records, list)
+        ):
+            raise ValueError("malformed kernel request")
+        numerator = _polynomial(numerator_records, variable_count, generators)
+        denominator = _polynomial(denominator_records, variable_count, generators)
+        factor = (
+            _polynomial(factor_records, variable_count, generators)
+            if factor_records
+            else None
+        )
+        generator = generators[axis]
+        derivative_numerator = numerator.diff(
+            generator
+        ) * denominator - numerator * denominator.diff(generator)
+        derivative_denominator = denominator * denominator
+        return _normalize_pair(
+            derivative_numerator,
+            derivative_denominator,
+            factor,
+            variable_count,
+        )
     raise ValueError("malformed kernel request")
 
 

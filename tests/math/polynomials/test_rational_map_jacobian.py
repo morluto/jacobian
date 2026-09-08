@@ -367,3 +367,33 @@ def test_repeated_linear_power_quotients_use_reduced_row_allocation() -> None:
     )
     result = jacobian_matrix(source)
     assert result.entries[0][0] == result.entries[1][0]
+
+
+def test_repeated_bivariate_linear_powers_retain_proven_sparse_support() -> None:
+    x, y = symbols("x y")
+    axes = ("x", "y")
+    component = rational_function_from_sympy(1 / (x + y) ** 33, axes)
+    source = RationalFunctionMap(
+        source_variables=axes,
+        target_coordinates=tuple(f"u{i}" for i in range(27)),
+        components=(component,) * 27,
+    )
+    result = jacobian_matrix(source)
+    expected = rational_function_from_sympy(-33 / (x + y) ** 34, axes)
+    assert result.entries == ((expected, expected),) * 27
+    retained_terms = sum(
+        len(value.numerator.terms) + len(value.denominator.terms)
+        for value in (
+            *result.source.components,
+            *(v for row in result.entries for v in row),
+        )
+    )
+    assert retained_terms == 2_889
+    decoded = RationalFunctionMapJacobian.model_validate_json(result.model_dump_json())
+    consumer = RationalFunctionMap(
+        source_variables=decoded.column_axis,
+        target_coordinates=("dx", "dy"),
+        components=decoded.entries[0],
+    )
+    second = rational_function_from_sympy(33 * 34 / (x + y) ** 35, axes)
+    assert jacobian_matrix(consumer).entries == ((second, second),) * 2

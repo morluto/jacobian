@@ -338,8 +338,38 @@ def normalize_admitted_fraction(
     )
 
 
+def differentiate_admitted_fraction(
+    source: RationalFunction,
+    axis: int,
+    factor_records: tuple[list[Any], ...] = (),
+) -> RationalFunction:
+    """Differentiate and normalize one admitted fraction in the GCD worker."""
+    variable_count = len(source.variables)
+    response = _run_kernel_worker(
+        {
+            "task": "differentiate",
+            "variable_count": variable_count,
+            "axis": axis,
+            "numerator": _polynomial_payload(source.numerator),
+            "denominator": _polynomial_payload(source.denominator),
+            "factor": [list(record) for record in factor_records],
+        },
+        stage="gradient kernel",
+    )
+    if set(response) != {"numerator", "denominator"}:
+        raise RuntimeError(
+            "bounded rational-gradient kernel worker returned malformed output"
+        )
+    return RationalFunction._from_kernel(
+        variables=source.variables,
+        numerator=_sparse_from_records(response["numerator"], variable_count),
+        denominator=_sparse_from_records(response["denominator"], variable_count),
+    )
+
+
 __all__ = [
     "DerivativeGcdFactor",
+    "differentiate_admitted_fraction",
     "forced_denominator_derivative_gcds",
     "normalize_admitted_fraction",
     "source_is_coprime",

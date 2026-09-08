@@ -306,7 +306,8 @@ def test_polar_metric_component_gradient() -> None:
 
 
 def test_inactive_axis_of_a_nonmonomial_reciprocal_is_canonical_zero() -> None:
-    x, y = symbols("x y")
+    x, _y = symbols("x y")
     result = _identity(rational_function_from_sympy(1 / (x + 1), ("x", "y")))
     assert not result.partial_derivatives[1].numerator.terms
+    assert result.partial_derivatives[1].denominator.terms[0].coefficient.num == 1
     assert result.partial_derivatives[1].denominator.terms[0].exponents == (0, 0)

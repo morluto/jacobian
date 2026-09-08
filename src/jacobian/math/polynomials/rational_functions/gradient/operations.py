@@ -54,6 +54,7 @@ from jacobian.math.polynomials.values import (
     RationalFunction,
     RationalPolynomialTerm,
     SparseRationalPolynomial,
+    _rational_function_one,
     require_canonical_rational_function,
 )
 
@@ -275,27 +276,43 @@ def _admit_general_factors(
     )
 
 
+def _reduced_admitted_bound(
+    bound: FractionBound, factor: DerivativeGcdFactor
+) -> FractionBound:
+    """Apply the admitted exact gcd after guaranteed linear-power cancellation."""
+
+    if (
+        bound.numerator.proven_cancellation_support
+        or bound.denominator.proven_cancellation_support
+    ):
+        return bound
+    return _remove_guaranteed_common_monomial(
+        _remove_exact_common_factor(bound, factor.bound)
+    )
+
+
+def _canonical_zero(variables: tuple[str, ...]) -> RationalFunction:
+    return RationalFunction._from_kernel(
+        variables=variables,
+        numerator=SparseRationalPolynomial(terms=()),
+        denominator=_rational_function_one(len(variables)),
+    )
+
+
 def _validate_admitted_factors(
     bounds: tuple[FractionBound, ...],
     factors: tuple[DerivativeGcdFactor, ...],
     ledger: BoundsLedger,
 ) -> None:
     for bound, factor in zip(bounds, factors, strict=True):
-        if (
-            bound.numerator.proven_cancellation_support
-            or bound.denominator.proven_cancellation_support
-        ):
-            reduced = bound
-        else:
-            reduced = _remove_guaranteed_common_monomial(
-                _remove_exact_common_factor(bound, factor.bound)
-            )
+        reduced = _reduced_admitted_bound(bound, factor)
         _validate_canonical_result_bound(reduced, ledger, work_bound=reduced)
 
 
 def _general_gradient_admitted(
     function: RationalFunction,
     factors: tuple[DerivativeGcdFactor, ...],
+    bounds: tuple[FractionBound, ...],
 ) -> tuple[RationalFunction, ...]:
     """Recognize and differentiate after the caller's whole-profile admission."""
     request_checkpoint("after rational gradient source recognition")
@@ -306,7 +323,9 @@ def _general_gradient_admitted(
         function.denominator, function.variables
     )
     return tuple(
-        _normalize_fraction(
+        _canonical_zero(function.variables)
+        if bounds[axis].is_zero
+        else _normalize_fraction(
             *_differentiate_fraction(numerator, denominator, axis),
             function.variables,
             factors[axis].records,
@@ -335,7 +354,7 @@ def gradient(function: RationalFunction) -> RationalFunctionGradient:
         bounds = _admit_general_gradient(function, ledger)
         factors = _admit_general_factors(function)
         _validate_admitted_factors(bounds, factors, ledger)
-        derivatives = _general_gradient_admitted(function, factors)
+        derivatives = _general_gradient_admitted(function, factors, bounds)
     result = RationalFunctionGradient(
         source=function, variables=function.variables, partial_derivatives=derivatives
     )

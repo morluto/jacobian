@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from fractions import Fraction
-from math import gcd, lcm
+from math import comb, gcd, isqrt, lcm
 from typing import Literal, NoReturn, Protocol
 
 from jacobian.canonical import format_canonical_integer
@@ -59,6 +59,7 @@ class PolynomialBound:
 
     terms: int
     degrees: tuple[int, ...]
+    total_degree: int
     minimum_exponents: tuple[int, ...]
     coefficient_digits: int
     rational_content: Fraction
@@ -87,6 +88,19 @@ def _dense_term_bound(degrees: tuple[int, ...], *, cap: int | None = None) -> in
     return result
 
 
+def _total_degree_term_bound(bound: PolynomialBound) -> int:
+    """Bound support using both coordinate degrees and total degree.
+
+    Every factor has at most the source's total and coordinate degrees.
+    Stars and bars counts all exponent vectors of total degree at most T
+    in the active variables, including the constant monomial.
+    """
+    active = sum(degree > 0 for degree in bound.degrees)
+    return min(
+        _dense_term_bound(bound.degrees), comb(bound.total_degree + active, active)
+    )
+
+
 def _polynomial_admission_work_units(
     polynomial: SparseRationalPolynomial, variable_count: int
 ) -> int:
@@ -94,7 +108,7 @@ def _polynomial_admission_work_units(
 
     Each nonzero coefficient is converted, participates in denominator/content
     reduction, is scaled and made primitive, and is inspected for height. Each
-    exponent is inspected once for the maximum and once for the minimum. The
+    exponent is inspected for the maximum, minimum, and total degree. The
     final unit prices construction of the separated rational content. Zero is
     represented by one exact ``Fraction`` construction.
     """
@@ -102,7 +116,7 @@ def _polynomial_admission_work_units(
     terms = len(polynomial.terms)
     if terms == 0:
         return 1
-    return terms * (6 + 2 * variable_count) + 1
+    return terms * (6 + 3 * variable_count) + 1
 
 
 def _polynomial_backend_conversion_work_units(bound: PolynomialBound) -> int:
@@ -123,6 +137,7 @@ def _polynomial_bound(polynomial: SparseRationalPolynomial) -> PolynomialBound:
         return PolynomialBound(
             terms=0,
             degrees=(),
+            total_degree=0,
             minimum_exponents=(),
             coefficient_digits=1,
             rational_content=Fraction(0),
@@ -148,6 +163,7 @@ def _polynomial_bound(polynomial: SparseRationalPolynomial) -> PolynomialBound:
             max(term.exponents[axis] for term in polynomial.terms)
             for axis in range(variable_count)
         ),
+        total_degree=max(sum(term.exponents) for term in polynomial.terms),
         minimum_exponents=tuple(
             min(term.exponents[axis] for term in polynomial.terms)
             for axis in range(variable_count)
@@ -164,6 +180,7 @@ def _zero_polynomial(variable_count: int) -> PolynomialBound:
     return PolynomialBound(
         terms=0,
         degrees=(0,) * variable_count,
+        total_degree=0,
         minimum_exponents=(0,) * variable_count,
         coefficient_digits=1,
         rational_content=Fraction(0),
@@ -174,6 +191,7 @@ def _one_polynomial(variable_count: int) -> PolynomialBound:
     return PolynomialBound(
         terms=1,
         degrees=(0,) * variable_count,
+        total_degree=0,
         minimum_exponents=(0,) * variable_count,
         coefficient_digits=1,
         rational_content=Fraction(1),
@@ -244,11 +262,15 @@ def _differentiate_polynomial(
 ) -> PolynomialBound:
     if source.is_zero or active_terms == 0:
         return _zero_polynomial(len(source.degrees))
-    degrees = list(source.degrees)
-    degrees[axis] -= 1
+    total_degree = source.total_degree - 1
+    degrees = tuple(
+        min(degree - int(i == axis), total_degree)
+        for i, degree in enumerate(source.degrees)
+    )
     result = PolynomialBound(
         terms=active_terms,
-        degrees=tuple(degrees),
+        degrees=degrees,
+        total_degree=total_degree,
         minimum_exponents=minimum_exponents,
         coefficient_digits=(
             source.coefficient_digits
@@ -284,6 +306,7 @@ def _multiply_polynomials(
     result = PolynomialBound(
         terms=min(pair_count, _dense_term_bound(degrees)),
         degrees=degrees,
+        total_degree=left.total_degree + right.total_degree,
         minimum_exponents=tuple(
             left_exponent + right_exponent
             for left_exponent, right_exponent in zip(
@@ -338,6 +361,7 @@ def _add_polynomials(
     result = PolynomialBound(
         terms=min(left.terms + right.terms, _dense_term_bound(degrees)),
         degrees=degrees,
+        total_degree=max(left.total_degree, right.total_degree),
         minimum_exponents=tuple(
             min(left_exponent, right_exponent)
             for left_exponent, right_exponent in zip(
@@ -460,21 +484,25 @@ def _add_fractions(
 
 
 def _factor_coefficient_digits(bound: PolynomialBound) -> int:
-    """Bound every coefficient of a rational factor of ``bound``.
+    """Bound coefficients of a primitive integral factor of ``bound``.
 
-    Clear source denominators, inject the multivariate polynomial into a
-    univariate polynomial by mixed-radix Kronecker substitution, and apply
-    Mignotte's ``2**degree * l2_norm`` integer-factor height bound.  A factor's
-    degree in each variable cannot exceed the source degree, so the mixed
-    radices introduce no carries in a factorization.
+    For an integral factor F of P, multiplicativity of Mahler measure and
+    M(P/F)>=1 give H(F)<=L(F)<=2**sum(deg_i(F))*M(F)
+    <=2**sum(deg_i(P))*||P||_2. The alternative bound
+    L(F)<=(a+1)**deg(F)*M(F), for a active variables, can be sharper.
+    See Amoroso--Mignotte, Acta Arith.
+    99 (2001), p. 1, https://doi.org/10.4064/aa99-1-1.
+    The separated rational content is handled by the caller.
     """
 
     if bound.is_zero:
         return 1
-    kronecker_degree = _dense_term_bound(bound.degrees) - 1
-    binary_factor_digits = (302 * kronecker_degree + 999) // 1000
-    norm_digits = len(format_canonical_integer(bound.terms)) + 1
-    return bound.coefficient_digits + binary_factor_digits + norm_digits + 2
+    active = sum(degree > 0 for degree in bound.degrees)
+    multiplier = min(1 << sum(bound.degrees), (active + 1) ** bound.total_degree)
+    norm_multiplier = isqrt(bound.terms - 1) + 1
+    return bound.coefficient_digits + len(
+        format_canonical_integer(multiplier * norm_multiplier)
+    )
 
 
 def _remove_guaranteed_common_monomial(bound: FractionBound) -> FractionBound:
@@ -505,6 +533,7 @@ def _remove_guaranteed_common_monomial(bound: FractionBound) -> FractionBound:
                 degree - exponent
                 for degree, exponent in zip(polynomial.degrees, common, strict=True)
             ),
+            total_degree=polynomial.total_degree - sum(common),
             minimum_exponents=tuple(
                 minimum - exponent
                 for minimum, exponent in zip(
@@ -521,6 +550,14 @@ def _remove_guaranteed_common_monomial(bound: FractionBound) -> FractionBound:
 
 
 def _canonical_coefficient_digits(bound: FractionBound) -> int:
+    """Bound monic reduction without counting integral content twice.
+
+    Write the raw pair as cN*N, cD*D with integral N,D. A primitive integral
+    common gcd G leaves integral factors A=N/G and B=D/G; their contents are
+    already included in the factor-height bounds. Canonical coefficients are
+    (cN/cD)*A_i/LC(B) and B_i/LC(B), so their rational components need only
+    the corresponding factor height and the separated content ratio.
+    """
     if bound.is_zero:
         return 1
     content_ratio = (
@@ -539,11 +576,9 @@ def _canonical_coefficient_digits(bound: FractionBound) -> int:
     )
     return max(
         len(format_canonical_integer(abs(content_ratio.numerator)))
-        + bound.numerator.coefficient_digits
-        + (0 if denominator_is_unit else numerator_factor_digits),
+        + numerator_factor_digits,
         len(format_canonical_integer(content_ratio.denominator))
-        + bound.denominator.coefficient_digits
-        + (0 if denominator_is_unit else denominator_factor_digits),
+        + denominator_factor_digits,
         denominator_factor_digits,
     )
 
@@ -563,10 +598,7 @@ def _validate_canonical_result_bound(bound: FractionBound, ledger: BoundsLedger)
                 f"{limits.label} {label} can exceed the canonical "
                 f"exponent bound {limits.result_exponent}",
             )
-        dense_terms = _dense_term_bound(
-            polynomial.degrees,
-            cap=limits.result_terms,
-        )
+        dense_terms = _total_degree_term_bound(polynomial)
         # When the denominator is the unit polynomial, there can be no
         # cancellation-induced support expansion, so the tracked sparse
         # term count is the accurate support bound.
@@ -586,6 +618,8 @@ def _validate_canonical_result_bound(bound: FractionBound, ledger: BoundsLedger)
             f"{limits.result_digits}-digit coefficient bound",
         )
     denominator_is_unit = all(degree == 0 for degree in bound.denominator.degrees)
+    # Normalization still uses the recursively dense backend. A sparse
+    # canonical support bound does not justify reducing this work charge.
     numerator_dense = (
         bound.numerator.terms
         if denominator_is_unit

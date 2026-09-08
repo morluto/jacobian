@@ -113,6 +113,23 @@ def test_multivariate_quotient_and_mixed_partial_composition() -> None:
     assert gradient(a).partial_derivatives[1] == gradient(b).partial_derivatives[0]
 
 
+@pytest.mark.parametrize("weights", [(1, 1, 1), (2, 3, 5), (1, -2, 3)])
+def test_low_total_degree_reciprocal_quadratic_power(
+    weights: tuple[int, int, int],
+) -> None:
+    x, y, z = symbols("x y z")
+    axes = (x, y, z)
+    quadratic = 1 + sum(c * v * v for c, v in zip(weights, axes, strict=True))
+    source = rational_function_from_sympy(1 / quadratic**2, ("x", "y", "z"))
+    result = _identity(source)
+    for c, v, partial in zip(weights, axes, result.partial_derivatives, strict=True):
+        expected = rational_function_from_sympy(
+            -4 * c * v / quadratic**3, source.variables
+        )
+        assert partial == expected
+        assert len(partial.denominator.terms) == 20
+
+
 @pytest.mark.parametrize("axis", [(), ("x",), ("x", "y")])
 @pytest.mark.parametrize("constant", [0, 3, 10**127])
 def test_constants_and_empty_axes(axis: tuple[str, ...], constant: int) -> None:

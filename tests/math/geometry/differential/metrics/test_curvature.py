@@ -446,8 +446,8 @@ def test_conformal_flat_metric_counts_complete_denominator_powers() -> None:
             variance=source.tensor.variance,
             components=source.tensor.components,
             retained_nonzero_denominators=canonical_locus_guards(
-                extra
-                + (
+                (
+                    *extra,
                     rational_function_from_sympy(x + 766, ("x", "y")).numerator,
                 ),
                 variable_count=2,

@@ -50,7 +50,7 @@ def test_timeout_is_unknown_without_negative_claim(
         (("a", "b"), ("a", "c"), ("a", "d"), ("b", "c"), ("b", "d"), ("c", "d")),
     )
     request = ChromaticBipartitionRequest(graph=source, s=2, t=2)
-    monkeypatch.setattr(operation, "remaining_ms", lambda started, seconds: 0)
+    monkeypatch.setattr(operation, "remaining_ms", lambda *_args: 0)
     result = find_chromatic_bipartition(request)
     assert result.status in {"SPLIT", "UNKNOWN"}
     if result.status == "UNKNOWN":
@@ -76,7 +76,7 @@ def test_worker_noncompletion_is_unknown(monkeypatch: pytest.MonkeyPatch) -> Non
         stderr = b""
 
     monkeypatch.setattr(
-        operation, "run_bounded_process", lambda *args, **kwargs: TimedOut()
+        operation, "run_bounded_process", lambda *_args, **_kwargs: TimedOut()
     )
     result = operation.find_chromatic_bipartition(
         ChromaticBipartitionRequest(graph=source, s=1, t=1)

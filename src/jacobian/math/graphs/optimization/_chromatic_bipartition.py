@@ -297,8 +297,8 @@ CHROMATIC_BIPARTITION_OPERATION = MathTool(
     operation_id="graph.chromatic_bipartition.find",
     title="Find a chromatic bipartition",
     description=(
-        "Decide whether a bounded simple graph has a canonical vertex bipartition "
-        "whose two induced subgraphs have chromatic numbers at least s and t. "
+        "Search a bounded simple graph for a canonical vertex bipartition whose "
+        "two induced subgraphs have chromatic numbers at least s and t. "
         "Return a witness, an exact NO_SPLIT after complete search, or UNKNOWN "
         "when the admitted shared exact-search budget is unresolved."
     ),

@@ -206,6 +206,18 @@ def test_existing_operation_ids_accept_quadratic_sources_and_retain_types() -> N
     assert tool.result_type.model_validate_json(result.model_dump_json()) == result
 
 
+def test_256_digit_squared_distance_is_admitted() -> None:
+    source = configuration(
+        (
+            (value(0, d=2), value(0, d=2)),
+            (value(9 * 10**127, d=2), value(0, d=2)),
+        ),
+        d=2,
+    )
+    result = distance_profile(source)
+    assert result.entries[0].squared_distance.rational_part.num == 81 * 10**254
+
+
 def test_expired_deadline_is_preserved() -> None:
     source = configuration(((value(0), value(0)), (value(1), value(0))))
     with request_execution(time.monotonic()):

@@ -37,6 +37,7 @@ from jacobian.math.number_theory.algebraic_numbers.quadratic import (
 class _Pair:
     indices: tuple[int, int]
     differences: tuple[Fraction, Fraction, Fraction, Fraction]
+    squared: tuple[Fraction, Fraction]
 
 
 def _reject() -> None:
@@ -96,21 +97,20 @@ def _admit(
         )
         radical = 2 * (a * b + c * e)
         if retain_values:
-            rational_bits = max(
+            limit = 10**256
+            if any(
+                abs(component.numerator) >= limit or component.denominator >= limit
+                for component in (rational, radical)
+            ):
+                _reject()
+            output_bits += max(
                 abs(rational.numerator).bit_length(),
                 rational.denominator.bit_length(),
-            )
-            radical_bits = max(
+            ) + max(
                 abs(radical.numerator).bit_length(),
                 radical.denominator.bit_length(),
             )
-            if any(
-                (bound * 30103 + 99999) // 100000 > 256
-                for bound in (rational_bits, radical_bits)
-            ):
-                _reject()
-            output_bits += rational_bits + radical_bits
-        rows.append(_Pair((i, j), (a, b, c, e)))
+        rows.append(_Pair((i, j), (a, b, c, e), (rational, radical)))
     if retain_values and output_bits > 16_777_216:
         raise OperationResourceAdmissionError(
             location=("configuration",),
@@ -142,9 +142,7 @@ def _profile(
     classes: dict[tuple[Fraction, Fraction], list[tuple[int, int]]] = {}
     for row in plan:
         request_checkpoint("during exact quadratic distance expansion")
-        a, b, c, e = row.differences
-        key = (a * a + d * b * b + c * c + d * e * e, 2 * (a * b + c * e))
-        classes.setdefault(key, []).append(row.indices)
+        classes.setdefault(row.squared, []).append(row.indices)
 
     def order(left: tuple[Fraction, Fraction], right: tuple[Fraction, Fraction]) -> int:
         return _sign(left[0] - right[0], left[1] - right[1], d)
@@ -190,8 +188,7 @@ def quadratic_distance_graph(
         edges = []
         for row in plan:
             request_checkpoint("during exact quadratic distance selection")
-            a, b, c, e = row.differences
-            if (a * a + d * b * b + c * c + d * e * e, 2 * (a * b + c * e)) == wanted:
+            if row.squared == wanted:
                 edges.append(row.indices)
         return DistanceGraphResult[QuadraticPointConfiguration, RealQuadraticValue](
             configuration=configuration,

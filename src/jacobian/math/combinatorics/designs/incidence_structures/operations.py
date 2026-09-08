@@ -2,9 +2,16 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from typing import Literal
 
+from jacobian._execution import (
+    bind_request_deadline,
+    current_request_execution,
+    request_checkpoint,
+    request_execution,
+)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.designs.incidence_structures._kernel import (
     containment_profile_data,
@@ -28,8 +35,10 @@ from jacobian.math.combinatorics.designs.incidence_structures._models import (
     _require_containment_profile_admitted,
     _require_incidence_trade_admitted,
 )
+from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
+    FiniteHypergraph,
+)
 from jacobian.math.matrices.values import IntegerMatrix
-from jacobian.math.combinatorics.finite_structures.hypergraphs._models import FiniteHypergraph
 
 
 def containment_profile(
@@ -37,6 +46,15 @@ def containment_profile(
 ) -> ContainmentProfileResult:
     """Return every fixed-order subset containment multiplicity exactly."""
 
+    execution = current_request_execution()
+    if execution is None:
+        with request_execution(time.monotonic()):
+            return containment_profile(incidence, order)
+    deadline = execution.started_at + 60
+    if execution.deadline is not None:
+        deadline = min(deadline, execution.deadline)
+    bind_request_deadline(deadline)
+    request_checkpoint("before containment profile admission")
     if not isinstance(incidence, (IncidenceStructure, FiniteHypergraph)):
         raise TypeError("incidence must be an IncidenceStructure or FiniteHypergraph")
     if type(order) is not int:
@@ -49,6 +67,7 @@ def containment_profile(
             code=f"incidence_structure.{exc.reason}",
             message=str(exc),
         ) from exc
+    request_checkpoint("after containment profile admission")
     return ContainmentProfileResult._from_kernel(
         incidence, order, containment_profile_data(incidence, order)
     )

@@ -15,8 +15,13 @@ from pydantic import (
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
+    MAX_EDGES as MAX_HYPERGRAPH_EDGES,
+)
+from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
+    FiniteHypergraph,
+)
 from jacobian.math.matrices.values import IntegerMatrix
-from jacobian.math.combinatorics.finite_structures.hypergraphs._models import FiniteHypergraph, MAX_EDGES as MAX_HYPERGRAPH_EDGES
 
 MAX_POINTS = 100
 MAX_BLOCKS = 100
@@ -153,6 +158,15 @@ def _require_containment_profile_admitted(
             "containment_work_budget_exceeded",
             "containment profile exceeds the execution work budget",
         )
+    # Reserve the echoed source, subset labels, histogram, and multiplicity
+    # integers before constructing the complete profile.
+    blocks = _containment_axes(incidence)[1]
+    source_bytes = sum(len(label.encode("utf-8")) for label in _containment_axes(incidence)[0])
+    source_bytes += sum(len(label.encode("utf-8")) for block in blocks for label in block)
+    source_bytes += len(blocks) * 8
+    output_units = subset_count * (order * 8 + 16) + (len(blocks) + 1) * 32 + source_bytes
+    if output_units > 2**26:
+        raise IncidenceStructureAdmissionError("containment_output_budget_exceeded", "containment profile output exceeds its allocation budget")
 
 
 def _require_incidence_trade_admitted(

@@ -134,8 +134,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="incidence.containment_profiles.compute",
         title="Compute t-subset containment multiplicity profiles",
-        description="For a bounded order t, return the finite map from every t-subset "
-        "of points to the number of blocks containing it, plus the "
+        description="For a bounded order t (including t=0), return the finite map from every t-subset "
+        "of points in an incidence structure or finite hypergraph to the number of blocks containing it, plus the "
         "multiplicity histogram and whether the profile is constant.",
         request_type=ContainmentProfileRequest,
         result_type=ContainmentProfileResult,

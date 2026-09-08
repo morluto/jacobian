@@ -1,25 +1,49 @@
+import time
 from fractions import Fraction
 
+import pytest
+
 from jacobian._exact import CanonicalRational
+from jacobian._execution import bind_request_deadline, request_execution
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.combinatorics.finite_structures.hypergraphs import FiniteHypergraph
+from jacobian.math.probability._distribution import FiniteDistributionAtom
 from jacobian.math.probability.hypergraph_edge_count_moments import (
     HypergraphEdgeCountMomentsResult,
     compute_hypergraph_edge_count_moments,
 )
+from jacobian.math.probability.operations import raw_moment
 
 
-def run(vertices: tuple[str, ...], edges: tuple[tuple[str, tuple[str, ...]], ...], p: Fraction) -> HypergraphEdgeCountMomentsResult:
-    return compute_hypergraph_edge_count_moments(FiniteHypergraph(vertices=vertices, edges=edges), CanonicalRational.from_fraction(p))
+def run(
+    vertices: tuple[str, ...],
+    edges: tuple[tuple[str, tuple[str, ...]], ...],
+    p: Fraction,
+) -> HypergraphEdgeCountMomentsResult:
+    return compute_hypergraph_edge_count_moments(
+        FiniteHypergraph(vertices=vertices, edges=edges),
+        CanonicalRational.from_fraction(p),
+    )
 
-def oracle(vertices: tuple[str, ...], edges: tuple[tuple[str, tuple[str, ...]], ...], p: Fraction) -> tuple[Fraction, Fraction, Fraction]:
+
+def oracle(
+    vertices: tuple[str, ...],
+    edges: tuple[tuple[str, tuple[str, ...]], ...],
+    p: Fraction,
+) -> tuple[Fraction, Fraction, Fraction]:
     first = second = Fraction(0)
     for mask in range(1 << len(vertices)):
         retained = {v for i, v in enumerate(vertices) if mask >> i & 1}
-        z = sum(members_set <= retained for _, members in edges for members_set in (set(members),))
+        z = sum(
+            members_set <= retained
+            for _, members in edges
+            for members_set in (set(members),)
+        )
         probability = p ** len(retained) * (1 - p) ** (len(vertices) - len(retained))
         first += probability * z
         second += probability * z * z
     return first, second, second - first * first
+
 
 def test_exhaustive_subset_oracle_and_overlap_counts() -> None:
     vertices = ("a", "b", "c", "d")
@@ -27,17 +51,36 @@ def test_exhaustive_subset_oracle_and_overlap_counts() -> None:
     for p in (Fraction(0), Fraction(1), Fraction(1, 2), Fraction(2, 3)):
         result = run(vertices, edges, p)
         expected = oracle(vertices, edges, p)
-        assert tuple(value.as_fraction() for value in (result.edge_count_expectation, result.edge_count_second_moment, result.edge_count_variance)) == expected
-    rows = {(row.edge_size_min, row.edge_size_max, row.intersection_size): row.pair_count for row in run(vertices, edges, Fraction(1, 2)).overlap_profile}
+        assert (
+            tuple(
+                value.as_fraction()
+                for value in (
+                    result.edge_count_expectation,
+                    result.edge_count_second_moment,
+                    result.edge_count_variance,
+                )
+            )
+            == expected
+        )
+    rows = {
+        (row.edge_size_min, row.edge_size_max, row.intersection_size): row.pair_count
+        for row in run(vertices, edges, Fraction(1, 2)).overlap_profile
+    }
     assert rows[(2, 2, 2)] == 1  # duplicate host pair
     assert rows[(1, 2, 0)] == 3
 
+
 def test_empty_edges_and_disjoint_nonuniform_profile() -> None:
-    result = run(("a", "b", "c"), (("empty", ()), ("e1", ("a",)), ("e2", ("b", "c"))), Fraction(1, 2))
+    result = run(
+        ("a", "b", "c"),
+        (("empty", ()), ("e1", ("a",)), ("e2", ("b", "c"))),
+        Fraction(1, 2),
+    )
     assert result.edge_count_expectation.as_fraction() == Fraction(7, 4)
     assert result.edge_count_variance.as_fraction() == Fraction(7, 16)
     assert result.overlap_profile[0].intersection_size == 0
     assert result.overlap_profile[0].covariance.as_fraction() == 0
+
 
 def test_accepted_large_compact_profile() -> None:
     vertices = tuple(f"v{i}" for i in range(101))
@@ -45,4 +88,50 @@ def test_accepted_large_compact_profile() -> None:
     result = run(vertices, edges, Fraction(1, 2))
     assert len(result.overlap_profile) == 1
     assert result.overlap_profile[0].pair_count == 5050
-    assert len(result.model_dump_json()) > 0
+    restored = HypergraphEdgeCountMomentsResult.model_validate_json(
+        result.model_dump_json()
+    )
+    assert restored == result
+    assert (
+        restored.edge_count_second_moment.as_fraction()
+        >= restored.edge_count_expectation.as_fraction()
+    )
+    assert restored.edge_count_variance.as_fraction() >= 0
+    consumed = raw_moment(
+        (
+            FiniteDistributionAtom(
+                value=restored.edge_count_expectation,
+                probability=CanonicalRational(num=1, den=1),
+            ),
+        ),
+        1,
+    )
+    assert consumed.moment == restored.edge_count_expectation
+
+
+def test_pair_work_is_refused_before_overlap_expansion() -> None:
+    vertices = tuple(f"v{i}" for i in range(16))
+    masks = range(4501)
+    edges = tuple(
+        (
+            f"e{mask}",
+            tuple(vertices[index] for index in range(16) if mask & (1 << index)),
+        )
+        for mask in masks
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="overlap work"):
+        run(vertices, edges, Fraction(1, 2))
+
+
+def test_rational_height_and_shared_deadline_are_admitted_before_execution() -> None:
+    vertices = tuple(f"v{i}" for i in range(256))
+    edges = (("e", vertices),)
+    huge = CanonicalRational(num=1, den=10**200)
+    with pytest.raises(OperationResourceAdmissionError, match="canonical rational"):
+        compute_hypergraph_edge_count_moments(
+            FiniteHypergraph(vertices=vertices, edges=edges), huge
+        )
+    with request_execution(time.monotonic()):
+        bind_request_deadline(time.monotonic() - 1)
+        with pytest.raises(TimeoutError):
+            run(vertices, edges, Fraction(1, 2))

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from math import comb
 
@@ -11,6 +12,7 @@ from jacobian.math.combinatorics.codes.general import minimum_distance
 from jacobian.math.combinatorics.codes.general._models import (
     CoveringRadiusRequest,
     LinearCodeRequest,
+    WeightDistributionResult,
 )
 from jacobian.math.combinatorics.codes.general._tools import (
     _covering_radius,
@@ -23,6 +25,22 @@ from jacobian.math.combinatorics.codes.general.operations import (
     verify_weight_distribution,
 )
 from jacobian.math.combinatorics.codes.linear.values import PrimeFieldLinearEncoder
+
+
+@pytest.mark.parametrize("count", ["0", "-1", "01", "1\n"])
+def test_weight_count_schema_and_decoder_reject_invalid_decimal_counts(
+    count: str,
+) -> None:
+    from jsonschema import Draft202012Validator
+
+    result = _weight_distribution(LinearCodeRequest(encoder=_encoder(((1,),), 2)))
+    payload = result.model_dump(mode="json")
+    validator = Draft202012Validator(WeightDistributionResult.model_json_schema())
+    assert not list(validator.iter_errors(payload))
+    payload["weights"][0][1] = count
+    assert list(validator.iter_errors(payload))
+    with pytest.raises(ValidationError):
+        WeightDistributionResult.model_validate_json(json.dumps(payload))
 
 
 def _assert_validation_error_code(factory: Callable[[], object], code: str) -> None:

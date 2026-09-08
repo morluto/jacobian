@@ -9,7 +9,10 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.matrices.quadratic_spectral import (
     RealAlgebraicMultiplicity,
     RealQuadraticInertia,
@@ -519,6 +522,10 @@ def test_inertia_admits_sixteen_dimensional_identity() -> None:
     assert (result.n_positive, result.n_negative, result.n_zero) == (16, 0, 0)
     assert result.definiteness == "positive_definite"
 
+    decoded = RealQuadraticInertia.model_validate_json(result.model_dump_json())
+    assert decoded == result
+    assert verify_inertia(decoded)
+
 
 def test_inertia_diagonal_fastpath_accepts_large_exact_scalars() -> None:
     """Diagonal signs do not require denominator clearing or minor growth."""
@@ -562,8 +569,31 @@ def test_inertia_rejects_unbounded_denominator_clearing_before_kernel() -> None:
             for row in range(16)
         )
     )
-    with pytest.raises(ValueError, match="intermediate integer growth"):
+    with pytest.raises(
+        OperationResourceAdmissionError, match="intermediate integer growth"
+    ):
         inertia(source)
+    with pytest.raises(
+        OperationResourceAdmissionError, match="intermediate integer growth"
+    ):
+        compute_inertia(RealQuadraticInertiaRequest(matrix=source))
+    # The source is strictly diagonally dominant with positive diagonal, so
+    # this is a true authored claim. Verification must preserve non-completion.
+    claim = RealQuadraticInertia.model_validate_json(
+        json.dumps(
+            {
+                "matrix": source.model_dump(mode="json"),
+                "n_positive": 16,
+                "n_negative": 0,
+                "n_zero": 0,
+                "definiteness": "positive_definite",
+            }
+        )
+    )
+    with pytest.raises(
+        OperationResourceAdmissionError, match="intermediate integer growth"
+    ):
+        verify_inertia(claim)
 
 
 def test_inertia_accepts_dense_large_shared_denominators() -> None:

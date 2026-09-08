@@ -9,6 +9,7 @@ from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
     OperationExample,
+    OperationResourceAdmissionError,
 )
 from jacobian.math.matrices.quadratic_spectral import operations as native
 from jacobian.math.matrices.quadratic_spectral._models import (
@@ -25,6 +26,8 @@ from jacobian.math.matrices.quadratic_spectral.values import (
 def _run[ResultT](operation: Callable[[], ResultT]) -> ResultT:
     try:
         return operation()
+    except OperationResourceAdmissionError:
+        raise
     except (PydanticCustomError, ValueError) as exc:
         code = (
             exc.type

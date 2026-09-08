@@ -6,6 +6,7 @@ from fractions import Fraction
 from math import factorial, gcd, lcm
 
 from jacobian.canonical import format_canonical_integer
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.matrices.quadratic_spectral.values import SpectrumKind
 from jacobian.math.matrices.values import RealQuadraticMatrix
 from jacobian.math.number_theory.algebraic_numbers.quadratic import RealQuadraticValue
@@ -157,8 +158,10 @@ def require_singular_spectrum_matrix(matrix: RealQuadraticMatrix) -> None:
 def require_inertia_matrix(matrix: RealQuadraticMatrix) -> None:
     _require_symmetric(matrix)
     if len(matrix.entries) > MAX_INERTIA_DIMENSION:
-        raise ValueError(
-            f"exact quadratic inertia supports dimension at most {MAX_INERTIA_DIMENSION}"
+        raise OperationResourceAdmissionError(
+            location=("matrix",),
+            code="matrix.inertia.dimension_bound",
+            message=f"exact quadratic inertia supports dimension at most {MAX_INERTIA_DIMENSION}",
         )
     if all(
         matrix.entries[row][column].rational_part.num == 0
@@ -198,9 +201,11 @@ def require_inertia_matrix(matrix: RealQuadraticMatrix) -> None:
     ) + len(str(factorial(order)))
     estimated_digits = 4 * minor_digits + 4 * radicand_digits + 8
     if estimated_digits > MAX_INERTIA_INTERMEDIATE_DIGITS:
-        raise ValueError(
-            "quadratic inertia intermediate integer growth exceeds the "
-            f"{MAX_INERTIA_INTERMEDIATE_DIGITS}-digit bound"
+        raise OperationResourceAdmissionError(
+            location=("matrix",),
+            code="matrix.inertia.growth_bound",
+            message="quadratic inertia intermediate integer growth exceeds the "
+            f"{MAX_INERTIA_INTERMEDIATE_DIGITS}-digit bound",
         )
 
 

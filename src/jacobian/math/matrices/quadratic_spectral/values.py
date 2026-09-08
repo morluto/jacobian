@@ -8,7 +8,7 @@ from pydantic import BeforeValidator, Field, StrictInt, WithJsonSchema, model_va
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.math.matrices.values import RealQuadraticMatrix
+from jacobian.math.matrices.values import MAX_MATRIX_DIMENSION, RealQuadraticMatrix
 from jacobian.math.number_theory.algebraic_numbers.real import (
     MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE,
     RealAlgebraicValue,
@@ -119,18 +119,18 @@ class RealQuadraticInertia(StrictModel):
     """Sylvester inertia and its canonical symmetric source matrix."""
 
     matrix: RealQuadraticMatrix
-    n_positive: StrictInt = Field(ge=0, le=4)
-    n_negative: StrictInt = Field(ge=0, le=4)
-    n_zero: StrictInt = Field(ge=0, le=4)
+    n_positive: StrictInt = Field(ge=0, le=MAX_MATRIX_DIMENSION)
+    n_negative: StrictInt = Field(ge=0, le=MAX_MATRIX_DIMENSION)
+    n_zero: StrictInt = Field(ge=0, le=MAX_MATRIX_DIMENSION)
     definiteness: Definiteness
 
     @model_validator(mode="after")
     def require_structural_inertia(self) -> Self:
         dimension = len(self.matrix.entries)
-        if dimension > 4 or any(len(row) != dimension for row in self.matrix.entries):
+        if self.matrix.column_count != dimension:
             raise _validation_error(
                 "shape_mismatch",
-                "inertia results retain a square source of order at most four",
+                "inertia results retain a square source",
             )
         if any(
             self.matrix.entries[row][column] != self.matrix.entries[column][row]

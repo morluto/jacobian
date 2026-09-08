@@ -23,6 +23,7 @@ from jacobian.math.geometry.differential.values import (
 from jacobian.math.polynomials._conversions import (
     rational_function_from_sympy,
     rational_function_to_sympy,
+    sparse_rational_polynomial_to_sympy,
 )
 
 r, theta = symbols("r theta")
@@ -382,3 +383,74 @@ def test_generated_determinant_nodes_share_one_guard_identity() -> None:
     result = covariant_derivative(source_metric, source_metric.tensor)
     assert all(not component.numerator.terms for component in result.components)
     assert len(result.retained_nonzero_denominators) == 768
+
+
+def test_cancelled_factor_of_a_generated_determinant_is_counted_separately() -> None:
+    x, y = symbols("x y")
+    axis = ("x", "y")
+    inherited = canonical_locus_guards(
+        tuple(
+            rational_function_from_sympy(x + offset, axis).numerator
+            for offset in range(1, 768)
+        ),
+        variable_count=2,
+    )
+    assert len(inherited) == 767
+    source_metric = RationalCoordinateMetric(
+        tensor=RationalCoordinateTensor(
+            coordinate_axis=axis,
+            variance=("COVARIANT", "COVARIANT"),
+            components=tuple(
+                rational_function_from_sympy(value, axis) for value in (x, y, y, y)
+            ),
+            retained_nonzero_denominators=inherited,
+        )
+    )
+    source = RationalCoordinateTensor(
+        coordinate_axis=axis,
+        variance=("CONTRAVARIANT",),
+        components=tuple(rational_function_from_sympy(value, axis) for value in (1, 0)),
+        retained_nonzero_denominators=inherited,
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="768 guards"):
+        covariant_derivative(source_metric, source)
+
+
+def test_cancelled_factor_of_a_generated_determinant_admits_at_the_exact_cap() -> None:
+    x, y = symbols("x y")
+    axis = ("x", "y")
+    inherited = canonical_locus_guards(
+        tuple(
+            rational_function_from_sympy(x + offset, axis).numerator
+            for offset in range(1, 767)
+        ),
+        variable_count=2,
+    )
+    assert len(inherited) == 766
+    source_metric = RationalCoordinateMetric(
+        tensor=RationalCoordinateTensor(
+            coordinate_axis=axis,
+            variance=("COVARIANT", "COVARIANT"),
+            components=tuple(
+                rational_function_from_sympy(value, axis) for value in (x, y, y, y)
+            ),
+            retained_nonzero_denominators=inherited,
+        )
+    )
+    source = RationalCoordinateTensor(
+        coordinate_axis=axis,
+        variance=("CONTRAVARIANT",),
+        components=tuple(rational_function_from_sympy(value, axis) for value in (1, 0)),
+        retained_nonzero_denominators=inherited,
+    )
+    result = covariant_derivative(source_metric, source)
+    assert len(result.retained_nonzero_denominators) == 768
+    det = y * (x - y)
+    assert any(
+        cancel(sparse_rational_polynomial_to_sympy(guard, axis) - det) == 0
+        for guard in result.retained_nonzero_denominators
+    )
+    assert any(
+        cancel(sparse_rational_polynomial_to_sympy(guard, axis) - (x - y)) == 0
+        for guard in result.retained_nonzero_denominators
+    )

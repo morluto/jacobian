@@ -54,11 +54,13 @@ def _node_guard_key(dag: Dag, index: int) -> object:
 def _denominator_guard_identity(dag: Dag, value: Expression) -> object | None:
     """Identify one retained output denominator after guaranteed monomial cancel.
 
-    A single sourced or generated factor matches the inherited polynomial
-    key. Shared raw ``D^2`` identities still split when axis-specific
-    numerators can cancel non-monomial factors, matching the guards result
-    construction retains. Constant remaining numerators keep one identity so
-    cheap cases such as ``1/(x+y)`` stay inside the cap.
+    A single sourced or generated factor matches the determinant or inherited
+    key only when guaranteed cancellation leaves the same degree and valuation
+    envelope. A proper factor remaining after cancel, such as ``x-y`` from
+    det ``y(x-y)``, is counted separately. Shared raw ``D^2`` identities still
+    split when axis-specific numerators can cancel non-monomial factors.
+    Constant remaining numerators keep one identity so cheap cases such as
+    ``1/(x+y)`` stay inside the cap.
     """
 
     if not _has_nonconstant_denominator(dag, value):
@@ -67,18 +69,34 @@ def _denominator_guard_identity(dag: Dag, value: Expression) -> object | None:
     remaining = cancelled.denominator
     if not any(remaining.degrees):
         return None
-    factors: list[tuple[object, int]] = []
+    factors: list[tuple[int, int]] = []
     for index, multiplicity in sorted(Counter(value.denominator).items()):
         if not any(dag.nodes[index].bound.degrees):
             continue
-        factors.append((_node_guard_key(dag, index), multiplicity))
+        factors.append((index, multiplicity))
     if not factors:
         return None
     if len(factors) == 1 and factors[0][1] == 1:
-        return factors[0][0]
+        index = factors[0][0]
+        raw = dag.nodes[index].bound
+        if (
+            remaining.degrees == raw.degrees
+            and remaining.minimum_exponents == raw.minimum_exponents
+        ):
+            return _node_guard_key(dag, index)
+        return (
+            "canonical-result-denominator",
+            (_node_guard_key(dag, index), 1),
+            remaining.minimum_exponents,
+            remaining.degrees,
+            tuple(sorted(Counter(value.numerator).items())),
+        )
     identity: tuple[object, ...] = (
         "canonical-result-denominator",
-        tuple(factors),
+        tuple(
+            (_node_guard_key(dag, index), multiplicity)
+            for index, multiplicity in factors
+        ),
         remaining.minimum_exponents,
         remaining.degrees,
     )

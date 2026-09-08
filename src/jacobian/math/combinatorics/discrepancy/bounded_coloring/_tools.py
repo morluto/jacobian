@@ -36,7 +36,11 @@ TOOLS: MathTools = (
         examples=(
             OperationExample(
                 name="different_bounds",
-                description="The two-element set must balance; its singleton allows one.",
+                description=(
+                    "Decide whether a +/-1 coloring of {0,1} keeps |sum| of the "
+                    "pair at most 0 and the singleton at most 1; each bound must "
+                    "not exceed its set's size."
+                ),
                 input={
                     "set_system": {"ground_set_size": 2, "sets": [[0, 1], [0]]},
                     "absolute_bounds": [0, 1],
@@ -44,7 +48,11 @@ TOOLS: MathTools = (
             ),
             OperationExample(
                 name="impossible_singleton",
-                description="A signed singleton cannot have imbalance zero.",
+                description=(
+                    "Decide whether a singleton can have signed sum 0; the bound "
+                    "must be at most the set size, so 0 is a valid but unsatisfiable "
+                    "request."
+                ),
                 input={
                     "set_system": {"ground_set_size": 1, "sets": [[0]]},
                     "absolute_bounds": [0],

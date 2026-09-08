@@ -162,6 +162,19 @@ def test_empty_set_requires_zero_and_wire_axis_rejects() -> None:
         )
 
 
+def test_budget_counters_reject_coerced_strings() -> None:
+    with pytest.raises(ValidationError):
+        BoundedColoringBudget.model_validate({"wall_seconds": "15"})
+    with pytest.raises(ValidationError):
+        BoundedColoringBudget.model_validate({"solver_work_limit": "1000"})
+
+
+def test_request_schema_states_per_set_upper_bound() -> None:
+    schema = BoundedColoringRequest.model_json_schema()
+    description = schema["properties"]["absolute_bounds"]["description"]
+    assert "at most that set's cardinality" in description
+
+
 def test_real_backend_work_exhaustion_and_expired_solver_are_claim_free() -> None:
     source = FiniteSetSystem(ground_set_size=6, sets=(tuple(range(6)),))
     result = decide(source, (0,), BoundedColoringBudget(solver_work_limit=1))

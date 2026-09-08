@@ -2,7 +2,7 @@
 
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StrictInt, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.math.combinatorics.discrepancy._models import FiniteSetSystem
@@ -17,13 +17,20 @@ ColorSign = Annotated[
 class BoundedColoringBudget(StrictModel):
     """One exact decision call's bounded proof work and total elapsed time."""
 
-    solver_work_limit: int = Field(default=1_000_000, ge=1, le=10_000_000)
-    wall_seconds: int = Field(default=15, ge=1, le=60)
+    solver_work_limit: StrictInt = Field(default=1_000_000, ge=1, le=10_000_000)
+    wall_seconds: StrictInt = Field(default=15, ge=1, le=60)
 
 
 class BoundedColoringRequest(StrictModel):
     set_system: FiniteSetSystem
-    absolute_bounds: tuple[AbsoluteBound, ...] = Field(max_length=1000)
+    absolute_bounds: tuple[AbsoluteBound, ...] = Field(
+        max_length=1000,
+        description=(
+            "One nonnegative integer bound per indexed source set, in the same "
+            "order as set_system.sets. Each bound must be at most that set's "
+            "cardinality (the empty set admits only 0)."
+        ),
+    )
     resource_budget: BoundedColoringBudget = Field(
         default_factory=BoundedColoringBudget
     )

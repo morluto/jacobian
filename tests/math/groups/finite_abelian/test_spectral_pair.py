@@ -294,7 +294,7 @@ def test_maximum_equal_size_work_boundary_is_admitted() -> None:
     assert work.cyclotomic_reductions == domain.MAX_SPECTRAL_CYCLOTOMIC_REDUCTIONS
     assert work.cyclotomic_degree == 32
     assert work.cyclotomic_degree <= domain.MAX_SPECTRAL_CYCLOTOMIC_DEGREE
-    assert work.cyclotomic_dense_ops == 295_750
+    assert work.cyclotomic_dense_ops == 180
     assert work.cyclotomic_dense_ops <= domain.MAX_SPECTRAL_CYCLOTOMIC_DENSE_OPS
     assert (
         work.cyclotomic_coefficient_bits
@@ -334,7 +334,7 @@ def test_derived_budgets_admit_exponent_above_the_former_fixed_cap() -> None:
 
 
 def test_equal_size_pair_over_derived_dense_op_budget_is_rejected() -> None:
-    source = _source((128,), ((0,), (1,)), ((0,), (1,)))
+    source = _source((105,), ((0,), (1,)), ((0,), (1,)))
 
     with pytest.raises(
         ValueError, match="cyclotomic construction work exceeds its dense-op bound"
@@ -543,7 +543,7 @@ def test_equal_size_pair_in_group_above_order_cap_fits_derived_budgets() -> None
 
     assert source.group.order == 8_192
     assert work.cyclotomic_degree == 32
-    assert work.cyclotomic_dense_ops == 295_750
+    assert work.cyclotomic_dense_ops == 180
 
     result = decide_finite_abelian_spectral_pair(source)
 
@@ -646,3 +646,77 @@ def test_canonical_source_round_trips_unchanged_through_catalog_request() -> Non
 
     assert result.source.model_dump(mode="json") == source_payload
     assert result.is_spectral is True
+
+
+@pytest.mark.parametrize(
+    "exponent,cardinality", [(81, 9), (90, 6), (98, 7), (100, 10), (108, 9), (120, 10)]
+)
+def test_prime_power_conductor_reduction_preserves_spectrality(
+    exponent: int, cardinality: int
+) -> None:
+    source = _source(
+        (exponent,),
+        tuple((j * (exponent // cardinality),) for j in range(cardinality)),
+        tuple((j,) for j in range(cardinality)),
+    )
+    request = FiniteAbelianSpectralPairRequest.model_validate_json(
+        json.dumps({"source": source.model_dump(mode="json")})
+    )
+    result = FINITE_ABELIAN_SPECTRAL_PAIR_OPERATION.run(request)
+    restored = FiniteAbelianSpectralPairResult.model_validate_json(
+        result.model_dump_json()
+    )
+    assert restored.source == source
+    assert restored.is_spectral
+    # Each nontrivial column quotient is a full sum of cardinality-th roots.
+    assert all(
+        sum(1 for j in range(cardinality) if (difference * j) % cardinality == residue)
+        == sum(
+            1
+            for j in range(cardinality)
+            if (difference * j) % cardinality == (residue + difference) % cardinality
+        )
+        for difference in range(1, cardinality)
+        for residue in range(cardinality)
+    )
+
+
+@pytest.mark.parametrize("moduli", [(100,), (81,), (98,), (108,), (4, 25), (25, 4)])
+def test_inflated_nonorthogonality_witness_matches_full_cyclotomic_division(
+    moduli: tuple[int, ...],
+) -> None:
+    zero = (0,) * len(moduli)
+    unit = (1,) * len(moduli)
+    source = _source(moduli, (zero, unit), (zero, unit))
+    result = FINITE_ABELIAN_SPECTRAL_PAIR_OPERATION.run(
+        FiniteAbelianSpectralPairRequest(source=source)
+    )
+    restored = FiniteAbelianSpectralPairResult.model_validate_json(
+        result.model_dump_json()
+    )
+    assert restored.source == source
+    witness = restored.first_nonorthogonal_pair
+    assert witness is not None
+    exponent = source.group.exponent
+    generator = Symbol("X")
+    polynomial = Poly(
+        sum(
+            generator
+            ** (
+                sum(
+                    (exponent // m) * a * d
+                    for m, a, d in zip(moduli, point, witness.difference, strict=True)
+                )
+                % exponent
+            )
+            for point in source.points
+        ),
+        generator,
+        domain=ZZ,
+    )
+    cyclotomic = cyclotomic_poly(exponent, generator, polys=True)
+    remainder = polynomial.rem(cyclotomic)
+    assert (
+        tuple(int(remainder.nth(i)) for i in range(cyclotomic.degree()))
+        == witness.remainder_coefficients
+    )

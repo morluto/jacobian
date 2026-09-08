@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 from itertools import product
-from math import comb, gcd, lcm, prod
+from math import comb, lcm, prod
 from time import monotonic
 from typing import TYPE_CHECKING, Annotated, Literal, Self, cast
 
@@ -45,6 +45,7 @@ MAX_SPECTRAL_CYCLOTOMIC_DEGREE = 60
 MAX_SPECTRAL_CHARACTER_TERMS = 258_048
 MAX_SPECTRAL_CYCLOTOMIC_REDUCTIONS = 4_032
 MAX_SPECTRAL_CYCLOTOMIC_DENSE_OPS = 524_288
+MAX_SPECTRAL_REDUCTION_DENSE_OPS = 16_777_216
 MAX_SPECTRAL_CYCLOTOMIC_COEFFICIENT_BITS = 64
 MAX_SPECTRAL_CYCLOTOMIC_INTERMEDIATE_BITS = 256
 MAX_SPECTRAL_REMAINDER_COEFFICIENT_BITS = 2_048
@@ -394,6 +395,8 @@ class FiniteAbelianSpectralPairResult(StrictModel):
 @dataclass(frozen=True, slots=True)
 class _SpectralPairWork:
     group_exponent: int
+    squarefree_exponent: int
+    inflation: int
     cyclotomic_degree: int | None
     character_terms: int
     cyclotomic_reductions: int
@@ -442,20 +445,12 @@ def _spectral_pair_work(source: FiniteAbelianSpectralPairSource) -> _SpectralPai
     every intermediate least common multiple stays below the product of the
     admitted moduli.
 
-    Every coefficient of ``Phi_N`` is at most ``2**phi(N)`` in absolute value:
-    it is an elementary symmetric sum of ``phi(N)`` unit-modulus roots. SymPy's
-    inflate/exact-quotient construction stays within a conservative
-    ``(N + 1) * 2**(2*N)`` coefficient-height envelope. Two constructions use
-    at most ``10*bit_length(N)*(N+1)^2`` conservative dense coefficient
-    operations, including inflation and monic exact division. Monic long
-    division of a degree-``< N`` character polynomial starts at height ``|A|``
-    and has at most ``N - phi(N)`` eliminations, each growing height by at most
-    ``1 + 2**phi(N)``. The bit bounds below are the corresponding integer upper
-    bounds, computed before SymPy is invoked. The dense-op and intermediate
-    budgets grow only with ``N``, so they are enforced before ``Phi_N``'s
-    totient trial division; every rejected exponent is already over one of
-    those derived budgets, and every surviving exponent makes that preflight
-    itself trivially bounded.
+    Write r=rad(N), t=N/r. The identity Phi_N(x)=Phi_r(x^t) lets the
+    kernel construct only Phi_r and reduce each residue class modulo t
+    independently. Construction work and coefficient growth therefore depend
+    on r and phi(r), while the retained witness still has phi(N) coordinates.
+    The degree bound makes trial factoring finite before any backend work;
+    monic reduction has at most r-phi(r) eliminations per residue class.
     """
 
     needs_reduction = (
@@ -464,6 +459,8 @@ def _spectral_pair_work(source: FiniteAbelianSpectralPairSource) -> _SpectralPai
     if not needs_reduction:
         return _SpectralPairWork(
             group_exponent=1,
+            squarefree_exponent=1,
+            inflation=1,
             cyclotomic_degree=None,
             character_terms=0,
             cyclotomic_reductions=0,
@@ -472,28 +469,22 @@ def _spectral_pair_work(source: FiniteAbelianSpectralPairSource) -> _SpectralPai
             cyclotomic_intermediate_bits=0,
             remainder_coefficient_bits=0,
         )
-    exponent = 1
-    for modulus in source.group.moduli:
-        exponent = exponent // gcd(exponent, int(modulus)) * int(modulus)
-        dense_ops = 10 * exponent.bit_length() * (exponent + 1) * (exponent + 1)
-        if dense_ops > MAX_CHARACTER_SUM_CYCLOTOMIC_DENSE_OPS:
-            raise ValueError(
-                "character-sum cyclotomic construction work exceeds its dense-op bound"
-            )
-    cyclotomic_dense_ops = 10 * exponent.bit_length() * (exponent + 1) * (exponent + 1)
-    cyclotomic_intermediate_bits = 2 * exponent + (exponent + 1).bit_length() + 1
+    exponent = source.group.exponent
+    radical, degree, inflation = _character_sum_conductor(exponent)
+    base_degree = degree // inflation
+    cyclotomic_dense_ops = 10 * radical.bit_length() * (radical + 1) ** 2
+    cyclotomic_intermediate_bits = 2 * radical + (radical + 1).bit_length() + 1
     if cyclotomic_dense_ops > MAX_SPECTRAL_CYCLOTOMIC_DENSE_OPS:
         raise ValueError("cyclotomic construction work exceeds its dense-op bound")
     if cyclotomic_intermediate_bits > MAX_SPECTRAL_CYCLOTOMIC_INTERMEDIATE_BITS:
         raise ValueError("cyclotomic construction intermediate exceeds its bit bound")
 
-    degree = _euler_totient(exponent)
     pair_count = comb(len(source.frequencies), 2)
     character_terms = 2 * pair_count * len(source.points)
     reductions = 2 * pair_count
-    cyclotomic_coefficient_bits = degree + 1
-    remainder_coefficient_bits = len(source.points).bit_length() + (degree + 1) * (
-        exponent - degree
+    cyclotomic_coefficient_bits = base_degree + 1
+    remainder_coefficient_bits = len(source.points).bit_length() + (base_degree + 1) * (
+        radical - base_degree
     )
     if degree > MAX_SPECTRAL_CYCLOTOMIC_DEGREE:
         raise ValueError("cyclotomic degree exceeds the exact reduction bound")
@@ -501,12 +492,17 @@ def _spectral_pair_work(source: FiniteAbelianSpectralPairSource) -> _SpectralPai
         raise ValueError("spectral-pair character-term work exceeds its bound")
     if reductions > MAX_SPECTRAL_CYCLOTOMIC_REDUCTIONS:
         raise ValueError("spectral-pair cyclotomic reductions exceed their bound")
+    reduction_work = reductions * inflation * (radical - base_degree) * base_degree
+    if reduction_work > MAX_SPECTRAL_REDUCTION_DENSE_OPS:
+        raise ValueError("spectral-pair dense reduction work exceeds its bound")
     if cyclotomic_coefficient_bits > MAX_SPECTRAL_CYCLOTOMIC_COEFFICIENT_BITS:
         raise ValueError("cyclotomic coefficient exceeds its bit bound")
     if remainder_coefficient_bits > MAX_SPECTRAL_REMAINDER_COEFFICIENT_BITS:
         raise ValueError("cyclotomic remainder intermediate exceeds its bit bound")
     return _SpectralPairWork(
         group_exponent=exponent,
+        squarefree_exponent=radical,
+        inflation=inflation,
         cyclotomic_degree=degree,
         character_terms=character_terms,
         cyclotomic_reductions=reductions,
@@ -525,11 +521,9 @@ def _character_sum_remainder(
     generator: Symbol,
     cyclotomic: Poly,
     cyclotomic_degree: int,
+    inflation: int,
 ) -> tuple[tuple[int, ...], tuple[int, ...]]:
     """Reduce one exact character sum modulo the exponent cyclotomic."""
-
-    from sympy import Poly
-    from sympy.polys.domains import ZZ
 
     exponent = source.group.exponent
     difference = tuple(
@@ -556,14 +550,12 @@ def _character_sum_remainder(
             % exponent
         )
         counts[power] += 1
-    polynomial = Poly.from_dict(
-        {(power,): coefficient for power, coefficient in counts.items()},
-        generator,
-        domain=ZZ,
-    )
-    remainder = polynomial.rem(cyclotomic, auto=False)
-    coefficients = tuple(
-        int(remainder.nth(power)) for power in range(cyclotomic_degree)
+    coefficients = _reduce_character_counts(
+        counts,
+        generator=generator,
+        cyclotomic=cyclotomic,
+        cyclotomic_degree=cyclotomic_degree,
+        inflation=inflation,
     )
     return difference, coefficients
 
@@ -594,9 +586,13 @@ def _finite_abelian_spectral_pair_decision_data(
     generator = Symbol("_finite_abelian_character")
     cyclotomic = cast(
         "Poly",
-        cyclotomic_poly(work.group_exponent, generator, polys=True),
+        cyclotomic_poly(work.squarefree_exponent, generator, polys=True),
     )
-    if cyclotomic.domain != ZZ or cyclotomic.LC() != 1 or cyclotomic.degree() != degree:
+    if (
+        cyclotomic.domain != ZZ
+        or cyclotomic.LC() != 1
+        or cyclotomic.degree() != degree // work.inflation
+    ):
         raise RuntimeError("SymPy returned an incompatible cyclotomic polynomial")
 
     for left_index, left_frequency in enumerate(source.frequencies):
@@ -608,6 +604,7 @@ def _finite_abelian_spectral_pair_decision_data(
                 generator=generator,
                 cyclotomic=cyclotomic,
                 cyclotomic_degree=degree,
+                inflation=work.inflation,
             )
             if any(coefficient != 0 for coefficient in coefficients):
                 return _SpectralPairDecisionData(
@@ -920,6 +917,31 @@ def _character_sum_conductor(exponent: int) -> tuple[int, int, int]:
     return radical, degree, exponent // radical
 
 
+def _reduce_character_counts(
+    counts: Counter[int],
+    *,
+    generator: Symbol,
+    cyclotomic: Poly,
+    cyclotomic_degree: int,
+    inflation: int,
+) -> tuple[int, ...]:
+    """Reduce residue classes modulo Phi_rad(N), retaining the Phi_N basis."""
+    from sympy import Poly
+    from sympy.polys.domains import ZZ
+
+    residue_counts: dict[int, dict[tuple[int], int]] = {}
+    for power, coefficient in counts.items():
+        quotient, residue = divmod(power, inflation)
+        residue_counts.setdefault(residue, {})[(quotient,)] = coefficient
+    reduced = [0] * cyclotomic_degree
+    for residue, coefficients in residue_counts.items():
+        polynomial = Poly.from_dict(coefficients, generator, domain=ZZ)
+        remainder = polynomial.rem(cyclotomic, auto=False)
+        for power in range(cyclotomic_degree // inflation):
+            reduced[residue + inflation * power] = int(remainder.nth(power))
+    return tuple(reduced)
+
+
 def _character_sum_interval_profile_work(
     source: FiniteAbelianCharacterSumIntervalProfileSource,
 ) -> _CharacterSumIntervalProfileWork:
@@ -1044,7 +1066,7 @@ def _finite_abelian_character_sum_interval_profile_data(
     degree = work.cyclotomic_degree
     exponent = work.group_exponent
 
-    from sympy import Poly, Symbol, cyclotomic_poly
+    from sympy import Symbol, cyclotomic_poly
     from sympy.polys.domains import ZZ
 
     generator = Symbol("_finite_abelian_character")
@@ -1087,29 +1109,13 @@ def _finite_abelian_character_sum_interval_profile_data(
             a_int = int(a)
             b_int = int(b)
             interval_powers = powers[a_int:b_int]
-            if not interval_powers:
-                coefficients = (0,) * degree
-            else:
-                residue_counts: dict[int, Counter[int]] = {}
-                for power in interval_powers:
-                    quotient, residue = divmod(power, work.inflation)
-                    residue_counts.setdefault(residue, Counter())[quotient] += 1
-                reduced = [0] * degree
-                for residue, counts in residue_counts.items():
-                    polynomial = Poly.from_dict(
-                        {
-                            (power,): coefficient
-                            for power, coefficient in counts.items()
-                        },
-                        generator,
-                        domain=ZZ,
-                    )
-                    remainder = polynomial.rem(cyclotomic, auto=False)
-                    for power in range(degree // work.inflation):
-                        reduced[residue + work.inflation * power] = int(
-                            remainder.nth(power)
-                        )
-                coefficients = tuple(reduced)
+            coefficients = _reduce_character_counts(
+                Counter(interval_powers),
+                generator=generator,
+                cyclotomic=cyclotomic,
+                cyclotomic_degree=degree,
+                inflation=work.inflation,
+            )
             cells.append(
                 FiniteAbelianCharacterSumCell(
                     frequency=frequency,

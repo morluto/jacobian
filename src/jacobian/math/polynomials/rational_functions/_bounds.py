@@ -795,7 +795,9 @@ def _remove_guaranteed_linear_power_factor(
     if extra <= 0 or bound.is_zero:
         return bound
 
-    def reduce(polynomial: PolynomialBound) -> PolynomialBound:
+    def reduce(
+        polynomial: PolynomialBound, *, linear_form_power: bool
+    ) -> PolynomialBound:
         if not polynomial.degrees:
             return polynomial
         if axis < 0:
@@ -812,10 +814,16 @@ def _remove_guaranteed_linear_power_factor(
                 coefficient_digits=polynomial.coefficient_digits,
                 rational_content=polynomial.rational_content,
             )
-            return replace(
-                reduced,
-                terms=min(polynomial.terms, _total_degree_term_bound(reduced)),
+            # After canceling (ax+by)^{n-1} from q=(ax+by)^n, the denominator
+            # remains a linear-form power, whose support has size total_degree+1.
+            # The cofactor numerator need not be homogeneous on that diagonal, so
+            # total_degree+1 is not a support bound there.
+            support = (
+                total_degree + 1
+                if linear_form_power
+                else _total_degree_term_bound(reduced)
             )
+            return replace(reduced, terms=min(polynomial.terms, support))
         if axis >= len(polynomial.degrees):
             return polynomial
         drop = min(extra, polynomial.degrees[axis], polynomial.total_degree)
@@ -842,7 +850,8 @@ def _remove_guaranteed_linear_power_factor(
         )
 
     return FractionBound(
-        numerator=reduce(bound.numerator), denominator=reduce(bound.denominator)
+        numerator=reduce(bound.numerator, linear_form_power=False),
+        denominator=reduce(bound.denominator, linear_form_power=True),
     )
 
 

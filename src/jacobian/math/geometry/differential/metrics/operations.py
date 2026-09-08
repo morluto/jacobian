@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import time
-from typing import Any
 
 from jacobian._execution import (
     bind_request_deadline,
@@ -16,69 +15,21 @@ from jacobian.math.geometry.differential._recognition_process import (
     RationalFunctionRecognitionCandidate,
     recognize_canonical_rational_functions,
 )
-from jacobian.math.geometry.differential.metrics._dag import Expression, Node
+from jacobian.math.geometry.differential.metrics._dag_evaluate_process import (
+    evaluate_admitted_dag,
+)
 from jacobian.math.geometry.differential.metrics._models import (
     RationalCoordinateConnection,
     RationalCoordinateMetric,
     RationalMetricCurvatureProfile,
 )
-from jacobian.math.geometry.differential.metrics._normalize_process import (
-    cancel_fraction,
-)
-from jacobian.math.geometry.differential.metrics._plan import build_plan, singular
+from jacobian.math.geometry.differential.metrics._plan import build_plan
 from jacobian.math.geometry.differential.values import (
     RationalCoordinateTensor,
     TensorVariance,
     canonical_locus_guards,
 )
-from jacobian.math.polynomials._conversions import (
-    sparse_rational_polynomial_from_sympy,
-    sparse_rational_polynomial_to_sympy,
-    symbols_for_variables,
-)
 from jacobian.math.polynomials.values import RationalFunction
-
-
-def _evaluate_node(
-    index: int, nodes: list[Node], axis: tuple[str, ...], cache: dict[int, Any]
-) -> Any:
-    from sympy import QQ
-
-    from jacobian.math.polynomials.rational_functions.gradient._kernel import (
-        _differentiate_fraction,
-    )
-
-    if index in cache:
-        return cache[index]
-    request_checkpoint("before curvature polynomial arithmetic")
-    node = nodes[index]
-    if node.operation == "SOURCE":
-        assert node.source is not None
-        result = sparse_rational_polynomial_to_sympy(node.source, axis)
-    elif node.operation == "SCALE":
-        result = _evaluate_node(node.arguments[0], nodes, axis, cache).mul_ground(
-            QQ(node.scalar.numerator, node.scalar.denominator)
-        )
-    elif node.operation == "MULTIPLY":
-        result = _evaluate_node(node.arguments[0], nodes, axis, cache) * _evaluate_node(
-            node.arguments[1], nodes, axis, cache
-        )
-    elif node.operation == "ADD":
-        result = sum(
-            (_evaluate_node(arg, nodes, axis, cache) for arg in node.arguments),
-            cache[0],
-        )
-    elif node.operation == "DERIVATIVE":
-        result, _ = _differentiate_fraction(
-            _evaluate_node(node.arguments[0], nodes, axis, cache),
-            _evaluate_node(node.arguments[1], nodes, axis, cache),
-            node.axis,
-        )
-    else:
-        raise AssertionError("unknown admitted curvature polynomial node")
-    cache[index] = result
-    request_checkpoint("after curvature polynomial arithmetic")
-    return result
 
 
 def curvature_profile(
@@ -126,65 +77,34 @@ def curvature_profile(
             code="differential_geometry.curvature.noncanonical_source",
             message="metric component must be a reduced canonical rational function",
         )
-    from sympy import QQ, Poly
-
     axis = metric.tensor.coordinate_axis
-    symbols = symbols_for_variables(axis)
-    cache: dict[int, Any] = {
-        0: Poly(0, *symbols, domain=QQ),
-        1: Poly(1, *symbols, domain=QQ),
-    }
-
-    def raw(value: Expression) -> tuple[Any, Any]:
-        numerator, denominator = plan.fractions[value]
-        return _evaluate_node(numerator, plan.dag.nodes, axis, cache), _evaluate_node(
-            denominator, plan.dag.nodes, axis, cache
-        )
-
-    determinant_guards = []
-    for index in dict.fromkeys(plan.determinant.numerator):
-        polynomial = _evaluate_node(index, plan.dag.nodes, axis, cache)
-        if polynomial.is_zero:
-            raise singular()
-        determinant_guards.append(
-            sparse_rational_polynomial_from_sympy(
-                polynomial.monic(), axis, maximum_terms=256
-            )
-        )
-    normalized: dict[Expression, RationalFunction] = {}
-
-    def convert(values: tuple[Expression, ...]) -> tuple[RationalFunction, ...]:
-        results = []
-        for value in values:
-            request_checkpoint("before curvature component normalization")
-            if value not in normalized:
-                numerator, denominator = raw(value)
-                cancelled_num, cancelled_den = cancel_fraction(
-                    numerator, denominator, deadline=deadline
-                )
-                normalized[value] = RationalFunction._from_kernel(
-                    variables=axis,
-                    numerator=sparse_rational_polynomial_from_sympy(
-                        cancelled_num, axis, maximum_terms=256
-                    ),
-                    denominator=sparse_rational_polynomial_from_sympy(
-                        cancelled_den, axis, maximum_terms=256
-                    ),
-                )
-            results.append(normalized[value])
-            request_checkpoint("after curvature component normalization")
-        return tuple(results)
-
-    inverse, connection, riemann, ricci, scalar = (
-        convert(values)
-        for values in (
-            plan.inverse,
-            plan.connection,
-            plan.riemann,
-            plan.ricci,
-            (plan.scalar,),
+    unique_outputs = tuple(
+        dict.fromkeys(
+            (*plan.inverse, *plan.connection, *plan.riemann, *plan.ricci, plan.scalar)
         )
     )
+    components, determinant_guards = evaluate_admitted_dag(
+        plan.dag.nodes,
+        axis,
+        fractions=tuple(plan.fractions[value] for value in unique_outputs),
+        determinants=tuple(dict.fromkeys(plan.determinant.numerator)),
+        sources=(),
+        deadline=deadline,
+        owner="metric curvature",
+        noncanonical_location=("metric",),
+        noncanonical_code="differential_geometry.curvature.noncanonical_source",
+        noncanonical_message="metric component must be a reduced canonical rational function",
+    )
+    normalized = dict(zip(unique_outputs, components, strict=True))
+
+    def convert(values: tuple[object, ...]) -> tuple[RationalFunction, ...]:
+        return tuple(normalized[value] for value in values)
+
+    inverse = convert(plan.inverse)
+    connection = convert(plan.connection)
+    riemann = convert(plan.riemann)
+    ricci = convert(plan.ricci)
+    scalar = convert((plan.scalar,))
     guards = canonical_locus_guards(
         metric.tensor.retained_nonzero_denominators,
         tuple(determinant_guards),

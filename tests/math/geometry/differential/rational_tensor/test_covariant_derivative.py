@@ -205,6 +205,39 @@ def test_shared_inherited_guards_are_capped_on_their_union() -> None:
     assert result.covariant_derivative.retained_nonzero_denominators == guards
 
 
+def test_nonmonic_determinant_unions_with_inherited_monic_guards() -> None:
+    axis = ("x",)
+    x = symbols("x")
+    guards = canonical_locus_guards(
+        (
+            rational_function_from_sympy(x, axis).numerator,
+            *(
+                rational_function_from_sympy(x + offset, axis).numerator
+                for offset in range(1, 768)
+            ),
+        ),
+        variable_count=1,
+    )
+    metric = RationalCoordinateMetric(
+        tensor=RationalCoordinateTensor(
+            coordinate_axis=axis,
+            variance=("COVARIANT", "COVARIANT"),
+            components=tensor(
+                [2 * x], ("COVARIANT", "COVARIANT"), axis=axis
+            ).components,
+            retained_nonzero_denominators=guards,
+        )
+    )
+    source = RationalCoordinateTensor(
+        coordinate_axis=axis,
+        variance=(),
+        components=tensor([1], (), axis=axis).components,
+        retained_nonzero_denominators=guards,
+    )
+    result = covariant_derivative(metric, source)
+    assert len(result.covariant_derivative.retained_nonzero_denominators) == 768
+
+
 def test_oversized_determinant_is_rejected_during_admission() -> None:
     x, y = symbols("x y")
     dense_x = sum(x**power for power in range(17))

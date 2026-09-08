@@ -383,3 +383,28 @@ def test_inherited_determinant_and_inverse_guards_are_unioned_before_the_cap() -
     result = curvature_profile(source)
     assert len(result.inverse_metric.retained_nonzero_denominators) == 768
     replay(result)
+
+
+def test_nonmonic_determinant_unions_with_inherited_monic_guards() -> None:
+    axis = ("x",)
+    guards = canonical_locus_guards(
+        (
+            rational_function_from_sympy(x, axis).numerator,
+            *(
+                rational_function_from_sympy(x + offset, axis).numerator
+                for offset in range(1, 768)
+            ),
+        ),
+        variable_count=1,
+    )
+    source = RationalCoordinateMetric(
+        tensor=RationalCoordinateTensor(
+            coordinate_axis=axis,
+            variance=("COVARIANT", "COVARIANT"),
+            components=(rational_function_from_sympy(2 * x, axis),),
+            retained_nonzero_denominators=guards,
+        )
+    )
+    result = curvature_profile(source)
+    assert len(result.inverse_metric.retained_nonzero_denominators) == 768
+    replay(result)

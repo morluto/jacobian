@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import time
-from typing import Any
 
 from jacobian._execution import (
     bind_request_deadline,
@@ -20,20 +19,12 @@ from jacobian.math.geometry.differential.laplace_beltrami._models import (
     RationalLaplaceBeltramiResult,
 )
 from jacobian.math.geometry.differential.laplace_beltrami._plan import build_plan
+from jacobian.math.geometry.differential.metrics._dag_evaluate_process import (
+    evaluate_admitted_dag,
+)
 from jacobian.math.geometry.differential.metrics._models import RationalCoordinateMetric
-from jacobian.math.geometry.differential.metrics._normalize_process import (
-    cancel_fraction,
-)
-from jacobian.math.geometry.differential.metrics._plan import singular
-from jacobian.math.geometry.differential.metrics.operations import _evaluate_node
 from jacobian.math.geometry.differential.values import canonical_locus_guards
-from jacobian.math.polynomials._conversions import (
-    sparse_rational_polynomial_from_sympy,
-    symbols_for_variables,
-)
-from jacobian.math.polynomials.values import (
-    RationalFunction,
-)
+from jacobian.math.polynomials.values import RationalFunction
 
 
 def _recognize_source(
@@ -76,40 +67,18 @@ def laplace_beltrami(
     plan = build_plan(metric, scalar)
     request_checkpoint("after Laplace--Beltrami admission")
     _recognize_source(metric, scalar, deadline)
-    from sympy import QQ, Poly
-
-    symbols = symbols_for_variables(axis)
-    cache: dict[int, Any] = {
-        0: Poly(0, *symbols, domain=QQ),
-        1: Poly(1, *symbols, domain=QQ),
-    }
-    numerator, denominator = plan.fraction
-    raw_numerator = _evaluate_node(numerator, plan.dag.nodes, axis, cache)
-    raw_denominator = _evaluate_node(denominator, plan.dag.nodes, axis, cache)
-    if raw_denominator.is_zero:
-        raise singular()
-    cancelled_numerator, cancelled_denominator = cancel_fraction(
-        raw_numerator, raw_denominator, deadline=deadline
+    (value,), determinant_guards = evaluate_admitted_dag(
+        plan.dag.nodes,
+        axis,
+        fractions=(plan.fraction,),
+        determinants=tuple(dict.fromkeys(plan.determinant.numerator)),
+        sources=(),
+        deadline=deadline,
+        owner="Laplace--Beltrami",
+        noncanonical_location=("laplace_beltrami",),
+        noncanonical_code="differential_geometry.laplace_beltrami.noncanonical_source",
+        noncanonical_message="metric and scalar must be reduced canonical rational functions",
     )
-    value = RationalFunction._from_kernel(
-        variables=axis,
-        numerator=sparse_rational_polynomial_from_sympy(
-            cancelled_numerator, axis, maximum_terms=256
-        ),
-        denominator=sparse_rational_polynomial_from_sympy(
-            cancelled_denominator, axis, maximum_terms=256
-        ),
-    )
-    determinant_guards = []
-    for index in dict.fromkeys(plan.determinant.numerator):
-        polynomial = _evaluate_node(index, plan.dag.nodes, axis, cache)
-        if polynomial.is_zero:
-            raise singular()
-        determinant_guards.append(
-            sparse_rational_polynomial_from_sympy(
-                polynomial.monic(), axis, maximum_terms=256
-            )
-        )
     guards = canonical_locus_guards(
         metric.tensor.retained_nonzero_denominators,
         tuple(determinant_guards),

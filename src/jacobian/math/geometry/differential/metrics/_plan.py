@@ -6,6 +6,7 @@ from fractions import Fraction
 from itertools import permutations, product
 from typing import NoReturn
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.differential.metrics._dag import (
     ONE,
@@ -150,8 +151,28 @@ def build_connection_plan(
     return ConnectionPlan(dag, entries, det, inverse, tuple(connection_list))
 
 
+def _monic_polynomial_key(
+    polynomial: SparseRationalPolynomial,
+) -> tuple[tuple[tuple[int, ...], str, str], ...]:
+    if not polynomial.terms:
+        return _polynomial_key(polynomial)
+    leading = polynomial.terms[0].coefficient.as_fraction()
+    return tuple(
+        (
+            term.exponents,
+            format_canonical_integer(
+                (term.coefficient.as_fraction() / leading).numerator
+            ),
+            format_canonical_integer(
+                (term.coefficient.as_fraction() / leading).denominator
+            ),
+        )
+        for term in polynomial.terms
+    )
+
+
 def _source_guard_keys(source: SparseRationalPolynomial) -> set[object]:
-    keys: set[object] = {_polynomial_key(source)}
+    keys: set[object] = {_monic_polynomial_key(source)}
     if len(source.terms) != 1:
         return keys
     exponents = source.terms[0].exponents
@@ -174,7 +195,9 @@ def _potential_locus_keys(
     for index in set(determinant.numerator):
         source = dag.nodes[index].source
         keys.add(
-            _polynomial_key(source) if source is not None else ("determinant", index)
+            _monic_polynomial_key(source)
+            if source is not None
+            else ("determinant", index)
         )
     for value in outputs:
         if not _has_nonconstant_denominator(dag, value):

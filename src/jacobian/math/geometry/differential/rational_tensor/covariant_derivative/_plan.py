@@ -12,6 +12,7 @@ from jacobian.math.geometry.differential.metrics._dag import Dag, Expression
 from jacobian.math.geometry.differential.metrics._models import RationalCoordinateMetric
 from jacobian.math.geometry.differential.metrics._plan import (
     ConnectionPlan,
+    _monic_polynomial_key,
     build_connection_plan,
 )
 from jacobian.math.geometry.differential.values import (
@@ -101,7 +102,9 @@ def _admit_outputs(
     for index in set(determinant.numerator):
         source = dag.nodes[index].source
         determinant_keys.add(
-            _polynomial_key(source) if source is not None else ("determinant", index)
+            _monic_polynomial_key(source)
+            if source is not None
+            else ("determinant", index)
         )
     output_keys = {
         ("canonical-result-denominator", value.numerator, value.denominator)

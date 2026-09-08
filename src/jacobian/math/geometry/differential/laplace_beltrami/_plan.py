@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import NoReturn
 
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.geometry.differential.metrics._dag import (
     Dag,
@@ -15,6 +14,7 @@ from jacobian.math.geometry.differential.metrics._dag import (
 from jacobian.math.geometry.differential.metrics._models import RationalCoordinateMetric
 from jacobian.math.geometry.differential.metrics._plan import (
     _has_nonconstant_denominator,
+    _monic_polynomial_key,
     build_connection_plan,
 )
 from jacobian.math.geometry.differential.values import (
@@ -35,24 +35,6 @@ MAX_LAPLACE_OUTPUT_SLOTS = 1_048_576
 
 _PolynomialKey = tuple[tuple[tuple[int, ...], str, str], ...]
 _GuardKey = _PolynomialKey | tuple[str, ...] | tuple[str, int]
-
-
-def _monic_polynomial_key(polynomial: SparseRationalPolynomial) -> _PolynomialKey:
-    if not polynomial.terms:
-        return _polynomial_key(polynomial)
-    leading = polynomial.terms[0].coefficient.as_fraction()
-    return tuple(
-        (
-            term.exponents,
-            format_canonical_integer(
-                (term.coefficient.as_fraction() / leading).numerator
-            ),
-            format_canonical_integer(
-                (term.coefficient.as_fraction() / leading).denominator
-            ),
-        )
-        for term in polynomial.terms
-    )
 
 
 def _laplace_reject(reason: str, message: str) -> NoReturn:

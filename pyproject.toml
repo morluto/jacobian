@@ -266,6 +266,7 @@ ignore_imports = [
     # Metric DAG expansion and fraction normalization run in killable workers.
     "jacobian.math.geometry.differential.metrics._dag_process -> jacobian.process",
     "jacobian.math.polynomials.rational_functions.gradient._normalize_process -> jacobian.process",
+    "jacobian.math.polynomials.rational_functions.gradient._gcd_process -> jacobian.process",
     # Exact common-interlacing factorization and isolation run in one bounded worker.
     "jacobian.math.graphs.triangle_free_diameter_augmentation._augmentation_z3 -> jacobian.process",
     "jacobian.math.polynomials.real_algebra._common_interlacing_process -> jacobian.process",

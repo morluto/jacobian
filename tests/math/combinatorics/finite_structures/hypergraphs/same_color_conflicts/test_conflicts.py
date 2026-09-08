@@ -147,9 +147,7 @@ def test_deserialized_provenance_must_match_source_edge_colors() -> None:
     with pytest.raises(ValidationError, match="match both referenced source edges"):
         SameColorConflictsResult.model_validate(mismatched)
     mixed = result.model_dump()
-    mixed["provenance"] = [
-        {**mixed["provenance"][0], "source_edge_ids": ("e0", "e2")}
-    ]
+    mixed["provenance"] = [{**mixed["provenance"][0], "source_edge_ids": ("e0", "e2")}]
     with pytest.raises(ValidationError, match="match both referenced source edges"):
         SameColorConflictsResult.model_validate(mixed)
 

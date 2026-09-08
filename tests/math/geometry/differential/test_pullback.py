@@ -47,14 +47,14 @@ def test_identity_map_recovers_metric() -> None:
 
 
 def test_rank_deficient_map_returns_degenerate_tensor() -> None:
-    x = symbols("x")
+    x, _y = symbols("x y")
     result = pullback_metric(
         metric((1, 0, 0, 1), ("u", "v")),
-        map_value((x, x), ("x",), ("u", "v")),
+        map_value((x, x), ("x", "y"), ("u", "v")),
     )
     assert [
         rational_function_to_sympy(value) for value in result.pullback.components
-    ] == [2]
+    ] == [2, 0, 0, 0]
 
 
 def test_rational_substitution_retains_map_and_metric_guards() -> None:

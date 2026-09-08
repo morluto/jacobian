@@ -15,6 +15,7 @@ from jacobian.math.polynomials.rational_functions._bounds import (
     _fraction_bound,
     _multiply_polynomials,
     _one_polynomial,
+    _polynomial_bound,
     _remove_guaranteed_common_monomial,
     _validate_canonical_result_bound,
 )
@@ -100,17 +101,22 @@ def _substitute_bound_only(
     numerator = _one_polynomial(variable_count)
     denominator = _one_polynomial(variable_count)
     for degree, bound in zip(polynomial.degrees, inner_bounds, strict=True):
+        # Clearing denominators for every monomial of P is bounded by
+        # (N_i + D_i)^degree; this retains both numerator and denominator
+        # support, including terms whose exponent is not the maximum degree.
+        base = _add_polynomials(bound.numerator, bound.denominator, ledger)
         for _ in range(degree):
-            numerator = _multiply_polynomials(numerator, bound.numerator, ledger)
+            numerator = _multiply_polynomials(numerator, base, ledger)
             denominator = _multiply_polynomials(denominator, bound.denominator, ledger)
-    if polynomial.terms > 1:
-        numerator = replace(
-            numerator,
-            terms=min(4096, numerator.terms * polynomial.terms),
-            coefficient_digits=numerator.coefficient_digits
+    numerator = replace(
+        numerator,
+        coefficient_digits=(
+            numerator.coefficient_digits
             + polynomial.coefficient_digits
-            + polynomial.terms.bit_length(),
-        )
+            + polynomial.terms.bit_length()
+        ),
+        rational_content=numerator.rational_content,
+    )
     return FractionBound(numerator, denominator)
 
 
@@ -148,7 +154,7 @@ def build_plan(
     metric: RationalCoordinateMetric, map_value: RationalFunctionMap
 ) -> Plan:
     n, m = len(map_value.source_variables), len(metric.tensor.coordinate_axis)
-    if n**2 > 256 or m**2 > 256 or m * n > 4096:
+    if n < 1 or n > 4 or n**2 > 256 or m**2 > 256 or m * n > 4096:
         reject(
             "shape",
             "complete metric pullback exceeds the tensor or Jacobian shape budget",
@@ -185,6 +191,15 @@ def build_plan(
     _multiply_polynomials(
         determinant_num.denominator, determinant_den.numerator, ledger
     )
+    guard_terms = sum(bound.denominator.terms for bound in map_bounds)
+    guard_terms += sum(value.denominator.terms for value in substitutions)
+    guard_terms += determinant_num.numerator.terms
+    for guard in metric.tensor.retained_nonzero_denominators:
+        guard_bound = _substitute_bound_only(
+            _polynomial_bound(guard), map_bounds, ledger
+        )
+        _validate_canonical_result_bound(guard_bound, ledger)
+        guard_terms += guard_bound.numerator.terms
     jacobian = []
     for bound in map_bounds:
         for axis in range(n):
@@ -247,9 +262,12 @@ def build_plan(
         + len(metric.tensor.components)
         + len(metric.tensor.retained_nonzero_denominators)
         + 1
+        + n * n
     )
     if guard_count > 768:
         reject("locus", "complete pullback locus exceeds 768 guards")
+    output_terms += guard_terms
+    output_digits += guard_terms * 8 * 128
     if output_terms > 65_536 or output_digits > 8_388_608:
         reject(
             "allocation", "complete pullback output exceeds its exact allocation budget"

@@ -285,8 +285,8 @@ class SubsetSumResidueProfileResult(StrictModel):
     source: Annotated[
         IndexedIntegerSequence,
         WithJsonSchema(indexed_sequence_item_ceiling(MAX_RESIDUE_PROFILE_ITEMS)),
-    ] = Field(default_factory=lambda: IndexedIntegerSequence(items=()))
-    modulus: int = Field(default=1, ge=1, le=MAX_RESIDUE_PROFILE_MODULUS, strict=True)
+    ]
+    modulus: int = Field(ge=1, le=MAX_RESIDUE_PROFILE_MODULUS, strict=True)
     include_empty_subset: StrictBool
     include_witnesses: StrictBool
     residue_counts: tuple[ResidueMultiplicity, ...] = Field(

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import time
 from itertools import product
-from typing import TYPE_CHECKING
 
 from jacobian._execution import (
     bind_request_deadline,
@@ -15,6 +14,9 @@ from jacobian._execution import (
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
+)
+from jacobian.math.combinatorics.additive._subset_sum_residue import (
+    SubsetSumResidueProfileResult,
 )
 from jacobian.math.combinatorics.additive.finite_abelian_subset_sum._models import (
     MAX_FINITE_ABELIAN_SUBSET_SUM_COORDINATE_SLOTS,
@@ -31,11 +33,6 @@ from jacobian.math.groups.finite_abelian import (
     FiniteAbelianProductGroup,
 )
 
-if TYPE_CHECKING:
-    from jacobian.math.combinatorics.additive._subset_sum_residue import (
-        SubsetSumResidueProfileResult,
-    )
-
 
 def _reject(code: str, message: str) -> None:
     raise OperationResourceAdmissionError(
@@ -43,6 +40,17 @@ def _reject(code: str, message: str) -> None:
         code=f"additive.finite_abelian_subset_sum.{code}",
         message=message,
     )
+
+
+def _admitted_group_order(group: FiniteAbelianProductGroup) -> int:
+    if len(group.moduli) > MAX_FINITE_ABELIAN_SUBSET_SUM_ORDER:
+        _reject("group_rank", "finite abelian group rank exceeds 4,096")
+    order = 1
+    for modulus in group.moduli:
+        order *= modulus
+        if order > MAX_FINITE_ABELIAN_SUBSET_SUM_ORDER:
+            _reject("group_order", "finite abelian group order exceeds 4,096")
+    return order
 
 
 def finite_abelian_subset_sum_profile(
@@ -61,9 +69,7 @@ def finite_abelian_subset_sum_profile(
         deadline = min(deadline, execution.deadline)
     bind_request_deadline(deadline)
     request_checkpoint("before finite abelian subset-sum admission")
-    order = group.order
-    if order > MAX_FINITE_ABELIAN_SUBSET_SUM_ORDER:
-        _reject("group_order", "finite abelian group order exceeds 4,096")
+    order = _admitted_group_order(group)
     if any(element.group != group for element in sequence):
         raise OperationDomainValidationError(
             location=("sequence",),
@@ -134,11 +140,6 @@ def finite_abelian_subset_sum_profile(
         for element, multiplicity in zip(elements, counts, strict=True)
     )
     support_size = sum(multiplicity > 0 for multiplicity in counts)
-    # Circular: result type lives in the cyclic residue owner that calls this kernel.
-    from jacobian.math.combinatorics.additive._subset_sum_residue import (
-        SubsetSumResidueProfileResult,
-    )
-
     return SubsetSumResidueProfileResult(
         source=IndexedIntegerSequence(items=()),
         modulus=1,

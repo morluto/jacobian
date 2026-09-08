@@ -224,6 +224,15 @@ def test_source_sensitive_candidate_bound_rejects_large_possible_profile() -> No
         construct(source, 1, 2)
 
 
+def test_enumerated_target_count_is_charged_for_sparse_high_uniformity() -> None:
+    vertices = tuple(str(index) for index in range(40))
+    members = [tuple(str(index) for index in range(start, start + 10)) for start in range(11)]
+    source = make_coloring(vertices, members, [0] * 11)
+
+    with pytest.raises(OperationResourceAdmissionError, match="lookup bound"):
+        construct(source, 10, 11)
+
+
 def test_long_source_labels_remain_native_admissible() -> None:
     vertices = tuple(str(index) for index in range(12))
     members = complete_edges(vertices, 2)

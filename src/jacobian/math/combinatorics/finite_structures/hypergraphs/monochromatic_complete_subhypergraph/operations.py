@@ -135,7 +135,7 @@ def _preflight_result(
     )
     if len(source_edges) == required_edges:
         candidate_upper_bound = min(candidate_upper_bound, 1)
-    work = candidate_upper_bound * required_edges
+    work = candidate_count * required_edges
     if work > MAX_PROFILE_WORK:
         _resource(
             ("target_uniformity",),

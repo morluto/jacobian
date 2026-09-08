@@ -186,7 +186,34 @@ def test_true_output_coefficient_boundary() -> None:
         gradient(_monomial_source(("x",), (64,), (0,), 10**127))
 
 
-def test_authored_common_factor_is_rejected() -> None:
+def test_repeated_linear_denominator_cancels_before_result_exponent() -> None:
+    x = symbols("x")
+    source = rational_function_from_sympy(1 / (x + 1) ** 33, ("x",))
+    result = _identity(source)
+    assert result.partial_derivatives[0] == rational_function_from_sympy(
+        -33 / (x + 1) ** 34, ("x",)
+    )
+    source = rational_function_from_sympy(1 / (x + 1) ** 35, ("x",))
+    result = _identity(source)
+    assert result.partial_derivatives[0] == rational_function_from_sympy(
+        -35 / (x + 1) ** 36, ("x",)
+    )
+    source = rational_function_from_sympy(1 / ((x + 1) ** 20 * (x + 2) ** 20), ("x",))
+    result = _identity(source)
+    assert result.partial_derivatives[0] == rational_function_from_sympy(
+        -20 * (2 * x + 3) / ((x + 1) ** 21 * (x + 2) ** 21), ("x",)
+    )
+    source = rational_function_from_sympy(1 / ((x + 1) ** 33 * (x + 2)), ("x",))
+    result = _identity(source)
+    assert result.partial_derivatives[0] == rational_function_from_sympy(
+        -(34 * x + 67) / ((x + 1) ** 34 * (x + 2) ** 2), ("x",)
+    )
+    x, y = symbols("x y")
+    source = rational_function_from_sympy(1 / (x + y) ** 33, ("x", "y"))
+    result = _identity(source)
+    assert result.partial_derivatives[0] == rational_function_from_sympy(
+        -33 / (x + y) ** 34, ("x", "y")
+    )
     source = _monomial_source(("x", "y"), (1, 1), (1, 0))
     with pytest.raises(OperationDomainValidationError, match="coprime"):
         gradient(source)
@@ -198,16 +225,18 @@ def test_authored_common_factor_is_rejected() -> None:
     )
     with pytest.raises(OperationDomainValidationError, match="coprime"):
         gradient(authored)
+    with pytest.raises(OperationResourceAdmissionError, match="exponent"):
+        gradient(rational_function_from_sympy(1 / (x + 1) ** 64, ("x",)))
 
 
 def test_dense_source_box_rejects_before_coprimality_worker(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def boom(*_args: object, **_kwargs: object) -> bool:
+    def boom(*_args: object, **_kwargs: object) -> object:
         raise AssertionError("coprimality worker must not start")
 
     monkeypatch.setattr(
-        "jacobian.math.polynomials.rational_functions.gradient.operations.source_is_coprime",
+        "jacobian.math.polynomials.rational_functions.gradient.operations.recognize_canonical_rational_functions",
         boom,
     )
     axes = tuple(f"x{i}" for i in range(8))
@@ -241,6 +270,23 @@ def test_dense_source_box_rejects_before_coprimality_worker(
     assert error.value.errors()[0]["type"].endswith("work_budget")
 
 
+def test_univariate_binomial_power_cancellation() -> None:
+    x = symbols("x")
+    source = rational_function_from_sympy(1 / (x**2 + 1) ** 17, ("x",))
+    result = gradient(source)
+    expected = rational_function_from_sympy(-34 * x / (x**2 + 1) ** 18, ("x",))
+    assert result.partial_derivatives == (expected,)
+    x, y = symbols("x y")
+    numerator = sum(x ** (2 * i) for i in range(32)) * sum(y**j for j in range(5))
+    source = rational_function_from_sympy(numerator / (x + 1) ** 33, ("x", "y"))
+    with pytest.raises(OperationResourceAdmissionError, match="term"):
+        gradient(source)
+    even_grid = sum(x ** (2 * a) * y ** (2 * b) for a in range(16) for b in range(16))
+    source = rational_function_from_sympy(even_grid / (x + y) ** 33, ("x", "y"))
+    with pytest.raises(OperationResourceAdmissionError, match="term"):
+        gradient(source)
+
+
 def test_shared_request_deadline() -> None:
     source = _monomial_source(("x",), (1,), (0,))
     with (
@@ -248,19 +294,6 @@ def test_shared_request_deadline() -> None:
         pytest.raises(OperationExecutionTimeoutError),
     ):
         gradient(source)
-
-
-def test_linear_power_denominator_cancels_before_result_exponent_cap() -> None:
-    x = symbols("x")
-    source = rational_function_from_sympy(1 / (x + 1) ** 33, ("x",))
-    result = _identity(source)
-    expected = rational_function_from_sympy(-33 / (x + 1) ** 34, ("x",))
-    assert result.partial_derivatives == (expected,)
-    assert (
-        RationalFunctionGradient.model_validate_json(result.model_dump_json()) == result
-    )
-    with pytest.raises(OperationResourceAdmissionError, match="exponent"):
-        gradient(rational_function_from_sympy(1 / (x + 1) ** 64, ("x",)))
 
 
 def test_polar_metric_component_gradient() -> None:

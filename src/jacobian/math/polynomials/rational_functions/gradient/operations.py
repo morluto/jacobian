@@ -18,6 +18,10 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.geometry.differential._recognition_process import (
+    RationalFunctionRecognitionCandidate,
+    recognize_canonical_rational_functions,
+)
 from jacobian.math.polynomials._conversions import sparse_rational_polynomial_to_sympy
 from jacobian.math.polynomials.rational_functions._bounds import (
     BoundsLedger,
@@ -29,6 +33,7 @@ from jacobian.math.polynomials.rational_functions._bounds import (
     _recognition_work_units,
     _remove_exact_common_factor,
     _remove_guaranteed_common_monomial,
+    _remove_guaranteed_linear_power_factor,
     _validate_canonical_result_bound,
 )
 from jacobian.math.polynomials.rational_functions._bounds import (
@@ -37,7 +42,6 @@ from jacobian.math.polynomials.rational_functions._bounds import (
 from jacobian.math.polynomials.rational_functions.gradient._gcd_process import (
     DerivativeGcdFactor,
     forced_denominator_derivative_gcds,
-    source_is_coprime,
 )
 from jacobian.math.polynomials.rational_functions.gradient._kernel import (
     _differentiate_fraction,
@@ -47,15 +51,10 @@ from jacobian.math.polynomials.rational_functions.gradient._models import (
     RationalFunctionGradient,
 )
 from jacobian.math.polynomials.values import (
-    MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS,
-    MAX_RATIONAL_FUNCTION_EXPONENT,
-    MAX_RATIONAL_FUNCTION_TERMS,
     RationalFunction,
     RationalPolynomialTerm,
     SparseRationalPolynomial,
-    _require_rational_function_shapes,
-    _require_rational_function_structural_normal_form,
-    require_sparse_polynomial_budget,
+    require_canonical_rational_function,
 )
 
 
@@ -95,53 +94,53 @@ type _MonomialGradientPlan = tuple[
 ]
 
 
-def _recognize_source(source: RationalFunction) -> None:
+def _source_deadline() -> float:
+    execution = current_request_execution()
+    if execution is None:
+        return time.monotonic() + 60
+    deadline = execution.started_at + 60
+    if execution.deadline is not None:
+        deadline = min(deadline, execution.deadline)
+    return deadline
+
+
+def _recognize_source(source: RationalFunction, deadline: float | None = None) -> None:
     """Recognize the authored field presentation at the admitted owner boundary."""
-    try:
-        _require_rational_function_shapes(source)
-        _require_rational_function_structural_normal_form(source)
-        for part, polynomial in (
-            ("numerator", source.numerator),
-            ("denominator", source.denominator),
-        ):
-            require_sparse_polynomial_budget(
-                polynomial,
-                maximum_terms=MAX_RATIONAL_FUNCTION_TERMS,
-                maximum_exponent=MAX_RATIONAL_FUNCTION_EXPONENT,
-                maximum_coefficient_digits=MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS,
-                label=f"rational function {part}",
-            )
-    except (PydanticCustomError, ValueError) as exc:
-        if isinstance(exc, PydanticCustomError):
+    if deadline is None:
+        deadline = _source_deadline()
+    if (
+        not source.numerator.terms
+        or not source.variables
+        or len(source.denominator.terms) == 1
+    ):
+        try:
+            require_canonical_rational_function(source)
+        except PydanticCustomError as exc:
             raise OperationDomainValidationError(
                 location=(), code=exc.type, message=exc.message()
             ) from exc
-        raise OperationDomainValidationError(
-            location=(), code="polynomial.budget", message=str(exc)
-        ) from exc
-    if not source.numerator.terms or not source.variables:
         return
-    if len(source.denominator.terms) == 1:
-        powers = source.denominator.terms[0].exponents
-        if any(
-            exponent and all(term.exponents[axis] for term in source.numerator.terms)
-            for axis, exponent in enumerate(powers)
-        ):
-            raise OperationDomainValidationError(
-                location=(),
-                code="polynomial.not_coprime",
-                message="rational-function numerator and denominator must be coprime",
-            )
-        return
-    if not source_is_coprime(source):
+    recognition = recognize_canonical_rational_functions(
+        (
+            RationalFunctionRecognitionCandidate(
+                owner="tensor",
+                component=0,
+                value=source,
+            ),
+        ),
+        deadline=deadline,
+    )
+    if recognition.non_coprime is not None:
         raise OperationDomainValidationError(
             location=(),
-            code="polynomial.not_coprime",
+            code="not_coprime",
             message="rational-function numerator and denominator must be coprime",
         )
 
 
-def _prepare_monomial_gradient(source: RationalFunction) -> _MonomialGradientPlan:
+def _prepare_monomial_gradient(
+    source: RationalFunction, deadline: float | None = None
+) -> _MonomialGradientPlan:
     """Differentiate finite Laurent support without a dense polynomial expansion.
 
     The canonical carrier bounds this phase by 8*256 coefficient scalings of
@@ -149,7 +148,7 @@ def _prepare_monomial_gradient(source: RationalFunction) -> _MonomialGradientPla
     normalization only shifts the unchanged surviving support. All component
     supports, exponents and scalar sizes are checked before result construction.
     """
-    _recognize_source(source)
+    _recognize_source(source, deadline)
     variables = source.variables
     denominator_powers = source.denominator.terms[0].exponents
     plans: list[
@@ -234,6 +233,8 @@ def _admit_general_gradient(
     """Admit one row's derivative bounds without launching GCD workers."""
     source_bound = _fraction_bound(function, ledger)
     ledger.charge("recognition", _recognition_work_units(source_bound))
+    # Source recognition constructs its own exact pair; account for the
+    # additional conversion used to retain the pair through differentiation.
     ledger.charge(
         "source_conversion",
         sum(
@@ -257,10 +258,10 @@ def _admit_general_gradient(
         )
     components = []
     for axis in range(variable_count):
-        bound = _remove_guaranteed_common_monomial(
+        raw = _remove_guaranteed_common_monomial(
             _derivative_bound(function, source_bound, axis, ledger)
         )
-        components.append(bound)
+        components.append(_remove_guaranteed_linear_power_factor(raw, function))
     return tuple(components)
 
 
@@ -280,12 +281,16 @@ def _validate_admitted_factors(
     ledger: BoundsLedger,
 ) -> None:
     for bound, factor in zip(bounds, factors, strict=True):
-        _validate_canonical_result_bound(
-            _remove_guaranteed_common_monomial(
+        if (
+            bound.numerator.proven_cancellation_support
+            or bound.denominator.proven_cancellation_support
+        ):
+            reduced = bound
+        else:
+            reduced = _remove_guaranteed_common_monomial(
                 _remove_exact_common_factor(bound, factor.bound)
-            ),
-            ledger,
-        )
+            )
+        _validate_canonical_result_bound(reduced, ledger, work_bound=reduced)
 
 
 def _general_gradient_admitted(
@@ -323,7 +328,7 @@ def gradient(function: RationalFunction) -> RationalFunctionGradient:
     request_checkpoint("before rational gradient admission")
     if len(function.denominator.terms) == 1:
         derivatives = _build_monomial_gradient(
-            function.variables, _prepare_monomial_gradient(function)
+            function.variables, _prepare_monomial_gradient(function, deadline)
         )
     else:
         ledger = _Ledger()

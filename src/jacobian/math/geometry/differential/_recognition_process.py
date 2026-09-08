@@ -35,9 +35,13 @@ _RECOGNITION_STDERR_BYTES = 64 * 1024
 _RECOGNITION_ADDRESS_SPACE_BYTES = 1024 * 1024 * 1024
 
 
+type RecognitionOwner = Literal["vector_field", "tensor", "metric", "scalar"]
+_RECOGNITION_OWNERS = ("vector_field", "tensor", "metric", "scalar")
+
+
 @dataclass(frozen=True, slots=True)
 class RationalFunctionRecognitionCandidate:
-    owner: Literal["vector_field", "tensor"]
+    owner: RecognitionOwner
     component: int
     value: RationalFunction
 
@@ -239,7 +243,7 @@ def recognize_canonical_rational_functions(
     if status == "NOT_COPRIME":
         owner = response.get("owner")
         component = response.get("component")
-        if owner not in ("vector_field", "tensor") or type(component) is not int:
+        if owner not in _RECOGNITION_OWNERS or type(component) is not int:
             raise RuntimeError(
                 "bounded rational-function recognition worker returned malformed output"
             )

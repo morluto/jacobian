@@ -191,7 +191,31 @@ def test_nonreduced_scalar_is_a_domain_error_before_admission() -> None:
     )
     with pytest.raises(OperationDomainValidationError) as rejected:
         laplace_beltrami(metric, scalar)
-    assert rejected.value.errors()[0]["type"].endswith("noncanonical_source")
+    error = rejected.value.errors()[0]
+    assert error["type"].endswith("noncanonical_source")
+    assert error["loc"] == ("scalar",)
+
+
+def test_nonreduced_metric_component_keeps_its_request_path() -> None:
+    x = symbols("x")
+    unreduced = RationalFunction(
+        variables=("x",),
+        numerator=_scalar(x**64 - 1, ("x",)).numerator,
+        denominator=_scalar(x**32 - 1, ("x",)).numerator,
+    )
+    metric = RationalCoordinateMetric(
+        tensor=RationalCoordinateTensor(
+            coordinate_axis=("x",),
+            variance=("COVARIANT", "COVARIANT"),
+            components=(unreduced,),
+            retained_nonzero_denominators=(unreduced.denominator,),
+        )
+    )
+    with pytest.raises(OperationDomainValidationError) as rejected:
+        laplace_beltrami(metric, _scalar(1, ("x",)))
+    error = rejected.value.errors()[0]
+    assert error["type"].endswith("noncanonical_source")
+    assert error["loc"] == ("metric", "tensor", "components", 0)
 
 
 def test_monic_powered_result_denominator_reuses_inherited_guards() -> None:
@@ -241,8 +265,21 @@ def test_recognition_work_is_rejected_before_the_gcd_worker(
             "recognition worker must follow work admission"
         ),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="work"):
+    with pytest.raises(OperationResourceAdmissionError, match="work") as rejected:
         laplace_beltrami(metric, scalar)
+    error = rejected.value.errors()[0]
+    assert error["type"].endswith(".work")
+    assert error["loc"] == ("scalar",)
+
+
+def test_scalar_derivative_bounds_report_the_scalar_field() -> None:
+    x = symbols("x")
+    metric = _metric((1,), ("x",))
+    with pytest.raises(OperationResourceAdmissionError) as rejected:
+        laplace_beltrami(metric, _scalar(1 / (x**64 + 1), ("x",)))
+    error = rejected.value.errors()[0]
+    assert error["loc"] == ("scalar",)
+    assert error["type"].endswith("result_exponent")
 
 
 def test_result_locus_guard_budget_is_bounded() -> None:

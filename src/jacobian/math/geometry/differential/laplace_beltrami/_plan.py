@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, replace
 from fractions import Fraction
 from typing import NoReturn
 
@@ -48,13 +49,25 @@ def _laplace_singular_metric() -> OperationDomainValidationError:
     )
 
 
+def _laplace_reject_at(
+    location: tuple[str, ...],
+) -> Callable[[str, str], NoReturn]:
+    def reject(reason: str, message: str) -> NoReturn:
+        raise OperationResourceAdmissionError(
+            location=location,
+            code=f"differential_geometry.laplace_beltrami.{reason}",
+            message=message,
+        )
+
+    return reject
+
+
+_laplace_metric_reject = _laplace_reject_at(("metric",))
+_laplace_scalar_reject = _laplace_reject_at(("scalar",))
+
+
 def _laplace_reject(reason: str, message: str) -> NoReturn:
-    location = ("scalar",) if reason == "result_exponent" else ("metric",)
-    raise OperationResourceAdmissionError(
-        location=location,
-        code=f"differential_geometry.laplace_beltrami.{reason}",
-        message=message,
-    )
+    _laplace_metric_reject(reason, message)
 
 
 @dataclass(frozen=True)
@@ -91,11 +104,16 @@ def build_plan(metric: RationalCoordinateMetric, scalar: RationalFunction) -> Pl
     dimension = len(metric.tensor.coordinate_axis)
     connection_plan = build_connection_plan(
         metric,
-        admission_reject=_laplace_reject,
+        admission_reject=_laplace_metric_reject,
         label="Laplace--Beltrami",
         singular_metric=_laplace_singular_metric,
     )
     dag = connection_plan.dag
+    dag.ledger.limits = replace(
+        dag.ledger.limits,
+        reject=_laplace_scalar_reject,
+        label="Laplace--Beltrami",
+    )
     field = dag.fraction(scalar)
     axes = tuple(range(dimension))
     value_terms: list[Expression] = []
@@ -197,7 +215,7 @@ def build_plan(metric: RationalCoordinateMetric, scalar: RationalFunction) -> Pl
         or bits > MAX_LAPLACE_OUTPUT_BITS
         or slots > MAX_LAPLACE_OUTPUT_SLOTS
     ):
-        _laplace_reject(
+        _laplace_scalar_reject(
             "output",
             "Laplace--Beltrami source and result exceed polynomial term, "
             "coefficient-bit, or coordinate allocation bounds",

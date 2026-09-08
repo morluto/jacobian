@@ -71,17 +71,21 @@ def admit_recognition_work(
     *,
     reject: Callable[[str, str], NoReturn] | None = None,
     label: str | None = None,
+    reject_for: Callable[[RationalFunction], Callable[[str, str], NoReturn]]
+    | None = None,
 ) -> None:
     """Charge coprimality work against the shared 50,000,000-unit envelope."""
 
     ledger = Ledger()
-    if reject is not None or label is not None:
+    if reject is not None or label is not None or reject_for is not None:
         ledger.limits = replace(
             ledger.limits,
             reject=reject or ledger.limits.reject,
             label=label or ledger.limits.label,
         )
     for value in dict.fromkeys(values):
+        if reject_for is not None:
+            ledger.limits = replace(ledger.limits, reject=reject_for(value))
         bound = _fraction_bound(value, ledger)
         ledger.charge("recognition", _recognition_work_units(bound))
 

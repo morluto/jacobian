@@ -20,7 +20,8 @@ from jacobian.math.geometry.differential.laplace_beltrami._models import (
     RationalLaplaceBeltramiResult,
 )
 from jacobian.math.geometry.differential.laplace_beltrami._plan import (
-    _laplace_reject,
+    _laplace_metric_reject,
+    _laplace_scalar_reject,
     build_plan,
 )
 from jacobian.math.geometry.differential.metrics._dag import admit_recognition_work
@@ -40,27 +41,48 @@ def _singular_metric() -> OperationDomainValidationError:
     )
 
 
+def _recognition_location(
+    failure: RationalFunctionRecognitionCandidate,
+) -> tuple[str | int, ...]:
+    if failure.owner == "scalar":
+        return ("scalar",)
+    return ("metric", "tensor", "components", failure.component)
+
+
 def _recognize_source(
     metric: RationalCoordinateMetric, scalar: RationalFunction, deadline: float
 ) -> None:
-    sources = gcd_recognition_values((*metric.tensor.components, scalar))
-    admit_recognition_work(
-        sources,
-        reject=_laplace_reject,
-        label="Laplace--Beltrami",
-    )
-    candidates = tuple(
-        RationalFunctionRecognitionCandidate(
-            owner="tensor", component=index, value=source
+    candidates: list[RationalFunctionRecognitionCandidate] = []
+    seen: set[RationalFunction] = set()
+    for index, component in enumerate(metric.tensor.components):
+        if component in seen or not gcd_recognition_values((component,)):
+            continue
+        seen.add(component)
+        candidates.append(
+            RationalFunctionRecognitionCandidate(
+                owner="metric", component=index, value=component
+            )
         )
-        for index, source in enumerate(sources)
-    )
-    if not candidates:
+    if scalar not in seen and gcd_recognition_values((scalar,)):
+        candidates.append(
+            RationalFunctionRecognitionCandidate(
+                owner="scalar", component=0, value=scalar
+            )
+        )
+    owned = tuple(candidates)
+    if not owned:
         return
-    recognition = recognize_canonical_rational_functions(candidates, deadline=deadline)
+    admit_recognition_work(
+        tuple(candidate.value for candidate in owned),
+        label="Laplace--Beltrami",
+        reject_for=lambda value: (
+            _laplace_scalar_reject if value == scalar else _laplace_metric_reject
+        ),
+    )
+    recognition = recognize_canonical_rational_functions(owned, deadline=deadline)
     if recognition.non_coprime is not None:
         raise OperationDomainValidationError(
-            location=("laplace_beltrami",),
+            location=_recognition_location(recognition.non_coprime),
             code="differential_geometry.laplace_beltrami.noncanonical_source",
             message="metric and scalar must be reduced canonical rational functions",
         )

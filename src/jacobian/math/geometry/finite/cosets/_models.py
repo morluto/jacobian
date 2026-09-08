@@ -61,9 +61,7 @@ class CosetIntersectionProfile(CosetIntersectionSource):
             _validate_vector(row.representative, self.space)
             for vector in row.members:
                 _validate_vector(vector, self.space)
-        collected = tuple(
-            sorted(member for row in self.rows for member in row.members)
-        )
+        collected = tuple(sorted(member for row in self.rows for member in row.members))
         if collected != self.subset:
             raise ValueError("row members must be the complete retained subset")
         return self

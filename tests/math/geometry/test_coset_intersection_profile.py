@@ -162,7 +162,6 @@ def test_profile_rows_must_cover_the_retained_subset() -> None:
         )
 
 
-
 @pytest.mark.parametrize("subset", [((0,), (0,)), ((1,), (0,)), ((3,),), ((0, 0),)])
 def test_noncanonical_subset_is_rejected(subset: tuple[tuple[int, ...], ...]) -> None:
     space = PrimeFieldVectorSpace(field_order=3, axis=("x",))

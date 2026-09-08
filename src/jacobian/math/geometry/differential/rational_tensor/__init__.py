@@ -1,13 +1,6 @@
-"""Rational coordinate-tensor operations."""
+"""Rational coordinate-tensor operation namespaces."""
 
-from jacobian.math.geometry.differential.rational_tensor.covariant_derivative import (
-    RationalCovariantDerivativeProfile,
-    RationalCovariantDerivativeRequest,
-    covariant_derivative,
-)
-
-__all__ = [
-    "RationalCovariantDerivativeProfile",
-    "RationalCovariantDerivativeRequest",
-    "covariant_derivative",
-]
+# Public values and operations are owned by their concrete operation package.
+# Keeping this grouping namespace empty avoids duplicate public ownership and
+# prevents wire request models from escaping through a parent import path.
+__all__: list[str] = []

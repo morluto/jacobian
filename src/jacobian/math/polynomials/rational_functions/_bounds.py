@@ -549,7 +549,9 @@ def _remove_guaranteed_common_monomial(bound: FractionBound) -> FractionBound:
     )
 
 
-def _guaranteed_linear_power_gcd(denominator: SparseRationalPolynomial) -> tuple[int, int]:
+def _guaranteed_linear_power_gcd(
+    denominator: SparseRationalPolynomial,
+) -> tuple[int, int]:
     """Return ``(axis, deg(gcd(q, q')))`` for a power of a linear polynomial.
 
     In characteristic zero, ``q = (alpha x_i + beta)^n`` with ``n >= 2`` and

@@ -8,11 +8,34 @@ from jsonschema import validate
 from jacobian.math.combinatorics.finite_structures.hypergraphs.same_color_conflicts._tools import (
     TOOLS,
 )
-from jacobian.math.geometry.exact.distance_edge_coloring._tools import (
-    TOOLS as DISTANCE_TOOLS,
+from jacobian.math.geometry.exact.distance_edge_coloring import (
+    compute_distance_edge_coloring,
+)
+from jacobian.math.geometry.exact.distance_edge_coloring._models import (
+    DistanceEdgeColoringRequest,
 )
 from jacobian.mcp.server import create_server
 from mcp import Client
+
+_UNIT_SQUARE = {
+    "configuration": {
+        "points": [
+            {
+                "label": label,
+                "coordinates": [
+                    {"num": str(x), "den": "1"},
+                    {"num": str(y), "den": "1"},
+                ],
+            }
+            for label, x, y in (
+                ("a", 0, 0),
+                ("b", 1, 0),
+                ("c", 0, 1),
+                ("d", 1, 1),
+            )
+        ]
+    }
+}
 
 
 def test_conflicts_native_schema_and_complete_distance_chain() -> None:
@@ -36,17 +59,9 @@ def test_conflicts_native_schema_and_complete_distance_chain() -> None:
             output = response.structured_content["output"]
             validate(output, tool.result_type.model_json_schema())
             assert output == native.model_dump(mode="json")
-            distance_tool = DISTANCE_TOOLS[0]
-            distances = await client.call_tool(
-                "math.run",
-                {
-                    "operation_id": distance_tool.operation_id,
-                    "payload": distance_tool.examples[0].input,
-                },
-            )
-            assert not distances.is_error
-            assert distances.structured_content is not None
-            geometry = distances.structured_content["output"]
+            geometry = compute_distance_edge_coloring(
+                DistanceEdgeColoringRequest.model_validate(_UNIT_SQUARE).configuration
+            ).model_dump(mode="json")
             conflicts = await client.call_tool(
                 "math.run",
                 {

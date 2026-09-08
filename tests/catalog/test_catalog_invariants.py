@@ -67,6 +67,14 @@ def test_geometry_incidence_search_stays_one_capability_family() -> None:
     }
 
 
+def test_derived_distance_edge_coloring_stays_off_the_catalog() -> None:
+    """Indexed distance colouring is a native projection of the distance profile."""
+
+    public_ids = {tool.operation_id for tool in BUILTIN_TOOLS}
+    assert "geometry.points.distance_profile.compute" in public_ids
+    assert "geometry.points.distance_edge_coloring.compute" not in public_ids
+
+
 def test_prime_field_matrix_computations_have_one_operation_family() -> None:
     """Rank, RREF, and nullspace over GF(p) are owned by ``prime_field.matrix``.
 

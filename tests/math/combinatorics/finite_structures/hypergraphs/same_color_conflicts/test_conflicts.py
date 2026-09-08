@@ -154,6 +154,24 @@ def test_deserialized_provenance_must_match_source_edge_colors() -> None:
         SameColorConflictsResult.model_validate(mixed)
 
 
+def test_deserialized_provenance_must_be_complete_and_name_unions() -> None:
+    result = check_oracle(
+        coloring(("a", "b", "c"), [("a",), ("b",), ("c",)], [0, 0, 0])
+    )
+    omitted = result.model_dump()
+    omitted["provenance"] = omitted["provenance"][1:]
+    with pytest.raises(ValidationError, match="every same-colour source pair"):
+        SameColorConflictsResult.model_validate(omitted)
+    swapped = result.model_dump()
+    first, last = swapped["provenance"][0], swapped["provenance"][-1]
+    swapped["provenance"][0] = {
+        **first,
+        "conflict_edge_id": last["conflict_edge_id"],
+    }
+    with pytest.raises(ValidationError, match="union of the two source edges"):
+        SameColorConflictsResult.model_validate(swapped)
+
+
 def test_multiple_colors_can_produce_the_same_union() -> None:
     result = check_oracle(
         coloring(("a", "b"), [("a",), ("b",), ("a",), ("b",)], [0, 0, 1, 1])

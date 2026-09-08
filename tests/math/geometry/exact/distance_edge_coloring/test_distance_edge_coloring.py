@@ -78,6 +78,27 @@ def test_square() -> None:
     }
 
 
+def test_deserialized_palette_must_be_strictly_increasing() -> None:
+    result = assert_reconstructs(configuration([(0, 0), (1, 0), (0, 1), (1, 1)]))
+    reversed_palette = result.model_dump()
+    reversed_palette["squared_distances"] = list(
+        reversed(reversed_palette["squared_distances"])
+    )
+    reversed_palette["coloring"]["assignments"] = [
+        {**item, "color_index": 1 - item["color_index"]}
+        for item in reversed_palette["coloring"]["assignments"]
+    ]
+    with pytest.raises(ValidationError, match="strictly increasing"):
+        DistanceEdgeColoringResult.model_validate(reversed_palette)
+    duplicate = result.model_dump()
+    duplicate["squared_distances"] = [
+        duplicate["squared_distances"][0],
+        duplicate["squared_distances"][0],
+    ]
+    with pytest.raises(ValidationError, match="strictly increasing"):
+        DistanceEdgeColoringResult.model_validate(duplicate)
+
+
 def test_pythagorean_pair_admits_reduced_unit_distance() -> None:
     m = 10**9000
     point = (

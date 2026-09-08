@@ -152,15 +152,13 @@ class TestComposition:
         assert composite.final_outputs == ()
         assert run_subsequential(composite, ())[0] == "NONFINAL_DOMAIN_STATE"
 
-    def test_product_state_bound_is_rejected_before_composition(self) -> None:
+    def test_unreachable_cartesian_states_do_not_block_composition(self) -> None:
         large = _flip().model_copy(update={"state_count": 9})
         request = ComposeRequest(first=large, second=large)
 
-        with pytest.raises(OperationDomainValidationError) as error:
-            compute_compose(request)
-        assert error.value.errors()[0]["type"] == (
-            "finite_state_transducer.composition_state_bound_exceeded"
-        )
+        result = compute_compose(request)
+        assert result.transducer.state_count == 1
+        assert run_subsequential(result.transducer, (0, 1, 0))[1] == (0, 1, 0)
 
     def test_adapter_binds_both_operands(self) -> None:
         request = ComposeRequest(first=identity_transducer(2), second=_flip())

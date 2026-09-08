@@ -5,7 +5,10 @@ from __future__ import annotations
 from collections import deque
 from typing import Literal
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.logic.automata.transducers._models import (
     ComposeResult,
     SubseqRunResult,
@@ -275,6 +278,9 @@ def compose_subsequential(
     """Compose two subsequential transducers, computing U o T.
 
     The result computes ``second(first(word))`` whenever both are defined.
+    Exploration admits at most 64 reachable pairs, each with at most 32 input
+    symbols and 512 intermediate symbols. Unreachable Cartesian pairs need
+    neither storage nor transition work.
     """
     _validate_composition_bounds(first, second)
     t_map = {
@@ -308,6 +314,12 @@ def compose_subsequential(
                 raise RuntimeError("admitted composite transition exceeded its bound")
             pair_next = (t_next, u_next_final)
             if pair_next not in state_pairs:
+                if len(state_pairs) == MAX_FST_STATES:
+                    raise OperationResourceAdmissionError(
+                        location=("first", "second"),
+                        code="finite_state_transducer.composition_state_bound_exceeded",
+                        message=f"reachable composite state count exceeds {MAX_FST_STATES}",
+                    )
                 state_pairs[pair_next] = len(state_pairs)
                 queue.append(pair_next)
             new_state_next = state_pairs[pair_next]
@@ -364,13 +376,6 @@ def _validate_composition_bounds(
         _reject(
             "composition_alphabet_mismatch",
             "first output alphabet must match second input alphabet",
-            "first",
-            "second",
-        )
-    if first.state_count * second.state_count > MAX_FST_STATES:
-        _reject(
-            "composition_state_bound_exceeded",
-            f"composite product-state bound exceeds {MAX_FST_STATES}",
             "first",
             "second",
         )
@@ -565,5 +570,7 @@ def verify_composition(claim: ComposeResult) -> bool:
 
     try:
         return compose_subsequential(claim.first, claim.second) == claim.transducer
+    except OperationResourceAdmissionError:
+        raise
     except (TypeError, ValueError, OperationDomainValidationError):
         return False

@@ -220,122 +220,143 @@ def _post_places(net: PetriNet, t: int) -> frozenset[int]:
     return frozenset(p for p in range(net.place_count) if net.post[p][t] > 0)
 
 
-def find_minimal_siphons(net: PetriNet) -> list[frozenset[int]]:
-    """Find all minimal siphons of a Petri net.
-
-    A siphon is a non-empty set of places S such that every transition
-    that outputs to S also inputs from S.  Formally, for every transition
-    *t*: if ``post(t) ∩ S ≠ ∅`` then ``pre(t) ∩ S ≠ ∅``.
-
-    Once a siphon loses all its tokens no transition can ever produce a
-    token in it again.
-
-    Returns the list of inclusion-minimal siphons.
-    """
-    from itertools import combinations
-
-    n = net.place_count
-    if net.transition_count == 0:
-        return [frozenset((place,)) for place in range(n)]
-    if n == 0:
-        return []
-
-    pre = [_pre_places(net, t) for t in range(net.transition_count)]
-    post = [_post_places(net, t) for t in range(net.transition_count)]
-
-    found: list[frozenset[int]] = []
-
-    for size in range(1, n + 1):
-        for subset in combinations(range(n), size):
-            s = frozenset(subset)
-            is_siphon = True
-            for t in range(net.transition_count):
-                if s & post[t] and not (s & pre[t]):
-                    is_siphon = False
-                    break
-            if not is_siphon:
-                continue
-            if any(prev <= s for prev in found):
-                continue
-            found.append(s)
-
-    return found
-
-
-def find_minimal_traps(net: PetriNet) -> list[frozenset[int]]:
-    """Find all minimal traps of a Petri net.
-
-    A trap is a non-empty set of places S such that every transition
-    that inputs from S also outputs to S.  Formally, for every transition
-    *t*: if ``pre(t) ∩ S ≠ ∅`` then ``post(t) ∩ S ≠ ∅``.
-
-    Once a trap has a token it can never become empty.
-
-    Returns the list of inclusion-minimal traps.
-    """
-    from itertools import combinations
-
-    n = net.place_count
-    if net.transition_count == 0:
-        return [frozenset((place,)) for place in range(n)]
-    if n == 0:
-        return []
-
-    pre = [_pre_places(net, t) for t in range(net.transition_count)]
-    post = [_post_places(net, t) for t in range(net.transition_count)]
-
-    found: list[frozenset[int]] = []
-
-    for size in range(1, n + 1):
-        for subset in combinations(range(n), size):
-            s = frozenset(subset)
-            is_trap = True
-            for t in range(net.transition_count):
-                if s & pre[t] and not (s & post[t]):
-                    is_trap = False
-                    break
-            if not is_trap:
-                continue
-            if any(prev <= s for prev in found):
-                continue
-            found.append(s)
-
-    return found
-
-
-def siphon_trap(net: PetriNet) -> SiphonTrapResult:
-    """Return all inclusion-minimal siphons and traps within the exact bound."""
-
-    if net.transition_count == 0:
-        # Every nonempty subset satisfies both implications vacuously; its
-        # inclusion-minimal members are precisely the singletons.
-        singletons = tuple(
-            PetriPlaceSubset(places=(place,)) for place in range(net.place_count)
+def _place_components(
+    net: PetriNet,
+) -> tuple[tuple[tuple[int, ...], tuple[int, ...]], ...]:
+    """Partition places joined by the support of any transition."""
+    neighbors: list[set[int]] = [set() for _ in range(net.place_count)]
+    supports = [
+        tuple(sorted(_pre_places(net, t) | _post_places(net, t)))
+        for t in range(net.transition_count)
+    ]
+    for support in supports:
+        if support:
+            anchor = support[0]
+            for place in support[1:]:
+                neighbors[anchor].add(place)
+                neighbors[place].add(anchor)
+    unseen = set(range(net.place_count))
+    components = []
+    while unseen:
+        start = min(unseen)
+        unseen.remove(start)
+        places = {start}
+        frontier = [start]
+        while frontier:
+            for neighbor in neighbors[frontier.pop()]:
+                if neighbor in unseen:
+                    unseen.remove(neighbor)
+                    places.add(neighbor)
+                    frontier.append(neighbor)
+        transitions = tuple(
+            t for t, support in enumerate(supports) if support and support[0] in places
         )
-        return SiphonTrapResult(net=net, siphons=singletons, traps=singletons)
-    if net.place_count > MAX_SIPHON_TRAP_PLACES:
-        raise OperationResourceAdmissionError(
-            location=("net",),
-            code="petri_net.siphon_trap_place_bound",
-            message="siphon/trap check supports at most "
-            f"{MAX_SIPHON_TRAP_PLACES} places for exact enumeration",
+        components.append((tuple(sorted(places)), transitions))
+    return tuple(components)
+
+
+def _minimal_component_families(
+    net: PetriNet, places: tuple[int, ...], transitions: tuple[int, ...]
+) -> tuple[list[frozenset[int]], list[frozenset[int]]]:
+    """Enumerate local subsets with a subset-DP minimality certificate."""
+    if not transitions:
+        singletons = [frozenset((place,)) for place in places]
+        return singletons, singletons.copy()
+    arcs = tuple(
+        (
+            sum(1 << i for i, p in enumerate(places) if net.pre[p][t]),
+            sum(1 << i for i, p in enumerate(places) if net.post[p][t]),
         )
-    candidates = (1 << net.place_count) - 1
-    work = 2 * candidates * (net.transition_count + net.place_count)
+        for t in transitions
+    )
+    # Bit1/bit2 record whether any nonempty subset is a siphon/trap.
+    # All proper submasks precede mask. Their union supplies minimality
+    # in O(number of places), avoiding pairwise scans over found families.
+    contains = bytearray(1 << len(places))
+    siphons: list[frozenset[int]] = []
+    traps: list[frozenset[int]] = []
+    for mask in range(1, len(contains)):
+        inherited = 0
+        bits = mask
+        while bits:
+            bit = bits & -bits
+            inherited |= contains[mask ^ bit]
+            bits ^= bit
+        valid = 3
+        for pre, post in arcs:
+            if mask & post and not mask & pre:
+                valid &= ~1
+            if mask & pre and not mask & post:
+                valid &= ~2
+        minimal = valid & ~inherited
+        if minimal:
+            subset = frozenset(p for i, p in enumerate(places) if mask & (1 << i))
+            if minimal & 1:
+                siphons.append(subset)
+            if minimal & 2:
+                traps.append(subset)
+        contains[mask] = inherited | valid
+    return siphons, traps
+
+
+def _minimal_place_families(
+    net: PetriNet,
+) -> tuple[list[frozenset[int]], list[frozenset[int]]]:
+    """Admit independent component searches before allocating subset tables."""
+    components = _place_components(net)
+    work = 2 * net.place_count * net.transition_count
+    for places, transitions in components:
+        if not transitions:
+            work += 2 * len(places)
+            continue
+        if len(places) > MAX_SIPHON_TRAP_PLACES:
+            raise OperationResourceAdmissionError(
+                location=("net",),
+                code="petri_net.siphon_trap_place_bound",
+                message=f"each coupled siphon/trap component supports at most {MAX_SIPHON_TRAP_PLACES} places for exact enumeration",
+            )
+        candidates = (1 << len(places)) - 1
+        work += 2 * candidates * (len(transitions) + len(places))
     if work > MAX_SIPHON_TRAP_WORK:
         raise OperationResourceAdmissionError(
             location=("net",),
             code="petri_net.siphon_trap_work_bound",
-            message="siphon/trap candidate and transition-scan work exceeds the admitted bound",
+            message="siphon/trap component subset work exceeds the admitted bound",
         )
+    siphons: list[frozenset[int]] = []
+    traps: list[frozenset[int]] = []
+    for places, transitions in components:
+        local_siphons, local_traps = _minimal_component_families(
+            net, places, transitions
+        )
+        siphons.extend(local_siphons)
+        traps.extend(local_traps)
+
+    # A global minimal family member lies in one component: each nonempty
+    # component intersection separately satisfies the same implications.
+    def key(subset: frozenset[int]) -> tuple[int, tuple[int, ...]]:
+        return len(subset), tuple(sorted(subset))
+
+    return sorted(siphons, key=key), sorted(traps, key=key)
+
+
+def find_minimal_siphons(net: PetriNet) -> list[frozenset[int]]:
+    """Return all inclusion-minimal nonempty siphons within the exact envelope."""
+    return _minimal_place_families(net)[0]
+
+
+def find_minimal_traps(net: PetriNet) -> list[frozenset[int]]:
+    """Return all inclusion-minimal nonempty traps within the exact envelope."""
+    return _minimal_place_families(net)[1]
+
+
+def siphon_trap(net: PetriNet) -> SiphonTrapResult:
+    """Return minimal families by independent place-transition components."""
+    siphons, traps = _minimal_place_families(net)
     return SiphonTrapResult(
         net=net,
-        siphons=tuple(
-            PetriPlaceSubset(places=tuple(sorted(s))) for s in find_minimal_siphons(net)
-        ),
-        traps=tuple(
-            PetriPlaceSubset(places=tuple(sorted(t))) for t in find_minimal_traps(net)
-        ),
+        siphons=tuple(PetriPlaceSubset(places=tuple(sorted(s))) for s in siphons),
+        traps=tuple(PetriPlaceSubset(places=tuple(sorted(t))) for t in traps),
     )
 
 

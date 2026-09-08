@@ -11,7 +11,17 @@ from jacobian.math.geometry.differential.metrics._dag import (
     reject,
 )
 from jacobian.math.geometry.differential.metrics._models import RationalCoordinateMetric
-from jacobian.math.geometry.differential.metrics._plan import build_connection_plan
+from jacobian.math.geometry.differential.metrics._plan import (
+    _has_nonconstant_denominator,
+    build_connection_plan,
+)
+from jacobian.math.geometry.differential.values import (
+    MAX_RATIONAL_TENSOR_COEFFICIENT_DIGITS,
+    MAX_RATIONAL_TENSOR_EXPONENT,
+    MAX_RATIONAL_TENSOR_LOCUS_GUARDS,
+    MAX_RATIONAL_TENSOR_POLYNOMIAL_TERMS,
+    _is_unit_polynomial,
+)
 from jacobian.math.polynomials.rational_functions._bounds import PolynomialBound
 from jacobian.math.polynomials.values import RationalFunction, SparseRationalPolynomial
 
@@ -77,10 +87,32 @@ def build_plan(metric: RationalCoordinateMetric, scalar: RationalFunction) -> Pl
             )
     value = dag.add(*value_terms)
     size = dag.admit_output(value)
-    determinant_sizes = [
-        _bound_allocation(dag.nodes[index].bound, dimension)
-        for index in set(connection_plan.determinant.numerator)
-    ]
+    determinant_sizes: list[tuple[int, int, int]] = []
+    for index in set(connection_plan.determinant.numerator):
+        bound = dag.nodes[index].bound
+        if (
+            bound.terms > MAX_RATIONAL_TENSOR_POLYNOMIAL_TERMS
+            or max(bound.degrees) > MAX_RATIONAL_TENSOR_EXPONENT
+            or bound.coefficient_digits > MAX_RATIONAL_TENSOR_COEFFICIENT_DIGITS
+        ):
+            reject(
+                "determinant_locus",
+                "determinant locus factors exceed canonical polynomial bounds",
+            )
+        determinant_sizes.append(_bound_allocation(bound, dimension))
+    extra_guards = 0 if _is_unit_polynomial(scalar.denominator, dimension) else 1
+    if _has_nonconstant_denominator(dag, value):
+        extra_guards += 1
+    potential_guards = (
+        len(metric.tensor.retained_nonzero_denominators)
+        + len(set(connection_plan.determinant.numerator))
+        + extra_guards
+    )
+    if potential_guards > MAX_RATIONAL_TENSOR_LOCUS_GUARDS:
+        reject(
+            "locus",
+            "complete retained Laplace--Beltrami locus exceeds 768 guards",
+        )
     source = [
         _source_allocation(polynomial, dimension)
         for polynomial in (

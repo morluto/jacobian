@@ -69,7 +69,7 @@ class RationalLaplaceBeltramiResult(StrictModel):
             )
         expected = canonical_locus_guards(
             self.metric.tensor.retained_nonzero_denominators,
-            component_denominators=(self.value.denominator,),
+            component_denominators=(self.value.denominator, self.scalar.denominator),
             variable_count=len(axis),
         )
         expected_keys = {_polynomial_key(guard) for guard in expected}

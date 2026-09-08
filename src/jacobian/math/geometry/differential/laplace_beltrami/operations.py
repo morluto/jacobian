@@ -107,12 +107,9 @@ def laplace_beltrami(
     guards = canonical_locus_guards(
         metric.tensor.retained_nonzero_denominators,
         tuple(determinant_guards),
-        component_denominators=(value.denominator,),
+        component_denominators=(value.denominator, scalar.denominator),
         variable_count=len(axis),
     )
-    # The scalar result carries its source locus through the result carrier's
-    # explicit metric source; the value itself is an ordinary canonical field
-    # element, so no mathematical claim is encoded in its denominator alone.
     return RationalLaplaceBeltramiResult._from_kernel(
         metric=metric,
         scalar=scalar,

@@ -6,6 +6,7 @@ import unicodedata
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.graphs.decomposition.tree_decompositions.values import (
@@ -49,6 +50,16 @@ class VertexOccurrencesRequest(StrictModel):
     """Compute per-source-vertex occurrence subtrees."""
 
     decomposition: TreeDecomposition
+
+    @model_validator(mode="after")
+    def require_source_order(self) -> Self:
+        if len(self.decomposition.graph.vertices) > MAX_SIMPLE_GRAPH_VERTICES:
+            raise PydanticCustomError(
+                "graph.tree_decomposition.vertex_occurrences.vertex_bound",
+                "vertex-occurrence profiles support at most "
+                f"{MAX_SIMPLE_GRAPH_VERTICES} source vertices",
+            )
+        return self
 
 
 class OccurrenceSubtree(StrictModel):

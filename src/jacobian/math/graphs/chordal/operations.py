@@ -183,7 +183,11 @@ def _admit_recognition(
     edge_count: int,
 ) -> None:
     order = len(graph.vertices)
-    order_work = order * edge_count + sum(count * count for count in neighbor_counts)
+    order_work = (
+        order * order
+        + order * edge_count
+        + sum(count * count for count in neighbor_counts)
+    )
     if order_work > MAX_CHORDAL_ORDER_WORK:
         raise _reject(
             "graph.chordal.order_work_bound",

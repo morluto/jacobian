@@ -6,6 +6,7 @@ import networkx as nx
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.coloring.equitable_k_coloring._models import (
+    MAX_EQUITABLE_COLORING_SEARCH_DEPTH,
     MAX_EQUITABLE_COLORING_SEARCH_NODES,
     EquitableColoringAssignment,
     EquitableColoringResult,
@@ -25,11 +26,10 @@ def _admit(graph: SimpleUndirectedGraph, k: int) -> None:
             message="equitable coloring requires a positive palette size",
         )
     n = len(graph.vertices)
-    if (
-        graph.edges
-        and 0 < k < n
-        and not _is_complete(graph)
-        and k**n > MAX_EQUITABLE_COLORING_SEARCH_NODES
+    needs_search = bool(graph.edges) and 0 < k < n and not _is_complete(graph) and k > 1
+    if needs_search and (
+        n > MAX_EQUITABLE_COLORING_SEARCH_DEPTH
+        or k**n > MAX_EQUITABLE_COLORING_SEARCH_NODES
     ):
         raise OperationDomainValidationError(
             location=("graph", "k"),
@@ -67,6 +67,15 @@ def decide_equitable_k_coloring(
     if direct_result is not None:
         return direct_result
     n = len(graph.vertices)
+    if n > MAX_EQUITABLE_COLORING_SEARCH_DEPTH:
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="graph.equitable_coloring_search_depth",
+            message=(
+                "equitable coloring search supports at most "
+                f"{MAX_EQUITABLE_COLORING_SEARCH_DEPTH} vertices"
+            ),
+        )
     nx_graph: nx.Graph[str] = nx.Graph()
     for v in graph.vertices:
         nx_graph.add_node(v)
@@ -123,6 +132,8 @@ def _direct_result(
 ) -> EquitableColoringResult | None:
     n = len(graph.vertices)
     if _is_complete(graph) and k < n:
+        return _result(graph, k, False)
+    if k == 1 and graph.edges:
         return _result(graph, k, False)
     if k >= n:
         coloring = tuple(range(n))

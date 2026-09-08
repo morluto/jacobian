@@ -8,7 +8,11 @@ from pydantic import ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.math.graphs.values import ColoredUndirectedGraph, GraphVertexLabel
+from jacobian.math.graphs.values import (
+    MAX_SIMPLE_GRAPH_VERTICES,
+    ColoredUndirectedGraph,
+    GraphVertexLabel,
+)
 
 
 class SimpleGraph(StrictModel):
@@ -112,6 +116,16 @@ class ColoredGraphCanonicalizationRequest(StrictModel):
             "aligned with the embedded graph's authoritative vertex and edge axes."
         )
     )
+
+    @model_validator(mode="after")
+    def require_supported_order(self) -> Self:
+        if len(self.colored_graph.graph.vertices) > MAX_SIMPLE_GRAPH_VERTICES:
+            raise PydanticCustomError(
+                "graph.colored_canonicalization.vertex_bound",
+                "colored-graph canonicalization supports at most "
+                f"{MAX_SIMPLE_GRAPH_VERTICES} vertices",
+            )
+        return self
 
 
 class GraphRelabelingPair(StrictModel):

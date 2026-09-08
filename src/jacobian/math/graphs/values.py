@@ -23,6 +23,11 @@ MAX_SIMPLE_GRAPH_VERTICES = 256
 MAX_SIMPLE_GRAPH_EDGES = (
     MAX_SIMPLE_GRAPH_VERTICES * (MAX_SIMPLE_GRAPH_VERTICES - 1) // 2
 )
+# Encoding envelope is independent of each consumer's computational admission.
+# Hypergraph incidence graphs need |V|+|E| vertices and one graph edge per
+# incidence (at most 36,000).
+MAX_ENCODED_SIMPLE_GRAPH_VERTICES = 12_256
+MAX_ENCODED_SIMPLE_GRAPH_EDGES = max(MAX_SIMPLE_GRAPH_EDGES, 36_000)
 # Indexed values also carry line graphs. Computational admission belongs to
 # each consumer, not to the producer-independent value's encoding envelope.
 MAX_INDEXED_SIMPLE_GRAPH_VERTICES = 1024
@@ -71,14 +76,14 @@ class SimpleUndirectedGraph(StrictModel):
     """Immutable canonical value for a finite simple undirected graph."""
 
     vertices: tuple[str, ...] = Field(
-        max_length=MAX_SIMPLE_GRAPH_VERTICES,
+        max_length=MAX_ENCODED_SIMPLE_GRAPH_VERTICES,
         description=(
             "Unique Unicode NFC vertex labels containing valid Unicode scalar "
             "values. Vertex list order is preserved and need not be sorted."
         ),
     )
     edges: tuple[tuple[str, str], ...] = Field(
-        max_length=MAX_SIMPLE_GRAPH_EDGES,
+        max_length=MAX_ENCODED_SIMPLE_GRAPH_EDGES,
         description=(
             "Unique pairs of distinct declared vertices. Each pair must have "
             "left < right in lexicographic label order (Unicode code points, "
@@ -102,8 +107,9 @@ class SimpleUndirectedGraph(StrictModel):
             raise PydanticCustomError(
                 "graph.graph_vertices_must_be_unique", "graph vertices must be unique"
             )
+        vertex_set = set(self.vertices)
         if any(
-            left >= right or left not in self.vertices or right not in self.vertices
+            left >= right or left not in vertex_set or right not in vertex_set
             for left, right in self.edges
         ):
             raise PydanticCustomError(
@@ -238,10 +244,14 @@ class ColoredUndirectedGraph(StrictModel):
 
 
 __all__ = [
+    "MAX_ENCODED_SIMPLE_GRAPH_EDGES",
+    "MAX_ENCODED_SIMPLE_GRAPH_VERTICES",
     "MAX_GRAPH_COLOR_BYTES",
     "MAX_GRAPH_LABEL_BYTES",
     "MAX_INDEXED_SIMPLE_GRAPH_EDGES",
     "MAX_INDEXED_SIMPLE_GRAPH_VERTICES",
+    "MAX_SIMPLE_GRAPH_EDGES",
+    "MAX_SIMPLE_GRAPH_VERTICES",
     "ColoredUndirectedGraph",
     "GraphColor",
     "GraphCompositionOperation",

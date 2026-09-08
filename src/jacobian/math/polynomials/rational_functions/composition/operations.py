@@ -95,7 +95,7 @@ def _equal_inner_substitution_vanishes(
     ):
         return False
     identities = [_component_identity(component) for component in inner_components]
-    representative = {}
+    representative: dict[bytes, int] = {}
     for index, identity in enumerate(identities):
         representative.setdefault(identity, index)
     collapsed: dict[tuple[int, ...], Fraction] = {}

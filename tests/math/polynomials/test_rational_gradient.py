@@ -18,6 +18,9 @@ from jacobian.math.polynomials.rational_functions.gradient import (
     RationalFunctionGradient,
     gradient,
 )
+from jacobian.math.polynomials.rational_functions.gradient import (
+    operations as gradient_ops,
+)
 from jacobian.math.polynomials.values import (
     RationalFunction,
     RationalPolynomialTerm,
@@ -303,6 +306,19 @@ def test_polar_metric_component_gradient() -> None:
         2 * r, ("r", "theta")
     )
     assert not result.partial_derivatives[1].numerator.terms
+
+
+def test_general_gradient_recognizes_and_cancels_in_the_bounded_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_server_gcd(value: RationalFunction) -> RationalFunction:
+        raise AssertionError("general-gradient gcd must not run in the server process")
+
+    monkeypatch.setattr(
+        gradient_ops, "require_canonical_rational_function", fail_server_gcd
+    )
+    x, y = symbols("x y")
+    _identity(rational_function_from_sympy((x * x + y) / (x - y), ("x", "y")))
 
 
 def test_inactive_axis_of_a_nonmonomial_reciprocal_is_canonical_zero() -> None:

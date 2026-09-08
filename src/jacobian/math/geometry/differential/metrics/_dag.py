@@ -53,12 +53,15 @@ class Ledger:
     def __init__(self) -> None:
         self.work = 0
         self.allocation_bits = 0
+        self.limits = Ledger.limits
 
     def charge(self, category: BoundWorkCategory, amount: int) -> None:
         request_checkpoint(f"admitting metric curvature {category}")
         self.work += amount
         if self.work > 50_000_000:
-            reject("work", "complete curvature DAG exceeds 50,000,000 work units")
+            self.limits.reject(
+                "work", "complete curvature DAG exceeds 50,000,000 work units"
+            )
 
 
 @dataclass(frozen=True)
@@ -118,7 +121,9 @@ class Dag:
             + 64 * self.dimension
         )
         if len(self.nodes) >= 16384 or self.ledger.allocation_bits > 268_435_456:
-            reject("allocation", "curvature DAG exceeds node or coefficient allocation")
+            self.ledger.limits.reject(
+                "allocation", "curvature DAG exceeds node or coefficient allocation"
+            )
         result = len(self.nodes)
         self.nodes.append(node)
         self.keys[key] = result

@@ -230,10 +230,16 @@ def compute_inertia_cells(
     intervening interval. Point cells are evaluated exactly, including nullity
     increases without sign changes and identically singular matrix families.
     """
-    validated_matrix, validated_interval = _require_inertia_inputs(matrix, interval)
-    if current_request_execution() is None:
+    execution = current_request_execution()
+    if execution is None:
         with request_execution(time.monotonic()):
-            return _compute(validated_matrix, validated_interval)
+            return compute_inertia_cells(matrix, interval)
+    deadline = execution.started_at + 60.0
+    if execution.deadline is not None:
+        deadline = min(deadline, execution.deadline)
+    bind_request_deadline(deadline)
+    request_checkpoint("before inertia input revalidation")
+    validated_matrix, validated_interval = _require_inertia_inputs(matrix, interval)
     return _compute(validated_matrix, validated_interval)
 
 

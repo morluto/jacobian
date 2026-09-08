@@ -6,7 +6,10 @@ from fractions import Fraction
 from itertools import product
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.additive.gowers_cube_profile._models import (
     MAX_GOWERS_CUBE_ORDER,
     MAX_GOWERS_CUBE_VERTEX_CHECKS,
@@ -51,7 +54,7 @@ def compute_gowers_cube_profile(
         len(subset) > 1
         and gowers_cube_work(modulus, order) > MAX_GOWERS_CUBE_VERTEX_CHECKS
     ):
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("modulus", "order"),
             code="gowers_cube.work_exceeded",
             message="Gowers cube enumeration exceeds the 2000000-vertex-check bound",
@@ -115,6 +118,8 @@ def compute_gowers_cube_profile(
 
 def verify_gowers_cube_profile(result: GowersCubeResult) -> bool:
     """Verify cube counts and normalization against the retained source."""
+    if not isinstance(result, GowersCubeResult):
+        return False
     try:
         expected = compute_gowers_cube_profile(
             result.modulus, result.subset, result.order
@@ -123,5 +128,7 @@ def verify_gowers_cube_profile(result: GowersCubeResult) -> bool:
             expected.cube_count == result.cube_count
             and expected.normalized_count == result.normalized_count
         )
-    except Exception:
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False

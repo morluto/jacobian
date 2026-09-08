@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from jacobian.canonical import format_canonical_integer
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.additive.product_representation._models import (
     ProductRepresentationResult,
     RepresentationEntry,
@@ -29,7 +32,7 @@ def _admit_product_representation(
 ) -> None:
     pair_count = len(left.elements) * len(right.elements)
     if pair_count > MAX_PRODUCT_REPRESENTATION_PAIRS:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("left", "right"),
             code="additive.product_representation_pair_work_exceeded",
             message=(
@@ -50,7 +53,7 @@ def _admit_product_representation(
     # any caller-supplied value into a Python integer.
     digit_work = pair_count * maximum_product_digits**2
     if digit_work > MAX_PRODUCT_REPRESENTATION_DIGIT_WORK:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("left", "right"),
             code="additive.product_representation_digit_work_exceeded",
             message=(
@@ -90,11 +93,15 @@ def compute_product_representation_profile(
 
 def verify_product_representation_profile(result: ProductRepresentationResult) -> bool:
     """Verify every product multiplicity against the retained source sets."""
+    if not isinstance(result, ProductRepresentationResult):
+        return False
     try:
         expected = compute_product_representation_profile(result.left, result.right)
         return (
             expected.entries == result.entries
             and expected.support_cardinality == result.support_cardinality
         )
-    except Exception:
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False

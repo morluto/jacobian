@@ -8,7 +8,10 @@ from itertools import product
 
 from sympy import isprime
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.codes.general._models import (
     EXACT_ENUMERATION_PASSES,
     MAX_COVERING_RADIUS_STATES_PER_PASS,
@@ -79,7 +82,7 @@ def _admit_enumeration(generator_matrix: GeneratorMatrix, field_order: int) -> N
         EXACT_ENUMERATION_PASSES * field_order ** len(generator_matrix)
         > MAX_EXACT_CODEWORD_EVALUATIONS
     ):
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("generator_matrix",),
             code="code_theory.enumeration_work_exceeded",
             message="generator matrix exceeds the exact enumeration bound",
@@ -114,12 +117,6 @@ def _admit_encoder(encoder: PrimeFieldLinearEncoder) -> GeneratorMatrix:
                 location=("encoder", "field_order"),
                 code="code_theory.field_order_not_prime",
                 message="field_order must be prime for this prime-field operation",
-            )
-        if not encoder.coordinate_axis:
-            raise OperationDomainValidationError(
-                location=("encoder", "coordinate_axis"),
-                code="code_theory.generator_width_out_of_bounds",
-                message="generator rows must have between one and 256 entries",
             )
         return generator_matrix
     _admit_prime_field_matrix(encoder.field_order, generator_matrix)
@@ -235,7 +232,7 @@ def covering_radius(encoder: PrimeFieldLinearEncoder) -> int:
     rank = _matrix_rank_mod_prime(generator_matrix, field_order)
     state_count = field_order ** (width - rank)
     if state_count > MAX_COVERING_RADIUS_STATES_PER_PASS:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("generator_matrix",),
             code="code_theory.syndrome_state_bound_exceeded",
             message="syndrome space exceeds the exact state bound",
@@ -245,7 +242,7 @@ def covering_radius(encoder: PrimeFieldLinearEncoder) -> int:
         SYNDROME_BFS_PASSES * state_count * move_count_bound
         > MAX_COVERING_RADIUS_TRANSITIONS
     ):
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("generator_matrix",),
             code="code_theory.syndrome_transition_bound_exceeded",
             message="syndrome graph exceeds the exact transition bound",
@@ -297,25 +294,37 @@ def covering_radius(encoder: PrimeFieldLinearEncoder) -> int:
 def verify_minimum_distance(claim: MinimumDistanceResult) -> bool:
     """Verify a serialized minimum-distance claim against its encoder."""
 
+    if not isinstance(claim, MinimumDistanceResult):
+        return False
     try:
         return claim.minimum_distance == minimum_distance(claim.request.encoder)
-    except (ArithmeticError, TypeError, ValueError, OperationDomainValidationError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
 def verify_weight_distribution(claim: WeightDistributionResult) -> bool:
     """Verify a serialized weight profile against its encoder."""
 
+    if not isinstance(claim, WeightDistributionResult):
+        return False
     try:
         return claim.weights == tuple(weight_distribution(claim.request.encoder))
-    except (ArithmeticError, TypeError, ValueError, OperationDomainValidationError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
 def verify_covering_radius(claim: CoveringRadiusResult) -> bool:
     """Verify a serialized covering-radius claim against its encoder."""
 
+    if not isinstance(claim, CoveringRadiusResult):
+        return False
     try:
         return claim.covering_radius == covering_radius(claim.request.encoder)
-    except (ArithmeticError, TypeError, ValueError, OperationDomainValidationError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False

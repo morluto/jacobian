@@ -34,10 +34,8 @@ class _ColoringAdmission:
     work_budget: int
 
 
-def _validate_coloring_envelope(
-    hypergraph: FiniteHypergraph, palette_size: int
-) -> _ColoringAdmission:
-    """Validate the complete request and retained-result envelope."""
+def _validate_coloring_source(hypergraph: FiniteHypergraph, palette_size: int) -> None:
+    """Validate source structure and bounded retained axes, without search work."""
     vertex_count = len(hypergraph.vertices)
     edge_count = len(hypergraph.edges)
     if not isinstance(palette_size, int) or isinstance(palette_size, bool):
@@ -59,6 +57,15 @@ def _validate_coloring_envelope(
             "hypergraph_coloring.too_many_edges",
             f"at most {MAX_EDGE_COUNT} edges are supported",
         )
+
+
+def _validate_coloring_envelope(
+    hypergraph: FiniteHypergraph, palette_size: int
+) -> _ColoringAdmission:
+    """Admit the decision search after checking its bounded source."""
+    _validate_coloring_source(hypergraph, palette_size)
+    vertex_count = len(hypergraph.vertices)
+    edge_count = len(hypergraph.edges)
     has_forced_failure = any(len(members) <= 1 for _, members in hypergraph.edges)
     has_injective_witness = not has_forced_failure and palette_size >= vertex_count
     work = (

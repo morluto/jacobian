@@ -8,7 +8,10 @@ from math import comb
 
 from pydantic_core import PydanticCustomError
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.finite_structures.divisibility_sum_triples._models import (
     MAX_INTERVAL_SIZE,
     DivisibilitySumTriplesResult,
@@ -47,14 +50,14 @@ def _admit_divisibility_sum_triples(
 
     interval_size = upper_bound - lower_bound + 1
     if interval_size > MAX_INTERVAL_SIZE:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=(),
             code="divisibility_sum.interval_too_large",
             message=f"interval size must not exceed {MAX_INTERVAL_SIZE}",
         )
     vertices = tuple(str(value) for value in range(lower_bound, upper_bound + 1))
     if any(len(vertex) > MAX_LABEL_LENGTH for vertex in vertices):
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=(),
             code="divisibility_sum.vertex_label_too_long",
             message=f"interval vertices must be at most {MAX_LABEL_LENGTH} characters",
@@ -68,7 +71,7 @@ def _admit_divisibility_sum_triples(
         0 if sparse_no_edges else comb(interval_size, 3) if interval_size >= 3 else 0
     )
     if candidate_count > MAX_TRIPLE_ENUMERATION:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=(),
             code="divisibility_sum.enumeration_work_exceeded",
             message=(
@@ -88,7 +91,7 @@ def _admit_divisibility_sum_triples(
                     (f"edge_{edge_index}", tuple(str(value) for value in triple))
                 )
                 if len(edges) > 12_000 or 3 * len(edges) > 36_000:
-                    raise OperationDomainValidationError(
+                    raise OperationResourceAdmissionError(
                         location=(),
                         code="divisibility_sum.output_too_large",
                         message="the exact triple family exceeds the hypergraph envelope",
@@ -121,10 +124,14 @@ def construct_divisibility_sum_triples_hypergraph(
 def verify_divisibility_sum_triples(claim: DivisibilitySumTriplesResult) -> bool:
     """Verify the complete interval-bound divisibility-triple claim."""
 
+    if not isinstance(claim, DivisibilitySumTriplesResult):
+        return False
     try:
         expected = construct_divisibility_sum_triples_hypergraph(
             claim.lower_bound, claim.upper_bound
         )
         return claim.hypergraph == expected.hypergraph
-    except Exception:
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False

@@ -232,7 +232,6 @@ def _admit_general_gradient(
     function: RationalFunction, ledger: BoundsLedger
 ) -> tuple[tuple[tuple[FractionBound, int], ...], tuple[DerivativeGcdFactor, ...]]:
     """Admit one row into a caller-owned complete scalar or matrix ledger."""
-    _recognize_source(function)
     source_bound = _fraction_bound(function, ledger)
     ledger.charge("recognition", _recognition_work_units(source_bound))
     # Source recognition constructs its own exact pair; account for the
@@ -244,6 +243,7 @@ def _admit_general_gradient(
             for bound in (source_bound.numerator, source_bound.denominator)
         ),
     )
+    _recognize_source(function)
     variable_count = len(function.variables)
     if function.denominator.terms:
         ledger.charge(

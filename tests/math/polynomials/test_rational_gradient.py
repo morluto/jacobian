@@ -200,6 +200,47 @@ def test_authored_common_factor_is_rejected() -> None:
         gradient(authored)
 
 
+def test_dense_source_box_rejects_before_coprimality_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def boom(*_args: object, **_kwargs: object) -> bool:
+        raise AssertionError("coprimality worker must not start")
+
+    monkeypatch.setattr(
+        "jacobian.math.polynomials.rational_functions.gradient.operations.source_is_coprime",
+        boom,
+    )
+    axes = tuple(f"x{i}" for i in range(8))
+    high = (64,) * 8
+    zero = (0,) * 8
+    source = RationalFunction(
+        variables=axes,
+        numerator=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=1, den=1),
+                    exponents=zero,
+                ),
+            )
+        ),
+        denominator=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=1, den=1),
+                    exponents=high,
+                ),
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=1, den=1),
+                    exponents=zero,
+                ),
+            )
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="work") as error:
+        gradient(source)
+    assert error.value.errors()[0]["type"].endswith("work_budget")
+
+
 def test_shared_request_deadline() -> None:
     source = _monomial_source(("x",), (1,), (0,))
     with (

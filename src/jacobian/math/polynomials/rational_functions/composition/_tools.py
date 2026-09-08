@@ -35,7 +35,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="two_variable_chart_transition",
                 description=(
-                    "Compose a rational inner chart with an outer coordinate map; "
+                    "Compose a rational inner chart with an outer coordinate map "
+                    "whose source_variables equal the inner target_coordinates; "
                     "all denominator conditions remain explicit."
                 ),
                 input={

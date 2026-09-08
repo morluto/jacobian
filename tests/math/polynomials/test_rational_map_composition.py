@@ -15,6 +15,7 @@ from jacobian.math.polynomials.rational_functions.composition import (
     RationalMapCompositionRequest,
     compose_maps,
 )
+from jacobian.math.polynomials.rational_functions.composition._tools import TOOLS
 from jacobian.math.polynomials.rational_functions.values import RationalFunctionMap
 from jacobian.math.polynomials.values import RationalFunction, SparseRationalPolynomial
 
@@ -53,6 +54,11 @@ def _evaluate(value: RationalFunction, point: tuple[Fraction, ...]) -> Fraction:
     if not denominator:
         raise ZeroDivisionError
     return numerator / denominator
+
+
+def test_example_states_the_intermediate_axis_precondition() -> None:
+    description = TOOLS[0].examples[0].description
+    assert "source_variables equal the inner target_coordinates" in description
 
 
 def test_example_composition_retains_all_construction_guards() -> None:

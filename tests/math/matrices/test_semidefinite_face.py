@@ -303,5 +303,3 @@ def test_coprime_constraint_denominators_are_bounded_in_compression() -> None:
         reduce_exposed_face(system, (_q(1), _q(1)))
     with pytest.raises(OperationResourceAdmissionError, match="canonical rational"):
         reduce_exposed_face(system, (_q(1), _q(0)))
-
-

@@ -28,6 +28,7 @@ from jacobian.math.polynomials.rational_functions._bounds import (
     _polynomial_backend_conversion_work_units,
     _recognition_work_units,
     _remove_guaranteed_common_monomial,
+    _remove_guaranteed_linear_power_factor,
     _validate_canonical_result_bound,
 )
 from jacobian.math.polynomials.rational_functions._bounds import (
@@ -198,8 +199,11 @@ def _admit_general_gradient(
     )
     components = []
     for axis in range(len(function.variables)):
-        bound = _remove_guaranteed_common_monomial(
-            _derivative_bound(function, source_bound, axis, ledger)
+        bound = _remove_guaranteed_linear_power_factor(
+            _remove_guaranteed_common_monomial(
+                _derivative_bound(function, source_bound, axis, ledger)
+            ),
+            function,
         )
         digits = _validate_canonical_result_bound(bound, ledger)
         components.append((bound, digits))

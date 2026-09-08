@@ -186,7 +186,13 @@ def test_true_output_coefficient_boundary() -> None:
         gradient(_monomial_source(("x",), (64,), (0,), 10**127))
 
 
-def test_authored_common_factor_is_rejected() -> None:
+def test_repeated_linear_denominator_cancels_before_result_exponent() -> None:
+    x = symbols("x")
+    source = rational_function_from_sympy(1 / (x + 1) ** 33, ("x",))
+    result = _identity(source)
+    assert result.partial_derivatives[0] == rational_function_from_sympy(
+        -33 / (x + 1) ** 34, ("x",)
+    )
     source = _monomial_source(("x", "y"), (1, 1), (1, 0))
     with pytest.raises(OperationDomainValidationError, match="coprime"):
         gradient(source)

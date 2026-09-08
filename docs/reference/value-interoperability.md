@@ -36,7 +36,9 @@ indexed graph operations consume, including the null graph and canonical
 1,024 vertices and 65,536 edges so existing line-graph outputs remain
 representable. This is not a computational admission promise: each consumer
 retains its own work and size limits. Label-based `SimpleUndirectedGraph`
-values retain their separate 256-vertex envelope.
+encoding admits 12,256 vertices and 36,000 edges
+(`MAX_ENCODED_SIMPLE_GRAPH_VERTICES` / `MAX_ENCODED_SIMPLE_GRAPH_EDGES`).
+Many graph operations still admit at most 256 vertices as a consumer bound.
 
 Frame operations share `VectorFamily`, whose required `dimension` retains the
 standard Euclidean ambient space even when `vectors` is empty. Coordinates are

@@ -112,3 +112,16 @@ def test_widened_path_is_refused_before_edge_subset_enumeration() -> None:
     graph = _graph(list(vertices), edges)
     with pytest.raises(OperationResourceAdmissionError, match="16 edges"):
         find_k_regular_subgraph(graph, 2)
+
+
+def test_k0_and_k1_on_a_long_path_do_not_require_edge_subset_search() -> None:
+    vertices = [f"v{index}" for index in range(18)]
+    edges = [(vertices[index], vertices[index + 1]) for index in range(17)]
+    graph = _graph(vertices, edges)
+    zero = find_k_regular_subgraph(graph, 0)
+    assert zero.found
+    assert zero.vertices == (vertices[0],)
+    assert zero.edges == ()
+    matching = find_k_regular_subgraph(graph, 1)
+    assert matching.found
+    assert matching.edges == ((vertices[0], vertices[1]),)

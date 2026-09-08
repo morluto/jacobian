@@ -43,6 +43,28 @@ def find_k_regular_subgraph(
         )
     edges = list(graph.edges)
     n_edges = len(edges)
+
+    # Trivial witnesses do not require enumerating edge subsets.
+    if k == 0 and n_vertices > 0:
+        return RegularSubgraphResult(
+            graph=graph,
+            k=k,
+            found=True,
+            vertices=(vertices[0],),
+            edges=(),
+        )
+    if k == 1 and n_edges > 0:
+        left_label, right_label = edges[0]
+        if left_label > right_label:
+            left_label, right_label = right_label, left_label
+        return RegularSubgraphResult(
+            graph=graph,
+            k=k,
+            found=True,
+            vertices=tuple(sorted((left_label, right_label))),
+            edges=((left_label, right_label),),
+        )
+
     if n_edges > MAX_REGULAR_SUBGRAPH_EDGES:
         raise OperationResourceAdmissionError(
             location=("graph",),
@@ -54,16 +76,6 @@ def find_k_regular_subgraph(
         )
 
     vertex_to_idx = {v: i for i, v in enumerate(vertices)}
-
-    # k=0: any single vertex with no edges is a 0-regular subgraph.
-    if k == 0 and n_vertices > 0:
-        return RegularSubgraphResult(
-            graph=graph,
-            k=k,
-            found=True,
-            vertices=(vertices[0],),
-            edges=(),
-        )
 
     # Precompute edge endpoints as index pairs.
     edge_pairs: list[tuple[int, int]] = []

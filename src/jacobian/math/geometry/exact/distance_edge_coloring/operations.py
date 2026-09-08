@@ -68,7 +68,7 @@ class _Budget:
 
 def _plan(
     configuration: PointConfiguration, budget: _Budget
-) -> tuple[tuple[fmpq, ...], ...]:
+) -> tuple[tuple[tuple[fmpq, ...], fmpq], ...]:
     """Admit bounded subtraction, then all squared sums and their output.
 
     Translation-invariant differences are reduced before estimating squared

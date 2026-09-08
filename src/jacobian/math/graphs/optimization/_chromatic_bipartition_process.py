@@ -67,27 +67,36 @@ def find_chromatic_bipartition(
                 ),
                 cwd=directory,
             )
-    except OSError:
-        return _unknown_result(request)
+    except OSError as exc:
+        raise RuntimeError(
+            "bounded chromatic bipartition worker could not be started"
+        ) from exc
     request_checkpoint("after chromatic bipartition worker")
     if completed.cancelled:
         raise OperationExecutionCancelledError("chromatic bipartition worker cancelled")
-    if (
-        completed.timed_out
-        or completed.returncode != 0
-        or completed.stdout_exceeded
-        or completed.stderr_exceeded
-    ):
+    if completed.timed_out:
         return _unknown_result(request)
+    if completed.stdout_exceeded or completed.stderr_exceeded:
+        raise RuntimeError(
+            "bounded chromatic bipartition worker exceeded an output cap"
+        )
+    if completed.returncode != 0:
+        raise RuntimeError(
+            "bounded chromatic bipartition worker did not establish an outcome"
+        )
     if time.monotonic() >= deadline:
         return _unknown_result(request)
     try:
         result = ChromaticBipartitionResult.model_validate(
             json.loads(completed.stdout.decode("utf-8"))
         )
-    except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
-        return _unknown_result(request)
+    except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
+        raise RuntimeError(
+            "bounded chromatic bipartition worker returned malformed output"
+        ) from exc
+    if result.graph != request.graph or result.s != request.s or result.t != request.t:
+        raise RuntimeError(
+            "chromatic bipartition worker result is not bound to the submitted request"
+        )
     request_checkpoint("after chromatic bipartition response validation")
-    return result.model_copy(
-        update={"graph": request.graph, "s": request.s, "t": request.t}
-    )
+    return result

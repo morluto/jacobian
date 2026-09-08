@@ -114,12 +114,49 @@ def _induced_graph(
     )
 
 
-def _admit_chromatic_bipartition(request: ChromaticBipartitionRequest) -> None:
-    """Charge every canonical partition and its inner k-colorability encodings."""
+def _unordered_partition_count(order: int) -> int:
+    """Count nonempty proper subsets with a strictly smaller complement mask."""
 
+    if order < 2:
+        return 0
+    return (1 << (order - 1)) - 1
+
+
+def _edgeless_chromatic_bipartition(
+    request: ChromaticBipartitionRequest,
+) -> ChromaticBipartitionResult:
+    """Decide an edgeless instance without enumerating 2^{n-1} partitions."""
+
+    vertices = request.graph.vertices
+    if len(vertices) < 2 or request.s > 1 or request.t > 1:
+        return ChromaticBipartitionResult(
+            graph=request.graph,
+            s=request.s,
+            t=request.t,
+            status="NO_SPLIT",
+            checked_partitions=0,
+        )
+    return ChromaticBipartitionResult(
+        graph=request.graph,
+        s=request.s,
+        t=request.t,
+        status="SPLIT",
+        side_a=(vertices[0],),
+        side_b=vertices[1:],
+        chromatic_a=1,
+        chromatic_b=1,
+        checked_partitions=0,
+    )
+
+
+def _admit_chromatic_bipartition(request: ChromaticBipartitionRequest) -> None:
+    """Charge every unordered partition and its inner k-colorability encodings."""
+
+    if not request.graph.edges:
+        return
     n = len(request.graph.vertices)
     m = len(request.graph.edges)
-    partitions = max(0, (1 << n) - 2)
+    partitions = _unordered_partition_count(n)
     # Two induced graphs, each trying up to n color counts. One encoding of
     # order n and k<=n uses n*k vertex literals plus m*k^2 edge separations.
     encoding = n * n + m * n * n
@@ -140,13 +177,15 @@ def _find_chromatic_bipartition_kernel(
 ) -> ChromaticBipartitionResult:
     """Search every canonical unordered vertex bipartition under one deadline."""
     graph = request.graph
+    if not graph.edges:
+        return _edgeless_chromatic_bipartition(request)
     source_vertices = graph.vertices
     started = time.monotonic()
     checked = 0
     order = len(source_vertices)
     for mask in range(1, 1 << order):
         complement = ((1 << order) - 1) ^ mask
-        if complement == 0:
+        if complement == 0 or mask > complement:
             continue
         side_a = tuple(
             vertex

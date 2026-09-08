@@ -90,7 +90,9 @@ def _equal_inner_substitution_vanishes(
 ) -> bool:
     """Return whether identifying equal inner coordinates cancels the polynomial."""
 
-    if not polynomial.terms or len(inner_components) != len(polynomial.terms[0].exponents):
+    if not polynomial.terms or len(inner_components) != len(
+        polynomial.terms[0].exponents
+    ):
         return False
     identities = [_component_identity(component) for component in inner_components]
     representative = {}
@@ -102,7 +104,9 @@ def _equal_inner_substitution_vanishes(
         for axis, degree in enumerate(term.exponents):
             exponents[representative[identities[axis]]] += degree
         slot = tuple(exponents)
-        collapsed[slot] = collapsed.get(slot, Fraction(0)) + term.coefficient.as_fraction()
+        collapsed[slot] = (
+            collapsed.get(slot, Fraction(0)) + term.coefficient.as_fraction()
+        )
     return all(coefficient == 0 for coefficient in collapsed.values())
 
 

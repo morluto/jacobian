@@ -288,6 +288,17 @@ class TestIncidenceGraph:
         with pytest.raises(OperationResourceAdmissionError, match="257"):
             incidence_graph(over_boundary)
 
+    def test_forged_namespace_or_graph_edge_is_rejected_as_domain_validation(self) -> None:
+        result = incidence_graph(_hypergraph(HYPERGRAPH))
+        payload = result.model_dump()
+        payload["vertex_labels"] = (("a", "e0"), ("b", "v1"), ("c", "v2"), ("d", "v3"))
+        with pytest.raises(ValidationError, match="incidence_graph"):
+            type(result).model_validate(payload)
+        payload = result.model_dump()
+        payload["graph"]["edges"] = []
+        with pytest.raises(ValidationError, match="incidence_graph"):
+            type(result).model_validate(payload)
+
     def test_no_edges(self) -> None:
         r = incidence_graph(_hypergraph(NO_EDGES))
         assert dict(r.vertex_incidence) == {"a": (), "b": ()}

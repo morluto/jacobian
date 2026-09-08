@@ -18,8 +18,8 @@ def test_incidence_graph_round_trips_into_cycle_profile() -> None:
     async def scenario() -> None:
         payload = {
             "hypergraph": {
-                "vertices": ["same", "isolated"],
-                "edges": [["same", ["same"]], ["other", ["same"]]],
+                "vertices": ["a", "b", "isolated"],
+                "edges": [["e1", ["a", "b"]], ["e2", ["a", "b"]]],
             }
         }
         request = IncidenceGraphRequest.model_validate_json(json.dumps(payload))
@@ -45,5 +45,7 @@ def test_incidence_graph_round_trips_into_cycle_profile() -> None:
                 },
             )
             assert not cycle.is_error
+            assert cycle.structured_content is not None
+            assert cycle.structured_content["output"]["rows"][0]["cycle_length"] == 4
 
     asyncio.run(scenario())

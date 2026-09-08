@@ -140,8 +140,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         request_type=ContainmentProfileRequest,
         result_type=ContainmentProfileResult,
         run=_containment_profile,
-        tags=("combinatorics", "incidence", "exact"),
-        discovery_terms=("t-codegree", "codegree profile"),
+        tags=("combinatorics", "incidence", "hypergraph", "exact"),
+        discovery_terms=("t-codegree", "codegree profile", "hypergraph containment"),
         examples=(
             OperationExample(
                 name="triangle_pair_codegrees",
@@ -149,6 +149,11 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "2-block incidence structure, including the zero codegree of "
                 "the pair {p1, p3}.",
                 input={"incidence": _STRUCTURE, "t": 2},
+            ),
+            OperationExample(
+                name="empty_hypergraph_zero_order",
+                description="The t=0 profile has one empty subset and zero multiplicity for a hypergraph with no edges.",
+                input={"incidence": {"vertices": ["a", "b"], "edges": []}, "t": 0},
             ),
         ),
     ),

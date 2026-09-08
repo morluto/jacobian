@@ -121,18 +121,24 @@ def _subset_count(point_count: int, order: int) -> int:
     return comb(point_count, order) if order <= point_count else 0
 
 
-def _containment_axes(incidence: IncidenceStructure | FiniteHypergraph) -> tuple[tuple[str, ...], tuple[tuple[str, ...], ...]]:
+def _containment_axes(
+    incidence: IncidenceStructure | FiniteHypergraph,
+) -> tuple[tuple[str, ...], tuple[tuple[str, ...], ...]]:
     if isinstance(incidence, FiniteHypergraph):
         return incidence.vertices, tuple(members for _, members in incidence.edges)
     return incidence.points, incidence.blocks
 
 
-def _profile_work_units(incidence: IncidenceStructure | FiniteHypergraph, order: int) -> int:
+def _profile_work_units(
+    incidence: IncidenceStructure | FiniteHypergraph, order: int
+) -> int:
     points, blocks = _containment_axes(incidence)
     subset_count = _subset_count(len(points), order)
     generated_block_subsets = sum(_subset_count(len(block), order) for block in blocks)
     canonicalization_units = len(points) * len(blocks) + sum(map(len, blocks))
-    return canonicalization_units + max(1, order) * (subset_count + generated_block_subsets)
+    return canonicalization_units + max(1, order) * (
+        subset_count + generated_block_subsets
+    )
 
 
 def _require_containment_profile_admitted(
@@ -158,15 +164,43 @@ def _require_containment_profile_admitted(
             "containment_work_budget_exceeded",
             "containment profile exceeds the execution work budget",
         )
-    # Reserve the echoed source, subset labels, histogram, and multiplicity
-    # integers before constructing the complete profile.
-    blocks = _containment_axes(incidence)[1]
-    source_bytes = sum(len(label.encode("utf-8")) for label in _containment_axes(incidence)[0])
-    source_bytes += sum(len(label.encode("utf-8")) for block in blocks for label in block)
-    source_bytes += len(blocks) * 8
-    output_units = subset_count * (order * 8 + 16) + (len(blocks) + 1) * 32 + source_bytes
-    if output_units > 2**26:
-        raise IncidenceStructureAdmissionError("containment_output_budget_exceeded", "containment profile output exceeds its allocation budget")
+    # Count mathematical label positions, not encoded transport bytes or
+    # pointers. Each output subset repeats its actual source labels.
+    _, blocks = _containment_axes(incidence)
+    ids = (
+        incidence.block_ids
+        if isinstance(incidence, IncidenceStructure)
+        else tuple(edge_id for edge_id, _ in incidence.edges)
+    )
+    source_labels = (
+        sum(map(len, points))
+        + sum(map(len, ids))
+        + sum(len(label) for block in blocks for label in block)
+    )
+    subset_labels = subset_count * order * max(map(len, points), default=0)
+    histogram_rows = min(subset_count, len(blocks) + 1)
+    integer_slots = subset_count + 2 * histogram_rows + 5
+    coordinate_slots = (
+        sum(map(len, blocks)) + len(points) + len(blocks) + subset_count * order
+    )
+    if (
+        source_labels + subset_labels > 2**26
+        or coordinate_slots + integer_slots > 1_048_576
+    ):
+        raise IncidenceStructureAdmissionError(
+            "containment_output_budget_exceeded",
+            "containment profile exceeds its label and coordinate allocation bounds",
+        )
+    # Multiplicities <= indexed block count, total <= rows * block count.
+    # The histogram has at most one row per attained multiplicity and subset.
+    coefficient_bits = integer_slots * max(
+        1, max(subset_count, len(blocks), subset_count * len(blocks)).bit_length()
+    )
+    if coefficient_bits > 16_777_216:
+        raise IncidenceStructureAdmissionError(
+            "containment_output_budget_exceeded",
+            "containment profile exceeds its exact integer allocation bound",
+        )
 
 
 def _require_incidence_trade_admitted(
@@ -280,7 +314,9 @@ class ContainmentProfileResult(StrictModel):
     min_multiplicity: StrictInt = Field(ge=0, le=MAX_HYPERGRAPH_EDGES)
     max_multiplicity: StrictInt = Field(ge=0, le=MAX_HYPERGRAPH_EDGES)
     is_constant: StrictBool
-    constant_lambda: StrictInt | None = Field(default=None, ge=0, le=MAX_HYPERGRAPH_EDGES)
+    constant_lambda: StrictInt | None = Field(
+        default=None, ge=0, le=MAX_HYPERGRAPH_EDGES
+    )
 
     @model_validator(mode="after")
     def require_structural_summary_consistency(self) -> Self:

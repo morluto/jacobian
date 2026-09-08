@@ -11,7 +11,10 @@ from jacobian._execution import (
     bind_request_deadline,
     request_execution,
 )
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.finite_structures.hypergraphs import (
     FiniteHypergraph,
     independence_number,
@@ -112,7 +115,6 @@ def test_all_two_color_assignments_with_nonuniform_and_empty_edges(
         ((), [], []),
         (("a", "b"), [], []),
         (("a",), [("a",)], [0]),
-        (("a",), [(), ()], [0, 0]),
         (("a", "b"), [("a",), ("a",), ("b",), ("b",)], [0, 0, 1, 1]),
         (("a", "b", "c"), [("a", "b"), ("a", "c"), ("b", "c")], [0, 0, 0]),
     ],
@@ -170,12 +172,8 @@ def test_all_source_edges_with_distinct_colors_are_accepted() -> None:
 
 
 def test_two_same_colored_empty_source_edges_compose_with_independence() -> None:
-    result = check_oracle(coloring(("a",), [(), ()], [0, 0]))
-    assert result.hypergraph.edges == ()
-    assert result.provenance == ()
-    independent = independence_number(result.hypergraph)
-    assert independent.status == "EXACT"
-    assert independent.independence_number == 1
+    with pytest.raises(OperationDomainValidationError, match="empty source"):
+        construct(coloring(("a",), [(), ()], [0, 0]))
 
 
 def test_many_duplicate_sources_fit_one_union_at_pair_boundary() -> None:

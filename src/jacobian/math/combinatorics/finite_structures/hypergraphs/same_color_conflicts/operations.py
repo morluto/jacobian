@@ -11,7 +11,10 @@ from jacobian._execution import (
     current_request_execution,
     request_checkpoint,
 )
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     MAX_EDGES,
     MAX_TOTAL_INCIDENCES,
@@ -53,8 +56,7 @@ class _Plan:
 def _admit(coloring: IndexedHyperedgeColoring, deadline: float) -> _Plan:
     """Admit pairs, compute compressed unions, then admit exact output size.
 
-    P counts nonempty same-colour unions: C(|E_c|,2) minus C(|empty_c|,2).
-    That bounds provenance and original pair expansion.
+    P=sum_c choose(|E_c|,2) bounds provenance and original pair expansion.
     Source incidences are <=36000, masks have <=256 bits, and P<=65536.
     Duplicate member sets within each colour are grouped before union planning:
     distinct-type pairs and repeated types together number at most P. Sorting
@@ -83,8 +85,18 @@ def _admit(coloring: IndexedHyperedgeColoring, deadline: float) -> _Plan:
     )
     pair_count = 0
     for group in groups:
-        total = len(group) * (len(group) - 1) // 2
         empty = sum(1 for index in group if masks[index] == 0)
+        if empty >= 2:
+            raise OperationDomainValidationError(
+                location=("coloring",),
+                code="same_color_conflicts.empty_source_pair",
+                message=(
+                    "two same-coloured empty source edges yield an empty conflict "
+                    "edge, which the hypergraph carrier and independence_number "
+                    "do not represent"
+                ),
+            )
+        total = len(group) * (len(group) - 1) // 2
         pair_count += total - empty * (empty - 1) // 2
     if pair_count > MAX_CONFLICT_PAIRS:
         _reject("complete same-colour source-pair provenance exceeds 65536 rows")

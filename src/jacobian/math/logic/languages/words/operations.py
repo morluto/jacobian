@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+from pydantic_core import PydanticCustomError
+
 from jacobian.math.logic.languages.words._fixed_point_admission import (
     require_fixed_point_prefix_budget,
 )
@@ -65,7 +67,10 @@ class PrimitivityAnalysis:
 
 def factors_of_length(word: FiniteWord, factor_length: int) -> FactorAnalysis:
     if not 0 <= factor_length <= len(word.letters):
-        raise ValueError("factor length must be between zero and the word length")
+        raise PydanticCustomError(
+            "word.factor_length_out_of_range",
+            "factor length must be between zero and the word length",
+        )
     positions: dict[tuple[str, ...], list[int]] = {}
     for start in range(len(word.letters) - factor_length + 1):
         factor = word.letters[start : start + factor_length]
@@ -166,12 +171,15 @@ def compose_morphisms(first: WordMorphism, second: WordMorphism) -> WordMorphism
     if first.target_alphabet != second.source_alphabet:
         raise ValueError("first target alphabet must equal second source alphabet")
     second_map = dict(zip(second.source_alphabet, second.images, strict=True))
+    if any(
+        sum(len(second_map[letter]) for letter in image) > MAX_MORPHISM_OUTPUT_LENGTH
+        for image in first.images
+    ):
+        raise ValueError("composed morphism image exceeds the length bound")
     images = tuple(
         tuple(output for letter in image for output in second_map[letter])
         for image in first.images
     )
-    if any(len(image) > MAX_MORPHISM_OUTPUT_LENGTH for image in images):
-        raise ValueError("composed morphism image exceeds the length bound")
     return WordMorphism(
         source_alphabet=first.source_alphabet,
         target_alphabet=second.target_alphabet,
@@ -269,6 +277,18 @@ def substitution_primitivity_profile(
     import networkx as nx
 
     alphabet = dependency_graph.substitution.morphism.source_alphabet
+    images = dependency_graph.substitution.morphism.images
+    expected_support = {
+        (source, target)
+        for source, image in zip(alphabet, images, strict=True)
+        for target in image
+    }
+    actual_support = {(edge.source, edge.target) for edge in dependency_graph.edges}
+    if actual_support != expected_support:
+        raise PydanticCustomError(
+            "word.dependency_support_mismatch",
+            "dependency graph support must match the retained substitution",
+        )
     index = {symbol: position for position, symbol in enumerate(alphabet)}
     graph: nx.DiGraph[str] = nx.DiGraph()
     graph.add_nodes_from(alphabet)
@@ -365,7 +385,7 @@ def verify_factors_length(claim: FactorsLengthResult) -> bool:
             == tuple(positions[0] for positions in analysis.occurrences)
             and claim.distinct_count == len(analysis.factors)
         )
-    except (TypeError, ValueError, IndexError):
+    except PydanticCustomError:
         return False
 
 
@@ -379,7 +399,7 @@ def verify_periods(claim: PeriodsResult) -> bool:
             and claim.least_period == analysis.least_period
             and claim.is_primitive == analysis.primitive
         )
-    except (TypeError, ValueError):
+    except PydanticCustomError:
         return False
 
 
@@ -388,7 +408,7 @@ def verify_incidence_matrix(claim: IncidenceMatrixResult) -> bool:
 
     try:
         return claim.matrix == incidence_matrix(claim.morphism)
-    except (TypeError, ValueError):
+    except PydanticCustomError:
         return False
 
 
@@ -399,7 +419,7 @@ def verify_substitution_dependency_graph(
 
     try:
         return claim.graph == substitution_dependency_graph(claim.substitution)
-    except (TypeError, ValueError):
+    except PydanticCustomError:
         return False
 
 
@@ -409,14 +429,6 @@ def verify_substitution_primitivity_profile(
     """Verify a substitution primitivity claim against its dependency graph."""
 
     try:
-        # The profile is mathematically a property of the substitution's
-        # dependency graph.  Verify that retained graph before trusting its
-        # edges; a structurally valid graph may omit an occurrence edge.
-        expected_graph = substitution_dependency_graph(
-            claim.dependency_graph.substitution
-        )
-        if expected_graph != claim.dependency_graph:
-            return False
         analysis = substitution_primitivity_profile(claim.dependency_graph)
         return (
             claim.strongly_connected_components
@@ -428,7 +440,7 @@ def verify_substitution_primitivity_profile(
             and claim.exponent_upper_bound == analysis.exponent_upper_bound
             and claim.obstruction == analysis.obstruction
         )
-    except (TypeError, ValueError):
+    except PydanticCustomError:
         return False
 
 
@@ -444,5 +456,5 @@ def verify_substitution_fixed_point_prefix(
             and claim.least_iterate_depth == analysis.least_iterate_depth
             and claim.retained_prefix_lengths == analysis.retained_prefix_lengths
         )
-    except (TypeError, ValueError):
+    except PydanticCustomError:
         return False

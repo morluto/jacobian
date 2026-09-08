@@ -114,6 +114,19 @@ def test_identically_singular_metric_rejects_before_cancellation() -> None:
         laplace_beltrami(metric, _scalar(x, ("x", "y")))
 
 
+def test_nonreduced_scalar_is_a_domain_error_before_admission() -> None:
+    x = symbols("x")
+    metric = _metric((1,), ("x",))
+    scalar = RationalFunction(
+        variables=("x",),
+        numerator=_scalar(x**64 - 1, ("x",)).numerator,
+        denominator=_scalar(x**32 - 1, ("x",)).numerator,
+    )
+    with pytest.raises(OperationDomainValidationError) as rejected:
+        laplace_beltrami(metric, scalar)
+    assert rejected.value.errors()[0]["type"].endswith("noncanonical_source")
+
+
 def test_result_locus_guard_budget_is_bounded() -> None:
     x = symbols("x")
     axis = ("x",)

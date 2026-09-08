@@ -72,9 +72,9 @@ def laplace_beltrami(
             code="differential_geometry.laplace_beltrami.axis_mismatch",
             message="metric and scalar must use the same coordinate axis",
         )
+    _recognize_source(metric, scalar, deadline)
     plan = build_plan(metric, scalar)
     request_checkpoint("after Laplace--Beltrami admission")
-    _recognize_source(metric, scalar, deadline)
     (value,), determinant_guards = evaluate_admitted_dag(
         plan.dag.nodes,
         axis,

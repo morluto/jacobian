@@ -10,6 +10,8 @@ from tempfile import TemporaryDirectory
 from time import monotonic
 from typing import Any
 
+from sympy import QQ, Poly, Rational
+
 from jacobian._execution import (
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
@@ -39,7 +41,7 @@ _WORKER_PATH = Path(__file__).resolve().with_name("_dag_evaluate_worker.py")
 _STDOUT_BYTES = 64 * 1024 * 1024
 _STDERR_BYTES = 64 * 1024
 _ADDRESS_SPACE_BYTES = 1024 * 1024 * 1024
-_PARENT_FINALIZATION_SECONDS = 0.05
+_PARENT_FINALIZATION_SECONDS = 1.0
 
 
 def _source_payload(polynomial: Any) -> list[list[object]]:
@@ -71,8 +73,6 @@ def _node_payload(node: Node) -> dict[str, object]:
 
 
 def _poly_from_payload(records: object, symbols: tuple[Any, ...]) -> Any:
-    from sympy import QQ, Poly, Rational
-
     if not isinstance(records, list):
         raise ValueError("malformed cancelled polynomial")
     coefficients: dict[tuple[int, ...], Any] = {}
@@ -88,6 +88,32 @@ def _poly_from_payload(records: object, symbols: tuple[Any, ...]) -> Any:
             raise ValueError("malformed cancelled polynomial")
         coefficients[exponents] = Rational(int(numerator), int(denominator))
     return Poly.from_dict(coefficients, *symbols, domain=QQ)
+
+
+def _load_worker_response(
+    stdout: bytes, *, owner: str, deadline: float
+) -> object:
+    request_checkpoint(f"before {owner} worker output decode")
+    if monotonic() >= deadline:
+        raise OperationExecutionTimeoutError(
+            f"{owner} deadline expired during worker output decode"
+        )
+    try:
+        response = loads_strict_json(
+            stdout,
+            limits=CanonicalLimits(
+                max_input_bytes=_STDOUT_BYTES,
+                max_output_bytes=_STDOUT_BYTES,
+            ),
+        )
+    except CanonicalizationError as exc:
+        raise RuntimeError(f"bounded {owner} worker returned malformed output") from exc
+    request_checkpoint(f"after {owner} worker output decode")
+    if monotonic() >= deadline:
+        raise OperationExecutionTimeoutError(
+            f"{owner} deadline expired during worker output decode"
+        )
+    return response
 
 
 def evaluate_admitted_dag(
@@ -169,16 +195,7 @@ def evaluate_admitted_dag(
         or completed.returncode != 0
     ):
         raise RuntimeError(f"bounded {owner} worker did not return cancelled fractions")
-    try:
-        response = loads_strict_json(
-            completed.stdout,
-            limits=CanonicalLimits(
-                max_input_bytes=_STDOUT_BYTES,
-                max_output_bytes=_STDOUT_BYTES,
-            ),
-        )
-    except CanonicalizationError as exc:
-        raise RuntimeError(f"bounded {owner} worker returned malformed output") from exc
+    response = _load_worker_response(completed.stdout, owner=owner, deadline=deadline)
     if not isinstance(response, dict):
         raise RuntimeError(f"bounded {owner} worker returned malformed output")
     if response.get("status") == "singular":

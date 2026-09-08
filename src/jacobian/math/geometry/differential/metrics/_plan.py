@@ -39,6 +39,17 @@ def _has_nonconstant_denominator(dag: Dag, value: Expression) -> bool:
 
 
 @dataclass(frozen=True)
+class ConnectionPlan:
+    """Admitted metric inverse and Levi-Civita connection DAG."""
+
+    dag: Dag
+    entries: tuple[Expression, ...]
+    determinant: Expression
+    inverse: tuple[Expression, ...]
+    connection: tuple[Expression, ...]
+
+
+@dataclass(frozen=True)
 class Plan:
     dag: Dag
     fractions: dict[Expression, tuple[int, int]]
@@ -50,39 +61,47 @@ class Plan:
     scalar: Expression
 
 
-def build_plan(metric: RationalCoordinateMetric) -> Plan:
+def _determinant(
+    dag: Dag,
+    entries: tuple[Expression, ...],
+    dimension: int,
+    rows: tuple[int, ...],
+    columns: tuple[int, ...],
+) -> Expression:
+    terms = []
+    for permutation in permutations(columns):
+        sign = (-1) ** sum(
+            permutation[i] > permutation[j]
+            for i in range(len(permutation))
+            for j in range(i + 1, len(permutation))
+        )
+        terms.append(
+            dag.multiply(
+                Expression(Fraction(sign)),
+                *(
+                    entries[i * dimension + j]
+                    for i, j in zip(rows, permutation, strict=True)
+                ),
+            )
+        )
+    return dag.add(*terms) if terms else ONE
+
+
+def build_connection_plan(metric: RationalCoordinateMetric) -> ConnectionPlan:
     n = len(metric.tensor.coordinate_axis)
     dag = Dag(n)
     entries = tuple(dag.fraction(value) for value in metric.tensor.components)
-
-    def determinant(rows: tuple[int, ...], columns: tuple[int, ...]) -> Expression:
-        terms = []
-        for permutation in permutations(columns):
-            sign = (-1) ** sum(
-                permutation[i] > permutation[j]
-                for i in range(len(permutation))
-                for j in range(i + 1, len(permutation))
-            )
-            # The permutation sign is relative to the ordered column subset.
-            terms.append(
-                dag.multiply(
-                    Expression(Fraction(sign)),
-                    *(
-                        entries[i * n + j]
-                        for i, j in zip(rows, permutation, strict=True)
-                    ),
-                )
-            )
-        return dag.add(*terms) if terms else ONE
-
     axes = tuple(range(n))
-    det = determinant(axes, axes)
+    det = _determinant(dag, entries, n, axes, axes)
     if not det.scalar:
         raise singular()
     inverse = tuple(
         dag.multiply(
             Expression(Fraction((-1) ** (i + j))),
-            determinant(
+            _determinant(
+                dag,
+                entries,
+                n,
                 tuple(k for k in axes if k != j), tuple(k for k in axes if k != i)
             ),
             dag.inverse(det),
@@ -119,7 +138,17 @@ def build_plan(metric: RationalCoordinateMetric) -> Plan:
                 )
                 connection_list[(k * n + i) * n + j] = value
                 connection_list[(k * n + j) * n + i] = value
-    connection = tuple(connection_list)
+    return ConnectionPlan(dag, entries, det, inverse, tuple(connection_list))
+
+
+def build_plan(metric: RationalCoordinateMetric) -> Plan:
+    connection_plan = build_connection_plan(metric)
+    n = len(metric.tensor.coordinate_axis)
+    dag = connection_plan.dag
+    det = connection_plan.determinant
+    inverse = connection_plan.inverse
+    connection = connection_plan.connection
+    axes = tuple(range(n))
 
     def gamma(k: int, i: int, j: int) -> Expression:
         return connection[(k * n + i) * n + j]

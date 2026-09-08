@@ -28,6 +28,7 @@ TOOLS = (
             "Apply the Levi-Civita connection of a rational coordinate metric "
             "to a rational mixed tensor. The result prepends one covariant "
             "derivative index and retains the complete metric and tensor locus. "
+            "The metric and tensor share the same ordered coordinate axis. "
             "For T^(i...)_(j...), use +Gamma on contravariant and -Gamma on "
             "covariant source indices."
         ),

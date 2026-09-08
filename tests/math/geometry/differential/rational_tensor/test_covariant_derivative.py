@@ -167,8 +167,13 @@ def test_singular_metric_after_expansion_is_a_domain_error() -> None:
         tensor=tensor([1, x, x, x**2], ("COVARIANT", "COVARIANT"), axis=("x", "y"))
     )
     source = tensor([1, 0], ("COVARIANT",), axis=("x", "y"))
-    with pytest.raises(OperationDomainValidationError, match="identically zero"):
+    with pytest.raises(
+        OperationDomainValidationError, match="identically zero"
+    ) as rejected:
         covariant_derivative(metric, source)
+    assert rejected.value.errors()[0]["type"].endswith(
+        "covariant_derivative.singular_metric"
+    )
 
 
 def test_shared_inherited_guards_are_capped_on_their_union() -> None:

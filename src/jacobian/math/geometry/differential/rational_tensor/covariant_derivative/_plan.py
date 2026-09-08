@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from fractions import Fraction
 from itertools import product
@@ -44,6 +45,31 @@ class Plan:
     connection: tuple[Expression, ...]
     derivative: tuple[Expression, ...]
     fractions: dict[Expression, tuple[int, int]]
+
+
+def _output_denominator_identity(dag: Dag, value: Expression) -> object | None:
+    """Identify one retained output denominator after cancelling shared factors.
+
+    Axis-specific remaining denominators such as ``(x+1)^2 (y+1)`` versus
+    ``(x+1)(y+1)^2`` stay distinct. Shared raw numerator cofactors over the
+    same remaining denominator keep one identity so 767 inherited guards
+    plus ``x+y`` still fit the 768-guard cap.
+    """
+
+    denominators = Counter(
+        index
+        for index in value.denominator
+        if any(dag.nodes[index].bound.degrees)
+    )
+    if not denominators:
+        return None
+    numerators = Counter(
+        index
+        for index in value.numerator
+        if any(dag.nodes[index].bound.degrees)
+    )
+    remaining = denominators - numerators or denominators
+    return ("canonical-result-denominator", tuple(sorted(remaining.items())))
 
 
 def _flatten(indices: tuple[int, ...], dimension: int) -> int:
@@ -107,12 +133,9 @@ def _admit_outputs(
             else ("determinant", index)
         )
     output_keys = {
-        ("canonical-result-denominator", value.denominator)
+        identity
         for value in outputs
-        if any(
-            any(degree for degree in dag.nodes[index].bound.degrees)
-            for index in value.denominator
-        )
+        if (identity := _output_denominator_identity(dag, value)) is not None
     }
     potential_guards = len(inherited_keys | determinant_keys | output_keys)
     if potential_guards > 768:
@@ -132,10 +155,21 @@ def _admit_outputs(
         for coordinate_tensor in (metric.tensor, tensor)
         for guard in coordinate_tensor.retained_nonzero_denominators
     ]
+    unique_inherited: dict[object, tuple[int, int, int]] = {}
+    for coordinate_tensor in (metric.tensor, tensor):
+        for guard in coordinate_tensor.retained_nonzero_denominators:
+            unique_inherited.setdefault(
+                _polynomial_key(guard), _source_allocation(guard, dimension)
+            )
+    unique_output_guards: dict[object, tuple[int, int, int]] = {}
+    for value, size in sizes.items():
+        identity = _output_denominator_identity(dag, value)
+        if identity is not None:
+            unique_output_guards.setdefault(identity, size)
     guards = (
-        inherited
+        list(unique_inherited.values())
         + determinant_allocations
-        + [sizes[value] for value in sizes if value.denominator]
+        + list(unique_output_guards.values())
     )
     allocations = (
         source_allocations + inherited + [sizes[value] for value in outputs] + guards

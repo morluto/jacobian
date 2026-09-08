@@ -24,7 +24,7 @@ from jacobian.math.geometry.differential.metrics._models import (
     RationalCoordinateMetric,
     RationalMetricCurvatureProfile,
 )
-from jacobian.math.geometry.differential.metrics._plan import build_plan
+from jacobian.math.geometry.differential.metrics._plan import build_plan, singular
 from jacobian.math.geometry.differential.values import (
     RationalCoordinateTensor,
     TensorVariance,
@@ -92,6 +92,7 @@ def curvature_profile(
         sources=(),
         deadline=deadline,
         owner="metric curvature",
+        singular_metric=singular,
         noncanonical_location=("metric",),
         noncanonical_code="differential_geometry.curvature.noncanonical_source",
         noncanonical_message="metric component must be a reduced canonical rational function",

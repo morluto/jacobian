@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from time import monotonic
@@ -24,7 +24,6 @@ from jacobian.canonical import (
 )
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.differential.metrics._dag import Node
-from jacobian.math.geometry.differential.metrics._plan import singular
 from jacobian.math.polynomials._conversions import (
     sparse_rational_polynomial_from_sympy,
     symbols_for_variables,
@@ -100,6 +99,7 @@ def evaluate_admitted_dag(
     sources: Sequence[RationalFunction],
     deadline: float,
     owner: str,
+    singular_metric: Callable[[], OperationDomainValidationError],
     noncanonical_location: tuple[str, ...] = (),
     noncanonical_code: str = "",
     noncanonical_message: str = "",
@@ -182,7 +182,7 @@ def evaluate_admitted_dag(
     if not isinstance(response, dict):
         raise RuntimeError(f"bounded {owner} worker returned malformed output")
     if response.get("status") == "singular":
-        raise singular()
+        raise singular_metric()
     if response.get("status") == "noncanonical":
         raise OperationDomainValidationError(
             location=noncanonical_location,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.differential.metrics._dag_evaluate_process import (
     evaluate_admitted_dag,
 )
@@ -11,6 +12,14 @@ from jacobian.math.geometry.differential.rational_tensor.covariant_derivative._p
     Plan,
 )
 from jacobian.math.polynomials.values import RationalFunction
+
+
+def _singular_metric() -> OperationDomainValidationError:
+    return OperationDomainValidationError(
+        location=("metric",),
+        code="differential_geometry.covariant_derivative.singular_metric",
+        message="metric determinant is identically zero",
+    )
 
 
 def evaluate_admitted_covariant_derivative(
@@ -30,6 +39,7 @@ def evaluate_admitted_covariant_derivative(
         sources=sources,
         deadline=deadline,
         owner="covariant derivative",
+        singular_metric=_singular_metric,
         noncanonical_location=("covariant_derivative",),
         noncanonical_code="differential_geometry.covariant_derivative.noncanonical_source",
         noncanonical_message=(

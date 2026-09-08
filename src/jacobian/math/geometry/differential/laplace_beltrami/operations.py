@@ -27,6 +27,14 @@ from jacobian.math.geometry.differential.values import canonical_locus_guards
 from jacobian.math.polynomials.values import RationalFunction
 
 
+def _singular_metric() -> OperationDomainValidationError:
+    return OperationDomainValidationError(
+        location=("metric",),
+        code="differential_geometry.laplace_beltrami.singular_metric",
+        message="metric determinant is identically zero",
+    )
+
+
 def _recognize_source(
     metric: RationalCoordinateMetric, scalar: RationalFunction, deadline: float
 ) -> None:
@@ -75,6 +83,7 @@ def laplace_beltrami(
         sources=(),
         deadline=deadline,
         owner="Laplace--Beltrami",
+        singular_metric=_singular_metric,
         noncanonical_location=("laplace_beltrami",),
         noncanonical_code="differential_geometry.laplace_beltrami.noncanonical_source",
         noncanonical_message="metric and scalar must be reduced canonical rational functions",

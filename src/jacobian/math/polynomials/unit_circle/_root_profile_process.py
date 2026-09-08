@@ -108,4 +108,8 @@ def count_reduced_roots(
     outside = response["outside"]
     if min(inside, on, outside) < 0:
         raise RuntimeError("bounded unit-disk kernel worker returned malformed output")
+    if inside + on + outside != len(coefficients) - 1:
+        raise RuntimeError(
+            "bounded unit-disk kernel worker returned counts that do not match the admitted degree"
+        )
     return inside, on, outside

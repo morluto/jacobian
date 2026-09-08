@@ -266,6 +266,49 @@ def test_raw_request_preflight_counts_actual_nested_cells() -> None:
         )
 
 
+def test_python_mode_generators_reduce_the_issue_fixture_face() -> None:
+    # Nested generators are the motivating Python-mode payload: preflight must
+    # install them before Pydantic sees an empty matrices or entries sequence.
+    request = SemidefiniteFaceReductionRequest.model_validate(
+        {
+            "system": {
+                "order": 2,
+                "matrices": (
+                    matrix
+                    for matrix in (
+                        {"entries": (row for row in ((_q(1), _q(0)), (_q(0), _q(0))))},
+                        {"entries": ((_q(1), _q(0)), (_q(0), _q(1)))},
+                    )
+                ),
+                "rhs": (_q(0), _q(1)),
+            },
+            "multipliers": (_q(1), _q(0)),
+        }
+    )
+    result = reduce_exposed_face(request.system, request.multipliers)
+    _identities(result)
+    assert _sympy(result.embedding) == Matrix([[0], [1]])
+    assert [_sympy(a) for a in result.reduced.matrices] == [
+        Matrix([[0]]),
+        Matrix([[1]]),
+    ]
+
+
+def test_raw_request_preflight_rejects_over_budget_generated_cells() -> None:
+    row = [{"num": "0", "den": "1"}] * 128
+    with pytest.raises(ValidationError, match="dense cell envelope"):
+        SemidefiniteFaceReductionRequest.model_validate(
+            {
+                "system": {
+                    "order": 1,
+                    "matrices": ({"entries": [row] * 128} for _ in range(9)),
+                    "rhs": [{"num": "0", "den": "1"}] * 9,
+                },
+                "multipliers": [{"num": "1", "den": "1"}] * 9,
+            }
+        )
+
+
 def test_inactive_constraint_denominators_are_charged_during_compression() -> None:
     huge = Fraction(1, 10**20_001)
     system = _system(

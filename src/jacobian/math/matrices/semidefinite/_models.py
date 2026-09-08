@@ -48,6 +48,16 @@ def _materialize_sequence(value: object, *, limit: int) -> list[object] | None:
     return None
 
 
+def _install_sequence(
+    container: dict[str, object], key: str, *, limit: int
+) -> list[object] | None:
+    value = container.get(key)
+    materialized = _materialize_sequence(value, limit=limit)
+    if materialized is not None and not isinstance(value, Sequence):
+        container[key] = materialized
+    return materialized
+
+
 def _scan_matrix_entries(matrices: object) -> tuple[int, int]:
     matrix_list = _materialize_sequence(matrices, limit=MAX_SEMIDEFINITE_CELLS)
     if matrix_list is None:
@@ -73,29 +83,59 @@ def _scan_matrix_entries(matrices: object) -> tuple[int, int]:
     return cells, digits
 
 
-def _count_raw_cells_and_digits(data: dict[str, object]) -> tuple[int, int, int]:
-    system = data.get("system")
+def _preflight_raw_payload(
+    data: dict[str, object],
+) -> tuple[dict[str, object], int, int, int]:
+    payload = dict(data)
+    system = payload.get("system")
     if not isinstance(system, dict):
-        return 0, 0, 0
-    order = system.get("order")
-    matrices = system.get("matrices")
-    cells, digits = _scan_matrix_entries(matrices)
+        return payload, 0, 0, 0
+    system = dict(system)
+    payload["system"] = system
+    matrices_value = system.get("matrices")
+    matrix_list = _materialize_sequence(matrices_value, limit=MAX_SEMIDEFINITE_CELLS)
+    installed_matrices: list[object] | None = None
+    if matrix_list is not None:
+        installed_matrices = []
+        needs_install = not isinstance(matrices_value, Sequence)
+        for matrix in matrix_list:
+            if isinstance(matrix, dict):
+                matrix_payload = dict(matrix)
+                entries = matrix_payload.get("entries")
+                row_list = _install_sequence(
+                    matrix_payload, "entries", limit=MAX_SEMIDEFINITE_CELLS
+                )
+                if row_list is not None and not isinstance(entries, Sequence):
+                    needs_install = True
+                installed_matrices.append(matrix_payload)
+            else:
+                installed_matrices.append(matrix)
+        if needs_install:
+            system["matrices"] = installed_matrices
+    cells, digits = _scan_matrix_entries(
+        installed_matrices if installed_matrices is not None else system.get("matrices")
+    )
     rhs = system.get("rhs")
     if isinstance(rhs, (list, tuple)):
         digits += sum(_raw_rational_digits(value) for value in rhs)
-    multipliers = data.get("multipliers")
+    multipliers = payload.get("multipliers")
     if isinstance(multipliers, (list, tuple)):
         digits += sum(_raw_rational_digits(value) for value in multipliers)
     declared = 0
+    order = system.get("order")
     if type(order) is int:
         if order < 0:
             raise ValueError(
                 "source and reduced matrices exceed the dense cell envelope"
             )
-        matrix_list = _materialize_sequence(matrices, limit=8192)
-        if matrix_list is not None:
-            declared = len(matrix_list) * order * order
-    return cells, declared, digits
+        declared_matrices = (
+            installed_matrices
+            if installed_matrices is not None
+            else _materialize_sequence(system.get("matrices"), limit=8192)
+        )
+        if declared_matrices is not None:
+            declared = len(declared_matrices) * order * order
+    return payload, cells, declared, digits
 
 
 class SemidefiniteFaceReductionRequest(StrictModel):
@@ -111,7 +151,7 @@ class SemidefiniteFaceReductionRequest(StrictModel):
         """Reject over-budget dense systems before nested matrix parsing."""
 
         if isinstance(data, dict):
-            cells, declared, digits = _count_raw_cells_and_digits(data)
+            data, cells, declared, digits = _preflight_raw_payload(data)
             if cells > MAX_SEMIDEFINITE_CELLS or declared > MAX_SEMIDEFINITE_CELLS:
                 raise ValueError(
                     "source and reduced matrices exceed the dense cell envelope"

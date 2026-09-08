@@ -6,6 +6,10 @@ from typing import Any
 
 from pydantic_core import PydanticCustomError
 
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.polynomials._conversions import (
     rational_function_from_sympy,
     rational_function_to_sympy,
@@ -53,12 +57,23 @@ def hermite_reduction(
     """Compute canonical ``f = R' + H`` over the admitted subset of ``QQ(x)``.
 
     The current native envelope matches the catalog operation: numerator degree
-    at most 6, denominator degree at most 3, and at most two decimal digits in
-    each rational coefficient component. ``H`` is proper with square-free
+    at most 6 and denominator degree at most 3. Polynomial inputs allow
+    127-digit rational components; other inputs allow two-digit components. ``H`` is proper with square-free
     denominator. ``R`` has zero additive constant, so the pair is unique.
     """
 
-    require_hermite_reduction_budget(function)
+    try:
+        require_hermite_reduction_budget(function)
+    except OperationResourceAdmissionError:
+        raise
+    except PydanticCustomError as exc:
+        raise OperationDomainValidationError(
+            location=(), code=exc.type, message=exc.message()
+        ) from exc
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=(), code="polynomial.rational_function_admission", message=str(exc)
+        ) from exc
     return _hermite_reduction_admitted(function)
 
 
@@ -86,7 +101,9 @@ def verify_hermite_reduction(claim: HermiteReductionResult) -> bool:
             == ("RATIONAL_PRIMITIVE" if has_primitive else "NO_RATIONAL_PRIMITIVE")
             and claim.rational_primitive == (rational_part if has_primitive else None)
         )
-    except (AttributeError, TypeError, ValueError, PydanticCustomError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 

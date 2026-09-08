@@ -2,35 +2,21 @@
 
 from __future__ import annotations
 
-from pydantic_core import PydanticCustomError
-
 from jacobian.catalog.models import (
     MathTool,
-    OperationDomainValidationError,
     OperationExample,
 )
 from jacobian.math.polynomials.rational_functions import operations as native
 from jacobian.math.polynomials.rational_functions._models import (
     HermiteReductionRequest,
     HermiteReductionResult,
-    require_hermite_reduction_budget,
 )
 
 
 def compute_hermite_reduction(
     request: HermiteReductionRequest,
 ) -> HermiteReductionResult:
-    try:
-        require_hermite_reduction_budget(request.function)
-    except PydanticCustomError as exc:
-        raise OperationDomainValidationError(
-            location=(), code=exc.type, message=exc.message()
-        ) from exc
-    except ValueError as exc:
-        raise OperationDomainValidationError(
-            location=(), code="polynomial.rational_function_admission", message=str(exc)
-        ) from exc
-    rational_part, remainder = native._hermite_reduction_admitted(request.function)
+    rational_part, remainder = native.hermite_reduction(request.function)
     return HermiteReductionResult._from_kernel(
         function=request.function,
         rational_part=rational_part,
@@ -48,7 +34,8 @@ TOOLS = (
             "completely decides whether f has a rational primitive; a nonzero "
             "H does not rule out a formal primitive involving logarithms. The "
             "current conservative envelope admits numerator degree 6, denominator "
-            "degree 3, and two-digit rational coefficient components."
+            "degree 3, and 127-digit rational components for polynomial inputs "
+            "or two-digit components for other rational functions."
         ),
         request_type=HermiteReductionRequest,
         result_type=HermiteReductionResult,
@@ -57,11 +44,7 @@ TOOLS = (
         examples=(
             OperationExample(
                 name="simple_and_repeated_poles",
-                description="Separate the derivative of a repeated pole from a simple-pole "
-                "remainder; the function must be canonical univariate QQ(x) in "
-                "one variable x, with numerator degree at most 6, denominator "
-                "degree at most 3, and two-digit rational coefficient "
-                "components.",
+                description="Use canonical univariate QQ(x), one variable x, numerator degree at most 6 and denominator degree at most 3. Polynomial inputs allow 127-digit rational coefficient components; other inputs require two-digit rational coefficient components.",
                 input={
                     "function": {
                         "variables": ["x"],

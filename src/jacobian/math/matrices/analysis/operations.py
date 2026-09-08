@@ -25,7 +25,10 @@ from jacobian._execution import (
     request_checkpoint,
 )
 from jacobian.canonical import format_canonical_integer
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.matrices._number_field import (
     EmbeddedNumberFieldRecognitionError,
     RecognizedRealSimpleNumberField,
@@ -858,9 +861,13 @@ def _compute_inertia(
 
 def verify_inertia(claim: InertiaResult) -> bool:
     """Verify a serialized exact-real inertia claim against its source matrix."""
+    if not isinstance(claim, InertiaResult):
+        return False
     try:
         return compute_inertia(claim.matrix) == claim
-    except (AttributeError, TypeError, ValueError, OperationDomainValidationError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 

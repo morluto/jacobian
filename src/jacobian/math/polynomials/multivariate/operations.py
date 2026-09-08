@@ -11,7 +11,10 @@ from jacobian._execution import (
     OperationExecutionTimeoutError,
 )
 from jacobian.canonical import format_canonical_integer
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.polynomials._conversions import (
     rational_polynomial_from_sympy,
     rational_polynomial_to_sympy,
@@ -517,12 +520,16 @@ def verify_multivariate_gcd(claim: MultivariateGcdResult) -> bool:
             claim.left.variables,
         )
         return expected == claim.gcd
-    except (AttributeError, TypeError, ValueError, OperationDomainValidationError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
 def verify_multivariate_division(claim: MultivariateDivisionResult) -> bool:
     """Verify the canonical quotient and remainder under the retained order."""
+    if not isinstance(claim, MultivariateDivisionResult):
+        return False
     try:
         _admit_division(claim.left, claim.right)
         expected = multivariate_division(claim.left, claim.right, claim.monomial_order)
@@ -530,20 +537,21 @@ def verify_multivariate_division(claim: MultivariateDivisionResult) -> bool:
             expected.quotient == claim.quotient
             and expected.remainder == claim.remainder
         )
-    except (AttributeError, TypeError, ValueError, OperationDomainValidationError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
 def verify_multivariate_factor(claim: MultivariateFactorResult) -> bool:
     """Verify the complete canonical factorization for the retained source."""
+    if not isinstance(claim, MultivariateFactorResult):
+        return False
     try:
         return multivariate_factor(claim.polynomial) == claim
-    except (
-        AttributeError,
-        TypeError,
-        ValueError,
-        OperationDomainValidationError,
-    ):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
@@ -557,7 +565,9 @@ def verify_multivariate_resultant(claim: MultivariateResultantResult) -> bool:
             )
             == claim.resultant
         )
-    except (AttributeError, TypeError, ValueError, OperationDomainValidationError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
@@ -565,10 +575,14 @@ def verify_multivariate_subresultant_sequence(
     claim: MultivariateSubresultantSequenceResult,
 ) -> bool:
     """Verify the complete Brown PRS and ledgers against retained sources."""
+    if not isinstance(claim, MultivariateSubresultantSequenceResult):
+        return False
     try:
         expected = multivariate_subresultant_sequence(
             claim.left, claim.right, claim.main_variable
         )
         return expected == claim
-    except (AttributeError, TypeError, ValueError, OperationDomainValidationError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False

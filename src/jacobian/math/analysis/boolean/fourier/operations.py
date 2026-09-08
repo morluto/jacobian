@@ -5,7 +5,10 @@ from __future__ import annotations
 from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.analysis.boolean._models import (
     MAX_WALSH_VARIABLES,
     BooleanRationalVector,
@@ -161,30 +164,42 @@ def erasure_noise(
 def verify_fourier_spectrum(claim: FourierSpectrumResult) -> bool:
     """Verify a Fourier spectrum against its retained Boolean function."""
 
+    if not isinstance(claim, FourierSpectrumResult):
+        return False
     try:
         return fourier_spectrum(claim.source.values) == claim
-    except (OperationDomainValidationError, ValueError, TypeError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
 def verify_multilinear_extension(claim: MultilinearExtensionResult) -> bool:
     """Verify multilinear coefficients against their retained truth table."""
 
+    if not isinstance(claim, MultilinearExtensionResult):
+        return False
     try:
         return multilinear_extension(claim.source.values) == claim
-    except (OperationDomainValidationError, ValueError, TypeError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
 def verify_erasure_noise(claim: ErasureNoiseResult) -> bool:
     """Verify the exact noise expectation against source and base assignment."""
 
+    if not isinstance(claim, ErasureNoiseResult):
+        return False
     try:
         return (
             erasure_noise(claim.source.values, claim.probability, claim.base_input)
             == claim
         )
-    except (OperationDomainValidationError, ValueError, TypeError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 

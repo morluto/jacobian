@@ -2,7 +2,13 @@
 
 from typing import Any
 
-from jacobian.catalog.models import MathTool, MathTools, OperationExample
+from jacobian.catalog.models import (
+    MathTool,
+    MathTools,
+    OperationDomainValidationError,
+    OperationExample,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.polynomials.intervals._models import (
     BOX_ENCLOSURE_ADMISSION_SUMMARY,
     PolynomialBoxEnclosureRequest,
@@ -30,7 +36,9 @@ def verify_polynomial_box_enclosure(
                 box=claim.box,
             )
         )
-    except Exception:
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
     return claim.enclosure == expected.enclosure
 

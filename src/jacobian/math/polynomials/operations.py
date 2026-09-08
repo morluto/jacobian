@@ -10,7 +10,10 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import format_canonical_integer
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.polynomials._conversions import (
     rational_from_sympy,
     rational_polynomial_from_sympy,
@@ -657,30 +660,42 @@ def polynomial_factorization(
 def verify_polynomial_gcd(claim: PolynomialGcdResult) -> bool:
     """Verify a GCD and Bézout identity against both retained operands."""
 
+    if not isinstance(claim, PolynomialGcdResult):
+        return False
     try:
         return polynomial_gcd(claim.left, claim.right) == claim
-    except (OperationDomainValidationError, ValueError, TypeError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
 def verify_polynomial_resultant(claim: PolynomialResultantResult) -> bool:
     """Verify a resultant against its retained operands and elimination variable."""
 
+    if not isinstance(claim, PolynomialResultantResult):
+        return False
     try:
         return (
             polynomial_resultant(claim.left, claim.right, claim.elimination_variable)
             == claim
         )
-    except (OperationDomainValidationError, ValueError, TypeError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
 def verify_polynomial_discriminant(claim: PolynomialDiscriminantResult) -> bool:
     """Verify a discriminant against its retained polynomial and variable."""
 
+    if not isinstance(claim, PolynomialDiscriminantResult):
+        return False
     try:
         return polynomial_discriminant(claim.polynomial, claim.variable) == claim
-    except (OperationDomainValidationError, ValueError, TypeError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
@@ -689,18 +704,26 @@ def verify_polynomial_square_free_decomposition(
 ) -> bool:
     """Verify square-free factors and reconstruction against their source."""
 
+    if not isinstance(claim, PolynomialSquareFreeDecompositionResult):
+        return False
     try:
         return polynomial_square_free_decomposition(claim.polynomial) == claim
-    except (OperationDomainValidationError, ValueError, TypeError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
 def verify_polynomial_factorization(claim: PolynomialFactorizationResult) -> bool:
     """Verify factorization claims against their retained source polynomial."""
 
+    if not isinstance(claim, PolynomialFactorizationResult):
+        return False
     try:
         return polynomial_factorization(claim.polynomial) == claim
-    except (OperationDomainValidationError, ValueError, TypeError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 

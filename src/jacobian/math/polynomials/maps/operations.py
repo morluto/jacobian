@@ -14,7 +14,10 @@ from jacobian._execution import (
 )
 from jacobian.backends import BackendUnavailableError
 from jacobian.canonical import format_canonical_integer
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.polynomials._conversions import (
     rational_from_sympy,
     rational_function_to_sympy,
@@ -361,9 +364,13 @@ def jacobian_matrix(polynomial_map: RationalPolynomialMap) -> JacobianResult:
 def verify_jacobian(claim: JacobianResult) -> bool:
     """Verify Jacobian entries against the retained polynomial map source."""
 
+    if not isinstance(claim, JacobianResult):
+        return False
     try:
         return jacobian_matrix(claim.source) == claim
-    except (OperationDomainValidationError, ValueError, TypeError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 

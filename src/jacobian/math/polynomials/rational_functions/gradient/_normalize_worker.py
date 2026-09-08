@@ -62,6 +62,15 @@ def _run(payload: dict[str, Any]) -> dict[str, Any]:
     numerator = numerator.diff(generator) * denominator - numerator * denominator.diff(
         generator
     )
+    if numerator.is_zero:
+        from sympy import QQ, Poly
+
+        one = Poly(1, *generators, domain=QQ)
+        return {
+            "status": "ok",
+            "numerator": [],
+            "denominator": _dump(one),
+        }
     denominator = denominator * denominator
     if not numerator.is_zero:
         numerator_terms, denominator_terms = numerator.terms(), denominator.terms()

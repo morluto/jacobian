@@ -279,7 +279,10 @@ def test_per_polynomial_source_terms_are_capped_before_coefficient_scan() -> Non
                         "numerator": {"terms": [term] * 4_097},
                         "denominator": {
                             "terms": [
-                                {"coefficient": {"num": "1", "den": "1"}, "exponents": [0]}
+                                {
+                                    "coefficient": {"num": "1", "den": "1"},
+                                    "exponents": [0],
+                                }
                             ]
                         },
                     }

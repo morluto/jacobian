@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from fractions import Fraction
 from itertools import product
+from typing import NoReturn
 
-from jacobian.math.geometry.differential.metrics._dag import Dag, Expression, reject
+from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.math.geometry.differential.metrics._dag import Dag, Expression
 from jacobian.math.geometry.differential.metrics._models import RationalCoordinateMetric
 from jacobian.math.geometry.differential.metrics._plan import (
     ConnectionPlan,
@@ -22,6 +24,15 @@ from jacobian.math.geometry.differential.values import (
     _polynomial_key,
 )
 from jacobian.math.polynomials.values import SparseRationalPolynomial
+
+
+def _covariant_reject(reason: str, message: str) -> NoReturn:
+    location = ("tensor",) if reason == "shape" else ("covariant_derivative",)
+    raise OperationResourceAdmissionError(
+        location=location,
+        code=f"differential_geometry.covariant_derivative.{reason}",
+        message=message,
+    )
 
 
 @dataclass(frozen=True)
@@ -70,7 +81,7 @@ def _admit_outputs(
             or max(bound.degrees, default=0) > MAX_RATIONAL_TENSOR_EXPONENT
             or bound.coefficient_digits > MAX_RATIONAL_TENSOR_COEFFICIENT_DIGITS
         ):
-            reject(
+            _covariant_reject(
                 "determinant_locus",
                 "determinant locus factors exceed canonical polynomial bounds",
             )
@@ -86,22 +97,23 @@ def _admit_outputs(
         for coordinate_tensor in (metric.tensor, tensor)
         for guard in coordinate_tensor.retained_nonzero_denominators
     }
-    potential_guards = (
-        len(inherited_keys)
-        + len(set(determinant.numerator))
-        + len(
-            {
-                value
-                for value in outputs
-                if any(
-                    any(degree for degree in dag.nodes[index].bound.degrees)
-                    for index in value.denominator
-                )
-            }
+    determinant_keys: set[object] = set()
+    for index in set(determinant.numerator):
+        source = dag.nodes[index].source
+        determinant_keys.add(
+            _polynomial_key(source) if source is not None else ("determinant", index)
         )
-    )
+    output_keys = {
+        ("canonical-result-denominator", value.numerator, value.denominator)
+        for value in outputs
+        if any(
+            any(degree for degree in dag.nodes[index].bound.degrees)
+            for index in value.denominator
+        )
+    }
+    potential_guards = len(inherited_keys | determinant_keys | output_keys)
     if potential_guards > 768:
-        reject("locus", "complete covariant-derivative locus exceeds 768 guards")
+        _covariant_reject("locus", "complete covariant-derivative locus exceeds 768 guards")
 
     dimension = dag.dimension
     source = [
@@ -130,7 +142,7 @@ def _admit_outputs(
         or coefficient_bits > 268_435_456
         or coordinate_slots > 1_048_576
     ):
-        reject(
+        _covariant_reject(
             "output",
             "covariant derivative exceeds polynomial term, coefficient-bit, "
             "or coordinate allocation bounds",
@@ -144,17 +156,22 @@ def build_plan(
     dimension = len(metric.tensor.coordinate_axis)
     tensor_rank = len(tensor.variance)
     if tensor_rank + 1 > MAX_RATIONAL_TENSOR_RANK:
-        reject(
+        _covariant_reject(
             "shape",
             "covariant derivative exceeds the rank-8 representation budget",
         )
     if dimension ** (tensor_rank + 1) > MAX_RATIONAL_TENSOR_COMPONENTS:
-        reject(
+        _covariant_reject(
             "shape",
             "covariant derivative exceeds the dense component representation budget",
         )
     connection_plan: ConnectionPlan = build_connection_plan(metric)
     dag = connection_plan.dag
+    dag.ledger.limits = replace(
+        dag.ledger.limits,
+        reject=_covariant_reject,
+        label="covariant derivative",
+    )
     axes = tuple(range(dimension))
     determinant = connection_plan.determinant
     inverse = connection_plan.inverse

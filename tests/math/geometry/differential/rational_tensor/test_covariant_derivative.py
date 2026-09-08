@@ -141,8 +141,8 @@ def test_rank_four_output_is_rejected_before_backend_execution(
     )
     monkeypatch.setattr(
         operations,
-        "_evaluate_node",
-        lambda *args: pytest.fail("backend execution must follow admission"),
+        "evaluate_admitted_covariant_derivative",
+        lambda *args, **kwargs: pytest.fail("backend execution must follow admission"),
     )
     with pytest.raises(OperationResourceAdmissionError, match="component"):
         covariant_derivative(metric, source)

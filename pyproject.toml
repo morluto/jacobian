@@ -243,6 +243,8 @@ ignore_imports = [
     "jacobian.math.lattices.invariant_forms._hnf_process -> jacobian.process",
     "jacobian.math.matrices.analysis._inertia_process -> jacobian.process",
     "jacobian.math.geometry.differential._recognition_process -> jacobian.process",
+    # Covariant derivatives expand and cancel in one deadline-bound SymPy worker.
+    "jacobian.math.geometry.differential.rational_tensor.covariant_derivative._process -> jacobian.process",
     "jacobian.math.polynomials.real_algebra._qepcad_plane_process -> jacobian.process",
     "jacobian.math.polynomials.real_algebra._qepcad_plane_worker -> jacobian.process",
     "jacobian.math.matrices.cyclic_linear._kernel_process -> jacobian.process",

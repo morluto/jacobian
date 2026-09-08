@@ -7,7 +7,10 @@ import pytest
 from sympy import cancel, symbols
 
 from jacobian._execution import OperationExecutionTimeoutError, request_execution
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.geometry.differential.laplace_beltrami import (
     RationalLaplaceBeltramiResult,
     laplace_beltrami,
@@ -152,6 +155,25 @@ def test_result_denominator_reuses_inherited_monomial_guards() -> None:
     result = laplace_beltrami(metric, _scalar(1 / x, axis))
     assert len(result.retained_nonzero_denominators) == 768
     assert rational_function_to_sympy(result.value) == 2 / x**3
+
+
+def test_powered_binomial_result_denominator_is_reserved() -> None:
+    x = symbols("x")
+    axis = ("x",)
+    linear = _scalar(x + 1, axis).numerator
+    fillers = tuple(_scalar(x + offset, axis).numerator for offset in range(2, 769))
+    guards = canonical_locus_guards((linear, *fillers), variable_count=1)
+    assert len(guards) == 768
+    metric = RationalCoordinateMetric(
+        tensor=RationalCoordinateTensor(
+            coordinate_axis=axis,
+            variance=("COVARIANT", "COVARIANT"),
+            components=_metric((1,), axis).tensor.components,
+            retained_nonzero_denominators=guards,
+        )
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="768 guards"):
+        laplace_beltrami(metric, _scalar(1 / (x + 1), axis))
 
 
 def test_nonreduced_scalar_is_a_domain_error_before_admission() -> None:

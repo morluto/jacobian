@@ -340,3 +340,37 @@ def test_axis_specific_normalized_denominators_are_counted_separately() -> None:
     )
     with pytest.raises(OperationResourceAdmissionError, match="768 guards"):
         covariant_derivative(identity, source)
+
+
+def test_powered_binomial_output_denominator_is_counted_separately() -> None:
+    x = symbols("x")
+    axis = ("x",)
+    linear = rational_function_from_sympy(x + 1, axis).numerator
+    inherited = canonical_locus_guards(
+        (linear,),
+        tuple(
+            rational_function_from_sympy(x + offset, axis).numerator
+            for offset in range(2, 769)
+        ),
+        variable_count=1,
+    )
+    assert len(inherited) == 768
+    metric = RationalCoordinateMetric(
+        tensor=tensor([1], ("COVARIANT", "COVARIANT"), axis=axis)
+    )
+    metric = RationalCoordinateMetric(
+        tensor=RationalCoordinateTensor(
+            coordinate_axis=axis,
+            variance=("COVARIANT", "COVARIANT"),
+            components=metric.tensor.components,
+            retained_nonzero_denominators=inherited,
+        )
+    )
+    source = RationalCoordinateTensor(
+        coordinate_axis=axis,
+        variance=(),
+        components=(rational_function_from_sympy(1 / (x + 1), axis),),
+        retained_nonzero_denominators=inherited,
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="768 guards"):
+        covariant_derivative(metric, source)

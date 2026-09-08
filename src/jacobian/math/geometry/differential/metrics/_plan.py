@@ -61,13 +61,29 @@ def _remaining_denominator_factors(
     return remaining, remaining_numerator
 
 
+def _powered_monomial_key(
+    source: SparseRationalPolynomial, multiplicity: int
+) -> object | None:
+    if len(source.terms) != 1 or multiplicity < 1:
+        return None
+    exponents = tuple(degree * multiplicity for degree in source.terms[0].exponents)
+    coefficient = source.terms[0].coefficient.as_fraction() ** multiplicity
+    return (
+        (
+            exponents,
+            format_canonical_integer(coefficient.numerator),
+            format_canonical_integer(coefficient.denominator),
+        ),
+    )
+
+
 def _denominator_guard_identity(dag: Dag, value: Expression) -> object | None:
     """Identify one retained output denominator after cancelling shared nodes.
 
-    A single sourced remaining factor with no leftover numerator reuses the
-    inherited polynomial key. Remaining numerator nodes keep independently
-    normalized outputs distinct when the worker cancels different algebraic
-    factors from the same DAG denominator copies.
+    A single sourced remaining factor keeps its leftover multiplicity, so
+    ``1/(x+1)`` and ``1/(x+1)^2`` stay distinct from the inherited ``x+1``
+    guard. Remaining numerator nodes keep independently normalized outputs
+    distinct when a multi-term source can cancel different algebraic factors.
     """
 
     if not _has_nonconstant_denominator(dag, value):
@@ -77,7 +93,7 @@ def _denominator_guard_identity(dag: Dag, value: Expression) -> object | None:
         return None
     remaining_numerator_identity = tuple(remaining_numerator)
     if len(factors) == 1:
-        index, _multiplicity = factors[0]
+        index, multiplicity = factors[0]
         source = dag.nodes[index].source
         factorizable = (
             source is not None
@@ -85,9 +101,11 @@ def _denominator_guard_identity(dag: Dag, value: Expression) -> object | None:
             and remaining_numerator_identity
         )
         if source is not None and not factorizable:
-            return _polynomial_key(source)
+            key = _polynomial_key(source)
+            return key if multiplicity == 1 else (key, multiplicity)
         if not factorizable:
-            return _node_guard_key(dag, index)
+            key = _node_guard_key(dag, index)
+            return key if multiplicity == 1 else (key, multiplicity)
     return (
         "canonical-result-denominator",
         tuple(
@@ -96,6 +114,27 @@ def _denominator_guard_identity(dag: Dag, value: Expression) -> object | None:
         ),
         remaining_numerator_identity,
     )
+
+
+def _complete_result_denominator_keys(dag: Dag, value: Expression) -> set[object]:
+    """Identities that may already appear in an inherited locus family."""
+
+    identity = _denominator_guard_identity(dag, value)
+    if identity is None:
+        return set()
+    keys: set[object] = {identity}
+    factors, _remaining_numerator = _remaining_denominator_factors(dag, value)
+    if len(factors) != 1:
+        return keys
+    index, multiplicity = factors[0]
+    source = dag.nodes[index].source
+    if source is None:
+        return keys
+    for power in (multiplicity, multiplicity - 1):
+        powered = _powered_monomial_key(source, power)
+        if powered is not None:
+            keys.add(powered)
+    return keys
 
 
 def _has_nonconstant_denominator(dag: Dag, value: Expression) -> bool:
@@ -258,17 +297,9 @@ def _source_guard_keys(
 
 
 def _sourced_denominator_keys(dag: Dag, value: Expression) -> set[object]:
-    """Return inherited-matching keys for remaining sourced denominator nodes."""
+    """Return complete remaining-denominator identities that can match a locus."""
 
-    factors, _remaining_numerator = _remaining_denominator_factors(dag, value)
-    keys: set[object] = set()
-    for index, _multiplicity in factors:
-        source = dag.nodes[index].source
-        if source is None:
-            continue
-        keys.add(_polynomial_key(source))
-        keys.update(_source_guard_keys(source))
-    return keys
+    return _complete_result_denominator_keys(dag, value)
 
 
 def _potential_locus_keys(

@@ -196,6 +196,5 @@ def test_encoded_cycle_certificate_matches_the_widened_carrier() -> None:
     assert result.status == "NONCHORDAL"
     assert len(result.induced_cycle) == order
     assert (
-        ChordalRecognitionResult.model_validate_json(result.model_dump_json())
-        == result
+        ChordalRecognitionResult.model_validate_json(result.model_dump_json()) == result
     )

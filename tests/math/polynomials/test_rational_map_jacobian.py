@@ -247,3 +247,20 @@ def test_quotient_rule_by_independent_exact_coefficient_convolution() -> None:
             assert product(coefficients(value.numerator), product(q, q)) == product(
                 quotient, coefficients(value.denominator)
             )
+
+
+def test_aggregate_source_terms_are_capped_before_component_parse() -> None:
+    term = {"coefficient": {"num": "1", "den": "1"}, "exponents": [0]}
+    component = {
+        "variables": ["x"],
+        "numerator": {"terms": [term] * 256},
+        "denominator": {"terms": [term] * 256},
+    }
+    with pytest.raises(ValidationError, match="65,536-term"):
+        RationalFunctionMap.model_validate(
+            {
+                "source_variables": ["x"],
+                "target_coordinates": [f"y{i}" for i in range(200)],
+                "components": [component] * 200,
+            }
+        )

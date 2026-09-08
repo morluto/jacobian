@@ -153,17 +153,19 @@ def jacobian_matrix(source: RationalFunctionMap) -> RationalFunctionMapJacobian:
             plans.append(None)
     # No result construction or general polynomial backend work starts until
     # every row's arithmetic and the complete matrix allocation are admitted.
-    entries = tuple(
-        _general_gradient_admitted(component)
-        if plan is None
-        else _build_monomial_gradient(source.source_variables, plan)
-        for component, plan in zip(source.components, plans, strict=True)
-    )
+    entries = []
+    for component, plan in zip(source.components, plans, strict=True):
+        request_checkpoint("during rational map Jacobian row construction")
+        entries.append(
+            _general_gradient_admitted(component)
+            if plan is None
+            else _build_monomial_gradient(source.source_variables, plan)
+        )
     result = RationalFunctionMapJacobian(
         source=source,
         row_axis=source.target_coordinates,
         column_axis=source.source_variables,
-        entries=entries,
+        entries=tuple(entries),
     )
     request_checkpoint("after rational map Jacobian construction")
     return result

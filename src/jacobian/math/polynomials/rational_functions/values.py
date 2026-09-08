@@ -4,7 +4,7 @@ from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.polynomials.values import (
     MAX_POLYNOMIAL_VARIABLES,
     PolynomialVariable,
@@ -12,6 +12,7 @@ from jacobian.math.polynomials.values import (
 )
 
 MAX_RATIONAL_MAP_COMPONENTS = 4096
+MAX_RATIONAL_MAP_SOURCE_TERMS = 65_536
 
 
 class RationalFunctionMap(StrictModel):
@@ -38,6 +39,38 @@ class RationalFunctionMap(StrictModel):
         max_length=MAX_RATIONAL_MAP_COMPONENTS
     )
     domain: Literal["COMMON_REGULAR_LOCUS"] = "COMMON_REGULAR_LOCUS"
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_aggregate_component_terms(cls, data: object) -> object:
+        """Cap nested polynomial terms before constructing each component."""
+
+        data = canonicalize_json_containers(data)
+        if not isinstance(data, dict):
+            return data
+        components = data.get("components")
+        if not isinstance(components, (list, tuple)):
+            return data
+        total = 0
+        for component in components:
+            if isinstance(component, RationalFunction):
+                total += len(component.numerator.terms) + len(
+                    component.denominator.terms
+                )
+            elif isinstance(component, dict):
+                for key in ("numerator", "denominator"):
+                    polynomial = component.get(key)
+                    if isinstance(polynomial, dict):
+                        terms = polynomial.get("terms")
+                        if isinstance(terms, (list, tuple)):
+                            total += len(terms)
+                    elif hasattr(polynomial, "terms"):
+                        total += len(polynomial.terms)
+            if total > MAX_RATIONAL_MAP_SOURCE_TERMS:
+                raise ValueError(
+                    "rational-map components exceed the 65,536-term source envelope"
+                )
+        return data
 
     @model_validator(mode="after")
     def require_coordinate_axes(self) -> Self:

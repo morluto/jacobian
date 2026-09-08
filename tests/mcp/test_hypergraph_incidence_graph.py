@@ -48,4 +48,32 @@ def test_incidence_graph_round_trips_into_cycle_profile() -> None:
             assert cycle.structured_content is not None
             assert cycle.structured_content["output"]["rows"][0]["cycle_length"] == 4
 
+            boundary_payload = {
+                "hypergraph": {
+                    "vertices": [str(index) for index in range(256)],
+                    "edges": [],
+                }
+            }
+            boundary = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "hypergraph.incidence_graph.compute",
+                    "payload": boundary_payload,
+                },
+            )
+            assert not boundary.is_error
+            assert boundary.structured_content is not None
+            boundary_graph = boundary.structured_content["output"]["graph"]
+            assert len(boundary_graph["vertices"]) == 256
+            consumed_boundary = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "graph.invariant.cycle_length_profile.compute",
+                    "payload": {"graph": boundary_graph},
+                },
+            )
+            assert not consumed_boundary.is_error
+            assert consumed_boundary.structured_content is not None
+            assert consumed_boundary.structured_content["output"]["rows"] == []
+
     asyncio.run(scenario())

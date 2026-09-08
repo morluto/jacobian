@@ -259,6 +259,8 @@ ignore_imports = [
     "jacobian.math.geometry.differential._recognition_process -> jacobian.process",
     # Metric contractions normalize exact fractions in one deadline-bound worker.
     "jacobian.math.geometry.differential.metrics._normalize_process -> jacobian.process",
+    # Metric and covariant DAGs expand in one deadline-bound worker.
+    "jacobian.math.geometry.differential.metrics._dag_evaluate_process -> jacobian.process",
     # Exact common-interlacing factorization and isolation run in one bounded worker.
     "jacobian.math.graphs.triangle_free_diameter_augmentation._augmentation_z3 -> jacobian.process",
     "jacobian.math.polynomials.real_algebra._common_interlacing_process -> jacobian.process",

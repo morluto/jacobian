@@ -7,7 +7,10 @@ from fractions import Fraction
 from itertools import product
 from typing import NoReturn
 
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.geometry.differential.metrics._dag import Dag, Expression
 from jacobian.math.geometry.differential.metrics._models import RationalCoordinateMetric
 from jacobian.math.geometry.differential.metrics._plan import (
@@ -26,6 +29,14 @@ from jacobian.math.geometry.differential.values import (
     _polynomial_key,
 )
 from jacobian.math.polynomials.values import SparseRationalPolynomial
+
+
+def _covariant_singular_metric() -> OperationDomainValidationError:
+    return OperationDomainValidationError(
+        location=("metric",),
+        code="differential_geometry.covariant_derivative.singular_metric",
+        message="metric determinant is identically zero",
+    )
 
 
 def _covariant_reject(reason: str, message: str) -> NoReturn:
@@ -173,7 +184,10 @@ def build_plan(
             "covariant derivative exceeds the dense component representation budget",
         )
     connection_plan: ConnectionPlan = build_connection_plan(
-        metric, reject=_covariant_reject, label="covariant derivative"
+        metric,
+        reject=_covariant_reject,
+        label="covariant derivative",
+        singular_metric=_covariant_singular_metric,
     )
     dag = connection_plan.dag
     axes = tuple(range(dimension))

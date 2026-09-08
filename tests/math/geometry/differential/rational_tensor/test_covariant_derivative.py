@@ -456,6 +456,18 @@ def test_cancelled_factor_of_a_generated_determinant_admits_at_the_exact_cap() -
     )
 
 
+def test_structurally_zero_metric_uses_the_covariant_derivative_domain_code() -> None:
+    metric = RationalCoordinateMetric(
+        tensor=tensor([0], ("COVARIANT", "COVARIANT"), axis=("x",))
+    )
+    source = tensor([1], (), axis=("x",))
+    with pytest.raises(OperationDomainValidationError) as rejected:
+        covariant_derivative(metric, source)
+    assert rejected.value.errors()[0]["type"].endswith(
+        "covariant_derivative.singular_metric"
+    )
+
+
 def test_singular_metric_uses_the_covariant_derivative_domain_code() -> None:
     x = symbols("x")
     metric = RationalCoordinateMetric(

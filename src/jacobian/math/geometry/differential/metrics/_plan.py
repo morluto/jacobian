@@ -202,6 +202,7 @@ def build_connection_plan(
     *,
     reject: Callable[[str, str], NoReturn] | None = None,
     label: str | None = None,
+    singular_metric: Callable[[], OperationDomainValidationError] | None = None,
 ) -> ConnectionPlan:
     n = len(metric.tensor.coordinate_axis)
     dag = Dag(n)
@@ -215,7 +216,7 @@ def build_connection_plan(
     axes = tuple(range(n))
     det = _determinant(dag, entries, n, axes, axes)
     if not det.scalar:
-        raise singular()
+        raise (singular_metric or singular)()
     inverse = tuple(
         dag.multiply(
             Expression(Fraction((-1) ** (i + j))),

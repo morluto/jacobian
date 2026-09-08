@@ -169,9 +169,15 @@ def admit(source: LebesgueIntervalSource) -> LebesguePlan:
                 "complete extrema can exceed canonical real-algebraic coefficient digits",
             )
         radius = max(
-            1,
-            abs(lower.numerator) // lower.denominator + 1,
-            abs(upper.numerator) // upper.denominator + 1,
+            (
+                max(
+                    abs(cell.lower.numerator) // cell.lower.denominator + 1,
+                    abs(cell.upper.numerator) // cell.upper.denominator + 1,
+                )
+                for cell in cells
+                if cell.kind == "INTERIOR"
+            ),
+            default=1,
         )
         # Interval Horner has width(A*X) <= R*width(A) + max|A|*width(X).
         # With R >= 1 and |X| <= R, induction bounds the final width by

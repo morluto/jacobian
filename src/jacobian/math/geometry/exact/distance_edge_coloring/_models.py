@@ -22,8 +22,8 @@ class DistanceEdgeColoringResult(StrictModel):
     The sole graph carrier is ``coloring.hypergraph``. Its vertex axis is the
     source point order, and edge ``i:j`` joins source positions i<j. Edges occur
     in lexicographic position-pair order. ``squared_distances[color_index]`` is
-    the exact colour value; the producer establishes increasing distinct values
-    and their geometric meaning. Parsing does not recompute distances.
+    the exact colour value. Parsing requires the palette to be strictly
+    increasing and duplicate-free; it does not recompute distances.
     """
 
     configuration: PointConfiguration
@@ -48,5 +48,10 @@ class DistanceEdgeColoringResult(StrictModel):
         if self.coloring.color_count != len(self.squared_distances):
             raise ValueError(
                 "colour count must equal the squared-distance palette size"
+            )
+        palette = tuple(value.as_fraction() for value in self.squared_distances)
+        if palette != tuple(sorted(set(palette))):
+            raise ValueError(
+                "squared-distance palette must be strictly increasing and duplicate-free"
             )
         return self

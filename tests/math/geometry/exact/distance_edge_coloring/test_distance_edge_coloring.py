@@ -78,6 +78,37 @@ def test_square() -> None:
     }
 
 
+def test_deserialized_palette_must_be_strictly_increasing() -> None:
+    result = assert_reconstructs(configuration([(0, 0), (1, 0), (0, 1), (1, 1)]))
+    reversed_palette = result.model_dump()
+    reversed_palette["squared_distances"] = list(
+        reversed(reversed_palette["squared_distances"])
+    )
+    reversed_palette["coloring"]["assignments"] = [
+        {**item, "color_index": 1 - item["color_index"]}
+        for item in reversed_palette["coloring"]["assignments"]
+    ]
+    with pytest.raises(ValidationError, match="strictly increasing"):
+        DistanceEdgeColoringResult.model_validate(reversed_palette)
+    duplicate = result.model_dump()
+    duplicate["squared_distances"] = [
+        duplicate["squared_distances"][0],
+        duplicate["squared_distances"][0],
+    ]
+    with pytest.raises(ValidationError, match="strictly increasing"):
+        DistanceEdgeColoringResult.model_validate(duplicate)
+
+
+def test_pythagorean_pair_admits_reduced_unit_distance() -> None:
+    m = 10**9000
+    point = (
+        Fraction(m * m - 1, m * m + 1),
+        Fraction(2 * m, m * m + 1),
+    )
+    result = assert_reconstructs(configuration([(0, 0), point]))
+    assert result.squared_distances[0].as_fraction() == 1
+
+
 @pytest.mark.parametrize(
     "rows",
     [
@@ -184,7 +215,7 @@ def test_source_coefficient_storage_rejects_before_pair_work() -> None:
 
 def test_incommensurate_denominator_growth_rejects() -> None:
     values = tuple(Fraction(1, 10**1000 + 2 * i + 1) for i in range(20))
-    with pytest.raises(OperationResourceAdmissionError, match="denominators"):
+    with pytest.raises(OperationResourceAdmissionError, match="coefficient"):
         compute_distance_edge_coloring(configuration([(0,) * 20, values]))
 
 

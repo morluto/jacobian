@@ -34,8 +34,6 @@ __all__ = ["compute_distance_edge_coloring"]
 _MAX_SOURCE_BITS = 8_000_000
 _MAX_RESULT_BITS = 64_000_000
 _MAX_WORK = 10**13
-# A component below 2**_RATIONAL_BITS fits the canonical decimal carrier.
-_RATIONAL_BITS = (10**MAX_CANONICAL_RATIONAL_DIGITS).bit_length() - 1
 
 
 def _reject(reason: str) -> None:
@@ -70,7 +68,7 @@ class _Budget:
 
 def _plan(
     configuration: PointConfiguration, budget: _Budget
-) -> tuple[tuple[fmpq, ...], ...]:
+) -> tuple[tuple[tuple[fmpq, ...], fmpq], ...]:
     """Admit bounded subtraction, then all squared sums and their output.
 
     Translation-invariant differences are reduced before estimating squared
@@ -99,7 +97,7 @@ def _plan(
                     budget.charge(
                         8 * height if a.den == b.den == 1 else 8 * height * height
                     )
-    plans: list[tuple[fmpq, ...]] = []
+    plans: list[tuple[tuple[fmpq, ...], fmpq]] = []
     result_bits = source_bits
     maximum_height = 1
     for i, left in enumerate(points):
@@ -115,12 +113,7 @@ def _plan(
                 h = common_denominator.bit_length() + denominator.bit_length()
                 budget.charge(4 * h * h)
                 factor = denominator // gcd(common_denominator, denominator)
-                if common_denominator.bit_length() + factor.bit_length() > (
-                    _RATIONAL_BITS // 2 + 1
-                ):
-                    _reject("squared-distance denominators exceed the exact carrier")
                 common_denominator *= factor
-            denominator_bits = 2 * (common_denominator.bit_length() - 1) + 2
             scaled_bits = max(
                 (
                     abs(int(value.numerator)).bit_length()
@@ -130,13 +123,30 @@ def _plan(
                 default=0,
             )
             numerator_bits = 2 * scaled_bits + (len(differences) - 1).bit_length()
-            height = max(1, numerator_bits, denominator_bits)
-            if height > _RATIONAL_BITS:
+            unreduced_height = max(
+                1,
+                numerator_bits,
+                2 * (common_denominator.bit_length() - 1) + 2,
+            )
+            budget.charge(16 * len(differences) * unreduced_height * unreduced_height)
+            squared = fmpq(0)
+            for value in differences:
+                squared += value * value
+            numerator = abs(int(squared.numerator))
+            denominator = int(squared.denominator)
+            if (
+                numerator >= 10**MAX_CANONICAL_RATIONAL_DIGITS
+                or denominator >= 10**MAX_CANONICAL_RATIONAL_DIGITS
+            ):
                 _reject("squared-distance coefficient growth exceeds the exact carrier")
-            budget.charge(16 * len(differences) * height * height)
-            result_bits += 2 * height
-            maximum_height = max(maximum_height, height)
-            plans.append(differences)
+            reduced_height = max(
+                1,
+                numerator.bit_length(),
+                denominator.bit_length(),
+            )
+            result_bits += 2 * reduced_height
+            maximum_height = max(maximum_height, reduced_height)
+            plans.append((differences, squared))
     # Every edge can have its own palette row; source axes, assignments and
     # graph incidences have independently bounded counts from PointConfiguration.
     if result_bits > _MAX_RESULT_BITS:
@@ -174,9 +184,9 @@ def compute_distance_edge_coloring(
     budget.charge(stage="before distance admission")
     plans = _plan(configuration, budget)
     distances: list[fmpq] = []
-    for differences in plans:
+    for _differences, squared in plans:
         budget.charge()
-        distances.append(sum((value * value for value in differences), fmpq(0)))
+        distances.append(squared)
     palette: list[fmpq] = []
     indices = [0] * len(distances)
     # Sorting and adjacent equality give O(E log E) comparisons even for

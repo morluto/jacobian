@@ -83,7 +83,6 @@ def _admit(coloring: IndexedHyperedgeColoring, deadline: float) -> _Plan:
         sum(1 << positions[label] for label in members)
         for _, members in coloring.hypergraph.edges
     )
-    pair_count = 0
     for group in groups:
         empty = sum(1 for index in group if masks[index] == 0)
         if empty >= 2:
@@ -96,8 +95,7 @@ def _admit(coloring: IndexedHyperedgeColoring, deadline: float) -> _Plan:
                     "do not represent"
                 ),
             )
-        total = len(group) * (len(group) - 1) // 2
-        pair_count += total - empty * (empty - 1) // 2
+    pair_count = sum(len(group) * (len(group) - 1) // 2 for group in groups)
     if pair_count > MAX_CONFLICT_PAIRS:
         _reject("complete same-colour source-pair provenance exceeds 65536 rows")
     candidates: list[int] = []
@@ -156,7 +154,7 @@ def construct(coloring: IndexedHyperedgeColoring) -> SameColorConflictsResult:
             )
         )
     _checkpoint(deadline, "before conflict result construction")
-    result = SameColorConflictsResult(
+    result = SameColorConflictsResult.model_construct(
         coloring=coloring,
         hypergraph=FiniteHypergraph(vertices=vertices, edges=edges),
         provenance=tuple(provenance),

@@ -12,6 +12,7 @@ def test_exact_public_api_symbols() -> None:
         "FiniteAbelianCharacterSumIntervalProfileRequest",
         "FiniteAbelianCharacterSumIntervalProfileResult",
         "FiniteAbelianCharacterSumIntervalProfileSource",
+        "FiniteAbelianGroupElement",
         "FiniteAbelianGroupFactorizationResult",
         "FiniteAbelianNonorthogonalityWitness",
         "FiniteAbelianProductGroup",

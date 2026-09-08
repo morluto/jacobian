@@ -236,4 +236,3 @@ def test_general_branch_uses_the_bounded_cancellation_worker(
     x, y = symbols("x y")
     _identity(rational_function_from_sympy((x * x + y) / (x + y + 1), ("x", "y")))
     assert calls
-

@@ -352,16 +352,14 @@ def test_complete_locus_admitted_before_curvature_expansion() -> None:
             retained_nonzero_denominators=guards,
         )
     )
-        # Shared formal denominator factors can reduce to distinct canonical
-        # denominators. The inherited family already saturates the 768-guard
-        # budget, so the independent xy determinant cannot be retained.
+    # Shared formal denominator factors can reduce to distinct canonical
+    # denominators. The inherited family already saturates the 768-guard
+    # budget, so the independent xy determinant cannot be retained.
     with pytest.raises(OperationResourceAdmissionError, match="768 guards"):
         curvature_profile(source)
 
 
-def test_inherited_determinant_and_inverse_guards_are_unioned_before_the_cap() -> (
-    None
-):
+def test_inherited_determinant_and_inverse_guards_are_unioned_before_the_cap() -> None:
     axis = ("x",)
     guards = canonical_locus_guards(
         (
@@ -385,4 +383,3 @@ def test_inherited_determinant_and_inverse_guards_are_unioned_before_the_cap() -
     result = curvature_profile(source)
     assert len(result.inverse_metric.retained_nonzero_denominators) == 768
     replay(result)
-

@@ -1,11 +1,10 @@
 """Exact Laplace--Beltrami identities and retained source-locus regressions."""
 
+import pytest
 from sympy import symbols
 
-import pytest
-
-from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.geometry.differential.laplace_beltrami import laplace_beltrami
 from jacobian.math.geometry.differential.metrics import RationalCoordinateMetric
 from jacobian.math.geometry.differential.values import (
@@ -103,4 +102,3 @@ def test_shared_one_term_inherited_locus_remains_admitted() -> None:
     )
     result = laplace_beltrami(metric, rational_function_from_sympy(1, axis))
     assert result.retained_nonzero_denominators == guards
-

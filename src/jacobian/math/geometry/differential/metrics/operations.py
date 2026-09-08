@@ -119,9 +119,7 @@ def curvature_profile(
             == (0,) * len(component.variables)
         )
     )
-    recognition = recognize_canonical_rational_functions(
-        candidates, deadline=deadline
-    )
+    recognition = recognize_canonical_rational_functions(candidates, deadline=deadline)
     if recognition.non_coprime is not None:
         raise OperationDomainValidationError(
             location=("metric",),

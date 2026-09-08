@@ -150,6 +150,44 @@ def build_connection_plan(
     return ConnectionPlan(dag, entries, det, inverse, tuple(connection_list))
 
 
+def _source_guard_keys(source: SparseRationalPolynomial) -> set[object]:
+    keys: set[object] = {_polynomial_key(source)}
+    if len(source.terms) != 1:
+        return keys
+    exponents = source.terms[0].exponents
+    for axis_index, degree in enumerate(exponents):
+        if degree:
+            axis_exponents = tuple(int(i == axis_index) for i in range(len(exponents)))
+            keys.add(((axis_exponents, "1", "1"),))
+    return keys
+
+
+def _potential_locus_keys(
+    dag: Dag,
+    metric: RationalCoordinateMetric,
+    determinant: Expression,
+    outputs: tuple[Expression, ...],
+) -> set[object]:
+    keys: set[object] = {
+        _polynomial_key(guard) for guard in metric.tensor.retained_nonzero_denominators
+    }
+    for index in set(determinant.numerator):
+        source = dag.nodes[index].source
+        keys.add(
+            _polynomial_key(source) if source is not None else ("determinant", index)
+        )
+    for value in outputs:
+        if not _has_nonconstant_denominator(dag, value):
+            continue
+        for index in set(value.denominator):
+            source = dag.nodes[index].source
+            if source is None:
+                keys.add(("canonical-result-denominator", index))
+            else:
+                keys.update(_source_guard_keys(source))
+    return keys
+
+
 def build_plan(metric: RationalCoordinateMetric) -> Plan:
     connection_plan = build_connection_plan(metric)
     n = len(metric.tensor.coordinate_axis)
@@ -213,36 +251,7 @@ def build_plan(metric: RationalCoordinateMetric) -> Plan:
         )
     outputs = (*inverse, *connection, *riemann, *ricci, scalar)
     sizes = {value: dag.admit_output(value) for value in dict.fromkeys(outputs)}
-    inherited_keys = {
-        _polynomial_key(guard)
-        for guard in metric.tensor.retained_nonzero_denominators
-    }
-    determinant_keys: set[object] = set()
-    for index in set(det.numerator):
-        source = dag.nodes[index].source
-        determinant_keys.add(
-            _polynomial_key(source) if source is not None else ("determinant", index)
-        )
-    output_keys: set[object] = set()
-    for value in outputs:
-        if not _has_nonconstant_denominator(dag, value):
-            continue
-        for index in set(value.denominator):
-            source = dag.nodes[index].source
-            if source is None:
-                output_keys.add(("canonical-result-denominator", index))
-                continue
-            output_keys.add(_polynomial_key(source))
-            if len(source.terms) == 1:
-                exponents = source.terms[0].exponents
-                for axis_index, degree in enumerate(exponents):
-                    if degree:
-                        axis_exponents = tuple(
-                            int(i == axis_index) for i in range(len(exponents))
-                        )
-                        output_keys.add(((axis_exponents, "1", "1"),))
-    potential_guards = len(inherited_keys | determinant_keys | output_keys)
-    if potential_guards > 768:
+    if len(_potential_locus_keys(dag, metric, det, outputs)) > 768:
         reject("locus", "complete retained curvature locus exceeds 768 guards")
 
     # Count mathematical storage, including every occurrence of the common

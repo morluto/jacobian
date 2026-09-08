@@ -157,13 +157,11 @@ def test_rank_eight_source_is_rejected_before_the_result_schema() -> None:
     source = tensor([0], ("COVARIANT",) * 8, axis=axis)
     with pytest.raises(OperationResourceAdmissionError, match="rank-8") as rejected:
         covariant_derivative(metric, source)
-    assert rejected.value.errors()[0]["type"].endswith(
-        "covariant_derivative.shape"
-    )
+    assert rejected.value.errors()[0]["type"].endswith("covariant_derivative.shape")
 
 
 def test_singular_metric_after_expansion_is_a_domain_error() -> None:
-    x, y = symbols("x y")
+    x = symbols("x")
     metric = RationalCoordinateMetric(
         tensor=tensor([1, x, x, x**2], ("COVARIANT", "COVARIANT"), axis=("x", "y"))
     )
@@ -223,4 +221,3 @@ def test_oversized_determinant_is_rejected_during_admission() -> None:
     ) as rejected:
         covariant_derivative(metric, tensor([1], (), axis=("x", "y")))
     assert rejected.value.errors()[0]["type"].endswith("determinant_locus")
-

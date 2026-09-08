@@ -311,14 +311,17 @@ def test_polar_metric_component_gradient() -> None:
 def test_general_branch_uses_the_bounded_cancellation_worker(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    calls: list[int] = []
+    calls: list[object] = []
     original = _normalize_fraction
 
     def wrapped(
-        source: RationalFunction, axis: int, *, deadline: float
-    ) -> RationalFunction:
-        calls.append(axis)
-        return original(source, axis, deadline=deadline)
+        numerator: object,
+        denominator: object,
+        variables: tuple[str, ...],
+        factor_records: tuple[list[object], ...] = (),
+    ) -> object:
+        calls.append(variables)
+        return original(numerator, denominator, variables, factor_records)
 
     monkeypatch.setattr(
         "jacobian.math.polynomials.rational_functions.gradient.operations._normalize_fraction",
@@ -326,7 +329,7 @@ def test_general_branch_uses_the_bounded_cancellation_worker(
     )
     x, y = symbols("x y")
     _identity(rational_function_from_sympy((x * x + y) / (x + y + 1), ("x", "y")))
-    assert calls == [0, 1]
+    assert calls == [("x", "y"), ("x", "y")]
 
 
 def test_inactive_axis_of_a_nonmonomial_reciprocal_is_canonical_zero() -> None:

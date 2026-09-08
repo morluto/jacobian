@@ -314,7 +314,7 @@ def test_oversized_raw_pair_rejected_before_backend_execution(
         }
     )
     monkeypatch.setattr(
-        "jacobian.math.geometry.differential.metrics.operations._evaluate_node",
+        "jacobian.math.geometry.differential.metrics.operations.require_canonical_rational_function",
         lambda *args: pytest.fail("backend execution must follow admission"),
     )
     with pytest.raises(OperationResourceAdmissionError, match=r"allocation|work"):

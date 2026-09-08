@@ -74,7 +74,7 @@ def _oversized_partial_trace_payload() -> dict[str, Any]:
         ),
         (
             "matrix.permanent.compute",
-            _identity_payload(MAX_MATRIX_DIMENSION + 1),
+            _identity_payload(MAX_PERMANENT_MATRIX_ORDER + 1),
             MAX_PERMANENT_MATRIX_ORDER,
             OperationRequestValidationError,
         ),

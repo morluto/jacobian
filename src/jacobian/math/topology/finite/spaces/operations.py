@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 
 from ._models import (
     BoundaryResult,
@@ -11,7 +14,7 @@ from ._models import (
     InteriorResult,
     KolmogorovQuotientResult,
 )
-from .values import FiniteTopologicalMap, FiniteTopologicalSpace
+from .values import MAX_POINTS, FiniteTopologicalMap, FiniteTopologicalSpace
 
 __all__ = [
     "boundary",
@@ -30,17 +33,39 @@ __all__ = [
 ]
 
 
+MAX_PREORDER_INCIDENCES = 262_144
+MAX_PREORDER_BIT_WORK = 268_435_456
+
+
 def _admit_space(space: FiniteTopologicalSpace) -> None:
-    """Establish the preorder laws within the 64-point carrier."""
-    rows = tuple(set(row) for row in space.preorder)
+    """Bound row storage and bitset work before establishing preorder laws.
+
+    With n points and m retained incidences, constructing n-bit row masks and
+    checking each inclusion costs O(n*m) bit operations. The factor eight
+    covers mask construction, inclusion, reflexivity and linear owner passes.
+    This admits large sparse spaces without charging them for n cubed set work.
+    """
+    count = len(space.points)
+    incidences = sum(map(len, space.preorder))
+    if (
+        count > MAX_POINTS
+        or incidences > MAX_PREORDER_INCIDENCES
+        or 8 * count * max(count, incidences) > MAX_PREORDER_BIT_WORK
+    ):
+        raise OperationResourceAdmissionError(
+            location=("space",),
+            code="finite_topology_space.preorder_work",
+            message="preorder storage or bitset work exceeds the admitted bound",
+        )
+    rows = tuple(sum(1 << index for index in row) for row in space.preorder)
     for i, row in enumerate(rows):
-        if i not in row:
+        if not row & (1 << i):
             raise OperationDomainValidationError(
                 location=("space",),
                 code="finite_topology_space.preorder_not_reflexive",
                 message="preorder must be reflexive",
             )
-        if any(not rows[j] <= row for j in row):
+        if any(rows[j] & row != rows[j] for j in space.preorder[i]):
             raise OperationDomainValidationError(
                 location=("space",),
                 code="finite_topology_space.preorder_not_transitive",
@@ -82,11 +107,11 @@ def minimal_neighbourhoods(
 def _minimal_neighbourhoods(
     space: FiniteTopologicalSpace,
 ) -> tuple[tuple[int, ...], ...]:
-    count = len(space.points)
-    return tuple(
-        tuple(sorted(y for y in range(count) if x in space.preorder[y]))
-        for x in range(count)
-    )
+    rows: list[list[int]] = [[] for _ in space.points]
+    for upper, downset in enumerate(space.preorder):
+        for lower in downset:
+            rows[lower].append(upper)
+    return tuple(tuple(row) for row in rows)
 
 
 def _admit_subset(space: FiniteTopologicalSpace, subset: frozenset[int]) -> None:
@@ -106,12 +131,9 @@ def interior(space: FiniteTopologicalSpace, subset: frozenset[int]) -> frozenset
 
 
 def _interior(space: FiniteTopologicalSpace, subset: frozenset[int]) -> frozenset[int]:
-    neighbourhoods = _minimal_neighbourhoods(space)
-    result: set[int] = set()
-    for i in range(len(space.points)):
-        if set(neighbourhoods[i]).issubset(subset):
-            result.add(i)
-    return frozenset(result)
+    # X \ closure(X \ A) avoids constructing every open neighbourhood.
+    outside = frozenset(range(len(space.points))) - subset
+    return frozenset(range(len(space.points))) - _closure(space, outside)
 
 
 def closure(space: FiniteTopologicalSpace, subset: frozenset[int]) -> frozenset[int]:
@@ -149,10 +171,11 @@ def continuous_check(map_: FiniteTopologicalMap) -> bool:
     tgt = map_.target
     _admit_space(src)
     _admit_space(tgt)
+    target_rows = tuple(set(row) for row in tgt.preorder)
     for i in range(len(src.points)):
         fi = map_.point_map[i]
         for j in src.preorder[i]:
-            if map_.point_map[j] not in tgt.preorder[fi]:
+            if map_.point_map[j] not in target_rows[fi]:
                 return False
     return True
 
@@ -202,13 +225,16 @@ def verify_continuity(claim: ContinuousCheckResult) -> bool:
     try:
         _admit_space(source)
         _admit_space(target)
+    except OperationResourceAdmissionError:
+        raise
     except OperationDomainValidationError:
         return False
+    target_rows = tuple(set(row) for row in target.preorder)
     monotone = True
     for i in range(len(source.points)):
         image = claim.point_map.point_map[i]
         for j in source.preorder[i]:
-            if claim.point_map.point_map[j] not in target.preorder[image]:
+            if claim.point_map.point_map[j] not in target_rows[image]:
                 monotone = False
                 break
         if not monotone:
@@ -223,6 +249,8 @@ def verify_interior(claim: InteriorResult) -> bool:
     try:
         _admit_space(claim.space)
         expected = _interior(claim.space, frozenset(claim.subset.indices))
+    except OperationResourceAdmissionError:
+        raise
     except OperationDomainValidationError:
         return False
     return tuple(sorted(expected)) == claim.interior.indices
@@ -235,6 +263,8 @@ def verify_closure(claim: ClosureResult) -> bool:
     try:
         _admit_space(claim.space)
         expected = _closure(claim.space, frozenset(claim.subset.indices))
+    except OperationResourceAdmissionError:
+        raise
     except OperationDomainValidationError:
         return False
     return tuple(sorted(expected)) == claim.closure.indices
@@ -248,6 +278,8 @@ def verify_boundary(claim: BoundaryResult) -> bool:
         _admit_space(claim.space)
         subset = frozenset(claim.subset.indices)
         expected = _closure(claim.space, subset) - _interior(claim.space, subset)
+    except OperationResourceAdmissionError:
+        raise
     except OperationDomainValidationError:
         return False
     return tuple(sorted(expected)) == claim.boundary.indices
@@ -267,6 +299,8 @@ def verify_kolmogorov_quotient(claim: KolmogorovQuotientResult) -> bool:
     try:
         _admit_space(source)
         _admit_space(target)
+    except OperationResourceAdmissionError:
+        raise
     except OperationDomainValidationError:
         return False
     count = len(source.points)
@@ -277,17 +311,18 @@ def verify_kolmogorov_quotient(claim: KolmogorovQuotientResult) -> bool:
         not 0 <= image < classes for image in class_map
     ):
         return False
-    representatives = [
-        next(i for i in range(count) if class_map[i] == a) for a in range(classes)
-    ]
+    representatives = [-1] * classes
+    row_classes: dict[tuple[int, ...], int] = {}
+    for index, row in enumerate(source.preorder):
+        image = class_map[index]
+        if row not in row_classes:
+            if representatives[image] != -1:
+                return False
+            row_classes[row] = image
+            representatives[image] = index
+        if image != row_classes[row]:
+            return False
     if tuple(source.points[rep] for rep in representatives) != target.points:
-        return False
-    if any(
-        (class_map[left] == class_map[right])
-        != (source.preorder[left] == source.preorder[right])
-        for left in range(count)
-        for right in range(left + 1, count)
-    ):
         return False
     for target_index in range(classes):
         expected = sorted(

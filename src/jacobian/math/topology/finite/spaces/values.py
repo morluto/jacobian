@@ -10,7 +10,7 @@ from pydantic_core import PydanticCustomError
 from jacobian._models import StrictModel
 from jacobian.math._labels import OpaqueLabel
 
-MAX_POINTS = 64
+MAX_POINTS = 4_096
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -36,7 +36,8 @@ class FiniteTopologicalSpace(StrictModel):
 
     ``points`` are unique labels. ``preorder`` is a tuple of one row per point
     (in the same order), where each row lists the indices of points <= that
-    point.
+    point. Operations separately admit retained incidences and bitset work;
+    the 4,096-point carrier ceiling is not a promise of dense computation.
     """
 
     points: tuple[OpaqueLabel, ...] = Field(min_length=1, max_length=MAX_POINTS)

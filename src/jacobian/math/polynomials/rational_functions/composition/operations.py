@@ -14,6 +14,7 @@ from jacobian._execution import (
     request_checkpoint,
     request_execution,
 )
+from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -77,6 +78,32 @@ def _reject_undefined_outer_denominator() -> NoReturn:
         code="rational_function_map.compose.undefined_outer_denominator",
         message="an outer denominator vanishes identically after substitution",
     )
+
+
+def _component_identity(component: RationalFunction) -> bytes:
+    return encode_strict_json(component.model_dump(mode="json"))
+
+
+def _equal_inner_substitution_vanishes(
+    polynomial: SparseRationalPolynomial,
+    inner_components: tuple[RationalFunction, ...],
+) -> bool:
+    """Return whether identifying equal inner coordinates cancels the polynomial."""
+
+    if not polynomial.terms or len(inner_components) != len(polynomial.terms[0].exponents):
+        return False
+    identities = [_component_identity(component) for component in inner_components]
+    representative = {}
+    for index, identity in enumerate(identities):
+        representative.setdefault(identity, index)
+    collapsed: dict[tuple[int, ...], Fraction] = {}
+    for term in polynomial.terms:
+        exponents = [0] * len(term.exponents)
+        for axis, degree in enumerate(term.exponents):
+            exponents[representative[identities[axis]]] += degree
+        slot = tuple(exponents)
+        collapsed[slot] = collapsed.get(slot, Fraction(0)) + term.coefficient.as_fraction()
+    return all(coefficient == 0 for coefficient in collapsed.values())
 
 
 class _Ledger:
@@ -535,6 +562,10 @@ def compose_maps(  # noqa: C901
             outer_denominator_bound.numerator,
             ledger,
         )
+        if _equal_inner_substitution_vanishes(
+            outer_component.denominator, inner.components
+        ):
+            _reject_undefined_outer_denominator()
         _check_raw_exponents(raw_denominator_bound)
         if raw_denominator_bound.is_zero:
             _reject_undefined_outer_denominator()
@@ -614,7 +645,12 @@ def compose_maps(  # noqa: C901
     require_canonical = tuple(
         component for component in (*outer.components, *inner.components)
     )
+    recognized: set[bytes] = set()
     for component in require_canonical:
+        identity = _component_identity(component)
+        if identity in recognized:
+            continue
+        recognized.add(identity)
         request_checkpoint("before composition source recognition")
         _recognize_source(component)
     outer_components = require_canonical[: len(outer.components)]
@@ -701,10 +737,16 @@ def compose_maps(  # noqa: C901
         return numerator, common_denominator
 
     composites: list[RationalFunction] = []
+    composite_rows: dict[bytes, RationalFunction] = {}
     for outer_component, prepared_component in zip(
         outer_components, prepared, strict=True
     ):
         request_checkpoint("before rational map composition output row")
+        identity = _component_identity(outer_component)
+        cached = composite_rows.get(identity)
+        if cached is not None:
+            composites.append(cached)
+            continue
         if use_monomial_path:
             assert (
                 prepared_component.numerator is not None
@@ -729,7 +771,9 @@ def compose_maps(  # noqa: C901
         outer_guard = _monic_guard(denominator_value)
         if outer_guard is not None:
             guards.append(outer_guard)
-        composites.append(_normalize_fraction(p_num * q_den, p_den * q_num, xvars))
+        value = _normalize_fraction(p_num * q_den, p_den * q_num, xvars)
+        composite_rows[identity] = value
+        composites.append(value)
     guards = sorted(
         {guard_key(guard): guard for guard in guards}.values(), key=guard_key
     )

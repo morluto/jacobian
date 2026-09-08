@@ -253,6 +253,19 @@ def test_axis_mismatch_and_authored_noncanonical_source_are_rejected() -> None:
         compose_maps(outer, bad_inner)
 
 
+def test_equal_inner_coordinates_make_an_outer_denominator_undefined() -> None:
+    x = symbols("x")
+    y1, y2 = symbols("y1 y2")
+    inner = _map(
+        ("x",),
+        ("y1", "y2"),
+        (_rf((x + 1) ** 64, (x,)), _rf((x + 1) ** 64, (x,))),
+    )
+    outer = _map(("y1", "y2"), ("z",), (_rf(1 / (y1**2 - y2**2), (y1, y2)),))
+    with pytest.raises(OperationDomainValidationError, match="vanishes identically"):
+        compose_maps(outer, inner)
+
+
 def test_identical_inner_denominators_are_one_construction_guard() -> None:
     x = symbols("x")
     coords = tuple(f"u{index}" for index in range(8))

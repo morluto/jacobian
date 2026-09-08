@@ -9,6 +9,7 @@ from jacobian._execution import (
     request_checkpoint,
     request_execution,
 )
+from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.polynomials.rational_functions._bounds import (
     BoundWorkCategory,
@@ -95,6 +96,31 @@ def _general_allocation(bound: FractionBound, digits: int) -> tuple[int, int]:
     return terms, terms * 8 * digits
 
 
+def _charge_and_build_general_row(
+    component: object,
+    admitted_bounds: tuple[FractionBound, ...],
+    ledger: _Ledger,
+    output_allocation: _Allocation,
+    factor_cache: dict[bytes, object],
+    general_rows: dict[bytes, tuple[object, ...]],
+    key: bytes,
+) -> tuple[object, ...]:
+    factors = factor_cache.get(key)
+    if factors is None:
+        factors = _admit_general_factors(component)
+        factor_cache[key] = factors
+    _validate_admitted_factors(admitted_bounds, factors, ledger)
+    for bound, factor in zip(admitted_bounds, factors, strict=True):
+        reduced = _reduced_admitted_bound(bound, factor)
+        digits = 1 if reduced.is_zero else _canonical_coefficient_digits(reduced)
+        output_allocation.charge(*_general_allocation(reduced, digits))
+    row = general_rows.get(key)
+    if row is None:
+        row = _general_gradient_admitted(component, factors, admitted_bounds)
+        general_rows[key] = row
+    return row
+
+
 def jacobian_matrix(source: RationalFunctionMap) -> RationalFunctionMapJacobian:
     """Differentiate every component on the source map's common regular locus."""
     execution = current_request_execution()
@@ -158,28 +184,34 @@ def jacobian_matrix(source: RationalFunctionMap) -> RationalFunctionMapJacobian:
             plans.append(None)
             general_bounds.append(bounds)
     entries = []
+    general_rows: dict[bytes, tuple[object, ...]] = {}
+    monomial_rows: dict[bytes, tuple[object, ...]] = {}
+    factor_cache: dict[bytes, object] = {}
     for component, monomial_plan, admitted_bounds in zip(
         source.components, plans, general_bounds, strict=True
     ):
         request_checkpoint("during rational map Jacobian row construction")
+        key = encode_strict_json(component.model_dump(mode="json"))
         if monomial_plan is None:
             if admitted_bounds is None:
                 raise RuntimeError("admitted Jacobian row is missing derivative bounds")
-            factors = _admit_general_factors(component)
-            _validate_admitted_factors(admitted_bounds, factors, ledger)
-            for bound, factor in zip(admitted_bounds, factors, strict=True):
-                reduced = _reduced_admitted_bound(bound, factor)
-                digits = (
-                    1 if reduced.is_zero else _canonical_coefficient_digits(reduced)
-                )
-                output_allocation.charge(*_general_allocation(reduced, digits))
             entries.append(
-                _general_gradient_admitted(component, factors, admitted_bounds)
+                _charge_and_build_general_row(
+                    component,
+                    admitted_bounds,
+                    ledger,
+                    output_allocation,
+                    factor_cache,
+                    general_rows,
+                    key,
+                )
             )
         else:
-            entries.append(
-                _build_monomial_gradient(source.source_variables, monomial_plan)
-            )
+            row = monomial_rows.get(key)
+            if row is None:
+                row = _build_monomial_gradient(source.source_variables, monomial_plan)
+                monomial_rows[key] = row
+            entries.append(row)
     result = RationalFunctionMapJacobian(
         source=source,
         row_axis=source.target_coordinates,

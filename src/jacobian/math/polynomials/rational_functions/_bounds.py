@@ -660,9 +660,7 @@ def _dense_univariate_gcd_degree(by_degree: dict[int, Fraction]) -> int:
             index -= 1
         return index
 
-    def remainder(
-        left: list[Fraction], right: list[Fraction]
-    ) -> list[Fraction]:
+    def remainder(left: list[Fraction], right: list[Fraction]) -> list[Fraction]:
         left = list(left)
         while degree_of(left) >= degree_of(right) >= 0:
             shift = degree_of(left) - degree_of(right)
@@ -828,9 +826,7 @@ def _remove_guaranteed_linear_power_factor(
             degree == 0 or index == axis for index, degree in enumerate(degrees)
         )
         terms = (
-            min(polynomial.terms, total_degree + 1)
-            if univariate
-            else polynomial.terms
+            min(polynomial.terms, total_degree + 1) if univariate else polynomial.terms
         )
         return PolynomialBound(
             terms=terms,
@@ -933,9 +929,7 @@ def _validate_canonical_result_bound(
     numerator_dense = (
         charged.numerator.terms
         if charged_denominator_is_unit
-        else min(
-            _dense_term_bound(charged.numerator.degrees), charged.numerator.terms
-        )
+        else min(_dense_term_bound(charged.numerator.degrees), charged.numerator.terms)
     )
     denominator_dense = (
         1

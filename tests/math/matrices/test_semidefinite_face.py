@@ -285,9 +285,9 @@ def test_python_mode_generators_reduce_the_issue_fixture_face() -> None:
                         {"entries": ((_q(1), _q(0)), (_q(0), _q(1)))},
                     )
                 ),
-                "rhs": (_q(0), _q(1)),
+                "rhs": (value for value in (_q(0), _q(1))),
             },
-            "multipliers": (_q(1), _q(0)),
+            "multipliers": (value for value in (_q(1), _q(0))),
         }
     )
     result = reduce_exposed_face(request.system, request.multipliers)
@@ -310,6 +310,61 @@ def test_raw_request_preflight_rejects_over_budget_generated_cells() -> None:
                     "rhs": [{"num": "0", "den": "1"}] * 9,
                 },
                 "multipliers": [{"num": "1", "den": "1"}] * 9,
+            }
+        )
+
+
+def test_raw_request_preflight_bounds_range_sequences() -> None:
+    with pytest.raises(ValidationError, match="dense cell envelope"):
+        SemidefiniteFaceReductionRequest.model_validate(
+            {
+                "system": {
+                    "order": 1,
+                    "matrices": range(10**9),
+                    "rhs": [{"num": "0", "den": "1"}],
+                },
+                "multipliers": [{"num": "1", "den": "1"}],
+            }
+        )
+    with pytest.raises(ValidationError, match="dense cell envelope"):
+        SemidefiniteFaceReductionRequest.model_validate(
+            {
+                "system": {
+                    "order": 1,
+                    "matrices": [{"entries": range(10**9)}],
+                    "rhs": [{"num": "0", "den": "1"}],
+                },
+                "multipliers": [{"num": "1", "den": "1"}],
+            }
+        )
+
+
+def test_raw_request_preflight_scans_generated_rhs_and_multipliers() -> None:
+    huge = {"num": "1" + "0" * 40_000, "den": "1"}
+    with pytest.raises(ValidationError, match="aggregate digit envelope"):
+        SemidefiniteFaceReductionRequest.model_validate(
+            {
+                "system": {
+                    "order": 1,
+                    "matrices": [
+                        {"entries": [[{"num": "1", "den": "1"}]]},
+                    ],
+                    "rhs": (huge for _ in range(8192)),
+                },
+                "multipliers": [{"num": "1", "den": "1"}],
+            }
+        )
+    with pytest.raises(ValidationError, match="aggregate digit envelope"):
+        SemidefiniteFaceReductionRequest.model_validate(
+            {
+                "system": {
+                    "order": 1,
+                    "matrices": [
+                        {"entries": [[{"num": "1", "den": "1"}]]},
+                    ],
+                    "rhs": [{"num": "0", "den": "1"}],
+                },
+                "multipliers": (huge for _ in range(8192)),
             }
         )
 

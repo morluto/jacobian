@@ -13,6 +13,7 @@ from jacobian.math.matrices.semidefinite.values import (
 )
 
 _MAX_SOURCE_DIGITS = 8_000_000
+_MAX_EQUALITIES = 8192
 
 
 def _raw_component_digits(component: object) -> int:
@@ -36,16 +37,14 @@ def _raw_rational_digits(value: object) -> int:
 def _materialize_sequence(value: object, *, limit: int) -> list[object] | None:
     if isinstance(value, (str, bytes, bytearray, Mapping)):
         return None
-    if isinstance(value, Sequence):
-        return list(value)
-    if isinstance(value, Iterable):
-        collected: list[object] = []
-        for item in value:
-            collected.append(item)
-            if len(collected) > limit:
-                break
-        return collected
-    return None
+    if not isinstance(value, Iterable):
+        return None
+    collected: list[object] = []
+    for item in value:
+        collected.append(item)
+        if len(collected) > limit:
+            break
+    return collected
 
 
 def _scan_row(row: object, *, limit: int) -> tuple[object, int, int, bool]:
@@ -54,12 +53,16 @@ def _scan_row(row: object, *, limit: int) -> tuple[object, int, int, bool]:
     if isinstance(row, (str, bytes, bytearray, Mapping)):
         return row, 1, _raw_rational_digits(row), False
     if isinstance(row, Sequence):
-        return (
-            row,
-            len(row),
-            sum(_raw_rational_digits(entry) for entry in row),
-            False,
-        )
+        row_length = len(row)
+        if row_length > limit:
+            return row, row_length, 0, False
+        if isinstance(row, (list, tuple)):
+            return (
+                row,
+                row_length,
+                sum(_raw_rational_digits(entry) for entry in row),
+                False,
+            )
     materialized = _materialize_sequence(row, limit=limit)
     if materialized is None:
         return row, 1, _raw_rational_digits(row), False
@@ -71,24 +74,52 @@ def _scan_row(row: object, *, limit: int) -> tuple[object, int, int, bool]:
     )
 
 
+def _scan_and_install_scalars(
+    container: dict[str, object],
+    key: str,
+    *,
+    digits: int,
+) -> int:
+    value = container.get(key)
+    if isinstance(value, (str, bytes, bytearray, Mapping)) or value is None:
+        return digits
+    if not isinstance(value, Iterable):
+        return digits
+    collected: list[object] = []
+    extra = 0
+    remaining = _MAX_SOURCE_DIGITS - digits
+    for item in value:
+        collected.append(item)
+        extra += _raw_rational_digits(item)
+        if extra > remaining or len(collected) > _MAX_EQUALITIES:
+            break
+    if not isinstance(value, (list, tuple)):
+        container[key] = collected
+    return digits + extra
+
+
 def _preflight_raw_payload(
     data: dict[str, object],
 ) -> tuple[dict[str, object], int, int, int]:
     payload = dict(data)
     system = payload.get("system")
     if not isinstance(system, dict):
-        return payload, 0, 0, 0
+        digits = _scan_and_install_scalars(payload, "multipliers", digits=0)
+        return payload, 0, 0, digits
     system = dict(system)
     payload["system"] = system
     matrices_value = system.get("matrices")
-    remaining_rows = MAX_SEMIDEFINITE_CELLS
-    matrix_list = _materialize_sequence(matrices_value, limit=remaining_rows)
+    matrix_list = _materialize_sequence(
+        matrices_value, limit=MAX_SEMIDEFINITE_CELLS
+    )
     installed_matrices: list[object] | None = None
     cells = 0
     digits = 0
     if matrix_list is not None:
         installed_matrices = []
-        needs_install = not isinstance(matrices_value, Sequence)
+        needs_install = not isinstance(matrices_value, (list, tuple))
+        if len(matrix_list) > MAX_SEMIDEFINITE_CELLS:
+            cells = MAX_SEMIDEFINITE_CELLS + 1
         for matrix in matrix_list:
             if cells > MAX_SEMIDEFINITE_CELLS:
                 break
@@ -117,7 +148,7 @@ def _preflight_raw_payload(
                 installed_matrices.append(matrix_payload)
                 continue
             installed_rows: list[object] = []
-            replace_entries = not isinstance(entries, Sequence)
+            replace_entries = not isinstance(entries, (list, tuple))
             for row in row_list:
                 installed_row, row_cells, row_digits, replaced = _scan_row(
                     row, limit=MAX_SEMIDEFINITE_CELLS - cells
@@ -134,12 +165,8 @@ def _preflight_raw_payload(
             installed_matrices.append(matrix_payload)
         if needs_install:
             system["matrices"] = installed_matrices
-    rhs = system.get("rhs")
-    if isinstance(rhs, (list, tuple)):
-        digits += sum(_raw_rational_digits(value) for value in rhs)
-    multipliers = payload.get("multipliers")
-    if isinstance(multipliers, (list, tuple)):
-        digits += sum(_raw_rational_digits(value) for value in multipliers)
+    digits = _scan_and_install_scalars(system, "rhs", digits=digits)
+    digits = _scan_and_install_scalars(payload, "multipliers", digits=digits)
     declared = 0
     order = system.get("order")
     if type(order) is int:

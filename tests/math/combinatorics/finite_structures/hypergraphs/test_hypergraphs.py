@@ -7,7 +7,6 @@ from pydantic import ValidationError
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
-    OperationResourceAdmissionError,
 )
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     CliqueExpansionRequest,

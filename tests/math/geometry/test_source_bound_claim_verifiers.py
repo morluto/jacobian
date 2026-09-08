@@ -66,7 +66,9 @@ def test_distance_profiles_retain_sources_and_reject_serialized_forgery() -> Non
     assert verify_distance_profile(decoded)
 
     forged = DistanceProfileResult.model_validate_json(
-        json.dumps(_forged_json(profile, ("entries", 0, "pair_count"), 99))
+        json.dumps(
+            _forged_json(profile, ("entries", 0, "squared_distance", "num"), "99")
+        )
     )
     assert not verify_distance_profile(forged)
 

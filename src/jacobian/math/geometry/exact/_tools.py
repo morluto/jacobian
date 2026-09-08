@@ -4,12 +4,14 @@ from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.geometry.exact._models import (
+    DistanceConfiguration,
     DistanceGraphRequest,
     DistanceGraphResult,
     DistanceProfileRequest,
     DistanceProfileResult,
     EuclideanOrbitProfileRequest,
     EuclideanOrbitProfileResult,
+    ExactSquaredDistance,
     PinnedLineDistanceRequest,
     PinnedLineDistanceResult,
 )
@@ -21,8 +23,13 @@ from jacobian.math.geometry.exact.operations import (
 )
 
 
-def _run_distance_profile(request: DistanceProfileRequest) -> DistanceProfileResult:
-    return distance_profile(request.configuration)
+def _run_distance_profile(
+    request: DistanceProfileRequest[DistanceConfiguration],
+) -> DistanceProfileResult[DistanceConfiguration, ExactSquaredDistance]:
+    result = distance_profile(request.configuration)
+    return DistanceProfileResult[DistanceConfiguration, ExactSquaredDistance](
+        configuration=result.configuration, entries=result.entries
+    )
 
 
 def _run_euclidean_orbit_profile(
@@ -31,8 +38,15 @@ def _run_euclidean_orbit_profile(
     return euclidean_orbit_profile(request.configuration)
 
 
-def _run_distance_graph(request: DistanceGraphRequest) -> DistanceGraphResult:
-    return distance_graph(request.configuration, request.target_squared_distance)
+def _run_distance_graph(
+    request: DistanceGraphRequest[DistanceConfiguration, ExactSquaredDistance],
+) -> DistanceGraphResult[DistanceConfiguration, ExactSquaredDistance]:
+    result = distance_graph(request.configuration, request.target_squared_distance)
+    return DistanceGraphResult[DistanceConfiguration, ExactSquaredDistance](
+        configuration=result.configuration,
+        target_squared_distance=result.target_squared_distance,
+        graph=result.graph,
+    )
 
 
 def _run_pinned_line_distance_profile(
@@ -108,15 +122,57 @@ UNIT_SQUARE_ORIGIN = {
     "anchor": [{"num": "0", "den": "1"}, {"num": "0", "den": "1"}],
 }
 
+
+def _quadratic_example_value(
+    a: int, b: int = 0, denominator: int = 1
+) -> dict[str, Any]:
+    return {
+        "rational_part": {"num": str(a), "den": str(denominator) if a else "1"},
+        "radical_coefficient": {"num": str(b), "den": str(denominator) if b else "1"},
+        "radicand": 3,
+    }
+
+
+EQUILATERAL_QUADRATIC = {
+    "configuration": {
+        "radicand": 3,
+        "embedding": "POSITIVE_ROOT",
+        "points": [
+            {
+                "label": "A",
+                "coordinates": [
+                    _quadratic_example_value(0),
+                    _quadratic_example_value(0),
+                ],
+            },
+            {
+                "label": "B",
+                "coordinates": [
+                    _quadratic_example_value(1),
+                    _quadratic_example_value(0),
+                ],
+            },
+            {
+                "label": "C",
+                "coordinates": [
+                    _quadratic_example_value(1, denominator=2),
+                    _quadratic_example_value(0, 1, 2),
+                ],
+            },
+        ],
+    },
+}
+
+
 TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="geometry.points.distance_profile.compute",
         title="Compute pairwise distance profile",
-        description="Given a finite set of labelled rational points, compute the exact "
+        description="Given labelled rational points or planar points in one explicitly selected positive-root real quadratic field, compute the exact "
         "squared distance for every unordered pair and return the distance "
-        "multiplicity profile.",
-        request_type=DistanceProfileRequest,
-        result_type=DistanceProfileResult,
+        "multiplicity profile with every source-indexed pair in each equality class. Distinct labels may coincide, producing squared distance zero.",
+        request_type=DistanceProfileRequest[DistanceConfiguration],
+        result_type=DistanceProfileResult[DistanceConfiguration, ExactSquaredDistance],
         run=_run_distance_profile,
         tags=("geometry", "distance", "exact"),
         examples=(
@@ -124,6 +180,11 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="unit_square_profile",
                 description="Distance profile of the unit square.",
                 input=UNIT_SQUARE,
+            ),
+            OperationExample(
+                name="quadratic_equilateral",
+                description="The triangle over QQ(sqrt(3)) has three source pairs of squared distance one.",
+                input=EQUILATERAL_QUADRATIC,
             ),
         ),
     ),
@@ -161,9 +222,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         title="Build distance-selected graph",
         description="Given a point configuration and a target squared distance, return "
         "the canonical integer-indexed simple graph whose edges connect pairs "
-        "at exactly that distance.",
-        request_type=DistanceGraphRequest,
-        result_type=DistanceGraphResult,
+        "at exactly that distance. Quadratic planar coordinates require a target RealQuadraticValue in the same positive-root field; rational coordinates require a rational target.",
+        request_type=DistanceGraphRequest[DistanceConfiguration, ExactSquaredDistance],
+        result_type=DistanceGraphResult[DistanceConfiguration, ExactSquaredDistance],
         run=_run_distance_graph,
         tags=("geometry", "distance-graph", "exact"),
         examples=(
@@ -173,6 +234,14 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 input={
                     **UNIT_SQUARE,
                     "target_squared_distance": {"num": "1", "den": "1"},
+                },
+            ),
+            OperationExample(
+                name="quadratic_unit_triangle",
+                description="Select all three unit pairs of the exact quadratic equilateral triangle.",
+                input={
+                    **EQUILATERAL_QUADRATIC,
+                    "target_squared_distance": _quadratic_example_value(1),
                 },
             ),
         ),

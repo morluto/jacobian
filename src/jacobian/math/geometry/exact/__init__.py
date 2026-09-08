@@ -1,5 +1,9 @@
 """Exact-geometry operation ownership."""
 
+from jacobian.math.geometry.exact._models import (
+    LabelledQuadraticPoint,
+    QuadraticPointConfiguration,
+)
 from jacobian.math.geometry.exact.operations import (
     distance_graph,
     distance_profile,
@@ -12,6 +16,8 @@ from jacobian.math.geometry.exact.operations import (
 )
 
 __all__ = [
+    "LabelledQuadraticPoint",
+    "QuadraticPointConfiguration",
     "distance_graph",
     "distance_profile",
     "euclidean_orbit_profile",

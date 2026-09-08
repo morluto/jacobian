@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from collections import Counter
 from fractions import Fraction
 from itertools import combinations, permutations
+from typing import overload
 
 from pydantic_core import PydanticCustomError
 
@@ -18,20 +18,28 @@ from jacobian.math.geometry.exact._line_arithmetic import (
     squared_point_line_distance,
 )
 from jacobian.math.geometry.exact._models import (
+    DistanceConfiguration,
     DistanceGraphResult,
     DistanceMultiplicityEntry,
     DistanceProfileResult,
     EuclideanOrbitProfileResult,
+    ExactSquaredDistance,
     LabelledRationalPoint,
     PinnedLineConfiguration,
     PinnedLineDistanceResult,
     PointConfiguration,
+    QuadraticPointConfiguration,
     _require_bounded_point_configuration,
     _validation_error,
 )
 from jacobian.math.geometry.exact._orbit_bounds import admit_orbit_profile
+from jacobian.math.geometry.exact._quadratic_distances import (
+    quadratic_distance_graph,
+    quadratic_distance_profile,
+)
 from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 from jacobian.math.matrices.values import RationalMatrix
+from jacobian.math.number_theory.algebraic_numbers.quadratic import RealQuadraticValue
 
 
 def _to_fraction_point(point: LabelledRationalPoint) -> tuple[Fraction, ...]:
@@ -47,20 +55,38 @@ def _squared_distance(
     return result
 
 
-def distance_profile(configuration: PointConfiguration) -> DistanceProfileResult:
+@overload
+def distance_profile(configuration: PointConfiguration) -> DistanceProfileResult: ...
+
+
+@overload
+def distance_profile(
+    configuration: QuadraticPointConfiguration,
+) -> DistanceProfileResult[QuadraticPointConfiguration, RealQuadraticValue]: ...
+
+
+def distance_profile(
+    configuration: DistanceConfiguration,
+) -> (
+    DistanceProfileResult
+    | DistanceProfileResult[QuadraticPointConfiguration, RealQuadraticValue]
+):
     """Compute exact pairwise squared distances for every unordered pair."""
+    if isinstance(configuration, QuadraticPointConfiguration):
+        return quadratic_distance_profile(configuration)
     points = [_to_fraction_point(point) for point in configuration.points]
-    distances: Counter[Fraction] = Counter(
-        _squared_distance(points[left], points[right])
-        for left in range(len(points))
-        for right in range(left + 1, len(points))
-    )
+    distances: dict[Fraction, list[tuple[int, int]]] = {}
+    for left, right in combinations(range(len(points)), 2):
+        distances.setdefault(_squared_distance(points[left], points[right]), []).append(
+            (left, right)
+        )
     entries = tuple(
         DistanceMultiplicityEntry(
             squared_distance=CanonicalRational.from_fraction(distance),
-            pair_count=count,
+            pair_count=len(pairs),
+            pairs=tuple(pairs),
         )
-        for distance, count in sorted(distances.items())
+        for distance, pairs in sorted(distances.items())
     )
     return DistanceProfileResult(
         configuration=configuration,
@@ -68,11 +94,44 @@ def distance_profile(configuration: PointConfiguration) -> DistanceProfileResult
     )
 
 
+@overload
 def distance_graph(
-    configuration: PointConfiguration,
-    target_squared_distance: CanonicalRational,
-) -> DistanceGraphResult:
+    configuration: PointConfiguration, target_squared_distance: CanonicalRational
+) -> DistanceGraphResult: ...
+
+
+@overload
+def distance_graph(
+    configuration: QuadraticPointConfiguration,
+    target_squared_distance: RealQuadraticValue,
+) -> DistanceGraphResult[QuadraticPointConfiguration, RealQuadraticValue]: ...
+
+
+@overload
+def distance_graph(
+    configuration: DistanceConfiguration, target_squared_distance: ExactSquaredDistance
+) -> DistanceGraphResult[DistanceConfiguration, ExactSquaredDistance]: ...
+
+
+def distance_graph(
+    configuration: DistanceConfiguration,
+    target_squared_distance: ExactSquaredDistance,
+) -> DistanceGraphResult[DistanceConfiguration, ExactSquaredDistance]:
     """Build the graph whose edges connect pairs at the target distance."""
+    if isinstance(configuration, QuadraticPointConfiguration):
+        if isinstance(target_squared_distance, RealQuadraticValue):
+            return quadratic_distance_graph(configuration, target_squared_distance)
+        raise OperationDomainValidationError(
+            location=("target_squared_distance",),
+            code="geometry.quadratic_distance.target_domain",
+            message="quadratic coordinates require a target in their explicit quadratic field",
+        )
+    if not isinstance(target_squared_distance, CanonicalRational):
+        raise OperationDomainValidationError(
+            location=("target_squared_distance",),
+            code="geometry.distance.target_domain",
+            message="rational coordinates require a rational squared-distance target",
+        )
     if target_squared_distance.as_fraction() < 0:
         raise OperationDomainValidationError(
             location=("target_squared_distance",),

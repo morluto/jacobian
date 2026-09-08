@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Self
+from typing import Annotated, Generic, Literal, Self
 
-from pydantic import ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
+from typing_extensions import TypeVar
 
 from jacobian._exact import CanonicalRational, DecimalIntegerEncoding
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 from jacobian.math.matrices.values import RationalMatrix
+from jacobian.math.number_theory.algebraic_numbers.quadratic import RealQuadraticValue
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -95,24 +97,117 @@ class PointConfiguration(StrictModel):
         return self
 
 
-class DistanceProfileRequest(StrictModel):
+class LabelledQuadraticPoint(StrictModel):
+    """A labelled planar point with coordinates in one real quadratic field."""
+
+    label: str = Field(min_length=1, max_length=64)
+    coordinates: tuple[RealQuadraticValue, RealQuadraticValue]
+
+
+class QuadraticPointConfiguration(StrictModel):
+    """One positive-root embedding and a retained labelled point axis.
+
+    Distinct labels may share coordinates; their pair then has exact distance
+    zero. Parsing binds the coordinate parents; the consuming operation admits
+    square-freeness once for the common field.
+    """
+
+    radicand: StrictInt = Field(ge=2, le=1_000_000)
+    embedding: Literal["POSITIVE_ROOT"] = "POSITIVE_ROOT"
+    points: tuple[LabelledQuadraticPoint, ...] = Field(max_length=MAX_POINTS)
+
+    @model_validator(mode="after")
+    def require_shared_parent_and_labels(self) -> Self:
+        if len({point.label for point in self.points}) != len(self.points):
+            raise _validation_error(
+                "point_labels_unique", "point labels must be unique"
+            )
+        if any(
+            coordinate.radicand != self.radicand
+            for point in self.points
+            for coordinate in point.coordinates
+        ):
+            raise _validation_error(
+                "quadratic_parent_mismatch",
+                "every coordinate must retain the configuration radicand",
+            )
+        return self
+
+
+type DistanceConfiguration = PointConfiguration | QuadraticPointConfiguration
+type ExactSquaredDistance = CanonicalRational | RealQuadraticValue
+
+ConfigurationT = TypeVar(
+    "ConfigurationT",
+    bound=DistanceConfiguration,
+    default=PointConfiguration,
+    covariant=True,
+)
+DistanceT = TypeVar(
+    "DistanceT", bound=ExactSquaredDistance, default=CanonicalRational, covariant=True
+)
+
+
+class DistanceProfileRequest(StrictModel, Generic[ConfigurationT]):
     """Compute exact pairwise squared distances."""
 
-    configuration: PointConfiguration
+    configuration: ConfigurationT
 
 
-class DistanceMultiplicityEntry(StrictModel):
+class DistanceMultiplicityEntry(StrictModel, Generic[DistanceT]):
     """One squared distance and how many pairs have it."""
 
-    squared_distance: CanonicalRational
+    squared_distance: DistanceT
     pair_count: int = Field(gt=0)
+    pairs: tuple[tuple[int, int], ...] = Field(min_length=1, max_length=MAX_PAIRS)
+
+    @model_validator(mode="after")
+    def require_pair_axis(self) -> Self:
+        if self.pair_count != len(self.pairs) or self.pairs != tuple(
+            sorted(set(self.pairs))
+        ):
+            raise _validation_error(
+                "distance_pair_axis",
+                "pair count must match the sorted unique pair rows",
+            )
+        return self
 
 
-class DistanceProfileResult(StrictModel):
+class DistanceProfileResult(StrictModel, Generic[ConfigurationT, DistanceT]):
     """Complete distance multiplicity profile of a point configuration."""
 
-    configuration: PointConfiguration
-    entries: tuple[DistanceMultiplicityEntry, ...]
+    configuration: ConfigurationT
+    entries: tuple[DistanceMultiplicityEntry[DistanceT], ...]
+
+    @model_validator(mode="after")
+    def require_complete_pair_axis(self) -> Self:
+        size = len(self.configuration.points)
+        pairs = [pair for entry in self.entries for pair in entry.pairs]
+        if (
+            len(pairs) != size * (size - 1) // 2
+            or len(set(pairs)) != len(pairs)
+            or any(not 0 <= i < j < size for i, j in pairs)
+        ):
+            raise _validation_error(
+                "distance_pair_coverage",
+                "distance classes must partition the complete source pair axis",
+            )
+        for entry in self.entries:
+            if isinstance(self.configuration, QuadraticPointConfiguration):
+                if (
+                    not isinstance(entry.squared_distance, RealQuadraticValue)
+                    or entry.squared_distance.radicand != self.configuration.radicand
+                ):
+                    raise _validation_error(
+                        "distance_value_parent",
+                        "distance values must retain the source quadratic field",
+                    )
+            elif not isinstance(entry.squared_distance, CanonicalRational):
+                raise _validation_error(
+                    "distance_value_parent",
+                    "rational points require rational distance values",
+                )
+        return self
 
 
 class EuclideanOrbitProfileRequest(StrictModel):
@@ -164,20 +259,20 @@ class EuclideanOrbitProfileResult(StrictModel):
         return self
 
 
-class DistanceGraphRequest(StrictModel):
+class DistanceGraphRequest(StrictModel, Generic[ConfigurationT, DistanceT]):
     """Build the graph induced by a selected squared distance."""
 
-    configuration: PointConfiguration
-    target_squared_distance: CanonicalRational = Field(
+    configuration: ConfigurationT
+    target_squared_distance: DistanceT = Field(
         description="Nonnegative squared Euclidean distance to select.",
     )
 
 
-class DistanceGraphResult(StrictModel):
+class DistanceGraphResult(StrictModel, Generic[ConfigurationT, DistanceT]):
     """Distance-selected graph retained with its source and target."""
 
-    configuration: PointConfiguration
-    target_squared_distance: CanonicalRational
+    configuration: ConfigurationT
+    target_squared_distance: DistanceT
     graph: IndexedSimpleUndirectedGraph
 
 
@@ -189,11 +284,13 @@ __all__ = [
     "DistanceProfileResult",
     "EuclideanOrbitProfileRequest",
     "EuclideanOrbitProfileResult",
+    "LabelledQuadraticPoint",
     "LabelledRationalPoint",
     "PinnedLineDistanceRequest",
     "PinnedLineDistanceResult",
     "PinnedLineEntry",
     "PointConfiguration",
+    "QuadraticPointConfiguration",
 ]
 
 

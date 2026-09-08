@@ -1,3 +1,5 @@
-"""Catalog-owned rational-function operations."""
+"""Canonical rational functions and coordinate maps."""
 
-__all__: list[str] = []
+from jacobian.math.polynomials.rational_functions.values import RationalFunctionMap
+
+__all__ = ["RationalFunctionMap"]

@@ -548,6 +548,56 @@ def _remove_guaranteed_common_monomial(bound: FractionBound) -> FractionBound:
     )
 
 
+def _remove_exact_common_factor(
+    bound: FractionBound, factor: PolynomialBound
+) -> FractionBound:
+    """Cancel a divisor known to divide both sides of a raw quotient pair."""
+
+    if bound.is_zero or factor.is_zero:
+        return bound
+    if all(degree == 0 for degree in factor.degrees):
+        return bound
+    if any(
+        degree < factor_degree
+        for polynomial in (bound.numerator, bound.denominator)
+        for degree, factor_degree in zip(
+            polynomial.degrees, factor.degrees, strict=True
+        )
+    ):
+        return bound
+
+    def divide(polynomial: PolynomialBound) -> PolynomialBound:
+        degrees = tuple(
+            degree - factor_degree
+            for degree, factor_degree in zip(
+                polynomial.degrees, factor.degrees, strict=True
+            )
+        )
+        total_degree = polynomial.total_degree - factor.total_degree
+        reduced = replace(
+            polynomial,
+            degrees=degrees,
+            total_degree=total_degree,
+            minimum_exponents=tuple(
+                max(0, minimum - factor_minimum)
+                for minimum, factor_minimum in zip(
+                    polynomial.minimum_exponents,
+                    factor.minimum_exponents,
+                    strict=True,
+                )
+            ),
+        )
+        return replace(
+            reduced,
+            terms=_total_degree_term_bound(reduced),
+            proven_cancellation_support=True,
+        )
+
+    return FractionBound(
+        numerator=divide(bound.numerator), denominator=divide(bound.denominator)
+    )
+
+
 def _integer_nth_root(value: int, n: int) -> int | None:
     if value < 0:
         return None

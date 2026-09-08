@@ -228,6 +228,49 @@ def test_repeated_linear_denominator_cancels_before_result_exponent() -> None:
     )
     with pytest.raises(OperationDomainValidationError, match="coprime"):
         gradient(authored)
+    with pytest.raises(OperationResourceAdmissionError, match="exponent"):
+        gradient(rational_function_from_sympy(1 / (x + 1) ** 64, ("x",)))
+
+
+def test_dense_source_box_rejects_before_coprimality_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def boom(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("coprimality worker must not start")
+
+    monkeypatch.setattr(
+        "jacobian.math.polynomials.rational_functions.gradient.operations.recognize_canonical_rational_functions",
+        boom,
+    )
+    axes = tuple(f"x{i}" for i in range(8))
+    high = (64,) * 8
+    zero = (0,) * 8
+    source = RationalFunction(
+        variables=axes,
+        numerator=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=1, den=1),
+                    exponents=zero,
+                ),
+            )
+        ),
+        denominator=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=1, den=1),
+                    exponents=high,
+                ),
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=1, den=1),
+                    exponents=zero,
+                ),
+            )
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="work") as error:
+        gradient(source)
+    assert error.value.errors()[0]["type"].endswith("work_budget")
 
 
 def test_univariate_binomial_power_cancellation() -> None:
@@ -292,3 +335,16 @@ def test_inactive_axis_of_a_nonmonomial_reciprocal_is_canonical_zero() -> None:
     assert not result.partial_derivatives[1].numerator.terms
     assert result.partial_derivatives[1].denominator.terms[0].coefficient.num == 1
     assert result.partial_derivatives[1].denominator.terms[0].exponents == (0, 0)
+
+
+def test_inactive_axes_of_a_bivariate_power_skip_denominator_gcds() -> None:
+    axis = tuple(f"x{index}" for index in range(8))
+    names = symbols("x0:8")
+    linear = names[0] + names[1] + 1
+    result = _identity(rational_function_from_sympy(1 / linear**20, axis))
+    assert all(
+        not component.numerator.terms for component in result.partial_derivatives[2:]
+    )
+    assert all(
+        component.numerator.terms for component in result.partial_derivatives[:2]
+    )

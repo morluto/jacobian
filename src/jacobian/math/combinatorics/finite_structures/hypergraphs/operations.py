@@ -31,6 +31,7 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     InducedTypeProfileResult,
     MaximumEdgeMatchingResult,
     MinimumTransversalResult,
+    NamespacedIncidenceGraph,
     ParametersResult,
     VertexDegreesResult,
     WeightedPackingResult,
@@ -42,7 +43,6 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
 )
 from jacobian.math.graphs.values import (
     MAX_GRAPH_LABEL_BYTES,
-    MAX_SIMPLE_GRAPH_EDGES,
     MAX_SIMPLE_GRAPH_VERTICES,
     SimpleUndirectedGraph,
 )
@@ -607,27 +607,6 @@ def dual(hypergraph: FiniteHypergraph) -> DualResult:
 def incidence_graph(hypergraph: FiniteHypergraph) -> IncidenceGraphResult:
     """Compute the bipartite incidence graph (Levi graph) of a hypergraph."""
 
-    graph_vertex_count = len(hypergraph.vertices) + len(hypergraph.edges)
-    if graph_vertex_count > MAX_SIMPLE_GRAPH_VERTICES:
-        raise OperationResourceAdmissionError(
-            location=("hypergraph",),
-            code="hypergraph.incidence_graph.graph_vertex_bound",
-            message=(
-                "the incidence graph has "
-                f"{graph_vertex_count} vertices, exceeding the "
-                f"{MAX_SIMPLE_GRAPH_VERTICES}-vertex graph bound"
-            ),
-        )
-    incidence_count = sum(len(members) for _, members in hypergraph.edges)
-    if incidence_count > MAX_SIMPLE_GRAPH_EDGES:
-        raise OperationResourceAdmissionError(
-            location=("hypergraph", "edges"),
-            code="hypergraph.incidence_graph.graph_edge_bound",
-            message=(
-                "the incidence graph has "
-                f"{incidence_count} edges, exceeding the graph edge bound"
-            ),
-        )
     vertex_incidence, edge_incidence, edges = _incidence_graph_data(hypergraph)
     vertex_labels = tuple(
         (vertex, f"v{index}") for index, vertex in enumerate(hypergraph.vertices)
@@ -643,7 +622,7 @@ def incidence_graph(hypergraph: FiniteHypergraph) -> IncidenceGraphResult:
             for left, right in ((vertex_map[v], edge_map[e]) for v, e in edges)
         )
     )
-    graph = SimpleUndirectedGraph(
+    graph = NamespacedIncidenceGraph(
         vertices=tuple(label for _, label in vertex_labels)
         + tuple(label for _, label in edge_labels),
         edges=graph_edges,

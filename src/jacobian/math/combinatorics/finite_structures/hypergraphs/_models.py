@@ -799,6 +799,31 @@ class IncidenceGraphRequest(StrictModel):
     hypergraph: FiniteHypergraph
 
 
+class NamespacedIncidenceGraph(SimpleUndirectedGraph):
+    """Levi graph on disjoint indexed vertex and edge namespaces.
+
+    A finite hypergraph may have 256 vertices and 12,000 edges, so the
+    incidence graph exceeds the 256-vertex simple-graph carrier used by
+    ordinary graph operations. This value keeps the same edge orientation
+    rules with a source-sized envelope.
+    """
+
+    vertices: tuple[str, ...] = Field(
+        max_length=MAX_VERTICES + MAX_EDGES,
+        description=(
+            "Unique Unicode NFC vertex labels containing valid Unicode scalar "
+            "values. Vertex list order is preserved and need not be sorted."
+        ),
+    )
+    edges: tuple[tuple[str, str], ...] = Field(
+        max_length=MAX_TOTAL_INCIDENCES,
+        description=(
+            "Unique pairs of distinct declared vertices. Each pair must have "
+            "left < right in lexicographic label order."
+        ),
+    )
+
+
 class IncidenceGraphResult(StrictModel):
     """The bipartite incidence graph (Levi graph) of a finite hypergraph.
 
@@ -818,7 +843,7 @@ class IncidenceGraphResult(StrictModel):
         max_length=MAX_EDGES
     )
     edges: tuple[tuple[str, str], ...] = Field(max_length=MAX_TOTAL_INCIDENCES)
-    graph: SimpleUndirectedGraph
+    graph: NamespacedIncidenceGraph
     vertex_labels: tuple[tuple[str, str], ...] = Field(max_length=MAX_VERTICES)
     edge_labels: tuple[tuple[str, str], ...] = Field(max_length=MAX_EDGES)
 
@@ -875,19 +900,32 @@ class IncidenceGraphResult(StrictModel):
         edge_map = dict(self.edge_labels)
         expected_incidences = tuple(
             (vertex, edge_id)
-            for vertex in self.hypergraph.vertices
-            for edge_id, members in self.hypergraph.edges
-            if vertex in members
+            for vertex, edge_ids_for_vertex in self.vertex_incidence
+            for edge_id in edge_ids_for_vertex
         )
         if self.edges != expected_incidences:
             raise _validation_error(
-                "incidence pairs must equal the retained hypergraph incidences"
+                "incidence pairs must equal the published vertex-incidence ledger"
+            )
+        vertex_order = {
+            vertex: index for index, vertex in enumerate(self.hypergraph.vertices)
+        }
+        grouped: dict[str, list[str]] = {edge_id: [] for edge_id in edge_ids}
+        for vertex, edge_id in self.edges:
+            grouped[edge_id].append(vertex)
+        expected_edge_incidence = tuple(
+            (
+                edge_id,
+                tuple(sorted(grouped[edge_id], key=vertex_order.__getitem__)),
+            )
+            for edge_id in edge_ids
+        )
+        if self.edge_incidence != expected_edge_incidence:
+            raise _validation_error(
+                "edge_incidence must match the published incidence pairs"
             )
         expected_edges = tuple(
-            sorted(
-                tuple(sorted((vertex_map[v], edge_map[e])))
-                for v, e in expected_incidences
-            )
+            sorted(tuple(sorted((vertex_map[v], edge_map[e]))) for v, e in self.edges)
         )
         if self.graph.edges != expected_edges:
             raise _validation_error(

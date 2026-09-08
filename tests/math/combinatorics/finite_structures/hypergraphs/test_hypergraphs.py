@@ -285,8 +285,9 @@ class TestIncidenceGraph:
                 "edges": [["edge", []]],
             }
         )
-        with pytest.raises(OperationResourceAdmissionError, match="257"):
-            incidence_graph(over_boundary)
+        result = incidence_graph(over_boundary)
+        assert len(result.graph.vertices) == 257
+        assert result.edge_labels == (("edge", "e0"),)
 
     def test_forged_namespace_or_graph_edge_is_rejected_as_domain_validation(
         self,

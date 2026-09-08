@@ -13,6 +13,42 @@ from jacobian.math.polynomials.values import (
 
 MAX_RATIONAL_MAP_COMPONENTS = 4096
 MAX_RATIONAL_MAP_SOURCE_TERMS = 65_536
+MAX_RATIONAL_MAP_SOURCE_BITS = 8_388_608
+
+
+def _raw_coefficient_bits(coefficient: object) -> int:
+    if isinstance(coefficient, dict):
+        bits = 0
+        for key in ("num", "den"):
+            component = coefficient.get(key)
+            if isinstance(component, str):
+                digits = component.lstrip("-") or "0"
+                bits += max(1, len(digits)) * 4
+            elif type(component) is int:
+                bits += max(1, abs(component).bit_length())
+        return bits
+    if hasattr(coefficient, "num") and hasattr(coefficient, "den"):
+        return abs(coefficient.num).bit_length() + coefficient.den.bit_length()
+    return 0
+
+
+def _raw_polynomial_bits(polynomial: object) -> int:
+    terms: object
+    if isinstance(polynomial, dict):
+        terms = polynomial.get("terms")
+    elif hasattr(polynomial, "terms"):
+        terms = polynomial.terms
+    else:
+        return 0
+    if not isinstance(terms, (list, tuple)):
+        return 0
+    bits = 0
+    for term in terms:
+        if isinstance(term, dict):
+            bits += _raw_coefficient_bits(term.get("coefficient"))
+        elif hasattr(term, "coefficient"):
+            bits += _raw_coefficient_bits(term.coefficient)
+    return bits
 
 
 class RationalFunctionMap(StrictModel):
@@ -52,11 +88,15 @@ class RationalFunctionMap(StrictModel):
         if not isinstance(components, (list, tuple)):
             return data
         total = 0
+        bits = 0
         for component in components:
             if isinstance(component, RationalFunction):
                 total += len(component.numerator.terms) + len(
                     component.denominator.terms
                 )
+                bits += _raw_polynomial_bits(
+                    component.numerator
+                ) + _raw_polynomial_bits(component.denominator)
             elif isinstance(component, dict):
                 for key in ("numerator", "denominator"):
                     polynomial = component.get(key)
@@ -66,9 +106,14 @@ class RationalFunctionMap(StrictModel):
                             total += len(terms)
                     elif hasattr(polynomial, "terms"):
                         total += len(polynomial.terms)
+                    bits += _raw_polynomial_bits(polynomial)
             if total > MAX_RATIONAL_MAP_SOURCE_TERMS:
                 raise ValueError(
                     "rational-map components exceed the 65,536-term source envelope"
+                )
+            if bits > MAX_RATIONAL_MAP_SOURCE_BITS:
+                raise ValueError(
+                    "rational-map components exceed the 8,388,608-bit source envelope"
                 )
         return data
 

@@ -264,3 +264,23 @@ def test_aggregate_source_terms_are_capped_before_component_parse() -> None:
                 "components": [component] * 200,
             }
         )
+
+
+def test_aggregate_source_digits_are_capped_before_component_parse() -> None:
+    coefficient = {"num": "1" + "0" * 127, "den": "1"}
+    term = {"coefficient": coefficient, "exponents": [0]}
+    component = {
+        "variables": ["x"],
+        "numerator": {"terms": [term] * 256},
+        "denominator": {
+            "terms": [{"coefficient": {"num": "1", "den": "1"}, "exponents": [0]}]
+        },
+    }
+    with pytest.raises(ValidationError, match="8,388,608-bit"):
+        RationalFunctionMap.model_validate(
+            {
+                "source_variables": ["x"],
+                "target_coordinates": [f"y{i}" for i in range(65)],
+                "components": [component] * 65,
+            }
+        )

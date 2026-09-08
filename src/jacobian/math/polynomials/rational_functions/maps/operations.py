@@ -119,7 +119,7 @@ def jacobian_matrix(source: RationalFunctionMap) -> RationalFunctionMapJacobian:
             (len(component.numerator.terms) + len(component.denominator.terms))
             * (len(source.source_variables) + 1),
         )
-    output_allocation = _Allocation()
+    output_allocation = source_allocation
     plans: list[_MonomialGradientPlan | None] = []
     for component in source.components:
         if len(component.denominator.terms) == 1:

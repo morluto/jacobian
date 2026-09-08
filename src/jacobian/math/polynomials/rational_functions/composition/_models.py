@@ -26,14 +26,12 @@ class RationalMapCompositionRequest(StrictModel):
 
     outer: RationalFunctionMap = Field(
         description=(
-            "The outer map. inner.target_coordinates must equal "
-            "outer.source_variables."
+            "The outer map. inner.target_coordinates must equal outer.source_variables."
         )
     )
     inner: RationalFunctionMap = Field(
         description=(
-            "The inner map. inner.target_coordinates must equal "
-            "outer.source_variables."
+            "The inner map. inner.target_coordinates must equal outer.source_variables."
         )
     )
 

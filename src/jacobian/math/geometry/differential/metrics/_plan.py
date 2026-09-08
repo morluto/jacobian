@@ -32,7 +32,12 @@ def singular() -> OperationDomainValidationError:
 
 
 def _has_nonconstant_denominator(dag: Dag, value: Expression) -> bool:
-    """Return whether an expression carries a genuine polynomial denominator."""
+    """Return whether an expression carries a genuine polynomial denominator.
+
+    Guard admission works on complete expressions, since distinct numerators
+    can canonicalize to distinct denominator factors even when the DAG shares
+    one denominator node.
+    """
 
     return any(
         any(degree for degree in dag.nodes[index].bound.degrees)
@@ -165,6 +170,7 @@ def _determinant(
             for i in range(len(permutation))
             for j in range(i + 1, len(permutation))
         )
+        # The permutation sign is relative to the ordered column subset.
         terms.append(
             dag.multiply(
                 Expression(Fraction(sign)),

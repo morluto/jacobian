@@ -1,4 +1,4 @@
-"""Standalone SymPy worker for admitted rational metric DAG arithmetic."""
+"""Standalone SymPy worker for admitted metric DAG arithmetic."""
 
 from __future__ import annotations
 
@@ -6,10 +6,10 @@ import json
 import sys
 from typing import Any
 
+from sympy import QQ, Poly, Rational, Symbol
+
 
 def _polynomial(records: list[Any], symbols: tuple[Any, ...]) -> Any:
-    from sympy import QQ, Poly, Rational
-
     coefficients: dict[tuple[int, ...], Any] = {}
     variable_count = len(symbols)
     for record in records:
@@ -36,8 +36,6 @@ def _dump(polynomial: Any) -> list[list[Any]]:
 
 
 def _cancel(numerator: Any, denominator: Any) -> tuple[Any, Any]:
-    from sympy import Poly
-
     if not numerator.is_zero:
         numerator_terms, denominator_terms = numerator.terms(), denominator.terms()
         common = tuple(
@@ -76,8 +74,6 @@ def _apply_operation(
     generators: tuple[Any, ...],
     variable_count: int,
 ) -> Any:
-    from sympy import QQ
-
     if operation == "ZERO":
         return cache[0]
     if operation == "ONE":
@@ -117,8 +113,6 @@ def _apply_operation(
 
 
 def _expand_nodes(payload: dict[str, Any]) -> tuple[list[Any], int]:
-    from sympy import QQ, Poly, Symbol
-
     variables = payload["variables"]
     nodes = payload["nodes"]
     if (
@@ -176,17 +170,12 @@ def _sources_are_coprime(payload: dict[str, Any], generators: tuple[Any, ...]) -
     return True
 
 
-def _run(payload: dict[str, Any]) -> dict[str, Any]:
-    if set(payload) != {
-        "variables",
-        "nodes",
-        "fractions",
-        "determinants",
-        "sources",
-    }:
-        raise ValueError("malformed metric DAG request")
-    from sympy import Symbol
+def _run_expansion(payload: dict[str, Any]) -> dict[str, Any]:
+    cache, _variable_count = _expand_nodes(payload)
+    return {"status": "ok", "values": [_dump(value) for value in cache]}
 
+
+def _run_admitted(payload: dict[str, Any]) -> dict[str, Any]:
     variables = payload["variables"]
     if (
         not isinstance(variables, list)
@@ -232,11 +221,20 @@ def _run(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _run(payload: dict[str, Any]) -> dict[str, Any]:
+    keys = set(payload)
+    if keys == {"variables", "nodes"}:
+        return _run_expansion(payload)
+    if keys == {"variables", "nodes", "fractions", "determinants", "sources"}:
+        return _run_admitted(payload)
+    raise ValueError("malformed DAG request")
+
+
 def main() -> int:
     try:
         payload = json.loads(sys.stdin.buffer.read().decode("utf-8"))
         if not isinstance(payload, dict):
-            raise ValueError("malformed metric DAG request")
+            raise ValueError("malformed DAG request")
         response = _run(payload)
     except Exception:
         return 1

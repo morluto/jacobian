@@ -277,7 +277,12 @@ def test_request_bounds_raw_source_before_nested_parsing() -> None:
 
 def test_source_schema_publishes_the_consumer_item_ceiling() -> None:
     schema = SubsetSumResidueProfileRequest.model_json_schema()
-    items_schema = schema["properties"]["source"]["properties"]["items"]
+    source_schema = schema["properties"]["source"]
+    if "anyOf" in source_schema:
+        source_schema = next(
+            item for item in source_schema["anyOf"] if "properties" in item
+        )
+    items_schema = source_schema["properties"]["items"]
 
     assert items_schema["maxItems"] == MAX_RESIDUE_PROFILE_ITEMS
     assert (
@@ -361,9 +366,19 @@ def test_modulus_boundary_and_schema_are_explicit() -> None:
         )
 
     schema = SubsetSumResidueProfileRequest.model_json_schema()
-    assert schema["properties"]["modulus"]["maximum"] == (MAX_RESIDUE_PROFILE_MODULUS)
+    modulus_schema = schema["properties"]["modulus"]
+    if "anyOf" in modulus_schema:
+        modulus_schema = next(
+            item for item in modulus_schema["anyOf"] if item.get("type") == "integer"
+        )
+    assert modulus_schema["maximum"] == (MAX_RESIDUE_PROFILE_MODULUS)
     assert "include_empty_subset" in schema["required"]
-    items_schema = schema["properties"]["source"]["properties"]["items"]
+    source_schema = schema["properties"]["source"]
+    if "anyOf" in source_schema:
+        source_schema = next(
+            item for item in source_schema["anyOf"] if "properties" in item
+        )
+    items_schema = source_schema["properties"]["items"]
     assert "distinct indexed items" in items_schema["description"]
 
     with pytest.raises(ValidationError):
@@ -437,6 +452,13 @@ def test_result_bounds_raw_arrays_before_source_binding_replay() -> None:
                     "include_empty_subset": False,
                 }
             )
+        )
+
+
+def test_cyclic_request_requires_an_explicit_modulus() -> None:
+    with pytest.raises(ValidationError, match="modulus"):
+        SubsetSumResidueProfileRequest.model_validate_json(
+            '{"source":{"items":["2","3"]},"include_empty_subset":true}'
         )
 
 

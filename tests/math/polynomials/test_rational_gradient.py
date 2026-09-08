@@ -18,6 +18,7 @@ from jacobian.math.polynomials.rational_functions.gradient import (
     RationalFunctionGradient,
     gradient,
 )
+from jacobian.math.polynomials.rational_functions.gradient import operations as gradient_ops
 from jacobian.math.polynomials.values import (
     RationalFunction,
     RationalPolynomialTerm,
@@ -59,7 +60,7 @@ def _derivative(a: Coefficients, axis: int) -> Coefficients:
 
 def _identity(source: RationalFunction) -> RationalFunctionGradient:
     result = gradient(source)
-    assert "source" not in result.model_dump()
+    assert result.source == source
     assert result.variables == source.variables
     p, q = _coefficients(source.numerator), _coefficients(source.denominator)
     for axis, component in enumerate(result.partial_derivatives):
@@ -186,7 +187,34 @@ def test_true_output_coefficient_boundary() -> None:
         gradient(_monomial_source(("x",), (64,), (0,), 10**127))
 
 
-def test_authored_common_factor_is_rejected() -> None:
+def test_repeated_linear_denominator_cancels_before_result_exponent() -> None:
+    x = symbols("x")
+    source = rational_function_from_sympy(1 / (x + 1) ** 33, ("x",))
+    result = _identity(source)
+    assert result.partial_derivatives[0] == rational_function_from_sympy(
+        -33 / (x + 1) ** 34, ("x",)
+    )
+    source = rational_function_from_sympy(1 / (x + 1) ** 35, ("x",))
+    result = _identity(source)
+    assert result.partial_derivatives[0] == rational_function_from_sympy(
+        -35 / (x + 1) ** 36, ("x",)
+    )
+    source = rational_function_from_sympy(1 / ((x + 1) ** 20 * (x + 2) ** 20), ("x",))
+    result = _identity(source)
+    assert result.partial_derivatives[0] == rational_function_from_sympy(
+        -20 * (2 * x + 3) / ((x + 1) ** 21 * (x + 2) ** 21), ("x",)
+    )
+    source = rational_function_from_sympy(1 / ((x + 1) ** 33 * (x + 2)), ("x",))
+    result = _identity(source)
+    assert result.partial_derivatives[0] == rational_function_from_sympy(
+        -(34 * x + 67) / ((x + 1) ** 34 * (x + 2) ** 2), ("x",)
+    )
+    x, y = symbols("x y")
+    source = rational_function_from_sympy(1 / (x + y) ** 33, ("x", "y"))
+    result = _identity(source)
+    assert result.partial_derivatives[0] == rational_function_from_sympy(
+        -33 / (x + y) ** 34, ("x", "y")
+    )
     source = _monomial_source(("x", "y"), (1, 1), (1, 0))
     with pytest.raises(OperationDomainValidationError, match="coprime"):
         gradient(source)
@@ -198,6 +226,23 @@ def test_authored_common_factor_is_rejected() -> None:
     )
     with pytest.raises(OperationDomainValidationError, match="coprime"):
         gradient(authored)
+
+
+def test_univariate_binomial_power_cancellation() -> None:
+    x = symbols("x")
+    source = rational_function_from_sympy(1 / (x**2 + 1) ** 17, ("x",))
+    result = gradient(source)
+    expected = rational_function_from_sympy(-34 * x / (x**2 + 1) ** 18, ("x",))
+    assert result.partial_derivatives == (expected,)
+    x, y = symbols("x y")
+    numerator = sum(x ** (2 * i) for i in range(32)) * sum(y**j for j in range(5))
+    source = rational_function_from_sympy(numerator / (x + 1) ** 33, ("x", "y"))
+    with pytest.raises(OperationResourceAdmissionError, match="term"):
+        gradient(source)
+    even_grid = sum(x ** (2 * a) * y ** (2 * b) for a in range(16) for b in range(16))
+    source = rational_function_from_sympy(even_grid / (x + y) ** 33, ("x", "y"))
+    with pytest.raises(OperationResourceAdmissionError, match="term"):
+        gradient(source)
 
 
 def test_shared_request_deadline() -> None:
@@ -221,11 +266,11 @@ def test_polar_metric_component_gradient() -> None:
 def test_general_gradient_recognizes_and_cancels_in_the_bounded_worker(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from jacobian.math.polynomials.rational_functions.gradient import operations as ops
-
     def fail_server_gcd(value: RationalFunction) -> RationalFunction:
         raise AssertionError("general-gradient gcd must not run in the server process")
 
-    monkeypatch.setattr(ops, "require_canonical_rational_function", fail_server_gcd)
+    monkeypatch.setattr(
+        gradient_ops, "require_canonical_rational_function", fail_server_gcd
+    )
     x, y = symbols("x y")
     _identity(rational_function_from_sympy((x * x + y) / (x - y), ("x", "y")))

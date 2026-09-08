@@ -18,6 +18,10 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.geometry.differential._recognition_process import (
+    RationalFunctionRecognitionCandidate,
+    recognize_canonical_rational_functions,
+)
 from jacobian.math.polynomials.rational_functions._bounds import (
     BoundsLedger,
     BoundWorkCategory,
@@ -27,16 +31,17 @@ from jacobian.math.polynomials.rational_functions._bounds import (
     _polynomial_backend_conversion_work_units,
     _recognition_work_units,
     _remove_guaranteed_common_monomial,
+    _remove_guaranteed_linear_power_factor,
     _validate_canonical_result_bound,
 )
 from jacobian.math.polynomials.rational_functions._bounds import (
     _differentiate_fraction as _derivative_bound,
 )
+from jacobian.math.polynomials.rational_functions.gradient._kernel import (
+    _normalize_fraction,
+)
 from jacobian.math.polynomials.rational_functions.gradient._models import (
     RationalFunctionGradient,
-)
-from jacobian.math.polynomials.rational_functions.gradient._process import (
-    evaluate_admitted_general_gradient,
 )
 from jacobian.math.polynomials.values import (
     RationalFunction,
@@ -82,17 +87,41 @@ type _MonomialGradientPlan = tuple[
 ]
 
 
-def _recognize_source(source: RationalFunction) -> None:
+def _recognize_source(source: RationalFunction, deadline: float) -> None:
     """Recognize the authored field presentation at the admitted owner boundary."""
-    try:
-        require_canonical_rational_function(source)
-    except PydanticCustomError as exc:
+    if (
+        not source.numerator.terms
+        or not source.variables
+        or len(source.denominator.terms) == 1
+    ):
+        try:
+            require_canonical_rational_function(source)
+        except PydanticCustomError as exc:
+            raise OperationDomainValidationError(
+                location=(), code=exc.type, message=exc.message()
+            ) from exc
+        return
+    recognition = recognize_canonical_rational_functions(
+        (
+            RationalFunctionRecognitionCandidate(
+                owner="tensor",
+                component=0,
+                value=source,
+            ),
+        ),
+        deadline=deadline,
+    )
+    if recognition.non_coprime is not None:
         raise OperationDomainValidationError(
-            location=(), code=exc.type, message=exc.message()
-        ) from exc
+            location=(),
+            code="not_coprime",
+            message="rational-function numerator and denominator must be coprime",
+        )
 
 
-def _prepare_monomial_gradient(source: RationalFunction) -> _MonomialGradientPlan:
+def _prepare_monomial_gradient(
+    source: RationalFunction, deadline: float
+) -> _MonomialGradientPlan:
     """Differentiate finite Laurent support without a dense polynomial expansion.
 
     The canonical carrier bounds this phase by 8*256 coefficient scalings of
@@ -100,7 +129,7 @@ def _prepare_monomial_gradient(source: RationalFunction) -> _MonomialGradientPla
     normalization only shifts the unchanged surviving support. All component
     supports, exponents and scalar sizes are checked before result construction.
     """
-    _recognize_source(source)
+    _recognize_source(source, deadline)
     variables = source.variables
     denominator_powers = source.denominator.terms[0].exponents
     plans: list[
@@ -196,16 +225,29 @@ def _admit_general_gradient(
     )
     components = []
     for axis in range(len(function.variables)):
-        bound = _remove_guaranteed_common_monomial(
+        raw = _remove_guaranteed_common_monomial(
             _derivative_bound(function, source_bound, axis, ledger)
         )
-        digits = _validate_canonical_result_bound(bound, ledger)
+        bound = _remove_guaranteed_linear_power_factor(raw, function)
+        digits = _validate_canonical_result_bound(bound, ledger, work_bound=bound)
         components.append((bound, digits))
     return tuple(components)
 
 
+def _general_gradient_admitted(
+    function: RationalFunction, deadline: float
+) -> tuple[RationalFunction, ...]:
+    """Recognize and differentiate after the caller's whole-profile admission."""
+    _recognize_source(function, deadline)
+    request_checkpoint("after rational gradient source recognition")
+    return tuple(
+        _normalize_fraction(function, axis, deadline=deadline)
+        for axis in range(len(function.variables))
+    )
+
+
 def gradient(function: RationalFunction) -> RationalFunctionGradient:
-    """Return every exact coordinate partial derivative on the declared axis."""
+    """Return every exact coordinate partial derivative with its retained source."""
     execution = current_request_execution()
     if execution is None:
         with request_execution(time.monotonic()):
@@ -217,14 +259,14 @@ def gradient(function: RationalFunction) -> RationalFunctionGradient:
     request_checkpoint("before rational gradient admission")
     if len(function.denominator.terms) == 1:
         derivatives = _build_monomial_gradient(
-            function.variables, _prepare_monomial_gradient(function)
+            function.variables, _prepare_monomial_gradient(function, deadline)
         )
     else:
         ledger = _Ledger()
         _admit_general_gradient(function, ledger)
-        derivatives = evaluate_admitted_general_gradient(function, deadline=deadline)
+        derivatives = _general_gradient_admitted(function, deadline)
     result = RationalFunctionGradient(
-        variables=function.variables, partial_derivatives=derivatives
+        source=function, variables=function.variables, partial_derivatives=derivatives
     )
     request_checkpoint("after rational gradient construction")
     return result

@@ -138,6 +138,31 @@ class FiniteAbelianProductGroup(StrictModel):
         return lcm(*self.moduli)
 
 
+class FiniteAbelianGroupElement(StrictModel):
+    """A canonical coordinate of one explicit finite abelian product group."""
+
+    group: FiniteAbelianProductGroup
+    coordinates: BoundedGroupElement
+
+    @model_validator(mode="after")
+    def canonicalize_coordinates(self) -> Self:
+        if len(self.coordinates) != len(self.group.moduli):
+            raise _validation_error(
+                "element_rank", "group element coordinates must match the group rank"
+            )
+        object.__setattr__(
+            self,
+            "coordinates",
+            tuple(
+                coordinate % modulus
+                for coordinate, modulus in zip(
+                    self.coordinates, self.group.moduli, strict=True
+                )
+            ),
+        )
+        return self
+
+
 class FiniteAbelianGroupFactorizationRequest(StrictModel):
     """Two bounded integer-vector factors in a product of cyclic groups.
 
@@ -1299,6 +1324,7 @@ __all__ = [
     "FiniteAbelianCharacterSumIntervalProfileRequest",
     "FiniteAbelianCharacterSumIntervalProfileResult",
     "FiniteAbelianCharacterSumIntervalProfileSource",
+    "FiniteAbelianGroupElement",
     "FiniteAbelianGroupFactorizationResult",
     "FiniteAbelianNonorthogonalityWitness",
     "FiniteAbelianProductGroup",

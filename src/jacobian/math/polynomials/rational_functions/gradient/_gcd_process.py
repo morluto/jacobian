@@ -11,6 +11,7 @@ from tempfile import TemporaryDirectory
 from time import monotonic
 from typing import Any
 
+from jacobian import process
 from jacobian._exact import CanonicalRational
 from jacobian._execution import (
     OperationExecutionCancelledError,
@@ -168,12 +169,6 @@ def _request_deadline(*, stage: str) -> float:
 
 
 def _run_kernel_worker(payload: dict[str, Any], *, stage: str) -> dict[str, Any]:
-    from jacobian.process import (
-        ProcessResourceLimits,
-        run_bounded_process,
-        worker_environment,
-    )
-
     deadline = _request_deadline(stage=stage)
     request_checkpoint(f"before {stage} encoding")
     encoded = encode_strict_json(payload)
@@ -185,14 +180,14 @@ def _run_kernel_worker(payload: dict[str, Any], *, stage: str) -> dict[str, Any]
                 raise OperationExecutionTimeoutError(
                     f"rational gradient deadline expired before {stage}"
                 )
-            completed = run_bounded_process(
+            completed = process.run_bounded_process(
                 [sys.executable, str(_WORKER_PATH)],
                 input_bytes=encoded,
                 timeout_seconds=remaining,
-                environment=worker_environment(locale="C.UTF-8"),
+                environment=process.worker_environment(locale="C.UTF-8"),
                 stdout_limit=_GCD_STDOUT_BYTES,
                 stderr_limit=_GCD_STDERR_BYTES,
-                resource_limits=ProcessResourceLimits(
+                resource_limits=process.ProcessResourceLimits(
                     cpu_seconds=max(1, math.ceil(remaining)),
                     address_space_bytes=_GCD_ADDRESS_SPACE_BYTES,
                     file_size_bytes=_GCD_STDOUT_BYTES,

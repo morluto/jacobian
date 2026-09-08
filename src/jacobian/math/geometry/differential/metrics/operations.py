@@ -6,6 +6,7 @@ import time
 from typing import Any
 
 from pydantic_core import PydanticCustomError
+from sympy import QQ, Poly
 
 from jacobian._execution import (
     bind_request_deadline,
@@ -127,8 +128,6 @@ def curvature_profile(
             code="differential_geometry.curvature.noncanonical_source",
             message="metric component must be a reduced canonical rational function",
         )
-    from sympy import QQ, Poly
-
     axis = metric.tensor.coordinate_axis
     symbols = symbols_for_variables(axis)
     cache: dict[int | str, Any] = {

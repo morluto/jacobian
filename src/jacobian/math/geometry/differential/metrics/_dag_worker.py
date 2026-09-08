@@ -1,4 +1,4 @@
-"""Standalone SymPy worker for admitted metric-curvature DAG expansion."""
+"""Standalone SymPy worker for admitted metric DAG arithmetic."""
 
 from __future__ import annotations
 
@@ -6,10 +6,10 @@ import json
 import sys
 from typing import Any
 
+from sympy import QQ, Poly, Rational, Symbol
+
 
 def _polynomial(records: list[Any], symbols: tuple[Any, ...]) -> Any:
-    from sympy import QQ, Poly, Rational
-
     coefficients: dict[tuple[int, ...], Any] = {}
     variable_count = len(symbols)
     for record in records:
@@ -35,6 +35,37 @@ def _dump(polynomial: Any) -> list[list[Any]]:
     ]
 
 
+def _cancel(numerator: Any, denominator: Any) -> tuple[Any, Any]:
+    if not numerator.is_zero:
+        numerator_terms, denominator_terms = numerator.terms(), denominator.terms()
+        common = tuple(
+            min(
+                min(exponents[axis] for exponents, _ in numerator_terms),
+                min(exponents[axis] for exponents, _ in denominator_terms),
+            )
+            for axis in range(len(numerator.gens))
+        )
+        if any(common):
+
+            def divide(value: Any) -> Any:
+                return Poly.from_dict(
+                    {
+                        tuple(
+                            exponent - shift
+                            for exponent, shift in zip(exponents, common, strict=True)
+                        ): coefficient
+                        for exponents, coefficient in value.terms()
+                    },
+                    value.gens,
+                    domain=value.domain,
+                )
+
+            numerator, denominator = divide(numerator), divide(denominator)
+    numerator, denominator = numerator.cancel(denominator, include=True)
+    leading = denominator.LC()
+    return numerator.mul_ground(1 / leading), denominator.mul_ground(1 / leading)
+
+
 def _apply_operation(
     operation: object,
     arguments: list[int],
@@ -43,8 +74,6 @@ def _apply_operation(
     generators: tuple[Any, ...],
     variable_count: int,
 ) -> Any:
-    from sympy import QQ
-
     if operation == "ZERO":
         return cache[0]
     if operation == "ONE":
@@ -83,11 +112,7 @@ def _apply_operation(
     raise ValueError("unknown DAG operation")
 
 
-def _run(payload: dict[str, Any]) -> dict[str, Any]:
-    from sympy import QQ, Poly, Symbol
-
-    if set(payload) != {"variables", "nodes"}:
-        raise ValueError("malformed DAG request")
+def _expand_nodes(payload: dict[str, Any]) -> tuple[list[Any], int]:
     variables = payload["variables"]
     nodes = payload["nodes"]
     if (
@@ -124,7 +149,85 @@ def _run(payload: dict[str, Any]) -> dict[str, Any]:
         if index < 2:
             continue
         cache.append(result)
+    return cache, variable_count
+
+
+def _sources_are_coprime(payload: dict[str, Any], generators: tuple[Any, ...]) -> bool:
+    sources = payload.get("sources")
+    if not isinstance(sources, list):
+        raise ValueError("malformed source request")
+    for source in sources:
+        if (
+            not isinstance(source, dict)
+            or not isinstance(source.get("numerator"), list)
+            or not isinstance(source.get("denominator"), list)
+        ):
+            raise ValueError("malformed source request")
+        numerator = _polynomial(source["numerator"], generators)
+        denominator = _polynomial(source["denominator"], generators)
+        if not numerator.gcd(denominator).is_one:
+            return False
+    return True
+
+
+def _run_expansion(payload: dict[str, Any]) -> dict[str, Any]:
+    cache, _variable_count = _expand_nodes(payload)
     return {"status": "ok", "values": [_dump(value) for value in cache]}
+
+
+def _run_admitted(payload: dict[str, Any]) -> dict[str, Any]:
+    variables = payload["variables"]
+    if (
+        not isinstance(variables, list)
+        or not variables
+        or any(not isinstance(name, str) or not name for name in variables)
+    ):
+        raise ValueError("malformed DAG request")
+    generators = tuple(Symbol(name) for name in variables)
+    if not _sources_are_coprime(payload, generators):
+        return {"status": "noncanonical"}
+    fractions = payload["fractions"]
+    determinants = payload["determinants"]
+    cache, _variable_count = _expand_nodes(payload)
+    if not isinstance(determinants, list) or any(
+        type(index) is not int or index < 0 or index >= len(cache)
+        for index in determinants
+    ):
+        raise ValueError("malformed determinant request")
+    for index in determinants:
+        if cache[index].is_zero:
+            return {"status": "singular"}
+    if not isinstance(fractions, list):
+        raise ValueError("malformed fraction request")
+    cancelled: list[dict[str, Any]] = []
+    for pair in fractions:
+        if (
+            not isinstance(pair, list)
+            or len(pair) != 2
+            or any(
+                type(index) is not int or index < 0 or index >= len(cache)
+                for index in pair
+            )
+        ):
+            raise ValueError("malformed fraction request")
+        numerator, denominator = _cancel(cache[pair[0]], cache[pair[1]])
+        cancelled.append(
+            {"numerator": _dump(numerator), "denominator": _dump(denominator)}
+        )
+    return {
+        "status": "ok",
+        "fractions": cancelled,
+        "determinants": [_dump(cache[index]) for index in determinants],
+    }
+
+
+def _run(payload: dict[str, Any]) -> dict[str, Any]:
+    keys = set(payload)
+    if keys == {"variables", "nodes"}:
+        return _run_expansion(payload)
+    if keys == {"variables", "nodes", "fractions", "determinants", "sources"}:
+        return _run_admitted(payload)
+    raise ValueError("malformed DAG request")
 
 
 def main() -> int:

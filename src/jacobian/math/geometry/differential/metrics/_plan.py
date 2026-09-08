@@ -1,8 +1,11 @@
 """Complete metric, inverse, connection and curvature DAG admission."""
 
-from dataclasses import dataclass
+from collections import Counter
+from collections.abc import Callable
+from dataclasses import dataclass, replace
 from fractions import Fraction
 from itertools import permutations, product
+from typing import NoReturn
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.differential.metrics._dag import (
@@ -13,6 +16,10 @@ from jacobian.math.geometry.differential.metrics._dag import (
     reject,
 )
 from jacobian.math.geometry.differential.metrics._models import RationalCoordinateMetric
+from jacobian.math.geometry.differential.values import _polynomial_key
+from jacobian.math.polynomials.rational_functions._bounds import (
+    _remove_guaranteed_common_monomial,
+)
 from jacobian.math.polynomials.values import SparseRationalPolynomial
 
 
@@ -38,6 +45,119 @@ def _has_nonconstant_denominator(dag: Dag, value: Expression) -> bool:
     )
 
 
+def _node_guard_key(dag: Dag, index: int) -> object:
+    """Identify one DAG polynomial node for locus-cap accounting.
+
+    Generated nodes such as ``xy-1`` keep one identity whether they appear as
+    a determinant factor or as an inverse denominator.
+    """
+
+    source = dag.nodes[index].source
+    if source is not None:
+        return _polynomial_key(source)
+    return ("dag-node", index)
+
+
+def _denominator_guard_identity(dag: Dag, value: Expression) -> object | None:
+    """Identify one retained output denominator after guaranteed monomial cancel.
+
+    A single sourced or generated factor matches the determinant or inherited
+    key only when guaranteed cancellation leaves the same degree and valuation
+    envelope. A proper factor remaining after cancel, such as ``x-y`` from
+    det ``y(x-y)``, is counted separately. Shared raw ``D^2`` identities still
+    split when axis-specific numerators can cancel non-monomial factors.
+    Constant remaining numerators keep one identity so cheap cases such as
+    ``1/(x+y)`` stay inside the cap.
+    """
+
+    if not _has_nonconstant_denominator(dag, value):
+        return None
+    cancelled = _remove_guaranteed_common_monomial(dag.bound(value))
+    remaining = cancelled.denominator
+    if not any(remaining.degrees):
+        return None
+    numerators = Counter(value.numerator)
+    denominators = Counter(value.denominator)
+    factors: list[tuple[int, int]] = []
+    remaining_numerator: list[tuple[int, int]] = []
+    cancelled_shared = False
+    for index, multiplicity in sorted(denominators.items()):
+        if not any(dag.nodes[index].bound.degrees):
+            continue
+        shared = min(multiplicity, numerators.get(index, 0))
+        leftover = multiplicity - shared
+        if shared:
+            cancelled_shared = True
+        if leftover:
+            factors.append((index, leftover))
+    for index, multiplicity in sorted(numerators.items()):
+        if not any(dag.nodes[index].bound.degrees):
+            continue
+        leftover = multiplicity - min(multiplicity, denominators.get(index, 0))
+        if leftover:
+            remaining_numerator.append((index, leftover))
+    if not factors:
+        return None
+    remaining_numerator_identity = tuple(remaining_numerator)
+    if len(factors) == 1 and factors[0][1] == 1:
+        index = factors[0][0]
+        raw = dag.nodes[index].bound
+        if (
+            remaining.degrees == raw.degrees
+            and remaining.minimum_exponents == raw.minimum_exponents
+            and not cancelled_shared
+        ):
+            return _node_guard_key(dag, index)
+        return (
+            "canonical-result-denominator",
+            (_node_guard_key(dag, index), 1),
+            remaining.minimum_exponents,
+            remaining.degrees,
+            remaining_numerator_identity,
+        )
+    identity: tuple[object, ...] = (
+        "canonical-result-denominator",
+        tuple(
+            (_node_guard_key(dag, index), multiplicity)
+            for index, multiplicity in factors
+        ),
+        remaining.minimum_exponents,
+        remaining.degrees,
+    )
+    if remaining_numerator_identity:
+        identity = (*identity, remaining_numerator_identity)
+    return identity
+
+
+def potential_locus_guard_keys(
+    dag: Dag,
+    inherited: tuple[SparseRationalPolynomial, ...],
+    determinant: Expression,
+    outputs: tuple[Expression, ...],
+) -> set[object]:
+    """Return the polynomial identities counted against the 768-guard cap."""
+
+    keys: set[object] = {_polynomial_key(guard) for guard in inherited}
+    for index in set(determinant.numerator):
+        keys.add(_node_guard_key(dag, index))
+    for value in outputs:
+        identity = _denominator_guard_identity(dag, value)
+        if identity is not None:
+            keys.add(identity)
+    return keys
+
+
+@dataclass(frozen=True)
+class ConnectionPlan:
+    """Admitted metric inverse and Levi-Civita connection DAG."""
+
+    dag: Dag
+    entries: tuple[Expression, ...]
+    determinant: Expression
+    inverse: tuple[Expression, ...]
+    connection: tuple[Expression, ...]
+
+
 @dataclass(frozen=True)
 class Plan:
     dag: Dag
@@ -50,40 +170,62 @@ class Plan:
     scalar: Expression
 
 
-def build_plan(metric: RationalCoordinateMetric) -> Plan:
+def _determinant(
+    dag: Dag,
+    entries: tuple[Expression, ...],
+    dimension: int,
+    rows: tuple[int, ...],
+    columns: tuple[int, ...],
+) -> Expression:
+    terms = []
+    for permutation in permutations(columns):
+        sign = (-1) ** sum(
+            permutation[i] > permutation[j]
+            for i in range(len(permutation))
+            for j in range(i + 1, len(permutation))
+        )
+        # The permutation sign is relative to the ordered column subset.
+        terms.append(
+            dag.multiply(
+                Expression(Fraction(sign)),
+                *(
+                    entries[i * dimension + j]
+                    for i, j in zip(rows, permutation, strict=True)
+                ),
+            )
+        )
+    return dag.add(*terms) if terms else ONE
+
+
+def build_connection_plan(
+    metric: RationalCoordinateMetric,
+    *,
+    reject: Callable[[str, str], NoReturn] | None = None,
+    label: str | None = None,
+    singular_metric: Callable[[], OperationDomainValidationError] | None = None,
+) -> ConnectionPlan:
     n = len(metric.tensor.coordinate_axis)
     dag = Dag(n)
+    if reject is not None:
+        dag.ledger.limits = replace(
+            dag.ledger.limits,
+            reject=reject,
+            label=label or dag.ledger.limits.label,
+        )
     entries = tuple(dag.fraction(value) for value in metric.tensor.components)
-
-    def determinant(rows: tuple[int, ...], columns: tuple[int, ...]) -> Expression:
-        terms = []
-        for permutation in permutations(columns):
-            sign = (-1) ** sum(
-                permutation[i] > permutation[j]
-                for i in range(len(permutation))
-                for j in range(i + 1, len(permutation))
-            )
-            # The permutation sign is relative to the ordered column subset.
-            terms.append(
-                dag.multiply(
-                    Expression(Fraction(sign)),
-                    *(
-                        entries[i * n + j]
-                        for i, j in zip(rows, permutation, strict=True)
-                    ),
-                )
-            )
-        return dag.add(*terms) if terms else ONE
-
     axes = tuple(range(n))
-    det = determinant(axes, axes)
+    det = _determinant(dag, entries, n, axes, axes)
     if not det.scalar:
-        raise singular()
+        raise (singular_metric or singular)()
     inverse = tuple(
         dag.multiply(
             Expression(Fraction((-1) ** (i + j))),
-            determinant(
-                tuple(k for k in axes if k != j), tuple(k for k in axes if k != i)
+            _determinant(
+                dag,
+                entries,
+                n,
+                tuple(k for k in axes if k != j),
+                tuple(k for k in axes if k != i),
             ),
             dag.inverse(det),
         )
@@ -119,7 +261,17 @@ def build_plan(metric: RationalCoordinateMetric) -> Plan:
                 )
                 connection_list[(k * n + i) * n + j] = value
                 connection_list[(k * n + j) * n + i] = value
-    connection = tuple(connection_list)
+    return ConnectionPlan(dag, entries, det, inverse, tuple(connection_list))
+
+
+def build_plan(metric: RationalCoordinateMetric) -> Plan:
+    connection_plan = build_connection_plan(metric)
+    n = len(metric.tensor.coordinate_axis)
+    dag = connection_plan.dag
+    det = connection_plan.determinant
+    inverse = connection_plan.inverse
+    connection = connection_plan.connection
+    axes = tuple(range(n))
 
     def gamma(k: int, i: int, j: int) -> Expression:
         return connection[(k * n + i) * n + j]
@@ -153,7 +305,10 @@ def build_plan(metric: RationalCoordinateMetric) -> Plan:
     # Retain the determinant numerator as its already-shared factors. Their
     # conjunction equals det(g)!=0 on the source denominator locus. This
     # avoids expanding an unnecessary determinant product in diagonal charts.
-    determinant_allocations: list[tuple[int, int, int]] = []
+    inherited_keys = {
+        _polynomial_key(guard) for guard in metric.tensor.retained_nonzero_denominators
+    }
+    unique_determinant: dict[object, tuple[int, int, int]] = {}
     for index in set(det.numerator):
         bound = dag.nodes[index].bound
         if (
@@ -166,22 +321,26 @@ def build_plan(metric: RationalCoordinateMetric) -> Plan:
                 "determinant locus factors exceed canonical polynomial bounds",
             )
         dag.ledger.charge("normalization", bound.terms * bound.coefficient_digits)
-        determinant_allocations.append(
+        key = _node_guard_key(dag, index)
+        if key in inherited_keys:
+            continue
+        unique_determinant.setdefault(
+            key,
             (
                 bound.terms,
                 8 * bound.coefficient_digits * bound.terms,
                 n * (bound.terms + 1),
-            )
+            ),
         )
     outputs = (*inverse, *connection, *riemann, *ricci, scalar)
     sizes = {value: dag.admit_output(value) for value in dict.fromkeys(outputs)}
-    potential_guard_expressions = {
-        value for value in outputs if _has_nonconstant_denominator(dag, value)
-    }
-    potential_guards = (
-        len(metric.tensor.retained_nonzero_denominators)
-        + len(set(det.numerator))
-        + len(potential_guard_expressions)
+    potential_guards = len(
+        potential_locus_guard_keys(
+            dag,
+            metric.tensor.retained_nonzero_denominators,
+            det,
+            outputs,
+        )
     )
     if potential_guards > 768:
         reject("locus", "complete retained curvature locus exceeds 768 guards")
@@ -211,7 +370,7 @@ def build_plan(metric: RationalCoordinateMetric) -> Plan:
     ]
     guards = (
         inherited
-        + determinant_allocations
+        + list(unique_determinant.values())
         + [sizes[value] for value in sizes if value.denominator]
     )
     allocations = source + inherited + [sizes[value] for value in outputs] + 5 * guards

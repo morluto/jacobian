@@ -34,7 +34,9 @@ def test_simple_graph_encoding_admits_incidence_graph_vertex_bound() -> None:
 
     with pytest.raises(ValidationError):
         SimpleUndirectedGraph(
-            vertices=tuple(str(i) for i in range(MAX_ENCODED_SIMPLE_GRAPH_VERTICES + 1)),
+            vertices=tuple(
+                str(i) for i in range(MAX_ENCODED_SIMPLE_GRAPH_VERTICES + 1)
+            ),
             edges=(),
         )
 

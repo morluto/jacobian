@@ -314,8 +314,8 @@ def test_oversized_raw_pair_rejected_before_backend_execution(
         }
     )
     monkeypatch.setattr(
-        "jacobian.math.geometry.differential.metrics.operations.require_canonical_rational_function",
-        lambda *args: pytest.fail("backend execution must follow admission"),
+        "jacobian.math.geometry.differential.metrics.operations.recognize_canonical_rational_functions",
+        lambda *args, **kwargs: pytest.fail("backend execution must follow admission"),
     )
     with pytest.raises(OperationResourceAdmissionError, match=r"allocation|work"):
         curvature_profile(source)
@@ -356,3 +356,32 @@ def test_complete_locus_admitted_before_curvature_expansion() -> None:
     # denominators for different numerators. The complete locus has 769 guards.
     with pytest.raises(OperationResourceAdmissionError, match="768 guards"):
         curvature_profile(source)
+
+
+def test_inherited_determinant_and_inverse_guards_are_unioned_before_the_cap() -> (
+    None
+):
+    axis = ("x",)
+    guards = canonical_locus_guards(
+        (
+            rational_function_from_sympy(x**2, axis).numerator,
+            rational_function_from_sympy(x, axis).numerator,
+            *(
+                rational_function_from_sympy(x + offset, axis).numerator
+                for offset in range(1, 767)
+            ),
+        ),
+        variable_count=1,
+    )
+    source = RationalCoordinateMetric(
+        tensor=RationalCoordinateTensor(
+            coordinate_axis=axis,
+            variance=("COVARIANT", "COVARIANT"),
+            components=(rational_function_from_sympy(x**2, axis),),
+            retained_nonzero_denominators=guards,
+        )
+    )
+    result = curvature_profile(source)
+    assert len(result.inverse_metric.retained_nonzero_denominators) == 768
+    replay(result)
+

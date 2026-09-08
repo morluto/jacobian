@@ -19,6 +19,7 @@ from jacobian.math.geometry.differential.rational_tensor.covariant_derivative im
 from jacobian.math.geometry.differential.values import (
     RationalCoordinateTensor,
     TensorVariance,
+    canonical_locus_guards,
 )
 from jacobian.math.polynomials._conversions import (
     rational_function_from_sympy,
@@ -141,8 +142,83 @@ def test_rank_four_output_is_rejected_before_backend_execution(
     )
     monkeypatch.setattr(
         operations,
-        "_evaluate_node",
-        lambda *args: pytest.fail("backend execution must follow admission"),
+        "evaluate_admitted_covariant_derivative",
+        lambda *args, **kwargs: pytest.fail("backend execution must follow admission"),
     )
     with pytest.raises(OperationResourceAdmissionError, match="component"):
         covariant_derivative(metric, source)
+
+
+def test_rank_eight_source_is_rejected_before_the_result_schema() -> None:
+    axis = ("x",)
+    metric = RationalCoordinateMetric(
+        tensor=tensor([1], ("COVARIANT", "COVARIANT"), axis=axis)
+    )
+    source = tensor([0], ("COVARIANT",) * 8, axis=axis)
+    with pytest.raises(OperationResourceAdmissionError, match="rank-8") as rejected:
+        covariant_derivative(metric, source)
+    assert "covariant_derivative" in rejected.value.code
+    assert "curvature" not in rejected.value.code
+
+
+def test_singular_metric_after_expansion_is_a_domain_error() -> None:
+    x, y = symbols("x y")
+    metric = RationalCoordinateMetric(
+        tensor=tensor([1, x, x, x**2], ("COVARIANT", "COVARIANT"), axis=("x", "y"))
+    )
+    source = tensor([1, 0], ("COVARIANT",), axis=("x", "y"))
+    with pytest.raises(OperationDomainValidationError, match="identically zero"):
+        covariant_derivative(metric, source)
+
+
+def test_shared_inherited_guards_are_capped_on_their_union() -> None:
+    axis = ("x",)
+    x = symbols("x")
+    guards = canonical_locus_guards(
+        tuple(
+            rational_function_from_sympy(x + offset, axis).numerator
+            for offset in range(1, 769)
+        ),
+        variable_count=1,
+    )
+    metric = RationalCoordinateMetric(
+        tensor=tensor(
+            [1],
+            ("COVARIANT", "COVARIANT"),
+            axis=axis,
+        )
+    )
+    metric = RationalCoordinateMetric(
+        tensor=RationalCoordinateTensor(
+            coordinate_axis=axis,
+            variance=("COVARIANT", "COVARIANT"),
+            components=metric.tensor.components,
+            retained_nonzero_denominators=guards,
+        )
+    )
+    source = RationalCoordinateTensor(
+        coordinate_axis=axis,
+        variance=(),
+        components=tensor([1], (), axis=axis).components,
+        retained_nonzero_denominators=guards,
+    )
+    result = covariant_derivative(metric, source)
+    assert result.covariant_derivative.retained_nonzero_denominators == guards
+
+
+def test_oversized_determinant_is_rejected_during_admission() -> None:
+    x, y = symbols("x y")
+    dense = sum(x**power for power in range(20))
+    metric = RationalCoordinateMetric(
+        tensor=tensor(
+            [dense, y, y, dense],
+            ("COVARIANT", "COVARIANT"),
+            axis=("x", "y"),
+        )
+    )
+    with pytest.raises(
+        OperationResourceAdmissionError, match="determinant locus"
+    ) as rejected:
+        covariant_derivative(metric, tensor([1], (), axis=("x", "y")))
+    assert rejected.value.code.endswith("determinant_locus")
+

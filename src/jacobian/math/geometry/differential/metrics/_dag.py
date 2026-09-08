@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from fractions import Fraction
 from typing import NoReturn
@@ -55,10 +56,13 @@ class Ledger:
         self.allocation_bits = 0
 
     def charge(self, category: BoundWorkCategory, amount: int) -> None:
-        request_checkpoint(f"admitting metric curvature {category}")
+        request_checkpoint(f"admitting {self.limits.label} {category}")
         self.work += amount
         if self.work > 50_000_000:
-            reject("work", "complete curvature DAG exceeds 50,000,000 work units")
+            self.limits.reject(
+                "work",
+                f"complete {self.limits.label} DAG exceeds 50,000,000 work units",
+            )
 
 
 @dataclass(frozen=True)
@@ -94,9 +98,21 @@ class Dag:
     complete inverse/connection/curvature formula.
     """
 
-    def __init__(self, dimension: int) -> None:
+    def __init__(
+        self,
+        dimension: int,
+        *,
+        reject: Callable[[str, str], NoReturn] | None = None,
+        label: str | None = None,
+    ) -> None:
         self.dimension = dimension
         self.ledger = Ledger()
+        if reject is not None or label is not None:
+            self.ledger.limits = replace(
+                self.ledger.limits,
+                reject=reject or self.ledger.limits.reject,
+                label=label or self.ledger.limits.label,
+            )
         self.nodes = [
             Node("ZERO", (), _zero_polynomial(dimension)),
             Node("ONE", (), _one_polynomial(dimension)),
@@ -118,7 +134,10 @@ class Dag:
             + 64 * self.dimension
         )
         if len(self.nodes) >= 16384 or self.ledger.allocation_bits > 268_435_456:
-            reject("allocation", "curvature DAG exceeds node or coefficient allocation")
+            self.ledger.limits.reject(
+                "allocation",
+                f"{self.ledger.limits.label} DAG exceeds node or coefficient allocation",
+            )
         result = len(self.nodes)
         self.nodes.append(node)
         self.keys[key] = result
@@ -339,7 +358,7 @@ class Dag:
                 len(format_canonical_integer(value.scalar.denominator)),
             )
             if digits > 128:
-                reject(
+                self.ledger.limits.reject(
                     "result_height", "constant result exceeds 128 coefficient digits"
                 )
             self.ledger.charge("normalization", 1)

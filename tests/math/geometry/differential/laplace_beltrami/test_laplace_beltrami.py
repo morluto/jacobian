@@ -2,6 +2,10 @@
 
 from sympy import symbols
 
+import pytest
+
+from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian._exact import CanonicalRational
 from jacobian.math.geometry.differential.laplace_beltrami import laplace_beltrami
 from jacobian.math.geometry.differential.metrics import RationalCoordinateMetric
 from jacobian.math.geometry.differential.values import (
@@ -9,6 +13,10 @@ from jacobian.math.geometry.differential.values import (
     canonical_locus_guards,
 )
 from jacobian.math.polynomials._conversions import rational_function_from_sympy
+from jacobian.math.polynomials.values import (
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
+)
 
 x, y = symbols("x y")
 
@@ -39,3 +47,60 @@ def test_harmonic_rational_scalar_retains_its_denominator_locus() -> None:
         variable_count=2,
     )
     assert result.retained_nonzero_denominators == expected
+
+
+def test_inherited_guards_are_counted_in_the_returned_family() -> None:
+    axis = ("x", "y")
+    pairs = tuple(
+        sorted(((index % 16, index // 16) for index in range(256)), reverse=True)
+    )
+    guards = canonical_locus_guards(
+        tuple(
+            SparseRationalPolynomial(
+                terms=tuple(
+                    RationalPolynomialTerm(
+                        coefficient=CanonicalRational(
+                            num=offset if exponents == (0, 0) else 1,
+                            den=1,
+                        ),
+                        exponents=exponents,
+                    )
+                    for exponents in pairs
+                )
+            )
+            for offset in range(2, 522)
+        ),
+        variable_count=2,
+    )
+    metric = RationalCoordinateMetric(
+        tensor=RationalCoordinateTensor(
+            coordinate_axis=axis,
+            variance=("COVARIANT", "COVARIANT"),
+            components=_euclidean().tensor.components,
+            retained_nonzero_denominators=guards,
+        )
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="allocation bounds"):
+        laplace_beltrami(metric, rational_function_from_sympy(1, axis))
+
+
+def test_shared_one_term_inherited_locus_remains_admitted() -> None:
+    axis = ("x", "y")
+    guards = canonical_locus_guards(
+        tuple(
+            rational_function_from_sympy(x + offset, axis).numerator
+            for offset in range(1, 769)
+        ),
+        variable_count=2,
+    )
+    metric = RationalCoordinateMetric(
+        tensor=RationalCoordinateTensor(
+            coordinate_axis=axis,
+            variance=("COVARIANT", "COVARIANT"),
+            components=_euclidean().tensor.components,
+            retained_nonzero_denominators=guards,
+        )
+    )
+    result = laplace_beltrami(metric, rational_function_from_sympy(1, axis))
+    assert result.retained_nonzero_denominators == guards
+

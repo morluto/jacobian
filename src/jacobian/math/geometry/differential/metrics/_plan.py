@@ -1,8 +1,10 @@
 """Complete metric, inverse, connection and curvature DAG admission."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from fractions import Fraction
 from itertools import permutations, product
+from typing import NoReturn
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.differential.metrics._dag import (
@@ -13,6 +15,7 @@ from jacobian.math.geometry.differential.metrics._dag import (
     reject,
 )
 from jacobian.math.geometry.differential.metrics._models import RationalCoordinateMetric
+from jacobian.math.geometry.differential.values import _polynomial_key
 from jacobian.math.polynomials.values import SparseRationalPolynomial
 
 
@@ -87,9 +90,14 @@ def _determinant(
     return dag.add(*terms) if terms else ONE
 
 
-def build_connection_plan(metric: RationalCoordinateMetric) -> ConnectionPlan:
+def build_connection_plan(
+    metric: RationalCoordinateMetric,
+    *,
+    admission_reject: Callable[[str, str], NoReturn] | None = None,
+    label: str | None = None,
+) -> ConnectionPlan:
     n = len(metric.tensor.coordinate_axis)
-    dag = Dag(n)
+    dag = Dag(n, reject=admission_reject, label=label)
     entries = tuple(dag.fraction(value) for value in metric.tensor.components)
     axes = tuple(range(n))
     det = _determinant(dag, entries, n, axes, axes)
@@ -205,14 +213,28 @@ def build_plan(metric: RationalCoordinateMetric) -> Plan:
         )
     outputs = (*inverse, *connection, *riemann, *ricci, scalar)
     sizes = {value: dag.admit_output(value) for value in dict.fromkeys(outputs)}
-    potential_guard_expressions = {
-        value for value in outputs if _has_nonconstant_denominator(dag, value)
+    inherited_keys = {
+        _polynomial_key(guard)
+        for guard in metric.tensor.retained_nonzero_denominators
     }
-    potential_guards = (
-        len(metric.tensor.retained_nonzero_denominators)
-        + len(set(det.numerator))
-        + len(potential_guard_expressions)
-    )
+    determinant_keys: set[object] = set()
+    for index in set(det.numerator):
+        source = dag.nodes[index].source
+        determinant_keys.add(
+            _polynomial_key(source) if source is not None else ("determinant", index)
+        )
+    output_keys: set[object] = set()
+    for value in outputs:
+        if not _has_nonconstant_denominator(dag, value):
+            continue
+        for index in value.denominator:
+            source = dag.nodes[index].source
+            output_keys.add(
+                _polynomial_key(source)
+                if source is not None
+                else ("canonical-result-denominator", index)
+            )
+    potential_guards = len(inherited_keys | determinant_keys | output_keys)
     if potential_guards > 768:
         reject("locus", "complete retained curvature locus exceeds 768 guards")
 

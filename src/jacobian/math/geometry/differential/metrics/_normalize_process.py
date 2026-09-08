@@ -61,16 +61,20 @@ def _poly_from_payload(records: object, symbols: tuple[Any, ...]) -> Any:
 
 
 def cancel_fraction(
-    numerator: Any, denominator: Any, *, deadline: float
+    numerator: Any,
+    denominator: Any,
+    *,
+    deadline: float,
+    owner: str = "metric curvature",
 ) -> tuple[Any, Any]:
     """Cancel one admitted pair in a killable worker under the shared deadline."""
 
     remaining = deadline - monotonic() - _PARENT_FINALIZATION_SECONDS
     if remaining <= 0:
         raise OperationExecutionTimeoutError(
-            "metric curvature deadline expired before cancellation"
+            f"{owner} deadline expired before cancellation"
         )
-    request_checkpoint("before metric-curvature cancellation payload encoding")
+    request_checkpoint(f"before {owner} cancellation payload encoding")
     payload = encode_strict_json(
         {
             "variable_count": len(numerator.gens),
@@ -78,11 +82,11 @@ def cancel_fraction(
             "denominator": _poly_payload(denominator),
         }
     )
-    request_checkpoint("after metric-curvature cancellation payload encoding")
+    request_checkpoint(f"after {owner} cancellation payload encoding")
     remaining = deadline - monotonic() - _PARENT_FINALIZATION_SECONDS
     if remaining <= 0:
         raise OperationExecutionTimeoutError(
-            "metric curvature deadline expired after cancellation payload encoding"
+            f"{owner} deadline expired after cancellation payload encoding"
         )
     try:
         with TemporaryDirectory(prefix="jacobian-metric-cancel-") as worker_directory:
@@ -102,15 +106,15 @@ def cancel_fraction(
             )
     except OSError as exc:
         raise RuntimeError(
-            "bounded metric-curvature cancellation worker could not be started"
+            f"bounded {owner} cancellation worker could not be started"
         ) from exc
     if completed.cancelled:
         raise OperationExecutionCancelledError(
-            "metric curvature cancelled during fraction cancellation"
+            f"{owner} cancelled during fraction cancellation"
         )
     if completed.timed_out:
         raise OperationExecutionTimeoutError(
-            "metric curvature deadline expired during fraction cancellation"
+            f"{owner} deadline expired during fraction cancellation"
         )
     if (
         completed.stdout_exceeded
@@ -118,7 +122,7 @@ def cancel_fraction(
         or completed.returncode != 0
     ):
         raise RuntimeError(
-            "bounded metric-curvature cancellation worker did not return a fraction"
+            f"bounded {owner} cancellation worker did not return a fraction"
         )
     try:
         response = loads_strict_json(
@@ -130,7 +134,7 @@ def cancel_fraction(
         )
     except CanonicalizationError as exc:
         raise RuntimeError(
-            "bounded metric-curvature cancellation worker returned malformed output"
+            f"bounded {owner} cancellation worker returned malformed output"
         ) from exc
     if (
         not isinstance(response, dict)
@@ -139,7 +143,7 @@ def cancel_fraction(
         or "denominator" not in response
     ):
         raise RuntimeError(
-            "bounded metric-curvature cancellation worker returned malformed output"
+            f"bounded {owner} cancellation worker returned malformed output"
         )
     symbols = tuple(numerator.gens)
     return (

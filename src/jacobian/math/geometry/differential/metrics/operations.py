@@ -5,8 +5,6 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from pydantic_core import PydanticCustomError
-
 from jacobian._execution import (
     bind_request_deadline,
     current_request_execution,
@@ -14,6 +12,10 @@ from jacobian._execution import (
     request_execution,
 )
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.geometry.differential._recognition_process import (
+    RationalFunctionRecognitionCandidate,
+    recognize_canonical_rational_functions,
+)
 from jacobian.math.geometry.differential.metrics._dag import Expression, Node
 from jacobian.math.geometry.differential.metrics._models import (
     RationalCoordinateConnection,
@@ -34,10 +36,7 @@ from jacobian.math.polynomials._conversions import (
     sparse_rational_polynomial_to_sympy,
     symbols_for_variables,
 )
-from jacobian.math.polynomials.values import (
-    RationalFunction,
-    require_canonical_rational_function,
-)
+from jacobian.math.polynomials.values import RationalFunction
 
 
 def _evaluate_node(
@@ -102,18 +101,33 @@ def curvature_profile(
     request_checkpoint("before curvature admission")
     plan = build_plan(metric)
     request_checkpoint("after complete curvature admission")
-    # Caller-authored field presentations have only structural validation.
-    # Recognize reducedness once before relying on source-field identities.
-    for component in dict.fromkeys(metric.tensor.components):
-        request_checkpoint("before metric component recognition")
-        try:
-            require_canonical_rational_function(component)
-        except PydanticCustomError as exc:
-            raise OperationDomainValidationError(
-                location=("metric",),
-                code="differential_geometry.curvature.noncanonical_source",
-                message="metric component must be a reduced canonical rational function",
-            ) from exc
+    candidates = tuple(
+        RationalFunctionRecognitionCandidate(
+            owner="tensor", component=index, value=component
+        )
+        for index, component in enumerate(dict.fromkeys(metric.tensor.components))
+        if component.numerator.terms
+        and component.variables
+        and not (
+            len(component.numerator.terms) == 1
+            and not any(component.numerator.terms[0].exponents)
+        )
+        and not (
+            len(component.denominator.terms) == 1
+            and component.denominator.terms[0].coefficient.as_fraction() == 1
+            and component.denominator.terms[0].exponents
+            == (0,) * len(component.variables)
+        )
+    )
+    recognition = recognize_canonical_rational_functions(
+        candidates, deadline=deadline
+    )
+    if recognition.non_coprime is not None:
+        raise OperationDomainValidationError(
+            location=("metric",),
+            code="differential_geometry.curvature.noncanonical_source",
+            message="metric component must be a reduced canonical rational function",
+        )
     from sympy import QQ, Poly
 
     axis = metric.tensor.coordinate_axis

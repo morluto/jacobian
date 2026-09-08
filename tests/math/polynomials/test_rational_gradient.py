@@ -216,3 +216,24 @@ def test_polar_metric_component_gradient() -> None:
         2 * r, ("r", "theta")
     )
     assert not result.partial_derivatives[1].numerator.terms
+
+
+def test_general_branch_uses_the_bounded_cancellation_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.polynomials.rational_functions.gradient import _kernel
+
+    calls: list[str] = []
+    original = _kernel.cancel_fraction
+
+    def wrapped(*args: object, **kwargs: object) -> object:
+        owner = kwargs.get("owner")
+        assert owner == "rational gradient"
+        calls.append(str(owner))
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(_kernel, "cancel_fraction", wrapped)
+    x, y = symbols("x y")
+    _identity(rational_function_from_sympy((x * x + y) / (x + y + 1), ("x", "y")))
+    assert calls
+

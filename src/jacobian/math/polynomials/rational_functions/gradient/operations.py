@@ -208,6 +208,8 @@ def _admit_general_gradient(
 
 def _general_gradient_admitted(
     function: RationalFunction,
+    *,
+    deadline: float,
 ) -> tuple[RationalFunction, ...]:
     """Recognize and differentiate after the caller's whole-profile admission."""
     _recognize_source(function)
@@ -220,7 +222,9 @@ def _general_gradient_admitted(
     )
     return tuple(
         _normalize_fraction(
-            *_differentiate_fraction(numerator, denominator, axis), function.variables
+            *_differentiate_fraction(numerator, denominator, axis),
+            function.variables,
+            deadline=deadline,
         )
         for axis in range(len(function.variables))
     )
@@ -244,7 +248,7 @@ def gradient(function: RationalFunction) -> RationalFunctionGradient:
     else:
         ledger = _Ledger()
         _admit_general_gradient(function, ledger)
-        derivatives = _general_gradient_admitted(function)
+        derivatives = _general_gradient_admitted(function, deadline=deadline)
     result = RationalFunctionGradient(
         source=function, variables=function.variables, partial_derivatives=derivatives
     )

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from fractions import Fraction
 from typing import NoReturn
 
@@ -96,7 +96,9 @@ def _bound_allocation(bound: PolynomialBound, dimension: int) -> tuple[int, int,
 
 def build_plan(metric: RationalCoordinateMetric, scalar: RationalFunction) -> Plan:
     dimension = len(metric.tensor.coordinate_axis)
-    connection_plan = build_connection_plan(metric)
+    connection_plan = build_connection_plan(
+        metric, admission_reject=_laplace_reject, label="Laplace--Beltrami"
+    )
     dag = connection_plan.dag
     field = dag.fraction(scalar)
     axes = tuple(range(dimension))
@@ -120,13 +122,23 @@ def build_plan(metric: RationalCoordinateMetric, scalar: RationalFunction) -> Pl
                 )
             )
     value = dag.add(*value_terms)
-    dag.ledger.limits = replace(
-        dag.ledger.limits,
-        reject=_laplace_reject,
-        label="Laplace--Beltrami",
-    )
     size = dag.admit_output(value)
-    determinant_sizes: list[tuple[int, int, int]] = []
+    extra_keys: set[_GuardKey] = set()
+    if not _is_unit_polynomial(scalar.denominator, dimension):
+        extra_keys.add(_monic_polynomial_key(scalar.denominator))
+    if _has_nonconstant_denominator(dag, value):
+        extra_keys.add(("canonical-result-denominator",))
+    guard_keys: set[_GuardKey] = {
+        _polynomial_key(guard) for guard in metric.tensor.retained_nonzero_denominators
+    }
+    returned: dict[_GuardKey, tuple[int, int, int]] = {
+        _polynomial_key(guard): _source_allocation(guard, dimension)
+        for guard in metric.tensor.retained_nonzero_denominators
+    }
+    if not _is_unit_polynomial(scalar.denominator, dimension):
+        returned[_monic_polynomial_key(scalar.denominator)] = _source_allocation(
+            scalar.denominator, dimension
+        )
     for index in set(connection_plan.determinant.numerator):
         bound = dag.nodes[index].bound
         if (
@@ -138,21 +150,18 @@ def build_plan(metric: RationalCoordinateMetric, scalar: RationalFunction) -> Pl
                 "determinant_locus",
                 "determinant locus factors exceed canonical polynomial bounds",
             )
-        determinant_sizes.append(_bound_allocation(bound, dimension))
-    extra_keys: set[_GuardKey] = set()
-    if not _is_unit_polynomial(scalar.denominator, dimension):
-        extra_keys.add(_monic_polynomial_key(scalar.denominator))
-    if _has_nonconstant_denominator(dag, value):
-        extra_keys.add(("canonical-result-denominator",))
-    guard_keys: set[_GuardKey] = {
-        _polynomial_key(guard) for guard in metric.tensor.retained_nonzero_denominators
-    }
-    for index in set(connection_plan.determinant.numerator):
         node_source = dag.nodes[index].source
         if node_source is not None:
-            guard_keys.add(_monic_polynomial_key(node_source))
+            key: _GuardKey = _monic_polynomial_key(node_source)
         else:
-            guard_keys.add(("determinant", index))
+            key = ("determinant", index)
+        guard_keys.add(key)
+        returned[key] = _bound_allocation(bound, dimension)
+    if _has_nonconstant_denominator(dag, value):
+        denominator_bound = dag.nodes[dag.polynomial(value.denominator)].bound
+        returned[("canonical-result-denominator",)] = _bound_allocation(
+            denominator_bound, dimension
+        )
     guard_keys.update(extra_keys)
     if len(guard_keys) > MAX_RATIONAL_TENSOR_LOCUS_GUARDS:
         _laplace_reject(
@@ -175,7 +184,7 @@ def build_plan(metric: RationalCoordinateMetric, scalar: RationalFunction) -> Pl
         _source_allocation(guard, dimension)
         for guard in metric.tensor.retained_nonzero_denominators
     ]
-    allocations = source_sizes + inherited + determinant_sizes + [size]
+    allocations = source_sizes + inherited + [size] + list(returned.values())
     terms, bits, slots = (
         sum(allocation[index] for allocation in allocations) for index in range(3)
     )

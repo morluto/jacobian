@@ -255,15 +255,16 @@ def test_bipartite_block_reserves_only_part_size_feasible_lengths() -> None:
     assert [row.cycle_length for row in result.rows] == [4]
 
 
-def test_perfect_matching_depth_two_scans_are_charged() -> None:
+def test_perfect_matching_has_no_cyclic_blocks() -> None:
     vertices = tuple(f"v{index:03d}" for index in range(256))
     graph = _graph(
         vertices,
         [(f"v{index:03d}", f"v{index + 128:03d}") for index in range(128)],
     )
 
-    with pytest.raises(OperationDomainValidationError, match="work bound"):
-        compute_cycle_length_profile(graph)
+    result = compute_cycle_length_profile(graph)
+    assert result.graph == graph
+    assert result.rows == ()
 
 
 def test_cycle_profile_rejects_unbounded_retained_labels() -> None:

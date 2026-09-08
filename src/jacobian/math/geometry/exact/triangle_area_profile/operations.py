@@ -23,12 +23,17 @@ from jacobian.math.geometry.exact.triangle_area_profile._models import (
 __all__ = ["compute_triangle_area_profile", "verify_triangle_area_profile"]
 
 
-def _admit_triangle_area_result(configuration: PointConfiguration) -> None:
+MAX_TRANSLATION_BIT_WORK = 200_000_000
+
+
+def _admit_triangle_area_result(
+    configuration: PointConfiguration,
+) -> tuple[tuple[Fraction, Fraction], ...]:
     """Reject configurations whose complete profile cannot fit the wire limit."""
     points = configuration.points
     triangle_count = len(points) * (len(points) - 1) * (len(points) - 2) // 6
     if triangle_count == 0:
-        return
+        return ()
     coordinate_widths = sorted(
         (
             max(
@@ -44,7 +49,29 @@ def _admit_triangle_area_result(configuration: PointConfiguration) -> None:
     # coordinates in a triple; subtraction and the factor 1/2 add carry
     # digits. Reserve that complete factor product before enumeration.
     derived_digits = sum(coordinate_widths[:6], 0) + 2
-    if derived_digits > MAX_CANONICAL_RATIONAL_DIGITS:
+    if derived_digits <= MAX_CANONICAL_RATIONAL_DIGITS:
+        return tuple(
+            (point.coordinates[0].as_fraction(), point.coordinates[1].as_fraction())
+            for point in points
+        )
+
+    # Try a common-origin translation before refusing large absolute heights.
+    # Rational subtraction uses two numerator/denominator products and a gcd.
+    # The quadratic bit-product charge covers those products and Euclidean
+    # reduction; integral translations have linear rather than quadratic cost.
+    origin = points[0].coordinates
+    work = 0
+    for point in points:
+        for axis, coordinate in enumerate(point.coordinates):
+            anchor = origin[axis]
+            a = max(1, abs(coordinate.num).bit_length())
+            b = coordinate.den.bit_length()
+            c = max(1, abs(anchor.num).bit_length())
+            d = anchor.den.bit_length()
+            numerator_bits = max(a + d, c + b) + 1
+            denominator_bits = b + d
+            work += 16 * (a * d + c * b + b * d + numerator_bits * denominator_bits)
+    if work > MAX_TRANSLATION_BIT_WORK:
         raise OperationResourceAdmissionError(
             location=("configuration",),
             code="geometry.triangle_area_result_bound",
@@ -53,6 +80,34 @@ def _admit_triangle_area_result(configuration: PointConfiguration) -> None:
                 f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit bound"
             ),
         )
+    anchor_x, anchor_y = origin[0].as_fraction(), origin[1].as_fraction()
+    translated = tuple(
+        (
+            point.coordinates[0].as_fraction() - anchor_x,
+            point.coordinates[1].as_fraction() - anchor_y,
+        )
+        for point in points
+    )
+    # A bit-length decimal upper bound avoids formatting an oversized private
+    # difference. Translation is reused by every triple, preserving all areas.
+    widths = sorted(
+        (
+            max(abs(value.numerator).bit_length(), value.denominator.bit_length())
+            * 30_103
+            // 100_000
+            + 1
+            for row in translated
+            for value in row
+        ),
+        reverse=True,
+    )
+    if sum(widths[:6]) + 2 > MAX_CANONICAL_RATIONAL_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("configuration",),
+            code="geometry.triangle_area_result_bound",
+            message=f"a derived triangle area exceeds the canonical rational {MAX_CANONICAL_RATIONAL_DIGITS}-digit bound",
+        )
+    return translated
 
 
 def compute_triangle_area_profile(
@@ -75,7 +130,7 @@ def compute_triangle_area_profile(
         raise OperationDomainValidationError(
             location=("configuration",), code=exc.type, message=exc.message()
         ) from exc
-    _admit_triangle_area_result(configuration)
+    coordinates = _admit_triangle_area_result(configuration)
     points = configuration.points
     n = len(points)
 
@@ -84,9 +139,7 @@ def compute_triangle_area_profile(
     admitted_areas: list[tuple[tuple[int, int, int], Fraction]] = []
 
     for i, j, k in combinations(range(n), 3):
-        coords_i = [c.as_fraction() for c in points[i].coordinates]
-        coords_j = [c.as_fraction() for c in points[j].coordinates]
-        coords_k = [c.as_fraction() for c in points[k].coordinates]
+        coords_i, coords_j, coords_k = coordinates[i], coordinates[j], coordinates[k]
 
         # Signed area = 0.5 * |cross product|
         # cross = (x_j - x_i) * (y_k - y_i) - (x_k - x_i) * (y_j - y_i)

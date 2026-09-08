@@ -5,7 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from itertools import pairwise
 
+import networkx as nx
+
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.graphs._networkx import biconnected_components
 from jacobian.math.graphs.cycle_length_profile._models import (
     MAX_VERTICES,
     CycleLengthProfileResult,
@@ -24,9 +27,16 @@ MAX_CYCLE_PROFILE_RETAINED_LABEL_CHARACTERS = 100_000_000
 
 
 @dataclass(frozen=True, slots=True)
-class _AdmissionPlan:
+class _BlockPlan:
     graph: SimpleUndirectedGraph
     wheel_order: tuple[str, ...] | None = None
+    cycle_order: tuple[str, ...] | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _AdmissionPlan:
+    graph: SimpleUndirectedGraph
+    blocks: tuple[_BlockPlan, ...]
 
 
 def _maximum_path_work(graph: SimpleUndirectedGraph, *, is_wheel: bool = False) -> int:
@@ -195,18 +205,8 @@ def _admit(graph: SimpleUndirectedGraph) -> _AdmissionPlan:
             "cycle_profile.vertex_bound",
             f"cycle profiles support at most {MAX_VERTICES} vertices",
         )
-    wheel_order = _wheel_search_order(graph)
-    if _maximum_path_work(graph, is_wheel=wheel_order is not None) > MAX_SEARCH_WORK:
-        _reject(
-            "cycle_profile.work_bound",
-            "complete cycle-profile search exceeds the admitted work bound",
-        )
-    label_lengths = sorted((len(vertex) for vertex in graph.vertices), reverse=True)
-    retained_label_characters = sum(label_lengths) + sum(
+    retained_label_characters = sum(len(vertex) for vertex in graph.vertices) + sum(
         len(left) + len(right) for left, right in graph.edges
-    )
-    retained_label_characters += sum(
-        sum(label_lengths[:length]) for length in range(3, vertex_count + 1)
     )
     if retained_label_characters > MAX_CYCLE_PROFILE_RETAINED_LABEL_CHARACTERS:
         _reject(
@@ -214,7 +214,70 @@ def _admit(graph: SimpleUndirectedGraph) -> _AdmissionPlan:
             "cycle profile exceeds the retained label-character bound",
         )
 
-    return _AdmissionPlan(graph=graph, wheel_order=wheel_order)
+    backend_graph: nx.Graph[str] = nx.Graph()
+    backend_graph.add_nodes_from(graph.vertices)
+    backend_graph.add_edges_from(graph.edges)
+    cyclic_blocks = [
+        component
+        for component in biconnected_components(backend_graph)
+        if len(component) >= 3
+    ]
+    # Every simple cycle lies in one biconnected block. Bridges and isolated
+    # vertices need no cycle search. Charge decomposition and source-edge scans
+    # used to construct every block, in addition to their admitted searches.
+    work = vertex_count + len(graph.edges) * (1 + len(cyclic_blocks))
+    blocks: list[_BlockPlan] = []
+    witness_characters: dict[int, int] = {}
+    for component in cyclic_blocks:
+        block = SimpleUndirectedGraph(
+            vertices=tuple(vertex for vertex in graph.vertices if vertex in component),
+            edges=tuple(
+                (left, right)
+                for left, right in graph.edges
+                if left in component and right in component
+            ),
+        )
+        wheel_order = _wheel_search_order(block)
+        cycle_order = None
+        if len(block.edges) == len(block.vertices):
+            # A biconnected simple graph with |E|=|V| is a chordless cycle.
+            adjacency: dict[str, list[str]] = {vertex: [] for vertex in block.vertices}
+            for left, right in block.edges:
+                adjacency[left].append(right)
+                adjacency[right].append(left)
+            order = [block.vertices[0]]
+            previous = None
+            while len(order) < len(block.vertices):
+                nxt = next(
+                    vertex for vertex in adjacency[order[-1]] if vertex != previous
+                )
+                previous = order[-1]
+                order.append(nxt)
+            cycle_order = _canonicalize_cycle(tuple(order))
+            work += len(block.vertices) ** 2
+        else:
+            work += _maximum_path_work(block, is_wheel=wheel_order is not None)
+        if work > MAX_SEARCH_WORK:
+            _reject(
+                "cycle_profile.work_bound",
+                "complete cycle-profile search exceeds the admitted work bound",
+            )
+        blocks.append(_BlockPlan(block, wheel_order, cycle_order))
+        lengths = (
+            (len(block.vertices),) if cycle_order else range(3, len(block.vertices) + 1)
+        )
+        label_lengths = sorted((len(vertex) for vertex in block.vertices), reverse=True)
+        for length in lengths:
+            witness_characters[length] = max(
+                witness_characters.get(length, 0), sum(label_lengths[:length])
+            )
+    retained_label_characters += sum(witness_characters.values())
+    if retained_label_characters > MAX_CYCLE_PROFILE_RETAINED_LABEL_CHARACTERS:
+        _reject(
+            "cycle_profile.retained_labels_exceed_bound",
+            "cycle profile exceeds the retained label-character bound",
+        )
+    return _AdmissionPlan(graph=graph, blocks=tuple(blocks))
 
 
 def compute_cycle_length_profile(
@@ -226,21 +289,29 @@ def compute_cycle_length_profile(
     k-cycle. Return one canonical witness cycle for each present length.
     """
     plan = _admit(graph)
-    vertices = list(plan.wheel_order or plan.graph.vertices)
-
-    n = len(vertices)
-    vertex_to_idx = {v: i for i, v in enumerate(vertices)}
-    adj_matrix = [[False] * n for _ in range(n)]
-    for a, b in graph.edges:
-        i, j = vertex_to_idx[a], vertex_to_idx[b]
-        adj_matrix[i][j] = True
-        adj_matrix[j][i] = True
-
     found: dict[int, tuple[str, ...]] = {}
-    for length in range(3, n + 1):
-        witness = _find_cycle_of_length(length, n, adj_matrix, vertices)
-        if witness is not None:
-            found[length] = witness
+    candidates: tuple[tuple[int, tuple[str, ...]], ...]
+    for block in plan.blocks:
+        if block.cycle_order is not None:
+            candidates = ((len(block.cycle_order), block.cycle_order),)
+        else:
+            vertices = list(block.wheel_order or block.graph.vertices)
+            n = len(vertices)
+            vertex_to_idx = {v: i for i, v in enumerate(vertices)}
+            adj_matrix = [[False] * n for _ in range(n)]
+            for a, b in block.graph.edges:
+                i, j = vertex_to_idx[a], vertex_to_idx[b]
+                adj_matrix[i][j] = True
+                adj_matrix[j][i] = True
+            candidates = tuple(
+                (length, witness)
+                for length in range(3, n + 1)
+                if (witness := _find_cycle_of_length(length, n, adj_matrix, vertices))
+                is not None
+            )
+        for length, witness in candidates:
+            if length not in found or witness < found[length]:
+                found[length] = witness
 
     rows = [
         CycleLengthRow._from_kernel(cycle_length=k, witness=w)

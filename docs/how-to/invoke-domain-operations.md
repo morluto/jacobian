@@ -59,11 +59,20 @@ or workspace documents.
 
 A successful tool call returns the operation's own mathematical result model.
 For `sat.solve`, `SAT` and `UNSAT` have their stated meanings, while `UNKNOWN`
-is a non-conclusion; its `exhausted` field may say whether a time, work, or
-memory budget was exhausted. A malformed payload or unknown operation ID is a
+is a healthy inconclusive solver answer. Known work, memory, output, or time
+exhaustion is an execution error, with no mathematical result. MCP reports
+`RESOURCE_EXHAUSTED`, `OPERATION_TIMEOUT`, `OPERATION_CANCELLED`, or
+`OPERATION_FAILED` in its model-visible error text. Backend details stay private.
+Increasing `timeout_ms` does not increase the fixed SAT/SMT work allowance;
+`smt.unsat_core` permits adjusting `rlimit` within its admitted range.
+
+Graph optimization may return valid bounds or an incumbent from an incomplete
+search before the parent deadline. A worker failure or parent deadline expiry
+is an execution error, even when trivial bounds could be constructed afterward.
+A malformed payload or unknown operation ID is a
 tool error, not a mathematical result. A client timeout aborts transport and is
 also not a conclusion. Preserve the selected operation, exact payload or digest,
-and the changed budget, backend, representation, or partition before retrying.
+and the concrete change in budget, backend, or representation before retrying.
 
 ## Use the same contract from the CLI
 

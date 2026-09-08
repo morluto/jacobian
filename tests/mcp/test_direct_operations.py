@@ -409,6 +409,7 @@ def test_direct_calls_preserve_owner_cancellation_diagnosis() -> None:
         )
         assert diagnostic == {
             "code": "OPERATION_CANCELLED",
+            "message": "operation was cancelled",
             "operation_id": operation.operation_id,
             "stage": "operation_execution",
         }
@@ -472,6 +473,9 @@ def test_calls_preserve_bounded_operation_failure_context(
         )
         assert diagnostic == {
             "code": code,
+            "message": "operation deadline expired"
+            if code == "OPERATION_TIMEOUT"
+            else "operation was cancelled",
             "operation_id": operation.operation_id,
             "stage": "operation_execution",
         }

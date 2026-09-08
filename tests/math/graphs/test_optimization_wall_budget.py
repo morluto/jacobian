@@ -8,6 +8,7 @@ import networkx as nx
 import pytest
 import z3
 
+from jacobian._execution import OperationExecutionTimeoutError
 from jacobian.math.graphs import _independence_z3
 from jacobian.math.graphs.independence import (
     IndependenceNumberBudget,
@@ -195,13 +196,10 @@ def test_graph_optimization_worker_failure_cannot_claim_an_optimum(
         ),
     )
 
-    result = _finite_optimization.DOMINATION_MINIMUM_OPERATION.run(
-        GraphOptimizationRequest(graph=_graph())
-    )
-
-    assert result.status == "UNKNOWN"
-    assert result.optimum_value is None
-    assert result.termination_reason == "WALL_TIME"
+    with pytest.raises(OperationExecutionTimeoutError):
+        _finite_optimization.DOMINATION_MINIMUM_OPERATION.run(
+            GraphOptimizationRequest(graph=_graph())
+        )
 
 
 def test_threshold_solver_does_not_start_or_finish_after_encoding_expires(

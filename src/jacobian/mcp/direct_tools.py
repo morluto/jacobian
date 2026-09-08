@@ -6,30 +6,20 @@ from dataclasses import dataclass
 from typing import Any, cast
 
 from mcp.server.mcpserver import Context
-from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.mcpserver.tools import Tool
 from mcp.server.mcpserver.utilities.func_metadata import ArgModelBase, FuncMetadata
-from mcp.shared.exceptions import MCPError
 from mcp.shared.tool_name_validation import validate_tool_name
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
 
-from jacobian._execution import (
-    OperationExecutionCancelledError,
-)
-from jacobian.backends import BackendUnavailableError
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.catalog import Catalog
-from jacobian.catalog.models import MathTool, OperationDomainValidationError
+from jacobian.catalog.models import MathTool
 from jacobian.dispatch import (
-    OperationExecutionTimeoutError,
-    OperationRequestValidationError,
     execute_operation,
 )
 from jacobian.mcp.runtime import AppState, _authorize
 from jacobian.mcp.tools import (
-    _backend_unavailable_error,
-    _execution_tool_error,
-    _invalid_request_error,
+    _operation_error_boundary,
     _request_cancellation,
 )
 
@@ -75,7 +65,7 @@ def _direct_operation_tool(
     ) -> CallToolResult:
         _authorize(ctx)
         cancellation = _request_cancellation(ctx)
-        try:
+        with _operation_error_boundary(operation_id):
 
             def project(
                 _operation_id: str, result: Any, _started: float
@@ -94,22 +84,6 @@ def _direct_operation_tool(
                 projector=project,
                 cancellation_signal=cancellation,
             )
-        except (OperationRequestValidationError, OperationDomainValidationError) as exc:
-            raise _invalid_request_error(operation_id, exc) from exc
-        except OperationExecutionTimeoutError as exc:
-            raise _execution_tool_error(
-                code="OPERATION_TIMEOUT", operation_id=operation_id, stage=exc.stage
-            ) from exc
-        except OperationExecutionCancelledError as exc:
-            raise _execution_tool_error(
-                code="OPERATION_CANCELLED", operation_id=operation_id, stage=exc.stage
-            ) from exc
-        except BackendUnavailableError as exc:
-            raise _backend_unavailable_error(operation_id, exc) from exc
-        except (MCPError, ToolError):
-            raise
-        except Exception as exc:
-            raise ToolError("operation execution failed") from exc
 
     metadata = FuncMetadata(
         arg_model=_direct_argument_model(operation),

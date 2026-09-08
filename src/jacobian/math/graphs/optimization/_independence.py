@@ -15,7 +15,8 @@ INDEPENDENCE_NUMBER_OPERATION = MathTool(
     description=(
         "Compute a maximum independent set (independence number) through order "
         "128. Return either the exact optimum or a feasible incumbent with "
-        "explicit lower and upper bounds when the wall-clock budget expires."
+        "explicit lower and upper bounds from an incomplete search."
+        " Worker failures and parent deadline expiry raise execution errors; a valid partial result must arrive before that deadline."
     ),
     request_type=IndependenceNumberRequest,
     result_type=IndependenceNumberResult,

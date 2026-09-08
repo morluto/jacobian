@@ -9,6 +9,10 @@ import pytest
 import z3
 from pydantic import ValidationError
 
+from jacobian._execution import (
+    OperationBackendError,
+    OperationResourceExhaustedError,
+)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic import _unsat_core as unsat_core
 from jacobian.math.logic._smt import SmtLogic
@@ -126,12 +130,10 @@ def test_empty_assertion_collection_is_satisfiable() -> None:
     assert result.detail is None
 
 
-def test_resource_exhaustion_is_unknown_not_unsat() -> None:
-    result = compute_smt_unsat_core(_request(rlimit=1))
-
-    assert result.outcome == "UNKNOWN"
-    assert result.core_indices == ()
-    assert result.detail
+def test_resource_exhaustion_raises() -> None:
+    with pytest.raises(OperationResourceExhaustedError) as caught:
+        compute_smt_unsat_core(_request(rlimit=1))
+    assert caught.value.resource == "work"
 
 
 def test_core_worker_bounds_parsing_and_solving_in_one_parent_envelope(
@@ -152,7 +154,8 @@ def test_core_worker_bounds_parsing_and_solving_in_one_parent_envelope(
     result = compute_smt_unsat_core(request)
 
     assert result.outcome == "UNSAT"
-    assert recorded["timeout_seconds"] == 2.5
+    assert isinstance(recorded["timeout_seconds"], float)
+    assert 0 < recorded["timeout_seconds"] <= 2.5
     assert Path(str(recorded["cwd"])).name.startswith("jacobian-unsat-core-")
     limits = recorded["resource_limits"]
     assert isinstance(limits, ProcessResourceLimits)
@@ -182,14 +185,15 @@ def test_core_worker_failures_never_project_a_math_verdict(
         lambda *_args, **_kwargs: completed,
     )
 
-    result = compute_smt_unsat_core(_request())
+    with pytest.raises(
+        OperationResourceExhaustedError
+        if completed.stdout_exceeded
+        else OperationBackendError
+    ):
+        compute_smt_unsat_core(_request())
 
-    assert result.outcome == "UNKNOWN"
-    assert result.core_indices == ()
-    assert detail in (result.detail or "")
 
-
-def test_core_extraction_failure_is_a_typed_unknown(
+def test_core_extraction_failure_is_an_execution_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def fail_core_extraction(_solver: object) -> None:
@@ -197,14 +201,8 @@ def test_core_extraction_failure_is_a_typed_unknown(
 
     monkeypatch.setattr(z3.Solver, "unsat_core", fail_core_extraction)
 
-    response = unsat_core._unsat_core_worker_kernel(_request())
-
-    assert response == {
-        "kind": "result",
-        "outcome": "UNKNOWN",
-        "core_indices": [],
-        "detail": "Z3 could not complete the bounded source check.",
-    }
+    with pytest.raises(OperationBackendError):
+        unsat_core._unsat_core_worker_kernel(_request())
 
 
 def test_kernel_producer_does_not_replay_its_established_core(
@@ -484,7 +482,7 @@ def test_core_bounds_reject_before_any_backend_parse(
 def test_core_admission_defers_parser_resource_failures_to_execution(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A parser resource failure is typed UNKNOWN, not a contract rejection."""
+    """A parser resource failure is typed execution failure, not a contract rejection."""
 
     def exhausting_parser(_source: str, **_kwargs: object) -> object:
         raise z3.Z3Exception("out of memory")
@@ -492,10 +490,9 @@ def test_core_admission_defers_parser_resource_failures_to_execution(
     monkeypatch.setattr(z3, "parse_smt2_string", exhausting_parser)
     admitted = SmtUnsatCoreRequest(logic="QF_LIA", smtlib=CONTRADICTORY_LIA)
 
-    response = unsat_core._unsat_core_worker_kernel(admitted)
-
-    assert response["outcome"] == "UNKNOWN"
-    assert response["core_indices"] == []
+    with pytest.raises(OperationResourceExhaustedError) as caught:
+        unsat_core._unsat_core_worker_kernel(admitted)
+    assert caught.value.resource == "memory"
 
 
 def test_request_bounds_numeric_coefficient_digits() -> None:
@@ -1621,3 +1618,26 @@ def test_request_schema_explains_validator_owned_indexing() -> None:
     assert "owner-local bounded Z3 worker" in schema["description"]
     assert "Boolean-sorted" in schema["properties"]["logic"]["description"]
     assert schema["examples"]
+
+
+@pytest.mark.parametrize("replay", [False, True])
+@pytest.mark.parametrize("phase", ["_bounded_outcome", "_configured_solver"])
+def test_core_preserves_execution_timeout_before_backend_os_errors(
+    monkeypatch: pytest.MonkeyPatch,
+    replay: bool,
+    phase: str,
+) -> None:
+    from jacobian._execution import OperationExecutionTimeoutError
+
+    error = OperationExecutionTimeoutError("operation solver time allowance expired")
+
+    def timeout(*args: object, **kwargs: object) -> None:
+        raise error
+
+    monkeypatch.setattr(unsat_core, phase, timeout)
+    with pytest.raises(OperationExecutionTimeoutError) as caught:
+        if replay:
+            unsat_core._replay_source(_request(), (0, 1))
+        else:
+            unsat_core._extract_source_core(_request())
+    assert caught.value is error

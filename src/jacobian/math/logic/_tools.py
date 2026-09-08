@@ -54,7 +54,7 @@ TOOLS: MathTools = (
     MathTool(
         operation_id="sat.solve",
         title="Solve a bounded CNF",
-        description="Run the maintained Z3 Python binding on one canonical CNF.",
+        description="Run the maintained Z3 Python binding on one canonical CNF. Resource exhaustion and backend failures raise execution errors; UNKNOWN denotes a healthy inconclusive solver answer.",
         request_type=SatSolveRequest,
         result_type=SatSolveResult,
         run=solve_sat,
@@ -73,6 +73,7 @@ TOOLS: MathTools = (
         description=(
             "Decide one bounded quantifier-free SMT-LIB query and return SAT, "
             "UNSAT, or UNKNOWN; SAT includes a satisfying model projection."
+            " Resource exhaustion and backend failures raise execution errors; UNKNOWN denotes a healthy inconclusive solver answer."
         ),
         request_type=SmtSolveRequest,
         result_type=SmtSolveResult,

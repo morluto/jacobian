@@ -138,6 +138,48 @@ class OperationExecutionCancelledError(Exception):
         super().__init__(message)
 
 
+class ExecutionResource(StrEnum):
+    WORK = "work"
+    MEMORY = "memory"
+    OUTPUT = "output"
+
+
+class BackendFailureReason(StrEnum):
+    INITIALIZATION = "initialization"
+    STARTUP = "startup"
+    ABNORMAL_EXIT = "abnormal_exit"
+    MALFORMED_RESPONSE = "malformed_response"
+    INVALID_OUTPUT = "invalid_output"
+
+
+class OperationResourceExhaustedError(Exception):
+    """An admitted execution exhausted an operational capacity."""
+
+    def __init__(
+        self,
+        resource: ExecutionResource,
+        *,
+        stage: OperationExecutionStage = OperationExecutionStage.OPERATION_EXECUTION,
+    ) -> None:
+        self.resource = resource
+        self.stage = stage
+        super().__init__(f"operation exhausted its {resource.value} allowance")
+
+
+class OperationBackendError(Exception):
+    """A backend failed to establish a usable mathematical result."""
+
+    def __init__(
+        self,
+        reason: BackendFailureReason,
+        *,
+        stage: OperationExecutionStage = OperationExecutionStage.OPERATION_EXECUTION,
+    ) -> None:
+        self.reason = reason
+        self.stage = stage
+        super().__init__(f"operation backend failed ({reason.value})")
+
+
 def bind_request_deadline(deadline: float) -> None:
     """Attach an owner-derived deadline to the current request envelope."""
 
@@ -146,17 +188,51 @@ def bind_request_deadline(deadline: float) -> None:
         _REQUEST_EXECUTION.set(replace(context, deadline=deadline))
 
 
+def execution_deadline(seconds: float) -> float:
+    """Bind the owner's allowance once, including earlier dispatch phases."""
+    execution = current_request_execution()
+    start = execution.started_at if execution is not None else time.monotonic()
+    deadline = start + seconds
+    if execution is not None and execution.deadline is not None:
+        deadline = min(deadline, execution.deadline)
+    bind_request_deadline(deadline)
+    require_execution_deadline(deadline)
+    return deadline
+
+
+def require_execution_deadline(deadline: float) -> None:
+    request_checkpoint("during operation execution")
+    if time.monotonic() >= deadline:
+        raise OperationExecutionTimeoutError("operation deadline expired")
+
+
+def remaining_timeout_ms(timeout_ms: int) -> int:
+    """Give a mandatory solver phase only the unspent request allowance."""
+    request_checkpoint("before solver phase")
+    execution = current_request_execution()
+    if execution is None or execution.deadline is None:
+        return timeout_ms
+    return min(timeout_ms, max(1, int((execution.deadline - time.monotonic()) * 1000)))
+
+
 __all__ = [
+    "BackendFailureReason",
+    "ExecutionResource",
+    "OperationBackendError",
     "OperationExecutionCancelledError",
     "OperationExecutionStage",
     "OperationExecutionTimeoutError",
+    "OperationResourceExhaustedError",
     "RequestCancellationSignal",
     "RequestExecution",
     "bind_request_deadline",
     "current_request_cancellation",
     "current_request_execution",
+    "execution_deadline",
+    "remaining_timeout_ms",
     "request_cancellation",
     "request_cancelled",
     "request_checkpoint",
     "request_execution",
+    "require_execution_deadline",
 ]

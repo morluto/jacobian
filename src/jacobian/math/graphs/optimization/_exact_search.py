@@ -6,6 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from jacobian._execution import remaining_timeout_ms
 from jacobian.math.graphs.optimization._budget import remaining_ms as _remaining_ms
 from jacobian.math.graphs.optimization._coloring_models import ChromaticGraph
 from jacobian.math.graphs.optimization._models import (
@@ -186,7 +187,7 @@ def _check_after_encoding(
     remaining_ms = _remaining_ms(started, budget.wall_seconds)
     if remaining_ms <= 0:
         return z3.unknown
-    solver.set(timeout=max(1, remaining_ms))
+    solver.set(timeout=remaining_timeout_ms(max(1, remaining_ms)))
     status = solver.check()
     return z3.unknown if _remaining_ms(started, budget.wall_seconds) <= 0 else status
 

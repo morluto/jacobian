@@ -11,8 +11,16 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any, cast
 
-from jacobian._execution import OperationExecutionCancelledError, request_checkpoint
+from jacobian._execution import (
+    BackendFailureReason,
+    OperationBackendError,
+    OperationExecutionTimeoutError,
+    execution_deadline,
+    request_checkpoint,
+    require_execution_deadline,
+)
 from jacobian._models import StrictModel
+from jacobian._worker_errors import decode_worker_execution_error
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -36,6 +44,7 @@ from jacobian.math.graphs.optimization._models import (
 )
 from jacobian.process import (
     ProcessResourceLimits,
+    check_bounded_process_result,
     run_bounded_process,
     worker_environment,
 )
@@ -119,64 +128,6 @@ def _valid_witness(graph: Any, result: StrictModel) -> bool:
     return validate(graph, result) if validate else False
 
 
-def _fallback_unknown[ResultT: StrictModel](
-    graph: Any,
-    request: GraphOptimizationRequest,
-    result_type: type[ResultT],
-    detail: str,
-    *,
-    wall_time: bool = False,
-) -> ResultT:
-    """Return a source-derived feasible incumbent without an optimum claim."""
-
-    vertices = tuple(sorted(request.graph.vertices))
-    common: dict[str, object] = {
-        "status": "UNKNOWN",
-        "order": len(vertices),
-        "optimum_value": None,
-        "tested": (),
-        "termination_reason": "WALL_TIME" if wall_time else "SOLVER_UNKNOWN",
-        "detail": detail,
-    }
-    if result_type is GraphDominationMinimumOutput:
-        return result_type.model_validate(
-            {
-                **common,
-                "incumbent_value": len(vertices),
-                "lower_bound": 0 if not vertices else 1,
-                "upper_bound": len(vertices),
-                "witness_vertices": vertices,
-            }
-        )
-    if result_type is GraphMinimumMaximalMatchingOutput:
-        used: set[str] = set()
-        selected: list[tuple[str, str]] = []
-        for left, right in sorted(graph.edges):
-            if left not in used and right not in used:
-                selected.append((left, right) if left < right else (right, left))
-                used.update((left, right))
-        edges = tuple(selected)
-        return result_type.model_validate(
-            {
-                **common,
-                "incumbent_value": len(edges),
-                "lower_bound": 0,
-                "upper_bound": len(edges),
-                "witness_edges": edges,
-            }
-        )
-    witness = () if not vertices else (vertices[0],)
-    return result_type.model_validate(
-        {
-            **common,
-            "incumbent_value": len(witness),
-            "lower_bound": len(witness),
-            "upper_bound": len(vertices),
-            "witness_vertices": witness,
-        }
-    )
-
-
 def _execute[ResultT: StrictModel](
     operation_id: str,
     request: GraphOptimizationRequest,
@@ -190,23 +141,18 @@ def _execute[ResultT: StrictModel](
             code="graph.optimization.max_order_budget",
             message="graph order exceeds the declared max_order budget",
         )
+    deadline = execution_deadline(request.resource_budget.wall_seconds)
     graph = cast(Any, build_simple_graph(request.graph))
-    deadline = time.monotonic() + request.resource_budget.wall_seconds
     try:
         with TemporaryDirectory(prefix="jacobian-graph-optimization-") as directory:
             remaining_seconds = deadline - time.monotonic()
             if remaining_seconds <= 0:
-                return _fallback_unknown(
-                    graph,
-                    request,
-                    result_type,
-                    "the graph optimization request expired before worker startup",
-                    wall_time=True,
-                )
+                raise OperationExecutionTimeoutError("operation deadline expired")
             completed = run_bounded_process(
                 [sys.executable, str(_OPTIMIZATION_WORKER)],
                 input_bytes=json.dumps(
                     {
+                        "_deadline": deadline,
                         "operation_id": operation_id,
                         "request": request.model_dump(mode="json"),
                     },
@@ -223,78 +169,28 @@ def _execute[ResultT: StrictModel](
                 ),
                 cwd=directory,
             )
-    except OSError:
-        return _fallback_unknown(
-            graph,
-            request,
-            result_type,
-            "the bounded graph optimization worker could not be started",
-        )
-    request_checkpoint("after graph optimization worker")
-    if completed.cancelled:
-        raise OperationExecutionCancelledError("graph optimization worker cancelled")
-    if completed.timed_out:
-        return _fallback_unknown(
-            graph,
-            request,
-            result_type,
-            "the graph optimization worker expired",
-            wall_time=True,
-        )
-    if (
-        completed.stdout_exceeded
-        or completed.stderr_exceeded
-        or completed.returncode != 0
-    ):
-        return _fallback_unknown(
-            graph,
-            request,
-            result_type,
-            "the bounded graph optimization worker did not establish an outcome",
-        )
-    if time.monotonic() >= deadline:
-        return _fallback_unknown(
-            graph,
-            request,
-            result_type,
-            "the graph optimization request expired before response validation",
-            wall_time=True,
-        )
+    except OSError as exc:
+        require_execution_deadline(deadline)
+        raise OperationBackendError(BackendFailureReason.STARTUP) from exc
+    check_bounded_process_result(completed)
+    require_execution_deadline(deadline)
     try:
-        result = result_type.model_validate(
-            json.loads(completed.stdout.decode("utf-8"))
-        )
-    except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
+        response = json.loads(completed.stdout.decode("utf-8"))
+        require_execution_deadline(deadline)
+        decode_worker_execution_error(response)
+        result = result_type.model_validate(response)
+    except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
         request_checkpoint("during graph optimization response validation")
-        expired = time.monotonic() >= deadline
-        return _fallback_unknown(
-            graph,
-            request,
-            result_type,
-            "the graph optimization request expired during response validation"
-            if expired
-            else "the bounded graph optimization worker returned malformed output",
-            wall_time=expired,
-        )
+        require_execution_deadline(deadline)
+        raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE) from exc
     valid_witness = getattr(result, "order", None) == len(
         request.graph.vertices
     ) and _valid_witness(graph, result)
     request_checkpoint("after graph optimization response validation")
     if time.monotonic() >= deadline:
-        return _fallback_unknown(
-            graph,
-            request,
-            result_type,
-            "the graph optimization request expired during response validation",
-            wall_time=True,
-        )
+        raise OperationExecutionTimeoutError("operation deadline expired")
     if not valid_witness:
-        return _fallback_unknown(
-            graph,
-            request,
-            result_type,
-            "the bounded graph optimization worker returned an invalid witness",
-        )
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
     return result
 
 
@@ -309,7 +205,8 @@ def _operation[ResultT: StrictModel](
     return MathTool(
         operation_id=operation_id,
         title=title,
-        description=description,
+        description=description
+        + " Worker failures and parent deadline expiry raise execution errors; a valid partial result must arrive before that deadline.",
         request_type=GraphOptimizationRequest,
         result_type=result_type,
         run=lambda request: _execute(operation_id, request, result_type),
@@ -470,5 +367,5 @@ def _run_worker_kernel(
     else:
         raise ValueError("unknown graph optimization operation")
     if not _valid_witness(graph, result):
-        raise ValueError("graph optimization kernel returned an invalid witness")
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
     return result

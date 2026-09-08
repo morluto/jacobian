@@ -11,10 +11,13 @@ from tempfile import TemporaryDirectory
 from typing import Any, cast
 
 from jacobian._execution import (
-    OperationExecutionCancelledError,
-    OperationExecutionTimeoutError,
-    request_checkpoint,
+    BackendFailureReason,
+    OperationBackendError,
+    execution_deadline,
+    remaining_timeout_ms,
+    require_execution_deadline,
 )
+from jacobian._worker_errors import decode_worker_execution_error
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
     HypergraphIndependenceBudget,
@@ -26,6 +29,7 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
 )
 from jacobian.process import (
     ProcessResourceLimits,
+    check_bounded_process_result,
     run_bounded_process,
     worker_environment,
 )
@@ -74,7 +78,7 @@ def _check_threshold(
         remaining_ms = _remaining_ms(started, wall_seconds)
         if remaining_ms <= 0:
             return z3.unknown, (), "the wall-clock budget expired during encoding"
-        solver.set(timeout=max(1, remaining_ms))
+        solver.set(timeout=remaining_timeout_ms(max(1, remaining_ms)))
         status = solver.check()
         if status != z3.sat:
             reason = solver.reason_unknown() if status == z3.unknown else ""
@@ -189,18 +193,7 @@ def _solve_independence_number_kernel(
     try:
         solver, selected, cardinality = _build_solver(source)
     except z3.Z3Exception as exc:
-        return _result(
-            source,
-            resource_budget,
-            status="UNKNOWN",
-            independence_number=None,
-            incumbent=incumbent,
-            upper_bound=source_upper_bound,
-            solver_calls=0,
-            wall_budget_exhausted=False,
-            termination_reason="SOLVER_ERROR",
-            detail=f"the exact backend rejected the admitted encoding: {str(exc)[:800]}",
-        )
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
 
     solver_calls = 0
     lower_bound = len(incumbent)
@@ -245,18 +238,7 @@ def _solve_independence_number_kernel(
                 vertices,
             )
         except z3.Z3Exception as exc:
-            return _result(
-                source,
-                resource_budget,
-                status="UNKNOWN",
-                independence_number=None,
-                incumbent=incumbent,
-                upper_bound=source_upper_bound,
-                solver_calls=solver_calls,
-                wall_budget_exhausted=False,
-                termination_reason="SOLVER_ERROR",
-                detail=f"the exact backend failed during a threshold query: {str(exc)[:800]}",
-            )
+            raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
         if solver_status == z3.unsat:
             upper_bound = threshold - 1
             continue
@@ -266,21 +248,7 @@ def _solve_independence_number_kernel(
             ) < threshold or not _solver_witness_is_canonical_and_independent(
                 source, candidate
             ):
-                return _result(
-                    source,
-                    resource_budget,
-                    status="UNKNOWN",
-                    independence_number=None,
-                    incumbent=incumbent,
-                    upper_bound=source_upper_bound,
-                    solver_calls=solver_calls,
-                    wall_budget_exhausted=False,
-                    termination_reason="SOLVER_ERROR",
-                    detail=(
-                        "the exact backend returned a satisfying witness below "
-                        f"the submitted threshold {threshold}"
-                    ),
-                )
+                raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
             if len(candidate) > len(incumbent):
                 incumbent = candidate
                 lower_bound = max(lower_bound, len(candidate))
@@ -322,11 +290,11 @@ def _solve_independence_number_kernel(
     )
 
 
-def _run_independence_worker(
-    payload: dict[str, object], *, timeout_seconds: float
-) -> object | None:
+def _run_independence_worker(payload: dict[str, object], *, deadline: float) -> object:
     """Run one complete Z3 kernel in an isolated bounded owner process."""
 
+    require_execution_deadline(deadline)
+    timeout_seconds = deadline - time.monotonic()
     try:
         with TemporaryDirectory(
             prefix="jacobian-hypergraph-independence-"
@@ -334,7 +302,9 @@ def _run_independence_worker(
             completed = run_bounded_process(
                 [sys.executable, str(_INDEPENDENCE_WORKER)],
                 input_bytes=json.dumps(
-                    payload, separators=(",", ":"), ensure_ascii=False
+                    {"_deadline": deadline, **payload},
+                    separators=(",", ":"),
+                    ensure_ascii=False,
                 ).encode("utf-8"),
                 timeout_seconds=timeout_seconds,
                 environment=worker_environment(locale="C.UTF-8"),
@@ -347,25 +317,19 @@ def _run_independence_worker(
                 ),
                 cwd=directory,
             )
-    except OSError:
-        return None
-    request_checkpoint("after hypergraph independence worker")
-    if completed.cancelled:
-        raise OperationExecutionCancelledError(
-            "hypergraph independence worker cancelled"
-        )
-    if completed.timed_out:
-        raise OperationExecutionTimeoutError("hypergraph independence worker expired")
-    if (
-        completed.stdout_exceeded
-        or completed.stderr_exceeded
-        or completed.returncode != 0
-    ):
-        return None
+    except OSError as exc:
+        require_execution_deadline(deadline)
+        raise OperationBackendError(BackendFailureReason.STARTUP) from exc
+    check_bounded_process_result(completed)
+    require_execution_deadline(deadline)
     try:
-        return cast(object, json.loads(completed.stdout.decode("utf-8")))
-    except (UnicodeDecodeError, json.JSONDecodeError):
-        return None
+        response = json.loads(completed.stdout.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        require_execution_deadline(deadline)
+        raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE) from exc
+    require_execution_deadline(deadline)
+    decode_worker_execution_error(response)
+    return cast(object, response)
 
 
 def solve_independence_number(
@@ -374,78 +338,23 @@ def solve_independence_number(
 ) -> HypergraphIndependenceResult:
     """Run every Z3 phase under one process and resource envelope."""
 
-    source_upper_bound = _independence_upper_bound(source)
-    incumbent = _greedy_independent_vertices(source)
-    started = time.monotonic()
-    remaining_seconds = _remaining_ms(started, resource_budget.wall_seconds) / 1_000
-    if remaining_seconds <= 0:
-        return _result(
-            source,
-            resource_budget,
-            status="UNKNOWN",
-            independence_number=None,
-            incumbent=incumbent,
-            upper_bound=source_upper_bound,
-            solver_calls=0,
-            wall_budget_exhausted=True,
-            termination_reason="WALL_TIME",
-            detail="the hypergraph independence request expired before worker startup",
-        )
+    deadline = execution_deadline(resource_budget.wall_seconds)
+    response = _run_independence_worker(
+        {
+            "kind": "solve",
+            "hypergraph": source.model_dump(mode="json"),
+            "resource_budget": resource_budget.model_dump(mode="json"),
+        },
+        deadline=deadline,
+    )
+    require_execution_deadline(deadline)
+    if (
+        not isinstance(response, dict)
+        or "hypergraph" in response
+        or "resource_budget" in response
+    ):
+        raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE)
     try:
-        response = _run_independence_worker(
-            {
-                "kind": "solve",
-                "hypergraph": source.model_dump(mode="json"),
-                "resource_budget": resource_budget.model_dump(mode="json"),
-            },
-            timeout_seconds=remaining_seconds,
-        )
-    except OperationExecutionTimeoutError:
-        return _result(
-            source,
-            resource_budget,
-            status="UNKNOWN",
-            independence_number=None,
-            incumbent=incumbent,
-            upper_bound=source_upper_bound,
-            solver_calls=0,
-            wall_budget_exhausted=True,
-            termination_reason="WALL_TIME",
-            detail="the hypergraph independence worker expired",
-        )
-    request_checkpoint("after hypergraph independence worker response")
-    remaining = _remaining_ms(started, resource_budget.wall_seconds)
-    if not isinstance(response, dict) and remaining > 0:
-        return _result(
-            source,
-            resource_budget,
-            status="UNKNOWN",
-            independence_number=None,
-            incumbent=incumbent,
-            upper_bound=source_upper_bound,
-            solver_calls=0,
-            wall_budget_exhausted=False,
-            termination_reason="SOLVER_ERROR",
-            detail="the bounded hypergraph independence worker did not establish an outcome",
-        )
-    if remaining <= 0:
-        return _result(
-            source,
-            resource_budget,
-            status="UNKNOWN",
-            independence_number=None,
-            incumbent=incumbent,
-            upper_bound=source_upper_bound,
-            solver_calls=0,
-            wall_budget_exhausted=True,
-            termination_reason="WALL_TIME",
-            detail="the hypergraph independence request expired before response validation",
-        )
-    assert isinstance(response, dict)
-    try:
-        # The worker returns only its bounded outcome projection.  Retained
-        # source data belongs to this parent request and must not consume the
-        # worker channel or be trusted from child output.
         result = HypergraphIndependenceResult.model_validate(
             {
                 **response,
@@ -453,39 +362,10 @@ def solve_independence_number(
                 "resource_budget": resource_budget.model_dump(mode="json"),
             }
         )
-    except (TypeError, ValueError):
-        request_checkpoint("during hypergraph independence response validation")
-        expired = _remaining_ms(started, resource_budget.wall_seconds) <= 0
-        return _result(
-            source,
-            resource_budget,
-            status="UNKNOWN",
-            independence_number=None,
-            incumbent=incumbent,
-            upper_bound=source_upper_bound,
-            solver_calls=0,
-            wall_budget_exhausted=expired,
-            termination_reason="WALL_TIME" if expired else "SOLVER_ERROR",
-            detail=(
-                "the hypergraph independence request expired during response validation"
-                if expired
-                else "the bounded hypergraph independence worker returned malformed output"
-            ),
-        )
-    request_checkpoint("after hypergraph independence response validation")
-    if _remaining_ms(started, resource_budget.wall_seconds) <= 0:
-        return _result(
-            source,
-            resource_budget,
-            status="UNKNOWN",
-            independence_number=None,
-            incumbent=incumbent,
-            upper_bound=source_upper_bound,
-            solver_calls=0,
-            wall_budget_exhausted=True,
-            termination_reason="WALL_TIME",
-            detail="the hypergraph independence request expired during response validation",
-        )
+    except (TypeError, ValueError) as exc:
+        require_execution_deadline(deadline)
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
+    require_execution_deadline(deadline)
     return result
 
 

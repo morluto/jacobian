@@ -36,7 +36,12 @@ TOOLS: MathTools = (
         examples=(
             OperationExample(
                 name="one_dimensional_face",
-                description="The relation X_00=0 forces the first PSD row and column to vanish.",
+                description=(
+                    "Reduce the exposed face of a 2-by-2 system whose one "
+                    "constraint is the symmetric matrix diag(1,0) with rhs 0 and "
+                    "multiplier 1; matrix count must match rhs, and every matrix "
+                    "must be symmetric of the declared order."
+                ),
                 input={
                     "system": {
                         "order": 2,

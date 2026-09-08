@@ -17,12 +17,13 @@ from jacobian.catalog.models import (
 from jacobian.math.matrices._flint import rational_matrix_product, rational_rref
 from jacobian.math.matrices.analysis.operations import _symmetric_inertia
 from jacobian.math.matrices.semidefinite.values import (
+    MAX_SEMIDEFINITE_CELLS,
     RationalSemidefiniteSystem,
     SemidefiniteFaceReduction,
 )
 from jacobian.math.matrices.values import rational_matrix_from_fractions
 
-_MAX_CELLS = 131_072
+_MAX_CELLS = MAX_SEMIDEFINITE_CELLS
 _MAX_BIT_WORK = 2_000_000_000
 _MAX_OUTPUT_DIGITS = 8_000_000
 _WALL_SECONDS = 3600.0
@@ -106,27 +107,51 @@ def _admit(
             output_digits=output_digits,
         )
         return True
-    # Clear all input denominators by one common Q. Its bit length is bounded
-    # without constructing Q. Repeated denominators are counted once.
+    active = tuple(
+        (multiplier, matrix)
+        for multiplier, matrix in zip(multipliers, system.matrices, strict=True)
+        if multiplier.num
+    )
+    exposing_scalars = (
+        *(
+            entry
+            for _, matrix in active
+            for row in matrix.entries
+            for entry in row
+        ),
+        *(multiplier for multiplier, _ in active),
+        *(
+            rhs
+            for multiplier, rhs in zip(multipliers, system.rhs, strict=True)
+            if multiplier.num
+        ),
+    )
     denominator_bits = sum(
-        (den - 1).bit_length() for den in {q.den for q in scalars} if den != 1
+        (den - 1).bit_length() for den in {q.den for q in exposing_scalars} if den != 1
     )
     input_bits = (
         denominator_bits
-        + max((abs(q.num).bit_length() for q in scalars), default=1)
+        + max((abs(q.num).bit_length() for q in exposing_scalars), default=1)
         + 1
     )
-    # Q^2 W is integral: each entry sums m products of Q-scaled inputs.
-    exposing_bits = 2 * input_bits + max(1, m.bit_length())
-    # Hadamard bounds every minor of Q^2 W. RREF coordinates have a common
-    # pivot-minor denominator and numerators bounded by these same minors.
-    # A nullspace basis adds identity coordinates. All compression products
-    # therefore share Q * pivot_minor^2 as a denominator, rather than a
-    # product of unrelated denominators for each summand.
+    exposing_bits = 2 * input_bits + max(1, max(len(active), 1).bit_length())
     minor_bits = max(1, n * (exposing_bits + n.bit_length()))
-    result_bits = input_bits + 2 * minor_bits + 2 * n.bit_length() + 2
-    # Congruence Schur entries are ratios of bordered minors; factor four
-    # covers unreduced multiply/add operands in 1x1 and 2x2 pivot updates.
+    matrix_bits = [
+        max(
+            (
+                abs(entry.num).bit_length() + entry.den.bit_length()
+                for row in matrix.entries
+                for entry in row
+            ),
+            default=1,
+        )
+        + 2 * minor_bits
+        for matrix in system.matrices
+    ]
+    result_bits = max(
+        input_bits + 2 * minor_bits + 2 * n.bit_length() + 2,
+        max(matrix_bits, default=1),
+    )
     intermediate_bits = 4 * max(result_bits, minor_bits)
     work = (2 * m + 4) * n**3 + m * n * n + m
     _check_budgets(cells, result_bits, intermediate_bits, work)

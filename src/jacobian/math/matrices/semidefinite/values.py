@@ -8,13 +8,32 @@ from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.math.matrices.values import RationalMatrix
 
+MAX_SEMIDEFINITE_CELLS = 131_072
+
 
 class RationalSemidefiniteSystem(StrictModel):
-    """The equalities tr(A_i X)=b_i with X PSD in the ordered matrix axes."""
+    """The equalities tr(A_i X)=b_i with X PSD in the ordered matrix axes.
 
-    order: int = Field(ge=0, le=8192)
-    matrices: tuple[RationalMatrix, ...] = Field(max_length=8192)
-    rhs: tuple[CanonicalRational, ...] = Field(max_length=8192)
+    ``matrices`` and ``rhs`` must have the same length. Every matrix must be
+    symmetric and exactly ``order`` by ``order``.
+    """
+
+    order: int = Field(
+        ge=0,
+        le=8192,
+        description="Common axis length; every constraint matrix is order-by-order.",
+    )
+    matrices: tuple[RationalMatrix, ...] = Field(
+        max_length=8192,
+        description=(
+            "Symmetric order-by-order QQ constraint matrices, one per equality "
+            "and in the same order as rhs."
+        ),
+    )
+    rhs: tuple[CanonicalRational, ...] = Field(
+        max_length=8192,
+        description="Right-hand sides; length must match matrices.",
+    )
 
     @model_validator(mode="after")
     def require_symmetric_equalities(self) -> Self:

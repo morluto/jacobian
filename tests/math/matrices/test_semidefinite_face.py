@@ -241,6 +241,31 @@ def test_shape_validation_and_zero_cone_has_no_proper_exposure() -> None:
         reduce_exposed_face(_system((_matrix([[1]]),), (0,)), ())
 
 
+def test_raw_request_preflight_rejects_over_budget_cells() -> None:
+    with pytest.raises(ValidationError, match="dense cell envelope"):
+        SemidefiniteFaceReductionRequest.model_validate(
+            {
+                "system": {
+                    "order": 128,
+                    "matrices": [{}] * 128,
+                    "rhs": [{"num": "0", "den": "1"}] * 128,
+                },
+                "multipliers": [{"num": "1", "den": "1"}] * 128,
+            }
+        )
+
+
+def test_inactive_large_denominator_does_not_block_exposing_matrix() -> None:
+    huge = Fraction(1, 10**20_001)
+    system = _system(
+        (_matrix([[1, 1], [1, 1]]), _matrix([[huge, 0], [0, 0]])),
+        (0, 0),
+    )
+    result = reduce_exposed_face(system, (_q(1), _q(0)))
+    _identities(result)
+    assert result.reduced.matrices[1].entries[0][0].as_fraction() == huge
+
+
 def test_native_dispatch_and_serialized_result_parity() -> None:
     tool = TOOLS[0]
     parsed = parse_operation_input(

@@ -104,7 +104,13 @@ class RationalFunctionMap(StrictModel):
         max_length=MAX_RATIONAL_MAP_COMPONENTS
     )
     components: tuple[RationalFunction, ...] = Field(
-        max_length=MAX_RATIONAL_MAP_COMPONENTS
+        max_length=MAX_RATIONAL_MAP_COMPONENTS,
+        description=(
+            "One rational function per target coordinate. Across all "
+            "components the map has at most "
+            f"{MAX_RATIONAL_MAP_SOURCE_TERMS:,} polynomial terms and "
+            f"{MAX_RATIONAL_MAP_SOURCE_BITS:,} coefficient bits."
+        ),
     )
     domain: Literal["COMMON_REGULAR_LOCUS"] = "COMMON_REGULAR_LOCUS"
 

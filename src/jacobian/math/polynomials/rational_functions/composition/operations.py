@@ -530,6 +530,8 @@ def compose_maps(  # noqa: C901
             ledger,
         )
         _check_raw_exponents(raw_denominator_bound)
+        if raw_denominator_bound.is_zero:
+            _reject_undefined_outer_denominator()
         result_bound = _remove_guaranteed_common_monomial(
             FractionBound(raw_numerator_bound, raw_denominator_bound)
         )

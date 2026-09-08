@@ -135,6 +135,18 @@ def test_eight_vertex_path_fits_the_unordered_partition_bound() -> None:
     assert not set(result.side_a or ()) & set(result.side_b or ())
 
 
+def test_impossible_threshold_sum_is_exact_no_split_before_search() -> None:
+    vertices = tuple(f"v{i}" for i in range(20))
+    source = graph(vertices, (("v0", "v1"),))
+    result = find_chromatic_bipartition(
+        ChromaticBipartitionRequest(graph=source, s=11, t=10)
+    )
+    assert result.status == "NO_SPLIT"
+    assert result.side_a is None and result.chromatic_a is None
+    assert result.checked_partitions == 0
+    assert result.model_validate_json(result.model_dump_json()) == result
+
+
 def test_complete_search_bound_still_rejects_a_dense_twenty_vertex_graph() -> None:
     vertices = tuple(f"v{i}" for i in range(20))
     source = graph(vertices, (("v0", "v1"),))
@@ -243,3 +255,24 @@ def test_split_below_submitted_thresholds_cannot_bind() -> None:
             chromatic_b=1,
             checked_partitions=1,
         )
+
+
+def test_long_nfc_labels_on_k2_return_split_through_the_worker() -> None:
+    left = "a" * 30_000
+    right = "b" * 30_000
+    source = graph((left, right), ((left, right),))
+    request = ChromaticBipartitionRequest(graph=source, s=1, t=1)
+    limit = process_owner._chromatic_bipartition_worker_stdout_limit(request)
+    assert limit > 128 * 1024
+    result = find_chromatic_bipartition(request)
+    assert result.status == "SPLIT"
+    assert result.side_a == (left,)
+    assert result.side_b == (right,)
+    assert (result.chromatic_a, result.chromatic_b) == (1, 1)
+    dumped = json.dumps(
+        result.model_dump(mode="json"),
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    assert len(dumped) <= limit
+    assert result.model_validate_json(result.model_dump_json()) == result

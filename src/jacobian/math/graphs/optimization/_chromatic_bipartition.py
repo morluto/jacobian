@@ -149,10 +149,28 @@ def _edgeless_chromatic_bipartition(
     )
 
 
+def _threshold_sum_exceeds_order(request: ChromaticBipartitionRequest) -> bool:
+    """chi(G[A]) <= |A| and chi(G[B]) <= |B|, so s + t > n cannot split."""
+
+    return request.s + request.t > len(request.graph.vertices)
+
+
+def _impossible_threshold_bipartition(
+    request: ChromaticBipartitionRequest,
+) -> ChromaticBipartitionResult:
+    return ChromaticBipartitionResult(
+        graph=request.graph,
+        s=request.s,
+        t=request.t,
+        status="NO_SPLIT",
+        checked_partitions=0,
+    )
+
+
 def _admit_chromatic_bipartition(request: ChromaticBipartitionRequest) -> None:
     """Charge every unordered partition and its inner k-colorability encodings."""
 
-    if not request.graph.edges:
+    if not request.graph.edges or _threshold_sum_exceeds_order(request):
         return
     n = len(request.graph.vertices)
     m = len(request.graph.edges)
@@ -177,6 +195,8 @@ def _find_chromatic_bipartition_kernel(
 ) -> ChromaticBipartitionResult:
     """Search every canonical unordered vertex bipartition under one deadline."""
     graph = request.graph
+    if _threshold_sum_exceeds_order(request):
+        return _impossible_threshold_bipartition(request)
     if not graph.edges:
         return _edgeless_chromatic_bipartition(request)
     source_vertices = graph.vertices

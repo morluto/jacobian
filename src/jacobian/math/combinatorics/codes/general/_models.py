@@ -7,6 +7,7 @@ from typing import Annotated, Self
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
 from jacobian.math.combinatorics.codes.linear.values import PrimeFieldLinearEncoder
 
@@ -18,10 +19,7 @@ MAX_EXACT_CODEWORD_EVALUATIONS = 131_072
 MAX_COVERING_RADIUS_STATES_PER_PASS = 65_536
 MAX_COVERING_RADIUS_TRANSITIONS = 2_000_000
 
-_WeightCount = Annotated[
-    StrictInt,
-    Field(ge=1, le=MAX_EXACT_CODEWORD_EVALUATIONS),
-]
+_WeightCount = Annotated[ExactInteger, Field(ge=1)]
 
 
 def _error(code: str, message: str) -> PydanticCustomError:

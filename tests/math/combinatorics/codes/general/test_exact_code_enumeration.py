@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from math import comb
 
 import pytest
 from pydantic import ValidationError
@@ -76,16 +77,14 @@ def test_code_contract_rejects_nonprime_fields_and_unbounded_enumeration() -> No
         lambda: _minimum_distance(LinearCodeRequest(encoder=_encoder(((1,),), 4))),
         "code_theory.field_order_not_prime",
     )
-    _assert_operation_error(
-        lambda: _minimum_distance(
-            LinearCodeRequest(
-                encoder=_encoder(
-                    ((1, 0, 0), (0, 1, 0), (0, 0, 1)),
-                    251,
-                )
-            )
-        ),
-        "code_theory.enumeration_work_exceeded",
+    identity = tuple(
+        tuple(int(row == column) for column in range(3)) for row in range(3)
+    )
+    assert (
+        _minimum_distance(
+            LinearCodeRequest(encoder=_encoder(identity, 251))
+        ).minimum_distance
+        == 1
     )
 
 
@@ -341,17 +340,106 @@ def test_enumeration_budget_charges_the_selected_kernel_path() -> None:
     assert _minimum_distance(boundary).minimum_distance == 1
     assert _weight_distribution(boundary).weights[-1] == (2, 62500)
 
+    identity = tuple(
+        tuple(int(row == column) for column in range(3)) for row in range(3)
+    )
+    assert (
+        _minimum_distance(
+            LinearCodeRequest(encoder=_encoder(identity, 251))
+        ).minimum_distance
+        == 1
+    )
+
+
+def test_dual_path_still_refuses_when_dual_enumeration_is_large() -> None:
+    matrix = tuple(
+        tuple(int(row == column) for column in range(64)) for row in range(3)
+    )
     _assert_operation_error(
-        lambda: _minimum_distance(
-            LinearCodeRequest(
-                encoder=_encoder(
-                    ((1, 0, 0), (0, 1, 0), (0, 0, 1)),
-                    251,
-                )
-            )
-        ),
+        lambda: _minimum_distance(LinearCodeRequest(encoder=_encoder(matrix, 251))),
         "code_theory.enumeration_work_exceeded",
     )
+
+
+def test_high_rate_profile_uses_exactly_enumerated_dual() -> None:
+    """A large systematic binary code has a tiny dual and a small profile."""
+
+    k, width = 18, 20
+    matrix = tuple(
+        tuple(int(row == column) if column < k else 1 for column in range(width))
+        for row in range(k)
+    )
+    request = LinearCodeRequest(encoder=_encoder(matrix, 2))
+
+    expected_counts = {weight: comb(k, weight) for weight in range(k + 1)}
+    expected_counts = {
+        (weight if weight % 2 == 0 else weight + 2): count
+        for weight, count in expected_counts.items()
+    }
+    expected = tuple(sorted(expected_counts.items()))
+    result = _weight_distribution(request)
+    assert result.weights == expected
+    assert type(result).model_validate_json(result.model_dump_json()) == result
+    assert _minimum_distance(request).minimum_distance == 2
+
+
+def test_full_space_profile_uses_the_zero_dual_edge_case() -> None:
+    """The full space has an empty dual, but its exact profile is retained."""
+
+    width = 18
+    matrix = tuple(
+        tuple(int(row == column) for column in range(width)) for row in range(width)
+    )
+    request = LinearCodeRequest(encoder=_encoder(matrix, 2))
+
+    expected = tuple((weight, comb(width, weight)) for weight in range(width + 1))
+    assert _weight_distribution(request).weights == expected
+
+
+@pytest.mark.parametrize(
+    ("field_order", "matrix"),
+    [
+        (2, ((1, 0, 1, 1), (0, 1, 1, 0))),
+        (3, ((1, 0, 1, 2), (0, 1, 2, 1))),
+    ],
+)
+def test_macwilliams_transform_matches_independent_small_primal_oracle(
+    field_order: int, matrix: tuple[tuple[int, ...], ...]
+) -> None:
+    """F2 and F3 dual transforms agree with direct word enumeration."""
+
+    from collections import Counter
+    from itertools import product
+
+    from jacobian.math.combinatorics.codes.general.operations import (
+        _dual_weight_distribution,
+    )
+
+    direct: Counter[int] = Counter()
+    for coefficients in product(range(field_order), repeat=len(matrix)):
+        word = tuple(
+            sum(coefficients[row] * matrix[row][column] for row in range(len(matrix)))
+            % field_order
+            for column in range(len(matrix[0]))
+        )
+        direct[sum(value != 0 for value in word)] += 1
+    assert _dual_weight_distribution(matrix, field_order) == sorted(direct.items())
+
+
+def test_full_binary_64_profile_preserves_large_counts_as_exact_integers() -> None:
+    """Counts above 2**53 survive canonical JSON and retain minimum distance."""
+
+    width = 64
+    matrix = tuple(
+        tuple(int(row == column) for column in range(width)) for row in range(width)
+    )
+    request = LinearCodeRequest(encoder=_encoder(matrix, 2))
+    result = _weight_distribution(request)
+
+    assert result.weights[32] == (32, comb(width, 32))
+    assert result.weights[32][1] > 2**53
+    assert type(result).model_validate_json(result.model_dump_json()) == result
+    assert _minimum_distance(request).minimum_distance == 1
 
 
 def test_covering_radius_budget_charges_the_selected_bfs_path() -> None:

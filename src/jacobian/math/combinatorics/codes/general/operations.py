@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Iterator
 from itertools import product
+from math import comb
 
 from sympy import isprime
 
@@ -36,6 +37,7 @@ __all__ = [
 
 
 GeneratorMatrix = tuple[tuple[int, ...], ...]
+MAX_MACWILLIAMS_TRANSFORM_WORK = 25_000_000
 
 
 def _admit_prime_field_matrix(
@@ -87,6 +89,77 @@ def _admit_enumeration(generator_matrix: GeneratorMatrix, field_order: int) -> N
             code="code_theory.enumeration_work_exceeded",
             message="generator matrix exceeds the exact enumeration bound",
         )
+
+
+def _macwilliams_from_dual(
+    dual_weights: dict[int, int],
+    *,
+    field_order: int,
+    code_cardinality: int,
+    length: int,
+) -> list[tuple[int, int]]:
+    """Recover a primal weight profile from an exactly enumerated dual."""
+    q = field_order
+    if length**3 > MAX_MACWILLIAMS_TRANSFORM_WORK:
+        raise OperationResourceAdmissionError(
+            location=("generator_matrix",),
+            code="code_theory.macwilliams_transform_work_exceeded",
+            message="exact MacWilliams transform exceeds its arithmetic work bound",
+        )
+    result: list[tuple[int, int]] = []
+    for weight in range(length + 1):
+        total = 0
+        for dual_weight, count in dual_weights.items():
+            for j in range(weight + 1):
+                if j <= dual_weight and weight - j <= length - dual_weight:
+                    total += (
+                        count
+                        * comb(dual_weight, j)
+                        * comb(length - dual_weight, weight - j)
+                        * (-1) ** j
+                        * (q - 1) ** (weight - j)
+                    )
+        if total % code_cardinality:
+            raise ArithmeticError("MacWilliams transform produced a nonintegral count")
+        count = total // code_cardinality
+        if count < 0:
+            raise ArithmeticError("MacWilliams transform produced a negative count")
+        if count:
+            result.append((weight, count))
+    return result
+
+
+def _dual_weight_distribution(
+    generator_matrix: GeneratorMatrix, field_order: int
+) -> list[tuple[int, int]]:
+    """Enumerate a small dual and transform its profile exactly."""
+    length = len(generator_matrix[0])
+    dual_matrix = _parity_check_matrix(generator_matrix, field_order)
+    dual_dimension = len(dual_matrix)
+    if (
+        EXACT_ENUMERATION_PASSES * field_order**dual_dimension
+        > MAX_EXACT_CODEWORD_EVALUATIONS
+    ):
+        raise OperationResourceAdmissionError(
+            location=("generator_matrix",),
+            code="code_theory.enumeration_work_exceeded",
+            message="generator matrix exceeds the exact enumeration bound",
+        )
+    if dual_dimension == 0:
+        dual_weights = {0: 1}
+    else:
+        dual_weights = {}
+        for codeword in _codewords(
+            tuple(tuple(row) for row in dual_matrix), field_order
+        ):
+            weight = sum(value != 0 for value in codeword)
+            dual_weights[weight] = dual_weights.get(weight, 0) + 1
+    return _macwilliams_from_dual(
+        dual_weights,
+        field_order=field_order,
+        code_cardinality=field_order**dual_dimension,
+        length=length,
+    )
 
 
 def _codewords(
@@ -141,7 +214,11 @@ def minimum_distance(encoder: PrimeFieldLinearEncoder) -> int:
     field_order = encoder.field_order
     if not generator_matrix:
         return len(encoder.coordinate_axis)
-    _admit_enumeration(generator_matrix, field_order)
+    try:
+        _admit_enumeration(generator_matrix, field_order)
+    except OperationResourceAdmissionError:
+        distribution = _dual_weight_distribution(generator_matrix, field_order)
+        return next(weight for weight, count in distribution if weight > 0 and count)
     min_dist = float("inf")
     for codeword in _codewords(generator_matrix, field_order):
         weight = sum(1 for c in codeword if c != 0)
@@ -157,7 +234,10 @@ def weight_distribution(encoder: PrimeFieldLinearEncoder) -> list[tuple[int, int
     field_order = encoder.field_order
     if not generator_matrix:
         return [(0, 1)]
-    _admit_enumeration(generator_matrix, field_order)
+    try:
+        _admit_enumeration(generator_matrix, field_order)
+    except OperationResourceAdmissionError:
+        return _dual_weight_distribution(generator_matrix, field_order)
 
     weights: Counter[int] = Counter()
     for codeword in _codewords(generator_matrix, field_order):

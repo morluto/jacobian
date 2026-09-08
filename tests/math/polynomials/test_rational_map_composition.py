@@ -12,8 +12,10 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials._conversions import rational_function_from_sympy
 from jacobian.math.polynomials.rational_functions.composition import (
     RationalFunctionMapComposition,
-    RationalMapCompositionRequest,
     compose_maps,
+)
+from jacobian.math.polynomials.rational_functions.composition._models import (
+    RationalMapCompositionRequest,
 )
 from jacobian.math.polynomials.rational_functions.values import RationalFunctionMap
 from jacobian.math.polynomials.values import RationalFunction, SparseRationalPolynomial

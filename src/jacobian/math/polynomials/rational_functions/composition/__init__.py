@@ -2,7 +2,6 @@
 
 from jacobian.math.polynomials.rational_functions.composition._models import (
     RationalFunctionMapComposition,
-    RationalMapCompositionRequest,
 )
 from jacobian.math.polynomials.rational_functions.composition.operations import (
     compose_maps,
@@ -10,6 +9,5 @@ from jacobian.math.polynomials.rational_functions.composition.operations import 
 
 __all__ = [
     "RationalFunctionMapComposition",
-    "RationalMapCompositionRequest",
     "compose_maps",
 ]

@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import pytest
 
+from jacobian._execution import (
+    OperationBackendError,
+    OperationResourceExhaustedError,
+)
 from jacobian.catalog.catalog import Catalog
 from jacobian.dispatch import OperationRequestValidationError, invoke_operation
 from jacobian.math.logic import _sat, _smt, _unsat_core
@@ -40,9 +44,8 @@ def _smt_worker_memory_exhaustion() -> BoundedProcessResult:
     return BoundedProcessResult(
         returncode=0,
         stdout=(
-            b'{"outcome":"UNKNOWN","model_smtlib":null,'
-            b'"exhausted":"memory","detail":"the bounded solver memory '
-            b'budget was exhausted"}'
+            b'{"kind":"execution_error","stage":"operation_execution",'
+            b'"resource":"memory"}'
         ),
         stderr=b"",
         stdout_exceeded=False,
@@ -55,9 +58,8 @@ def _sat_worker_memory_exhaustion() -> BoundedProcessResult:
     return BoundedProcessResult(
         returncode=0,
         stdout=(
-            b'{"outcome":"UNKNOWN","assignment":null,'
-            b'"exhausted":"memory","detail":"the bounded solver memory '
-            b'budget was exhausted"}'
+            b'{"kind":"execution_error","stage":"operation_execution",'
+            b'"resource":"memory"}'
         ),
         stderr=b"",
         stdout_exceeded=False,
@@ -68,12 +70,12 @@ def _sat_worker_memory_exhaustion() -> BoundedProcessResult:
 
 def _unsat_core_worker_unavailable() -> BoundedProcessResult:
     return BoundedProcessResult(
-        returncode=None,
+        returncode=2,
         stdout=b"",
         stderr=b"",
         stdout_exceeded=False,
         stderr_exceeded=False,
-        timed_out=True,
+        timed_out=False,
     )
 
 
@@ -85,14 +87,14 @@ def _unsat_core_worker_unavailable() -> BoundedProcessResult:
         ("smt.unsat_core", _contradictory_bounds_core()),
     ],
 )
-def test_dispatch_types_parser_resource_failure_as_execution_unknown(
+def test_dispatch_types_parser_resource_failure_as_execution_failure(
     monkeypatch: pytest.MonkeyPatch, operation_id: str, payload: dict[str, object]
 ) -> None:
     """A fresh request validation cannot claim parser exhaustion is malformed.
 
     ``math.run`` revalidates every payload. Backend parsing happens only in
     the bounded owner worker, so a resource failure remains admissible and
-    surfaces as typed execution UNKNOWN instead of
+    surfaces as typed execution failure instead of
     ``OperationRequestValidationError``.
     """
 
@@ -116,14 +118,16 @@ def test_dispatch_types_parser_resource_failure_as_execution_unknown(
         )
 
     try:
-        result = invoke_operation(operation_id, payload, Catalog.open())
+        with pytest.raises(
+            OperationBackendError
+            if operation_id == "smt.unsat_core"
+            else OperationResourceExhaustedError
+        ):
+            invoke_operation(operation_id, payload, Catalog.open())
     except OperationRequestValidationError as exc:
         raise AssertionError(
             f"{operation_id} rejected a parser resource failure as caller error"
         ) from exc
-
-    assert result.operation_id == operation_id
-    assert result.output["outcome"] == "UNKNOWN"
 
 
 def test_dispatch_reports_memory_exhaustion_for_smt_solve(
@@ -137,10 +141,9 @@ def test_dispatch_reports_memory_exhaustion_for_smt_solve(
         lambda *_args, **_kwargs: _smt_worker_memory_exhaustion(),
     )
 
-    result = invoke_operation("smt.solve", _positive_integer_query(), Catalog.open())
-
-    assert result.output["outcome"] == "UNKNOWN"
-    assert result.output["exhausted"] == "memory"
+    with pytest.raises(OperationResourceExhaustedError) as caught:
+        invoke_operation("smt.solve", _positive_integer_query(), Catalog.open())
+    assert caught.value.resource == "memory"
 
 
 def test_dispatch_reports_memory_exhaustion_for_sat_solve(
@@ -152,13 +155,12 @@ def test_dispatch_reports_memory_exhaustion_for_sat_solve(
         lambda *_args, **_kwargs: _sat_worker_memory_exhaustion(),
     )
 
-    result = invoke_operation("sat.solve", _positive_cnf_query(), Catalog.open())
+    with pytest.raises(OperationResourceExhaustedError) as caught:
+        invoke_operation("sat.solve", _positive_cnf_query(), Catalog.open())
+    assert caught.value.resource == "memory"
 
-    assert result.output["outcome"] == "UNKNOWN"
-    assert result.output["exhausted"] == "memory"
 
-
-def test_dispatch_types_unsat_core_initialization_failure_as_unknown(
+def test_dispatch_types_unsat_core_initialization_failure_as_execution_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A failed core worker must not turn an accepted request into an import error."""
@@ -169,13 +171,5 @@ def test_dispatch_types_unsat_core_initialization_failure_as_unknown(
         lambda *_args, **_kwargs: _unsat_core_worker_unavailable(),
     )
 
-    result = invoke_operation(
-        "smt.unsat_core", _contradictory_bounds_core(), Catalog.open()
-    )
-
-    assert result.output["outcome"] == "UNKNOWN"
-    assert result.output["core_indices"] == []
-    assert (
-        result.output["detail"]
-        == "the bounded SMT core worker did not establish an outcome"
-    )
+    with pytest.raises(OperationBackendError):
+        invoke_operation("smt.unsat_core", _contradictory_bounds_core(), Catalog.open())

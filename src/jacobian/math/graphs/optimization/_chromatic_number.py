@@ -9,7 +9,15 @@ import time
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from jacobian._execution import OperationExecutionCancelledError, request_checkpoint
+from jacobian._execution import (
+    BackendFailureReason,
+    OperationBackendError,
+    OperationExecutionTimeoutError,
+    execution_deadline,
+    request_checkpoint,
+    require_execution_deadline,
+)
+from jacobian._worker_errors import decode_worker_execution_error
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.graphs.optimization._chromatic_kernel import (
     build_simple_graph,
@@ -21,6 +29,7 @@ from jacobian.math.graphs.optimization._coloring_models import (
 )
 from jacobian.process import (
     ProcessResourceLimits,
+    check_bounded_process_result,
     run_bounded_process,
     worker_environment,
 )
@@ -50,56 +59,21 @@ def _search_chromatic_number_kernel(
     return output
 
 
-def _chromatic_worker_failure(
-    request: GraphChromaticNumberRequest, detail: str
-) -> GraphChromaticNumberOutput:
-    """Return a source-derived unknown when the bounded worker fails."""
-
-    vertices = request.graph.vertices
-    if not vertices:
-        return GraphChromaticNumberOutput(
-            status="EXACT",
-            vertices=vertices,
-            order=0,
-            chromatic_number=0,
-            lower_bound=0,
-            upper_bound=0,
-            coloring={},
-            solver_status="SPECIAL_CASE",
-            tested=(),
-            detail="the empty graph requires zero colors",
-        )
-    return GraphChromaticNumberOutput(
-        status="UNKNOWN",
-        vertices=vertices,
-        order=len(vertices),
-        lower_bound=2 if request.graph.edges else 1,
-        upper_bound=len(vertices),
-        coloring={vertex: index for index, vertex in enumerate(vertices)},
-        solver_status="UNKNOWN",
-        tested=(),
-        detail=detail,
-    )
-
-
 def _search_chromatic_number(
     request: GraphChromaticNumberRequest,
 ) -> GraphChromaticNumberOutput:
     """Run the complete Z3 chromatic search in a bounded owner worker."""
 
-    deadline = time.monotonic() + request.resource_budget.wall_seconds
+    deadline = execution_deadline(request.resource_budget.wall_seconds)
     try:
         with TemporaryDirectory(prefix="jacobian-graph-chromatic-") as directory:
             remaining_seconds = deadline - time.monotonic()
             if remaining_seconds <= 0:
-                return _chromatic_worker_failure(
-                    request,
-                    "the chromatic-number request expired before worker startup",
-                )
+                raise OperationExecutionTimeoutError("operation deadline expired")
             completed = run_bounded_process(
                 [sys.executable, str(_CHROMATIC_NUMBER_WORKER)],
                 input_bytes=json.dumps(
-                    request.model_dump(mode="json"),
+                    {"_deadline": deadline, **request.model_dump(mode="json")},
                     separators=(",", ":"),
                     ensure_ascii=False,
                 ).encode("utf-8"),
@@ -114,31 +88,18 @@ def _search_chromatic_number(
                 ),
                 cwd=directory,
             )
-    except OSError:
-        return _chromatic_worker_failure(
-            request, "the bounded chromatic-number worker could not be started"
-        )
-    request_checkpoint("after chromatic-number worker")
-    if completed.cancelled:
-        raise OperationExecutionCancelledError("chromatic-number worker cancelled")
-    if completed.timed_out:
-        return _chromatic_worker_failure(request, "the chromatic-number worker expired")
-    if (
-        completed.stdout_exceeded
-        or completed.stderr_exceeded
-        or completed.returncode != 0
-    ):
-        return _chromatic_worker_failure(
-            request, "the bounded chromatic-number worker did not establish an outcome"
-        )
-    if time.monotonic() >= deadline:
-        return _chromatic_worker_failure(
-            request, "the chromatic-number request expired before response validation"
-        )
+    except OSError as exc:
+        require_execution_deadline(deadline)
+        raise OperationBackendError(BackendFailureReason.STARTUP) from exc
+    check_bounded_process_result(completed)
+    require_execution_deadline(deadline)
     try:
+        response = json.loads(completed.stdout.decode("utf-8"))
+        require_execution_deadline(deadline)
+        decode_worker_execution_error(response)
         result = GraphChromaticNumberOutput.model_validate(
             {
-                **json.loads(completed.stdout.decode("utf-8")),
+                **response,
                 "vertices": list(request.graph.vertices),
             }
         )
@@ -149,22 +110,15 @@ def _search_chromatic_number(
                 for left, right in request.graph.edges
             )
         ):
-            raise ValueError("worker result is not bound to the submitted graph")
-    except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
+            require_execution_deadline(deadline)
+            raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
         request_checkpoint("during chromatic-number response validation")
-        if time.monotonic() >= deadline:
-            return _chromatic_worker_failure(
-                request,
-                "the chromatic-number request expired during response validation",
-            )
-        return _chromatic_worker_failure(
-            request, "the bounded chromatic-number worker returned malformed output"
-        )
+        require_execution_deadline(deadline)
+        raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE) from exc
     request_checkpoint("after chromatic-number response validation")
     if time.monotonic() >= deadline:
-        return _chromatic_worker_failure(
-            request, "the chromatic-number request expired during response validation"
-        )
+        raise OperationExecutionTimeoutError("operation deadline expired")
     return result
 
 
@@ -173,8 +127,9 @@ CHROMATIC_NUMBER_OPERATION = MathTool(
     title="Exact chromatic number",
     description=(
         "Compute the exact chromatic number of a bounded simple undirected "
-        "graph by bounded Z3 k-colorability decisions. A timeout returns "
-        "an UNKNOWN result with the tested bounds and search trace."
+        "graph by bounded Z3 k-colorability decisions. An incomplete search can return "
+        "an UNKNOWN result with established bounds and the search trace."
+        " Worker failures and parent deadline expiry raise execution errors; a valid partial result must arrive before that deadline."
     ),
     request_type=GraphChromaticNumberRequest,
     result_type=GraphChromaticNumberOutput,

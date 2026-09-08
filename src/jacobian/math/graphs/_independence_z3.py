@@ -10,7 +10,16 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any, Literal
 
-from jacobian._execution import OperationExecutionCancelledError, request_checkpoint
+from jacobian._execution import (
+    BackendFailureReason,
+    OperationBackendError,
+    OperationExecutionTimeoutError,
+    execution_deadline,
+    remaining_timeout_ms,
+    request_checkpoint,
+    require_execution_deadline,
+)
+from jacobian._worker_errors import decode_worker_execution_error
 from jacobian.math.graphs.independence import (
     IndependenceNumberBudget,
     IndependenceNumberResult,
@@ -18,6 +27,7 @@ from jacobian.math.graphs.independence import (
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.process import (
     ProcessResourceLimits,
+    check_bounded_process_result,
     run_bounded_process,
     worker_environment,
 )
@@ -43,10 +53,13 @@ def _independence_worker_stdout_limit(graph: SimpleUndirectedGraph) -> int:
         "detail": "x" * 1_024,
         "convention": "MAXIMUM_EDGE_FREE_VERTEX_SUBSET",
     }
-    return len(
-        json.dumps(projection, separators=(",", ":"), ensure_ascii=False).encode(
-            "utf-8"
-        )
+    return max(
+        8192,
+        len(
+            json.dumps(projection, separators=(",", ":"), ensure_ascii=False).encode(
+                "utf-8"
+            )
+        ),
     )
 
 
@@ -100,7 +113,7 @@ def _solve_independence_number_values_kernel(
     import z3
 
     optimizer = z3.Optimize()
-    optimizer.set(timeout=max(1, remaining_ms))
+    optimizer.set(timeout=remaining_timeout_ms(max(1, remaining_ms)))
     selected = {
         vertex: z3.Bool(f"selected_{index}") for index, vertex in enumerate(vertices)
     }
@@ -137,16 +150,7 @@ def _solve_independence_number_values_kernel(
                 detail="bounded Z3 optimization seeded by a NetworkX feasible witness",
             )
     elif status == z3.unsat:
-        return IndependenceNumberResult._from_kernel(
-            graph=graph,
-            status="UNKNOWN",
-            optimum_value=None,
-            upper_bound=len(vertices),
-            incumbent_vertices=incumbent,
-            termination_reason="SOLVER_UNSAT",
-            detail="bounded Z3 optimization returned unsat, which is unexpected "
-            "for an independence-number problem that always has a feasible witness",
-        )
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
     termination: Literal["WALL_TIME", "SOLVER_UNKNOWN"] = (
         "WALL_TIME"
         if time.monotonic() - started >= resource_budget.wall_seconds
@@ -169,32 +173,17 @@ def solve_independence_number_values(
 ) -> IndependenceNumberResult:
     """Run Z3 optimization in one bounded owner worker and decode its result."""
 
-    incumbent = () if not graph.vertices else (min(graph.vertices),)
-
-    def fallback(detail: str, *, wall_time: bool = False) -> IndependenceNumberResult:
-        return IndependenceNumberResult._from_kernel(
-            graph=graph,
-            status="UNKNOWN",
-            optimum_value=None,
-            upper_bound=len(graph.vertices),
-            incumbent_vertices=incumbent,
-            termination_reason="WALL_TIME" if wall_time else "SOLVER_UNKNOWN",
-            detail=detail,
-        )
-
-    deadline = time.monotonic() + resource_budget.wall_seconds
+    deadline = execution_deadline(resource_budget.wall_seconds)
     try:
         with TemporaryDirectory(prefix="jacobian-graph-independence-") as directory:
             remaining_seconds = deadline - time.monotonic()
             if remaining_seconds <= 0:
-                return fallback(
-                    "the graph independence request expired before worker startup",
-                    wall_time=True,
-                )
+                raise OperationExecutionTimeoutError("operation deadline expired")
             completed = run_bounded_process(
                 [sys.executable, str(_INDEPENDENCE_WORKER)],
                 input_bytes=json.dumps(
                     {
+                        "_deadline": deadline,
                         "graph": graph.model_dump(mode="json"),
                         "resource_budget": resource_budget.model_dump(mode="json"),
                     },
@@ -212,48 +201,27 @@ def solve_independence_number_values(
                 ),
                 cwd=directory,
             )
-    except OSError:
-        return fallback("the bounded graph independence worker could not be started")
-    request_checkpoint("after graph independence worker")
-    if completed.cancelled:
-        raise OperationExecutionCancelledError("graph independence worker cancelled")
-    if completed.timed_out:
-        return fallback("the graph independence worker expired", wall_time=True)
-    if (
-        completed.stdout_exceeded
-        or completed.stderr_exceeded
-        or completed.returncode != 0
-    ):
-        return fallback(
-            "the bounded graph independence worker did not establish an outcome"
-        )
-    if time.monotonic() >= deadline:
-        return fallback(
-            "the graph independence request expired before response validation",
-            wall_time=True,
-        )
+    except OSError as exc:
+        require_execution_deadline(deadline)
+        raise OperationBackendError(BackendFailureReason.STARTUP) from exc
+    check_bounded_process_result(completed)
+    require_execution_deadline(deadline)
     try:
+        response = json.loads(completed.stdout.decode("utf-8"))
+        require_execution_deadline(deadline)
+        decode_worker_execution_error(response)
+        if not isinstance(response, dict) or "graph" in response:
+            raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE)
         result = IndependenceNumberResult.model_validate(
             {
-                **json.loads(completed.stdout.decode("utf-8")),
+                **response,
                 "graph": graph.model_dump(mode="json"),
             }
         )
         request_checkpoint("after graph independence response validation")
-        return (
-            result
-            if time.monotonic() < deadline
-            else fallback(
-                "the graph independence request expired during response validation",
-                wall_time=True,
-            )
-        )
-    except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
+        require_execution_deadline(deadline)
+        return result
+    except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
         request_checkpoint("during graph independence response validation")
-        expired = time.monotonic() >= deadline
-        return fallback(
-            "the graph independence request expired during response validation"
-            if expired
-            else "the bounded graph independence worker returned malformed output",
-            wall_time=expired,
-        )
+        require_execution_deadline(deadline)
+        raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE) from exc

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from jacobian._execution import remaining_timeout_ms
 from jacobian.math.graphs.optimization._budget import remaining_ms as _remaining_ms
 from jacobian.math.graphs.optimization._coloring_models import (
     ChromaticGraph,
@@ -149,7 +150,7 @@ def solve_chromatic_number(
                 detail="the chromatic-number wall-clock budget expired",
             )
         solver = z3.Solver()
-        solver.set(timeout=max(1, remaining_ms))
+        solver.set(timeout=remaining_timeout_ms(max(1, remaining_ms)))
         variable_names, clauses = coloring_cnf(encoded_graph, colors)
         variables = {
             index: z3.Bool(name) for index, name in enumerate(variable_names, start=1)

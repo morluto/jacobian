@@ -33,6 +33,12 @@ from pathlib import Path
 from typing import BinaryIO, Never, cast
 
 from jacobian._execution import (
+    BackendFailureReason,
+    ExecutionResource,
+    OperationBackendError,
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+    OperationResourceExhaustedError,
     RequestCancellationSignal,
     current_request_cancellation,
     current_request_execution,
@@ -48,6 +54,7 @@ __all__ = [
     "ProcessPlatformTools",
     "ProcessResourceLimits",
     "bounded_process_cancellation",
+    "check_bounded_process_result",
     "run_bounded_process",
     "run_bounded_worker_dialogue",
     "worker_environment",
@@ -67,6 +74,21 @@ class BoundedProcessResult:
     stderr_exceeded: bool
     timed_out: bool
     cancelled: bool = False
+
+
+def check_bounded_process_result(result: BoundedProcessResult) -> None:
+    """Opt in to execution exceptions without interpreting worker mathematics."""
+
+    if result.cancelled:
+        raise OperationExecutionCancelledError("operation worker cancelled")
+    if result.timed_out:
+        raise OperationExecutionTimeoutError("operation worker deadline expired")
+    if result.stdout_exceeded or result.stderr_exceeded:
+        raise OperationResourceExhaustedError(ExecutionResource.OUTPUT)
+    if result.returncode != 0:
+        error = OperationBackendError(BackendFailureReason.ABNORMAL_EXIT)
+        error.add_note(repr(result.stderr[:16384]))
+        raise error
 
 
 class BoundedWorkerDialogueErrorReason(StrEnum):

@@ -8,7 +8,8 @@ import json
 import logging
 import secrets
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from typing import Any
 
 from mcp.server.mcpserver import Context
@@ -16,7 +17,9 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.shared.exceptions import MCPError
 
 from jacobian._execution import (
+    OperationBackendError,
     OperationExecutionCancelledError,
+    OperationResourceExhaustedError,
     RequestCancellationSignal,
 )
 from jacobian.backends import BackendUnavailableError, check_backend
@@ -167,7 +170,7 @@ def math_run(
     _authorize(ctx)
     catalog = _catalog(ctx)
     cancellation = _request_cancellation(ctx)
-    try:
+    with _operation_error_boundary(operation_id):
         try:
             return execute_operation(
                 operation_id,
@@ -182,6 +185,14 @@ def math_run(
             )
         except _OperationResolutionError as exc:
             raise ToolError(str(exc)) from exc
+
+
+@contextmanager
+def _operation_error_boundary(operation_id: str) -> Iterator[None]:
+    """Translate and privately log failures once for both SDK entry points."""
+
+    try:
+        yield
     except (OperationRequestValidationError, OperationDomainValidationError) as exc:
         raise _invalid_request_error(operation_id, exc) from exc
     except OperationExecutionTimeoutError as exc:
@@ -192,13 +203,35 @@ def math_run(
         raise _execution_tool_error(
             code="OPERATION_CANCELLED", operation_id=operation_id, stage=exc.stage
         ) from exc
+    except OperationResourceExhaustedError as exc:
+        hint = None
+        if exc.resource == "work":
+            if operation_id == "smt.unsat_core":
+                hint = "Adjust rlimit within its admitted range; timeout_ms does not increase the work allowance."
+            elif operation_id in {"sat.solve", "smt.solve"}:
+                hint = "timeout_ms does not increase the fixed work allowance."
+        raise _execution_tool_error(
+            code="RESOURCE_EXHAUSTED",
+            operation_id=operation_id,
+            stage=exc.stage,
+            resource=exc.resource,
+            hint=hint,
+        ) from exc
+    except OperationBackendError as exc:
+        logger.exception(
+            "operation backend failure operation_id=%s reason=%s",
+            operation_id,
+            exc.reason,
+        )
+        raise _execution_tool_error(
+            code="OPERATION_FAILED", operation_id=operation_id, stage=exc.stage
+        ) from exc
     except BackendUnavailableError as exc:
         raise _backend_unavailable_error(operation_id, exc) from exc
     except (MCPError, ToolError):
         raise
     except Exception as exc:
-        # Keep backend details inside the owner while guaranteeing the SDK
-        # receives a bounded tool error instead of an unhandled worker failure.
+        logger.exception("unexpected operation failure operation_id=%s", operation_id)
         raise ToolError("operation execution failed") from exc
 
 
@@ -243,12 +276,35 @@ def _backend_unavailable_error(
     )
 
 
-def _execution_tool_error(*, code: str, operation_id: str, stage: str) -> ToolError:
+def _execution_tool_error(
+    *,
+    code: str,
+    operation_id: str,
+    stage: str,
+    resource: str | None = None,
+    hint: str | None = None,
+) -> ToolError:
     """Project bounded operation context through the SDK's text-only tool error."""
 
+    messages = {
+        "OPERATION_TIMEOUT": "operation deadline expired",
+        "OPERATION_CANCELLED": "operation was cancelled",
+        "RESOURCE_EXHAUSTED": "operation exhausted its resource allowance",
+        "OPERATION_FAILED": "operation backend failed",
+    }
+    diagnostic = {
+        "code": code,
+        "operation_id": operation_id,
+        "stage": stage,
+        "message": messages[code],
+    }
+    if resource is not None:
+        diagnostic["resource"] = resource
+    if hint is not None:
+        diagnostic["hint"] = hint
     return ToolError(
         json.dumps(
-            {"code": code, "operation_id": operation_id, "stage": stage},
+            diagnostic,
             separators=(",", ":"),
             sort_keys=True,
         )

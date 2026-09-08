@@ -19,10 +19,14 @@ from pydantic import (
 from pydantic_core import PydanticCustomError
 
 from jacobian._execution import (
+    BackendFailureReason,
+    OperationBackendError,
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
+    require_execution_deadline,
 )
 from jacobian._models import StrictModel
+from jacobian._worker_errors import decode_worker_execution_error
 from jacobian.math.logic._cnf import (
     _MAX_VARIABLES,
     CanonicalCnf,
@@ -30,16 +34,19 @@ from jacobian.math.logic._cnf import (
     check_sat_assignment,
 )
 from jacobian.math.logic._smt import (
-    _EXHAUSTION_DETAILS,
-    _classify_exhaustion,
     _execution_deadline,
-    _project_unknown,
     _require_execution_deadline,
     _solver_settings,
+)
+from jacobian.math.logic._solver_errors import (
+    _classify_exhaustion,
+    _project_unknown,
+    _raise_exhaustion,
     _UnknownResource,
 )
 from jacobian.process import (
     ProcessResourceLimits,
+    check_bounded_process_result,
     run_bounded_process,
     worker_environment,
 )
@@ -99,12 +106,7 @@ def _solve_sat_kernel(*, cnf: CanonicalCnf, timeout_ms: int) -> dict[str, object
     try:
         import z3
     except (ImportError, OSError) as exc:
-        return {
-            "outcome": "UNKNOWN",
-            "assignment": None,
-            "exhausted": None,
-            "detail": f"the Z3 backend could not initialize: {exc}"[:1_024],
-        }
+        raise OperationBackendError(BackendFailureReason.INITIALIZATION) from exc
 
     try:
         variables = tuple(z3.Bool(name) for name in cnf.variables)
@@ -138,22 +140,13 @@ def _solve_sat_kernel(*, cnf: CanonicalCnf, timeout_ms: int) -> dict[str, object
                 "exhausted": None,
                 "detail": None,
             }
+    except (OperationExecutionTimeoutError, OperationExecutionCancelledError):
+        raise
     except (OSError, z3.Z3Exception) as exc:
         exhausted = _classify_exhaustion(str(exc))
         if exhausted is not None:
-            return {
-                "outcome": "UNKNOWN",
-                "assignment": None,
-                "exhausted": exhausted,
-                "detail": _EXHAUSTION_DETAILS[exhausted],
-            }
-        detail = f"the Z3 backend failed during the bounded solve: {exc}"
-        return {
-            "outcome": "UNKNOWN",
-            "assignment": None,
-            "exhausted": None,
-            "detail": detail[:1_024],
-        }
+            _raise_exhaustion(exhausted, cause=exc)
+        raise OperationBackendError(BackendFailureReason.ABNORMAL_EXIT) from exc
     exhausted, detail = _project_unknown(solver.reason_unknown())
     return {
         "outcome": "UNKNOWN",
@@ -161,23 +154,6 @@ def _solve_sat_kernel(*, cnf: CanonicalCnf, timeout_ms: int) -> dict[str, object
         "exhausted": exhausted,
         "detail": detail,
     }
-
-
-def _result(request: SatSolveRequest, **values: object) -> SatSolveResult:
-    """Bind every projected worker outcome to its exact admitted source."""
-
-    return SatSolveResult.model_validate(
-        {"source": request.model_dump(mode="json"), **values}
-    )
-
-
-def _time_exhausted_result(request: SatSolveRequest) -> SatSolveResult:
-    return _result(
-        request,
-        outcome="UNKNOWN",
-        exhausted="time",
-        detail=_EXHAUSTION_DETAILS["time"],
-    )
 
 
 def _run_sat_worker(request: SatSolveRequest) -> SatSolveResult:
@@ -194,7 +170,8 @@ def _run_sat_worker(request: SatSolveRequest) -> SatSolveResult:
             completed = run_bounded_process(
                 [sys.executable, str(_SAT_WORKER)],
                 input_bytes=json.dumps(
-                    request.model_dump(mode="json"), separators=(",", ":")
+                    {"_deadline": deadline, **request.model_dump(mode="json")},
+                    separators=(",", ":"),
                 ).encode("utf-8"),
                 timeout_seconds=remaining_seconds,
                 environment=worker_environment(locale="C.UTF-8"),
@@ -209,34 +186,15 @@ def _run_sat_worker(request: SatSolveRequest) -> SatSolveResult:
             )
     except (OperationExecutionCancelledError, OperationExecutionTimeoutError):
         raise
-    except OSError:
-        _require_execution_deadline(deadline, "after SAT worker startup")
-        return _result(
-            request,
-            outcome="UNKNOWN",
-            detail="the bounded Z3 worker could not be started",
-        )
-    if completed.timed_out:
-        raise OperationExecutionTimeoutError(
-            "request deadline expired during SAT worker"
-        )
-    if completed.cancelled:
-        raise OperationExecutionCancelledError("request cancelled during SAT worker")
-    if completed.stdout_exceeded or completed.stderr_exceeded:
-        return _result(
-            request,
-            outcome="UNKNOWN",
-            detail="the bounded Z3 worker exceeded its output limit",
-        )
-    if completed.returncode != 0:
-        return _result(
-            request,
-            outcome="UNKNOWN",
-            detail="the bounded Z3 worker failed before returning a result",
-        )
-    _require_execution_deadline(deadline, "after SAT worker")
+    except OSError as exc:
+        require_execution_deadline(deadline)
+        raise OperationBackendError(BackendFailureReason.STARTUP) from exc
+    check_bounded_process_result(completed)
+    require_execution_deadline(deadline)
     try:
         response = json.loads(completed.stdout.decode("utf-8"))
+        require_execution_deadline(deadline)
+        decode_worker_execution_error(response)
         if not isinstance(response, dict) or "source" in response:
             raise TypeError("worker response must not replace the retained source")
         result = SatSolveResult.model_validate(
@@ -250,22 +208,14 @@ def _run_sat_worker(request: SatSolveRequest) -> SatSolveResult:
         ):
             # The parent-side scan may have consumed the remaining budget.
             _require_execution_deadline(deadline, "after SAT assignment check")
-            return _result(
-                request,
-                outcome="UNKNOWN",
-                detail=(
-                    "the Z3 worker returned an assignment that does not satisfy "
-                    "the canonical CNF"
-                ),
-            )
+            raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+        if result.exhausted is not None:
+            _raise_exhaustion(result.exhausted)
         _require_execution_deadline(deadline, "after SAT result projection")
         return result
-    except (TypeError, ValueError, UnicodeDecodeError, json.JSONDecodeError):
-        return _result(
-            request,
-            outcome="UNKNOWN",
-            detail="the bounded Z3 worker returned malformed output",
-        )
+    except (TypeError, ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        require_execution_deadline(deadline)
+        raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE) from exc
 
 
 def solve_sat(request: SatSolveRequest) -> SatSolveResult:

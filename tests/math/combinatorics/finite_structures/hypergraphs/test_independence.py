@@ -8,6 +8,9 @@ import pytest
 import z3
 from pydantic import ValidationError
 
+from jacobian._execution import (
+    OperationBackendError,
+)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     MAX_EDGES,
@@ -576,10 +579,8 @@ def test_independence_worker_projection_cannot_replace_the_submitted_request(
         ),
     )
 
-    result = independence_number(request.hypergraph, request.resource_budget)
-
-    assert result.status == "UNKNOWN"
-    assert result.hypergraph == request.hypergraph
+    with pytest.raises(OperationBackendError):
+        independence_number(request.hypergraph, request.resource_budget)
 
 
 def test_threshold_encoding_rechecks_the_wall_budget_before_solver_check(
@@ -655,7 +656,7 @@ def test_interrupted_solver_returns_unknown(monkeypatch: pytest.MonkeyPatch) -> 
     assert result.termination_reason == "SOLVER_UNKNOWN"
 
 
-def test_backend_exception_returns_typed_unknown(
+def test_backend_exception_raises_execution_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from jacobian.math.combinatorics.finite_structures.hypergraphs import (
@@ -666,15 +667,13 @@ def test_backend_exception_returns_typed_unknown(
         raise z3.Z3Exception("forced backend failure")
 
     monkeypatch.setattr(_independence_z3, "_check_threshold", fail)
-    result = _kernel_compute(
-        {
-            "vertices": ["a", "b", "c"],
-            "edges": [["triple", ["a", "b", "c"]]],
-        }
-    )
-    assert result.status == "UNKNOWN"
-    assert result.independence_number is None
-    assert result.termination_reason == "SOLVER_ERROR"
+    with pytest.raises(OperationBackendError):
+        _kernel_compute(
+            {
+                "vertices": ["a", "b", "c"],
+                "edges": [["triple", ["a", "b", "c"]]],
+            }
+        )
 
 
 def test_produced_result_reparses_structurally() -> None:
@@ -701,14 +700,13 @@ def test_producer_rejects_infeasible_backend_witness(
         return z3.sat, ("a", "b", "c"), ""
 
     monkeypatch.setattr(_independence_z3, "_check_threshold", regressed)
-    result = _kernel_compute(
-        {
-            "vertices": ["a", "b", "c"],
-            "edges": [["triple", ["a", "b", "c"]]],
-        }
-    )
-    assert result.status == "UNKNOWN"
-    assert result.termination_reason == "SOLVER_ERROR"
+    with pytest.raises(OperationBackendError):
+        _kernel_compute(
+            {
+                "vertices": ["a", "b", "c"],
+                "edges": [["triple", ["a", "b", "c"]]],
+            }
+        )
 
 
 def test_producer_rejects_forged_optimum_below_greedy_incumbent(
@@ -722,18 +720,13 @@ def test_producer_rejects_forged_optimum_below_greedy_incumbent(
         return z3.sat, ("a",), ""
 
     monkeypatch.setattr(_independence_z3, "_check_threshold", regressed)
-    result = _kernel_compute(
-        {
-            "vertices": ["a", "b", "c"],
-            "edges": [["triple", ["a", "b", "c"]]],
-        }
-    )
-    assert result.status == "UNKNOWN"
-    assert result.independence_number is None
-    assert result.incumbent_vertices == ("a", "b")
-    assert result.upper_bound == 3
-    assert result.solver_calls == 1
-    assert result.termination_reason == "SOLVER_ERROR"
+    with pytest.raises(OperationBackendError):
+        _kernel_compute(
+            {
+                "vertices": ["a", "b", "c"],
+                "edges": [["triple", ["a", "b", "c"]]],
+            }
+        )
 
 
 def test_producer_rejects_solver_calls_inconsistent_with_established_bounds(
@@ -747,21 +740,17 @@ def test_producer_rejects_solver_calls_inconsistent_with_established_bounds(
         return z3.sat, ("b", "c"), ""
 
     monkeypatch.setattr(_independence_z3, "_check_threshold", regressed)
-    result = _kernel_compute(
-        {
-            "vertices": ["a", "b", "c", "d"],
-            "edges": [
-                ["ab", ["a", "b"]],
-                ["ac", ["a", "c"]],
-                ["ad", ["a", "d"]],
-            ],
-        }
-    )
-    assert result.status == "UNKNOWN"
-    assert result.independence_number is None
-    assert result.upper_bound == 4
-    assert result.solver_calls == 1
-    assert result.termination_reason == "SOLVER_ERROR"
+    with pytest.raises(OperationBackendError):
+        _kernel_compute(
+            {
+                "vertices": ["a", "b", "c", "d"],
+                "edges": [
+                    ["ab", ["a", "b"]],
+                    ["ac", ["a", "c"]],
+                    ["ad", ["a", "d"]],
+                ],
+            }
+        )
 
 
 def test_producer_projects_solver_error_when_witness_misses_threshold(
@@ -786,25 +775,17 @@ def test_producer_projects_solver_error_when_witness_misses_threshold(
         return z3.sat, ("c",), ""
 
     monkeypatch.setattr(_independence_z3, "_check_threshold", regressed)
-    result = _kernel_compute(
-        {
-            "vertices": ["c", "a", "b"],
-            "edges": [["ca", ["c", "a"]], ["cb", ["c", "b"]]],
-        }
-    )
+    with pytest.raises(OperationBackendError):
+        _kernel_compute(
+            {
+                "vertices": ["c", "a", "b"],
+                "edges": [["ca", ["c", "a"]], ["cb", ["c", "b"]]],
+            }
+        )
     # Binary search on (lo=1, hi=3) first queries mid=2, where the mocked
     # backend returns a below-threshold witness, so the run stops after
     # one call (linear descent would query 3 first, then 2).
     assert thresholds == [2]
-    assert result.status == "UNKNOWN"
-    assert result.independence_number is None
-    assert result.incumbent_vertices == ("c",)
-    assert result.lower_bound == 1
-    assert result.upper_bound == 3
-    assert result.solver_calls == 1
-    assert not result.wall_budget_exhausted
-    assert result.termination_reason == "SOLVER_ERROR"
-    assert HypergraphIndependenceResult.model_validate_json(result.model_dump_json())
 
 
 def test_produced_exact_result_meets_the_queried_threshold() -> None:

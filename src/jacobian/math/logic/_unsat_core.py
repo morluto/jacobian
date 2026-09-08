@@ -6,6 +6,7 @@ import json
 import math
 import re
 import sys
+import time
 from fractions import Fraction
 from math import lcm
 from pathlib import Path
@@ -15,8 +16,17 @@ from typing import Any, Literal, NamedTuple, Self
 from pydantic import ConfigDict, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._execution import OperationExecutionCancelledError, request_checkpoint
+from jacobian._execution import (
+    BackendFailureReason,
+    OperationBackendError,
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+    execution_deadline,
+    remaining_timeout_ms,
+    require_execution_deadline,
+)
 from jacobian._models import StrictModel
+from jacobian._worker_errors import decode_worker_execution_error
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     MathTool,
@@ -32,8 +42,14 @@ from jacobian.math.logic._smt import (
     _tokenize_smtlib,
     _top_level_smtlib_commands,
 )
+from jacobian.math.logic._solver_errors import (
+    _classify_exhaustion,
+    _project_unknown,
+    _raise_exhaustion,
+)
 from jacobian.process import (
     ProcessResourceLimits,
+    check_bounded_process_result,
     run_bounded_process,
     worker_environment,
 )
@@ -379,11 +395,8 @@ def _parsed_request_error(
 
     try:
         import z3
-    except (ImportError, OSError):
-        # Backend absence provides no information about caller-controlled
-        # source. Leave this accepted request for execution to report as its
-        # typed UNKNOWN outcome.
-        return None
+    except (ImportError, OSError) as exc:
+        raise OperationBackendError(BackendFailureReason.INITIALIZATION) from exc
 
     try:
         assertions = _parse_assertions(smtlib)
@@ -396,10 +409,13 @@ def _parsed_request_error(
                 f"{_MAX_CORE_AST_NODES} distinct AST nodes"
             )
         _require_declared_logic(assertions, logic)
-    except (OSError, z3.Z3Exception):
-        # A deferred backend failure carries no evidence about this source;
-        # execution reports it through the typed UNKNOWN outcome.
-        return None
+    except (OperationExecutionTimeoutError, OperationExecutionCancelledError):
+        raise
+    except (OSError, z3.Z3Exception) as exc:
+        resource = _classify_exhaustion(str(exc))
+        if resource is not None:
+            _raise_exhaustion(resource, cause=exc)
+        raise OperationBackendError(BackendFailureReason.ABNORMAL_EXIT) from exc
     except ValueError as exc:
         return str(exc)
     return None
@@ -1258,7 +1274,7 @@ def _configured_solver(source: SmtUnsatCoreRequest, *, context: Any) -> Any:
 
     solver = z3.SolverFor(source.logic.value, ctx=context)
     solver.set(
-        timeout=source.timeout_ms,
+        timeout=remaining_timeout_ms(source.timeout_ms),
         rlimit=source.rlimit,
         random_seed=0,
         unsat_core=True,
@@ -1276,8 +1292,8 @@ def _bounded_outcome(
         return "SAT", None
     if outcome == z3.unsat:
         return "UNSAT", None
-    detail = solver.reason_unknown().strip() or "Z3 returned UNKNOWN."
-    return "UNKNOWN", detail[:1_024]
+    _, detail = _project_unknown(solver.reason_unknown())
+    return "UNKNOWN", detail
 
 
 def _extract_source_core(
@@ -1286,7 +1302,7 @@ def _extract_source_core(
     try:
         import z3
     except (ImportError, OSError) as exc:
-        return "UNKNOWN", (), f"the Z3 backend could not initialize: {exc}"[:1_024]
+        raise OperationBackendError(BackendFailureReason.INITIALIZATION) from exc
 
     try:
         context = z3.Context()
@@ -1302,15 +1318,20 @@ def _extract_source_core(
         core_ids = {literal.get_id() for literal in solver.unsat_core()}
         tracker_ids = {tracker.get_id() for tracker in trackers}
         if not core_ids or not core_ids <= tracker_ids:
-            return "UNKNOWN", (), "Z3 returned an unusable UNSAT core."
+            raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
         core_indices = tuple(
             index
             for index, tracker in enumerate(trackers)
             if tracker.get_id() in core_ids
         )
         return "UNSAT", core_indices, None
-    except (OSError, ValueError, z3.Z3Exception):
-        return "UNKNOWN", (), "Z3 could not complete the bounded source check."
+    except (OperationExecutionTimeoutError, OperationExecutionCancelledError):
+        raise
+    except (OSError, ValueError, z3.Z3Exception) as exc:
+        resource = _classify_exhaustion(str(exc))
+        if resource is not None:
+            _raise_exhaustion(resource, cause=exc)
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
 
 
 def _classify_source_for_execution(source: SmtUnsatCoreRequest) -> str | None:
@@ -1330,7 +1351,7 @@ def _replay_source(
     try:
         import z3
     except (ImportError, OSError) as exc:
-        return "UNKNOWN", f"the Z3 backend could not initialize: {exc}"[:1_024]
+        raise OperationBackendError(BackendFailureReason.INITIALIZATION) from exc
 
     try:
         context = z3.Context()
@@ -1343,8 +1364,13 @@ def _replay_source(
         solver = _configured_solver(source, context=context)
         solver.add(*(assertions[index] for index in selected))
         return _bounded_outcome(solver)
-    except (OSError, ValueError, z3.Z3Exception):
-        return "UNKNOWN", "Z3 could not complete the bounded source replay."
+    except (OperationExecutionTimeoutError, OperationExecutionCancelledError):
+        raise
+    except (OSError, ValueError, z3.Z3Exception) as exc:
+        resource = _classify_exhaustion(str(exc))
+        if resource is not None:
+            _raise_exhaustion(resource, cause=exc)
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
 
 
 def _unsat_core_worker_kernel(
@@ -1373,10 +1399,13 @@ def _run_unsat_core_worker(
     source: SmtUnsatCoreRequest,
     *,
     selected_indices: tuple[int, ...] | None = None,
-) -> dict[str, object] | None:
+    deadline: float | None = None,
+) -> dict[str, object]:
     """Execute one semantic core phase in an isolated, bounded Z3 worker."""
 
-    request_checkpoint("before SMT unsat-core worker")
+    if deadline is None:
+        deadline = execution_deadline(source.timeout_ms / 1000)
+    require_execution_deadline(deadline)
     payload: dict[str, object] = {
         "request": source.model_dump(mode="json"),
         "selected_indices": list(selected_indices)
@@ -1387,8 +1416,10 @@ def _run_unsat_core_worker(
         with TemporaryDirectory(prefix="jacobian-unsat-core-") as worker_directory:
             completed = run_bounded_process(
                 [sys.executable, str(_UNSAT_CORE_WORKER)],
-                input_bytes=json.dumps(payload, separators=(",", ":")).encode("utf-8"),
-                timeout_seconds=source.timeout_ms / 1_000,
+                input_bytes=json.dumps(
+                    {"_deadline": deadline, **payload}, separators=(",", ":")
+                ).encode("utf-8"),
+                timeout_seconds=max(0, deadline - time.monotonic()),
                 environment=worker_environment(locale="C.UTF-8"),
                 stdout_limit=_UNSAT_CORE_WORKER_OUTPUT_BYTES,
                 stderr_limit=_UNSAT_CORE_WORKER_ERROR_BYTES,
@@ -1399,52 +1430,47 @@ def _run_unsat_core_worker(
                 ),
                 cwd=worker_directory,
             )
-    except OSError:
-        return None
-    request_checkpoint("after SMT unsat-core worker")
-    if completed.cancelled:
-        raise OperationExecutionCancelledError("SMT unsat-core worker cancelled")
-    if (
-        completed.timed_out
-        or completed.stdout_exceeded
-        or completed.stderr_exceeded
-        or completed.returncode != 0
-    ):
-        return None
+    except OSError as exc:
+        require_execution_deadline(deadline)
+        raise OperationBackendError(BackendFailureReason.STARTUP) from exc
+    check_bounded_process_result(completed)
+    require_execution_deadline(deadline)
     try:
         response = json.loads(completed.stdout.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError):
-        request_checkpoint("during SMT unsat-core response validation")
-        return None
-    request_checkpoint("after SMT unsat-core response validation")
-    return response if isinstance(response, dict) else None
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        require_execution_deadline(deadline)
+        raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE) from exc
+    require_execution_deadline(deadline)
+    decode_worker_execution_error(response)
+    if not isinstance(response, dict):
+        raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE)
+    return response
 
 
 def compute_smt_unsat_core(request: SmtUnsatCoreRequest) -> SmtUnsatCoreResult:
     """Return a bounded core of source-assertion indices when Z3 proves UNSAT."""
 
-    response = _run_unsat_core_worker(request)
-    if response is None:
-        return SmtUnsatCoreResult(
-            source=request,
-            outcome="UNKNOWN",
-            detail="the bounded SMT core worker did not establish an outcome",
-        )
+    deadline = execution_deadline(request.timeout_ms / 1000)
+    response = _run_unsat_core_worker(request, deadline=deadline)
     detail = response.get("detail")
-    if response.get("kind") == "invalid" and isinstance(detail, str):
+    if (
+        set(response) == {"kind", "detail"}
+        and response.get("kind") == "invalid"
+        and isinstance(detail, str)
+        and 0 < len(detail) <= 1024
+    ):
         raise OperationDomainValidationError(
             location=("smtlib",),
             code="logic.unsat_core_contract",
-            message=detail[:1_024],
+            message=detail,
         )
-    if response.get("kind") != "result":
-        return SmtUnsatCoreResult(
-            source=request,
-            outcome="UNKNOWN",
-            detail="the bounded SMT core worker returned malformed output",
-        )
+    if (
+        set(response) != {"kind", "outcome", "core_indices", "detail"}
+        or response.get("kind") != "result"
+    ):
+        raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE)
     try:
-        return SmtUnsatCoreResult.model_validate(
+        result = SmtUnsatCoreResult.model_validate(
             {
                 "source": request,
                 "outcome": response["outcome"],
@@ -1452,12 +1478,11 @@ def compute_smt_unsat_core(request: SmtUnsatCoreRequest) -> SmtUnsatCoreResult:
                 "detail": response["detail"],
             }
         )
-    except (KeyError, TypeError, ValueError):
-        return SmtUnsatCoreResult(
-            source=request,
-            outcome="UNKNOWN",
-            detail="the bounded SMT core worker returned malformed output",
-        )
+    except (KeyError, TypeError, ValueError) as exc:
+        require_execution_deadline(deadline)
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
+    require_execution_deadline(deadline)
+    return result
 
 
 SMT_UNSAT_CORE_OPERATION = MathTool(
@@ -1467,6 +1492,7 @@ SMT_UNSAT_CORE_OPERATION = MathTool(
         "Return SAT, UNKNOWN, or a deterministic backend-selected set of source-order "
         "assertion indices whose exact subsystem replays as UNSAT through the "
         "maintained Z3 Python binding. The core need not be minimal."
+        " Resource exhaustion and backend failures raise execution errors; UNKNOWN denotes a healthy inconclusive solver answer."
     ),
     request_type=SmtUnsatCoreRequest,
     result_type=SmtUnsatCoreResult,

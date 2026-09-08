@@ -10,6 +10,10 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from jacobian._execution import (
+    OperationBackendError,
+    OperationExecutionTimeoutError,
+)
 from jacobian.math.graphs import _independence_z3 as z3_backend
 from jacobian.math.graphs.independence import (
     IndependenceNumberBudget,
@@ -383,11 +387,8 @@ def test_independence_worker_failure_is_not_an_exact_claim(
         ),
     )
 
-    result = solve_independence_number(IndependenceNumberRequest(graph=_path_graph()))
-
-    assert result.status == "UNKNOWN"
-    assert result.optimum_value is None
-    assert result.upper_bound == result.order
+    with pytest.raises(OperationExecutionTimeoutError):
+        solve_independence_number(IndependenceNumberRequest(graph=_path_graph()))
 
 
 def test_independence_worker_projection_cannot_replace_the_submitted_graph(
@@ -414,10 +415,8 @@ def test_independence_worker_projection_cannot_replace_the_submitted_graph(
         ),
     )
 
-    result = solve_independence_number(request)
-
-    assert result.status == "UNKNOWN"
-    assert result.graph == request.graph
+    with pytest.raises(OperationBackendError):
+        solve_independence_number(request)
 
 
 def test_native_result_does_not_inherit_canonical_output_limit() -> None:

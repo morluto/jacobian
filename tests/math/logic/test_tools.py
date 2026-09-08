@@ -14,8 +14,10 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._execution import (
+    OperationBackendError,
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
+    OperationResourceExhaustedError,
     request_cancellation,
     request_execution,
 )
@@ -273,15 +275,8 @@ def test_sat_solver_does_not_promote_a_malformed_backend_model(
         ),
     )
 
-    result = solve_sat(
-        SatSolveRequest(cnf=CanonicalCnf(variables=("x",), clauses=((1,),)))
-    )
-
-    assert result.outcome == "UNKNOWN"
-    assert result.assignment is None
-    assert result.detail == (
-        "the Z3 worker returned an assignment that does not satisfy the canonical CNF"
-    )
+    with pytest.raises(OperationBackendError):
+        solve_sat(SatSolveRequest(cnf=CanonicalCnf(variables=("x",), clauses=((1,),))))
 
 
 def test_sat_solver_invalid_model_cannot_outlive_request_deadline(
@@ -340,24 +335,18 @@ def test_smt_solver_does_not_promote_a_malformed_backend_model(
 
     monkeypatch.setattr(z3, "SolverFor", lambda _logic: MisreportingSolver())
 
-    result = _solve_smt_kernel(
-        SmtSolveRequest(
-            logic=SmtLogic.QF_LIA,
-            smtlib=(
-                "(set-logic QF_LIA)\n"
-                "(declare-const x Int)\n"
-                "(assert (> x 0))\n"
-                "(check-sat)"
-            ),
+    with pytest.raises(OperationBackendError):
+        _solve_smt_kernel(
+            SmtSolveRequest(
+                logic=SmtLogic.QF_LIA,
+                smtlib=(
+                    "(set-logic QF_LIA)\n"
+                    "(declare-const x Int)\n"
+                    "(assert (> x 0))\n"
+                    "(check-sat)"
+                ),
+            )
         )
-    )
-
-    assert result.outcome == "UNKNOWN"
-    assert result.model_smtlib is None
-    assert result.detail == (
-        "the Z3 backend returned a model that does not satisfy the admitted "
-        "SMT-LIB assertions"
-    )
 
 
 def test_smt_solver_uses_the_inline_smtlib_query() -> None:
@@ -924,15 +913,17 @@ def test_sat_worker_never_projects_transport_failure_as_a_math_verdict(
                 SatSolveRequest(cnf=CanonicalCnf(variables=("x",), clauses=((1,),)))
             )
     else:
-        result = solve_sat(
-            SatSolveRequest(cnf=CanonicalCnf(variables=("x",), clauses=((1,),)))
-        )
-        assert result.outcome == "UNKNOWN"
-        assert result.exhausted is None
-        assert detail in (result.detail or "")
+        with pytest.raises(
+            OperationResourceExhaustedError
+            if completed.stdout_exceeded
+            else OperationBackendError
+        ):
+            solve_sat(
+                SatSolveRequest(cnf=CanonicalCnf(variables=("x",), clauses=((1,),)))
+            )
 
 
-def test_sat_worker_start_failure_is_a_typed_unknown(
+def test_sat_worker_start_failure_is_an_execution_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def unavailable(*_args: object, **_kwargs: object) -> BoundedProcessResult:
@@ -940,13 +931,8 @@ def test_sat_worker_start_failure_is_a_typed_unknown(
 
     monkeypatch.setattr(sat, "run_bounded_process", unavailable)
 
-    result = solve_sat(
-        SatSolveRequest(cnf=CanonicalCnf(variables=("x",), clauses=((1,),)))
-    )
-
-    assert result.outcome == "UNKNOWN"
-    assert result.exhausted is None
-    assert result.detail == "the bounded Z3 worker could not be started"
+    with pytest.raises(OperationBackendError):
+        solve_sat(SatSolveRequest(cnf=CanonicalCnf(variables=("x",), clauses=((1,),))))
 
 
 @pytest.mark.parametrize(
@@ -979,18 +965,20 @@ def test_smt_worker_never_projects_transport_failure_as_a_math_verdict(
                 )
             )
     else:
-        result = solve_smt(
-            SmtSolveRequest(
-                logic=SmtLogic.QF_LIA,
-                smtlib="(set-logic QF_LIA)\n(declare-const x Int)\n(check-sat)",
+        with pytest.raises(
+            OperationResourceExhaustedError
+            if completed.stdout_exceeded
+            else OperationBackendError
+        ):
+            solve_smt(
+                SmtSolveRequest(
+                    logic=SmtLogic.QF_LIA,
+                    smtlib="(set-logic QF_LIA)\n(declare-const x Int)\n(check-sat)",
+                )
             )
-        )
-        assert result.outcome == "UNKNOWN"
-        assert result.exhausted is None
-        assert detail in (result.detail or "")
 
 
-def test_smt_worker_start_failure_is_a_typed_unknown(
+def test_smt_worker_start_failure_is_an_execution_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def unavailable(*_args: object, **_kwargs: object) -> BoundedProcessResult:
@@ -998,19 +986,16 @@ def test_smt_worker_start_failure_is_a_typed_unknown(
 
     monkeypatch.setattr(smt, "run_bounded_process", unavailable)
 
-    result = solve_smt(
-        SmtSolveRequest(
-            logic=SmtLogic.QF_LIA,
-            smtlib="(set-logic QF_LIA)\n(declare-const x Int)\n(check-sat)",
+    with pytest.raises(OperationBackendError):
+        solve_smt(
+            SmtSolveRequest(
+                logic=SmtLogic.QF_LIA,
+                smtlib="(set-logic QF_LIA)\n(declare-const x Int)\n(check-sat)",
+            )
         )
-    )
-
-    assert result.outcome == "UNKNOWN"
-    assert result.exhausted is None
-    assert result.detail == "the bounded Z3 worker could not be started"
 
 
-def test_smt_parse_stage_expiry_is_a_typed_unknown(
+def test_smt_parse_stage_expiry_is_an_execution_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Parser work cannot outlive the hard parent-to-worker deadline."""
@@ -1062,65 +1047,54 @@ def test_native_smt_caller_cancellation_stops_before_worker_launch(
         solve_smt(request)
 
 
-def test_smt_solver_projects_exhausted_work_budget_as_typed_unknown(
+def test_smt_solver_projects_exhausted_work_budget_as_execution_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(smt, "_SOLVER_RLIMIT", 1)
-    result = _solve_smt_kernel(
-        SmtSolveRequest(
-            logic=SmtLogic.QF_LIA,
-            smtlib="(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)",
+    with pytest.raises(OperationResourceExhaustedError) as caught:
+        _solve_smt_kernel(
+            SmtSolveRequest(
+                logic=SmtLogic.QF_LIA,
+                smtlib="(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)",
+            )
         )
-    )
-
-    assert result.outcome == "UNKNOWN"
-    assert result.exhausted == "work"
-    assert result.model_smtlib is None
-    assert result.detail is not None and "work budget" in result.detail
+    assert caught.value.resource == "work"
 
 
-def test_sat_solver_projects_exhausted_work_budget_as_typed_unknown(
+def test_sat_solver_projects_exhausted_work_budget_as_execution_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(smt, "_SOLVER_RLIMIT", 1)
-    result = _solve_sat_kernel(
-        SatSolveRequest(cnf=CanonicalCnf(variables=("x",), clauses=((1,),)))
-    )
-
-    assert result.outcome == "UNKNOWN"
-    assert result.exhausted == "work"
-    assert result.assignment is None
-    assert result.detail is not None and "work budget" in result.detail
+    with pytest.raises(OperationResourceExhaustedError) as caught:
+        _solve_sat_kernel(
+            SatSolveRequest(cnf=CanonicalCnf(variables=("x",), clauses=((1,),)))
+        )
+    assert caught.value.resource == "work"
 
 
-def test_smt_solver_projects_exhausted_memory_budget_as_typed_unknown(
+def test_smt_solver_projects_exhausted_memory_budget_as_execution_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(smt, "_SOLVER_MAX_MEMORY_MB", 2)
-    result = _solve_smt_kernel(
-        SmtSolveRequest(
-            logic=SmtLogic.QF_LIA,
-            smtlib=_pigeonhole_smtlib(8, 7),
+    with pytest.raises(OperationResourceExhaustedError) as caught:
+        _solve_smt_kernel(
+            SmtSolveRequest(
+                logic=SmtLogic.QF_LIA,
+                smtlib=_pigeonhole_smtlib(8, 7),
+            )
         )
-    )
-
-    assert result.outcome == "UNKNOWN"
-    assert result.exhausted == "memory"
-    assert result.detail is not None and "memory budget" in result.detail
+    assert caught.value.resource == "memory"
 
 
-def test_smt_solver_projects_exhausted_time_budget_as_typed_unknown() -> None:
-    result = _solve_smt_kernel(
-        SmtSolveRequest(
-            logic=SmtLogic.QF_LIA,
-            smtlib=_pigeonhole_smtlib(8, 7),
-            timeout_ms=1,
+def test_smt_solver_projects_exhausted_time_budget_as_execution_failure() -> None:
+    with pytest.raises(OperationExecutionTimeoutError):
+        _solve_smt_kernel(
+            SmtSolveRequest(
+                logic=SmtLogic.QF_LIA,
+                smtlib=_pigeonhole_smtlib(8, 7),
+                timeout_ms=1,
+            )
         )
-    )
-
-    assert result.outcome == "UNKNOWN"
-    assert result.exhausted == "time"
-    assert result.detail is not None and "time budget" in result.detail
 
 
 def test_smt_solver_wraps_backend_failure_during_the_solve(
@@ -1139,16 +1113,13 @@ def test_smt_solver_wraps_backend_failure_during_the_solve(
             raise z3.Z3Exception("backend exploded")
 
     monkeypatch.setattr(z3, "SolverFor", lambda _logic: ExplodingSolver())
-    result = _solve_smt_kernel(
-        SmtSolveRequest(
-            logic=SmtLogic.QF_LIA,
-            smtlib="(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)",
+    with pytest.raises(OperationBackendError):
+        _solve_smt_kernel(
+            SmtSolveRequest(
+                logic=SmtLogic.QF_LIA,
+                smtlib="(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)",
+            )
         )
-    )
-
-    assert result.outcome == "UNKNOWN"
-    assert result.exhausted is None
-    assert result.detail is not None and "backend exploded" in result.detail
 
 
 @pytest.mark.parametrize(
@@ -1179,14 +1150,17 @@ def test_sat_solver_projects_exhaustion_messages_from_z3_exceptions(
             raise AssertionError("check must not run after a failed assertion add")
 
     monkeypatch.setattr(z3, "Solver", ExhaustingSolver)
-    result = _solve_sat_kernel(
-        SatSolveRequest(cnf=CanonicalCnf(variables=("x",), clauses=((1,),)))
-    )
-
-    assert result.outcome == "UNKNOWN"
-    assert result.exhausted == exhausted
-    assert result.assignment is None
-    assert result.detail == smt._EXHAUSTION_DETAILS[exhausted]
+    with pytest.raises(
+        OperationExecutionTimeoutError
+        if exhausted == "time"
+        else OperationResourceExhaustedError
+    ) as caught:
+        _solve_sat_kernel(
+            SatSolveRequest(cnf=CanonicalCnf(variables=("x",), clauses=((1,),)))
+        )
+    if exhausted != "time":
+        assert isinstance(caught.value, OperationResourceExhaustedError)
+        assert caught.value.resource == exhausted
 
 
 @pytest.mark.parametrize(
@@ -1215,17 +1189,20 @@ def test_smt_solver_projects_exhaustion_messages_from_z3_exceptions(
             raise AssertionError("check must not run after a failed assertion add")
 
     monkeypatch.setattr(z3, "SolverFor", lambda _logic: ExhaustingSolver())
-    result = _solve_smt_kernel(
-        SmtSolveRequest(
-            logic=SmtLogic.QF_LIA,
-            smtlib="(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)",
+    with pytest.raises(
+        OperationExecutionTimeoutError
+        if exhausted == "time"
+        else OperationResourceExhaustedError
+    ) as caught:
+        _solve_smt_kernel(
+            SmtSolveRequest(
+                logic=SmtLogic.QF_LIA,
+                smtlib="(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)",
+            )
         )
-    )
-
-    assert result.outcome == "UNKNOWN"
-    assert result.exhausted == exhausted
-    assert result.model_smtlib is None
-    assert result.detail == smt._EXHAUSTION_DETAILS[exhausted]
+    if exhausted != "time":
+        assert isinstance(caught.value, OperationResourceExhaustedError)
+        assert caught.value.resource == exhausted
 
 
 def test_smt_solver_projects_exhaustion_from_model_serialization(
@@ -1254,16 +1231,14 @@ def test_smt_solver_projects_exhaustion_from_model_serialization(
             return ExhaustingModel()
 
     monkeypatch.setattr(z3, "SolverFor", lambda _logic: SolvingThenExhaustingSolver())
-    result = _solve_smt_kernel(
-        SmtSolveRequest(
-            logic=SmtLogic.QF_LIA,
-            smtlib="(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)",
+    with pytest.raises(OperationResourceExhaustedError) as caught:
+        _solve_smt_kernel(
+            SmtSolveRequest(
+                logic=SmtLogic.QF_LIA,
+                smtlib="(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)",
+            )
         )
-    )
-
-    assert result.outcome == "UNKNOWN"
-    assert result.exhausted == "memory"
-    assert result.detail == "the bounded solver memory budget was exhausted"
+    assert caught.value.resource == "memory"
 
 
 def test_solver_wraps_unrecognized_z3_exceptions_without_typed_exhaustion(
@@ -1282,24 +1257,17 @@ def test_solver_wraps_unrecognized_z3_exceptions_without_typed_exhaustion(
             raise AssertionError("check must not run after a failed assertion add")
 
     monkeypatch.setattr(z3, "Solver", ExplodingSolver)
-    sat_result = _solve_sat_kernel(
-        SatSolveRequest(cnf=CanonicalCnf(variables=("x",), clauses=((1,),)))
-    )
-    monkeypatch.setattr(z3, "SolverFor", lambda _logic: ExplodingSolver())
-    smt_result = _solve_smt_kernel(
-        SmtSolveRequest(
-            logic=SmtLogic.QF_LIA,
-            smtlib="(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)",
+    with pytest.raises(OperationBackendError):
+        _solve_sat_kernel(
+            SatSolveRequest(cnf=CanonicalCnf(variables=("x",), clauses=((1,),)))
         )
-    )
-
-    for result in (sat_result, smt_result):
-        assert result.outcome == "UNKNOWN"
-        assert result.exhausted is None
-        assert result.detail is not None
-        assert (
-            "the Z3 backend failed during the bounded solve: backend exploded"
-            in result.detail
+    monkeypatch.setattr(z3, "SolverFor", lambda _logic: ExplodingSolver())
+    with pytest.raises(OperationBackendError):
+        _solve_smt_kernel(
+            SmtSolveRequest(
+                logic=SmtLogic.QF_LIA,
+                smtlib="(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)",
+            )
         )
 
 
@@ -1326,7 +1294,7 @@ def test_solver_wraps_unrecognized_z3_exceptions_without_typed_exhaustion(
         ),
     ),
 )
-def test_z3_initialization_failure_is_a_typed_unknown(
+def test_z3_initialization_failure_is_an_execution_failure(
     operation: Callable[[object], SatSolveResult | SmtSolveResult],
     accepted_request: object,
     monkeypatch: pytest.MonkeyPatch,
@@ -1335,13 +1303,8 @@ def test_z3_initialization_failure_is_a_typed_unknown(
 
     monkeypatch.setitem(sys.modules, "z3", None)
 
-    result = operation(accepted_request)
-
-    assert result.outcome == "UNKNOWN"
-    assert result.exhausted is None
-    assert result.detail is not None
-    assert "could not initialize" in result.detail
-    assert type(result).model_validate(result.model_dump()) == result
+    with pytest.raises(OperationBackendError):
+        operation(accepted_request)
 
 
 def test_smt_request_admission_skips_grammar_rejection_without_the_backend(
@@ -1355,12 +1318,8 @@ def test_smt_request_admission_skips_grammar_rejection_without_the_backend(
         smtlib="(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)",
     )
 
-    result = _solve_smt_kernel(admitted)
-
-    assert result.outcome == "UNKNOWN"
-    assert result.exhausted is None
-    assert result.detail is not None
-    assert "could not initialize" in result.detail
+    with pytest.raises(OperationBackendError):
+        _solve_smt_kernel(admitted)
 
 
 def test_smt_request_does_not_parse_before_execution(
@@ -1405,10 +1364,10 @@ def test_smt_execution_reports_undeclared_identifiers_without_resource_claims(
         )
 
 
-def test_smt_solver_types_parse_stage_backend_failures_as_unknown(
+def test_smt_solver_types_parse_stage_backend_failures_as_execution_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A backend parser failure on an admitted source is execution UNKNOWN."""
+    """A backend parser failure on an admitted source is execution failure."""
 
     import z3
 
@@ -1420,11 +1379,9 @@ def test_smt_solver_types_parse_stage_backend_failures_as_unknown(
         smtlib="(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)",
     )
     monkeypatch.setattr(z3, "parse_smt2_string", exhausting_parser)
-    result = _solve_smt_kernel(admitted)
-
-    assert result.outcome == "UNKNOWN"
-    assert result.exhausted == "memory"
-    assert result.detail == smt._EXHAUSTION_DETAILS["memory"]
+    with pytest.raises(OperationResourceExhaustedError) as caught:
+        _solve_smt_kernel(admitted)
+    assert caught.value.resource == "memory"
 
 
 def test_smt_solver_never_classifies_located_source_text_as_exhaustion(
@@ -1498,7 +1455,7 @@ def test_smt_execution_projects_located_parser_diagnostics(
         },
     ),
 )
-def test_smt_rejects_malformed_invalid_worker_envelopes_as_unknown(
+def test_smt_rejects_malformed_invalid_worker_envelopes_as_execution_failure(
     monkeypatch: pytest.MonkeyPatch, response: dict[str, object]
 ) -> None:
     monkeypatch.setattr(
@@ -1508,14 +1465,13 @@ def test_smt_rejects_malformed_invalid_worker_envelopes_as_unknown(
             stdout=json.dumps(response).encode("utf-8")
         ),
     )
-    result = solve_smt(
-        SmtSolveRequest(
-            logic=SmtLogic.QF_LIA,
-            smtlib="(set-logic QF_LIA)\n(check-sat)",
+    with pytest.raises(OperationBackendError):
+        solve_smt(
+            SmtSolveRequest(
+                logic=SmtLogic.QF_LIA,
+                smtlib="(set-logic QF_LIA)\n(check-sat)",
+            )
         )
-    )
-    assert result.outcome == "UNKNOWN"
-    assert result.detail == "the bounded Z3 worker returned malformed output"
 
 
 def test_smt_request_admission_defers_parse_stage_os_errors(
@@ -1526,7 +1482,7 @@ def test_smt_request_admission_defers_parse_stage_os_errors(
     ``math.run`` validates the request before calling the solver, so admission
     must not let a native ``OSError`` from ``parse_smt2_string`` escape as a
     host exception; it carries no evidence about the source and defers to
-    execution, which reports it through the typed UNKNOWN translation.
+    execution, which reports it through the typed execution failure translation.
     """
 
     import z3
@@ -1537,9 +1493,8 @@ def test_smt_request_admission_defers_parse_stage_os_errors(
     source = "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)"
     monkeypatch.setattr(z3, "parse_smt2_string", failing_parser)
     admitted = SmtSolveRequest(logic=SmtLogic.QF_LIA, smtlib=source)
-    result = _solve_smt_kernel(admitted)
-
-    assert result.outcome == "UNKNOWN"
+    with pytest.raises(OperationBackendError):
+        _solve_smt_kernel(admitted)
 
 
 @pytest.mark.parametrize(
@@ -1564,16 +1519,20 @@ def test_every_concrete_smt_request_keeps_grammar_validation_structural(
 
 
 def test_unknown_projection_maps_every_exhausted_resource() -> None:
-    assert smt._project_unknown("max. resource limit exceeded") == (
-        "work",
-        "the bounded solver work budget was exhausted",
+    for reason, resource in (
+        ("max. resource limit exceeded", "work"),
+        ("canceled", "work"),
+        ("max. memory exceeded", "memory"),
+    ):
+        with pytest.raises(OperationResourceExhaustedError) as caught:
+            smt._project_unknown(reason)
+        assert caught.value.resource == resource
+    with pytest.raises(OperationExecutionTimeoutError):
+        smt._project_unknown("timeout")
+    assert smt._project_unknown("max. engine depth reached") == (
+        None,
+        "the solver returned an inconclusive answer",
     )
-    assert smt._project_unknown("canceled")[0] == "work"
-    assert smt._project_unknown("max. memory exceeded")[0] == "memory"
-    assert smt._project_unknown("timeout")[0] == "time"
-    passthrough = smt._project_unknown("max. engine depth reached")
-    assert passthrough[0] is None
-    assert passthrough[1] == "max. engine depth reached"
     assert smt._project_unknown(None)[1].endswith("no completeness evidence")
 
 

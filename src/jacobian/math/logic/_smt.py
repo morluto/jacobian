@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import math
-import re
 import sys
 import time
 from enum import StrEnum
@@ -21,16 +20,31 @@ from pydantic import (
 from pydantic_core import PydanticCustomError
 
 from jacobian._execution import (
+    BackendFailureReason,
+    ExecutionResource,
+    OperationBackendError,
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
+    OperationResourceExhaustedError,
     bind_request_deadline,
     current_request_execution,
+    remaining_timeout_ms,
     request_checkpoint,
+    require_execution_deadline,
 )
 from jacobian._models import StrictModel
+from jacobian._worker_errors import decode_worker_execution_error
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.logic._solver_errors import (
+    _Z3_SOURCE_DIAGNOSTIC,
+    _classify_exhaustion,
+    _project_unknown,
+    _raise_exhaustion,
+    _UnknownResource,
+)
 from jacobian.process import (
     ProcessResourceLimits,
+    check_bounded_process_result,
     run_bounded_process,
     worker_environment,
 )
@@ -58,7 +72,7 @@ _MAX_SMTLIB_ARITHMETIC_WORK = _MAX_SMTLIB_NUMERAL_DIGITS**2 * 64
 # or speed. The ceiling is orders of magnitude above admitted easy queries
 # (measured <1k units) while cutting runaway search within seconds at a
 # measured ~0.2-5M units/s across QF regimes. max_memory caps Z3's own arena so
-# exhaustion surfaces as typed UNKNOWN instead of host memory pressure.
+# exhaustion surfaces as typed execution failure instead of host memory pressure.
 _SOLVER_RLIMIT = 20_000_000
 _SOLVER_MAX_MEMORY_MB = 1024
 _MAX_MODEL_BYTES = 64_000
@@ -79,7 +93,6 @@ _SUPPORTED_SMTLIB_COMMANDS = frozenset(
 _SUPPORTED_SMTLIB_COMMANDS_DESCRIPTION = (
     "set-logic, declare-const, declare-fun, assert, and check-sat"
 )
-_UnknownResource = Literal["time", "work", "memory"]
 
 
 def _execution_deadline(timeout_ms: int, stage: str) -> float:
@@ -417,9 +430,6 @@ def _smtlib_structure(source: str) -> _SmtLibStructure:
     return _SmtLibStructure(max_depth, compound_terms, numeral_digits)
 
 
-_Z3_SOURCE_DIAGNOSTIC = re.compile(r'\(error "line \d+ column \d+: ')
-
-
 def _exception_message(exc: Exception) -> str:
     message = exc.args[0] if exc.args else ""
     if isinstance(message, bytes):
@@ -576,54 +586,11 @@ class SmtSolveResult(StrictModel):
         return self
 
 
-_EXHAUSTION_DETAILS: dict[_UnknownResource, str] = {
-    "work": "the bounded solver work budget was exhausted",
-    "memory": "the bounded solver memory budget was exhausted",
-    "time": "the bounded solver time budget was exhausted",
-}
-
-
-def _classify_exhaustion(message: str) -> _UnknownResource | None:
-    """Classify one Z3 reason or exception message onto the exhausted budgets.
-
-    Exhaustion keywords classify only backend conditions, which carry no
-    source locator. A message containing a located ``(error "line ...
-    column ...: ...")`` diagnostic is never classified as exhaustion, even
-    when its text mentions a resource keyword: the diagnostic quotes
-    caller-controlled source spellings, so an undeclared identifier named
-    ``memory`` or a comment mentioning ``timeout`` must not report an
-    exhausted budget.
-    """
-
-    if _Z3_SOURCE_DIAGNOSTIC.search(message) is not None:
-        return None
-    lowered = message.strip().lower()
-    if "resource limit" in lowered or "canceled" in lowered:
-        return "work"
-    if "memory" in lowered:
-        return "memory"
-    if "timeout" in lowered or "time limit" in lowered:
-        return "time"
-    return None
-
-
-def _project_unknown(reason: str | None) -> tuple[_UnknownResource | None, str]:
-    """Project one Z3 unknown reason onto the typed exhausted-budget taxonomy."""
-
-    text = (reason or "").strip()
-    classified = _classify_exhaustion(text)
-    if classified is not None:
-        return classified, _EXHAUSTION_DETAILS[classified]
-    if not text:
-        return None, "the solver returned no completeness evidence"
-    return None, text[:1_024]
-
-
 def _solver_settings(timeout_ms: int) -> dict[str, int]:
     """Return the full request-scoped Z3 budget: wall time, work, and memory."""
 
     return {
-        "timeout": timeout_ms,
+        "timeout": remaining_timeout_ms(timeout_ms),
         "rlimit": _SOLVER_RLIMIT,
         "max_memory": _SOLVER_MAX_MEMORY_MB,
     }
@@ -721,25 +688,6 @@ def _probe_declared_logic(
         raise ValueError(f"SMT terms must belong to the declared {logic} fragment")
 
 
-def _result(request: SmtSolveRequest, **values: object) -> SmtSolveResult:
-    """Bind every projected worker outcome to its exact admitted source."""
-
-    return SmtSolveResult.model_validate(
-        {"source": request.model_dump(mode="json"), **values}
-    )
-
-
-def _time_exhausted_result(request: SmtSolveRequest) -> SmtSolveResult:
-    """Project expiry of the admitted owner envelope as a non-conclusion."""
-
-    return _result(
-        request,
-        outcome="UNKNOWN",
-        exhausted="time",
-        detail=_EXHAUSTION_DETAILS["time"],
-    )
-
-
 def _solve_smt_kernel(
     *, logic: str, smtlib: str, timeout_ms: int
 ) -> dict[str, str | None]:
@@ -748,12 +696,7 @@ def _solve_smt_kernel(
     try:
         import z3
     except (ImportError, OSError) as exc:
-        return {
-            "outcome": "UNKNOWN",
-            "model_smtlib": None,
-            "exhausted": None,
-            "detail": f"the Z3 backend could not initialize: {exc}"[:1_024],
-        }
+        raise OperationBackendError(BackendFailureReason.INITIALIZATION) from exc
 
     try:
         assertions = z3.parse_smt2_string(smtlib)
@@ -771,23 +714,10 @@ def _solve_smt_kernel(
                 z3.is_true(model.eval(assertion, model_completion=True))
                 for assertion in assertions
             ):
-                return {
-                    "outcome": "UNKNOWN",
-                    "model_smtlib": None,
-                    "exhausted": None,
-                    "detail": (
-                        "the Z3 backend returned a model that does not satisfy the "
-                        "admitted SMT-LIB assertions"
-                    ),
-                }
+                raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
             model_smtlib = model.sexpr()
             if len(model_smtlib.encode("utf-8")) > _MAX_MODEL_BYTES:
-                return {
-                    "outcome": "UNKNOWN",
-                    "model_smtlib": None,
-                    "exhausted": None,
-                    "detail": "the satisfying model exceeds the bounded result limit",
-                }
+                raise OperationResourceExhaustedError(ExecutionResource.OUTPUT)
             return {
                 "outcome": "SAT",
                 "model_smtlib": model_smtlib,
@@ -801,6 +731,8 @@ def _solve_smt_kernel(
                 "exhausted": None,
                 "detail": None,
             }
+    except (OperationExecutionTimeoutError, OperationExecutionCancelledError):
+        raise
     except (OSError, z3.Z3Exception) as exc:
         if isinstance(exc, z3.Z3Exception) and _is_smtlib_source_diagnostic(exc):
             return {
@@ -809,19 +741,8 @@ def _solve_smt_kernel(
             }
         exhausted = _classify_exhaustion(str(exc))
         if exhausted is not None:
-            return {
-                "outcome": "UNKNOWN",
-                "model_smtlib": None,
-                "exhausted": exhausted,
-                "detail": _EXHAUSTION_DETAILS[exhausted],
-            }
-        detail = f"the Z3 backend failed during the bounded solve: {exc}"
-        return {
-            "outcome": "UNKNOWN",
-            "model_smtlib": None,
-            "exhausted": None,
-            "detail": detail[:1_024],
-        }
+            _raise_exhaustion(exhausted, cause=exc)
+        raise OperationBackendError(BackendFailureReason.ABNORMAL_EXIT) from exc
     exhausted, detail = _project_unknown(solver.reason_unknown())
     return {
         "outcome": "UNKNOWN",
@@ -849,6 +770,7 @@ def _run_smt_worker(request: SmtSolveRequest) -> SmtSolveResult:
                 [sys.executable, str(_SMT_WORKER)],
                 input_bytes=json.dumps(
                     {
+                        "_deadline": deadline,
                         "logic": request.logic.value,
                         "smtlib": request.smtlib,
                         "timeout_ms": request.timeout_ms,
@@ -868,34 +790,15 @@ def _run_smt_worker(request: SmtSolveRequest) -> SmtSolveResult:
             )
     except (OperationExecutionCancelledError, OperationExecutionTimeoutError):
         raise
-    except OSError:
-        _require_execution_deadline(deadline, "after SMT worker startup")
-        return _result(
-            request,
-            outcome="UNKNOWN",
-            detail="the bounded Z3 worker could not be started",
-        )
-    if completed.timed_out:
-        raise OperationExecutionTimeoutError(
-            "request deadline expired during SMT worker"
-        )
-    if completed.cancelled:
-        raise OperationExecutionCancelledError("request cancelled during SMT worker")
-    if completed.stdout_exceeded or completed.stderr_exceeded:
-        return _result(
-            request,
-            outcome="UNKNOWN",
-            detail="the bounded Z3 worker exceeded its output limit",
-        )
-    if completed.returncode != 0:
-        return _result(
-            request,
-            outcome="UNKNOWN",
-            detail="the bounded Z3 worker failed before returning a result",
-        )
-    _require_execution_deadline(deadline, "after SMT worker")
+    except OSError as exc:
+        require_execution_deadline(deadline)
+        raise OperationBackendError(BackendFailureReason.STARTUP) from exc
+    check_bounded_process_result(completed)
+    require_execution_deadline(deadline)
     try:
         response = json.loads(completed.stdout.decode("utf-8"))
+        require_execution_deadline(deadline)
+        decode_worker_execution_error(response)
         if not isinstance(response, dict):
             raise TypeError("worker response must be an object")
         if "source" in response:
@@ -914,16 +817,15 @@ def _run_smt_worker(request: SmtSolveRequest) -> SmtSolveResult:
         result = SmtSolveResult.model_validate(
             {"source": request.model_dump(mode="json"), **response}
         )
+        if result.exhausted is not None:
+            _raise_exhaustion(result.exhausted)
         _require_execution_deadline(deadline, "after SMT result projection")
         return result
     except OperationDomainValidationError:
         raise
-    except (TypeError, ValueError, UnicodeDecodeError, json.JSONDecodeError):
-        return _result(
-            request,
-            outcome="UNKNOWN",
-            detail="the bounded Z3 worker returned malformed output",
-        )
+    except (TypeError, ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        require_execution_deadline(deadline)
+        raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE) from exc
 
 
 def solve_smt(request: SmtSolveRequest) -> SmtSolveResult:
@@ -933,7 +835,6 @@ def solve_smt(request: SmtSolveRequest) -> SmtSolveResult:
 
 
 __all__ = [
-    "_EXHAUSTION_DETAILS",
     "SmtLogic",
     "SmtSolveRequest",
     "SmtSolveResult",

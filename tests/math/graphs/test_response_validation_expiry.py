@@ -6,7 +6,11 @@ from typing import Any
 
 import pytest
 
-from jacobian._execution import OperationExecutionCancelledError, request_cancellation
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+    request_cancellation,
+)
 from jacobian.math.graphs.optimization import _chromatic_number, _invariants
 from jacobian.math.graphs.optimization._coloring_models import (
     GraphChromaticNumberRequest,
@@ -64,12 +68,8 @@ def test_control_expiry_after_real_response_validation(
             with pytest.raises(OperationExecutionCancelledError):
                 execute(request)
         else:
-            result = execute(request)
-            assert result.status == "UNKNOWN"
-            assert "expired during response validation" in result.detail
-            assert "malformed" not in result.detail
-            if kind == "clique":
-                assert result.termination_reason == "WALL_TIME"
+            with pytest.raises(OperationExecutionTimeoutError):
+                execute(request)
 
 
 def test_augmentation_noop_expiry_has_a_modeled_outcome(
@@ -119,7 +119,9 @@ def test_hypergraph_response_validation_control_outcome(
     monkeypatch.setattr(
         module,
         "_run_independence_worker",
-        lambda *a, **_kwargs: expected.model_dump(mode="json"),
+        lambda *a, **_kwargs: expected.model_dump(
+            mode="json", exclude={"hypergraph", "resource_budget"}
+        ),
     )
     now = [0.0]
     event = Event()
@@ -142,10 +144,8 @@ def test_hypergraph_response_validation_control_outcome(
             with pytest.raises(OperationExecutionCancelledError):
                 module.solve_independence_number(source, budget)
         else:
-            result = module.solve_independence_number(source, budget)
-            assert result.termination_reason == "WALL_TIME"
-            assert result.wall_budget_exhausted
-            assert "malformed" not in result.detail
+            with pytest.raises(OperationExecutionTimeoutError):
+                module.solve_independence_number(source, budget)
 
 
 def test_hypergraph_worker_timeout_is_not_solver_error(
@@ -172,10 +172,10 @@ def test_hypergraph_worker_timeout_is_not_solver_error(
             timed_out=True,
         ),
     )
-    result = module.solve_independence_number(
-        source, HypergraphIndependenceBudget(wall_seconds=1)
-    )
-    assert result.termination_reason == "WALL_TIME"
+    with pytest.raises(OperationExecutionTimeoutError):
+        module.solve_independence_number(
+            source, HypergraphIndependenceBudget(wall_seconds=1)
+        )
 
 
 @pytest.mark.parametrize("cancel", [False, True])
@@ -219,6 +219,5 @@ def test_expiry_during_finite_graph_witness_check_precedes_invalid_witness(
             with pytest.raises(OperationExecutionCancelledError):
                 operation.run(request)
         else:
-            result = operation.run(request)
-            assert result.termination_reason == "WALL_TIME"
-            assert "invalid witness" not in result.detail
+            with pytest.raises(OperationExecutionTimeoutError):
+                operation.run(request)

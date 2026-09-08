@@ -129,7 +129,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         description="Compute a maximum vertex subset containing no complete hyperedge. "
         "Return either the exact independence number and a maximizing witness, "
         "or a source-bound feasible incumbent with sound lower and upper bounds "
-        "when the bounded exact threshold search does not finish.",
+        "when the bounded exact threshold search does not finish."
+        " Worker failures and parent deadline expiry raise execution errors; a valid partial result must arrive before that deadline.",
         request_type=HypergraphIndependenceRequest,
         result_type=HypergraphIndependenceResult,
         run=_compute_independence_number,

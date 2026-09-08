@@ -882,16 +882,13 @@ class IncidenceGraphResult(StrictModel):
             raise _validation_error(
                 "incidence pairs must equal the published vertex-incidence ledger"
             )
-        vertex_order = {
-            vertex: index for index, vertex in enumerate(self.hypergraph.vertices)
-        }
         grouped: dict[str, list[str]] = {edge_id: [] for edge_id in edge_ids}
         for vertex, edge_id in self.edges:
             grouped[edge_id].append(vertex)
         expected_edge_incidence = tuple(
             (
                 edge_id,
-                tuple(sorted(grouped[edge_id], key=vertex_order.__getitem__)),
+                tuple(sorted(grouped[edge_id])),
             )
             for edge_id in edge_ids
         )

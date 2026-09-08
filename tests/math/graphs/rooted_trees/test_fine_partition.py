@@ -14,6 +14,7 @@ from jacobian.math.graphs.rooted_trees import (
     RootedTreeNotATree,
     construct_fine_partition,
 )
+from jacobian.math.graphs.rooted_trees._models import RootedTreeFinePartitionRequest
 from jacobian.math.graphs.rooted_trees._tools import TOOLS
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -242,6 +243,39 @@ def test_non_tree_inputs_return_source_bound_diagnostics(
     assert (
         RootedTreeFinePartition.model_validate_json(result.model_dump_json()) == result
     )
+
+
+def test_edgeless_order_boundary_preserves_not_a_tree_envelope() -> None:
+    boundary = SimpleUndirectedGraph(
+        vertices=tuple(f"{index:03d}" for index in range(256)),
+        edges=(),
+    )
+    result = construct_fine_partition(boundary, boundary.vertices[0], 1)
+    assert result.outcome == RootedTreeNotATree(
+        connected=False,
+        has_cycle=False,
+        component_count=256,
+    )
+    restored = RootedTreeFinePartition.model_validate_json(result.model_dump_json())
+    assert restored == result
+    RootedTreeFinePartitionRequest(
+        graph=boundary,
+        root=boundary.vertices[0],
+        component_size_limit=1,
+    )
+
+    oversized = SimpleUndirectedGraph(
+        vertices=tuple(f"{index:03d}" for index in range(257)),
+        edges=(),
+    )
+    with pytest.raises(ValidationError, match="at most 256 vertices"):
+        RootedTreeFinePartitionRequest(
+            graph=oversized,
+            root=oversized.vertices[0],
+            component_size_limit=1,
+        )
+    with pytest.raises(OperationDomainValidationError, match="at most 256 vertices"):
+        construct_fine_partition(oversized, oversized.vertices[0], 1)
 
 
 def test_result_parsing_rejects_constructed_rows_not_bound_to_source() -> None:

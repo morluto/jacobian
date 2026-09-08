@@ -324,6 +324,22 @@ class TestIncidenceGraph:
         r = incidence_graph(hg)
         assert dict(r.edge_incidence)["e"] == ("a", "b", "c")
 
+    def test_edge_incidence_uses_lexical_member_order_not_declared_vertices(
+        self,
+    ) -> None:
+        hg = _hypergraph(
+            {
+                "vertices": ["z", "a"],
+                "edges": [["e", ["z", "a"]]],
+            }
+        )
+        result = incidence_graph(hg)
+        assert result.hypergraph.edges == (("e", ("a", "z")),)
+        assert dict(result.edge_incidence)["e"] == ("a", "z")
+        restored = type(result).model_validate(result.model_dump())
+        assert restored == result
+        assert restored.graph == result.graph
+
     def test_vertex_incidence_preserves_edge_order(self) -> None:
         hg: HypergraphWire = {
             "vertices": ["v"],

@@ -491,8 +491,9 @@ def _incidence_graph_data(
 
     ``vertex_incidence`` maps each vertex to the edge ids containing it in
     declared edge order.  ``edge_incidence`` maps each edge id to the
-    vertices it contains in declared vertex order.  ``edges`` is the list of
-    ``(vertex, edge_id)`` incidence pairs sorted by vertex then edge id.
+    vertices it contains in canonical lexical member order.  ``edges`` is
+    the list of ``(vertex, edge_id)`` incidence pairs sorted by vertex then
+    edge id.
     """
 
     edges = _canonical_edges(hypergraph)

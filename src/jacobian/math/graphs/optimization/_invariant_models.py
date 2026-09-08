@@ -14,15 +14,34 @@ from jacobian.math.graphs.optimization._models import (
     OptimizationTermination,
 )
 from jacobian.math.graphs.values import GraphVertexLabel as GraphVertex
-from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.graphs.values import MAX_SIMPLE_GRAPH_VERTICES, SimpleUndirectedGraph
+
+
+def _require_invariant_graph_order(graph: SimpleUndirectedGraph) -> None:
+    if len(graph.vertices) > MAX_SIMPLE_GRAPH_VERTICES:
+        raise PydanticCustomError(
+            "graph.invariant.vertex_bound",
+            "graph invariant operations support at most "
+            f"{MAX_SIMPLE_GRAPH_VERTICES} vertices",
+        )
 
 
 class GraphInvariantRequest(StrictModel):
     graph: SimpleUndirectedGraph
 
+    @model_validator(mode="after")
+    def require_supported_order(self) -> Self:
+        _require_invariant_graph_order(self.graph)
+        return self
+
 
 class GraphMaximumMatchingRequest(StrictModel):
     graph: SimpleUndirectedGraph
+
+    @model_validator(mode="after")
+    def require_supported_order(self) -> Self:
+        _require_invariant_graph_order(self.graph)
+        return self
 
 
 class GraphGirthResult(StrictModel):

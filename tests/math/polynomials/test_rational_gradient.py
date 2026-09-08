@@ -193,6 +193,11 @@ def test_repeated_linear_denominator_cancels_before_result_exponent() -> None:
     assert result.partial_derivatives[0] == rational_function_from_sympy(
         -33 / (x + 1) ** 34, ("x",)
     )
+    source = rational_function_from_sympy(1 / (x + 1) ** 35, ("x",))
+    result = _identity(source)
+    assert result.partial_derivatives[0] == rational_function_from_sympy(
+        -35 / (x + 1) ** 36, ("x",)
+    )
     source = _monomial_source(("x", "y"), (1, 1), (1, 0))
     with pytest.raises(OperationDomainValidationError, match="coprime"):
         gradient(source)
@@ -204,6 +209,14 @@ def test_repeated_linear_denominator_cancels_before_result_exponent() -> None:
     )
     with pytest.raises(OperationDomainValidationError, match="coprime"):
         gradient(authored)
+
+
+def test_linear_power_cancellation_preserves_unrelated_degrees() -> None:
+    x, y = symbols("x y")
+    numerator = sum(x ** (2 * i) for i in range(32)) * sum(y**j for j in range(5))
+    source = rational_function_from_sympy(numerator / (x + 1) ** 33, ("x", "y"))
+    with pytest.raises(OperationResourceAdmissionError, match="term"):
+        gradient(source)
 
 
 def test_shared_request_deadline() -> None:

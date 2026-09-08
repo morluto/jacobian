@@ -549,40 +549,48 @@ def _remove_guaranteed_common_monomial(bound: FractionBound) -> FractionBound:
     )
 
 
-def _guaranteed_linear_power_gcd_degree(denominator: SparseRationalPolynomial) -> int:
-    """Return ``deg(gcd(q, q'))`` when ``q`` is a power of a linear polynomial.
+def _guaranteed_linear_power_gcd(denominator: SparseRationalPolynomial) -> tuple[int, int]:
+    """Return ``(axis, deg(gcd(q, q')))`` for a power of a linear polynomial.
 
-    In characteristic zero, ``q = (alpha x + beta)^n`` with ``n >= 2`` and
-    ``beta != 0`` has ``gcd(q, q') = (alpha x + beta)^{n-1}``. The binomial
+    In characteristic zero, ``q = (alpha x_i + beta)^n`` with ``n >= 2`` and
+    ``beta != 0`` has ``gcd(q, q') = (alpha x_i + beta)^{n-1}``. The binomial
     coefficient recurrence is a source-intrinsic identity, so this lower bound
     does not replay differentiation or polynomial GCD.
     """
 
     if not denominator.terms:
-        return 0
+        return -1, 0
     axes = len(denominator.terms[0].exponents)
+    used = [
+        axis
+        for axis in range(axes)
+        if any(term.exponents[axis] for term in denominator.terms)
+    ]
+    if len(used) != 1:
+        return -1, 0
+    axis = used[0]
     by_degree: dict[int, Fraction] = {}
     for term in denominator.terms:
-        if any(term.exponents[axis] for axis in range(1, axes)):
-            return 0
-        degree = term.exponents[0]
+        if any(term.exponents[other] for other in range(axes) if other != axis):
+            return -1, 0
+        degree = term.exponents[axis]
         if degree in by_degree:
-            return 0
+            return -1, 0
         by_degree[degree] = term.coefficient.as_fraction()
     degree = max(by_degree, default=0)
     if degree < 2 or len(by_degree) != degree + 1:
-        return 0
+        return -1, 0
     if any(index not in by_degree for index in range(degree + 1)):
-        return 0
+        return -1, 0
     constant = by_degree[0]
     if constant == 0:
-        return 0
+        return -1, 0
     scale = by_degree[1] / (constant * degree)
     for index in range(1, degree + 1):
-        expected = by_degree[index - 1] * ((degree - index + 1) / index) * scale
+        expected = by_degree[index - 1] * Fraction(degree - index + 1, index) * scale
         if by_degree[index] != expected:
-            return 0
-    return degree - 1
+            return -1, 0
+    return axis, degree - 1
 
 
 def _remove_guaranteed_linear_power_factor(
@@ -590,18 +598,24 @@ def _remove_guaranteed_linear_power_factor(
 ) -> FractionBound:
     """Cancel the forced ``gcd(q, q')`` factor before canonical-result caps."""
 
-    extra = _guaranteed_linear_power_gcd_degree(source.denominator)
+    axis, extra = _guaranteed_linear_power_gcd(source.denominator)
     if extra <= 0 or bound.is_zero:
         return bound
 
     def reduce(polynomial: PolynomialBound) -> PolynomialBound:
-        drop = min(extra, polynomial.total_degree)
+        if axis >= len(polynomial.degrees):
+            return polynomial
+        drop = min(extra, polynomial.degrees[axis], polynomial.total_degree)
         if drop <= 0:
             return polynomial
+        degrees = tuple(
+            max(0, degree - drop) if index == axis else degree
+            for index, degree in enumerate(polynomial.degrees)
+        )
         return PolynomialBound(
             terms=polynomial.terms,
-            degrees=tuple(max(0, degree - drop) for degree in polynomial.degrees),
-            total_degree=polynomial.total_degree - drop,
+            degrees=degrees,
+            total_degree=max(0, polynomial.total_degree - drop),
             minimum_exponents=polynomial.minimum_exponents,
             coefficient_digits=polynomial.coefficient_digits,
             rational_content=polynomial.rational_content,

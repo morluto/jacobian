@@ -2,7 +2,6 @@
 
 from jacobian.math.geometry.differential.rational_tensor.covariant_derivative._models import (
     RationalCovariantDerivativeProfile,
-    RationalCovariantDerivativeRequest,
 )
 from jacobian.math.geometry.differential.rational_tensor.covariant_derivative.operations import (
     covariant_derivative,
@@ -10,6 +9,5 @@ from jacobian.math.geometry.differential.rational_tensor.covariant_derivative.op
 
 __all__ = [
     "RationalCovariantDerivativeProfile",
-    "RationalCovariantDerivativeRequest",
     "covariant_derivative",
 ]

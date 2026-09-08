@@ -135,9 +135,7 @@ class TestVertexOccurrences:
         td = TreeDecomposition(
             graph=SimpleUndirectedGraph(vertices=vertices, edges=()),
             tree_nodes=nodes,
-            tree_edges=tuple(
-                (nodes[index], nodes[index + 1]) for index in range(255)
-            ),
+            tree_edges=tuple((nodes[index], nodes[index + 1]) for index in range(255)),
             bags=tuple((vertices[index],) for index in range(256)),
         )
         result = compute_vertex_occurrences(VertexOccurrencesRequest(decomposition=td))

@@ -112,9 +112,10 @@ def _admit(
             for bound in (rational_bits, radical_bits, denominator_bits)
         ):
             _reject()
-        output_bits += rational_bits + radical_bits + 2 * denominator_bits
+        if retain_values:
+            output_bits += rational_bits + radical_bits + 2 * denominator_bits
         rows.append(_Pair((i, j), (a, b, c, e)))
-    if output_bits > 16_777_216:
+    if retain_values and output_bits > 16_777_216:
         raise OperationResourceAdmissionError(
             location=("configuration",),
             code="geometry.quadratic_distance.output_allocation",

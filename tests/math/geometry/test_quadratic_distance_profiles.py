@@ -201,3 +201,16 @@ def test_expired_deadline_is_preserved() -> None:
         bind_request_deadline(time.monotonic() - 1)
         with pytest.raises(OperationExecutionTimeoutError):
             distance_profile(source)
+
+
+def test_graph_selection_does_not_inherit_profile_output_bits() -> None:
+    huge = Fraction(1, 10**250 + 7)
+    points = tuple(
+        (
+            value(huge, Fraction(1, 10**249 + i + 3)),
+            value(Fraction(1, 10**248 + i + 5), Fraction(1, 10**247 + i + 11)),
+        )
+        for i in range(64)
+    )
+    selected = distance_graph(configuration(points), value(0))
+    assert selected.graph.edges == ()

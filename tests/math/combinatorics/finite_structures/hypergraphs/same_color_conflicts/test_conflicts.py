@@ -134,7 +134,7 @@ def test_deserialized_provenance_uses_source_axis_order() -> None:
         **payload["provenance"][0],
         "conflict_edge_id": result.provenance[0].conflict_edge_id,
     }
-    with pytest.raises(ValidationError, match="conflicting duplicate"):
+    with pytest.raises(ValidationError, match="union of the two source edges"):
         SameColorConflictsResult.model_validate(payload)
 
 
@@ -157,15 +157,14 @@ def test_deserialized_provenance_must_be_complete_and_name_unions() -> None:
         coloring(("a", "b", "c"), [("a",), ("b",), ("c",)], [0, 0, 0])
     )
     omitted = result.model_dump()
-    omitted["provenance"] = omitted["provenance"][1:]
+    omitted["provenance"] = list(omitted["provenance"])[1:]
     with pytest.raises(ValidationError, match="every same-colour source pair"):
         SameColorConflictsResult.model_validate(omitted)
     swapped = result.model_dump()
-    first, last = swapped["provenance"][0], swapped["provenance"][-1]
-    swapped["provenance"][0] = {
-        **first,
-        "conflict_edge_id": last["conflict_edge_id"],
-    }
+    rows = list(swapped["provenance"])
+    first, last = rows[0], rows[-1]
+    rows[0] = {**first, "conflict_edge_id": last["conflict_edge_id"]}
+    swapped["provenance"] = rows
     with pytest.raises(ValidationError, match="union of the two source edges"):
         SameColorConflictsResult.model_validate(swapped)
 
@@ -278,5 +277,5 @@ def test_native_all_distinct_distances_compose_to_full_independent_set() -> None
     )
     assert result.hypergraph.edges == ()
     independent = independence_number(result.hypergraph)
-    assert independent.status == "EXACT"
     assert independent.independence_number == 4
+

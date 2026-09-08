@@ -496,6 +496,7 @@ def compose_maps(  # noqa: C901
 
     # Inner denominators are construction guards, including denominators that
     # happen not to occur in a particular outer coordinate.
+    seen_inner_guards: set[bytes] = set()
     for component in inner.components:
         denominator = component.denominator
         if denominator.terms and any(denominator.terms[0].exponents):
@@ -503,6 +504,10 @@ def compose_maps(  # noqa: C901
                 variables=inner.source_variables,
                 polynomial=denominator,
             )
+            key = guard_key(guard)
+            if key in seen_inner_guards:
+                continue
+            seen_inner_guards.add(key)
             guards.append(guard)
             allocation.charge(
                 len(guard.polynomial.terms),

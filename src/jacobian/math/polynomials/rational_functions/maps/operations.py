@@ -24,6 +24,7 @@ from jacobian.math.polynomials.rational_functions.gradient.operations import (
     _general_gradient_admitted,
     _MonomialGradientPlan,
     _prepare_monomial_gradient,
+    _reduced_admitted_bound,
     _validate_admitted_factors,
 )
 from jacobian.math.polynomials.rational_functions.maps._models import (
@@ -154,9 +155,6 @@ def jacobian_matrix(source: RationalFunctionMap) -> RationalFunctionMapJacobian:
             general_bounds.append(None)
         else:
             bounds = _admit_general_gradient(component, ledger)
-            for bound in bounds:
-                digits = 1 if bound.is_zero else _canonical_coefficient_digits(bound)
-                output_allocation.charge(*_general_allocation(bound, digits))
             plans.append(None)
             general_bounds.append(bounds)
     entries = []
@@ -169,7 +167,15 @@ def jacobian_matrix(source: RationalFunctionMap) -> RationalFunctionMapJacobian:
                 raise RuntimeError("admitted Jacobian row is missing derivative bounds")
             factors = _admit_general_factors(component)
             _validate_admitted_factors(admitted_bounds, factors, ledger)
-            entries.append(_general_gradient_admitted(component, factors))
+            for bound, factor in zip(admitted_bounds, factors, strict=True):
+                reduced = _reduced_admitted_bound(bound, factor)
+                digits = (
+                    1 if reduced.is_zero else _canonical_coefficient_digits(reduced)
+                )
+                output_allocation.charge(*_general_allocation(reduced, digits))
+            entries.append(
+                _general_gradient_admitted(component, factors, admitted_bounds)
+            )
         else:
             entries.append(
                 _build_monomial_gradient(source.source_variables, monomial_plan)

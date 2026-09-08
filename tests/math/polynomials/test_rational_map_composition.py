@@ -253,6 +253,19 @@ def test_axis_mismatch_and_authored_noncanonical_source_are_rejected() -> None:
         compose_maps(outer, bad_inner)
 
 
+def test_identical_inner_denominators_are_one_construction_guard() -> None:
+    x = symbols("x")
+    coords = tuple(f"u{index}" for index in range(8))
+    inner = _map(
+        ("x",),
+        coords,
+        tuple(_rf(1 / (x + 1), (x,)) for _ in coords),
+    )
+    outer = _map(coords, ("z",), (_rf(symbols(coords[0]), coords),))
+    result = compose_maps(outer, inner)
+    assert len(result.construction_locus_guard) == 1
+
+
 def test_shared_deadline_is_honored() -> None:
     x, y = symbols("x y")
     inner = _map(("x",), ("y",), (_rf(x, (x,)),))

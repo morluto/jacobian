@@ -44,7 +44,30 @@ def test_k4_returns_canonical_split_and_exact_induced_values() -> None:
     assert result.model_validate_json(result.model_dump_json()) == result
 
 
-def test_k3_has_exact_no_split() -> None:
+def test_k3_unit_thresholds_report_the_induced_k2_chromatic_number() -> None:
+    source = graph(("a", "b", "c"), (("a", "b"), ("a", "c"), ("b", "c")))
+    result = find_chromatic_bipartition(
+        ChromaticBipartitionRequest(graph=source, s=1, t=1)
+    )
+    assert result.status == "SPLIT"
+    assert result.side_a == ("a",)
+    assert result.side_b == ("b", "c")
+    assert (result.chromatic_a, result.chromatic_b) == (1, 2)
+    assert result.model_validate_json(result.model_dump_json()) == result
+
+
+def test_k4_unit_thresholds_report_the_induced_k3_chromatic_number() -> None:
+    source = graph(
+        ("a", "b", "c", "d"),
+        (("a", "b"), ("a", "c"), ("a", "d"), ("b", "c"), ("b", "d"), ("c", "d")),
+    )
+    result = find_chromatic_bipartition(
+        ChromaticBipartitionRequest(graph=source, s=1, t=1)
+    )
+    assert result.status == "SPLIT"
+    assert result.side_a == ("a",)
+    assert result.side_b == ("b", "c", "d")
+    assert (result.chromatic_a, result.chromatic_b) == (1, 3)
     source = graph(("a", "b", "c"), (("a", "b"), ("a", "c"), ("b", "c")))
     result = find_chromatic_bipartition(
         ChromaticBipartitionRequest(graph=source, s=2, t=2)

@@ -167,19 +167,69 @@ def _impossible_threshold_bipartition(
     )
 
 
+def _is_bipartite(graph: SimpleUndirectedGraph) -> bool:
+    color: dict[str, int] = {}
+    adjacency: dict[str, list[str]] = {vertex: [] for vertex in graph.vertices}
+    for left, right in graph.edges:
+        adjacency[left].append(right)
+        adjacency[right].append(left)
+    for start in graph.vertices:
+        if start in color:
+            continue
+        color[start] = 0
+        queue = [start]
+        for vertex in queue:
+            for neighbor in adjacency[vertex]:
+                assigned = color.get(neighbor)
+                if assigned is None:
+                    color[neighbor] = 1 - color[vertex]
+                    queue.append(neighbor)
+                elif assigned == color[vertex]:
+                    return False
+    return True
+
+
+def _exact_induced_chromatic(
+    graph: SimpleUndirectedGraph,
+    vertices: tuple[str, ...],
+    request: ChromaticBipartitionRequest,
+    started: float,
+) -> int | None:
+    induced = _induced_graph(graph, vertices)
+    if len(vertices) <= 1 or not induced.edges:
+        return 1
+    if _is_bipartite(induced):
+        return 2
+    return _chromatic_number(induced, request, started)
+
+
 def _unit_threshold_bipartition(
     request: ChromaticBipartitionRequest,
 ) -> ChromaticBipartitionResult:
+    """Split off a singleton and report exact induced chromatic numbers."""
+
     vertices = request.graph.vertices
+    side_a = (vertices[0],)
+    side_b = vertices[1:]
+    started = time.monotonic()
+    chromatic_b = _exact_induced_chromatic(request.graph, side_b, request, started)
+    if chromatic_b is None:
+        return ChromaticBipartitionResult(
+            graph=request.graph,
+            s=request.s,
+            t=request.t,
+            status="UNKNOWN",
+            checked_partitions=0,
+        )
     return ChromaticBipartitionResult(
         graph=request.graph,
         s=request.s,
         t=request.t,
         status="SPLIT",
-        side_a=(vertices[0],),
-        side_b=vertices[1:],
+        side_a=side_a,
+        side_b=side_b,
         chromatic_a=1,
-        chromatic_b=1,
+        chromatic_b=chromatic_b,
         checked_partitions=0,
     )
 

@@ -7,7 +7,10 @@ from dataclasses import dataclass
 from fractions import Fraction
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math._rational_height import RationalHeight, sum_heights
 from jacobian.math.algebra.affine_map_word_collision._models import (
     MAX_COMPOSITION_WORK,
@@ -315,6 +318,8 @@ def _composed_words(
 def verify_word_collision_profile(claim: WordCollisionProfileResult) -> bool:
     """Verify composed maps and complete collision multiplicities from the family."""
 
+    if not isinstance(claim, WordCollisionProfileResult):
+        return False
     try:
         generators = tuple(
             (item.slope.as_fraction(), item.intercept.as_fraction())
@@ -322,7 +327,9 @@ def verify_word_collision_profile(claim: WordCollisionProfileResult) -> bool:
         )
         expected = compute_word_collision_profile(generators, claim.depth)
         return expected.rows == claim.rows
-    except (ArithmeticError, TypeError, ValueError, OperationDomainValidationError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 

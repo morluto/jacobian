@@ -41,7 +41,12 @@ class _EntryPlan:
 
 
 def _reject(code: str, message: str) -> NoReturn:
-    raise OperationDomainValidationError(
+    error_type = (
+        OperationDomainValidationError
+        if code == "invalid_configuration"
+        else OperationResourceAdmissionError
+    )
+    raise error_type(
         location=("configuration",),
         code=f"pinned_distance.{code}",
         message=message,
@@ -127,11 +132,13 @@ def verify_pinned_distance_support_profile(
     claim: PinnedDistanceSupportProfileResult,
 ) -> bool:
     """Verify a serialized support profile against its retained configuration."""
+    if not isinstance(claim, PinnedDistanceSupportProfileResult):
+        return False
     try:
         return compute_pinned_distance_support_profile(claim.configuration) == claim
     except OperationResourceAdmissionError:
         raise
-    except (OperationDomainValidationError, ValueError):
+    except OperationDomainValidationError:
         return False
 
 

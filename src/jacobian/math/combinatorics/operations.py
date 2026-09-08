@@ -11,7 +11,10 @@ from typing import Literal, NoReturn
 
 from jacobian._exact import CanonicalRational
 from jacobian._execution import bind_request_deadline, current_request_execution
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics._counting_process import evaluate_count
 from jacobian.math.combinatorics._progression_hypergraph_models import (
     MAX_GROUP_ORDER,
@@ -812,7 +815,11 @@ def verify_rational_generating_function_coefficients(
             _rational_series_work_units(len(denominator) - 1, order)
             > MAX_RATIONAL_SERIES_WORK_UNITS
         ):
-            return False
+            raise OperationResourceAdmissionError(
+                location=("claim",),
+                code="combinatorics.generating_function_verification_work_bound",
+                message="coefficient-relation verification exceeds its work bound",
+            )
         coefficients = _canonical_fractions(
             series.coefficients,
             MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS,
@@ -828,6 +835,8 @@ def verify_rational_generating_function_coefficients(
             == (numerator[degree] if degree < len(numerator) else Fraction())
             for degree in range(order)
         )
+    except OperationResourceAdmissionError:
+        raise
     except (ArithmeticError, AttributeError, IndexError, TypeError, ValueError):
         return False
 

@@ -409,3 +409,28 @@ def test_smith_producer_leaves_relation_replay_to_claim_verifier(
         update={"source": IntegerMatrix(entries=((3, 4), (6, 8)))}
     )
     assert not verify_smith_normal_form_certificate(forged)
+
+
+def test_unimodular_inverse_retains_backend_result_without_product_replay(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from sympy.polys.matrices import DomainMatrix
+
+    from jacobian.math.matrices.certified_snf.operations import inverse_unimodular
+
+    original = DomainMatrix.matmul
+    products = 0
+
+    def counted_product(left: DomainMatrix, right: DomainMatrix) -> DomainMatrix:
+        nonlocal products
+        products += 1
+        return original(left, right)
+
+    monkeypatch.setattr(DomainMatrix, "matmul", counted_product)
+    assert inverse_unimodular([[1, 2], [0, 1]]) == [[1, -2], [0, 1]]
+    assert products == 0
+    assert inverse_unimodular([]) == []
+    with pytest.raises(ValueError, match="not unimodular"):
+        inverse_unimodular([[2]])
+    with pytest.raises(ValueError, match="singular"):
+        inverse_unimodular([[0]])

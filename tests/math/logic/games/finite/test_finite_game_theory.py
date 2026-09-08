@@ -64,7 +64,8 @@ class TestBestResponse:
         assert result.best_row == 0  # Row 0 has minimum 0, Row 1 has minimum 0
         decoded = type(result).model_validate_json(result.model_dump_json())
         assert verify_best_response(decoded)
-        assert not verify_best_response(decoded.model_copy(update={"best_row": 1}))
+        assert verify_best_response(decoded.model_copy(update={"best_row": 1}))
+        assert not verify_best_response(decoded.model_copy(update={"value": _r(1)}))
 
     def test_payoffs_beyond_the_equilibrium_bound_still_admit_best_response(
         self,
@@ -219,3 +220,50 @@ class TestNashEquilibrium:
         )
         result = best_response(req.payoff_matrix)
         assert result.value.as_fraction() == -100000000000000000000
+
+
+def test_equilibrium_verifier_accepts_alternative_exact_saddle_point() -> None:
+    from jacobian.math.logic.games.finite._models import NashEquilibriumResult
+
+    matrix = PayoffMatrix(n_rows=2, n_cols=2, entries=(_r(0),) * 4)
+    claim = NashEquilibriumResult(
+        payoff_matrix=matrix,
+        row_strategy=(_r(Fraction(1, 3)), _r(Fraction(2, 3))),
+        col_strategy=(_r(Fraction(2, 5)), _r(Fraction(3, 5))),
+        value=_r(0),
+    )
+    assert verify_nash_equilibrium(
+        type(claim).model_validate_json(claim.model_dump_json())
+    )
+
+
+def test_best_response_verifier_accepts_a_tied_maximizing_row() -> None:
+    matrix = PayoffMatrix(n_rows=2, n_cols=2, entries=(_r(0),) * 4)
+    claim = best_response(matrix).model_copy(update={"best_row": 1})
+    assert verify_best_response(
+        type(claim).model_validate_json(claim.model_dump_json())
+    )
+
+
+@pytest.mark.parametrize(
+    "rows,columns,value",
+    [
+        ((Fraction(-1), Fraction(2)), (Fraction(1), Fraction(0)), 0),
+        ((Fraction(1), Fraction(1)), (Fraction(1), Fraction(0)), 0),
+        ((Fraction(1), Fraction(0)), (Fraction(1), Fraction(0)), 1),
+    ],
+)
+def test_equilibrium_verifier_rejects_invalid_simplex_and_value(
+    rows: tuple[Fraction, ...], columns: tuple[Fraction, ...], value: int
+) -> None:
+    from jacobian.math.logic.games.finite._models import NashEquilibriumResult
+
+    matrix = PayoffMatrix(n_rows=2, n_cols=2, entries=(_r(0),) * 4)
+    assert not verify_nash_equilibrium(
+        NashEquilibriumResult(
+            payoff_matrix=matrix,
+            row_strategy=tuple(_r(x) for x in rows),
+            col_strategy=tuple(_r(x) for x in columns),
+            value=_r(value),
+        )
+    )

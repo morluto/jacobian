@@ -189,3 +189,20 @@ def test_denominator_degree_controls_the_recurrence_work_envelope() -> None:
 
 def test_large_constant_prefix_is_admitted_by_recurrence_work() -> None:
     assert len(_expand((ONE,), 250_000).series.coefficients) == 250_000
+
+
+def test_verifier_resource_refusal_is_not_disagreement(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.catalog.models import OperationResourceAdmissionError
+    from jacobian.math.combinatorics import operations
+
+    one = CanonicalRational(num=1, den=1)
+    minus_one = CanonicalRational(num=-1, den=1)
+    claim = operations.rational_generating_function_coefficients(
+        (one,), (one, minus_one), "ASCENDING_POWERS_OF_X", 0, 4
+    )
+    assert operations.verify_rational_generating_function_coefficients(claim)
+    monkeypatch.setattr(operations, "MAX_RATIONAL_SERIES_WORK_UNITS", 0)
+    with pytest.raises(OperationResourceAdmissionError):
+        operations.verify_rational_generating_function_coefficients(claim)

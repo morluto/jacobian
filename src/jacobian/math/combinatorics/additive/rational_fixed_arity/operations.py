@@ -9,7 +9,10 @@ from math import gcd
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import format_canonical_integer
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.additive.rational_fixed_arity._models import (
     RationalFixedAritySumResult,
     SumProfileRow,
@@ -32,7 +35,17 @@ class _AdmissionPlan:
 
 
 def _reject(location: tuple[str | int, ...], code: str, message: str) -> None:
-    raise OperationDomainValidationError(location=location, code=code, message=message)
+    error_type = (
+        OperationResourceAdmissionError
+        if code
+        in {
+            "rational_fixed_arity.work_bound",
+            "rational_fixed_arity.rational_growth",
+            "rational_fixed_arity.arity_json_range",
+        }
+        else OperationDomainValidationError
+    )
+    raise error_type(location=location, code=code, message=message)
 
 
 def _common_denominator_digits(fractions: tuple[Fraction, ...]) -> int:
@@ -418,8 +431,12 @@ def verify_rational_fixed_arity_sum_profile(
     result: RationalFixedAritySumResult,
 ) -> bool:
     """Verify fixed-arity sums and multiplicities against source values."""
+    if not isinstance(result, RationalFixedAritySumResult):
+        return False
     try:
         expected = compute_rational_fixed_arity_sum_profile(result.values, result.arity)
         return expected.rows == result.rows
-    except Exception:
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False

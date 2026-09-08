@@ -80,3 +80,39 @@ class TestValidation:
         with pytest.raises(ValidationError) as error:
             CubicalCell(intervals=((1, 0),))
         assert error.value.errors()[0]["type"] == "cubical_complex.interval_order"
+
+
+@pytest.mark.parametrize("published", [False, True])
+def test_face_closure_refuses_output_growth_as_resource_admission(
+    published: bool,
+) -> None:
+    from jacobian.catalog.models import OperationResourceAdmissionError
+    from jacobian.math.topology.cubical_complexes._tools import _face_closure
+
+    source = (
+        CubicalCell(intervals=((0, 1),) * 10),
+        CubicalCell(intervals=((3, 4),) * 10),
+    )
+    with pytest.raises(OperationResourceAdmissionError):
+        if published:
+            _face_closure(FaceClosureRequest(cells=source))
+        else:
+            face_closure(source)
+
+
+def test_repeated_cubes_share_face_admission() -> None:
+    source = CubicalCell(intervals=((0, 1),) * 7)
+    result = face_closure((source,) * 10)
+    assert result.total_cells == 3**7
+    assert result.original_cells == 1
+
+
+def test_full_cube_beyond_source_cell_limit_is_admitted() -> None:
+    from math import comb
+
+    result = face_closure((CubicalCell(intervals=((0, 1),) * 8),))
+    assert result.total_cells == 3**8
+    assert result.cells_by_dimension.counts == tuple(
+        comb(8, degree) * 2 ** (8 - degree) for degree in range(9)
+    )
+    assert FaceClosureResult.model_validate_json(result.model_dump_json()) == result

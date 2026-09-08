@@ -66,7 +66,7 @@ def _admit_evaluate(
             message="assignment must cover exactly the referenced variables",
         )
     size = len(algebra.carrier)
-    if any(not 0 <= value < size for value in assignment):
+    if any(type(value) is not int or not 0 <= value < size for value in assignment):
         _reject(
             location=("assignment",),
             code="assignment_carrier_range",
@@ -194,6 +194,14 @@ def evaluate_term(
 
     Return the exact carrier value ``t^A(alpha)``.
     """
+    if any(type(key) is not int for key in assignment) or set(assignment) != set(
+        range(term.variable_count)
+    ):
+        _reject(
+            location=("assignment",),
+            code="assignment_variable_axis",
+            message="assignment keys must cover exactly the term variable axis 0..variable_count-1",
+        )
     _admit_evaluate(algebra, term, tuple(assignment.values()))
     return _evaluate_term_unchecked(algebra, term, assignment)
 

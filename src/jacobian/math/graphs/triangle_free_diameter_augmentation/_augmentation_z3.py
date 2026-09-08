@@ -62,10 +62,7 @@ def _is_triangle_free(graph: SimpleUndirectedGraph) -> bool:
     import networkx as nx
 
     g = _graph_from_value(graph)
-    try:
-        tri = sum(nx.triangles(g).values()) // 3  # type: ignore[union-attr]
-    except Exception:
-        return False
+    tri = sum(nx.triangles(g).values()) // 3  # type: ignore[union-attr]
     return tri == 0
 
 

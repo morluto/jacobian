@@ -397,6 +397,10 @@ def unit_circle_arc_energy(
 
 def verify_unit_circle_arc_energy(claim: UnitCircleArcEnergyResult) -> bool:
     """Verify the exact arc-energy identity against its retained source."""
+    if not isinstance(claim, UnitCircleArcEnergyResult) or not isinstance(
+        claim.pi_inverse_coefficient, SimpleNumberFieldRealEmbeddingBinding
+    ):
+        return False
     try:
         coefficients, _degree, width, conductor = _admit_arc(
             claim.polynomial, claim.start_turn, claim.end_turn
@@ -436,12 +440,7 @@ def verify_unit_circle_arc_energy(claim: UnitCircleArcEnergyResult) -> bool:
         return actual == expected
     except OperationResourceAdmissionError:
         raise
-    except (
-        AttributeError,
-        TypeError,
-        OperationDomainValidationError,
-        ValueError,
-    ):
+    except OperationDomainValidationError:
         return False
 
 
@@ -554,6 +553,10 @@ def verify_real_symmetric_degree_one_fejer_riesz_factor(
     claim: FejerRieszFactorResult,
 ) -> bool:
     """Independently verify the conclusion against its retained Laurent source."""
+    if not isinstance(claim, FejerRieszFactorResult) or not isinstance(
+        claim.source, HermitianLaurentPolynomial
+    ):
+        return False
     try:
         coefficients = _laurent_coefficients(claim.source)
         c0 = coefficients.get(0, Fraction(0))
@@ -596,11 +599,8 @@ def verify_real_symmetric_degree_one_fejer_riesz_factor(
     except OperationResourceAdmissionError:
         raise
     except (
-        AttributeError,
         EmbeddedNumberFieldRecognitionError,
         NumberFieldRealEmbeddingOrderError,
         OperationDomainValidationError,
-        TypeError,
-        ValueError,
     ):
         return False

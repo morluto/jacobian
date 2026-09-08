@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.crossed_products.values import (
     MAX_EXPONENT_DIGITS,
     FiniteCosetCrossedProductElement,
@@ -13,8 +16,8 @@ MAX_MULTIPLICATION_SCALAR_WORK = 80_000
 MAX_COEFFICIENT_INTERMEDIATE_DIGITS = 19
 
 
-def _reject(*, location: tuple[str, ...], code: str, message: str) -> None:
-    raise OperationDomainValidationError(
+def _reject_resource(*, location: tuple[str, ...], code: str, message: str) -> None:
+    raise OperationResourceAdmissionError(
         location=location,
         code=f"crossed_product.{code}",
         message=message,
@@ -32,15 +35,15 @@ def require_multiplication_budget(
     """Preflight all work, intermediate, support, exponent, and output bounds."""
 
     if left.presentation != right.presentation:
-        _reject(
+        raise OperationDomainValidationError(
             location=("left", "right"),
-            code="presentation_mismatch",
+            code="crossed_product.presentation_mismatch",
             message="crossed-product operands must have the same presentation",
         )
 
     pair_count = len(left.terms) * len(right.terms)
     if pair_count > MAX_CONVOLUTION_PAIRS:
-        _reject(
+        _reject_resource(
             location=("left", "right"),
             code="convolution_work_bound",
             message=(
@@ -52,7 +55,7 @@ def require_multiplication_budget(
     dimension = left.presentation.lattice_rank
     scalar_work = pair_count * (dimension**2 + 3 * dimension + 1)
     if scalar_work > MAX_MULTIPLICATION_SCALAR_WORK:
-        _reject(
+        _reject_resource(
             location=("left", "right"),
             code="scalar_work_bound",
             message="crossed-product multiplication exceeds its scalar-work budget",
@@ -61,7 +64,7 @@ def require_multiplication_budget(
     characteristic = left.presentation.characteristic
     coefficient_intermediate = (characteristic - 1) ** 2 + characteristic - 1
     if coefficient_intermediate >= 10**MAX_COEFFICIENT_INTERMEDIATE_DIGITS:
-        _reject(
+        _reject_resource(
             location=("left", "right"),
             code="coefficient_growth_bound",
             message="coefficient accumulation exceeds its exact-integer bound",
@@ -96,7 +99,7 @@ def require_multiplication_budget(
             left_height + dimension * action_height * right_height + cocycle_height
         )
         if exponent_height >= 10**MAX_EXPONENT_DIGITS:
-            _reject(
+            _reject_resource(
                 location=("left", "right"),
                 code="exponent_growth_bound",
                 message=(

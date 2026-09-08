@@ -10,6 +10,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math._rational_height import RationalHeight, sum_heights
 from jacobian.math.polynomials.values import PolynomialVariable, RationalPolynomial
 
@@ -42,6 +43,18 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"formal_power_series.{reason}", message)
 
 
+def _resource_error(reason: str, message: str) -> OperationResourceAdmissionError:
+    return OperationResourceAdmissionError(
+        location=(), code=f"formal_power_series.{reason}", message=message
+    )
+
+
+def _has_degree_at_most(series: TruncatedSeries, degree: int) -> bool:
+    return series.truncation_order <= MAX_TRUNCATE_SOURCE_ORDER and not any(
+        value.num for value in series.coefficients[degree + 1 :]
+    )
+
+
 def _height(value: CanonicalRational) -> RationalHeight:
     return RationalHeight.from_canonical(value)
 
@@ -71,7 +84,7 @@ def _require_height_vector(
         height is not None and height.exceeds(MAX_RESULT_RATIONAL_DIGITS)
         for height in coefficients
     ):
-        raise _validation_error(
+        raise _resource_error(
             f"{operation}_coefficient_growth",
             f"{operation} coefficient growth exceeds the "
             f"{MAX_RESULT_RATIONAL_DIGITS}-digit result bound",
@@ -142,7 +155,7 @@ def _convolution_height(
 
 def _require_height(height: RationalHeight, operation: str) -> None:
     if height.exceeds(MAX_RESULT_RATIONAL_DIGITS):
-        raise _validation_error(
+        raise _resource_error(
             f"{operation}_coefficient_growth",
             f"{operation} coefficient growth exceeds the "
             f"{MAX_RESULT_RATIONAL_DIGITS}-digit result bound",
@@ -266,20 +279,30 @@ def _require_native_scalar(value: int, label: str) -> None:
         raise _validation_error(f"{label}_type", f"{label} must be an integer scalar")
 
 
-def _require_native_input_series(series: TruncatedSeries) -> None:
-    if series.truncation_order > MAX_TRUNCATION_ORDER:
-        raise _validation_error(
-            "input_order", f"truncation order exceeds {MAX_TRUNCATION_ORDER}"
+def _require_native_input_series(
+    series: TruncatedSeries, *, maximum_order: int = MAX_TRUNCATION_ORDER
+) -> None:
+    if series.truncation_order > maximum_order:
+        raise _resource_error(
+            "input_order", f"truncation order exceeds {maximum_order}"
         )
-    for value in series.coefficients:
-        require_bounded_rational(
-            value, max_digits=MAX_RATIONAL_DIGITS, label="input coefficient"
-        )
+    try:
+        for value in series.coefficients:
+            require_bounded_rational(
+                value, max_digits=MAX_RATIONAL_DIGITS, label="input coefficient"
+            )
+    except ValueError as exc:
+        raise _resource_error("input_coefficient", str(exc)) from exc
 
 
-def _require_native_pair(left: TruncatedSeries, right: TruncatedSeries) -> None:
-    _require_native_input_series(left)
-    _require_native_input_series(right)
+def _require_native_pair(
+    left: TruncatedSeries,
+    right: TruncatedSeries,
+    *,
+    maximum_order: int = MAX_TRUNCATION_ORDER,
+) -> None:
+    _require_native_input_series(left, maximum_order=maximum_order)
+    _require_native_input_series(right, maximum_order=maximum_order)
     if left.variable != right.variable:
         raise _validation_error(
             "operand_variable_mismatch", "operands must share the same variable"
@@ -340,22 +363,38 @@ def admit_native_power(series: TruncatedSeries, exponent: int) -> None:
 
 
 def admit_native_inverse(series: TruncatedSeries) -> None:
-    _require_native_input_series(series)
+    constant = _has_degree_at_most(series, 0)
+    _require_native_input_series(
+        series,
+        maximum_order=MAX_TRUNCATE_SOURCE_ORDER if constant else MAX_TRUNCATION_ORDER,
+    )
     if series.coefficients[0].as_fraction() == 0:
         raise _validation_error(
             "inverse_zero_constant", "inverse requires a nonzero constant term"
         )
-    _inverse_height(series)
+    if not constant:
+        _inverse_height(series)
 
 
 def admit_native_divide(
     numerator: TruncatedSeries, denominator: TruncatedSeries
 ) -> None:
-    _require_native_pair(numerator, denominator)
+    constant = _has_degree_at_most(denominator, 0)
+    _require_native_pair(
+        numerator,
+        denominator,
+        maximum_order=MAX_TRUNCATE_SOURCE_ORDER if constant else MAX_TRUNCATION_ORDER,
+    )
     if denominator.coefficients[0].as_fraction() == 0:
         raise _validation_error(
             "denominator_zero_constant", "denominator must have a nonzero constant term"
         )
+    if constant:
+        # A coefficient quotient has at most twice the input component bound.
+        _require_height(
+            RationalHeight(2 * MAX_RATIONAL_DIGITS, 2 * MAX_RATIONAL_DIGITS), "division"
+        )
+        return
     inv_num, inv_den, source_norm, source_den = _inverse_height(denominator)
     common_denominator, coefficients = _cleared_series(numerator)
     norm = sum(abs(value) for value in coefficients).bit_length()
@@ -390,7 +429,13 @@ def admit_native_compose(outer: TruncatedSeries, inner: TruncatedSeries) -> None
 
 
 def admit_native_reversion(series: TruncatedSeries) -> None:
-    _require_native_input_series(series)
+    linear_source = _has_degree_at_most(series, 1)
+    _require_native_input_series(
+        series,
+        maximum_order=MAX_TRUNCATE_SOURCE_ORDER
+        if linear_source
+        else MAX_TRUNCATION_ORDER,
+    )
     if series.truncation_order < 2:
         raise _validation_error(
             "reversion_order", "reversion requires truncation order >= 2"
@@ -404,6 +449,8 @@ def admit_native_reversion(series: TruncatedSeries) -> None:
             "reversion_zero_linear_coefficient",
             "reversion requires nonzero linear coefficient",
         )
+    if linear_source:
+        return
     source = _height_vector(series.coefficients)
     linear = _height(series.coefficients[1])
     result: list[CoefficientHeight] = [None, RationalHeight(1, 1).quotient(linear)]

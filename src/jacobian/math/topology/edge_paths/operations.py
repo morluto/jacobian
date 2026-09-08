@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.topology.edge_paths._models import (
+    MAX_EDGES,
+    MAX_WORD,
     EdgeGraph,
     EdgePathConcatenateResult,
     EdgePathWordResult,
@@ -25,6 +30,12 @@ def _admit_edge_path_word(
     start_vertex: int,
     path: tuple[OrientedEdge, ...],
 ) -> None:
+    if len(edges) > MAX_EDGES or len(path) > MAX_WORD:
+        raise OperationResourceAdmissionError(
+            location=("path",),
+            code="topology.edge_path.source_budget",
+            message="edge path exceeds the source edge or word bound",
+        )
     for u, v in edges:
         if not (0 <= u < vertex_count and 0 <= v < vertex_count):
             _reject(
@@ -62,6 +73,18 @@ def _admit_edge_path_concatenation(
     path_a: tuple[int, ...],
     path_b: tuple[int, ...],
 ) -> None:
+    if not path_a or not path_b:
+        _reject(
+            location=("path_a", "path_b"),
+            code="missing_endpoint",
+            message="each path must retain at least its endpoint vertex",
+        )
+    if len(path_a) > MAX_WORD or len(path_b) > MAX_WORD:
+        raise OperationResourceAdmissionError(
+            location=("path_a", "path_b"),
+            code="topology.edge_path.source_budget",
+            message="edge path exceeds the source word bound",
+        )
     if any(not 0 <= v < vertex_count for v in path_a):
         _reject(
             location=("path_a",),
@@ -118,12 +141,7 @@ def concatenate_edge_paths(
     the concatenation is path_a + path_b[1:], removing the duplicate.
     """
     _admit_edge_path_concatenation(vertex_count, path_a, path_b)
-    first = list(path_a)
-    second = list(path_b)
-    if first and second and first[-1] == second[0]:
-        result = first + second[1:]
-    else:
-        result = first + second
+    result = path_a + path_b[1:]
     return EdgePathConcatenateResult(
         vertex_count=vertex_count,
         path_a=path_a,
@@ -145,7 +163,9 @@ def verify_edge_path_word(claim: EdgePathWordResult) -> bool:
             )
             == claim
         )
-    except (OperationDomainValidationError, TypeError, ValueError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
@@ -156,7 +176,9 @@ def verify_edge_path_concatenation(claim: EdgePathConcatenateResult) -> bool:
             concatenate_edge_paths(claim.vertex_count, claim.path_a, claim.path_b)
             == claim
         )
-    except (OperationDomainValidationError, TypeError, ValueError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 

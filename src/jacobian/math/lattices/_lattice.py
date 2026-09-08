@@ -10,8 +10,6 @@ from jacobian.math.lattices import reduce_basis
 from jacobian.math.lattices._models import (
     LatticeReductionRequest,
     LatticeReductionResult,
-    _require_lattice_matrix_envelope,
-    _run_admission,
 )
 from jacobian.math.matrices.values import (
     MAX_MATRIX_SCALAR_DIGITS,
@@ -36,13 +34,10 @@ def _wire(matrix: Any) -> IntegerMatrix:
 def reduce_lattice_basis(
     request: LatticeReductionRequest,
 ) -> LatticeReductionResult:
-    _run_admission(
-        lambda: _require_lattice_matrix_envelope(request.basis, label="basis input"),
-        location=("basis",),
-    )
     entries = [list(row) for row in request.basis.entries]
     reduced, transformation, rank = reduce_basis(entries)
     return LatticeReductionResult(
+        basis=request.basis,
         reduced_basis=_wire(reduced),
         transformation=_wire(transformation),
         rank=rank,

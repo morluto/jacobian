@@ -4,11 +4,9 @@ from typing import Any
 
 from jacobian.catalog.models import (
     MathTool,
-    OperationDomainValidationError,
     OperationExample,
 )
 from jacobian.math.logic.automata.petri_nets._models import (
-    MAX_SIPHON_TRAP_PLACES,
     EnabledTransitionsRequest,
     EnabledTransitionsResult,
     FireTransitionRequest,
@@ -44,32 +42,11 @@ def compute_incidence(request: IncidenceMatrixRequest) -> IncidenceMatrixResult:
 
 
 def compute_reachability(request: ReachabilityRequest) -> ReachabilityResult:
-    try:
-        return reachability_graph(
-            request.net, request.initial_marking, request.max_states
-        )
-    except ValueError as error:
-        raise OperationDomainValidationError(
-            location=("net", "max_states"),
-            code="petri_net.reachability_bound",
-            message=str(error),
-        ) from error
+    return reachability_graph(request.net, request.initial_marking, request.max_states)
 
 
 def compute_siphon_trap(request: SiphonTrapRequest) -> SiphonTrapResult:
-    try:
-        return siphon_trap(request.net)
-    except ValueError as error:
-        code = (
-            "petri_net.siphon_trap_place_bound"
-            if request.net.place_count > MAX_SIPHON_TRAP_PLACES
-            else "petri_net.siphon_trap_work_bound"
-        )
-        raise OperationDomainValidationError(
-            location=("net",),
-            code=code,
-            message=str(error),
-        ) from error
+    return siphon_trap(request.net)
 
 
 # Simple net: 2 places, 2 transitions

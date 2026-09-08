@@ -82,11 +82,13 @@ def common_interlacing_profile(
 def verify_common_interlacing_profile(claim: CommonInterlacingProfile) -> bool:
     """Verify retained roots and the complete common-interlacing outcome."""
 
+    if not isinstance(claim, CommonInterlacingProfile):
+        return False
     try:
         return common_interlacing_profile(claim.family) == claim
     except OperationResourceAdmissionError:
         raise
-    except (OperationDomainValidationError, ValueError, TypeError):
+    except OperationDomainValidationError:
         return False
 
 
@@ -358,19 +360,27 @@ def compute_root_count(
 
 def verify_sturm_chain(claim: SturmChainResult) -> bool:
     """Verify a serialized Sturm chain against its retained source polynomial."""
+    if not isinstance(claim, SturmChainResult):
+        return False
     try:
         expected = compute_sturm_chain(claim.source_polynomial)
         return expected.chain == claim.chain and expected.degree == claim.degree
-    except (AttributeError, TypeError, ValueError, OperationDomainValidationError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
 def verify_root_count(claim: RootCountResult) -> bool:
     """Verify a serialized distinct-root count against its source interval."""
+    if not isinstance(claim, RootCountResult):
+        return False
     try:
         expected = compute_root_count(claim.source_polynomial, claim.lower, claim.upper)
         return expected.root_count == claim.root_count
-    except (AttributeError, TypeError, ValueError, OperationDomainValidationError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
@@ -395,6 +405,8 @@ def compute_strict_sublevel_measure(
 def verify_strict_sublevel_measure(claim: StrictSublevelMeasureResult) -> bool:
     """Verify strict-sublevel components and exact measure against the source."""
 
+    if not isinstance(claim, StrictSublevelMeasureResult):
+        return False
     try:
         return (
             compute_strict_sublevel_measure(
@@ -407,7 +419,7 @@ def verify_strict_sublevel_measure(claim: StrictSublevelMeasureResult) -> bool:
         )
     except OperationResourceAdmissionError:
         raise
-    except (OperationDomainValidationError, ValueError, TypeError):
+    except OperationDomainValidationError:
         return False
 
 
@@ -424,5 +436,5 @@ def verify_plane_component_profile(claim: PlaneComponentProfileResult) -> bool:
         )
     except OperationResourceAdmissionError:
         raise
-    except (OperationDomainValidationError, ValueError, TypeError):
+    except OperationDomainValidationError:
         return False

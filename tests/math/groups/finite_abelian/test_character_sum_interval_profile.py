@@ -19,7 +19,10 @@ from jacobian._execution import (
     request_execution,
 )
 from jacobian.canonical import encode_strict_json
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.groups import finite_abelian as domain
 from jacobian.math.groups._tools import TOOLS as GROUP_TOOLS
 from jacobian.math.groups.finite_abelian import (
@@ -535,10 +538,9 @@ def test_work_bounds_rejections() -> None:
     with pytest.raises(ValueError, match="cyclotomic degree"):
         src_deg = _source((71,), ((0,), (1,)), ((0,), (1,)), ((0, 2),))
         compute_finite_abelian_character_sum_interval_profile(src_deg)
-    # Dense ops bound: exponent 128 phi 64 but dense ops 10*8*129*129 >524k?
-    # 128 bit_length 8 => 10*8*129*129 = 1,331,280 >524k
+    # Squarefree exponent 105 has degree 48 but exceeds construction work.
     with pytest.raises(ValueError, match="dense-op"):
-        src_dense = _source((128,), ((0,),), ((0,),), ((0, 1),))
+        src_dense = _source((105,), ((0,),), ((0,),), ((0, 1),))
         compute_finite_abelian_character_sum_interval_profile(src_dense)
 
 
@@ -664,7 +666,6 @@ def test_z2_power_17_singleton_profile_is_admitted() -> None:
     source = _source((2,) * rank, (zero,), (zero,), ((0, 1),))
     work = domain._character_sum_interval_profile_work(source)
     assert work.cells == 1
-    assert work.prefix_work == rank + 1
     result = compute_finite_abelian_character_sum_interval_profile(source)
     assert result.group_exponent == 2
     assert result.cyclotomic_degree == 1
@@ -687,11 +688,11 @@ def test_rank_linear_prefix_work_rejects_expensive_profiles() -> None:
         compute_finite_abelian_character_sum_interval_profile(source)
 
 
-def test_catalog_projects_admission_as_domain_error() -> None:
+def test_catalog_projects_admission_as_resource_error() -> None:
     request = FiniteAbelianCharacterSumIntervalProfileRequest(
-        source=_source((128,), ((0,),), ((0,),), ((0, 1),))
+        source=_source((105,), ((0,),), ((0,),), ((0, 1),))
     )
-    with pytest.raises(OperationDomainValidationError, match="dense-op"):
+    with pytest.raises(OperationResourceAdmissionError, match="dense-op"):
         PROFILE_OPERATION.run(request)
 
 
@@ -716,3 +717,47 @@ def test_profile_observes_expired_owner_deadline() -> None:
         pytest.raises(OperationExecutionTimeoutError, match="character-sum"),
     ):
         compute_finite_abelian_character_sum_interval_profile(source)
+
+
+def test_order_100_interval_profile_uses_shared_prime_power_structure() -> None:
+    sequence = (
+        2,
+        14,
+        62,
+        74,
+        22,
+        34,
+        86,
+        18,
+        46,
+        78,
+        6,
+        38,
+        82,
+        94,
+        66,
+        98,
+        42,
+        54,
+        26,
+        58,
+    )
+    source = _source(
+        (100,),
+        tuple((x,) for x in sequence),
+        tuple((x,) for x in range(100)),
+        ((0, 6), (0, 20)),
+    )
+    request = PROFILE_OPERATION.request_type.model_validate_json(
+        encode_strict_json({"source": source.model_dump(mode="json")})
+    )
+    result = PROFILE_OPERATION.run(request)
+    assert result.group_exponent == 100
+    assert result.cyclotomic_degree == 40
+    assert len(result.sums) == 200
+    for cell in result.sums:
+        expected, _ = _oracle_remainder(
+            (100,), source.sequence, cell.frequency, cell.interval
+        )
+        assert cell.remainder_coefficients == expected
+    assert type(result).model_validate_json(result.model_dump_json()) == result

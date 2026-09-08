@@ -110,7 +110,7 @@ def test_adding_exact_derivative_preserves_remainder() -> None:
     [
         (x**7, "numerator exponent"),
         (1 / (x**4 + 1), "denominator exponent"),
-        (100 * x, "numerator coefficient"),
+        (100 / (x + 1), "numerator coefficient"),
     ],
 )
 def test_request_rejects_above_conservative_work_envelope(
@@ -207,3 +207,44 @@ def test_request_accepts_repeated_pole_work_envelope_boundary() -> None:
                 coefficient = term.coefficient
                 assert abs(coefficient.num) < 10**128
                 assert coefficient.den < 10**128
+
+
+def test_polynomial_hermite_reduction_admits_three_digit_constant() -> None:
+    result = compute_hermite_reduction(_request(100))
+    assert rational_function_to_sympy(result.rational_part) == 100 * x
+    assert verify_hermite_reduction(
+        HermiteReductionResult.model_validate_json(result.model_dump_json())
+    )
+
+
+def test_hermite_verifier_preserves_nonpolynomial_resource_refusal() -> None:
+    from jacobian.catalog.models import OperationResourceAdmissionError
+
+    function = rational_function_from_sympy(100 / (x**2 + 1), ("x",))
+    claim = HermiteReductionResult(
+        function=function,
+        rational_part=rational_function_from_sympy(0, ("x",)),
+        remainder=function,
+        rational_primitive_status="NO_RATIONAL_PRIMITIVE",
+        rational_primitive=None,
+    )
+    with pytest.raises(OperationResourceAdmissionError):
+        verify_hermite_reduction(
+            HermiteReductionResult.model_validate_json(claim.model_dump_json())
+        )
+
+
+@pytest.mark.parametrize(
+    "expression",
+    [100 * x**6, sum((10**126 + degree) * x**degree for degree in range(7))],
+)
+def test_degree_six_polynomial_primitive_round_trips(expression: object) -> None:
+    result = compute_hermite_reduction(_request(expression))
+    parsed = HermiteReductionResult.model_validate_json(result.model_dump_json())
+    primitive = rational_function_to_sympy(parsed.rational_part)
+
+    assert max(term.exponents[0] for term in parsed.rational_part.numerator.terms) == 7
+    assert len(parsed.rational_part.numerator.terms) <= 7
+    assert primitive.subs(x, 0) == 0
+    assert cancel(diff(primitive, x) - expression) == 0
+    assert verify_hermite_reduction(parsed)

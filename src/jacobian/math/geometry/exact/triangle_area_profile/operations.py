@@ -45,7 +45,7 @@ def _admit_triangle_area_result(configuration: PointConfiguration) -> None:
     # digits. Reserve that complete factor product before enumeration.
     derived_digits = sum(coordinate_widths[:6], 0) + 2
     if derived_digits > MAX_CANONICAL_RATIONAL_DIGITS:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("configuration",),
             code="geometry.triangle_area_result_bound",
             message=(
@@ -105,7 +105,7 @@ def compute_triangle_area_profile(
             len(numerator.lstrip("-")) > MAX_CANONICAL_RATIONAL_DIGITS
             or len(denominator) > MAX_CANONICAL_RATIONAL_DIGITS
         ):
-            raise OperationDomainValidationError(
+            raise OperationResourceAdmissionError(
                 location=("configuration",),
                 code="geometry.triangle_area_result_bound",
                 message=(
@@ -142,9 +142,11 @@ def compute_triangle_area_profile(
 
 def verify_triangle_area_profile(claim: TriangleAreaProfileResult) -> bool:
     """Verify a serialized triangle-area profile against its source."""
+    if not isinstance(claim, TriangleAreaProfileResult):
+        return False
     try:
         return compute_triangle_area_profile(claim.configuration) == claim
     except OperationResourceAdmissionError:
         raise
-    except (OperationDomainValidationError, ValueError):
+    except OperationDomainValidationError:
         return False

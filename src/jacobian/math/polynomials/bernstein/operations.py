@@ -15,7 +15,10 @@ from jacobian._execution import (
     request_checkpoint,
 )
 from jacobian.canonical import format_canonical_integer
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.analysis.intervals import RationalBox
 from jacobian.math.polynomials.bernstein.values import (
     Multidegree,
@@ -327,12 +330,16 @@ def bernstein_coefficients(
 
 def verify_bernstein_coefficients(claim: RationalBernsteinPolynomial) -> bool:
     """Verify tensor coefficients against the retained polynomial and box."""
+    if not isinstance(claim, RationalBernsteinPolynomial):
+        return False
     try:
         expected = bernstein_coefficients(
             claim.polynomial, claim.box, claim.multidegree
         )
         return expected.coefficients == claim.coefficients
-    except (AttributeError, TypeError, ValueError, OperationDomainValidationError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 
@@ -519,6 +526,10 @@ def verify_bernstein_restriction(
     claim: RationalBernsteinPolynomial,
 ) -> bool:
     """Verify a serialized child tensor is the exact restriction of its parent."""
+    if not isinstance(parent, RationalBernsteinPolynomial) or not isinstance(
+        claim, RationalBernsteinPolynomial
+    ):
+        return False
     try:
         if (
             parent.polynomial != claim.polynomial
@@ -529,7 +540,9 @@ def verify_bernstein_restriction(
             return False
         expected = _restrict_trusted(parent, claim.box)
         return expected.coefficients == claim.coefficients
-    except (AttributeError, TypeError, ValueError, OperationDomainValidationError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
 
 

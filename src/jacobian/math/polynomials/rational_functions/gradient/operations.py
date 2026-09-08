@@ -47,6 +47,7 @@ from jacobian.math.polynomials.values import (
     RationalFunction,
     RationalPolynomialTerm,
     SparseRationalPolynomial,
+    _rational_function_one,
     require_canonical_rational_function,
 )
 
@@ -234,15 +235,27 @@ def _admit_general_gradient(
     return tuple(components)
 
 
+def _canonical_zero(variables: tuple[str, ...]) -> RationalFunction:
+    return RationalFunction._from_kernel(
+        variables=variables,
+        numerator=SparseRationalPolynomial(terms=()),
+        denominator=_rational_function_one(len(variables)),
+    )
+
+
 def _general_gradient_admitted(
-    function: RationalFunction, deadline: float
+    function: RationalFunction,
+    components: tuple[tuple[FractionBound, int], ...],
+    deadline: float,
 ) -> tuple[RationalFunction, ...]:
     """Recognize and differentiate after the caller's whole-profile admission."""
     _recognize_source(function, deadline)
     request_checkpoint("after rational gradient source recognition")
     return tuple(
-        _normalize_fraction(function, axis, deadline=deadline)
-        for axis in range(len(function.variables))
+        _canonical_zero(function.variables)
+        if bound.is_zero
+        else _normalize_fraction(function, axis, deadline=deadline)
+        for axis, (bound, _) in enumerate(components)
     )
 
 
@@ -263,8 +276,8 @@ def gradient(function: RationalFunction) -> RationalFunctionGradient:
         )
     else:
         ledger = _Ledger()
-        _admit_general_gradient(function, ledger)
-        derivatives = _general_gradient_admitted(function, deadline)
+        components = _admit_general_gradient(function, ledger)
+        derivatives = _general_gradient_admitted(function, components, deadline)
     result = RationalFunctionGradient(
         source=function, variables=function.variables, partial_derivatives=derivatives
     )

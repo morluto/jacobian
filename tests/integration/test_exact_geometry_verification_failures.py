@@ -50,7 +50,18 @@ def _claim(owner: str, verifier: str) -> tuple[Any, Any]:
     module = import_module("jacobian.math.geometry." + owner + ".operations")
     tools = import_module("jacobian.math.geometry." + owner + "._tools").TOOLS
     result_type = get_type_hints(getattr(module, verifier))["claim"]
-    tool = next(tool for tool in tools if tool.result_type is result_type)
+    if owner == "exact" and verifier in (
+        "verify_distance_profile",
+        "verify_distance_graph",
+    ):
+        # Catalog union and native rational specializations have distinct
+        # generic identities; select the public operation being exercised.
+        operation_id = (
+            "geometry.points." + verifier.removeprefix("verify_") + ".compute"
+        )
+        tool = next(tool for tool in tools if tool.operation_id == operation_id)
+    else:
+        tool = next(tool for tool in tools if tool.result_type is result_type)
     request = tool.request_type.model_validate_json(json.dumps(tool.examples[0].input))
     return module, tool.run(request)
 

@@ -36,7 +36,16 @@ def test_verifiers_propagate_operational_failures(
 ) -> None:
     verifier = getattr(module, f"verify_{recompute}")
     result_type = get_type_hints(verifier)["claim"]
-    tool = next(tool for tool in BUILTIN_TOOLS if tool.result_type is result_type)
+    if module is exact_geometry and recompute == "distance_profile":
+        # Native rational-only and catalog union specializations intentionally
+        # have distinct Pydantic generic identities.
+        tool = next(
+            tool
+            for tool in BUILTIN_TOOLS
+            if tool.operation_id == "geometry.points.distance_profile.compute"
+        )
+    else:
+        tool = next(tool for tool in BUILTIN_TOOLS if tool.result_type is result_type)
     request = tool.request_type.model_validate_json(json.dumps(tool.examples[0].input))
     result = tool.run(request)
     claim = tool.result_type.model_validate_json(result.model_dump_json())

@@ -540,6 +540,7 @@ dependencies = [
     { name = "scipy" },
     { name = "sympy" },
     { name = "typer" },
+    { name = "typing-extensions" },
     { name = "z3-solver" },
 ]
 
@@ -600,6 +601,7 @@ requires-dist = [
     { name = "scipy", specifier = "==1.16.1" },
     { name = "sympy", specifier = "==1.14.0" },
     { name = "typer", specifier = ">=0.20,<1" },
+    { name = "typing-extensions", specifier = ">=4.14.1" },
     { name = "z3-solver", specifier = "==5.1.0.0" },
 ]
 

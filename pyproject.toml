@@ -25,6 +25,7 @@ dependencies = [
     "scipy==1.16.1",
     "sympy==1.14.0",
     "typer>=0.20,<1",
+    "typing-extensions>=4.14.1",
     "z3-solver==5.1.0.0",
 ]
 

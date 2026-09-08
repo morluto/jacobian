@@ -6,6 +6,7 @@ from itertools import pairwise
 from math import lcm, prod
 from typing import Literal, NoReturn
 
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
 from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.analysis.approximation.lebesgue._models import LebesgueIntervalSource
@@ -160,7 +161,13 @@ def admit(source: LebesgueIntervalSource) -> LebesguePlan:
         )
         value_bits = _factor_bits(critical_degree, resultant_bits)
         point_bits = _factor_bits(critical_degree, derivative_bits)
-        coefficient_bits = max(coefficient_bits, value_bits, point_bits)
+        algebraic_bits = max(value_bits, point_bits)
+        coefficient_bits = max(coefficient_bits, algebraic_bits)
+        if _digits(algebraic_bits) > MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS:
+            reject(
+                "algebraic_height",
+                "complete extrema can exceed canonical real-algebraic coefficient digits",
+            )
         radius = max(
             1,
             abs(lower.numerator) // lower.denominator + 1,
@@ -178,10 +185,10 @@ def admit(source: LebesgueIntervalSource) -> LebesguePlan:
         refinement_bits = (
             _separation_bits(critical_degree, value_bits) + lipschitz_bits + 8
         )
-    if _digits(coefficient_bits) > MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS:
+    if _digits(endpoint_bits) > MAX_CANONICAL_RATIONAL_DIGITS:
         reject(
-            "algebraic_height",
-            "complete extrema can exceed canonical real-algebraic coefficient digits",
+            "endpoint_height",
+            "endpoint values exceed the canonical rational digit envelope",
         )
     if refinement_bits > 65_536:
         reject(

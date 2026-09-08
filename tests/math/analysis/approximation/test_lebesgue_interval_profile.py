@@ -170,6 +170,16 @@ def test_constant_query_retains_large_rational_endpoints() -> None:
     )
 
 
+def test_rational_endpoints_are_not_capped_by_algebraic_height() -> None:
+    result = lebesgue_interval_profile(
+        source((-1, 0, 1), Fraction(1, 2), Fraction(1, 2) + Fraction(1, 10**2000))
+    )
+    assert result.cells
+    assert (
+        LebesgueIntervalProfile.model_validate_json(result.model_dump_json()) == result
+    )
+
+
 def test_unrepresentable_interior_degree_rejects_before_basis_expansion(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

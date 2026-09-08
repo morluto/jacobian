@@ -12,7 +12,12 @@ from jacobian.math.matrices.certified_snf.values import (
     MAX_CERTIFIED_SNF_INPUT_DIMENSION,
     SmithNormalFormCertificate,
 )
+from jacobian.math.matrices.symbolic.values import RationalPolynomialMatrix
 from jacobian.math.matrices.values import IntegerMatrix, SmithNormalForm
+
+
+class PolynomialSmithRequest(StrictModel):
+    matrix: RationalPolynomialMatrix
 
 
 def _certified_smith_input_schema() -> JsonSchemaValue:

@@ -198,6 +198,11 @@ def test_repeated_linear_denominator_cancels_before_result_exponent() -> None:
     assert result.partial_derivatives[0] == rational_function_from_sympy(
         -35 / (x + 1) ** 36, ("x",)
     )
+    source = rational_function_from_sympy(1 / ((x + 1) ** 20 * (x + 2) ** 20), ("x",))
+    result = _identity(source)
+    assert result.partial_derivatives[0] == rational_function_from_sympy(
+        -20 * (2 * x + 3) / ((x + 1) ** 21 * (x + 2) ** 21), ("x",)
+    )
     source = _monomial_source(("x", "y"), (1, 1), (1, 0))
     with pytest.raises(OperationDomainValidationError, match="coprime"):
         gradient(source)

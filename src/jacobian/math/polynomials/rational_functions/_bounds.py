@@ -549,15 +549,111 @@ def _remove_guaranteed_common_monomial(bound: FractionBound) -> FractionBound:
     )
 
 
+def _integer_nth_root(value: int, n: int) -> int | None:
+    if value < 0:
+        return None
+    if value in (0, 1) or n == 1:
+        return value
+    low, high = 1, value
+    while low < high:
+        mid = (low + high + 1) // 2
+        power = mid**n
+        if power == value:
+            return mid
+        if power < value:
+            low = mid
+        else:
+            high = mid - 1
+    return low if low**n == value else None
+
+
+def _rational_nth_root(value: Fraction, n: int) -> Fraction | None:
+    if n < 2:
+        return None
+    sign = -1 if value.numerator < 0 else 1
+    if sign < 0 and n % 2 == 0:
+        return None
+    root_num = _integer_nth_root(abs(value.numerator), n)
+    root_den = _integer_nth_root(value.denominator, n)
+    if root_num is None or root_den is None:
+        return None
+    return Fraction(sign * root_num, root_den)
+
+
+def _poly_mul(left: list[Fraction], right: list[Fraction]) -> list[Fraction]:
+    product = [Fraction(0)] * (len(left) + len(right) - 1)
+    for i, left_coeff in enumerate(left):
+        if left_coeff == 0:
+            continue
+        for j, right_coeff in enumerate(right):
+            if right_coeff != 0:
+                product[i + j] += left_coeff * right_coeff
+    return product
+
+
+def _poly_pow(coefficients: list[Fraction], exponent: int) -> list[Fraction]:
+    result = [Fraction(1)]
+    base = coefficients
+    remaining = exponent
+    while remaining:
+        if remaining & 1:
+            result = _poly_mul(result, base)
+        remaining >>= 1
+        if remaining:
+            base = _poly_mul(base, base)
+    return result
+
+
+def _guaranteed_univariate_perfect_power_gcd(
+    by_degree: dict[int, Fraction],
+) -> int:
+    """Return ``deg(gcd(p^n, (p^n)'))`` when the source is a univariate ``p^n``."""
+
+    if 0 not in by_degree:
+        return 0
+    total_degree = max(by_degree)
+    if total_degree < 2:
+        return 0
+    source = [by_degree.get(degree, Fraction(0)) for degree in range(total_degree + 1)]
+    best = 0
+    for power in range(2, total_degree + 1):
+        if total_degree % power:
+            continue
+        inner_degree = total_degree // power
+        constant = _rational_nth_root(source[0], power)
+        if constant is None:
+            continue
+        inner = [Fraction(0)] * (inner_degree + 1)
+        inner[0] = constant
+        failed = False
+        for degree in range(1, inner_degree + 1):
+            known = _poly_pow(inner[:degree], power)
+            known_coeff = known[degree] if degree < len(known) else Fraction(0)
+            scale = power * (constant ** (power - 1))
+            if scale == 0:
+                failed = True
+                break
+            inner[degree] = (source[degree] - known_coeff) / scale
+        if failed:
+            continue
+        expanded = _poly_pow(inner, power)
+        if len(expanded) < total_degree + 1:
+            expanded.extend([Fraction(0)] * (total_degree + 1 - len(expanded)))
+        if expanded[: total_degree + 1] != source:
+            continue
+        best = max(best, (power - 1) * inner_degree)
+    return best
+
+
 def _guaranteed_linear_power_gcd(
     denominator: SparseRationalPolynomial,
 ) -> tuple[int, int]:
-    """Return ``(axis, deg(gcd(q, q')))`` for a univariate binomial power.
+    """Return ``(axis, deg(gcd(q, q')))`` for a univariate perfect power.
 
-    In characteristic zero, ``q = (alpha x_i^g + beta)^n`` with ``n >= 2`` and
-    ``beta != 0`` has ``gcd(q, q')`` of degree ``(n-1) g``. The binomial
-    coefficient recurrence is a source-intrinsic identity, so this lower bound
-    does not replay differentiation or polynomial GCD.
+    In characteristic zero, ``q = p^n`` has ``gcd(q, q')`` of degree
+    ``(n-1) deg(p)``. The coefficient recurrence is a source-intrinsic identity,
+    so this lower bound does not replay differentiation or polynomial GCD. Products
+    of equal linear powers are perfect powers of their product polynomial.
     """
 
     if not denominator.terms:
@@ -579,6 +675,9 @@ def _guaranteed_linear_power_gcd(
         if degree in by_degree:
             return -1, 0
         by_degree[degree] = term.coefficient.as_fraction()
+    extra = _guaranteed_univariate_perfect_power_gcd(by_degree)
+    if extra > 0:
+        return axis, extra
     exponents = sorted(by_degree)
     if 0 not in by_degree:
         return -1, 0

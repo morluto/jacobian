@@ -224,6 +224,7 @@ ignore_imports = [
     "jacobian.math.graphs._independence_z3 -> jacobian.process",
     "jacobian.math.graphs.coloring._coloring_process -> jacobian.process",
     "jacobian.math.graphs.optimization._chromatic_number -> jacobian.process",
+    "jacobian.math.graphs.optimization._chromatic_bipartition -> jacobian.process",
     "jacobian.math.graphs.optimization._finite_optimization -> jacobian.process",
     "jacobian.math.graphs.optimization._invariants -> jacobian.process",
     "jacobian.math.graphs.optimization._maximum_cut_process -> jacobian.process",

@@ -16,6 +16,7 @@ from jacobian.canonical import (
     CanonicalizationError,
     CanonicalLimits,
     encode_strict_json,
+    format_canonical_integer,
     loads_strict_json,
 )
 from jacobian.process import (
@@ -41,7 +42,13 @@ def count_reduced_roots(
         raise OperationExecutionTimeoutError(
             "unit-disk root profile deadline expired before the kernel worker"
         )
-    payload = encode_strict_json({"coefficients": coefficients})
+    payload = encode_strict_json(
+        {
+            "coefficients": [
+                format_canonical_integer(coefficient) for coefficient in coefficients
+            ]
+        }
+    )
     try:
         with TemporaryDirectory(prefix="jacobian-unit-disk-") as worker_directory:
             completed = run_bounded_process(

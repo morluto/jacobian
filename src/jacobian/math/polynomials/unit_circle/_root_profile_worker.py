@@ -59,13 +59,18 @@ def _real_root_count(coefficients: list[int]) -> int:
 def _run(payload: dict[str, Any]) -> dict[str, Any]:
     from flint import fmpz_poly
 
+    from jacobian.canonical import parse_canonical_integer
+
     if set(payload) != {"coefficients"} or not isinstance(
         payload["coefficients"], list
     ):
         raise ValueError("malformed unit-disk request")
-    coefficients = payload["coefficients"]
-    if not coefficients or any(type(value) is not int for value in coefficients):
+    raw_coefficients = payload["coefficients"]
+    if not raw_coefficients or any(
+        not isinstance(value, str) for value in raw_coefficients
+    ):
         raise ValueError("malformed unit-disk request")
+    coefficients = [parse_canonical_integer(value) for value in raw_coefficients]
     source = fmpz_poly(coefficients)
     inside, boundary, outside = 0, 0, 0
     _, factors = source.factor_squarefree()

@@ -395,52 +395,7 @@ class SubsetSumResidueProfileResult(StrictModel):
             or self.support_size is not None
             or self.covers_group is not None
         ):
-            if self.group is None or self.sequence is None or self.group_rows is None:
-                raise _validation_error(
-                    "result_shape", "product result fields are required together"
-                )
-            if (
-                self.residue_counts
-                or self.source.items
-                or self.modulus != 1
-                or self.residue_witnesses is not None
-                or self.include_witnesses
-            ):
-                raise _validation_error(
-                    "result_shape",
-                    "product results cannot contain cyclic fields or witnesses",
-                )
-            if any(element.group != self.group for element in self.sequence) or any(
-                row.element.group != self.group for row in self.group_rows
-            ):
-                raise _validation_error(
-                    "group_binding", "all profile elements must use the supplied group"
-                )
-            if self.support_size is None or self.covers_group is None:
-                raise _validation_error(
-                    "result_shape", "product results require support size and coverage"
-                )
-            order = bounded_finite_abelian_subset_sum_order(self.group)
-            if order is None:
-                raise _validation_error(
-                    "result_shape",
-                    "product result group order exceeds 4,096",
-                )
-            if self.support_size != sum(
-                row.multiplicity > 0 for row in self.group_rows
-            ) or self.covers_group != (self.support_size == order):
-                raise _validation_error(
-                    "result_shape",
-                    "support and coverage must agree with complete row counts",
-                )
-            coordinates = tuple(row.element.coordinates for row in self.group_rows)
-            if len(coordinates) != order or coordinates != tuple(
-                sorted(set(coordinates))
-            ):
-                raise _validation_error(
-                    "result_shape",
-                    "product rows must enumerate the group in canonical order",
-                )
+            self._require_product_profile()
             return self
         if self.source is None or self.modulus is None:
             raise _validation_error(
@@ -472,6 +427,52 @@ class SubsetSumResidueProfileResult(StrictModel):
                         "residue witness index lies outside the retained source",
                     )
         return self
+
+    def _require_product_profile(self) -> None:
+        if self.group is None or self.sequence is None or self.group_rows is None:
+            raise _validation_error(
+                "result_shape", "product result fields are required together"
+            )
+        if (
+            self.residue_counts
+            or self.source.items
+            or self.modulus != 1
+            or self.residue_witnesses is not None
+            or self.include_witnesses
+        ):
+            raise _validation_error(
+                "result_shape",
+                "product results cannot contain cyclic fields or witnesses",
+            )
+        if any(element.group != self.group for element in self.sequence) or any(
+            row.element.group != self.group for row in self.group_rows
+        ):
+            raise _validation_error(
+                "group_binding", "all profile elements must use the supplied group"
+            )
+        if self.support_size is None or self.covers_group is None:
+            raise _validation_error(
+                "result_shape", "product results require support size and coverage"
+            )
+        order = bounded_finite_abelian_subset_sum_order(self.group)
+        if order is None:
+            raise _validation_error(
+                "result_shape",
+                "product result group order exceeds 4,096",
+            )
+        if self.support_size != sum(
+            row.multiplicity > 0 for row in self.group_rows
+        ) or self.covers_group != (self.support_size == order):
+            raise _validation_error(
+                "result_shape",
+                "support and coverage must agree with complete row counts",
+            )
+        coordinates = tuple(row.element.coordinates for row in self.group_rows)
+        if len(coordinates) != order or coordinates != tuple(sorted(set(coordinates))):
+            raise _validation_error(
+                "result_shape",
+                "product rows must enumerate the group in canonical order",
+            )
 
     @classmethod
     def _from_kernel(

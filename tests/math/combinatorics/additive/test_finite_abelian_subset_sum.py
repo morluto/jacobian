@@ -159,10 +159,14 @@ def test_bounded_order_short_circuits_rank_and_running_product() -> None:
         moduli=(2,) * (MAX_FINITE_ABELIAN_SUBSET_SUM_ORDER + 1)
     )
     assert bounded_finite_abelian_subset_sum_order(high_rank) is None
-    binary = FiniteAbelianProductGroup(moduli=(2,) * MAX_FINITE_ABELIAN_SUBSET_SUM_ORDER)
+    binary = FiniteAbelianProductGroup(
+        moduli=(2,) * MAX_FINITE_ABELIAN_SUBSET_SUM_ORDER
+    )
     assert bounded_finite_abelian_subset_sum_order(binary) is None
     assert (
-        bounded_finite_abelian_subset_sum_order(FiniteAbelianProductGroup(moduli=(2, 2)))
+        bounded_finite_abelian_subset_sum_order(
+            FiniteAbelianProductGroup(moduli=(2, 2))
+        )
         == 4
     )
 

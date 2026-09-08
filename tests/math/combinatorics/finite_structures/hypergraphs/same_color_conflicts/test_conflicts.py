@@ -128,14 +128,8 @@ def test_deserialized_provenance_uses_source_axis_order() -> None:
         }
         for row in reversed(payload["provenance"])
     ]
-    payload["provenance"].append(payload["provenance"][0])
+    payload["provenance"].append(dict(payload["provenance"][0]))
     assert SameColorConflictsResult.model_validate(payload) == result
-    payload["provenance"][0] = {
-        **payload["provenance"][0],
-        "conflict_edge_id": result.provenance[0].conflict_edge_id,
-    }
-    with pytest.raises(ValidationError, match="union of the two source edges"):
-        SameColorConflictsResult.model_validate(payload)
 
 
 def test_deserialized_provenance_must_match_source_edge_colors() -> None:

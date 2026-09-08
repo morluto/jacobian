@@ -264,3 +264,17 @@ def test_surrogate_point_label_is_rejected_before_distances() -> None:
     )
     with pytest.raises(OperationDomainValidationError, match="UTF-8"):
         compute_distance_edge_coloring(forged)
+
+
+def test_deserialized_palette_must_be_strictly_increasing() -> None:
+    result = assert_reconstructs(configuration([(0,), (1,), (3,)]))
+    duplicate = result.model_dump()
+    palette = list(duplicate["squared_distances"])
+    palette[1] = palette[0]
+    duplicate["squared_distances"] = palette
+    with pytest.raises(ValidationError, match="strictly increasing"):
+        DistanceEdgeColoringResult.model_validate(duplicate)
+    reordered = result.model_dump()
+    reordered["squared_distances"] = list(reversed(reordered["squared_distances"]))
+    with pytest.raises(ValidationError, match="strictly increasing"):
+        DistanceEdgeColoringResult.model_validate(reordered)

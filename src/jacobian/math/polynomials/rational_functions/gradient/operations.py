@@ -199,13 +199,11 @@ def _admit_general_gradient(
     )
     components = []
     for axis in range(len(function.variables)):
-        bound = _remove_guaranteed_linear_power_factor(
-            _remove_guaranteed_common_monomial(
-                _derivative_bound(function, source_bound, axis, ledger)
-            ),
-            function,
+        raw = _remove_guaranteed_common_monomial(
+            _derivative_bound(function, source_bound, axis, ledger)
         )
-        digits = _validate_canonical_result_bound(bound, ledger)
+        bound = _remove_guaranteed_linear_power_factor(raw, function)
+        digits = _validate_canonical_result_bound(bound, ledger, work_bound=raw)
         components.append((bound, digits))
     return tuple(components)
 

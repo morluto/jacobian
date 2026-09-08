@@ -211,7 +211,12 @@ def test_repeated_linear_denominator_cancels_before_result_exponent() -> None:
         gradient(authored)
 
 
-def test_linear_power_cancellation_preserves_unrelated_degrees() -> None:
+def test_univariate_binomial_power_cancellation() -> None:
+    x = symbols("x")
+    source = rational_function_from_sympy(1 / (x**2 + 1) ** 17, ("x",))
+    result = gradient(source)
+    expected = rational_function_from_sympy(-34 * x / (x**2 + 1) ** 18, ("x",))
+    assert result.partial_derivatives == (expected,)
     x, y = symbols("x y")
     numerator = sum(x ** (2 * i) for i in range(32)) * sum(y**j for j in range(5))
     source = rational_function_from_sympy(numerator / (x + 1) ** 33, ("x", "y"))

@@ -552,10 +552,10 @@ def _remove_guaranteed_common_monomial(bound: FractionBound) -> FractionBound:
 def _guaranteed_linear_power_gcd(
     denominator: SparseRationalPolynomial,
 ) -> tuple[int, int]:
-    """Return ``(axis, deg(gcd(q, q')))`` for a power of a linear polynomial.
+    """Return ``(axis, deg(gcd(q, q')))`` for a univariate binomial power.
 
-    In characteristic zero, ``q = (alpha x_i + beta)^n`` with ``n >= 2`` and
-    ``beta != 0`` has ``gcd(q, q') = (alpha x_i + beta)^{n-1}``. The binomial
+    In characteristic zero, ``q = (alpha x_i^g + beta)^n`` with ``n >= 2`` and
+    ``beta != 0`` has ``gcd(q, q')`` of degree ``(n-1) g``. The binomial
     coefficient recurrence is a source-intrinsic identity, so this lower bound
     does not replay differentiation or polynomial GCD.
     """
@@ -579,20 +579,29 @@ def _guaranteed_linear_power_gcd(
         if degree in by_degree:
             return -1, 0
         by_degree[degree] = term.coefficient.as_fraction()
-    degree = max(by_degree, default=0)
-    if degree < 2 or len(by_degree) != degree + 1:
+    exponents = sorted(by_degree)
+    if 0 not in by_degree:
         return -1, 0
-    if any(index not in by_degree for index in range(degree + 1)):
+    step = 0
+    for exponent in by_degree:
+        if exponent:
+            step = exponent if step == 0 else gcd(step, exponent)
+    if step < 1:
+        return -1, 0
+    power = max(by_degree) // step
+    if power < 2 or exponents != list(range(0, power * step + 1, step)):
         return -1, 0
     constant = by_degree[0]
     if constant == 0:
         return -1, 0
-    scale = by_degree[1] / (constant * degree)
-    for index in range(1, degree + 1):
-        expected = by_degree[index - 1] * Fraction(degree - index + 1, index) * scale
-        if by_degree[index] != expected:
+    scale = by_degree[step] / (constant * power)
+    for index in range(1, power + 1):
+        expected = (
+            by_degree[(index - 1) * step] * Fraction(power - index + 1, index) * scale
+        )
+        if by_degree[index * step] != expected:
             return -1, 0
-    return axis, degree - 1
+    return axis, (power - 1) * step
 
 
 def _remove_guaranteed_linear_power_factor(
@@ -662,8 +671,14 @@ def _canonical_coefficient_digits(bound: FractionBound) -> int:
     )
 
 
-def _validate_canonical_result_bound(bound: FractionBound, ledger: BoundsLedger) -> int:
+def _validate_canonical_result_bound(
+    bound: FractionBound,
+    ledger: BoundsLedger,
+    *,
+    work_bound: FractionBound | None = None,
+) -> int:
     limits = ledger.limits
+    charged = bound if work_bound is None else work_bound
     if bound.is_zero:
         ledger.charge("normalization", 1)
         return 1
@@ -696,23 +711,28 @@ def _validate_canonical_result_bound(bound: FractionBound, ledger: BoundsLedger)
             f"{limits.label} normalization can exceed the canonical "
             f"{limits.result_digits}-digit coefficient bound",
         )
-    denominator_is_unit = all(degree == 0 for degree in bound.denominator.degrees)
+    charged_denominator_is_unit = all(
+        degree == 0 for degree in charged.denominator.degrees
+    )
     # Normalization still uses the recursively dense backend. A sparse
     # canonical support bound does not justify reducing this work charge.
     numerator_dense = (
-        bound.numerator.terms
-        if denominator_is_unit
-        else _dense_term_bound(bound.numerator.degrees)
+        charged.numerator.terms
+        if charged_denominator_is_unit
+        else _dense_term_bound(charged.numerator.degrees)
     )
     denominator_dense = (
-        1 if denominator_is_unit else _dense_term_bound(bound.denominator.degrees)
+        1
+        if charged_denominator_is_unit
+        else _dense_term_bound(charged.denominator.degrees)
     )
+    work_digits = _canonical_coefficient_digits(charged)
     normalization_degree = max(numerator_dense + denominator_dense - 2, 0)
     ledger.charge(
         "normalization",
         (numerator_dense + denominator_dense)
         * (normalization_degree + 1)
-        * coefficient_digits,
+        * work_digits,
     )
     return coefficient_digits
 

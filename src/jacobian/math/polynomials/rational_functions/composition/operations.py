@@ -24,6 +24,7 @@ from jacobian.math.polynomials._conversions import (
     symbols_for_variables,
 )
 from jacobian.math.polynomials.rational_functions._bounds import (
+    BoundsLedger,
     BoundWorkCategory,
     FractionBound,
     PolynomialBound,
@@ -202,7 +203,7 @@ def _power(
 def _substitute_bound(
     polynomial: SparseRationalPolynomial,
     inner_bounds: tuple[FractionBound, ...],
-    ledger: _Ledger,
+    ledger: BoundsLedger,
 ) -> _SubstitutionBound:
     """Bound a cleared-denominator substitution before any CAS expansion."""
     variable_count = len(inner_bounds[0].numerator.degrees) if inner_bounds else 0

@@ -9,7 +9,13 @@ import time
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from jacobian._execution import OperationExecutionCancelledError, request_checkpoint
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    bind_request_deadline,
+    current_request_execution,
+    request_checkpoint,
+    request_execution,
+)
 from jacobian.math.graphs.optimization._chromatic_bipartition import (
     ChromaticBipartitionRequest,
     ChromaticBipartitionResult,
@@ -30,7 +36,14 @@ def find_chromatic_bipartition(
     request: ChromaticBipartitionRequest,
 ) -> ChromaticBipartitionResult:
     """Run the aggregate search in a killable worker with one request deadline."""
-    deadline = time.monotonic() + request.resource_budget.wall_seconds
+    execution = current_request_execution()
+    if execution is None:
+        with request_execution(time.monotonic()):
+            return find_chromatic_bipartition(request)
+    deadline = execution.started_at + request.resource_budget.wall_seconds
+    if execution.deadline is not None:
+        deadline = min(deadline, execution.deadline)
+    bind_request_deadline(deadline)
     try:
         with TemporaryDirectory(prefix="jacobian-graph-bipartition-") as directory:
             remaining_seconds = deadline - time.monotonic()
@@ -75,4 +88,6 @@ def find_chromatic_bipartition(
     except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
         return _unknown_result(request)
     request_checkpoint("after chromatic bipartition response validation")
-    return result
+    return result.model_copy(
+        update={"graph": request.graph, "s": request.s, "t": request.t}
+    )

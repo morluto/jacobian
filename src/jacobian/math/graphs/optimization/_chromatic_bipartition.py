@@ -12,6 +12,7 @@ from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     MathTool,
     OperationExample,
+    OperationResourceAdmissionError,
 )
 from jacobian.math.graphs.optimization._budget import remaining_ms
 from jacobian.math.graphs.optimization._chromatic_kernel import (
@@ -33,18 +34,6 @@ class ChromaticBipartitionRequest(StrictModel):
     resource_budget: ChromaticNumberBudget = Field(
         default_factory=ChromaticNumberBudget
     )
-
-    @model_validator(mode="after")
-    def admit_complete_partition_search(self) -> Self:
-        n = len(self.graph.vertices)
-        partitions = 1 << max(0, n - 1)
-        work = partitions * (n + len(self.graph.edges) + 1)
-        if work > MAX_CHROMATIC_BIPARTITION_WORK:
-            raise PydanticCustomError(
-                "graph.chromatic_bipartition_exact_work_exceeds",
-                "chromatic bipartition search exceeds the admitted complete-search work bound",
-            )
-        return self
 
 
 class ChromaticBipartitionResult(StrictModel):
@@ -93,11 +82,6 @@ class ChromaticBipartitionResult(StrictModel):
                     "graph.chromatic_bipartition_must_partition_vertices",
                     "split sides must partition graph vertices exactly once",
                 )
-            if self.graph.vertices[0] not in self.side_a:
-                raise PydanticCustomError(
-                    "graph.chromatic_bipartition_side_a_anchor",
-                    "side_a must contain the first source vertex",
-                )
             if self.chromatic_a < self.s or self.chromatic_b < self.t:
                 raise PydanticCustomError(
                     "graph.chromatic_bipartition_thresholds_not_met",
@@ -130,6 +114,27 @@ def _induced_graph(
     )
 
 
+def _admit_chromatic_bipartition(request: ChromaticBipartitionRequest) -> None:
+    """Charge every canonical partition and its inner k-colorability encodings."""
+
+    n = len(request.graph.vertices)
+    m = len(request.graph.edges)
+    partitions = max(0, (1 << n) - 2)
+    # Two induced graphs, each trying up to n color counts. One encoding of
+    # order n and k<=n uses n*k vertex literals plus m*k^2 edge separations.
+    encoding = n * n + m * n * n
+    work = partitions * 2 * n * (encoding + n + m + 1)
+    if work > MAX_CHROMATIC_BIPARTITION_WORK:
+        raise OperationResourceAdmissionError(
+            location=("graph",),
+            code="graph.chromatic_bipartition_exact_work_exceeds",
+            message=(
+                "chromatic bipartition search exceeds the admitted complete-search "
+                "work bound"
+            ),
+        )
+
+
 def _find_chromatic_bipartition_kernel(
     request: ChromaticBipartitionRequest,
 ) -> ChromaticBipartitionResult:
@@ -138,9 +143,10 @@ def _find_chromatic_bipartition_kernel(
     source_vertices = graph.vertices
     started = time.monotonic()
     checked = 0
-    anchor = 1
-    for mask in range(1, 1 << len(source_vertices)):
-        if not mask & anchor:
+    order = len(source_vertices)
+    for mask in range(1, 1 << order):
+        complement = ((1 << order) - 1) ^ mask
+        if complement == 0:
             continue
         side_a = tuple(
             vertex
@@ -161,8 +167,6 @@ def _find_chromatic_bipartition_kernel(
                 status="UNKNOWN",
                 checked_partitions=checked,
             )
-        if len(side_a) < request.s or len(side_b) < request.t:
-            continue
         chromatic_a = _chromatic_number(_induced_graph(graph, side_a), request, started)
         if chromatic_a is None:
             return ChromaticBipartitionResult(
@@ -172,8 +176,6 @@ def _find_chromatic_bipartition_kernel(
                 status="UNKNOWN",
                 checked_partitions=checked,
             )
-        if chromatic_a < request.s:
-            continue
         chromatic_b = _chromatic_number(_induced_graph(graph, side_b), request, started)
         if chromatic_b is None:
             return ChromaticBipartitionResult(
@@ -183,7 +185,7 @@ def _find_chromatic_bipartition_kernel(
                 status="UNKNOWN",
                 checked_partitions=checked,
             )
-        if chromatic_b >= request.t:
+        if chromatic_a >= request.s and chromatic_b >= request.t:
             return ChromaticBipartitionResult(
                 graph=graph,
                 s=request.s,
@@ -193,6 +195,22 @@ def _find_chromatic_bipartition_kernel(
                 side_b=side_b,
                 chromatic_a=chromatic_a,
                 chromatic_b=chromatic_b,
+                checked_partitions=checked,
+            )
+        if (
+            request.s != request.t
+            and chromatic_a >= request.t
+            and chromatic_b >= request.s
+        ):
+            return ChromaticBipartitionResult(
+                graph=graph,
+                s=request.s,
+                t=request.t,
+                status="SPLIT",
+                side_a=side_b,
+                side_b=side_a,
+                chromatic_a=chromatic_b,
+                chromatic_b=chromatic_a,
                 checked_partitions=checked,
             )
     return ChromaticBipartitionResult(
@@ -219,6 +237,7 @@ def find_chromatic_bipartition(
 ) -> ChromaticBipartitionResult:
     """Run the aggregate search in a killable worker with one request deadline."""
 
+    _admit_chromatic_bipartition(request)
     # Circular: the process owner imports this module's request and result types.
     from jacobian.math.graphs.optimization._chromatic_bipartition_process import (
         find_chromatic_bipartition as run_worker,

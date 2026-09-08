@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.graphs.optimization import _chromatic_bipartition as operation
 from jacobian.math.graphs.optimization import (
     _chromatic_bipartition_process as process_owner,
@@ -41,8 +41,21 @@ def test_k3_has_exact_no_split() -> None:
         ChromaticBipartitionRequest(graph=source, s=2, t=2)
     )
     assert result.status == "NO_SPLIT"
-    assert result.checked_partitions == 4
     assert result.side_a is None
+
+
+def test_unequal_thresholds_accept_the_opposite_orientation() -> None:
+    source = graph(
+        ("a", "b", "c", "d", "e"),
+        (("a", "b"), ("c", "d"), ("c", "e"), ("d", "e")),
+    )
+    result = find_chromatic_bipartition(
+        ChromaticBipartitionRequest(graph=source, s=3, t=2)
+    )
+    assert result.status == "SPLIT"
+    assert set(result.side_a) == {"c", "d", "e"}
+    assert set(result.side_b) == {"a", "b"}
+    assert (result.chromatic_a, result.chromatic_b) == (3, 2)
 
 
 def test_timeout_is_unknown_without_negative_claim(
@@ -62,8 +75,9 @@ def test_timeout_is_unknown_without_negative_claim(
 
 def test_complete_search_bound_is_source_admission() -> None:
     source = graph(tuple(f"v{i}" for i in range(20)), ())
-    with pytest.raises(ValidationError, match="complete-search work bound"):
-        ChromaticBipartitionRequest(graph=source, s=1, t=1)
+    request = ChromaticBipartitionRequest(graph=source, s=1, t=1)
+    with pytest.raises(OperationResourceAdmissionError, match="complete-search work"):
+        find_chromatic_bipartition(request)
 
 
 def test_worker_noncompletion_is_unknown(monkeypatch: pytest.MonkeyPatch) -> None:

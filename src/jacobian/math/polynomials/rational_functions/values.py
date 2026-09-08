@@ -23,7 +23,8 @@ def _raw_coefficient_bits(coefficient: object) -> int:
             component = coefficient.get(key)
             if isinstance(component, str):
                 digits = component.lstrip("-") or "0"
-                bits += max(1, len(digits)) * 4
+                # log2(10) < 333/100; JSON decimal length must match native bit_length.
+                bits += max(1, (len(digits) * 333 + 99) // 100)
             elif type(component) is int:
                 bits += max(1, abs(component).bit_length())
         return bits
@@ -49,6 +50,37 @@ def _raw_polynomial_bits(polynomial: object) -> int:
         elif hasattr(term, "coefficient"):
             bits += _raw_coefficient_bits(term.coefficient)
     return bits
+
+
+def _reject_oversize_map_components(components: object) -> None:
+    if not isinstance(components, (list, tuple)):
+        return
+    total = 0
+    bits = 0
+    for component in components:
+        if isinstance(component, RationalFunction):
+            total += len(component.numerator.terms) + len(component.denominator.terms)
+            bits += _raw_polynomial_bits(component.numerator) + _raw_polynomial_bits(
+                component.denominator
+            )
+        elif isinstance(component, dict):
+            for key in ("numerator", "denominator"):
+                polynomial = component.get(key)
+                if isinstance(polynomial, dict):
+                    terms = polynomial.get("terms")
+                    if isinstance(terms, (list, tuple)):
+                        total += len(terms)
+                elif hasattr(polynomial, "terms"):
+                    total += len(polynomial.terms)
+                bits += _raw_polynomial_bits(polynomial)
+        if total > MAX_RATIONAL_MAP_SOURCE_TERMS:
+            raise ValueError(
+                "rational-map components exceed the 65,536-term source envelope"
+            )
+        if bits > MAX_RATIONAL_MAP_SOURCE_BITS:
+            raise ValueError(
+                "rational-map components exceed the 8,388,608-bit source envelope"
+            )
 
 
 class RationalFunctionMap(StrictModel):
@@ -81,41 +113,9 @@ class RationalFunctionMap(StrictModel):
     def require_aggregate_component_terms(cls, data: object) -> object:
         """Cap nested polynomial terms before constructing each component."""
 
-        data = canonicalize_json_containers(data)
-        if not isinstance(data, dict):
-            return data
-        components = data.get("components")
-        if not isinstance(components, (list, tuple)):
-            return data
-        total = 0
-        bits = 0
-        for component in components:
-            if isinstance(component, RationalFunction):
-                total += len(component.numerator.terms) + len(
-                    component.denominator.terms
-                )
-                bits += _raw_polynomial_bits(
-                    component.numerator
-                ) + _raw_polynomial_bits(component.denominator)
-            elif isinstance(component, dict):
-                for key in ("numerator", "denominator"):
-                    polynomial = component.get(key)
-                    if isinstance(polynomial, dict):
-                        terms = polynomial.get("terms")
-                        if isinstance(terms, (list, tuple)):
-                            total += len(terms)
-                    elif hasattr(polynomial, "terms"):
-                        total += len(polynomial.terms)
-                    bits += _raw_polynomial_bits(polynomial)
-            if total > MAX_RATIONAL_MAP_SOURCE_TERMS:
-                raise ValueError(
-                    "rational-map components exceed the 65,536-term source envelope"
-                )
-            if bits > MAX_RATIONAL_MAP_SOURCE_BITS:
-                raise ValueError(
-                    "rational-map components exceed the 8,388,608-bit source envelope"
-                )
-        return data
+        if isinstance(data, dict):
+            _reject_oversize_map_components(data.get("components"))
+        return canonicalize_json_containers(data)
 
     @model_validator(mode="after")
     def require_coordinate_axes(self) -> Self:

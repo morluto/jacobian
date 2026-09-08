@@ -267,7 +267,7 @@ def test_aggregate_source_terms_are_capped_before_component_parse() -> None:
 
 
 def test_aggregate_source_digits_are_capped_before_component_parse() -> None:
-    coefficient = {"num": "1" + "0" * 127, "den": "1"}
+    coefficient = {"num": "1" + "0" * 199, "den": "1"}
     term = {"coefficient": coefficient, "exponents": [0]}
     component = {
         "variables": ["x"],

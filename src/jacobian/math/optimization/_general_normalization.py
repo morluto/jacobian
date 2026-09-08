@@ -25,8 +25,58 @@ class GeneralLinearNormalization:
     standard_program: StandardFormRationalLinearProgram
     offsets: tuple[Fraction, ...]
     columns: tuple[tuple[tuple[int, Fraction], ...], ...]
-    source_rows: tuple[tuple[int, Fraction], ...]
+    source_rows: tuple[tuple[int | None, Fraction], ...]
     upper_rows: tuple[int | None, ...]
+    chain: tuple[int, ...] = ()
+    chain_rows: tuple[tuple[int, Fraction], ...] = ()
+
+
+def _ordered_chain(
+    program: GeneralFormRationalLinearProgram,
+) -> tuple[tuple[int, ...], tuple[tuple[int, Fraction], ...]]:
+    """Recognize a full zero-gap chain above one common finite lower bound."""
+    size = len(program.variables)
+    lower = program.variables[0].lower_bound
+    if (
+        size < 2
+        or lower is None
+        or any(
+            variable.lower_bound != lower or variable.upper_bound is not None
+            for variable in program.variables
+        )
+    ):
+        return (), ()
+    outgoing: dict[int, tuple[int, int, Fraction]] = {}
+    incoming: set[int] = set()
+    for row_index, row in enumerate(program.constraints):
+        if row.relation == "EQ" or row.rhs.num != 0:
+            continue
+        sign = Fraction(-1 if row.relation == "GE" else 1)
+        nonzero = [
+            (i, sign * value.as_fraction())
+            for i, value in enumerate(row.coefficients)
+            if value.num
+        ]
+        if len(nonzero) != 2 or {value for _, value in nonzero} != {-1, 1}:
+            continue
+        first = next(i for i, value in nonzero if value == 1)
+        second = next(i for i, value in nonzero if value == -1)
+        if first in outgoing or second in incoming:
+            return (), ()
+        outgoing[first] = second, row_index, sign
+        incoming.add(second)
+    starts = set(range(size)) - incoming
+    if len(outgoing) != size - 1 or len(starts) != 1:
+        return (), ()
+    chain = [starts.pop()]
+    rows = []
+    while chain[-1] in outgoing:
+        following, row_index, sign = outgoing[chain[-1]]
+        if following in chain:
+            return (), ()
+        chain.append(following)
+        rows.append((row_index, sign))
+    return (tuple(chain), tuple(rows)) if len(chain) == size else ((), ())
 
 
 def _rational(value: Fraction) -> CanonicalRational:
@@ -35,12 +85,26 @@ def _rational(value: Fraction) -> CanonicalRational:
 
 def _source_coordinate_map(
     program: GeneralFormRationalLinearProgram,
+    chain: tuple[int, ...] = (),
 ) -> tuple[
     list[Fraction],
     list[tuple[tuple[int, Fraction], ...]],
     list[str],
 ]:
     """Represent every original coordinate by nonnegative private columns."""
+
+    if chain:
+        lower = program.variables[chain[0]].lower_bound
+        assert lower is not None
+        positions = {source: position for position, source in enumerate(chain)}
+        return (
+            [lower.as_fraction()] * len(chain),
+            [
+                tuple((i, Fraction(1)) for i in range(positions[source] + 1))
+                for source in range(len(chain))
+            ],
+            [f"_chain{i}" for i in range(len(chain))],
+        )
 
     offsets: list[Fraction] = []
     columns: list[tuple[tuple[int, Fraction], ...]] = []
@@ -72,21 +136,27 @@ def normalize_general_program(
     program: GeneralFormRationalLinearProgram,
 ) -> GeneralLinearNormalization:
     """Construct the bounded private standard-form source and exact ledger."""
-
+    chain, chain_rows = _ordered_chain(program)
+    removed_rows = {index for index, _ in chain_rows}
     normalized_columns = (
         sum(
             2 if v.lower_bound is None and v.upper_bound is None else 1
             for v in program.variables
         )
         + sum(row.relation != "EQ" for row in program.constraints)
+        - len(removed_rows)
         + sum(
             v.lower_bound is not None and v.upper_bound is not None
             for v in program.variables
         )
     )
-    normalized_rows = len(program.constraints) + sum(
-        v.lower_bound is not None and v.upper_bound is not None
-        for v in program.variables
+    normalized_rows = (
+        len(program.constraints)
+        - len(removed_rows)
+        + sum(
+            v.lower_bound is not None and v.upper_bound is not None
+            for v in program.variables
+        )
     )
     for reason, count, limit in (
         (
@@ -110,12 +180,15 @@ def normalize_general_program(
     source_objective = tuple(
         value.as_fraction() for value in program.objective.coefficients
     )
-    offsets, columns, standard_names = _source_coordinate_map(program)
+    offsets, columns, standard_names = _source_coordinate_map(program, chain)
 
     rows: list[list[Fraction]] = []
     rhs: list[Fraction] = []
-    source_rows: list[tuple[int, Fraction]] = []
+    source_rows: list[tuple[int | None, Fraction]] = []
     for row_index, source_row in enumerate(program.constraints):
+        if row_index in removed_rows:
+            source_rows.append((None, Fraction(1)))
+            continue
         coefficients = tuple(value.as_fraction() for value in source_row.coefficients)
         sign = Fraction(-1 if source_row.relation == "GE" else 1)
         normalized_row = [Fraction()] * len(standard_names)
@@ -146,7 +219,7 @@ def normalize_general_program(
                 )
             )
         )
-        source_rows.append((row_index, sign))
+        source_rows.append((len(rows) - 1, sign))
 
     upper_rows: list[int | None] = []
     for source_index, variable in enumerate(program.variables):
@@ -190,6 +263,8 @@ def normalize_general_program(
         columns=tuple(columns),
         source_rows=tuple(source_rows),
         upper_rows=tuple(upper_rows),
+        chain=chain,
+        chain_rows=chain_rows,
     )
 
 
@@ -213,7 +288,7 @@ def _standard_intermediate_digit_bound(
 _MAPPED_RESULT_HEIGHT_SLACK = 16
 
 
-def _mapped_point_digit_bound(standard_digits: int) -> int:
+def _mapped_point_digit_bound(standard_digits: int, terms: int = 2) -> int:
     """Bound mapped coordinates, bound slacks, and mapped recession rays.
 
     A source coordinate adds its offset to at most two standard columns, and
@@ -222,7 +297,9 @@ def _mapped_point_digit_bound(standard_digits: int) -> int:
     before one chained difference.
     """
 
-    return 2 * MAX_RATIONAL_DIGITS + 2 * standard_digits + _MAPPED_RESULT_HEIGHT_SLACK
+    return (
+        2 * MAX_RATIONAL_DIGITS + terms * standard_digits + _MAPPED_RESULT_HEIGHT_SLACK
+    )
 
 
 def _mapped_residual_digit_bound(
@@ -240,8 +317,9 @@ def _mapped_residual_digit_bound(
 
     variables = len(normalization.offsets)
     summed_terms = 2 * variables + 1
+    mapped_terms = max(len(mapping) for mapping in normalization.columns)
     return (
-        variables * (3 * MAX_RATIONAL_DIGITS + standard_digits)
+        variables * (3 * MAX_RATIONAL_DIGITS + mapped_terms * standard_digits)
         + MAX_RATIONAL_DIGITS
         + len(str(summed_terms))
         + 1
@@ -269,6 +347,42 @@ def _mapped_certificate_digit_bound(
         + (2 + 4 * variables) * MAX_RATIONAL_DIGITS
         + _MAPPED_RESULT_HEIGHT_SLACK
     )
+
+
+def chain_mapped_digit_bounds(
+    program: GeneralFormRationalLinearProgram,
+    normalization: GeneralLinearNormalization,
+    standard_digits: int,
+) -> tuple[int, int, int]:
+    """Bound source-coordinate outputs before solving the reduced chain LP.
+
+    All source denominators divide their product D (count each distinct
+    denominator once). Standard coordinate denominators divide a product of
+    at most n denominators; standard dual denominators a product of at most
+    r denominators. A source point therefore has denominator dividing D*P,
+    and its objective/residuals D**2*P. A mapped chain multiplier is a sum
+    of source coefficients times standard duals, with denominator D*Q;
+    stationarity and source-bound pairings divide D**2*Q. The magnitude
+    allowance covers two source factors, a standard factor and all sums.
+    """
+    scalars = [*program.objective.coefficients]
+    for row in program.constraints:
+        scalars.extend(row.coefficients)
+        scalars.append(row.rhs)
+    scalars.extend(
+        variable.lower_bound
+        for variable in program.variables
+        if variable.lower_bound is not None
+    )
+    denominator_digits = sum(len(str(d)) for d in {v.den for v in scalars} if d != 1)
+    source_digits = max(len(str(abs(v.num))) for v in scalars)
+    n = len(program.variables)
+    r = len(normalization.standard_program.coefficients)
+    magnitude = 2 * source_digits + standard_digits + 3 * len(str(n + r + 1)) + 4
+    point = denominator_digits + n * standard_digits + magnitude
+    residual = 2 * denominator_digits + n * standard_digits + magnitude
+    certificate = 2 * denominator_digits + r * standard_digits + magnitude
+    return point, residual, certificate
 
 
 def admit_general_normalization(

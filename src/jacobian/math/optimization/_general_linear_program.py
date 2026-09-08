@@ -20,6 +20,7 @@ from jacobian.math.optimization._general_normalization import (
     _mapped_point_digit_bound,
     _mapped_residual_digit_bound,
     admit_general_normalization,
+    chain_mapped_digit_bounds,
 )
 from jacobian.math.optimization._linear_basis import (
     admit_linear_program,
@@ -119,13 +120,39 @@ def _primal_data(
 
 
 def _effective_constraint_values(
+    program: GeneralFormRationalLinearProgram,
     normalization: GeneralLinearNormalization,
     standard_values: tuple[CanonicalRational, ...],
+    *,
+    farkas: bool = False,
 ) -> tuple[Fraction, ...]:
     values = tuple(value.as_fraction() for value in standard_values)
-    return tuple(
-        values[standard_row] * sign for standard_row, sign in normalization.source_rows
-    )
+    result = [
+        values[row] * sign if row is not None else Fraction()
+        for row, sign in normalization.source_rows
+    ]
+    if normalization.chain:
+        objective, coefficients, _ = _source_arrays(program)
+        sense = Fraction(1 if program.objective.sense == "MINIMIZE" else -1)
+        gradient = [
+            (Fraction() if farkas else sense * objective[i])
+            - sum(
+                (
+                    row[i] * multiplier
+                    for row, multiplier in zip(coefficients, result, strict=True)
+                ),
+                Fraction(),
+            )
+            for i in range(len(program.variables))
+        ]
+        # Reduced costs in difference coordinates are suffix sums of the
+        # source gradient. They become multipliers of the removed chain rows.
+        suffix = Fraction()
+        for position in range(len(normalization.chain) - 1, 0, -1):
+            suffix += gradient[normalization.chain[position]]
+            row, sign = normalization.chain_rows[position - 1]
+            result[row] = -sign * suffix
+    return tuple(result)
 
 
 def _effective_bound_values(
@@ -466,7 +493,7 @@ def _map_standard_result(
     if standard_result.status == "INFEASIBLE":
         assert standard_result.farkas_candidate is not None
         constraints = _effective_constraint_values(
-            normalization, standard_result.farkas_candidate
+            program, normalization, standard_result.farkas_candidate, farkas=True
         )
         lower, upper = _effective_farkas_bounds(
             program,
@@ -538,7 +565,7 @@ def _map_standard_result(
     assert standard_result.status == "OPTIMAL"
     assert standard_result.dual_candidate is not None
     effective_constraints = _effective_constraint_values(
-        normalization, standard_result.dual_candidate
+        program, normalization, standard_result.dual_candidate
     )
     effective_lower, effective_upper = _effective_bound_values(
         program,
@@ -729,6 +756,31 @@ def _general_linear_program(
 
     normalization = admit_general_normalization(program)
     admission = admit_linear_program(normalization.standard_program)
+    point_digits = _mapped_point_digit_bound(
+        admission.result_digits, max(len(mapping) for mapping in normalization.columns)
+    )
+    residual_digits = _mapped_residual_digit_bound(
+        normalization, admission.result_digits
+    )
+    certificate_digits = _mapped_certificate_digit_bound(
+        normalization, admission.result_digits
+    )
+    if normalization.chain:
+        from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
+        from jacobian.catalog.models import OperationResourceAdmissionError
+
+        point_digits, residual_digits, certificate_digits = chain_mapped_digit_bounds(
+            program, normalization, admission.result_digits
+        )
+        if (
+            max(point_digits, residual_digits, certificate_digits)
+            > MAX_CANONICAL_RATIONAL_DIGITS
+        ):
+            raise OperationResourceAdmissionError(
+                location=("program",),
+                code="optimization.linear.mapped_result_digits",
+                message="Ordered-chain LP source-coordinate growth exceeds the exact scalar digit bound.",
+            )
     standard_result = _linear_program_admitted(
         normalization.standard_program, admission
     )
@@ -736,13 +788,9 @@ def _general_linear_program(
         program,
         normalization,
         standard_result,
-        point_max_digits=_mapped_point_digit_bound(admission.result_digits),
-        residual_max_digits=_mapped_residual_digit_bound(
-            normalization, admission.result_digits
-        ),
-        certificate_max_digits=_mapped_certificate_digit_bound(
-            normalization, admission.result_digits
-        ),
+        point_max_digits=point_digits,
+        residual_max_digits=residual_digits,
+        certificate_max_digits=certificate_digits,
     )
 
 

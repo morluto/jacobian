@@ -131,8 +131,13 @@ def _admit(
     )
     exposing_bits = 2 * input_bits + max(1, max(len(active), 1).bit_length())
     minor_bits = max(1, n * (exposing_bits + n.bit_length()))
-    matrix_bits = [
-        max(
+    matrix_bits = []
+    for matrix in system.matrices:
+        dens = {entry.den for row in matrix.entries for entry in row}
+        aggregate_denominators = sum(
+            (den - 1).bit_length() for den in dens if den != 1
+        )
+        entry_bits = max(
             (
                 abs(entry.num).bit_length() + entry.den.bit_length()
                 for row in matrix.entries
@@ -140,16 +145,35 @@ def _admit(
             ),
             default=1,
         )
-        + 2 * minor_bits
-        for matrix in system.matrices
-    ]
+        matrix_bits.append(
+            max(entry_bits, aggregate_denominators)
+            + 2 * minor_bits
+            + (n * n).bit_length()
+        )
     result_bits = max(
         input_bits + 2 * minor_bits + 2 * n.bit_length() + 2,
         max(matrix_bits, default=1),
     )
     intermediate_bits = 4 * max(result_bits, minor_bits)
     work = (2 * m + 4) * n**3 + m * n * n + m
-    _check_budgets(cells, result_bits, intermediate_bits, work)
+    retained_scalars = (
+        *(
+            entry
+            for matrix in system.matrices
+            for row in matrix.entries
+            for entry in row
+        ),
+        *system.rhs,
+        *multipliers,
+    )
+    output_digits = 2 * sum(
+        _component_digits(abs(component).bit_length())
+        for q in retained_scalars
+        for component in (q.num, q.den)
+    ) + 2 * n * n * _component_digits(result_bits)
+    _check_budgets(
+        cells, result_bits, intermediate_bits, work, output_digits=output_digits
+    )
     return False
 
 

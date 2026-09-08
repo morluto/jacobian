@@ -281,6 +281,32 @@ def test_inactive_large_denominator_does_not_block_exposing_matrix() -> None:
     assert result.reduced.matrices[1].entries[0][0].as_fraction() == huge
 
 
+def test_inactive_rhs_heights_count_toward_output() -> None:
+    huge = Fraction(10**32_000)
+    matrices = (_matrix([[1, 1], [1, 1]]),) + tuple(
+        _matrix([[0, 0], [0, 0]]) for _ in range(200)
+    )
+    rhs = (0,) + tuple(huge for _ in range(200))
+    system = RationalSemidefiniteSystem(
+        order=2, matrices=matrices, rhs=tuple(_q(value) for value in rhs)
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="output digit"):
+        reduce_exposed_face(system, (_q(1),) + tuple(_q(0) for _ in range(200)))
+
+
+def test_coprime_constraint_denominators_are_bounded_in_compression() -> None:
+    primes = [10**12_000 + 2 * i + 1 for i in range(3)]
+    dense = _matrix(
+        [
+            [Fraction(1, primes[0]), Fraction(1, primes[1])],
+            [Fraction(1, primes[1]), Fraction(1, primes[2])],
+        ]
+    )
+    system = _system((_matrix([[0, 1], [1, 0]]), dense), (0, 0))
+    with pytest.raises(OperationResourceAdmissionError, match="canonical rational"):
+        reduce_exposed_face(system, (_q(1), _q(1)))
+
+
 def test_native_dispatch_and_serialized_result_parity() -> None:
     tool = TOOLS[0]
     parsed = parse_operation_input(

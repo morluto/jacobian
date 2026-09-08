@@ -48,39 +48,27 @@ def _materialize_sequence(value: object, *, limit: int) -> list[object] | None:
     return None
 
 
-def _install_sequence(
-    container: dict[str, object], key: str, *, limit: int
-) -> list[object] | None:
-    value = container.get(key)
-    materialized = _materialize_sequence(value, limit=limit)
-    if materialized is not None and not isinstance(value, Sequence):
-        container[key] = materialized
-    return materialized
+def _scan_row(row: object, *, limit: int) -> tuple[object, int, int, bool]:
+    """Count cells in one row and materialize a generated row up to ``limit``."""
 
-
-def _scan_matrix_entries(matrices: object) -> tuple[int, int]:
-    matrix_list = _materialize_sequence(matrices, limit=MAX_SEMIDEFINITE_CELLS)
-    if matrix_list is None:
-        return 0, 0
-    cells = 0
-    digits = 0
-    for matrix in matrix_list:
-        entries = matrix.get("entries") if isinstance(matrix, dict) else None
-        if entries is None and hasattr(matrix, "entries"):
-            entries = matrix.entries
-        row_list = _materialize_sequence(entries, limit=MAX_SEMIDEFINITE_CELLS)
-        if row_list is None:
-            continue
-        for row in row_list:
-            if isinstance(row, (list, tuple)):
-                cells += len(row)
-                digits += sum(_raw_rational_digits(entry) for entry in row)
-            else:
-                cells += 1
-                digits += _raw_rational_digits(row)
-            if cells > MAX_SEMIDEFINITE_CELLS:
-                return cells, digits
-    return cells, digits
+    if isinstance(row, (str, bytes, bytearray, Mapping)):
+        return row, 1, _raw_rational_digits(row), False
+    if isinstance(row, Sequence):
+        return (
+            row,
+            len(row),
+            sum(_raw_rational_digits(entry) for entry in row),
+            False,
+        )
+    materialized = _materialize_sequence(row, limit=limit)
+    if materialized is None:
+        return row, 1, _raw_rational_digits(row), False
+    return (
+        materialized,
+        len(materialized),
+        sum(_raw_rational_digits(entry) for entry in materialized),
+        True,
+    )
 
 
 def _preflight_raw_payload(
@@ -93,28 +81,59 @@ def _preflight_raw_payload(
     system = dict(system)
     payload["system"] = system
     matrices_value = system.get("matrices")
-    matrix_list = _materialize_sequence(matrices_value, limit=MAX_SEMIDEFINITE_CELLS)
+    remaining_rows = MAX_SEMIDEFINITE_CELLS
+    matrix_list = _materialize_sequence(matrices_value, limit=remaining_rows)
     installed_matrices: list[object] | None = None
+    cells = 0
+    digits = 0
     if matrix_list is not None:
         installed_matrices = []
         needs_install = not isinstance(matrices_value, Sequence)
         for matrix in matrix_list:
-            if isinstance(matrix, dict):
-                matrix_payload = dict(matrix)
-                entries = matrix_payload.get("entries")
-                row_list = _install_sequence(
-                    matrix_payload, "entries", limit=MAX_SEMIDEFINITE_CELLS
+            if cells > MAX_SEMIDEFINITE_CELLS:
+                break
+            if not isinstance(matrix, dict):
+                entries = matrix.entries if hasattr(matrix, "entries") else None
+                row_list = _materialize_sequence(
+                    entries, limit=MAX_SEMIDEFINITE_CELLS - cells
                 )
-                if row_list is not None and not isinstance(entries, Sequence):
-                    needs_install = True
-                installed_matrices.append(matrix_payload)
-            else:
+                if row_list is not None:
+                    for row in row_list:
+                        _installed, row_cells, row_digits, _replaced = _scan_row(
+                            row, limit=MAX_SEMIDEFINITE_CELLS - cells
+                        )
+                        cells += row_cells
+                        digits += row_digits
+                        if cells > MAX_SEMIDEFINITE_CELLS:
+                            break
                 installed_matrices.append(matrix)
+                continue
+            matrix_payload = dict(matrix)
+            entries = matrix_payload.get("entries")
+            row_list = _materialize_sequence(
+                entries, limit=MAX_SEMIDEFINITE_CELLS - cells
+            )
+            if row_list is None:
+                installed_matrices.append(matrix_payload)
+                continue
+            installed_rows: list[object] = []
+            replace_entries = not isinstance(entries, Sequence)
+            for row in row_list:
+                installed_row, row_cells, row_digits, replaced = _scan_row(
+                    row, limit=MAX_SEMIDEFINITE_CELLS - cells
+                )
+                installed_rows.append(installed_row)
+                replace_entries = replace_entries or replaced
+                cells += row_cells
+                digits += row_digits
+                if cells > MAX_SEMIDEFINITE_CELLS:
+                    break
+            if replace_entries:
+                matrix_payload["entries"] = installed_rows
+                needs_install = True
+            installed_matrices.append(matrix_payload)
         if needs_install:
             system["matrices"] = installed_matrices
-    cells, digits = _scan_matrix_entries(
-        installed_matrices if installed_matrices is not None else system.get("matrices")
-    )
     rhs = system.get("rhs")
     if isinstance(rhs, (list, tuple)):
         digits += sum(_raw_rational_digits(value) for value in rhs)

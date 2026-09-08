@@ -276,7 +276,12 @@ def test_python_mode_generators_reduce_the_issue_fixture_face() -> None:
                 "matrices": (
                     matrix
                     for matrix in (
-                        {"entries": (row for row in ((_q(1), _q(0)), (_q(0), _q(0))))},
+                        {
+                            "entries": (
+                                (entry for entry in row)
+                                for row in ((_q(1), _q(0)), (_q(0), _q(0)))
+                            )
+                        },
                         {"entries": ((_q(1), _q(0)), (_q(0), _q(1)))},
                     )
                 ),
@@ -305,6 +310,28 @@ def test_raw_request_preflight_rejects_over_budget_generated_cells() -> None:
                     "rhs": [{"num": "0", "den": "1"}] * 9,
                 },
                 "multipliers": [{"num": "1", "den": "1"}] * 9,
+            }
+        )
+
+
+def test_raw_request_preflight_counts_generated_row_cells() -> None:
+    zero = {"num": "0", "den": "1"}
+
+    def generated_row() -> object:
+        return (zero for _ in range(8192))
+
+    with pytest.raises(ValidationError, match="dense cell envelope"):
+        SemidefiniteFaceReductionRequest.model_validate(
+            {
+                "system": {
+                    "order": 1,
+                    "matrices": [
+                        {"entries": (generated_row() for _ in range(8192))}
+                        for _ in range(16)
+                    ],
+                    "rhs": [zero] * 16,
+                },
+                "multipliers": [{"num": "1", "den": "1"}] * 16,
             }
         )
 

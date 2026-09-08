@@ -76,19 +76,36 @@ def _denominator_guard_identity(dag: Dag, value: Expression) -> object | None:
     remaining = cancelled.denominator
     if not any(remaining.degrees):
         return None
+    numerators = Counter(value.numerator)
+    denominators = Counter(value.denominator)
     factors: list[tuple[int, int]] = []
-    for index, multiplicity in sorted(Counter(value.denominator).items()):
+    remaining_numerator: list[tuple[int, int]] = []
+    cancelled_shared = False
+    for index, multiplicity in sorted(denominators.items()):
         if not any(dag.nodes[index].bound.degrees):
             continue
-        factors.append((index, multiplicity))
+        shared = min(multiplicity, numerators.get(index, 0))
+        leftover = multiplicity - shared
+        if shared:
+            cancelled_shared = True
+        if leftover:
+            factors.append((index, leftover))
+    for index, multiplicity in sorted(numerators.items()):
+        if not any(dag.nodes[index].bound.degrees):
+            continue
+        leftover = multiplicity - min(multiplicity, denominators.get(index, 0))
+        if leftover:
+            remaining_numerator.append((index, leftover))
     if not factors:
         return None
+    remaining_numerator_identity = tuple(remaining_numerator)
     if len(factors) == 1 and factors[0][1] == 1:
         index = factors[0][0]
         raw = dag.nodes[index].bound
         if (
             remaining.degrees == raw.degrees
             and remaining.minimum_exponents == raw.minimum_exponents
+            and not cancelled_shared
         ):
             return _node_guard_key(dag, index)
         return (
@@ -96,7 +113,7 @@ def _denominator_guard_identity(dag: Dag, value: Expression) -> object | None:
             (_node_guard_key(dag, index), 1),
             remaining.minimum_exponents,
             remaining.degrees,
-            tuple(sorted(Counter(value.numerator).items())),
+            remaining_numerator_identity,
         )
     identity: tuple[object, ...] = (
         "canonical-result-denominator",
@@ -107,11 +124,8 @@ def _denominator_guard_identity(dag: Dag, value: Expression) -> object | None:
         remaining.minimum_exponents,
         remaining.degrees,
     )
-    if any(cancelled.numerator.degrees):
-        identity = (
-            *identity,
-            tuple(sorted(Counter(value.numerator).items())),
-        )
+    if remaining_numerator_identity:
+        identity = (*identity, remaining_numerator_identity)
     return identity
 
 

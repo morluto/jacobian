@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from fractions import Fraction
+from typing import NoReturn
 
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.geometry.differential.metrics._dag import (
     Dag,
     Expression,
@@ -29,6 +31,15 @@ from jacobian.math.polynomials.values import RationalFunction, SparseRationalPol
 MAX_LAPLACE_OUTPUT_TERMS = 262_144
 MAX_LAPLACE_OUTPUT_BITS = 268_435_456
 MAX_LAPLACE_OUTPUT_SLOTS = 1_048_576
+
+
+def _laplace_reject(reason: str, message: str) -> NoReturn:
+    location = ("scalar",) if reason == "result_exponent" else ("metric",)
+    raise OperationResourceAdmissionError(
+        location=location,
+        code=f"differential_geometry.laplace_beltrami.{reason}",
+        message=message,
+    )
 
 
 @dataclass(frozen=True)
@@ -87,6 +98,11 @@ def build_plan(metric: RationalCoordinateMetric, scalar: RationalFunction) -> Pl
                 )
             )
     value = dag.add(*value_terms)
+    dag.ledger.limits = replace(
+        dag.ledger.limits,
+        reject=_laplace_reject,
+        label="Laplace--Beltrami",
+    )
     size = dag.admit_output(value)
     determinant_sizes: list[tuple[int, int, int]] = []
     for index in set(connection_plan.determinant.numerator):

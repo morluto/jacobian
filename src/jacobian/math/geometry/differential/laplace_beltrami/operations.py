@@ -5,8 +5,6 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from pydantic_core import PydanticCustomError
-
 from jacobian._execution import (
     bind_request_deadline,
     current_request_execution,
@@ -14,6 +12,10 @@ from jacobian._execution import (
     request_execution,
 )
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.geometry.differential._recognition_process import (
+    RationalFunctionRecognitionCandidate,
+    recognize_canonical_rational_functions,
+)
 from jacobian.math.geometry.differential.laplace_beltrami._models import (
     RationalLaplaceBeltramiResult,
 )
@@ -31,23 +33,25 @@ from jacobian.math.polynomials._conversions import (
 )
 from jacobian.math.polynomials.values import (
     RationalFunction,
-    require_canonical_rational_function,
 )
 
 
 def _recognize_source(
-    metric: RationalCoordinateMetric, scalar: RationalFunction
+    metric: RationalCoordinateMetric, scalar: RationalFunction, deadline: float
 ) -> None:
-    for source in (*metric.tensor.components, scalar):
-        request_checkpoint("before Laplace--Beltrami source recognition")
-        try:
-            require_canonical_rational_function(source)
-        except PydanticCustomError as exc:
-            raise OperationDomainValidationError(
-                location=("laplace_beltrami",),
-                code="differential_geometry.laplace_beltrami.noncanonical_source",
-                message="metric and scalar must be reduced canonical rational functions",
-            ) from exc
+    candidates = tuple(
+        RationalFunctionRecognitionCandidate(
+            owner="tensor", component=index, value=source
+        )
+        for index, source in enumerate((*metric.tensor.components, scalar))
+    )
+    recognition = recognize_canonical_rational_functions(candidates, deadline=deadline)
+    if recognition.non_coprime is not None:
+        raise OperationDomainValidationError(
+            location=("laplace_beltrami",),
+            code="differential_geometry.laplace_beltrami.noncanonical_source",
+            message="metric and scalar must be reduced canonical rational functions",
+        )
 
 
 def laplace_beltrami(
@@ -71,7 +75,7 @@ def laplace_beltrami(
         )
     plan = build_plan(metric, scalar)
     request_checkpoint("after Laplace--Beltrami admission")
-    _recognize_source(metric, scalar)
+    _recognize_source(metric, scalar, deadline)
     from sympy import QQ, Poly
 
     symbols = symbols_for_variables(axis)

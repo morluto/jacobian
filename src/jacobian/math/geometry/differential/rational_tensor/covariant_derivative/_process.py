@@ -20,6 +20,7 @@ from jacobian.canonical import (
     encode_strict_json,
     loads_strict_json,
 )
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.differential.metrics._dag import Node
 from jacobian.math.geometry.differential.metrics._plan import singular
 from jacobian.math.geometry.differential.rational_tensor.covariant_derivative._plan import (
@@ -88,7 +89,11 @@ def _poly_from_payload(records: object, symbols: tuple[Any, ...]) -> Any:
 
 
 def evaluate_admitted_covariant_derivative(
-    plan: Plan, axis: tuple[str, ...], *, deadline: float
+    plan: Plan,
+    axis: tuple[str, ...],
+    sources: tuple[RationalFunction, ...],
+    *,
+    deadline: float,
 ) -> tuple[tuple[RationalFunction, ...], tuple[Any, ...]]:
     """Expand and cancel the admitted DAG in one killable worker."""
 
@@ -106,6 +111,13 @@ def evaluate_admitted_covariant_derivative(
             "nodes": [_node_payload(node) for node in plan.dag.nodes],
             "fractions": fraction_pairs,
             "determinants": determinant_indices,
+            "sources": [
+                {
+                    "numerator": _source_payload(component.numerator),
+                    "denominator": _source_payload(component.denominator),
+                }
+                for component in sources
+            ],
         }
     )
     request_checkpoint("after covariant-derivative payload encoding")
@@ -168,6 +180,12 @@ def evaluate_admitted_covariant_derivative(
         )
     if response.get("status") == "singular":
         raise singular()
+    if response.get("status") == "noncanonical":
+        raise OperationDomainValidationError(
+            location=("covariant_derivative",),
+            code="differential_geometry.covariant_derivative.noncanonical_source",
+            message="metric and tensor components must be reduced canonical rational functions",
+        )
     if (
         response.get("status") != "ok"
         or not isinstance(response.get("fractions"), list)

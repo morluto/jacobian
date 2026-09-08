@@ -155,9 +155,45 @@ def _expand_nodes(payload: dict[str, Any]) -> tuple[list[Any], int]:
     return cache, variable_count
 
 
+def _sources_are_coprime(payload: dict[str, Any], generators: tuple[Any, ...]) -> bool:
+    sources = payload.get("sources")
+    if not isinstance(sources, list):
+        raise ValueError("malformed source request")
+    for source in sources:
+        if (
+            not isinstance(source, dict)
+            or not isinstance(source.get("numerator"), list)
+            or not isinstance(source.get("denominator"), list)
+        ):
+            raise ValueError("malformed source request")
+        numerator = _polynomial(source["numerator"], generators)
+        denominator = _polynomial(source["denominator"], generators)
+        if not numerator.gcd(denominator).is_one:
+            return False
+    return True
+
+
 def _run(payload: dict[str, Any]) -> dict[str, Any]:
-    if set(payload) != {"variables", "nodes", "fractions", "determinants"}:
+    if set(payload) != {
+        "variables",
+        "nodes",
+        "fractions",
+        "determinants",
+        "sources",
+    }:
         raise ValueError("malformed covariant-derivative request")
+    from sympy import Symbol
+
+    variables = payload["variables"]
+    if (
+        not isinstance(variables, list)
+        or not variables
+        or any(not isinstance(name, str) or not name for name in variables)
+    ):
+        raise ValueError("malformed DAG request")
+    generators = tuple(Symbol(name) for name in variables)
+    if not _sources_are_coprime(payload, generators):
+        return {"status": "noncanonical"}
     fractions = payload["fractions"]
     determinants = payload["determinants"]
     cache, _variable_count = _expand_nodes(payload)

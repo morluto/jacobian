@@ -28,7 +28,7 @@ def test_live_rational_covariant_derivative_parity() -> None:
             output = response.structured_content["output"]
             validate(output, tool.result_type.model_json_schema())
             assert output == expected
-            assert output["covariant_derivative"]["variance"] == ["COVARIANT"]
-            assert output["covariant_derivative"]["components"][0]["numerator"]["terms"]
+            assert output["variance"] == ["COVARIANT"]
+            assert output["components"][0]["numerator"]["terms"]
 
     asyncio.run(scenario())

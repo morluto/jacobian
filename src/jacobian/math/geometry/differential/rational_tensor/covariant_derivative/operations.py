@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import time
 
-from pydantic_core import PydanticCustomError
-
 from jacobian._execution import (
     bind_request_deadline,
     current_request_execution,
@@ -15,9 +13,6 @@ from jacobian._execution import (
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.differential.metrics._models import (
     RationalCoordinateMetric,
-)
-from jacobian.math.geometry.differential.rational_tensor.covariant_derivative._models import (
-    RationalCovariantDerivativeProfile,
 )
 from jacobian.math.geometry.differential.rational_tensor.covariant_derivative._plan import (
     build_plan,
@@ -29,30 +24,12 @@ from jacobian.math.geometry.differential.values import (
     RationalCoordinateTensor,
     canonical_locus_guards,
 )
-from jacobian.math.polynomials.values import (
-    require_canonical_rational_function,
-)
-
-
-def _recognize_sources(
-    metric: RationalCoordinateMetric, tensor: RationalCoordinateTensor
-) -> None:
-    for source in (*metric.tensor.components, *tensor.components):
-        request_checkpoint("before covariant-derivative source recognition")
-        try:
-            require_canonical_rational_function(source)
-        except PydanticCustomError as exc:
-            raise OperationDomainValidationError(
-                location=("covariant_derivative",),
-                code="differential_geometry.covariant_derivative.noncanonical_source",
-                message="metric and tensor components must be reduced canonical rational functions",
-            ) from exc
 
 
 def covariant_derivative(
     metric: RationalCoordinateMetric,
     tensor: RationalCoordinateTensor,
-) -> RationalCovariantDerivativeProfile:
+) -> RationalCoordinateTensor:
     """Return the exact covariant derivative with one leading covariant axis."""
     execution = current_request_execution()
     if execution is None:
@@ -71,10 +48,12 @@ def covariant_derivative(
         )
     plan = build_plan(metric, tensor)
     request_checkpoint("after covariant-derivative admission")
-    _recognize_sources(metric, tensor)
     axis = metric.tensor.coordinate_axis
     components, determinant_guards = evaluate_admitted_covariant_derivative(
-        plan, axis, deadline=deadline
+        plan,
+        axis,
+        sources=(*metric.tensor.components, *tensor.components),
+        deadline=deadline,
     )
     guards = canonical_locus_guards(
         metric.tensor.retained_nonzero_denominators,
@@ -83,15 +62,12 @@ def covariant_derivative(
         component_denominators=tuple(value.denominator for value in components),
         variable_count=len(axis),
     )
-    result = RationalCoordinateTensor(
+    request_checkpoint("after covariant-derivative result construction")
+    return RationalCoordinateTensor(
         coordinate_axis=axis,
         variance=("COVARIANT", *tensor.variance),
         components=components,
         retained_nonzero_denominators=guards,
-    )
-    request_checkpoint("after covariant-derivative result construction")
-    return RationalCovariantDerivativeProfile._from_kernel(
-        metric=metric, source=tensor, covariant_derivative=result
     )
 
 

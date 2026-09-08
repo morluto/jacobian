@@ -2,17 +2,17 @@
 
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.geometry.differential.rational_tensor.covariant_derivative._models import (
-    RationalCovariantDerivativeProfile,
     RationalCovariantDerivativeRequest,
 )
 from jacobian.math.geometry.differential.rational_tensor.covariant_derivative.operations import (
     covariant_derivative,
 )
+from jacobian.math.geometry.differential.values import RationalCoordinateTensor
 
 
 def _compute(
     request: RationalCovariantDerivativeRequest,
-) -> RationalCovariantDerivativeProfile:
+) -> RationalCoordinateTensor:
     return covariant_derivative(request.metric, request.tensor)
 
 
@@ -26,13 +26,13 @@ TOOLS = (
         title="Compute an exact rational covariant derivative",
         description=(
             "Apply the Levi-Civita connection of a rational coordinate metric "
-            "to a rational mixed tensor. The result prepends one covariant "
-            "derivative index and retains the complete metric and tensor locus. "
+            "to a rational mixed tensor. Return the derivative tensor with one "
+            "leading covariant index and the complete retained locus. "
             "For T^(i...)_(j...), use +Gamma on contravariant and -Gamma on "
             "covariant source indices."
         ),
         request_type=RationalCovariantDerivativeRequest,
-        result_type=RationalCovariantDerivativeProfile,
+        result_type=RationalCoordinateTensor,
         run=_compute,
         tags=("differential-geometry", "tensor", "covariant-derivative", "rational"),
         examples=(

@@ -1130,6 +1130,48 @@ def test_expired_dispatch_deadline_stops_before_semantic_preflight() -> None:
         lie_derivative(vector, scalar)
 
 
+def test_cancellation_support_growth_is_rejected_before_conversion() -> None:
+    """Quotient support can exceed the raw sum; reject at admission, not convert."""
+
+    axis = ("x", "y", "z")
+    x, y, z = sympy.symbols("x y z")
+    power_x, power_y, power_z = x**7, y**7, z**7
+    denominator = (x - 1) * (y - 1) * (z - 1)
+    first_numerator = (
+        power_x * power_y * power_z
+        - power_x * power_y
+        - power_x * power_z
+        - power_y * power_z
+    )
+    second_numerator = power_x + power_y + power_z - 1
+    first = rational_function_from_sympy(first_numerator / denominator, axis)
+    second = rational_function_from_sympy(second_numerator / denominator, axis)
+    zero = rational_function_from_sympy(0, axis)
+    vector = _tensor(
+        axis,
+        ("CONTRAVARIANT",),
+        (first, second, zero),
+        guards=tuple(
+            polynomial.model_dump()
+            for polynomial in canonical_locus_guards(
+                component_denominators=(
+                    first.denominator,
+                    second.denominator,
+                    zero.denominator,
+                ),
+                variable_count=3,
+            )
+        ),
+    )
+    scalar = _tensor(axis, (), (rational_function_from_sympy(x + y, axis),))
+    with pytest.raises(
+        OperationDomainValidationError,
+        match="256-term",
+    ) as error:
+        lie_derivative(vector, scalar)
+    assert error.value.errors()[0]["type"].endswith("result_support")
+
+
 def test_result_exponent_admission_has_an_accepted_and_rejected_edge() -> None:
     variables = ("x",)
 

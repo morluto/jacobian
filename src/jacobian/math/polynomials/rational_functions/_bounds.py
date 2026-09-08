@@ -63,6 +63,7 @@ class PolynomialBound:
     minimum_exponents: tuple[int, ...]
     coefficient_digits: int
     rational_content: Fraction
+    proven_cancellation_support: bool = False
 
     @property
     def is_zero(self) -> bool:
@@ -527,8 +528,8 @@ def _remove_guaranteed_common_monomial(bound: FractionBound) -> FractionBound:
         return bound
 
     def divide(polynomial: PolynomialBound) -> PolynomialBound:
-        return PolynomialBound(
-            terms=polynomial.terms,
+        return replace(
+            polynomial,
             degrees=tuple(
                 degree - exponent
                 for degree, exponent in zip(polynomial.degrees, common, strict=True)
@@ -540,8 +541,6 @@ def _remove_guaranteed_common_monomial(bound: FractionBound) -> FractionBound:
                     polynomial.minimum_exponents, common, strict=True
                 )
             ),
-            coefficient_digits=polynomial.coefficient_digits,
-            rational_content=polynomial.rational_content,
         )
 
     return FractionBound(
@@ -816,14 +815,19 @@ def _remove_guaranteed_linear_power_factor(
             )
             # After canceling (ax+by)^{n-1} from q=(ax+by)^n, the denominator
             # remains a linear-form power, whose support has size total_degree+1.
-            # The cofactor numerator need not be homogeneous on that diagonal, so
-            # total_degree+1 is not a support bound there.
+            # The cofactor numerator is bounded by the factor/quotient box.
+            # Do not min with the pre-cancel sparse count: division can grow
+            # support.
             support = (
                 total_degree + 1
                 if linear_form_power
                 else _total_degree_term_bound(reduced)
             )
-            return replace(reduced, terms=min(polynomial.terms, support))
+            return replace(
+                reduced,
+                terms=support,
+                proven_cancellation_support=True,
+            )
         if axis >= len(polynomial.degrees):
             return polynomial
         drop = min(extra, polynomial.degrees[axis], polynomial.total_degree)
@@ -834,19 +838,22 @@ def _remove_guaranteed_linear_power_factor(
             for index, degree in enumerate(polynomial.degrees)
         )
         total_degree = max(0, polynomial.total_degree - drop)
-        univariate = all(
-            degree == 0 or index == axis for index, degree in enumerate(degrees)
-        )
-        terms = (
-            min(polynomial.terms, total_degree + 1) if univariate else polynomial.terms
-        )
-        return PolynomialBound(
-            terms=terms,
+        reduced = PolynomialBound(
+            terms=polynomial.terms,
             degrees=degrees,
             total_degree=total_degree,
             minimum_exponents=polynomial.minimum_exponents,
             coefficient_digits=polynomial.coefficient_digits,
             rational_content=polynomial.rational_content,
+        )
+        univariate = all(
+            degree == 0 or index == axis for index, degree in enumerate(degrees)
+        )
+        terms = total_degree + 1 if univariate else _total_degree_term_bound(reduced)
+        return replace(
+            reduced,
+            terms=terms,
+            proven_cancellation_support=True,
         )
 
     return FractionBound(
@@ -913,14 +920,17 @@ def _validate_canonical_result_bound(
         dense_terms = _total_degree_term_bound(polynomial)
         # When the denominator is the unit polynomial, there can be no
         # cancellation-induced support expansion, so the tracked sparse
-        # term count is the accurate support bound. After a source-intrinsic
-        # linear-power cancel, ``terms`` may be tighter than the dense box.
+        # term count is the accurate support bound. After a proven
+        # cancellation-specific bound, ``terms`` may be tighter than the
+        # factor/quotient box. Raw arithmetic term counts are not a bound
+        # on post-cancellation support: division can increase it.
         denominator_is_unit = all(degree == 0 for degree in bound.denominator.degrees)
-        support_terms = (
-            polynomial.terms
-            if denominator_is_unit
-            else min(dense_terms, polynomial.terms)
-        )
+        if denominator_is_unit:
+            support_terms = polynomial.terms
+        elif polynomial.proven_cancellation_support:
+            support_terms = min(dense_terms, polynomial.terms)
+        else:
+            support_terms = dense_terms
         if support_terms > limits.result_terms:
             limits.reject(
                 "result_support",

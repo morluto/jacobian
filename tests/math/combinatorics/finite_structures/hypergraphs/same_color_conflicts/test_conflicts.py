@@ -5,6 +5,7 @@ from itertools import combinations, product
 from time import monotonic
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian._execution import (
     OperationExecutionTimeoutError,
@@ -131,6 +132,20 @@ def test_multiple_colors_can_produce_the_same_union() -> None:
     )
     assert result.hypergraph.edges == (("c0", ("a", "b")),)
     assert [row.color_index for row in result.provenance] == [0, 1]
+
+
+def test_deserialized_provenance_rejects_coerced_color_indices() -> None:
+    result = check_oracle(
+        coloring(("a", "b"), [("a",), ("b",)], [0, 0])
+    )
+    payload = result.model_dump()
+    for coerced in ("0", 0.0, False):
+        forged = dict(payload)
+        forged["provenance"] = [
+            {**row, "color_index": coerced} for row in payload["provenance"]
+        ]
+        with pytest.raises(ValidationError):
+            SameColorConflictsResult.model_validate(forged)
 
 
 def test_coherent_vertex_and_source_edge_relabeling() -> None:

@@ -2,7 +2,7 @@
 
 from typing import Annotated, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StrictInt, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
@@ -31,7 +31,7 @@ class SameColorConflictProvenance(StrictModel):
     source_edge_ids: tuple[
         Annotated[str, Field(max_length=64)], Annotated[str, Field(max_length=64)]
     ]
-    color_index: int = Field(ge=0, lt=12_000)
+    color_index: StrictInt = Field(ge=0, lt=12_000)
 
 
 class SameColorConflictsResult(StrictModel):

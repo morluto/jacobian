@@ -209,6 +209,19 @@ def test_shared_request_deadline() -> None:
         gradient(source)
 
 
+def test_linear_power_denominator_cancels_before_result_exponent_cap() -> None:
+    x = symbols("x")
+    source = rational_function_from_sympy(1 / (x + 1) ** 33, ("x",))
+    result = _identity(source)
+    expected = rational_function_from_sympy(-33 / (x + 1) ** 34, ("x",))
+    assert result.partial_derivatives == (expected,)
+    assert (
+        RationalFunctionGradient.model_validate_json(result.model_dump_json()) == result
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="exponent"):
+        gradient(rational_function_from_sympy(1 / (x + 1) ** 64, ("x",)))
+
+
 def test_polar_metric_component_gradient() -> None:
     r, _theta = symbols("r theta")
     result = _identity(rational_function_from_sympy(r * r, ("r", "theta")))

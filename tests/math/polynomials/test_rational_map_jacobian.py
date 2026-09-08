@@ -249,7 +249,43 @@ def test_quotient_rule_by_independent_exact_coefficient_convolution() -> None:
             )
 
 
-def test_aggregate_source_terms_are_capped_before_component_parse() -> None:
+def test_linear_power_row_cancels_before_result_exponent_cap() -> None:
+    x = symbols("x")
+    source = RationalFunctionMap(
+        source_variables=("x",),
+        target_coordinates=("u",),
+        components=(rational_function_from_sympy(1 / (x + 1) ** 33, ("x",)),),
+    )
+    result = jacobian_matrix(source)
+    assert result.entries[0][0] == rational_function_from_sympy(
+        -33 / (x + 1) ** 34, ("x",)
+    )
+    assert (
+        RationalFunctionMapJacobian.model_validate_json(result.model_dump_json())
+        == result
+    )
+
+
+def test_per_polynomial_source_terms_are_capped_before_coefficient_scan() -> None:
+    term = {"coefficient": {"num": "1", "den": "1"}, "exponents": [0]}
+    with pytest.raises(ValidationError, match="4,096-term"):
+        RationalFunctionMap.model_validate(
+            {
+                "source_variables": ["x"],
+                "target_coordinates": ["y"],
+                "components": [
+                    {
+                        "variables": ["x"],
+                        "numerator": {"terms": [term] * 4_097},
+                        "denominator": {
+                            "terms": [
+                                {"coefficient": {"num": "1", "den": "1"}, "exponents": [0]}
+                            ]
+                        },
+                    }
+                ],
+            }
+        )
     term = {"coefficient": {"num": "1", "den": "1"}, "exponents": [0]}
     component = {
         "variables": ["x"],

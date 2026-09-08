@@ -23,12 +23,16 @@ from jacobian.math.polynomials.rational_functions._bounds import (
     BoundsLedger,
     BoundWorkCategory,
     FractionBound,
+    PolynomialBound,
     RationalFunctionBoundLimits,
     _fraction_bound,
+    _one_polynomial,
     _polynomial_backend_conversion_work_units,
     _recognition_work_units,
+    _remove_exact_common_factor,
     _remove_guaranteed_common_monomial,
     _validate_canonical_result_bound,
+    _zero_polynomial,
 )
 from jacobian.math.polynomials.rational_functions._bounds import (
     _differentiate_fraction as _derivative_bound,
@@ -199,11 +203,56 @@ def _admit_general_gradient(
     components = []
     for axis in range(len(function.variables)):
         bound = _remove_guaranteed_common_monomial(
-            _derivative_bound(function, source_bound, axis, ledger)
+            _remove_exact_common_factor(
+                _derivative_bound(function, source_bound, axis, ledger),
+                _forced_denominator_derivative_gcd(function, axis, ledger),
+            )
         )
         digits = _validate_canonical_result_bound(bound, ledger)
         components.append((bound, digits))
     return tuple(components)
+
+
+def _forced_denominator_derivative_gcd(
+    function: RationalFunction, axis: int, ledger: BoundsLedger
+) -> PolynomialBound:
+    """Bound the exact ``gcd(q, q')`` that always divides the quotient rule.
+
+    The unreduced denominator is ``q^2``. Every common factor of ``q`` and
+    ``q'`` therefore cancels from the exact derivative before canonical
+    result caps apply.
+    """
+
+    variable_count = len(function.variables)
+    if variable_count == 0 or not function.denominator.terms:
+        return _one_polynomial(variable_count)
+    ledger.charge(
+        "normalization",
+        (len(function.denominator.terms) + 1)
+        * (max(term.exponents[axis] for term in function.denominator.terms) + 1),
+    )
+    denominator = sparse_rational_polynomial_to_sympy(
+        function.denominator, function.variables
+    )
+    factor = denominator.gcd(denominator.diff(axis))
+    terms = factor.terms()
+    if not terms:
+        return _zero_polynomial(variable_count)
+    exponents = tuple(monomial for monomial, _ in terms)
+    return PolynomialBound(
+        terms=len(terms),
+        degrees=tuple(
+            max(monomial[index] for monomial in exponents)
+            for index in range(variable_count)
+        ),
+        total_degree=max(sum(monomial) for monomial in exponents),
+        minimum_exponents=tuple(
+            min(monomial[index] for monomial in exponents)
+            for index in range(variable_count)
+        ),
+        coefficient_digits=1,
+        rational_content=Fraction(1),
+    )
 
 
 def _general_gradient_admitted(

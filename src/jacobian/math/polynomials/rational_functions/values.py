@@ -6,6 +6,7 @@ from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.polynomials.values import (
+    MAX_POLYNOMIAL_TERMS,
     MAX_POLYNOMIAL_VARIABLES,
     PolynomialVariable,
     RationalFunction,
@@ -36,14 +37,16 @@ def _raw_coefficient_bits(coefficient: object) -> int:
     return 0
 
 
-def _raw_polynomial_bits(polynomial: object) -> int:
-    terms: object
+def _raw_polynomial_terms(polynomial: object) -> object:
     if isinstance(polynomial, dict):
-        terms = polynomial.get("terms")
-    elif hasattr(polynomial, "terms"):
-        terms = polynomial.terms
-    else:
-        return 0
+        return polynomial.get("terms")
+    if hasattr(polynomial, "terms"):
+        return polynomial.terms
+    return None
+
+
+def _raw_polynomial_bits(polynomial: object) -> int:
+    terms = _raw_polynomial_terms(polynomial)
     if not isinstance(terms, (list, tuple)):
         return 0
     bits = 0
@@ -55,35 +58,46 @@ def _raw_polynomial_bits(polynomial: object) -> int:
     return bits
 
 
+def _reject_oversize_polynomial_terms(count: int) -> None:
+    if count > MAX_POLYNOMIAL_TERMS:
+        raise ValueError(
+            "rational-map component polynomial exceeds the "
+            f"{MAX_POLYNOMIAL_TERMS:,}-term source envelope"
+        )
+
+
+def _reject_oversize_aggregate_terms(total: int) -> None:
+    if total > MAX_RATIONAL_MAP_SOURCE_TERMS:
+        raise ValueError(
+            "rational-map components exceed the 65,536-term source envelope"
+        )
+
+
 def _reject_oversize_map_components(components: object) -> None:
     if not isinstance(components, (list, tuple)):
         return
     total = 0
     bits = 0
     for component in components:
+        polynomials: tuple[object, ...]
         if isinstance(component, RationalFunction):
-            total += len(component.numerator.terms) + len(component.denominator.terms)
-            bits += _raw_polynomial_bits(component.numerator) + _raw_polynomial_bits(
-                component.denominator
-            )
+            polynomials = (component.numerator, component.denominator)
         elif isinstance(component, dict):
-            for key in ("numerator", "denominator"):
-                polynomial = component.get(key)
-                if isinstance(polynomial, dict):
-                    terms = polynomial.get("terms")
-                    if isinstance(terms, (list, tuple)):
-                        total += len(terms)
-                elif hasattr(polynomial, "terms"):
-                    total += len(polynomial.terms)
-                bits += _raw_polynomial_bits(polynomial)
-        if total > MAX_RATIONAL_MAP_SOURCE_TERMS:
-            raise ValueError(
-                "rational-map components exceed the 65,536-term source envelope"
-            )
-        if bits > MAX_RATIONAL_MAP_SOURCE_BITS:
-            raise ValueError(
-                "rational-map components exceed the 8,388,608-bit source envelope"
-            )
+            polynomials = (component.get("numerator"), component.get("denominator"))
+        else:
+            polynomials = ()
+        for polynomial in polynomials:
+            terms = _raw_polynomial_terms(polynomial)
+            count = len(terms) if isinstance(terms, (list, tuple)) else 0
+            _reject_oversize_polynomial_terms(count)
+            total += count
+            _reject_oversize_aggregate_terms(total)
+        for polynomial in polynomials:
+            bits += _raw_polynomial_bits(polynomial)
+            if bits > MAX_RATIONAL_MAP_SOURCE_BITS:
+                raise ValueError(
+                    "rational-map components exceed the 8,388,608-bit source envelope"
+                )
 
 
 class RationalFunctionMap(StrictModel):

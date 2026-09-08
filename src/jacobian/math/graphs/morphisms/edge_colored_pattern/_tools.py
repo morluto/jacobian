@@ -22,7 +22,7 @@ TOOLS: MathTools = (
         examples=(
             OperationExample(
                 name="mixed_color_path",
-                description="A red-blue path occurs with both required colors preserved.",
+                description="A red-blue path occurs with both required colors preserved. Both sources need nonempty total edge colorings and empty vertex-color axes.",
                 input={
                     "pattern": {
                         "graph": {

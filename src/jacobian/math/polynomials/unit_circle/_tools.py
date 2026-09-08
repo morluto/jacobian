@@ -9,6 +9,11 @@ from jacobian.math.polynomials.unit_circle._models import (
     UnitCircleArcEnergyRequest,
     UnitCircleArcEnergyResult,
 )
+from jacobian.math.polynomials.unit_circle._root_profile import (
+    UnitDiskProfile,
+    UnitDiskProfileRequest,
+    unit_disk_profile,
+)
 from jacobian.math.polynomials.unit_circle.operations import (
     real_symmetric_degree_one_fejer_riesz_factor,
     unit_circle_arc_energy,
@@ -42,6 +47,49 @@ POLYNOMIAL_ONE_PLUS_Z = {
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    MathTool(
+        operation_id="polynomial.root_location.unit_disk_profile.compute",
+        title="Count exact polynomial roots relative to the unit disk",
+        description=(
+            "Count roots of a nonzero univariate rational polynomial strictly "
+            "inside, on, and strictly outside the unit circle, with multiplicity. "
+            "Includes repeated boundary roots and reciprocal common factors; "
+            "nonzero constants have zero counts. Exact arithmetic admission uses "
+            "compressed support degree and coefficient growth. Rational radius r "
+            "is handled by supplying p(r*z)."
+        ),
+        request_type=UnitDiskProfileRequest,
+        result_type=UnitDiskProfile,
+        run=lambda request: unit_disk_profile(request.polynomial),
+        tags=("polynomial", "roots", "unit-disk", "schur-stability", "exact"),
+        examples=(
+            OperationExample(
+                name="reciprocal_pair",
+                description="Roots 1/2 and 2 lie on opposite sides of the circle.",
+                input={
+                    "polynomial": {
+                        "variables": ["z"],
+                        "polynomial": {
+                            "terms": [
+                                {
+                                    "coefficient": {"num": "2", "den": "1"},
+                                    "exponents": [2],
+                                },
+                                {
+                                    "coefficient": {"num": "-5", "den": "1"},
+                                    "exponents": [1],
+                                },
+                                {
+                                    "coefficient": {"num": "2", "den": "1"},
+                                    "exponents": [0],
+                                },
+                            ]
+                        },
+                    }
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="polynomial.unit_circle.arc_energy.compute",
         title="Compute exact unit-circle arc energy",

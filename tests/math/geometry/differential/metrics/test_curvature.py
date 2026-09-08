@@ -266,6 +266,61 @@ def test_expansion_rejection_and_earlier_deadline() -> None:
             curvature_profile(metric([1], ("x",)))
 
 
+def test_oversized_raw_pair_rejected_before_backend_execution(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Raw source recognition remains bounded before any SymPy conversion."""
+    axis = ("x", "y", "z", "w")
+    exponents = sorted(product((0, 1, 2, 64), repeat=4), reverse=True)
+    polynomial = {
+        "terms": [
+            {
+                "exponents": list(exponent),
+                "coefficient": {"num": 1, "den": 1},
+            }
+            for exponent in exponents
+        ]
+    }
+    one = {
+        "terms": [
+            {
+                "exponents": [0, 0, 0, 0],
+                "coefficient": {"num": 1, "den": 1},
+            }
+        ]
+    }
+    raw_pair = {
+        "domain": "QQ",
+        "variables": list(axis),
+        "numerator": polynomial,
+        "denominator": polynomial,
+    }
+    zero = {
+        "domain": "QQ",
+        "variables": list(axis),
+        "numerator": {"terms": []},
+        "denominator": one,
+    }
+    source = RationalCoordinateMetric.model_validate(
+        {
+            "tensor": {
+                "coordinate_axis": list(axis),
+                "variance": ["COVARIANT", "COVARIANT"],
+                "components": [
+                    raw_pair if i == j else zero for i in range(4) for j in range(4)
+                ],
+                "retained_nonzero_denominators": [polynomial],
+            }
+        }
+    )
+    monkeypatch.setattr(
+        "jacobian.math.geometry.differential.metrics.operations._evaluate_node",
+        lambda *args: pytest.fail("backend execution must follow admission"),
+    )
+    with pytest.raises(OperationResourceAdmissionError, match=r"allocation|work"):
+        curvature_profile(source)
+
+
 def test_four_dimensional_hyperbolic_metric() -> None:
     result = curvature_profile(
         metric(

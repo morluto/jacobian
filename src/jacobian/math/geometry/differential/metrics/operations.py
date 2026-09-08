@@ -5,6 +5,8 @@ from __future__ import annotations
 import time
 from typing import Any
 
+from pydantic_core import PydanticCustomError
+
 from jacobian._execution import (
     bind_request_deadline,
     current_request_execution,
@@ -95,23 +97,20 @@ def curvature_profile(
         deadline = min(deadline, execution.deadline)
     bind_request_deadline(deadline)
     request_checkpoint("before curvature admission")
+    plan = build_plan(metric)
+    request_checkpoint("after complete curvature admission")
     # Caller-authored field presentations have only structural validation.
     # Recognize reducedness once before relying on source-field identities.
     for component in dict.fromkeys(metric.tensor.components):
         request_checkpoint("before metric component recognition")
         try:
             require_canonical_rational_function(component)
-        except ValueError as exc:
+        except PydanticCustomError as exc:
             raise OperationDomainValidationError(
                 location=("metric",),
                 code="differential_geometry.curvature.noncanonical_source",
                 message="metric component must be a reduced canonical rational function",
             ) from exc
-    # Build the complete DAG only after source field presentations have been
-    # recognized.  This keeps malformed caller-authored values out of the
-    # arithmetic admission path and makes recognition a single preflight step.
-    plan = build_plan(metric)
-    request_checkpoint("after complete curvature admission")
     from sympy import QQ, Poly
 
     from jacobian.math.polynomials.rational_functions.gradient._kernel import (

@@ -154,8 +154,26 @@ class Dag:
             self.source(value.numerator),
             self.source(value.denominator),
         )
+
+        # Recognition sees the authored numerator and denominator separately.
+        # Preserve those raw bounds before structural factor cancellation can
+        # make a presentation such as x**2/x look constant. Source conversion
+        # is charged again here for the recognition backend; ``source`` owns
+        # the separate conversion reservation used by the executor.
+        raw_numerator = self.nodes[
+            self.polynomial(numerator.numerator, numerator.scalar)
+        ].bound
+        raw_denominator = self.nodes[
+            self.polynomial(denominator.numerator, denominator.scalar)
+        ].bound
+        raw_bound = FractionBound(raw_numerator, raw_denominator)
+        self.ledger.charge("recognition", _recognition_work_units(raw_bound))
+        self.ledger.charge(
+            "source_conversion",
+            _polynomial_backend_conversion_work_units(raw_numerator)
+            + _polynomial_backend_conversion_work_units(raw_denominator),
+        )
         result = self.multiply(numerator, self.inverse(denominator))
-        self.ledger.charge("recognition", _recognition_work_units(self.bound(result)))
         return result
 
     @staticmethod

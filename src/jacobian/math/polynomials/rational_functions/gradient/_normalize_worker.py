@@ -63,7 +63,7 @@ def _run(payload: dict[str, Any]) -> dict[str, Any]:
         generator
     )
     if numerator.is_zero:
-        from sympy import Poly, QQ
+        from sympy import QQ, Poly
 
         one = Poly(1, *generators, domain=QQ)
         return {

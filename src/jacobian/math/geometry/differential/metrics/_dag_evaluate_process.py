@@ -90,9 +90,7 @@ def _poly_from_payload(records: object, symbols: tuple[Any, ...]) -> Any:
     return Poly.from_dict(coefficients, *symbols, domain=QQ)
 
 
-def _load_worker_response(
-    stdout: bytes, *, owner: str, deadline: float
-) -> object:
+def _load_worker_response(stdout: bytes, *, owner: str, deadline: float) -> object:
     request_checkpoint(f"before {owner} worker output decode")
     if monotonic() >= deadline:
         raise OperationExecutionTimeoutError(

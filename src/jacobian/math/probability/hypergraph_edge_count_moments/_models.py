@@ -36,12 +36,16 @@ class EdgeOverlapMomentRow(StrictModel):
 class HypergraphEdgeCountMomentsRequest(StrictModel):
     hypergraph: FiniteHypergraph
     retention_probability: CanonicalRational = Field(
-        description="Exact edge-retention probability in the closed interval [0, 1]."
+        description=(
+            "Exact independent vertex-retention probability in the closed "
+            "interval [0, 1]. An edge survives with probability p^|e|."
+        )
     )
 
     @model_validator(mode="after")
     def validate_probability(self) -> Self:
-        if not 0 <= self.retention_probability.as_fraction() <= 1:
+        probability = self.retention_probability
+        if not 0 <= probability.num <= probability.den:
             raise ValueError("retention_probability must be between 0 and 1")
         return self
 

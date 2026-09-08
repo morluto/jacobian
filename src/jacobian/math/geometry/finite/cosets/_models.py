@@ -57,8 +57,14 @@ class CosetIntersectionProfile(CosetIntersectionSource):
 
     @model_validator(mode="after")
     def require_row_coordinates(self) -> Self:
+        previous: Vector | None = None
         for row in self.rows:
             _validate_vector(row.representative, self.space)
+            if previous is not None and row.representative <= previous:
+                raise ValueError(
+                    "occupied rows must be strictly lexicographically ordered by representative"
+                )
+            previous = row.representative
             for vector in row.members:
                 _validate_vector(vector, self.space)
         collected = tuple(sorted(member for row in self.rows for member in row.members))

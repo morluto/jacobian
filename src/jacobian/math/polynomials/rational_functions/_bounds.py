@@ -645,6 +645,110 @@ def _guaranteed_univariate_perfect_power_gcd(
     return best
 
 
+def _dense_univariate_gcd_degree(by_degree: dict[int, Fraction]) -> int:
+    """Return ``deg(gcd(q, q'))`` by the Euclidean algorithm on dense coefficients."""
+
+    if not by_degree:
+        return 0
+    total = max(by_degree)
+    dividend = [by_degree.get(degree, Fraction(0)) for degree in range(total + 1)]
+    divisor = [Fraction(index) * dividend[index] for index in range(1, len(dividend))]
+
+    def degree_of(polynomial: list[Fraction]) -> int:
+        index = len(polynomial) - 1
+        while index >= 0 and polynomial[index] == 0:
+            index -= 1
+        return index
+
+    def remainder(
+        left: list[Fraction], right: list[Fraction]
+    ) -> list[Fraction]:
+        left = list(left)
+        while degree_of(left) >= degree_of(right) >= 0:
+            shift = degree_of(left) - degree_of(right)
+            scale = left[degree_of(left)] / right[degree_of(right)]
+            for index, coefficient in enumerate(right):
+                left[index + shift] -= scale * coefficient
+        while left and left[-1] == 0:
+            left.pop()
+        return left
+
+    while degree_of(divisor) >= 0:
+        dividend, divisor = divisor, remainder(dividend, divisor)
+    return max(0, degree_of(dividend))
+
+
+def _binomial_linear_form_power_gcd(denominator: SparseRationalPolynomial) -> int:
+    """Return ``n-1`` when the denominator is a square-free-linear form to the n."""
+
+    if not denominator.terms:
+        return 0
+    axes = len(denominator.terms[0].exponents)
+    used = [
+        axis
+        for axis in range(axes)
+        if any(term.exponents[axis] for term in denominator.terms)
+    ]
+    if len(used) != 2:
+        return 0
+    left, right = used
+    total = max(sum(term.exponents) for term in denominator.terms)
+    if total < 2 or len(denominator.terms) != total + 1:
+        return 0
+    by_power: dict[int, Fraction] = {}
+    for term in denominator.terms:
+        if any(term.exponents[axis] for axis in range(axes) if axis not in used):
+            return 0
+        if term.exponents[left] + term.exponents[right] != total:
+            return 0
+        power = term.exponents[right]
+        if power in by_power:
+            return 0
+        by_power[power] = term.coefficient.as_fraction()
+    if set(by_power) != set(range(total + 1)) or by_power[0] == 0:
+        return 0
+    ratio = by_power[1] / (by_power[0] * total)
+    for power in range(total + 1):
+        expected = by_power[0] * Fraction(comb(total, power)) * (ratio**power)
+        if by_power[power] != expected:
+            return 0
+    return total - 1
+
+
+def _univariate_denominator_gcd_degree(by_degree: dict[int, Fraction]) -> int:
+    """Return ``deg(gcd(q, q'))`` for a dense univariate coefficient map."""
+
+    extra = _guaranteed_univariate_perfect_power_gcd(by_degree)
+    if extra > 0:
+        return extra
+    extra = _dense_univariate_gcd_degree(by_degree)
+    if extra > 0:
+        return extra
+    exponents = sorted(by_degree)
+    if 0 not in by_degree:
+        return 0
+    step = 0
+    for exponent in by_degree:
+        if exponent:
+            step = exponent if step == 0 else gcd(step, exponent)
+    if step < 1:
+        return 0
+    power = max(by_degree) // step
+    if power < 2 or exponents != list(range(0, power * step + 1, step)):
+        return 0
+    constant = by_degree[0]
+    if constant == 0:
+        return 0
+    scale = by_degree[step] / (constant * power)
+    for index in range(1, power + 1):
+        expected = (
+            by_degree[(index - 1) * step] * Fraction(power - index + 1, index) * scale
+        )
+        if by_degree[index * step] != expected:
+            return 0
+    return (power - 1) * step
+
+
 def _guaranteed_linear_power_gcd(
     denominator: SparseRationalPolynomial,
 ) -> tuple[int, int]:
@@ -658,6 +762,9 @@ def _guaranteed_linear_power_gcd(
 
     if not denominator.terms:
         return -1, 0
+    binomial_extra = _binomial_linear_form_power_gcd(denominator)
+    if binomial_extra > 0:
+        return -1, binomial_extra
     axes = len(denominator.terms[0].exponents)
     used = [
         axis
@@ -675,32 +782,10 @@ def _guaranteed_linear_power_gcd(
         if degree in by_degree:
             return -1, 0
         by_degree[degree] = term.coefficient.as_fraction()
-    extra = _guaranteed_univariate_perfect_power_gcd(by_degree)
-    if extra > 0:
-        return axis, extra
-    exponents = sorted(by_degree)
-    if 0 not in by_degree:
+    extra = _univariate_denominator_gcd_degree(by_degree)
+    if extra <= 0:
         return -1, 0
-    step = 0
-    for exponent in by_degree:
-        if exponent:
-            step = exponent if step == 0 else gcd(step, exponent)
-    if step < 1:
-        return -1, 0
-    power = max(by_degree) // step
-    if power < 2 or exponents != list(range(0, power * step + 1, step)):
-        return -1, 0
-    constant = by_degree[0]
-    if constant == 0:
-        return -1, 0
-    scale = by_degree[step] / (constant * power)
-    for index in range(1, power + 1):
-        expected = (
-            by_degree[(index - 1) * step] * Fraction(power - index + 1, index) * scale
-        )
-        if by_degree[index * step] != expected:
-            return -1, 0
-    return axis, (power - 1) * step
+    return axis, extra
 
 
 def _remove_guaranteed_linear_power_factor(
@@ -713,6 +798,22 @@ def _remove_guaranteed_linear_power_factor(
         return bound
 
     def reduce(polynomial: PolynomialBound) -> PolynomialBound:
+        if not polynomial.degrees:
+            return polynomial
+        if axis < 0:
+            drop = min(extra, polynomial.total_degree, *polynomial.degrees)
+            if drop <= 0:
+                return polynomial
+            degrees = tuple(max(0, degree - drop) for degree in polynomial.degrees)
+            total_degree = max(0, polynomial.total_degree - drop)
+            return PolynomialBound(
+                terms=min(polynomial.terms, total_degree + 1),
+                degrees=degrees,
+                total_degree=total_degree,
+                minimum_exponents=polynomial.minimum_exponents,
+                coefficient_digits=polynomial.coefficient_digits,
+                rational_content=polynomial.rational_content,
+            )
         if axis >= len(polynomial.degrees):
             return polynomial
         drop = min(extra, polynomial.degrees[axis], polynomial.total_degree)
@@ -722,10 +823,19 @@ def _remove_guaranteed_linear_power_factor(
             max(0, degree - drop) if index == axis else degree
             for index, degree in enumerate(polynomial.degrees)
         )
+        total_degree = max(0, polynomial.total_degree - drop)
+        univariate = all(
+            degree == 0 or index == axis for index, degree in enumerate(degrees)
+        )
+        terms = (
+            min(polynomial.terms, total_degree + 1)
+            if univariate
+            else polynomial.terms
+        )
         return PolynomialBound(
-            terms=polynomial.terms,
+            terms=terms,
             degrees=degrees,
-            total_degree=max(0, polynomial.total_degree - drop),
+            total_degree=total_degree,
             minimum_exponents=polynomial.minimum_exponents,
             coefficient_digits=polynomial.coefficient_digits,
             rational_content=polynomial.rational_content,
@@ -794,9 +904,14 @@ def _validate_canonical_result_bound(
         dense_terms = _total_degree_term_bound(polynomial)
         # When the denominator is the unit polynomial, there can be no
         # cancellation-induced support expansion, so the tracked sparse
-        # term count is the accurate support bound.
+        # term count is the accurate support bound. After a source-intrinsic
+        # linear-power cancel, ``terms`` may be tighter than the dense box.
         denominator_is_unit = all(degree == 0 for degree in bound.denominator.degrees)
-        support_terms = polynomial.terms if denominator_is_unit else dense_terms
+        support_terms = (
+            polynomial.terms
+            if denominator_is_unit
+            else min(dense_terms, polynomial.terms)
+        )
         if support_terms > limits.result_terms:
             limits.reject(
                 "result_support",
@@ -818,12 +933,17 @@ def _validate_canonical_result_bound(
     numerator_dense = (
         charged.numerator.terms
         if charged_denominator_is_unit
-        else _dense_term_bound(charged.numerator.degrees)
+        else min(
+            _dense_term_bound(charged.numerator.degrees), charged.numerator.terms
+        )
     )
     denominator_dense = (
         1
         if charged_denominator_is_unit
-        else _dense_term_bound(charged.denominator.degrees)
+        else min(
+            _dense_term_bound(charged.denominator.degrees),
+            charged.denominator.terms,
+        )
     )
     work_digits = _canonical_coefficient_digits(charged)
     normalization_degree = max(numerator_dense + denominator_dense - 2, 0)

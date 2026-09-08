@@ -203,7 +203,7 @@ def _admit_general_gradient(
             _derivative_bound(function, source_bound, axis, ledger)
         )
         bound = _remove_guaranteed_linear_power_factor(raw, function)
-        digits = _validate_canonical_result_bound(bound, ledger, work_bound=raw)
+        digits = _validate_canonical_result_bound(bound, ledger, work_bound=bound)
         components.append((bound, digits))
     return tuple(components)
 

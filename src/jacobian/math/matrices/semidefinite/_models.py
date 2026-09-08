@@ -4,6 +4,7 @@ from pydantic import Field, model_validator
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel, canonicalize_json_containers
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.matrices.semidefinite.values import (
     MAX_SEMIDEFINITE_CELLS,
     RationalSemidefiniteSystem,
@@ -16,7 +17,7 @@ def _raw_component_digits(component: object) -> int:
     if isinstance(component, str):
         return len(component.lstrip("-") or "0")
     if type(component) is int:
-        return len(str(abs(component)))
+        return len(format_canonical_integer(abs(component)))
     return 0
 
 

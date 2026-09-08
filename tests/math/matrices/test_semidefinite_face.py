@@ -270,15 +270,14 @@ def test_raw_request_preflight_counts_actual_nested_cells() -> None:
         )
 
 
-def test_inactive_large_denominator_does_not_block_exposing_matrix() -> None:
+def test_inactive_constraint_denominators_are_charged_during_compression() -> None:
     huge = Fraction(1, 10**20_001)
     system = _system(
         (_matrix([[1, 1], [1, 1]]), _matrix([[huge, 0], [0, 0]])),
         (0, 0),
     )
-    result = reduce_exposed_face(system, (_q(1), _q(0)))
-    _identities(result)
-    assert result.reduced.matrices[1].entries[0][0].as_fraction() == huge
+    with pytest.raises(OperationResourceAdmissionError, match="canonical rational"):
+        reduce_exposed_face(system, (_q(1), _q(0)))
 
 
 def test_inactive_rhs_heights_count_toward_output() -> None:
@@ -305,6 +304,8 @@ def test_coprime_constraint_denominators_are_bounded_in_compression() -> None:
     system = _system((_matrix([[0, 1], [1, 0]]), dense), (0, 0))
     with pytest.raises(OperationResourceAdmissionError, match="canonical rational"):
         reduce_exposed_face(system, (_q(1), _q(1)))
+    with pytest.raises(OperationResourceAdmissionError, match="canonical rational"):
+        reduce_exposed_face(system, (_q(1), _q(0)))
 
 
 def test_native_dispatch_and_serialized_result_parity() -> None:

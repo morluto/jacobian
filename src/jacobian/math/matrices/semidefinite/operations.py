@@ -143,7 +143,7 @@ def _admit(
             ),
             default=1,
         )
-        denominator_growth = aggregate_denominators if multiplier.num else 0
+        denominator_growth = aggregate_denominators
         matrix_bits.append(
             entry_bits + denominator_growth + 2 * minor_bits + (n * n).bit_length()
         )

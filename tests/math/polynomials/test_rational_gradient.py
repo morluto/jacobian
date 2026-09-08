@@ -238,6 +238,10 @@ def test_univariate_binomial_power_cancellation() -> None:
     source = rational_function_from_sympy(numerator / (x + 1) ** 33, ("x", "y"))
     with pytest.raises(OperationResourceAdmissionError, match="term"):
         gradient(source)
+    even_grid = sum(x ** (2 * a) * y ** (2 * b) for a in range(16) for b in range(16))
+    source = rational_function_from_sympy(even_grid / (x + y) ** 33, ("x", "y"))
+    with pytest.raises(OperationResourceAdmissionError, match="term"):
+        gradient(source)
 
 
 def test_shared_request_deadline() -> None:

@@ -7,7 +7,7 @@ callback. These estimates own no operation-specific deadline or error policy.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from fractions import Fraction
 from math import comb, gcd, isqrt, lcm
 from typing import Literal, NoReturn, Protocol
@@ -804,13 +804,17 @@ def _remove_guaranteed_linear_power_factor(
                 return polynomial
             degrees = tuple(max(0, degree - drop) for degree in polynomial.degrees)
             total_degree = max(0, polynomial.total_degree - drop)
-            return PolynomialBound(
-                terms=min(polynomial.terms, total_degree + 1),
+            reduced = PolynomialBound(
+                terms=polynomial.terms,
                 degrees=degrees,
                 total_degree=total_degree,
                 minimum_exponents=polynomial.minimum_exponents,
                 coefficient_digits=polynomial.coefficient_digits,
                 rational_content=polynomial.rational_content,
+            )
+            return replace(
+                reduced,
+                terms=min(polynomial.terms, _total_degree_term_bound(reduced)),
             )
         if axis >= len(polynomial.degrees):
             return polynomial

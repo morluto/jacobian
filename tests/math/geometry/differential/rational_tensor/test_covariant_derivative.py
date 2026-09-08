@@ -155,7 +155,7 @@ def test_rank_eight_source_is_rejected_before_rank_nine_result() -> None:
 
 
 def test_determinant_guards_are_capped_before_backend_expansion() -> None:
-    x, y = symbols("x y")
+    x = symbols("x")
     axis = ("x", "y")
     metric = RationalCoordinateMetric(
         tensor=tensor(

@@ -18,6 +18,7 @@ from jacobian.canonical import (
     CanonicalizationError,
     CanonicalLimits,
     encode_strict_json,
+    format_canonical_integer,
     loads_strict_json,
 )
 from jacobian.catalog.models import OperationDomainValidationError
@@ -46,7 +47,11 @@ _PARENT_FINALIZATION_SECONDS = 0.05
 
 def _source_payload(polynomial: Any) -> list[list[object]]:
     return [
-        [*term.exponents, str(term.coefficient.num), str(term.coefficient.den)]
+        [
+            *term.exponents,
+            format_canonical_integer(term.coefficient.num),
+            format_canonical_integer(term.coefficient.den),
+        ]
         for term in polynomial.terms
     ]
 
@@ -127,7 +132,9 @@ def evaluate_admitted_covariant_derivative(
             "covariant derivative deadline expired after payload encoding"
         )
     try:
-        with TemporaryDirectory(prefix="jacobian-covariant-derivative-") as worker_directory:
+        with TemporaryDirectory(
+            prefix="jacobian-covariant-derivative-"
+        ) as worker_directory:
             completed = run_bounded_process(
                 [sys.executable, str(_WORKER_PATH)],
                 input_bytes=payload,

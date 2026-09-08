@@ -1,9 +1,11 @@
 """Complete metric, inverse, connection and curvature DAG admission."""
 
 from collections import Counter
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, replace
 from fractions import Fraction
 from itertools import permutations, product
+from typing import NoReturn
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.differential.metrics._dag import (
@@ -175,9 +177,20 @@ def _determinant(
     return dag.add(*terms) if terms else ONE
 
 
-def build_connection_plan(metric: RationalCoordinateMetric) -> ConnectionPlan:
+def build_connection_plan(
+    metric: RationalCoordinateMetric,
+    *,
+    reject: Callable[[str, str], NoReturn] | None = None,
+    label: str | None = None,
+) -> ConnectionPlan:
     n = len(metric.tensor.coordinate_axis)
     dag = Dag(n)
+    if reject is not None:
+        dag.ledger.limits = replace(
+            dag.ledger.limits,
+            reject=reject,
+            label=label or dag.ledger.limits.label,
+        )
     entries = tuple(dag.fraction(value) for value in metric.tensor.components)
     axes = tuple(range(n))
     det = _determinant(dag, entries, n, axes, axes)

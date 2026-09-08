@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from fractions import Fraction
 from itertools import product
 from typing import NoReturn
@@ -159,13 +159,10 @@ def build_plan(
             "shape",
             "covariant derivative exceeds the dense component representation budget",
         )
-    connection_plan: ConnectionPlan = build_connection_plan(metric)
-    dag = connection_plan.dag
-    dag.ledger.limits = replace(
-        dag.ledger.limits,
-        reject=_covariant_reject,
-        label="covariant derivative",
+    connection_plan: ConnectionPlan = build_connection_plan(
+        metric, reject=_covariant_reject, label="covariant derivative"
     )
+    dag = connection_plan.dag
     axes = tuple(range(dimension))
     determinant = connection_plan.determinant
     inverse = connection_plan.inverse

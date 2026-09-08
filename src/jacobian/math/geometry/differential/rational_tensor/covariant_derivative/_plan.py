@@ -50,22 +50,23 @@ class Plan:
 def _output_denominator_identity(dag: Dag, value: Expression) -> object | None:
     """Identify one retained output denominator after cancelling shared factors.
 
-    Axis-specific remaining denominators such as ``(x+1)^2 (y+1)`` versus
-    ``(x+1)(y+1)^2`` stay distinct. Shared raw numerator cofactors over the
-    same remaining denominator keep one identity so 767 inherited guards
-    plus ``x+y`` still fit the 768-guard cap.
+    Axis-specific remaining denominators stay distinct, so
+    ``1/((x+1)^2 (y+1))`` and ``1/((x+1)(y+1)^2)`` are separate keys. A
+    cofactor over the same remaining denominator keeps the determinant
+    identity, so ``1/D`` and ``adj/D`` share one guard.
     """
 
-    denominators = Counter(
-        index for index in value.denominator if any(dag.nodes[index].bound.degrees)
-    )
-    if not denominators:
+    numerators = Counter(value.numerator)
+    remaining: list[tuple[int, int]] = []
+    for index, multiplicity in sorted(Counter(value.denominator).items()):
+        if not any(dag.nodes[index].bound.degrees):
+            continue
+        leftover = multiplicity - min(multiplicity, numerators.get(index, 0))
+        if leftover:
+            remaining.append((index, leftover))
+    if not remaining:
         return None
-    numerators = Counter(
-        index for index in value.numerator if any(dag.nodes[index].bound.degrees)
-    )
-    remaining = denominators - numerators or denominators
-    return ("canonical-result-denominator", tuple(sorted(remaining.items())))
+    return ("canonical-result-denominator", tuple(remaining))
 
 
 def _flatten(indices: tuple[int, ...], dimension: int) -> int:

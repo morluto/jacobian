@@ -115,12 +115,7 @@ def _plan(
                 h = common_denominator.bit_length() + denominator.bit_length()
                 budget.charge(4 * h * h)
                 factor = denominator // gcd(common_denominator, denominator)
-                if common_denominator.bit_length() + factor.bit_length() > (
-                    _RATIONAL_BITS // 2 + 1
-                ):
-                    _reject("squared-distance denominators exceed the exact carrier")
                 common_denominator *= factor
-            denominator_bits = 2 * (common_denominator.bit_length() - 1) + 2
             scaled_bits = max(
                 (
                     abs(int(value.numerator)).bit_length()
@@ -130,12 +125,24 @@ def _plan(
                 default=0,
             )
             numerator_bits = 2 * scaled_bits + (len(differences) - 1).bit_length()
-            height = max(1, numerator_bits, denominator_bits)
-            if height > _RATIONAL_BITS:
+            unreduced_height = max(
+                1,
+                numerator_bits,
+                2 * (common_denominator.bit_length() - 1) + 2,
+            )
+            squared = fmpq(0)
+            for value in differences:
+                squared += value * value
+            reduced_height = max(
+                1,
+                abs(int(squared.numerator)).bit_length(),
+                int(squared.denominator).bit_length(),
+            )
+            if reduced_height > _RATIONAL_BITS:
                 _reject("squared-distance coefficient growth exceeds the exact carrier")
-            budget.charge(16 * len(differences) * height * height)
-            result_bits += 2 * height
-            maximum_height = max(maximum_height, height)
+            budget.charge(16 * len(differences) * unreduced_height * unreduced_height)
+            result_bits += 2 * reduced_height
+            maximum_height = max(maximum_height, reduced_height)
             plans.append(differences)
     # Every edge can have its own palette row; source axes, assignments and
     # graph incidences have independently bounded counts from PointConfiguration.

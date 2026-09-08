@@ -121,10 +121,16 @@ def decide(
         constraints = _admit(set_system, absolute_bounds)
         if constraints:
             reply = run_solver(
-                set_system.ground_set_size, constraints, budget.solver_work_limit, deadline
+                set_system.ground_set_size,
+                constraints,
+                budget.solver_work_limit,
+                deadline,
             )
         else:
-            reply = {"status": "SATISFIABLE", "coloring": (1,) * set_system.ground_set_size}
+            reply = {
+                "status": "SATISFIABLE",
+                "coloring": (1,) * set_system.ground_set_size,
+            }
         _checkpoint(deadline, "before discrepancy witness replay")
         outcome = _outcome(set_system, absolute_bounds, reply)
         _checkpoint(deadline, "before discrepancy result construction")

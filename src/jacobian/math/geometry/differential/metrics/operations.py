@@ -10,6 +10,7 @@ from jacobian._execution import (
     request_checkpoint,
     request_execution,
 )
+from jacobian.math.geometry.differential.metrics._dag import Expression
 from jacobian.math.geometry.differential.metrics._dag_process import (
     RationalDagWorkerMessages,
     evaluate_admitted_rational_dag,
@@ -79,7 +80,7 @@ def curvature_profile(
     )
     normalized = dict(zip(unique_outputs, unique_values, strict=True))
 
-    def convert(values: tuple[object, ...]) -> tuple[RationalFunction, ...]:
+    def convert(values: tuple[Expression, ...]) -> tuple[RationalFunction, ...]:
         return tuple(normalized[value] for value in values)
 
     inverse = convert(plan.inverse)

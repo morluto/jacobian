@@ -293,3 +293,92 @@ def test_package_exports_the_derivative_tensor_not_a_source_bound_profile() -> N
 
     assert package.__all__ == ["covariant_derivative"]
     assert not hasattr(package, "RationalCovariantDerivativeProfile")
+
+
+def test_non_monomial_axis_cancellations_are_counted_separately() -> None:
+    x, y = symbols("x y")
+    axis = ("x", "y")
+    denominator = rational_function_from_sympy((x + 1) * (y + 1), axis).numerator
+    inherited = canonical_locus_guards(
+        tuple(
+            rational_function_from_sympy(x + offset, axis).numerator
+            for offset in range(1, 767)
+        ),
+        (denominator,),
+        variable_count=2,
+    )
+    assert len(inherited) == 767
+    identity = RationalCoordinateMetric(
+        tensor=tensor([1, 0, 0, 1], ("COVARIANT", "COVARIANT"), axis=axis)
+    )
+    source = RationalCoordinateTensor(
+        coordinate_axis=axis,
+        variance=(),
+        components=(rational_function_from_sympy(1 / ((x + 1) * (y + 1)), axis),),
+        retained_nonzero_denominators=inherited,
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="768 guards"):
+        covariant_derivative(identity, source)
+
+
+def test_non_monomial_axis_cancellations_admit_at_the_exact_cap() -> None:
+    x, y = symbols("x y")
+    axis = ("x", "y")
+    denominator = rational_function_from_sympy((x + 1) * (y + 1), axis).numerator
+    inherited = canonical_locus_guards(
+        tuple(
+            rational_function_from_sympy(x + offset, axis).numerator
+            for offset in range(1, 766)
+        ),
+        (denominator,),
+        variable_count=2,
+    )
+    assert len(inherited) == 766
+    identity = RationalCoordinateMetric(
+        tensor=tensor([1, 0, 0, 1], ("COVARIANT", "COVARIANT"), axis=axis)
+    )
+    source = RationalCoordinateTensor(
+        coordinate_axis=axis,
+        variance=(),
+        components=(rational_function_from_sympy(1 / ((x + 1) * (y + 1)), axis),),
+        retained_nonzero_denominators=inherited,
+    )
+    result = covariant_derivative(identity, source)
+    assert len(result.retained_nonzero_denominators) == 768
+    assert all(
+        cancel(left - right) == 0
+        for left, right in zip(
+            expressions(result),
+            (
+                -1 / ((x + 1) ** 2 * (y + 1)),
+                -1 / ((x + 1) * (y + 1) ** 2),
+            ),
+            strict=True,
+        )
+    )
+
+
+def test_generated_determinant_nodes_share_one_guard_identity() -> None:
+    x, y = symbols("x y")
+    axis = ("x", "y")
+    inherited = canonical_locus_guards(
+        tuple(
+            rational_function_from_sympy(x + offset, axis).numerator
+            for offset in range(1, 768)
+        ),
+        variable_count=2,
+    )
+    assert len(inherited) == 767
+    source_metric = RationalCoordinateMetric(
+        tensor=RationalCoordinateTensor(
+            coordinate_axis=axis,
+            variance=("COVARIANT", "COVARIANT"),
+            components=tuple(
+                rational_function_from_sympy(value, axis) for value in (x, 1, 1, y)
+            ),
+            retained_nonzero_denominators=inherited,
+        )
+    )
+    result = covariant_derivative(source_metric, source_metric.tensor)
+    assert all(not component.numerator.terms for component in result.components)
+    assert len(result.retained_nonzero_denominators) == 768

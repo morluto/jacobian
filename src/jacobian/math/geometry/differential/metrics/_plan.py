@@ -38,14 +38,27 @@ def _has_nonconstant_denominator(dag: Dag, value: Expression) -> bool:
     )
 
 
+def _node_guard_key(dag: Dag, index: int) -> object:
+    """Identify one DAG polynomial node for locus-cap accounting.
+
+    Generated nodes such as ``xy-1`` keep one identity whether they appear as
+    a determinant factor or as an inverse denominator.
+    """
+
+    source = dag.nodes[index].source
+    if source is not None:
+        return _polynomial_key(source)
+    return ("dag-node", index)
+
+
 def _denominator_guard_identity(dag: Dag, value: Expression) -> object | None:
     """Identify one retained output denominator after guaranteed monomial cancel.
 
-    A single sourced factor matches the inherited polynomial key. Shared raw
-    ``D^2`` identities still split when axis-specific numerators cancel to
-    distinct remaining valuations, matching the guards result construction
-    retains. Identical remaining valuations keep one identity so cheap cases
-    such as ``1/(x+y)`` stay inside the cap.
+    A single sourced or generated factor matches the inherited polynomial
+    key. Shared raw ``D^2`` identities still split when axis-specific
+    numerators can cancel non-monomial factors, matching the guards result
+    construction retains. Constant remaining numerators keep one identity so
+    cheap cases such as ``1/(x+y)`` stay inside the cap.
     """
 
     if not _has_nonconstant_denominator(dag, value):
@@ -58,21 +71,23 @@ def _denominator_guard_identity(dag: Dag, value: Expression) -> object | None:
     for index, multiplicity in sorted(Counter(value.denominator).items()):
         if not any(dag.nodes[index].bound.degrees):
             continue
-        source = dag.nodes[index].source
-        factor_key: object = (
-            _polynomial_key(source) if source is not None else ("dag-node", index)
-        )
-        factors.append((factor_key, multiplicity))
+        factors.append((_node_guard_key(dag, index), multiplicity))
     if not factors:
         return None
     if len(factors) == 1 and factors[0][1] == 1:
         return factors[0][0]
-    return (
+    identity: tuple[object, ...] = (
         "canonical-result-denominator",
         tuple(factors),
         remaining.minimum_exponents,
         remaining.degrees,
     )
+    if any(cancelled.numerator.degrees):
+        identity = (
+            *identity,
+            tuple(sorted(Counter(value.numerator).items())),
+        )
+    return identity
 
 
 def potential_locus_guard_keys(
@@ -85,13 +100,8 @@ def potential_locus_guard_keys(
 
     keys: set[object] = {_polynomial_key(guard) for guard in inherited}
     for index in set(determinant.numerator):
-        source = dag.nodes[index].source
-        keys.add(
-            _polynomial_key(source) if source is not None else ("determinant", index)
-        )
+        keys.add(_node_guard_key(dag, index))
     for value in outputs:
-        if not _has_nonconstant_denominator(dag, value):
-            continue
         identity = _denominator_guard_identity(dag, value)
         if identity is not None:
             keys.add(identity)

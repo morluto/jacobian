@@ -2,7 +2,6 @@
 
 from jacobian.math.combinatorics.additive.finite_abelian_subset_sum._models import (
     FiniteAbelianSubsetSumRequest,
-    FiniteAbelianSubsetSumResult,
 )
 from jacobian.math.combinatorics.additive.finite_abelian_subset_sum.operations import (
     finite_abelian_subset_sum_profile,
@@ -10,6 +9,5 @@ from jacobian.math.combinatorics.additive.finite_abelian_subset_sum.operations i
 
 __all__ = [
     "FiniteAbelianSubsetSumRequest",
-    "FiniteAbelianSubsetSumResult",
     "finite_abelian_subset_sum_profile",
 ]

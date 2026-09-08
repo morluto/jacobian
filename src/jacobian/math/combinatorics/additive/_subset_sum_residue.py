@@ -385,6 +385,8 @@ class SubsetSumResidueProfileResult(StrictModel):
             self.group is not None
             or self.sequence is not None
             or self.group_rows is not None
+            or self.support_size is not None
+            or self.covers_group is not None
         ):
             if self.group is None or self.sequence is None or self.group_rows is None:
                 raise _validation_error(
@@ -581,21 +583,8 @@ def subset_sum_residue_profile(
                 code="additive_combinatorics.subset_sum_residue.witness_domain",
                 message="product-group profiles require include_witnesses=False",
             )
-        product_result = finite_abelian_subset_sum_profile(
+        return finite_abelian_subset_sum_profile(
             group, sequence, include_empty_subset
-        )
-        return SubsetSumResidueProfileResult(
-            source=IndexedIntegerSequence(items=()),
-            modulus=1,
-            include_empty_subset=include_empty_subset,
-            include_witnesses=False,
-            residue_counts=(),
-            residue_witnesses=None,
-            group=group,
-            sequence=sequence,
-            group_rows=product_result.rows,
-            support_size=product_result.support_size,
-            covers_group=product_result.covers_group,
         )
     if source is None or modulus is None:
         raise OperationDomainValidationError(

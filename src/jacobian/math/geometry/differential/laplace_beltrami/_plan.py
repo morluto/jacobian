@@ -21,6 +21,7 @@ from jacobian.math.geometry.differential.values import (
     MAX_RATIONAL_TENSOR_LOCUS_GUARDS,
     MAX_RATIONAL_TENSOR_POLYNOMIAL_TERMS,
     _is_unit_polynomial,
+    _polynomial_key,
 )
 from jacobian.math.polynomials.rational_functions._bounds import PolynomialBound
 from jacobian.math.polynomials.values import RationalFunction, SparseRationalPolynomial
@@ -100,15 +101,26 @@ def build_plan(metric: RationalCoordinateMetric, scalar: RationalFunction) -> Pl
                 "determinant locus factors exceed canonical polynomial bounds",
             )
         determinant_sizes.append(_bound_allocation(bound, dimension))
-    extra_guards = 0 if _is_unit_polynomial(scalar.denominator, dimension) else 1
+    extra_keys: set[object] = set()
+    if not _is_unit_polynomial(scalar.denominator, dimension):
+        extra_keys.add(_polynomial_key(scalar.denominator))
     if _has_nonconstant_denominator(dag, value):
-        extra_guards += 1
-    potential_guards = (
-        len(metric.tensor.retained_nonzero_denominators)
-        + len(set(connection_plan.determinant.numerator))
-        + extra_guards
-    )
-    if potential_guards > MAX_RATIONAL_TENSOR_LOCUS_GUARDS:
+        extra_keys.update(
+            _polynomial_key(dag.nodes[index].source)
+            if dag.nodes[index].source is not None
+            else ("value-denominator", index)
+            for index in value.denominator
+        )
+    guard_keys = {
+        _polynomial_key(guard) for guard in metric.tensor.retained_nonzero_denominators
+    }
+    for index in set(connection_plan.determinant.numerator):
+        source = dag.nodes[index].source
+        guard_keys.add(
+            _polynomial_key(source) if source is not None else ("determinant", index)
+        )
+    guard_keys.update(extra_keys)
+    if len(guard_keys) > MAX_RATIONAL_TENSOR_LOCUS_GUARDS:
         reject(
             "locus",
             "complete retained Laplace--Beltrami locus exceeds 768 guards",

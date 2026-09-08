@@ -107,6 +107,13 @@ def test_shared_deadline_is_honored() -> None:
         laplace_beltrami(metric, _scalar(x**2, ("x",)))
 
 
+def test_identically_singular_metric_rejects_before_cancellation() -> None:
+    x = symbols("x")
+    metric = _metric((1, x, x, x**2), ("x", "y"))
+    with pytest.raises(OperationDomainValidationError, match="identically zero"):
+        laplace_beltrami(metric, _scalar(x, ("x", "y")))
+
+
 def test_result_locus_guard_budget_is_bounded() -> None:
     x = symbols("x")
     axis = ("x",)

@@ -82,6 +82,8 @@ def laplace_beltrami(
     numerator, denominator = plan.fraction
     raw_numerator = _evaluate_node(numerator, plan.dag.nodes, axis, cache)
     raw_denominator = _evaluate_node(denominator, plan.dag.nodes, axis, cache)
+    if raw_denominator.is_zero:
+        raise singular()
     cancelled_numerator, cancelled_denominator = cancel_fraction(
         raw_numerator, raw_denominator, deadline=deadline
     )

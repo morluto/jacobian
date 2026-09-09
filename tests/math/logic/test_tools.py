@@ -158,7 +158,7 @@ def test_solver_schemas_publish_the_full_lifecycle_wall_time_range() -> None:
         timeout_schema = tools_by_id[operation_id].request_type.model_json_schema()[
             "properties"
         ]["timeout_ms"]
-        assert timeout_schema["default"] == 1_000
+        assert timeout_schema["default"] == 10_000
         assert timeout_schema["minimum"] == 1
         assert timeout_schema["maximum"] == 120_000
         assert "Full-lifecycle wall-clock limit" in timeout_schema["description"]

@@ -75,6 +75,7 @@ _MAX_SMTLIB_ARITHMETIC_WORK = _MAX_SMTLIB_NUMERAL_DIGITS**2 * 64
 # exhaustion surfaces as typed execution failure instead of host memory pressure.
 _SOLVER_RLIMIT = 20_000_000
 _SOLVER_MAX_MEMORY_MB = 1024
+_DEFAULT_LOGIC_TIMEOUT_MS = 10_000
 _MAX_LOGIC_TIMEOUT_MS = 120_000
 _LOGIC_TIMEOUT_DESCRIPTION = (
     "Full-lifecycle wall-clock limit in milliseconds, from 1 through 120000, "
@@ -483,7 +484,7 @@ class SmtSolveRequest(StrictModel):
         ],
     )
     timeout_ms: StrictInt = Field(
-        default=1_000,
+        default=_DEFAULT_LOGIC_TIMEOUT_MS,
         ge=1,
         le=_MAX_LOGIC_TIMEOUT_MS,
         description=_LOGIC_TIMEOUT_DESCRIPTION,

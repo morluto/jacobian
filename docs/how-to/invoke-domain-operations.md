@@ -66,7 +66,7 @@ exhaustion is an execution error, with no mathematical result. MCP reports
 Increasing `timeout_ms` does not increase the fixed SAT/SMT work allowance;
 `smt.unsat_core` permits adjusting `rlimit` within its admitted range. The three
 solver operations accept a full-lifecycle `timeout_ms` from 1 through 120,000
-milliseconds. Keep the one-second default for easy queries and select a longer
+milliseconds. The ten-second default covers ordinary queries; select a longer
 value when the same admitted deterministic work needs more wall time. The MCP
 host's request deadline must also cover the selected value.
 

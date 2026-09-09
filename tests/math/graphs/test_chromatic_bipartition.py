@@ -14,6 +14,7 @@ from jacobian._execution import (
     bind_request_deadline,
     request_execution,
 )
+from jacobian._worker_protocol import encode_worker_result_frame
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.graphs.optimization import _chromatic_bipartition as operation
 from jacobian.math.graphs.optimization import (
@@ -26,7 +27,7 @@ from jacobian.math.graphs.optimization._chromatic_bipartition import (
 )
 from jacobian.math.graphs.optimization._coloring_models import ChromaticNumberBudget
 from jacobian.math.graphs.values import SimpleUndirectedGraph
-from jacobian.process import BoundedProcessResult, encode_worker_result_frame
+from jacobian.process import BoundedProcessResult
 
 
 def graph(

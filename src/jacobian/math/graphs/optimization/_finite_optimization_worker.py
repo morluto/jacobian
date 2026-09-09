@@ -13,9 +13,9 @@ from jacobian._execution import (
     request_execution,
 )
 from jacobian._worker_errors import bind_worker_deadline, worker_execution_errors
+from jacobian._worker_protocol import encode_worker_result_frame
 from jacobian.math.graphs.optimization._finite_optimization import _run_worker_kernel
 from jacobian.math.graphs.optimization._models import GraphOptimizationRequest
-from jacobian.process import encode_worker_result_frame
 
 
 def main() -> int:

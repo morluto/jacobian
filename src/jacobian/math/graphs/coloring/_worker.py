@@ -15,6 +15,7 @@ from jacobian._execution import (
     request_execution,
 )
 from jacobian._worker_errors import bind_worker_deadline, worker_execution_errors
+from jacobian._worker_protocol import encode_worker_result_frame
 from jacobian.math.graphs.coloring._coloring_process import (
     run_edge_coloring_solver_kernel,
     run_k_colorability_solver_kernel,
@@ -24,7 +25,6 @@ from jacobian.math.graphs.values import (
     IndexedSimpleUndirectedGraph,
     SimpleUndirectedGraph,
 )
-from jacobian.process import encode_worker_result_frame
 
 
 def main() -> int:

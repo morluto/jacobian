@@ -19,6 +19,9 @@ from jacobian._execution import (
     request_checkpoint,
     require_execution_deadline,
 )
+from jacobian._worker_protocol import (
+    encode_worker_result_frame,
+)
 from jacobian.math.graphs.independence import (
     IndependenceNumberBudget,
     IndependenceNumberResult,
@@ -28,7 +31,6 @@ from jacobian.process import (
     ProcessResourceLimits,
     check_bounded_process_result,
     decode_checked_worker_output,
-    encode_worker_result_frame,
     run_bounded_process,
     worker_environment,
 )

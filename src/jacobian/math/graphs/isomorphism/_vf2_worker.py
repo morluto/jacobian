@@ -9,7 +9,7 @@ from typing import Any
 import networkx as nx
 from networkx.algorithms import isomorphism as nx_isomorphism
 
-from jacobian.process import encode_worker_result_frame
+from jacobian._worker_protocol import encode_worker_result_frame
 
 
 def _graph(payload: dict[str, Any]) -> nx.Graph[int] | nx.DiGraph[int]:

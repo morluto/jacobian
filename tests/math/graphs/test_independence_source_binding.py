@@ -14,6 +14,9 @@ from jacobian._execution import (
     OperationBackendError,
     OperationExecutionTimeoutError,
 )
+from jacobian._worker_protocol import (
+    encode_worker_result_frame,
+)
 from jacobian.math.graphs import _independence_z3 as z3_backend
 from jacobian.math.graphs.independence import (
     IndependenceNumberBudget,
@@ -27,7 +30,6 @@ from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.process import (
     BoundedProcessResult,
     ProcessResourceLimits,
-    encode_worker_result_frame,
 )
 
 

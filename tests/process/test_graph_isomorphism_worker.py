@@ -4,6 +4,9 @@ import pytest
 
 from jacobian import process as process_runtime
 from jacobian._execution import OperationExecutionTimeoutError
+from jacobian._worker_protocol import (
+    encode_worker_result_frame,
+)
 from jacobian.math.graphs.isomorphism import _vf2_process as isomorphism_operations
 from jacobian.math.graphs.isomorphism._models import GraphIsomorphismRequest
 from jacobian.math.graphs.isomorphism._vf2_process import decide_graph_isomorphism
@@ -11,7 +14,6 @@ from jacobian.math.graphs.isomorphism._vf2_worker import _first_isomorphism_mapp
 from jacobian.process import (
     BoundedProcessResult,
     ProcessResourceLimits,
-    encode_worker_result_frame,
 )
 
 

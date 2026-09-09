@@ -23,6 +23,9 @@ from jacobian._execution import (
     request_execution,
     require_execution_deadline,
 )
+from jacobian._worker_protocol import (
+    encode_worker_result_frame,
+)
 from jacobian.math.graphs.optimization._chromatic_bipartition import (
     ChromaticBipartitionRequest,
     ChromaticBipartitionResult,
@@ -31,7 +34,6 @@ from jacobian.math.graphs.optimization._chromatic_bipartition import (
 from jacobian.process import (
     ProcessResourceLimits,
     decode_checked_worker_output,
-    encode_worker_result_frame,
     run_bounded_process,
     worker_environment,
 )

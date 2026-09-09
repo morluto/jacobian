@@ -11,11 +11,13 @@ from jacobian._execution import (
     ProgressSink,
     request_execution,
 )
-from jacobian.process import (
-    decode_checked_worker_output,
+from jacobian._worker_protocol import (
     encode_worker_error_frame,
     encode_worker_progress_frame,
     encode_worker_result_frame,
+)
+from jacobian.process import (
+    decode_checked_worker_output,
 )
 
 

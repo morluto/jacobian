@@ -13,6 +13,7 @@ from jacobian._execution import (
     request_execution,
 )
 from jacobian._worker_errors import bind_worker_deadline, worker_execution_errors
+from jacobian._worker_protocol import encode_worker_result_frame
 from jacobian.math.combinatorics.finite_structures.hypergraphs._independence_z3 import (
     _solve_independence_number_kernel,
 )
@@ -20,7 +21,6 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
     HypergraphIndependenceBudget,
 )
-from jacobian.process import encode_worker_result_frame
 
 
 def main() -> int:

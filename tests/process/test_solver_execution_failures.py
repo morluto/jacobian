@@ -11,8 +11,9 @@ from jacobian._execution import (
     OperationExecutionTimeoutError,
     OperationResourceExhaustedError,
 )
+from jacobian._worker_protocol import encode_worker_result_frame
 from jacobian.catalog.catalog import Catalog
-from jacobian.process import BoundedProcessResult, encode_worker_result_frame
+from jacobian.process import BoundedProcessResult
 
 OWNERS = [
     ("sat.solve", "jacobian.math.logic._sat"),

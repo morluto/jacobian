@@ -59,9 +59,6 @@ __all__ = [
     "bounded_process_cancellation",
     "check_bounded_process_result",
     "decode_checked_worker_output",
-    "encode_worker_error_frame",
-    "encode_worker_progress_frame",
-    "encode_worker_result_frame",
     "run_bounded_process",
     "run_bounded_worker_dialogue",
     "worker_environment",
@@ -97,43 +94,6 @@ def check_bounded_process_result(result: BoundedProcessResult) -> None:
         error = OperationBackendError(BackendFailureReason.ABNORMAL_EXIT)
         error.add_note(repr(result.stderr[:16384]))
         raise error
-
-
-def encode_worker_progress_frame(
-    progress: int, *, total: int | None = None, message: str | None = None
-) -> bytes:
-    """Encode one bounded private absolute-progress frame."""
-
-    frame: dict[str, Any] = {"kind": "progress", "progress": progress}
-    if total is not None:
-        frame["total"] = total
-    if message is not None:
-        frame["message"] = message
-    return json.dumps(frame, separators=(",", ":"), ensure_ascii=False).encode() + b"\n"
-
-
-def encode_worker_error_frame(reason: BackendFailureReason) -> bytes:
-    """Encode one private worker execution-error frame."""
-
-    return (
-        json.dumps(
-            {"kind": "error", "reason": reason.value}, separators=(",", ":")
-        ).encode()
-        + b"\n"
-    )
-
-
-def encode_worker_result_frame(result: Any) -> bytes:
-    """Encode one private final-result frame."""
-
-    return (
-        json.dumps(
-            {"kind": "result", "result": result},
-            separators=(",", ":"),
-            ensure_ascii=False,
-        ).encode()
-        + b"\n"
-    )
 
 
 def decode_checked_worker_output[CheckedResultT](

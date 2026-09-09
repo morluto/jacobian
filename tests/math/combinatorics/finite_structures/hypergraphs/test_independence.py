@@ -11,6 +11,9 @@ from pydantic import ValidationError
 from jacobian._execution import (
     OperationBackendError,
 )
+from jacobian._worker_protocol import (
+    encode_worker_result_frame,
+)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     MAX_EDGES,
@@ -31,7 +34,6 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs.operations import
 from jacobian.process import (
     BoundedProcessResult,
     ProcessResourceLimits,
-    encode_worker_result_frame,
 )
 
 

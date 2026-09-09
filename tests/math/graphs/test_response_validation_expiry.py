@@ -11,13 +11,14 @@ from jacobian._execution import (
     OperationExecutionTimeoutError,
     request_cancellation,
 )
+from jacobian._worker_protocol import encode_worker_result_frame
 from jacobian.math.graphs.optimization import _chromatic_number, _invariants
 from jacobian.math.graphs.optimization._coloring_models import (
     GraphChromaticNumberRequest,
 )
 from jacobian.math.graphs.optimization._models import GraphOptimizationRequest
 from jacobian.math.graphs.values import SimpleUndirectedGraph
-from jacobian.process import BoundedProcessResult, encode_worker_result_frame
+from jacobian.process import BoundedProcessResult
 
 
 @pytest.mark.parametrize("kind", ["chromatic", "clique"])

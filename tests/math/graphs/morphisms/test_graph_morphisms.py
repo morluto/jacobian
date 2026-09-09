@@ -9,7 +9,10 @@ from jacobian._execution import (
     bind_request_deadline,
     request_execution,
 )
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.graphs.morphisms._models import (
     GraphHomomorphism,
     GraphHomomorphismObstruction,
@@ -364,11 +367,18 @@ class TestFixedLengthCycle:
     def test_large_bipartite_odd_cycle_is_rejected_before_complete_search(
         self,
     ) -> None:
+        from jacobian.math.graphs.morphisms._models import FixedLengthCycleResult
+
         left = [f"a{index:02d}" for index in range(32)]
         right = [f"b{index:02d}" for index in range(32)]
         graph = self._g(left + right, [[u, v] for u in left for v in right])
         with pytest.raises(OperationDomainValidationError, match="path work budget"):
             fixed_length_cycle(graph, 63)
+        claim = FixedLengthCycleResult(
+            graph=graph, decision="DOES_NOT_EXIST", length=63, cycle=()
+        )
+        with pytest.raises(OperationResourceAdmissionError, match="path work budget"):
+            verify_fixed_length_cycle(claim)
 
     def test_cycle_checks_parent_deadline_after_final_candidate(
         self, monkeypatch: pytest.MonkeyPatch
@@ -628,6 +638,8 @@ class TestSubgraphPatternFind:
     ) -> None:
         from itertools import combinations
 
+        from jacobian.math.graphs.morphisms._models import SubgraphPatternFindResult
+
         pattern_labels = [f"p{index}" for index in range(8)]
         pattern = self._g(
             pattern_labels, [list(edge) for edge in combinations(pattern_labels, 2)]
@@ -645,6 +657,13 @@ class TestSubgraphPatternFind:
             OperationDomainValidationError, match="candidate work budget"
         ):
             subgraph_pattern_find(pattern, host)
+        claim = SubgraphPatternFindResult(
+            pattern=pattern, host=host, decision="DOES_NOT_EXIST", vertex_map=()
+        )
+        with pytest.raises(
+            OperationResourceAdmissionError, match="candidate work budget"
+        ):
+            verify_subgraph_pattern_find(claim)
 
     def test_embedding_checks_parent_deadline_after_final_candidate(
         self, monkeypatch: pytest.MonkeyPatch

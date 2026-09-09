@@ -321,6 +321,8 @@ def verify_fixed_length_cycle(claim: FixedLengthCycleResult) -> bool:
             return False
         _admit_cycle_request(claim.graph, claim.length)
         return _decide_cycle_indices(claim.graph, claim.length) is None
+    except OperationResourceAdmissionError:
+        raise
     except (TypeError, ValueError):
         return False
 
@@ -550,5 +552,7 @@ def verify_subgraph_pattern_find(claim: SubgraphPatternFindResult) -> bool:
             return False
         _admit_subgraph_request(claim.pattern, claim.host)
         return _decide_subgraph_embedding(claim.pattern, claim.host) is None
+    except OperationResourceAdmissionError:
+        raise
     except (TypeError, ValueError):
         return False

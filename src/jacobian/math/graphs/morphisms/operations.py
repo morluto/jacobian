@@ -33,6 +33,19 @@ __all__ = [
 MAX_MORPHISM_RETAINED_LABEL_CHARACTERS = 10_000_000
 
 
+def _canonical_max_degree(graph: SimpleUndirectedGraph) -> int:
+    """Maximum vertex degree of the canonical source graph.
+
+    Owner-local admission helper: the cycle work estimate must be computed
+    from canonical values without replaying the search kernel.
+    """
+    degree: dict[str, int] = dict.fromkeys(graph.vertices, 0)
+    for u, v in graph.edges:
+        degree[u] += 1
+        degree[v] += 1
+    return max(degree.values(), default=0)
+
+
 def _graph_label_characters(graph: SimpleUndirectedGraph) -> int:
     return sum(len(vertex) for vertex in graph.vertices) + sum(
         len(left) + len(right) for left, right in graph.edges
@@ -67,6 +80,22 @@ def _admit_cycle_request(graph: SimpleUndirectedGraph, length: int) -> None:
             location=("length",),
             code="graph.cycle.length_bound",
             message="cycle length must not exceed the vertex count",
+        )
+    # Conservative full-negative-case admission: worst-case DFS work for a
+    # k-cycle is bounded by the number of simple directed paths of length
+    # k-1, at most n*(d_max)^(k-1). Every accepted request must terminate
+    # inside the tested bound even when no witness exists, so this estimate
+    # is enforced before enumeration begins; the runtime ledger remains only
+    # as defense-in-depth and never as the primary admission.
+    work = n * (_canonical_max_degree(graph) ** (length - 1))
+    if work > MAX_CYCLE_SEARCH_PATHS:
+        raise OperationDomainValidationError(
+            location=("length",),
+            code="graph.cycle.search_bound",
+            message=(
+                "fixed-length cycle search exceeds the "
+                f"{MAX_CYCLE_SEARCH_PATHS}-path work budget"
+            ),
         )
     _admit_cycle_retained(graph, length)
 
@@ -114,6 +143,24 @@ def _admit_subgraph_request(
             code="graph.subgraph.pattern_size_bound",
             message="pattern must not have more vertices than the host",
         )
+    # Conservative full-negative-case admission: worst-case backtracking work
+    # is bounded by the falling factorial of host vertices taken
+    # pattern-at-a-time. A negative decision requires the complete search, so
+    # requests whose exhaustive family exceeds the candidate budget are
+    # rejected before enumeration begins; the runtime ledger remains only as
+    # defense-in-depth.
+    assignments = 1
+    for step in range(pattern_size):
+        assignments *= len(host.vertices) - step
+        if assignments > MAX_SUBGRAPH_CANDIDATE_CHECKS:
+            raise OperationDomainValidationError(
+                location=("pattern", "host"),
+                code="graph.subgraph.search_bound",
+                message=(
+                    "subgraph-pattern search exceeds the "
+                    f"{MAX_SUBGRAPH_CANDIDATE_CHECKS}-assignment work budget"
+                ),
+            )
     _admit_subgraph_retained(pattern, host)
 
 

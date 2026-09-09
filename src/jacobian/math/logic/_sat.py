@@ -34,6 +34,9 @@ from jacobian.math.logic._cnf import (
     check_sat_assignment,
 )
 from jacobian.math.logic._smt import (
+    _DEFAULT_LOGIC_TIMEOUT_MS,
+    _LOGIC_TIMEOUT_DESCRIPTION,
+    _MAX_LOGIC_TIMEOUT_MS,
     _execution_deadline,
     _require_execution_deadline,
     _solver_settings,
@@ -64,7 +67,12 @@ def _validation_error(code: str, message: str) -> PydanticCustomError:
 
 class SatSolveRequest(StrictModel):
     cnf: CanonicalCnf
-    timeout_ms: StrictInt = Field(default=1_000, ge=1, le=10_000)
+    timeout_ms: StrictInt = Field(
+        default=_DEFAULT_LOGIC_TIMEOUT_MS,
+        ge=1,
+        le=_MAX_LOGIC_TIMEOUT_MS,
+        description=_LOGIC_TIMEOUT_DESCRIPTION,
+    )
 
 
 class SatSolveResult(StrictModel):

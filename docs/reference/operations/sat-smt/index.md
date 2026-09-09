@@ -32,8 +32,12 @@ are unchanged. The `exhausted` field on SAT/SMT success results is now null.
 
 The work allowance of `sat.solve` and `smt.solve` is fixed: increasing
 `timeout_ms` does not increase it. `smt.unsat_core` exposes `rlimit`; callers
-may adjust it within the range advertised by its request schema. All mandatory
-phases share the parent deadline, including worker startup and result validation.
+may adjust it within the range advertised by its request schema. `timeout_ms`
+defaults to 10,000 milliseconds and admits values from 1 through 120,000
+milliseconds for all three operations. It is a full-lifecycle wall limit: all
+mandatory phases share the parent deadline, including worker startup, parsing,
+solving, result validation, and projection. An earlier caller or transport
+deadline still wins.
 
 Native callers receive `OperationResourceExhaustedError` for work, memory, or
 output capacity, `OperationExecutionTimeoutError` for time expiry, and

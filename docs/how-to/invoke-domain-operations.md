@@ -64,7 +64,11 @@ exhaustion is an execution error, with no mathematical result. MCP reports
 `RESOURCE_EXHAUSTED`, `OPERATION_TIMEOUT`, `OPERATION_CANCELLED`, or
 `OPERATION_FAILED` in its model-visible error text. Backend details stay private.
 Increasing `timeout_ms` does not increase the fixed SAT/SMT work allowance;
-`smt.unsat_core` permits adjusting `rlimit` within its admitted range.
+`smt.unsat_core` permits adjusting `rlimit` within its admitted range. The three
+solver operations accept a full-lifecycle `timeout_ms` from 1 through 120,000
+milliseconds. The ten-second default covers ordinary queries; select a longer
+value when the same admitted deterministic work needs more wall time. The MCP
+host's request deadline must also cover the selected value.
 
 Graph optimization may return valid bounds or an incumbent from an incomplete
 search before the parent deadline. A worker failure or parent deadline expiry

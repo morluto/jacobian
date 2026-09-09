@@ -151,6 +151,20 @@ def test_smt_schema_publishes_commands_and_unsat_core_limits() -> None:
     assert "256 digits" in core_description
 
 
+def test_solver_schemas_publish_the_full_lifecycle_wall_time_range() -> None:
+    tools_by_id = {operation.operation_id: operation for operation in TOOLS}
+
+    for operation_id in ("sat.solve", "smt.solve", "smt.unsat_core"):
+        timeout_schema = tools_by_id[operation_id].request_type.model_json_schema()[
+            "properties"
+        ]["timeout_ms"]
+        assert timeout_schema["default"] == 10_000
+        assert timeout_schema["minimum"] == 1
+        assert timeout_schema["maximum"] == 120_000
+        assert "Full-lifecycle wall-clock limit" in timeout_schema["description"]
+        assert "does not increase" in timeout_schema["description"]
+
+
 @pytest.mark.parametrize("clauses, outcome", (((), "SAT"), (((),), "UNSAT")))
 def test_sat_solver_preserves_empty_formula_semantics(
     clauses: tuple[tuple[int, ...], ...], outcome: str

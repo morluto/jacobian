@@ -54,7 +54,13 @@ TOOLS: MathTools = (
     MathTool(
         operation_id="sat.solve",
         title="Solve a bounded CNF",
-        description="Run the maintained Z3 Python binding on one canonical CNF. Resource exhaustion and backend failures raise execution errors; UNKNOWN denotes a healthy inconclusive solver answer.",
+        description=(
+            "Run the maintained Z3 Python binding on one canonical CNF. "
+            "timeout_ms provides up to 120 seconds for the full lifecycle without "
+            "increasing the fixed solver work limit. Resource exhaustion and backend "
+            "failures raise execution errors; UNKNOWN denotes a healthy inconclusive "
+            "solver answer."
+        ),
         request_type=SatSolveRequest,
         result_type=SatSolveResult,
         run=solve_sat,
@@ -73,7 +79,10 @@ TOOLS: MathTools = (
         description=(
             "Decide one bounded quantifier-free SMT-LIB query and return SAT, "
             "UNSAT, or UNKNOWN; SAT includes a satisfying model projection."
-            " Resource exhaustion and backend failures raise execution errors; UNKNOWN denotes a healthy inconclusive solver answer."
+            " timeout_ms provides up to 120 seconds for the full lifecycle without "
+            "increasing the fixed solver work limit. Resource exhaustion and backend "
+            "failures raise execution errors; UNKNOWN denotes a healthy inconclusive "
+            "solver answer."
         ),
         request_type=SmtSolveRequest,
         result_type=SmtSolveResult,

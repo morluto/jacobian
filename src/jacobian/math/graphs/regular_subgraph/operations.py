@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import deque
 from itertools import combinations
 
 from jacobian._execution import OperationWorkLedger, request_checkpoint
@@ -17,6 +18,96 @@ from jacobian.math.graphs.values import SimpleUndirectedGraph
 MAX_REGULAR_SUBGRAPH_WORK = 16 * (1 << 15)
 
 
+def _trivial_result(
+    graph: SimpleUndirectedGraph,
+    k: int,
+    edges: list[tuple[str, str]],
+) -> RegularSubgraphResult | None:
+    """Return a constant-work result for k=0 or k=1 when available."""
+
+    if k == 0 and graph.vertices:
+        return RegularSubgraphResult(
+            graph=graph,
+            k=k,
+            found=True,
+            vertices=(graph.vertices[0],),
+            edges=(),
+        )
+    if k == 1 and edges:
+        left_label, right_label = edges[0]
+        edge = (
+            (left_label, right_label)
+            if left_label <= right_label
+            else (right_label, left_label)
+        )
+        return RegularSubgraphResult(
+            graph=graph,
+            k=k,
+            found=True,
+            vertices=edge,
+            edges=(edge,),
+        )
+    return None
+
+
+def _find_cycle_edge_indices(
+    edge_pairs: list[tuple[int, int]],
+    vertex_count: int,
+    ledger: OperationWorkLedger,
+) -> tuple[int, ...] | None:
+    """Return one cycle's edge indices using an incrementally built forest."""
+
+    parents = list(range(vertex_count))
+    ranks = [0] * vertex_count
+    forest: list[list[tuple[int, int]]] = [[] for _ in range(vertex_count)]
+
+    def root(vertex: int) -> int:
+        while parents[vertex] != vertex:
+            parents[vertex] = parents[parents[vertex]]
+            vertex = parents[vertex]
+        return vertex
+
+    for edge_index, (left, right) in enumerate(edge_pairs):
+        ledger.charge()
+        if ledger.consumed % 1024 == 0:
+            request_checkpoint("during 2-regular cycle search")
+        left_root, right_root = root(left), root(right)
+        if left_root != right_root:
+            if ranks[left_root] < ranks[right_root]:
+                left_root, right_root = right_root, left_root
+            parents[right_root] = left_root
+            if ranks[left_root] == ranks[right_root]:
+                ranks[left_root] += 1
+            forest[left].append((right, edge_index))
+            forest[right].append((left, edge_index))
+            continue
+
+        previous: dict[int, tuple[int, int] | None] = {left: None}
+        pending = deque([left])
+        while pending:
+            vertex = pending.popleft()
+            if vertex == right:
+                break
+            for neighbor, forest_edge_index in forest[vertex]:
+                ledger.charge()
+                if ledger.consumed % 1024 == 0:
+                    request_checkpoint("during 2-regular cycle reconstruction")
+                if neighbor not in previous:
+                    previous[neighbor] = (vertex, forest_edge_index)
+                    pending.append(neighbor)
+
+        path_edges: list[int] = []
+        vertex = right
+        previous_step = previous[vertex]
+        while previous_step is not None:
+            vertex, forest_edge_index = previous_step
+            path_edges.append(forest_edge_index)
+            previous_step = previous[vertex]
+        path_edges.append(edge_index)
+        return tuple(path_edges)
+    return None
+
+
 def find_k_regular_subgraph(
     graph: SimpleUndirectedGraph,
     k: int,
@@ -24,8 +115,8 @@ def find_k_regular_subgraph(
     """Return a nonempty k-regular subgraph (vertex set and edge set) or found=false.
 
     A subgraph is k-regular when every *used* vertex has degree exactly k in the
-    selected edge set. We enumerate edge subsets in increasing size order and
-    return the first feasible solution. For k=0, any single vertex suffices.
+    selected edge set. The k=2 regime uses exact cycle detection; larger k uses
+    bounded edge-subset enumeration. For k=0, any single vertex suffices.
     """
 
     if k < 0:
@@ -46,27 +137,10 @@ def find_k_regular_subgraph(
     n_edges = len(edges)
 
     # Trivial witnesses do not require enumerating edge subsets.
-    if k == 0 and n_vertices > 0:
+    trivial_result = _trivial_result(graph, k, edges)
+    if trivial_result is not None:
         request_checkpoint("before k-regular subgraph result construction")
-        return RegularSubgraphResult(
-            graph=graph,
-            k=k,
-            found=True,
-            vertices=(vertices[0],),
-            edges=(),
-        )
-    if k == 1 and n_edges > 0:
-        left_label, right_label = edges[0]
-        if left_label > right_label:
-            left_label, right_label = right_label, left_label
-        request_checkpoint("before k-regular subgraph result construction")
-        return RegularSubgraphResult(
-            graph=graph,
-            k=k,
-            found=True,
-            vertices=tuple(sorted((left_label, right_label))),
-            edges=((left_label, right_label),),
-        )
+        return trivial_result
 
     vertex_to_idx = {v: i for i, v in enumerate(vertices)}
 
@@ -75,11 +149,28 @@ def find_k_regular_subgraph(
     for left_label, right_label in edges:
         edge_pairs.append((vertex_to_idx[left_label], vertex_to_idx[right_label]))
 
+    ledger = OperationWorkLedger(MAX_REGULAR_SUBGRAPH_WORK)
+    request_checkpoint("before k-regular subgraph search")
+    if k == 2:
+        cycle_edges = _find_cycle_edge_indices(edge_pairs, n_vertices, ledger)
+        request_checkpoint("before k-regular subgraph result construction")
+        if cycle_edges is None:
+            return RegularSubgraphResult(graph=graph, k=k, found=False)
+        selected_labels = [edges[index] for index in cycle_edges]
+        used_labels = tuple(
+            sorted({label for edge in selected_labels for label in edge})
+        )
+        return RegularSubgraphResult(
+            graph=graph,
+            k=k,
+            found=True,
+            vertices=used_labels,
+            edges=tuple(sorted(selected_labels)),
+        )
+
     # Try edge subsets in increasing size. A nonempty subgraph with at least one
     # vertex of positive degree requires at least k+1 vertices and ceil(k*|V|/2) edges.
     min_edges_needed = (k + 1) * k // 2 if k > 0 else 0
-    ledger = OperationWorkLedger(MAX_REGULAR_SUBGRAPH_WORK)
-    request_checkpoint("before k-regular subgraph search")
 
     for edge_count in range(max(1, min_edges_needed), n_edges + 1):
         for edge_combo in combinations(range(n_edges), edge_count):

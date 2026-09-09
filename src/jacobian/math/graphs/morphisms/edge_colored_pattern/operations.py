@@ -1,8 +1,7 @@
-"""Exhaustive admitted edge-coloured monomorphism search."""
+"""Bounded edge-coloured monomorphism search."""
 
 import time
 from collections import Counter
-from itertools import permutations
 
 from pydantic_core import PydanticCustomError
 
@@ -88,14 +87,19 @@ def edge_colored_subgraph_pattern_find(
         host_edges.get(edge) == color
         for edge, color in zip(pattern.graph.edges, pattern.edge_colors, strict=True)
     )
-    setup_work = retained + len(host.graph.edges)
-    if setup_work > MAX_WORK:
-        _reject("work", "colored embedding setup exceeds its admitted work bound")
-    request_checkpoint("after colored embedding admission")
     found: tuple[str, ...] | None = None
     if identity and not impossible:
         found = pattern.graph.vertices
     elif not impossible:
+        setup_work = (
+            retained
+            + 3 * len(pattern.graph.edges)
+            + 3 * len(host.graph.edges)
+            + n * (k + 2 * len(pattern.graph.edges))
+        )
+        if setup_work > MAX_WORK:
+            _reject("work", "colored embedding setup exceeds its admitted work bound")
+        request_checkpoint("after colored embedding admission")
         found = _search(
             pattern,
             host,
@@ -126,33 +130,106 @@ def _search(
             dict.fromkeys((*pattern.edge_colors, *host.edge_colors))
         )
     }
-    required = tuple(
-        (pattern_index[u], pattern_index[v], palette[color])
-        for (u, v), color in zip(pattern.graph.edges, pattern.edge_colors, strict=True)
-    )
+    pattern_adjacency: list[dict[int, int]] = [{} for _ in pattern.graph.vertices]
+    pattern_color_degrees: list[Counter[int]] = [
+        Counter() for _ in pattern.graph.vertices
+    ]
+    for (u, v), color in zip(pattern.graph.edges, pattern.edge_colors, strict=True):
+        u_index, v_index, color_index = (
+            pattern_index[u],
+            pattern_index[v],
+            palette[color],
+        )
+        pattern_adjacency[u_index][v_index] = color_index
+        pattern_adjacency[v_index][u_index] = color_index
+        pattern_color_degrees[u_index][color_index] += 1
+        pattern_color_degrees[v_index][color_index] += 1
     available = {
         (min(host_index[u], host_index[v]), max(host_index[u], host_index[v])): palette[
             color
         ]
         for (u, v), color in zip(host.graph.edges, host.edge_colors, strict=True)
     }
+    host_color_degrees: list[Counter[int]] = [Counter() for _ in host.graph.vertices]
+    for (u, v), color in zip(host.graph.edges, host.edge_colors, strict=True):
+        u_index, v_index, color_index = host_index[u], host_index[v], palette[color]
+        host_color_degrees[u_index][color_index] += 1
+        host_color_degrees[v_index][color_index] += 1
+    host_degrees = [sum(color_degrees.values()) for color_degrees in host_color_degrees]
     if candidate_ledger is None:
         candidate_ledger = OperationWorkLedger(MAX_ASSIGNMENTS)
     if work_ledger is None:
         work_ledger = OperationWorkLedger(MAX_WORK)
-    per_candidate_work = len(pattern.graph.vertices) + len(pattern.graph.edges)
-    for assignment in permutations(
-        range(len(host.graph.vertices)), len(pattern.graph.vertices)
-    ):
-        candidate_ledger.charge()
-        work_ledger.charge(per_candidate_work)
-        request_checkpoint("during colored embedding search")
-        if all(
-            available.get(
-                (min(assignment[u], assignment[v]), max(assignment[u], assignment[v]))
+    candidate_domains = [
+        tuple(
+            host_vertex
+            for host_vertex, host_color_degree in enumerate(host_color_degrees)
+            if host_degrees[host_vertex] >= len(pattern_adjacency[pattern_vertex])
+            and all(
+                host_color_degree[color] >= count
+                for color, count in pattern_color_degrees[pattern_vertex].items()
             )
-            == color
-            for u, v, color in required
-        ):
-            return tuple(host.graph.vertices[i] for i in assignment)
-    return None
+        )
+        for pattern_vertex in range(len(pattern.graph.vertices))
+    ]
+    pattern_order = sorted(
+        range(len(pattern.graph.vertices)),
+        key=lambda vertex: (
+            len(candidate_domains[vertex]),
+            -len(pattern_adjacency[vertex]),
+            vertex,
+        ),
+    )
+    pattern_position = {
+        pattern_vertex: position
+        for position, pattern_vertex in enumerate(pattern_order)
+    }
+    earlier_neighbors = [
+        tuple(
+            (neighbor, color)
+            for neighbor, color in pattern_adjacency[pattern_vertex].items()
+            if pattern_position[neighbor] < pattern_position[pattern_vertex]
+        )
+        for pattern_vertex in range(len(pattern.graph.vertices))
+    ]
+    assignment = [-1] * len(pattern.graph.vertices)
+    used_host_vertices: set[int] = set()
+
+    def backtrack(position: int) -> bool:
+        if position == len(pattern_order):
+            return True
+        pattern_vertex = pattern_order[position]
+        for host_vertex in candidate_domains[pattern_vertex]:
+            candidate_ledger.charge()
+            work_ledger.charge()
+            request_checkpoint("during colored embedding search")
+            if host_vertex in used_host_vertices:
+                continue
+            compatible = True
+            for neighbor, color in earlier_neighbors[pattern_vertex]:
+                mapped_neighbor = assignment[neighbor]
+                work_ledger.charge()
+                if (
+                    available.get(
+                        (
+                            min(host_vertex, mapped_neighbor),
+                            max(host_vertex, mapped_neighbor),
+                        )
+                    )
+                    != color
+                ):
+                    compatible = False
+                    break
+            if not compatible:
+                continue
+            assignment[pattern_vertex] = host_vertex
+            used_host_vertices.add(host_vertex)
+            if backtrack(position + 1):
+                return True
+            used_host_vertices.remove(host_vertex)
+            assignment[pattern_vertex] = -1
+        return False
+
+    if not backtrack(0):
+        return None
+    return tuple(host.graph.vertices[index] for index in assignment)

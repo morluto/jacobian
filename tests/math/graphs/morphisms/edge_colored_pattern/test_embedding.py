@@ -138,7 +138,42 @@ def test_large_identity_and_early_isomorphic_witnesses() -> None:
     )
     renamed = edge_colored_subgraph_pattern_find(pattern, host)
     assert renamed.decision == "EXISTS"
-    assert renamed.vertex_map == host_vertices
+    mapping = dict(zip(pattern.graph.vertices, renamed.vertex_map, strict=True))
+    host_edges = dict(zip(host.graph.edges, host.edge_colors, strict=True))
+    assert len(set(renamed.vertex_map)) == len(pattern.graph.vertices)
+    assert all(
+        host_edges[(min(mapping[u], mapping[v]), max(mapping[u], mapping[v]))] == color
+        for (u, v), color in zip(pattern.graph.edges, pattern.edge_colors, strict=True)
+    )
+
+
+def test_degree_filter_finds_forced_star_embedding_at_source_limit() -> None:
+    pattern_vertices = tuple(f"p{index}" for index in range(6))
+    pattern_edges = tuple(("p0", f"p{index}") for index in range(1, 6))
+    host_leaves = tuple(f"h{index:02d}" for index in range(63))
+    host_vertices = (*host_leaves, "hz")
+    host_edges = tuple((leaf, "hz") for leaf in host_leaves)
+    pattern = colored(pattern_vertices, pattern_edges, ("red",) * 5)
+    host = colored(host_vertices, host_edges, ("red",) * 63)
+    result = edge_colored_subgraph_pattern_find(pattern, host)
+    assert result.decision == "EXISTS"
+    mapping = dict(zip(pattern_vertices, result.vertex_map, strict=True))
+    assert mapping["p0"] == "hz"
+    assert len(set(result.vertex_map)) == len(pattern_vertices)
+    assert all(mapping[leaf] in host_leaves for leaf in pattern_vertices[1:])
+
+
+def test_large_identity_witness_does_not_reserve_unused_search_setup() -> None:
+    pattern_vertices = tuple(f"v{index:05d}" for index in range(64))
+    pattern_edges = tuple(combinations(pattern_vertices, 2))
+    host_vertices = pattern_vertices + tuple(
+        f"z{index:05d}" for index in range(64, 12_256)
+    )
+    pattern = colored(pattern_vertices, pattern_edges, ("red",) * len(pattern_edges))
+    host = colored(host_vertices, pattern_edges, ("red",) * len(pattern_edges))
+    result = edge_colored_subgraph_pattern_find(pattern, host)
+    assert result.decision == "EXISTS"
+    assert result.vertex_map == pattern_vertices
 
 
 def test_search_exhaustion_is_not_a_negative_decision(
@@ -174,6 +209,13 @@ def test_search_work_units_exhaust_independently_of_candidate_count(
         + sum(map(len, host.edge_colors))
         + len(pattern.graph.vertices) * max(map(len, host.graph.vertices))
     )
-    monkeypatch.setattr(operations, "MAX_WORK", retained + len(host.graph.edges) + 2)
+    setup_work = (
+        retained
+        + 3 * len(pattern.graph.edges)
+        + 3 * len(host.graph.edges)
+        + len(host.graph.vertices)
+        * (len(pattern.graph.vertices) + 2 * len(pattern.graph.edges))
+    )
+    monkeypatch.setattr(operations, "MAX_WORK", setup_work + 1)
     with pytest.raises(OperationResourceExhaustedError):
         edge_colored_subgraph_pattern_find(pattern, host)

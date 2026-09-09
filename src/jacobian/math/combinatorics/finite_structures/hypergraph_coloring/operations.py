@@ -79,6 +79,7 @@ def decide_nonmonochromatic_coloring(
         deadline = time.monotonic() + max(60.0, work_budget / 100_000)
 
     vertices = list(hypergraph.vertices)
+    active_vertices = list(admission.active_vertices)
     edges = list(hypergraph.edges)
 
     # An empty or singleton edge is monochromatic under every positive palette;
@@ -102,8 +103,11 @@ def decide_nonmonochromatic_coloring(
         )
 
     if admission.has_injective_witness:
+        active_colors = {vertex: index for index, vertex in enumerate(active_vertices)}
         witness = ColoringWitness(
-            assignments=tuple((vertex, index) for index, vertex in enumerate(vertices))
+            assignments=tuple(
+                (vertex, active_colors.get(vertex, 0)) for vertex in vertices
+            )
         )
         request_checkpoint("before hypergraph coloring result construction")
         return NonmonochromaticColoringResult(
@@ -113,7 +117,7 @@ def decide_nonmonochromatic_coloring(
             witness=witness,
         )
 
-    n = len(vertices)
+    n = len(active_vertices)
     ledger = OperationWorkLedger(admission.work_budget)
     request_checkpoint("before hypergraph coloring search")
     for index, coloring in enumerate(product(range(palette_size), repeat=n)):
@@ -123,8 +127,11 @@ def decide_nonmonochromatic_coloring(
                 raise OperationExecutionTimeoutError(
                     "hypergraph coloring search exceeded its request deadline"
                 )
-        if _is_valid_coloring(coloring, edges, vertices, ledger, deadline):
-            assignments = tuple((vertices[i], coloring[i]) for i in range(n))
+        if _is_valid_coloring(coloring, edges, active_vertices, ledger, deadline):
+            active_colors = dict(zip(active_vertices, coloring, strict=True))
+            assignments = tuple(
+                (vertex, active_colors.get(vertex, 0)) for vertex in vertices
+            )
             witness = ColoringWitness(assignments=assignments)
             request_checkpoint("before hypergraph coloring result construction")
             return NonmonochromaticColoringResult(

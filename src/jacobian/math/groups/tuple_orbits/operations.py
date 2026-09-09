@@ -3,8 +3,8 @@
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.groups.operations import _backend_group, _full_permutation_form
 from jacobian.math.groups.tuple_orbits._models import (
-    TupleFamilyOrbitRequest,
     TupleFamilyOrbitResult,
+    TupleFamilyOrbitSource,
     TupleOrbitRow,
 )
 
@@ -13,7 +13,7 @@ MAX_TUPLE_ORBIT_ACTIONS = 1_000_000
 
 
 def tuple_family_orbit_profile(
-    request: TupleFamilyOrbitRequest,
+    request: TupleFamilyOrbitSource,
 ) -> TupleFamilyOrbitResult:
     backend = _backend_group(request.group)
     order = int(backend.order())

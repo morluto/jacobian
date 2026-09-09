@@ -13,8 +13,8 @@ from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.sequences.core._models import (
     AutocorrelationCell,
-    AutocorrelationRequest,
     AutocorrelationResult,
+    FiniteIntegerSequence,
     FrequencyEntry,
     IntegerSequenceBooleanResult,
     IntegerSequenceFrequenciesResult,
@@ -96,7 +96,7 @@ def _value_result(value: int) -> IntegerSequenceValueResult:
     return IntegerSequenceValueResult(value=value)
 
 
-def _admit_autocorrelation(request: AutocorrelationRequest) -> tuple[int, ...]:
+def _admit_autocorrelation(request: FiniteIntegerSequence) -> tuple[int, ...]:
     values = tuple(request.values)
     if not values:
         return values
@@ -111,7 +111,7 @@ def _admit_autocorrelation(request: AutocorrelationRequest) -> tuple[int, ...]:
     return values
 
 
-def aperiodic_autocorrelation(request: AutocorrelationRequest) -> AutocorrelationResult:
+def aperiodic_autocorrelation(request: FiniteIntegerSequence) -> AutocorrelationResult:
     values = _admit_autocorrelation(request)
     size = len(values)
     cells = tuple(
@@ -130,7 +130,7 @@ def aperiodic_autocorrelation(request: AutocorrelationRequest) -> Autocorrelatio
     return AutocorrelationResult(source=request, cells=negative + cells)
 
 
-def cyclic_autocorrelation(request: AutocorrelationRequest) -> AutocorrelationResult:
+def cyclic_autocorrelation(request: FiniteIntegerSequence) -> AutocorrelationResult:
     values = _admit_autocorrelation(request)
     size = len(values)
     return AutocorrelationResult(
@@ -148,7 +148,7 @@ def cyclic_autocorrelation(request: AutocorrelationRequest) -> AutocorrelationRe
     )
 
 
-def sequence_order_shape(request: AutocorrelationRequest) -> SequenceOrderShapeResult:
+def sequence_order_shape(request: FiniteIntegerSequence) -> SequenceOrderShapeResult:
     values = _admit_autocorrelation(request)
     nondecreasing_violation = next(
         (

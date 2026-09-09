@@ -9,7 +9,7 @@ from jacobian._models import StrictModel
 from jacobian.math.groups._models import MAX_GROUP_DEGREE, PermutationGroup
 
 
-class TupleFamilyOrbitRequest(StrictModel):
+class TupleFamilyOrbitSource(StrictModel):
     group: PermutationGroup
     arity: StrictInt = Field(ge=0, le=MAX_GROUP_DEGREE)
     family: tuple[tuple[StrictInt, ...], ...] = Field(max_length=4096)
@@ -36,5 +36,5 @@ class TupleOrbitRow(StrictModel):
 
 
 class TupleFamilyOrbitResult(StrictModel):
-    source: TupleFamilyOrbitRequest
+    source: TupleFamilyOrbitSource
     rows: tuple[TupleOrbitRow, ...] = Field(max_length=4096)

@@ -4,8 +4,8 @@ from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.number_theory.sequences.core._models import (
-    AutocorrelationRequest,
     AutocorrelationResult,
+    FiniteIntegerSequence,
     IntegerSequenceBooleanResult,
     IntegerSequenceFrequenciesResult,
     IntegerSequenceIndexListResult,
@@ -61,7 +61,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "position, explicit signed log-concavity comparisons, nonnegativity, "
             "and internal-zero status for a finite integer sequence."
         ),
-        request_type=AutocorrelationRequest,
+        request_type=FiniteIntegerSequence,
         result_type=SequenceOrderShapeResult,
         run=sequence_order_shape,
         tags=("sequence", "order", "unimodal", "log-concavity", "exact"),
@@ -80,7 +80,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "Compute the exact integer autocorrelation at lags -(n-1) through "
             "n-1 without wraparound. An empty sequence returns an empty profile."
         ),
-        request_type=AutocorrelationRequest,
+        request_type=FiniteIntegerSequence,
         result_type=AutocorrelationResult,
         run=aperiodic_autocorrelation,
         tags=("sequence", "autocorrelation", "aperiodic", "exact"),
@@ -99,7 +99,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "Compute the exact integer autocorrelation with indices modulo n at "
             "lags 0 through n-1. An empty sequence returns an empty profile."
         ),
-        request_type=AutocorrelationRequest,
+        request_type=FiniteIntegerSequence,
         result_type=AutocorrelationResult,
         run=cyclic_autocorrelation,
         tags=("sequence", "autocorrelation", "cyclic", "exact"),

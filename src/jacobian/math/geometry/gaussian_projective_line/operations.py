@@ -4,7 +4,7 @@ from fractions import Fraction
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.gaussian_projective_line._models import (
-    GaussianCrossRatioRequest,
+    GaussianCrossRatioSource,
     GaussianProjectiveLinePoint,
     _divide,
 )
@@ -34,7 +34,7 @@ def _determinant(
 
 
 def gaussian_rational_cross_ratio(
-    request: GaussianCrossRatioRequest,
+    request: GaussianCrossRatioSource,
 ) -> GaussianRational:
     numerator = _multiply(
         _determinant(request.first, request.third),

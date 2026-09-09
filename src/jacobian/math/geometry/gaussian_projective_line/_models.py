@@ -40,11 +40,11 @@ class GaussianProjectiveLinePoint(StrictModel):
         return self
 
 
-class GaussianCrossRatioRequest(StrictModel):
+class GaussianCrossRatioSource(StrictModel):
     first: GaussianProjectiveLinePoint
     second: GaussianProjectiveLinePoint
     third: GaussianProjectiveLinePoint
     fourth: GaussianProjectiveLinePoint
 
 
-__all__ = ["GaussianCrossRatioRequest", "GaussianProjectiveLinePoint"]
+__all__ = ["GaussianCrossRatioSource", "GaussianProjectiveLinePoint"]

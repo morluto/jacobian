@@ -2,7 +2,7 @@
 
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.geometry.gaussian_projective_line._models import (
-    GaussianCrossRatioRequest,
+    GaussianCrossRatioSource,
 )
 from jacobian.math.geometry.gaussian_projective_line.operations import (
     gaussian_rational_cross_ratio,
@@ -14,7 +14,7 @@ TOOLS: MathTools = (
         operation_id="geometry.projective_line.gaussian_rational.cross_ratio.compute",
         title="Compute a Gaussian-rational projective cross-ratio",
         description="Normalize homogeneous P1(Q(i)) points and compute their exact cross-ratio through homogeneous determinants.",
-        request_type=GaussianCrossRatioRequest,
+        request_type=GaussianCrossRatioSource,
         result_type=GaussianRational,
         run=gaussian_rational_cross_ratio,
         tags=(

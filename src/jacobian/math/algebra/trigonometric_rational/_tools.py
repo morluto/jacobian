@@ -2,8 +2,8 @@
 
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.algebra.trigonometric_rational.operations import (
-    TrigonometricRationalNormalizeRequest,
     TrigonometricRationalNormalizeResult,
+    TrigonometricRationalSource,
     normalize_trigonometric_rational,
 )
 
@@ -15,7 +15,7 @@ TOOLS = (
             "Normalize a bounded typed expression in sines and cosines of integer affine angle forms "
             "to a canonical exact QQ(i) Laurent numerator and denominator, retaining its denominator-nonzero locus."
         ),
-        request_type=TrigonometricRationalNormalizeRequest,
+        request_type=TrigonometricRationalSource,
         result_type=TrigonometricRationalNormalizeResult,
         run=normalize_trigonometric_rational,
         tags=(

@@ -1,12 +1,12 @@
 """Diagonal tuple-family orbit profiles."""
 
 from jacobian.math.groups._models import PermutationGroup
-from jacobian.math.groups.tuple_orbits._models import TupleFamilyOrbitRequest
+from jacobian.math.groups.tuple_orbits._models import TupleFamilyOrbitSource
 from jacobian.math.groups.tuple_orbits.operations import tuple_family_orbit_profile
 
 
 def test_repeated_coordinates_and_duplicate_sources_are_retained() -> None:
-    request = TupleFamilyOrbitRequest(
+    request = TupleFamilyOrbitSource(
         group=PermutationGroup(degree=3, generators=((1, 2, 0),)),
         arity=2,
         family=((2, 2), (0, 0), (0, 1), (1, 2), (0, 1)),
@@ -19,7 +19,7 @@ def test_repeated_coordinates_and_duplicate_sources_are_retained() -> None:
 
 
 def test_empty_family_has_empty_profile() -> None:
-    request = TupleFamilyOrbitRequest(
+    request = TupleFamilyOrbitSource(
         group=PermutationGroup(degree=1, generators=((0,),)), arity=0, family=()
     )
     assert tuple_family_orbit_profile(request).rows == ()

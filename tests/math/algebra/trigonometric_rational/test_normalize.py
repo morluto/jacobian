@@ -2,13 +2,13 @@ import pytest
 
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.algebra.trigonometric_rational.operations import (
-    TrigonometricRationalNormalizeRequest,
+    TrigonometricRationalSource,
     normalize_trigonometric_rational,
 )
 
 
 def test_pythagorean_identity_normalizes_to_one() -> None:
-    request = TrigonometricRationalNormalizeRequest.model_validate(
+    request = TrigonometricRationalSource.model_validate(
         {
             "variables": ["x"],
             "expression": {
@@ -38,7 +38,7 @@ def test_pythagorean_identity_normalizes_to_one() -> None:
 
 
 def test_tangent_retains_cosine_nonzero_locus() -> None:
-    request = TrigonometricRationalNormalizeRequest.model_validate(
+    request = TrigonometricRationalSource.model_validate(
         {
             "variables": ["x"],
             "expression": {
@@ -55,7 +55,7 @@ def test_tangent_retains_cosine_nonzero_locus() -> None:
 
 
 def test_zero_quotient_retains_denominator_nonzero_locus() -> None:
-    request = TrigonometricRationalNormalizeRequest.model_validate(
+    request = TrigonometricRationalSource.model_validate(
         {
             "variables": ["x"],
             "expression": {
@@ -72,7 +72,7 @@ def test_zero_quotient_retains_denominator_nonzero_locus() -> None:
 
 
 def test_oversized_gaussian_output_is_rejected_by_admission() -> None:
-    request = TrigonometricRationalNormalizeRequest.model_validate(
+    request = TrigonometricRationalSource.model_validate(
         {
             "variables": [],
             "expression": {

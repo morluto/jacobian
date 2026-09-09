@@ -69,7 +69,7 @@ class IntegerSequenceBooleanResult(StrictModel):
     holds: bool
 
 
-class AutocorrelationRequest(StrictModel):
+class FiniteIntegerSequence(StrictModel):
     """A possibly empty finite integer sequence."""
 
     values: tuple[ExactInteger, ...] = Field(
@@ -83,7 +83,7 @@ class AutocorrelationCell(StrictModel):
 
 
 class AutocorrelationResult(StrictModel):
-    source: AutocorrelationRequest
+    source: FiniteIntegerSequence
     cells: tuple[AutocorrelationCell, ...] = Field(
         min_length=0, max_length=2 * MAX_SEQUENCE_LENGTH - 1
     )
@@ -97,7 +97,7 @@ class SequenceLogConcavityRow(StrictModel):
 
 
 class SequenceOrderShapeResult(StrictModel):
-    source: AutocorrelationRequest
+    source: FiniteIntegerSequence
     first_nondecreasing_violation: int | None = Field(
         default=None, ge=0, le=MAX_SEQUENCE_LENGTH - 2
     )

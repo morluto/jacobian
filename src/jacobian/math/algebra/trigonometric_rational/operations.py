@@ -117,7 +117,7 @@ class GaussianLaurentPolynomial(StrictModel):
         return self
 
 
-class TrigonometricRationalNormalizeRequest(StrictModel):
+class TrigonometricRationalSource(StrictModel):
     variables: tuple[str, ...] = Field(max_length=MAX_TRIG_VARIABLES)
     expression: TrigonometricRationalExpression
 
@@ -362,7 +362,7 @@ def _wire(
 
 
 def normalize_trigonometric_rational(
-    request: TrigonometricRationalNormalizeRequest,
+    request: TrigonometricRationalSource,
 ) -> TrigonometricRationalNormalizeResult:
     if len(set(request.variables)) != len(request.variables):
         raise PydanticCustomError(

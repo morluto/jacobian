@@ -43,6 +43,21 @@ native code must not
 inherit MCP byte/depth/echo limits unless those limits are part of the
 mathematical operation itself.
 
+This parity includes bounded execution. Deadlines, cancellation checkpoints,
+deterministic work accounting, worker containment, and backend-failure
+classification are transport-independent library behavior. A native call
+receives the canonical result or the same typed timeout, cancellation, resource,
+backend-availability, or backend-failure exception that a delivery adapter
+would translate. It does not receive `ToolError`, an MCP task handle, protocol
+progress metadata, or a CLI exit code.
+
+The library execution context may carry an optional progress sink supplied by a
+caller. Progress reports only real completed units or phases and does not change
+the function's result type. MCP may connect that sink to protocol notifications;
+native applications may connect it to their own UI or leave it absent. Durable
+job identity, persistence, polling, authorization, and result retention belong
+to a serving runtime rather than the native mathematical API.
+
 An MCP operation parses one wire request before calling the shared domain
 admission function. Native callers call that domain function directly rather
 than constructing a wire Pydantic model. Native and wire parity tests should

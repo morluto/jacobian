@@ -43,6 +43,64 @@ operation ID + JSON
   -> MCP/JSON transport projection
 ```
 
+## Library execution and delivery boundaries
+
+Bounded execution is part of the Jacobian library. It is not an MCP feature.
+Native Python, CLI, `math.run`, and direct MCP tools use the same
+transport-independent execution path and therefore reach the same mathematical
+result or typed execution exception for the same input and execution envelope.
+Only request-context binding and presentation differ.
+
+```text
+native caller / CLI / MCP adapter
+  -> request execution envelope
+       absolute outer deadline and its owner
+       cancellation signal
+       optional transport-neutral progress sink
+  -> owner-local mathematical admission and execution plan
+       deterministic work, memory, and output bounds
+       monotonically narrowed phase allowances
+  -> checked in-process kernel or worker supervisor
+       backend cutoff < result-delivery cutoff < outer deadline
+  -> owner-local decoding, source binding, and mathematical validation
+  -> exact value, valid mathematical partial, or typed execution exception
+```
+
+The library owns the request execution envelope, monotone deadline narrowing,
+cancellation checkpoints, deterministic work accounting, process containment,
+private worker protocols, backend-failure classification, and canonical result
+construction. Domain owners retain mathematical policy: they admit the request,
+choose an algorithm or backend, decode derived output, bind it to the retained
+source, and validate every witness, bound, enclosure, or searched subdomain that
+the public result relies on.
+
+Delivery adapters have narrower roles:
+
+- `jacobian.mcp` binds MCP request cancellation and deadlines to the library
+  envelope, connects the library's optional progress sink to protocol progress,
+  projects successful values, and translates library exceptions into sanitized
+  tool errors. MCP types do not enter mathematical kernels or result models.
+- The CLI invokes the same library path and maps typed exceptions to diagnostics
+  and a nonzero exit status. It does not define another execution policy.
+- A durable serving runtime owns task identity, persistence, polling, TTL,
+  authorization, quotas, reconnection, and retained result delivery. Task state
+  is operational state, never a mathematical result. Operation-owned shard or
+  checkpoint values remain in the library because their coverage and
+  composition are mathematical contracts.
+
+An optional progress sink reports execution telemetry, not mathematical truth.
+Progress is monotone and bounded; it names real completed units or phases and
+omits a total when the remaining work is unknown. It must not invent a
+percentage for an opaque backend. Absence of progress, task state, cancellation,
+or a timeout establishes no mathematical conclusion.
+
+Nested owners may only tighten a request deadline. An operation allocates its
+single outer allowance across backend work, result construction, bounded
+delivery, decoding, validation, projection, and process cleanup before expensive
+work begins. No phase receives a fresh clock after an earlier phase consumes its
+allowance. A solver that may return a valid incumbent or bound stops early enough
+for the parent to receive and validate that partial result.
+
 ### Runtime ownership rule
 
 Parsing establishes only the canonical request shape and cheap representation
@@ -120,6 +178,12 @@ structured JSON delivery. Jacobian does not duplicate those
 checks. The SDK's Streamable HTTP request-body ceiling is an input constraint;
 it does not define a tool-result byte ceiling. No MCP response-size limit is
 therefore inferred from the canonical codec's defaults.
+
+The SDK does not own mathematical execution. The transport adapter binds SDK
+request state to the library execution envelope described above and maps its
+typed result or exception onto the protocol. Durable task records, protocol
+progress tokens, and tool-error envelopes remain delivery concerns; operation
+requests and results do not acquire those fields.
 
 Mathematical values enforce canonical representation and intrinsic
 representation bounds, never JSON response bytes. Operation owners bound work,

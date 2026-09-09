@@ -8,6 +8,15 @@ Jacobian exposes two MCP tools for atomic mathematics.
 - `math.run` executes one operation with a typed `payload` and returns that
   operation's typed mathematical result.
 
+These tools adapt the Jacobian library; they do not define a second mathematical
+or execution API. The library owns admission, deadlines, cancellation,
+deterministic work, worker containment, backend-failure classification, and
+result validation. The MCP adapter binds host request state to that library
+execution envelope, projects successful values, connects optional progress to
+the protocol, and converts typed library exceptions into sanitized tool errors.
+MCP task identity, polling, TTL, authorization, and retained-result delivery are
+serving-runtime concerns and never fields in an operation's mathematical result.
+
 Built-in membership follows the
 [public mathematical operation admission contract](public-operation-admission.md),
 which keeps the public catalog distinct from the broader native Python API.

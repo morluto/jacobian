@@ -180,6 +180,15 @@ tests prove process-group termination and descendant cleanup. Register each
 process owner in the architecture check and Import Linter exception list; these
 are narrow ownership declarations, not a general math-to-process dependency.
 
+Mathematical workers use the supervisor's checked execution path by default.
+That path handles cancellation, timeout, output overflow, and abnormal exit in
+one documented order and raises transport-independent execution exceptions.
+Access to an unchecked process result is restricted to diagnostic availability
+probes and owners with a complete, independently tested exact fallback. The
+shared supervisor does not parse mathematical output or decide whether a
+backend's inconclusive status is a valid Jacobian partial result; the domain
+owner retains those decisions.
+
 The supervisor's wall deadline starts at adapter entry and is shared by input
 spooling, launch, resource setup, capture, execution, conversion, and result
 delivery. Cleanup may use a separately named finite reaping grace, but it must

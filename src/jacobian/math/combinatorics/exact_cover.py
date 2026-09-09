@@ -707,6 +707,17 @@ def minimum_generalized_exact_cover(  # noqa: C901
     item_index = {item: index for index, item in enumerate(items)}
     primary_count = len(instance.primary_items)
     row_count = len(instance.rows)
+    scan_work = (
+        search_node_limit
+        * primary_count
+        * max(1, (max(row_count, primary_count) + 63) // 64)
+    )
+    if scan_work > 256 * 100_000 * 64:
+        raise OperationResourceAdmissionError(
+            location=("search_node_limit",),
+            code="combinatorics.minimum_exact_cover_work",
+            message="node-by-item scan work exceeds the minimum exact-cover envelope",
+        )
     item_rows = [0] * len(items)
     row_primary_masks: list[int] = []
     row_item_indices: list[tuple[int, ...]] = []

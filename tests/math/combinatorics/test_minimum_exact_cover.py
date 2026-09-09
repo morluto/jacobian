@@ -58,3 +58,18 @@ def test_node_limit_with_incumbent_returns_witness_backed_bounds() -> None:
     assert result.status == "BOUNDED"
     assert result.selected_row_ids == ("a-both",)
     assert result.lower_bound == result.upper_bound == 1
+
+
+def test_large_node_by_item_scan_is_rejected_before_search() -> None:
+    primary = tuple(f"p{i:04}" for i in range(2_048))
+    instance = GeneralizedExactCoverInstance(
+        primary_items=primary,
+        secondary_items=(),
+        rows=tuple(
+            ExactCoverRow(row_id=f"r{copy}-{index:04}", items=(item,))
+            for copy in range(2)
+            for index, item in enumerate(primary)
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError):
+        minimum_generalized_exact_cover(instance)

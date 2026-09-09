@@ -2,7 +2,10 @@
 
 from fractions import Fraction
 
+import pytest
+
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.probability._compound_poisson import (
     CompoundPoissonCumulantRequest,
     compound_poisson_cumulant_prefix,
@@ -59,3 +62,22 @@ def test_order_zero_returns_empty_prefix_without_a_pmf() -> None:
         )
     )
     assert result.cumulants == ()
+
+
+def test_intensity_growth_is_admitted_before_cumulant_construction() -> None:
+    large = 10**255 - 1
+    jumps = FiniteRationalDistribution(
+        atoms=(
+            FiniteDistributionAtom(
+                value=_q(Fraction(large)), probability=_q(Fraction(1))
+            ),
+        )
+    )
+    with pytest.raises(OperationResourceAdmissionError):
+        compound_poisson_cumulant_prefix(
+            CompoundPoissonCumulantRequest(
+                intensity=_q(Fraction(large)),
+                jump_distribution=jumps,
+                max_order=128,
+            )
+        )

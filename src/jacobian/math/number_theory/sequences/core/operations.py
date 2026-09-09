@@ -10,7 +10,10 @@ from itertools import pairwise
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import format_canonical_integer
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.number_theory.sequences.core._models import (
     AutocorrelationCell,
     AutocorrelationResult,
@@ -29,6 +32,8 @@ from jacobian.math.number_theory.sequences.core.values import (
     MAX_SEQUENCE_TOTAL_DIGITS,
     IntegerSequence,
 )
+
+MAX_AUTOCORRELATION_MULTIPLICATIONS = 4_000_000
 
 
 def _admit(
@@ -114,6 +119,12 @@ def _admit_autocorrelation(request: FiniteIntegerSequence) -> tuple[int, ...]:
 def aperiodic_autocorrelation(request: FiniteIntegerSequence) -> AutocorrelationResult:
     values = _admit_autocorrelation(request)
     size = len(values)
+    if size * (size + 1) // 2 > MAX_AUTOCORRELATION_MULTIPLICATIONS:
+        raise OperationResourceAdmissionError(
+            location=("values",),
+            code="sequences.autocorrelation.work_bound",
+            message="aperiodic autocorrelation exceeds the admitted multiplication bound",
+        )
     cells = tuple(
         AutocorrelationCell(
             lag=lag,
@@ -133,6 +144,12 @@ def aperiodic_autocorrelation(request: FiniteIntegerSequence) -> Autocorrelation
 def cyclic_autocorrelation(request: FiniteIntegerSequence) -> AutocorrelationResult:
     values = _admit_autocorrelation(request)
     size = len(values)
+    if size * size > MAX_AUTOCORRELATION_MULTIPLICATIONS:
+        raise OperationResourceAdmissionError(
+            location=("values",),
+            code="sequences.autocorrelation.work_bound",
+            message="cyclic autocorrelation exceeds the admitted multiplication bound",
+        )
     return AutocorrelationResult(
         source=request,
         cells=tuple(
@@ -166,13 +183,20 @@ def sequence_order_shape(request: FiniteIntegerSequence) -> SequenceOrderShapeRe
         ),
         None,
     )
-    peaks = tuple(
-        peak
-        for peak in range(len(values))
-        if all(values[index] <= values[index + 1] for index in range(peak))
-        and all(
-            values[index] >= values[index + 1] for index in range(peak, len(values) - 1)
+    nondecreasing_prefix = [True] * len(values)
+    for index in range(1, len(values)):
+        nondecreasing_prefix[index] = (
+            nondecreasing_prefix[index - 1] and values[index - 1] <= values[index]
         )
+    nonincreasing_suffix = [True] * len(values)
+    for index in range(len(values) - 2, -1, -1):
+        nonincreasing_suffix[index] = (
+            nonincreasing_suffix[index + 1] and values[index] >= values[index + 1]
+        )
+    peaks = tuple(
+        index
+        for index in range(len(values))
+        if nondecreasing_prefix[index] and nonincreasing_suffix[index]
     )
     log_rows = tuple(
         SequenceLogConcavityRow(

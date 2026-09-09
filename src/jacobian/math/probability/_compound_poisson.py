@@ -7,9 +7,14 @@ from pydantic import Field, StrictInt, model_validator
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.probability._distribution import (
     FiniteRationalDistribution,
     require_input_distribution,
+)
+from jacobian.math.probability._models import (
+    MAX_RESULT_RATIONAL_DIGITS,
+    _require_bounded_fraction,
 )
 from jacobian.math.probability.operations import _plan_raw_moment
 
@@ -47,12 +52,24 @@ def compound_poisson_cumulant_prefix(
     request: CompoundPoissonCumulantRequest,
 ) -> CompoundPoissonCumulantResult:
     atoms = request.jump_distribution.atoms
-    if request.max_order:
-        _plan_raw_moment(atoms, request.max_order)
+    intensity = request.intensity.as_fraction()
+    for order in range(1, request.max_order + 1):
+        moment = _plan_raw_moment(atoms, order).total
+        try:
+            _require_bounded_fraction(
+                intensity * moment,
+                max_digits=MAX_RESULT_RATIONAL_DIGITS,
+                label="compound-Poisson cumulant",
+            )
+        except ValueError as exc:
+            raise OperationResourceAdmissionError(
+                location=("intensity",),
+                code="probability.compound_poisson.cumulant_height_bound",
+                message=str(exc),
+            ) from exc
     powers = [Fraction(1) for _ in atoms]
     values = [atom.value.as_fraction() for atom in atoms]
     probabilities = [atom.probability.as_fraction() for atom in atoms]
-    intensity = request.intensity.as_fraction()
     rows = []
     for order in range(1, request.max_order + 1):
         for index, value in enumerate(values):

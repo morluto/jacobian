@@ -2,7 +2,11 @@
 
 from fractions import Fraction
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    CanonicalRational,
+    canonical_rational_component_digits,
+)
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -38,6 +42,21 @@ def rational_laurent_multiply(
             location=("right", "terms"),
             code="polynomial.laurent.convolution_bound",
             message=f"sparse convolution requires {work} term products; maximum is {MAX_POLYNOMIAL_TERMS}",
+        )
+    coefficient_digits = work * (
+        max(
+            canonical_rational_component_digits(term.coefficient) for term in left.terms
+        )
+        + max(
+            canonical_rational_component_digits(term.coefficient)
+            for term in right.terms
+        )
+    ) + len(str(work))
+    if coefficient_digits > MAX_CANONICAL_RATIONAL_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("right", "terms"),
+            code="polynomial.laurent.coefficient_growth",
+            message="Laurent convolution coefficients exceed the exact-output bound",
         )
     coefficients: dict[tuple[int, ...], Fraction] = {}
     for left_term in left.terms:

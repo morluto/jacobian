@@ -3,7 +3,7 @@
 from fractions import Fraction
 from math import comb
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -28,6 +28,19 @@ class RationalDiscreteAntiderivativeResult(StrictModel):
     source: RationalDiscreteAntiderivativeRequest
     antiderivative: RationalPolynomial
     reconstructed_difference: RationalPolynomial
+
+
+def _admit_coefficients(coefficients: dict[tuple[int, ...], Fraction]) -> None:
+    limit = 10**MAX_CANONICAL_RATIONAL_DIGITS
+    if any(
+        abs(value.numerator) >= limit or value.denominator >= limit
+        for value in coefficients.values()
+    ):
+        raise OperationResourceAdmissionError(
+            location=("polynomial",),
+            code="polynomial.discrete_antiderivative.coefficient_growth",
+            message="discrete-antiderivative coefficients exceed the exact-output bound",
+        )
 
 
 def _polynomial(
@@ -109,6 +122,8 @@ def rational_discrete_antiderivative(
             reconstructed[key] = reconstructed.get(
                 key, Fraction()
             ) + coefficient * comb(degree, lower_degree)
+    _admit_coefficients(answer)
+    _admit_coefficients(reconstructed)
     antiderivative = _polynomial(source.variables, answer)
     difference = _polynomial(source.variables, reconstructed)
     if difference != source:

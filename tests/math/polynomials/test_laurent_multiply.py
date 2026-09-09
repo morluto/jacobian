@@ -3,7 +3,10 @@
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.polynomials._laurent import rational_laurent_multiply
 from jacobian.math.polynomials.values import (
     RationalLaurentPolynomial,
@@ -44,4 +47,12 @@ def test_axis_mismatch_rejects_before_convolution() -> None:
     right = RationalLaurentPolynomial(variables=("y",), terms=(term(1, 0),))
 
     with pytest.raises(OperationDomainValidationError, match="ordered variable axis"):
+        rational_laurent_multiply(left, right)
+
+
+def test_coefficient_growth_is_rejected_before_convolution() -> None:
+    coefficient = 10**20_000
+    left = RationalLaurentPolynomial(variables=("x",), terms=(term(coefficient, 0),))
+    right = RationalLaurentPolynomial(variables=("x",), terms=(term(coefficient, 0),))
+    with pytest.raises(OperationResourceAdmissionError):
         rational_laurent_multiply(left, right)

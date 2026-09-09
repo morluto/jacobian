@@ -1,5 +1,10 @@
 """Exact aperiodic and cyclic autocorrelation contracts."""
 
+from collections.abc import Callable
+
+import pytest
+
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.number_theory.sequences.core._models import (
     AutocorrelationResult,
     FiniteIntegerSequence,
@@ -53,3 +58,20 @@ def test_order_shape_reports_internal_zero_and_signed_log_concavity() -> None:
     assert result.has_internal_zero
     assert result.log_concavity_rows[0].neighbor_product == 6
     assert not result.log_concavity_rows[0].holds
+
+
+@pytest.mark.parametrize(
+    "operation", [aperiodic_autocorrelation, cyclic_autocorrelation]
+)
+def test_large_quadratic_autocorrelation_is_rejected(
+    operation: Callable[[FiniteIntegerSequence], AutocorrelationResult],
+) -> None:
+    source = FiniteIntegerSequence(values=(1,) * 3_000)
+    with pytest.raises(OperationResourceAdmissionError):
+        operation(source)
+
+
+def test_constant_sequence_peak_scan_is_linear() -> None:
+    source = FiniteIntegerSequence(values=(1,) * 10_000)
+    result = sequence_order_shape(source)
+    assert result.weak_unimodal_peak_positions == tuple(range(10_000))

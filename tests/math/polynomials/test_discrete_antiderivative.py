@@ -2,7 +2,10 @@
 
 from fractions import Fraction
 
+import pytest
+
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.polynomials._discrete_antiderivative import (
     RationalDiscreteAntiderivativeRequest,
     rational_discrete_antiderivative,
@@ -50,3 +53,22 @@ def test_other_variable_is_a_coefficient_parameter() -> None:
         for term in result.antiderivative.polynomial.terms
     }
     assert coefficients == {(2, 1): Fraction(1, 2), (1, 1): Fraction(-1, 2)}
+
+
+def test_denominator_growth_is_rejected_before_result_construction() -> None:
+    denominator = 5 * 10**32_767 + 1
+    source = RationalPolynomial(
+        variables=("k",),
+        polynomial=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=1, den=denominator),
+                    exponents=(1,),
+                ),
+            )
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError):
+        rational_discrete_antiderivative(
+            RationalDiscreteAntiderivativeRequest(polynomial=source, variable="k")
+        )

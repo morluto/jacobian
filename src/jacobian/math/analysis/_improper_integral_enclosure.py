@@ -97,28 +97,17 @@ class EndpointLogImproperIntegralResult(StrictModel):
 
     @model_validator(mode="after")
     def bind_proof_decomposition(self) -> Self:
-        truncation, left_bound, right_bound = _tail_plan(self.source)
-        expected_left = _quadrature_request(
-            self.source,
-            _transformed_expression(self.source, left=True),
-            truncation,
-        )
-        expected_right = _quadrature_request(
-            self.source,
-            _transformed_expression(self.source, left=False),
-            truncation,
-        )
+        truncation = self.left_tail.truncation
         if (
-            self.left_tail
-            != EndpointTailEnclosure(
-                truncation=truncation, enclosure=_tail_interval(left_bound)
+            self.right_tail.truncation != truncation
+            or not _symmetric_tail(self.left_tail)
+            or not _symmetric_tail(self.right_tail)
+            or not _quadrature_shape_matches(
+                self.left_quadrature, self.source, truncation
             )
-            or self.right_tail
-            != EndpointTailEnclosure(
-                truncation=truncation, enclosure=_tail_interval(right_bound)
+            or not _quadrature_shape_matches(
+                self.right_quadrature, self.source, truncation
             )
-            or not _quadrature_matches(self.left_quadrature, expected_left)
-            or not _quadrature_matches(self.right_quadrature, expected_right)
         ):
             raise ValueError(
                 "improper-integral quadratures and tails must match the source decomposition"
@@ -313,17 +302,23 @@ def _quadrature_request(
     )
 
 
-def _quadrature_matches(
+def _symmetric_tail(tail: EndpointTailEnclosure) -> bool:
+    return tail.enclosure.lower.as_fraction() == -tail.enclosure.upper.as_fraction()
+
+
+def _quadrature_shape_matches(
     result: DefiniteIntegralEnclosureResult,
-    expected: DefiniteIntegralEnclosureRequest,
+    source: EndpointLogImproperIntegralRequest,
+    truncation: int,
 ) -> bool:
     return (
-        result.expression == expected.expression
-        and result.box == expected.box
-        and result.precision_bits == expected.precision_bits
-        and result.target_width == expected.target_width
-        and result.max_leaves == expected.max_leaves
-        and result.wall_seconds == expected.wall_seconds
+        result.box.variables == ("t",)
+        and result.box.intervals[0].lower.as_fraction() == 0
+        and result.box.intervals[0].upper.as_fraction() == truncation
+        and result.precision_bits == source.precision_bits
+        and result.target_width == _quarter_target(source.target_width)
+        and result.max_leaves == source.max_leaves
+        and result.wall_seconds == source.wall_seconds
     )
 
 

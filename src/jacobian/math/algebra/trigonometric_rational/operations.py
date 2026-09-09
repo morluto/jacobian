@@ -12,11 +12,15 @@ from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.number_theory.number_fields import GaussianRational
+from jacobian.math.number_theory.number_fields.values import (
+    MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS,
+)
 
 MAX_TRIG_VARIABLES = 8
 MAX_TRIG_AST_NODES = 128
 MAX_TRIG_LAURENT_TERMS = 4_096
 MAX_TRIG_EXPONENT = 4_096
+_GAUSSIAN_COMPONENT_LIMIT = 10**MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS
 
 
 class IntegerAffineAngleForm(StrictModel):
@@ -130,23 +134,42 @@ Polynomial = dict[Support, Gaussian]
 RationalFunction = tuple[Polynomial, Polynomial]
 
 
+def _admit_gaussian(value: Gaussian) -> Gaussian:
+    if any(
+        abs(component.numerator) >= _GAUSSIAN_COMPONENT_LIMIT
+        or component.denominator >= _GAUSSIAN_COMPONENT_LIMIT
+        for component in value
+    ):
+        raise OperationResourceAdmissionError(
+            location=("expression",),
+            code="trigonometric_rational.coefficient_bound",
+            message="trigonometric Laurent coefficients exceed the admitted exact-output bound",
+        )
+    return value
+
+
 def _gadd(left: Gaussian, right: Gaussian) -> Gaussian:
-    return left[0] + right[0], left[1] + right[1]
+    return _admit_gaussian((left[0] + right[0], left[1] + right[1]))
 
 
 def _gmul(left: Gaussian, right: Gaussian) -> Gaussian:
-    return left[0] * right[0] - left[1] * right[1], left[0] * right[1] + left[
-        1
-    ] * right[0]
+    return _admit_gaussian(
+        (
+            left[0] * right[0] - left[1] * right[1],
+            left[0] * right[1] + left[1] * right[0],
+        )
+    )
 
 
 def _gdiv(left: Gaussian, right: Gaussian) -> Gaussian:
     norm = right[0] * right[0] + right[1] * right[1]
     if not norm:
         raise ZeroDivisionError
-    return (
-        (left[0] * right[0] + left[1] * right[1]) / norm,
-        (left[1] * right[0] - left[0] * right[1]) / norm,
+    return _admit_gaussian(
+        (
+            (left[0] * right[0] + left[1] * right[1]) / norm,
+            (left[1] * right[0] - left[0] * right[1]) / norm,
+        )
     )
 
 
@@ -345,12 +368,13 @@ def normalize_trigonometric_rational(
         raise PydanticCustomError(
             "trigonometric.variable_axis", "variables must be unique"
         )
-    numerator, denominator = _canonicalize(
-        *_evaluate(request.expression, len(request.variables), [0])
-    )
+    axis = len(request.variables)
+    raw_numerator, raw_denominator = _evaluate(request.expression, axis, [0])
+    numerator, denominator = _canonicalize(raw_numerator, raw_denominator)
+    _, denominator_nonzero = _canonicalize(_one(axis), raw_denominator)
     denominator_wire = _wire(request.variables, denominator)
     return TrigonometricRationalNormalizeResult(
         numerator=_wire(request.variables, numerator),
         denominator=denominator_wire,
-        denominator_nonzero=denominator_wire,
+        denominator_nonzero=_wire(request.variables, denominator_nonzero),
     )

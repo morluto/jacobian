@@ -454,6 +454,20 @@ class GeneralizedExactCoverShardResultsCombineRequest(StrictModel):
         min_length=1, max_length=MAX_EXACT_COVER_ROWS
     )
 
+    @model_validator(mode="after")
+    def admit_rechecks(self) -> Self:
+        if (
+            sum(
+                min(result.search_node_limit, result.searched_node_count)
+                for result in self.child_results
+            )
+            > MAX_EXACT_COVER_SEARCH_NODES_PER_PASS
+        ):
+            raise _combinatorics_validation_error(
+                "combined child rechecks exceed the exact-cover node bound"
+            )
+        return self
+
 
 def _solve_generalized_exact_cover(
     instance: GeneralizedExactCoverInstance,
@@ -628,43 +642,43 @@ def combine_generalized_exact_cover_shard_results(
         raise _combinatorics_validation_error(
             "combined results must cover each disjoint child shard exactly once"
         )
-    searched = sum(result.searched_node_count for result in request.child_results)
+    confirmed = tuple(
+        _solve_generalized_exact_cover(
+            request.instance,
+            min(result.search_node_limit, result.searched_node_count),
+            result.source_shard,
+        )
+        for result in request.child_results
+    )
+    searched = sum(result.searched_node_count for result in confirmed)
     found = next(
-        (result for result in request.child_results if result.status == "FOUND"),
+        (result for result in confirmed if result.status == "FOUND"),
         None,
     )
     if found is not None:
         return GeneralizedExactCoverResult._from_kernel(
             instance=request.instance,
-            search_node_limit=max(
-                result.search_node_limit for result in request.child_results
-            ),
+            search_node_limit=max(result.search_node_limit for result in confirmed),
             status="FOUND",
             source_shard=request.parent_shard,
             selected_row_ids=found.selected_row_ids,
             item_multiplicities=found.item_multiplicities,
             searched_node_count=searched,
         )
-    if all(result.status == "NO_COVER" for result in request.child_results):
+    if all(result.status == "NO_COVER" for result in confirmed):
         return GeneralizedExactCoverResult._from_kernel(
             instance=request.instance,
-            search_node_limit=max(
-                result.search_node_limit for result in request.child_results
-            ),
+            search_node_limit=max(result.search_node_limit for result in confirmed),
             status="NO_COVER",
             source_shard=request.parent_shard,
             searched_node_count=searched,
         )
     frontier = tuple(
-        shard
-        for result in request.child_results
-        for shard in result.unresolved_frontier
+        shard for result in confirmed for shard in result.unresolved_frontier
     )
     return GeneralizedExactCoverResult._from_kernel(
         instance=request.instance,
-        search_node_limit=max(
-            result.search_node_limit for result in request.child_results
-        ),
+        search_node_limit=max(result.search_node_limit for result in confirmed),
         status="UNKNOWN",
         source_shard=request.parent_shard,
         searched_node_count=searched,

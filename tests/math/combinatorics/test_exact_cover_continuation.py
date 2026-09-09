@@ -67,3 +67,30 @@ def test_split_is_disjoint_complete_and_children_combine_negative() -> None:
     )
     assert combined.status == "NO_COVER"
     assert combined.source_shard == root
+
+
+def test_combine_rechecks_caller_authored_negative_results() -> None:
+    instance = GeneralizedExactCoverInstance(
+        primary_items=("p",),
+        secondary_items=(),
+        rows=(ExactCoverRow(row_id="a", items=("p",)),),
+    )
+    root = _root(instance)
+    child = split_generalized_exact_cover_shard(
+        GeneralizedExactCoverShardSplitRequest(instance=instance, shard=root)
+    ).children[0]
+    actual = find_generalized_exact_cover(instance, shard=child)
+    forged = actual.model_copy(
+        update={
+            "status": "NO_COVER",
+            "selected_row_ids": None,
+            "item_multiplicities": None,
+        }
+    )
+    combined = combine_generalized_exact_cover_shard_results(
+        GeneralizedExactCoverShardResultsCombineRequest(
+            instance=instance, parent_shard=root, child_results=(forged,)
+        )
+    )
+    assert combined.status == "FOUND"
+    assert combined.selected_row_ids == ("a",)

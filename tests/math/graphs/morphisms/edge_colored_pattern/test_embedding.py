@@ -161,9 +161,15 @@ def test_search_work_units_exhaust_independently_of_candidate_count(
 
     pattern = colored(("p0", "p1"), (("p0", "p1"),), ("red",))
     host = colored(("h0", "h1", "h2"), (("h1", "h2"),), ("red",))
+
+    def label_characters(graph: SimpleUndirectedGraph) -> int:
+        return sum(map(len, graph.vertices)) + sum(
+            len(left) + len(right) for left, right in graph.edges
+        )
+
     retained = (
-        operations._graph_label_characters(pattern.graph)
-        + operations._graph_label_characters(host.graph)
+        label_characters(pattern.graph)
+        + label_characters(host.graph)
         + sum(map(len, pattern.edge_colors))
         + sum(map(len, host.edge_colors))
         + len(pattern.graph.vertices) * max(map(len, host.graph.vertices))

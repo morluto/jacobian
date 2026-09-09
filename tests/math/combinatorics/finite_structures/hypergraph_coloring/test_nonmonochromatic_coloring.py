@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 import pytest
 
 from jacobian._execution import OperationResourceExhaustedError
@@ -13,7 +15,9 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
 )
 
 
-def _hg(vertices, edges):
+def _hg(
+    vertices: Iterable[str], edges: Iterable[tuple[str, Iterable[str]]]
+) -> FiniteHypergraph:
     return FiniteHypergraph(
         vertices=tuple(vertices),
         edges=tuple((eid, tuple(m)) for eid, m in edges),
@@ -98,6 +102,7 @@ def test_witness_replay() -> None:
     )
     result = decide_nonmonochromatic_coloring(h, 2)
     assert result.outcome == "COLORABLE"
+    assert result.witness is not None
     color_map = dict(result.witness.assignments)
     for _, members in h.edges:
         colors = {color_map[m] for m in members}

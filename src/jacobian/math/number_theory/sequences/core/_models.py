@@ -67,3 +67,48 @@ class IntegerSequenceBooleanResult(StrictModel):
     """Truth value of a sequence predicate."""
 
     holds: bool
+
+
+class AutocorrelationRequest(StrictModel):
+    """A possibly empty finite integer sequence."""
+
+    values: tuple[ExactInteger, ...] = Field(
+        min_length=0, max_length=MAX_SEQUENCE_LENGTH
+    )
+
+
+class AutocorrelationCell(StrictModel):
+    lag: int
+    value: ExactInteger
+
+
+class AutocorrelationResult(StrictModel):
+    source: AutocorrelationRequest
+    cells: tuple[AutocorrelationCell, ...] = Field(
+        min_length=0, max_length=2 * MAX_SEQUENCE_LENGTH - 1
+    )
+
+
+class SequenceLogConcavityRow(StrictModel):
+    index: int = Field(ge=1, le=MAX_SEQUENCE_LENGTH - 2)
+    square: ExactInteger
+    neighbor_product: ExactInteger
+    holds: bool
+
+
+class SequenceOrderShapeResult(StrictModel):
+    source: AutocorrelationRequest
+    first_nondecreasing_violation: int | None = Field(
+        default=None, ge=0, le=MAX_SEQUENCE_LENGTH - 2
+    )
+    first_nonincreasing_violation: int | None = Field(
+        default=None, ge=0, le=MAX_SEQUENCE_LENGTH - 2
+    )
+    weak_unimodal_peak_positions: tuple[int, ...] = Field(
+        min_length=0, max_length=MAX_SEQUENCE_LENGTH
+    )
+    log_concavity_rows: tuple[SequenceLogConcavityRow, ...] = Field(
+        min_length=0, max_length=MAX_SEQUENCE_LENGTH - 2
+    )
+    is_nonnegative: bool
+    has_internal_zero: bool

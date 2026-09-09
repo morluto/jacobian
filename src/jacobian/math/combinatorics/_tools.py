@@ -3,7 +3,12 @@
 from jacobian.catalog.models import MathTools
 from jacobian.math.combinatorics._counting_tools import COUNTING_OPERATIONS
 from jacobian.math.combinatorics._difference_sets import DIFFERENCE_SET_OPERATIONS
-from jacobian.math.combinatorics._exact_cover import GENERALIZED_EXACT_COVER_OPERATION
+from jacobian.math.combinatorics._exact_cover import (
+    GENERALIZED_EXACT_COVER_OPERATION,
+    GENERALIZED_EXACT_COVER_SHARD_COMBINE_OPERATION,
+    GENERALIZED_EXACT_COVER_SHARD_SPLIT_OPERATION,
+    MINIMUM_GENERALIZED_EXACT_COVER_OPERATION,
+)
 from jacobian.math.combinatorics._partition_tools import PARTITION_OPERATIONS
 from jacobian.math.combinatorics._progression_hypergraph import (
     PROGRESSION_HYPERGRAPH_OPERATION,
@@ -19,6 +24,9 @@ TOOLS: MathTools = (
     *RECURRENCE_OPERATIONS,
     *DIFFERENCE_SET_OPERATIONS,
     GENERALIZED_EXACT_COVER_OPERATION,
+    GENERALIZED_EXACT_COVER_SHARD_SPLIT_OPERATION,
+    GENERALIZED_EXACT_COVER_SHARD_COMBINE_OPERATION,
+    MINIMUM_GENERALIZED_EXACT_COVER_OPERATION,
     SIDON_EXTENSION_OPERATION[0],
     PROGRESSION_HYPERGRAPH_OPERATION,
 )

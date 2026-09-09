@@ -16,6 +16,7 @@ def test_exact_public_api_symbols() -> None:
         "TransitionParikhProfile",
         "count_accepted_words",
         "dfa_complement",
+        "dfa_equivalence",
         "dfa_run",
         "dfa_transition_carrier",
         "transition_parikh_profile",

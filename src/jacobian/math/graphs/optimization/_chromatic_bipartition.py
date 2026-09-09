@@ -8,6 +8,7 @@ from typing import Literal, Self
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._execution import OperationExecutionTimeoutError
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     MathTool,
@@ -43,7 +44,7 @@ class ChromaticBipartitionResult(StrictModel):
     graph: SimpleUndirectedGraph
     s: StrictInt = Field(ge=1, le=32)
     t: StrictInt = Field(ge=1, le=32)
-    status: Literal["SPLIT", "NO_SPLIT", "UNKNOWN"]
+    status: Literal["SPLIT", "NO_SPLIT"]
     side_a: tuple[str, ...] | None = None
     side_b: tuple[str, ...] | None = None
     chromatic_a: StrictInt | None = Field(default=None, ge=0, le=32)
@@ -259,7 +260,11 @@ def _unit_threshold_bipartition(
             continue
         chromatic_b = _exact_induced_chromatic(request.graph, side_b, request, started)
         if chromatic_b is None:
-            continue
+            raise OperationExecutionTimeoutError(
+                "chromatic bipartition solver deadline expired",
+                configured_seconds=request.resource_budget.wall_seconds,
+                adjustable_field_path=("resource_budget", "wall_seconds"),
+            )
         return ChromaticBipartitionResult(
             graph=request.graph,
             s=request.s,
@@ -271,12 +276,10 @@ def _unit_threshold_bipartition(
             chromatic_b=chromatic_b,
             checked_partitions=0,
         )
-    return ChromaticBipartitionResult(
-        graph=request.graph,
-        s=request.s,
-        t=request.t,
-        status="UNKNOWN",
-        checked_partitions=0,
+    raise OperationExecutionTimeoutError(
+        "chromatic bipartition solver did not finish",
+        configured_seconds=request.resource_budget.wall_seconds,
+        adjustable_field_path=("resource_budget", "wall_seconds"),
     )
 
 
@@ -352,30 +355,24 @@ def _find_chromatic_bipartition_kernel(
         )
         checked += 1
         if remaining_ms(started, request.resource_budget.wall_seconds) <= 0:
-            return ChromaticBipartitionResult(
-                graph=graph,
-                s=request.s,
-                t=request.t,
-                status="UNKNOWN",
-                checked_partitions=checked,
+            raise OperationExecutionTimeoutError(
+                "chromatic bipartition deadline expired",
+                configured_seconds=request.resource_budget.wall_seconds,
+                adjustable_field_path=("resource_budget", "wall_seconds"),
             )
         chromatic_a = _chromatic_number(_induced_graph(graph, side_a), request, started)
         if chromatic_a is None:
-            return ChromaticBipartitionResult(
-                graph=graph,
-                s=request.s,
-                t=request.t,
-                status="UNKNOWN",
-                checked_partitions=checked,
+            raise OperationExecutionTimeoutError(
+                "chromatic bipartition solver deadline expired",
+                configured_seconds=request.resource_budget.wall_seconds,
+                adjustable_field_path=("resource_budget", "wall_seconds"),
             )
         chromatic_b = _chromatic_number(_induced_graph(graph, side_b), request, started)
         if chromatic_b is None:
-            return ChromaticBipartitionResult(
-                graph=graph,
-                s=request.s,
-                t=request.t,
-                status="UNKNOWN",
-                checked_partitions=checked,
+            raise OperationExecutionTimeoutError(
+                "chromatic bipartition solver deadline expired",
+                configured_seconds=request.resource_budget.wall_seconds,
+                adjustable_field_path=("resource_budget", "wall_seconds"),
             )
         if chromatic_a >= request.s and chromatic_b >= request.t:
             return ChromaticBipartitionResult(
@@ -414,16 +411,6 @@ def _find_chromatic_bipartition_kernel(
     )
 
 
-def _unknown_result(request: ChromaticBipartitionRequest) -> ChromaticBipartitionResult:
-    return ChromaticBipartitionResult(
-        graph=request.graph,
-        s=request.s,
-        t=request.t,
-        status="UNKNOWN",
-        checked_partitions=0,
-    )
-
-
 def find_chromatic_bipartition(
     request: ChromaticBipartitionRequest,
 ) -> ChromaticBipartitionResult:
@@ -457,8 +444,7 @@ CHROMATIC_BIPARTITION_OPERATION = MathTool(
     description=(
         "Search a bounded simple graph for a canonical vertex bipartition whose "
         "two induced subgraphs have chromatic numbers at least s and t. "
-        "Return a witness, an exact NO_SPLIT after complete search, or UNKNOWN "
-        "when the admitted shared exact-search budget is unresolved."
+        "Return a witness or an exact NO_SPLIT after complete search."
     ),
     request_type=ChromaticBipartitionRequest,
     result_type=ChromaticBipartitionResult,

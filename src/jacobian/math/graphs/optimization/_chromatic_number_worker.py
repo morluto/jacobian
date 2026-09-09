@@ -19,6 +19,7 @@ from jacobian.math.graphs.optimization._chromatic_number import (
 from jacobian.math.graphs.optimization._coloring_models import (
     GraphChromaticNumberRequest,
 )
+from jacobian.process import encode_worker_result_frame
 
 
 def main() -> int:
@@ -27,11 +28,9 @@ def main() -> int:
         bind_worker_deadline(payload)
         request = GraphChromaticNumberRequest.model_validate(payload)
         result = _search_chromatic_number_kernel(request)
-        sys.stdout.write(
-            json.dumps(
-                result.model_dump(mode="json", exclude={"vertices"}),
-                separators=(",", ":"),
-                ensure_ascii=False,
+        sys.stdout.buffer.write(
+            encode_worker_result_frame(
+                result.model_dump(mode="json", exclude={"vertices"})
             )
         )
         return 0

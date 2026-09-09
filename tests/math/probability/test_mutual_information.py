@@ -256,6 +256,44 @@ def test_mutual_information_exact_log_identity(base: int, expected: str | None) 
     ) == (None if expected is None else Fraction(expected))
 
 
+def test_sparse_sixteen_by_sixteen_diagonal_law_is_admitted() -> None:
+    from jacobian._exact import CanonicalRational
+    from jacobian.math.probability import mutual_information
+
+    zero = CanonicalRational(num=0, den=1)
+    mass = CanonicalRational(num=1, den=16)
+    table = FiniteJointTable(
+        row_labels=tuple(f"r{index}" for index in range(16)),
+        column_labels=tuple(f"c{index}" for index in range(16)),
+        probabilities=tuple(
+            tuple(mass if row == column else zero for column in range(16))
+            for row in range(16)
+        ),
+        log_base=2,
+    )
+
+    result = mutual_information(table)
+
+    assert len(result.positive_support) == 16
+    assert result.exact_value == CanonicalRational(num=4, den=1)
+
+
+def test_dense_table_over_operation_support_envelope_is_resource_rejected() -> None:
+    from jacobian._exact import CanonicalRational
+    from jacobian.catalog.models import OperationResourceAdmissionError
+    from jacobian.math.probability import mutual_information
+
+    mass = CanonicalRational(num=1, den=256)
+    table = FiniteJointTable(
+        row_labels=tuple(f"r{index}" for index in range(16)),
+        column_labels=tuple(f"c{index}" for index in range(16)),
+        probabilities=tuple(tuple(mass for _ in range(16)) for _ in range(16)),
+    )
+
+    with pytest.raises(OperationResourceAdmissionError, match="positive cells"):
+        mutual_information(table)
+
+
 def test_joint_table_rejects_ambiguous_axes_and_shape() -> None:
     from jacobian._exact import CanonicalRational
 

@@ -11,8 +11,10 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs._networkx import biconnected_components
 from jacobian.math.graphs.cycle_length_profile._models import (
     MAX_VERTICES,
+    CycleIncidenceRow,
     CycleLengthProfileResult,
     CycleLengthRow,
+    FixedLengthCycleEnumerationResult,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -24,6 +26,8 @@ __all__ = [
 
 MAX_SEARCH_WORK = 10_000_000
 MAX_CYCLE_PROFILE_RETAINED_LABEL_CHARACTERS = 100_000_000
+MAX_FIXED_CYCLE_WORK = 10_000_000
+MAX_FIXED_CYCLES = 20_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -395,3 +399,105 @@ def _canonicalize_cycle(cycle: tuple[str, ...]) -> tuple[str, ...]:
     reversed_cycle = (cycle[0], *reversed(cycle[1:]))
     rotations.extend(reversed_cycle[i:] + reversed_cycle[:i] for i in range(n))
     return min(rotations)
+
+
+def enumerate_fixed_length_cycles(
+    graph: SimpleUndirectedGraph,
+    cycle_length: int,
+    *,
+    chordless: bool = False,
+) -> FixedLengthCycleEnumerationResult:
+    """Return all simple cycles of the requested length."""
+
+    vertex_count = len(graph.vertices)
+    if not 3 <= cycle_length <= vertex_count:
+        _reject(
+            "cycle_enumeration.length",
+            "cycle_length must be between 3 and the graph order",
+        )
+    prefix_bound = 0
+    falling = 1
+    for depth in range(1, cycle_length):
+        falling *= vertex_count - depth
+        prefix_bound += vertex_count * falling
+    output_bound = falling * vertex_count // (2 * cycle_length)
+    if prefix_bound * max(1, vertex_count) > MAX_FIXED_CYCLE_WORK:
+        _reject(
+            "cycle_enumeration.path_bound",
+            "fixed-length DFS path bound exceeds the admitted work envelope",
+        )
+    if output_bound > MAX_FIXED_CYCLES:
+        _reject(
+            "cycle_enumeration.output_bound",
+            "fixed-length cycle output bound exceeds the admitted result envelope",
+        )
+    adjacency: dict[str, set[str]] = {vertex: set() for vertex in graph.vertices}
+    for left, right in graph.edges:
+        adjacency[left].add(right)
+        adjacency[right].add(left)
+    edge_set = {frozenset(edge) for edge in graph.edges}
+    cycles: set[tuple[str, ...]] = set()
+
+    def search_from(start: str) -> None:
+        path = [start]
+        used = {start}
+
+        def visit(current: str) -> None:
+            if len(path) == cycle_length:
+                if start not in adjacency[current]:
+                    return
+                cycle = tuple(path)
+                if chordless and any(
+                    frozenset((cycle[left], cycle[right])) in edge_set
+                    for left in range(cycle_length)
+                    for right in range(left + 1, cycle_length)
+                    if (right - left) not in (1, cycle_length - 1)
+                ):
+                    return
+                cycles.add(_canonicalize_cycle(cycle))
+                return
+            for neighbor in sorted(adjacency[current]):
+                if neighbor <= start or neighbor in used:
+                    continue
+                used.add(neighbor)
+                path.append(neighbor)
+                visit(neighbor)
+                path.pop()
+                used.remove(neighbor)
+
+        visit(start)
+
+    for start in graph.vertices:
+        search_from(start)
+    ordered = tuple(sorted(cycles))
+    vertex_rows = tuple(
+        CycleIncidenceRow(
+            source=(vertex,),
+            cycle_indices=tuple(
+                index for index, cycle in enumerate(ordered) if vertex in cycle
+            ),
+        )
+        for vertex in graph.vertices
+    )
+    edge_rows = tuple(
+        CycleIncidenceRow(
+            source=(left, right),
+            cycle_indices=tuple(
+                index
+                for index, cycle in enumerate(ordered)
+                if frozenset((left, right))
+                in {
+                    frozenset((cycle[i], cycle[(i + 1) % cycle_length]))
+                    for i in range(cycle_length)
+                }
+            ),
+        )
+        for left, right in graph.edges
+    )
+    return FixedLengthCycleEnumerationResult(
+        graph=graph,
+        cycle_length=cycle_length,
+        cycles=ordered,
+        vertex_incidence=vertex_rows,
+        edge_incidence=edge_rows,
+    )

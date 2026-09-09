@@ -14,12 +14,11 @@ from jacobian._execution import (
     BackendFailureReason,
     OperationBackendError,
     OperationExecutionTimeoutError,
-    execution_deadline,
+    lease_operation_phases,
     remaining_timeout_ms,
     request_checkpoint,
     require_execution_deadline,
 )
-from jacobian._worker_errors import decode_worker_execution_error
 from jacobian.math.graphs.independence import (
     IndependenceNumberBudget,
     IndependenceNumberResult,
@@ -28,6 +27,8 @@ from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.process import (
     ProcessResourceLimits,
     check_bounded_process_result,
+    decode_checked_worker_output,
+    encode_worker_result_frame,
     run_bounded_process,
     worker_environment,
 )
@@ -55,11 +56,7 @@ def _independence_worker_stdout_limit(graph: SimpleUndirectedGraph) -> int:
     }
     return max(
         8192,
-        len(
-            json.dumps(projection, separators=(",", ":"), ensure_ascii=False).encode(
-                "utf-8"
-            )
-        ),
+        len(encode_worker_result_frame(projection)),
     )
 
 
@@ -173,17 +170,23 @@ def solve_independence_number_values(
 ) -> IndependenceNumberResult:
     """Run Z3 optimization in one bounded owner worker and decode its result."""
 
-    deadline = execution_deadline(resource_budget.wall_seconds)
+    stdout_limit = _independence_worker_stdout_limit(graph)
+    lease = lease_operation_phases(
+        resource_budget.wall_seconds,
+        admitted_response_bytes=stdout_limit,
+        validation_work=len(graph.vertices) + len(graph.edges),
+    )
+    deadline = lease.operation_deadline
     try:
         with TemporaryDirectory(prefix="jacobian-graph-independence-") as directory:
-            remaining_seconds = deadline - time.monotonic()
+            remaining_seconds = lease.backend_deadline - time.monotonic()
             if remaining_seconds <= 0:
                 raise OperationExecutionTimeoutError("operation deadline expired")
             completed = run_bounded_process(
                 [sys.executable, str(_INDEPENDENCE_WORKER)],
                 input_bytes=json.dumps(
                     {
-                        "_deadline": deadline,
+                        "_deadline": lease.backend_deadline,
                         "graph": graph.model_dump(mode="json"),
                         "resource_budget": resource_budget.model_dump(mode="json"),
                     },
@@ -192,7 +195,7 @@ def solve_independence_number_values(
                 ).encode("utf-8"),
                 timeout_seconds=remaining_seconds,
                 environment=worker_environment(locale="C.UTF-8"),
-                stdout_limit=_independence_worker_stdout_limit(graph),
+                stdout_limit=stdout_limit,
                 stderr_limit=_WORKER_ERROR_BYTES,
                 resource_limits=ProcessResourceLimits(
                     cpu_seconds=max(1, math.ceil(resource_budget.wall_seconds)),
@@ -207,21 +210,23 @@ def solve_independence_number_values(
     check_bounded_process_result(completed)
     require_execution_deadline(deadline)
     try:
-        response = json.loads(completed.stdout.decode("utf-8"))
-        require_execution_deadline(deadline)
-        decode_worker_execution_error(response)
-        if not isinstance(response, dict) or "graph" in response:
-            raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE)
-        result = IndependenceNumberResult.model_validate(
-            {
-                **response,
-                "graph": graph.model_dump(mode="json"),
-            }
+
+        def decode(response: Any) -> IndependenceNumberResult:
+            if not isinstance(response, dict) or "graph" in response:
+                raise ValueError
+            return IndependenceNumberResult.model_validate(
+                {**response, "graph": graph.model_dump(mode="json")}
+            )
+
+        result = decode_checked_worker_output(
+            completed.stdout,
+            decode_result=decode,
+            checkpoint=lambda: require_execution_deadline(deadline),
         )
         request_checkpoint("after graph independence response validation")
         require_execution_deadline(deadline)
         return result
-    except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
+    except (TypeError, ValueError) as exc:
         request_checkpoint("during graph independence response validation")
         require_execution_deadline(deadline)
         raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE) from exc

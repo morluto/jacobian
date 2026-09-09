@@ -44,6 +44,59 @@ class ComplementRequest(StrictModel):
     dfa: DFA
 
 
+class EquivalenceRequest(StrictModel):
+    """Two total DFAs over one common ordered alphabet."""
+
+    left: DFA
+    right: DFA
+
+
+class EquivalenceResult(StrictModel):
+    """Exact equivalence decision with a replayable least counterexample."""
+
+    left: DFA
+    right: DFA
+    equivalent: bool
+    distinguishing_word: tuple[int, ...] | None = Field(
+        default=None, max_length=MAX_DFA_STATES * MAX_DFA_STATES
+    )
+    left_state_trace: tuple[int, ...] | None = None
+    right_state_trace: tuple[int, ...] | None = None
+
+    @model_validator(mode="after")
+    def require_counterexample_shape(self) -> Self:
+        fields = (
+            self.distinguishing_word,
+            self.left_state_trace,
+            self.right_state_trace,
+        )
+        if self.equivalent:
+            if any(field is not None for field in fields):
+                raise _validation_error(
+                    "equivalent_counterexample",
+                    "equivalent DFAs cannot carry a distinguishing word or traces",
+                )
+            return self
+        if any(field is None for field in fields):
+            raise _validation_error(
+                "missing_counterexample",
+                "inequivalent DFAs require a distinguishing word and both traces",
+            )
+        assert self.distinguishing_word is not None
+        assert self.left_state_trace is not None
+        assert self.right_state_trace is not None
+        expected = len(self.distinguishing_word) + 1
+        if (
+            len(self.left_state_trace) != expected
+            or len(self.right_state_trace) != expected
+        ):
+            raise _validation_error(
+                "counterexample_trace_length",
+                "each counterexample trace must contain one state per word prefix",
+            )
+        return self
+
+
 class TransitionParikhProfileRequest(StrictModel):
     """Compute a complete transition-use profile for exact automaton paths.
 
@@ -154,6 +207,8 @@ __all__ = [
     "ComplementResult",
     "CountRequest",
     "CountResult",
+    "EquivalenceRequest",
+    "EquivalenceResult",
     "RunRequest",
     "RunResult",
     "TransitionParikhProfileRequest",

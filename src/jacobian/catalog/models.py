@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Annotated, Any, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import Field, StringConstraints, model_validator
 from pydantic_core import PydanticCustomError
@@ -91,6 +91,7 @@ class OperationMatchRequest(StrictModel):
     )
     limit: int = Field(default=5, ge=1, le=20, strict=True)
     cursor: OperationId | None = None
+    search_mode: Literal["precise", "broad"] = "precise"
 
     @model_validator(mode="after")
     def reject_blank_filters(self) -> Self:
@@ -120,6 +121,7 @@ class OperationMatchResult(StrictModel):
 
     need: str
     namespace: str | None = None
+    search_mode: Literal["precise", "broad"] = "precise"
     matches: tuple[OperationDiscoveryMatch, ...]
     total_matches: int = Field(ge=0, strict=True)
     next_cursor: OperationId | None = None

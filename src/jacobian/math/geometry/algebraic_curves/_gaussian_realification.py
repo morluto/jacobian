@@ -13,6 +13,7 @@ from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.number_theory.number_fields import GaussianRational
 from jacobian.math.polynomials.values import (
     MAX_RATIONAL_FUNCTION_EXPONENT,
     MAX_RATIONAL_FUNCTION_TERMS,
@@ -21,7 +22,6 @@ from jacobian.math.polynomials.values import (
     RationalPolynomialTerm,
     SparseRationalPolynomial,
 )
-from jacobian.math.probability import ExactComplexRational
 
 MAX_GAUSSIAN_REALIFICATION_TERMS = 64
 MAX_GAUSSIAN_REALIFICATION_DEGREE = 64
@@ -37,7 +37,7 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 # Q(i) has one shared serialized value across Jacobian.  Keep this alias for
 # existing Python callers while making the field and wire representation compose
 # with the Gaussian-moment operations.
-GaussianComplexCoefficient = ExactComplexRational
+GaussianComplexCoefficient = GaussianRational
 
 
 class UnivariateGaussianPolynomialTerm(StrictModel):

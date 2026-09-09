@@ -290,11 +290,9 @@ def test_unknown_result_round_trips_as_a_non_conclusion() -> None:
             ("r2", ("q", "s")),
         ),
     )
-    unknown = GeneralizedExactCoverResult(
-        instance=no_cover,
-        search_node_limit=1,
-        status="UNKNOWN",
-    )
+    unknown = _solve(no_cover, search_node_limit=1)
+    assert unknown.status == "UNKNOWN"
+    assert unknown.unresolved_frontier
     assert type(unknown).model_validate(unknown.model_dump()) == unknown
 
 

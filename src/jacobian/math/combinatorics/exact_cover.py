@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import unicodedata
+from hashlib import sha256
 from typing import Literal, Self
 
 from pydantic import ConfigDict, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.canonical import canonicalize_json
 from jacobian.math._labels import OpaqueLabel
 
 
@@ -32,6 +34,7 @@ MAX_EXACT_COVER_INCIDENCES = 65_536
 MAX_EXACT_COVER_SEARCH_NODES_PER_PASS = 100_000
 
 ExactCoverSearchStatus = Literal["FOUND", "NO_COVER", "UNKNOWN"]
+MinimumExactCoverStatus = Literal["EXACT", "INFEASIBLE", "BOUNDED"]
 
 
 def _require_canonical_labels(labels: tuple[str, ...], role: str) -> None:
@@ -140,6 +143,24 @@ class GeneralizedExactCoverInstance(StrictModel):
         return self
 
 
+def exact_cover_instance_digest(instance: GeneralizedExactCoverInstance) -> str:
+    payload = instance.model_dump(mode="json")
+    return "sha256:" + sha256(canonicalize_json(payload)).hexdigest()
+
+
+class GeneralizedExactCoverShard(StrictModel):
+    """One semantic fixed-row prefix in the canonical exact-cover traversal."""
+
+    instance_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    operation_id: Literal["combinatorics.generalized_exact_cover.find"] = (
+        "combinatorics.generalized_exact_cover.find"
+    )
+    traversal_version: Literal[1] = 1
+    fixed_row_prefix: tuple[OpaqueLabel, ...] = Field(
+        max_length=MAX_EXACT_COVER_PRIMARY_ITEMS
+    )
+
+
 class GeneralizedExactCoverRequest(StrictModel):
     """Find one generalized exact cover under a deterministic node limit."""
 
@@ -147,16 +168,15 @@ class GeneralizedExactCoverRequest(StrictModel):
         json_schema_extra={
             "description": (
                 "Find one row family covering each primary item exactly once "
-                "and each secondary item at most once. The bitset Algorithm X "
-                "search visits at most `search_node_limit` partial row families "
-                "per pass. It returns NO_COVER only after exhaustive search; a "
-                "node-limit stop returns UNKNOWN. UNKNOWN is a source-bound "
-                "non-conclusion rather than a proof of absence."
+                "and each secondary item at most once. A node-limit stop returns "
+                "UNKNOWN with canonical unresolved frontier shards for deterministic "
+                "continuation; NO_COVER requires exhaustive completion."
             )
         }
     )
 
     instance: GeneralizedExactCoverInstance
+    shard: GeneralizedExactCoverShard | None = None
     search_node_limit: StrictInt = Field(
         default=100_000,
         ge=1,
@@ -254,6 +274,7 @@ class GeneralizedExactCoverResult(StrictModel):
     instance: GeneralizedExactCoverInstance
     search_node_limit: StrictInt = Field(ge=1, le=MAX_EXACT_COVER_SEARCH_NODES_PER_PASS)
     status: ExactCoverSearchStatus
+    source_shard: GeneralizedExactCoverShard | None = None
     selected_row_ids: tuple[OpaqueLabel, ...] | None = Field(
         default=None,
         max_length=MAX_EXACT_COVER_PRIMARY_ITEMS,
@@ -269,13 +290,29 @@ class GeneralizedExactCoverResult(StrictModel):
             "then-secondary order for FOUND; absent otherwise."
         ),
     )
+    searched_node_count: StrictInt = Field(default=1, ge=1, le=2_147_483_647)
+    unresolved_frontier: tuple[GeneralizedExactCoverShard, ...] = Field(
+        default=(), max_length=MAX_EXACT_COVER_INCIDENCES
+    )
 
     @model_validator(mode="after")
     def require_result_shape(self) -> Self:
+        expected_digest = exact_cover_instance_digest(self.instance)
+        if (
+            self.source_shard is not None
+            and self.source_shard.instance_digest != expected_digest
+        ):
+            raise _combinatorics_validation_error(
+                "source shard must bind the retained exact-cover instance digest"
+            )
         if self.status == "FOUND":
             if self.selected_row_ids is None or self.item_multiplicities is None:
                 raise _combinatorics_validation_error(
                     "a FOUND result must carry selected rows and item multiplicities"
+                )
+            if self.unresolved_frontier:
+                raise _combinatorics_validation_error(
+                    "a FOUND result cannot retain an unresolved frontier"
                 )
             return self
 
@@ -284,6 +321,22 @@ class GeneralizedExactCoverResult(StrictModel):
                 "only a FOUND result may carry a selected-row family"
             )
 
+        if self.status == "UNKNOWN":
+            if not self.unresolved_frontier:
+                raise _combinatorics_validation_error(
+                    "an UNKNOWN result must retain its unresolved frontier"
+                )
+            if any(
+                shard.instance_digest != expected_digest
+                for shard in self.unresolved_frontier
+            ):
+                raise _combinatorics_validation_error(
+                    "every unresolved shard must bind the retained instance digest"
+                )
+        elif self.unresolved_frontier:
+            raise _combinatorics_validation_error(
+                "an exhaustive result cannot retain unresolved shards"
+            )
         return self
 
     @classmethod
@@ -295,6 +348,9 @@ class GeneralizedExactCoverResult(StrictModel):
         status: ExactCoverSearchStatus,
         selected_row_ids: tuple[OpaqueLabel, ...] | None = None,
         item_multiplicities: tuple[ExactCoverItemMultiplicity, ...] | None = None,
+        searched_node_count: int,
+        unresolved_frontier: tuple[GeneralizedExactCoverShard, ...] = (),
+        source_shard: GeneralizedExactCoverShard | None = None,
     ) -> Self:
         """Construct an admitted, kernel-established result without replay."""
 
@@ -302,14 +358,107 @@ class GeneralizedExactCoverResult(StrictModel):
             instance=instance,
             search_node_limit=search_node_limit,
             status=status,
+            source_shard=source_shard,
             selected_row_ids=selected_row_ids,
             item_multiplicities=item_multiplicities,
+            searched_node_count=searched_node_count,
+            unresolved_frontier=unresolved_frontier,
         )
+
+
+class MinimumGeneralizedExactCoverRequest(StrictModel):
+    """Minimize the number of selected rows in a generalized exact cover."""
+
+    instance: GeneralizedExactCoverInstance
+    search_node_limit: StrictInt = Field(
+        default=100_000, ge=1, le=MAX_EXACT_COVER_SEARCH_NODES_PER_PASS
+    )
+
+
+class MinimumGeneralizedExactCoverResult(StrictModel):
+    """Exact minimum, exhaustive infeasibility, or witness-backed bounds."""
+
+    instance: GeneralizedExactCoverInstance
+    status: MinimumExactCoverStatus
+    selected_row_ids: tuple[OpaqueLabel, ...] | None = Field(
+        default=None, max_length=MAX_EXACT_COVER_PRIMARY_ITEMS
+    )
+    item_multiplicities: tuple[ExactCoverItemMultiplicity, ...] | None = Field(
+        default=None, max_length=MAX_EXACT_COVER_ITEMS
+    )
+    lower_bound: StrictInt = Field(ge=0, le=MAX_EXACT_COVER_PRIMARY_ITEMS)
+    upper_bound: StrictInt | None = Field(
+        default=None, ge=0, le=MAX_EXACT_COVER_PRIMARY_ITEMS
+    )
+    searched_node_count: StrictInt = Field(
+        ge=1, le=MAX_EXACT_COVER_SEARCH_NODES_PER_PASS
+    )
+
+    @model_validator(mode="after")
+    def bind_minimum_result(self) -> Self:
+        if self.status == "INFEASIBLE":
+            if (
+                self.selected_row_ids is not None
+                or self.item_multiplicities is not None
+                or self.upper_bound is not None
+            ):
+                raise _combinatorics_validation_error(
+                    "an infeasible minimum result cannot carry an upper bound witness"
+                )
+            return self
+        if (
+            self.selected_row_ids is None
+            or self.item_multiplicities is None
+            or self.upper_bound is None
+        ):
+            raise _combinatorics_validation_error(
+                "an exact or bounded minimum result must carry an upper bound witness"
+            )
+        expected = _expected_coverage(self.instance, self.selected_row_ids)
+        if expected != self.item_multiplicities:
+            raise _combinatorics_validation_error(
+                "minimum exact-cover multiplicities must reconstruct the witness"
+            )
+        if self.upper_bound != len(self.selected_row_ids):
+            raise _combinatorics_validation_error(
+                "minimum exact-cover upper bound must equal its witness cardinality"
+            )
+        if not self.lower_bound <= self.upper_bound:
+            raise _combinatorics_validation_error(
+                "minimum exact-cover bounds must be ordered"
+            )
+        if self.status == "EXACT" and self.lower_bound != self.upper_bound:
+            raise _combinatorics_validation_error(
+                "an exact minimum must have coincident objective bounds"
+            )
+        return self
+
+
+class GeneralizedExactCoverShardSplitRequest(StrictModel):
+    instance: GeneralizedExactCoverInstance
+    shard: GeneralizedExactCoverShard
+
+
+class GeneralizedExactCoverShardSplitResult(StrictModel):
+    source: GeneralizedExactCoverShardSplitRequest
+    children: tuple[GeneralizedExactCoverShard, ...] = Field(
+        max_length=MAX_EXACT_COVER_ROWS
+    )
+    exhausted: bool
+
+
+class GeneralizedExactCoverShardResultsCombineRequest(StrictModel):
+    instance: GeneralizedExactCoverInstance
+    parent_shard: GeneralizedExactCoverShard
+    child_results: tuple[GeneralizedExactCoverResult, ...] = Field(
+        min_length=1, max_length=MAX_EXACT_COVER_ROWS
+    )
 
 
 def _solve_generalized_exact_cover(
     instance: GeneralizedExactCoverInstance,
     search_node_limit: int,
+    shard: GeneralizedExactCoverShard | None = None,
 ) -> GeneralizedExactCoverResult:
     """Run the kernel after its owner has admitted canonical inputs."""
 
@@ -317,12 +466,42 @@ def _solve_generalized_exact_cover(
         search_generalized_exact_cover,
     )
 
-    search = search_generalized_exact_cover(instance, search_node_limit)
+    digest = exact_cover_instance_digest(instance)
+    if shard is not None and shard.instance_digest != digest:
+        raise _combinatorics_validation_error(
+            "exact-cover shard digest must match the canonical instance"
+        )
+    rows_by_id = {row.row_id: index for index, row in enumerate(instance.rows)}
+    try:
+        fixed_rows = (
+            tuple(rows_by_id[row_id] for row_id in shard.fixed_row_prefix)
+            if shard is not None
+            else ()
+        )
+    except KeyError as error:
+        raise _combinatorics_validation_error(
+            "exact-cover shard fixed rows must belong to the canonical instance"
+        ) from error
+    try:
+        search = search_generalized_exact_cover(instance, search_node_limit, fixed_rows)
+    except ValueError as error:
+        raise _combinatorics_validation_error(str(error)) from error
     if search.status != "FOUND":
         return GeneralizedExactCoverResult._from_kernel(
             instance=instance,
             search_node_limit=search_node_limit,
             status=search.status,
+            source_shard=shard,
+            searched_node_count=search.visited_nodes,
+            unresolved_frontier=tuple(
+                GeneralizedExactCoverShard(
+                    instance_digest=digest,
+                    fixed_row_prefix=tuple(
+                        instance.rows[index].row_id for index in prefix
+                    ),
+                )
+                for prefix in search.frontier_prefixes
+            ),
         )
 
     selected_row_ids = tuple(
@@ -332,8 +511,10 @@ def _solve_generalized_exact_cover(
         instance=instance,
         search_node_limit=search_node_limit,
         status="FOUND",
+        source_shard=shard,
         selected_row_ids=selected_row_ids,
         item_multiplicities=_expected_coverage(instance, selected_row_ids),
+        searched_node_count=search.visited_nodes,
     )
 
 
@@ -361,6 +542,7 @@ def find_generalized_exact_cover(
     instance: GeneralizedExactCoverInstance,
     *,
     search_node_limit: int = MAX_EXACT_COVER_SEARCH_NODES_PER_PASS,
+    shard: GeneralizedExactCoverShard | None = None,
 ) -> GeneralizedExactCoverResult:
     """Return one cover, exact nonexistence, or UNKNOWN for canonical values.
 
@@ -393,7 +575,217 @@ def find_generalized_exact_cover(
             code="combinatorics.exact_cover_work",
             message="item-scan word work exceeds the exact-cover envelope",
         )
-    return _solve_generalized_exact_cover(instance, search_node_limit)
+    return _solve_generalized_exact_cover(instance, search_node_limit, shard)
+
+
+def split_generalized_exact_cover_shard(
+    request: GeneralizedExactCoverShardSplitRequest,
+) -> GeneralizedExactCoverShardSplitResult:
+    from jacobian.math.combinatorics._exact_cover_kernel import (
+        split_exact_cover_prefix,
+    )
+
+    digest = exact_cover_instance_digest(request.instance)
+    if request.shard.instance_digest != digest:
+        raise _combinatorics_validation_error(
+            "exact-cover shard digest must match the canonical instance"
+        )
+    rows_by_id = {row.row_id: index for index, row in enumerate(request.instance.rows)}
+    try:
+        prefix = tuple(rows_by_id[row_id] for row_id in request.shard.fixed_row_prefix)
+        children = split_exact_cover_prefix(request.instance, prefix)
+    except (KeyError, ValueError) as error:
+        raise _combinatorics_validation_error(str(error)) from error
+    shards = tuple(
+        GeneralizedExactCoverShard(
+            instance_digest=digest,
+            fixed_row_prefix=tuple(
+                request.instance.rows[index].row_id for index in child
+            ),
+        )
+        for child in children
+    )
+    return GeneralizedExactCoverShardSplitResult(
+        source=request, children=shards, exhausted=not shards
+    )
+
+
+def combine_generalized_exact_cover_shard_results(
+    request: GeneralizedExactCoverShardResultsCombineRequest,
+) -> GeneralizedExactCoverResult:
+    split = split_generalized_exact_cover_shard(
+        GeneralizedExactCoverShardSplitRequest(
+            instance=request.instance, shard=request.parent_shard
+        )
+    )
+    expected = {shard.model_dump_json() for shard in split.children}
+    actual = {
+        result.source_shard.model_dump_json()
+        for result in request.child_results
+        if result.source_shard is not None
+    }
+    if actual != expected or len(actual) != len(request.child_results):
+        raise _combinatorics_validation_error(
+            "combined results must cover each disjoint child shard exactly once"
+        )
+    searched = sum(result.searched_node_count for result in request.child_results)
+    found = next(
+        (result for result in request.child_results if result.status == "FOUND"),
+        None,
+    )
+    if found is not None:
+        return GeneralizedExactCoverResult._from_kernel(
+            instance=request.instance,
+            search_node_limit=max(
+                result.search_node_limit for result in request.child_results
+            ),
+            status="FOUND",
+            source_shard=request.parent_shard,
+            selected_row_ids=found.selected_row_ids,
+            item_multiplicities=found.item_multiplicities,
+            searched_node_count=searched,
+        )
+    if all(result.status == "NO_COVER" for result in request.child_results):
+        return GeneralizedExactCoverResult._from_kernel(
+            instance=request.instance,
+            search_node_limit=max(
+                result.search_node_limit for result in request.child_results
+            ),
+            status="NO_COVER",
+            source_shard=request.parent_shard,
+            searched_node_count=searched,
+        )
+    frontier = tuple(
+        shard
+        for result in request.child_results
+        for shard in result.unresolved_frontier
+    )
+    return GeneralizedExactCoverResult._from_kernel(
+        instance=request.instance,
+        search_node_limit=max(
+            result.search_node_limit for result in request.child_results
+        ),
+        status="UNKNOWN",
+        source_shard=request.parent_shard,
+        searched_node_count=searched,
+        unresolved_frontier=frontier,
+    )
+
+
+def minimum_generalized_exact_cover(  # noqa: C901
+    instance: GeneralizedExactCoverInstance,
+    *,
+    search_node_limit: int = MAX_EXACT_COVER_SEARCH_NODES_PER_PASS,
+) -> MinimumGeneralizedExactCoverResult:
+    """Minimize selected-row cardinality with honest exhaustive or bounded output."""
+
+    from jacobian.catalog.models import OperationResourceAdmissionError
+
+    if not isinstance(instance, GeneralizedExactCoverInstance):
+        raise TypeError("instance must be a GeneralizedExactCoverInstance")
+    if type(search_node_limit) is not int or not (
+        1 <= search_node_limit <= MAX_EXACT_COVER_SEARCH_NODES_PER_PASS
+    ):
+        raise _combinatorics_validation_error(
+            "search_node_limit must be within the exact-cover node bound"
+        )
+    items = (*instance.primary_items, *instance.secondary_items)
+    item_index = {item: index for index, item in enumerate(items)}
+    primary_count = len(instance.primary_items)
+    row_count = len(instance.rows)
+    item_rows = [0] * len(items)
+    row_primary_masks: list[int] = []
+    row_item_indices: list[tuple[int, ...]] = []
+    maximum_primary_coverage = 0
+    for row_index, row in enumerate(instance.rows):
+        indices = tuple(item_index[item] for item in row.items)
+        row_item_indices.append(indices)
+        primary_mask = 0
+        for index in indices:
+            item_rows[index] |= 1 << row_index
+            if index < primary_count:
+                primary_mask |= 1 << index
+        row_primary_masks.append(primary_mask)
+        maximum_primary_coverage = max(
+            maximum_primary_coverage, primary_mask.bit_count()
+        )
+    row_conflicts = []
+    for indices in row_item_indices:
+        conflicts = 0
+        for index in indices:
+            conflicts |= item_rows[index]
+        row_conflicts.append(conflicts)
+    all_primary = (1 << primary_count) - 1
+    all_rows = (1 << row_count) - 1
+    root_lower_bound = (
+        (primary_count + maximum_primary_coverage - 1) // maximum_primary_coverage
+        if primary_count and maximum_primary_coverage
+        else 0
+    )
+    stack: list[tuple[int, int, tuple[int, ...]]] = [(all_primary, all_rows, ())]
+    incumbent: tuple[int, ...] | None = None
+    visited = 0
+    while stack and visited < search_node_limit:
+        uncovered, available, selected = stack.pop()
+        visited += 1
+        if uncovered == 0:
+            if incumbent is None or len(selected) < len(incumbent):
+                incumbent = selected
+            continue
+        if incumbent is not None and len(selected) >= len(incumbent) - 1:
+            continue
+        chosen_rows = 0
+        fewest = row_count + 1
+        remaining = uncovered
+        while remaining:
+            bit = remaining & -remaining
+            item = bit.bit_length() - 1
+            candidates = item_rows[item] & available
+            if candidates.bit_count() < fewest:
+                fewest = candidates.bit_count()
+                chosen_rows = candidates
+            remaining ^= bit
+        candidate_indices: list[int] = []
+        while chosen_rows:
+            bit = chosen_rows & -chosen_rows
+            candidate_indices.append(bit.bit_length() - 1)
+            chosen_rows ^= bit
+        for row_index in reversed(candidate_indices):
+            stack.append(
+                (
+                    uncovered & ~row_primary_masks[row_index],
+                    available & ~row_conflicts[row_index],
+                    (*selected, row_index),
+                )
+            )
+    exhausted = not stack
+    if incumbent is None:
+        if not exhausted:
+            raise OperationResourceAdmissionError(
+                location=("search_node_limit",),
+                code="combinatorics.minimum_exact_cover.no_incumbent",
+                message=(
+                    "node limit was reached before finding a feasible upper-bound "
+                    "witness; increase search_node_limit"
+                ),
+            )
+        return MinimumGeneralizedExactCoverResult(
+            instance=instance,
+            status="INFEASIBLE",
+            lower_bound=root_lower_bound,
+            searched_node_count=visited,
+        )
+    selected_ids = tuple(sorted(instance.rows[index].row_id for index in incumbent))
+    upper_bound = len(selected_ids)
+    return MinimumGeneralizedExactCoverResult(
+        instance=instance,
+        status="EXACT" if exhausted else "BOUNDED",
+        selected_row_ids=selected_ids,
+        item_multiplicities=_expected_coverage(instance, selected_ids),
+        lower_bound=upper_bound if exhausted else min(root_lower_bound, upper_bound),
+        upper_bound=upper_bound,
+        searched_node_count=visited,
+    )
 
 
 __all__ = [
@@ -402,6 +794,17 @@ __all__ = [
     "ExactCoverSearchStatus",
     "GeneralizedExactCoverInstance",
     "GeneralizedExactCoverResult",
+    "GeneralizedExactCoverShard",
+    "GeneralizedExactCoverShardResultsCombineRequest",
+    "GeneralizedExactCoverShardSplitRequest",
+    "GeneralizedExactCoverShardSplitResult",
+    "MinimumExactCoverStatus",
+    "MinimumGeneralizedExactCoverRequest",
+    "MinimumGeneralizedExactCoverResult",
+    "combine_generalized_exact_cover_shard_results",
+    "exact_cover_instance_digest",
     "find_generalized_exact_cover",
+    "minimum_generalized_exact_cover",
+    "split_generalized_exact_cover_shard",
     "verify_generalized_exact_cover",
 ]

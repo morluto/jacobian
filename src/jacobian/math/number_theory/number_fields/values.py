@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from fractions import Fraction
 from math import gcd
 from typing import Annotated, Any, Literal, Self
 
 from pydantic import Field, StrictInt, ValidateAs, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational, DecimalIntegerEncoding
+from jacobian._exact import (
+    CanonicalRational,
+    DecimalIntegerEncoding,
+    require_bounded_rational,
+)
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.number_theory.algebraic_numbers.complex import (
@@ -29,6 +34,7 @@ MAX_NUMBER_FIELD_EMBEDDING_DEGREE = 8
 MAX_SIMPLE_NUMBER_FIELD_COEFFICIENT_DIGITS = 256
 MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS = 256
 MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS = 4_096
+MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS = 4_096
 MAX_NUMBER_FIELD_DISCRIMINANT_DIGITS = (
     2 * MAX_SIMPLE_NUMBER_FIELD_DEGREE - 1
 ) * MAX_SIMPLE_NUMBER_FIELD_COEFFICIENT_DIGITS + 4 * MAX_SIMPLE_NUMBER_FIELD_DEGREE
@@ -62,6 +68,53 @@ def _raw_rational_component_bound(
                     "rational_component_bound",
                     f"{label} components may contain at most {max_digits} digits",
                 )
+
+
+class GaussianRational(StrictModel):
+    """One exact element of Q(i) in the distinguished embedding i^2 = -1."""
+
+    real: CanonicalRational
+    imaginary: CanonicalRational
+
+    @model_validator(mode="after")
+    def require_bounded_components(self) -> Self:
+        for label, value in (("real", self.real), ("imaginary", self.imaginary)):
+            require_bounded_rational(
+                value,
+                max_digits=MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS,
+                label=f"Gaussian-rational {label} component",
+            )
+        return self
+
+    def as_fractions(self) -> tuple[Fraction, Fraction]:
+        return self.real.as_fraction(), self.imaginary.as_fraction()
+
+    def __mul__(self, other: object) -> GaussianRational:
+        if not isinstance(other, GaussianRational):
+            return NotImplemented
+        left_real, left_imaginary = self.as_fractions()
+        right_real, right_imaginary = other.as_fractions()
+        return type(self).from_fractions(
+            left_real * right_real - left_imaginary * right_imaginary,
+            left_real * right_imaginary + left_imaginary * right_real,
+        )
+
+    @classmethod
+    def from_fractions(cls, real: Fraction, imaginary: Fraction) -> Self:
+        return cls(
+            real=CanonicalRational(num=real.numerator, den=real.denominator),
+            imaginary=CanonicalRational(
+                num=imaginary.numerator, den=imaginary.denominator
+            ),
+        )
+
+    @classmethod
+    def zero(cls) -> Self:
+        return cls.from_fractions(Fraction(), Fraction())
+
+    @classmethod
+    def one(cls) -> Self:
+        return cls.from_fractions(Fraction(1), Fraction())
 
 
 class SimpleNumberFieldPresentation(StrictModel):
@@ -727,12 +780,14 @@ class SimpleNumberFieldRealEmbeddingOrder(StrictModel):
 
 
 __all__ = [
+    "MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS",
     "MAX_NUMBER_FIELD_EMBEDDING_DEGREE",
     "MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS",
     "MAX_SIMPLE_NUMBER_FIELD_COEFFICIENT_DIGITS",
     "MAX_SIMPLE_NUMBER_FIELD_DEGREE",
     "MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS",
     "ComplexNumberFieldEmbeddingRecord",
+    "GaussianRational",
     "NumberFieldConjugatePair",
     "NumberFieldEmbedding",
     "NumberFieldEmbeddingProfile",

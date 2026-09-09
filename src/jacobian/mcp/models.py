@@ -52,6 +52,10 @@ OperationMatchLimit = Annotated[
     StrictInt,
     Field(ge=1, le=20, description="Maximum compact matches to return."),
 ]
+OperationSearchMode = Annotated[
+    Literal["precise", "broad"],
+    Field(description="Precise applicability filtering or broad lexical recall."),
+]
 OperationCursor = Annotated[
     str | None,
     Field(
@@ -86,6 +90,7 @@ class OperationFindResult(StrictModel):
     kind: Literal["matches"]
     need: str
     namespace: str | None = None
+    search_mode: Literal["precise", "broad"] = "precise"
     matches: tuple[OperationDiscoveryMatch, ...]
     total_matches: StrictInt
     next_cursor: str | None = None
@@ -172,5 +177,6 @@ __all__ = [
     "OperationNamespace",
     "OperationNeed",
     "OperationResourceAdmissionData",
+    "OperationSearchMode",
     "OperationValidationIssue",
 ]

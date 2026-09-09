@@ -284,6 +284,17 @@ def test_dispatch_deadline_covers_parsing_execution_and_serialization(
         )
 
 
+def test_owner_deadline_does_not_replace_the_request_envelope() -> None:
+    from jacobian._execution import request_execution
+
+    with request_execution(time.monotonic()):
+        envelope = current_request_execution()
+        assert envelope is not None
+        bind_request_deadline(envelope.started_at + 2)
+        assert current_request_execution() is envelope
+        assert envelope.deadline == envelope.started_at + 2
+
+
 def test_shared_execution_rejects_cancellation_before_parsing() -> None:
     class Cancelled:
         @staticmethod

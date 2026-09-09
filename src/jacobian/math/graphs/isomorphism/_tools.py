@@ -21,8 +21,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         description="Decide whether two simple graphs (directed or undirected) are "
         "isomorphic using a bounded NetworkX VF2 worker. Returns ISOMORPHIC "
         "with an explicit vertex mapping when an isomorphism exists, "
-        "NOT_ISOMORPHIC when the exact search completes without one, or "
-        "UNKNOWN when the bounded worker cannot complete. Both graphs must "
+        "or NOT_ISOMORPHIC when the exact search completes without one. Both graphs must "
         "share the same vertex count and directedness.",
         request_type=GraphIsomorphismRequest,
         result_type=GraphIsomorphismResult,

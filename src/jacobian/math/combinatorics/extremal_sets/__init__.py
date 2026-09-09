@@ -2,7 +2,12 @@
 
 from jacobian.math.combinatorics.extremal_sets.operations import (
     construct_binary_union_relation,
+    construct_sunflower_hypergraph,
 )
 from jacobian.math.combinatorics.extremal_sets.values import IndexedFiniteSetFamily
 
-__all__ = ["IndexedFiniteSetFamily", "construct_binary_union_relation"]
+__all__ = [
+    "IndexedFiniteSetFamily",
+    "construct_binary_union_relation",
+    "construct_sunflower_hypergraph",
+]

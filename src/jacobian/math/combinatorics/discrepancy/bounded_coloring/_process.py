@@ -8,8 +8,12 @@ from time import monotonic
 from typing import cast
 
 from jacobian._execution import (
+    BackendFailureReason,
+    ExecutionResource,
+    OperationBackendError,
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
+    OperationResourceExhaustedError,
     request_checkpoint,
 )
 from jacobian.math.combinatorics.discrepancy.bounded_coloring._z3 import (
@@ -26,16 +30,12 @@ from jacobian.process import (
 _WORKER = Path(__file__).with_name("_worker.py")
 
 
-def _failed() -> BackendReply:
-    return {"status": "EXECUTION_FAILED", "coloring": None}
-
-
 def decode_reply(data: bytes, variable_count: int) -> BackendReply:
     """Check the bounded worker codec without trusting a model assignment."""
     try:
         value = json.loads(data)
         if not isinstance(value, dict) or set(value) != {"status", "coloring"}:
-            return _failed()
+            raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE)
         status = value["status"]
         if status not in (
             "SATISFIABLE",
@@ -43,19 +43,19 @@ def decode_reply(data: bytes, variable_count: int) -> BackendReply:
             "BUDGET_EXCEEDED",
             "EXECUTION_FAILED",
         ):
-            return _failed()
+            raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE)
         coloring = value["coloring"]
         if status == "SATISFIABLE":
             if not isinstance(coloring, list) or len(coloring) != variable_count:
-                return _failed()
+                raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
             if any(type(item) is not int or item not in (-1, 1) for item in coloring):
-                return _failed()
+                raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
             return {"status": "SATISFIABLE", "coloring": tuple(coloring)}
         if coloring is not None:
-            return _failed()
+            raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
         return {"status": cast(BackendStatus, status), "coloring": None}
-    except (UnicodeDecodeError, TypeError, ValueError):
-        return _failed()
+    except (UnicodeDecodeError, TypeError, ValueError) as exc:
+        raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE) from exc
 
 
 def run_solver(
@@ -69,11 +69,9 @@ def run_solver(
     request_checkpoint("before discrepancy worker startup")
     remaining = deadline - monotonic()
     if remaining <= 0:
-        if caller_limited:
-            raise OperationExecutionTimeoutError(
-                "discrepancy decision deadline expired before the solver worker"
-            )
-        return {"status": "BUDGET_EXCEEDED", "coloring": None}
+        raise OperationExecutionTimeoutError(
+            "discrepancy decision deadline expired before the solver worker"
+        )
     payload = json.dumps(
         {
             "variable_count": variable_count,
@@ -100,17 +98,15 @@ def run_solver(
                 file_size_bytes=1024 * 1024,
             ),
         )
-    except OSError:
-        return _failed()
+    except OSError as exc:
+        raise OperationBackendError(BackendFailureReason.STARTUP) from exc
     if completed.cancelled:
         raise OperationExecutionCancelledError("discrepancy decision cancelled")
     if completed.timed_out:
-        if caller_limited:
-            raise OperationExecutionTimeoutError(
-                "discrepancy decision deadline expired during the solver worker"
-            )
-        return {"status": "BUDGET_EXCEEDED", "coloring": None}
-    if completed.returncode == 3 and caller_limited:
+        raise OperationExecutionTimeoutError(
+            "discrepancy decision deadline expired during the solver worker"
+        )
+    if completed.returncode == 3:
         raise OperationExecutionTimeoutError(
             "discrepancy decision deadline expired during the Z3 check"
         )
@@ -119,5 +115,12 @@ def run_solver(
         or completed.stdout_exceeded
         or completed.stderr_exceeded
     ):
-        return _failed()
-    return decode_reply(completed.stdout, variable_count)
+        if completed.stdout_exceeded or completed.stderr_exceeded:
+            raise OperationResourceExhaustedError(ExecutionResource.OUTPUT)
+        raise OperationBackendError(BackendFailureReason.ABNORMAL_EXIT)
+    reply = decode_reply(completed.stdout, variable_count)
+    if reply["status"] == "BUDGET_EXCEEDED":
+        raise OperationResourceExhaustedError(ExecutionResource.WORK)
+    if reply["status"] == "EXECUTION_FAILED":
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    return reply

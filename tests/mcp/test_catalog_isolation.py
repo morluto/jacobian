@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import logging
@@ -33,9 +34,11 @@ def test_math_find_does_not_acquire_an_execution_runtime() -> None:
     )
     context = SimpleNamespace(request_context=SimpleNamespace(lifespan_context=state))
 
-    result = math_find(
-        query="compute an exact greatest common divisor",
-        ctx=cast(Any, context),
+    result = asyncio.run(
+        math_find(
+            query="compute an exact greatest common divisor",
+            ctx=cast(Any, context),
+        )
     )
 
     assert result.root.kind == "matches"
@@ -50,9 +53,11 @@ def test_math_find_inspection_does_not_log_a_query_or_acquire_a_runtime(
     context = SimpleNamespace(request_context=SimpleNamespace(lifespan_context=state))
 
     with caplog.at_level(logging.INFO, logger="jacobian.mcp.tools"):
-        result = math_find(
-            operation_id="integer.compute.unknown",
-            ctx=cast(Any, context),
+        result = asyncio.run(
+            math_find(
+                operation_id="integer.compute.unknown",
+                ctx=cast(Any, context),
+            )
         )
 
     assert result.root.kind == "error"
@@ -71,9 +76,11 @@ def test_math_find_logs_a_hashed_match_query(
     need = "find an exact gcd\nwithout logging a run payload"
 
     with caplog.at_level(logging.INFO, logger="jacobian.mcp.tools"):
-        math_find(
-            query=need,
-            ctx=cast(Any, context),
+        asyncio.run(
+            math_find(
+                query=need,
+                ctx=cast(Any, context),
+            )
         )
 
     records = [

@@ -1,6 +1,5 @@
 """Supported native exact finite-probability APIs."""
 
-from jacobian.math.probability._gaussian import ExactComplexRational
 from jacobian.math.probability._graph_connection_probability import (
     GraphConnectionProbabilityResult,
     GraphReliabilityEdgeProbability,
@@ -42,7 +41,6 @@ __all__ = [
     "AsymmetricLocalLemmaInequality",
     "AsymmetricLocalLemmaWitness",
     "AsymmetricLocalLemmaWitnessCheckResult",
-    "ExactComplexRational",
     "FiniteJointTable",
     "GraphConnectionProbabilityResult",
     "GraphReliabilityEdgeProbability",

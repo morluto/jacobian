@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import unicodedata
+from itertools import permutations, product
+from math import factorial
 
 from pydantic_core import PydanticCustomError
 
@@ -11,11 +13,13 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.graphs.symmetry._edges import canonical_edge
 from jacobian.math.graphs.symmetry._models import (
     _UNCOLORED,
     MAX_GRAPH_SYMMETRY_EDGES,
     MAX_GRAPH_SYMMETRY_GENERATORS,
     MAX_GRAPH_SYMMETRY_VERTICES,
+    FullGraphAutomorphismResult,
     GraphAutomorphismGenerator,
     GraphEdgeOrbit,
     GraphSymmetryOrbitResult,
@@ -24,6 +28,8 @@ from jacobian.math.graphs.symmetry._models import (
 )
 from jacobian.math.graphs.symmetry._orbits import declared_orbit_partitions
 from jacobian.math.graphs.values import ColoredUndirectedGraph
+
+MAX_FULL_AUTOMORPHISM_PERMUTATIONS = 100_000
 
 
 def _admit_graph_symmetry_orbit(
@@ -190,4 +196,79 @@ def verify_graph_symmetry_orbits(claim: GraphSymmetryOrbitResult) -> bool:
     )
 
 
-__all__ = ["graph_symmetry_orbits", "verify_graph_symmetry_orbits"]
+def full_graph_automorphism_group(
+    graph: ColoredUndirectedGraph,
+) -> FullGraphAutomorphismResult:
+    """Exhaust the admitted color classes and reduce the full group to generators."""
+
+    from sympy.combinatorics import Permutation, PermutationGroup
+
+    vertices = graph.graph.vertices
+    colors = graph.vertex_colors or (_UNCOLORED,) * len(vertices)
+    classes = tuple(
+        tuple(index for index, value in enumerate(colors) if value == color)
+        for color in sorted(set(colors))
+    )
+    permutation_bound = 1
+    for color_class in classes:
+        permutation_bound *= factorial(len(color_class))
+    if permutation_bound > MAX_FULL_AUTOMORPHISM_PERMUTATIONS:
+        raise OperationResourceAdmissionError(
+            location=("graph", "vertex_colors"),
+            code="graph.automorphism.permutation_bound",
+            message="color-class permutation search exceeds its admitted bound",
+        )
+    edge_colors = dict(
+        zip(
+            graph.graph.edges,
+            graph.edge_colors or (_UNCOLORED,) * len(graph.graph.edges),
+            strict=True,
+        )
+    )
+    generators: list[Permutation] = []
+    generator_rows: list[GraphAutomorphismGenerator] = []
+    automorphism_count = 0
+    group: PermutationGroup | None = None
+    class_permutations = [tuple(permutations(color_class)) for color_class in classes]
+    for images_by_class in product(*class_permutations):
+        images = list(range(len(vertices)))
+        for color_class, class_images in zip(classes, images_by_class, strict=True):
+            for source, image in zip(color_class, class_images, strict=True):
+                images[source] = image
+        mapping = dict(
+            zip(vertices, (vertices[index] for index in images), strict=True)
+        )
+        mapped_edges = {
+            canonical_edge(mapping[left], mapping[right]): color
+            for (left, right), color in edge_colors.items()
+        }
+        if mapped_edges != edge_colors:
+            continue
+        automorphism_count += 1
+        candidate = Permutation(images, size=len(vertices))
+        if candidate.is_Identity or (group is not None and group.contains(candidate)):
+            continue
+        generators.append(candidate)
+        group = PermutationGroup(generators)
+        generator_rows.append(
+            GraphAutomorphismGenerator(
+                generator_id=f"g{len(generator_rows)}",
+                mapping=tuple((vertex, mapping[vertex]) for vertex in vertices),
+            )
+        )
+    generated_order = int(group.order()) if group is not None else 1
+    if generated_order != automorphism_count:
+        raise RuntimeError("reduced generators do not generate every automorphism")
+    return FullGraphAutomorphismResult(
+        graph=graph,
+        generators=tuple(generator_rows),
+        automorphism_count=automorphism_count,
+        generated_group_order=generated_order,
+    )
+
+
+__all__ = [
+    "full_graph_automorphism_group",
+    "graph_symmetry_orbits",
+    "verify_graph_symmetry_orbits",
+]

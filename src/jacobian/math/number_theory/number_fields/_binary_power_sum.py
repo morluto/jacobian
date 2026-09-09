@@ -23,6 +23,7 @@ from jacobian._execution import (
 )
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.number_theory.number_fields._embeddings_process import (
+    EMBEDDINGS_WORKER_WALL_SECONDS,
     embeddings_worker_cancelled,
 )
 from jacobian.math.number_theory.number_fields._real_embedding_order import (
@@ -925,20 +926,15 @@ def _recognize_profile_base(
 ) -> tuple[RecognizedRealEmbeddingContext, _BinaryPowerSumDeadlineTrace]:
     """Recognize the selected root without widening the caller's envelope."""
 
+    execution = current_request_execution()
+    started = execution.started_at if execution is not None else time.monotonic()
+    recognition_deadline = min(
+        profile_deadline, started + EMBEDDINGS_WORKER_WALL_SECONDS
+    )
     try:
         context = recognize_real_embedding_binding(base)
     except NumberFieldRealEmbeddingOrderError as exc:
         raise BinaryPowerSumAdmissionError(exc.reason, str(exc)) from exc
-    recognition_execution = current_request_execution()
-    recognition_deadline = (
-        recognition_execution.deadline if recognition_execution is not None else None
-    )
-    if recognition_deadline is not None and recognition_deadline > profile_deadline:
-        raise RuntimeError("embedding recognition extended the profile deadline")
-
-    # The embedding producer applies its stricter one-worker subdeadline. The
-    # remaining admitted profile work resumes under this operation's envelope.
-    bind_request_deadline(profile_deadline)
     resumed_execution = current_request_execution()
     resumed_deadline = (
         resumed_execution.deadline if resumed_execution is not None else None

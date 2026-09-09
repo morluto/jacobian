@@ -755,10 +755,10 @@ class TestSupportValueInvariants:
                     }
                 )
 
-    def test_empty_variable_axis_rejected(self) -> None:
-        """Every canonical polynomial ring names at least one variable."""
-        with raises_pydantic_code("too_short"):
-            _polynomial((), ())
+    def test_constant_polynomial_retains_empty_variable_axis(self) -> None:
+        polynomial = _polynomial((), ())
+        assert polynomial.variables == ()
+        assert polynomial.polynomial.terms == ()
 
     def test_duplicate_newton_points_rejected(self) -> None:
         """Retained vertices, nonextreme points, and support are sets of

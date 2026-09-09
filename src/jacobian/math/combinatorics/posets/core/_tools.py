@@ -4,6 +4,9 @@ from typing import Any
 
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.combinatorics.posets.core._closure_tools import CLOSURE_OPERATIONS
+from jacobian.math.combinatorics.posets.core._maximal_chain_tools import (
+    MAXIMAL_CHAIN_ENUMERATION_OPERATION,
+)
 from jacobian.math.combinatorics.posets.core._models import (
     AntichainProfileRequest,
     AntichainProfileResult,
@@ -123,6 +126,7 @@ _MATERIALIZED_DIAMOND: dict[str, Any] = {
 
 
 FINITE_POSET_OPERATIONS: MathTools = (
+    MAXIMAL_CHAIN_ENUMERATION_OPERATION,
     MathTool(
         operation_id="poset.finite.compute",
         title="Compute a canonical finite poset",

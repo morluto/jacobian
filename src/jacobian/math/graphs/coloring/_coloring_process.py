@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Literal
 
 from jacobian._execution import (
-    OperationExecutionCancelledError,
+    BackendFailureReason,
+    OperationBackendError,
     OperationExecutionTimeoutError,
+    lease_operation_phases,
+    require_execution_deadline,
 )
 from jacobian.math.graphs.coloring._models import (
     _incident_edge_index_pairs_for_canonical_graph,
@@ -21,6 +25,8 @@ from jacobian.math.graphs.values import (
 )
 from jacobian.process import (
     ProcessResourceLimits,
+    check_bounded_process_result,
+    decode_checked_worker_output,
     run_bounded_process,
     worker_environment,
 )
@@ -34,6 +40,7 @@ _WORKER_FILE_SIZE_BYTES = 1_024 * 1_024
 ColoringWorkerOutcome = Literal[
     "sat", "unsat", "optimal", "budget_exceeded", "execution_failed"
 ]
+CheckedColoringWorkerOutcome = Literal["sat", "unsat", "optimal"]
 
 
 def run_k_colorability_solver_kernel(
@@ -169,15 +176,27 @@ def run_coloring_worker(
     colors: int,
     solver_conflicts: int,
     fixed_colors: tuple[tuple[int, int], ...] = (),
-) -> tuple[ColoringWorkerOutcome, tuple[int, ...] | None]:
+) -> tuple[CheckedColoringWorkerOutcome, tuple[int, ...] | None]:
     """Run one complete coloring solver transaction in an isolated worker."""
 
+    lease = lease_operation_phases(
+        _COLORING_WORKER_WALL_SECONDS,
+        admitted_response_bytes=_WORKER_OUTPUT_BYTES,
+        validation_work=len(graph.edges),
+    )
     try:
         with TemporaryDirectory(prefix="jacobian-graph-coloring-") as directory:
+            remaining_seconds = lease.backend_deadline - time.monotonic()
+            if remaining_seconds <= 0:
+                raise OperationExecutionTimeoutError(
+                    "coloring backend lease expired",
+                    configured_seconds=_COLORING_WORKER_WALL_SECONDS,
+                )
             completed = run_bounded_process(
                 [sys.executable, str(_COLORING_WORKER)],
                 input_bytes=json.dumps(
                     {
+                        "_deadline": lease.backend_deadline,
                         "kind": kind,
                         "graph": graph.model_dump(mode="json"),
                         "colors": colors,
@@ -187,7 +206,7 @@ def run_coloring_worker(
                     separators=(",", ":"),
                     ensure_ascii=False,
                 ).encode("utf-8"),
-                timeout_seconds=_COLORING_WORKER_WALL_SECONDS,
+                timeout_seconds=remaining_seconds,
                 environment=worker_environment(locale="C.UTF-8"),
                 stdout_limit=_WORKER_OUTPUT_BYTES,
                 stderr_limit=_WORKER_ERROR_BYTES,
@@ -199,27 +218,20 @@ def run_coloring_worker(
                 cwd=directory,
             )
     except OSError as exc:
-        raise RuntimeError("bounded coloring worker could not be started") from exc
-    if completed.cancelled:
-        raise OperationExecutionCancelledError("coloring solver execution cancelled")
-    if completed.timed_out:
-        raise OperationExecutionTimeoutError("coloring solver execution timed out")
-    if (
-        completed.stdout_exceeded
-        or completed.stderr_exceeded
-        or completed.returncode != 0
-    ):
-        raise RuntimeError("bounded coloring worker did not establish an outcome")
+        raise OperationBackendError(BackendFailureReason.STARTUP) from exc
+    check_bounded_process_result(completed)
     try:
-        payload = json.loads(completed.stdout.decode("utf-8"))
+        payload = decode_checked_worker_output(
+            completed.stdout,
+            decode_result=lambda value: value,
+            checkpoint=lambda: require_execution_deadline(lease.operation_deadline),
+        )
         outcome = payload["outcome"]
         coloring = payload["coloring"]
         if outcome not in {
             "sat",
             "unsat",
             "optimal",
-            "budget_exceeded",
-            "execution_failed",
         }:
             raise ValueError("worker returned an invalid solver outcome")
         if coloring is None:
@@ -236,7 +248,7 @@ def run_coloring_worker(
         TypeError,
         ValueError,
     ) as exc:
-        raise RuntimeError("bounded coloring worker returned malformed output") from exc
+        raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE) from exc
 
 
 __all__ = [

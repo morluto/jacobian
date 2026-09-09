@@ -3,6 +3,9 @@
 from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.math.combinatorics.codes.linear._canonicalization_tools import (
+    LINEAR_CODE_CANONICALIZATION_OPERATION,
+)
 from jacobian.math.combinatorics.codes.linear._models import (
     CodeEqualRequest,
     CodeEqualResult,
@@ -96,6 +99,7 @@ def compute_shorten(request: ShortenRequest) -> ShortenResult:
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    LINEAR_CODE_CANONICALIZATION_OPERATION,
     MathTool(
         operation_id="code.linear.received_word_profile.compute",
         title="Compute a linear code's received-word distance profile",

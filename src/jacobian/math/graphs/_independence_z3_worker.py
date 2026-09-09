@@ -18,6 +18,7 @@ from jacobian.math.graphs._independence_z3 import (
 )
 from jacobian.math.graphs.independence import IndependenceNumberBudget
 from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.process import encode_worker_result_frame
 
 
 def main() -> int:
@@ -31,11 +32,9 @@ def main() -> int:
             payload["resource_budget"]
         )
         result = _solve_independence_number_values_kernel(graph, resource_budget)
-        sys.stdout.write(
-            json.dumps(
+        sys.stdout.buffer.write(
+            encode_worker_result_frame(
                 result.model_dump(mode="json", exclude={"graph"}),
-                separators=(",", ":"),
-                ensure_ascii=False,
             )
         )
         return 0

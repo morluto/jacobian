@@ -38,8 +38,27 @@ class BinaryUnionRelationResult(StrictModel):
     hypergraph: FiniteHypergraph
 
 
+class SunflowerHypergraphRequest(StrictModel):
+    source: IndexedFiniteSetFamily
+
+
+class SunflowerTriple(StrictModel):
+    edge_id: str
+    source_indices: tuple[int, int, int]
+    core: tuple[int, ...]
+
+
+class SunflowerHypergraphResult(StrictModel):
+    source: IndexedFiniteSetFamily
+    sunflowers: tuple[SunflowerTriple, ...] = Field(max_length=MAX_EDGES)
+    hypergraph: FiniteHypergraph
+
+
 __all__ = [
     "BinaryUnionRelationRequest",
     "BinaryUnionRelationResult",
+    "SunflowerHypergraphRequest",
+    "SunflowerHypergraphResult",
+    "SunflowerTriple",
     "UnionRelationRow",
 ]

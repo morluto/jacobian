@@ -9,7 +9,11 @@ from typing import Any
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian.canonical import format_canonical_integer
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
+from jacobian.math.number_theory.number_fields import GaussianRational
 from jacobian.math.probability._distribution import (
     MAX_FINITE_CONVOLUTION_OUTPUT_ATOMS,
     MAX_FINITE_CONVOLUTION_PAIRS,
@@ -37,7 +41,6 @@ from jacobian.math.probability._gaussian import (
     MAX_GAUSSIAN_EXPANSION_PATHS,
     MAX_GAUSSIAN_MOMENT_ORDER,
     MAX_GAUSSIAN_RESULT_RATIONAL_DIGITS,
-    ExactComplexRational,
     GaussianMomentContraction,
     GaussianPolynomial,
     GaussianPolynomialMomentResult,
@@ -65,11 +68,22 @@ class _ConvolutionPowerPlan:
     multiplication_shapes: tuple[tuple[int, int], ...]
 
 
+@dataclass(frozen=True)
+class _RawMomentPlan:
+    powered_values: tuple[Fraction, ...]
+    contributions: tuple[Fraction, ...]
+    total: Fraction
+
+
 def _wire(value: Any) -> CanonicalRational:
     return CanonicalRational(
         num=int(value.p),
         den=int(value.q),
     )
+
+
+def _fraction_wire(value: Fraction) -> CanonicalRational:
+    return CanonicalRational(num=value.numerator, den=value.denominator)
 
 
 def _fmpq(value: CanonicalRational) -> Any:
@@ -79,8 +93,8 @@ def _fmpq(value: CanonicalRational) -> Any:
     return fmpq(fraction.numerator, fraction.denominator)
 
 
-def _complex_wire(value: tuple[Any, Any]) -> ExactComplexRational:
-    return ExactComplexRational(real=_wire(value[0]), imaginary=_wire(value[1]))
+def _complex_wire(value: tuple[Any, Any]) -> GaussianRational:
+    return GaussianRational(real=_wire(value[0]), imaginary=_wire(value[1]))
 
 
 def _support_values(distribution: FiniteRationalDistribution) -> tuple[Fraction, ...]:
@@ -325,6 +339,81 @@ def _lcm_within_result_digits(
     return reduced_left * right
 
 
+def _plan_raw_moment(
+    atoms: tuple[FiniteDistributionAtom, ...], order: int
+) -> _RawMomentPlan:
+    """Admit exact growth once and retain the bounded arithmetic ledger."""
+
+    limit = _MAX_RESULT_RATIONAL_VALUE
+    powered_values: list[Fraction] = []
+    contributions: list[Fraction] = []
+    aggregate_denominator = 1
+    for index, atom in enumerate(atoms):
+        value = atom.value.as_fraction()
+        probability = atom.probability.as_fraction()
+        powered_numerator = _power_at_most(abs(value.numerator), order, limit)
+        powered_denominator = _power_at_most(value.denominator, order, limit)
+        if powered_numerator is None or powered_denominator is None:
+            raise OperationResourceAdmissionError(
+                location=("atoms", index, "value"),
+                code="probability.raw_moment.power_height_bound",
+                message=(
+                    "raw-moment powered values exceed the "
+                    f"{MAX_RESULT_RATIONAL_DIGITS}-digit result bound"
+                ),
+            )
+        powered = Fraction(
+            -powered_numerator
+            if value.numerator < 0 and order % 2
+            else powered_numerator,
+            powered_denominator,
+        )
+        contribution = probability * powered
+        try:
+            _require_bounded_fraction(
+                contribution,
+                max_digits=MAX_RESULT_RATIONAL_DIGITS,
+                label="raw-moment contribution",
+            )
+        except ValueError as exc:
+            raise OperationResourceAdmissionError(
+                location=("atoms", index),
+                code="probability.raw_moment.contribution_height_bound",
+                message=str(exc),
+            ) from exc
+        aggregate_denominator = _lcm_within_result_digits(
+            aggregate_denominator,
+            contribution.denominator,
+            location=("atoms",),
+            code="probability.raw_moment.aggregate_lcm_bound",
+            message=(
+                "raw-moment aggregate denominator exceeds the "
+                f"{MAX_RESULT_RATIONAL_DIGITS}-digit result bound"
+            ),
+        )
+        powered_values.append(powered)
+        contributions.append(contribution)
+
+    total = sum(contributions, Fraction())
+    try:
+        _require_bounded_fraction(
+            total,
+            max_digits=MAX_RESULT_RATIONAL_DIGITS,
+            label="raw-moment result",
+        )
+    except ValueError as exc:
+        raise OperationResourceAdmissionError(
+            location=("atoms", "order"),
+            code="probability.raw_moment.result_height_bound",
+            message=str(exc),
+        ) from exc
+    return _RawMomentPlan(
+        powered_values=tuple(powered_values),
+        contributions=tuple(contributions),
+        total=total,
+    )
+
+
 def _power_multiplication_shapes(
     base_degree: int, exponent: int
 ) -> tuple[tuple[int, int], ...]:
@@ -554,8 +643,6 @@ def _distribution(values: dict[Fraction, Any]) -> FiniteRationalDistribution:
 def raw_moment(
     atoms: tuple[FiniteDistributionAtom, ...], order: int
 ) -> FiniteRawMomentResult:
-    from flint import fmpq
-
     if type(order) is not int or not 0 <= order <= 128:
         raise ValueError("raw moment order must be between 0 and 128")
     _require_atom_envelope(
@@ -567,26 +654,23 @@ def raw_moment(
             f"finite raw moments accept at most {MAX_FINITE_INPUT_ATOMS} source atoms"
         ),
     )
-    _admit_distribution(atoms, require_canonical=False, enforce_input_bounds=True)
+    _admit_distribution(atoms, require_canonical=False)
+    plan = _plan_raw_moment(atoms, order)
     contributions: list[FiniteRawMomentContribution] = []
-    total = fmpq(0)
-    for atom in atoms:
-        value = _fmpq(atom.value)
-        probability = _fmpq(atom.probability)
-        powered = value**order
-        contribution = probability * powered
-        total += contribution
+    for atom, powered, contribution in zip(
+        atoms, plan.powered_values, plan.contributions, strict=True
+    ):
         contributions.append(
             FiniteRawMomentContribution(
                 value=atom.value,
                 probability=atom.probability,
-                powered_value=_wire(powered),
-                contribution=_wire(contribution),
+                powered_value=_fraction_wire(powered),
+                contribution=_fraction_wire(contribution),
             )
         )
     return FiniteRawMomentResult._from_kernel(
         order=order,
-        moment=_wire(total),
+        moment=_fraction_wire(plan.total),
         contributions=tuple(contributions),
     )
 

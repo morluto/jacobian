@@ -70,6 +70,7 @@ def _encoder(
 
 def test_catalog_contains_only_audited_operations() -> None:
     expected = {
+        "code.linear.prime_field.coordinate_canonicalize.compute",
         "code.linear.received_word_profile.compute",
         "code.linear.codeword.check",
         "code.linear.dual.compute",

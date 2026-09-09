@@ -18,13 +18,12 @@ from jacobian._execution import (
     BackendFailureReason,
     OperationBackendError,
     OperationExecutionTimeoutError,
-    execution_deadline,
+    lease_operation_phases,
     remaining_timeout_ms,
     request_checkpoint,
     require_execution_deadline,
 )
 from jacobian._models import StrictModel
-from jacobian._worker_errors import decode_worker_execution_error
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -59,6 +58,7 @@ from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.process import (
     ProcessResourceLimits,
     check_bounded_process_result,
+    decode_checked_worker_output,
     run_bounded_process,
     worker_environment,
 )
@@ -426,16 +426,24 @@ def _clique_execute(
             code="graph.clique_number.max_order_budget",
             message="graph order exceeds the declared max_order budget",
         )
-    deadline = execution_deadline(request.resource_budget.wall_seconds)
+    lease = lease_operation_phases(
+        request.resource_budget.wall_seconds,
+        admitted_response_bytes=_WORKER_OUTPUT_BYTES,
+        validation_work=len(request.graph.vertices) + len(request.graph.edges),
+    )
+    deadline = lease.operation_deadline
     try:
         with TemporaryDirectory(prefix="jacobian-graph-clique-") as directory:
-            remaining_seconds = deadline - time.monotonic()
+            remaining_seconds = lease.backend_deadline - time.monotonic()
             if remaining_seconds <= 0:
                 raise OperationExecutionTimeoutError("operation deadline expired")
             completed = run_bounded_process(
                 [sys.executable, str(_INVARIANTS_WORKER)],
                 input_bytes=json.dumps(
-                    {"_deadline": deadline, **request.model_dump(mode="json")},
+                    {
+                        "_deadline": lease.backend_deadline,
+                        **request.model_dump(mode="json"),
+                    },
                     separators=(",", ":"),
                 ).encode("utf-8"),
                 timeout_seconds=remaining_seconds,
@@ -455,10 +463,11 @@ def _clique_execute(
     check_bounded_process_result(completed)
     require_execution_deadline(deadline)
     try:
-        response = json.loads(completed.stdout.decode("utf-8"))
-        require_execution_deadline(deadline)
-        decode_worker_execution_error(response)
-        result = GraphCliqueNumberResult.model_validate(response)
+        result = decode_checked_worker_output(
+            completed.stdout,
+            decode_result=GraphCliqueNumberResult.model_validate,
+            checkpoint=lambda: require_execution_deadline(deadline),
+        )
         source_vertices = set(request.graph.vertices)
         source_edges = {tuple(sorted(edge)) for edge in request.graph.edges}
         if (
@@ -472,7 +481,7 @@ def _clique_execute(
         ):
             require_execution_deadline(deadline)
             raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
-    except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
+    except (TypeError, ValueError) as exc:
         request_checkpoint("during clique response validation")
         require_execution_deadline(deadline)
         raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE) from exc

@@ -13,11 +13,10 @@ from typing import Any, cast
 from jacobian._execution import (
     BackendFailureReason,
     OperationBackendError,
-    execution_deadline,
+    lease_operation_phases,
     remaining_timeout_ms,
     require_execution_deadline,
 )
-from jacobian._worker_errors import decode_worker_execution_error
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
     HypergraphIndependenceBudget,
@@ -30,6 +29,7 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
 from jacobian.process import (
     ProcessResourceLimits,
     check_bounded_process_result,
+    decode_checked_worker_output,
     run_bounded_process,
     worker_environment,
 )
@@ -322,14 +322,13 @@ def _run_independence_worker(payload: dict[str, object], *, deadline: float) -> 
         raise OperationBackendError(BackendFailureReason.STARTUP) from exc
     check_bounded_process_result(completed)
     require_execution_deadline(deadline)
-    try:
-        response = json.loads(completed.stdout.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        require_execution_deadline(deadline)
-        raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE) from exc
+    response = decode_checked_worker_output(
+        completed.stdout,
+        decode_result=lambda value: cast(object, value),
+        checkpoint=lambda: require_execution_deadline(deadline),
+    )
     require_execution_deadline(deadline)
-    decode_worker_execution_error(response)
-    return cast(object, response)
+    return response
 
 
 def solve_independence_number(
@@ -338,16 +337,20 @@ def solve_independence_number(
 ) -> HypergraphIndependenceResult:
     """Run every Z3 phase under one process and resource envelope."""
 
-    deadline = execution_deadline(resource_budget.wall_seconds)
+    lease = lease_operation_phases(
+        resource_budget.wall_seconds,
+        admitted_response_bytes=_WORKER_OUTPUT_BYTES,
+        validation_work=len(source.vertices) + len(source.edges),
+    )
     response = _run_independence_worker(
         {
             "kind": "solve",
             "hypergraph": source.model_dump(mode="json"),
             "resource_budget": resource_budget.model_dump(mode="json"),
         },
-        deadline=deadline,
+        deadline=lease.backend_deadline,
     )
-    require_execution_deadline(deadline)
+    require_execution_deadline(lease.operation_deadline)
     if (
         not isinstance(response, dict)
         or "hypergraph" in response
@@ -363,9 +366,9 @@ def solve_independence_number(
             }
         )
     except (TypeError, ValueError) as exc:
-        require_execution_deadline(deadline)
+        require_execution_deadline(lease.operation_deadline)
         raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
-    require_execution_deadline(deadline)
+    require_execution_deadline(lease.operation_deadline)
     return result
 
 

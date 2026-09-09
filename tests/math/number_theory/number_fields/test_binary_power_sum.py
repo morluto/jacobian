@@ -606,6 +606,7 @@ def test_embedding_recognition_subdeadline_preserves_the_caller_envelope(
         bind_request_deadline(caller_deadline)
         execution = _execute_binary_power_sum_gap_profile(base, 0)
         active = current_request_execution()
+        active_deadline = active.deadline if active is not None else None
 
     assert execution.deadlines.profile_deadline == caller_deadline
     assert execution.deadlines.embedding_recognition_deadline == (
@@ -613,7 +614,7 @@ def test_embedding_recognition_subdeadline_preserves_the_caller_envelope(
     )
     assert execution.deadlines.resumed_profile_deadline == caller_deadline
     assert active is not None
-    assert active.deadline == caller_deadline
+    assert active_deadline == caller_deadline
 
 
 def test_catalog_operation_runs_example_and_projects_domain_errors() -> None:

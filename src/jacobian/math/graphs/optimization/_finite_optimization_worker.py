@@ -15,6 +15,7 @@ from jacobian._execution import (
 from jacobian._worker_errors import bind_worker_deadline, worker_execution_errors
 from jacobian.math.graphs.optimization._finite_optimization import _run_worker_kernel
 from jacobian.math.graphs.optimization._models import GraphOptimizationRequest
+from jacobian.process import encode_worker_result_frame
 
 
 def main() -> int:
@@ -28,8 +29,8 @@ def main() -> int:
             raise ValueError("worker payload has invalid operation id")
         request = GraphOptimizationRequest.model_validate(payload["request"])
         result = _run_worker_kernel(operation_id, request)
-        sys.stdout.write(
-            json.dumps(result.model_dump(mode="json"), separators=(",", ":"))
+        sys.stdout.buffer.write(
+            encode_worker_result_frame(result.model_dump(mode="json"))
         )
         return 0
     except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:

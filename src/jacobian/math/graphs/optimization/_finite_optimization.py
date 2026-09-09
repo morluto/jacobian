@@ -15,12 +15,11 @@ from jacobian._execution import (
     BackendFailureReason,
     OperationBackendError,
     OperationExecutionTimeoutError,
-    execution_deadline,
+    lease_operation_phases,
     request_checkpoint,
     require_execution_deadline,
 )
 from jacobian._models import StrictModel
-from jacobian._worker_errors import decode_worker_execution_error
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -45,6 +44,7 @@ from jacobian.math.graphs.optimization._models import (
 from jacobian.process import (
     ProcessResourceLimits,
     check_bounded_process_result,
+    decode_checked_worker_output,
     run_bounded_process,
     worker_environment,
 )
@@ -141,18 +141,23 @@ def _execute[ResultT: StrictModel](
             code="graph.optimization.max_order_budget",
             message="graph order exceeds the declared max_order budget",
         )
-    deadline = execution_deadline(request.resource_budget.wall_seconds)
+    lease = lease_operation_phases(
+        request.resource_budget.wall_seconds,
+        admitted_response_bytes=_WORKER_OUTPUT_BYTES,
+        validation_work=len(request.graph.vertices) + len(request.graph.edges),
+    )
+    deadline = lease.operation_deadline
     graph = cast(Any, build_simple_graph(request.graph))
     try:
         with TemporaryDirectory(prefix="jacobian-graph-optimization-") as directory:
-            remaining_seconds = deadline - time.monotonic()
+            remaining_seconds = lease.backend_deadline - time.monotonic()
             if remaining_seconds <= 0:
                 raise OperationExecutionTimeoutError("operation deadline expired")
             completed = run_bounded_process(
                 [sys.executable, str(_OPTIMIZATION_WORKER)],
                 input_bytes=json.dumps(
                     {
-                        "_deadline": deadline,
+                        "_deadline": lease.backend_deadline,
                         "operation_id": operation_id,
                         "request": request.model_dump(mode="json"),
                     },
@@ -175,11 +180,12 @@ def _execute[ResultT: StrictModel](
     check_bounded_process_result(completed)
     require_execution_deadline(deadline)
     try:
-        response = json.loads(completed.stdout.decode("utf-8"))
-        require_execution_deadline(deadline)
-        decode_worker_execution_error(response)
-        result = result_type.model_validate(response)
-    except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = decode_checked_worker_output(
+            completed.stdout,
+            decode_result=result_type.model_validate,
+            checkpoint=lambda: require_execution_deadline(deadline),
+        )
+    except (TypeError, ValueError) as exc:
         request_checkpoint("during graph optimization response validation")
         require_execution_deadline(deadline)
         raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE) from exc

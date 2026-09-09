@@ -8,7 +8,11 @@ from jacobian.math.graphs.isomorphism import _vf2_process as isomorphism_operati
 from jacobian.math.graphs.isomorphism._models import GraphIsomorphismRequest
 from jacobian.math.graphs.isomorphism._vf2_process import decide_graph_isomorphism
 from jacobian.math.graphs.isomorphism._vf2_worker import _first_isomorphism_mapping
-from jacobian.process import BoundedProcessResult, ProcessResourceLimits
+from jacobian.process import (
+    BoundedProcessResult,
+    ProcessResourceLimits,
+    encode_worker_result_frame,
+)
 
 
 def test_vf2_worker_obtains_a_positive_witness_in_one_search_traversal() -> None:
@@ -70,7 +74,9 @@ def test_vf2_worker_has_private_cwd_and_os_resource_limits(
         recorded.update(kwargs)
         return BoundedProcessResult(
             returncode=0,
-            stdout=b'{"ok":true,"mapping":[[0,0],[1,1]]}',
+            stdout=encode_worker_result_frame(
+                {"ok": True, "mapping": [[0, 0], [1, 1]]}
+            ),
             stderr=b"",
             stdout_exceeded=False,
             stderr_exceeded=False,

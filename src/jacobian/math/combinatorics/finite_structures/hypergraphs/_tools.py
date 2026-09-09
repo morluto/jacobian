@@ -29,6 +29,12 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     WeightedPackingRequest,
     WeightedPackingResult,
 )
+from jacobian.math.combinatorics.finite_structures.hypergraphs._transversal_tools import (
+    MINIMAL_TRANSVERSAL_ENUMERATION_OPERATION,
+)
+from jacobian.math.combinatorics.finite_structures.hypergraphs._weighted_independence_tools import (
+    WEIGHTED_INDEPENDENT_SELECTION_OPERATION,
+)
 from jacobian.math.combinatorics.finite_structures.hypergraphs.operations import (
     clique_expansion,
     dual,
@@ -123,6 +129,8 @@ _HYPERGRAPH = {
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    MINIMAL_TRANSVERSAL_ENUMERATION_OPERATION,
+    WEIGHTED_INDEPENDENT_SELECTION_OPERATION,
     MathTool(
         operation_id="hypergraph.independence_number.compute",
         title="Compute the independence number of a finite hypergraph",

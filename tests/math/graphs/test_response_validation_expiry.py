@@ -17,7 +17,7 @@ from jacobian.math.graphs.optimization._coloring_models import (
 )
 from jacobian.math.graphs.optimization._models import GraphOptimizationRequest
 from jacobian.math.graphs.values import SimpleUndirectedGraph
-from jacobian.process import BoundedProcessResult
+from jacobian.process import BoundedProcessResult, encode_worker_result_frame
 
 
 @pytest.mark.parametrize("kind", ["chromatic", "clique"])
@@ -42,7 +42,7 @@ def test_control_expiry_after_real_response_validation(
         execute = module._clique_execute
     response = BoundedProcessResult(
         returncode=0,
-        stdout=expected.model_dump_json().encode(),
+        stdout=encode_worker_result_frame(expected.model_dump(mode="json")),
         stderr=b"",
         stdout_exceeded=False,
         stderr_exceeded=False,
@@ -195,7 +195,7 @@ def test_expiry_during_finite_graph_witness_check_precedes_invalid_witness(
         "run_bounded_process",
         lambda *a, **_kwargs: BoundedProcessResult(
             returncode=0,
-            stdout=expected.model_dump_json().encode(),
+            stdout=encode_worker_result_frame(expected.model_dump(mode="json")),
             stderr=b"",
             stdout_exceeded=False,
             stderr_exceeded=False,

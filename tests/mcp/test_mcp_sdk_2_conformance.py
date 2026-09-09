@@ -27,7 +27,7 @@ def _content_text(block: ContentBlock) -> str:
 
 def test_mcp_sdk_is_exactly_pinned_and_v2_bindings_are_used() -> None:
     assert importlib.metadata.version("mcp") == "2.1.0"
-    assert not inspect.iscoroutinefunction(math_run)
+    assert inspect.iscoroutinefunction(math_run)
 
 
 def test_math_run_resolves_the_selected_operation_once(
@@ -59,10 +59,12 @@ def test_math_run_resolves_the_selected_operation_once(
         lambda _ctx: SimpleNamespace(is_set=lambda: False),
     )
 
-    result = math_run(
-        "integer.compute.extended_gcd",
-        {"left": "84", "right": "30"},
-        ctx=cast(Any, SimpleNamespace()),
+    result = asyncio.run(
+        math_run(
+            "integer.compute.extended_gcd",
+            {"left": "84", "right": "30"},
+            ctx=cast(Any, SimpleNamespace()),
+        )
     )
 
     assert result.output["gcd"] == "6"
@@ -266,6 +268,7 @@ def test_mcp_v2_uses_sdk_typed_tools_lifespan_and_structured_resources() -> None
                 "namespace",
                 "limit",
                 "cursor",
+                "search_mode",
             }
             assert not find.input_schema.get("required")
             query_schema = find.input_schema["properties"]["query"]

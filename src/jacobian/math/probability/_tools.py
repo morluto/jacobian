@@ -6,6 +6,9 @@ from typing import Any
 
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.probability import operations as native
+from jacobian.math.probability._compound_poisson_tools import (
+    COMPOUND_POISSON_CUMULANT_OPERATION,
+)
 from jacobian.math.probability._directed_bond_reliability import (
     DIRECTED_BOND_CONNECTION_PROBABILITY_OPERATION,
 )
@@ -107,6 +110,7 @@ _FAIR_DIE_3 = {
 }
 
 FINITE_PROBABILITY_OPERATIONS = (
+    COMPOUND_POISSON_CUMULANT_OPERATION,
     MathTool(
         operation_id="probability.finite_distribution.event_probability.compute",
         title="Exact finite-event probability",

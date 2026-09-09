@@ -13,7 +13,9 @@ from jacobian._models import StrictModel, canonicalize_json_containers
 
 MAX_FINITE_JOINT_TABLE_ROWS = 16
 MAX_FINITE_JOINT_TABLE_COLUMNS = 16
-MAX_FINITE_JOINT_TABLE_CELLS = 64
+MAX_FINITE_JOINT_TABLE_CELLS = (
+    MAX_FINITE_JOINT_TABLE_ROWS * MAX_FINITE_JOINT_TABLE_COLUMNS
+)
 MAX_INPUT_RATIONAL_DIGITS = 256
 MAX_MUTUAL_INFORMATION_SCALE_BITS = 1_024
 MAX_MUTUAL_INFORMATION_POWER_COST_BITS = 32_768
@@ -100,11 +102,8 @@ def _bound_raw_probability_matrix(value: Any) -> Any:
         return value
     if len(raw_table) > MAX_FINITE_JOINT_TABLE_ROWS:
         raise _validation_error("joint table exceeds the bounded row count")
-    cell_count = 0
     for row in raw_table:
-        cell_count += _bound_raw_probability_row(row)
-        if cell_count > MAX_FINITE_JOINT_TABLE_CELLS:
-            raise _validation_error("joint table exceeds the bounded cell count")
+        _bound_raw_probability_row(row)
     prepared = dict(value)
     for field_name in ("row_labels", "column_labels"):
         raw_labels = prepared.get(field_name)
@@ -190,8 +189,6 @@ def _require_native_probability_shape(
         raise _validation_error("joint-table row count must match row labels")
     if any(len(row) != len(column_labels) for row in probabilities):
         raise _validation_error("joint-table rows must match column labels")
-    if len(row_labels) * len(column_labels) > MAX_FINITE_JOINT_TABLE_CELLS:
-        raise _validation_error("joint table exceeds the bounded cell count")
 
 
 class FiniteJointTable(StrictModel):

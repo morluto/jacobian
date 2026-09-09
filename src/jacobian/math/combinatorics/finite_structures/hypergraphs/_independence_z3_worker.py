@@ -20,6 +20,7 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
     HypergraphIndependenceBudget,
 )
+from jacobian.process import encode_worker_result_frame
 
 
 def main() -> int:
@@ -35,8 +36,8 @@ def main() -> int:
                 payload["resource_budget"]
             )
             result = _solve_independence_number_kernel(source, resource_budget)
-            sys.stdout.write(
-                json.dumps(
+            sys.stdout.buffer.write(
+                encode_worker_result_frame(
                     result.model_dump(
                         mode="json",
                         exclude={
@@ -44,8 +45,6 @@ def main() -> int:
                             "resource_budget",
                         },
                     ),
-                    separators=(",", ":"),
-                    ensure_ascii=False,
                 )
             )
             return 0

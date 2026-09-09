@@ -134,6 +134,9 @@ def test_sdk_execution_failure(
         if code == "RESOURCE_EXHAUSTED":
             assert data["resource"] == "work"
             assert "timeout_ms does not increase" in data["hint"]
+        if code == "OPERATION_TIMEOUT":
+            assert data["timeout_owner"] == "operation_wall"
+            assert data["deterministic_work_remains_fixed"] is False
     else:
         assert text.endswith("operation execution failed")
     records = [

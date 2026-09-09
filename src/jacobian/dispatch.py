@@ -12,6 +12,7 @@ from pydantic import BaseModel, ValidationError
 from jacobian._execution import (
     OperationExecutionStage,
     OperationExecutionTimeoutError,
+    ProgressSink,
     RequestCancellationSignal,
     request_cancellation,
     request_checkpoint,
@@ -95,6 +96,7 @@ def execute_operation[ProjectedT](
     *,
     projector: Callable[[OperationId, StrictModel, float], ProjectedT],
     cancellation_signal: RequestCancellationSignal | None = None,
+    progress_sink: ProgressSink | None = None,
 ) -> ProjectedT:
     """Own one complete parse, invocation, and projection execution envelope."""
 
@@ -104,7 +106,14 @@ def execute_operation[ProjectedT](
         if cancellation_signal is not None
         else nullcontext()
     )
-    with request_execution(started), cancellation_context:
+    with (
+        request_execution(
+            started,
+            cancellation_signal=cancellation_signal,
+            progress_sink=progress_sink,
+        ),
+        cancellation_context,
+    ):
         request_checkpoint("before parsing")
         binding = catalog._binding(operation_id)
         if binding is None:

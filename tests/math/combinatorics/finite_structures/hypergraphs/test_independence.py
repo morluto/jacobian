@@ -28,7 +28,11 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs.operations import
     parameters,
     verify_independence_number,
 )
-from jacobian.process import BoundedProcessResult, ProcessResourceLimits
+from jacobian.process import (
+    BoundedProcessResult,
+    ProcessResourceLimits,
+    encode_worker_result_frame,
+)
 
 
 def _compute(
@@ -74,11 +78,9 @@ def _kernel_compute(
 
 
 def _independence_worker_result(payload: dict[str, object]) -> BoundedProcessResult:
-    import json
-
     return BoundedProcessResult(
         returncode=0,
-        stdout=json.dumps(payload, separators=(",", ":")).encode("utf-8"),
+        stdout=encode_worker_result_frame(payload),
         stderr=b"",
         stdout_exceeded=False,
         stderr_exceeded=False,

@@ -1,6 +1,8 @@
 """Finite integer-sequence values and native operations."""
 
 from jacobian.math.number_theory.sequences.core.operations import (
+    aperiodic_autocorrelation,
+    cyclic_autocorrelation,
     decide_arithmetic,
     decide_geometric,
     decide_nondecreasing,
@@ -23,6 +25,7 @@ from jacobian.math.number_theory.sequences.core.operations import (
     sequence_mean,
     sequence_median,
     sequence_minimum,
+    sequence_order_shape,
     sequence_product,
     sequence_range,
     sequence_sum,
@@ -35,6 +38,8 @@ from jacobian.math.number_theory.sequences.core.values import IntegerSequence
 
 __all__ = [
     "IntegerSequence",
+    "aperiodic_autocorrelation",
+    "cyclic_autocorrelation",
     "decide_arithmetic",
     "decide_geometric",
     "decide_nondecreasing",
@@ -57,6 +62,7 @@ __all__ = [
     "sequence_mean",
     "sequence_median",
     "sequence_minimum",
+    "sequence_order_shape",
     "sequence_product",
     "sequence_range",
     "sequence_sum",

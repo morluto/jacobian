@@ -27,12 +27,15 @@ _BASIS_ENVELOPE = (
     "For n remaining columns and m remaining rows, the basis estimate is "
     "max C(n+1,r) over 0<=r<=min(n,m); the work estimate is "
     "8(m+1)^2(n+m+2) + max C(n+1,r)[4r^3+2r^2(n+2)+4r(n+2)]. "
-    f"Limits are {MAX_LINEAR_PROGRAM_BASES} bases and "
-    f"{MAX_LINEAR_PROGRAM_SCALAR_UPDATES} scalar updates, plus source-derived "
-    "rational-minor height within the canonical rational digit limit. "
-    "Rejections report derived counts, estimates and limits; shape bounds alone "
-    "do not guarantee admission. Execution has one 600-second cooperative safety "
-    "deadline; expiration yields an execution error, never a mathematical conclusion."
+    f"The complete family must contain at most {MAX_LINEAR_PROGRAM_BASES} bases. "
+    "Execution tries bases in deterministic order and returns as soon as an exact "
+    f"certificate is found, charging at most {MAX_LINEAR_PROGRAM_SCALAR_UPDATES} "
+    "scalar updates across preprocessing, components, and both basis families. "
+    "Exhausting that execution allowance is an operational error, not a mathematical "
+    "conclusion. Source-derived rational-minor height must remain within the canonical "
+    "rational digit limit. Inspection reports the derived estimates and limits; shape "
+    "bounds alone do not guarantee completion. Execution has one 600-second cooperative "
+    "safety deadline; expiration yields an execution error."
 )
 
 

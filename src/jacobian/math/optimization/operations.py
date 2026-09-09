@@ -9,6 +9,7 @@ from jacobian.canonical import format_canonical_integer
 from jacobian.math.optimization._arithmetic import rational_dot
 from jacobian.math.optimization._linear_basis import (
     LinearAdmission,
+    _LinearWorkLedger,
     admit_linear_program,
     independent_rows,
     linear_execution,
@@ -117,8 +118,16 @@ def _expand_vector(
     return tuple(expanded)
 
 
+def _work_ledger(
+    admission: LinearAdmission, ledger: _LinearWorkLedger | None
+) -> _LinearWorkLedger:
+    return ledger if ledger is not None else _LinearWorkLedger(admission.initial_work)
+
+
 def _component_programs(
-    program: StandardFormRationalLinearProgram, admission: LinearAdmission
+    program: StandardFormRationalLinearProgram,
+    admission: LinearAdmission,
+    ledger: _LinearWorkLedger,
 ) -> RationalLinearProgramResult:
     width, height = len(program.variables), len(program.rhs)
     point, dual = [Fraction()] * width, [Fraction()] * height
@@ -135,7 +144,12 @@ def _component_programs(
         )
         result = _linear_program_admitted(
             component,
-            LinearAdmission(tuple(range(len(columns))), admission.result_digits),
+            LinearAdmission(
+                columns=tuple(range(len(columns))),
+                result_digits=admission.result_digits,
+                initial_work=0,
+            ),
+            ledger=ledger,
         )
         if result.status == "INFEASIBLE":
             assert result.farkas_candidate is not None
@@ -174,10 +188,13 @@ def _component_programs(
 def _linear_program_admitted(
     program: StandardFormRationalLinearProgram,
     admission: LinearAdmission,
+    *,
+    ledger: _LinearWorkLedger | None = None,
 ) -> RationalLinearProgramResult:
     from flint import fmpq, fmpq_mat
 
     digits = admission.result_digits
+    ledger = _work_ledger(admission, ledger)
     width, height = len(program.variables), len(program.rhs)
     zero = Fraction()
     for i, (row, rhs) in enumerate(zip(program.coefficients, program.rhs, strict=True)):
@@ -186,7 +203,7 @@ def _linear_program_admitted(
             witness[i] = Fraction(1 if rhs.num < 0 else -1)
             return _certify_infeasible(program, tuple(witness), digits)
     if len(admission.components) > 1:
-        return _component_programs(program, admission)
+        return _component_programs(program, admission, ledger)
     columns = admission.columns
     active_rows = tuple(
         i for i, row in enumerate(program.coefficients) if any(v.num != 0 for v in row)
@@ -219,7 +236,7 @@ def _linear_program_admitted(
     reduced_a = fmpq_mat([[a[i, j] for j in range(len(columns))] for i in row_indices])
     reduced_b = fmpq_mat([[b[i, 0]] for i in row_indices])
     c = fmpq_mat([[scalar(program.objective[j]) for j in columns]])
-    solved = search_bases(reduced_a, reduced_b, c)
+    solved = search_bases(reduced_a, reduced_b, c, ledger=ledger)
     if solved is None:
         augmented = fmpq_mat(
             [
@@ -228,7 +245,11 @@ def _linear_program_admitted(
             ]
         )
         phase_one = search_bases(
-            augmented, reduced_b, fmpq_mat([[0] * len(columns) + [1]]), artificial=True
+            augmented,
+            reduced_b,
+            fmpq_mat([[0] * len(columns) + [1]]),
+            ledger=ledger,
+            artificial=True,
         )
         if phase_one is None:
             _execution_failure()

@@ -8,7 +8,9 @@ from pydantic import ValidationError
 from tests.support.rationals import rational_payload as q
 
 from jacobian._execution import (
+    ExecutionResource,
     OperationExecutionTimeoutError,
+    OperationResourceExhaustedError,
     bind_request_deadline,
     current_request_execution,
     request_execution,
@@ -51,11 +53,8 @@ def test_scalar_envelope_agrees_for_native_and_json_components(sign: int) -> Non
         StandardFormRationalLinearProgram.model_validate_json(json.dumps(wire))
 
 
-@pytest.mark.parametrize(
-    ("n", "m", "code"), [(18, 6, "work_bound"), (24, 12, "basis_bound")]
-)
-def test_standard_admission_reports_measured_costs(n: int, m: int, code: str) -> None:
-    program = StandardFormRationalLinearProgram.model_validate_json(
+def _dense_program(n: int, m: int) -> StandardFormRationalLinearProgram:
+    return StandardFormRationalLinearProgram.model_validate_json(
         json.dumps(
             {
                 "variables": [f"x{i}" for i in range(n)],
@@ -67,14 +66,43 @@ def test_standard_admission_reports_measured_costs(n: int, m: int, code: str) ->
             }
         )
     )
+
+
+def test_exhaustive_work_estimate_does_not_prevent_short_certificate() -> None:
+    result = linear_program(_dense_program(18, 6))
+    assert result.status == "OPTIMAL"
+    assert result.primal_objective is not None
+    assert result.primal_objective.as_fraction().as_integer_ratio() == (6, 7)
+
+
+def test_standard_basis_admission_reports_measured_costs() -> None:
+    n, m = 24, 12
+    program = _dense_program(n, m)
     with pytest.raises(OperationResourceAdmissionError) as caught:
         linear_program(program)
-    assert caught.value.errors()[0]["type"] == f"optimization.linear.{code}"
+    assert caught.value.errors()[0]["type"] == "optimization.linear.basis_bound"
     count, work = basis_bounds(n, m)
     work += 16 * (m + 1) * (n + 1)
     assert f"basis_estimate={count}" in str(caught.value)
     assert f"work_estimate={work}" in str(caught.value)
     assert "input_value" not in str(caught.value)
+
+
+def test_search_exhaustion_is_an_execution_error() -> None:
+    n, m = 18, 6
+    program = StandardFormRationalLinearProgram.model_validate_json(
+        json.dumps(
+            {
+                "variables": [f"x{i}" for i in range(n)],
+                "objective": [q(1)] * n,
+                "coefficients": [[q((j + 1) ** i) for j in range(n)] for i in range(m)],
+                "rhs": [q(-1)] * m,
+            }
+        )
+    )
+    with pytest.raises(OperationResourceExhaustedError) as caught:
+        linear_program(program)
+    assert caught.value.resource is ExecutionResource.WORK
 
 
 def test_native_general_deadline_covers_normalization_and_respects_outer_deadline() -> (

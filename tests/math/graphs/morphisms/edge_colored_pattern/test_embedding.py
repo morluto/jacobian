@@ -163,6 +163,19 @@ def test_degree_filter_finds_forced_star_embedding_at_source_limit() -> None:
     assert all(mapping[leaf] in host_leaves for leaf in pattern_vertices[1:])
 
 
+def test_large_identity_witness_does_not_reserve_unused_search_setup() -> None:
+    pattern_vertices = tuple(f"v{index:05d}" for index in range(64))
+    pattern_edges = tuple(combinations(pattern_vertices, 2))
+    host_vertices = pattern_vertices + tuple(
+        f"z{index:05d}" for index in range(64, 12_256)
+    )
+    pattern = colored(pattern_vertices, pattern_edges, ("red",) * len(pattern_edges))
+    host = colored(host_vertices, pattern_edges, ("red",) * len(pattern_edges))
+    result = edge_colored_subgraph_pattern_find(pattern, host)
+    assert result.decision == "EXISTS"
+    assert result.vertex_map == pattern_vertices
+
+
 def test_search_exhaustion_is_not_a_negative_decision(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

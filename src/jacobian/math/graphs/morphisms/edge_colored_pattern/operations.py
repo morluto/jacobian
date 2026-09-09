@@ -87,19 +87,19 @@ def edge_colored_subgraph_pattern_find(
         host_edges.get(edge) == color
         for edge, color in zip(pattern.graph.edges, pattern.edge_colors, strict=True)
     )
-    setup_work = (
-        retained
-        + 3 * len(pattern.graph.edges)
-        + 3 * len(host.graph.edges)
-        + n * (k + 2 * len(pattern.graph.edges))
-    )
-    if setup_work > MAX_WORK:
-        _reject("work", "colored embedding setup exceeds its admitted work bound")
-    request_checkpoint("after colored embedding admission")
     found: tuple[str, ...] | None = None
     if identity and not impossible:
         found = pattern.graph.vertices
     elif not impossible:
+        setup_work = (
+            retained
+            + 3 * len(pattern.graph.edges)
+            + 3 * len(host.graph.edges)
+            + n * (k + 2 * len(pattern.graph.edges))
+        )
+        if setup_work > MAX_WORK:
+            _reject("work", "colored embedding setup exceeds its admitted work bound")
+        request_checkpoint("after colored embedding admission")
         found = _search(
             pattern,
             host,
@@ -180,6 +180,18 @@ def _search(
             vertex,
         ),
     )
+    pattern_position = {
+        pattern_vertex: position
+        for position, pattern_vertex in enumerate(pattern_order)
+    }
+    earlier_neighbors = [
+        tuple(
+            (neighbor, color)
+            for neighbor, color in pattern_adjacency[pattern_vertex].items()
+            if pattern_position[neighbor] < pattern_position[pattern_vertex]
+        )
+        for pattern_vertex in range(len(pattern.graph.vertices))
+    ]
     assignment = [-1] * len(pattern.graph.vertices)
     used_host_vertices: set[int] = set()
 
@@ -194,10 +206,8 @@ def _search(
             if host_vertex in used_host_vertices:
                 continue
             compatible = True
-            for neighbor, color in pattern_adjacency[pattern_vertex].items():
+            for neighbor, color in earlier_neighbors[pattern_vertex]:
                 mapped_neighbor = assignment[neighbor]
-                if mapped_neighbor == -1:
-                    continue
                 work_ledger.charge()
                 if (
                     available.get(

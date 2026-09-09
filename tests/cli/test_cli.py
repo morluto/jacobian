@@ -53,6 +53,52 @@ def test_cli_catalog_inspect_and_run_are_inline(
     }
 
 
+@pytest.mark.parametrize(
+    ("operation_id", "payload"),
+    [
+        (
+            "sat.solve",
+            {"cnf": {"variables": ["x"], "clauses": [[1]]}},
+        ),
+        (
+            "smt.solve",
+            {
+                "logic": "QF_LIA",
+                "smtlib": (
+                    "(set-logic QF_LIA)\n(declare-const x Int)\n"
+                    "(assert (> x 0))\n(check-sat)"
+                ),
+            },
+        ),
+        (
+            "smt.unsat_core",
+            {
+                "logic": "QF_LIA",
+                "smtlib": (
+                    "(set-logic QF_LIA)\n(declare-const x Int)\n"
+                    "(assert (> x 0))\n(assert (<= x 0))\n(check-sat)"
+                ),
+            },
+        ),
+    ],
+)
+def test_cli_solver_operations_accept_extended_wall_time(
+    operation_id: str, payload: dict[str, object]
+) -> None:
+    result = CliRunner().invoke(
+        app,
+        [
+            "run",
+            operation_id,
+            "--json",
+            json.dumps({**payload, "timeout_ms": 120_000}),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert json.loads(result.stdout)["output"]["source"]["timeout_ms"] == 120_000
+
+
 @pytest.mark.parametrize("arguments", [(), ("--json", "{}", "--file", "input.json")])
 def test_cli_run_requires_exactly_one_payload_source(
     arguments: tuple[str, ...],

@@ -75,6 +75,12 @@ _MAX_SMTLIB_ARITHMETIC_WORK = _MAX_SMTLIB_NUMERAL_DIGITS**2 * 64
 # exhaustion surfaces as typed execution failure instead of host memory pressure.
 _SOLVER_RLIMIT = 20_000_000
 _SOLVER_MAX_MEMORY_MB = 1024
+_MAX_LOGIC_TIMEOUT_MS = 120_000
+_LOGIC_TIMEOUT_DESCRIPTION = (
+    "Full-lifecycle wall-clock limit in milliseconds, from 1 through 120000, "
+    "covering worker startup, parsing, solving, result validation, and projection. "
+    "This does not increase the operation's separate deterministic solver work limit."
+)
 _MAX_MODEL_BYTES = 64_000
 _SMT_WORKER = Path(__file__).with_name("_smt_worker.py")
 # JSON escaping can expand a model's UTF-8 spelling by almost twofold.  The
@@ -476,7 +482,12 @@ class SmtSolveRequest(StrictModel):
             "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)"
         ],
     )
-    timeout_ms: StrictInt = Field(default=1_000, ge=1, le=10_000)
+    timeout_ms: StrictInt = Field(
+        default=1_000,
+        ge=1,
+        le=_MAX_LOGIC_TIMEOUT_MS,
+        description=_LOGIC_TIMEOUT_DESCRIPTION,
+    )
 
     @model_validator(mode="after")
     def require_single_smtlib_query(self) -> Self:

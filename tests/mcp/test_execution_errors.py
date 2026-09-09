@@ -26,6 +26,39 @@ from mcp import Client
 
 
 @pytest.mark.parametrize("direct", [False, True])
+@pytest.mark.parametrize("operation_id", ["sat.solve", "smt.solve", "smt.unsat_core"])
+def test_sdk_solver_entry_points_accept_extended_wall_time(
+    direct: bool, operation_id: str
+) -> None:
+    catalog = Catalog.open()
+    operation = catalog.operation(operation_id)
+    assert operation is not None
+    catalog = Catalog((operation,))
+    server = _build_server(
+        state=AppState(operation_catalog=catalog),
+        evaluation_tools=direct_operation_tools(catalog) if direct else (),
+    )
+    payload = {**operation.examples[0].input, "timeout_ms": 120_000}
+
+    async def scenario() -> Any:
+        async with Client(server, raise_exceptions=False) as client:
+            return await client.call_tool(
+                operation_id if direct else "math.run",
+                payload
+                if direct
+                else {"operation_id": operation_id, "payload": payload},
+            )
+
+    result = asyncio.run(scenario())
+    assert not result.is_error
+    assert result.structured_content is not None
+    output = (
+        result.structured_content if direct else result.structured_content["output"]
+    )
+    assert output["source"]["timeout_ms"] == 120_000
+
+
+@pytest.mark.parametrize("direct", [False, True])
 @pytest.mark.parametrize(
     ("error", "code", "tracebacks"),
     [

@@ -1491,8 +1491,10 @@ SMT_UNSAT_CORE_OPERATION = MathTool(
     description=(
         "Return SAT, UNKNOWN, or a deterministic backend-selected set of source-order "
         "assertion indices whose exact subsystem replays as UNSAT through the "
-        "maintained Z3 Python binding. The core need not be minimal."
-        " Resource exhaustion and backend failures raise execution errors; UNKNOWN denotes a healthy inconclusive solver answer."
+        "maintained Z3 Python binding. The core need not be minimal. timeout_ms "
+        "provides up to 120 seconds for the full lifecycle without increasing the "
+        "caller-selected rlimit. Resource exhaustion and backend failures raise "
+        "execution errors; UNKNOWN denotes a healthy inconclusive solver answer."
     ),
     request_type=SmtUnsatCoreRequest,
     result_type=SmtUnsatCoreResult,

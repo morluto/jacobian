@@ -31,6 +31,7 @@ class _ColoringAdmission:
 
     has_forced_failure: bool
     has_injective_witness: bool
+    active_vertices: tuple[str, ...]
     work_budget: int
 
 
@@ -64,19 +65,27 @@ def _validate_coloring_envelope(
 ) -> _ColoringAdmission:
     """Admit the decision search after checking its bounded source."""
     _validate_coloring_source(hypergraph, palette_size)
-    vertex_count = len(hypergraph.vertices)
     edge_count = len(hypergraph.edges)
     has_forced_failure = any(len(members) <= 1 for _, members in hypergraph.edges)
-    has_injective_witness = not has_forced_failure and palette_size >= vertex_count
+    active_vertex_set = {
+        vertex for _, members in hypergraph.edges for vertex in members
+    }
+    active_vertices = tuple(
+        vertex for vertex in hypergraph.vertices if vertex in active_vertex_set
+    )
+    has_injective_witness = not has_forced_failure and palette_size >= len(
+        active_vertices
+    )
     exhaustive_work = (
         0
         if has_forced_failure or has_injective_witness
-        else palette_size**vertex_count * edge_count
+        else palette_size ** len(active_vertices) * edge_count
     )
 
     return _ColoringAdmission(
         has_forced_failure=has_forced_failure,
         has_injective_witness=has_injective_witness,
+        active_vertices=active_vertices,
         work_budget=min(exhaustive_work, MAX_COLORING_WORK),
     )
 

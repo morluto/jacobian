@@ -185,7 +185,10 @@ def test_singleton_edge_not_colorable() -> None:
 def test_native_search_exhaustion_is_not_a_negative_decision(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    h = _hg(["a", "b", "c"], [("edge", ("a", "b"))])
+    h = _hg(
+        ["a", "b", "c"],
+        [("ab", ("a", "b")), ("ac", ("a", "c")), ("bc", ("b", "c"))],
+    )
     monkeypatch.setattr(
         "jacobian.math.combinatorics.finite_structures.hypergraph_coloring._models.MAX_COLORING_WORK",
         1,
@@ -216,3 +219,17 @@ def test_early_coloring_witness_precedes_oversized_complete_search() -> None:
     assert result.witness is not None
     colors = dict(result.witness.assignments)
     assert len({colors[vertex] for vertex in vertices}) == 2
+
+
+def test_isolated_vertices_do_not_expand_coloring_search() -> None:
+    vertices = [f"v{index:02d}" for index in range(23)]
+    result = decide_nonmonochromatic_coloring(
+        _hg(vertices, [("edge", ("v00", "v01"))]), 2
+    )
+    assert result.outcome == "COLORABLE"
+    assert result.witness is not None
+    colors = dict(result.witness.assignments)
+    assert tuple(colors) == tuple(vertices)
+    assert colors["v00"] != colors["v01"]
+    assert all(colors[vertex] == 0 for vertex in vertices[2:])
+    assert verify_coloring_witness(result)

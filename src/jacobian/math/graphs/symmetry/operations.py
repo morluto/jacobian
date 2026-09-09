@@ -30,6 +30,7 @@ from jacobian.math.graphs.symmetry._orbits import declared_orbit_partitions
 from jacobian.math.graphs.values import ColoredUndirectedGraph
 
 MAX_FULL_AUTOMORPHISM_PERMUTATIONS = 100_000
+MAX_FULL_AUTOMORPHISM_WORK = 25_600_000
 
 
 def _admit_graph_symmetry_orbit(
@@ -212,11 +213,15 @@ def full_graph_automorphism_group(
     permutation_bound = 1
     for color_class in classes:
         permutation_bound *= factorial(len(color_class))
-    if permutation_bound > MAX_FULL_AUTOMORPHISM_PERMUTATIONS:
+    work = permutation_bound * max(1, len(vertices) + len(graph.graph.edges))
+    if (
+        permutation_bound > MAX_FULL_AUTOMORPHISM_PERMUTATIONS
+        or work > MAX_FULL_AUTOMORPHISM_WORK
+    ):
         raise OperationResourceAdmissionError(
             location=("graph", "vertex_colors"),
             code="graph.automorphism.permutation_bound",
-            message="color-class permutation search exceeds its admitted bound",
+            message="color-class permutation and edge-scan work exceeds its admitted bound",
         )
     edge_colors = dict(
         zip(

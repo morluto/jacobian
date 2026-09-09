@@ -1,5 +1,8 @@
 """Full color-preserving graph automorphism group tests."""
 
+import pytest
+
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.graphs.symmetry.operations import full_graph_automorphism_group
 from jacobian.math.graphs.values import ColoredUndirectedGraph, SimpleUndirectedGraph
 
@@ -27,3 +30,20 @@ def test_vertex_colors_restrict_the_full_group() -> None:
     result = full_graph_automorphism_group(graph)
     assert result.automorphism_count == 1
     assert result.generators == ()
+
+
+def test_dense_graph_edge_scan_work_is_rejected_before_enumeration() -> None:
+    vertices = tuple(f"v{i:03}" for i in range(256))
+    graph = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(
+            vertices=vertices,
+            edges=tuple(
+                (vertices[left], vertices[right])
+                for left in range(len(vertices))
+                for right in range(left + 1, len(vertices))
+            ),
+        ),
+        vertex_colors=("free",) * 8 + tuple(f"fixed-{i}" for i in range(248)),
+    )
+    with pytest.raises(OperationResourceAdmissionError):
+        full_graph_automorphism_group(graph)

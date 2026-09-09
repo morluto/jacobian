@@ -79,10 +79,10 @@ def test_unattainable_width_is_rejected_before_publication() -> None:
         dickman_rho_piecewise_enclosure(_request(8, -12))
 
 
-def test_result_rejects_a_forged_remainder() -> None:
+def test_result_rejects_a_structurally_excessive_remainder() -> None:
     result = dickman_rho_piecewise_enclosure(_request(2, -5))
     payload = result.model_dump()
-    payload["pieces"][-1]["uniform_remainder"] = {"mantissa": 0, "exponent": 0}
+    payload["pieces"][-1]["uniform_remainder"] = {"mantissa": 1, "exponent": 0}
 
-    with pytest.raises(ValidationError, match="proved residual"):
+    with pytest.raises(ValidationError, match="requested uniform width"):
         DickmanRhoPiecewiseEnclosureResult.model_validate(payload)

@@ -1,5 +1,6 @@
 """Maximum induced matching through a private conflict graph."""
 
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.graphs.independence import (
     IndependenceNumberBudget,
     independence_number,
@@ -18,6 +19,13 @@ def maximum_induced_matching(
 ) -> MaximumInducedMatchingResult:
     """Return an exact or rigorously bounded maximum induced matching."""
 
+    budget = resource_budget or IndependenceNumberBudget()
+    if len(graph.edges) > budget.max_order:
+        raise OperationResourceAdmissionError(
+            location=("graph", "edges"),
+            code="graph.induced_matching.conflict_graph_order_bound",
+            message="source edge count exceeds the admitted conflict-graph order",
+        )
     bindings = tuple(
         SourceEdgeBinding(edge_id=f"e{index}", endpoints=edge)
         for index, edge in enumerate(graph.edges)
@@ -34,14 +42,16 @@ def maximum_induced_matching(
                 for v in right_endpoints
             )
             if left_endpoints & right_endpoints or cross_edge:
-                conflicts.append((left.edge_id, right.edge_id))
+                conflicts.append(
+                    (left.edge_id, right.edge_id)
+                    if left.edge_id < right.edge_id
+                    else (right.edge_id, left.edge_id)
+                )
     conflict_graph = SimpleUndirectedGraph(
         vertices=tuple(binding.edge_id for binding in bindings),
         edges=tuple(conflicts),
     )
-    independence = independence_number(
-        conflict_graph, resource_budget=resource_budget or IndependenceNumberBudget()
-    )
+    independence = independence_number(conflict_graph, resource_budget=budget)
     selected_ids = independence.witness_vertices
     selected = {
         endpoint

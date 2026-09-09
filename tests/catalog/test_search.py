@@ -79,6 +79,14 @@ def test_precise_mode_finds_published_aperiodic_autocorrelation() -> None:
     )
 
 
+def test_precise_mode_ignores_incidental_query_words() -> None:
+    result = Catalog.open().match(
+        OperationMatchRequest(need="please calculate determinant")
+    )
+    assert result.matches
+    assert result.matches[0].operation_id == "matrix.determinant.compute"
+
+
 def test_precise_mode_finds_published_sunflower_construction() -> None:
     result = Catalog.open().match(
         OperationMatchRequest(need="sunflower triple hypergraph construction")

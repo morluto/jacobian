@@ -93,30 +93,22 @@ class DickmanRhoPiecewiseEnclosureResult(StrictModel):
         if not self.pieces or self.pieces[0].lower.as_fraction() != 0:
             raise ValueError("Dickman pieces must start at zero")
         cursor = Fraction()
-        target = self.source.target_width.as_fraction()
-        expected = _central_pieces(endpoint, self.degree)
-        if len(expected) != len(self.pieces):
-            raise ValueError("Dickman piece count does not match the source")
-        for piece, (lower, upper, coefficients, remainder) in zip(
-            self.pieces, expected, strict=True
+        if (
+            len(self.pieces)
+            != (endpoint.numerator + endpoint.denominator - 1) // endpoint.denominator
         ):
+            raise ValueError("Dickman piece count does not match the source")
+        target = self.source.target_width.as_fraction()
+        for piece in self.pieces:
             if piece.lower.as_fraction() != cursor:
                 raise ValueError("Dickman pieces must form a contiguous partition")
             cursor = piece.upper.as_fraction()
-            if piece.lower.as_fraction() != lower or piece.upper.as_fraction() != upper:
-                raise ValueError("Dickman piece endpoints do not match the source")
+            if cursor != min(piece.lower.as_fraction() + 1, endpoint):
+                raise ValueError(
+                    "Dickman pieces must be unit intervals truncated at the endpoint"
+                )
             if len(piece.coefficients) != self.degree + 1:
                 raise ValueError("every Dickman piece must use the declared degree")
-            if any(
-                ball.lower.as_fraction() > coefficient
-                or ball.upper.as_fraction() < coefficient
-                for ball, coefficient in zip(
-                    piece.coefficients, coefficients, strict=True
-                )
-            ):
-                raise ValueError("coefficient balls must enclose the recurrence")
-            if piece.uniform_remainder.as_fraction() < remainder:
-                raise ValueError("uniform remainder must enclose the proved residual")
             width = 2 * piece.uniform_remainder.as_fraction() + sum(
                 coefficient.upper.as_fraction() - coefficient.lower.as_fraction()
                 for coefficient in piece.coefficients

@@ -92,7 +92,7 @@ class RationalPolynomial(StrictModel):
 
     domain: Literal["QQ"] = "QQ"
     variables: tuple[PolynomialVariable, ...] = Field(
-        min_length=1, max_length=MAX_POLYNOMIAL_VARIABLES
+        min_length=0, max_length=MAX_POLYNOMIAL_VARIABLES
     )
     polynomial: SparseRationalPolynomial
 
@@ -108,6 +108,63 @@ class RationalPolynomial(StrictModel):
             raise _validation_error(
                 "monomial_shape",
                 "every monomial must match the declared variable order",
+            )
+        return self
+
+
+class RationalLaurentPolynomialTerm(StrictModel):
+    """One nonzero term with a signed exponent on every declared axis."""
+
+    coefficient: CanonicalRational
+    exponents: tuple[int, ...] = Field(
+        min_length=0, max_length=MAX_POLYNOMIAL_VARIABLES
+    )
+
+    @model_validator(mode="after")
+    def require_bounded_nonzero_term(self) -> Self:
+        if self.coefficient.as_fraction() == 0:
+            raise _validation_error(
+                "laurent_zero_term", "zero Laurent terms must be omitted"
+            )
+        if any(abs(exponent) > MAX_POLYNOMIAL_EXPONENT for exponent in self.exponents):
+            raise _validation_error(
+                "laurent_exponent_bound",
+                "Laurent exponents exceed the shared representation limit",
+            )
+        return self
+
+
+class RationalLaurentPolynomial(StrictModel):
+    """Canonical sparse Laurent polynomial over an explicitly ordered QQ axis."""
+
+    domain: Literal["QQ"] = "QQ"
+    variables: tuple[PolynomialVariable, ...] = Field(
+        min_length=0, max_length=MAX_POLYNOMIAL_VARIABLES
+    )
+    terms: tuple[RationalLaurentPolynomialTerm, ...] = Field(
+        default=(), max_length=MAX_POLYNOMIAL_TERMS
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_support(self) -> Self:
+        if len(set(self.variables)) != len(self.variables):
+            raise _validation_error(
+                "laurent_duplicate_variables", "Laurent variables must be unique"
+            )
+        support = tuple(term.exponents for term in self.terms)
+        if any(len(exponents) != len(self.variables) for exponents in support):
+            raise _validation_error(
+                "laurent_monomial_shape",
+                "every Laurent monomial must match the declared variable order",
+            )
+        if len(set(support)) != len(support):
+            raise _validation_error(
+                "laurent_duplicate_exponents", "Laurent exponent tuples must be unique"
+            )
+        if support != tuple(sorted(support, reverse=True)):
+            raise _validation_error(
+                "laurent_term_order",
+                "Laurent terms must use descending lexicographic order",
             )
         return self
 
@@ -477,6 +534,8 @@ __all__ = [
     "MonicPolynomial",
     "PolynomialVariable",
     "RationalFunction",
+    "RationalLaurentPolynomial",
+    "RationalLaurentPolynomialTerm",
     "RationalPolynomial",
     "RationalPolynomialIdeal",
     "RationalPolynomialTerm",

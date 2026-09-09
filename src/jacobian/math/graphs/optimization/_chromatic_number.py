@@ -13,11 +13,10 @@ from jacobian._execution import (
     BackendFailureReason,
     OperationBackendError,
     OperationExecutionTimeoutError,
-    execution_deadline,
+    lease_operation_phases,
     request_checkpoint,
     require_execution_deadline,
 )
-from jacobian._worker_errors import decode_worker_execution_error
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.graphs.optimization._chromatic_kernel import (
     build_simple_graph,
@@ -30,6 +29,7 @@ from jacobian.math.graphs.optimization._coloring_models import (
 from jacobian.process import (
     ProcessResourceLimits,
     check_bounded_process_result,
+    decode_checked_worker_output,
     run_bounded_process,
     worker_environment,
 )
@@ -64,16 +64,24 @@ def _search_chromatic_number(
 ) -> GraphChromaticNumberOutput:
     """Run the complete Z3 chromatic search in a bounded owner worker."""
 
-    deadline = execution_deadline(request.resource_budget.wall_seconds)
+    lease = lease_operation_phases(
+        request.resource_budget.wall_seconds,
+        admitted_response_bytes=_WORKER_OUTPUT_BYTES,
+        validation_work=len(request.graph.vertices) + len(request.graph.edges),
+    )
+    deadline = lease.operation_deadline
     try:
         with TemporaryDirectory(prefix="jacobian-graph-chromatic-") as directory:
-            remaining_seconds = deadline - time.monotonic()
+            remaining_seconds = lease.backend_deadline - time.monotonic()
             if remaining_seconds <= 0:
                 raise OperationExecutionTimeoutError("operation deadline expired")
             completed = run_bounded_process(
                 [sys.executable, str(_CHROMATIC_NUMBER_WORKER)],
                 input_bytes=json.dumps(
-                    {"_deadline": deadline, **request.model_dump(mode="json")},
+                    {
+                        "_deadline": lease.backend_deadline,
+                        **request.model_dump(mode="json"),
+                    },
                     separators=(",", ":"),
                     ensure_ascii=False,
                 ).encode("utf-8"),
@@ -94,14 +102,12 @@ def _search_chromatic_number(
     check_bounded_process_result(completed)
     require_execution_deadline(deadline)
     try:
-        response = json.loads(completed.stdout.decode("utf-8"))
-        require_execution_deadline(deadline)
-        decode_worker_execution_error(response)
-        result = GraphChromaticNumberOutput.model_validate(
-            {
-                **response,
-                "vertices": list(request.graph.vertices),
-            }
+        result = decode_checked_worker_output(
+            completed.stdout,
+            decode_result=lambda response: GraphChromaticNumberOutput.model_validate(
+                {**response, "vertices": list(request.graph.vertices)}
+            ),
+            checkpoint=lambda: require_execution_deadline(deadline),
         )
         if result.order != len(request.graph.vertices) or (
             result.coloring is not None
@@ -112,7 +118,7 @@ def _search_chromatic_number(
         ):
             require_execution_deadline(deadline)
             raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
-    except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
+    except (TypeError, ValueError) as exc:
         request_checkpoint("during chromatic-number response validation")
         require_execution_deadline(deadline)
         raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE) from exc

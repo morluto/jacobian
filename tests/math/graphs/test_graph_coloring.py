@@ -7,6 +7,7 @@ from typing import NoReturn
 import pytest
 from pydantic import ValidationError
 
+from jacobian._execution import OperationResourceExhaustedError
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.coloring import _coloring_process as coloring_process
 from jacobian.math.graphs.coloring._models import (
@@ -598,7 +599,7 @@ class TestSolverConflictBudget:
         request = EdgeKColorabilityRequest(
             graph=_petersen_graph(), colors=3, solver_conflicts=1
         )
-        with pytest.raises(TimeoutError):
+        with pytest.raises(OperationResourceExhaustedError):
             compute_edge_k_colorability(request)
 
     def test_default_budget_still_decides_petersen_negative(self) -> None:
@@ -626,7 +627,7 @@ class TestSolverConflictBudget:
             EdgeKColorabilityRequest(graph=petersen, colors=3)
         )
         assert EdgeKColorabilityResult.model_validate(negative.model_dump()) == negative
-        with pytest.raises(TimeoutError):
+        with pytest.raises(OperationResourceExhaustedError):
             compute_edge_k_colorability(
                 EdgeKColorabilityRequest(graph=petersen, colors=3, solver_conflicts=1)
             )
@@ -713,7 +714,7 @@ class TestVertexKColorability:
         from jacobian.math.graphs.coloring._tools import compute_k_colorability
 
         request = KColorabilityRequest(graph=self._k4(), colors=3, solver_conflicts=1)
-        with pytest.raises(TimeoutError):
+        with pytest.raises(OperationResourceExhaustedError):
             compute_k_colorability(request)
 
     def test_default_budget_still_decides_k4_negative(self) -> None:

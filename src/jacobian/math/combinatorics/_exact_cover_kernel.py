@@ -5,52 +5,31 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+from jacobian._execution import report_request_progress
 from jacobian.math.combinatorics.exact_cover import GeneralizedExactCoverInstance
+
+
+@dataclass(frozen=True, slots=True)
+class _SearchState:
+    uncovered_primary: int
+    available_rows: int
+    selected_rows: tuple[int, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class ExactCoverKernelResult:
     status: Literal["FOUND", "NO_COVER", "UNKNOWN"]
     selected_rows: tuple[int, ...] = ()
+    frontier_prefixes: tuple[tuple[int, ...], ...] = ()
+    visited_nodes: int = 0
 
 
-def search_generalized_exact_cover(
+def _indices(
     instance: GeneralizedExactCoverInstance,
-    search_node_limit: int,
-) -> ExactCoverKernelResult:
-    """Search one materialized primary/secondary incidence matrix.
-
-    A node is one conflict-free partial selected-row family, represented by
-    its uncovered-primary and available-row bitsets. The root and terminal
-    states count as nodes. Branching chooses the uncovered primary item with
-    the fewest available rows, ties by canonical item order, and tries rows in
-    canonical row-ID order. Thus the same canonical input and node limit always
-    produce the same status and witness.
-
-    Write P for primary items, M for all items, R for rows, I for incidences,
-    and N for the node allowance. Index construction materializes I item
-    indices, M R-bit item-to-row masks, R P-bit row-to-primary masks, and R
-    R-bit conflict masks using at most 2I mask updates. The logical bitset
-    payload is therefore M*R + R*P + R*R bits plus I bounded item indices.
-
-    Each node uses at most P intersections and population counts on R-bit
-    masks to choose a primary item, followed by constant-many P- or R-bit mask
-    operations for each child. At most N nodes and N-1 child edges are visited.
-    The explicit DFS stack has depth at most P, with logical mask payload
-    (P+1)*(P+2R) bits plus P selected row indices. P, M, R <= 4096
-    bound retained storage independently of the Python recursion limit.
-    Admission also bounds N*P*ceil(max(P,R)/64), preserving the previous maximum
-    item-scan word work for larger instances.
-    """
-
-    if search_node_limit < 1:
-        raise ValueError("search_node_limit must be positive")
-
+) -> tuple[list[int], list[int], list[int]]:
     items = (*instance.primary_items, *instance.secondary_items)
     item_index = {item: index for index, item in enumerate(items)}
     primary_count = len(instance.primary_items)
-    row_count = len(instance.rows)
-
     item_rows = [0] * len(items)
     row_item_indices: list[tuple[int, ...]] = []
     row_primary_masks: list[int] = []
@@ -63,58 +42,123 @@ def search_generalized_exact_cover(
             if index < primary_count:
                 primary_mask |= 1 << index
         row_primary_masks.append(primary_mask)
-
-    # Selecting a row removes every row sharing any primary or secondary item.
-    # At most MAX_INCIDENCES bounded big-integer ORs construct this index.
-    row_conflicts: list[int] = []
+    row_conflicts = []
     for indices in row_item_indices:
         conflicts = 0
         for index in indices:
             conflicts |= item_rows[index]
         row_conflicts.append(conflicts)
+    return item_rows, row_primary_masks, row_conflicts
 
-    all_primary = (1 << primary_count) - 1
-    all_rows = (1 << row_count) - 1
-    visited_nodes = 0
-    selected_rows: list[int] = []
-    # Frames retain only the remaining siblings, not a copy of each path.
-    stack: list[tuple[int, int, int]] = []
-    uncovered_primary, available_rows = all_primary, all_rows
-    while True:
-        if visited_nodes >= search_node_limit:
-            return ExactCoverKernelResult(status="UNKNOWN")
-        visited_nodes += 1
-        if uncovered_primary == 0:
-            return ExactCoverKernelResult(
-                status="FOUND", selected_rows=tuple(selected_rows)
+
+def _children(
+    state: _SearchState,
+    item_rows: list[int],
+    row_primary_masks: list[int],
+    row_conflicts: list[int],
+) -> tuple[_SearchState, ...]:
+    chosen_rows = 0
+    fewest = len(row_primary_masks) + 1
+    remaining = state.uncovered_primary
+    while remaining:
+        bit = remaining & -remaining
+        item = bit.bit_length() - 1
+        candidates = item_rows[item] & state.available_rows
+        if candidates.bit_count() < fewest:
+            fewest = candidates.bit_count()
+            chosen_rows = candidates
+        remaining ^= bit
+    children = []
+    while chosen_rows:
+        bit = chosen_rows & -chosen_rows
+        row = bit.bit_length() - 1
+        children.append(
+            _SearchState(
+                uncovered_primary=state.uncovered_primary & ~row_primary_masks[row],
+                available_rows=state.available_rows & ~row_conflicts[row],
+                selected_rows=(*state.selected_rows, row),
             )
-
-        chosen_rows = 0
-        fewest_candidates = row_count + 1
-        remaining_items = uncovered_primary
-        while remaining_items:
-            item_bit = remaining_items & -remaining_items
-            item = item_bit.bit_length() - 1
-            candidates = item_rows[item] & available_rows
-            candidate_count = candidates.bit_count()
-            if candidate_count < fewest_candidates:
-                chosen_rows = candidates
-                fewest_candidates = candidate_count
-                if candidate_count == 0:
-                    break
-            remaining_items ^= item_bit
-
-        while not chosen_rows:
-            if not stack:
-                return ExactCoverKernelResult(status="NO_COVER")
-            uncovered_primary, available_rows, chosen_rows = stack.pop()
-            selected_rows.pop()
-        row_bit = chosen_rows & -chosen_rows
-        selected_row = row_bit.bit_length() - 1
-        stack.append((uncovered_primary, available_rows, chosen_rows ^ row_bit))
-        selected_rows.append(selected_row)
-        uncovered_primary &= ~row_primary_masks[selected_row]
-        available_rows &= ~row_conflicts[selected_row]
+        )
+        chosen_rows ^= bit
+    return tuple(children)
 
 
-__all__ = ["ExactCoverKernelResult", "search_generalized_exact_cover"]
+def search_generalized_exact_cover(
+    instance: GeneralizedExactCoverInstance,
+    search_node_limit: int,
+    fixed_rows: tuple[int, ...] = (),
+) -> ExactCoverKernelResult:
+    """Search a deterministic prefix and retain every unresolved subtree."""
+
+    if search_node_limit < 1:
+        raise ValueError("search_node_limit must be positive")
+    item_rows, row_primary_masks, row_conflicts = _indices(instance)
+    state = _SearchState(
+        uncovered_primary=(1 << len(instance.primary_items)) - 1,
+        available_rows=(1 << len(instance.rows)) - 1,
+        selected_rows=(),
+    )
+    for fixed_row in fixed_rows:
+        matches = [
+            child
+            for child in _children(state, item_rows, row_primary_masks, row_conflicts)
+            if child.selected_rows[-1] == fixed_row
+        ]
+        if not matches:
+            raise ValueError("fixed-row prefix is not a semantic traversal prefix")
+        state = matches[0]
+    stack = [state]
+    visited = 0
+    while stack and visited < search_node_limit:
+        state = stack.pop()
+        visited += 1
+        if visited == 1 or visited % 256 == 0:
+            report_request_progress(visited, message="exact-cover search nodes visited")
+        if state.uncovered_primary == 0:
+            return ExactCoverKernelResult(
+                status="FOUND",
+                selected_rows=state.selected_rows,
+                visited_nodes=visited,
+            )
+        children = _children(state, item_rows, row_primary_masks, row_conflicts)
+        stack.extend(reversed(children))
+    if stack:
+        return ExactCoverKernelResult(
+            status="UNKNOWN",
+            frontier_prefixes=tuple(state.selected_rows for state in reversed(stack)),
+            visited_nodes=visited,
+        )
+    return ExactCoverKernelResult(status="NO_COVER", visited_nodes=visited)
+
+
+def split_exact_cover_prefix(
+    instance: GeneralizedExactCoverInstance,
+    fixed_rows: tuple[int, ...],
+) -> tuple[tuple[int, ...], ...]:
+    """Split one semantic traversal prefix into disjoint complete children."""
+
+    item_rows, row_primary_masks, row_conflicts = _indices(instance)
+    state = _SearchState(
+        uncovered_primary=(1 << len(instance.primary_items)) - 1,
+        available_rows=(1 << len(instance.rows)) - 1,
+        selected_rows=(),
+    )
+    for fixed_row in fixed_rows:
+        children = _children(state, item_rows, row_primary_masks, row_conflicts)
+        matches = [child for child in children if child.selected_rows[-1] == fixed_row]
+        if not matches:
+            raise ValueError("fixed-row prefix is not a semantic traversal prefix")
+        state = matches[0]
+    if state.uncovered_primary == 0:
+        raise ValueError("a completed cover cannot be split as an unresolved shard")
+    return tuple(
+        child.selected_rows
+        for child in _children(state, item_rows, row_primary_masks, row_conflicts)
+    )
+
+
+__all__ = [
+    "ExactCoverKernelResult",
+    "search_generalized_exact_cover",
+    "split_exact_cover_prefix",
+]

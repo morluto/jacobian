@@ -49,6 +49,21 @@ def test_raw_moment_producer_satisfies_its_contribution_identity() -> None:
     )
 
 
+def test_raw_moment_accepts_low_order_two_hundred_digit_probabilities() -> None:
+    denominator = 10**200 + 1
+    atoms = (
+        FiniteDistributionAtom(value=_q(0), probability=_q(1, denominator)),
+        FiniteDistributionAtom(value=_q(1), probability=_q(1, denominator)),
+        FiniteDistributionAtom(
+            value=_q(2), probability=_q(denominator - 2, denominator)
+        ),
+    )
+
+    result = raw_moment(atoms, 1)
+
+    assert result.moment.as_fraction() == Fraction(2 * denominator - 3, denominator)
+
+
 def test_condition_producer_binds_distribution_to_contributions() -> None:
     source = _distribution()
     result = condition(source, (_q(0), _q(2)))

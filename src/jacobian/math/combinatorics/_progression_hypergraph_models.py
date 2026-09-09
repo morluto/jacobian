@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-from pydantic import Field
-
 from jacobian._models import StrictModel
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
-    MAX_EDGES,
-    MAX_TOTAL_INCIDENCES,
     MAX_VERTICES,
     FiniteHypergraph,
 )
+from jacobian.math.groups.finite_abelian import (
+    FiniteAbelianGroupElement,
+    FiniteAbelianProductGroup,
+)
 
 
-def _progression_edge_count(group_order: int) -> int:
+def _cyclic_progression_edge_count(group_order: int) -> int:
     """Return the exact number of distinct 3-AP edges in ``Z/group_order Z``.
 
     The ordered construction has two encodings for an ordinary edge.  When
@@ -28,28 +28,35 @@ def _progression_edge_count(group_order: int) -> int:
     return edge_count
 
 
-def _fits_hypergraph_representation(group_order: int) -> bool:
-    edge_count = _progression_edge_count(group_order)
-    return edge_count <= MAX_EDGES and 3 * edge_count <= MAX_TOTAL_INCIDENCES
+def progression_edge_bound(group: FiniteAbelianProductGroup) -> int:
+    """Return a sound pre-enumeration edge bound for the supplied group."""
+
+    if len(group.moduli) == 1:
+        return _cyclic_progression_edge_count(group.order)
+    return group.order * (group.order - 1) // 2
 
 
-MAX_GROUP_ORDER: int = max(
-    group_order
-    for group_order in range(2, MAX_VERTICES + 1)
-    if _fits_hypergraph_representation(group_order)
-)
+MAX_GROUP_ORDER = MAX_VERTICES
 
 
 class ProgressionHypergraphRequest(StrictModel):
-    """Order of the cyclic group Z/nZ for 3-AP hypergraph construction."""
+    """Finite Abelian product group whose three-point progressions are requested."""
 
-    group_order: int = Field(ge=2, le=MAX_GROUP_ORDER)
+    group: FiniteAbelianProductGroup
+
+
+class ProgressionVertexBinding(StrictModel):
+    """Binding from one hypergraph vertex to its canonical group element."""
+
+    vertex: str
+    element: FiniteAbelianGroupElement
 
 
 class ProgressionHypergraphResult(StrictModel):
-    """The 3-uniform hypergraph of all 3-term arithmetic progressions in Z/nZ."""
+    """Complete 3-uniform progression hypergraph of a finite Abelian group."""
 
-    group_order: int
+    group: FiniteAbelianProductGroup
+    vertex_elements: tuple[ProgressionVertexBinding, ...]
     hypergraph: FiniteHypergraph
 
 
@@ -57,4 +64,6 @@ __all__ = [
     "MAX_GROUP_ORDER",
     "ProgressionHypergraphRequest",
     "ProgressionHypergraphResult",
+    "ProgressionVertexBinding",
+    "progression_edge_bound",
 ]

@@ -9,6 +9,7 @@ from jacobian.catalog.models import (
     OperationMatchRequest,
 )
 from jacobian.catalog.search import (
+    OperationDiscoveryCursorError,
     discovery_terms,
     match_operations,
 )
@@ -20,7 +21,9 @@ def _positions(need: str) -> dict[str, int]:
     matches: list[OperationDiscoveryMatch] = []
     while True:
         result = catalog.match(
-            OperationMatchRequest(need=need, limit=20, cursor=cursor)
+            OperationMatchRequest(
+                need=need, limit=20, cursor=cursor, search_mode="broad"
+            )
         )
         matches.extend(result.matches)
         if result.next_cursor is None:
@@ -40,6 +43,7 @@ def test_determinant_need_ranks_determinants_before_charpolys() -> None:
                 namespace="matrix",
                 limit=20,
                 cursor=cursor,
+                search_mode="broad",
             )
         )
         matches.extend(result.matches)
@@ -64,6 +68,52 @@ def test_determinant_need_ranks_determinants_before_charpolys() -> None:
         for determinant_id in determinant_ids
         for characteristic_polynomial_id in characteristic_polynomial_ids
     )
+
+
+def test_precise_mode_finds_published_aperiodic_autocorrelation() -> None:
+    result = Catalog.open().match(
+        OperationMatchRequest(need="aperiodic autocorrelation")
+    )
+    assert (
+        result.matches[0].operation_id == "sequence.autocorrelation.aperiodic.compute"
+    )
+
+
+def test_precise_mode_ignores_incidental_query_words() -> None:
+    result = Catalog.open().match(
+        OperationMatchRequest(need="please calculate determinant")
+    )
+    assert result.matches
+    assert result.matches[0].operation_id == "matrix.determinant.compute"
+
+
+def test_precise_mode_finds_published_sunflower_construction() -> None:
+    result = Catalog.open().match(
+        OperationMatchRequest(need="sunflower triple hypergraph construction")
+    )
+    assert (
+        result.matches[0].operation_id
+        == "set_system.sunflower_triple_hypergraph.construct"
+    )
+
+
+def test_discovery_cursor_is_bound_to_search_mode() -> None:
+    catalog = Catalog.open()
+    first = catalog.match(
+        OperationMatchRequest(
+            need="exact mathematical computation", search_mode="broad"
+        )
+    )
+    assert first.next_cursor is not None
+
+    with pytest.raises(OperationDiscoveryCursorError, match="cursor is not present"):
+        catalog.match(
+            OperationMatchRequest(
+                need="exact mathematical computation",
+                cursor=first.next_cursor,
+                search_mode="precise",
+            )
+        )
 
 
 def test_smt_model_query_discovers_the_solver_operation() -> None:
@@ -359,6 +409,7 @@ def test_observed_ramsey_need_retains_arrowing_over_proper_edge_coloring() -> No
                 "complete coloring witness avoiding monochromatic triangles."
             ),
             limit=20,
+            search_mode="broad",
         )
     )
     positions = {

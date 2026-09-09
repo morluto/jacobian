@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Annotated, Literal, Self
+from typing import TYPE_CHECKING, Annotated, Self
 
-from pydantic import ConfigDict, Field, StrictInt, StringConstraints, model_validator
+from pydantic import ConfigDict, Field, StrictInt, model_validator
 
 from jacobian._exact import DecimalIntegerEncoding
 from jacobian._models import StrictModel
@@ -28,46 +28,6 @@ ContiguousSumInteger = Annotated[
     int,
     DecimalIntegerEncoding(max_digits=MAX_PROFILE_INTEGER_DIGITS),
 ]
-
-ContiguousSumFailureKind = Literal[
-    "WORKER_START_FAILED",
-    "WORKER_TIMEOUT",
-    "WORKER_CANCELLED",
-    "STDOUT_LIMIT_EXCEEDED",
-    "STDERR_LIMIT_EXCEEDED",
-    "WORKER_RESOURCE_LIMIT",
-    "WORKER_EXITED",
-    "MALFORMED_OUTPUT",
-    "REQUEST_DEADLINE_EXPIRED",
-]
-ContiguousSumTimeoutLayer = Literal[
-    "WORKER_START",
-    "WORKER_WALL",
-    "REQUEST_CANCELLATION",
-    "OUTPUT_LIMIT",
-    "PROCESS_RESOURCE",
-    "WORKER_EXIT",
-    "RESULT_VALIDATION",
-    "REQUEST_DEADLINE",
-]
-
-
-class ContiguousSumWorkerDiagnostic(StrictModel):
-    """Bounded replay evidence for a contiguous-sum ``UNKNOWN`` result."""
-
-    failure: ContiguousSumFailureKind
-    timeout_layer: ContiguousSumTimeoutLayer
-    elapsed_ms: StrictInt = Field(ge=0)
-    worker_timeout_ms: StrictInt = Field(ge=0, le=MAX_FACTORING_WORK_SECONDS * 1000)
-    budget_seconds: StrictInt = Field(ge=1, le=MAX_FACTORING_WORK_SECONDS)
-    returncode: StrictInt | None = Field(default=None, ge=-(2**31), le=(2**32) - 1)
-    operation_version: Literal["1"] = "1"
-    repository_revision: Annotated[
-        str,
-        StringConstraints(
-            pattern=r"^(?:unknown|[0-9a-f]{40})$", max_length=40, strict=True
-        ),
-    ]
 
 
 class ContiguousSumProfileRequest(StrictModel):
@@ -121,35 +81,13 @@ class ContiguousSumProfileRow(StrictModel):
 
 
 class ContiguousSumProfileResult(StrictModel):
-    """Complete or operationally incomplete profile over a closed interval."""
+    """Complete profile over a closed interval."""
 
-    status: Literal["COMPLETE", "UNKNOWN"] = "COMPLETE"
     lower_bound: ContiguousSumInteger
     upper_bound: ContiguousSumInteger
     rows: tuple[ContiguousSumProfileRow, ...] = Field(
         min_length=0, max_length=MAX_INTERVAL_WIDTH
     )
-    detail: str | None = None
-    diagnostic: ContiguousSumWorkerDiagnostic | None = None
-
-    @classmethod
-    def _unknown_from_kernel(
-        cls,
-        *,
-        admission: ContiguousSumProfileAdmission,
-        detail: str,
-        diagnostic: ContiguousSumWorkerDiagnostic,
-    ) -> Self:
-        """Build the typed non-conclusion from the admitted execution plan."""
-
-        return cls.model_construct(
-            status="UNKNOWN",
-            lower_bound=admission.lower_bound,
-            upper_bound=admission.upper_bound,
-            rows=(),
-            detail=detail,
-            diagnostic=diagnostic,
-        )
 
     @classmethod
     def _complete_from_kernel(
@@ -171,12 +109,9 @@ class ContiguousSumProfileResult(StrictModel):
             )
         )
         return cls.model_construct(
-            status="COMPLETE",
             lower_bound=admission.lower_bound,
             upper_bound=admission.upper_bound,
             rows=rows,
-            detail=None,
-            diagnostic=None,
         )
 
     @model_validator(mode="after")
@@ -185,14 +120,6 @@ class ContiguousSumProfileResult(StrictModel):
         upper = self.upper_bound
         if lower < 1 or upper < lower:
             raise ValueError("result endpoints must form a positive interval")
-        if self.status == "UNKNOWN":
-            if self.rows or not self.detail or self.diagnostic is None:
-                raise ValueError(
-                    "an unknown profile has no rows, detail, and diagnostic"
-                )
-            return self
-        if self.detail is not None or self.diagnostic is not None:
-            raise ValueError("a complete profile cannot include diagnostics")
         expected_width = upper - lower + 1
         if len(self.rows) != expected_width:
             raise ValueError("a complete profile has one row per interval integer")
@@ -213,5 +140,4 @@ __all__ = [
     "ContiguousSumProfileRequest",
     "ContiguousSumProfileResult",
     "ContiguousSumProfileRow",
-    "ContiguousSumWorkerDiagnostic",
 ]

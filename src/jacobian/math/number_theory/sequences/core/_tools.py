@@ -4,14 +4,19 @@ from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.number_theory.sequences.core._models import (
+    AutocorrelationResult,
+    FiniteIntegerSequence,
     IntegerSequenceBooleanResult,
     IntegerSequenceFrequenciesResult,
     IntegerSequenceIndexListResult,
     IntegerSequenceListResult,
     IntegerSequenceRationalResult,
     IntegerSequenceValueResult,
+    SequenceOrderShapeResult,
 )
 from jacobian.math.number_theory.sequences.core.operations import (
+    aperiodic_autocorrelation,
+    cyclic_autocorrelation,
     decide_arithmetic,
     decide_geometric,
     decide_nondecreasing,
@@ -34,6 +39,7 @@ from jacobian.math.number_theory.sequences.core.operations import (
     sequence_mean,
     sequence_median,
     sequence_minimum,
+    sequence_order_shape,
     sequence_product,
     sequence_range,
     sequence_sum,
@@ -47,6 +53,64 @@ from jacobian.math.number_theory.sequences.core.values import IntegerSequence
 _SEQ = {"values": ["1", "2", "3"]}
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    MathTool(
+        operation_id="sequence.order_shape.profile.compute",
+        title="Compute an exact sequence order-shape profile",
+        description=(
+            "Return first monotonicity violations, every valid weak-unimodal peak "
+            "position, explicit signed log-concavity comparisons, nonnegativity, "
+            "and internal-zero status for a finite integer sequence."
+        ),
+        request_type=FiniteIntegerSequence,
+        result_type=SequenceOrderShapeResult,
+        run=sequence_order_shape,
+        tags=("sequence", "order", "unimodal", "log-concavity", "exact"),
+        examples=(
+            OperationExample(
+                name="flat_peak",
+                description="Profile the weak-unimodal sequence 1, 3, 3, 2.",
+                input={"values": ["1", "3", "3", "2"]},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="sequence.autocorrelation.aperiodic.compute",
+        title="Compute exact aperiodic autocorrelation",
+        description=(
+            "Compute the exact integer autocorrelation at lags -(n-1) through "
+            "n-1 without wraparound. An empty sequence returns an empty profile."
+        ),
+        request_type=FiniteIntegerSequence,
+        result_type=AutocorrelationResult,
+        run=aperiodic_autocorrelation,
+        tags=("sequence", "autocorrelation", "aperiodic", "exact"),
+        examples=(
+            OperationExample(
+                name="three_terms",
+                description="Compute the aperiodic autocorrelation of 1, 2, 3.",
+                input={"values": ["1", "2", "3"]},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="sequence.autocorrelation.cyclic.compute",
+        title="Compute exact cyclic autocorrelation",
+        description=(
+            "Compute the exact integer autocorrelation with indices modulo n at "
+            "lags 0 through n-1. An empty sequence returns an empty profile."
+        ),
+        request_type=FiniteIntegerSequence,
+        result_type=AutocorrelationResult,
+        run=cyclic_autocorrelation,
+        tags=("sequence", "autocorrelation", "cyclic", "exact"),
+        examples=(
+            OperationExample(
+                name="three_terms",
+                description="Compute the cyclic autocorrelation of 1, 2, 3.",
+                input={"values": ["1", "2", "3"]},
+            ),
+        ),
+    ),
     MathTool(
         operation_id="sequence.compute.sum",
         title="Sum integer sequence",

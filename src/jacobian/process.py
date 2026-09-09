@@ -17,6 +17,7 @@ conversion to a typed mathematical result.
 
 from __future__ import annotations
 
+import json
 import math
 import os
 import signal
@@ -30,7 +31,7 @@ from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import BinaryIO, Never, cast
+from typing import Any, BinaryIO, Never, cast
 
 from jacobian._execution import (
     BackendFailureReason,
@@ -42,7 +43,9 @@ from jacobian._execution import (
     RequestCancellationSignal,
     current_request_cancellation,
     current_request_execution,
+    report_request_progress,
     request_cancellation,
+    request_checkpoint,
 )
 
 __all__ = [
@@ -55,6 +58,7 @@ __all__ = [
     "ProcessResourceLimits",
     "bounded_process_cancellation",
     "check_bounded_process_result",
+    "decode_checked_worker_output",
     "run_bounded_process",
     "run_bounded_worker_dialogue",
     "worker_environment",
@@ -63,6 +67,7 @@ __all__ = [
 
 _PIPE_DRAIN_GRACE_SECONDS = 0.5
 _DEFAULT_LOCALE = "C.UTF-8"
+_CHECKED_WORKER_FRAME_BYTES = 16 * 1024 * 1024
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,6 +94,77 @@ def check_bounded_process_result(result: BoundedProcessResult) -> None:
         error = OperationBackendError(BackendFailureReason.ABNORMAL_EXIT)
         error.add_note(repr(result.stderr[:16384]))
         raise error
+
+
+def decode_checked_worker_output[CheckedResultT](
+    output: bytes,
+    *,
+    decode_result: Callable[[Any], CheckedResultT],
+    checkpoint: Callable[[], None] | None = None,
+) -> CheckedResultT:
+    """Decode bounded private frames and require exactly one terminal result."""
+
+    if not output or len(output) > _CHECKED_WORKER_FRAME_BYTES:
+        raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE)
+    result: CheckedResultT | None = None
+    terminal = False
+    last_progress = -1
+    try:
+        for raw_frame in output.splitlines():
+            if not raw_frame or len(raw_frame) > _CHECKED_WORKER_FRAME_BYTES:
+                raise ValueError
+            frame = json.loads(raw_frame)
+            if checkpoint is None:
+                request_checkpoint("during checked worker frame validation")
+            else:
+                checkpoint()
+            if not isinstance(frame, dict) or terminal:
+                raise ValueError
+            kind = frame.get("kind")
+            if kind == "progress":
+                progress = frame.get("progress")
+                total = frame.get("total")
+                message = frame.get("message")
+                if (
+                    not isinstance(progress, int)
+                    or isinstance(progress, bool)
+                    or progress < last_progress
+                    or (
+                        total is not None
+                        and (not isinstance(total, int) or total < progress)
+                    )
+                    or (message is not None and not isinstance(message, str))
+                ):
+                    raise ValueError
+                last_progress = progress
+                report_request_progress(progress, total=total, message=message)
+            elif kind == "error":
+                terminal = True
+                raise OperationBackendError(BackendFailureReason(frame["reason"]))
+            elif kind == "execution_error":
+                terminal = True
+                from jacobian._worker_errors import decode_worker_execution_error
+
+                decode_worker_execution_error(frame)
+                raise ValueError
+            elif kind == "result":
+                terminal = True
+                result = decode_result(frame["result"])
+            else:
+                raise ValueError
+    except OperationBackendError:
+        raise
+    except (
+        KeyError,
+        TypeError,
+        ValueError,
+        UnicodeDecodeError,
+        json.JSONDecodeError,
+    ) as exc:
+        raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE) from exc
+    if not terminal or result is None:
+        raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE)
+    return result
 
 
 class BoundedWorkerDialogueErrorReason(StrEnum):

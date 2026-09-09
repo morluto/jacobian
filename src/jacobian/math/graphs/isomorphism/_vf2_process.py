@@ -5,15 +5,19 @@ from __future__ import annotations
 import json
 import math
 import sys
+import time
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from pydantic_core import PydanticCustomError
 
 from jacobian._execution import (
-    OperationExecutionCancelledError,
+    BackendFailureReason,
+    OperationBackendError,
     OperationExecutionTimeoutError,
+    lease_operation_phases,
     request_checkpoint,
+    require_execution_deadline,
 )
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.isomorphism._models import (
@@ -63,11 +67,18 @@ def _vertex_mapping(
     """
     from jacobian.process import (
         ProcessResourceLimits,
+        check_bounded_process_result,
+        decode_checked_worker_output,
         run_bounded_process,
         worker_environment,
     )
 
     request_checkpoint("before graph isomorphism")
+    lease = lease_operation_phases(
+        _VF2_WALL_SECONDS,
+        admitted_response_bytes=_VF2_STDOUT_LIMIT,
+        validation_work=graph_a.vertex_count + len(graph_a.edges) + len(graph_b.edges),
+    )
     request = {
         "graph_a": {
             "vertex_count": graph_a.vertex_count,
@@ -82,10 +93,16 @@ def _vertex_mapping(
     }
     try:
         with TemporaryDirectory(prefix="jacobian-vf2-") as worker_directory:
+            remaining_seconds = lease.backend_deadline - time.monotonic()
+            if remaining_seconds <= 0:
+                raise OperationExecutionTimeoutError(
+                    "graph isomorphism backend lease expired",
+                    configured_seconds=_VF2_WALL_SECONDS,
+                )
             completed = run_bounded_process(
                 [sys.executable, str(_VF2_WORKER)],
                 input_bytes=json.dumps(request, separators=(",", ":")).encode("utf-8"),
-                timeout_seconds=_VF2_WALL_SECONDS,
+                timeout_seconds=remaining_seconds,
                 environment=worker_environment(locale="C.UTF-8"),
                 stdout_limit=_VF2_STDOUT_LIMIT,
                 stderr_limit=_VF2_STDERR_LIMIT,
@@ -97,20 +114,15 @@ def _vertex_mapping(
                 cwd=worker_directory,
             )
     except OSError as exc:
-        raise RuntimeError("bounded VF2 worker could not be started") from exc
+        raise OperationBackendError(BackendFailureReason.STARTUP) from exc
     request_checkpoint("after graph isomorphism worker")
-    if completed.cancelled:
-        raise OperationExecutionCancelledError("graph isomorphism worker cancelled")
-    if completed.timed_out:
-        raise OperationExecutionTimeoutError("graph isomorphism worker expired")
-    if (
-        completed.stdout_exceeded
-        or completed.stderr_exceeded
-        or completed.returncode != 0
-    ):
-        raise RuntimeError("bounded VF2 worker did not establish an outcome")
+    check_bounded_process_result(completed)
     try:
-        response = json.loads(completed.stdout.decode("utf-8"))
+        response = decode_checked_worker_output(
+            completed.stdout,
+            decode_result=lambda value: value,
+            checkpoint=lambda: require_execution_deadline(lease.operation_deadline),
+        )
         request_checkpoint("during graph isomorphism response validation")
         mapping = response["mapping"] if response["ok"] is True else None
         if mapping is None:
@@ -127,15 +139,15 @@ def _vertex_mapping(
         UnicodeDecodeError,
         json.JSONDecodeError,
     ) as exc:
-        raise RuntimeError("bounded VF2 worker returned malformed output") from exc
+        raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE) from exc
     if len(pairs) != graph_a.vertex_count:
-        raise ValueError("worker mapping is not complete")
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
     sources = {source for source, _ in pairs}
     targets = {target for _, target in pairs}
     if sources != set(range(graph_a.vertex_count)) or targets != set(
         range(graph_b.vertex_count)
     ):
-        raise ValueError("worker mapping is not bijective")
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
     forward = dict(pairs)
     edges_b = {
         edge if graph_b.directed else tuple(sorted(edge)) for edge in graph_b.edges
@@ -146,7 +158,7 @@ def _vertex_mapping(
         else tuple(sorted((forward[source], forward[target])))
         for source, target in graph_a.edges
     } != edges_b:
-        raise ValueError("worker mapping does not preserve adjacency")
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
     request_checkpoint("after graph isomorphism response validation")
     return [VertexMappingPair(from_vertex=src, to_vertex=dst) for src, dst in pairs]
 

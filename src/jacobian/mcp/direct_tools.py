@@ -21,6 +21,7 @@ from jacobian.mcp.runtime import AppState, _authorize
 from jacobian.mcp.tools import (
     _operation_error_boundary,
     _request_cancellation,
+    run_with_mcp_progress,
 )
 
 _FIXED_TOOL_NAMES = frozenset({"math.find", "math.run"})
@@ -58,7 +59,7 @@ def _direct_operation_tool(
     if catalog._binding(operation_id) is None:  # pragma: no cover
         raise RuntimeError(f"catalog binding disappeared for {operation_id}")
 
-    def execute(
+    async def execute(
         payload: dict[str, Any],
         *,
         ctx: Context[AppState, Any],
@@ -77,12 +78,16 @@ def _direct_operation_tool(
                     structured_content=structured_content,
                 )
 
-            return execute_operation(
-                operation_id,
-                payload,
-                catalog,
-                projector=project,
-                cancellation_signal=cancellation,
+            return await run_with_mcp_progress(
+                lambda progress_sink: execute_operation(
+                    operation_id,
+                    payload,
+                    catalog,
+                    projector=project,
+                    cancellation_signal=cancellation,
+                    progress_sink=progress_sink,
+                ),
+                ctx,
             )
 
     metadata = FuncMetadata(
@@ -98,7 +103,7 @@ def _direct_operation_tool(
         description=operation.description,
         parameters=_operation_input_schema(operation),
         fn_metadata=metadata,
-        is_async=False,
+        is_async=True,
         context_kwarg="ctx",
         annotations=ToolAnnotations(
             read_only_hint=True,

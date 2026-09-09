@@ -18,11 +18,11 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
+from jacobian.math.number_theory.number_fields import GaussianRational
 from jacobian.math.probability._gaussian import (
     MAX_GAUSSIAN_POLYNOMIAL_TERMS,
     MAX_GAUSSIAN_TERM_DEGREE,
     MAX_GAUSSIAN_VARIABLES,
-    ExactComplexRational,
     GaussianPolynomial,
     GaussianPolynomialMomentRequest,
     GaussianPolynomialTerm,
@@ -37,7 +37,7 @@ def _validation_error(message: str) -> PydanticCustomError:
 class RawGaussianPolynomialTerm(StrictModel):
     """One bounded wire term before duplicate/zero canonicalization."""
 
-    coefficient: ExactComplexRational
+    coefficient: GaussianRational
     exponents: tuple[StrictInt, ...] = Field(
         min_length=1,
         max_length=MAX_GAUSSIAN_VARIABLES,
@@ -136,7 +136,7 @@ def canonical_gaussian_polynomial(
 
     terms = tuple(
         GaussianPolynomialTerm(
-            coefficient=ExactComplexRational(
+            coefficient=GaussianRational(
                 real=_rational(real),
                 imaginary=_rational(imaginary),
             ),

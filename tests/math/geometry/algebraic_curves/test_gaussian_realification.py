@@ -22,7 +22,7 @@ from jacobian.math.geometry.algebraic_curves._gaussian_realification import (
     gaussian_realification,
 )
 from jacobian.math.geometry.algebraic_curves._tools import TOOLS
-from jacobian.math.probability import ExactComplexRational
+from jacobian.math.number_theory.number_fields import GaussianRational
 
 
 def _cr(real: int, imag: int = 0) -> GaussianComplexCoefficient:
@@ -43,7 +43,7 @@ def test_catalog_contains_gaussian_realification() -> None:
 
 
 def test_native_api_and_gaussian_scalar_compose() -> None:
-    coefficient = ExactComplexRational(
+    coefficient = GaussianRational(
         real=CanonicalRational(num=1, den=1),
         imaginary=CanonicalRational(num=2, den=1),
     )

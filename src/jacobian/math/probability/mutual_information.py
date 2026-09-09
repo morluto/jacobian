@@ -6,7 +6,10 @@ from fractions import Fraction
 from math import lcm
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.probability.values import (
     MAX_MUTUAL_INFORMATION_POWER_COST_BITS,
     MAX_MUTUAL_INFORMATION_PRODUCT_DIGITS,
@@ -16,6 +19,8 @@ from jacobian.math.probability.values import (
     MutualInformationResult,
     MutualInformationTerm,
 )
+
+MAX_MUTUAL_INFORMATION_POSITIVE_SUPPORT = 64
 
 
 def _small_prime_factorization(value: int) -> dict[int, int]:
@@ -74,15 +79,23 @@ def _require_bounded_product(
     weighted_ratios: list[tuple[Fraction, Fraction]],
 ) -> None:
     if scale.bit_length() > MAX_MUTUAL_INFORMATION_SCALE_BITS:
-        raise ValueError(
-            "mutual-information logarithmic representation scale exceeds the bound"
+        raise OperationResourceAdmissionError(
+            location=("probabilities",),
+            code="probability.mutual_information.scale_bound",
+            message=(
+                "mutual-information logarithmic representation scale exceeds the bound"
+            ),
         )
     power_cost = 0
     for probability, ratio in weighted_ratios:
         scaled_probability = scale * probability
         if scaled_probability.denominator != 1:
-            raise ValueError(
-                "mutual-information logarithmic representation scale does not clear support masses"
+            raise OperationResourceAdmissionError(
+                location=("probabilities",),
+                code="probability.mutual_information.scale_bound",
+                message=(
+                    "mutual-information logarithmic representation scale does not clear support masses"
+                ),
             )
         exponent = scaled_probability.numerator
         if ratio == 1:
@@ -91,8 +104,12 @@ def _require_bounded_product(
             ratio.numerator.bit_length() + ratio.denominator.bit_length()
         )
         if power_cost > MAX_MUTUAL_INFORMATION_POWER_COST_BITS:
-            raise ValueError(
-                "mutual-information logarithmic representation product exceeds the output-cost bound"
+            raise OperationResourceAdmissionError(
+                location=("probabilities",),
+                code="probability.mutual_information.product_bound",
+                message=(
+                    "mutual-information logarithmic representation product exceeds the output-cost bound"
+                ),
             )
 
 
@@ -116,6 +133,18 @@ def mutual_information(table: FiniteJointTable) -> MutualInformationResult:
         )
         for column in range(len(table.column_labels))
     )
+    positive_support_count = sum(
+        probability != 0 for row in probabilities for probability in row
+    )
+    if positive_support_count > MAX_MUTUAL_INFORMATION_POSITIVE_SUPPORT:
+        raise OperationResourceAdmissionError(
+            location=("probabilities",),
+            code="probability.mutual_information.support_bound",
+            message=(
+                "mutual information accepts at most "
+                f"{MAX_MUTUAL_INFORMATION_POSITIVE_SUPPORT} positive cells"
+            ),
+        )
     support: list[MutualInformationTerm] = []
     weighted_ratios: list[tuple[Fraction, Fraction]] = []
     for row_index, row in enumerate(probabilities):
@@ -174,6 +203,7 @@ def mutual_information(table: FiniteJointTable) -> MutualInformationResult:
 
 
 __all__ = [
+    "MAX_MUTUAL_INFORMATION_POSITIVE_SUPPORT",
     "MAX_MUTUAL_INFORMATION_PRODUCT_DIGITS",
     "FiniteJointTable",
     "MutualInformationLogRepresentation",

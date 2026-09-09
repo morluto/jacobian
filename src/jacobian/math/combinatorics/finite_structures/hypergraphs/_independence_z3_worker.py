@@ -13,6 +13,7 @@ from jacobian._execution import (
     request_execution,
 )
 from jacobian._worker_errors import bind_worker_deadline, worker_execution_errors
+from jacobian._worker_protocol import encode_worker_result_frame
 from jacobian.math.combinatorics.finite_structures.hypergraphs._independence_z3 import (
     _solve_independence_number_kernel,
 )
@@ -35,8 +36,8 @@ def main() -> int:
                 payload["resource_budget"]
             )
             result = _solve_independence_number_kernel(source, resource_budget)
-            sys.stdout.write(
-                json.dumps(
+            sys.stdout.buffer.write(
+                encode_worker_result_frame(
                     result.model_dump(
                         mode="json",
                         exclude={
@@ -44,8 +45,6 @@ def main() -> int:
                             "resource_budget",
                         },
                     ),
-                    separators=(",", ":"),
-                    ensure_ascii=False,
                 )
             )
             return 0

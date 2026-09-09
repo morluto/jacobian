@@ -4,9 +4,12 @@ from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.graphs.cycle_length_profile._models import (
     CycleLengthProfileRequest,
     CycleLengthProfileResult,
+    FixedLengthCycleEnumerationRequest,
+    FixedLengthCycleEnumerationResult,
 )
 from jacobian.math.graphs.cycle_length_profile.operations import (
     compute_cycle_length_profile,
+    enumerate_fixed_length_cycles,
 )
 
 
@@ -14,6 +17,20 @@ def compute_cycle_length_profile_op(
     request: CycleLengthProfileRequest,
 ) -> CycleLengthProfileResult:
     return compute_cycle_length_profile(request.graph)
+
+
+def _enumerate_cycles(
+    request: FixedLengthCycleEnumerationRequest,
+) -> FixedLengthCycleEnumerationResult:
+    return enumerate_fixed_length_cycles(request.graph, request.cycle_length)
+
+
+def _enumerate_chordless_cycles(
+    request: FixedLengthCycleEnumerationRequest,
+) -> FixedLengthCycleEnumerationResult:
+    return enumerate_fixed_length_cycles(
+        request.graph, request.cycle_length, chordless=True
+    )
 
 
 TOOLS: MathTools = (
@@ -40,6 +57,50 @@ TOOLS: MathTools = (
                         "vertices": ["0", "1", "2", "3"],
                         "edges": [["0", "1"], ["1", "2"], ["2", "3"], ["0", "3"]],
                     },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="graph.simple_cycle.fixed_length.enumerate",
+        title="Enumerate fixed-length simple cycles",
+        description="Return every simple cycle of one length with dihedral canonicalization and source incidence profiles.",
+        request_type=FixedLengthCycleEnumerationRequest,
+        result_type=FixedLengthCycleEnumerationResult,
+        run=_enumerate_cycles,
+        tags=("graph", "cycle", "enumeration", "exact"),
+        examples=(
+            OperationExample(
+                name="square",
+                description="Enumerate the unique four-cycle of a square.",
+                input={
+                    "graph": {
+                        "vertices": ["0", "1", "2", "3"],
+                        "edges": [["0", "1"], ["0", "3"], ["1", "2"], ["2", "3"]],
+                    },
+                    "cycle_length": 4,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="graph.chordless_cycle.fixed_length.enumerate",
+        title="Enumerate fixed-length chordless cycles",
+        description="Return every induced cycle of one length with dihedral canonicalization and source incidence profiles.",
+        request_type=FixedLengthCycleEnumerationRequest,
+        result_type=FixedLengthCycleEnumerationResult,
+        run=_enumerate_chordless_cycles,
+        tags=("graph", "cycle", "chordless", "enumeration", "exact"),
+        examples=(
+            OperationExample(
+                name="square",
+                description="Enumerate the unique chordless four-cycle of a square.",
+                input={
+                    "graph": {
+                        "vertices": ["0", "1", "2", "3"],
+                        "edges": [["0", "1"], ["0", "3"], ["1", "2"], ["2", "3"]],
+                    },
+                    "cycle_length": 4,
                 },
             ),
         ),

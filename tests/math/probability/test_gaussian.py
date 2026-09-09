@@ -8,9 +8,9 @@ import pytest
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import MathTool, OperationDomainValidationError
+from jacobian.math.number_theory.number_fields import GaussianRational
 from jacobian.math.probability._gaussian import (
     MAX_GAUSSIAN_EXPANSION_PATHS,
-    ExactComplexRational,
     GaussianPolynomial,
     GaussianPolynomialMomentResult,
     GaussianPolynomialTerm,
@@ -33,7 +33,7 @@ def _operation() -> MathTool[
 
 def _term(exponents: tuple[int, ...]) -> GaussianPolynomialTerm:
     return GaussianPolynomialTerm(
-        coefficient=ExactComplexRational(
+        coefficient=GaussianRational(
             real=CanonicalRational(num=1, den=1),
             imaginary=CanonicalRational(num=0, den=1),
         ),

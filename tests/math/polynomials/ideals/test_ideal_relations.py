@@ -242,10 +242,11 @@ def test_relation_kernel_uses_the_bound_request_deadline() -> None:
             IdealComputationBudget(wall_seconds=1)
         )
         execution = current_request_execution()
+        active_deadline = execution.deadline if execution is not None else None
 
     assert execution is not None
-    assert execution.deadline is not None
-    assert execution.deadline == kernel_deadline
+    assert active_deadline is not None
+    assert active_deadline == kernel_deadline
 
 
 def test_ledger_rejects_a_false_positive_shape() -> None:

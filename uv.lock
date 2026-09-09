@@ -531,6 +531,7 @@ name = "jacobian"
 version = "0.20.0"
 source = { editable = "." }
 dependencies = [
+    { name = "anyio" },
     { name = "mcp" },
     { name = "networkx" },
     { name = "pydantic" },
@@ -592,6 +593,7 @@ dev-core = [
 
 [package.metadata]
 requires-dist = [
+    { name = "anyio", specifier = ">=4.5,<5" },
     { name = "mcp", specifier = "==2.1.0" },
     { name = "networkx", specifier = "==3.6.1" },
     { name = "pydantic", specifier = ">=2.12,<3" },

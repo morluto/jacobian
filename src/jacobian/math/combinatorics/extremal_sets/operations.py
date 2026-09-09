@@ -4,9 +4,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.extremal_sets._models import (
     BinaryUnionRelationResult,
+    SunflowerHypergraphResult,
+    SunflowerTriple,
     UnionRelationRow,
 )
 from jacobian.math.combinatorics.extremal_sets.values import (
@@ -19,9 +24,10 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
 )
 
-__all__ = ["construct_binary_union_relation"]
+__all__ = ["construct_binary_union_relation", "construct_sunflower_hypergraph"]
 
 MAX_BINARY_UNION_MEMBERSHIP_WORK = 20_000_000
+MAX_SUNFLOWER_INTERSECTION_WORK = 20_000_000
 
 
 @dataclass(frozen=True)
@@ -56,6 +62,64 @@ def construct_binary_union_relation(
         source=source,
         rows=rows,
         hypergraph=FiniteHypergraph(vertices=vertices, edges=edges),
+    )
+
+
+def construct_sunflower_hypergraph(
+    source: IndexedFiniteSetFamily,
+) -> SunflowerHypergraphResult:
+    """Return every three-member sunflower with its exact common core."""
+
+    member_count = len(source.members)
+    if member_count > MAX_VERTICES:
+        raise OperationResourceAdmissionError(
+            location=("source", "members"),
+            code="set_system.sunflower.vertex_bound",
+            message=f"sunflower construction supports at most {MAX_VERTICES} members",
+        )
+    triple_bound = member_count * (member_count - 1) * (member_count - 2) // 6
+    if triple_bound > MAX_EDGES:
+        raise OperationResourceAdmissionError(
+            location=("source", "members"),
+            code="set_system.sunflower.output_bound",
+            message=f"the {triple_bound} candidate triples exceed the {MAX_EDGES}-edge output bound",
+        )
+    maximum_size = max((len(member) for member in source.members), default=0)
+    if 3 * maximum_size * triple_bound > MAX_SUNFLOWER_INTERSECTION_WORK:
+        raise OperationResourceAdmissionError(
+            location=("source", "members"),
+            code="set_system.sunflower.intersection_work_bound",
+            message="sunflower pair-intersection work exceeds its exact bound",
+        )
+    sets = tuple(frozenset(member) for member in source.members)
+    rows: list[SunflowerTriple] = []
+    for first in range(member_count):
+        for second in range(first + 1, member_count):
+            first_core = sets[first] & sets[second]
+            for third in range(second + 1, member_count):
+                if (
+                    first_core
+                    == sets[first] & sets[third]
+                    == sets[second] & sets[third]
+                ):
+                    edge_id = f"sunflower_{first}_{second}_{third}"
+                    rows.append(
+                        SunflowerTriple(
+                            edge_id=edge_id,
+                            source_indices=(first, second, third),
+                            core=tuple(sorted(first_core)),
+                        )
+                    )
+    return SunflowerHypergraphResult(
+        source=source,
+        sunflowers=tuple(rows),
+        hypergraph=FiniteHypergraph(
+            vertices=tuple(str(index) for index in range(member_count)),
+            edges=tuple(
+                (row.edge_id, tuple(str(index) for index in row.source_indices))
+                for row in rows
+            ),
+        ),
     )
 
 

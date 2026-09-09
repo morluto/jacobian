@@ -21,10 +21,12 @@ def test_subject_operation_groups_preserve_wire_contracts() -> None:
             "interval.expression.adaptive_range_enclosure.compute",
             "interval.expression.box_enclosure.compute",
             "interval.expression.definite_integral_enclosure.compute",
+            "interval.expression.endpoint_log_improper_integral_enclosure.compute",
             "interval.expression.second_jet_enclosure.compute",
         ),
         (
             "probability.joint.mutual_information.compute",
+            "probability.compound_poisson.cumulant_prefix.compute",
             "probability.finite_distribution.event_probability.compute",
             "probability.finite_distribution.raw_moment.compute",
             "probability.finite_distribution.condition.compute",

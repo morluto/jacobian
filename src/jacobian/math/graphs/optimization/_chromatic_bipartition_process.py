@@ -10,20 +10,30 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from jacobian._execution import (
+    BackendFailureReason,
+    ExecutionResource,
+    OperationBackendError,
     OperationExecutionCancelledError,
-    bind_request_deadline,
+    OperationExecutionTimeoutError,
+    OperationResourceExhaustedError,
     current_request_execution,
+    lease_operation_phases,
+    report_request_progress,
     request_checkpoint,
     request_execution,
+    require_execution_deadline,
+)
+from jacobian._worker_protocol import (
+    encode_worker_result_frame,
 )
 from jacobian.math.graphs.optimization._chromatic_bipartition import (
     ChromaticBipartitionRequest,
     ChromaticBipartitionResult,
-    _unknown_result,
     _unordered_partition_count,
 )
 from jacobian.process import (
     ProcessResourceLimits,
+    decode_checked_worker_output,
     run_bounded_process,
     worker_environment,
 )
@@ -34,13 +44,7 @@ _WORKER_FILE_SIZE_BYTES = 1_024 * 1_024
 
 
 def _serialized_result_bytes(result: ChromaticBipartitionResult) -> int:
-    return len(
-        json.dumps(
-            result.model_dump(mode="json"),
-            separators=(",", ":"),
-            ensure_ascii=False,
-        ).encode("utf-8")
-    )
+    return len(encode_worker_result_frame(result.model_dump(mode="json")))
 
 
 def _chromatic_bipartition_worker_stdout_limit(
@@ -56,13 +60,6 @@ def _chromatic_bipartition_worker_stdout_limit(
             s=request.s,
             t=request.t,
             status="NO_SPLIT",
-            checked_partitions=checked,
-        ),
-        ChromaticBipartitionResult(
-            graph=request.graph,
-            s=request.s,
-            t=request.t,
-            status="UNKNOWN",
             checked_partitions=checked,
         ),
     ]
@@ -91,20 +88,35 @@ def find_chromatic_bipartition(
     if execution is None:
         with request_execution(time.monotonic()):
             return find_chromatic_bipartition(request)
-    deadline = execution.started_at + request.resource_budget.wall_seconds
-    if execution.deadline is not None:
-        deadline = min(deadline, execution.deadline)
-    bind_request_deadline(deadline)
+    total_partitions = _unordered_partition_count(len(request.graph.vertices))
+    report_request_progress(
+        0,
+        total=total_partitions,
+        message="chromatic bipartitions checked",
+    )
+    stdout_limit = _chromatic_bipartition_worker_stdout_limit(request)
+    lease = lease_operation_phases(
+        request.resource_budget.wall_seconds,
+        admitted_response_bytes=stdout_limit,
+        validation_work=len(request.graph.vertices) + len(request.graph.edges),
+    )
+    deadline = lease.operation_deadline
     try:
         with TemporaryDirectory(prefix="jacobian-graph-bipartition-") as directory:
-            remaining_seconds = deadline - time.monotonic()
+            remaining_seconds = lease.backend_deadline - time.monotonic()
             if remaining_seconds <= 0:
-                return _unknown_result(request)
-            stdout_limit = _chromatic_bipartition_worker_stdout_limit(request)
+                raise OperationExecutionTimeoutError(
+                    "chromatic bipartition backend lease expired",
+                    configured_seconds=request.resource_budget.wall_seconds,
+                    adjustable_field_path=("resource_budget", "wall_seconds"),
+                )
             completed = run_bounded_process(
                 [sys.executable, str(_BIPARTITION_WORKER)],
                 input_bytes=json.dumps(
-                    request.model_dump(mode="json"),
+                    {
+                        "_deadline": lease.backend_deadline,
+                        **request.model_dump(mode="json"),
+                    },
                     separators=(",", ":"),
                     ensure_ascii=False,
                 ).encode("utf-8"),
@@ -120,35 +132,40 @@ def find_chromatic_bipartition(
                 cwd=directory,
             )
     except OSError as exc:
-        raise RuntimeError(
-            "bounded chromatic bipartition worker could not be started"
-        ) from exc
+        raise OperationBackendError(BackendFailureReason.STARTUP) from exc
     if completed.cancelled:
         raise OperationExecutionCancelledError("chromatic bipartition worker cancelled")
     if completed.timed_out:
-        return _unknown_result(request)
+        raise OperationExecutionTimeoutError(
+            "chromatic bipartition worker deadline expired",
+            configured_seconds=request.resource_budget.wall_seconds,
+            adjustable_field_path=("resource_budget", "wall_seconds"),
+        )
     request_checkpoint("after chromatic bipartition worker")
     if completed.stdout_exceeded or completed.stderr_exceeded:
-        raise RuntimeError(
-            "bounded chromatic bipartition worker exceeded an output cap"
-        )
+        raise OperationResourceExhaustedError(ExecutionResource.OUTPUT)
     if completed.returncode != 0:
-        raise RuntimeError(
-            "bounded chromatic bipartition worker did not establish an outcome"
-        )
+        raise OperationBackendError(BackendFailureReason.ABNORMAL_EXIT)
     if time.monotonic() >= deadline:
-        return _unknown_result(request)
+        raise OperationExecutionTimeoutError(
+            "chromatic bipartition operation deadline expired",
+            configured_seconds=request.resource_budget.wall_seconds,
+            adjustable_field_path=("resource_budget", "wall_seconds"),
+        )
     try:
-        result = ChromaticBipartitionResult.model_validate(
-            json.loads(completed.stdout.decode("utf-8"))
+        result = decode_checked_worker_output(
+            completed.stdout,
+            decode_result=ChromaticBipartitionResult.model_validate,
+            checkpoint=lambda: require_execution_deadline(deadline),
         )
-    except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
-        raise RuntimeError(
-            "bounded chromatic bipartition worker returned malformed output"
-        ) from exc
+    except (TypeError, ValueError) as exc:
+        raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE) from exc
     if result.graph != request.graph or result.s != request.s or result.t != request.t:
-        raise RuntimeError(
-            "chromatic bipartition worker result is not bound to the submitted request"
-        )
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
     request_checkpoint("after chromatic bipartition response validation")
+    report_request_progress(
+        result.checked_partitions,
+        total=total_partitions,
+        message="chromatic bipartitions checked",
+    )
     return result

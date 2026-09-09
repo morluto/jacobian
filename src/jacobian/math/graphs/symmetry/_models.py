@@ -316,10 +316,27 @@ class GraphSymmetryOrbitResult(StrictModel):
         )
 
 
+class FullGraphAutomorphismRequest(StrictModel):
+    """Compute the full color-preserving automorphism group."""
+
+    graph: ColoredUndirectedGraph
+
+
+class FullGraphAutomorphismResult(StrictModel):
+    """Deterministic generators and order of the full automorphism group."""
+
+    graph: ColoredUndirectedGraph
+    generators: tuple[GraphAutomorphismGenerator, ...]
+    automorphism_count: StrictInt = Field(ge=1)
+    generated_group_order: StrictInt = Field(ge=1)
+
+
 __all__ = [
     "MAX_GRAPH_SYMMETRY_EDGES",
     "MAX_GRAPH_SYMMETRY_GENERATORS",
     "MAX_GRAPH_SYMMETRY_VERTICES",
+    "FullGraphAutomorphismRequest",
+    "FullGraphAutomorphismResult",
     "GraphAutomorphismGenerator",
     "GraphEdgeOrbit",
     "GraphSymmetryOrbitRequest",

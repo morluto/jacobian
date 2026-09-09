@@ -60,7 +60,7 @@ def test_mcp_compact_operation_matches_are_paginated() -> None:
 
             listed = await client.call_tool(
                 "math.find",
-                {"query": "exact mathematical computation"},
+                {"query": "exact mathematical computation", "search_mode": "broad"},
             )
             assert isinstance(listed.structured_content, dict)
             index = listed.structured_content
@@ -80,6 +80,7 @@ def test_mcp_compact_operation_matches_are_paginated() -> None:
                     "math.find",
                     {
                         "query": "exact mathematical computation",
+                        "search_mode": "broad",
                         "cursor": cursor,
                         "limit": 10,
                     },
@@ -101,6 +102,7 @@ def test_mcp_compact_operation_matches_are_paginated() -> None:
                 "math.find",
                 {
                     "query": "exact mathematical computation",
+                    "search_mode": "broad",
                     "limit": 10,
                 },
             )
@@ -112,6 +114,7 @@ def test_mcp_compact_operation_matches_are_paginated() -> None:
                 "math.find",
                 {
                     "query": "exact mathematical computation",
+                    "search_mode": "broad",
                     "cursor": first["next_cursor"],
                     "limit": 10,
                 },
@@ -126,6 +129,7 @@ def test_mcp_compact_operation_matches_are_paginated() -> None:
                 "math.find",
                 {
                     "query": "exact mathematical computation",
+                    "search_mode": "broad",
                     "cursor": first["next_cursor"],
                     "limit": 20,
                 },
@@ -145,6 +149,7 @@ def test_mcp_compact_operation_matches_are_paginated() -> None:
                 "math.find",
                 {
                     "query": "exact mathematical computation",
+                    "search_mode": "broad",
                     "limit": 20,
                 },
             )

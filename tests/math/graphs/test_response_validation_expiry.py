@@ -11,6 +11,7 @@ from jacobian._execution import (
     OperationExecutionTimeoutError,
     request_cancellation,
 )
+from jacobian._worker_protocol import encode_worker_result_frame
 from jacobian.math.graphs.optimization import _chromatic_number, _invariants
 from jacobian.math.graphs.optimization._coloring_models import (
     GraphChromaticNumberRequest,
@@ -42,7 +43,7 @@ def test_control_expiry_after_real_response_validation(
         execute = module._clique_execute
     response = BoundedProcessResult(
         returncode=0,
-        stdout=expected.model_dump_json().encode(),
+        stdout=encode_worker_result_frame(expected.model_dump(mode="json")),
         stderr=b"",
         stdout_exceeded=False,
         stderr_exceeded=False,
@@ -195,7 +196,7 @@ def test_expiry_during_finite_graph_witness_check_precedes_invalid_witness(
         "run_bounded_process",
         lambda *a, **_kwargs: BoundedProcessResult(
             returncode=0,
-            stdout=expected.model_dump_json().encode(),
+            stdout=encode_worker_result_frame(expected.model_dump(mode="json")),
             stderr=b"",
             stdout_exceeded=False,
             stderr_exceeded=False,

@@ -12,6 +12,9 @@ from jacobian.math.analysis._expression_enclosure import (
     IntervalExpressionEnclosureRequest,
     IntervalExpressionEnclosureResult,
 )
+from jacobian.math.analysis._improper_integral_enclosure import (
+    IMPROPER_INTEGRAL_OPERATIONS,
+)
 from jacobian.math.analysis._models import MAX_RATIONAL_BOX_ENDPOINT_DIGITS
 from jacobian.math.analysis._point_enclosure import (
     ArbPointEnclosureRequest,
@@ -227,6 +230,7 @@ TOOLS: MathTools = (
     *ADAPTIVE_RANGE_ENCLOSURE_OPERATIONS,
     *BOX_EXPRESSION_ENCLOSURE_OPERATIONS,
     *DEFINITE_INTEGRAL_ENCLOSURE_OPERATIONS,
+    *IMPROPER_INTEGRAL_OPERATIONS,
     *SECOND_JET_ENCLOSURE_OPERATIONS,
 )
 

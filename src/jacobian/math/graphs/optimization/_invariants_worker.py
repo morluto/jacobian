@@ -13,6 +13,7 @@ from jacobian._execution import (
     request_execution,
 )
 from jacobian._worker_errors import bind_worker_deadline, worker_execution_errors
+from jacobian._worker_protocol import encode_worker_result_frame
 from jacobian.math.graphs.optimization._invariants import _clique_execute_kernel
 from jacobian.math.graphs.optimization._models import GraphOptimizationRequest
 
@@ -23,8 +24,8 @@ def main() -> int:
         bind_worker_deadline(payload)
         request = GraphOptimizationRequest.model_validate(payload)
         result = _clique_execute_kernel(request)
-        sys.stdout.write(
-            json.dumps(result.model_dump(mode="json"), separators=(",", ":"))
+        sys.stdout.buffer.write(
+            encode_worker_result_frame(result.model_dump(mode="json"))
         )
         return 0
     except (TypeError, ValueError, json.JSONDecodeError) as exc:

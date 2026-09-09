@@ -9,12 +9,9 @@ from typing import Literal, Self
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import (
-    CanonicalRational,
-    ExactInteger,
-    require_bounded_rational,
-)
+from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
+from jacobian.math.number_theory.number_fields import GaussianRational
 
 MAX_GAUSSIAN_VARIABLES = 16
 MAX_GAUSSIAN_POLYNOMIAL_TERMS = 16
@@ -29,31 +26,8 @@ def _validation_error(message: str) -> PydanticCustomError:
     return PydanticCustomError("probability.model_invariant", message)
 
 
-class ExactComplexRational(StrictModel):
-    """One exact element of Q(i), encoded without floating-point values."""
-
-    real: CanonicalRational
-    imaginary: CanonicalRational
-
-    def as_fractions(self) -> tuple[Fraction, Fraction]:
-        return self.real.as_fraction(), self.imaginary.as_fraction()
-
-    @model_validator(mode="after")
-    def require_bounded_components(self) -> Self:
-        for label, value in (
-            ("complex real component", self.real),
-            ("complex imaginary component", self.imaginary),
-        ):
-            require_bounded_rational(
-                value,
-                max_digits=MAX_GAUSSIAN_RESULT_RATIONAL_DIGITS,
-                label=label,
-            )
-        return self
-
-
 class GaussianPolynomialTerm(StrictModel):
-    coefficient: ExactComplexRational
+    coefficient: GaussianRational
     exponents: tuple[StrictInt, ...] = Field(
         min_length=1,
         max_length=MAX_GAUSSIAN_VARIABLES,
@@ -119,13 +93,13 @@ class GaussianMomentContraction(StrictModel):
         min_length=1,
         max_length=MAX_GAUSSIAN_VARIABLES,
     )
-    expanded_coefficient: ExactComplexRational
+    expanded_coefficient: GaussianRational
     variable_moment_factors: tuple[ExactInteger, ...] = Field(
         min_length=1,
         max_length=MAX_GAUSSIAN_VARIABLES,
     )
     gaussian_moment_factor: ExactInteger
-    contribution: ExactComplexRational
+    contribution: GaussianRational
 
     @model_validator(mode="after")
     def bind_gaussian_contraction(self) -> Self:
@@ -136,7 +110,7 @@ class GaussianMomentContraction(StrictModel):
 
 class GaussianPolynomialMomentResult(StrictModel):
     order: StrictInt = Field(ge=0, le=MAX_GAUSSIAN_MOMENT_ORDER)
-    moment: ExactComplexRational
+    moment: GaussianRational
     expansion_path_count: StrictInt = Field(ge=1, le=MAX_GAUSSIAN_EXPANSION_PATHS)
     expanded_monomial_count: StrictInt = Field(ge=1, le=MAX_GAUSSIAN_EXPANSION_PATHS)
     contractions: tuple[GaussianMomentContraction, ...] = Field(
@@ -163,7 +137,7 @@ class GaussianPolynomialMomentResult(StrictModel):
         cls,
         *,
         order: int,
-        moment: ExactComplexRational,
+        moment: GaussianRational,
         expansion_path_count: int,
         expanded_monomial_count: int,
         contractions: tuple[GaussianMomentContraction, ...],
@@ -187,7 +161,6 @@ __all__ = [
     "MAX_GAUSSIAN_RESULT_RATIONAL_DIGITS",
     "MAX_GAUSSIAN_TERM_DEGREE",
     "MAX_GAUSSIAN_VARIABLES",
-    "ExactComplexRational",
     "GaussianMomentContraction",
     "GaussianPolynomial",
     "GaussianPolynomialMomentRequest",

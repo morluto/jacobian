@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationMatchRequest
 from jacobian.catalog.search import OperationDiscoveryCursorError
@@ -19,12 +21,14 @@ def _operation_match_response(
     namespace: str | None,
     limit: int | None,
     cursor: str | None,
+    search_mode: Literal["precise", "broad"] = "precise",
 ) -> OperationFindResult | OperationDiscoveryError:
     match_request = OperationMatchRequest(
         need=need,
         namespace=namespace,
         limit=limit if limit is not None else 5,
         cursor=cursor,
+        search_mode=search_mode,
     )
     try:
         matched = catalog.match(match_request)
@@ -45,6 +49,7 @@ def _operation_match_response(
         kind="matches",
         need=matched.need,
         namespace=matched.namespace,
+        search_mode=matched.search_mode,
         matches=matched.matches,
         total_matches=matched.total_matches,
         next_cursor=matched.next_cursor,

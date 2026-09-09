@@ -69,23 +69,8 @@ class UnsatisfiableBoundedColoring(StrictModel):
     status: Literal["UNSATISFIABLE"] = "UNSATISFIABLE"
 
 
-class BoundedColoringBudgetExceeded(StrictModel):
-    """No mathematical conclusion or partial witness was established."""
-
-    status: Literal["BUDGET_EXCEEDED"] = "BUDGET_EXCEEDED"
-
-
-class BoundedColoringExecutionFailed(StrictModel):
-    """The exact backend did not establish a decision; no witness is returned."""
-
-    status: Literal["EXECUTION_FAILED"] = "EXECUTION_FAILED"
-
-
 BoundedColoringOutcome = Annotated[
-    SatisfiableBoundedColoring
-    | UnsatisfiableBoundedColoring
-    | BoundedColoringBudgetExceeded
-    | BoundedColoringExecutionFailed,
+    SatisfiableBoundedColoring | UnsatisfiableBoundedColoring,
     Field(discriminator="status"),
 ]
 

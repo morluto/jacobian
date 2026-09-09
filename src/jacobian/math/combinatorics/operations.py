@@ -6,7 +6,7 @@ import math
 import time
 from collections.abc import Iterable
 from fractions import Fraction
-from itertools import pairwise
+from itertools import pairwise, product
 from typing import Literal, NoReturn
 
 from jacobian._exact import CanonicalRational
@@ -19,6 +19,8 @@ from jacobian.math.combinatorics._counting_process import evaluate_count
 from jacobian.math.combinatorics._progression_hypergraph_models import (
     MAX_GROUP_ORDER,
     ProgressionHypergraphResult,
+    ProgressionVertexBinding,
+    progression_edge_bound,
 )
 from jacobian.math.combinatorics._recurrence_admission import (
     _admit_linear_recurrence,
@@ -38,7 +40,13 @@ from jacobian.math.combinatorics._recurrence_models import (
     _require_bounded_rational,
 )
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
+    MAX_EDGES,
+    MAX_TOTAL_INCIDENCES,
     FiniteHypergraph,
+)
+from jacobian.math.groups.finite_abelian import (
+    FiniteAbelianGroupElement,
+    FiniteAbelianProductGroup,
 )
 from jacobian.math.polynomials.series._models import TruncatedSeries
 
@@ -443,34 +451,54 @@ def stirling_second(n: int, k: int) -> int:
     return int(stirling(first, second, kind=2))
 
 
-def progression_hypergraph(group_order: int) -> ProgressionHypergraphResult:
-    """Return the 3-term progression hypergraph of ``Z/group_order Z``."""
+def progression_hypergraph(
+    group: FiniteAbelianProductGroup,
+) -> ProgressionHypergraphResult:
+    """Return the complete nondegenerate 3-AP hypergraph of ``group``."""
 
-    if not 2 <= group_order <= MAX_GROUP_ORDER:
-        raise OperationDomainValidationError(
-            location=("group_order",),
-            code="combinatorics.progression_hypergraph.group_order",
-            message=f"group order must be between 2 and {MAX_GROUP_ORDER}",
+    group_order = group.order
+    edge_bound = progression_edge_bound(group)
+    if group_order > MAX_GROUP_ORDER:
+        raise OperationResourceAdmissionError(
+            location=("group", "moduli"),
+            code="combinatorics.progression_hypergraph.vertex_bound",
+            message=f"group order exceeds the {MAX_GROUP_ORDER}-vertex bound",
         )
-    vertices = tuple(str(index) for index in range(group_order))
-    edge_sets = {
-        frozenset(
-            (start, (start + step) % group_order, (start + 2 * step) % group_order)
+    if edge_bound > MAX_EDGES or 3 * edge_bound > MAX_TOTAL_INCIDENCES:
+        raise OperationResourceAdmissionError(
+            location=("group", "moduli"),
+            code="combinatorics.progression_hypergraph.edge_bound",
+            message="progression edge bound exceeds the finite-hypergraph envelope",
         )
-        for step in range(1, group_order)
-        for start in range(group_order)
-    }
-    nondegenerate_edges = sorted(
-        (edge for edge in edge_sets if len(edge) == 3),
-        key=lambda edge: tuple(sorted(edge)),
-    )
+    coordinates = tuple(product(*(range(modulus) for modulus in group.moduli)))
+    labels = {element: f"v{index}" for index, element in enumerate(coordinates)}
+    edge_sets: set[frozenset[tuple[int, ...]]] = set()
+    for start in coordinates:
+        for step in coordinates:
+            progression = frozenset(
+                tuple(
+                    (start[index] + multiple * step[index]) % group.moduli[index]
+                    for index in range(len(group.moduli))
+                )
+                for multiple in range(3)
+            )
+            if len(progression) == 3:
+                edge_sets.add(progression)
+    nondegenerate_edges = sorted(edge_sets, key=lambda edge: tuple(sorted(edge)))
     edges = tuple(
-        (f"e{index}", tuple(sorted(str(vertex) for vertex in edge)))
+        (f"e{index}", tuple(labels[vertex] for vertex in sorted(edge)))
         for index, edge in enumerate(nondegenerate_edges)
     )
     return ProgressionHypergraphResult(
-        group_order=group_order,
-        hypergraph=FiniteHypergraph(vertices=vertices, edges=edges),
+        group=group,
+        vertex_elements=tuple(
+            ProgressionVertexBinding(
+                vertex=labels[element],
+                element=FiniteAbelianGroupElement(group=group, coordinates=element),
+            )
+            for element in coordinates
+        ),
+        hypergraph=FiniteHypergraph(vertices=tuple(labels.values()), edges=edges),
     )
 
 

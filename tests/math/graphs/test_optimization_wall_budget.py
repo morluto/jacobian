@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any, cast
 
@@ -9,6 +8,9 @@ import pytest
 import z3
 
 from jacobian._execution import OperationExecutionTimeoutError
+from jacobian._worker_protocol import (
+    encode_worker_result_frame,
+)
 from jacobian.math.graphs import _independence_z3
 from jacobian.math.graphs.independence import (
     IndependenceNumberBudget,
@@ -30,7 +32,10 @@ from jacobian.math.graphs.optimization._models import (
     GraphOptimizationRequest,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
-from jacobian.process import BoundedProcessResult, ProcessResourceLimits
+from jacobian.process import (
+    BoundedProcessResult,
+    ProcessResourceLimits,
+)
 
 
 def _graph() -> SimpleUndirectedGraph:
@@ -102,10 +107,9 @@ def test_chromatic_worker_projection_is_bound_to_the_submitted_vertices(
         "run_bounded_process",
         lambda *_args, **_kwargs: BoundedProcessResult(
             returncode=0,
-            stdout=json.dumps(
-                expected.model_dump(mode="json", exclude={"vertices"}),
-                ensure_ascii=False,
-            ).encode("utf-8"),
+            stdout=encode_worker_result_frame(
+                expected.model_dump(mode="json", exclude={"vertices"})
+            ),
             stderr=b"",
             stdout_exceeded=False,
             stderr_exceeded=False,
@@ -157,7 +161,7 @@ def test_graph_optimization_worker_binds_encoding_and_solving_to_one_envelope(
         recorded.update(kwargs)
         return BoundedProcessResult(
             returncode=0,
-            stdout=json.dumps(expected.model_dump(mode="json")).encode("utf-8"),
+            stdout=encode_worker_result_frame(expected.model_dump(mode="json")),
             stderr=b"",
             stdout_exceeded=False,
             stderr_exceeded=False,

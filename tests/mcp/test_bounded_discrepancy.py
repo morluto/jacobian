@@ -14,13 +14,6 @@ def test_bounded_coloring_native_mcp_statuses_schema_and_eval() -> None:
     async def scenario() -> None:
         tool = TOOLS[0]
         payloads = [example.input for example in tool.examples]
-        payloads.append(
-            {
-                "set_system": {"ground_set_size": 6, "sets": [list(range(6))]},
-                "absolute_bounds": [0],
-                "resource_budget": {"solver_work_limit": 1},
-            }
-        )
         async with Client(create_server(), raise_exceptions=False) as client:
             rejected = await client.call_tool(
                 "math.run",
@@ -67,6 +60,22 @@ def test_bounded_coloring_native_mcp_statuses_schema_and_eval() -> None:
                     )
                 else:
                     assert set(outcome) == {"status"}
-            assert statuses == ["SATISFIABLE", "UNSATISFIABLE", "BUDGET_EXCEEDED"]
+            assert statuses == ["SATISFIABLE", "UNSATISFIABLE"]
+            exhausted = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": tool.operation_id,
+                    "payload": {
+                        "set_system": {
+                            "ground_set_size": 6,
+                            "sets": [list(range(6))],
+                        },
+                        "absolute_bounds": [0],
+                        "resource_budget": {"solver_work_limit": 1},
+                    },
+                },
+            )
+            assert exhausted.is_error
+            assert exhausted.structured_content is None
 
     asyncio.run(scenario())

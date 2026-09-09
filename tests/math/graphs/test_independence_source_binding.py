@@ -14,6 +14,9 @@ from jacobian._execution import (
     OperationBackendError,
     OperationExecutionTimeoutError,
 )
+from jacobian._worker_protocol import (
+    encode_worker_result_frame,
+)
 from jacobian.math.graphs import _independence_z3 as z3_backend
 from jacobian.math.graphs.independence import (
     IndependenceNumberBudget,
@@ -24,7 +27,10 @@ from jacobian.math.graphs.independence import (
     _compute_independence_number as solve_independence_number,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
-from jacobian.process import BoundedProcessResult, ProcessResourceLimits
+from jacobian.process import (
+    BoundedProcessResult,
+    ProcessResourceLimits,
+)
 
 
 def _graph(
@@ -345,10 +351,9 @@ def test_independence_worker_covers_encoding_and_solving(
         recorded.update(kwargs)
         return BoundedProcessResult(
             returncode=0,
-            stdout=json.dumps(
-                expected.model_dump(mode="json", exclude={"graph"}),
-                ensure_ascii=False,
-            ).encode("utf-8"),
+            stdout=encode_worker_result_frame(
+                expected.model_dump(mode="json", exclude={"graph"})
+            ),
             stderr=b"",
             stdout_exceeded=False,
             stderr_exceeded=False,

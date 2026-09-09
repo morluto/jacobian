@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
-from jacobian._execution import OperationExecutionTimeoutError
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.coloring._chromatic_number_models import (
     ChromaticNumberCertificateCheckResult,
@@ -224,11 +223,7 @@ def k_colorability(
             colorable=False,
             coloring=None,
         )
-    if outcome == "budget_exceeded":
-        raise OperationExecutionTimeoutError(
-            "vertex-coloring solver exhausted its conflict budget"
-        )
-    raise RuntimeError("vertex-coloring solver failed")
+    raise AssertionError("checked coloring worker returned an impossible outcome")
 
 
 def precoloring_edge_repair(
@@ -266,11 +261,9 @@ def precoloring_edge_repair(
         fixed_colors,
     )
     if outcome != "optimal" or solved_coloring is None:
-        if outcome == "budget_exceeded":
-            raise OperationExecutionTimeoutError(
-                "precolouring edge-repair optimizer exhausted its conflict budget"
-            )
-        raise RuntimeError("precolouring edge-repair optimizer failed")
+        raise AssertionError(
+            "checked edge-repair worker returned an impossible outcome"
+        )
     coloring = solved_coloring
     repaired = tuple(
         index
@@ -430,11 +423,7 @@ def edge_k_colorability(
             colorable=False,
             coloring=None,
         )
-    if outcome == "budget_exceeded":
-        raise OperationExecutionTimeoutError(
-            "edge-coloring solver exhausted its conflict budget"
-        )
-    raise RuntimeError("edge-coloring solver failed")
+    raise AssertionError("checked coloring worker returned an impossible outcome")
 
 
 def edge_coloring_check(

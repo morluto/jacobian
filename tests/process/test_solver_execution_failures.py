@@ -11,6 +11,7 @@ from jacobian._execution import (
     OperationExecutionTimeoutError,
     OperationResourceExhaustedError,
 )
+from jacobian._worker_protocol import encode_worker_result_frame
 from jacobian.catalog.catalog import Catalog
 from jacobian.process import BoundedProcessResult
 
@@ -222,15 +223,17 @@ def test_hypergraph_preserves_unspent_dispatch_allowance(
     def complete(*args: object, **kwargs: Any) -> BoundedProcessResult:
         recorded.update(kwargs)
         return BoundedProcessResult(
-            0, json.dumps(projection).encode(), b"", False, False, False
+            0, encode_worker_result_frame(projection), b"", False, False, False
         )
 
     monkeypatch.setattr(owner, "run_bounded_process", complete)
     monkeypatch.setattr(time, "monotonic", lambda: 106.0)
     with request_execution(100.0):
         assert operation.run(request) == expected
-    assert recorded["timeout_seconds"] == 4.0
-    assert json.loads(recorded["input_bytes"])["_deadline"] == 110.0
+    assert 3.9 < recorded["timeout_seconds"] < 4.0
+    assert json.loads(recorded["input_bytes"])["_deadline"] == pytest.approx(
+        106.0 + recorded["timeout_seconds"]
+    )
 
 
 def test_hypergraph_error_decoding_preserves_parent_deadline(

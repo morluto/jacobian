@@ -4,10 +4,15 @@ from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.graphs.symmetry._models import (
+    FullGraphAutomorphismRequest,
+    FullGraphAutomorphismResult,
     GraphSymmetryOrbitRequest,
     GraphSymmetryOrbitResult,
 )
-from jacobian.math.graphs.symmetry.operations import graph_symmetry_orbits
+from jacobian.math.graphs.symmetry.operations import (
+    full_graph_automorphism_group,
+    graph_symmetry_orbits,
+)
 
 
 def _compute_graph_symmetry_orbits(
@@ -16,6 +21,12 @@ def _compute_graph_symmetry_orbits(
     """Project the wire request into the canonical native operation."""
 
     return graph_symmetry_orbits(request.graph, request.generators)
+
+
+def _compute_full_automorphisms(
+    request: FullGraphAutomorphismRequest,
+) -> FullGraphAutomorphismResult:
+    return full_graph_automorphism_group(request.graph)
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
@@ -66,6 +77,29 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                             "mapping": [["a", "c"], ["b", "b"], ["c", "a"]],
                         }
                     ],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="graph.automorphism_group.color_preserving.compute",
+        title="Compute the full color-preserving graph automorphism group",
+        description="Exhaust the admitted color-class permutations and return deterministic generators whose Schreier-Sims order equals the full automorphism count.",
+        request_type=FullGraphAutomorphismRequest,
+        result_type=FullGraphAutomorphismResult,
+        run=_compute_full_automorphisms,
+        tags=("graph", "automorphism", "permutation-group", "exact"),
+        examples=(
+            OperationExample(
+                name="path_reflection",
+                description="Compute the order-two automorphism group of a path.",
+                input={
+                    "graph": {
+                        "graph": {
+                            "vertices": ["a", "b", "c"],
+                            "edges": [["a", "b"], ["b", "c"]],
+                        }
+                    }
                 },
             ),
         ),

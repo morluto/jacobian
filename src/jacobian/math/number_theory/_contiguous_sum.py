@@ -17,7 +17,7 @@ def compute_contiguous_sum_profile(
 CONTIGUOUS_SUM_OPERATION = MathTool(
     operation_id="number_theory.integer_interval.contiguous_sum_profile.compute",
     title="Compute contiguous-sum representation profile on a bounded interval",
-    description="For each n in [L, U], count representations as a sum of consecutive positive integers, or report UNKNOWN if high-magnitude factorization does not complete within its bounded worker envelope.",
+    description="For each n in [L, U], count representations as a sum of consecutive positive integers. High-magnitude factorization timeout or worker failure is an operational error.",
     request_type=ContiguousSumProfileRequest,
     result_type=ContiguousSumProfileResult,
     run=compute_contiguous_sum_profile,

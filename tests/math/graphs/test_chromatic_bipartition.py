@@ -6,7 +6,15 @@ import time
 import pytest
 from pydantic import ValidationError
 
-from jacobian._execution import bind_request_deadline, request_execution
+from jacobian._execution import (
+    BackendFailureReason,
+    OperationBackendError,
+    OperationExecutionTimeoutError,
+    OperationResourceExhaustedError,
+    bind_request_deadline,
+    request_execution,
+)
+from jacobian._worker_protocol import encode_worker_result_frame
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.graphs.optimization import _chromatic_bipartition as operation
 from jacobian.math.graphs.optimization import (
@@ -89,12 +97,14 @@ def test_unequal_thresholds_accept_the_opposite_orientation() -> None:
         ChromaticBipartitionRequest(graph=source, s=3, t=2)
     )
     assert result.status == "SPLIT"
+    assert result.side_a is not None
+    assert result.side_b is not None
     assert set(result.side_a) == {"c", "d", "e"}
     assert set(result.side_b) == {"a", "b"}
     assert (result.chromatic_a, result.chromatic_b) == (3, 2)
 
 
-def test_kernel_timeout_is_unknown_without_a_negative_claim(
+def test_kernel_timeout_is_an_operational_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     source = graph(
@@ -103,10 +113,8 @@ def test_kernel_timeout_is_unknown_without_a_negative_claim(
     )
     request = ChromaticBipartitionRequest(graph=source, s=2, t=2)
     monkeypatch.setattr(operation, "remaining_ms", lambda *_args: 0)
-    result = operation._find_chromatic_bipartition_kernel(request)
-    assert result.status == "UNKNOWN"
-    assert result.side_a is None and result.chromatic_a is None
-    assert result.checked_partitions == 1
+    with pytest.raises(OperationExecutionTimeoutError):
+        operation._find_chromatic_bipartition_kernel(request)
 
 
 def test_worker_deadline_times_out_across_the_process_boundary() -> None:
@@ -122,9 +130,8 @@ def test_worker_deadline_times_out_across_the_process_boundary() -> None:
     )
     with request_execution(time.monotonic()):
         bind_request_deadline(time.monotonic() + 0.02)
-        result = process_owner.find_chromatic_bipartition(request)
-    assert result.status == "UNKNOWN"
-    assert result.side_a is None and result.chromatic_a is None
+        with pytest.raises(OperationExecutionTimeoutError):
+            process_owner.find_chromatic_bipartition(request)
 
 
 def test_edgeless_twenty_vertex_request_is_exactly_decidable() -> None:
@@ -219,6 +226,7 @@ def test_unit_threshold_tries_another_singleton_before_backend_overflow() -> Non
         ChromaticBipartitionRequest(graph=graph((isolated, *cycle), edges), s=1, t=1)
     )
     assert result.status == "SPLIT"
+    assert result.side_a is not None
     assert result.chromatic_a == 1
     assert result.chromatic_b == 2
     assert len(result.side_a) == 1
@@ -255,33 +263,43 @@ def _completed(
     )
 
 
-def test_worker_timeout_is_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_worker_timeout_is_an_operational_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     source = graph(("a", "b"), (("a", "b"),))
     monkeypatch.setattr(
         process_owner,
         "run_bounded_process",
         lambda *_args, **_kwargs: _completed(returncode=None, timed_out=True),
     )
-    result = operation.find_chromatic_bipartition(
-        ChromaticBipartitionRequest(graph=source, s=1, t=1)
-    )
-    assert result.status == "UNKNOWN"
-    assert result.side_a is None and result.side_b is None
+    with pytest.raises(OperationExecutionTimeoutError):
+        operation.find_chromatic_bipartition(
+            ChromaticBipartitionRequest(graph=source, s=1, t=1)
+        )
 
 
 @pytest.mark.parametrize(
-    ("completed", "message"),
+    ("completed", "error_type", "reason"),
     [
-        (_completed(returncode=1), "did not establish an outcome"),
-        (_completed(stdout_exceeded=True), "exceeded an output cap"),
-        (_completed(stderr_exceeded=True), "exceeded an output cap"),
-        (_completed(stdout=b"not-json"), "malformed output"),
+        (
+            _completed(returncode=1),
+            OperationBackendError,
+            BackendFailureReason.ABNORMAL_EXIT,
+        ),
+        (_completed(stdout_exceeded=True), OperationResourceExhaustedError, None),
+        (_completed(stderr_exceeded=True), OperationResourceExhaustedError, None),
+        (
+            _completed(stdout=b"not-json"),
+            OperationBackendError,
+            BackendFailureReason.MALFORMED_RESPONSE,
+        ),
     ],
 )
 def test_worker_failures_are_operational_errors(
     monkeypatch: pytest.MonkeyPatch,
     completed: BoundedProcessResult,
-    message: str,
+    error_type: type[Exception],
+    reason: BackendFailureReason | None,
 ) -> None:
     source = graph(("a", "b"), (("a", "b"),))
     monkeypatch.setattr(
@@ -289,10 +307,13 @@ def test_worker_failures_are_operational_errors(
         "run_bounded_process",
         lambda *_args, **_kwargs: completed,
     )
-    with pytest.raises(RuntimeError, match=message):
+    with pytest.raises(error_type) as caught:
         operation.find_chromatic_bipartition(
             ChromaticBipartitionRequest(graph=source, s=1, t=1)
         )
+    if reason is not None:
+        assert isinstance(caught.value, OperationBackendError)
+        assert caught.value.reason == reason
 
 
 def test_worker_result_must_echo_the_submitted_source(
@@ -314,13 +335,14 @@ def test_worker_result_must_echo_the_submitted_source(
         process_owner,
         "run_bounded_process",
         lambda *_args, **_kwargs: _completed(
-            stdout=json.dumps(echoed.model_dump(mode="json")).encode("utf-8")
+            stdout=encode_worker_result_frame(echoed.model_dump(mode="json"))
         ),
     )
-    with pytest.raises(RuntimeError, match="not bound to the submitted request"):
+    with pytest.raises(OperationBackendError) as caught:
         operation.find_chromatic_bipartition(
             ChromaticBipartitionRequest(graph=source, s=2, t=2)
         )
+    assert caught.value.reason == BackendFailureReason.INVALID_OUTPUT
 
 
 def test_split_below_submitted_thresholds_cannot_bind() -> None:

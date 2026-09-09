@@ -10,7 +10,11 @@ from jsonschema import validate
 from pydantic import ValidationError
 
 from jacobian._execution import (
+    BackendFailureReason,
+    ExecutionResource,
+    OperationBackendError,
     OperationExecutionTimeoutError,
+    OperationResourceExhaustedError,
     bind_request_deadline,
     request_execution,
 )
@@ -177,8 +181,9 @@ def test_request_schema_states_per_set_upper_bound() -> None:
 
 def test_real_backend_work_exhaustion_and_expired_solver_are_claim_free() -> None:
     source = FiniteSetSystem(ground_set_size=6, sets=(tuple(range(6)),))
-    result = decide(source, (0,), BoundedColoringBudget(solver_work_limit=1))
-    assert result.outcome.model_dump() == {"status": "BUDGET_EXCEEDED"}
+    with pytest.raises(OperationResourceExhaustedError) as exhausted:
+        decide(source, (0,), BoundedColoringBudget(solver_work_limit=1))
+    assert exhausted.value.resource == ExecutionResource.WORK
     reply = solve(6, _admit(source, (0,)), 1_000_000, monotonic() - 1)
     assert reply == {"status": "BUDGET_EXCEEDED", "coloring": None}
 
@@ -200,8 +205,8 @@ def test_wall_expiry_after_real_solver_discards_mathematical_result(
     clock = iter((now, now, now + 100))
     monkeypatch.setattr(operations, "monotonic", lambda: next(clock))
     source = FiniteSetSystem(ground_set_size=2, sets=((0, 1),))
-    result = decide(source, (0,))
-    assert result.outcome.model_dump() == {"status": "BUDGET_EXCEEDED"}
+    with pytest.raises(OperationExecutionTimeoutError):
+        decide(source, (0,))
 
 
 def test_invalid_bounds_reject_before_budget_short_circuit() -> None:
@@ -215,9 +220,11 @@ def test_invalid_bounds_reject_before_budget_short_circuit() -> None:
 
 def test_elapsed_request_start_exhausts_own_wall_budget() -> None:
     source = FiniteSetSystem(ground_set_size=0, sets=())
-    with request_execution(monotonic() - 100):
-        result = decide(source, ())
-    assert result.outcome.model_dump() == {"status": "BUDGET_EXCEEDED"}
+    with (
+        request_execution(monotonic() - 100),
+        pytest.raises(OperationExecutionTimeoutError),
+    ):
+        decide(source, ())
 
 
 def test_parsed_budget_result_still_rejects_invalid_bounds() -> None:
@@ -227,7 +234,7 @@ def test_parsed_budget_result_still_rejects_invalid_bounds() -> None:
             {
                 "set_system": source.model_dump(mode="json"),
                 "absolute_bounds": [2],
-                "outcome": {"status": "BUDGET_EXCEEDED"},
+                "outcome": {"status": "UNSATISFIABLE"},
             }
         )
 
@@ -245,13 +252,15 @@ def test_parsed_budget_result_still_rejects_invalid_bounds() -> None:
     ],
 )
 def test_malformed_worker_codec_cannot_publish_infeasibility(payload: bytes) -> None:
-    assert decode_reply(payload, 1) == {"status": "EXECUTION_FAILED", "coloring": None}
+    with pytest.raises(OperationBackendError):
+        decode_reply(payload, 1)
 
 
 def test_invalid_candidate_fails_exact_replay_without_claim() -> None:
     source = FiniteSetSystem(ground_set_size=2, sets=((0, 1),))
-    outcome = _outcome(source, (0,), {"status": "SATISFIABLE", "coloring": (1, 1)})
-    assert outcome.model_dump() == {"status": "EXECUTION_FAILED"}
+    with pytest.raises(OperationBackendError) as failed:
+        _outcome(source, (0,), {"status": "SATISFIABLE", "coloring": (1, 1)})
+    assert failed.value.reason == BackendFailureReason.INVALID_OUTPUT
 
 
 def test_closed_schema_excludes_witness_from_non_success() -> None:
@@ -274,8 +283,9 @@ def test_real_failed_worker_execution_is_claim_free(
     # child process fails, rather than fabricating a solver's mathematical answer.
     monkeypatch.setattr(_process, "_WORKER", _process._WORKER.parent)
     source = FiniteSetSystem(ground_set_size=2, sets=((0, 1),))
-    result = decide(source, (0,))
-    assert result.outcome.model_dump() == {"status": "EXECUTION_FAILED"}
+    with pytest.raises(OperationBackendError) as failed:
+        decide(source, (0,))
+    assert failed.value.reason == BackendFailureReason.ABNORMAL_EXIT
 
 
 def test_unavailable_backend_is_claim_free(monkeypatch: pytest.MonkeyPatch) -> None:

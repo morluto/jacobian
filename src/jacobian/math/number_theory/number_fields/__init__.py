@@ -19,6 +19,7 @@ if TYPE_CHECKING:
         verify_discriminant,
     )
     from jacobian.math.number_theory.number_fields.values import (
+        GaussianRational,
         NumberFieldEmbeddingProfile,
         NumberFieldRealValueEnclosure,
         RealNumberFieldEmbedding,
@@ -33,6 +34,7 @@ __all__ = [
     "BinaryPowerSumGap",
     "BinaryPowerSumGapProfile",
     "BinaryPowerSumValueBucket",
+    "GaussianRational",
     "NumberFieldEmbeddingProfile",
     "NumberFieldRealValueEnclosure",
     "RealNumberFieldEmbedding",
@@ -54,6 +56,7 @@ _OWNER_MODULES = {
     "BinaryPowerSumGap": "_binary_power_sum",
     "BinaryPowerSumGapProfile": "_binary_power_sum",
     "BinaryPowerSumValueBucket": "_binary_power_sum",
+    "GaussianRational": "values",
     "NumberFieldEmbeddingProfile": "values",
     "NumberFieldRealValueEnclosure": "values",
     "RealNumberFieldEmbedding": "values",

@@ -9,6 +9,8 @@ from typing import Any
 import networkx as nx
 from networkx.algorithms import isomorphism as nx_isomorphism
 
+from jacobian._worker_protocol import encode_worker_result_frame
+
 
 def _graph(payload: dict[str, Any]) -> nx.Graph[int] | nx.DiGraph[int]:
     graph: nx.Graph[int] | nx.DiGraph[int]
@@ -38,7 +40,7 @@ def main() -> int:
         "ok": True,
         "mapping": _first_isomorphism_mapping(matcher),
     }
-    json.dump(response, sys.stdout, separators=(",", ":"))
+    sys.stdout.buffer.write(encode_worker_result_frame(response))
     return 0
 
 

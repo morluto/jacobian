@@ -76,9 +76,10 @@ def test_counting_preserves_a_shorter_caller_deadline() -> None:
         bind_request_deadline(caller_deadline)
         assert canonical_binomial(4, 2) == 6
         execution = current_request_execution()
+        active_deadline = execution.deadline if execution is not None else None
 
     assert execution is not None
-    assert execution.deadline == caller_deadline
+    assert active_deadline == caller_deadline
 
 
 def test_expired_caller_deadline_is_not_replaced_by_counting_owner_limit() -> None:

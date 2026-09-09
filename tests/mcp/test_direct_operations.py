@@ -471,7 +471,7 @@ def test_calls_preserve_bounded_operation_failure_context(
                 f"Error executing tool {operation.operation_id if direct else 'math.run'}: "
             )
         )
-        assert diagnostic == {
+        expected: dict[str, object] = {
             "code": code,
             "message": "operation deadline expired"
             if code == "OPERATION_TIMEOUT"
@@ -479,6 +479,12 @@ def test_calls_preserve_bounded_operation_failure_context(
             "operation_id": operation.operation_id,
             "stage": "operation_execution",
         }
+        if code == "OPERATION_TIMEOUT":
+            expected.update(
+                timeout_owner="operation_wall",
+                deterministic_work_remains_fixed=False,
+            )
+        assert diagnostic == expected
         assert "private" not in _content_text(result.content[0])
 
     asyncio.run(scenario())

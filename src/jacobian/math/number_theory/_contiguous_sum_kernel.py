@@ -2,58 +2,49 @@
 
 from __future__ import annotations
 
-import os
-import re
 from math import isqrt, prod
 from time import monotonic
-from typing import Literal
+from typing import NoReturn
 
+from jacobian._execution import (
+    BackendFailureReason,
+    ExecutionResource,
+    OperationBackendError,
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+    OperationResourceExhaustedError,
+)
 from jacobian.math.number_theory._contiguous_sum_admission import (
     ContiguousSumProfileAdmission,
 )
 from jacobian.math.number_theory._contiguous_sum_models import (
     ContiguousSumProfileResult,
-    ContiguousSumWorkerDiagnostic,
 )
 from jacobian.math.number_theory._factorization_kernels import (
     BoundedFactorizationFailure,
     _bounded_direct_factorization,
 )
 
-_CONTIGUOUS_SUM_OPERATION_VERSION: Literal["1"] = "1"
-_GIT_SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 
-
-def _repository_revision() -> str:
-    """Read the immutable build revision when the runtime provides one."""
-
-    revision = os.environ.get("JACOBIAN_REVISION", "unknown")
-    return revision if _GIT_SHA_PATTERN.fullmatch(revision) else "unknown"
-
-
-def _worker_diagnostic(
-    admission: ContiguousSumProfileAdmission,
-    failure: BoundedFactorizationFailure,
-    *,
-    elapsed_seconds: float | None = None,
-) -> ContiguousSumWorkerDiagnostic:
-    """Project bounded worker evidence into the public ``UNKNOWN`` result."""
-
-    budget_seconds = admission.factorization_budget_seconds
-    assert budget_seconds is not None
-    return ContiguousSumWorkerDiagnostic(
-        failure=failure.kind,
-        timeout_layer=failure.timeout_layer,
-        elapsed_ms=round(
-            (failure.elapsed_seconds if elapsed_seconds is None else elapsed_seconds)
-            * 1_000
-        ),
-        worker_timeout_ms=round(failure.timeout_seconds * 1_000),
-        budget_seconds=budget_seconds,
-        returncode=failure.returncode,
-        operation_version=_CONTIGUOUS_SUM_OPERATION_VERSION,
-        repository_revision=_repository_revision(),
-    )
+def _raise_factorization_failure(failure: BoundedFactorizationFailure) -> NoReturn:
+    if failure.kind == "WORKER_CANCELLED":
+        raise OperationExecutionCancelledError("contiguous-sum factorization cancelled")
+    if failure.kind in ("WORKER_TIMEOUT", "REQUEST_DEADLINE_EXPIRED"):
+        raise OperationExecutionTimeoutError(
+            "contiguous-sum factorization deadline expired",
+            configured_seconds=failure.timeout_seconds,
+            elapsed_seconds=failure.elapsed_seconds,
+        )
+    if failure.kind in ("STDOUT_LIMIT_EXCEEDED", "STDERR_LIMIT_EXCEEDED"):
+        raise OperationResourceExhaustedError(ExecutionResource.OUTPUT)
+    if failure.kind == "WORKER_RESOURCE_LIMIT":
+        raise OperationResourceExhaustedError(ExecutionResource.MEMORY)
+    reason = {
+        "WORKER_START_FAILED": BackendFailureReason.STARTUP,
+        "WORKER_EXITED": BackendFailureReason.ABNORMAL_EXIT,
+        "MALFORMED_OUTPUT": BackendFailureReason.MALFORMED_RESPONSE,
+    }.get(failure.kind, BackendFailureReason.INVALID_OUTPUT)
+    raise OperationBackendError(reason)
 
 
 def _odd_primes_up_to(limit: int) -> list[int]:
@@ -160,50 +151,21 @@ def run_contiguous_sum_profile(
                 )
             if count is None:
                 assert failures
-                failure = failures[0]
-                return ContiguousSumProfileResult._unknown_from_kernel(
-                    admission=admission,
-                    detail=(
-                        "the bounded factorization worker did not establish "
-                        "the complete profile"
-                    ),
-                    diagnostic=_worker_diagnostic(
-                        admission,
-                        failure,
-                        elapsed_seconds=max(
-                            failure.elapsed_seconds,
-                            monotonic() - profile_started,
-                        ),
-                    ),
-                )
+                _raise_factorization_failure(failures[0])
             direct_counts.append(count)
         counts = tuple(direct_counts)
         if monotonic() >= factorization_deadline:
-            failure = BoundedFactorizationFailure(
-                kind="REQUEST_DEADLINE_EXPIRED",
-                timeout_layer="REQUEST_DEADLINE",
+            raise OperationExecutionTimeoutError(
+                "contiguous-sum deadline expired before result construction",
                 elapsed_seconds=monotonic() - profile_started,
-                timeout_seconds=0.0,
-            )
-            return ContiguousSumProfileResult._unknown_from_kernel(
-                admission=admission,
-                detail="the request deadline expired before complete-result construction",
-                diagnostic=_worker_diagnostic(admission, failure),
             )
     if (
         admission.execution_deadline is not None
         and monotonic() >= admission.execution_deadline
     ):
-        failure = BoundedFactorizationFailure(
-            kind="REQUEST_DEADLINE_EXPIRED",
-            timeout_layer="REQUEST_DEADLINE",
+        raise OperationExecutionTimeoutError(
+            "contiguous-sum deadline expired before result construction",
             elapsed_seconds=monotonic() - profile_started,
-            timeout_seconds=0.0,
-        )
-        return ContiguousSumProfileResult._unknown_from_kernel(
-            admission=admission,
-            detail="the request deadline expired before result construction",
-            diagnostic=_worker_diagnostic(admission, failure),
         )
     result = ContiguousSumProfileResult._complete_from_kernel(
         admission=admission,
@@ -213,16 +175,9 @@ def run_contiguous_sum_profile(
         admission.execution_deadline is not None
         and monotonic() >= admission.execution_deadline
     ):
-        failure = BoundedFactorizationFailure(
-            kind="REQUEST_DEADLINE_EXPIRED",
-            timeout_layer="REQUEST_DEADLINE",
+        raise OperationExecutionTimeoutError(
+            "contiguous-sum deadline expired after result construction",
             elapsed_seconds=monotonic() - profile_started,
-            timeout_seconds=0.0,
-        )
-        return ContiguousSumProfileResult._unknown_from_kernel(
-            admission=admission,
-            detail="the request deadline expired after result construction",
-            diagnostic=_worker_diagnostic(admission, failure),
         )
     return result
 

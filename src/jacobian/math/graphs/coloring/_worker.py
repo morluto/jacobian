@@ -4,8 +4,18 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from typing import Any
 
+from jacobian._execution import (
+    BackendFailureReason,
+    ExecutionResource,
+    OperationBackendError,
+    OperationResourceExhaustedError,
+    request_execution,
+)
+from jacobian._worker_errors import bind_worker_deadline, worker_execution_errors
+from jacobian._worker_protocol import encode_worker_result_frame
 from jacobian.math.graphs.coloring._coloring_process import (
     run_edge_coloring_solver_kernel,
     run_k_colorability_solver_kernel,
@@ -20,6 +30,7 @@ from jacobian.math.graphs.values import (
 def main() -> int:
     try:
         payload: Any = json.loads(sys.stdin.buffer.read())
+        bind_worker_deadline(payload)
         if not isinstance(payload, dict):
             raise ValueError("worker payload must be an object")
         kind = payload["kind"]
@@ -55,12 +66,12 @@ def main() -> int:
             outcome, coloring = run_precoloring_edge_repair_solver_kernel(
                 indexed_graph, colors, fixed_colors, solver_conflicts
             )
-        sys.stdout.write(
-            json.dumps(
-                {"outcome": outcome, "coloring": coloring},
-                separators=(",", ":"),
-                ensure_ascii=False,
-            )
+        if outcome == "budget_exceeded":
+            raise OperationResourceExhaustedError(ExecutionResource.WORK)
+        if outcome == "execution_failed":
+            raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+        sys.stdout.buffer.write(
+            encode_worker_result_frame({"outcome": outcome, "coloring": coloring})
         )
         return 0
     except (KeyError, TypeError, ValueError, json.JSONDecodeError):
@@ -68,4 +79,5 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    with worker_execution_errors(), request_execution(time.monotonic()):
+        raise SystemExit(main())

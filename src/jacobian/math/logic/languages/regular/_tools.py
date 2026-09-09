@@ -11,6 +11,7 @@ from jacobian.math.logic.languages.regular import (
     TransitionParikhProfile,
     count_accepted_words,
     dfa_complement,
+    dfa_equivalence,
     dfa_run,
     transition_parikh_profile,
 )
@@ -19,9 +20,14 @@ from jacobian.math.logic.languages.regular._models import (
     ComplementResult,
     CountRequest,
     CountResult,
+    EquivalenceRequest,
+    EquivalenceResult,
     RunRequest,
     RunResult,
     TransitionParikhProfileRequest,
+)
+from jacobian.math.logic.languages.regular._symbol_parikh_tools import (
+    SYMBOL_PARIKH_PROFILE_OPERATION,
 )
 
 
@@ -58,6 +64,18 @@ def compute_count(request: CountRequest) -> CountResult:
 
 def compute_complement(request: ComplementRequest) -> ComplementResult:
     return ComplementResult(dfa=dfa_complement(request.dfa))
+
+
+def compute_equivalence(request: EquivalenceRequest) -> EquivalenceResult:
+    word, left_trace, right_trace = dfa_equivalence(request.left, request.right)
+    return EquivalenceResult(
+        left=request.left,
+        right=request.right,
+        equivalent=word is None,
+        distinguishing_word=word,
+        left_state_trace=left_trace,
+        right_state_trace=right_trace,
+    )
 
 
 def compute_transition_parikh_profile(
@@ -102,6 +120,30 @@ _TRANSITION_PROFILE_EXAMPLE = {
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    SYMBOL_PARIKH_PROFILE_OPERATION,
+    MathTool(
+        operation_id="regular_language.dfa.equivalence.decide",
+        title="Decide deterministic finite automaton equivalence",
+        description=(
+            "Decide whether two total DFAs over the same ordered alphabet accept "
+            "the same language by reachable-product search. Inequivalence returns "
+            "the shortest lexicographically least distinguishing word and both run traces."
+        ),
+        request_type=EquivalenceRequest,
+        result_type=EquivalenceResult,
+        run=compute_equivalence,
+        tags=("regular-language", "automata", "dfa", "equivalence", "exact"),
+        examples=(
+            OperationExample(
+                name="different_empty_word_acceptance",
+                description="Distinguish a DFA from its complement using the empty word.",
+                input={
+                    "left": _DFA_EXAMPLE["dfa"],
+                    "right": {**_DFA_EXAMPLE["dfa"], "accepting_states": [0]},
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="regular_language.complement.compute",
         title="Complement a deterministic finite automaton",

@@ -27,7 +27,23 @@ class OperationDiscoveryCursorError(ValueError):
 
 _DISCOVERY_TOKEN_PATTERN = re.compile(r"[a-z0-9]+")
 _DISCOVERY_STOP_WORDS = frozenset(
-    {"a", "an", "and", "for", "find", "from", "in", "of", "on", "the", "to", "with"}
+    {
+        "a",
+        "an",
+        "and",
+        "calculate",
+        "for",
+        "find",
+        "from",
+        "in",
+        "into",
+        "of",
+        "on",
+        "please",
+        "the",
+        "to",
+        "with",
+    }
 )
 # Terms whose final ``s`` is not regular plural morphology, plus irregular
 # plurals that the deliberately small suffix rules below would corrupt.
@@ -65,6 +81,9 @@ _DISCOVERY_PLURAL_INFLECTIONS = {
     "lenses": "lens",
 }
 _DISCOVERY_SINGULAR_SUFFIXES = ("ics", "is", "ous", "ss", "us")
+_PRECISE_POSTCONDITION_TERMS = frozenset(
+    {"canonicalize", "enumerate", "equivalence", "multiply", "normalize", "simplify"}
+)
 
 
 class SearchableOperation(Protocol):
@@ -168,7 +187,16 @@ def _match_corpus(
         )
         if score > 0:
             score += _phrase_relevance(descriptor, request.need)
-        if score > 0:
+        if score > 0 and (
+            request.search_mode == "broad"
+            or _precise_match(
+                descriptor,
+                fields,
+                need_terms,
+                score,
+                request.need,
+            )
+        ):
             ranked.append(
                 (
                     score,
@@ -193,6 +221,7 @@ def _match_corpus(
                     if _match_cursor(
                         need=request.need,
                         namespace=normalized_namespace,
+                        search_mode=request.search_mode,
                         operation_id=match.operation_id,
                     )
                     == request.cursor
@@ -208,6 +237,7 @@ def _match_corpus(
         _match_cursor(
             need=request.need,
             namespace=normalized_namespace,
+            search_mode=request.search_mode,
             operation_id=page[-1][1].operation_id,
         )
         if page and start + len(page) < total_matches
@@ -216,16 +246,19 @@ def _match_corpus(
     return OperationMatchResult(
         need=request.need,
         namespace=normalized_namespace,
+        search_mode=request.search_mode,
         matches=tuple(match for _, match in page),
         total_matches=total_matches,
         next_cursor=next_cursor,
     )
 
 
-def _match_cursor(*, need: str, namespace: str | None, operation_id: str) -> str:
+def _match_cursor(
+    *, need: str, namespace: str | None, search_mode: str, operation_id: str
+) -> str:
     """Bind one opaque stateless cursor to its ranked discovery result."""
 
-    identity = f"{need}\0{namespace or ''}\0{operation_id}".encode()
+    identity = f"{need}\0{namespace or ''}\0{search_mode}\0{operation_id}".encode()
     return f"cursor.{sha256(identity).hexdigest()}"
 
 
@@ -374,6 +407,39 @@ def _explicit_domain_matches(
         return False
     return not (
         {"modular", "modulo"} & terms and not {"modular", "modulo"} & need_terms
+    )
+
+
+def _precise_match(
+    operation: SearchableOperation,
+    fields: tuple[frozenset[str], ...],
+    need_terms: frozenset[str],
+    score: float,
+    need: str,
+) -> bool:
+    """Require named-object/postcondition agreement for the default first page."""
+
+    identifying_terms = fields[0] | fields[1] | fields[3] | fields[4]
+    requested_postconditions = need_terms & _PRECISE_POSTCONDITION_TERMS
+    if requested_postconditions and not requested_postconditions & identifying_terms:
+        return False
+    if need_terms & {"certificate", "certify", "check", "test", "verify"}:
+        return score >= 2.0
+    if (
+        operation.operation_id.endswith(".check")
+        and not need_terms & {"check", "verify", "test"}
+        and need_terms & {"compute", "maximum", "minimum", "number", "return"}
+    ):
+        return False
+    if len(need_terms) == 1:
+        return bool(need_terms & identifying_terms)
+    if score < 2.0:
+        return False
+    overlap = {term for term in need_terms & identifying_terms if len(term) > 2}
+    if len(overlap) >= min(3, len(need_terms)):
+        return True
+    return bool(
+        _phrases(need) & (_phrases(operation.operation_id) | _phrases(operation.title))
     )
 
 

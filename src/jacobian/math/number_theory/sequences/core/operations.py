@@ -12,6 +12,9 @@ from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.sequences.core._models import (
+    AutocorrelationCell,
+    AutocorrelationResult,
+    FiniteIntegerSequence,
     FrequencyEntry,
     IntegerSequenceBooleanResult,
     IntegerSequenceFrequenciesResult,
@@ -19,6 +22,8 @@ from jacobian.math.number_theory.sequences.core._models import (
     IntegerSequenceListResult,
     IntegerSequenceRationalResult,
     IntegerSequenceValueResult,
+    SequenceLogConcavityRow,
+    SequenceOrderShapeResult,
 )
 from jacobian.math.number_theory.sequences.core.values import (
     MAX_SEQUENCE_TOTAL_DIGITS,
@@ -89,6 +94,108 @@ def _values(request: IntegerSequence) -> list[int]:
 
 def _value_result(value: int) -> IntegerSequenceValueResult:
     return IntegerSequenceValueResult(value=value)
+
+
+def _admit_autocorrelation(request: FiniteIntegerSequence) -> tuple[int, ...]:
+    values = tuple(request.values)
+    if not values:
+        return values
+    digits = max(len(format_canonical_integer(abs(value))) for value in values)
+    result_digits = 2 * digits + len(str(len(values)))
+    if result_digits > MAX_CANONICAL_RATIONAL_DIGITS:
+        raise OperationDomainValidationError(
+            location=("values",),
+            code="sequences.autocorrelation_result_digits_exceeded",
+            message="autocorrelation values exceed the exact integer digit bound",
+        )
+    return values
+
+
+def aperiodic_autocorrelation(request: FiniteIntegerSequence) -> AutocorrelationResult:
+    values = _admit_autocorrelation(request)
+    size = len(values)
+    cells = tuple(
+        AutocorrelationCell(
+            lag=lag,
+            value=sum(
+                values[index] * values[index + lag] for index in range(size - lag)
+            ),
+        )
+        for lag in range(size)
+    )
+    negative = tuple(
+        AutocorrelationCell(lag=-cell.lag, value=cell.value)
+        for cell in reversed(cells[1:])
+    )
+    return AutocorrelationResult(source=request, cells=negative + cells)
+
+
+def cyclic_autocorrelation(request: FiniteIntegerSequence) -> AutocorrelationResult:
+    values = _admit_autocorrelation(request)
+    size = len(values)
+    return AutocorrelationResult(
+        source=request,
+        cells=tuple(
+            AutocorrelationCell(
+                lag=lag,
+                value=sum(
+                    values[index] * values[(index + lag) % size]
+                    for index in range(size)
+                ),
+            )
+            for lag in range(size)
+        ),
+    )
+
+
+def sequence_order_shape(request: FiniteIntegerSequence) -> SequenceOrderShapeResult:
+    values = _admit_autocorrelation(request)
+    nondecreasing_violation = next(
+        (
+            index
+            for index in range(len(values) - 1)
+            if values[index] > values[index + 1]
+        ),
+        None,
+    )
+    nonincreasing_violation = next(
+        (
+            index
+            for index in range(len(values) - 1)
+            if values[index] < values[index + 1]
+        ),
+        None,
+    )
+    peaks = tuple(
+        peak
+        for peak in range(len(values))
+        if all(values[index] <= values[index + 1] for index in range(peak))
+        and all(
+            values[index] >= values[index + 1] for index in range(peak, len(values) - 1)
+        )
+    )
+    log_rows = tuple(
+        SequenceLogConcavityRow(
+            index=index,
+            square=values[index] ** 2,
+            neighbor_product=values[index - 1] * values[index + 1],
+            holds=values[index] ** 2 >= values[index - 1] * values[index + 1],
+        )
+        for index in range(1, len(values) - 1)
+    )
+    nonzero = [index for index, value in enumerate(values) if value != 0]
+    has_internal_zero = bool(nonzero) and any(
+        values[index] == 0 for index in range(nonzero[0] + 1, nonzero[-1])
+    )
+    return SequenceOrderShapeResult(
+        source=request,
+        first_nondecreasing_violation=nondecreasing_violation,
+        first_nonincreasing_violation=nonincreasing_violation,
+        weak_unimodal_peak_positions=peaks,
+        log_concavity_rows=log_rows,
+        is_nonnegative=all(value >= 0 for value in values),
+        has_internal_zero=has_internal_zero,
+    )
 
 
 def _list_result(values: list[int]) -> IntegerSequenceListResult:

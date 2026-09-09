@@ -4,6 +4,9 @@ from itertools import groupby
 from time import monotonic
 
 from jacobian._execution import (
+    BackendFailureReason,
+    OperationBackendError,
+    OperationExecutionTimeoutError,
     current_request_execution,
     request_checkpoint,
 )
@@ -11,8 +14,6 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.discrepancy._models import FiniteSetSystem
 from jacobian.math.combinatorics.discrepancy.bounded_coloring._models import (
     BoundedColoringBudget,
-    BoundedColoringBudgetExceeded,
-    BoundedColoringExecutionFailed,
     BoundedColoringOutcome,
     BoundedColoringResult,
     SatisfiableBoundedColoring,
@@ -83,22 +84,20 @@ def _outcome(
             or len(coloring) != source.ground_set_size
             or any(type(value) is not int or value not in (-1, 1) for value in coloring)
         ):
-            return BoundedColoringExecutionFailed()
+            raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
         signed_sums = tuple(
             sum(coloring[index] for index in subset) for subset in source.sets
         )
         if any(
             abs(total) > bound for total, bound in zip(signed_sums, bounds, strict=True)
         ):
-            return BoundedColoringExecutionFailed()
+            raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
         return SatisfiableBoundedColoring(coloring=coloring, signed_sums=signed_sums)
     if reply["coloring"] is not None:
-        return BoundedColoringExecutionFailed()
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
     if reply["status"] == "UNSATISFIABLE":
         return UnsatisfiableBoundedColoring()
-    if reply["status"] == "BUDGET_EXCEEDED":
-        return BoundedColoringBudgetExceeded()
-    return BoundedColoringExecutionFailed()
+    raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
 
 
 def decide(
@@ -145,11 +144,6 @@ def decide(
         _checkpoint(deadline, "after discrepancy result construction")
         return result
     except _WallBudgetExceededError:
-        # Only bounded source copying remains; no solver evidence is promoted.
-        result = BoundedColoringResult._from_kernel(
-            set_system=set_system,
-            absolute_bounds=absolute_bounds,
-            outcome=BoundedColoringBudgetExceeded(),
-        )
-        request_checkpoint("after discrepancy budget result construction")
-        return result
+        raise OperationExecutionTimeoutError(
+            "discrepancy decision operation wall allowance expired"
+        ) from None

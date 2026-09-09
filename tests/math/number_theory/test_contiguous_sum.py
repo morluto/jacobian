@@ -3,6 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
+from jacobian._execution import OperationExecutionTimeoutError
 from jacobian.math.number_theory._contiguous_sum import (
     CONTIGUOUS_SUM_OPERATION,
     compute_contiguous_sum_profile,
@@ -129,8 +130,8 @@ def test_unknown_profile_rejects_rows() -> None:
         )
 
 
-def test_complete_profile_cannot_carry_worker_diagnostics() -> None:
-    with pytest.raises(ValidationError, match="cannot include diagnostics"):
+def test_complete_profile_rejects_legacy_worker_diagnostics() -> None:
+    with pytest.raises(ValidationError):
         ContiguousSumProfileResult.model_validate(
             {
                 "status": "COMPLETE",
@@ -150,20 +151,15 @@ def test_complete_profile_cannot_carry_worker_diagnostics() -> None:
         )
 
 
-def test_expired_direct_profile_retains_replay_diagnostic() -> None:
+def test_expired_direct_profile_is_an_operational_timeout() -> None:
     admission = require_contiguous_sum_profile_admission(
         1_000_000_000_001,
         1_000_000_000_001,
         started_at=0.0,
     )
 
-    result = run_contiguous_sum_profile(admission, profile_started=0.0)
-
-    assert result.status == "UNKNOWN"
-    assert result.diagnostic is not None
-    assert result.diagnostic.failure == "REQUEST_DEADLINE_EXPIRED"
-    assert result.diagnostic.timeout_layer == "REQUEST_DEADLINE"
-    assert result.diagnostic.budget_seconds == 60
+    with pytest.raises(OperationExecutionTimeoutError):
+        run_contiguous_sum_profile(admission, profile_started=0.0)
 
 
 def test_request_schema_publishes_coupled_bounds() -> None:

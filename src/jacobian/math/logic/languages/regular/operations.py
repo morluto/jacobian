@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections import deque
+
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -25,6 +27,7 @@ from jacobian.math.logic.languages.regular.values import (
 __all__ = [
     "count_accepted_words",
     "dfa_complement",
+    "dfa_equivalence",
     "dfa_run",
     "dfa_transition_carrier",
     "transition_parikh_profile",
@@ -208,6 +211,55 @@ def dfa_complement(dfa: DFA) -> DFA:
         initial_state=dfa.initial_state,
         accepting_states=tuple(sorted(set(range(dfa.state_count)) - accepting)),
     )
+
+
+def dfa_equivalence(
+    left: DFA, right: DFA
+) -> tuple[tuple[int, ...] | None, tuple[int, ...] | None, tuple[int, ...] | None]:
+    """Return the shortest lexicographically least distinguishing word and traces."""
+
+    if left.alphabet_size != right.alphabet_size:
+        raise OperationDomainValidationError(
+            location=("right", "alphabet_size"),
+            code="regular_language.equivalence.alphabet_mismatch",
+            message="DFA equivalence requires the same ordered alphabet",
+        )
+    left_transitions = _transition_map(left)
+    right_transitions = _transition_map(right)
+    initial = (left.initial_state, right.initial_state)
+    queue = deque([initial])
+    predecessor: dict[tuple[int, int], tuple[tuple[int, int], int] | None] = {
+        initial: None
+    }
+    while queue:
+        pair = queue.popleft()
+        left_accepts = pair[0] in left.accepting_states
+        right_accepts = pair[1] in right.accepting_states
+        if left_accepts != right_accepts:
+            pairs = [pair]
+            symbols: list[int] = []
+            link = predecessor[pairs[-1]]
+            while link is not None:
+                parent, symbol = link
+                symbols.append(symbol)
+                pairs.append(parent)
+                link = predecessor[parent]
+            pairs.reverse()
+            symbols.reverse()
+            return (
+                tuple(symbols),
+                tuple(state[0] for state in pairs),
+                tuple(state[1] for state in pairs),
+            )
+        for symbol in range(left.alphabet_size):
+            target = (
+                left_transitions[(pair[0], symbol)],
+                right_transitions[(pair[1], symbol)],
+            )
+            if target not in predecessor:
+                predecessor[target] = (pair, symbol)
+                queue.append(target)
+    return None, None, None
 
 
 def dfa_transition_carrier(dfa: DFA) -> FiniteLabeledAutomaton:

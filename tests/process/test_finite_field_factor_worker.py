@@ -73,10 +73,8 @@ def test_request_stops_and_reaps_a_blocked_backend_call(
             os.kill(int(marker.read_text()), 0)
 
 
-@pytest.mark.parametrize("cancel", [False, True])
-def test_control_stop_during_directory_setup_does_not_start_a_worker(
+def test_cancellation_during_directory_setup_does_not_start_a_worker(
     monkeypatch: pytest.MonkeyPatch,
-    cancel: bool,
 ) -> None:
     original = _factor_process.TemporaryDirectory
     cancellation = Event()
@@ -84,10 +82,7 @@ def test_control_stop_during_directory_setup_does_not_start_a_worker(
     @contextmanager
     def expired_directory(*args: Any, **kwargs: Any) -> Iterator[str]:
         with original(*args, **kwargs) as directory:
-            if cancel:
-                cancellation.set()
-            else:
-                bind_request_deadline(time.monotonic() - 1)
+            cancellation.set()
             yield directory
 
     def unexpected(*_args: object, **_kwargs: object) -> None:
@@ -95,8 +90,8 @@ def test_control_stop_during_directory_setup_does_not_start_a_worker(
 
     monkeypatch.setattr(_factor_process, "TemporaryDirectory", expired_directory)
     monkeypatch.setattr(_factor_process, "run_bounded_process", unexpected)
-    error = (
-        OperationExecutionCancelledError if cancel else OperationExecutionTimeoutError
-    )
-    with request_cancellation(cancellation), pytest.raises(error):
+    with (
+        request_cancellation(cancellation),
+        pytest.raises(OperationExecutionCancelledError),
+    ):
         galois_factor(5, (1, 0, 1))

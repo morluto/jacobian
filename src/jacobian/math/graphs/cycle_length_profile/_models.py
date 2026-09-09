@@ -104,9 +104,36 @@ class CycleLengthProfileResult(StrictModel):
         return cls.model_construct(graph=graph, rows=rows)
 
 
+class FixedLengthCycleEnumerationRequest(StrictModel):
+    """Enumerate every simple cycle of one fixed length."""
+
+    graph: SimpleUndirectedGraph
+    cycle_length: StrictInt = Field(ge=3, le=MAX_VERTICES)
+
+
+class CycleIncidenceRow(StrictModel):
+    """Cycles incident with one source vertex or edge."""
+
+    source: tuple[str, ...] = Field(min_length=1, max_length=2)
+    cycle_indices: tuple[StrictInt, ...]
+
+
+class FixedLengthCycleEnumerationResult(StrictModel):
+    """Complete dihedrally canonical fixed-length cycle family."""
+
+    graph: SimpleUndirectedGraph
+    cycle_length: StrictInt = Field(ge=3, le=MAX_VERTICES)
+    cycles: tuple[tuple[str, ...], ...] = Field(max_length=20_000)
+    vertex_incidence: tuple[CycleIncidenceRow, ...]
+    edge_incidence: tuple[CycleIncidenceRow, ...]
+
+
 __all__ = [
     "MAX_VERTICES",
+    "CycleIncidenceRow",
     "CycleLengthProfileRequest",
     "CycleLengthProfileResult",
     "CycleLengthRow",
+    "FixedLengthCycleEnumerationRequest",
+    "FixedLengthCycleEnumerationResult",
 ]

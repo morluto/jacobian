@@ -68,21 +68,16 @@ def _validate_coloring_envelope(
     edge_count = len(hypergraph.edges)
     has_forced_failure = any(len(members) <= 1 for _, members in hypergraph.edges)
     has_injective_witness = not has_forced_failure and palette_size >= vertex_count
-    work = (
+    exhaustive_work = (
         0
         if has_forced_failure or has_injective_witness
         else palette_size**vertex_count * edge_count
     )
-    if work > MAX_COLORING_WORK:
-        raise PydanticCustomError(
-            "hypergraph_coloring.work_too_large",
-            f"coloring search requires at most {MAX_COLORING_WORK} edge checks",
-        )
 
     return _ColoringAdmission(
         has_forced_failure=has_forced_failure,
         has_injective_witness=has_injective_witness,
-        work_budget=work,
+        work_budget=min(exhaustive_work, MAX_COLORING_WORK),
     )
 
 

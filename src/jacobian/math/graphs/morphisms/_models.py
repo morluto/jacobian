@@ -166,19 +166,8 @@ class HomomorphismCheckResult(StrictModel):
 # Fixed-length cycle decision
 # ---------------------------------------------------------------------------
 
-# Worst-case DFS work for a k-cycle is bounded by the number of simple
-# directed paths of length k-1, at most n*(d_max)^(k-1) where d_max is the
-# maximum degree.  This product budget couples graph size with the requested
-# length so every accepted request terminates inside a tested bound.
 MAX_CYCLE_SEARCH_PATHS = 10_000_000
-
-
-def _canonical_max_degree(graph: SimpleUndirectedGraph) -> int:
-    degree: dict[str, int] = dict.fromkeys(graph.vertices, 0)
-    for u, v in graph.edges:
-        degree[u] += 1
-        degree[v] += 1
-    return max(degree.values(), default=0)
+MAX_SUBGRAPH_CANDIDATE_CHECKS = 10_000_000
 
 
 class FixedLengthCycleRequest(StrictModel):
@@ -189,9 +178,10 @@ class FixedLengthCycleRequest(StrictModel):
             "description": (
                 "Decide whether the canonical simple graph contains a simple "
                 "cycle of length `length` (3..64) in a graph with at most 64 "
-                "vertices. The request is rejected when "
-                "the worst-case exhaustive search would exceed the work budget, "
-                "or when the retained source graph plus witness labels exceed "
+                "vertices. Search visits at most 10,000,000 path extensions and "
+                "returns immediately on a checked witness. Exhaustion is an "
+                "execution error; a negative result follows only from completed "
+                "search. The retained source graph plus witness labels must fit "
                 "the owner-local representation bound. Accepts the domain-owned "
                 "`SimpleUndirectedGraph` so "
                 "callers can compose the output of `explicit_graph` or "
@@ -309,11 +299,11 @@ class FixedLengthCycleResult(StrictModel):
 class SubgraphPatternFindRequest(StrictModel):
     """Find an injective edge-preserving embedding of ``pattern`` in ``host``.
 
-    The pattern is capped at 64 vertices (``MORPHISM_MAX_VERTICES``), and the
-    request is rejected when the worst-case backtracking work - bounded by the
-    falling factorial of host vertices taken pattern-at-a-time times the
-    edge-choice branching - would exceed the search budget. Both graphs are
-    canonical ``SimpleUndirectedGraph`` values for direct composition.
+    The pattern is capped at 64 vertices (``MORPHISM_MAX_VERTICES``). Search
+    charges at most 10,000,000 host-candidate scans and returns immediately on
+    a checked witness. Exhaustion is an execution error; a negative result
+    follows only from completed search. Both graphs are canonical
+    ``SimpleUndirectedGraph`` values for direct composition.
     """
 
     model_config = ConfigDict(
@@ -322,10 +312,11 @@ class SubgraphPatternFindRequest(StrictModel):
                 "Find an injective edge-preserving embedding of `pattern` in "
                 "`host`. Both are canonical `SimpleUndirectedGraph` values so "
                 "callers can pass `explicit_graph` output directly. `pattern` "
-                "must have at most 64 vertices; requests whose worst-case "
-                "assignment search exceeds the per-pass work budget are "
-                "rejected. Admitted searches return a complete decision; returned "
-                "maps remain bounded by the admitted pattern cardinality."
+                "must have at most 64 vertices. Search visits at most 10,000,000 "
+                "host candidates and returns immediately on a checked witness. "
+                "Exhaustion is an execution error; negative decisions follow only "
+                "from complete search. Returned maps remain bounded by the admitted "
+                "pattern cardinality."
             )
         },
     )

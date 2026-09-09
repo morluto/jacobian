@@ -3,11 +3,11 @@
 import time
 from collections import Counter
 from itertools import permutations
-from math import perm
 
 from pydantic_core import PydanticCustomError
 
 from jacobian._execution import (
+    OperationWorkLedger,
     bind_request_deadline,
     current_request_execution,
     request_checkpoint,
@@ -88,23 +88,20 @@ def edge_colored_subgraph_pattern_find(
         host_edges.get(edge) == color
         for edge, color in zip(pattern.graph.edges, pattern.edge_colors, strict=True)
     )
-    assignments = 0 if impossible or identity else perm(n, k)
-    # itertools constructs k-entry injections; each candidate checks at most
-    # every pattern edge. Colors are interned once so search compares integers.
-    work = (
-        retained + len(host.graph.edges) + assignments * (k + len(pattern.graph.edges))
-    )
-    if assignments > MAX_ASSIGNMENTS or work > MAX_WORK:
-        _reject(
-            "search",
-            "complete injective assignment search exceeds its admitted work bound",
-        )
-    request_checkpoint("after complete colored embedding admission")
+    setup_work = retained + len(host.graph.edges)
+    if setup_work > MAX_WORK:
+        _reject("work", "colored embedding setup exceeds its admitted work bound")
+    request_checkpoint("after colored embedding admission")
     found: tuple[str, ...] | None = None
     if identity and not impossible:
         found = pattern.graph.vertices
     elif not impossible:
-        found = _search(pattern, host)
+        found = _search(
+            pattern,
+            host,
+            candidate_ledger=OperationWorkLedger(MAX_ASSIGNMENTS),
+            work_ledger=OperationWorkLedger(MAX_WORK, consumed=setup_work),
+        )
     request_checkpoint("before colored embedding result construction")
     return EdgeColoredPatternResult(
         pattern=pattern,
@@ -115,7 +112,11 @@ def edge_colored_subgraph_pattern_find(
 
 
 def _search(
-    pattern: ColoredUndirectedGraph, host: ColoredUndirectedGraph
+    pattern: ColoredUndirectedGraph,
+    host: ColoredUndirectedGraph,
+    *,
+    candidate_ledger: OperationWorkLedger | None = None,
+    work_ledger: OperationWorkLedger | None = None,
 ) -> tuple[str, ...] | None:
     pattern_index = {label: i for i, label in enumerate(pattern.graph.vertices)}
     host_index = {label: i for i, label in enumerate(host.graph.vertices)}
@@ -135,9 +136,16 @@ def _search(
         ]
         for (u, v), color in zip(host.graph.edges, host.edge_colors, strict=True)
     }
+    if candidate_ledger is None:
+        candidate_ledger = OperationWorkLedger(MAX_ASSIGNMENTS)
+    if work_ledger is None:
+        work_ledger = OperationWorkLedger(MAX_WORK)
+    per_candidate_work = len(pattern.graph.vertices) + len(pattern.graph.edges)
     for assignment in permutations(
         range(len(host.graph.vertices)), len(pattern.graph.vertices)
     ):
+        candidate_ledger.charge()
+        work_ledger.charge(per_candidate_work)
         request_checkpoint("during colored embedding search")
         if all(
             available.get(

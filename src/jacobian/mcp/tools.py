@@ -219,6 +219,18 @@ def _operation_error_boundary(operation_id: str) -> Iterator[None]:
                     "If exact primal-dual candidates are available, submit them to "
                     "optimization.linear.rational_optimality.check."
                 )
+            elif operation_id in {
+                "graph.k_regular_subgraph.find",
+                "graph.cycle.fixed_length.decide",
+                "graph.subgraph_pattern.find",
+                "graph.edge_colored_subgraph_pattern.find",
+                "hypergraph.nonmonochromatic_vertex_coloring.q_decide",
+            }:
+                hint = (
+                    "The bounded search prefix found no witness; this does not "
+                    "establish a negative result. Reduce the search space enough "
+                    "for the operation to complete within its fixed work allowance."
+                )
         raise _execution_tool_error(
             code="RESOURCE_EXHAUSTED",
             operation_id=operation_id,

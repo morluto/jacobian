@@ -8,13 +8,11 @@ from pydantic import ValidationError
 
 from jacobian._execution import (
     OperationExecutionTimeoutError,
+    OperationResourceExhaustedError,
     bind_request_deadline,
     request_execution,
 )
-from jacobian.catalog.models import (
-    OperationDomainValidationError,
-    OperationResourceAdmissionError,
-)
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.morphisms.edge_colored_pattern import (
     edge_colored_subgraph_pattern_find,
 )
@@ -124,7 +122,7 @@ def test_color_domain_and_shared_deadline() -> None:
             edge_colored_subgraph_pattern_find(valid, valid)
 
 
-def test_large_identity_presolve_and_unadmitted_search() -> None:
+def test_large_identity_and_early_isomorphic_witnesses() -> None:
     vertices = tuple(f"v{i:02}" for i in range(64))
     edges = tuple((vertices[i], vertices[i + 1]) for i in range(63))
     pattern = colored(vertices, edges, ("red",) * 63)
@@ -138,5 +136,44 @@ def test_large_identity_presolve_and_unadmitted_search() -> None:
         tuple((host_vertices[i], host_vertices[i + 1]) for i in range(63)),
         ("red",) * 63,
     )
-    with pytest.raises(OperationResourceAdmissionError):
+    renamed = edge_colored_subgraph_pattern_find(pattern, host)
+    assert renamed.decision == "EXISTS"
+    assert renamed.vertex_map == host_vertices
+
+
+def test_search_exhaustion_is_not_a_negative_decision(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pattern = colored(("p0", "p1"), (("p0", "p1"),), ("red",))
+    host = colored(("h0", "h1", "h2"), (("h1", "h2"),), ("red",))
+    monkeypatch.setattr(
+        "jacobian.math.graphs.morphisms.edge_colored_pattern.operations.MAX_ASSIGNMENTS",
+        1,
+    )
+    with pytest.raises(OperationResourceExhaustedError):
+        edge_colored_subgraph_pattern_find(pattern, host)
+
+
+def test_search_work_units_exhaust_independently_of_candidate_count(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.graphs.morphisms.edge_colored_pattern import operations
+
+    pattern = colored(("p0", "p1"), (("p0", "p1"),), ("red",))
+    host = colored(("h0", "h1", "h2"), (("h1", "h2"),), ("red",))
+
+    def label_characters(graph: SimpleUndirectedGraph) -> int:
+        return sum(map(len, graph.vertices)) + sum(
+            len(left) + len(right) for left, right in graph.edges
+        )
+
+    retained = (
+        label_characters(pattern.graph)
+        + label_characters(host.graph)
+        + sum(map(len, pattern.edge_colors))
+        + sum(map(len, host.edge_colors))
+        + len(pattern.graph.vertices) * max(map(len, host.graph.vertices))
+    )
+    monkeypatch.setattr(operations, "MAX_WORK", retained + len(host.graph.edges) + 2)
+    with pytest.raises(OperationResourceExhaustedError):
         edge_colored_subgraph_pattern_find(pattern, host)

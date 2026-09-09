@@ -21,8 +21,9 @@ TOOLS: MathTools = (
         description=(
             "Find a nonempty k-regular subgraph of a simple undirected "
             "graph: a vertex set and edge set where every used vertex has "
-            "degree exactly k. Returns a witness or found=false. "
-            "Exhaustive edge-subset enumeration."
+            "degree exactly k. Returns the first checked witness found within "
+            "524,288 selected-edge checks. Returns found=false only after complete "
+            "search; exhausting the work allowance is an execution error."
         ),
         request_type=RegularSubgraphRequest,
         result_type=RegularSubgraphResult,

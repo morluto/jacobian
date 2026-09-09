@@ -2,7 +2,7 @@
 
 import pytest
 
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian._execution import OperationResourceExhaustedError
 from jacobian.math.combinatorics.finite_structures.hypergraph_coloring import (
     _models,
     operations,
@@ -33,7 +33,7 @@ def test_noncolorability_resource_refusal_is_not_a_false_claim(
     claim = operations.decide_nonmonochromatic_coloring(_cycle(3), 2)
     assert operations.verify_non_colorable(claim)
     monkeypatch.setattr(_models, "MAX_COLORING_WORK", 0)
-    with pytest.raises(OperationResourceAdmissionError):
+    with pytest.raises(OperationResourceExhaustedError):
         operations.verify_non_colorable(claim)
 
 

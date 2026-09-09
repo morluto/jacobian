@@ -166,6 +166,21 @@ class OperationResourceExhaustedError(Exception):
         super().__init__(f"operation exhausted its {resource.value} allowance")
 
 
+@dataclass(slots=True)
+class OperationWorkLedger:
+    """Charge deterministic kernel work before each bounded unit executes."""
+
+    limit: int
+    consumed: int = 0
+
+    def charge(self, units: int = 1) -> None:
+        if units < 0:
+            raise ValueError("work charge must be nonnegative")
+        if units > self.limit - self.consumed:
+            raise OperationResourceExhaustedError(ExecutionResource.WORK)
+        self.consumed += units
+
+
 class OperationBackendError(Exception):
     """A backend failed to establish a usable mathematical result."""
 
@@ -223,6 +238,7 @@ __all__ = [
     "OperationExecutionStage",
     "OperationExecutionTimeoutError",
     "OperationResourceExhaustedError",
+    "OperationWorkLedger",
     "RequestCancellationSignal",
     "RequestExecution",
     "bind_request_deadline",

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian._execution import OperationResourceExhaustedError
 from jacobian.math.combinatorics.finite_structures.hypergraph_coloring.operations import (
     decide_nonmonochromatic_coloring,
     verify_coloring_witness,
@@ -177,10 +177,16 @@ def test_singleton_edge_not_colorable() -> None:
     assert result.outcome == "NOT_COLORABLE"
 
 
-def test_native_admission_matches_request_bounds() -> None:
-    h = _hg([str(i) for i in range(256)], [("e0", ("0", "1"))])
-    with pytest.raises(OperationDomainValidationError, match="edge checks"):
-        decide_nonmonochromatic_coloring(h, 16)
+def test_native_search_exhaustion_is_not_a_negative_decision(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    h = _hg(["a", "b", "c"], [("edge", ("a", "b"))])
+    monkeypatch.setattr(
+        "jacobian.math.combinatorics.finite_structures.hypergraph_coloring._models.MAX_COLORING_WORK",
+        1,
+    )
+    with pytest.raises(OperationResourceExhaustedError, match="work allowance"):
+        decide_nonmonochromatic_coloring(h, 2)
 
 
 def test_large_carrier_with_cheap_search_is_admitted() -> None:
@@ -189,8 +195,19 @@ def test_large_carrier_with_cheap_search_is_admitted() -> None:
     assert result.outcome == "NOT_COLORABLE"
 
 
-def test_rejects_search_work_before_enumeration() -> None:
+def test_injective_presolve_precedes_search_work() -> None:
     h = _hg([str(i) for i in range(16)], [("e0", ("0", "1"))])
     result = decide_nonmonochromatic_coloring(h, 16)
     assert result.outcome == "COLORABLE"
     assert result.witness is not None
+
+
+def test_early_coloring_witness_precedes_oversized_complete_search() -> None:
+    vertices = [f"v{index:02d}" for index in range(22)]
+    result = decide_nonmonochromatic_coloring(
+        _hg(vertices, [("edge", tuple(vertices))]), 2
+    )
+    assert result.outcome == "COLORABLE"
+    assert result.witness is not None
+    colors = dict(result.witness.assignments)
+    assert len({colors[vertex] for vertex in vertices}) == 2

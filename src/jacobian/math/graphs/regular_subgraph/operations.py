@@ -4,16 +4,17 @@ from __future__ import annotations
 
 from itertools import combinations
 
-from jacobian.catalog.models import (
-    OperationDomainValidationError,
-    OperationResourceAdmissionError,
-)
+from jacobian._execution import OperationWorkLedger, request_checkpoint
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.regular_subgraph._models import (
     RegularSubgraphResult,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
-MAX_REGULAR_SUBGRAPH_EDGES = 16
+# The previous 16-edge envelope could visit every edge in every subset:
+# 16 * 2**15 selected-edge visits. Runtime accounting keeps that ceiling while
+# allowing an early witness in a larger source graph.
+MAX_REGULAR_SUBGRAPH_WORK = 16 * (1 << 15)
 
 
 def find_k_regular_subgraph(
@@ -46,6 +47,7 @@ def find_k_regular_subgraph(
 
     # Trivial witnesses do not require enumerating edge subsets.
     if k == 0 and n_vertices > 0:
+        request_checkpoint("before k-regular subgraph result construction")
         return RegularSubgraphResult(
             graph=graph,
             k=k,
@@ -57,22 +59,13 @@ def find_k_regular_subgraph(
         left_label, right_label = edges[0]
         if left_label > right_label:
             left_label, right_label = right_label, left_label
+        request_checkpoint("before k-regular subgraph result construction")
         return RegularSubgraphResult(
             graph=graph,
             k=k,
             found=True,
             vertices=tuple(sorted((left_label, right_label))),
             edges=((left_label, right_label),),
-        )
-
-    if n_edges > MAX_REGULAR_SUBGRAPH_EDGES:
-        raise OperationResourceAdmissionError(
-            location=("graph",),
-            code="graphs.regular_subgraph.edge_subset_work",
-            message=(
-                "k-regular subgraph search exceeds the admitted complete-search "
-                f"bound of {MAX_REGULAR_SUBGRAPH_EDGES} edges"
-            ),
         )
 
     vertex_to_idx = {v: i for i, v in enumerate(vertices)}
@@ -85,9 +78,14 @@ def find_k_regular_subgraph(
     # Try edge subsets in increasing size. A nonempty subgraph with at least one
     # vertex of positive degree requires at least k+1 vertices and ceil(k*|V|/2) edges.
     min_edges_needed = (k + 1) * k // 2 if k > 0 else 0
+    ledger = OperationWorkLedger(MAX_REGULAR_SUBGRAPH_WORK)
+    request_checkpoint("before k-regular subgraph search")
 
     for edge_count in range(max(1, min_edges_needed), n_edges + 1):
         for edge_combo in combinations(range(n_edges), edge_count):
+            ledger.charge(edge_count)
+            if ledger.consumed % 1024 == 0:
+                request_checkpoint("during k-regular subgraph search")
             selected_edges = [edge_pairs[i] for i in edge_combo]
             used_vertices: set[int] = set()
             for left_idx, right_idx in selected_edges:
@@ -114,6 +112,7 @@ def find_k_regular_subgraph(
                         if left_label <= right_label
                         else (right_label, left_label)
                     )
+                request_checkpoint("before k-regular subgraph result construction")
                 return RegularSubgraphResult(
                     graph=graph,
                     k=k,
@@ -122,6 +121,7 @@ def find_k_regular_subgraph(
                     edges=tuple(sorted(used_edge_list)),
                 )
 
+    request_checkpoint("before k-regular subgraph result construction")
     return RegularSubgraphResult(graph=graph, k=k, found=False)
 
 
@@ -130,7 +130,7 @@ def verify_k_regular_subgraph(claim: RegularSubgraphResult) -> bool:
     if not claim.found:
         try:
             return not find_k_regular_subgraph(claim.graph, claim.k).found
-        except (OperationDomainValidationError, OperationResourceAdmissionError):
+        except OperationDomainValidationError:
             return False
     vertices = set(claim.vertices)
     if not vertices or len(vertices) != len(claim.vertices):

@@ -24,7 +24,9 @@ TOOLS: MathTools = (
             "Given a finite hypergraph H and a positive palette size q, decide "
             "whether H has a vertex q-colouring in which no hyperedge is "
             "monochromatic. Returns COLORABLE with one witness colouring, or "
-            "NOT_COLORABLE."
+            "NOT_COLORABLE after complete search. Search checks at most 2,000,000 "
+            "coloring-edge pairs and returns immediately on a checked witness; "
+            "exhaustion is an execution error."
         ),
         request_type=NonmonochromaticColoringRequest,
         result_type=NonmonochromaticColoringResult,

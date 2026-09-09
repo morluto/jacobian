@@ -9,8 +9,10 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._execution import (
     OperationExecutionTimeoutError,
+    OperationWorkLedger,
     bind_request_deadline,
     current_request_execution,
+    request_checkpoint,
 )
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -82,6 +84,7 @@ def decide_nonmonochromatic_coloring(
     # An empty or singleton edge is monochromatic under every positive palette;
     # return the exact decision without charging or enumerating all colorings.
     if admission.has_forced_failure:
+        request_checkpoint("before hypergraph coloring result construction")
         return NonmonochromaticColoringResult(
             hypergraph=hypergraph,
             palette_size=palette_size,
@@ -90,6 +93,7 @@ def decide_nonmonochromatic_coloring(
 
     if not edges:
         witness = ColoringWitness(assignments=tuple((v, 0) for v in vertices))
+        request_checkpoint("before hypergraph coloring result construction")
         return NonmonochromaticColoringResult(
             hypergraph=hypergraph,
             palette_size=palette_size,
@@ -101,6 +105,7 @@ def decide_nonmonochromatic_coloring(
         witness = ColoringWitness(
             assignments=tuple((vertex, index) for index, vertex in enumerate(vertices))
         )
+        request_checkpoint("before hypergraph coloring result construction")
         return NonmonochromaticColoringResult(
             hypergraph=hypergraph,
             palette_size=palette_size,
@@ -109,14 +114,19 @@ def decide_nonmonochromatic_coloring(
         )
 
     n = len(vertices)
+    ledger = OperationWorkLedger(admission.work_budget)
+    request_checkpoint("before hypergraph coloring search")
     for index, coloring in enumerate(product(range(palette_size), repeat=n)):
-        if index % 1024 == 0 and deadline is not None and time.monotonic() >= deadline:
-            raise OperationExecutionTimeoutError(
-                "hypergraph coloring search exceeded its request deadline"
-            )
-        if _is_valid_coloring(coloring, edges, vertices, deadline):
+        if index % 1024 == 0:
+            request_checkpoint("during hypergraph coloring search")
+            if deadline is not None and time.monotonic() >= deadline:
+                raise OperationExecutionTimeoutError(
+                    "hypergraph coloring search exceeded its request deadline"
+                )
+        if _is_valid_coloring(coloring, edges, vertices, ledger, deadline):
             assignments = tuple((vertices[i], coloring[i]) for i in range(n))
             witness = ColoringWitness(assignments=assignments)
+            request_checkpoint("before hypergraph coloring result construction")
             return NonmonochromaticColoringResult(
                 hypergraph=hypergraph,
                 palette_size=palette_size,
@@ -124,6 +134,7 @@ def decide_nonmonochromatic_coloring(
                 witness=witness,
             )
 
+    request_checkpoint("before hypergraph coloring result construction")
     return NonmonochromaticColoringResult(
         hypergraph=hypergraph,
         palette_size=palette_size,
@@ -135,18 +146,18 @@ def _is_valid_coloring(
     coloring: tuple[int, ...],
     edges: list[tuple[str, tuple[str, ...]]],
     vertices: list[str],
+    ledger: OperationWorkLedger,
     deadline: float | None = None,
 ) -> bool:
     vertex_to_color = {vertices[i]: coloring[i] for i in range(len(coloring))}
     for edge_index, (_, members) in enumerate(edges):
-        if (
-            edge_index % 256 == 0
-            and deadline is not None
-            and time.monotonic() >= deadline
-        ):
-            raise OperationExecutionTimeoutError(
-                "hypergraph coloring edge checks exceeded its request deadline"
-            )
+        ledger.charge()
+        if edge_index % 256 == 0:
+            request_checkpoint("during hypergraph coloring edge checks")
+            if deadline is not None and time.monotonic() >= deadline:
+                raise OperationExecutionTimeoutError(
+                    "hypergraph coloring edge checks exceeded its request deadline"
+                )
         colors = {vertex_to_color[m] for m in members}
         if len(colors) < 2:
             return False

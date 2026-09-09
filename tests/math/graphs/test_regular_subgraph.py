@@ -2,7 +2,13 @@ from __future__ import annotations
 
 import pytest
 
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian._execution import (
+    OperationExecutionTimeoutError,
+    OperationResourceExhaustedError,
+    OperationWorkLedger,
+    bind_request_deadline,
+    request_execution,
+)
 from jacobian.math.graphs.regular_subgraph._models import RegularSubgraphResult
 from jacobian.math.graphs.regular_subgraph.operations import (
     find_k_regular_subgraph,
@@ -106,11 +112,11 @@ def test_serialized_witness_claim_is_verified_against_its_graph() -> None:
     assert not verify_k_regular_subgraph(RegularSubgraphResult.model_validate(forged))
 
 
-def test_widened_path_is_refused_before_edge_subset_enumeration() -> None:
+def test_widened_path_exhaustion_is_not_a_negative_decision() -> None:
     vertices = tuple(f"v{index:03d}" for index in range(257))
     edges = [(vertices[index], vertices[index + 1]) for index in range(256)]
     graph = _graph(list(vertices), edges)
-    with pytest.raises(OperationResourceAdmissionError, match="16 edges"):
+    with pytest.raises(OperationResourceExhaustedError, match="work allowance"):
         find_k_regular_subgraph(graph, 2)
 
 
@@ -125,3 +131,40 @@ def test_k0_and_k1_on_a_long_path_do_not_require_edge_subset_search() -> None:
     matching = find_k_regular_subgraph(graph, 1)
     assert matching.found
     assert matching.edges == ((vertices[0], vertices[1]),)
+
+
+def test_triangle_witness_precedes_oversized_complete_search() -> None:
+    vertices = [f"v{index:02d}" for index in range(18)]
+    edges = [("v00", "v01"), ("v00", "v02"), ("v01", "v02")]
+    edges.extend((vertices[index], vertices[index + 1]) for index in range(3, 17))
+    result = find_k_regular_subgraph(_graph(vertices, edges), 2)
+    assert result.found
+    assert result.vertices == ("v00", "v01", "v02")
+    assert result.edges == (("v00", "v01"), ("v00", "v02"), ("v01", "v02"))
+
+
+def test_dense_large_subsets_charge_their_selected_edge_work() -> None:
+    left = [f"l{index:02d}" for index in range(16)]
+    right = [f"r{index:02d}" for index in range(16)]
+    graph = _graph(left + right, [(u, v) for u in left for v in right])
+    with pytest.raises(OperationResourceExhaustedError, match="work allowance"):
+        find_k_regular_subgraph(graph, 16)
+
+
+def test_search_checks_parent_deadline_after_final_candidate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clock = {"now": 0.0}
+    original_charge = OperationWorkLedger.charge
+
+    def charge_and_expire(ledger: OperationWorkLedger, units: int = 1) -> None:
+        original_charge(ledger, units)
+        clock["now"] = 2.0
+
+    monkeypatch.setattr(OperationWorkLedger, "charge", charge_and_expire)
+    monkeypatch.setattr("jacobian._execution.time.monotonic", lambda: clock["now"])
+    graph = _graph(["a", "b", "c"], [("a", "b"), ("a", "c"), ("b", "c")])
+    with request_execution(0.0):
+        bind_request_deadline(1.0)
+        with pytest.raises(OperationExecutionTimeoutError):
+            find_k_regular_subgraph(graph, 2)

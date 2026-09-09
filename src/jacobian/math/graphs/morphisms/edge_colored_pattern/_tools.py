@@ -14,7 +14,7 @@ TOOLS: MathTools = (
     MathTool(
         operation_id="graph.edge_colored_subgraph_pattern.find",
         title="Find an edge-color-preserving subgraph embedding",
-        description="Decide ordinary non-induced containment of one edge-colored pattern in an edge-colored host, returning one injective host-label map in the pattern vertex order. Both sources must have nonempty total edge colorings and no vertex colors. Negative decisions follow complete admitted search or a source-count obstruction; execution interruption establishes no decision.",
+        description="Decide ordinary non-induced containment of one edge-colored pattern in an edge-colored host, returning one injective host-label map in the pattern vertex order. Both sources must have nonempty total edge colorings and no vertex colors. Search charges at most 10,000,000 assignments and 50,000,000 work units, returning immediately on a checked witness. Negative decisions follow complete search or a source-count obstruction; exhaustion establishes no decision.",
         request_type=EdgeColoredPatternRequest,
         result_type=EdgeColoredPatternResult,
         run=_run,

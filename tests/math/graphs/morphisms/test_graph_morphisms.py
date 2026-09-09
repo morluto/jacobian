@@ -3,6 +3,13 @@
 import pytest
 from pydantic import ValidationError
 
+from jacobian._execution import (
+    OperationExecutionTimeoutError,
+    OperationResourceExhaustedError,
+    OperationWorkLedger,
+    bind_request_deadline,
+    request_execution,
+)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.morphisms._models import (
     GraphHomomorphism,
@@ -335,6 +342,44 @@ class TestFixedLengthCycle:
         assert result.decision == "EXISTS"
         assert len(result.cycle) == 4
 
+    def test_early_cycle_witness_precedes_oversized_path_estimate(self) -> None:
+        from itertools import combinations
+
+        labels = [f"v{i:02d}" for i in range(64)]
+        graph = self._g(labels, [list(edge) for edge in combinations(labels, 2)])
+        result = fixed_length_cycle(graph, 4)
+        assert result.decision == "EXISTS"
+        assert result.cycle == tuple(labels[:4])
+        assert verify_fixed_length_cycle(result)
+
+    def test_cycle_search_exhaustion_is_not_a_negative_decision(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        graph = self._g(["a", "b", "c"], [["a", "b"], ["a", "c"], ["b", "c"]])
+        monkeypatch.setattr(
+            "jacobian.math.graphs.morphisms.operations.MAX_CYCLE_SEARCH_PATHS", 1
+        )
+        with pytest.raises(OperationResourceExhaustedError):
+            fixed_length_cycle(graph, 3)
+
+    def test_cycle_checks_parent_deadline_after_final_candidate(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        clock = {"now": 0.0}
+        original_charge = OperationWorkLedger.charge
+
+        def charge_and_expire(ledger: OperationWorkLedger, units: int = 1) -> None:
+            original_charge(ledger, units)
+            clock["now"] = 2.0
+
+        monkeypatch.setattr(OperationWorkLedger, "charge", charge_and_expire)
+        monkeypatch.setattr("jacobian._execution.time.monotonic", lambda: clock["now"])
+        graph = self._g(["a", "b", "c"], [["a", "b"], ["a", "c"], ["b", "c"]])
+        with request_execution(0.0):
+            bind_request_deadline(1.0)
+            with pytest.raises(OperationExecutionTimeoutError):
+                fixed_length_cycle(graph, 3)
+
     def test_distinct_from_girth(self) -> None:
         # A graph with a 3-cycle and a 4-cycle: asking for length 4 still finds
         # the 4-cycle even though the girth is 3.
@@ -538,6 +583,54 @@ class TestSubgraphPatternFind:
             SubgraphPatternFindRequest(pattern=pat, host=host),
         )
         assert result.decision == "EXISTS"
+
+    def test_early_embedding_precedes_oversized_assignment_family(self) -> None:
+        from itertools import combinations
+
+        pattern_labels = [f"p{i:02d}" for i in range(6)]
+        host_labels = [f"h{i:02d}" for i in range(64)]
+        pattern = self._g(
+            pattern_labels,
+            [list(edge) for edge in combinations(pattern_labels, 2)],
+        )
+        host = self._g(
+            host_labels, [list(edge) for edge in combinations(host_labels, 2)]
+        )
+        result = subgraph_pattern_find(pattern, host)
+        assert result.decision == "EXISTS"
+        assert result.vertex_map == tuple(host_labels[:6])
+        assert verify_subgraph_pattern_find(result)
+
+    def test_embedding_search_exhaustion_is_not_a_negative_decision(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        pattern = self._g(["p", "q"], [["p", "q"]])
+        host = self._g(["a", "b"], [["a", "b"]])
+        monkeypatch.setattr(
+            "jacobian.math.graphs.morphisms.operations.MAX_SUBGRAPH_CANDIDATE_CHECKS",
+            1,
+        )
+        with pytest.raises(OperationResourceExhaustedError):
+            subgraph_pattern_find(pattern, host)
+
+    def test_embedding_checks_parent_deadline_after_final_candidate(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        clock = {"now": 0.0}
+        original_charge = OperationWorkLedger.charge
+
+        def charge_and_expire(ledger: OperationWorkLedger, units: int = 1) -> None:
+            original_charge(ledger, units)
+            clock["now"] = 2.0
+
+        monkeypatch.setattr(OperationWorkLedger, "charge", charge_and_expire)
+        monkeypatch.setattr("jacobian._execution.time.monotonic", lambda: clock["now"])
+        pattern = self._g(["p", "q"], [["p", "q"]])
+        host = self._g(["a", "b"], [["a", "b"]])
+        with request_execution(0.0):
+            bind_request_deadline(1.0)
+            with pytest.raises(OperationExecutionTimeoutError):
+                subgraph_pattern_find(pattern, host)
 
     def test_rejects_pattern_larger_than_host(self) -> None:
         from jacobian.math.graphs.morphisms._models import (

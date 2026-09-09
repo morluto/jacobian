@@ -178,10 +178,11 @@ class FixedLengthCycleRequest(StrictModel):
             "description": (
                 "Decide whether the canonical simple graph contains a simple "
                 "cycle of length `length` (3..64) in a graph with at most 64 "
-                "vertices. Search visits at most 10,000,000 path extensions and "
-                "returns immediately on a checked witness. Exhaustion is an "
-                "execution error; a negative result follows only from completed "
-                "search. The retained source graph plus witness labels must fit "
+                "vertices. A bounded witness presolve returns immediately on a "
+                "checked cycle. If exhaustive search remains necessary, every "
+                "possible path extension must fit the 10,000,000-path admission "
+                "bound before search begins. A negative result follows only from "
+                "completed search. The retained source graph plus witness labels must fit "
                 "the owner-local representation bound. Accepts the domain-owned "
                 "`SimpleUndirectedGraph` so "
                 "callers can compose the output of `explicit_graph` or "
@@ -300,9 +301,10 @@ class SubgraphPatternFindRequest(StrictModel):
     """Find an injective edge-preserving embedding of ``pattern`` in ``host``.
 
     The pattern is capped at 64 vertices (``MORPHISM_MAX_VERTICES``). Search
-    charges at most 10,000,000 host-candidate scans and returns immediately on
-    a checked witness. Exhaustion is an execution error; a negative result
-    follows only from completed search. Both graphs are canonical
+    first runs a bounded witness presolve. If exhaustive search remains necessary,
+    every possible host-candidate scan must fit the 10,000,000-candidate admission
+    bound before search begins. A negative result follows only from completed
+    search. Both graphs are canonical
     ``SimpleUndirectedGraph`` values for direct composition.
     """
 
@@ -312,10 +314,11 @@ class SubgraphPatternFindRequest(StrictModel):
                 "Find an injective edge-preserving embedding of `pattern` in "
                 "`host`. Both are canonical `SimpleUndirectedGraph` values so "
                 "callers can pass `explicit_graph` output directly. `pattern` "
-                "must have at most 64 vertices. Search visits at most 10,000,000 "
-                "host candidates and returns immediately on a checked witness. "
-                "Exhaustion is an execution error; negative decisions follow only "
-                "from complete search. Returned maps remain bounded by the admitted "
+                "must have at most 64 vertices. A bounded witness presolve returns "
+                "immediately on a checked embedding. If exhaustive search remains "
+                "necessary, every possible host-candidate scan must fit the "
+                "10,000,000-candidate admission bound before search begins. Negative "
+                "decisions follow only from complete search. Returned maps remain bounded by the admitted "
                 "pattern cardinality."
             )
         },

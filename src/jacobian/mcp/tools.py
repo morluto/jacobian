@@ -210,6 +210,15 @@ def _operation_error_boundary(operation_id: str) -> Iterator[None]:
                 hint = "Adjust rlimit within its admitted range; timeout_ms does not increase the work allowance."
             elif operation_id in {"sat.solve", "smt.solve"}:
                 hint = "timeout_ms does not increase the fixed work allowance."
+            elif operation_id in {
+                "optimization.linear.rational_optimum.compute",
+                "optimization.linear.rational_general_optimum.compute",
+            }:
+                hint = (
+                    "The exact basis search reached its fixed scalar-update allowance. "
+                    "If exact primal-dual candidates are available, submit them to "
+                    "optimization.linear.rational_optimality.check."
+                )
         raise _execution_tool_error(
             code="RESOURCE_EXHAUSTED",
             operation_id=operation_id,

@@ -26,7 +26,11 @@ alternatives include [SoPlex](https://soplex.zib.de/) and
 adopting either would require an additional native dependency. The finite basis
 families and conservative scalar-update/minor-height bounds are documented in
 `src/jacobian/math/optimization/_linear_basis.py` and exposed through inspection.
-They establish admission; timings do not.
+The complete-family basis and height bounds establish admission. A shared execution
+ledger reserves preprocessing, then charges each basis before exact FLINT work. This
+lets an early exact certificate complete even when exhaustive search would exceed
+the ledger; exhausting the ledger is an execution error and establishes no LP
+status. Timings do not establish either bound.
 
 On 2026-09-05, Python 3.12.13 / FLINT 0.9.0 on x86-64 completed five runs of the
 #3192 pair cover at objective 2 in 0.0048–0.0054 seconds for ten source variables
@@ -46,6 +50,15 @@ admitted coefficient regimes and host variation. It is cooperative between
 bounded FLINT primitives, not a hard interruption inside a native matrix call.
 Normalization, both searches, certificate construction and dispatch projection
 share the original request deadline; no phase receives a fresh allowance.
+
+On 2026-09-09, a nine-row grid-collision cover normalized to 18 columns had an
+exhaustive estimate of 324,709,800 updates but produced independently checked
+primal and dual certificates of value 8/3 in 0.036 seconds. This is the motivating
+certificate-prefix regression for the execution ledger. Reversing its source rows
+retains the same exact optimum. An eighteen-column Vandermonde control with
+negative RHS has no feasible original basis and deterministically exhausts the
+50,000,000-update ledger, demonstrating that the larger admitted prefix remains
+bounded.
 
 ## Adding an entry
 

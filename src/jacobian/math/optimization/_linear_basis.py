@@ -30,6 +30,8 @@ from typing import Any
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
 from jacobian._execution import (
+    ExecutionResource,
+    OperationResourceExhaustedError,
     bind_request_deadline,
     current_request_execution,
     request_checkpoint,
@@ -75,7 +77,27 @@ def linear_execution() -> Iterator[None]:
 class LinearAdmission:
     columns: tuple[int, ...]
     result_digits: int
+    initial_work: int
     components: tuple[tuple[tuple[int, ...], tuple[int, ...]], ...] = ()
+
+
+@dataclass
+class _LinearWorkLedger:
+    consumed: int
+    limit: int = MAX_LINEAR_PROGRAM_SCALAR_UPDATES
+
+    def charge(self, work: int) -> None:
+        if work > self.limit - self.consumed:
+            raise OperationResourceExhaustedError(ExecutionResource.WORK)
+        self.consumed += work
+
+
+def _preprocessing_work(variables: int, equations: int) -> int:
+    return 8 * (equations + 1) ** 2 * (variables + equations + 2)
+
+
+def _basis_work(variables: int, rank: int) -> int:
+    return 4 * rank**3 + 2 * rank**2 * (variables + 2) + 4 * rank * (variables + 2)
 
 
 def basis_bounds(variables: int, equations: int) -> tuple[int, int]:
@@ -88,14 +110,12 @@ def basis_bounds(variables: int, equations: int) -> tuple[int, int]:
     elimination and matrix products have finite intermediate height bounded by
     (2*min(n,m)+4) times the conservative result-minor digit bound.
     """
-    preprocessing = 8 * (equations + 1) ** 2 * (variables + equations + 2)
+    preprocessing = _preprocessing_work(variables, equations)
     candidates = 1
     updates = preprocessing
     for rank in range(1, min(variables, equations) + 1):
         count = comb(variables + 1, rank)
-        per_basis = (
-            4 * rank**3 + 2 * rank**2 * (variables + 2) + 4 * rank * (variables + 2)
-        )
+        per_basis = _basis_work(variables, rank)
         candidates = max(candidates, count)
         updates = max(updates, preprocessing + count * per_basis)
     return candidates, updates
@@ -142,14 +162,17 @@ def admit_linear_program(program: StandardFormRationalLinearProgram) -> LinearAd
     rows = len(_active_equations(program))
     components = _constraint_components(program)
     if _has_trivial_inconsistent_row(program):
-        candidates, work = 0, 0
+        candidates, work, initial_work = 0, 0, 0
     else:
         bounds = [basis_bounds(len(cs), len(rs)) for rs, cs in components]
         candidates = sum(count for count, _ in bounds)
         # Source scans, subproblem projection and certificate assembly remain
         # in source coordinates; their dense work is charged independently.
-        work = sum(cost for _, cost in bounds) + 16 * (len(program.rhs) + 1) * (
-            len(program.variables) + 1
+        source_work = 16 * (len(program.rhs) + 1) * (len(program.variables) + 1)
+        work = sum(cost for _, cost in bounds) + source_work
+        initial_work = (
+            sum(_preprocessing_work(len(cs), len(rs)) for rs, cs in components)
+            + source_work
         )
 
     quantities = (
@@ -157,12 +180,13 @@ def admit_linear_program(program: StandardFormRationalLinearProgram) -> LinearAd
         f"normalized_rows={len(program.rhs)}, active_rows={rows}, "
         f"basis_estimate={candidates}, basis_limit={MAX_LINEAR_PROGRAM_BASES}, "
         f"work_estimate={work}, work_limit={MAX_LINEAR_PROGRAM_SCALAR_UPDATES}, "
+        f"initial_work={initial_work}, "
         f"result_digits={digits}, result_digit_limit={MAX_CANONICAL_RATIONAL_DIGITS}"
     )
     for reason, measured, limit in (
         ("result_height", digits, MAX_CANONICAL_RATIONAL_DIGITS),
         ("basis_bound", candidates, MAX_LINEAR_PROGRAM_BASES),
-        ("work_bound", work, MAX_LINEAR_PROGRAM_SCALAR_UPDATES),
+        ("work_bound", initial_work, MAX_LINEAR_PROGRAM_SCALAR_UPDATES),
     ):
         if measured > limit:
             raise OperationResourceAdmissionError(
@@ -170,7 +194,12 @@ def admit_linear_program(program: StandardFormRationalLinearProgram) -> LinearAd
                 code=f"optimization.linear.{reason}",
                 message=f"Exact LP {reason} exceeded: {quantities}.",
             )
-    return LinearAdmission(columns, digits, components)
+    return LinearAdmission(
+        columns=columns,
+        result_digits=digits,
+        initial_work=initial_work,
+        components=components,
+    )
 
 
 def independent_rows(a: Any, b: Any) -> tuple[tuple[int, ...], Any | None]:
@@ -205,7 +234,12 @@ def independent_rows(a: Any, b: Any) -> tuple[tuple[int, ...], Any | None]:
 
 
 def search_bases(
-    a: Any, b: Any, c: Any, *, artificial: bool = False
+    a: Any,
+    b: Any,
+    c: Any,
+    *,
+    ledger: _LinearWorkLedger,
+    artificial: bool = False,
 ) -> tuple[Any, Any, Any | None] | None:
     """Return a primal/dual pair or a primal/ray pair from one finite family."""
     from flint import fmpq_mat
@@ -218,6 +252,7 @@ def search_bases(
     )
     for basis in family:
         request_checkpoint("linear-program basis search")
+        ledger.charge(_basis_work(columns - int(artificial), rows))
         square = fmpq_mat([[a[i, j] for j in basis] for i in range(rows)])
         try:
             inverse = square.inv()

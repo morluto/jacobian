@@ -186,6 +186,48 @@ def test_pair_cover_original_and_trimmed_encodings(unused: bool) -> None:
     assert_cover_certificate(general_linear_program(cover_program(rows)))
 
 
+@pytest.mark.parametrize("reverse_rows", [False, True])
+def test_grid_collision_cover_finds_short_exact_certificate(
+    reverse_rows: bool,
+) -> None:
+    supports = [
+        (0, 1, 3),
+        (0, 1, 6),
+        (0, 2, 3),
+        (0, 2, 6),
+        (1, 2, 4),
+        (1, 2, 7),
+        (3, 4, 6),
+        (3, 5, 6),
+        (4, 5, 7),
+    ]
+    rows = [[int(j in support) for j in range(9)] for support in supports]
+    if reverse_rows:
+        rows.reverse()
+
+    result = general_linear_program(cover_program(rows))
+
+    assert result.status == "OPTIMAL"
+    assert result.primal_candidate is not None
+    assert result.constraint_dual is not None
+    point = tuple(value.as_fraction() for value in result.primal_candidate)
+    dual = tuple(value.as_fraction() for value in result.constraint_dual)
+    assert all(value >= 0 for value in (*point, *dual))
+    assert all(
+        sum(coefficient * value for coefficient, value in zip(row, point, strict=True))
+        >= 1
+        for row in rows
+    )
+    assert all(
+        sum(row[j] * value for row, value in zip(rows, dual, strict=True)) <= 1
+        for j in range(9)
+    )
+    assert sum(point) == sum(dual) == Fraction(8, 3)
+    assert result.primal_objective is not None
+    assert result.primal_objective.as_fraction() == Fraction(8, 3)
+    assert result.dual_objective == result.primal_objective
+
+
 @pytest.mark.parametrize(
     ("rows", "rhs", "objective", "status"),
     [

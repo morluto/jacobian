@@ -112,12 +112,13 @@ def test_serialized_witness_claim_is_verified_against_its_graph() -> None:
     assert not verify_k_regular_subgraph(RegularSubgraphResult.model_validate(forged))
 
 
-def test_widened_path_exhaustion_is_not_a_negative_decision() -> None:
+def test_widened_path_uses_exact_linear_k2_regime() -> None:
     vertices = tuple(f"v{index:03d}" for index in range(257))
     edges = [(vertices[index], vertices[index + 1]) for index in range(256)]
     graph = _graph(list(vertices), edges)
-    with pytest.raises(OperationResourceExhaustedError, match="work allowance"):
-        find_k_regular_subgraph(graph, 2)
+    result = find_k_regular_subgraph(graph, 2)
+    assert not result.found
+    assert verify_k_regular_subgraph(result)
 
 
 def test_k0_and_k1_on_a_long_path_do_not_require_edge_subset_search() -> None:

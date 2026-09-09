@@ -112,9 +112,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "the graph contains a simple cycle of exactly length k, returning an "
         "ordered cycle witness when one exists. The cycle is a subgraph and "
         "may have chords; this is distinct from girth (shortest cycle) and "
-        "from Hamiltonicity (spanning). Search visits at most 10,000,000 path "
-        "extensions and returns immediately on a checked witness. Exhaustion is "
-        "an execution error; DOES_NOT_EXIST follows only from complete search. "
+        "from Hamiltonicity (spanning). A bounded presolve returns an early "
+        "witness. Any remaining exhaustive search is admitted only when all path "
+        "extensions fit the 10,000,000-path budget; DOES_NOT_EXIST follows only "
+        "from complete search. "
         "Accepts the canonical "
         "`SimpleUndirectedGraph` so `explicit_graph` output composes directly.",
         request_type=FixedLengthCycleRequest,
@@ -127,7 +128,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 description=(
                     "A 4-cycle with a chord contains a 3-cycle (triangle); "
                     "length k is 3..vertex count. Preconditions: at most 64 "
-                    "vertices; a spent path-search allowance is an execution error."
+                    "vertices; exhaustive search must fit the path budget."
                 ),
                 input=CYCLE_C4_WITH_CHORD,
             ),
@@ -147,8 +148,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         title="Find a subgraph-pattern embedding",
         description="Given bounded canonical simple graphs pattern H and host G, find an "
         "injective non-induced embedding. Returns one vertex map in pattern order "
-        "when found. Search visits at most 10,000,000 host candidates. Exhaustion "
-        "is an execution error; DOES_NOT_EXIST follows only from complete search. "
+        "when found. A bounded presolve returns an early witness. Any remaining "
+        "exhaustive search is admitted only when all host-candidate scans fit the "
+        "10,000,000-candidate budget; DOES_NOT_EXIST follows only from complete search. "
         "Returned maps are bounded by the admitted pattern cardinality.",
         request_type=SubgraphPatternFindRequest,
         result_type=SubgraphPatternFindResult,
@@ -160,7 +162,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 description=(
                     "A triangle pattern embeds in a 4-cycle-with-chord host. "
                     "Preconditions: pattern at most 64 vertices, no larger than "
-                    "the host; a spent candidate allowance is an execution error."
+                    "the host; exhaustive search must fit the candidate budget."
                 ),
                 input=SUBGRAPH_TRIANGLE_IN_C4_CHORD,
             ),

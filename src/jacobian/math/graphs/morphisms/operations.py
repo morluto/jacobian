@@ -2,8 +2,17 @@
 
 from __future__ import annotations
 
-from jacobian._execution import OperationWorkLedger, request_checkpoint
-from jacobian.catalog.models import OperationDomainValidationError
+from dataclasses import dataclass
+
+from jacobian._execution import (
+    OperationResourceExhaustedError,
+    OperationWorkLedger,
+    request_checkpoint,
+)
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.graphs.morphisms._models import (
     MAX_CYCLE_SEARCH_PATHS,
     MAX_SUBGRAPH_CANDIDATE_CHECKS,
@@ -31,6 +40,7 @@ __all__ = [
 ]
 
 MAX_MORPHISM_RETAINED_LABEL_CHARACTERS = 10_000_000
+_WITNESS_PRESOLVE_WORK = 1_024
 
 
 def _graph_label_characters(graph: SimpleUndirectedGraph) -> int:
@@ -69,6 +79,26 @@ def _admit_cycle_request(graph: SimpleUndirectedGraph, length: int) -> None:
             message="cycle length must not exceed the vertex count",
         )
     _admit_cycle_retained(graph, length)
+
+
+def _admit_complete_cycle_search(adjacency: list[set[int]], length: int) -> None:
+    """Admit every charged DFS prefix needed for a negative decision."""
+
+    maximum_degree = max(map(len, adjacency), default=0)
+    work = 0
+    paths_at_depth = len(adjacency)
+    for _ in range(1, length):
+        paths_at_depth *= maximum_degree
+        work += paths_at_depth
+        if work > MAX_CYCLE_SEARCH_PATHS:
+            raise OperationResourceAdmissionError(
+                location=("length",),
+                code="graph.cycle.search_bound",
+                message=(
+                    "complete fixed-length cycle search exceeds the "
+                    f"{MAX_CYCLE_SEARCH_PATHS}-path work budget"
+                ),
+            )
 
 
 def _admit_cycle_retained(graph: SimpleUndirectedGraph, length: int) -> None:
@@ -184,7 +214,7 @@ def _canonical_label_adjacency(
 
 def _find_cycle_of_length(
     vertices: tuple[str, ...],
-    edges: tuple[tuple[str, str], ...],
+    adjacency: list[set[int]],
     length: int,
     *,
     max_search_paths: int = MAX_CYCLE_SEARCH_PATHS,
@@ -193,7 +223,7 @@ def _find_cycle_of_length(
 
     Exhaustive search over vertex indices with a runtime path-count budget.
     """
-    _, adj = _canonical_label_adjacency(vertices, edges)
+    adj = adjacency
     n = len(vertices)
     ledger = OperationWorkLedger(max_search_paths)
     request_checkpoint("before fixed-length cycle search")
@@ -226,6 +256,29 @@ def _find_cycle_of_length(
     return None
 
 
+def _decide_cycle_indices(
+    graph: SimpleUndirectedGraph, length: int
+) -> tuple[int, ...] | None:
+    """Run a bounded witness presolve, then an admitted complete search."""
+
+    _, adjacency = _canonical_label_adjacency(graph.vertices, graph.edges)
+    try:
+        return _find_cycle_of_length(
+            graph.vertices,
+            adjacency,
+            length,
+            max_search_paths=min(_WITNESS_PRESOLVE_WORK, MAX_CYCLE_SEARCH_PATHS),
+        )
+    except OperationResourceExhaustedError:
+        _admit_complete_cycle_search(adjacency, length)
+        return _find_cycle_of_length(
+            graph.vertices,
+            adjacency,
+            length,
+            max_search_paths=MAX_CYCLE_SEARCH_PATHS,
+        )
+
+
 def fixed_length_cycle(
     graph: SimpleUndirectedGraph, length: int
 ) -> FixedLengthCycleResult:
@@ -239,9 +292,7 @@ def fixed_length_cycle(
     """
     _admit_cycle_request(graph, length)
     k = length
-    found = _find_cycle_of_length(
-        graph.vertices, graph.edges, k, max_search_paths=MAX_CYCLE_SEARCH_PATHS
-    )
+    found = _decide_cycle_indices(graph, k)
     request_checkpoint("before fixed-length cycle result construction")
     if found is not None:
         return FixedLengthCycleResult._from_kernel(
@@ -269,15 +320,7 @@ def verify_fixed_length_cycle(claim: FixedLengthCycleResult) -> bool:
         if claim.cycle:
             return False
         _admit_cycle_request(claim.graph, claim.length)
-        return (
-            _find_cycle_of_length(
-                claim.graph.vertices,
-                claim.graph.edges,
-                claim.length,
-                max_search_paths=MAX_CYCLE_SEARCH_PATHS,
-            )
-            is None
-        )
+        return _decide_cycle_indices(claim.graph, claim.length) is None
     except (TypeError, ValueError):
         return False
 
@@ -285,9 +328,9 @@ def verify_fixed_length_cycle(claim: FixedLengthCycleResult) -> bool:
 def _candidate_preserves_pattern_edges(
     candidate_idx: int,
     pattern_idx: int,
-    pattern_adj: list[list[int]],
+    pattern_adj: tuple[tuple[int, ...], ...],
     vertex_map_idx: list[int],
-    host_adj: list[set[int]],
+    host_adj: tuple[set[int], ...],
 ) -> bool:
     for neighbor_idx in pattern_adj[pattern_idx]:
         mapped_idx = vertex_map_idx[neighbor_idx]
@@ -298,10 +341,10 @@ def _candidate_preserves_pattern_edges(
 
 def _backtrack_subgraph_embedding(
     position: int,
-    pattern_order: list[int],
-    pattern_adj: list[list[int]],
-    candidate_domains: list[tuple[int, ...]],
-    host_adj: list[set[int]],
+    pattern_order: tuple[int, ...],
+    pattern_adj: tuple[tuple[int, ...], ...],
+    candidate_domains: tuple[tuple[int, ...], ...],
+    host_adj: tuple[set[int], ...],
     vertex_map_idx: list[int],
     used_host_idx: set[int],
     ledger: OperationWorkLedger,
@@ -337,21 +380,22 @@ def _backtrack_subgraph_embedding(
     return False
 
 
-def _find_subgraph_embedding(
+@dataclass(frozen=True)
+class _SubgraphSearchPlan:
+    pattern_order: tuple[int, ...]
+    pattern_adjacency: tuple[tuple[int, ...], ...]
+    candidate_domains: tuple[tuple[int, ...], ...]
+    host_adjacency: tuple[set[int], ...]
+
+
+def _build_subgraph_search_plan(
     pattern_vertices: tuple[str, ...],
     pattern_edges: tuple[tuple[str, str], ...],
     host_vertices: tuple[str, ...],
     host_edges: tuple[tuple[str, str], ...],
-    max_candidate_checks: int = MAX_SUBGRAPH_CANDIDATE_CHECKS,
-) -> tuple[int, ...] | None:
-    """Return host indices ordered by pattern vertex order, or ``None``.
+) -> _SubgraphSearchPlan:
+    """Build the degree-filtered plan shared by presolve and full search."""
 
-    Ordinary (non-induced) subgraph containment via bounded backtracking.
-    Every host-candidate scan at an internal backtracking node is charged
-    against ``max_candidate_checks`` before it executes. Exhausting that
-    allowance raises an execution error, so a partial search can never
-    masquerade as a negative decision.
-    """
     # Normalize host labels to indices once, as the cycle kernel does: the
     # assignment-count admission bounds search paths, so every per-check
     # cost must be index work rather than label-length-dependent string
@@ -365,44 +409,106 @@ def _find_subgraph_embedding(
     for u, v in pattern_edges:
         pattern_degree[u] += 1
         pattern_degree[v] += 1
-    pattern_order = sorted(
-        range(p_n), key=lambda i: -pattern_degree[pattern_vertices[i]]
+    pattern_order = tuple(
+        sorted(range(p_n), key=lambda i: -pattern_degree[pattern_vertices[i]])
     )
     # Pattern edges as pairs of indices in pattern vertex order.
     pattern_edge_idx = tuple(
         (pattern_index[u], pattern_index[v]) for u, v in pattern_edges
     )
-    ledger = OperationWorkLedger(max_candidate_checks)
-    request_checkpoint("before subgraph-pattern search")
-
-    vertex_map_idx: list[int] = [-1] * p_n  # pattern idx -> host idx
-    used_host_idx: set[int] = set()
     # Pattern adjacency for quick neighbor checks.
     pattern_adj: list[list[int]] = [[] for _ in range(p_n)]
     for u_idx, v_idx in pattern_edge_idx:
         pattern_adj[u_idx].append(v_idx)
         pattern_adj[v_idx].append(u_idx)
-    candidate_domains = [
+    candidate_domains = tuple(
         tuple(
             host_idx
             for host_idx, neighbors in enumerate(host_adj)
             if len(neighbors) >= len(pattern_adj[pattern_idx])
         )
         for pattern_idx in range(p_n)
-    ]
+    )
+    return _SubgraphSearchPlan(
+        pattern_order=pattern_order,
+        pattern_adjacency=tuple(tuple(row) for row in pattern_adj),
+        candidate_domains=candidate_domains,
+        host_adjacency=tuple(host_adj),
+    )
+
+
+def _admit_complete_subgraph_search(plan: _SubgraphSearchPlan) -> None:
+    """Admit every candidate scan in the degree-filtered search plan."""
+
+    host_size = len(plan.host_adjacency)
+    partial_assignments = 1
+    work = 0
+    for depth, pattern_index in enumerate(plan.pattern_order):
+        domain_size = len(plan.candidate_domains[pattern_index])
+        work += partial_assignments * domain_size
+        if work > MAX_SUBGRAPH_CANDIDATE_CHECKS:
+            raise OperationResourceAdmissionError(
+                location=("pattern", "host"),
+                code="graph.subgraph.search_bound",
+                message=(
+                    "complete subgraph-pattern search exceeds the "
+                    f"{MAX_SUBGRAPH_CANDIDATE_CHECKS}-candidate work budget"
+                ),
+            )
+        partial_assignments *= min(domain_size, host_size - depth)
+
+
+def _find_subgraph_embedding(
+    plan: _SubgraphSearchPlan,
+    max_candidate_checks: int = MAX_SUBGRAPH_CANDIDATE_CHECKS,
+) -> tuple[int, ...] | None:
+    """Return host indices ordered by pattern vertex order, or ``None``."""
+
+    ledger = OperationWorkLedger(max_candidate_checks)
+    request_checkpoint("before subgraph-pattern search")
+    vertex_map_idx: list[int] = [-1] * len(plan.pattern_order)
+    used_host_idx: set[int] = set()
 
     if _backtrack_subgraph_embedding(
         0,
-        pattern_order,
-        pattern_adj,
-        candidate_domains,
-        host_adj,
+        plan.pattern_order,
+        plan.pattern_adjacency,
+        plan.candidate_domains,
+        plan.host_adjacency,
         vertex_map_idx,
         used_host_idx,
         ledger,
     ):
-        return tuple(vertex_map_idx[i] for i in range(p_n))
+        return tuple(vertex_map_idx)
     return None
+
+
+def _decide_subgraph_embedding(
+    pattern: SimpleUndirectedGraph, host: SimpleUndirectedGraph
+) -> tuple[int, ...] | None:
+    """Run a bounded witness presolve, then an admitted complete search."""
+
+    plan = _build_subgraph_search_plan(
+        pattern.vertices, pattern.edges, host.vertices, host.edges
+    )
+    candidate_union = {
+        host_index for domain in plan.candidate_domains for host_index in domain
+    }
+    if len(candidate_union) < len(plan.pattern_order):
+        return None
+    try:
+        return _find_subgraph_embedding(
+            plan,
+            max_candidate_checks=min(
+                _WITNESS_PRESOLVE_WORK, MAX_SUBGRAPH_CANDIDATE_CHECKS
+            ),
+        )
+    except OperationResourceExhaustedError:
+        _admit_complete_subgraph_search(plan)
+        return _find_subgraph_embedding(
+            plan,
+            max_candidate_checks=MAX_SUBGRAPH_CANDIDATE_CHECKS,
+        )
 
 
 def subgraph_pattern_find(
@@ -416,13 +522,7 @@ def subgraph_pattern_find(
     order) or ``DOES_NOT_EXIST`` after exhaustive bounded search.
     """
     _admit_subgraph_request(pattern, host)
-    found = _find_subgraph_embedding(
-        pattern.vertices,
-        pattern.edges,
-        host.vertices,
-        host.edges,
-        max_candidate_checks=MAX_SUBGRAPH_CANDIDATE_CHECKS,
-    )
+    found = _decide_subgraph_embedding(pattern, host)
     request_checkpoint("before subgraph-pattern result construction")
     if found is not None:
         return SubgraphPatternFindResult._from_kernel(
@@ -449,15 +549,6 @@ def verify_subgraph_pattern_find(claim: SubgraphPatternFindResult) -> bool:
         if claim.vertex_map:
             return False
         _admit_subgraph_request(claim.pattern, claim.host)
-        return (
-            _find_subgraph_embedding(
-                claim.pattern.vertices,
-                claim.pattern.edges,
-                claim.host.vertices,
-                claim.host.edges,
-                max_candidate_checks=MAX_SUBGRAPH_CANDIDATE_CHECKS,
-            )
-            is None
-        )
+        return _decide_subgraph_embedding(claim.pattern, claim.host) is None
     except (TypeError, ValueError):
         return False

@@ -5,7 +5,6 @@ from pydantic import ValidationError
 
 from jacobian._execution import (
     OperationExecutionTimeoutError,
-    OperationResourceExhaustedError,
     OperationWorkLedger,
     bind_request_deadline,
     request_execution,
@@ -352,15 +351,24 @@ class TestFixedLengthCycle:
         assert result.cycle == tuple(labels[:4])
         assert verify_fixed_length_cycle(result)
 
-    def test_cycle_search_exhaustion_is_not_a_negative_decision(
+    def test_cycle_search_requires_complete_work_admission(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         graph = self._g(["a", "b", "c"], [["a", "b"], ["a", "c"], ["b", "c"]])
         monkeypatch.setattr(
             "jacobian.math.graphs.morphisms.operations.MAX_CYCLE_SEARCH_PATHS", 1
         )
-        with pytest.raises(OperationResourceExhaustedError):
+        with pytest.raises(OperationDomainValidationError, match="path work budget"):
             fixed_length_cycle(graph, 3)
+
+    def test_large_bipartite_odd_cycle_is_rejected_before_complete_search(
+        self,
+    ) -> None:
+        left = [f"a{index:02d}" for index in range(32)]
+        right = [f"b{index:02d}" for index in range(32)]
+        graph = self._g(left + right, [[u, v] for u in left for v in right])
+        with pytest.raises(OperationDomainValidationError, match="path work budget"):
+            fixed_length_cycle(graph, 63)
 
     def test_cycle_checks_parent_deadline_after_final_candidate(
         self, monkeypatch: pytest.MonkeyPatch
@@ -601,7 +609,7 @@ class TestSubgraphPatternFind:
         assert result.vertex_map == tuple(host_labels[:6])
         assert verify_subgraph_pattern_find(result)
 
-    def test_embedding_search_exhaustion_is_not_a_negative_decision(
+    def test_embedding_search_requires_complete_work_admission(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         pattern = self._g(["p", "q"], [["p", "q"]])
@@ -610,7 +618,32 @@ class TestSubgraphPatternFind:
             "jacobian.math.graphs.morphisms.operations.MAX_SUBGRAPH_CANDIDATE_CHECKS",
             1,
         )
-        with pytest.raises(OperationResourceExhaustedError):
+        with pytest.raises(
+            OperationDomainValidationError, match="candidate work budget"
+        ):
+            subgraph_pattern_find(pattern, host)
+
+    def test_large_partite_clique_obstruction_is_rejected_before_complete_search(
+        self,
+    ) -> None:
+        from itertools import combinations
+
+        pattern_labels = [f"p{index}" for index in range(8)]
+        pattern = self._g(
+            pattern_labels, [list(edge) for edge in combinations(pattern_labels, 2)]
+        )
+        parts = [[f"h{part}{index:02d}" for index in range(9)] for part in range(7)]
+        host_labels = [vertex for part in parts for vertex in part]
+        host_edges = [
+            [left, right]
+            for left_part, right_part in combinations(parts, 2)
+            for left in left_part
+            for right in right_part
+        ]
+        host = self._g(host_labels, host_edges)
+        with pytest.raises(
+            OperationDomainValidationError, match="candidate work budget"
+        ):
             subgraph_pattern_find(pattern, host)
 
     def test_embedding_checks_parent_deadline_after_final_candidate(

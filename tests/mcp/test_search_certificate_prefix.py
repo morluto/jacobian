@@ -1,4 +1,4 @@
-"""Search prefixes may establish witnesses; exhaustion establishes no decision."""
+"""Search prefixes may establish witnesses before complete-work admission."""
 
 from __future__ import annotations
 
@@ -214,7 +214,7 @@ _EXHAUSTION_CASES = (
     ("operation_id", "module", "limit", "limit_value", "payload"),
     _EXHAUSTION_CASES,
 )
-def test_exhausted_prefixes_are_mcp_errors_without_mathematical_output(
+def test_incomplete_searches_are_mcp_errors_without_mathematical_output(
     monkeypatch: pytest.MonkeyPatch,
     direct: bool,
     operation_id: str,
@@ -229,7 +229,16 @@ def test_exhausted_prefixes_are_mcp_errors_without_mathematical_output(
     assert result.structured_content is None
     assert isinstance(result.content[0], TextContent)
     diagnostic = json.loads(result.content[0].text[result.content[0].text.index("{") :])
-    assert diagnostic["code"] == "RESOURCE_EXHAUSTED"
     assert diagnostic["operation_id"] == operation_id
-    assert diagnostic["resource"] == "work"
-    assert "does not establish a negative result" in diagnostic["hint"]
+    admission_codes = {
+        "graph.cycle.fixed_length.decide": "graph.cycle.search_bound",
+        "graph.subgraph_pattern.find": "graph.subgraph.search_bound",
+    }
+    if operation_id in admission_codes:
+        assert diagnostic["code"] == "RESOURCE_ADMISSION_REJECTED"
+        assert diagnostic["stage"] == "resource_admission"
+        assert diagnostic["errors"][0]["code"] == admission_codes[operation_id]
+    else:
+        assert diagnostic["code"] == "RESOURCE_EXHAUSTED"
+        assert diagnostic["resource"] == "work"
+        assert "does not establish a negative result" in diagnostic["hint"]

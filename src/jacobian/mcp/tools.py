@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-import hashlib
-import hmac
 import json
 import logging
-import secrets
 import threading
 import time
 from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -64,9 +61,6 @@ from jacobian.mcp.runtime import (
 _MAX_VALIDATION_ERRORS = 64
 _MAX_VALIDATION_LOCATION_COMPONENTS = 32
 _MAX_VALIDATION_LOCATION_LENGTH = 128
-_FIND_QUERY_HASH_HEX_LENGTH = 16
-_FIND_QUERY_LOG_KEY = secrets.token_bytes(32)
-
 logger = logging.getLogger(__name__)
 
 
@@ -215,12 +209,6 @@ def _math_find_sync(
         )
 
     if query is not None:
-        # The process-local HMAC key prevents log readers from recovering a
-        # short caller need through an offline digest lookup.
-        need_hash = hmac.new(
-            _FIND_QUERY_LOG_KEY, query.encode("utf-8"), hashlib.sha256
-        ).hexdigest()[:_FIND_QUERY_HASH_HEX_LENGTH]
-        logger.info("math.find query_hash=%s", need_hash)
         match_response = _operation_match_response(
             active_catalog,
             need=query,

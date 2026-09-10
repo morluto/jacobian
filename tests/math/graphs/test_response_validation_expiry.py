@@ -73,7 +73,7 @@ def test_control_expiry_after_real_response_validation(
                 execute(request)
 
 
-def test_augmentation_noop_expiry_has_a_modeled_outcome(
+def test_augmentation_noop_expiry_is_an_execution_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from jacobian.math.graphs.triangle_free_diameter_augmentation import (
@@ -94,11 +94,10 @@ def test_augmentation_noop_expiry_has_a_modeled_outcome(
 
     monkeypatch.setattr(module, "_diameter", delayed)
     monkeypatch.setattr(time, "monotonic", lambda: now[0])
-    result = module.solve_triangle_free_diameter_augmentation_values(
-        graph, 1, TriangleFreeDiameterAugmentationBudget(wall_seconds=1)
-    )
-    assert result.status == "SOLVER_BUDGET_EXCEEDED"
-    assert "no-op presolve" in result.detail
+    with pytest.raises(OperationExecutionTimeoutError):
+        module.solve_triangle_free_diameter_augmentation_values(
+            graph, 1, TriangleFreeDiameterAugmentationBudget(wall_seconds=1)
+        )
 
 
 @pytest.mark.parametrize("cancel", [False, True])

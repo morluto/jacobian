@@ -9,7 +9,11 @@ import networkx as nx
 import pytest
 from pydantic import ValidationError
 
+from jacobian._execution import OperationExecutionTimeoutError
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.graphs.triangle_free_diameter_augmentation import (
+    _augmentation_z3,
+)
 from jacobian.math.graphs.triangle_free_diameter_augmentation._augmentation_z3 import (
     _derive_candidates,
     _solve_augmentation_kernel,
@@ -223,13 +227,11 @@ def test_invalid_target_boundary() -> None:
         )
 
 
-def test_solver_budget_exhaustion() -> None:
+def test_solver_deadline_expiry_is_an_execution_error() -> None:
     # Force wall-clock expiry via monkeypatching time
     g = _graph(("0", "1", "2", "3"), (("0", "1"), ("1", "2"), ("2", "3")))
     budget = TriangleFreeDiameterAugmentationBudget(wall_seconds=1, max_order=10)
     # monkeypatch time.monotonic inside kernel to simulate expiry
-    import jacobian.math.graphs.triangle_free_diameter_augmentation._augmentation_z3 as _augmentation_z3
-
     mod: Any = cast(Any, _augmentation_z3)
 
     orig = mod.time.monotonic
@@ -237,11 +239,8 @@ def test_solver_budget_exhaustion() -> None:
         # make remaining_ms negative by advancing clock
         it = iter([0.0, 10.0])
         mod.time.monotonic = lambda: next(it, 10.0)
-        res = _solve_augmentation_kernel(g, 2, budget)
-        assert res.status == "SOLVER_BUDGET_EXCEEDED"
-        assert res.added_edge_count is None
-        assert res.added_edges == ()
-        assert res.augmented_diameter is None
+        with pytest.raises(OperationExecutionTimeoutError):
+            _solve_augmentation_kernel(g, 2, budget)
     finally:
         mod.time.monotonic = orig
 
@@ -357,14 +356,11 @@ def test_result_rejects_forged_ledger() -> None:
 def test_admission_bounds_candidate_and_reachability() -> None:
     # Candidate bound: use n=12 path which has 45 candidates within 55, but we can artificially test exceeding by lowering hard limit via monkeypatch
     g = _path_padded(12)
-    # Normal should pass
+    # Normal admission should pass without depending on solver timing.
     budget = TriangleFreeDiameterAugmentationBudget(wall_seconds=5, max_order=12)
-    res = triangle_free_diameter_augmentation(g, 2, resource_budget=budget)
-    assert res.status in ("EXACT", "INFEASIBLE", "SOLVER_BUDGET_EXCEEDED")
+    _augmentation_z3._require_admitted_request(g, 2, budget)
 
     # Force candidate bound exceed by temporarily lowering limit
-    import jacobian.math.graphs.triangle_free_diameter_augmentation._augmentation_z3 as _augmentation_z3
-
     mod: Any = cast(Any, _augmentation_z3)
 
     orig_cand = mod.HARD_MAX_CANDIDATES

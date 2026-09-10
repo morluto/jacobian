@@ -10,7 +10,20 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
 
-from jacobian._execution import OperationExecutionCancelledError, request_checkpoint
+from jacobian._execution import (
+    BackendFailureReason,
+    ExecutionResource,
+    OperationBackendError,
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+    OperationResourceExhaustedError,
+    current_request_execution,
+    lease_operation_phases,
+    request_checkpoint,
+    request_execution,
+    require_execution_deadline,
+)
+from jacobian._worker_protocol import encode_worker_result_frame
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.triangle_free_diameter_augmentation._models import (
     TriangleFreeDiameterAugmentationBudget,
@@ -19,6 +32,7 @@ from jacobian.math.graphs.triangle_free_diameter_augmentation._models import (
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.process import (
     ProcessResourceLimits,
+    decode_checked_worker_output,
     run_bounded_process,
     worker_environment,
 )
@@ -251,6 +265,13 @@ def _solve_augmentation_kernel(  # noqa: C901
     | None = None,
 ) -> TriangleFreeDiameterAugmentationResult:
     started = time.monotonic()
+    execution = current_request_execution()
+    solver_deadline = min(
+        started + budget.wall_seconds,
+        execution.deadline
+        if execution is not None and execution.deadline is not None
+        else float("inf"),
+    )
     # admission (also derives vertices/candidates)
     vertices, candidates, triangle_constraints = admitted or _require_admitted_request(
         graph, target_diameter, budget
@@ -284,16 +305,11 @@ def _solve_augmentation_kernel(  # noqa: C901
 
     # timeout handling helper
     def remaining_ms() -> int:
-        return int((budget.wall_seconds - (time.monotonic() - started)) * 1000)
+        return int((solver_deadline - time.monotonic()) * 1000)
 
     if remaining_ms() <= 0:
-        return TriangleFreeDiameterAugmentationResult._from_kernel(
-            graph=graph,
-            target_diameter=target_diameter,
-            status="SOLVER_BUDGET_EXCEEDED",
-            added_edges=(),
-            augmented_diameter=None,
-            detail="wall-clock budget expired before solver startup",
+        raise OperationExecutionTimeoutError(
+            "augmentation solver deadline expired before startup"
         )
     # variables for candidates
     xs = [z3.Bool(f"x_{i}") for i in range(m)]
@@ -377,25 +393,17 @@ def _solve_augmentation_kernel(  # noqa: C901
     # Set timeout
     ms = remaining_ms()
     if ms <= 0:
-        return TriangleFreeDiameterAugmentationResult._from_kernel(
-            graph=graph,
-            target_diameter=target_diameter,
-            status="SOLVER_BUDGET_EXCEEDED",
-            added_edges=(),
-            augmented_diameter=None,
-            detail="wall-clock budget expired before feasibility check",
+        raise OperationExecutionTimeoutError(
+            "augmentation solver deadline expired before feasibility check"
         )
     solver.set(timeout=max(1, ms))
     res = solver.check()
     if res == z3.unknown:
-        return TriangleFreeDiameterAugmentationResult._from_kernel(
-            graph=graph,
-            target_diameter=target_diameter,
-            status="SOLVER_BUDGET_EXCEEDED",
-            added_edges=(),
-            augmented_diameter=None,
-            detail="solver did not settle feasibility within budget",
-        )
+        if "timeout" in solver.reason_unknown().lower():
+            raise OperationExecutionTimeoutError(
+                "augmentation solver deadline expired during feasibility check"
+            )
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
     if res == z3.unsat:
         return TriangleFreeDiameterAugmentationResult._from_kernel(
             graph=graph,
@@ -414,13 +422,8 @@ def _solve_augmentation_kernel(  # noqa: C901
     for k in range(m + 1):
         # check deadline
         if remaining_ms() <= 0:
-            return TriangleFreeDiameterAugmentationResult._from_kernel(
-                graph=graph,
-                target_diameter=target_diameter,
-                status="SOLVER_BUDGET_EXCEEDED",
-                added_edges=(),
-                augmented_diameter=None,
-                detail="wall-clock budget expired during minimization",
+            raise OperationExecutionTimeoutError(
+                "augmentation solver deadline expired during minimization"
             )
         solver.push()
         # cardinality constraint Sum(If(xs[i],1,0)) <= k
@@ -429,13 +432,8 @@ def _solve_augmentation_kernel(  # noqa: C901
         ms2 = remaining_ms()
         if ms2 <= 0:
             solver.pop()
-            return TriangleFreeDiameterAugmentationResult._from_kernel(
-                graph=graph,
-                target_diameter=target_diameter,
-                status="SOLVER_BUDGET_EXCEEDED",
-                added_edges=(),
-                augmented_diameter=None,
-                detail="wall-clock budget expired before cardinality check",
+            raise OperationExecutionTimeoutError(
+                "augmentation solver deadline expired before cardinality check"
             )
         solver.set(timeout=max(1, ms2))
         res2 = solver.check()
@@ -477,14 +475,11 @@ def _solve_augmentation_kernel(  # noqa: C901
             )
         elif res2 == z3.unknown:
             solver.pop()
-            return TriangleFreeDiameterAugmentationResult._from_kernel(
-                graph=graph,
-                target_diameter=target_diameter,
-                status="SOLVER_BUDGET_EXCEEDED",
-                added_edges=(),
-                augmented_diameter=None,
-                detail="solver did not settle cardinality check within budget",
-            )
+            if "timeout" in solver.reason_unknown().lower():
+                raise OperationExecutionTimeoutError(
+                    "augmentation solver deadline expired during cardinality check"
+                )
+            raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
         else:  # unsat, need larger k
             solver.pop()
             continue
@@ -510,14 +505,33 @@ def _augmentation_worker_stdout_limit(graph: SimpleUndirectedGraph) -> int:
         "augmented_diameter": 2,
         "detail": "x" * 1024,
     }
-    # Include graph dump size rough
-    base = json.dumps(projection, separators=(",", ":"), ensure_ascii=False).encode(
-        "utf-8"
-    )
     graph_bytes = json.dumps(
         graph.model_dump(mode="json"), separators=(",", ":"), ensure_ascii=False
     ).encode("utf-8")
-    return len(base) + len(graph_bytes) + 1024
+    return len(encode_worker_result_frame(projection)) + len(graph_bytes) + 1024
+
+
+def _validate_worker_result(result: TriangleFreeDiameterAugmentationResult) -> None:
+    """Check the worker-authored witness relation at the parent boundary."""
+    if result.status != "EXACT":
+        return
+    augmented = _graph_from_value(result.graph)
+    augmented.add_edges_from(result.added_edges)
+    augmented_value = SimpleUndirectedGraph(
+        vertices=result.graph.vertices,
+        edges=tuple(sorted(tuple(sorted(edge)) for edge in augmented.edges)),
+    )
+    if not _is_triangle_free(augmented_value):
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    if not _is_connected(augmented_value):
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    diameter = _diameter(augmented_value)
+    if (
+        diameter is None
+        or diameter != result.augmented_diameter
+        or diameter > result.target_diameter
+    ):
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
 
 
 def solve_triangle_free_diameter_augmentation_values(  # noqa: C901
@@ -526,8 +540,19 @@ def solve_triangle_free_diameter_augmentation_values(  # noqa: C901
     budget: TriangleFreeDiameterAugmentationBudget,
 ) -> TriangleFreeDiameterAugmentationResult:
     """Run bounded augmentation in owner worker and decode result."""
-
-    deadline = time.monotonic() + budget.wall_seconds
+    execution = current_request_execution()
+    if execution is None:
+        with request_execution(time.monotonic()):
+            return solve_triangle_free_diameter_augmentation_values(
+                graph, target_diameter, budget
+            )
+    stdout_limit = _augmentation_worker_stdout_limit(graph)
+    lease = lease_operation_phases(
+        budget.wall_seconds,
+        admitted_response_bytes=stdout_limit,
+        validation_work=len(graph.vertices) + len(graph.edges),
+    )
+    deadline = lease.operation_deadline
     request_checkpoint("before augmentation presolve")
     order = len(graph.vertices)
     if order > budget.max_order:
@@ -556,15 +581,7 @@ def solve_triangle_free_diameter_augmentation_values(  # noqa: C901
         original_diameter = _diameter(graph)
         request_checkpoint("after augmentation presolve")
         if original_diameter is not None and original_diameter <= target_diameter:
-            if time.monotonic() >= deadline:
-                return TriangleFreeDiameterAugmentationResult._from_kernel(
-                    graph=graph,
-                    target_diameter=target_diameter,
-                    status="SOLVER_BUDGET_EXCEEDED",
-                    added_edges=(),
-                    augmented_diameter=None,
-                    detail="augmentation request expired during no-op presolve",
-                )
+            require_execution_deadline(deadline)
             return TriangleFreeDiameterAugmentationResult._from_kernel(
                 graph=graph,
                 target_diameter=target_diameter,
@@ -576,35 +593,20 @@ def solve_triangle_free_diameter_augmentation_values(  # noqa: C901
 
     # Shared admission before worker (native and MCP parity)
     admitted = _require_admitted_request(graph, target_diameter, budget)
-    if time.monotonic() >= deadline:
-        return TriangleFreeDiameterAugmentationResult._from_kernel(
-            graph=graph,
-            target_diameter=target_diameter,
-            status="SOLVER_BUDGET_EXCEEDED",
-            added_edges=(),
-            augmented_diameter=None,
-            detail="augmentation request expired during admission",
-        )
-
-    def fallback(detail: str) -> TriangleFreeDiameterAugmentationResult:
-        return TriangleFreeDiameterAugmentationResult._from_kernel(
-            graph=graph,
-            target_diameter=target_diameter,
-            status="SOLVER_BUDGET_EXCEEDED",
-            added_edges=(),
-            augmented_diameter=None,
-            detail=detail,
-        )
+    require_execution_deadline(deadline)
 
     try:
         with TemporaryDirectory(prefix="jacobian-graph-augmentation-") as directory:
-            remaining = deadline - time.monotonic()
+            remaining = lease.backend_deadline - time.monotonic()
             if remaining <= 0:
-                return fallback("augmentation request expired before worker startup")
+                raise OperationExecutionTimeoutError(
+                    "augmentation backend lease expired before worker startup"
+                )
             completed = run_bounded_process(
                 [sys.executable, str(_AUGMENTATION_WORKER)],
                 input_bytes=json.dumps(
                     {
+                        "_deadline": lease.backend_deadline,
                         "graph": graph.model_dump(mode="json"),
                         "target_diameter": target_diameter,
                         "resource_budget": budget.model_dump(mode="json"),
@@ -619,7 +621,7 @@ def solve_triangle_free_diameter_augmentation_values(  # noqa: C901
                 ).encode("utf-8"),
                 timeout_seconds=remaining,
                 environment=worker_environment(locale="C.UTF-8"),
-                stdout_limit=_augmentation_worker_stdout_limit(graph),
+                stdout_limit=stdout_limit,
                 stderr_limit=_WORKER_ERROR_BYTES,
                 resource_limits=ProcessResourceLimits(
                     cpu_seconds=max(1, math.ceil(budget.wall_seconds)),
@@ -629,68 +631,44 @@ def solve_triangle_free_diameter_augmentation_values(  # noqa: C901
                 cwd=directory,
             )
     except OSError as exc:
-        raise RuntimeError("bounded augmentation worker could not be started") from exc
+        require_execution_deadline(deadline)
+        raise OperationBackendError(BackendFailureReason.STARTUP) from exc
     if completed.cancelled:
         raise OperationExecutionCancelledError("augmentation worker cancelled")
     if completed.timed_out:
-        return fallback("bounded augmentation worker did not establish an outcome")
+        raise OperationExecutionTimeoutError(
+            "augmentation worker deadline expired",
+            configured_seconds=budget.wall_seconds,
+            adjustable_field_path=("resource_budget", "wall_seconds"),
+        )
     if completed.stdout_exceeded or completed.stderr_exceeded:
-        raise RuntimeError("bounded augmentation worker exceeded its stream limit")
+        raise OperationResourceExhaustedError(ExecutionResource.OUTPUT)
     if completed.returncode != 0:
-        raise RuntimeError(
-            "bounded augmentation worker failed before establishing an outcome"
-        )
-    if time.monotonic() >= deadline:
-        return fallback("augmentation request expired before response validation")
+        raise OperationBackendError(BackendFailureReason.ABNORMAL_EXIT)
+    require_execution_deadline(deadline)
     try:
-        payload = json.loads(completed.stdout.decode("utf-8"))
-        if not isinstance(payload, dict):
-            raise ValueError("worker projection must be an object")
-        status = payload.get("status")
-        worker_target = payload.get("target_diameter")
-        added_edges = payload.get("added_edges", [])
-        augmented_diameter = payload.get("augmented_diameter")
-        detail = payload.get("detail")
-        if (
-            status not in {"EXACT", "INFEASIBLE", "SOLVER_BUDGET_EXCEEDED"}
-            or type(worker_target) is not int
-            or not isinstance(added_edges, list)
-            or (augmented_diameter is not None and type(augmented_diameter) is not int)
-            or not isinstance(detail, str)
-        ):
-            raise ValueError("worker projection has an invalid shape")
-        edges = tuple(tuple(edge) for edge in added_edges)
-        if any(
-            len(edge) != 2 or not all(isinstance(label, str) for label in edge)
-            for edge in edges
-        ):
-            raise ValueError("worker added-edge projection is invalid")
-        if worker_target != target_diameter:
-            raise ValueError("worker target mismatch")
-        result = TriangleFreeDiameterAugmentationResult.model_validate(
-            {
-                "graph": graph,
-                "target_diameter": target_diameter,
-                "status": status,
-                "added_edges": edges,
-                "added_edge_count": len(edges) if status == "EXACT" else None,
-                "augmented_diameter": augmented_diameter,
-                "detail": detail,
-            }
+
+        def decode(payload: Any) -> TriangleFreeDiameterAugmentationResult:
+            if not isinstance(payload, dict) or "graph" in payload:
+                raise ValueError("worker projection must omit the source graph")
+            return TriangleFreeDiameterAugmentationResult.model_validate(
+                {**payload, "graph": graph.model_dump(mode="json")}
+            )
+
+        result = decode_checked_worker_output(
+            completed.stdout,
+            decode_result=decode,
+            checkpoint=lambda: require_execution_deadline(deadline),
         )
-        request_checkpoint("after augmentation response validation")
-        return (
-            result
-            if time.monotonic() < deadline
-            else fallback("request expired during validation")
-        )
-    except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
-        request_checkpoint("during augmentation response validation")
-        if time.monotonic() >= deadline:
-            return fallback("augmentation request expired during response validation")
-        raise RuntimeError(
-            "bounded augmentation worker returned malformed output"
-        ) from exc
+    except (TypeError, ValueError) as exc:
+        require_execution_deadline(deadline)
+        raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE) from exc
+    if result.graph != graph or result.target_diameter != target_diameter:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    _validate_worker_result(result)
+    request_checkpoint("after augmentation response validation")
+    require_execution_deadline(deadline)
+    return result
 
 
 # Re-export helper for tests

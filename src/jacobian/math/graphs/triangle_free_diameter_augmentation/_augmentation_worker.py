@@ -4,8 +4,12 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from typing import Any
 
+from jacobian._execution import request_execution
+from jacobian._worker_errors import bind_worker_deadline, worker_execution_errors
+from jacobian._worker_protocol import encode_worker_result_frame
 from jacobian.math.graphs.triangle_free_diameter_augmentation._augmentation_z3 import (
     _solve_augmentation_kernel,
 )
@@ -20,6 +24,7 @@ def main() -> int:
         payload: Any = json.loads(sys.stdin.buffer.read())
         if not isinstance(payload, dict):
             raise ValueError("worker payload must be an object")
+        bind_worker_deadline(payload)
         graph = SimpleUndirectedGraph.model_validate(payload["graph"])
         target_diameter = int(payload["target_diameter"])
         budget = TriangleFreeDiameterAugmentationBudget.model_validate(
@@ -35,11 +40,9 @@ def main() -> int:
         )
         result = _solve_augmentation_kernel(graph, target_diameter, budget, admitted)
         # Exclude graph to reduce stdout, parent will reattach
-        sys.stdout.write(
-            json.dumps(
-                result.model_dump(mode="json", exclude={"graph"}),
-                separators=(",", ":"),
-                ensure_ascii=False,
+        sys.stdout.buffer.write(
+            encode_worker_result_frame(
+                result.model_dump(mode="json", exclude={"graph"})
             )
         )
         return 0
@@ -48,4 +51,5 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    with worker_execution_errors(), request_execution(time.monotonic()):
+        raise SystemExit(main())

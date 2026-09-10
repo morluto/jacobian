@@ -13,7 +13,6 @@ from jacobian.math.graphs.values import SimpleUndirectedGraph
 TriangleFreeDiameterAugmentationStatus = Literal[
     "EXACT",
     "INFEASIBLE",
-    "SOLVER_BUDGET_EXCEEDED",
 ]
 
 
@@ -35,7 +34,7 @@ class TriangleFreeDiameterAugmentationRequest(StrictModel):
 
 
 class TriangleFreeDiameterAugmentationResult(StrictModel):
-    """Exact minimum augmentation or typed non-success for one source graph."""
+    """Exact minimum augmentation or infeasibility for one source graph."""
 
     graph: SimpleUndirectedGraph
     target_diameter: StrictInt = Field(ge=1, le=12)
@@ -93,17 +92,6 @@ class TriangleFreeDiameterAugmentationResult(StrictModel):
                 raise PydanticCustomError(
                     "graph.infeasible_must_not_carry_diameter",
                     "infeasible result must not carry diameter",
-                )
-        elif self.status == "SOLVER_BUDGET_EXCEEDED":
-            if self.added_edge_count is not None or self.added_edges:
-                raise PydanticCustomError(
-                    "graph.budget_exceeded_must_not_carry_witness",
-                    "budget-exceeded result must not carry witness",
-                )
-            if self.augmented_diameter is not None:
-                raise PydanticCustomError(
-                    "graph.budget_exceeded_must_not_carry_diameter",
-                    "budget-exceeded result must not carry diameter",
                 )
 
     def _require_exact_branch(self) -> None:

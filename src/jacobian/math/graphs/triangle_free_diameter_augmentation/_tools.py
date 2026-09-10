@@ -29,8 +29,8 @@ TOOLS = (
             "Given a connected triangle-free simple graph G and target diameter r>=1, "
             "return the minimum number of missing edges to add while preserving "
             "triangle-freeness and achieving diameter at most r, with one sorted "
-            "realizing edge set; infeasible targets return INFEASIBLE and "
-            "budget-exhausted requests return SOLVER_BUDGET_EXCEEDED without witness."
+            "realizing edge set; infeasible targets return INFEASIBLE. Operational "
+            "timeout, resource exhaustion, and backend failure are execution errors."
         ),
         request_type=TriangleFreeDiameterAugmentationRequest,
         result_type=TriangleFreeDiameterAugmentationResult,

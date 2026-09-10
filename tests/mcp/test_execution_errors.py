@@ -18,11 +18,56 @@ from jacobian._execution import (
     OperationResourceExhaustedError,
 )
 from jacobian.catalog.catalog import Catalog
+from jacobian.math.graphs.triangle_free_diameter_augmentation import (
+    _augmentation_z3 as augmentation_owner,
+)
 from jacobian.math.logic import _sat
 from jacobian.mcp.direct_tools import direct_operation_tools
 from jacobian.mcp.runtime import AppState
 from jacobian.mcp.server import _build_server
+from jacobian.process import BoundedProcessResult
 from mcp import Client
+
+
+@pytest.mark.parametrize("direct", [False, True])
+def test_triangle_augmentation_timeout_is_an_mcp_error(
+    monkeypatch: pytest.MonkeyPatch, direct: bool
+) -> None:
+    monkeypatch.setattr(
+        augmentation_owner,
+        "run_bounded_process",
+        lambda *args, **kwargs: BoundedProcessResult(0, b"", b"", False, False, True),
+    )
+    catalog = Catalog.open()
+    operation = catalog.operation("graph.triangle_free_diameter_augmentation.minimum")
+    assert operation is not None
+    catalog = Catalog((operation,))
+    server = _build_server(
+        state=AppState(operation_catalog=catalog),
+        evaluation_tools=direct_operation_tools(catalog) if direct else (),
+    )
+    payload = {
+        "graph": {
+            "vertices": ["0", "1", "2", "3"],
+            "edges": [["0", "1"], ["1", "2"], ["2", "3"]],
+        },
+        "target_diameter": 2,
+    }
+
+    async def scenario() -> Any:
+        async with Client(server, raise_exceptions=False) as client:
+            return await client.call_tool(
+                operation.operation_id if direct else "math.run",
+                payload
+                if direct
+                else {"operation_id": operation.operation_id, "payload": payload},
+            )
+
+    result = asyncio.run(scenario())
+    assert result.is_error is True
+    assert result.structured_content is None
+    assert result.content and isinstance(result.content[0], TextContent)
+    assert "OPERATION_TIMEOUT" in result.content[0].text
 
 
 @pytest.mark.parametrize("direct", [False, True])

@@ -47,6 +47,8 @@ def _require_mahler_polynomial_envelope(polynomial: IntegerPolynomial) -> None:
         )
 
 
+
+
 class ReciprocalProfileRequest(StrictModel):
     polynomial: IntegerPolynomial
 
@@ -94,8 +96,24 @@ class ReciprocalProfileResult(StrictModel):
         return self
 
     @classmethod
-    def _from_kernel(cls, **values: object) -> Self:
-        return cls.model_construct(**values)
+    def _from_kernel(
+        cls,
+        *,
+        degree: int,
+        reversed_coefficients: tuple[ExactInteger, ...],
+        state: Literal["RECIPROCAL", "ANTIRECIPROCAL", "NEITHER"],
+        leading_coefficient: ExactInteger,
+        constant_coefficient: ExactInteger,
+        coefficient_pair_ledger: tuple[tuple[ExactInteger, ExactInteger], ...],
+    ) -> Self:
+        return cls.model_construct(
+            degree=degree,
+            reversed_coefficients=reversed_coefficients,
+            state=state,
+            leading_coefficient=leading_coefficient,
+            constant_coefficient=constant_coefficient,
+            coefficient_pair_ledger=coefficient_pair_ledger,
+        )
 
 
 class RealQuadraticRootProfileRequest(StrictModel):

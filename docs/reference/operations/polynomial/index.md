@@ -69,4 +69,5 @@ for replay.
 
 ## Focused contracts
 
+- [Elementary-symmetric polynomial families](elementary-symmetric.md)
 - [Monomial-ideal graded Betti profiles](monomial-ideal-graded-betti.md)

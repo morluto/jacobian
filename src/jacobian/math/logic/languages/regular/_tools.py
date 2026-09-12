@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -68,6 +69,7 @@ def compute_complement(request: ComplementRequest) -> ComplementResult:
 
 def compute_equivalence(request: EquivalenceRequest) -> EquivalenceResult:
     word, left_trace, right_trace = dfa_equivalence(request.left, request.right)
+    request_checkpoint("before DFA equivalence result construction")
     return EquivalenceResult(
         left=request.left,
         right=request.right,
@@ -136,7 +138,11 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             OperationExample(
                 name="different_empty_word_acceptance",
-                description="Distinguish a DFA from its complement using the empty word.",
+                description=(
+                    "Decide that these two total DFAs differ and return the empty-word "
+                    "witness; both must share one ordered alphabet and a complete "
+                    "state-symbol transition table."
+                ),
                 input={
                     "left": _DFA_EXAMPLE["dfa"],
                     "right": {**_DFA_EXAMPLE["dfa"], "accepting_states": [0]},

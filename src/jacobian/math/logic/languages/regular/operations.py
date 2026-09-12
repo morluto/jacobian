@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import deque
 
+from jacobian._execution import OperationWorkLedger, request_checkpoint
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -18,7 +19,18 @@ from jacobian.math.logic.languages.regular.values import (
     MAX_COUNT_MATRIX_BIT_WORK,
     MAX_COUNT_RESULT_DIGITS,
     MAX_COUNT_WORD_LENGTH,
+    MAX_DFA_ALPHABET,
+    MAX_DFA_EQUIVALENCE_INTERMEDIATE_ALLOCATION,
+    MAX_DFA_EQUIVALENCE_OUTPUT_ALLOCATION,
+    MAX_DFA_EQUIVALENCE_PRODUCT_STATES,
+    MAX_DFA_EQUIVALENCE_PRODUCT_TRANSITIONS,
+    MAX_DFA_EQUIVALENCE_TRACE_ROWS,
+    MAX_DFA_EQUIVALENCE_WITNESS_LENGTH,
+    MAX_DFA_EQUIVALENCE_WORK,
+    MAX_DFA_STATES,
+    MAX_DFA_TRANSITIONS,
     AutomatonTransition,
+    DFATransition,
     FiniteLabeledAutomaton,
     TransitionParikhCell,
     TransitionParikhProfile,
@@ -213,17 +225,152 @@ def dfa_complement(dfa: DFA) -> DFA:
     )
 
 
-def dfa_equivalence(
-    left: DFA, right: DFA
-) -> tuple[tuple[int, ...] | None, tuple[int, ...] | None, tuple[int, ...] | None]:
-    """Return the shortest lexicographically least distinguishing word and traces."""
+def _require_equivalence_dfa(value: object, location: str) -> int:
+    """Guard the native entry point against unvalidated or partial DFAs."""
 
+    if type(value) is not DFA:
+        raise OperationDomainValidationError(
+            location=(location,),
+            code=f"regular_language.equivalence.{location}_not_dfa",
+            message=f"{location} must be a canonical DFA value",
+        )
+    state_count = getattr(value, "state_count", None)
+    alphabet_size = getattr(value, "alphabet_size", None)
+    initial_state = getattr(value, "initial_state", None)
+    accepting_states = getattr(value, "accepting_states", None)
+    transitions = getattr(value, "transitions", None)
+    if (
+        type(state_count) is not int
+        or not 1 <= state_count <= MAX_DFA_STATES
+        or type(alphabet_size) is not int
+        or not 0 <= alphabet_size <= MAX_DFA_ALPHABET
+        or type(initial_state) is not int
+        or not 0 <= initial_state < state_count
+        or type(accepting_states) is not tuple
+        or len(accepting_states) > MAX_DFA_STATES
+        or any(
+            type(state) is not int or not 0 <= state < state_count
+            for state in accepting_states
+        )
+        or len(set(accepting_states)) != len(accepting_states)
+        or type(transitions) is not tuple
+        or len(transitions) > MAX_DFA_TRANSITIONS
+    ):
+        raise OperationDomainValidationError(
+            location=(location,),
+            code="regular_language.equivalence.invalid_dfa",
+            message=f"{location} is not a structurally valid DFA",
+        )
+    keys: set[tuple[int, int]] = set()
+    for transition in transitions:
+        source = getattr(transition, "source", None)
+        symbol = getattr(transition, "symbol", None)
+        target = getattr(transition, "target", None)
+        if (
+            type(transition) is not DFATransition
+            or type(source) is not int
+            or type(symbol) is not int
+            or type(target) is not int
+            or not 0 <= source < state_count
+            or not 0 <= target < state_count
+            or not 0 <= symbol < alphabet_size
+        ):
+            raise OperationDomainValidationError(
+                location=(location, "transitions"),
+                code="regular_language.equivalence.invalid_dfa",
+                message=f"{location} contains an invalid transition",
+            )
+        key = (source, symbol)
+        if key in keys:
+            raise OperationDomainValidationError(
+                location=(location, "transitions"),
+                code="regular_language.equivalence.partial_dfa",
+                message=f"{location} must have one transition for every state-symbol pair",
+            )
+        keys.add(key)
+    expected = state_count * alphabet_size
+    if len(keys) != expected:
+        raise OperationDomainValidationError(
+            location=(location, "transitions"),
+            code="regular_language.equivalence.partial_dfa",
+            message=f"{location} must have one transition for every state-symbol pair",
+        )
+    return len(transitions) + len(accepting_states) + 4
+
+
+def _admit_dfa_equivalence(left: DFA, right: DFA) -> tuple[int, int]:
+    """Admit every BFS materialization before the product search begins."""
+
+    source_work = _require_equivalence_dfa(left, "left")
+    source_work += _require_equivalence_dfa(right, "right")
     if left.alphabet_size != right.alphabet_size:
         raise OperationDomainValidationError(
             location=("right", "alphabet_size"),
             code="regular_language.equivalence.alphabet_mismatch",
             message="DFA equivalence requires the same ordered alphabet",
         )
+    product_states = left.state_count * right.state_count
+    product_transitions = product_states * left.alphabet_size
+    witness_length = product_states - 1
+    predecessor_allocation = product_states * 4
+    trace_rows = 2 * (witness_length + 1)
+    reconstruction_work = witness_length + trace_rows
+    work = source_work + product_transitions + product_states + reconstruction_work
+    output_allocation = (
+        2
+        * (
+            left.state_count
+            + right.state_count
+            + left.alphabet_size
+            + len(left.transitions)
+            + len(right.transitions)
+            + len(left.accepting_states)
+            + len(right.accepting_states)
+        )
+        + witness_length
+        + trace_rows
+        + 8
+    )
+    bounds = (
+        ("product_states", product_states, MAX_DFA_EQUIVALENCE_PRODUCT_STATES),
+        (
+            "product_transitions",
+            product_transitions,
+            MAX_DFA_EQUIVALENCE_PRODUCT_TRANSITIONS,
+        ),
+        ("witness_length", witness_length, MAX_DFA_EQUIVALENCE_WITNESS_LENGTH),
+        ("trace_rows", trace_rows, MAX_DFA_EQUIVALENCE_TRACE_ROWS),
+        (
+            "intermediate_cells",
+            predecessor_allocation,
+            MAX_DFA_EQUIVALENCE_INTERMEDIATE_ALLOCATION,
+        ),
+        ("work", work, MAX_DFA_EQUIVALENCE_WORK),
+        ("output_allocation", output_allocation, MAX_DFA_EQUIVALENCE_OUTPUT_ALLOCATION),
+    )
+    for resource, observed, admitted in bounds:
+        if observed > admitted:
+            raise OperationResourceAdmissionError(
+                location=("left", "right"),
+                code=f"regular_language.equivalence.{resource}_bound",
+                message=(
+                    f"DFA equivalence {resource} exceeds the admitted "
+                    f"bound of {admitted}"
+                ),
+            )
+    return source_work, work
+
+
+def dfa_equivalence(
+    left: DFA, right: DFA
+) -> tuple[tuple[int, ...] | None, tuple[int, ...] | None, tuple[int, ...] | None]:
+    """Return the shortest lexicographically least distinguishing word and traces."""
+
+    request_checkpoint("before DFA equivalence admission")
+    source_work, admitted_work = _admit_dfa_equivalence(left, right)
+    request_checkpoint("after DFA equivalence admission")
+    ledger = OperationWorkLedger(admitted_work)
+    ledger.charge(source_work)
     left_transitions = _transition_map(left)
     right_transitions = _transition_map(right)
     initial = (left.initial_state, right.initial_state)
@@ -232,6 +379,8 @@ def dfa_equivalence(
         initial: None
     }
     while queue:
+        ledger.charge()
+        request_checkpoint("during DFA equivalence product search")
         pair = queue.popleft()
         left_accepts = pair[0] in left.accepting_states
         right_accepts = pair[1] in right.accepting_states
@@ -240,18 +389,22 @@ def dfa_equivalence(
             symbols: list[int] = []
             link = predecessor[pairs[-1]]
             while link is not None:
+                ledger.charge()
+                request_checkpoint("during DFA equivalence witness reconstruction")
                 parent, symbol = link
                 symbols.append(symbol)
                 pairs.append(parent)
                 link = predecessor[parent]
             pairs.reverse()
             symbols.reverse()
+            request_checkpoint("before DFA equivalence result construction")
             return (
                 tuple(symbols),
                 tuple(state[0] for state in pairs),
                 tuple(state[1] for state in pairs),
             )
         for symbol in range(left.alphabet_size):
+            ledger.charge()
             target = (
                 left_transitions[(pair[0], symbol)],
                 right_transitions[(pair[1], symbol)],
@@ -259,6 +412,7 @@ def dfa_equivalence(
             if target not in predecessor:
                 predecessor[target] = (pair, symbol)
                 queue.append(target)
+    request_checkpoint("before DFA equivalence result construction")
     return None, None, None
 
 

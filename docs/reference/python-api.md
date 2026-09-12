@@ -64,6 +64,18 @@ than constructing a wire Pydantic model. Native and wire parity tests should
 assert equal exact results and typed outcomes, and should document any
 difference as an explicit transport-only constraint.
 
+Every native function that backs a public operation is itself an admitted
+boundary. It applies strict Python type and domain checks, the same owner-defined
+work and intermediate limits, and the same exact-output or materialization
+bounds before calling a backend or allocating expanded results. Put reusable
+admission in one owner helper used by native and catalog paths. Expected invalid
+values, shapes, axes, and dimensions produce `OperationDomainValidationError`
+or the operation's declared subtype while preserving its stable owner code and
+domain/resource classification. Use `OperationResourceAdmissionError` when the
+operation distinguishes execution-envelope refusal from other domain
+rejections. Neither path may leak raw `IndexError`, tuple-unpacking errors,
+helper `ValueError`, or Pydantic validation exceptions.
+
 Pydantic request models are transport contracts, not containers for hidden
 execution state. They may enforce typed shape, canonical representation, and
 cheap intrinsic cross-field consistency. They must not store admission plans in
@@ -201,10 +213,9 @@ needs a concrete mathematical witness or checking relation.
 The native surface also retains useful deterministic helpers intentionally
 excluded from `math.find`, including classical combinatorial numbers, basic
 formal-series transformations, Young-diagram projections, graph transforms and
-decomposition projections, DFA complement, continued-fraction convergents, and
-finite-metric balls. Their absence from the public operation catalog is
-deliberate: native availability does not create a distinct agent discovery
-intent.
+decomposition projections, DFA complement, and finite-metric balls. Their
+absence from the public operation catalog is deliberate: native availability
+does not create a distinct agent discovery intent.
 
 ## Optional native runtimes
 

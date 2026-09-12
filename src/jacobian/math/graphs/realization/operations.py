@@ -50,13 +50,25 @@ def graph_realization(sequence: DegreeSequence) -> GraphRealizationResult:
     degrees = sequence.degrees
     if not _is_graphical_erdos_gallai(degrees):
         return GraphRealizationResult(sequence=sequence, is_graphical=False)
-    graph = nx.havel_hakimi_graph(list(degrees))
+    # NetworkX's Havel--Hakimi implementation assigns its node labels only to
+    # nonzero entries in the input sequence.  Keep the public degree axis by
+    # mapping those compact labels back to their source positions; zero-degree
+    # positions remain isolated vertices of the returned indexed graph.
+    nonzero_positions = tuple(
+        index for index, degree in enumerate(degrees) if degree > 0
+    )
+    graph = nx.havel_hakimi_graph([degrees[index] for index in nonzero_positions])
     return GraphRealizationResult(
         sequence=sequence,
         is_graphical=True,
         graph=IndexedSimpleUndirectedGraph(
             vertex_count=len(degrees),
-            edges=tuple(sorted(tuple(sorted(edge)) for edge in graph.edges())),
+            edges=tuple(
+                sorted(
+                    tuple(sorted((nonzero_positions[left], nonzero_positions[right])))
+                    for left, right in graph.edges()
+                )
+            ),
         ),
     )
 

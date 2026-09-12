@@ -15,6 +15,7 @@ from jacobian.math.graphs.clique_candidate_hypergraph._models import (
 from jacobian.math.graphs.clique_candidate_hypergraph.operations import (
     construct_all_clique_candidate_hypergraph,
     convert_candidate_cliques,
+    verify_clique_candidate_hypergraph,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -59,13 +60,15 @@ class TestCompleteConstructor:
     def test_hyperedges_hold_exactly_internal_resources(self) -> None:
         graph = _graph(BOWTIE)
         result = construct_all_clique_candidate_hypergraph(graph)
-        resource_of = {entry.endpoints: entry.resource for entry in result.resource_map}
+        resource_of: dict[tuple[str, str], str] = {
+            entry.endpoints: entry.resource for entry in result.resource_map
+        }
         by_candidate = {
             entry.candidate: entry.members for entry in result.candidate_map
         }
         for edge_id, members in result.hypergraph.edges:
             expected = {
-                resource_of[tuple(sorted((left, right)))]
+                resource_of[(left, right) if left < right else (right, left)]
                 for left in by_candidate[edge_id]
                 for right in by_candidate[edge_id]
                 if left < right
@@ -74,12 +77,36 @@ class TestCompleteConstructor:
 
     def test_result_reparses(self) -> None:
         result = construct_all_clique_candidate_hypergraph(_graph(BOWTIE))
-        assert (
-            CliqueCandidateHypergraphResult.model_validate(
-                result.model_dump(mode="json")
-            )
-            == result
+        reparsed = CliqueCandidateHypergraphResult.model_validate(
+            result.model_dump(mode="json")
         )
+        assert reparsed == result
+        assert verify_clique_candidate_hypergraph(reparsed)
+
+    def test_serialized_result_is_structural_and_verifiable(self) -> None:
+        result = construct_all_clique_candidate_hypergraph(_graph(BOWTIE))
+        payload = result.model_dump(mode="json")
+
+        payload["hypergraph"]["edges"][0][1] = []
+        forged = CliqueCandidateHypergraphResult.model_validate(payload)
+        assert not verify_clique_candidate_hypergraph(forged)
+
+        payload = result.model_dump(mode="json")
+        payload["hypergraph"]["vertices"] = payload["hypergraph"]["vertices"][1:]
+        with pytest.raises(ValueError, match="declared vertex"):
+            CliqueCandidateHypergraphResult.model_validate(payload)
+
+    def test_serialized_result_rejects_oversized_candidate_axes(self) -> None:
+        result = construct_all_clique_candidate_hypergraph(_graph(BOWTIE))
+        payload = result.model_dump(mode="json")
+        payload["candidate_map"] = payload["candidate_map"] * 1501
+        with pytest.raises(ValueError, match="at most 12000 items"):
+            CliqueCandidateHypergraphResult.model_validate(payload)
+
+        payload = result.model_dump(mode="json")
+        payload["candidate_map"][0]["members"] = ["a"] * 257
+        with pytest.raises(ValueError, match="at most 256 items"):
+            CliqueCandidateHypergraphResult.model_validate(payload)
 
     def test_request_path_matches_native(self) -> None:
         from jacobian.math.graphs.clique_candidate_hypergraph._tools import (

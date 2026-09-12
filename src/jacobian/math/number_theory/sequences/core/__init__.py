@@ -1,5 +1,11 @@
-"""Finite integer-sequence values and native operations."""
+"""Finite exact-sequence values and native operations."""
 
+from jacobian.math.number_theory.sequences.core._models import (
+    AutocorrelationCell,
+    AutocorrelationResult,
+    FiniteIntegerSequence,
+    FiniteRationalSequence,
+)
 from jacobian.math.number_theory.sequences.core.operations import (
     aperiodic_autocorrelation,
     cyclic_autocorrelation,
@@ -37,6 +43,10 @@ from jacobian.math.number_theory.sequences.core.operations import (
 from jacobian.math.number_theory.sequences.core.values import IntegerSequence
 
 __all__ = [
+    "AutocorrelationCell",
+    "AutocorrelationResult",
+    "FiniteIntegerSequence",
+    "FiniteRationalSequence",
     "IntegerSequence",
     "aperiodic_autocorrelation",
     "cyclic_autocorrelation",

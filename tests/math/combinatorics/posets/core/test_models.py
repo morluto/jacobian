@@ -10,6 +10,7 @@ from jacobian.math.combinatorics.posets.core._models import (
     ElementRank,
     FinitePoset,
     FinitePosetRequest,
+    IncomparablePair,
     LinearExtensionRequest,
     MobiusFunctionRequest,
     OrderedPair,
@@ -197,6 +198,66 @@ def test_consumers_reject_integer_graded_flag_as_domain_errors() -> None:
 
     assert type(forged.graded) is int
     assert forged.graded == 1
+    assert verify_finite_poset(forged) is False
+    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+        width(forged)
+
+
+def test_consumers_reject_foreign_rank_models_as_domain_errors() -> None:
+    class ForeignRank(ElementRank):
+        extra: str = "foreign"
+
+    poset = _materialize(["a", "b"], [("a", "b")])
+    forged_ranks = tuple(
+        ForeignRank(element=entry.element, rank=entry.rank)
+        for entry in poset.ranks or ()
+    )
+    forged = poset.model_copy(
+        update={
+            "ranks": forged_ranks,
+            "poset_digest": finite_poset_digest(
+                elements=poset.elements,
+                strict_order_pairs=poset.strict_order_pairs,
+                cover_relations=poset.cover_relations,
+                incomparable_pairs=poset.incomparable_pairs,
+                minimal_elements=poset.minimal_elements,
+                maximal_elements=poset.maximal_elements,
+                graded=poset.graded,
+                ranks=forged_ranks,
+            ),
+        }
+    )
+
+    assert verify_finite_poset(forged) is False
+    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+        width(forged)
+
+
+def test_consumers_reject_foreign_incomparable_pair_models_as_domain_errors() -> None:
+    class ForeignPair(IncomparablePair):
+        extra: str = "foreign"
+
+    poset = _materialize(["a", "b"], [])
+    forged_pairs = tuple(
+        ForeignPair(left=pair.left, right=pair.right)
+        for pair in poset.incomparable_pairs
+    )
+    forged = poset.model_copy(
+        update={
+            "incomparable_pairs": forged_pairs,
+            "poset_digest": finite_poset_digest(
+                elements=poset.elements,
+                strict_order_pairs=poset.strict_order_pairs,
+                cover_relations=poset.cover_relations,
+                incomparable_pairs=forged_pairs,
+                minimal_elements=poset.minimal_elements,
+                maximal_elements=poset.maximal_elements,
+                graded=poset.graded,
+                ranks=poset.ranks,
+            ),
+        }
+    )
+
     assert verify_finite_poset(forged) is False
     with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
         width(forged)

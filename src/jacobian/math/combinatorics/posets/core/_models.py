@@ -319,6 +319,12 @@ def _validate_poset_incomparable_pairs(
         for right in elements[index + 1 :]
         if (left, right) not in closure and (right, left) not in closure
     )
+    for pair in incomparable_pairs:
+        if type(pair) is not IncomparablePair:
+            raise _validation_error(
+                "canonical_incomparable_pairs",
+                "incomparable_pairs must use the canonical IncomparablePair type",
+            )
     actual_incomparable = tuple((pair.left, pair.right) for pair in incomparable_pairs)
     if actual_incomparable != expected_incomparable:
         raise _validation_error(

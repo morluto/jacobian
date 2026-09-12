@@ -145,11 +145,11 @@ def _revalidated_ranks(ranks: object) -> tuple[ElementRank, ...] | None:
         return None
     if type(ranks) is not tuple:
         raise TypeError("ranks must be a tuple")
+    for entry in ranks:
+        if type(entry) is not ElementRank:
+            raise TypeError("rank entries must use the canonical ElementRank type")
     return tuple(
-        ElementRank.model_validate(
-            {"element": entry.element, "rank": entry.rank},
-            strict=True,
-        )
+        ElementRank.model_validate(entry.model_dump(mode="python"), strict=True)
         for entry in ranks
     )
 

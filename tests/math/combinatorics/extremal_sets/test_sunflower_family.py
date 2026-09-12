@@ -215,6 +215,13 @@ def test_output_edge_bound_is_admitted_before_row_construction() -> None:
         construct_sunflower_family(source, 2)
 
 
+def test_qualifying_plan_stops_once_the_output_bound_is_exceeded() -> None:
+    """C(20, 9) empty-core rows must not be fully retained before output refusal."""
+    source = _family(tuple((index,) for index in range(20)), ground=20)
+    with pytest.raises(OperationResourceAdmissionError, match="output bound"):
+        construct_sunflower_family(source, 9)
+
+
 def test_nested_chain_is_sunflower_free_without_candidate_output_rejection() -> None:
     """A nested chain has no 4-sunflowers; C(30, 4) candidates must not be an output bound."""
     members = tuple(tuple(range(index + 1)) for index in range(30))

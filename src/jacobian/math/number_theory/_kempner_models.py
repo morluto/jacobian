@@ -141,9 +141,10 @@ class KempnerArithmeticProgressionResult(StrictModel):
 
     @model_validator(mode="after")
     def require_arity_matches_witness(self) -> Self:
-        if isinstance(self.conclusion, KempnerContainsProgression) and len(
-            self.conclusion.values
-        ) != self.arity:
+        if (
+            isinstance(self.conclusion, KempnerContainsProgression)
+            and len(self.conclusion.values) != self.arity
+        ):
             raise _validation_error(
                 "witness_shape",
                 "a positive result must retain one ordered value for each source index",

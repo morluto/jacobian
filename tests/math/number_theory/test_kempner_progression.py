@@ -142,9 +142,7 @@ def test_wire_schema_rejects_base_outside_two_through_sixty_four() -> None:
     with pytest.raises(ValidationError):
         KempnerDigitSet.model_validate({"base": "2\n", "allowed_digits": ["1"]})
     validator = Draft202012Validator(schema)
-    assert list(
-        validator.iter_errors({"base": "2\n", "allowed_digits": ["1"]})
-    )
+    assert list(validator.iter_errors({"base": "2\n", "allowed_digits": ["1"]}))
 
 
 def test_wire_schema_encodes_arity_lower_bound() -> None:
@@ -177,7 +175,9 @@ def test_progression_free_result_rejects_undefined_arity() -> None:
 def test_result_schema_discriminates_status_branches() -> None:
     schema = KempnerArithmeticProgressionResult.model_json_schema()
     conclusion = schema["properties"]["conclusion"]
-    assert "discriminator" in conclusion or "oneOf" in conclusion or "anyOf" in conclusion
+    assert (
+        "discriminator" in conclusion or "oneOf" in conclusion or "anyOf" in conclusion
+    )
     with pytest.raises(ValidationError):
         KempnerArithmeticProgressionResult.model_validate(
             {

@@ -869,6 +869,12 @@ def _fraction_digits(value: Fraction) -> int:
     )
 
 
+def _fraction_serialized_digits(value: Fraction) -> int:
+    return len(format_canonical_integer(abs(value.numerator))) + len(
+        format_canonical_integer(value.denominator)
+    )
+
+
 def _translated_max_digits(
     origin: tuple[Fraction, Fraction],
     points: tuple[tuple[Fraction, Fraction], ...],
@@ -1060,9 +1066,9 @@ def spanned_circle_profile(
         restored_x = key[0] + origin[0]
         restored_y = key[1] + origin[1]
         restored_digits = (
-            _fraction_digits(restored_x)
-            + _fraction_digits(restored_y)
-            + _fraction_digits(key[2])
+            _fraction_serialized_digits(restored_x)
+            + _fraction_serialized_digits(restored_y)
+            + _fraction_serialized_digits(key[2])
         )
         if (
             _fraction_digits(restored_x) > MAX_CANONICAL_INTEGER_DIGITS

@@ -466,6 +466,29 @@ class TestSpannedCircleProfile:
                 circles=(),
             )
 
+    def test_translated_back_output_counts_numerator_and_denominator(self) -> None:
+        origin_num = 10**30_000 + 17
+        origin_den = 10**30_000 + 19
+        points = tuple(
+            RationalPoint2D(
+                x=CanonicalRational(
+                    num=origin_num + index * origin_den, den=origin_den
+                ),
+                y=CanonicalRational(
+                    num=origin_num + (index * index) * origin_den, den=origin_den
+                ),
+            )
+            for index in range(6)
+        )
+        with pytest.raises(OperationResourceAdmissionError) as error:
+            spanned_circle_profile(
+                SpannedCircleProfileRequest(configuration=_configuration(*points))
+            )
+        assert error.value.errors()[0]["type"] == (
+            "geometry.spanned_circle_result_digit_bound"
+        )
+        assert "aggregate" in error.value.errors()[0]["msg"]
+
     def test_translated_back_centers_are_admitted_before_wiring(self) -> None:
         shift = CanonicalRational(num=6 * 10**32767, den=1)
         points = (

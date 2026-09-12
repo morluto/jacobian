@@ -209,9 +209,7 @@ def test_twice_odd_prime_index_uses_phi_m_of_minus_x() -> None:
     index = 2 * odd_prime
     result = _run(CyclotomicRequest(index=index))
     assert result.totient == odd_prime - 1
-    assert result.polynomial.coefficients == tuple(
-        (-1) ** k for k in range(odd_prime)
-    )
+    assert result.polynomial.coefficients == tuple((-1) ** k for k in range(odd_prime))
     product = (
         fmpz_poly([-1, 1])
         * fmpz_poly([1, 1])

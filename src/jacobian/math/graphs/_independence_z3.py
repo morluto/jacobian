@@ -68,9 +68,25 @@ def _integer_bound(value: Any, fallback: int) -> int:
     return value.as_long() if z3.is_int_value(value) else fallback
 
 
+def _closed_objective_value(objective: Any) -> int | None:
+    """Return an objective value only when both Optimize bounds are closed."""
+
+    import z3
+
+    lower = objective.lower()
+    upper = objective.upper()
+    if not (z3.is_int_value(lower) and z3.is_int_value(upper)):
+        return None
+    lower_value = lower.as_long()
+    upper_value = upper.as_long()
+    return lower_value if lower_value == upper_value else None
+
+
 def _solve_independence_number_values_kernel(
     graph: SimpleUndirectedGraph,
     resource_budget: IndependenceNumberBudget,
+    *,
+    canonicalize_witness: bool = False,
 ) -> IndependenceNumberResult:
     """Run one wall-clock-bounded exact maximum independent-set optimization.
 
@@ -112,15 +128,15 @@ def _solve_independence_number_values_kernel(
     import z3
 
     optimizer = z3.Optimize()
+    optimizer.set(priority="lex")
     optimizer.set(timeout=remaining_timeout_ms(max(1, remaining_ms)))
     selected = {
         vertex: z3.Bool(f"selected_{index}") for index, vertex in enumerate(vertices)
     }
     for left, right in graph.edges:
         optimizer.add(z3.Or(z3.Not(selected[left]), z3.Not(selected[right])))
-    objective = optimizer.maximize(
-        z3.Sum([z3.If(selected[vertex], 1, 0) for vertex in vertices])
-    )
+    cardinality = z3.Sum([z3.If(selected[vertex], 1, 0) for vertex in vertices])
+    objective = optimizer.maximize(cardinality)
 
     status = optimizer.check()
     if status == z3.sat:
@@ -138,16 +154,68 @@ def _solve_independence_number_values_kernel(
         upper = objective.upper()
         lower_bound = max(len(incumbent), _integer_bound(lower, len(incumbent)))
         upper_bound = max(lower_bound, min(order, _integer_bound(upper, order)))
-        if lower_bound == upper_bound == len(incumbent):
-            return IndependenceNumberResult._from_kernel(
-                graph=graph,
-                status="EXACT",
-                optimum_value=len(incumbent),
-                upper_bound=len(incumbent),
-                incumbent_vertices=incumbent,
-                termination_reason="OPTIMUM_ESTABLISHED",
-                detail="bounded Z3 optimization seeded by a NetworkX feasible witness",
+        if lower_bound == upper_bound == len(incumbent) and (
+            _closed_objective_value(objective) == len(incumbent)
+        ):
+            if not canonicalize_witness:
+                return IndependenceNumberResult._from_kernel(
+                    graph=graph,
+                    status="EXACT",
+                    optimum_value=len(incumbent),
+                    upper_bound=len(incumbent),
+                    incumbent_vertices=incumbent,
+                    termination_reason="OPTIMUM_ESTABLISHED",
+                    detail="bounded Z3 optimization seeded by a NetworkX feasible witness",
+                )
+            remaining_ms = int(
+                (resource_budget.wall_seconds - (time.monotonic() - started)) * 1000
             )
+            if remaining_ms > 0:
+                lex_optimizer = z3.Optimize()
+                lex_optimizer.set(priority="lex")
+                lex_optimizer.set(timeout=remaining_timeout_ms(max(1, remaining_ms)))
+                lex_selected = {
+                    vertex: z3.Bool(f"lex_{index}")
+                    for index, vertex in enumerate(vertices)
+                }
+                for left, right in graph.edges:
+                    lex_optimizer.add(
+                        z3.Or(
+                            z3.Not(lex_selected[left]),
+                            z3.Not(lex_selected[right]),
+                        )
+                    )
+                lex_optimizer.add(
+                    z3.Sum([z3.If(lex_selected[vertex], 1, 0) for vertex in vertices])
+                    == len(incumbent)
+                )
+                lex_objectives = [
+                    lex_optimizer.maximize(z3.If(lex_selected[vertex], 1, 0))
+                    for vertex in vertices
+                ]
+                if lex_optimizer.check() == z3.sat and all(
+                    _closed_objective_value(objective) is not None
+                    for objective in lex_objectives
+                ):
+                    lex_model = lex_optimizer.model()
+                    incumbent = tuple(
+                        sorted(
+                            vertex
+                            for vertex, variable in lex_selected.items()
+                            if z3.is_true(
+                                lex_model.eval(variable, model_completion=True)
+                            )
+                        )
+                    )
+                    return IndependenceNumberResult._from_kernel(
+                        graph=graph,
+                        status="EXACT",
+                        optimum_value=len(incumbent),
+                        upper_bound=len(incumbent),
+                        incumbent_vertices=incumbent,
+                        termination_reason="OPTIMUM_ESTABLISHED",
+                        detail="bounded Z3 optimization seeded by a NetworkX feasible witness",
+                    )
     elif status == z3.unsat:
         raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
     termination: Literal["WALL_TIME", "SOLVER_UNKNOWN"] = (
@@ -169,6 +237,8 @@ def _solve_independence_number_values_kernel(
 def solve_independence_number_values(
     graph: SimpleUndirectedGraph,
     resource_budget: IndependenceNumberBudget,
+    *,
+    canonicalize_witness: bool = False,
 ) -> IndependenceNumberResult:
     """Run Z3 optimization in one bounded owner worker and decode its result."""
 
@@ -191,6 +261,7 @@ def solve_independence_number_values(
                         "_deadline": lease.backend_deadline,
                         "graph": graph.model_dump(mode="json"),
                         "resource_budget": resource_budget.model_dump(mode="json"),
+                        "canonicalize_witness": canonicalize_witness,
                     },
                     separators=(",", ":"),
                     ensure_ascii=False,

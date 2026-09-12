@@ -18,7 +18,7 @@ from typing import Literal, Self, cast
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, ExactInteger
 from jacobian._models import StrictModel
 
 MAX_BRACKET_GROUND_SIZE = 12
@@ -82,7 +82,7 @@ class BracketMonomial(StrictModel):
     declared multiplicity, so two presentations of the same monomial are equal.
     """
 
-    factors: tuple[tuple[CanonicalBracket, StrictInt], ...] = Field(
+    factors: tuple[tuple[CanonicalBracket, ExactInteger], ...] = Field(
         max_length=MAX_BRACKET_FACTORS
     )
 

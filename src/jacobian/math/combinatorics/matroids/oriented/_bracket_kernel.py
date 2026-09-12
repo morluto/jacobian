@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from typing import cast
 
 from pydantic_core import PydanticCustomError
 
@@ -34,7 +33,7 @@ _RelationTerm = tuple[int, tuple[tuple[int, int, int], ...]]
 
 
 def _combine(
-    contributions: list[tuple[Fraction, tuple[CanonicalBracket, ...]]],
+    contributions: list[tuple[Fraction, tuple[tuple[CanonicalBracket, int], ...]]],
     ground_size: int,
 ) -> BracketPolynomial:
     """Combine signed bracket monomials into a canonical sparse polynomial."""
@@ -43,14 +42,11 @@ def _combine(
     for coefficient, brackets in contributions:
         if coefficient == 0:
             continue
-        factor_key = cast(
-            tuple[tuple[int, int, int], ...],
-            tuple(sorted(bracket.indices for bracket in brackets)),
-        )
-        # Group repeated factors into multiplicities.
         multiplicities: dict[tuple[int, int, int], int] = {}
-        for triples in factor_key:
-            multiplicities[triples] = multiplicities.get(triples, 0) + 1
+        for bracket, multiplicity in brackets:
+            multiplicities[bracket.indices] = (
+                multiplicities.get(bracket.indices, 0) + multiplicity
+            )
         canonical_key = tuple(sorted(multiplicities.items()))
         combined[canonical_key] = combined.get(canonical_key, Fraction(0)) + coefficient
     terms = []
@@ -80,7 +76,7 @@ def bracket_polynomial_from_terms(
 ) -> BracketPolynomial:
     """Build a canonical bracket polynomial from signed ordered triples."""
 
-    contributions: list[tuple[Fraction, tuple[CanonicalBracket, ...]]] = []
+    contributions: list[tuple[Fraction, tuple[tuple[CanonicalBracket, int], ...]]] = []
     for coefficient, ordered_triples in terms:
         brackets: list[CanonicalBracket] = []
         sign = 1
@@ -88,7 +84,9 @@ def bracket_polynomial_from_terms(
             bracket, parity = ordered_bracket(ordered)
             brackets.append(bracket)
             sign *= parity
-        contributions.append((coefficient * sign, tuple(brackets)))
+        contributions.append(
+            (coefficient * sign, tuple((bracket, 1) for bracket in brackets))
+        )
     return _combine(contributions, ground_size)
 
 
@@ -135,7 +133,7 @@ def grassmann_pluecker_relation(
         if request.family == "FOUR_TERM"
         else _shared_index_three_term_relation(request.indices)
     )
-    contributions: list[tuple[Fraction, tuple[CanonicalBracket, ...]]] = []
+    contributions: list[tuple[Fraction, tuple[tuple[CanonicalBracket, int], ...]]] = []
     for coefficient, ordered_triples in ordered_terms:
         brackets: list[CanonicalBracket] = []
         sign = coefficient
@@ -153,7 +151,9 @@ def grassmann_pluecker_relation(
                 ) from error
             brackets.append(bracket)
             sign *= parity
-        contributions.append((Fraction(sign), tuple(brackets)))
+        contributions.append(
+            (Fraction(sign), tuple((bracket, 1) for bracket in brackets))
+        )
     polynomial = _combine(contributions, request.ground_size)
     return GrassmannPlueckerRelationResult(
         ground_size=request.ground_size,
@@ -195,30 +195,15 @@ def bracket_syzygy_residual(request: BracketSyzygyResidualRequest) -> BracketPol
                 code="bracket.syzygy_monomial_factors",
                 message="every assembled monomial must fit the bracket-factor bound",
             )
-    contributions: list[tuple[Fraction, tuple[CanonicalBracket, ...]]] = []
+    contributions: list[tuple[Fraction, tuple[tuple[CanonicalBracket, int], ...]]] = []
     for term in request.target.terms:
-        factors = tuple(
-            factor
-            for factor, multiplicity in term.monomial.factors
-            for _ in range(multiplicity)
-        )
-        contributions.append((term.coefficient.as_fraction(), factors))
+        contributions.append((term.coefficient.as_fraction(), term.monomial.factors))
     for scalar, multiplier, relation in request.terms:
-        multiplier_factors = tuple(
-            factor
-            for factor, multiplicity in multiplier.factors
-            for _ in range(multiplicity)
-        )
         for term in relation.terms:
-            relation_factors = tuple(
-                factor
-                for factor, multiplicity in term.monomial.factors
-                for _ in range(multiplicity)
-            )
             contributions.append(
                 (
                     -scalar.as_fraction() * term.coefficient.as_fraction(),
-                    multiplier_factors + relation_factors,
+                    multiplier.factors + term.monomial.factors,
                 )
             )
     return _combine(contributions, request.target.ground_size)

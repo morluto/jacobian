@@ -205,3 +205,32 @@ def test_syzygy_residual_cancels_a_supplied_relation() -> None:
         )
     )
     assert residual.terms == ()
+
+
+def test_compressed_large_multiplicity_survives_residual_and_json() -> None:
+    from jacobian.math.combinatorics.matroids.oriented._bracket_models import (
+        BracketPolynomialTerm,
+    )
+
+    target = BracketPolynomial(
+        ground_size=3,
+        terms=(
+            BracketPolynomialTerm(
+                coefficient=CanonicalRational(num=1, den=1),
+                monomial=BracketMonomial(
+                    factors=((CanonicalBracket(indices=(0, 1, 2)), 10**20),)
+                ),
+            ),
+        ),
+    )
+    result = bracket_syzygy_residual(
+        BracketSyzygyResidualRequest(target=target, terms=())
+    )
+    assert result == target
+    restored = BracketPolynomial.model_validate_json(
+        encode_strict_json(result.model_dump(mode="json")), strict=True
+    )
+    assert (
+        bracket_syzygy_residual(BracketSyzygyResidualRequest(target=restored, terms=()))
+        == target
+    )

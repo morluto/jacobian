@@ -1,7 +1,7 @@
 """Exact sparse rational Laurent-polynomial multiplication."""
 
 from fractions import Fraction
-from math import lcm
+from math import gcd
 
 from pydantic import ValidationError
 
@@ -75,7 +75,19 @@ def _integer_digits(value: int) -> int:
 
 
 def _capped_denominator_lcm(left: int, right: int) -> int | None:
-    merged = lcm(left, right)
+    """Merge denominators by gcd-based LCM, refusing only after a digit bound."""
+
+    if left == 1:
+        return right if _integer_digits(right) <= MAX_CANONICAL_RATIONAL_DIGITS else None
+    if right == 1:
+        return left if _integer_digits(left) <= MAX_CANONICAL_RATIONAL_DIGITS else None
+    overlap = gcd(left, right)
+    left_digits = _integer_digits(left)
+    right_digits = _integer_digits(right)
+    overlap_digits = _integer_digits(overlap)
+    if left_digits + right_digits - overlap_digits > MAX_CANONICAL_RATIONAL_DIGITS:
+        return None
+    merged = (left // overlap) * right
     if _integer_digits(merged) > MAX_CANONICAL_RATIONAL_DIGITS:
         return None
     return merged

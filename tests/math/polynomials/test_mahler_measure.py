@@ -8,6 +8,7 @@ from math import sqrt
 import pytest
 from pydantic import ValidationError
 
+from jacobian._exact import CanonicalRational
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -306,8 +307,8 @@ def test_mahler_result_binds_degree_leading_coefficient_and_locations() -> None:
 def test_quadratic_surd_rejects_radical_beyond_operation_envelope() -> None:
     with pytest.raises(ValidationError):
         QuadraticSurd(
-            rational_part={"num": 0, "den": 1},
-            radical_coefficient={"num": 1, "den": 1},
+            rational_part=CanonicalRational(num=0, den=1),
+            radical_coefficient=CanonicalRational(num=1, den=1),
             radicand=(1 << MAX_MAHLER_RADICAND_BITS) + 3,
         )
 
@@ -315,8 +316,8 @@ def test_quadratic_surd_rejects_radical_beyond_operation_envelope() -> None:
 def test_quadratic_surd_rejects_decimal_boundary_before_isqrt() -> None:
     with pytest.raises(ValidationError):
         QuadraticSurd(
-            rational_part={"num": 0, "den": 1},
-            radical_coefficient={"num": 1, "den": 1},
+            rational_part=CanonicalRational(num=0, den=1),
+            radical_coefficient=CanonicalRational(num=1, den=1),
             radicand=10**MAX_MAHLER_RADICAND_DIGITS,
         )
 

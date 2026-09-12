@@ -50,7 +50,6 @@ from jacobian.math.combinatorics.posets.core._models import (
     PosetChain,
     PosetClosureResult,
     PosetInterval,
-    PosetRequest,
     PosetSubset,
     PosetWidthResult,
     PresentationPair,
@@ -196,7 +195,7 @@ def verify_finite_poset(poset: FinitePoset) -> bool:
 def maximal_chains(poset: FinitePoset) -> MaximalChainEnumerationResult:
     """Enumerate every inclusion-maximal chain of a canonical finite poset."""
 
-    return _enumerate_maximal_chains(PosetRequest(poset=poset))
+    return _enumerate_maximal_chains(poset)
 
 
 def _admit_antichain_profile(poset: FinitePoset) -> None:

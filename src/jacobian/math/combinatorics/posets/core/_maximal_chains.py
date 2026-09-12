@@ -18,7 +18,6 @@ from jacobian.math.combinatorics.posets.core._models import (
     ElementLabel,
     FinitePoset,
     OrderedPair,
-    PosetRequest,
 )
 
 MAX_MAXIMAL_CHAINS = 100_000
@@ -232,20 +231,18 @@ def _chain_profile_stats(
     )
 
 
-def _admit_typed_source(request: PosetRequest) -> tuple[FinitePoset, int]:
+def _admit_typed_source(poset: FinitePoset) -> int:
     from jacobian.math.combinatorics.posets.core.operations import (
         verify_finite_poset,
     )
 
     request_checkpoint("before maximal-chain source admission")
-    candidate = getattr(request, "poset", None)
-    if not isinstance(request, PosetRequest) or not isinstance(candidate, FinitePoset):
+    if not isinstance(poset, FinitePoset):
         raise OperationDomainValidationError(
             location=("poset",),
             code="poset.maximal_chains.request_type",
-            message="maximal-chain enumeration requires a typed finite-poset request",
+            message="maximal-chain enumeration requires a typed finite poset",
         )
-    poset = candidate
     try:
         element_count = len(poset.elements)
         strict_pair_count = len(poset.strict_order_pairs)
@@ -282,7 +279,7 @@ def _admit_typed_source(request: PosetRequest) -> tuple[FinitePoset, int]:
             code="poset.maximal_chains.source_claims",
             message="the finite-poset order and Hasse claims are not canonical",
         )
-    return poset, source_validation_work
+    return source_validation_work
 
 
 def _profile_and_admit_output(
@@ -352,8 +349,10 @@ def _profile_and_admit_output(
     return total, total_elements, histogram
 
 
-def enumerate_maximal_chains(request: PosetRequest) -> MaximalChainEnumerationResult:
-    poset, source_validation_work = _admit_typed_source(request)
+def enumerate_maximal_chains(poset: FinitePoset) -> MaximalChainEnumerationResult:
+    """Enumerate every maximal chain of one canonical finite-poset value."""
+
+    source_validation_work = _admit_typed_source(poset)
     outgoing: dict[str, list[str]] = {element: [] for element in poset.elements}
     for relation in poset.cover_relations:
         outgoing[relation.lower].append(relation.upper)

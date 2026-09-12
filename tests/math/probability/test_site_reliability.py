@@ -231,8 +231,25 @@ def test_site_resource_bound_uses_resource_admission_error() -> None:
     )
     with pytest.raises(OperationResourceAdmissionError):
         compute_site_connection_probability(
-            _source(vertices, edges, (Fraction(1, 2),) * len(vertices), vertices[:2])
+            _source(
+                vertices,
+                edges,
+                (Fraction(1, 2),) * len(vertices),
+                ("v0", "v1"),
+            )
         )
+
+
+def test_site_vertex_bound_is_owned_by_operation_admission() -> None:
+    vertices = tuple(sorted(f"v{index}" for index in range(13)))
+    source = _source(
+        vertices,
+        (),
+        (Fraction(1, 2),) * len(vertices),
+        ("v0", "v1"),
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="vertex bound"):
+        compute_site_connection_probability(source)
 
 
 def test_matches_independent_brute_force() -> None:

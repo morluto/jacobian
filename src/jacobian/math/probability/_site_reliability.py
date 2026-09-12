@@ -16,6 +16,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
+from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -37,7 +38,11 @@ MAX_SITE_RELIABILITY_RATIONAL_DIGITS = (
     MAX_INPUT_RATIONAL_DIGITS * MAX_SITE_RELIABILITY_VERTICES
     + MAX_SITE_RELIABILITY_VERTICES
 )
-MAX_SITE_RELIABILITY_LEDGER_UNITS = 64_000_000
+MAX_SITE_RELIABILITY_OUTPUT_BYTES = 64_000_000
+MAX_SITE_RELIABILITY_LEDGER_UNITS = MAX_SITE_RELIABILITY_OUTPUT_BYTES
+MAX_SITE_RELIABILITY_LOGICAL_WORK = MAX_SITE_RELIABILITY_STATES * (
+    4 * MAX_SITE_RELIABILITY_VERTICES + 4 * MAX_SITE_RELIABILITY_EDGES + 16
+)
 
 
 def _validation_error(message: str) -> PydanticCustomError:
@@ -61,9 +66,22 @@ class SiteReliabilityVertexProbability(StrictModel):
 class GraphSiteReliabilitySource(StrictModel):
     """Canonical graph, vertex-axis probabilities, and terminal event source."""
 
-    graph: SimpleUndirectedGraph
+    graph: SimpleUndirectedGraph = Field(
+        description=(
+            "Simple undirected graph with at most "
+            f"{MAX_SITE_RELIABILITY_VERTICES} vertices and "
+            f"{MAX_SITE_RELIABILITY_EDGES} edges for complete vertex-subset "
+            "enumeration."
+        )
+    )
+    # The shared graph carrier is larger than this operation's powerset
+    # envelope.  Operation-specific cardinality belongs to admission so an
+    # otherwise well-formed oversized request receives a resource error.
     vertex_probabilities: tuple[SiteReliabilityVertexProbability, ...] = Field(
-        max_length=MAX_SITE_RELIABILITY_VERTICES
+        description=(
+            "One independent exact open probability for every graph vertex, "
+            "in the graph's declared vertex-axis order."
+        )
     )
     terminals: tuple[str, str]
     event: Literal["TERMINALS_OPEN_AND_CONNECTED"] = "TERMINALS_OPEN_AND_CONNECTED"
@@ -86,8 +104,6 @@ class GraphSiteReliabilitySource(StrictModel):
             raise _validation_error(
                 "site reliability terminals must be two distinct graph vertices"
             )
-        if len(self.graph.vertices) > MAX_SITE_RELIABILITY_VERTICES:
-            raise _validation_error("site reliability source exceeds the vertex bound")
         return self
 
 
@@ -246,6 +262,17 @@ def _admit_site_request(
             message="site reliability probabilities must lie in [0, 1]",
         )
 
+    state_count = 1 << len(request.graph.vertices)
+    logical_work = state_count * (
+        4 * len(request.graph.vertices) + 4 * len(request.graph.edges) + 16
+    )
+    if logical_work > MAX_SITE_RELIABILITY_LOGICAL_WORK:
+        raise OperationResourceAdmissionError(
+            location=("states",),
+            code="probability.site_reliability.work_bound",
+            message="site reliability enumeration exceeds its work bound",
+        )
+
     # Bound both the exact numerator/denominator height and the complete
     # ledger before entering the powerset loop.  Complements have numerator
     # ``den-num``; taking the maximum over both branches is a sound bound for
@@ -266,7 +293,6 @@ def _admit_site_request(
         )
         for item in request.vertex_probabilities
     )
-    state_count = 1 << len(request.graph.vertices)
     rational_digits = factor_digits + len(str(state_count))
     if rational_digits > MAX_SITE_RELIABILITY_RATIONAL_DIGITS:
         raise OperationResourceAdmissionError(
@@ -277,26 +303,51 @@ def _admit_site_request(
                 f"{MAX_SITE_RELIABILITY_RATIONAL_DIGITS}-digit result bound"
             ),
         )
-    label_characters = sum(len(vertex) for vertex in request.graph.vertices)
-    max_component_characters = max(
-        (len(vertex) for vertex in request.graph.vertices),
-        default=1,
+
+    def json_string_size(value: str) -> int:
+        return len(encode_strict_json(value))
+
+    def json_array_size(item_sizes: tuple[int, ...]) -> int:
+        return 2 + max(len(item_sizes) - 1, 0) + sum(item_sizes)
+
+    def json_object_size(fields: tuple[tuple[str, int], ...]) -> int:
+        return (
+            2
+            + max(len(fields) - 1, 0)
+            + sum(
+                json_string_size(name) + 1 + value_size for name, value_size in fields
+            )
+        )
+
+    source_bytes = len(encode_strict_json(request.model_dump(mode="json")))
+    rational_bytes = len(
+        encode_strict_json({"num": "9" * rational_digits, "den": "9" * rational_digits})
     )
-    # Bound mathematical storage by label characters, exact rational digits,
-    # and scalar slots. Reserve every state for the full open-vertex axis;
-    # fixed padding covers the bounded source and per-state scalar fields.
-    ledger_units = (
-        1024
-        + label_characters * 8
-        + len(request.vertex_probabilities) * (2 * MAX_INPUT_RATIONAL_DIGITS + 96)
-        + state_count
-        * (
-            192
-            + len(request.graph.vertices) * max_component_characters
-            + 2 * rational_digits
+    open_vertices_bytes = json_array_size(
+        tuple(json_string_size(vertex) for vertex in request.graph.vertices)
+    )
+    state_bytes = json_object_size(
+        (
+            ("state_index", len(encode_strict_json(state_count - 1))),
+            ("open_vertices", open_vertices_bytes),
+            ("terminals_connected", len(encode_strict_json(True))),
+            ("state_probability", rational_bytes),
         )
     )
-    if ledger_units > MAX_SITE_RELIABILITY_LEDGER_UNITS:
+    states_bytes = 2 + max(state_count - 1, 0) + state_count * state_bytes
+    result_bytes = json_object_size(
+        (
+            ("source", source_bytes),
+            ("connection_probability", rational_bytes),
+            ("vertex_count", len(encode_strict_json(len(request.graph.vertices)))),
+            ("visited_states", len(encode_strict_json(state_count))),
+            ("states", states_bytes),
+            ("event", json_string_size("TERMINALS_OPEN_AND_CONNECTED")),
+            ("vertex_independence", json_string_size("INDEPENDENT_BERNOULLI")),
+            ("enumeration", json_string_size("COMPLETE_VERTEX_SUBSETS")),
+        )
+    )
+    if result_bytes > MAX_SITE_RELIABILITY_OUTPUT_BYTES:
         raise OperationResourceAdmissionError(
             location=("states",),
             code="probability.site_reliability.output_bound",
@@ -402,6 +453,8 @@ SITE_CONNECTION_PROBABILITY_OPERATION = MathTool(
 __all__ = [
     "MAX_SITE_RELIABILITY_EDGES",
     "MAX_SITE_RELIABILITY_LEDGER_UNITS",
+    "MAX_SITE_RELIABILITY_LOGICAL_WORK",
+    "MAX_SITE_RELIABILITY_OUTPUT_BYTES",
     "MAX_SITE_RELIABILITY_STATES",
     "MAX_SITE_RELIABILITY_VERTICES",
     "SITE_CONNECTION_PROBABILITY_OPERATION",

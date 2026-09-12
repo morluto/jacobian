@@ -16,6 +16,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
+from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -38,7 +39,14 @@ MAX_HYPERGRAPH_RELIABILITY_RATIONAL_DIGITS = (
     MAX_INPUT_RATIONAL_DIGITS * MAX_HYPERGRAPH_RELIABILITY_HYPEREDGES
     + MAX_HYPERGRAPH_RELIABILITY_HYPEREDGES
 )
-MAX_HYPERGRAPH_RELIABILITY_LEDGER_UNITS = 64_000_000
+MAX_HYPERGRAPH_RELIABILITY_OUTPUT_BYTES = 64_000_000
+MAX_HYPERGRAPH_RELIABILITY_LEDGER_UNITS = MAX_HYPERGRAPH_RELIABILITY_OUTPUT_BYTES
+MAX_HYPERGRAPH_RELIABILITY_LOGICAL_WORK = MAX_HYPERGRAPH_RELIABILITY_STATES * (
+    4 * MAX_HYPERGRAPH_RELIABILITY_HYPEREDGES
+    + 4 * MAX_HYPERGRAPH_RELIABILITY_VERTICES
+    + 4 * MAX_HYPERGRAPH_RELIABILITY_HYPEREDGES * MAX_HYPERGRAPH_RELIABILITY_VERTICES
+    + 16
+)
 
 
 def _validation_error(message: str) -> PydanticCustomError:
@@ -62,9 +70,22 @@ class HyperedgeOpenProbability(StrictModel):
 class HypergraphBondReliabilitySource(StrictModel):
     """Canonical hypergraph, hyperedge-axis probabilities, and terminals."""
 
-    hypergraph: FiniteHypergraph
+    hypergraph: FiniteHypergraph = Field(
+        description=(
+            "Finite simple hypergraph with at most "
+            f"{MAX_HYPERGRAPH_RELIABILITY_VERTICES} vertices and "
+            f"{MAX_HYPERGRAPH_RELIABILITY_HYPEREDGES} nonempty hyperedges "
+            "for complete hyperedge-subset enumeration."
+        )
+    )
+    # The shared finite-hypergraph carrier is larger than this operation's
+    # powerset envelope.  Keep this structural model broad and let operation
+    # admission own the resource rejection.
     hyperedge_probabilities: tuple[HyperedgeOpenProbability, ...] = Field(
-        max_length=MAX_HYPERGRAPH_RELIABILITY_HYPEREDGES
+        description=(
+            "One independent exact open probability for every hyperedge, "
+            "in the hypergraph's declared hyperedge-axis order."
+        )
     )
     terminals: tuple[str, str]
     event: Literal["TERMINALS_CONNECTED_IN_INCIDENCE_GRAPH"] = (
@@ -90,9 +111,14 @@ class HypergraphBondReliabilitySource(StrictModel):
             raise _validation_error(
                 "hypergraph reliability terminals must be two distinct declared vertices"
             )
-        if len(self.hypergraph.edges) > MAX_HYPERGRAPH_RELIABILITY_HYPEREDGES:
+        members = tuple(members for _, members in self.hypergraph.edges)
+        if any(not edge_members for edge_members in members):
             raise _validation_error(
-                "hypergraph reliability source exceeds the hyperedge bound"
+                "hypergraph reliability hyperedges must be nonempty"
+            )
+        if len(set(members)) != len(members):
+            raise _validation_error(
+                "hypergraph reliability hyperedges must have distinct vertex sets"
             )
         return self
 
@@ -116,6 +142,8 @@ class HypergraphBondReliabilityState(StrictModel):
             raise _validation_error(
                 "hypergraph reliability state probability must lie in [0, 1]"
             )
+        if len(set(self.open_hyperedge_ids)) != len(self.open_hyperedge_ids):
+            raise _validation_error("hypergraph state hyperedge IDs must be canonical")
         return self
 
 
@@ -261,6 +289,18 @@ def _admit_hypergraph_request(
         for item in request.hyperedge_probabilities
     )
     state_count = 1 << len(request.hypergraph.edges)
+    logical_work = state_count * (
+        4 * len(request.hypergraph.edges)
+        + 4 * len(request.hypergraph.vertices)
+        + 4 * sum(len(members) for _, members in request.hypergraph.edges)
+        + 16
+    )
+    if logical_work > MAX_HYPERGRAPH_RELIABILITY_LOGICAL_WORK:
+        raise OperationResourceAdmissionError(
+            location=("states",),
+            code="probability.hypergraph_reliability.work_bound",
+            message="hypergraph reliability enumeration exceeds its work bound",
+        )
     rational_digits = factor_digits + len(str(state_count))
     if rational_digits > MAX_HYPERGRAPH_RELIABILITY_RATIONAL_DIGITS:
         raise OperationResourceAdmissionError(
@@ -271,29 +311,55 @@ def _admit_hypergraph_request(
                 f"{MAX_HYPERGRAPH_RELIABILITY_RATIONAL_DIGITS}-digit result bound"
             ),
         )
-    label_characters = sum(len(vertex) for vertex in request.hypergraph.vertices) + sum(
-        len(edge_id) + sum(len(vertex) for vertex in members)
-        for edge_id, members in request.hypergraph.edges
+
+    def json_string_size(value: str) -> int:
+        return len(encode_strict_json(value))
+
+    def json_array_size(item_sizes: tuple[int, ...]) -> int:
+        return 2 + max(len(item_sizes) - 1, 0) + sum(item_sizes)
+
+    def json_object_size(fields: tuple[tuple[str, int], ...]) -> int:
+        return (
+            2
+            + max(len(fields) - 1, 0)
+            + sum(
+                json_string_size(name) + 1 + value_size for name, value_size in fields
+            )
+        )
+
+    source_bytes = len(encode_strict_json(request.model_dump(mode="json")))
+    rational_bytes = len(
+        encode_strict_json({"num": "9" * rational_digits, "den": "9" * rational_digits})
     )
-    max_component_characters = max(
-        (len(edge_id) for edge_id, _ in request.hypergraph.edges),
-        default=1,
+    open_hyperedge_bytes = json_array_size(
+        tuple(json_string_size(edge_id) for edge_id, _ in request.hypergraph.edges)
     )
-    # Bound mathematical storage by label characters, exact rational digits,
-    # and scalar slots. Reserve every state for the full open-hyperedge axis;
-    # fixed padding covers the bounded source and per-state scalar fields.
-    ledger_units = (
-        1024
-        + label_characters * 4
-        + len(request.hyperedge_probabilities) * (2 * MAX_INPUT_RATIONAL_DIGITS + 96)
-        + state_count
-        * (
-            192
-            + len(request.hypergraph.edges) * max_component_characters
-            + 2 * rational_digits
+    state_bytes = json_object_size(
+        (
+            ("state_index", len(encode_strict_json(state_count - 1))),
+            ("open_hyperedge_ids", open_hyperedge_bytes),
+            ("terminals_connected", len(encode_strict_json(True))),
+            ("state_probability", rational_bytes),
         )
     )
-    if ledger_units > MAX_HYPERGRAPH_RELIABILITY_LEDGER_UNITS:
+    states_bytes = 2 + max(state_count - 1, 0) + state_count * state_bytes
+    result_bytes = json_object_size(
+        (
+            ("source", source_bytes),
+            ("connection_probability", rational_bytes),
+            ("hyperedge_count", len(encode_strict_json(len(request.hypergraph.edges)))),
+            ("visited_states", len(encode_strict_json(state_count))),
+            ("states", states_bytes),
+            (
+                "event",
+                json_string_size("TERMINALS_CONNECTED_IN_INCIDENCE_GRAPH"),
+            ),
+            ("hyperedge_independence", json_string_size("INDEPENDENT_BERNOULLI")),
+            ("connectivity_convention", json_string_size("INCIDENCE_GRAPH_CHAIN")),
+            ("enumeration", json_string_size("COMPLETE_HYPEREDGE_SUBSETS")),
+        )
+    )
+    if result_bytes > MAX_HYPERGRAPH_RELIABILITY_OUTPUT_BYTES:
         raise OperationResourceAdmissionError(
             location=("states",),
             code="probability.hypergraph_reliability.output_bound",
@@ -410,6 +476,8 @@ __all__ = [
     "HYPERGRAPH_BOND_CONNECTION_PROBABILITY_OPERATION",
     "MAX_HYPERGRAPH_RELIABILITY_HYPEREDGES",
     "MAX_HYPERGRAPH_RELIABILITY_LEDGER_UNITS",
+    "MAX_HYPERGRAPH_RELIABILITY_LOGICAL_WORK",
+    "MAX_HYPERGRAPH_RELIABILITY_OUTPUT_BYTES",
     "MAX_HYPERGRAPH_RELIABILITY_STATES",
     "MAX_HYPERGRAPH_RELIABILITY_VERTICES",
     "HyperedgeOpenProbability",

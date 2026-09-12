@@ -9,7 +9,10 @@ from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import encode_strict_json
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
 )
@@ -253,4 +256,39 @@ def test_forged_hyperedge_state_ids_are_rejected_after_json_round_trip() -> None
     with pytest.raises(ValidationError, match="state IDs"):
         HypergraphBondConnectionProbabilityResult.model_validate_json(
             encode_strict_json(payload), strict=True
+        )
+
+
+def test_hyperedge_bound_is_owned_by_operation_admission() -> None:
+    vertices = tuple(f"v{index}" for index in range(14))
+    edges = tuple((f"e{index}", (f"v{index}", f"v{index + 1}")) for index in range(13))
+    source = _source(
+        vertices,
+        edges,
+        {edge_id: Fraction(1, 2) for edge_id, _ in edges},
+        ("v0", "v1"),
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="hyperedge bound"):
+        compute_hypergraph_bond_connection_probability(source)
+
+
+def test_empty_hyperedges_are_rejected_by_the_reliability_contract() -> None:
+    with pytest.raises(ValidationError, match="nonempty"):
+        _source(
+            ("a", "b"),
+            (("empty", ()),),
+            {"empty": Fraction(1, 2)},
+            ("a", "b"),
+        )
+
+
+def test_duplicate_hyperedge_vertex_sets_are_rejected_by_the_reliability_contract() -> (
+    None
+):
+    with pytest.raises(ValidationError, match="distinct vertex sets"):
+        _source(
+            ("a", "b"),
+            (("first", ("a", "b")), ("second", ("a", "b"))),
+            {"first": Fraction(1, 2), "second": Fraction(1, 2)},
+            ("a", "b"),
         )

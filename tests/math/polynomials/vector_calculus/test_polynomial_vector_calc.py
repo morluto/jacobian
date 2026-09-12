@@ -93,7 +93,9 @@ def test_native_vector_operations_reject_malformed_fields_at_admission() -> None
         divergence(())
 
     x = _polynomial(("x", "y", "z"), {(1, 0, 0): 1})
-    with pytest.raises(OperationDomainValidationError, match="one component per variable"):
+    with pytest.raises(
+        OperationDomainValidationError, match="one component per variable"
+    ):
         divergence((x, x))
 
     planar = _polynomial(("x", "y"), {(1, 0): 1})

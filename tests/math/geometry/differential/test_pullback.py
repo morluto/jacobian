@@ -264,3 +264,62 @@ def test_pullback_dag_is_bound_to_pullback_admission_errors(
         )
     assert "pullback" in error.value.errors()[0]["type"]
     assert "curvature" not in error.value.errors()[0]["type"]
+
+
+def test_vanishing_substituted_denominator_is_undefined_not_singular() -> None:
+    u, v, w, x, y = symbols("u v w x y")
+    component = rf(1 / (u - v - w), ("u", "v", "w"))
+    source = RationalCoordinateMetric(
+        tensor=RationalCoordinateTensor(
+            coordinate_axis=("u", "v", "w"),
+            variance=("COVARIANT", "COVARIANT"),
+            components=(
+                component,
+                rf(0, ("u", "v", "w")),
+                rf(0, ("u", "v", "w")),
+                rf(0, ("u", "v", "w")),
+                rf(1, ("u", "v", "w")),
+                rf(0, ("u", "v", "w")),
+                rf(0, ("u", "v", "w")),
+                rf(0, ("u", "v", "w")),
+                rf(1, ("u", "v", "w")),
+            ),
+            retained_nonzero_denominators=(component.denominator,),
+        )
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        pullback_metric(
+            source,
+            map_value((x + y, x, y), ("x", "y"), ("u", "v", "w")),
+        )
+    assert error.value.errors()[0]["type"].endswith("undefined_metric_locus")
+
+
+def test_forged_short_tensor_is_rejected_before_planning() -> None:
+    x = symbols("x")
+    tensor = RationalCoordinateTensor.model_construct(
+        coordinate_axis=("u", "v"),
+        variance=("COVARIANT", "COVARIANT"),
+        components=(rf(1, ("u", "v")),),
+    )
+    forged = RationalCoordinateMetric.model_construct(tensor=tensor)
+    with pytest.raises(OperationDomainValidationError, match="canonical native"):
+        pullback_metric(forged, map_value((x, x), ("x", "y"), ("u", "v")))
+
+
+def test_locus_fields_must_agree_exactly() -> None:
+    x, y = symbols("x y")
+    source_tensor = RationalCoordinateTensor(
+        coordinate_axis=("y",),
+        variance=("COVARIANT", "COVARIANT"),
+        components=(rf(1 / y, (y,)),),
+        retained_nonzero_denominators=(rf(y, (y,)).numerator,),
+    )
+    result = pullback_metric(
+        RationalCoordinateMetric(tensor=source_tensor),
+        map_value((x / (x - 1),), ("x",), ("y",)),
+    )
+    dumped = result.model_dump(mode="python")
+    dumped["pullback_locus_guard"] = ()
+    with pytest.raises(ValueError, match="agree exactly"):
+        type(result).model_validate(dumped)

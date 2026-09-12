@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 
+from pydantic import ValidationError
 from pydantic_core import PydanticCustomError
 
 from jacobian._execution import (
@@ -90,6 +91,19 @@ def pullback_metric(
         deadline = min(deadline, execution.deadline)
     bind_request_deadline(deadline)
     request_checkpoint("before rational metric pullback admission")
+    try:
+        metric = RationalCoordinateMetric.model_validate(
+            metric.model_dump(mode="python")
+        )
+        map_value = RationalFunctionMap.model_validate(
+            map_value.model_dump(mode="python")
+        )
+    except ValidationError as exc:
+        raise OperationDomainValidationError(
+            location=("metric", "map"),
+            code="differential_geometry.rational_metric.pullback.invalid_source",
+            message="metric and map must be canonical native values before planning",
+        ) from exc
     if map_value.target_coordinates != metric.tensor.coordinate_axis:
         raise OperationDomainValidationError(
             location=("map", "target_coordinates"),
@@ -132,6 +146,11 @@ def pullback_metric(
             location=("metric",),
             code="differential_geometry.rational_metric.pullback.singular_metric",
             message="metric determinant vanishes identically after substitution",
+        ),
+        undefined_metric_locus=lambda: OperationDomainValidationError(
+            location=("metric",),
+            code="differential_geometry.rational_metric.pullback.undefined_metric_locus",
+            message="a required metric denominator or chart guard vanishes identically after substitution",
         ),
         noncanonical_location=("metric", "map"),
         noncanonical_code="differential_geometry.rational_metric.pullback.noncanonical_source",

@@ -222,7 +222,7 @@ def _run(payload: dict[str, Any]) -> dict[str, Any]:
         ):
             raise ValueError("malformed fraction request")
         if cache[pair[1]].is_zero:
-            return {"status": "singular"}
+            return {"status": "undefined"}
         numerator, denominator = _cancel(cache[pair[0]], cache[pair[1]])
         cancelled.append(
             {"numerator": _dump(numerator), "denominator": _dump(denominator)}

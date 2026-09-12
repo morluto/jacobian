@@ -124,6 +124,7 @@ def evaluate_admitted_dag(
     deadline: float,
     owner: str,
     singular_metric: Callable[[], OperationDomainValidationError],
+    undefined_metric_locus: Callable[[], OperationDomainValidationError] | None = None,
     noncanonical_location: tuple[str, ...] = (),
     noncanonical_code: str = "",
     noncanonical_message: str = "",
@@ -198,6 +199,8 @@ def evaluate_admitted_dag(
         raise RuntimeError(f"bounded {owner} worker returned malformed output")
     if response.get("status") == "singular":
         raise singular_metric()
+    if response.get("status") == "undefined":
+        raise (undefined_metric_locus or singular_metric)()
     if response.get("status") == "noncanonical":
         raise OperationDomainValidationError(
             location=noncanonical_location,

@@ -48,14 +48,13 @@ class RationalMetricPullbackProfile(StrictModel):
             for value in self.pullback_locus_guard
         ):
             raise ValueError("pullback guards must use the map source axis")
-        guard_keys = set(keys)
-        tensor_keys = {
+        tensor_sequence = [
             _polynomial_key(value)
             for value in self.pullback.retained_nonzero_denominators
-        }
-        if not tensor_keys <= guard_keys:
+        ]
+        if keys != tensor_sequence:
             raise ValueError(
-                "pullback tensor denominators must be retained by its locus"
+                "pullback_locus_guard must agree exactly with the pullback tensor locus"
             )
         return self
 

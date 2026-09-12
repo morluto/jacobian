@@ -13,12 +13,12 @@ from jacobian.math.polynomials._elementary_kernel import (
     rational_polynomial_evaluate,
     rational_polynomial_integral,
 )
+from jacobian.math.polynomials._elementary_symmetric import (
+    elementary_symmetric_family,
+)
 from jacobian.math.polynomials._expression_normalize import (
     PolynomialExpressionSource,
     normalize_polynomial_expression,
-)
-from jacobian.math.polynomials._elementary_symmetric import (
-    elementary_symmetric_family,
 )
 from jacobian.math.polynomials.operations import (
     derivative,

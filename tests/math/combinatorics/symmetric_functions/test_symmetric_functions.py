@@ -277,7 +277,29 @@ def test_native_schur_rejects_variable_name_exceeding_length_bound() -> None:
     variable = "x" * (_MAX_SCHUR_VARIABLE_NAME_LENGTH + 1)
     with pytest.raises(
         OperationDomainValidationError,
-        match="variable names must be nonempty strings",
+        match="canonical nonempty labels",
+    ):
+        schur_evaluation(IntegerPartition(parts=(1,)), (1,), (variable,))
+
+
+@pytest.mark.parametrize("variable", (" x", "x ", "x\x00"))
+def test_schur_rejects_noncanonical_variable_name(variable: str) -> None:
+    with pytest.raises(ValidationError):
+        SchurExpansionRequest(
+            partition=IntegerPartition(parts=(1,)),
+            variables=(variable,),
+            point=(1,),
+        )
+    with pytest.raises(ValidationError):
+        SchurExpansionResult(
+            partition=IntegerPartition(parts=(1,)),
+            variables=(variable,),
+            point=(1,),
+            value=1,
+        )
+    with pytest.raises(
+        OperationDomainValidationError,
+        match="canonical nonempty labels",
     ):
         schur_evaluation(IntegerPartition(parts=(1,)), (1,), (variable,))
 

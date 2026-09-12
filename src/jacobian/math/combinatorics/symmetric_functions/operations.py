@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from pydantic import TypeAdapter, ValidationError
+
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.symmetric_functions._models import (
     _MAX_POINT_COORDINATE_ABS,
@@ -13,6 +15,8 @@ from jacobian.math.combinatorics.symmetric_functions._models import (
     SchurExpansionResult,
     SchurVariableName,
 )
+
+_SCHUR_VARIABLE_NAME_ADAPTER = TypeAdapter(SchurVariableName)
 
 
 def partition_conjugate(partition: IntegerPartition) -> IntegerPartition:
@@ -80,19 +84,18 @@ def schur_evaluation(
         if variables is not None
         else tuple(f"x{i}" for i in range(len(point)))
     )
-    if any(
-        type(variable) is not str
-        or not 1 <= len(variable) <= _MAX_SCHUR_VARIABLE_NAME_LENGTH
-        for variable in variables
-    ):
-        raise OperationDomainValidationError(
-            location=("variables",),
-            code="symmetric_function.schur_variable_name_bounded",
-            message=(
-                "variable names must be nonempty strings of at most "
-                f"{_MAX_SCHUR_VARIABLE_NAME_LENGTH} characters"
-            ),
-        )
+    for variable in variables:
+        try:
+            _SCHUR_VARIABLE_NAME_ADAPTER.validate_python(variable, strict=True)
+        except ValidationError as error:
+            raise OperationDomainValidationError(
+                location=("variables",),
+                code="symmetric_function.schur_variable_name_bounded",
+                message=(
+                    "variable names must be canonical nonempty labels of at most "
+                    f"{_MAX_SCHUR_VARIABLE_NAME_LENGTH} characters"
+                ),
+            ) from error
     if len(variables) != len(point):
         raise OperationDomainValidationError(
             location=("variables",),

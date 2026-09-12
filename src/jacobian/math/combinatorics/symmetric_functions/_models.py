@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from typing import Annotated, Self
 
-from pydantic import Field, StringConstraints, WithJsonSchema, model_validator
+from pydantic import Field, WithJsonSchema, model_validator
 from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
+from jacobian.math._labels import MAX_OPAQUE_LABEL_LENGTH, OpaqueLabel
 from jacobian.math.combinatorics.symmetric_functions.values import (
     MAX_PARTITION_SIZE,
     IntegerPartition,
@@ -20,7 +21,7 @@ _MAX_POINT_COORDINATE_DIGITS = 6
 _MAX_POINT_COORDINATE_ABS = 10**_MAX_POINT_COORDINATE_DIGITS - 1
 _MAX_SCHUR_RESULT_DIGITS = 4000
 _MAX_SCHUR_PARTITION_LENGTH = 50
-_MAX_SCHUR_VARIABLE_NAME_LENGTH = 64
+_MAX_SCHUR_VARIABLE_NAME_LENGTH = MAX_OPAQUE_LABEL_LENGTH
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -43,15 +44,8 @@ PointCoordinate = Annotated[
 """One bounded evaluation coordinate: ``abs(value) <= 10**6 - 1``."""
 
 
-SchurVariableName = Annotated[
-    str,
-    StringConstraints(
-        min_length=1,
-        max_length=_MAX_SCHUR_VARIABLE_NAME_LENGTH,
-        strict=True,
-    ),
-]
-"""One bounded variable label retained in a Schur evaluation context."""
+SchurVariableName = OpaqueLabel
+"""One canonical bounded variable label retained in a Schur context."""
 
 
 def _schur_partition_schema() -> JsonSchemaValue:

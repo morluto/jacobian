@@ -56,6 +56,7 @@ def run_integral_basis_worker(
     *,
     include_basis: bool,
     admitted_polynomial_discriminant: int | None = None,
+    admitted_irreducible: bool | None = None,
 ) -> IntegralBasisWorkerResult | None:
     """Compute one integral basis in a request-owned killable worker."""
 
@@ -66,6 +67,7 @@ def run_integral_basis_worker(
                 request,
                 include_basis=include_basis,
                 admitted_polynomial_discriminant=admitted_polynomial_discriminant,
+                admitted_irreducible=admitted_irreducible,
             )
 
     owner_deadline = execution.started_at + _WORKER_TIMEOUT_SECONDS
@@ -82,6 +84,8 @@ def run_integral_basis_worker(
         payload["admitted_polynomial_discriminant"] = format_canonical_integer(
             admitted_polynomial_discriminant
         )
+    if admitted_irreducible is not None:
+        payload["admitted_irreducible"] = admitted_irreducible
     input_bytes = encode_strict_json(payload)
     stdout_limit = _worker_stdout_limit(request.field, include_basis=include_basis)
     command = [sys.executable, str(_WORKER)]

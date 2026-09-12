@@ -256,9 +256,19 @@ def test_admitted_monic_discriminant_is_request_scoped_and_reused(
             "admitted discriminant must not recompute Poly.discriminant"
         )
 
+    def fail_if_irreducible_rerun(self: object) -> bool:
+        raise AssertionError(
+            "admitted irreducibility must not recompute Poly.is_irreducible"
+        )
+
     monkeypatch.setattr(sympy.Poly, "discriminant", fail_if_poly_discriminant_rerun)
+    monkeypatch.setattr(
+        sympy.Poly, "is_irreducible", property(fail_if_irreducible_rerun)
+    )
     recognized = recognized_integral_basis(
-        field, admitted_polynomial_discriminant=admitted
+        field,
+        admitted_polynomial_discriminant=admitted,
+        admitted_irreducible=True,
     )
     assert recognized is not None
     _ring, field_discriminant, _alpha, _leading = recognized

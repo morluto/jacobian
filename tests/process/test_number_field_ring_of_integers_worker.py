@@ -14,7 +14,7 @@ from jacobian._execution import (
     OperationExecutionTimeoutError,
     request_execution,
 )
-from jacobian.canonical import encode_strict_json
+from jacobian.canonical import encode_strict_json, loads_strict_json
 from jacobian.math.number_theory.number_fields._models import (
     NumberFieldRingOfIntegersRequest,
 )
@@ -142,6 +142,10 @@ def test_ring_worker_uses_private_cwd_and_os_resource_limits(
     command = recorded["command"]
     assert isinstance(command, list)
     assert command[-1] == "--basis"
+    payload = loads_strict_json(recorded["input_bytes"])
+    assert isinstance(payload, dict)
+    assert payload["admitted_irreducible"] is True
+    assert payload["admitted_polynomial_discriminant"] == "20"
     assert recorded["resource_limits"] == ProcessResourceLimits(
         cpu_seconds=60,
         address_space_bytes=1024 * 1024 * 1024,

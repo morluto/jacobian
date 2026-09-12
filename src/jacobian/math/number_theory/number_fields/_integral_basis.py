@@ -190,19 +190,34 @@ def require_factorizable_discriminant(
     )
 
 
-def _poly_with_admitted_discriminant(polynomial: Any, admitted: int) -> Any:
-    """Supply the request-scoped discriminant without mutating Poly methods."""
+def _poly_with_admitted_round_two_work(
+    polynomial: Any,
+    *,
+    admitted_discriminant: int | None,
+    admitted_irreducible: bool,
+) -> Any:
+    """Supply request-scoped round_two facts without mutating Poly methods."""
 
     import sympy
 
-    admitted_value = sympy.Integer(admitted)
+    admitted_value = (
+        None if admitted_discriminant is None else sympy.Integer(admitted_discriminant)
+    )
     poly_type = type(polynomial)
 
-    class _AdmittedDiscriminantPoly(poly_type):  # type: ignore[misc, valid-type]
+    class _AdmittedRoundTwoPoly(poly_type):  # type: ignore[misc, valid-type]
         def discriminant(self, *args: object, **kwargs: object) -> Any:
+            if admitted_value is None:
+                return super().discriminant(*args, **kwargs)
             return admitted_value
 
-    return _AdmittedDiscriminantPoly(
+        @property
+        def is_irreducible(self) -> bool:
+            if admitted_irreducible:
+                return True
+            return bool(super().is_irreducible)
+
+    return _AdmittedRoundTwoPoly(
         polynomial.as_expr(),
         *polynomial.gens,
         domain=polynomial.domain,
@@ -212,6 +227,8 @@ def _poly_with_admitted_discriminant(polynomial: Any, admitted: int) -> Any:
 def recognized_integral_basis(
     field: SimpleNumberFieldPresentation,
     admitted_polynomial_discriminant: int | None = None,
+    *,
+    admitted_irreducible: bool | None = None,
 ) -> tuple[Any, Any, Any, int] | None:
     """Recognize the presentation and compute its integral basis once."""
 
@@ -226,11 +243,15 @@ def recognized_integral_basis(
         gens=alpha,
         domain=sympy.ZZ,
     )
-    if polynomial.is_irreducible is not True:
+    if admitted_irreducible is False:
         return None
-    if admitted_polynomial_discriminant is not None:
-        polynomial = _poly_with_admitted_discriminant(
-            polynomial, admitted_polynomial_discriminant
+    if admitted_irreducible is not True and polynomial.is_irreducible is not True:
+        return None
+    if admitted_polynomial_discriminant is not None or admitted_irreducible is True:
+        polynomial = _poly_with_admitted_round_two_work(
+            polynomial,
+            admitted_discriminant=admitted_polynomial_discriminant,
+            admitted_irreducible=admitted_irreducible is True,
         )
     ring, field_discriminant = cast(tuple[Any, Any], round_two(polynomial))
     return ring, field_discriminant, alpha, leading

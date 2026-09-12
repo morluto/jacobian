@@ -27,9 +27,16 @@ def main() -> int:
     if not isinstance(payload, dict):
         raise RuntimeError("number-field worker request must be an object")
     admitted_raw = payload.pop("admitted_polynomial_discriminant", None)
+    admitted_irreducible_raw = payload.pop("admitted_irreducible", None)
     admitted_discriminant = (
         parse_canonical_integer(admitted_raw) if admitted_raw is not None else None
     )
+    if admitted_irreducible_raw is None:
+        admitted_irreducible = None
+    elif isinstance(admitted_irreducible_raw, bool):
+        admitted_irreducible = admitted_irreducible_raw
+    else:
+        raise RuntimeError("admitted irreducibility must be a boolean")
     request = NumberFieldRequest.model_validate_json(
         encode_strict_json(payload),
         strict=True,
@@ -37,6 +44,7 @@ def main() -> int:
     integral_basis = recognized_integral_basis(
         request.field,
         admitted_polynomial_discriminant=admitted_discriminant,
+        admitted_irreducible=admitted_irreducible,
     )
     if integral_basis is None:
         response: dict[str, object] = {"kind": "invalid"}

@@ -120,7 +120,9 @@ def ring_of_integers(
         )
     admitted_discriminant = require_factorizable_discriminant(field)
     recognized = recognized_integral_basis(
-        field, admitted_polynomial_discriminant=admitted_discriminant
+        field,
+        admitted_polynomial_discriminant=admitted_discriminant,
+        admitted_irreducible=admitted_discriminant is not None,
     )
     if recognized is None:
         raise OperationDomainValidationError(

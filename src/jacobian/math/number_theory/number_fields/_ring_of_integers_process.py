@@ -49,6 +49,7 @@ def compute_nf_ring_of_integers(
         NumberFieldRequest(field=request.field),
         include_basis=True,
         admitted_polynomial_discriminant=admitted_discriminant,
+        admitted_irreducible=admitted_discriminant is not None,
     )
     if worker_result is None:
         raise OperationDomainValidationError(

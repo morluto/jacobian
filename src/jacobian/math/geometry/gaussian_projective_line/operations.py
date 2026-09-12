@@ -1,7 +1,7 @@
 """Gaussian-rational projective cross ratios."""
 
+from dataclasses import dataclass
 from fractions import Fraction
-from math import gcd
 from typing import NoReturn
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
@@ -130,8 +130,17 @@ def _reject_resource(code: str, message: str) -> NoReturn:
     )
 
 
-def _admit_request(request: GaussianCrossRatioSource) -> None:
-    """Admit pairwise distinct points and all exact intermediate heights."""
+@dataclass(frozen=True, slots=True)
+class _CrossRatioPlan:
+    """Request-scoped products and the admitted quotient, computed once."""
+
+    numerator: tuple[Fraction, Fraction]
+    denominator: tuple[Fraction, Fraction]
+    value: GaussianRational
+
+
+def _admit_request(request: GaussianCrossRatioSource) -> _CrossRatioPlan:
+    """Admit distinctness, product height, and the exact quotient once."""
 
     points = (request.first, request.second, request.third, request.fourth)
     for left_index, left in enumerate(points):
@@ -151,73 +160,41 @@ def _admit_request(request: GaussianCrossRatioSource) -> None:
         _determinant(request.first, request.fourth),
         _determinant(request.second, request.third),
     )
-    # Bound the quotient from the actual determinant products so structurally
-    # sparse points are not charged a dense worst-case height.
     product_digits = max(
         _gaussian_component_digits(numerator), _gaussian_component_digits(denominator)
     )
-    quotient_digits = 4 * product_digits + 3
-    if quotient_digits > MAX_CROSS_RATIO_INTERMEDIATE_DIGITS:
+    if 4 * product_digits + 3 > MAX_CROSS_RATIO_INTERMEDIATE_DIGITS:
         _reject_resource(
             "intermediate_height_bound",
             "cross-ratio determinant products and quotient exceed the exact intermediate digit bound",
         )
-    result_digits = _gaussian_quotient_digit_bound(numerator, denominator)
-    if result_digits > MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS:
-        if numerator[1] == 0 and denominator[1] == 0 and denominator[0]:
-            reduced = numerator[0] / denominator[0]
-            if (
-                max(
-                    _fraction_component_digits(reduced),
-                    _fraction_component_digits(Fraction()),
-                )
-                <= MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS
-            ):
-                return
-        if numerator[0] == 0 and denominator[0] == 0 and denominator[1]:
-            reduced = numerator[1] / denominator[1]
-            if (
-                _fraction_component_digits(reduced)
-                <= MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS
-            ):
-                return
-        _reject_resource(
-            "output_height_bound",
-            "cross-ratio output exceeds the Gaussian-rational component bound",
-        )
-
-
-def gaussian_rational_cross_ratio(
-    request: GaussianCrossRatioSource,
-) -> GaussianRational:
-    request_checkpoint("before cross-ratio admission")
-    _admit_request(request)
-    request_checkpoint("after cross-ratio admission")
-
-    numerator = _multiply(
-        _determinant(request.first, request.third),
-        _determinant(request.second, request.fourth),
-    )
-    denominator = _multiply(
-        _determinant(request.first, request.fourth),
-        _determinant(request.second, request.third),
-    )
     if not denominator[0] and not denominator[1]:
         raise OperationDomainValidationError(
             location=("first", "second", "third", "fourth"),
             code="geometry.gaussian_cross_ratio.undefined",
             message="cross-ratio denominator determinants must be nonzero",
         )
-    try:
-        result = GaussianRational.from_fractions(*_divide(numerator, denominator))
-    except ValueError as exc:
-        raise OperationResourceAdmissionError(
-            location=("first", "second", "third", "fourth"),
-            code="geometry.gaussian_cross_ratio.output_height_bound",
-            message="cross-ratio output exceeds the Gaussian-rational component bound",
-        ) from exc
+    quotient = _divide(numerator, denominator)
+    if _gaussian_component_digits(quotient) > MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS:
+        _reject_resource(
+            "output_height_bound",
+            "cross-ratio output exceeds the Gaussian-rational component bound",
+        )
+    return _CrossRatioPlan(
+        numerator=numerator,
+        denominator=denominator,
+        value=GaussianRational.from_fractions(*quotient),
+    )
+
+
+def gaussian_rational_cross_ratio(
+    request: GaussianCrossRatioSource,
+) -> GaussianRational:
+    request_checkpoint("before cross-ratio admission")
+    plan = _admit_request(request)
+    request_checkpoint("after cross-ratio admission")
     request_checkpoint("after cross-ratio result construction")
-    return result
+    return plan.value
 
 
 __all__ = ["gaussian_rational_cross_ratio"]

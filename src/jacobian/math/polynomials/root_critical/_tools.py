@@ -55,7 +55,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="cubic_roots_and_critical_point",
                 description=(
                     "The three roots of z^3-1 are compared with the repeated "
-                    "critical point 0; every squared distance is exactly 1."
+                    "critical point 0; every squared distance is exactly 1. The "
+                    "source must be a bounded nonconstant univariate polynomial "
+                    "over QQ."
                 ),
                 input=_CUBIC_EXAMPLE,
             ),

@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import time
+
 import pytest
 
 from jacobian._exact import CanonicalRational
+from jacobian._execution import OperationExecutionTimeoutError, request_execution
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -276,3 +279,17 @@ def test_root_rectangles_ignore_crootof_cache_refinement() -> None:
         assert again.model_dump() == result.model_dump()
     finally:
         CRootOf.clear_cache()
+
+
+def test_catalog_example_states_the_univariate_qq_precondition() -> None:
+    description = TOOLS[0].examples[0].description
+    assert "bounded nonconstant univariate" in description
+    assert "QQ" in description
+
+
+def test_expired_owner_deadline_stops_before_the_sympy_kernel() -> None:
+    with (
+        request_execution(time.monotonic() - 61.0),
+        pytest.raises(OperationExecutionTimeoutError),
+    ):
+        root_critical_distance_profile(_polynomial((3, 1), (0, -1)))

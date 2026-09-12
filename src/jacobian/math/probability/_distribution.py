@@ -10,6 +10,7 @@ from typing import Literal, Self
 from pydantic import Field, StrictInt, model_validator
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._execution import request_checkpoint
 from jacobian._models import StrictModel
 from jacobian.math.probability._models import (
     MAX_INPUT_RATIONAL_DIGITS,
@@ -26,31 +27,111 @@ MAX_FINITE_CONVOLUTION_POWER = 10**15
 MAX_FINITE_DISTRIBUTION_SUM_DIGITS = MAX_RESULT_RATIONAL_DIGITS
 
 
+def _decimal_digits(value: int) -> int:
+    magnitude = abs(value)
+    if magnitude <= 1:
+        return 1
+    return magnitude.bit_length() * 30_103 // 100_000 + 1
+
+
+def _remove_prime_power(value: int, prime: int) -> int:
+    if value % prime:
+        return value
+    powers = [prime]
+    square = prime * prime
+    while value % square == 0:
+        powers.append(square)
+        if square > value // square:
+            break
+        square *= square
+    for power in reversed(powers):
+        if value % power == 0:
+            value //= power
+    return value
+
+
+def _two_three_kernel(value: int) -> int:
+    kernel = abs(value) or 1
+    trailing_twos = (kernel & -kernel).bit_length() - 1
+    if trailing_twos > 0:
+        kernel >>= trailing_twos
+    return _remove_prime_power(kernel, 3)
+
+
+_SUM_VALUE_LIMIT = 10**MAX_FINITE_DISTRIBUTION_SUM_DIGITS
+
+
+def _raise_normalization_bound(label: str) -> None:
+    raise _validation_error(
+        f"{label} normalization exceeds the "
+        f"{MAX_FINITE_DISTRIBUTION_SUM_DIGITS}-digit intermediate bound"
+    )
+
+
+def _add_height_bounded(left: Fraction, right: Fraction, *, label: str) -> Fraction:
+    """Add two nonnegative rationals after bounding common-denominator growth."""
+
+    if right == 0:
+        return left
+    if left == 0:
+        return right
+    common = gcd(left.denominator, right.denominator)
+    left_scale = right.denominator // common
+    right_scale = left.denominator // common
+    if (
+        left_scale > _SUM_VALUE_LIMIT // max(1, abs(left.numerator))
+        or right_scale > _SUM_VALUE_LIMIT // max(1, abs(right.numerator))
+        or left_scale > _SUM_VALUE_LIMIT // left.denominator
+    ):
+        _raise_normalization_bound(label)
+    numerator = left.numerator * left_scale + right.numerator * right_scale
+    denominator = left.denominator * left_scale
+    if abs(numerator) >= _SUM_VALUE_LIMIT or denominator >= _SUM_VALUE_LIMIT:
+        _raise_normalization_bound(label)
+    return Fraction(numerator, denominator)
+
+
 def _bounded_fraction_sum(
     values: tuple[Fraction, ...],
     *,
     label: str,
 ) -> Fraction:
-    """Sum nonnegative rationals without materializing an over-height fraction."""
+    """Sum nonnegative rationals without paying source-order LCD growth.
 
+    Masses are bucketed by the 2-3-free kernel of each denominator so
+    complementary pairs such as ``1/(6p)`` and ``(p-1)/(6p)`` reduce before
+    unrelated primes are combined. Unique reduced denominators are then
+    digit-budgeted, and each addition bounds its cancelled scales before any
+    common-denominator multiply, so a unit-sum law cannot force unbounded GCD
+    work.
+    """
+
+    buckets: dict[int, Fraction] = {}
+    for index, value in enumerate(values):
+        if index % 128 == 0:
+            request_checkpoint("during finite-distribution normalization")
+        kernel = _two_three_kernel(value.denominator)
+        buckets[kernel] = _add_height_bounded(
+            buckets.get(kernel, Fraction()),
+            value,
+            label=label,
+        )
+    reduced = list(buckets.values())
+    running = 1
+    running_digits = 1
+    for term in reduced:
+        denominator = term.denominator
+        shared = gcd(running, denominator)
+        next_digits = (
+            running_digits + _decimal_digits(denominator) - _decimal_digits(shared)
+        )
+        if next_digits > MAX_FINITE_DISTRIBUTION_SUM_DIGITS:
+            _raise_normalization_bound(label)
+        running = running // shared * denominator
+        running_digits = _decimal_digits(running)
     total = Fraction()
-    for value in values:
-        common = gcd(total.denominator, value.denominator)
-        left_denominator = total.denominator // common
-        right_denominator = value.denominator // common
-        left_numerator = abs(total.numerator) * right_denominator
-        right_numerator = abs(value.numerator) * left_denominator
-        common_denominator = left_denominator * value.denominator
-        if (
-            common_denominator >= 10**MAX_FINITE_DISTRIBUTION_SUM_DIGITS
-            or left_numerator + right_numerator
-            >= 10**MAX_FINITE_DISTRIBUTION_SUM_DIGITS
-        ):
-            raise _validation_error(
-                f"{label} normalization exceeds the "
-                f"{MAX_FINITE_DISTRIBUTION_SUM_DIGITS}-digit intermediate bound"
-            )
-        total += value
+    for term in reduced:
+        total = _add_height_bounded(total, term, label=label)
     return total
 
 

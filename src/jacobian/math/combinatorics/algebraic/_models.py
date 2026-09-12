@@ -74,14 +74,17 @@ class HookContentCountRequest(StrictModel):
     """Count semistandard tableaux with entries in ``1..alphabet_size``."""
 
     partition: IntegerPartition
-    alphabet_size: StrictInt = Field(ge=1, le=MAX_CANONICAL_PARTITION_SIZE)
+    # The alphabet is bounded by the operation's derived admission estimate,
+    # not by the number of cells in the partition.  In particular, a one-cell
+    # shape has an exact count equal to the alphabet size.
+    alphabet_size: StrictInt = Field(ge=1)
 
 
 class HookContentCountResult(StrictModel):
     """Exact hook-content count and the factors used to derive it."""
 
     partition: IntegerPartition
-    alphabet_size: StrictInt = Field(ge=1, le=MAX_CANONICAL_PARTITION_SIZE)
+    alphabet_size: StrictInt = Field(ge=1)
     count: ExactInteger
     numerators: tuple[StrictInt, ...] = Field(max_length=MAX_CANONICAL_PARTITION_SIZE)
     hook_product: ExactInteger

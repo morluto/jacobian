@@ -11,6 +11,8 @@ from fractions import Fraction
 from math import factorial, prod
 from typing import cast
 
+from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.combinatorics.algebraic._models import DominanceRelation, RSKResult
 from jacobian.math.combinatorics.algebraic._rsk import (
     _row_insert,
@@ -23,9 +25,6 @@ from jacobian.math.combinatorics.algebraic._rsk import (
 )
 from jacobian.math.combinatorics.algebraic.values import RSKTableauPair
 from jacobian.math.combinatorics.symmetric_functions.values import (
-    MAX_PARTITION_SIZE as MAX_CANONICAL_PARTITION_SIZE,
-)
-from jacobian.math.combinatorics.symmetric_functions.values import (
     IntegerPartition,
     SemistandardYoungTableau,
     StandardYoungTableau,
@@ -35,6 +34,8 @@ from jacobian.math.combinatorics.symmetric_functions.values import (
 from jacobian.math.logic.languages.words.values import FiniteWord
 
 __all__ = [
+    "check_semistandard_tableau",
+    "check_standard_tableau",
     "conjugate_partition",
     "hook_content_count",
     "hook_lengths",
@@ -44,6 +45,48 @@ __all__ = [
     "standard_young_tableaux_count",
     "verify_rsk",
 ]
+
+
+# Hook-content evaluation performs exact products of one factor per cell.  The
+# first bound protects the serialized integer fields; the second bounds the
+# estimated quadratic cost of those bigint products.  Both are computed from
+# canonical source dimensions and the supplied alphabet before expansion.
+MAX_HOOK_CONTENT_WORK = 8_000_000
+
+
+def _upper_decimal_digits(value: int) -> int:
+    """Return a conservative decimal-digit bound without converting to text."""
+    return (value.bit_length() * 30103) // 100000 + 1
+
+
+def _admit_hook_content(partition: IntegerPartition, alphabet_size: int) -> None:
+    """Admit hook-content arithmetic before constructing any factors."""
+    if type(alphabet_size) is not int or alphabet_size < 1:
+        raise ValueError("alphabet_size must be a positive integer")
+
+    cell_count = sum(partition.parts)
+    largest_factor = alphabet_size + cell_count
+    factor_digits = _upper_decimal_digits(largest_factor)
+    # The alphabet is retained in the result even for the empty shape, so its
+    # own serialized size is part of the output bound.
+    output_digits = max(factor_digits, cell_count * factor_digits)
+    if output_digits > MAX_CANONICAL_INTEGER_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("alphabet_size",),
+            code="algebraic_combinatorics.hook_content_result_digits",
+            message="hook-content factors exceed the exact output digit bound",
+        )
+
+    # Multiplying n integers of at most d digits has a conservative n*d^2
+    # work estimate.  This is checked from bit-length-derived d, before any
+    # hook-content factor or product is materialized.
+    work = max(1, cell_count) * factor_digits * factor_digits
+    if work > MAX_HOOK_CONTENT_WORK:
+        raise OperationResourceAdmissionError(
+            location=("alphabet_size",),
+            code="algebraic_combinatorics.hook_content_work",
+            message="hook-content arithmetic exceeds the admitted work bound",
+        )
 
 
 def row_insertion_rsk(word: FiniteWord) -> RSKTableauPair:
@@ -151,11 +194,7 @@ def hook_content_count(
     alongside them makes the integer divisibility computation replayable
     without introducing a generic certificate envelope.
     """
-    if (
-        type(alphabet_size) is not int
-        or not 1 <= alphabet_size <= MAX_CANONICAL_PARTITION_SIZE
-    ):
-        raise ValueError("alphabet_size must be between 1 and the partition-size bound")
+    _admit_hook_content(partition, alphabet_size)
     hooks = hook_lengths(partition)
     numerators = tuple(
         alphabet_size + column - row

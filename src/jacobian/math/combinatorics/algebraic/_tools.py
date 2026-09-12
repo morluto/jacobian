@@ -2,6 +2,9 @@
 
 from typing import Any
 
+from pydantic import ValidationError
+from pydantic_core import PydanticCustomError
+
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -32,6 +35,23 @@ from jacobian.math.combinatorics.symmetric_functions.values import (
     StandardYoungTableau,
 )
 from jacobian.math.logic.languages.words.values import FiniteWord
+
+
+def _tableau_validation_error(
+    exc: PydanticCustomError | ValidationError,
+    *,
+    fallback_code: str,
+) -> OperationDomainValidationError:
+    if isinstance(exc, PydanticCustomError):
+        code = exc.type
+        message = exc.message()
+    else:
+        error = exc.errors()[0] if exc.errors() else {}
+        code = str(error.get("type", fallback_code))
+        message = str(error.get("msg", str(exc)))
+    return OperationDomainValidationError(
+        location=("tableau",), code=code, message=message
+    )
 
 
 def hook_lengths(request: HookLengthRequest) -> HookLengthResult:
@@ -91,13 +111,9 @@ def check_standard_tableau(
 ) -> StandardYoungTableau:
     try:
         return native.check_standard_tableau(request.tableau)
-    except Exception as exc:
-        message = str(exc)
-        error_type = getattr(
-            exc, "type", "algebraic_combinatorics.standard_tableau_invalid"
-        )
-        raise OperationDomainValidationError(
-            location=("tableau",), code=error_type, message=message
+    except (PydanticCustomError, ValidationError) as exc:
+        raise _tableau_validation_error(
+            exc, fallback_code="algebraic_combinatorics.standard_tableau_invalid"
         ) from exc
 
 
@@ -106,13 +122,9 @@ def check_semistandard_tableau(
 ) -> SemistandardYoungTableau:
     try:
         return native.check_semistandard_tableau(request.tableau)
-    except Exception as exc:
-        message = str(exc)
-        error_type = getattr(
-            exc, "type", "algebraic_combinatorics.semistandard_tableau_invalid"
-        )
-        raise OperationDomainValidationError(
-            location=("tableau",), code=error_type, message=message
+    except (PydanticCustomError, ValidationError) as exc:
+        raise _tableau_validation_error(
+            exc, fallback_code="algebraic_combinatorics.semistandard_tableau_invalid"
         ) from exc
 
 

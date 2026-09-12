@@ -396,6 +396,18 @@ def test_incomplete_forged_action_is_a_typed_domain_error() -> None:
     )
 
 
+def test_incomplete_forged_action_with_family_is_a_typed_domain_error() -> None:
+    forged_action = FinitePermutationAction.model_construct(generators=((0,),))
+    request = TupleFamilyOrbitSource.model_construct(
+        action=forged_action, arity=1, family=((0,),)
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        tuple_family_orbit_profile(request)
+    assert exc_info.value.errors()[0]["type"] == (
+        "finite_group_action.tuple_family_action_type"
+    )
+
+
 def test_orbit_row_payloads_are_preflighted_before_container_copy() -> None:
     class _HugeRepresentative(tuple):
         def __len__(self) -> int:

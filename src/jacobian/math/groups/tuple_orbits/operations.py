@@ -41,8 +41,16 @@ MAX_TUPLE_ORBIT_RESULT_CELLS = 2_000_000
 def _backend_action(action: FinitePermutationAction) -> Any:
     """Adapt Jacobian's labelled action to the maintained SymPy backend."""
 
+    domain = _declared_attr(action, "domain")
+    generators = _declared_attr(action, "generators")
+    if domain is None or generators is None:
+        raise OperationDomainValidationError(
+            location=("action",),
+            code="finite_group_action.tuple_family_action_type",
+            message="tuple-family source must retain a finite permutation action",
+        )
     return _backend_group(
-        PermutationGroup(degree=len(action.domain), generators=action.generators)
+        PermutationGroup(degree=len(domain), generators=generators)
     )
 
 

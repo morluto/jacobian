@@ -117,6 +117,7 @@ class _ExpressionMetrics:
     denominator: int | None
     zero: bool
     constant: Fraction | None
+    monomial: frozenset[tuple[str, int]] | None
     total_coefficient_digits: int
     maximum_numerator_bits: int
     maximum_denominator_bits: int
@@ -316,6 +317,37 @@ def _digits_of_rational(value: Fraction) -> int:
     ) + _decimal_digits_from_bits(_denominator_bits(value.denominator))
 
 
+def _scale_monomial(
+    monomial: frozenset[tuple[str, int]] | None, exponent: int
+) -> frozenset[tuple[str, int]] | None:
+    if monomial is None:
+        return None
+    if exponent == 0:
+        return frozenset()
+    return frozenset(
+        (name, power * exponent) for name, power in monomial if power * exponent
+    )
+
+
+def _multiply_monomials(
+    children: list[_ExpressionMetrics],
+) -> frozenset[tuple[str, int]] | None:
+    if any(child.monomial is None for child in children):
+        return None
+    powers: dict[str, int] = {}
+    for child in children:
+        for name, power in child.monomial or ():
+            powers[name] = powers.get(name, 0) + power
+    return frozenset((name, power) for name, power in powers.items() if power)
+
+
+def _addends_are_disjoint(children: list[_ExpressionMetrics]) -> bool:
+    monomials = [child.monomial for child in children if not child.zero]
+    return bool(monomials) and all(
+        monomial is not None for monomial in monomials
+    ) and len(set(monomials)) == len(monomials)
+
+
 def _product_total_coefficient_digits(
     left_support: int,
     left_digits: int,
@@ -352,6 +384,7 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
             denominator=expression.value.den,
             zero=expression.value.num == 0,
             constant=expression.value.as_fraction(),
+            monomial=frozenset(),
             total_coefficient_digits=_digits_of_rational(
                 expression.value.as_fraction()
             ),
@@ -374,6 +407,7 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
             denominator=1,
             zero=False,
             constant=None,
+            monomial=frozenset(((expression.name, 1),)),
             total_coefficient_digits=2,
             maximum_numerator_bits=1,
             maximum_denominator_bits=0,
@@ -394,6 +428,7 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
                 denominator=1,
                 zero=False,
                 constant=Fraction(1),
+                monomial=frozenset(),
                 total_coefficient_digits=2,
                 maximum_numerator_bits=max(base.maximum_numerator_bits, 1),
                 maximum_denominator_bits=base.maximum_denominator_bits,
@@ -495,6 +530,7 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
             denominator=denominator,
             zero=zero,
             constant=constant,
+            monomial=_scale_monomial(base.monomial, exponent),
             total_coefficient_digits=(
                 _digits_of_rational(constant)
                 if constant is not None
@@ -523,6 +559,7 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
             tuple(row.expansion_terms for row in child_metrics), MAX_POLYNOMIAL_TERMS
         )
         degree = max(row.degree for row in child_metrics)
+        disjoint = _addends_are_disjoint(child_metrics)
         constant: Fraction | None
         if child_metrics and all(
             child.constant is not None for child in child_metrics
@@ -540,6 +577,12 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
         if zero:
             common_denominator = 1
             common_numerator_bits = 1
+        elif disjoint:
+            common_denominator = 1
+            common_numerator_bits = max(
+                (child.numerator_bits for child in child_metrics if not child.zero),
+                default=1,
+            )
         else:
             active_metrics = [child for child in child_metrics if not child.zero]
             common_denominator = _bounded_denominator_lcm(
@@ -567,28 +610,46 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
         carry_digits = _decimal_digits_from_bits(
             _ceil_log2(max(1, len(child_metrics)))
         )
-        total_coefficient_digits = (
-            1
-            if zero
-            else min(
+        if zero:
+            total_coefficient_digits = 1
+        elif disjoint:
+            total_coefficient_digits = min(
                 _MAX_EXPRESSION_TOTAL_COEFFICIENT_DIGITS + 1,
-                sum(child.total_coefficient_digits for child in child_metrics)
-                + _bounded_product(
+                sum(child.total_coefficient_digits for child in child_metrics),
+            )
+        else:
+            total_coefficient_digits = max(
+                _representation_digits(
                     support,
-                    carry_digits,
-                    _MAX_EXPRESSION_TOTAL_COEFFICIENT_DIGITS,
+                    common_numerator_bits,
+                    _denominator_bits(common_denominator),
+                ),
+                min(
+                    _MAX_EXPRESSION_TOTAL_COEFFICIENT_DIGITS + 1,
+                    sum(child.total_coefficient_digits for child in child_metrics)
+                    + _bounded_product(
+                        support,
+                        carry_digits,
+                        _MAX_EXPRESSION_TOTAL_COEFFICIENT_DIGITS,
+                    ),
                 ),
             )
-        )
         maximum_numerator_bits = max(
             common_numerator_bits,
             *(child.maximum_numerator_bits for child in child_metrics),
         )
-        maximum_denominator_bits = max(
-            _denominator_bits(common_denominator),
-            *(child.maximum_denominator_bits for child in child_metrics),
-        )
+        if disjoint:
+            maximum_denominator_bits = max(
+                *(child.maximum_denominator_bits for child in child_metrics),
+                default=0,
+            )
+        else:
+            maximum_denominator_bits = max(
+                _denominator_bits(common_denominator),
+                *(child.maximum_denominator_bits for child in child_metrics),
+            )
     else:
+        disjoint = False
         expansion_terms = 1
         support = 1
         work = 0
@@ -689,6 +750,14 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
         denominator=denominator,
         zero=zero,
         constant=constant,
+        monomial=(
+            next((child.monomial for child in child_metrics if not child.zero), frozenset())
+            if disjoint
+            and sum(1 for child in child_metrics if not child.zero) == 1
+            else _multiply_monomials(child_metrics)
+            if not isinstance(expression, PolynomialAdd)
+            else None
+        ),
         total_coefficient_digits=total_coefficient_digits,
         maximum_numerator_bits=maximum_numerator_bits,
         maximum_denominator_bits=maximum_denominator_bits,

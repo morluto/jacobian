@@ -382,6 +382,92 @@ def test_heterogeneous_coefficient_heights_use_aggregate_digits() -> None:
     assert constant == 10 ** (127 * 32) + 1
 
 
+def _dense_quadratic_product(variables: tuple[str, ...]) -> dict[str, Any]:
+    product: dict[str, Any] = {"kind": "LITERAL", "value": {"num": 1, "den": 1}}
+    for name in variables:
+        product = {
+            "kind": "MULTIPLY",
+            "operands": [
+                product,
+                {
+                    "kind": "ADD",
+                    "operands": [
+                        {"kind": "LITERAL", "value": {"num": 1, "den": 1}},
+                        {"kind": "VARIABLE", "name": name},
+                        {
+                            "kind": "POWER",
+                            "base": {"kind": "VARIABLE", "name": name},
+                            "exponent": 2,
+                        },
+                    ],
+                },
+            ],
+        }
+    return product
+
+
+def test_overlapping_rational_addends_include_common_denominator_scaling() -> None:
+    variables = tuple(f"x{index}" for index in range(6))
+    product = _dense_quadratic_product(variables)
+    primes = (10**127 + 39, 10**127 + 79)
+    expression = {
+        "kind": "ADD",
+        "operands": [
+            {
+                "kind": "MULTIPLY",
+                "operands": [
+                    product,
+                    {
+                        "kind": "POWER",
+                        "base": {
+                            "kind": "LITERAL",
+                            "value": {"num": 1, "den": prime},
+                        },
+                        "exponent": 20,
+                    },
+                ],
+            }
+            for prime in primes
+        ],
+    }
+    with pytest.raises(
+        OperationResourceAdmissionError,
+        match="representation envelope",
+    ):
+        normalize_polynomial_expression(_request("QQ", expression, variables=variables))
+
+
+def test_disjoint_monomial_denominators_are_not_globally_cleared() -> None:
+    primes = (10**127 + 39, 10**127 + 79, 10**127 + 121)
+    powers = (1, 2, 3)
+    expression = {
+        "kind": "ADD",
+        "operands": [
+            {
+                "kind": "MULTIPLY",
+                "operands": [
+                    {
+                        "kind": "POWER",
+                        "base": {"kind": "VARIABLE", "name": "x"},
+                        "exponent": power,
+                    },
+                    {
+                        "kind": "POWER",
+                        "base": {
+                            "kind": "LITERAL",
+                            "value": {"num": 1, "den": prime},
+                        },
+                        "exponent": 31,
+                    },
+                ],
+            }
+            for power, prime in zip(powers, primes, strict=True)
+        ],
+    }
+    result = normalize_polynomial_expression(_request("QQ", expression))
+    assert len(result.polynomial.polynomial.terms) == 3
+
+
 def test_nested_constant_powers_are_capped_before_evaluation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

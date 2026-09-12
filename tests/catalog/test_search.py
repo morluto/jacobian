@@ -89,12 +89,10 @@ def test_precise_mode_ignores_incidental_query_words() -> None:
 
 def test_precise_mode_finds_published_sunflower_construction() -> None:
     result = Catalog.open().match(
-        OperationMatchRequest(need="sunflower triple hypergraph construction")
+        OperationMatchRequest(need="complete sunflower family construction")
     )
-    assert (
-        result.matches[0].operation_id
-        == "set_system.sunflower_triple_hypergraph.construct"
-    )
+    assert result.matches
+    assert result.matches[0].operation_id == "set_system.sunflower_family.construct"
 
 
 def test_declared_petal_query_finds_complete_sunflower_family() -> None:
@@ -103,6 +101,15 @@ def test_declared_petal_query_finds_complete_sunflower_family() -> None:
     )
     assert result.matches
     assert result.matches[0].operation_id == "set_system.sunflower_family.construct"
+
+
+def test_r3_sunflower_is_not_a_second_catalog_operation() -> None:
+    ids = {
+        descriptor.operation_id
+        for descriptor in Catalog.open().snapshot().operations
+    }
+    assert "set_system.sunflower_triple_hypergraph.construct" not in ids
+    assert "set_system.sunflower_family.construct" in ids
 
 
 def test_discovery_cursor_is_bound_to_search_mode() -> None:

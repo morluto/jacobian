@@ -29,10 +29,8 @@ def test_triple_projection_uses_the_family_ordinal_edge_ids() -> None:
     )
     triples = construct_sunflower_hypergraph(source)
     family = construct_sunflower_family(source, 3)
-    assert triples.hypergraph == family.hypergraph
-    assert [row.edge_id for row in triples.sunflowers] == [
-        row.edge_id for row in family.sunflowers
-    ]
+    assert triples == family
+    assert triples.petal_count == 3
     assert [row.edge_id for row in triples.sunflowers] == [
         "sunflower_1",
         "sunflower_2",

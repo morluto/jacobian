@@ -59,8 +59,5 @@ or `hypergraph.maximum_weight_packing.compute`; those operations analyze the
 returned relation, while this operation remains responsible only for complete
 sunflower construction.
 
-The older
-`set_system.sunflower_triple_hypergraph.construct` operation remains the
-specialized `r=3` contract and uses the same ordinal `sunflower_k` edge IDs
-as this family construction. New callers needing a declared petal count should
-use `set_system.sunflower_family.construct`.
+Native ``construct_sunflower_hypergraph`` is the same family construction at
+petal count 3 and is not a second catalog operation.

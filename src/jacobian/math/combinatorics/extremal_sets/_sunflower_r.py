@@ -1,10 +1,9 @@
 """Complete bounded sunflower construction for any admitted petal count.
 
 A sunflower of petal count ``r >= 2`` over the source family is an ``r``-member
-subfamily whose pairwise intersections are all equal to one common core.  The
-``r = 3`` slice already exists as ``set_system.sunflower_triple_hypergraph``;
-this module generalizes the same postcondition to a declared ``r`` while
-keeping the source, core, and hypergraph conventions identical.
+subfamily whose pairwise intersections are all equal to one common core.
+This module owns that complete relation for every admitted ``r``, including
+the former specialized ``r = 3`` slice.
 """
 
 from __future__ import annotations

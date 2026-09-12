@@ -9,11 +9,10 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.combinatorics.extremal_sets._models import (
     BinaryUnionRelationResult,
-    SunflowerHypergraphResult,
-    SunflowerTriple,
     UnionRelationRow,
 )
 from jacobian.math.combinatorics.extremal_sets._sunflower_r import (
+    SunflowerFamilyResult,
     construct_sunflower_family,
 )
 from jacobian.math.combinatorics.extremal_sets.values import (
@@ -68,31 +67,14 @@ def construct_binary_union_relation(
 
 def construct_sunflower_hypergraph(
     source: IndexedFiniteSetFamily,
-) -> SunflowerHypergraphResult:
-    """Return every three-member sunflower with its exact common core.
+) -> SunflowerFamilyResult:
+    """Return the r=3 sunflower family without a second catalog operation.
 
-    Edge identities are the same ordinal ``sunflower_k`` labels produced by
-    ``construct_sunflower_family`` for ``petal_count=3``.
+    This native compatibility wrapper is the same mathematical postcondition as
+    ``construct_sunflower_family(source, 3)`` and does not rebuild rows.
     """
 
-    family = construct_sunflower_family(source, 3)
-    rows = tuple(
-        SunflowerTriple(
-            edge_id=row.edge_id,
-            source_indices=(
-                row.source_indices[0],
-                row.source_indices[1],
-                row.source_indices[2],
-            ),
-            core=row.core,
-        )
-        for row in family.sunflowers
-    )
-    return SunflowerHypergraphResult(
-        source=family.source,
-        sunflowers=rows,
-        hypergraph=family.hypergraph,
-    )
+    return construct_sunflower_family(source, 3)
 
 
 def _admit_union_relation(source: IndexedFiniteSetFamily) -> _UnionRelationPlan:

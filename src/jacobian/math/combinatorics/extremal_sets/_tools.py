@@ -4,8 +4,6 @@ from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.combinatorics.extremal_sets._models import (
     BinaryUnionRelationRequest,
     BinaryUnionRelationResult,
-    SunflowerHypergraphRequest,
-    SunflowerHypergraphResult,
 )
 from jacobian.math.combinatorics.extremal_sets._sunflower_r import (
     SunflowerFamilyRequest,
@@ -14,7 +12,6 @@ from jacobian.math.combinatorics.extremal_sets._sunflower_r import (
 )
 from jacobian.math.combinatorics.extremal_sets.operations import (
     construct_binary_union_relation,
-    construct_sunflower_hypergraph,
 )
 
 
@@ -61,34 +58,6 @@ TOOLS: MathTools = (
                         "members": [[0, 1], [0, 2], [0, 3], [0, 4]],
                     },
                     "petal_count": 4,
-                },
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="set_system.sunflower_triple_hypergraph.construct",
-        title="Construct the complete sunflower-triple hypergraph",
-        description=(
-            "Return every three-member subfamily whose three pairwise intersections "
-            "are equal. Each hyperedge retains its exact common core and source indices."
-        ),
-        request_type=SunflowerHypergraphRequest,
-        result_type=SunflowerHypergraphResult,
-        run=lambda request: construct_sunflower_hypergraph(request.source),
-        tags=("combinatorics", "set-system", "sunflower", "hypergraph", "complete"),
-        examples=(
-            OperationExample(
-                name="three_petals",
-                description=(
-                    "Construct the exact three-petal sunflower through core {0}; "
-                    "the source members must be canonical distinct subsets of "
-                    "the declared four-element ground set."
-                ),
-                input={
-                    "source": {
-                        "ground_set_size": 4,
-                        "members": [[0, 1], [0, 2], [0, 3]],
-                    }
                 },
             ),
         ),

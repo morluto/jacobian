@@ -172,9 +172,7 @@ def _tight_complex_frame(
     operator_value = tuple(tuple(to_value(entry) for entry in row) for row in operator)
     residual_value = tuple(tuple(to_value(entry) for entry in row) for row in residual)
     return (
-        all(
-            entry == (Fraction(0), Fraction(0)) for row in residual for entry in row
-        )
+        all(entry == (Fraction(0), Fraction(0)) for row in residual for entry in row)
         and scalar[1] == 0,
         operator_value,
         residual_value,

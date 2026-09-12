@@ -76,7 +76,7 @@ def test_exponent_growth_is_rejected_before_convolution() -> None:
     )
     right = RationalLaurentPolynomial(
         variables=("x",),
-        terms=tuple(term(1, index) for index in range(right_count)),
+        terms=tuple(term(1, index) for index in range(right_count - 1, -1, -1)),
     )
     with pytest.raises(OperationResourceAdmissionError) as error:
         rational_laurent_multiply(left, right)
@@ -97,7 +97,7 @@ def test_catalog_admits_exponent_growth_before_convolution_bound() -> None:
     )
     right = RationalLaurentPolynomial(
         variables=("x",),
-        terms=tuple(term(1, index) for index in range(right_count)),
+        terms=tuple(term(1, index) for index in range(right_count - 1, -1, -1)),
     )
     request = operation.request_type(left=left, right=right)
 

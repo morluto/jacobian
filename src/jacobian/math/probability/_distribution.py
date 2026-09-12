@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from fractions import Fraction
 from itertools import pairwise
-from math import gcd
 from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
@@ -31,26 +30,19 @@ def _bounded_fraction_sum(
     *,
     label: str,
 ) -> Fraction:
-    """Sum nonnegative rationals without materializing an over-height fraction."""
+    """Sum nonnegative rationals; bound only the reduced total, not partial LCDs."""
 
     total = Fraction()
     for value in values:
-        common = gcd(total.denominator, value.denominator)
-        left_denominator = total.denominator // common
-        right_denominator = value.denominator // common
-        left_numerator = abs(total.numerator) * right_denominator
-        right_numerator = abs(value.numerator) * left_denominator
-        common_denominator = left_denominator * value.denominator
-        if (
-            common_denominator >= 10**MAX_FINITE_DISTRIBUTION_SUM_DIGITS
-            or left_numerator + right_numerator
-            >= 10**MAX_FINITE_DISTRIBUTION_SUM_DIGITS
-        ):
-            raise _validation_error(
-                f"{label} normalization exceeds the "
-                f"{MAX_FINITE_DISTRIBUTION_SUM_DIGITS}-digit intermediate bound"
-            )
         total += value
+    if total == 1:
+        return total
+    limit = 10**MAX_FINITE_DISTRIBUTION_SUM_DIGITS
+    if abs(total.numerator) >= limit or total.denominator >= limit:
+        raise _validation_error(
+            f"{label} normalization exceeds the "
+            f"{MAX_FINITE_DISTRIBUTION_SUM_DIGITS}-digit intermediate bound"
+        )
     return total
 
 

@@ -1,6 +1,7 @@
 """Exact compound-Poisson cumulant tests."""
 
 from fractions import Fraction
+from math import gcd
 
 import pytest
 
@@ -394,3 +395,28 @@ def test_prefix_round_trips_with_its_source_parent() -> None:
     result = compound_poisson_cumulant_prefix(_q(Fraction(5, 7)), jumps, 3)
     assert result.model_validate_json(result.model_dump_json()) == result
     assert result.source.jump_distribution == jumps
+
+
+def test_normalized_masses_with_large_partial_denominators_are_admitted() -> None:
+    primes: list[int] = []
+    candidate = 10**99
+    while len(primes) < 6:
+        candidate += 1
+        if all(gcd(candidate, prime) == 1 for prime in primes):
+            primes.append(candidate)
+    atoms = tuple(
+        FiniteDistributionAtom(
+            value=_q(Fraction(index)),
+            probability=_q(Fraction(1, 6 * prime)),
+        )
+        for index, prime in enumerate(primes)
+    ) + tuple(
+        FiniteDistributionAtom(
+            value=_q(Fraction(index + 6)),
+            probability=_q(Fraction(prime - 1, 6 * prime)),
+        )
+        for index, prime in enumerate(primes)
+    )
+    jumps = FiniteRationalDistribution(atoms=atoms)
+    result = compound_poisson_cumulant_prefix(_q(Fraction(1)), jumps, 0)
+    assert result.cumulants == ()

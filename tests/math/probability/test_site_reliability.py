@@ -16,6 +16,7 @@ from jacobian.catalog.models import (
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.probability import _site_reliability as site_module
 from jacobian.math.probability._site_reliability import (
+    SITE_CONNECTION_PROBABILITY_OPERATION,
     GraphSiteReliabilityResult,
     GraphSiteReliabilitySource,
     SiteReliabilityVertexProbability,
@@ -368,3 +369,10 @@ def test_result_round_trips_through_strict_json() -> None:
         encode_strict_json(result.model_dump(mode="json")), strict=True
     )
     assert restored == result
+
+
+def test_published_site_example_states_axis_and_terminal_preconditions() -> None:
+    description = SITE_CONNECTION_PROBABILITY_OPERATION.examples[0].description
+    assert "p^2 = 1/4" in description
+    assert "vertex axis" in description
+    assert "distinct declared vertices" in description

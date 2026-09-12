@@ -20,6 +20,7 @@ from jacobian.math.probability import (
     _hypergraph_bond_reliability as hypergraph_reliability_module,
 )
 from jacobian.math.probability._hypergraph_bond_reliability import (
+    HYPERGRAPH_BOND_CONNECTION_PROBABILITY_OPERATION,
     HyperedgeOpenProbability,
     HypergraphBondConnectionProbabilityResult,
     HypergraphBondReliabilitySource,
@@ -333,3 +334,11 @@ def test_duplicate_hyperedge_vertex_sets_are_rejected_by_the_reliability_contrac
             {"first": Fraction(1, 2), "second": Fraction(1, 2)},
             ("a", "b"),
         )
+
+
+def test_published_hypergraph_example_states_axis_and_terminal_preconditions() -> None:
+    example = HYPERGRAPH_BOND_CONNECTION_PROBABILITY_OPERATION.examples[0]
+    description = example.description
+    assert "ab and bd" in description
+    assert "hyperedge axis" in description
+    assert "distinct declared vertices" in description

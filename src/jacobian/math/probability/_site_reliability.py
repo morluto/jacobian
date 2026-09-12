@@ -417,7 +417,9 @@ SITE_CONNECTION_PROBABILITY_OPERATION = MathTool(
             name="path_of_two",
             description=(
                 "Two vertices joined by an edge connect exactly when both are "
-                "open, so the probability is p^2 = 1/4."
+                "open, so the probability is p^2 = 1/4. Vertex probabilities "
+                "must follow the graph's declared vertex axis, and the two "
+                "terminals must be distinct declared vertices."
             ),
             input={
                 "graph": {"vertices": ["a", "b"], "edges": [["a", "b"]]},

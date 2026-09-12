@@ -423,7 +423,10 @@ HYPERGRAPH_BOND_CONNECTION_PROBABILITY_OPERATION = MathTool(
             name="two_hyperedges_through_a_bridge",
             description=(
                 "Terminals a and d connect when both hyperedges ab and bd are "
-                "open and share vertex b, so the probability is 1/4."
+                "open and share vertex b, so the probability is 1/4. "
+                "Hyperedge probabilities must cover the declared hyperedge "
+                "axis in order, and the two terminals must be distinct "
+                "declared vertices."
             ),
             input={
                 "hypergraph": {

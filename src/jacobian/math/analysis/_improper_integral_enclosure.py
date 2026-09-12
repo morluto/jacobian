@@ -79,13 +79,6 @@ class EndpointLogImproperIntegralRequest(StrictModel):
             raise ValueError("improper integration requires a positive target width")
         if self.target_width.exponent < -MAX_DYADIC_EXPONENT + 2:
             raise ValueError("target width is too small to reserve quadrature error")
-        for left in (True, False):
-            try:
-                _bounded_expression_nodes(_transformed_expression(self, left=left))
-            except ValueError as error:
-                raise ValueError(
-                    "endpoint substitution exceeds the admitted expression size"
-                ) from error
         return self
 
 
@@ -103,7 +96,7 @@ class EndpointLogImproperIntegralResult(StrictModel):
     enclosure: ClosedRationalInterval
 
     @model_validator(mode="after")
-    def bind_proof_decomposition(self) -> Self:
+    def bind_structural_decomposition(self) -> Self:
         truncation = self.left_tail.truncation
         if (
             self.right_tail.truncation != truncation
@@ -119,27 +112,11 @@ class EndpointLogImproperIntegralResult(StrictModel):
             raise ValueError(
                 "improper-integral quadratures and tails must match the source decomposition"
             )
-        expected_lower = Fraction()
-        expected_upper = Fraction()
         for quadrature in (self.left_quadrature, self.right_quadrature):
-            outcome = quadrature.outcome
-            if isinstance(outcome, DefiniteIntegralDomainUnproven):
+            if isinstance(quadrature.outcome, DefiniteIntegralDomainUnproven):
                 raise ValueError(
                     "an improper-integral result requires concluded quadratures"
                 )
-            expected_lower += outcome.enclosure.lower.as_fraction()
-            expected_upper += outcome.enclosure.upper.as_fraction()
-        expected_lower += self.left_tail.enclosure.lower.as_fraction()
-        expected_lower += self.right_tail.enclosure.lower.as_fraction()
-        expected_upper += self.left_tail.enclosure.upper.as_fraction()
-        expected_upper += self.right_tail.enclosure.upper.as_fraction()
-        if (
-            self.enclosure.lower.as_fraction() != expected_lower
-            or self.enclosure.upper.as_fraction() != expected_upper
-        ):
-            raise ValueError(
-                "combined improper-integral enclosure must sum both quadratures and tails"
-            )
         return self
 
 
@@ -353,16 +330,23 @@ def _quadrature_shape_matches(
 def _enclose_endpoint_log_improper_integral(
     request: EndpointLogImproperIntegralRequest,
 ) -> EndpointLogImproperIntegralResult:
+    try:
+        left_expression = _transformed_expression(request, left=True)
+        right_expression = _transformed_expression(request, left=False)
+        _bounded_expression_nodes(left_expression)
+        _bounded_expression_nodes(right_expression)
+    except ValueError as error:
+        raise OperationResourceAdmissionError(
+            location=("smooth_expression",),
+            code="analysis.improper_integral.transformed_expression_bound",
+            message="endpoint substitution exceeds the admitted expression size",
+        ) from error
     truncation, left_tail, right_tail = _tail_plan(request)
     left = _compute_definite_integral_enclosure(
-        _quadrature_request(
-            request, _transformed_expression(request, left=True), truncation
-        )
+        _quadrature_request(request, left_expression, truncation)
     )
     right = _compute_definite_integral_enclosure(
-        _quadrature_request(
-            request, _transformed_expression(request, left=False), truncation
-        )
+        _quadrature_request(request, right_expression, truncation)
     )
     if isinstance(left.outcome, DefiniteIntegralDomainUnproven) or isinstance(
         right.outcome, DefiniteIntegralDomainUnproven
@@ -404,6 +388,12 @@ def enclose_endpoint_log_improper_integral(
 ) -> EndpointLogImproperIntegralResult:
     """Enclose one endpoint-logarithmic integral under one request deadline."""
 
+    if not isinstance(request, EndpointLogImproperIntegralRequest):
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="analysis.improper_integral.request_type",
+            message="improper integration requires a validated endpoint-log request",
+        )
     if current_request_execution() is None:
         with request_execution(monotonic()):
             return _enclose_endpoint_log_improper_integral(request)

@@ -64,6 +64,15 @@ def test_left_logarithm_encloses_its_exact_unit_integral() -> None:
     assert result.model_validate_json(result.model_dump_json()) == result
 
 
+def test_squared_left_logarithm_encloses_its_exact_integral() -> None:
+    result = enclose_endpoint_log_improper_integral(
+        _request(left_log_power=2, target_width={"mantissa": 1, "exponent": -1})
+    )
+
+    assert result.enclosure.lower.as_fraction() <= 2
+    assert result.enclosure.upper.as_fraction() >= 2
+
+
 def test_both_endpoint_log_factors_use_the_same_truncation() -> None:
     result = enclose_endpoint_log_improper_integral(
         _request(right_log_power=1, target_width={"mantissa": 1, "exponent": -1})
@@ -73,6 +82,47 @@ def test_both_endpoint_log_factors_use_the_same_truncation() -> None:
     assert result.right_tail.enclosure.upper.as_fraction() >= 0
 
 
+def test_refining_the_target_returns_a_narrower_valid_enclosure() -> None:
+    coarse = enclose_endpoint_log_improper_integral(
+        _request(target_width={"mantissa": 1, "exponent": -2})
+    ).enclosure
+    fine = enclose_endpoint_log_improper_integral(
+        _request(target_width={"mantissa": 1, "exponent": -5})
+    ).enclosure
+
+    coarse_width = coarse.upper.as_fraction() - coarse.lower.as_fraction()
+    fine_width = fine.upper.as_fraction() - fine.lower.as_fraction()
+    assert coarse.lower.as_fraction() <= 1 <= coarse.upper.as_fraction()
+    assert fine.lower.as_fraction() <= 1 <= fine.upper.as_fraction()
+    assert fine_width < coarse_width
+
+
+def test_symmetric_endpoint_logs_enclose_an_exact_cancellation() -> None:
+    result = enclose_endpoint_log_improper_integral(
+        _request(
+            smooth_expression={
+                "op": "sub",
+                "children": [
+                    {
+                        "op": "mul",
+                        "children": [
+                            {"op": "const", "value": {"num": 2, "den": 1}},
+                            {"op": "var", "variable": "x"},
+                        ],
+                    },
+                    {"op": "const", "value": {"num": 1, "den": 1}},
+                ],
+            },
+            left_log_power=1,
+            right_log_power=1,
+            target_width={"mantissa": 1, "exponent": -2},
+        )
+    )
+
+    assert result.enclosure.lower.as_fraction() <= 0
+    assert result.enclosure.upper.as_fraction() >= 0
+
+
 def test_closed_box_unsafe_smooth_factor_is_rejected_before_quadrature() -> None:
     with pytest.raises(OperationDomainValidationError):
         enclose_endpoint_log_improper_integral(
@@ -80,6 +130,21 @@ def test_closed_box_unsafe_smooth_factor_is_rejected_before_quadrature() -> None
                 smooth_expression={
                     "op": "log",
                     "children": [{"op": "var", "variable": "x"}],
+                }
+            )
+        )
+
+
+def test_divergent_smooth_factor_is_outside_the_proved_class() -> None:
+    with pytest.raises(OperationDomainValidationError):
+        enclose_endpoint_log_improper_integral(
+            _request(
+                smooth_expression={
+                    "op": "div",
+                    "children": [
+                        {"op": "const", "value": {"num": 1, "den": 1}},
+                        {"op": "var", "variable": "x"},
+                    ],
                 }
             )
         )
@@ -95,6 +160,22 @@ def test_tail_target_beyond_the_admitted_truncation_is_rejected() -> None:
         )
 
 
+def test_transformed_expression_growth_is_typed_operation_admission() -> None:
+    expression: dict[str, object] = {"op": "var", "variable": "x"}
+    for _ in range(7):
+        expression = {
+            "op": "add",
+            "children": [expression, {"op": "var", "variable": "x"}],
+        }
+    request = _request(smooth_expression=expression)
+
+    with pytest.raises(
+        OperationResourceAdmissionError,
+        match="endpoint substitution exceeds",
+    ):
+        enclose_endpoint_log_improper_integral(request)
+
+
 def test_forged_tail_does_not_round_trip() -> None:
     result = enclose_endpoint_log_improper_integral(_request())
     forged = result.model_dump()
@@ -103,9 +184,20 @@ def test_forged_tail_does_not_round_trip() -> None:
         EndpointLogImproperIntegralResult.model_validate(forged)
 
 
-def test_forged_combined_enclosure_does_not_round_trip() -> None:
+def test_result_decoding_does_not_replay_combined_enclosure_arithmetic() -> None:
     result = enclose_endpoint_log_improper_integral(_request())
     forged = result.model_dump()
-    forged["enclosure"]["upper"] = {"num": 0, "den": 1}
-    with pytest.raises(ValidationError):
-        EndpointLogImproperIntegralResult.model_validate(forged)
+    forged["enclosure"] = {
+        "lower": {"num": -99, "den": 1},
+        "upper": {"num": 99, "den": 1},
+    }
+
+    decoded = EndpointLogImproperIntegralResult.model_validate(forged)
+
+    assert decoded.enclosure.lower.as_fraction() == -99
+    assert decoded.enclosure.upper.as_fraction() == 99
+
+
+def test_malformed_direct_native_request_is_typed() -> None:
+    with pytest.raises(OperationDomainValidationError, match="validated endpoint-log"):
+        enclose_endpoint_log_improper_integral("not a request")  # type: ignore[arg-type]

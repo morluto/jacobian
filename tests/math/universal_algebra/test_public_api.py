@@ -20,6 +20,7 @@ def test_exact_public_api_symbols() -> None:
         "evaluate_term",
         "generated_subalgebra",
         "homomorphism_profile",
+        "implication_countermodel_check",
         "quotient",
         "verify_congruence",
         "verify_equation_profile",

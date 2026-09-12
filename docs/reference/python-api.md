@@ -18,8 +18,10 @@ determinant = matrices.determinant(matrix)
 
 The polynomial expression normalizer is available natively as
 `polynomials.normalize_polynomial_expression`. It accepts the same typed
-`PolynomialExpressionNormalizeRequest` used by the catalog and never parses or
-evaluates caller-authored source strings.
+`PolynomialExpressionSource` value used by the native API; the catalog's wire
+`PolynomialExpressionNormalizeRequest` is unwrapped in `_tools.py` before the
+same function runs. It never parses or evaluates caller-authored source
+strings.
 
 Each public `jacobian.math.<domain>` module declares its supported names in
 `__all__`; that is the authoritative native API. Functions accept domain values

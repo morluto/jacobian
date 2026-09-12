@@ -4,6 +4,7 @@ import json
 from threading import Event
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian._execution import (
     OperationExecutionCancelledError,
@@ -211,6 +212,11 @@ def test_serialized_family_checks_axes_and_incidence_without_replaying_edges() -
         FixedLengthCycleEnumerationResult.model_validate(
             json.loads(json.dumps(payload))
         )
+
+    oversized = result.model_dump(mode="json")
+    oversized["vertex_incidence"][0]["cycle_indices"] = list(range(20_001))
+    with pytest.raises(ValidationError):
+        FixedLengthCycleEnumerationResult.model_validate(oversized)
 
     square = SimpleUndirectedGraph(
         vertices=("a", "b", "c", "d"),

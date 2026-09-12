@@ -136,7 +136,8 @@ class CycleIncidenceRow(StrictModel):
 
     source: tuple[str, ...] = Field(min_length=1, max_length=2)
     cycle_indices: tuple[StrictInt, ...] = Field(
-        description="Zero-based indices into the complete, lexicographically sorted cycle family."
+        max_length=20_000,
+        description="Zero-based indices into the complete, lexicographically sorted cycle family.",
     )
 
 

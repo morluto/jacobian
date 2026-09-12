@@ -89,7 +89,7 @@ def _factorial_digits_upper(degree: int) -> int:
 
 def _exceeds_canonical_digits(value: Fraction) -> bool:
     limit = 10**MAX_CANONICAL_RATIONAL_DIGITS
-    return abs(value.numerator) >= limit or value.denominator >= limit
+    return bool(abs(value.numerator) >= limit or value.denominator >= limit)
 
 
 def _admit_closed_form_coefficients(values: tuple[Fraction, ...]) -> None:

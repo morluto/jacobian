@@ -155,6 +155,19 @@ def _upper_decimal_digits(value: int) -> int:
     return estimate
 
 
+def _log10_upper_units(value: int) -> int:
+    """Return U such that log10(value) < U / 100000 for value >= 1."""
+
+    return value.bit_length() * 30103
+
+
+def _log10_lower_units(value: int) -> int:
+    """Return L such that log10(value) >= L / 100000 for value >= 1."""
+
+    # 0.30102 < log10(2), so (bit_length-1) * 0.30102 underestimates log10(2^{b-1}).
+    return max(value.bit_length() - 1, 0) * 30102
+
+
 def _cancelled_hook_content_digit_bound(
     partition: IntegerPartition, alphabet_size: int, alphabet_digits: int
 ) -> int:
@@ -164,18 +177,21 @@ def _cancelled_hook_content_digit_bound(
     if cell_count == 0:
         return max(1, alphabet_digits)
     conjugate = conjugate_partition(partition).parts
-    numerator_digit_excess = 0
+    numerator_log_units = 0
     hook_product = 1
     for row, length in enumerate(partition.parts):
         for column in range(length):
             content = alphabet_size + column - row
             if content <= 0:
                 return max(1, alphabet_digits)
-            numerator_digit_excess += _upper_decimal_digits(content) - 1
+            numerator_log_units += _log10_upper_units(content)
             hook_product *= length - column + conjugate[column] - row - 1
-    numerator_digit_bound = numerator_digit_excess + 1
-    hook_digits = _upper_decimal_digits(hook_product)
-    return max(1, alphabet_digits, numerator_digit_bound - hook_digits + 1)
+    if cell_count == 1:
+        return max(1, alphabet_digits, _upper_decimal_digits(alphabet_size))
+    cancelled_units = numerator_log_units - _log10_lower_units(hook_product)
+    if cancelled_units < 0:
+        return max(1, alphabet_digits)
+    return max(1, alphabet_digits, cancelled_units // 100000 + 1)
 
 
 def _admit_hook_content(partition: IntegerPartition, alphabet_size: int) -> None:

@@ -215,6 +215,16 @@ def test_hook_content_admits_column_count_after_hook_cancellation() -> None:
     assert result.alphabet_size == alphabet_size
 
 
+def test_hook_content_rejects_column_count_beyond_digit_limit() -> None:
+    # C(10**68, 500) has 32,866 digits. A true log upper bound must refuse
+    # before constructing HookContentCountResult.
+    request = HookContentCountRequest.model_validate(
+        {"partition": {"parts": [1] * 500}, "alphabet_size": 10**68}
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="digit bound"):
+        hook_content_count(request)
+
+
 @pytest.mark.parametrize(
     ("left", "right", "relation"),
     [

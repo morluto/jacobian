@@ -332,9 +332,18 @@ def test_dense_twist_composes_with_width_and_inverse_twist() -> None:
     )
 
 
-def test_twist_output_limit_remains_a_resource_refusal() -> None:
+def test_twist_output_limit_remains_a_resource_refusal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from jacobian.catalog.models import OperationResourceAdmissionError
+    from jacobian.math.combinatorics.matroids.delta import operations
 
+    def fail_if_replayed(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("exchange replayed before output preflight")
+
+    monkeypatch.setattr(
+        operations, "first_symmetric_exchange_obstruction", fail_if_replayed
+    )
     source = FiniteDeltaMatroid(
         ground=tuple(f"e{i}" for i in range(129)),
         feasible=((), *tuple((i,) for i in range(129))),

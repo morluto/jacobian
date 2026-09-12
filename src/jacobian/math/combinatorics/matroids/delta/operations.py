@@ -14,6 +14,7 @@ from jacobian.math.combinatorics.matroids.delta.values import (
     FiniteDeltaMatroid,
     first_symmetric_exchange_obstruction,
     require_delta_matroid_admission,
+    require_delta_matroid_envelope,
 )
 
 __all__ = [
@@ -83,7 +84,10 @@ def twist(
     """
 
     require_twist_subset(delta_matroid, subset)
-    _require_delta_matroid(delta_matroid)
+    system = FiniteFeasibleSetSystem(
+        ground=delta_matroid.ground, feasible=delta_matroid.feasible
+    )
+    require_delta_matroid_envelope(system)
     twist_subset = frozenset(subset)
     projected_memberships = sum(
         len(row) + len(twist_subset) - 2 * len(twist_subset.intersection(row))
@@ -94,6 +98,7 @@ def twist(
             "memberships_exceeded",
             "twisted feasible-family memberships exceed the output envelope",
         )
+    _require_delta_matroid(delta_matroid)
     rows = tuple(
         sorted(
             tuple(sorted(frozenset(row) ^ twist_subset))

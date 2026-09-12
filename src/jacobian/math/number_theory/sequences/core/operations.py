@@ -10,6 +10,7 @@ from itertools import pairwise
 from math import gcd
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
+from jacobian._execution import request_checkpoint
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -37,6 +38,8 @@ from jacobian.math.number_theory.sequences.core.values import (
 
 MAX_AUTOCORRELATION_MULTIPLICATIONS = 4_000_000
 MAX_AUTOCORRELATION_ADDITIONS = 4_000_000
+MAX_ORDER_SHAPE_WORK = 4_000_000
+MAX_ORDER_SHAPE_RESULT_ALLOCATIONS = 500_000
 
 
 def _admit(
@@ -202,21 +205,103 @@ def _admit_autocorrelation(
     return fractions, result_digits, operand_width
 
 
-def _admit_integer_sequence_for_shape(
-    request: FiniteIntegerSequence,
-) -> tuple[int, ...]:
-    values = tuple(request.values)
-    if not values:
-        return values
-    digits = max(len(format_canonical_integer(abs(value))) for value in values)
-    result_digits = 2 * digits + len(str(len(values)))
-    if result_digits > MAX_CANONICAL_RATIONAL_DIGITS:
+def _order_shape_rationals(
+    request: FiniteRationalSequence,
+) -> tuple[CanonicalRational, ...]:
+    if isinstance(request, FiniteRationalSequence):
+        return request.values
+    raise TypeError("sequence_order_shape requires FiniteRationalSequence")
+
+
+def _product_component_digits(left: CanonicalRational, right: CanonicalRational) -> int:
+    """Bound retained numerator/denominator digits of one exact product."""
+
+    if left.num == 0 or right.num == 0:
+        return 1
+    left_num = abs(left.num)
+    right_num = abs(right.num)
+    cancel_left = gcd(left_num, right.den)
+    cancel_right = gcd(right_num, left.den)
+    numerator_digits = len(format_canonical_integer(left_num // cancel_left)) + len(
+        format_canonical_integer(right_num // cancel_right)
+    )
+    denominator_digits = len(format_canonical_integer(left.den // cancel_right)) + len(
+        format_canonical_integer(right.den // cancel_left)
+    )
+    return max(1, numerator_digits, denominator_digits)
+
+
+def _admit_order_shape(
+    request: FiniteRationalSequence,
+) -> tuple[CanonicalRational, ...]:
+    """Admit linear comparisons, exact products, and the complete profile."""
+
+    rational_values = _order_shape_rationals(request)
+    size = len(rational_values)
+    component_digits = max(
+        (
+            max(
+                len(format_canonical_integer(abs(value.num))),
+                len(format_canonical_integer(value.den)),
+            )
+            for value in rational_values
+        ),
+        default=1,
+    )
+    source_digits = sum(
+        len(format_canonical_integer(abs(value.num)))
+        + len(format_canonical_integer(value.den))
+        for value in rational_values
+    )
+    if size * component_digits > MAX_ORDER_SHAPE_WORK:
+        raise OperationResourceAdmissionError(
+            location=("values",),
+            code="sequences.order_shape.work_bound",
+            message="order-shape comparisons exceed the admitted exact-work bound",
+        )
+    row_count = max(0, size - 2)
+    product_digits = 1
+    result_digits = source_digits
+    for index in range(1, size - 1):
+        if index % 128 == 0:
+            request_checkpoint("during sequence order-shape product admission")
+        square_digits = _product_component_digits(
+            rational_values[index], rational_values[index]
+        )
+        neighbor_digits = _product_component_digits(
+            rational_values[index - 1], rational_values[index + 1]
+        )
+        product_digits = max(product_digits, square_digits, neighbor_digits)
+        result_digits += 2 * square_digits + 2 * neighbor_digits
+    if row_count and product_digits > MAX_CANONICAL_RATIONAL_DIGITS:
         raise OperationDomainValidationError(
             location=("values",),
-            code="sequences.autocorrelation_result_digits_exceeded",
-            message="autocorrelation values exceed the exact integer digit bound",
+            code="sequences.order_shape.result_digits_exceeded",
+            message="order-shape cross-products exceed the exact rational digit bound",
         )
-    return values
+    # The result retains the source, one peak-position slot per source entry,
+    # and four slots (index, two exact products, decision) per interior row.
+    result_allocations = size + size + 4 * row_count + 8
+    if result_allocations > MAX_ORDER_SHAPE_RESULT_ALLOCATIONS:
+        raise OperationResourceAdmissionError(
+            location=("values",),
+            code="sequences.order_shape.result_allocation_bound",
+            message=(
+                "the complete order-shape profile requires "
+                f"{result_allocations} result allocations; maximum is "
+                f"{MAX_ORDER_SHAPE_RESULT_ALLOCATIONS}"
+            ),
+        )
+    if result_digits > MAX_SEQUENCE_TOTAL_DIGITS:
+        raise OperationDomainValidationError(
+            location=("values",),
+            code="sequences.order_shape.result_representation_too_large",
+            message=(
+                "order-shape cross-products exceed the exact result representation "
+                f"bound of {MAX_SEQUENCE_TOTAL_DIGITS} digits"
+            ),
+        )
+    return rational_values
 
 
 def _autocorrelation_scalar(
@@ -316,60 +401,86 @@ def cyclic_autocorrelation(
     )
 
 
-def sequence_order_shape(request: FiniteIntegerSequence) -> SequenceOrderShapeResult:
-    values = _admit_integer_sequence_for_shape(request)
+def _order_shape_scalar(
+    value: Fraction,
+) -> CanonicalRational:
+    """Encode a product in the canonical rational result domain."""
+
+    return CanonicalRational.from_fraction(value)
+
+
+def sequence_order_shape(
+    request: FiniteRationalSequence,
+) -> SequenceOrderShapeResult:
+    fractions = tuple(value.as_fraction() for value in _admit_order_shape(request))
     nondecreasing_violation = next(
         (
             index
-            for index in range(len(values) - 1)
-            if values[index] > values[index + 1]
+            for index in range(len(fractions) - 1)
+            if fractions[index] > fractions[index + 1]
         ),
         None,
     )
     nonincreasing_violation = next(
         (
             index
-            for index in range(len(values) - 1)
-            if values[index] < values[index + 1]
+            for index in range(len(fractions) - 1)
+            if fractions[index] < fractions[index + 1]
         ),
         None,
     )
-    nondecreasing_prefix = [True] * len(values)
-    for index in range(1, len(values)):
+    nondecreasing_prefix = [True] * len(fractions)
+    for index in range(1, len(fractions)):
         nondecreasing_prefix[index] = (
-            nondecreasing_prefix[index - 1] and values[index - 1] <= values[index]
+            nondecreasing_prefix[index - 1] and fractions[index - 1] <= fractions[index]
         )
-    nonincreasing_suffix = [True] * len(values)
-    for index in range(len(values) - 2, -1, -1):
+    nonincreasing_suffix = [True] * len(fractions)
+    for index in range(len(fractions) - 2, -1, -1):
         nonincreasing_suffix[index] = (
-            nonincreasing_suffix[index + 1] and values[index] >= values[index + 1]
+            nonincreasing_suffix[index + 1] and fractions[index] >= fractions[index + 1]
         )
     peaks = tuple(
         index
-        for index in range(len(values))
+        for index in range(len(fractions))
         if nondecreasing_prefix[index] and nonincreasing_suffix[index]
     )
     log_rows = tuple(
         SequenceLogConcavityRow(
             index=index,
-            square=values[index] ** 2,
-            neighbor_product=values[index - 1] * values[index + 1],
-            holds=values[index] ** 2 >= values[index - 1] * values[index + 1],
+            square=_order_shape_scalar(fractions[index] ** 2),
+            neighbor_product=_order_shape_scalar(
+                fractions[index - 1] * fractions[index + 1]
+            ),
+            holds=fractions[index] ** 2 >= fractions[index - 1] * fractions[index + 1],
         )
-        for index in range(1, len(values) - 1)
+        for index in range(1, len(fractions) - 1)
     )
-    nonzero = [index for index, value in enumerate(values) if value != 0]
-    has_internal_zero = bool(nonzero) and any(
-        values[index] == 0 for index in range(nonzero[0] + 1, nonzero[-1])
+    first_log_violation = next((row.index for row in log_rows if not row.holds), None)
+    first_negative = next(
+        (index for index, value in enumerate(fractions) if value < 0), None
     )
+    nonzero = [index for index, value in enumerate(fractions) if value != 0]
+    internal_zero_indices = (
+        tuple(
+            index
+            for index in range(nonzero[0] + 1, nonzero[-1])
+            if fractions[index] == 0
+        )
+        if nonzero
+        else ()
+    )
+    first_internal_zero = internal_zero_indices[0] if internal_zero_indices else None
     return SequenceOrderShapeResult(
         source=request,
         first_nondecreasing_violation=nondecreasing_violation,
         first_nonincreasing_violation=nonincreasing_violation,
         weak_unimodal_peak_positions=peaks,
         log_concavity_rows=log_rows,
-        is_nonnegative=all(value >= 0 for value in values),
-        has_internal_zero=has_internal_zero,
+        first_log_concavity_violation=first_log_violation,
+        is_nonnegative=first_negative is None,
+        first_negative_index=first_negative,
+        has_internal_zero=bool(internal_zero_indices),
+        first_internal_zero_index=first_internal_zero,
     )
 
 

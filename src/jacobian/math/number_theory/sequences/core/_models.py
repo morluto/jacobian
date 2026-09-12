@@ -157,6 +157,12 @@ class FiniteRationalSequence(FiniteSequence):
             data.get("values"), (list, tuple)
         ):
             return data
+        if len(data["values"]) > MAX_SEQUENCE_LENGTH:
+            raise _validation_error(
+                "sequence_length_exceeded",
+                "rational sequence exceeds the "
+                f"{MAX_SEQUENCE_LENGTH}-entry length bound",
+            )
         converted: list[object] = []
         for value in data["values"]:
             if isinstance(value, int) and not isinstance(value, bool):
@@ -240,13 +246,13 @@ class AutocorrelationResult(StrictModel):
 
 class SequenceLogConcavityRow(StrictModel):
     index: int = Field(ge=1, le=MAX_SEQUENCE_LENGTH - 2)
-    square: ExactInteger
-    neighbor_product: ExactInteger
+    square: CanonicalRational
+    neighbor_product: CanonicalRational
     holds: bool
 
 
 class SequenceOrderShapeResult(StrictModel):
-    source: FiniteIntegerSequence
+    source: FiniteRationalSequence
     first_nondecreasing_violation: int | None = Field(
         default=None, ge=0, le=MAX_SEQUENCE_LENGTH - 2
     )
@@ -259,8 +265,67 @@ class SequenceOrderShapeResult(StrictModel):
     log_concavity_rows: tuple[SequenceLogConcavityRow, ...] = Field(
         min_length=0, max_length=MAX_SEQUENCE_LENGTH - 2
     )
+    first_log_concavity_violation: int | None = Field(
+        default=None, ge=1, le=MAX_SEQUENCE_LENGTH - 2
+    )
     is_nonnegative: bool
+    first_negative_index: int | None = Field(
+        default=None, ge=0, le=MAX_SEQUENCE_LENGTH - 1
+    )
     has_internal_zero: bool
+    first_internal_zero_index: int | None = Field(
+        default=None, ge=1, le=MAX_SEQUENCE_LENGTH - 2
+    )
+
+    @model_validator(mode="after")
+    def require_structural_profile(self) -> SequenceOrderShapeResult:
+        """Check profile shape without replaying any arithmetic invariant."""
+
+        size = len(self.source.values)
+        peaks = self.weak_unimodal_peak_positions
+        if peaks != tuple(sorted(set(peaks))) or any(
+            index < 0 or index >= size for index in peaks
+        ):
+            raise ValueError(
+                "unimodal peak positions must be sorted, unique, and in range"
+            )
+        expected_rows = tuple(range(1, max(size - 1, 1)))
+        row_indices = tuple(row.index for row in self.log_concavity_rows)
+        if row_indices != expected_rows:
+            raise ValueError(
+                "log-concavity rows must cover each interior index exactly once"
+            )
+        for field_name, index in (
+            ("first_nondecreasing_violation", self.first_nondecreasing_violation),
+            ("first_nonincreasing_violation", self.first_nonincreasing_violation),
+        ):
+            if index is not None and index >= max(size - 1, 0):
+                raise ValueError(f"{field_name} must identify an adjacent source pair")
+        if self.first_negative_index is not None and self.first_negative_index >= size:
+            raise ValueError("negative index must identify a source position")
+        if self.first_internal_zero_index is not None and (
+            self.first_internal_zero_index not in row_indices
+        ):
+            raise ValueError("internal-zero index must identify an interior position")
+        if self.is_nonnegative is (self.first_negative_index is not None):
+            raise ValueError(
+                "nonnegativity must agree with the presence of the first negative index"
+            )
+        if self.has_internal_zero is not (self.first_internal_zero_index is not None):
+            raise ValueError(
+                "internal-zero status must agree with the presence of the first "
+                "internal-zero index"
+            )
+        first_false = next(
+            (row.index for row in self.log_concavity_rows if not row.holds),
+            None,
+        )
+        if self.first_log_concavity_violation != first_false:
+            raise ValueError(
+                "first log-concavity violation must be the first interior row "
+                "whose comparison fails"
+            )
+        return self
 
 
 def _finite_sequence_core_schema(

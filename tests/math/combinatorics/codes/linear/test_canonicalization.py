@@ -4,6 +4,8 @@ from jacobian.math.combinatorics.codes.linear._canonicalization import (
     LinearCodeCanonicalizationRequest,
     canonicalize_linear_code,
 )
+from jacobian.math.combinatorics.codes.linear._models import GeneratorMatrixRequest
+from jacobian.math.combinatorics.codes.linear._tools import compute_from_generator
 from jacobian.math.combinatorics.codes.linear.values import PrimeFieldLinearEncoder
 from jacobian.math.groups._models import PermutationGroup
 
@@ -39,3 +41,48 @@ def test_supplied_cyclic_action_is_respected() -> None:
     )
     assert result.orbit_size == 3
     assert result.stabilizer_size == 1
+
+
+def test_transporter_replays_through_the_public_generator_operation() -> None:
+    source = _encoder()
+    result = canonicalize_linear_code(LinearCodeCanonicalizationRequest(encoder=source))
+    permuted = tuple(
+        tuple(row[index] for index in result.transporter)
+        for row in source.generator_matrix
+    )
+    replayed = compute_from_generator(
+        GeneratorMatrixRequest(
+            field_order=source.field_order,
+            generator_matrix=permuted,
+            coordinate_axis=result.transported_axis,
+        )
+    )
+    assert replayed.encoder == result.canonical_encoder
+
+
+def test_zero_code_and_full_space_keep_degenerate_rref_shapes() -> None:
+    zero = PrimeFieldLinearEncoder(
+        field_order=3,
+        message_axis=(),
+        coordinate_axis=("x0", "x1"),
+        generator_matrix=(),
+    )
+    zero_result = canonicalize_linear_code(
+        LinearCodeCanonicalizationRequest(encoder=zero)
+    )
+    assert zero_result.canonical_encoder.generator_matrix == ()
+    assert zero_result.orbit_size == 1
+    assert zero_result.stabilizer_size == 2
+
+    full = PrimeFieldLinearEncoder(
+        field_order=3,
+        message_axis=("m0", "m1"),
+        coordinate_axis=("x0", "x1"),
+        generator_matrix=((1, 0), (0, 1)),
+    )
+    full_result = canonicalize_linear_code(
+        LinearCodeCanonicalizationRequest(encoder=full)
+    )
+    assert full_result.canonical_encoder.generator_matrix == ((1, 0), (0, 1))
+    assert full_result.orbit_size == 1
+    assert full_result.stabilizer_size == 2

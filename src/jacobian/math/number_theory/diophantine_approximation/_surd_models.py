@@ -41,6 +41,10 @@ _SURD_AXIS_DESCRIPTION = (
 _SURD_SCALAR_RADICAND_DESCRIPTION = (
     f"Nonsquare integer radicand in the admitted range 2..{MAX_SURD_RADICAND}."
 )
+_POSITIVE_MULTIPLIER_PATTERN = r"^[1-9][0-9]*$"
+_POSITIVE_MULTIPLIER_DESCRIPTION = (
+    "Positive exact multiplier; computation admits at most 4096 bits."
+)
 
 
 def _validation_error(code: str, message: str) -> PydanticCustomError:
@@ -90,7 +94,8 @@ class ScaledFloorRequest(StrictModel):
 
     multiplier: ExactInteger = Field(
         ge=1,
-        description="Positive exact multiplier; computation admits at most 4096 bits.",
+        description=_POSITIVE_MULTIPLIER_DESCRIPTION,
+        json_schema_extra={"pattern": _POSITIVE_MULTIPLIER_PATTERN},
     )
     radicand: StrictInt = Field(
         ge=2,
@@ -154,7 +159,8 @@ class NearestIntegerDistanceRequest(StrictModel):
 
     multiplier: ExactInteger = Field(
         ge=1,
-        description="Positive exact multiplier; computation admits at most 4096 bits.",
+        description=_POSITIVE_MULTIPLIER_DESCRIPTION,
+        json_schema_extra={"pattern": _POSITIVE_MULTIPLIER_PATTERN},
     )
     radicand: StrictInt = Field(
         ge=2,
@@ -247,7 +253,8 @@ class SimultaneousProductRequest(StrictModel):
 
     multiplier: ExactInteger = Field(
         ge=1,
-        description="Positive exact multiplier; computation admits at most 4096 bits.",
+        description=_POSITIVE_MULTIPLIER_DESCRIPTION,
+        json_schema_extra={"pattern": _POSITIVE_MULTIPLIER_PATTERN},
     )
     radicands: tuple[StrictInt, ...] = Field(
         min_length=1,

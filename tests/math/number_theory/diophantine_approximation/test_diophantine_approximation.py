@@ -517,6 +517,37 @@ def test_scaled_floor_rejects_square_radicand() -> None:
         scaled_floor(2, 9)
 
 
+def test_surd_request_schemas_encode_positive_multipliers() -> None:
+    """Wire JSON for multipliers is a positive decimal string, not ExactInteger zero."""
+    payloads = (
+        (ScaledFloorRequest, '{"multiplier":"0","radicand":2}'),
+        (
+            NearestIntegerDistanceRequest,
+            '{"multiplier":"0","radicand":2,"scale_bits":1}',
+        ),
+        (
+            SimultaneousProductRequest,
+            '{"multiplier":"0","radicands":[2],"scale_bits":1}',
+        ),
+    )
+    negative = (
+        (ScaledFloorRequest, '{"multiplier":"-1","radicand":2}'),
+        (
+            NearestIntegerDistanceRequest,
+            '{"multiplier":"-1","radicand":2,"scale_bits":1}',
+        ),
+        (
+            SimultaneousProductRequest,
+            '{"multiplier":"-1","radicands":[2],"scale_bits":1}',
+        ),
+    )
+    for request_type, payload in (*payloads, *negative):
+        schema = request_type.model_json_schema()["properties"]["multiplier"]
+        assert schema["pattern"] == r"^[1-9][0-9]*$"
+        with pytest.raises(ValidationError):
+            request_type.model_validate_json(payload)
+
+
 def test_scaled_floor_deserialization_does_not_replay_endpoint_squares() -> None:
     """Endpoint squares are authored claims; decoding must not recompute them."""
     value = scaled_floor(3, 2)

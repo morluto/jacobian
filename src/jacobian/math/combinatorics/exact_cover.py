@@ -784,9 +784,8 @@ def minimum_generalized_exact_cover(  # noqa: C901
         raise _combinatorics_validation_error(
             "search_node_limit must be within the exact-cover node bound"
         )
-    items = (*instance.primary_items, *instance.secondary_items)
-    item_index = {item: index for index, item in enumerate(items)}
     primary_count = len(instance.primary_items)
+    item_count = primary_count + len(instance.secondary_items)
     primary_items = frozenset(instance.primary_items)
     source_rows = instance.rows
     source_incidence_count = sum(len(row.items) for row in source_rows)
@@ -803,12 +802,16 @@ def minimum_generalized_exact_cover(  # noqa: C901
             if row_item in primary_items:
                 primary_row_degrees[row_item] += 1
     normalization_work = len(source_rows) + 4 * source_incidence_count
-    if normalization_work > _MINIMUM_EXACT_COVER_WORK_LIMIT:
+    # The shortcut still constructs the complete retained coverage ledger, so
+    # charge both its item-axis scans and selected-row reconstruction before
+    # returning an exact result.
+    shortcut_work = normalization_work + 4 * item_count + 2 * source_incidence_count
+    if shortcut_work > _MINIMUM_EXACT_COVER_WORK_LIMIT:
         raise OperationResourceAdmissionError(
             location=("search_node_limit",),
             code="combinatorics.minimum_exact_cover_work",
             message=(
-                "minimum exact-cover row normalization exceeds the admitted "
+                "minimum exact-cover shortcut recognition exceeds the admitted "
                 "work envelope"
             ),
         )
@@ -837,6 +840,8 @@ def minimum_generalized_exact_cover(  # noqa: C901
         )
         request_checkpoint("after minimum exact-cover result construction")
         return result
+    items = (*instance.primary_items, *instance.secondary_items)
+    item_index = {item: index for index, item in enumerate(items)}
     row_count = len(active_rows)
     mask_words = max(1, (max(row_count, primary_count) + 63) // 64)
     incidence_count = sum(len(row.items) for row in active_rows)
@@ -853,7 +858,7 @@ def minimum_generalized_exact_cover(  # noqa: C901
         * mask_words
     )
     if (
-        normalization_work + index_work + scan_work + candidate_work
+        shortcut_work + index_work + scan_work + candidate_work
         > _MINIMUM_EXACT_COVER_WORK_LIMIT
     ):
         raise OperationResourceAdmissionError(

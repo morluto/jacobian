@@ -30,19 +30,31 @@ def _bounded_fraction_sum(
     *,
     label: str,
 ) -> Fraction:
-    """Sum nonnegative rationals; bound only the reduced total, not partial LCDs."""
+    """Sum nonnegative rationals without paying source-order LCD growth.
 
-    total = Fraction()
+    Equal-denominator numerators are collected first so complementary masses
+    on a shared denominator reduce before distinct primes are combined. The
+    512-digit intermediate bound then applies to the reduced running total,
+    except when that total is exactly one.
+    """
+
+    numerators_by_denominator: dict[int, int] = {}
     for value in values:
-        total += value
-    if total == 1:
-        return total
-    limit = 10**MAX_FINITE_DISTRIBUTION_SUM_DIGITS
-    if abs(total.numerator) >= limit or total.denominator >= limit:
-        raise _validation_error(
-            f"{label} normalization exceeds the "
-            f"{MAX_FINITE_DISTRIBUTION_SUM_DIGITS}-digit intermediate bound"
+        denominator = value.denominator
+        numerators_by_denominator[denominator] = (
+            numerators_by_denominator.get(denominator, 0) + value.numerator
         )
+    total = Fraction()
+    limit = 10**MAX_FINITE_DISTRIBUTION_SUM_DIGITS
+    for denominator, numerator in numerators_by_denominator.items():
+        total += Fraction(numerator, denominator)
+        if total == 1:
+            continue
+        if abs(total.numerator) >= limit or total.denominator >= limit:
+            raise _validation_error(
+                f"{label} normalization exceeds the "
+                f"{MAX_FINITE_DISTRIBUTION_SUM_DIGITS}-digit intermediate bound"
+            )
     return total
 
 

@@ -128,6 +128,23 @@ def test_backend_nonintegral_coefficients_are_not_truncated(
     assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT
 
 
+def test_backend_wrong_constant_is_rejected_on_the_native_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import sympy
+
+    class FakePolynomial:
+        def all_coeffs(self) -> tuple[int, ...]:
+            return (1, 0)
+
+    monkeypatch.setattr(
+        sympy, "cyclotomic_poly", lambda *args, **kwargs: FakePolynomial()
+    )
+    with pytest.raises(OperationBackendError) as exc_info:
+        cyclotomic(2)
+    assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT
+
+
 def test_serialized_result_preserves_the_canonical_integer_polynomial() -> None:
     result = _run(CyclotomicRequest(index=12))
     decoded = CyclotomicResult.model_validate_json(result.model_dump_json())

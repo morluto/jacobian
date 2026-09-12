@@ -257,6 +257,7 @@ def _compute(index: int) -> tuple[int, IntegerPolynomial]:
         len(coefficients) != admission.degree + 1
         or not coefficients
         or coefficients[0] != 1
+        or coefficients[-1] != (-1 if index == 1 else 1)
         or any(
             len(str(abs(value))) > admission.coefficient_digits
             for value in coefficients

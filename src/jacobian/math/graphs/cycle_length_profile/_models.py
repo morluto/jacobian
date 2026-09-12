@@ -167,7 +167,13 @@ class FixedLengthCycleEnumerationResult(StrictModel):
 
         vertices = set(self.graph.vertices)
         graph_edges = {frozenset(edge) for edge in self.graph.edges}
-        for cycle in self.cycles:
+        expected_vertex_incidence: dict[str, list[int]] = {
+            vertex: [] for vertex in self.graph.vertices
+        }
+        expected_edge_incidence: dict[frozenset[str], list[int]] = {
+            frozenset(edge): [] for edge in self.graph.edges
+        }
+        for index, cycle in enumerate(self.cycles):
             if len(cycle) != self.cycle_length:
                 raise PydanticCustomError(
                     "cycle_enumeration.cycle_length_mismatch",
@@ -178,11 +184,11 @@ class FixedLengthCycleEnumerationResult(StrictModel):
                     "cycle_enumeration.cycle_vertices_invalid",
                     "cycles must contain distinct declared graph vertices",
                 )
-            if any(
+            cycle_edges = tuple(
                 frozenset((cycle[position], cycle[(position + 1) % self.cycle_length]))
-                not in graph_edges
                 for position in range(self.cycle_length)
-            ):
+            )
+            if any(edge not in graph_edges for edge in cycle_edges):
                 raise PydanticCustomError(
                     "cycle_enumeration.cycle_edges_invalid",
                     "every cycle must close through declared graph edges",
@@ -198,6 +204,10 @@ class FixedLengthCycleEnumerationResult(StrictModel):
                     "cycle_enumeration.cycle_must_be_canonical",
                     "cycles must use canonical rotation and orientation",
                 )
+            for vertex in cycle:
+                expected_vertex_incidence[vertex].append(index)
+            for edge in cycle_edges:
+                expected_edge_incidence[edge].append(index)
 
         expected_vertex_sources = tuple((vertex,) for vertex in self.graph.vertices)
         if (
@@ -228,37 +238,25 @@ class FixedLengthCycleEnumerationResult(StrictModel):
                     "incidence indices must refer to returned cycles",
                 )
 
-        expected_vertex_incidence = tuple(
-            tuple(index for index, cycle in enumerate(self.cycles) if vertex in cycle)
-            for vertex in self.graph.vertices
+        expected_vertex_incidence_tuple = tuple(
+            tuple(expected_vertex_incidence[vertex]) for vertex in self.graph.vertices
         )
         if (
             tuple(row.cycle_indices for row in self.vertex_incidence)
-            != expected_vertex_incidence
+            != expected_vertex_incidence_tuple
         ):
             raise PydanticCustomError(
                 "cycle_enumeration.vertex_incidence_mismatch",
                 "vertex incidence does not bind to the returned cycle family",
             )
 
-        expected_edge_incidence = []
-        for edge in self.graph.edges:
-            edge_key = frozenset(edge)
-            expected_edge_incidence.append(
-                tuple(
-                    index
-                    for index, cycle in enumerate(self.cycles)
-                    if any(
-                        frozenset(
-                            (cycle[position], cycle[(position + 1) % self.cycle_length])
-                        )
-                        == edge_key
-                        for position in range(self.cycle_length)
-                    )
-                )
-            )
-        if tuple(row.cycle_indices for row in self.edge_incidence) != tuple(
-            expected_edge_incidence
+        expected_edge_incidence_tuple = tuple(
+            tuple(expected_edge_incidence[frozenset(edge)])
+            for edge in self.graph.edges
+        )
+        if (
+            tuple(row.cycle_indices for row in self.edge_incidence)
+            != expected_edge_incidence_tuple
         ):
             raise PydanticCustomError(
                 "cycle_enumeration.edge_incidence_mismatch",

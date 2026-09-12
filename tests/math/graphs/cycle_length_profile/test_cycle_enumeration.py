@@ -172,6 +172,26 @@ def test_serialized_family_checks_axes_and_incidence_without_replaying_edges() -
         )
 
 
+def test_large_serialized_family_round_trips_with_linear_incidence_checks() -> None:
+    vertices = tuple(f"v{i:02}" for i in range(50))
+    graph = SimpleUndirectedGraph(
+        vertices=vertices,
+        edges=tuple(
+            (left, right)
+            for index, left in enumerate(vertices)
+            for right in vertices[index + 1 :]
+        ),
+    )
+    result = enumerate_fixed_length_cycles(graph, 3)
+
+    restored = FixedLengthCycleEnumerationResult.model_validate_json(
+        result.model_dump_json()
+    )
+
+    assert restored.cycle_count == 19_600
+    assert restored.cycles == result.cycles
+
+
 def test_exact_catalog_ids_are_published() -> None:
     ids = {tool.operation_id for tool in TOOLS}
     assert "graph.cycle.fixed_length.enumerate" in ids

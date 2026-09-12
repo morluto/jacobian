@@ -179,7 +179,9 @@ def test_order_shape_rejects_contradictory_log_concavity_witness() -> None:
 
 def test_order_shape_serialization_schema_omits_integer_wire_alternative() -> None:
     serialized = SequenceOrderShapeResult.model_json_schema(mode="serialization")
-    source_values = serialized["$defs"]["FiniteRationalSequence"]["properties"]["values"]
+    source_values = serialized["$defs"]["FiniteRationalSequence"]["properties"][
+        "values"
+    ]
     assert "anyOf" not in source_values["items"]
     validation = FiniteRationalSequence.model_json_schema(mode="validation")
     assert "anyOf" in validation["properties"]["values"]["items"]

@@ -32,6 +32,7 @@ from jacobian.math.logic.languages.words import (
     primitive_root,
     substitution_dependency_graph,
     substitution_primitivity_profile,
+    suffixes,
 )
 from jacobian.math.logic.languages.words import _tools as word_operations
 from jacobian.math.logic.languages.words._models import (
@@ -46,20 +47,15 @@ from jacobian.math.logic.languages.words._models import (
     SubstitutionFixedPointPrefixRequest,
     SubstitutionFixedPointPrefixResult,
     SubstitutionPrimitivityProfileRequest,
-    WordFamilyRequest,
-    WordPrefixesResult,
-    WordSuffixesResult,
 )
 from jacobian.math.logic.languages.words._tools import (
     TOOLS,
     compute_factors_length,
     compute_incidence_matrix,
     compute_periods,
-    compute_prefixes,
     compute_substitution_dependency_graph,
     compute_substitution_fixed_point_prefix,
     compute_substitution_primitivity_profile,
-    compute_suffixes,
 )
 from jacobian.math.logic.languages.words.values import (
     MAX_ALPHABET_SIZE,
@@ -94,8 +90,6 @@ def _substitution(
 def test_public_catalog_surface_is_the_audited_operations() -> None:
     operation_ids = tuple(tool.operation_id for tool in TOOLS)
     assert operation_ids == (
-        "word.prefixes.compute",
-        "word.suffixes.compute",
         "word.factors.length.compute",
         "word.periods.compute",
         "word_morphism.incidence_matrix.compute",
@@ -105,11 +99,9 @@ def test_public_catalog_surface_is_the_audited_operations() -> None:
     )
 
 
-def test_prefix_and_suffix_families_are_complete_and_serializable() -> None:
+def test_prefix_and_suffix_families_are_complete() -> None:
     source = _word("abaab")
-    prefix_result = compute_prefixes(WordFamilyRequest(word=source))
-    suffix_result = compute_suffixes(WordFamilyRequest(word=source))
-    assert tuple(item.letters for item in prefix_result.prefixes) == (
+    assert tuple(item.letters for item in prefixes(source)) == (
         (),
         ("a",),
         ("a", "b"),
@@ -117,7 +109,7 @@ def test_prefix_and_suffix_families_are_complete_and_serializable() -> None:
         ("a", "b", "a", "a"),
         ("a", "b", "a", "a", "b"),
     )
-    assert tuple(item.letters for item in suffix_result.suffixes) == (
+    assert tuple(item.letters for item in suffixes(source)) == (
         ("a", "b", "a", "a", "b"),
         ("b", "a", "a", "b"),
         ("a", "a", "b"),
@@ -125,98 +117,12 @@ def test_prefix_and_suffix_families_are_complete_and_serializable() -> None:
         ("b",),
         (),
     )
-    assert prefix_result.prefix_lengths == (0, 1, 2, 3, 4, 5)
-    assert prefix_result.prefix_indices == (0, 1, 2, 3, 4, 5)
-    assert tuple(
-        (entry.family_index, entry.source_start, entry.source_end, entry.length)
-        for entry in prefix_result.prefix_map
-    ) == tuple((index, 0, index, index) for index in range(6))
-    assert suffix_result.suffix_lengths == (5, 4, 3, 2, 1, 0)
-    assert suffix_result.suffix_indices == (0, 1, 2, 3, 4, 5)
-    assert tuple(
-        (entry.family_index, entry.source_start, entry.source_end, entry.length)
-        for entry in suffix_result.suffix_map
-    ) == tuple((index, index, 5, 5 - index) for index in range(6))
-    assert (
-        WordPrefixesResult.model_validate_json(prefix_result.model_dump_json())
-        == prefix_result
-    )
-    assert (
-        WordSuffixesResult.model_validate_json(suffix_result.model_dump_json())
-        == suffix_result
-    )
-
-
-@pytest.mark.parametrize(
-    ("result_type", "field_name", "message"),
-    (
-        (WordPrefixesResult, "prefix_lengths", "typed length/index maps"),
-        (WordPrefixesResult, "prefix_map", "family map rows"),
-        (WordSuffixesResult, "suffix_indices", "typed length/index maps"),
-        (WordSuffixesResult, "suffix_map", "family map rows"),
-    ),
-)
-def test_word_family_result_rejects_forged_length_or_index_axis(
-    result_type: type[WordPrefixesResult] | type[WordSuffixesResult],
-    field_name: str,
-    message: str,
-) -> None:
-    source = _word("abaab")
-    result = (
-        compute_prefixes(WordFamilyRequest(word=source))
-        if result_type is WordPrefixesResult
-        else compute_suffixes(WordFamilyRequest(word=source))
-    )
-    payload = result.model_dump(mode="json")
-    if field_name.endswith("_map"):
-        payload[field_name][2]["source_end"] = 99
-    else:
-        payload[field_name][2] = 99
-
-    with pytest.raises(ValidationError, match=message):
-        result_type.model_validate(payload)
-
-
-@pytest.mark.parametrize(
-    ("result_type", "field_name"),
-    ((WordPrefixesResult, "prefixes"), (WordSuffixesResult, "suffixes")),
-)
-def test_word_family_result_rejects_over_bound_serialized_axis(
-    result_type: type[WordPrefixesResult] | type[WordSuffixesResult],
-    field_name: str,
-) -> None:
-    source = _word("")
-    payload = {
-        "word": source.model_dump(mode="json"),
-        field_name: [source.model_dump(mode="json")] * (MAX_WORD_LENGTH + 2),
-    }
-
-    with pytest.raises(ValidationError) as error:
-        result_type.model_validate_json(json.dumps(payload))
-    assert error.value.errors()[0]["type"] == "too_long"
-
-
-def test_large_word_family_json_round_trip_uses_bounded_validation() -> None:
-    source = _word("ab" * (MAX_WORD_LENGTH // 2))
-    result = WordPrefixesResult._from_kernel(
-        WordFamilyRequest(word=source), prefixes(source)
-    )
-    payload = json.loads(result.model_dump_json())
-    payload["prefixes"][MAX_WORD_LENGTH // 2]["letters"][0] = "b"
-
-    decoded = WordPrefixesResult.model_validate_json(json.dumps(payload))
-
-    assert decoded.prefixes[MAX_WORD_LENGTH // 2].letters[0] == "b"
 
 
 def test_word_family_operations_retain_empty_alphabet_and_empty_word() -> None:
     source = FiniteWord(alphabet=(), letters=())
-
-    prefixes_result = compute_prefixes(WordFamilyRequest(word=source))
-    suffixes_result = compute_suffixes(WordFamilyRequest(word=source))
-
-    assert prefixes_result.prefixes == (source,)
-    assert suffixes_result.suffixes == (source,)
+    assert prefixes(source) == (source,)
+    assert suffixes(source) == (source,)
 
 
 def test_word_family_operations_retain_both_maximum_axes() -> None:
@@ -225,18 +131,17 @@ def test_word_family_operations_retain_both_maximum_axes() -> None:
         alphabet=alphabet,
         letters=(alphabet[0],) * MAX_WORD_LENGTH,
     )
+    prefix_family = prefixes(source)
+    suffix_family = suffixes(source)
 
-    prefixes_result = compute_prefixes(WordFamilyRequest(word=source))
-    suffixes_result = compute_suffixes(WordFamilyRequest(word=source))
-
-    assert len(prefixes_result.prefixes) == MAX_WORD_LENGTH + 1
-    assert len(suffixes_result.suffixes) == MAX_WORD_LENGTH + 1
-    assert prefixes_result.prefixes[0] == FiniteWord(alphabet=alphabet, letters=())
-    assert prefixes_result.prefixes[-1] == source
-    assert suffixes_result.suffixes[0] == source
-    assert suffixes_result.suffixes[-1] == FiniteWord(alphabet=alphabet, letters=())
-    assert all(item.alphabet == alphabet for item in prefixes_result.prefixes)
-    assert all(item.alphabet == alphabet for item in suffixes_result.suffixes)
+    assert len(prefix_family) == MAX_WORD_LENGTH + 1
+    assert len(suffix_family) == MAX_WORD_LENGTH + 1
+    assert prefix_family[0] == FiniteWord(alphabet=alphabet, letters=())
+    assert prefix_family[-1] == source
+    assert suffix_family[0] == source
+    assert suffix_family[-1] == FiniteWord(alphabet=alphabet, letters=())
+    assert all(item.alphabet == alphabet for item in prefix_family)
+    assert all(item.alphabet == alphabet for item in suffix_family)
 
 
 def test_maximum_family_stays_within_materialization_cell_bound() -> None:
@@ -245,14 +150,12 @@ def test_maximum_family_stays_within_materialization_cell_bound() -> None:
         alphabet=alphabet,
         letters=(alphabet[0],) * MAX_WORD_LENGTH,
     )
-    result = compute_prefixes(WordFamilyRequest(word=source))
-
-    assert len(result.prefixes) == MAX_WORD_LENGTH + 1
+    assert len(prefixes(source)) == MAX_WORD_LENGTH + 1
 
 
-@pytest.mark.parametrize("operation", (compute_prefixes, compute_suffixes))
+@pytest.mark.parametrize("operation", (prefixes, suffixes))
 def test_unicode_maximum_family_is_admitted_with_bounded_materialization(
-    operation: Callable[[WordFamilyRequest], WordPrefixesResult | WordSuffixesResult],
+    operation: Callable[[FiniteWord], tuple[FiniteWord, ...]],
 ) -> None:
     alphabet = tuple(chr(0x1F600 + index) * 64 for index in range(MAX_ALPHABET_SIZE))
     source = FiniteWord(
@@ -260,11 +163,7 @@ def test_unicode_maximum_family_is_admitted_with_bounded_materialization(
         letters=(alphabet[0],) * MAX_WORD_LENGTH,
     )
 
-    result = operation(WordFamilyRequest(word=source))
-    family = (
-        result.prefixes if isinstance(result, WordPrefixesResult) else result.suffixes
-    )
-    assert len(family) == MAX_WORD_LENGTH + 1
+    assert len(operation(source)) == MAX_WORD_LENGTH + 1
 
 
 def test_narrowed_scalar_symbol_contract_rejects_lone_surrogates() -> None:

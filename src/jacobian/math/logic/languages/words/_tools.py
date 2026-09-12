@@ -23,19 +23,14 @@ from jacobian.math.logic.languages.words._models import (
     SubstitutionFixedPointPrefixResult,
     SubstitutionPrimitivityProfileRequest,
     SubstitutionPrimitivityProfileResult,
-    WordFamilyRequest,
-    WordPrefixesResult,
-    WordSuffixesResult,
 )
 from jacobian.math.logic.languages.words.operations import (
     factors_of_length,
     fixed_point_prefix,
     incidence_matrix,
     periods,
-    prefixes,
     substitution_dependency_graph,
     substitution_primitivity_profile,
-    suffixes,
 )
 
 
@@ -64,14 +59,6 @@ def compute_factors_length(request: FactorsLengthRequest) -> FactorsLengthResult
     return FactorsLengthResult._from_kernel(
         request, factors=analysis.factors, occurrences=analysis.occurrences
     )
-
-
-def compute_prefixes(request: WordFamilyRequest) -> WordPrefixesResult:
-    return WordPrefixesResult._from_kernel(request, prefixes(request.word))
-
-
-def compute_suffixes(request: WordFamilyRequest) -> WordSuffixesResult:
-    return WordSuffixesResult._from_kernel(request, suffixes(request.word))
 
 
 def compute_periods(request: PeriodsRequest) -> PeriodsResult:
@@ -140,54 +127,6 @@ def compute_substitution_fixed_point_prefix(
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    MathTool(
-        operation_id="word.prefixes.compute",
-        title="Compute all prefixes of a finite word",
-        description=(
-            "Return the complete prefix family in increasing length order, "
-            "including the empty prefix, with a typed source-interval map."
-        ),
-        request_type=WordFamilyRequest,
-        result_type=WordPrefixesResult,
-        run=compute_prefixes,
-        tags=("combinatorics", "words", "prefixes", "exact", "complete"),
-        examples=(
-            OperationExample(
-                name="abaab_prefixes",
-                description="Compute every prefix of abaab, including the empty prefix.",
-                input={
-                    "word": {
-                        "alphabet": ["a", "b"],
-                        "letters": ["a", "b", "a", "a", "b"],
-                    }
-                },
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="word.suffixes.compute",
-        title="Compute all suffixes of a finite word",
-        description=(
-            "Return the complete suffix family ordered by starting position, "
-            "including the empty suffix, with a typed source-interval map."
-        ),
-        request_type=WordFamilyRequest,
-        result_type=WordSuffixesResult,
-        run=compute_suffixes,
-        tags=("combinatorics", "words", "suffixes", "exact", "complete"),
-        examples=(
-            OperationExample(
-                name="abaab_suffixes",
-                description="Compute every suffix of abaab, including the empty suffix.",
-                input={
-                    "word": {
-                        "alphabet": ["a", "b"],
-                        "letters": ["a", "b", "a", "a", "b"],
-                    }
-                },
-            ),
-        ),
-    ),
     MathTool(
         operation_id="word.factors.length.compute",
         title="Compute all factors of one length",

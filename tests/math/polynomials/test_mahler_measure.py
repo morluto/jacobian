@@ -14,8 +14,8 @@ from jacobian.catalog.models import (
 from jacobian.math.number_theory._certification_models import (
     CertifiedFactorizationRequest,
 )
+from jacobian.math.number_theory._factorization_kernels import factorize_certified
 from jacobian.math.number_theory.algebraic_numbers.real import RealAlgebraicValue
-from jacobian.math.polynomials import _mahler_kernel
 from jacobian.math.polynomials._mahler_kernel import (
     content_primitive_profile,
     mahler_measure,
@@ -388,7 +388,7 @@ def test_quadratic_surd_normalization_is_not_replayed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[int] = []
-    original = _mahler_kernel.factorize_certified
+    original = factorize_certified
 
     def count_calls(request: CertifiedFactorizationRequest) -> object:
         calls.append(request.value)

@@ -298,6 +298,11 @@ def test_r2_allocation_is_refused_before_enumerating_every_pair(
         "request_checkpoint",
         lambda label: labels.append(label),
     )
+
+    def fail_pair_scan(*_args: object) -> int:
+        raise AssertionError("r=2 allocation must refuse before pairwise enumeration")
+
+    monkeypatch.setattr(sunflower_module, "_intersection_search_work", fail_pair_scan)
     core = tuple(range(350))
     members = tuple((*core, 350 + index) for index in range(155))
     with pytest.raises(OperationResourceAdmissionError, match="allocation units"):

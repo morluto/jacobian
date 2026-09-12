@@ -164,6 +164,7 @@ def _admit_candidates(
     petal_count: int,
     member_count: int,
     source_work: int,
+    source_units: int,
 ) -> int:
     """Admit candidate, intersection-work, and complete-output envelopes."""
 
@@ -178,6 +179,17 @@ def _admit_candidates(
                 f"the {candidate_bound} candidate {petal_count}-subfamilies exceed "
                 f"the {MAX_SUNFLOWER_CANDIDATES}-candidate exact-work bound"
             ),
+        )
+    # Every pair is a sunflower, so the candidate bound is the exact row count
+    # and allocation can refuse before the pairwise work scan.
+    if petal_count == 2 and candidate_bound:
+        _admit_qualifying_result(
+            source,
+            petal_count,
+            member_count,
+            source_units,
+            candidate_bound,
+            max((len(member) for member in source.members), default=0),
         )
     sizes = tuple(len(member) for member in source.members)
     search_work = _intersection_search_work(sizes, petal_count)
@@ -414,7 +426,7 @@ def construct_sunflower_family(
     source, petal_count, member_count, source_work, source_units = _admit_source(
         source, petal_count
     )
-    _admit_candidates(source, petal_count, member_count, source_work)
+    _admit_candidates(source, petal_count, member_count, source_work, source_units)
     vertices = tuple(str(index) for index in range(member_count))
     if member_count < petal_count:
         _admit_qualifying_result(source, petal_count, member_count, source_units, 0, 0)
@@ -423,16 +435,6 @@ def construct_sunflower_family(
             petal_count=petal_count,
             sunflowers=(),
             hypergraph=FiniteHypergraph(vertices=vertices, edges=()),
-        )
-    # Every distinct pair is a sunflower, so C(m, 2) is the exact row count.
-    if petal_count == 2:
-        _admit_qualifying_result(
-            source,
-            petal_count,
-            member_count,
-            source_units,
-            comb(member_count, 2),
-            max((len(member) for member in source.members), default=0),
         )
     request_checkpoint("before sunflower member expansion")
     sets = tuple(frozenset(member) for member in source.members)

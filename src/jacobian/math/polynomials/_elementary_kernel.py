@@ -3,15 +3,20 @@
 from __future__ import annotations
 
 from functools import cache
-from typing import Any
+from math import gcd
+from typing import Any, Literal
 
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
+    MAX_CANONICAL_INTEGER_DIGITS,
     MAX_CANONICAL_RATIONAL_DIGITS,
     CanonicalRational,
 )
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math import polynomials
 from jacobian.math.polynomials._conversions import (
     rational_from_sympy,
@@ -39,10 +44,13 @@ from jacobian.math.polynomials._models import (
     _validation_error,
 )
 from jacobian.math.polynomials.values import (
+    MAX_POLYNOMIAL_TERMS,
     RationalPolynomial,
     rational_evaluation_component_digit_bounds,
     require_polynomial_budget,
 )
+
+_CANONICAL_INTEGER_LIMIT = 10**MAX_CANONICAL_INTEGER_DIGITS
 
 
 def _run_admission(admission: Any) -> None:
@@ -70,6 +78,46 @@ def _admit_integer(polynomial: IntegerPolynomial) -> None:
         for coefficient in polynomial.coefficients
     ):
         raise _validation_error("integer coefficient exceeds the decimal-digit budget")
+
+
+def _admit_primitive_part(polynomial: IntegerPolynomial) -> None:
+    """Admit content/primitive decomposition on the integer-polynomial carrier."""
+
+    coefficients = polynomial.coefficients
+    if not isinstance(coefficients, tuple) or not coefficients:
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="polynomial.primitive_part_empty",
+            message="a canonical integer polynomial has at least one coefficient",
+        )
+    if any(type(coefficient) is not int for coefficient in coefficients):
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="polynomial.primitive_part_coefficients",
+            message="primitive-part coefficients must be exact integers",
+        )
+    if len(coefficients) > 1 and coefficients[0] == 0:
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="polynomial.primitive_part_shape",
+            message="a canonical integer polynomial omits leading zeros",
+        )
+    if len(coefficients) > MAX_POLYNOMIAL_TERMS:
+        raise OperationResourceAdmissionError(
+            location=("polynomial",),
+            code="polynomial.primitive_part_term_bound",
+            message="primitive decomposition exceeds the integer-polynomial carrier",
+        )
+    if any(
+        abs(coefficient) >= _CANONICAL_INTEGER_LIMIT
+        for coefficient in coefficients
+        if abs(coefficient).bit_length() > MAX_CANONICAL_INTEGER_DIGITS
+    ):
+        raise OperationResourceAdmissionError(
+            location=("polynomial",),
+            code="polynomial.primitive_part_integer_digits",
+            message="a coefficient exceeds the canonical integer representation envelope",
+        )
 
 
 def _admit_integer_pair(left: IntegerPolynomial, right: IntegerPolynomial) -> None:
@@ -211,19 +259,52 @@ def integer_polynomial_content(
     )
 
 
+MAX_PRIMITIVE_PART_RESULT_DIGITS = 8_000_000
+
+
+def _retained_integer_digits(value: int) -> int:
+    if value == 0:
+        return 1
+    return (abs(value).bit_length() * 30103) // 100000 + 1
+
+
 def integer_polynomial_primitive_part(
     polynomial: IntegerPolynomial,
 ) -> IntegerPolynomialPrimitivePartResult:
-    """Return content, primitive part, and exact reconstruction."""
+    """Return sign, content, positive-leading primitive part, and reconstruction."""
 
-    _run_admission(lambda: _admit_integer(polynomial))
-    source = _integer_poly(polynomial)
-    content, primitive = source.primitive()
-    reconstructed = primitive.mul_ground(content)
-    return IntegerPolynomialPrimitivePartResult(
-        content=int(content),
-        primitive_part=_integer_value(primitive),
-        reconstruction=_integer_value(reconstructed),
+    _run_admission(lambda: _admit_primitive_part(polynomial))
+    coefficients = polynomial.coefficients
+    if not any(coefficients):
+        zero = IntegerPolynomial(coefficients=(0,))
+        return IntegerPolynomialPrimitivePartResult._from_kernel(
+            sign=1,
+            content=0,
+            primitive_part=zero,
+            degree=0,
+            reconstruction=zero,
+        )
+    source_digits = sum(
+        _retained_integer_digits(coefficient) for coefficient in coefficients
+    )
+    if 2 * source_digits + 1 > MAX_PRIMITIVE_PART_RESULT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("polynomial",),
+            code="polynomial.content_profile_result_digits",
+            message="the retained profile coefficients exceed the exact output bound",
+        )
+    sign: Literal[-1, 1] = 1 if coefficients[0] > 0 else -1
+    content = 0
+    for coefficient in coefficients:
+        content = gcd(content, abs(coefficient))
+    primitive = tuple((sign * coefficient) // content for coefficient in coefficients)
+    reconstruction = tuple(sign * content * value for value in primitive)
+    return IntegerPolynomialPrimitivePartResult._from_kernel(
+        sign=sign,
+        content=content,
+        primitive_part=IntegerPolynomial(coefficients=primitive),
+        degree=len(primitive) - 1,
+        reconstruction=IntegerPolynomial(coefficients=reconstruction),
     )
 
 

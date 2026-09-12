@@ -4,6 +4,9 @@ import json
 from itertools import product
 from typing import TypedDict
 
+import pytest
+from pydantic import ValidationError
+
 from jacobian.math.number_theory.counting import congruence_box_count, floor_sum
 from jacobian.math.number_theory.counting._models import (
     _MAX_BOX_LINEAR_COEFFICIENT,
@@ -165,8 +168,33 @@ class TestCongruenceBoxCount:
         forged = restored.model_dump(mode="json")
         forged["modulus"] = 5
         assert not verify_congruence_box_count(
-            CongruenceBoxCountResult.model_validate(forged)
+            CongruenceBoxCountResult.model_validate_json(json.dumps(forged))
         )
+
+    @pytest.mark.parametrize("count", ["-1", "01", "1\n"])
+    def test_count_schema_and_decoder_reject_invalid_decimal_counts(
+        self, count: str
+    ) -> None:
+        request = CongruenceBoxCountRequest(
+            x_lo=0,
+            x_hi=5,
+            y_lo=0,
+            y_hi=5,
+            u=1,
+            v=1,
+            c=0,
+            modulus=3,
+        )
+        result = compute_congruence_box_count(request)
+        payload = result.model_dump(mode="json")
+        from jsonschema import Draft202012Validator
+
+        validator = Draft202012Validator(CongruenceBoxCountResult.model_json_schema())
+        assert not list(validator.iter_errors(payload))
+        payload["count"] = count
+        assert list(validator.iter_errors(payload))
+        with pytest.raises(ValidationError):
+            CongruenceBoxCountResult.model_validate_json(json.dumps(payload))
 
     def test_admits_full_coordinate_box(self) -> None:
         request = CongruenceBoxCountRequest.model_validate(
@@ -182,6 +210,67 @@ class TestCongruenceBoxCount:
             )
         )
         assert compute_congruence_box_count(request).count == 40_040
+
+    def test_large_exact_public_count_uses_periodic_residue_oracle(self) -> None:
+        """The O(modulus) kernel must not inherit a coordinate-width cap."""
+
+        endpoint = 10**20
+        modulus = 97
+        payload: dict[str, object] = {
+            "x_lo": -endpoint,
+            "x_hi": endpoint,
+            "y_lo": -endpoint,
+            "y_hi": endpoint,
+            "u": 17,
+            "v": 19,
+            "c": 23,
+            "modulus": modulus,
+        }
+
+        def residue_count(lower: int, upper: int, residue: int) -> int:
+            return (upper - residue) // modulus - (lower - 1 - residue) // modulus
+
+        # A period decomposition independent of the single-residue solver in
+        # the kernel: count the exact Cartesian multiplicity of every one of
+        # the 97^2 coordinate residue pairs.
+        expected = sum(
+            residue_count(-endpoint, endpoint, x_residue)
+            * residue_count(-endpoint, endpoint, y_residue)
+            for x_residue, y_residue in product(range(modulus), repeat=2)
+            if (17 * x_residue + 19 * y_residue - 23) % modulus == 0
+        )
+
+        public_request = CongruenceBoxCountRequest.model_validate(payload)
+        public = compute_congruence_box_count(public_request).model_dump(mode="json")
+        result = CongruenceBoxCountResult.model_validate_json(json.dumps(public))
+        assert result.count == expected
+        assert result.count > 2**53
+        assert public["count"] == str(expected)
+        assert public["x_lo"] == str(-endpoint)
+        assert verify_congruence_box_count(result)
+
+    def test_narrow_axis_avoids_a_full_modulus_scan(self) -> None:
+        endpoint = 10**20
+        modulus = 9_991
+        x_value = endpoint + 17
+        y_residue = ((23 - 17 * x_value) * pow(19, -1, modulus)) % modulus
+        expected = (endpoint - y_residue) // modulus - (
+            -endpoint - 1 - y_residue
+        ) // modulus
+
+        assert (
+            congruence_box_count(
+                x_lo=x_value,
+                x_hi=x_value,
+                y_lo=-endpoint,
+                y_hi=endpoint,
+                u=17,
+                v=19,
+                c=23,
+                modulus=modulus,
+            )
+            == expected
+        )
 
     def test_matches_exhaustive_small_boxes(self) -> None:
         intervals = ((-2, 2), (-1, -1), (0, 2))

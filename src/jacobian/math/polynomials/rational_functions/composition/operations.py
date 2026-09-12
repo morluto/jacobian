@@ -531,6 +531,21 @@ def compose_maps(  # noqa: C901
     inner: RationalFunctionMap,
 ) -> RationalFunctionMapComposition:
     """Compose two canonical rational maps on their retained construction locus."""
+    # Native callers bypass the Pydantic wire request, so retain the same
+    # typed boundary here instead of allowing attribute errors or tuple
+    # unpacking failures to escape from admission.
+    if not isinstance(outer, RationalFunctionMap):
+        raise OperationDomainValidationError(
+            location=("outer",),
+            code="rational_function_map.compose.invalid_outer_type",
+            message="outer must be a RationalFunctionMap",
+        )
+    if not isinstance(inner, RationalFunctionMap):
+        raise OperationDomainValidationError(
+            location=("inner",),
+            code="rational_function_map.compose.invalid_inner_type",
+            message="inner must be a RationalFunctionMap",
+        )
     execution = current_request_execution()
     if execution is None:
         with request_execution(time.monotonic()):

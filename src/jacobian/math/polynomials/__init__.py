@@ -17,6 +17,9 @@ from jacobian.math.polynomials._elementary_kernel import (
     rational_polynomial_evaluate,
     rational_polynomial_integral,
 )
+from jacobian.math.polynomials._elementary_symmetric import (
+    elementary_symmetric_family,
+)
 from jacobian.math.polynomials.operations import (
     derivative,
     discriminant,
@@ -68,6 +71,7 @@ __all__ = [
     "derivative",
     "discriminant",
     "divide",
+    "elementary_symmetric_family",
     "evaluate",
     "factorization",
     "gcdex",

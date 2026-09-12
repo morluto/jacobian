@@ -101,12 +101,49 @@ def _reachable_states_without_index(dfa: DFA) -> set[int]:
     return reachable
 
 
+def _extend_profile_layer(
+    layer: dict[tuple[int, tuple[int, ...]], int],
+    transitions: dict[tuple[int, int], int],
+    reachable: set[int],
+    alphabet_size: int,
+) -> dict[tuple[int, tuple[int, ...]], int]:
+    next_layer: dict[tuple[int, tuple[int, ...]], int] = {}
+    for (state, counts), multiplicity in layer.items():
+        for symbol in range(alphabet_size):
+            target = transitions[(state, symbol)]
+            if target not in reachable:
+                continue
+            updated = (*counts[:symbol], counts[symbol] + 1, *counts[symbol + 1 :])
+            key = (target, updated)
+            next_layer[key] = next_layer.get(key, 0) + multiplicity
+    return next_layer
+
+
+def _collect_profile(
+    layer: dict[tuple[int, tuple[int, ...]], int],
+    accepting: set[int],
+) -> dict[tuple[int, ...], int]:
+    profile: dict[tuple[int, ...], int] = {}
+    for (state, counts), multiplicity in layer.items():
+        if state in accepting:
+            profile[counts] = profile.get(counts, 0) + multiplicity
+    return profile
+
+
 def symbol_parikh_profile(
     request: SymbolParikhProfileRequest,
 ) -> SymbolParikhProfileResult:
     dfa = request.dfa
     length = request.word_length
     alphabet_size = dfa.alphabet_size
+    if alphabet_size == 0:
+        total = int(length == 0 and dfa.initial_state in dfa.accepting_states)
+        cells = (SymbolParikhCell(symbol_counts=(), multiplicity=1),) if total else ()
+        return SymbolParikhProfileResult._from_kernel(
+            request,
+            cells=cells,
+            total_accepted_words=total,
+        )
     output_bound = comb(length + alphabet_size - 1, alphabet_size - 1)
     transition_count = dfa.state_count * alphabet_size
     # The layer at step t contains weak compositions of t, so only layers
@@ -169,21 +206,9 @@ def symbol_parikh_profile(
     zero = (0,) * alphabet_size
     layer: dict[tuple[int, tuple[int, ...]], int] = {(dfa.initial_state, zero): 1}
     for _step in range(length):
-        next_layer: dict[tuple[int, tuple[int, ...]], int] = {}
-        for (state, counts), multiplicity in layer.items():
-            for symbol in range(alphabet_size):
-                target = transitions[(state, symbol)]
-                if target not in reachable:
-                    continue
-                updated = (*counts[:symbol], counts[symbol] + 1, *counts[symbol + 1 :])
-                key = (target, updated)
-                next_layer[key] = next_layer.get(key, 0) + multiplicity
-        layer = next_layer
-    profile: dict[tuple[int, ...], int] = {}
+        layer = _extend_profile_layer(layer, transitions, reachable, alphabet_size)
     accepting = set(dfa.accepting_states)
-    for (state, counts), multiplicity in layer.items():
-        if state in accepting:
-            profile[counts] = profile.get(counts, 0) + multiplicity
+    profile = _collect_profile(layer, accepting)
     total = sum(profile.values())
     return SymbolParikhProfileResult._from_kernel(
         request,

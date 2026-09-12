@@ -19,6 +19,7 @@ from jacobian.math.logic.languages.regular.operations import (
     dfa_run,
 )
 from jacobian.math.logic.languages.regular.values import DFA, DFATransition
+from tests.fixtures.accounting import assert_charged_work_parity
 
 
 def ending_in_one() -> DFA:
@@ -342,3 +343,107 @@ def test_transition_index_charge_rejects_before_indexing(
         profile.symbol_parikh_profile(
             SymbolParikhProfileRequest(dfa=dfa, word_length=length)
         )
+
+
+def test_profile_execution_matches_admission_charge(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.logic.languages.regular._symbol_parikh as profile
+
+    dfa = _source_sensitive_dfa(
+        reachable_state_count=4,
+        state_count=5,
+        alphabet_size=3,
+    )
+    length = 4
+    alphabet_size = dfa.alphabet_size
+    transition_count = dfa.state_count * alphabet_size
+    output_bound = comb(length + alphabet_size - 1, alphabet_size - 1)
+    reachable_count = 4
+
+    extension_cells = 0
+    possible_word_count = 1
+    for step in range(length):
+        extension_cells += min(
+            reachable_count * comb(step + alphabet_size - 1, alphabet_size - 1),
+            possible_word_count,
+        )
+        possible_word_count *= alphabet_size
+    output_materialization_cells = min(
+        reachable_count * output_bound,
+        possible_word_count,
+    )
+
+    executed = {
+        "transition_index": 0,
+        "reachability_scan": 0,
+        "extension_coordinate": 0,
+        "output_materialization": 0,
+    }
+    original_index = profile._build_transition_index
+    original_reachable = profile._reachable_states_without_index
+    original_extend = profile._extend_profile_layer
+    original_collect = profile._collect_profile
+
+    def count_index(value: DFA) -> dict[tuple[int, int], int]:
+        executed["transition_index"] += len(value.transitions)
+        return original_index(value)
+
+    def count_reachable(value: DFA) -> set[int]:
+        result = original_reachable(value)
+        executed["reachability_scan"] += len(result) * len(value.transitions)
+        return result
+
+    def count_extend(
+        layer: dict[tuple[int, tuple[int, ...]], int],
+        transitions: dict[tuple[int, int], int],
+        reachable: set[int],
+        size: int,
+    ) -> dict[tuple[int, tuple[int, ...]], int]:
+        executed["extension_coordinate"] += len(layer) * size * max(1, size)
+        return original_extend(layer, transitions, reachable, size)
+
+    def count_collect(
+        layer: dict[tuple[int, tuple[int, ...]], int], accepting: set[int]
+    ) -> dict[tuple[int, ...], int]:
+        executed["output_materialization"] += len(layer) * max(1, alphabet_size)
+        return original_collect(layer, accepting)
+
+    monkeypatch.setattr(profile, "_build_transition_index", count_index)
+    monkeypatch.setattr(profile, "_reachable_states_without_index", count_reachable)
+    monkeypatch.setattr(profile, "_extend_profile_layer", count_extend)
+    monkeypatch.setattr(profile, "_collect_profile", count_collect)
+
+    result = profile.symbol_parikh_profile(
+        profile.SymbolParikhProfileRequest(dfa=dfa, word_length=length)
+    )
+
+    assert result.total_accepted_words == alphabet_size**length
+    assert executed["transition_index"] == transition_count
+    assert all(executed.values())
+    assert_charged_work_parity(
+        charged={
+            "transition_index": transition_count,
+            "reachability_scan": reachable_count * transition_count,
+            "extension_coordinate": extension_cells
+            * alphabet_size
+            * max(1, alphabet_size),
+            "output_materialization": output_materialization_cells
+            * max(1, alphabet_size),
+        },
+        executed=executed,
+    )
+
+
+def test_empty_alphabet_has_only_the_empty_word() -> None:
+    dfa = DFA(
+        state_count=1,
+        alphabet_size=0,
+        transitions=(),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+    result = symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=0))
+    assert result.alphabet == ()
+    assert result.cells[0].symbol_counts == ()
+    assert result.total_accepted_words == 1

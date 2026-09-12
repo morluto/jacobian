@@ -1,14 +1,18 @@
 """Exact symbol-level Parikh profiles for accepted DFA words."""
 
 from math import comb
+from typing import Self
 
-from pydantic import Field, StrictInt
+from pydantic import Field, StrictInt, model_validator
 
 from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
 from jacobian.catalog.models import OperationResourceAdmissionError
-from jacobian.math.logic.languages.regular.operations import count_accepted_words
-from jacobian.math.logic.languages.regular.values import DFA, MAX_COUNT_RESULT_DIGITS
+from jacobian.math.logic.languages.regular.values import (
+    DFA,
+    MAX_COUNT_RESULT_DIGITS,
+    MAX_DFA_ALPHABET,
+)
 
 MAX_SYMBOL_PARIKH_LENGTH = 1_000
 MAX_SYMBOL_PARIKH_DP_WORK = 2_000_000
@@ -21,16 +25,40 @@ class SymbolParikhProfileRequest(StrictModel):
 
 
 class SymbolParikhCell(StrictModel):
-    symbol_counts: tuple[StrictInt, ...]
-    multiplicity: ExactInteger
+    symbol_counts: tuple[StrictInt, ...] = Field(max_length=MAX_DFA_ALPHABET)
+    multiplicity: ExactInteger = Field(ge=1)
 
 
 class SymbolParikhProfileResult(StrictModel):
     dfa: DFA
-    alphabet: tuple[StrictInt, ...]
+    alphabet: tuple[StrictInt, ...] = Field(max_length=MAX_DFA_ALPHABET)
     word_length: StrictInt = Field(ge=0, le=MAX_SYMBOL_PARIKH_LENGTH)
     cells: tuple[SymbolParikhCell, ...] = Field(max_length=MAX_SYMBOL_PARIKH_CELLS)
     total_accepted_words: ExactInteger
+
+    @model_validator(mode="after")
+    def require_canonical_cells(self) -> Self:
+        if self.alphabet != tuple(range(self.dfa.alphabet_size)):
+            raise ValueError("symbol-Parikh alphabet must be the DFA's ordered axis")
+        vectors = tuple(cell.symbol_counts for cell in self.cells)
+        if vectors != tuple(sorted(set(vectors))):
+            raise ValueError(
+                "symbol-Parikh cells must be lexicographically sorted and unique"
+            )
+        for vector in vectors:
+            if len(vector) != self.dfa.alphabet_size:
+                raise ValueError(
+                    "symbol-Parikh vectors must use the complete alphabet axis"
+                )
+            if any(count < 0 for count in vector) or sum(vector) != self.word_length:
+                raise ValueError(
+                    "symbol-Parikh vectors must be nonnegative and sum to word_length"
+                )
+        if self.total_accepted_words != sum(cell.multiplicity for cell in self.cells):
+            raise ValueError(
+                "total_accepted_words must equal the sum of cell multiplicities"
+            )
+        return self
 
 
 def symbol_parikh_profile(
@@ -54,7 +82,11 @@ def symbol_parikh_profile(
                 frontier.append(target)
     output_bound = comb(length + alphabet_size - 1, alphabet_size - 1)
     state_bound = len(reachable) * comb(length + alphabet_size, alphabet_size)
-    work_bound = alphabet_size * state_bound
+    # Every extension performs one transition lookup and rewrites all symbol
+    # coordinates in the immutable tuple. Charge both costs before allocating
+    # the sparse layers; the profile must not advertise a bound that ignores
+    # the coordinate work its representation necessarily performs.
+    work_bound = alphabet_size * max(1, alphabet_size) * state_bound
     if output_bound > MAX_SYMBOL_PARIKH_CELLS or work_bound > MAX_SYMBOL_PARIKH_DP_WORK:
         raise OperationResourceAdmissionError(
             location=("word_length",),
@@ -86,11 +118,6 @@ def symbol_parikh_profile(
         if state in accepting:
             profile[counts] = profile.get(counts, 0) + multiplicity
     total = sum(profile.values())
-    expected = count_accepted_words(dfa, length)
-    if total != expected:
-        raise RuntimeError(
-            "symbol-Parikh profile disagrees with accepted-word counting"
-        )
     return SymbolParikhProfileResult(
         dfa=dfa,
         alphabet=tuple(range(alphabet_size)),

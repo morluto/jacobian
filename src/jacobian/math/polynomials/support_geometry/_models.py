@@ -60,6 +60,11 @@ def _require_transportable_weight(
             "weight vector length must match variable count",
         )
     for component in weight:
+        if type(component) is not int:
+            raise _validation_error(
+                "weight_component_not_integer",
+                "weight components must be exact integers",
+            )
         if abs(component) > MAX_WEIGHT_COMPONENT_MAGNITUDE:
             raise _validation_error(
                 "weight_component_out_of_range",

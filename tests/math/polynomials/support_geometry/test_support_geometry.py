@@ -20,7 +20,9 @@ from jacobian.math.polynomials.support_geometry.operations import (
     exponent_support,
     initial_form,
     newton_polytope,
+    verify_polynomial_face_data,
     verify_polynomial_support,
+    verify_polynomial_weight_profile,
     weight_profile,
 )
 from jacobian.math.polynomials.support_geometry.values import (
@@ -101,6 +103,46 @@ VARS = ("x", "y")
 
 
 class TestSupport:
+    def test_serialized_initial_form_verifier_rejects_forged_face(self) -> None:
+        source = _polynomial((_term(1, [2, 0]), _term(1, [0, 2])), VARS)
+        genuine = compute_initial_form(
+            InitialFormRequest(polynomial=source, weight=(1, 2))
+        )
+        decoded = PolynomialFaceData.model_validate_json(genuine.model_dump_json())
+        assert verify_polynomial_face_data(decoded)
+        forged = genuine.model_copy(
+            update={"initial_form": _polynomial((_term(1, [0, 0]),), VARS)}
+        )
+        assert not verify_polynomial_face_data(forged)
+
+    def test_serialized_weight_profile_verifier_rejects_forged_layers(self) -> None:
+        source = _polynomial((_term(1, [2, 0]), _term(1, [0, 2])), VARS)
+        genuine = compute_weight_profile(
+            WeightProfileRequest(polynomial=source, weight=(1, 2))
+        )
+        decoded = PolynomialWeightProfile.model_validate_json(genuine.model_dump_json())
+        assert verify_polynomial_weight_profile(decoded)
+        forged = genuine.model_copy(
+            update={"minimum_weight": genuine.minimum_weight + 1}
+        )
+        assert not verify_polynomial_weight_profile(forged)
+
+    @pytest.mark.parametrize("component", [1.5, True])
+    def test_verifiers_reject_non_integer_model_construct_weights(
+        self, component: object
+    ) -> None:
+        source = _polynomial((_term(1, [2, 0]), _term(1, [0, 2])), VARS)
+        profile = compute_weight_profile(
+            WeightProfileRequest(polynomial=source, weight=(1, 2))
+        )
+        face = compute_initial_form(
+            InitialFormRequest(polynomial=source, weight=(1, 2))
+        )
+        forged_profile = profile.model_copy(update={"weight": (component, 2)})
+        forged_face = face.model_copy(update={"weight": (component, 2)})
+        assert not verify_polynomial_weight_profile(forged_profile)
+        assert not verify_polynomial_face_data(forged_face)
+
     def test_nonzero_support(self) -> None:
         result = compute_support(
             SupportRequest(polynomial=_polynomial(_XY_TERMS, VARS))

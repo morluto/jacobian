@@ -29,6 +29,7 @@ from jacobian.math.polynomials.support_geometry.values import (
 )
 from jacobian.math.polynomials.values import (
     MAX_POLYNOMIAL_EXPONENT,
+    MonicPolynomial,
     RationalPolynomial,
     RationalPolynomialTerm,
     SparseRationalPolynomial,
@@ -611,6 +612,28 @@ def _within_digit_bound(value: int, maximum_digits: int) -> bool:
     return bool(magnitude < 10**maximum_digits)
 
 
+def _rebuild_weighted_source(
+    polynomial: object,
+    variables: tuple[str, ...],
+    term_payloads: list[dict[str, object]],
+    exponent_tuple: tuple[tuple[int, ...], ...],
+) -> tuple[RationalPolynomial, tuple[str, ...], tuple[tuple[int, ...], ...]] | None:
+    """Rebuild a fresh canonical source and revalidate recognized subtypes."""
+    if len(set(exponent_tuple)) != len(exponent_tuple):
+        return None
+    if exponent_tuple != tuple(sorted(exponent_tuple, reverse=True)):
+        return None
+    payload = {
+        "domain": "QQ",
+        "variables": variables,
+        "polynomial": {"terms": tuple(term_payloads)},
+    }
+    if isinstance(polynomial, MonicPolynomial):
+        MonicPolynomial.model_validate(payload)
+    normalized = RationalPolynomial.model_validate(payload)
+    return normalized, variables, exponent_tuple
+
+
 def _bounded_weighted_source(
     polynomial: object,
     *,
@@ -622,9 +645,10 @@ def _bounded_weighted_source(
     Weighted verifiers receive values that may have bypassed Pydantic through
     ``model_copy`` or ``model_construct``.  This preflight checks every source
     carrier before the operation is replayed, including the term budget,
-    canonical rational representation, and exponent bounds.  The returned
-    source is a fresh base ``RationalPolynomial`` so a caller-owned subtype
-    cannot run arbitrary attribute or equality code during replay.
+    canonical rational representation, exponent bounds, and recognized subtype
+    invariants such as ``MonicPolynomial``.  The returned source is a fresh
+    base ``RationalPolynomial`` so a caller-owned subtype cannot run arbitrary
+    attribute or equality code during replay.
     """
     try:
         if not isinstance(polynomial, RationalPolynomial):
@@ -693,19 +717,9 @@ def _bounded_weighted_source(
                 }
             )
 
-        exponent_tuple = tuple(exponents)
-        if len(set(exponent_tuple)) != len(exponent_tuple):
-            return None
-        if exponent_tuple != tuple(sorted(exponent_tuple, reverse=True)):
-            return None
-        normalized = RationalPolynomial.model_validate(
-            {
-                "domain": "QQ",
-                "variables": variables,
-                "polynomial": {"terms": tuple(term_payloads)},
-            }
+        return _rebuild_weighted_source(
+            polynomial, variables, term_payloads, tuple(exponents)
         )
-        return normalized, variables, exponent_tuple
     except Exception:
         # The source may be a caller-owned subtype whose fields execute code;
         # malformed source data is a false claim at this boundary.

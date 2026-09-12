@@ -394,6 +394,35 @@ class TestSupport:
         assert verify_polynomial_weight_profile(profile)
         assert verify_polynomial_face_data(face)
 
+    def test_invalid_monic_subtype_is_rejected_before_retain_or_verify(self) -> None:
+        from jacobian.math.polynomials.values import MonicPolynomial
+
+        source = _polynomial((_term(2, [1]), _term(1, [0])), ("t",))
+        with pytest.raises(ValidationError):
+            MonicPolynomial(variables=("t",), polynomial=source.polynomial)
+        invalid_monic = MonicPolynomial.model_construct(
+            domain="QQ",
+            variables=("t",),
+            polynomial=source.polynomial,
+        )
+
+        with raises_domain_code("polynomial_support_geometry.malformed_polynomial"):
+            weight_profile(invalid_monic, (1,))
+        with raises_domain_code("polynomial_support_geometry.malformed_polynomial"):
+            initial_form(invalid_monic, (1,))
+
+        profile = weight_profile(source, (1,))
+        face = initial_form(source, (1,))
+        assert not verify_polynomial_weight_profile(
+            profile.model_copy(update={"polynomial": invalid_monic})
+        )
+        assert not verify_polynomial_face_data(
+            face.model_copy(update={"polynomial": invalid_monic})
+        )
+        assert not verify_polynomial_face_data(
+            face.model_copy(update={"initial_form": invalid_monic})
+        )
+
     @pytest.mark.parametrize("kind", ("profile", "face"))
     @pytest.mark.parametrize(
         "failure", (RuntimeError, ValueError, TypeError, OperationDomainValidationError)

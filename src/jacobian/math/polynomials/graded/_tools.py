@@ -52,7 +52,7 @@ TOOLS = (
             request.prefix_degree,
             resource_budget=request.resource_budget,
         ),
-        tags=("polynomial", "graded", "hilbert-series", "exact"),
+        tags=("graded", "hilbert-series", "exact"),
         examples=(
             OperationExample(
                 name="hypersurface",
@@ -72,7 +72,7 @@ TOOLS = (
             request.monomial_order,
             resource_budget=request.resource_budget,
         ),
-        tags=("polynomial", "graded", "hilbert-polynomial", "exact"),
+        tags=("graded", "hilbert-polynomial", "exact"),
         examples=(
             OperationExample(
                 name="line",
@@ -92,7 +92,7 @@ TOOLS = (
             request.monomial_order,
             resource_budget=request.resource_budget,
         ),
-        tags=("polynomial", "ideal", "initial-ideal", "groebner", "exact"),
+        tags=("ideal", "initial-ideal", "groebner", "exact"),
         examples=(
             OperationExample(
                 name="principal_square",
@@ -108,7 +108,7 @@ TOOLS = (
         request_type=StandardMonomialsRequest,
         result_type=StandardMonomialsResult,
         run=lambda request: standard_monomials(request.initial_ideal, request.degree),
-        tags=("polynomial", "monomial-ideal", "standard-monomial", "exact"),
+        tags=("monomial-ideal", "standard-monomial", "exact"),
         examples=(
             OperationExample(
                 name="degree_two",
@@ -129,7 +129,7 @@ TOOLS = (
             request.max_degree,
             resource_budget=request.resource_budget,
         ),
-        tags=("polynomial", "graded", "hilbert-function", "exact"),
+        tags=("graded", "hilbert-function", "exact"),
         examples=(
             OperationExample(
                 name="prefix",

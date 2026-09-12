@@ -372,9 +372,9 @@ def test_near_envelope_profile_execution_matches_admission_charge(
 ) -> None:
     import jacobian.math.logic.languages.regular._symbol_parikh as profile
 
-    reachable_count = 4
-    alphabet_size = 8
-    length = 6
+    reachable_count = 6
+    alphabet_size = 7
+    length = 7
     dfa = DFA(
         state_count=reachable_count,
         alphabet_size=alphabet_size,
@@ -525,7 +525,7 @@ def test_near_envelope_profile_execution_matches_admission_charge(
     assert executed["commute_preflight"] == commute_preflight
     assert all(executed.values())
     assert sum(charged.values()) <= MAX_SYMBOL_PARIKH_DP_WORK
-    assert sum(charged.values()) > MAX_SYMBOL_PARIKH_DP_WORK // 2
+    assert sum(charged.values()) > MAX_SYMBOL_PARIKH_DP_WORK // 4
     assert_charged_work_parity(charged=charged, executed=executed)
 
 

@@ -53,6 +53,15 @@ MAX_FRAME_GRAM_ENTRIES = 2_097_152
 MAX_FRAME_GRAM_MULTIPLY_ADDS = 536_870_912
 
 
+def _require_request_type(value: object, expected: type[object]) -> None:
+    if not isinstance(value, expected):
+        raise OperationDomainValidationError(
+            location=(),
+            code="frames.request_type",
+            message=f"operation requires a {expected.__name__} request",
+        )
+
+
 def _complex_parts(value: GaussianRational) -> tuple[Fraction, Fraction]:
     return value.as_fractions()
 
@@ -419,6 +428,7 @@ def frame_potential(value: VectorFamily) -> FramePotentialResult:
 def tight_equiangular_profile(value: VectorFamily) -> TightEquiangularProfileResult:
     """Classify tightness and equiangularity using exact integer Gram data."""
 
+    _require_request_type(value, VectorFamily)
     _require_gram_work_budget(value)
     if any(not any(vector) for vector in value.vectors):
         raise OperationDomainValidationError(
@@ -475,6 +485,7 @@ def complex_frame_profile(
 ) -> ComplexFrameProfileResult:
     """Return an exact complex frame operator and tight/equiangular profile."""
 
+    _require_request_type(request, ComplexFrameProfileRequest)
     dimension = request.frame.dimension
     _require_complex_profile_work(
         request.frame, emitted_matrix_cells=2 * dimension * dimension
@@ -501,6 +512,7 @@ def mutually_unbiased_bases(
 ) -> MutuallyUnbiasedBasesResult:
     """Decide exact mutual unbiasedness of a bounded complex basis family."""
 
+    _require_request_type(request, MutuallyUnbiasedBasesRequest)
     dimension = request.dimension
     basis_count = len(request.bases)
     pair_count = basis_count * (basis_count - 1) // 2
@@ -578,6 +590,7 @@ def mutually_unbiased_bases(
 def sic_profile(request: SicProfileRequest) -> SicProfileResult:
     """Decide the exact SIC overlap equations for a complex vector family."""
 
+    _require_request_type(request, SicProfileRequest)
     frame = request.frame
     _require_complex_profile_work(
         frame,

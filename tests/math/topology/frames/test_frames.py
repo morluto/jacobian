@@ -286,6 +286,24 @@ def test_complex_profile_rejects_scalar_height_before_expansion() -> None:
         _sic_profile(SicProfileRequest(frame=frame))
 
 
+@pytest.mark.parametrize(
+    ("operation", "request_type"),
+    (
+        (_tight_equiangular_profile, VectorFamily),
+        (_complex_frame_profile, ComplexFrameProfileRequest),
+        (_mutually_unbiased_bases, MutuallyUnbiasedBasesRequest),
+        (_sic_profile, SicProfileRequest),
+    ),
+)
+def test_new_frame_operations_reject_untyped_native_requests(
+    operation: object, request_type: type[object]
+) -> None:
+    with pytest.raises(OperationDomainValidationError, match="request") as error:
+        operation({})  # type: ignore[operator]
+    assert error.value.errors()[0]["type"] == "frames.request_type"
+    assert request_type.__name__ in str(error.value)
+
+
 def test_coherence_is_exact_and_carries_canonical_maximizer() -> None:
     result = _coherence(
         VectorFamily.model_validate(

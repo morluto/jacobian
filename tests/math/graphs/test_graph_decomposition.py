@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import pytest
+from jsonschema import Draft202012Validator
+from jsonschema import ValidationError as JSONSchemaValidationError
 from pydantic import ValidationError
 
 from jacobian.math.graphs.decomposition._models import (
@@ -73,8 +75,63 @@ class TestBlockCutTreeRequest:
     def test_vertex_count_too_large(self) -> None:
         with pytest.raises(ValidationError):
             BlockCutTreeRequest(
-                graph=IndexedSimpleUndirectedGraph(vertex_count=65, edges=())
+                graph=IndexedSimpleUndirectedGraph(vertex_count=1025, edges=())
             )
+
+    def test_linear_path_above_legacy_cap_is_admitted_and_round_trips(self) -> None:
+        graph = IndexedSimpleUndirectedGraph(
+            vertex_count=65, edges=tuple((index, index + 1) for index in range(64))
+        )
+        request = BlockCutTreeRequest(graph=graph)
+        result = block_cut_tree(request.graph)
+        assert len(result.blocks) == 64
+        assert len(result.articulation_points) == 63
+        assert len(result.tree) == 126
+        assert type(result).model_validate(result.model_dump()) == result
+
+    def test_full_indexed_vertex_envelope_and_schema_parity(self) -> None:
+        schema = BlockCutTreeRequest.model_json_schema()
+        graph_schema = schema["properties"]["graph"]
+        assert graph_schema["properties"]["vertex_count"]["minimum"] == 1
+        assert graph_schema["properties"]["vertex_count"]["maximum"] == 1024
+        graph = IndexedSimpleUndirectedGraph(
+            vertex_count=1024,
+            edges=tuple((index, index + 1) for index in range(1023)),
+        )
+        result = block_cut_tree(BlockCutTreeRequest(graph=graph).graph)
+        assert len(result.blocks) == 1023
+        assert len(result.articulation_points) == 1022
+        assert len(result.tree) == 2044
+
+    def test_schema_rejects_empty_graph_vertex_count(self) -> None:
+        validator = Draft202012Validator(BlockCutTreeRequest.model_json_schema())
+        validator.validate({"graph": {"vertex_count": 1, "edges": []}})
+        with pytest.raises(JSONSchemaValidationError):
+            validator.validate({"graph": {"vertex_count": 0, "edges": []}})
+
+    def test_full_indexed_star_envelope_is_admitted(self) -> None:
+        graph = IndexedSimpleUndirectedGraph(
+            vertex_count=1024,
+            edges=tuple((0, index) for index in range(1, 1024)),
+        )
+        result = block_cut_tree(BlockCutTreeRequest(graph=graph).graph)
+        assert len(result.blocks) == 1023
+        assert result.articulation_points == (0,)
+        assert len(result.tree) == 1023
+
+    def test_near_edge_carrier_bound_is_admitted(self) -> None:
+        edges = []
+        for left in range(1024):
+            for right in range(left + 1, 1024):
+                edges.append((left, right))
+                if len(edges) == 65_536:
+                    break
+            if len(edges) == 65_536:
+                break
+        graph = IndexedSimpleUndirectedGraph(vertex_count=1024, edges=tuple(edges))
+        result = block_cut_tree(BlockCutTreeRequest(graph=graph).graph)
+        assert len(result.blocks) == 1
+        assert result.articulation_points == ()
 
     def test_vertex_count_too_small(self) -> None:
         with pytest.raises(ValidationError):

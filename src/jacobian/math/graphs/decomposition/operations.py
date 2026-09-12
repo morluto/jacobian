@@ -56,15 +56,18 @@ def block_cut_tree(graph: IndexedSimpleUndirectedGraph) -> BlockCutTreeResult:
         for component in nx.biconnected_components(g)
     ]
     articulation_points = sorted(nx.articulation_points(g))
+    canonical_blocks = tuple(tuple(sorted(block)) for block in blocks)
 
-    tree_edges: list[tuple[int, int]] = []
-    for block_index, block in enumerate(blocks):
-        for vertex in articulation_points:
-            if vertex in block:
-                tree_edges.append((block_index, vertex))
+    articulation_set = set(articulation_points)
+    tree_edges: list[tuple[int, int]] = [
+        (block_index, vertex)
+        for block_index, block in enumerate(canonical_blocks)
+        for vertex in block
+        if vertex in articulation_set
+    ]
 
     return BlockCutTreeResult(
-        blocks=tuple(tuple(sorted(block)) for block in blocks),
+        blocks=canonical_blocks,
         articulation_points=tuple(articulation_points),
         tree=tuple(tree_edges),
     )

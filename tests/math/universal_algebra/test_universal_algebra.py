@@ -968,7 +968,9 @@ def test_native_implication_check_uses_mathematical_arguments() -> None:
     assert result.is_countermodel
 
 
-def test_native_implication_check_bounds_raw_premise_tuple_before_deduplication() -> None:
+def test_native_implication_check_bounds_raw_premise_tuple_before_deduplication() -> (
+    None
+):
     from jacobian.math.universal_algebra import implication_countermodel_check
 
     magma = _cyclic_addition_algebra(2)

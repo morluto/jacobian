@@ -94,11 +94,17 @@ def _admit_equation_profile(
             code="variable_coverage",
             message="variable_count must cover every referenced variable",
         )
-    if len(algebra.carrier) ** variable_count > MAX_ENUMERATION_WORK:
+    evaluation_work = len(algebra.carrier) ** variable_count * (
+        len(left.nodes) + len(right.nodes)
+    )
+    if evaluation_work > MAX_ENUMERATION_WORK:
         _reject(
             location=("variable_count",),
-            code="equation_work_bound",
-            message="equation profile exceeds the assignment work budget",
+            code="equation_evaluation_work_bound",
+            message=(
+                "equation profile exceeds the assignment work budget after "
+                "charging term-evaluation nodes"
+            ),
         )
 
 
@@ -106,7 +112,7 @@ def _admit_implication_countermodel(
     algebra: FiniteAlgebra,
     premises: tuple[MagmaEquation, ...],
     target: MagmaEquation,
-) -> None:
+) -> tuple[int, ...]:
     """Admit one complete finite-magma implication check before evaluation."""
 
     if len(premises) > 16:
@@ -123,28 +129,57 @@ def _admit_implication_countermodel(
         )
     equations = (*premises, target)
     total_work = 0
-    for equation in equations:
+    variable_counts: list[int] = []
+    for equation_index, equation in enumerate(equations):
         for term in (equation.left, equation.right):
             try:
                 require_term_for_algebra(term, algebra)
             except UniversalAlgebraAdmissionError as exc:
-                _reject(location=("equation",), code="term_signature", message=str(exc))
-        variable_count = max(
-            equation.left.variable_count, equation.right.variable_count
+                _reject(
+                    location=("equations", equation_index),
+                    code="term_signature",
+                    message=str(exc),
+                )
+        variable_ids = tuple(
+            sorted(
+                {
+                    node.variable_id
+                    for term in (equation.left, equation.right)
+                    for node in term.nodes
+                    if isinstance(node, VariableTerm)
+                }
+            )
         )
+        if variable_ids != tuple(range(len(variable_ids))):
+            _reject(
+                location=("equations", equation_index),
+                code="sparse_variable_axis",
+                message=(
+                    "equation variable IDs must form the dense canonical axis "
+                    "0..variable_count-1"
+                ),
+            )
+        variable_count = len(variable_ids)
         if variable_count > 8:
             _reject(
-                location=("equation",),
+                location=("equations", equation_index),
                 code="variable_count_bound",
                 message="an equation may use at most eight variables",
             )
-        total_work += len(algebra.carrier) ** variable_count
+        total_work += len(algebra.carrier) ** variable_count * (
+            len(equation.left.nodes) + len(equation.right.nodes)
+        )
+        variable_counts.append(variable_count)
     if total_work > MAX_ENUMERATION_WORK:
         _reject(
             location=("equations",),
             code="countermodel_work_bound",
-            message="complete premise and target assignment work exceeds the bound",
+            message=(
+                "complete assignment work including term-evaluation nodes "
+                "exceeds the bound"
+            ),
         )
+    return tuple(variable_counts)
 
 
 def _admit_subalgebra(algebra: FiniteAlgebra, generators: tuple[int, ...]) -> None:
@@ -212,18 +247,27 @@ def _evaluate_node(
     assignment: dict[int, int],
     n: int,
     index: int,
+    memo: dict[int, int],
 ) -> int:
+    if index in memo:
+        return memo[index]
     node = term.nodes[index]
     if isinstance(node, VariableTerm):
         if node.variable_id not in assignment:
             raise ValueError("incomplete assignment")
-        return assignment[node.variable_id]
+        value = assignment[node.variable_id]
+        memo[index] = value
+        return value
     if isinstance(node, ApplicationTerm):
-        args = [_evaluate_node(algebra, term, assignment, n, c) for c in node.children]
+        args = [
+            _evaluate_node(algebra, term, assignment, n, c, memo) for c in node.children
+        ]
         cell_index = 0
         for arg in args:
             cell_index = cell_index * n + arg
-        return algebra.tables[node.operation][cell_index]
+        value = algebra.tables[node.operation][cell_index]
+        memo[index] = value
+        return value
     raise AssertionError("closed term union admitted an unknown node")
 
 
@@ -232,7 +276,14 @@ def _evaluate_term_unchecked(
 ) -> int:
     """Evaluate a term after the caller has completed source-bound admission."""
 
-    return _evaluate_node(algebra, term, assignment, len(algebra.carrier), term.root)
+    return _evaluate_node(
+        algebra,
+        term,
+        assignment,
+        len(algebra.carrier),
+        term.root,
+        {},
+    )
 
 
 def evaluate_term(
@@ -290,15 +341,17 @@ def implication_countermodel_check(
     hold universally and the target has a counterassignment.
     """
 
-    _admit_implication_countermodel(algebra, premises, target)
+    variable_counts = _admit_implication_countermodel(algebra, premises, target)
     profiles = tuple(
         _equation_profile_unchecked(
             algebra,
             equation.left,
             equation.right,
-            max(equation.left.variable_count, equation.right.variable_count),
+            variable_count,
         )
-        for equation in (*premises, target)
+        for equation, variable_count in zip(
+            (*premises, target), variable_counts, strict=True
+        )
     )
     premise_profiles = profiles[:-1]
     target_profile = profiles[-1]

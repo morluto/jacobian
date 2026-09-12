@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.universal_algebra import (
     ApplicationTerm,
     FiniteAlgebra,
@@ -72,6 +73,54 @@ def _and_term() -> FlatTerm:
         ),
         root=2,
     )
+
+
+def _shared_dag_term(depth: int) -> FlatTerm:
+    nodes: list[VariableTerm | ApplicationTerm] = [
+        VariableTerm(kind="variable", variable_id=0)
+    ]
+    for _ in range(depth):
+        previous = len(nodes) - 1
+        nodes.append(
+            ApplicationTerm(
+                kind="application", operation=0, children=(previous, previous)
+            )
+        )
+    return FlatTerm(nodes=tuple(nodes), root=len(nodes) - 1)
+
+
+def _large_dense_axis_term() -> FlatTerm:
+    nodes: list[VariableTerm | ApplicationTerm] = [
+        VariableTerm(kind="variable", variable_id=index) for index in range(8)
+    ]
+    roots: list[int] = []
+    for left, right in zip(range(4), range(4, 8), strict=True):
+        nodes.append(
+            ApplicationTerm(kind="application", operation=0, children=(left, right))
+        )
+        previous = len(nodes) - 1
+        for _ in range(28):
+            nodes.append(
+                ApplicationTerm(
+                    kind="application", operation=0, children=(previous, previous)
+                )
+            )
+            previous = len(nodes) - 1
+        roots.append(previous)
+    nodes.extend(
+        (
+            ApplicationTerm(
+                kind="application", operation=0, children=(roots[0], roots[1])
+            ),
+            ApplicationTerm(
+                kind="application", operation=0, children=(roots[2], roots[3])
+            ),
+            ApplicationTerm(
+                kind="application", operation=0, children=(len(nodes), len(nodes) + 1)
+            ),
+        )
+    )
+    return FlatTerm(nodes=tuple(nodes), root=len(nodes) - 1)
 
 
 def _cyclic_addition_algebra(order: int) -> FiniteAlgebra:
@@ -257,6 +306,44 @@ class TestMagmaImplicationCountermodel:
         assert result.premises[0].status == "FAILS"
         assert result.target.status == "FAILS"
         assert result.is_countermodel is False
+
+    def test_shared_dag_evaluation_is_memoized_at_the_depth_boundary(self) -> None:
+        term = _shared_dag_term(60)
+        result = compute_implication_countermodel_check(
+            ImplicationCountermodelCheckRequest(
+                algebra=_cyclic_addition_algebra(2),
+                premises=(),
+                target=MagmaEquation(left=term, right=term),
+            )
+        )
+
+        assert result.target.status == "HOLDS"
+        assert result.target.satisfying_count == 2
+        assert result.is_countermodel is False
+
+    def test_term_nodes_are_charged_before_assignment_expansion(self) -> None:
+        term = _large_dense_axis_term()
+        with pytest.raises(OperationDomainValidationError, match="term-evaluation"):
+            compute_implication_countermodel_check(
+                ImplicationCountermodelCheckRequest(
+                    algebra=_cyclic_addition_algebra(4),
+                    premises=(),
+                    target=MagmaEquation(left=term, right=term),
+                )
+            )
+
+    def test_sparse_variable_axis_is_rejected(self) -> None:
+        term = _variable_term(7)
+        with pytest.raises(
+            OperationDomainValidationError, match="dense canonical axis"
+        ):
+            compute_implication_countermodel_check(
+                ImplicationCountermodelCheckRequest(
+                    algebra=_cyclic_addition_algebra(2),
+                    premises=(),
+                    target=MagmaEquation(left=term, right=term),
+                )
+            )
 
 
 # ---------------------------------------------------------------------------

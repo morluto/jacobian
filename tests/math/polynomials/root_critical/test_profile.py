@@ -243,7 +243,7 @@ def test_zero_pair_budget_rejects_before_root_expansion() -> None:
 
 def test_native_pair_budget_matches_catalog_range() -> None:
     polynomial = _polynomial((3, 1), (0, -1))
-    with pytest.raises(OperationDomainValidationError, match="0..64"):
+    with pytest.raises(OperationDomainValidationError, match=r"0\.\.64"):
         root_critical_distance_profile(polynomial, max_pair_rows=65)
     with pytest.raises(OperationDomainValidationError, match="non-boolean"):
         root_critical_distance_profile(polynomial, max_pair_rows="64")  # type: ignore[arg-type]

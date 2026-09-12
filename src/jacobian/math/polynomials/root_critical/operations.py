@@ -238,53 +238,56 @@ def _nth_root_bounds(value: Fraction, n: int) -> tuple[Fraction, Fraction]:
     return lower, Fraction(low + 1, scale)
 
 
+def _integer_power_box(
+    factor: tuple[Fraction, Fraction, Fraction, Fraction], power: int
+) -> tuple[Fraction, Fraction, Fraction, Fraction]:
+    if power < 0:
+        raise ValueError("certified enclosure does not invert")
+    result = (Fraction(1), Fraction(1), Fraction(), Fraction())
+    remaining = power
+    while remaining:
+        if remaining & 1:
+            result = _multiply_boxes(result, factor)
+        remaining >>= 1
+        if remaining:
+            factor = _multiply_boxes(factor, factor)
+    return result
+
+
+def _enclose_rational_power(
+    base: Any, exponent: Any
+) -> tuple[Fraction, Fraction, Fraction, Fraction] | None:
+    if not (getattr(exponent, "is_Rational", False) or isinstance(exponent, Fraction)):
+        return None
+    numerator = int(exponent.p if hasattr(exponent, "p") else exponent.numerator)
+    denominator = int(exponent.q if hasattr(exponent, "q") else exponent.denominator)
+    if denominator not in {1, 2, 3} or numerator < 0:
+        return None
+    r0, r1, i0, i1 = _enclose_sympy(base)
+    if i0 != 0 or i1 != 0:
+        raise ValueError("certified radical requires a real box")
+    if denominator > 1:
+        if r0 < 0 and denominator % 2 == 0:
+            raise ValueError("certified even root requires a nonnegative real box")
+        r0, r1 = (
+            _nth_root_bounds(r0, denominator)[0],
+            _nth_root_bounds(r1, denominator)[1],
+        )
+    if numerator == 0:
+        return Fraction(1), Fraction(1), Fraction(), Fraction()
+    return _integer_power_box((r0, r1, Fraction(), Fraction()), numerator)
+
+
 def _enclose_pow(expr: Any) -> tuple[Fraction, Fraction, Fraction, Fraction]:
     base, exponent = expr.args
     if exponent == 2:
         r0, r1, i0, i1 = _enclose_sympy(base)
         return _square_box(r0, r1, i0, i1)
-    if getattr(exponent, "is_Rational", False) or isinstance(exponent, Fraction):
-        numerator = int(exponent.p if hasattr(exponent, "p") else exponent.numerator)
-        denominator = int(exponent.q if hasattr(exponent, "q") else exponent.denominator)
-        if denominator in {1, 2, 3} and numerator >= 0:
-            r0, r1, i0, i1 = _enclose_sympy(base)
-            if i0 != 0 or i1 != 0:
-                raise ValueError("certified radical requires a real box")
-            if denominator > 1:
-                if r0 < 0 and denominator % 2 == 0:
-                    raise ValueError(
-                        "certified even root requires a nonnegative real box"
-                    )
-                r0, r1 = _nth_root_bounds(r0, denominator)[0], _nth_root_bounds(
-                    r1, denominator
-                )[1]
-            if numerator == 0:
-                return Fraction(1), Fraction(1), Fraction(), Fraction()
-            result = (r0, r1, Fraction(), Fraction())
-            factor = result
-            remaining = numerator
-            power_result = (Fraction(1), Fraction(1), Fraction(), Fraction())
-            while remaining:
-                if remaining & 1:
-                    power_result = _multiply_boxes(power_result, factor)
-                remaining >>= 1
-                if remaining:
-                    factor = _multiply_boxes(factor, factor)
-            return power_result
+    rational_box = _enclose_rational_power(base, exponent)
+    if rational_box is not None:
+        return rational_box
     if getattr(exponent, "is_Integer", False):
-        power = int(exponent)
-        if power < 0:
-            raise ValueError("certified enclosure does not invert")
-        result = (Fraction(1), Fraction(1), Fraction(), Fraction())
-        factor = _enclose_sympy(base)
-        remaining = power
-        while remaining:
-            if remaining & 1:
-                result = _multiply_boxes(result, factor)
-            remaining >>= 1
-            if remaining:
-                factor = _multiply_boxes(factor, factor)
-        return result
+        return _integer_power_box(_enclose_sympy(base), int(exponent))
     raise ValueError("expression is outside the certified enclosure grammar")
 
 

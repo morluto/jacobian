@@ -6,7 +6,7 @@ from fractions import Fraction
 
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS, CanonicalRational
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -16,6 +16,7 @@ from jacobian.math.combinatorics.matroids.oriented._bracket_models import (
     MAX_BRACKET_CONTRIBUTIONS,
     MAX_BRACKET_FACTORS,
     MAX_BRACKET_OUTPUT_CELLS,
+    MAX_BRACKET_SERIALIZED_RESULT_BYTES,
     MAX_BRACKET_TERMS,
     BracketMonomial,
     BracketPolynomial,
@@ -208,6 +209,47 @@ def _rational_component_digit_upper_bound(value: CanonicalRational) -> tuple[int
     )
 
 
+def _exceeds_canonical_integer_bound(value: int) -> bool:
+    """Check a nonnegative output integer without formatting huge values."""
+
+    if value.bit_length() <= 3 * MAX_CANONICAL_INTEGER_DIGITS:
+        return False
+    return bool(value >= 10**MAX_CANONICAL_INTEGER_DIGITS)
+
+
+def _admit_serialized_result(
+    output_keys: set[tuple[tuple[tuple[int, int, int], int], ...]],
+    coefficient_digit_bound: int,
+    ground_size: int,
+) -> None:
+    """Admit a conservative ASCII-JSON size envelope for the residual."""
+
+    index_digits = _integer_digit_upper_bound(ground_size - 1)
+    term_cells = len(output_keys)
+    factor_cells = sum(len(key) for key in output_keys)
+    output_cells = term_cells + factor_cells
+    serialized_bytes = 256 + term_cells * (256 + 2 * coefficient_digit_bound)
+    serialized_bytes += sum(
+        128 + 3 * index_digits + _integer_digit_upper_bound(multiplicity)
+        for key in output_keys
+        for _, multiplicity in key
+    )
+    # Keep the cell count explicit: this prevents a future change to the
+    # carrier shape from silently dropping a factor from the estimate.
+    if output_cells > MAX_BRACKET_OUTPUT_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("terms",),
+            code="bracket.syzygy_output_cell_bound",
+            message="the exact sparse residual output exceeds the supported cell bound",
+        )
+    if serialized_bytes > MAX_BRACKET_SERIALIZED_RESULT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("terms",),
+            code="bracket.syzygy_serialized_result_bound",
+            message="the exact residual exceeds the serialized result envelope",
+        )
+
+
 def _admit_residual_envelope(request: BracketSyzygyResidualRequest) -> None:
     """Admit source claims, sparse output, and exact coefficient growth up front."""
 
@@ -233,6 +275,17 @@ def _admit_residual_envelope(request: BracketSyzygyResidualRequest) -> None:
         for factor, multiplicity in factors:
             multiplicities[factor.indices] = (
                 multiplicities.get(factor.indices, 0) + multiplicity
+            )
+        if any(
+            _exceeds_canonical_integer_bound(value) for value in multiplicities.values()
+        ):
+            raise OperationResourceAdmissionError(
+                location=("terms",),
+                code="bracket.syzygy_multiplicity_digit_bound",
+                message=(
+                    "assembled bracket-factor multiplicity exceeds the canonical "
+                    "integer representation envelope"
+                ),
             )
         if len(multiplicities) > MAX_BRACKET_FACTORS:
             raise OperationDomainValidationError(
@@ -285,9 +338,7 @@ def _admit_residual_envelope(request: BracketSyzygyResidualRequest) -> None:
             for numerator_digits, denominator_digits in components
         )
         sum_digit_overhead = (
-            0
-            if len(components) <= 1
-            else _integer_digit_upper_bound(len(components))
+            0 if len(components) <= 1 else _integer_digit_upper_bound(len(components))
         )
         coefficient_digit_bound = max(
             coefficient_digit_bound,
@@ -300,13 +351,9 @@ def _admit_residual_envelope(request: BracketSyzygyResidualRequest) -> None:
             code="bracket.syzygy_coefficient_digit_bound",
             message="exact residual coefficient growth exceeds the supported digit bound",
         )
-    output_cells = len(output_keys) * (MAX_BRACKET_FACTORS + 1)
-    if output_cells > MAX_BRACKET_OUTPUT_CELLS:
-        raise OperationResourceAdmissionError(
-            location=("terms",),
-            code="bracket.syzygy_output_cell_bound",
-            message="the exact sparse residual output exceeds the supported cell bound",
-        )
+    _admit_serialized_result(
+        output_keys, coefficient_digit_bound, request.target.ground_size
+    )
 
 
 def grassmann_pluecker_relation(

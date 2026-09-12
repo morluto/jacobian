@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import random
 from fractions import Fraction
-from itertools import combinations
+from itertools import combinations, islice
+from typing import cast
 
 import pytest
 from pydantic import ValidationError
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS, CanonicalRational
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -154,19 +155,46 @@ def test_relation_rejects_indices_outside_the_ground_range() -> None:
 
 
 def test_normalized_relation_agrees_with_the_permuted_presentation() -> None:
-    """Permuting the presented indices still yields a canonical polynomial."""
+    """Relabelling indices preserves each bracket's alternating parity."""
     base = grassmann_pluecker_relation(
         GrassmannPlueckerRelationRequest(
             ground_size=6, indices=(0, 1, 2, 3, 4, 5), family="FOUR_TERM"
         )
     )
+    relabelling = (2, 0, 5, 1, 4, 3)
     permuted = grassmann_pluecker_relation(
         GrassmannPlueckerRelationRequest(
-            ground_size=6, indices=(1, 0, 2, 3, 4, 5), family="FOUR_TERM"
+            ground_size=6, indices=relabelling, family="FOUR_TERM"
         )
     )
     assert isinstance(permuted.polynomial, BracketPolynomial)
     assert len(permuted.polynomial.terms) == len(base.polynomial.terms)
+    expected: dict[tuple[tuple[tuple[int, int, int], int], ...], Fraction] = {}
+    for term in base.polynomial.terms:
+        coefficient = term.coefficient.as_fraction()
+        factors = []
+        for factor, multiplicity in term.monomial.factors:
+            relabelled = (
+                relabelling[factor.indices[0]],
+                relabelling[factor.indices[1]],
+                relabelling[factor.indices[2]],
+            )
+            inversions = sum(
+                left > right for left, right in combinations(relabelled, 2)
+            )
+            coefficient *= -1 if inversions % 2 else 1
+            factors.append(
+                (cast(tuple[int, int, int], tuple(sorted(relabelled))), multiplicity)
+            )
+        expected[tuple(sorted(factors))] = coefficient
+    permuted_coefficients = {
+        tuple(
+            (factor.indices, multiplicity)
+            for factor, multiplicity in term.monomial.factors
+        ): term.coefficient.as_fraction()
+        for term in permuted.polynomial.terms
+    }
+    assert permuted_coefficients == expected
 
 
 def test_result_round_trips_through_strict_json() -> None:
@@ -229,7 +257,7 @@ def test_syzygy_rejects_anonymous_polynomial_sources() -> None:
                 (
                     CanonicalRational(num=1, den=1),
                     BracketMonomial(factors=()),
-                    relation.polynomial,
+                    cast(GrassmannPlueckerRelation, relation.polynomial),
                 ),
             ),
         )
@@ -309,9 +337,7 @@ def test_syzygy_rejects_513_distinct_output_terms_before_expansion() -> None:
         factors = tuple(
             sorted(((left, 1), (right, 1)), key=lambda item: item[0].indices)
         )
-        key = tuple(
-            (factor.indices, multiplicity) for factor, multiplicity in factors
-        )
+        key = tuple((factor.indices, multiplicity) for factor, multiplicity in factors)
         if key in relation_keys:
             continue
         target_terms.append(
@@ -372,6 +398,91 @@ def test_syzygy_rejects_unbounded_intermediate_coefficient_digits() -> None:
         bracket_syzygy_residual(
             BracketSyzygyResidualRequest(target=relation.polynomial, terms=terms)
         )
+
+
+def test_syzygy_rejects_assembled_multiplicity_overflow_before_combine() -> None:
+    relation = grassmann_pluecker_relation(
+        GrassmannPlueckerRelationRequest(
+            ground_size=5,
+            indices=(0, 1, 2, 3, 4),
+            family="SHARED_INDEX_THREE_TERM",
+        )
+    )
+    multiplier = BracketMonomial(
+        factors=(
+            (
+                CanonicalBracket(indices=(0, 1, 2)),
+                10**MAX_CANONICAL_INTEGER_DIGITS - 1,
+            ),
+        )
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        bracket_syzygy_residual(
+            BracketSyzygyResidualRequest(
+                target=BracketPolynomial(ground_size=5, terms=()),
+                terms=((CanonicalRational(num=1, den=1), multiplier, relation),),
+            )
+        )
+    assert error.value.errors()[0]["type"] == "bracket.syzygy_multiplicity_digit_bound"
+
+
+def test_syzygy_accepts_maximum_assembled_multiplicity() -> None:
+    relation = grassmann_pluecker_relation(
+        GrassmannPlueckerRelationRequest(
+            ground_size=5,
+            indices=(0, 1, 2, 3, 4),
+            family="SHARED_INDEX_THREE_TERM",
+        )
+    )
+    maximum = 10**MAX_CANONICAL_INTEGER_DIGITS - 1
+    multiplier = BracketMonomial(
+        factors=((CanonicalBracket(indices=(0, 1, 2)), maximum - 1),)
+    )
+    residual = bracket_syzygy_residual(
+        BracketSyzygyResidualRequest(
+            target=BracketPolynomial(ground_size=5, terms=()),
+            terms=((CanonicalRational(num=1, den=1), multiplier, relation),),
+        )
+    )
+    assert any(
+        multiplicity == maximum
+        for term in residual.terms
+        for _factor, multiplicity in term.monomial.factors
+    )
+
+
+def test_syzygy_rejects_serialized_result_growth_before_combine() -> None:
+    atoms = [CanonicalBracket(indices=triple) for triple in combinations(range(12), 3)]
+    coefficient = CanonicalRational(
+        num=10 ** (MAX_CANONICAL_INTEGER_DIGITS - 1) - 1,
+        den=1,
+    )
+    target_terms = tuple(
+        BracketPolynomialTerm(
+            coefficient=coefficient,
+            monomial=BracketMonomial(
+                factors=tuple(
+                    (atom, 10**MAX_CANONICAL_INTEGER_DIGITS - 1) for atom in factors
+                )
+            ),
+        )
+        for factors in islice(combinations(atoms, 4), 512)
+    )
+    target = BracketPolynomial(
+        ground_size=12,
+        terms=tuple(
+            sorted(
+                target_terms,
+                key=lambda term: tuple(
+                    (factor.indices, multiplicity)
+                    for factor, multiplicity in term.monomial.factors
+                ),
+            )
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        bracket_syzygy_residual(BracketSyzygyResidualRequest(target=target, terms=()))
+    assert error.value.errors()[0]["type"] == "bracket.syzygy_serialized_result_bound"
 
 
 def test_compressed_large_multiplicity_survives_residual_and_json() -> None:

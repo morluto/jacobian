@@ -5,7 +5,7 @@ from itertools import product
 from typing import Any
 
 import pytest
-from sympy import cancel, symbols
+from sympy import Matrix, cancel, diff, symbols
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -106,6 +106,78 @@ def test_mixed_tensor_formula_replays_exactly() -> None:
                 * source_values[upper * 2 + replacement]
             )
         expected.append(expression)
+    assert all(
+        cancel(left - right) == 0 for left, right in zip(actual, expected, strict=True)
+    )
+
+
+def test_nondiagonal_tensor_formula_matches_independent_sympy_oracle() -> None:
+    """Derive the connection independently instead of reusing the DAG plan."""
+    x, y = symbols("x y")
+    axis = ("x", "y")
+    metric = RationalCoordinateMetric(
+        tensor=tensor([2 + x, y, y, 3 + x], ("COVARIANT", "COVARIANT"), axis)
+    )
+    source_components = tuple(
+        rational_function_from_sympy(value, axis)
+        for value in (x / (x + 1), 1, y, (x + y) / (y + 1))
+    )
+    source = RationalCoordinateTensor(
+        coordinate_axis=axis,
+        variance=("CONTRAVARIANT", "COVARIANT"),
+        components=source_components,
+        retained_nonzero_denominators=canonical_locus_guards(
+            tuple(
+                component.denominator
+                for component in source_components
+                if component.denominator.terms
+            ),
+            variable_count=len(axis),
+        ),
+    )
+
+    result = covariant_derivative(metric, source)
+    actual = expressions(result)
+
+    coordinates = (x, y)
+    metric_matrix = Matrix([[2 + x, y], [y, 3 + x]])
+    inverse = metric_matrix.inv()
+    gamma = [
+        [
+            [
+                cancel(
+                    sum(
+                        inverse[k, ell]
+                        * (
+                            diff(metric_matrix[ell, j], coordinates[i])
+                            + diff(metric_matrix[ell, i], coordinates[j])
+                            - diff(metric_matrix[i, j], coordinates[ell])
+                        )
+                        for ell in range(2)
+                    )
+                    / 2
+                )
+                for j in range(2)
+            ]
+            for i in range(2)
+        ]
+        for k in range(2)
+    ]
+    source_values = expressions(source)
+    expected = []
+    for derivative_axis, upper, lower in product(range(2), repeat=3):
+        value = source_values[upper * 2 + lower].diff(coordinates[derivative_axis])
+        for replacement in range(2):
+            value += (
+                gamma[upper][derivative_axis][replacement]
+                * source_values[replacement * 2 + lower]
+            )
+            value -= (
+                gamma[replacement][derivative_axis][lower]
+                * source_values[upper * 2 + replacement]
+            )
+        expected.append(value)
+
     assert all(
         cancel(left - right) == 0 for left, right in zip(actual, expected, strict=True)
     )

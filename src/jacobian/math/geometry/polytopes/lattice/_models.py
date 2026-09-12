@@ -8,12 +8,15 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
+    MAX_CANONICAL_INTEGER_DIGITS,
     ExactInteger,
     require_bounded_rational,
 )
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.geometry.polytopes.values import Halfspace as RationalHalfspace
 from jacobian.math.geometry.polytopes.values import Vertex as RationalVertex
+from jacobian.math.polynomials.values import RationalPolynomial
 
 MAX_DIMENSION = 4
 """Absolute upper bound on the ambient dimension of a polytope.
@@ -60,6 +63,9 @@ the work.  Requests whose deduplicated facet count times their integer
 bounding-box scan exceeds this budget are rejected at validation.
 """
 
+MAX_FACET_COMBINATIONS = 700_000
+"""Maximum V-representation facet candidates admitted by one lattice scan."""
+
 MAX_TOTAL_SCAN = 10_000_000
 """Absolute upper bound on candidate points tested by one admitted scan.
 
@@ -67,6 +73,9 @@ Every accepted request's integer bounding box stays within this many
 integer candidates, so neither operation can ever observe more lattice
 points than this; the count result is constrained to the same maximum.
 """
+
+MAX_EHRHART_DILATIONS = 32
+"""Maximum number of dilation values retained by Ehrhart interpolation."""
 
 COORDINATE_DIGITS = 32_768
 """Per-component digit bound forwarded to the canonical rational validator."""
@@ -311,15 +320,257 @@ class EnumerateLatticePointsRequest(LatticePolytopeRequest):
     """Wire request for enumeration; execution admission happens in the operation."""
 
 
+def _require_ehrhart_request_shape(
+    vertices: tuple[RationalVertex, ...], degree_bound: int, max_dilation: int
+) -> int:
+    """Check cheap request shape and scalar bounds before native admission."""
+
+    dimension = _require_ehrhart_vertex_structure(vertices)
+    if not 1 <= len(vertices) <= MAX_VERTICES:
+        raise _validation_error(
+            "ehrhart_vertex_count", "vertex count exceeds the admitted range"
+        )
+    if type(degree_bound) is not int or not 1 <= degree_bound <= MAX_DIMENSION:
+        raise _validation_error(
+            "ehrhart_degree_range", "degree_bound exceeds the admitted range"
+        )
+    if type(max_dilation) is not int or not 1 <= max_dilation <= MAX_EHRHART_DILATIONS:
+        raise _validation_error(
+            "ehrhart_dilation_range", "max_dilation exceeds the admitted range"
+        )
+    if degree_bound < dimension:
+        raise _validation_error(
+            "ehrhart_degree_bound", "degree_bound must cover the polytope dimension"
+        )
+    if max_dilation < degree_bound:
+        raise _validation_error(
+            "ehrhart_dilation_range",
+            "max_dilation must provide degree_bound + 1 evaluations",
+        )
+    return dimension
+
+
+def _require_ehrhart_vertex_structure(
+    vertices: tuple[RationalVertex, ...],
+) -> int:
+    """Check source vertex shape and scalar representation without rank work."""
+
+    if not 1 <= len(vertices) <= MAX_VERTICES:
+        raise _validation_error(
+            "ehrhart_vertex_count", "vertex count exceeds the admitted range"
+        )
+    dimensions = {len(vertex.coordinates) for vertex in vertices}
+    if len(dimensions) != 1:
+        raise _validation_error(
+            "ehrhart_vertex_dimension", "all vertices must share one dimension"
+        )
+    dimension = next(iter(dimensions))
+    if not 1 <= dimension <= MAX_DIMENSION:
+        raise _validation_error(
+            "ehrhart_dimension_exceeded",
+            "Ehrhart dimension exceeds the supported bound",
+        )
+    if any(
+        coordinate.den != 1 for vertex in vertices for coordinate in vertex.coordinates
+    ):
+        raise _validation_error(
+            "ehrhart_requires_integral_vertices",
+            "Ehrhart polynomial recovery currently requires integral vertices",
+        )
+    return dimension
+
+
+def _require_ehrhart_full_dimensional(
+    vertices: tuple[RationalVertex, ...],
+) -> int:
+    """Require the source vertices to affinely span their ambient dimension."""
+
+    dimension = _require_ehrhart_vertex_structure(vertices)
+    base = vertices[0].coordinates
+    rows = [
+        [
+            vertex.coordinates[index].as_fraction() - base[index].as_fraction()
+            for index in range(dimension)
+        ]
+        for vertex in vertices[1:]
+    ]
+    rank = 0
+    for column in range(dimension):
+        pivot = next(
+            (row for row in range(rank, len(rows)) if rows[row][column] != 0),
+            None,
+        )
+        if pivot is None:
+            continue
+        rows[rank], rows[pivot] = rows[pivot], rows[rank]
+        pivot_value = rows[rank][column]
+        rows[rank] = [value / pivot_value for value in rows[rank]]
+        for row in range(len(rows)):
+            if row != rank and rows[row][column] != 0:
+                factor = rows[row][column]
+                rows[row] = [
+                    value - factor * pivot_value
+                    for value, pivot_value in zip(rows[row], rows[rank], strict=True)
+                ]
+        rank += 1
+        if rank == len(rows):
+            break
+    if rank < dimension:
+        raise _validation_error(
+            "ehrhart_not_full_dimensional",
+            "Ehrhart source vertices must affinely span their ambient dimension",
+        )
+    return dimension
+
+
+def _admit_ehrhart_scaled_coordinates(
+    vertices: tuple[RationalVertex, ...], max_dilation: int
+) -> None:
+    """Admit maximum dilated height once at the native execution boundary."""
+
+    scaled_digits = 0
+    for vertex in vertices:
+        for coordinate in vertex.coordinates:
+            scaled_digits = max(
+                scaled_digits,
+                len(format_canonical_integer(abs(coordinate.num * max_dilation))),
+            )
+    if scaled_digits > MAX_CANONICAL_INTEGER_DIGITS:
+        raise _validation_error(
+            "ehrhart_scaled_coordinate",
+            "a maximum-dilation coordinate exceeds the canonical integer bound",
+        )
+
+
+def require_ehrhart_source(
+    vertices: tuple[RationalVertex, ...], degree_bound: int, max_dilation: int
+) -> None:
+    """Admit one native Ehrhart source, including affine dimension."""
+
+    _require_ehrhart_request_shape(vertices, degree_bound, max_dilation)
+    _admit_ehrhart_scaled_coordinates(vertices, max_dilation)
+    _require_ehrhart_full_dimensional(vertices)
+
+
+class EhrhartRequest(StrictModel):
+    """Recover an Ehrhart polynomial for a bounded integral V-polytope."""
+
+    vertices: tuple[RationalVertex, ...] = Field(
+        min_length=1,
+        max_length=MAX_VERTICES,
+        description=(
+            "Integral vertices of a full-dimensional bounded V-polytope. "
+            "Integral vertices are required because rational polytopes have "
+            "quasi-polynomial Ehrhart counts."
+        ),
+    )
+    degree_bound: int = Field(ge=1, le=MAX_DIMENSION)
+    max_dilation: int = Field(default=MAX_DIMENSION, ge=1, le=MAX_EHRHART_DILATIONS)
+
+    @model_validator(mode="after")
+    def require_integral_vertices_and_range(self) -> Self:
+        _require_ehrhart_request_shape(
+            self.vertices, self.degree_bound, self.max_dilation
+        )
+        return self
+
+
+class EhrhartResult(StrictModel):
+    """A source-bound exact Ehrhart polynomial and its retained count table."""
+
+    vertices: tuple[RationalVertex, ...] = Field(
+        min_length=1,
+        max_length=MAX_VERTICES,
+    )
+
+    dimension: int = Field(ge=1, le=MAX_DIMENSION)
+    degree_bound: int = Field(ge=1, le=MAX_DIMENSION)
+    max_dilation: int = Field(ge=1, le=MAX_EHRHART_DILATIONS)
+    counts: tuple[tuple[int, ExactInteger], ...] = Field(
+        min_length=2, max_length=MAX_EHRHART_DILATIONS + 1
+    )
+    polynomial: RationalPolynomial
+
+    @model_validator(mode="after")
+    def require_result_shapes(self) -> Self:
+        dimension = _require_ehrhart_request_shape(
+            self.vertices, self.degree_bound, self.max_dilation
+        )
+        if self.dimension != dimension:
+            raise _validation_error(
+                "ehrhart_dimension_shape",
+                "result dimension must match the source vertex dimension",
+            )
+        if self.max_dilation < self.degree_bound:
+            raise _validation_error(
+                "ehrhart_dilation_range",
+                "max_dilation must provide degree_bound + 1 evaluations",
+            )
+        if len(self.counts) != self.max_dilation + 1:
+            raise _validation_error(
+                "ehrhart_count_shape",
+                "counts must contain every dilation from zero through max_dilation",
+            )
+        if tuple(t for t, _count in self.counts) != tuple(range(self.max_dilation + 1)):
+            raise _validation_error(
+                "ehrhart_count_dilation",
+                "dilation values must be the complete range from zero",
+            )
+        if any(count < 0 for _dilation, count in self.counts):
+            raise _validation_error(
+                "ehrhart_count_value", "lattice counts must be nonnegative"
+            )
+        if self.polynomial.variables != ("t",):
+            raise _validation_error(
+                "ehrhart_polynomial_axis",
+                "Ehrhart polynomials must use the canonical `t` axis",
+            )
+        if any(
+            term.exponents[0] > self.degree_bound
+            for term in self.polynomial.polynomial.terms
+        ):
+            raise _validation_error(
+                "ehrhart_polynomial_degree",
+                "polynomial degree must not exceed degree_bound",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        vertices: tuple[RationalVertex, ...],
+        dimension: int,
+        degree_bound: int,
+        max_dilation: int,
+        counts: tuple[tuple[int, ExactInteger], ...],
+        polynomial: RationalPolynomial,
+    ) -> Self:
+        """Construct trusted output after native admission and counting."""
+
+        return cls.model_construct(
+            vertices=vertices,
+            dimension=dimension,
+            degree_bound=degree_bound,
+            max_dilation=max_dilation,
+            counts=counts,
+            polynomial=polynomial,
+        )
+
+
 __all__ = [
     "MAX_BOUND_SPAN",
     "MAX_DIMENSION",
+    "MAX_EHRHART_DILATIONS",
+    "MAX_FACET_COMBINATIONS",
     "MAX_FACET_TESTS",
     "MAX_HALFSPACES",
     "MAX_LATTICE_POINTS",
     "MAX_TOTAL_SCAN",
     "MAX_VERTICES",
     "CountLatticePointsResult",
+    "EhrhartRequest",
+    "EhrhartResult",
     "EnumerateLatticePointsRequest",
     "EnumerateLatticePointsResult",
     "LatticePoint",

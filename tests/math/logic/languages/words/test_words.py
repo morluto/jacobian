@@ -5,7 +5,7 @@ from __future__ import annotations
 import itertools
 import json
 import random
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 
 import pytest
@@ -28,9 +28,11 @@ from jacobian.math.logic.languages.words import (
     parikh_vector,
     periods,
     prefix_function,
+    prefixes,
     primitive_root,
     substitution_dependency_graph,
     substitution_primitivity_profile,
+    suffixes,
 )
 from jacobian.math.logic.languages.words import _tools as word_operations
 from jacobian.math.logic.languages.words._models import (
@@ -54,6 +56,10 @@ from jacobian.math.logic.languages.words._tools import (
     compute_substitution_dependency_graph,
     compute_substitution_fixed_point_prefix,
     compute_substitution_primitivity_profile,
+)
+from jacobian.math.logic.languages.words.values import (
+    MAX_ALPHABET_SIZE,
+    MAX_WORD_LENGTH,
 )
 
 
@@ -82,7 +88,8 @@ def _substitution(
 
 
 def test_public_catalog_surface_is_the_audited_operations() -> None:
-    assert tuple(tool.operation_id for tool in TOOLS) == (
+    operation_ids = tuple(tool.operation_id for tool in TOOLS)
+    assert operation_ids == (
         "word.factors.length.compute",
         "word.periods.compute",
         "word_morphism.incidence_matrix.compute",
@@ -90,6 +97,73 @@ def test_public_catalog_surface_is_the_audited_operations() -> None:
         "substitution.primitivity_profile.compute",
         "substitution.fixed_point_prefix.compute",
     )
+
+
+def test_prefix_and_suffix_families_are_complete() -> None:
+    source = _word("abaab")
+    assert tuple(item.letters for item in prefixes(source)) == (
+        (),
+        ("a",),
+        ("a", "b"),
+        ("a", "b", "a"),
+        ("a", "b", "a", "a"),
+        ("a", "b", "a", "a", "b"),
+    )
+    assert tuple(item.letters for item in suffixes(source)) == (
+        ("a", "b", "a", "a", "b"),
+        ("b", "a", "a", "b"),
+        ("a", "a", "b"),
+        ("a", "b"),
+        ("b",),
+        (),
+    )
+
+
+def test_word_family_operations_retain_empty_alphabet_and_empty_word() -> None:
+    source = FiniteWord(alphabet=(), letters=())
+    assert prefixes(source) == (source,)
+    assert suffixes(source) == (source,)
+
+
+def test_word_family_operations_retain_both_maximum_axes() -> None:
+    alphabet = tuple(f"s{index}" for index in range(MAX_ALPHABET_SIZE))
+    source = FiniteWord(
+        alphabet=alphabet,
+        letters=(alphabet[0],) * MAX_WORD_LENGTH,
+    )
+    prefix_family = prefixes(source)
+    suffix_family = suffixes(source)
+
+    assert len(prefix_family) == MAX_WORD_LENGTH + 1
+    assert len(suffix_family) == MAX_WORD_LENGTH + 1
+    assert prefix_family[0] == FiniteWord(alphabet=alphabet, letters=())
+    assert prefix_family[-1] == source
+    assert suffix_family[0] == source
+    assert suffix_family[-1] == FiniteWord(alphabet=alphabet, letters=())
+    assert all(item.alphabet == alphabet for item in prefix_family)
+    assert all(item.alphabet == alphabet for item in suffix_family)
+
+
+def test_maximum_family_stays_within_materialization_cell_bound() -> None:
+    alphabet = tuple(chr(65 + index) * 64 for index in range(MAX_ALPHABET_SIZE))
+    source = FiniteWord(
+        alphabet=alphabet,
+        letters=(alphabet[0],) * MAX_WORD_LENGTH,
+    )
+    assert len(prefixes(source)) == MAX_WORD_LENGTH + 1
+
+
+@pytest.mark.parametrize("operation", (prefixes, suffixes))
+def test_unicode_maximum_family_is_admitted_with_bounded_materialization(
+    operation: Callable[[FiniteWord], tuple[FiniteWord, ...]],
+) -> None:
+    alphabet = tuple(chr(0x1F600 + index) * 64 for index in range(MAX_ALPHABET_SIZE))
+    source = FiniteWord(
+        alphabet=alphabet,
+        letters=(alphabet[0],) * MAX_WORD_LENGTH,
+    )
+
+    assert len(operation(source)) == MAX_WORD_LENGTH + 1
 
 
 def test_narrowed_scalar_symbol_contract_rejects_lone_surrogates() -> None:

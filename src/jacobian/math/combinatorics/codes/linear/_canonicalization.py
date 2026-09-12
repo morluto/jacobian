@@ -16,6 +16,10 @@ from jacobian.catalog.models import (
 from jacobian.math.combinatorics.codes.linear.values import PrimeFieldLinearEncoder
 from jacobian.math.groups._models import PermutationGroup
 from jacobian.math.groups.operations import _backend_group, _full_permutation_form
+from jacobian.math.matrices.finite_fields.linear_algebra import (
+    PrimeFieldMatrix,
+    _rref_admitted,
+)
 
 MAX_CODE_CANONICALIZATION_ACTION_ORDER = 100_000
 MAX_CODE_CANONICALIZATION_RREF_WORK = 20_000_000
@@ -47,33 +51,16 @@ class LinearCodeCanonicalizationResult(StrictModel):
 
 
 def _rref(
-    matrix: tuple[tuple[int, ...], ...], prime: int
-) -> tuple[tuple[int, ...], ...]:
-    rows = [list(row) for row in matrix]
-    pivot = 0
-    width = len(rows[0]) if rows else 0
-    for column in range(width):
-        selected = next(
-            (row for row in range(pivot, len(rows)) if rows[row][column] % prime),
-            None,
-        )
-        if selected is None:
-            continue
-        rows[pivot], rows[selected] = rows[selected], rows[pivot]
-        inverse = pow(rows[pivot][column], -1, prime)
-        rows[pivot] = [value * inverse % prime for value in rows[pivot]]
-        for row in range(len(rows)):
-            if row == pivot:
-                continue
-            factor = rows[row][column]
-            rows[row] = [
-                (left - factor * right) % prime
-                for left, right in zip(rows[row], rows[pivot], strict=True)
-            ]
-        pivot += 1
-        if pivot == len(rows):
-            break
-    return tuple(tuple(row) for row in rows)
+    matrix: tuple[tuple[int, ...], ...], prime: int, width: int
+) -> tuple[tuple[tuple[int, ...], ...], tuple[int, ...]]:
+    """Reduce through the canonical prime-field matrix carrier.
+
+    Keeping this operation on the shared carrier is important for composition:
+    the same FLINT/SymPy exact backend and empty-axis convention used by the
+    other code-linear operations define every canonical representative here.
+    """
+
+    return _rref_admitted(PrimeFieldMatrix(prime=prime, entries=matrix, columns=width))
 
 
 def canonicalize_linear_code(
@@ -86,8 +73,12 @@ def canonicalize_linear_code(
             code="code.canonicalization.prime_field",
             message="linear-code canonicalization requires a prime field order",
         )
-    source_rref = _rref(encoder.generator_matrix, encoder.field_order)
-    if any(not any(row) for row in source_rref):
+    _, pivots = _rref(
+        encoder.generator_matrix,
+        encoder.field_order,
+        len(encoder.coordinate_axis),
+    )
+    if len(pivots) != len(encoder.generator_matrix):
         raise OperationDomainValidationError(
             location=("encoder", "generator_matrix"),
             code="code.canonicalization.full_row_rank",
@@ -134,7 +125,20 @@ def canonicalize_linear_code(
             tuple(row[element[column]] for column in range(width))
             for row in encoder.generator_matrix
         )
-        reduced = _rref(permuted, encoder.field_order)
+        reduced, pivots = _rref(
+            permuted,
+            encoder.field_order,
+            width,
+        )
+        # Coordinate permutations preserve rank. Keep the assertion local to
+        # the producer so a future action adapter cannot silently emit a
+        # malformed canonical encoder.
+        if len(pivots) != len(encoder.generator_matrix):
+            raise OperationDomainValidationError(
+                location=("encoder", "generator_matrix"),
+                code="code.canonicalization.transported_rank",
+                message="a coordinate action must preserve generator rank",
+            )
         distinct.add(reduced)
         candidates.append(
             (

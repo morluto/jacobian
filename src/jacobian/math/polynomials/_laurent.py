@@ -43,6 +43,26 @@ def rational_laurent_multiply(
             code="polynomial.laurent.convolution_bound",
             message=f"sparse convolution requires {work} term products; maximum is {MAX_POLYNOMIAL_TERMS}",
         )
+    # Check the full exponent envelope before entering the convolution.  This
+    # keeps a mathematically invalid product from doing partial exact work and
+    # makes the admission decision independent of cancellation in the result.
+    max_left = tuple(
+        max(abs(term.exponents[index]) for term in left.terms)
+        for index in range(len(left.variables))
+    )
+    max_right = tuple(
+        max(abs(term.exponents[index]) for term in right.terms)
+        for index in range(len(right.variables))
+    )
+    if any(
+        left_bound + right_bound > MAX_POLYNOMIAL_EXPONENT
+        for left_bound, right_bound in zip(max_left, max_right, strict=True)
+    ):
+        raise OperationResourceAdmissionError(
+            location=("right", "terms"),
+            code="polynomial.laurent.exponent_growth",
+            message="product exponent may exceed the Laurent representation bound",
+        )
     coefficient_digits = work * (
         max(
             canonical_rational_component_digits(term.coefficient) for term in left.terms
@@ -65,12 +85,6 @@ def rational_laurent_multiply(
                 a + b
                 for a, b in zip(left_term.exponents, right_term.exponents, strict=True)
             )
-            if any(abs(exponent) > MAX_POLYNOMIAL_EXPONENT for exponent in exponents):
-                raise OperationResourceAdmissionError(
-                    location=("right", "terms"),
-                    code="polynomial.laurent.exponent_growth",
-                    message="product exponent exceeds the Laurent representation bound",
-                )
             coefficients[exponents] = coefficients.get(exponents, Fraction()) + (
                 left_term.coefficient.as_fraction()
                 * right_term.coefficient.as_fraction()

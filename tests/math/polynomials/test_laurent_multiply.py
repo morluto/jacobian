@@ -56,3 +56,11 @@ def test_coefficient_growth_is_rejected_before_convolution() -> None:
     right = RationalLaurentPolynomial(variables=("x",), terms=(term(coefficient, 0),))
     with pytest.raises(OperationResourceAdmissionError):
         rational_laurent_multiply(left, right)
+
+
+def test_exponent_growth_is_rejected_before_convolution() -> None:
+    limit = 32_768
+    left = RationalLaurentPolynomial(variables=("x",), terms=(term(1, limit),))
+    right = RationalLaurentPolynomial(variables=("x",), terms=(term(1, 1),))
+    with pytest.raises(OperationResourceAdmissionError, match="exponent"):
+        rational_laurent_multiply(left, right)

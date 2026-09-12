@@ -1,5 +1,7 @@
 """Complete maximal-chain enumeration from canonical cover relations."""
 
+from itertools import combinations, pairwise
+
 import pytest
 from pydantic import ValidationError
 
@@ -8,11 +10,12 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.combinatorics.posets.core._maximal_chains import (
-    MAX_MAXIMAL_CHAIN_RESULT_BYTES,
+    MAX_MAXIMAL_CHAIN_ELEMENT_SLOTS,
     MaximalChainEnumerationResult,
     enumerate_maximal_chains,
 )
 from jacobian.math.combinatorics.posets.core._models import (
+    OrderedPair,
     PosetRequest,
     PresentationPair,
     ReflexivePairPolicy,
@@ -21,6 +24,7 @@ from jacobian.math.combinatorics.posets.core._models import (
 from jacobian.math.combinatorics.posets.core.operations import (
     dual_poset,
     materialize_finite_poset,
+    maximal_chains,
 )
 
 
@@ -42,7 +46,12 @@ def test_diamond_chains_endpoints_and_histogram() -> None:
     assert all(
         row.lower_endpoint == "0" and row.upper_endpoint == "1" for row in result.chains
     )
+    assert tuple(row.cover_relations for row in result.chains) == (
+        (OrderedPair(lower="0", upper="a"), OrderedPair(lower="a", upper="1")),
+        (OrderedPair(lower="0", upper="b"), OrderedPair(lower="b", upper="1")),
+    )
     assert [(cell.length, cell.count) for cell in result.length_histogram] == [(3, 2)]
+    assert maximal_chains(poset) == result
 
 
 def test_empty_poset_has_single_empty_maximal_chain() -> None:
@@ -95,6 +104,61 @@ def test_inclusion_maximal_chains_include_different_lengths() -> None:
     ]
 
 
+def test_boolean_lattices_b2_and_b3_are_complete_by_independent_oracle() -> None:
+    for dimension, expected_count in ((2, 2), (3, 6)):
+        elements = tuple(str(mask) for mask in range(1 << dimension))
+        relations = tuple(
+            PresentationPair(lower=str(lower), upper=str(upper))
+            for lower in range(1 << dimension)
+            for upper in range(1 << dimension)
+            if lower != upper
+            and lower & ~upper == 0
+            and (upper ^ lower).bit_count() == 1
+        )
+        poset = materialize_finite_poset(
+            elements,
+            relations,
+            RelationInterpretation.COVER_EDGES,
+            ReflexivePairPolicy.FORBIDDEN,
+        )
+        result = enumerate_maximal_chains(PosetRequest(poset=poset))
+
+        strict = {(pair.lower, pair.upper) for pair in poset.strict_order_pairs}
+
+        def is_chain(
+            candidate: tuple[str, ...], *, strict: set[tuple[str, str]] = strict
+        ) -> bool:
+            return all(
+                (lower, upper) in strict for lower, upper in combinations(candidate, 2)
+            )
+
+        def is_inclusion_maximal(
+            candidate: tuple[str, ...], *, elements: tuple[str, ...] = elements
+        ) -> bool:
+            return all(
+                not is_chain(tuple(sorted((*candidate, element))))
+                for element in set(elements) - set(candidate)
+            )
+
+        oracle = {
+            candidate
+            for size in range(1, len(elements) + 1)
+            for subset in combinations(elements, size)
+            for candidate in (subset,)
+            if is_chain(candidate) and is_inclusion_maximal(candidate)
+        }
+        assert len(result.chains) == expected_count
+        assert {row.elements for row in result.chains} == oracle
+        assert all(
+            tuple(row.cover_relations)
+            == tuple(
+                OrderedPair(lower=lower, upper=upper)
+                for lower, upper in pairwise(row.elements)
+            )
+            for row in result.chains
+        )
+
+
 def test_dual_reverses_each_chain_and_preserves_histogram() -> None:
     poset = materialize_finite_poset(
         ("0", "a", "b", "1"),
@@ -143,6 +207,25 @@ def test_serialized_result_rejects_contradictory_structural_row() -> None:
         MaximalChainEnumerationResult.model_validate(payload)
 
 
+def test_serialized_result_rejects_noncover_chain() -> None:
+    poset = materialize_finite_poset(
+        ("a", "b", "c"),
+        (
+            PresentationPair(lower="a", upper="b"),
+            PresentationPair(lower="b", upper="c"),
+        ),
+        RelationInterpretation.COVER_EDGES,
+        ReflexivePairPolicy.FORBIDDEN,
+    )
+    result = enumerate_maximal_chains(PosetRequest(poset=poset))
+    payload = result.model_dump(mode="json")
+    payload["chains"][0]["elements"] = ["a", "c"]
+    payload["chains"][0]["cover_relations"] = [{"lower": "a", "upper": "c"}]
+    payload["chains"][0]["length"] = 2
+    with pytest.raises(ValidationError, match="source Hasse"):
+        MaximalChainEnumerationResult.model_validate(payload)
+
+
 def test_direct_native_guard_rejects_untyped_request() -> None:
     with pytest.raises(OperationDomainValidationError, match="typed finite-poset"):
         enumerate_maximal_chains(PosetRequest.model_construct())
@@ -150,7 +233,8 @@ def test_direct_native_guard_rejects_untyped_request() -> None:
 
 def test_complete_profile_rejects_predicted_result_explosion() -> None:
     # Sixteen binary layers have 65,536 maximal chains.  Their repeated
-    # labels alone exceed the complete canonical result envelope.
+    # element slots exceed the semantic complete-result envelope even though
+    # the row count itself remains below its limit.
     elements = tuple(f"x{layer}_{branch}" for layer in range(16) for branch in (0, 1))
     relations = tuple(
         PresentationPair(
@@ -167,6 +251,7 @@ def test_complete_profile_rejects_predicted_result_explosion() -> None:
         ReflexivePairPolicy.FORBIDDEN,
     )
     with pytest.raises(
-        OperationResourceAdmissionError, match=str(MAX_MAXIMAL_CHAIN_RESULT_BYTES)
+        OperationResourceAdmissionError,
+        match=str(MAX_MAXIMAL_CHAIN_ELEMENT_SLOTS),
     ):
         enumerate_maximal_chains(PosetRequest(poset=poset))

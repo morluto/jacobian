@@ -3,9 +3,14 @@
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.combinatorics.posets.core._maximal_chains import (
     MaximalChainEnumerationResult,
-    enumerate_maximal_chains,
 )
 from jacobian.math.combinatorics.posets.core._models import PosetRequest
+from jacobian.math.combinatorics.posets.core.operations import maximal_chains
+
+
+def _run(request: PosetRequest) -> MaximalChainEnumerationResult:
+    return maximal_chains(request.poset)
+
 
 MAXIMAL_CHAIN_ENUMERATION_OPERATION = MathTool(
     operation_id="poset.maximal_chains.enumerate",
@@ -18,12 +23,16 @@ MAXIMAL_CHAIN_ENUMERATION_OPERATION = MathTool(
     ),
     request_type=PosetRequest,
     result_type=MaximalChainEnumerationResult,
-    run=enumerate_maximal_chains,
+    run=_run,
     tags=("poset", "chain", "maximal", "enumerate", "complete"),
     examples=(
         OperationExample(
             name="diamond",
-            description="Enumerate the two maximal chains of the four-element diamond.",
+            description=(
+                "Enumerate the two maximal chains of the four-element diamond; "
+                "the supplied finite-poset value must contain canonical closure, "
+                "cover, extremal, and digest claims."
+            ),
             input={
                 "poset": {
                     "elements": ["0", "1", "a", "b"],

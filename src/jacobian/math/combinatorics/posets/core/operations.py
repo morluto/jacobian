@@ -26,6 +26,12 @@ from jacobian.math.combinatorics.posets.core._closure_models import (
     LowerClosureResult,
     UpperClosureResult,
 )
+from jacobian.math.combinatorics.posets.core._maximal_chains import (
+    MaximalChainEnumerationResult,
+)
+from jacobian.math.combinatorics.posets.core._maximal_chains import (
+    enumerate_maximal_chains as _enumerate_maximal_chains,
+)
 from jacobian.math.combinatorics.posets.core._models import (
     MAX_ANTICHAIN_PROFILE_CANDIDATES,
     MAX_ANTICHAIN_PROFILE_ELEMENTS,
@@ -44,6 +50,7 @@ from jacobian.math.combinatorics.posets.core._models import (
     PosetChain,
     PosetClosureResult,
     PosetInterval,
+    PosetRequest,
     PosetSubset,
     PosetWidthResult,
     PresentationPair,
@@ -184,6 +191,12 @@ def verify_finite_poset(poset: FinitePoset) -> bool:
         )
     except (OperationDomainValidationError, PydanticCustomError, TypeError, ValueError):
         return False
+
+
+def maximal_chains(poset: FinitePoset) -> MaximalChainEnumerationResult:
+    """Enumerate every inclusion-maximal chain of a canonical finite poset."""
+
+    return _enumerate_maximal_chains(PosetRequest(poset=poset))
 
 
 def _admit_antichain_profile(poset: FinitePoset) -> None:
@@ -596,6 +609,7 @@ __all__ = [
     "linear_extension_count",
     "lower_closure",
     "materialize_finite_poset",
+    "maximal_chains",
     "mobius_function",
     "upper_closure",
     "verify_finite_poset",

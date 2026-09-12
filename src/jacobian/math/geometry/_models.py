@@ -18,6 +18,7 @@ from jacobian._exact import (
 from jacobian._flint import flint_workprec
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
+from jacobian.math.geometry.exact._models import PointConfiguration
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -1441,30 +1442,19 @@ class CircumradiusProfileResult(StrictModel):
 class SpannedCircleProfileRequest(StrictModel):
     """Compute the distinct circles determined by triples of rational points."""
 
-    points: tuple[RationalPoint2D, ...] = Field(
-        min_length=3,
-        max_length=MAX_CONFIGURATION_POINTS,
+    configuration: PointConfiguration = Field(
         description=(
-            f"Bounded configuration of 3..{MAX_CONFIGURATION_POINTS} distinct "
-            "rational planar points. Every non-collinear triple determines one "
-            "circle; collinear triples are omitted. Each coordinate numerator "
-            f"and denominator is at most {MAX_COORDINATE_DIGITS} digits. "
-            f"Collinearity work C(n,3)*max_digits^2, circumcircle construction "
-            f"for each non-collinear triple, and incidence work "
+            f"Canonical labelled point configuration. The operation admits "
+            f"3..{MAX_CONFIGURATION_POINTS} distinct planar points. Each "
+            f"coordinate numerator and denominator is at most {MAX_COORDINATE_DIGITS} "
+            "digits after translating by a source point. Collinearity work "
+            f"C(n,3)*max_digits^2, circumcircle construction for each "
+            "non-collinear triple, and incidence work "
             f"n*(distinct circles)*max_digits^2 together stay at most "
             f"{MAX_SPANNED_CIRCLE_WORK}. The result has at most C(n,3) circle "
             f"rows, globally at most {MAX_SPANNED_CIRCLES}."
         ),
     )
-
-    @model_validator(mode="after")
-    def require_unique(self) -> Self:
-        keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in self.points)
-        if len(keys) != len(set(keys)):
-            raise _validation_error(
-                "point_set_coordinates_unique", "point-set coordinates must be unique"
-            )
-        return self
 
 
 class SpannedCircleEntry(StrictModel):
@@ -1493,24 +1483,26 @@ class SpannedCircleEntry(StrictModel):
 class SpannedCircleProfileResult(StrictModel):
     """Complete source-bound partition of all non-collinear triples by circle."""
 
-    points: tuple[RationalPoint2D, ...] = Field(
-        min_length=3, max_length=MAX_CONFIGURATION_POINTS
-    )
+    configuration: PointConfiguration
     num_points: int = Field(ge=3, le=MAX_CONFIGURATION_POINTS)
     circles: tuple[SpannedCircleEntry, ...] = Field(max_length=MAX_SPANNED_CIRCLES)
 
     @model_validator(mode="after")
     def require_canonical(self) -> Self:
-        keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in self.points)
+        points = self.configuration.points
+        keys = tuple(
+            tuple((coord.num, coord.den) for coord in point.coordinates)
+            for point in points
+        )
         if len(keys) != len(set(keys)):
             raise _validation_error(
                 "point_set_coordinates_unique", "point-set coordinates must be unique"
             )
-        if self.num_points != len(self.points):
+        if self.num_points != len(points):
             raise _validation_error(
                 "num_points_len_points", "num_points must equal len(points)"
             )
-        n = len(self.points)
+        n = len(points)
         triple_count = n * (n - 1) * (n - 2) // 6
         if len(self.circles) > triple_count:
             raise _validation_error(
@@ -1546,9 +1538,11 @@ class SpannedCircleProfileResult(StrictModel):
     def _from_kernel(
         cls,
         *,
-        points: tuple[RationalPoint2D, ...],
+        configuration: PointConfiguration,
         circles: tuple[SpannedCircleEntry, ...],
     ) -> Self:
         return cls.model_construct(
-            points=points, num_points=len(points), circles=circles
+            configuration=configuration,
+            num_points=len(configuration.points),
+            circles=circles,
         )

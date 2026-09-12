@@ -122,7 +122,7 @@ def circumradius_profile(
 def spanned_circle_profile(
     request: SpannedCircleProfileRequest,
 ) -> SpannedCircleProfileResult:
-    return _native.spanned_circle_profile(request.points)
+    return _native.spanned_circle_profile(request.configuration)
 
 
 from jacobian.math.geometry._configuration import CONFIGURATION_OPERATIONS  # noqa: E402

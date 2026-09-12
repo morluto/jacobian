@@ -49,13 +49,13 @@ from jacobian.math.geometry._models import (
     SpannedCircleProfileResult,
     _inverted_components_within_bound,
     _is_simple_ring,
-    _max_coordinate_digits,
     _point_key,
     _require_bounded_configuration,
     _require_general_position_work_bound,
     _require_inversion_admission_bound,
 )
 from jacobian.math.geometry._predicates import are_collinear, determinant4
+from jacobian.math.geometry.exact._models import PointConfiguration
 
 __all__ = [
     "centroid",
@@ -200,23 +200,37 @@ def _admit_circumcircle(
         )
 
 
-def _admit_spanned_circle_source(points: tuple[RationalPoint2D, ...]) -> None:
+def _admit_spanned_circle_source(
+    configuration: PointConfiguration,
+) -> tuple[RationalPoint2D, ...]:
+    points = configuration.points
+    if points and len(points[0].coordinates) != 2:
+        _reject_geometry_domain(
+            location=("configuration",),
+            code="geometry.spanned_circle_requires_planar_points",
+            message="spanned-circle profiles require planar source points",
+        )
     if not 3 <= len(points) <= MAX_CONFIGURATION_POINTS:
         _reject_geometry_domain(
-            location=("points",),
+            location=("configuration",),
             code="geometry.spanned_circle_point_count",
             message=(
                 "spanned-circle profiles require between 3 and "
                 f"{MAX_CONFIGURATION_POINTS} source points"
             ),
         )
-    keys = tuple(_point_key(point) for point in points)
+    planar = tuple(
+        RationalPoint2D(x=point.coordinates[0], y=point.coordinates[1])
+        for point in points
+    )
+    keys = tuple(_point_key(point) for point in planar)
     if len(keys) != len(set(keys)):
         _reject_geometry_domain(
-            location=("points",),
+            location=("configuration",),
             code="geometry.spanned_circle_points_unique",
             message="spanned-circle source point coordinates must be unique",
         )
+    return planar
 
 
 def _admit_simple_polygon_point(
@@ -820,22 +834,36 @@ def circumradius_profile(
     )
 
 
+def _fraction_digits(value: Fraction) -> int:
+    return max(
+        len(format_canonical_integer(abs(value.numerator))),
+        len(format_canonical_integer(value.denominator)),
+    )
+
+
 def spanned_circle_profile(
-    points: tuple[RationalPoint2D, ...],
+    configuration: PointConfiguration,
 ) -> SpannedCircleProfileResult:
     """Return every distinct circle spanned by a non-collinear source triple."""
 
-    _admit_spanned_circle_source(points)
+    points = _admit_spanned_circle_source(configuration)
     _admit_configuration(points, output_bound=True)
     point_values = _points_to_fractions(points)
-    n = len(point_values)
+    origin = point_values[0]
+    translated = tuple(
+        (point[0] - origin[0], point[1] - origin[1]) for point in point_values
+    )
+    n = len(translated)
     triples = n * (n - 1) * (n - 2) // 6
-    max_digits = _max_coordinate_digits(points)
+    max_digits = max(
+        max(_fraction_digits(coordinate) for coordinate in point)
+        for point in translated
+    )
     digit_work = max_digits * max_digits
     collinearity_work = triples * digit_work
     if collinearity_work > MAX_SPANNED_CIRCLE_WORK:
         raise OperationResourceAdmissionError(
-            location=("points",),
+            location=("configuration",),
             code="geometry.spanned_circle_profile_work_bound",
             message=(
                 f"spanned-circle collinearity work exceeds the {MAX_SPANNED_CIRCLE_WORK}"
@@ -845,7 +873,7 @@ def spanned_circle_profile(
 
     generated: list[tuple[int, int, int]] = []
     for i, j, k in combinations(range(n), 3):
-        first, second, third = point_values[i], point_values[j], point_values[k]
+        first, second, third = translated[i], translated[j], translated[k]
         cross = (second[0] - first[0]) * (third[1] - first[1]) - (
             second[1] - first[1]
         ) * (third[0] - first[0])
@@ -854,7 +882,7 @@ def spanned_circle_profile(
     construction_work = len(generated) * digit_work
     if collinearity_work + construction_work > MAX_SPANNED_CIRCLE_WORK:
         raise OperationResourceAdmissionError(
-            location=("points",),
+            location=("configuration",),
             code="geometry.spanned_circle_profile_work_bound",
             message=(
                 f"spanned-circle construction work exceeds the {MAX_SPANNED_CIRCLE_WORK}"
@@ -864,7 +892,7 @@ def spanned_circle_profile(
 
     grouped: dict[tuple[Fraction, Fraction, Fraction], None] = {}
     for i, j, k in generated:
-        first, second, third = point_values[i], point_values[j], point_values[k]
+        first, second, third = translated[i], translated[j], translated[k]
         cross = (second[0] - first[0]) * (third[1] - first[1]) - (
             second[1] - first[1]
         ) * (third[0] - first[0])
@@ -887,7 +915,7 @@ def spanned_circle_profile(
     incidence_work = n * len(grouped) * digit_work
     if collinearity_work + construction_work + incidence_work > MAX_SPANNED_CIRCLE_WORK:
         raise OperationResourceAdmissionError(
-            location=("points",),
+            location=("configuration",),
             code="geometry.spanned_circle_profile_work_bound",
             message=(
                 f"spanned-circle incidence work exceeds the {MAX_SPANNED_CIRCLE_WORK}"
@@ -900,13 +928,13 @@ def spanned_circle_profile(
         center_x, center_y, radius_squared = key
         incidences[key] = tuple(
             source_index
-            for source_index, point in enumerate(point_values)
+            for source_index, point in enumerate(translated)
             if (point[0] - center_x) ** 2 + (point[1] - center_y) ** 2 == radius_squared
         )
 
     if len(grouped) > MAX_SPANNED_CIRCLES:
         raise OperationResourceAdmissionError(
-            location=("points",),
+            location=("configuration",),
             code="geometry.spanned_circle_profile_work_bound",
             message=(
                 "spanned-circle result exceeds the "
@@ -918,7 +946,8 @@ def spanned_circle_profile(
         SpannedCircleEntry(
             circle=GeometryCircleResult(
                 center=RationalPoint2D(
-                    x=_wire_rational(key[0]), y=_wire_rational(key[1])
+                    x=_wire_rational(key[0] + origin[0]),
+                    y=_wire_rational(key[1] + origin[1]),
                 ),
                 radius_squared=_wire_rational(key[2]),
             ),
@@ -927,6 +956,6 @@ def spanned_circle_profile(
         for key in sorted(grouped)
     )
     return SpannedCircleProfileResult._from_kernel(
-        points=points,
+        configuration=configuration,
         circles=entries,
     )

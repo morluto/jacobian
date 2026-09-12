@@ -30,6 +30,10 @@ from jacobian.math.geometry._tools import (
     general_position_search,
     spanned_circle_profile,
 )
+from jacobian.math.geometry.exact._models import (
+    LabelledRationalPoint,
+    PointConfiguration,
+)
 from jacobian.math.geometry.operations import verify_collinearity, verify_concyclicity
 
 
@@ -37,6 +41,18 @@ def _point(x: str, y: str) -> RationalPoint2D:
     return RationalPoint2D(
         x=CanonicalRational.from_fraction(Fraction(x)),
         y=CanonicalRational.from_fraction(Fraction(y)),
+    )
+
+
+def _configuration(*points: RationalPoint2D) -> PointConfiguration:
+    return PointConfiguration(
+        points=tuple(
+            LabelledRationalPoint(
+                label=f"p{index}",
+                coordinates=(point.x, point.y),
+            )
+            for index, point in enumerate(points)
+        )
     )
 
 
@@ -243,7 +259,7 @@ class TestSpannedCircleProfile:
             _point("0", "1"),
         ]
         result = spanned_circle_profile(
-            SpannedCircleProfileRequest(points=tuple(points))
+            SpannedCircleProfileRequest(configuration=_configuration(*points))
         )
         assert len(result.circles) == 1
         circle = result.circles[0]
@@ -264,7 +280,7 @@ class TestSpannedCircleProfile:
             _point("0", "2"),
         ]
         result = spanned_circle_profile(
-            SpannedCircleProfileRequest(points=tuple(points))
+            SpannedCircleProfileRequest(configuration=_configuration(*points))
         )
         assert len(result.circles) == 5
         assert all(len(circle.point_indices) >= 3 for circle in result.circles)
@@ -279,10 +295,10 @@ class TestSpannedCircleProfile:
         ]
         reordered = [points[2], points[0], points[3], points[1]]
         first = spanned_circle_profile(
-            SpannedCircleProfileRequest(points=tuple(points))
+            SpannedCircleProfileRequest(configuration=_configuration(*points))
         )
         second = spanned_circle_profile(
-            SpannedCircleProfileRequest(points=tuple(reordered))
+            SpannedCircleProfileRequest(configuration=_configuration(*reordered))
         )
         assert [(c.circle.center, c.circle.radius_squared) for c in first.circles] == [
             (c.circle.center, c.circle.radius_squared) for c in second.circles
@@ -297,21 +313,37 @@ class TestSpannedCircleProfile:
             )
             for t in range(1, 33)
         )
-        result = spanned_circle_profile(SpannedCircleProfileRequest(points=points))
+        result = spanned_circle_profile(
+            SpannedCircleProfileRequest(configuration=_configuration(*points))
+        )
         assert len(result.circles) == 1
         assert len(result.circles[0].point_indices) == 32
 
     def test_collinear_configuration_is_admitted_without_incidence_work(self) -> None:
         points = tuple(_point(str(index), str(1000 + index)) for index in range(32))
-        result = spanned_circle_profile(SpannedCircleProfileRequest(points=points))
+        result = spanned_circle_profile(
+            SpannedCircleProfileRequest(configuration=_configuration(*points))
+        )
         assert result.circles == ()
 
-    def test_non_collinear_work_ceiling_is_a_resource_admission(self) -> None:
+    def test_translated_parabola_is_admitted_like_the_origin_frame(self) -> None:
         points = tuple(
             _point(str(index), str(1000 + index * index)) for index in range(32)
         )
+        result = spanned_circle_profile(
+            SpannedCircleProfileRequest(configuration=_configuration(*points))
+        )
+        assert result.configuration == _configuration(*points)
+        assert result.circles
+
+    def test_non_collinear_work_ceiling_is_a_resource_admission(self) -> None:
+        points = tuple(
+            _point(str(index), str(index * index * 10_000)) for index in range(32)
+        )
         with pytest.raises(OperationResourceAdmissionError, match="2000000"):
-            spanned_circle_profile(SpannedCircleProfileRequest(points=points))
+            spanned_circle_profile(
+                SpannedCircleProfileRequest(configuration=_configuration(*points))
+            )
 
     def test_result_rejects_more_circles_than_source_triples(self) -> None:
         points = (_point("0", "0"), _point("1", "0"), _point("0", "1"))
@@ -325,7 +357,7 @@ class TestSpannedCircleProfile:
         )
         with pytest.raises(ValidationError, match="source triples"):
             SpannedCircleProfileResult(
-                points=points,
+                configuration=_configuration(*points),
                 num_points=3,
                 circles=(
                     SpannedCircleEntry(circle=first, point_indices=(0, 1, 2)),
@@ -347,4 +379,4 @@ def test_native_spanned_circles_reject_invalid_source(
 
     points = tuple(_point(str(x), str(y)) for x, y in coordinates)
     with pytest.raises(OperationDomainValidationError):
-        native(points)
+        native(_configuration(*points))

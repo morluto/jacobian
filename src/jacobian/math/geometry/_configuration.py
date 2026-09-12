@@ -50,16 +50,16 @@ CONFIGURATION_OPERATIONS: MathTools = (
         operation_id="geometry.points.spanned_circle_profile.compute",
         title="Compute the exact spanned-circle incidence profile",
         description=(
-            "Given a bounded rational planar point configuration (3..32 points, "
-            "each coordinate at most 256 digits, collinearity work "
-            "C(n,3)*max_digits^2 plus circumcircle construction per non-collinear "
-            "triple plus incidence work n*(distinct circles)*max_digits^2 at most "
-            "2000000, at most C(n,3) circle rows and globally 4960), enumerate "
-            "every distinct circle determined by a non-collinear source triple "
-            "and return its canonical circle value with the complete source-point "
-            "incidence set. Collinear triples are omitted; exhaustive triple "
-            "generation and point-membership work are bounded before incidence "
-            "expansion."
+            "Given a bounded labelled PointConfiguration (3..32 planar points, "
+            "each coordinate at most 256 digits after translating by a source "
+            "point, collinearity work C(n,3)*max_digits^2 plus circumcircle "
+            "construction per non-collinear triple plus incidence work "
+            "n*(distinct circles)*max_digits^2 at most 2000000, at most C(n,3) "
+            "circle rows and globally 4960), enumerate every distinct circle "
+            "determined by a non-collinear source triple and return its canonical "
+            "circle value with the complete source-point incidence set. Collinear "
+            "triples are omitted; exhaustive triple generation and "
+            "point-membership work are bounded before incidence expansion."
         ),
         request_type=SpannedCircleProfileRequest,
         result_type=SpannedCircleProfileResult,
@@ -73,12 +73,38 @@ CONFIGURATION_OPERATIONS: MathTools = (
                     "the source points must be distinct rational planar points."
                 ),
                 input={
-                    "points": [
-                        {"x": {"num": "0", "den": "1"}, "y": {"num": "0", "den": "1"}},
-                        {"x": {"num": "1", "den": "1"}, "y": {"num": "0", "den": "1"}},
-                        {"x": {"num": "1", "den": "1"}, "y": {"num": "1", "den": "1"}},
-                        {"x": {"num": "0", "den": "1"}, "y": {"num": "1", "den": "1"}},
-                    ]
+                    "configuration": {
+                        "points": [
+                            {
+                                "label": "a",
+                                "coordinates": [
+                                    {"num": "0", "den": "1"},
+                                    {"num": "0", "den": "1"},
+                                ],
+                            },
+                            {
+                                "label": "b",
+                                "coordinates": [
+                                    {"num": "1", "den": "1"},
+                                    {"num": "0", "den": "1"},
+                                ],
+                            },
+                            {
+                                "label": "c",
+                                "coordinates": [
+                                    {"num": "1", "den": "1"},
+                                    {"num": "1", "den": "1"},
+                                ],
+                            },
+                            {
+                                "label": "d",
+                                "coordinates": [
+                                    {"num": "0", "den": "1"},
+                                    {"num": "1", "den": "1"},
+                                ],
+                            },
+                        ]
+                    }
                 },
             ),
         ),

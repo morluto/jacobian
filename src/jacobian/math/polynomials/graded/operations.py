@@ -43,6 +43,17 @@ from jacobian.math.polynomials.values import (
     SparseRationalPolynomial,
 )
 
+_MONOMIAL_ORDERS = frozenset({"lex", "grlex", "grevlex"})
+
+
+def _require_monomial_order(monomial_order: object) -> None:
+    if monomial_order not in _MONOMIAL_ORDERS:
+        raise OperationDomainValidationError(
+            location=("monomial_order",),
+            code="graded_ideal.monomial_order",
+            message="monomial_order must be lex, grlex, or grevlex",
+        )
+
 
 def _is_explicit_unit_ideal(ideal: RationalPolynomialIdeal) -> bool:
     return any(
@@ -109,6 +120,7 @@ def initial_monomial_ideal(
 ) -> InitialMonomialIdealResult:
     """Project the existing exact Gröbner result to its initial monomial ideal."""
 
+    _require_monomial_order(monomial_order)
     _require_homogeneous(ideal)
     if _is_explicit_unit_ideal(ideal):
         return _unit_initial_ideal(ideal, monomial_order)

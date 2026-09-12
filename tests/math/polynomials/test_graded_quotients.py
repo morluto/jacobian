@@ -10,8 +10,11 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.polynomials.graded import operations as graded_operations
 from jacobian.math.polynomials.graded._models import (
+    HilbertDimensionResult,
     HilbertFunctionResult,
+    HilbertMultiplicityResult,
     HilbertPolynomialRequest,
     HilbertPolynomialResult,
     HilbertSeriesRequest,
@@ -527,3 +530,45 @@ def test_quadratic_hypersurface_stabilizes_from_degree_zero() -> None:
     assert polynomial.stabilization_degree == 0
     prefix = hilbert_function(hypersurface, max_degree=3)
     assert prefix.values == (1, 3, 5, 7)
+
+
+def test_hilbert_series_denominator_exponent_is_bounded_before_expansion() -> None:
+    series = hilbert_series(_ideal((2, 0)), prefix_degree=2)
+    payload = series.model_dump()
+    payload["denominator_exponent"] = 10_000_000
+    with pytest.raises(ValidationError):
+        HilbertSeriesResult.model_validate(payload)
+
+
+def test_native_monomial_order_is_validated_before_ideal_inspection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("invalid monomial orders must not inspect the ideal")
+
+    monkeypatch.setattr(graded_operations, "_require_homogeneous", fail)
+    with pytest.raises(OperationDomainValidationError, match="lex, grlex, or grevlex"):
+        initial_monomial_ideal(_ideal((2, 0)), "degrevlex")  # type: ignore[arg-type]
+    unit = _ideal((0,))
+    with pytest.raises(OperationDomainValidationError, match="lex, grlex, or grevlex"):
+        initial_monomial_ideal(unit, "degrevlex")  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    "result_type",
+    (HilbertDimensionResult, HilbertMultiplicityResult, HVectorResult),
+)
+def test_hilbert_projection_results_bind_the_source_ring(
+    result_type: type[object],
+) -> None:
+    if result_type is HilbertDimensionResult:
+        result = hilbert_dimension(_ideal((2, 0)))
+    elif result_type is HilbertMultiplicityResult:
+        result = hilbert_multiplicity(_ideal((2, 0)))
+    else:
+        result = h_vector(_ideal((2, 0)))
+    other = initial_monomial_ideal(_ideal((2, 0, 0)))
+    payload = result.model_dump()
+    payload["initial_ideal"] = other.initial_ideal.model_dump()
+    with pytest.raises(ValidationError, match="source ring"):
+        result_type.model_validate(payload)

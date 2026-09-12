@@ -160,7 +160,7 @@ class HilbertSeriesResult(StrictModel):
     series: RationalFunction
     reduced_numerator: RationalPolynomial
     h_numerator: RationalPolynomial
-    denominator_exponent: StrictInt = Field(ge=0)
+    denominator_exponent: StrictInt = Field(ge=0, le=MAX_RATIONAL_FUNCTION_EXPONENT)
     prefix: tuple[NonnegativeHilbertCount, ...] = Field(
         min_length=1, max_length=MAX_HILBERT_PREFIX + 1
     )
@@ -226,6 +226,12 @@ class HilbertDimensionResult(StrictModel):
     monomial_order: Literal["lex", "grlex", "grevlex"]
     dimension: StrictInt = Field(ge=0)
 
+    @model_validator(mode="after")
+    def require_source_ring(self) -> Self:
+        if self.ideal.variables != self.initial_ideal.variables:
+            raise ValueError("Hilbert-dimension values must share the source ring")
+        return self
+
 
 class HilbertMultiplicityResult(StrictModel):
     ideal: RationalPolynomialIdeal
@@ -233,6 +239,12 @@ class HilbertMultiplicityResult(StrictModel):
     monomial_order: Literal["lex", "grlex", "grevlex"]
     dimension: StrictInt = Field(ge=0)
     multiplicity: ExactInteger = Field(ge=0)
+
+    @model_validator(mode="after")
+    def require_source_ring(self) -> Self:
+        if self.ideal.variables != self.initial_ideal.variables:
+            raise ValueError("Hilbert-multiplicity values must share the source ring")
+        return self
 
 
 class HVectorResult(StrictModel):
@@ -243,6 +255,12 @@ class HVectorResult(StrictModel):
     h_vector: tuple[ExactInteger, ...] = Field(
         max_length=MAX_RATIONAL_FUNCTION_EXPONENT + 1
     )
+
+    @model_validator(mode="after")
+    def require_source_ring(self) -> Self:
+        if self.ideal.variables != self.initial_ideal.variables:
+            raise ValueError("h-vector values must share the source ring")
+        return self
 
 
 __all__ = [

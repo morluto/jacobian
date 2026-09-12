@@ -410,7 +410,7 @@ def _reduce_common_laurent_factor(
     if not numerator:
         return _canonicalize(numerator, denominator)
     axis = len(next(iter(denominator)))
-    if axis == 0:
+    if axis == 0 or len(denominator) == 1:
         return _canonicalize(numerator, denominator)
 
     # Shift both Laurent polynomials into an ordinary polynomial ring.  This

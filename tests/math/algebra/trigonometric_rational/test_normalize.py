@@ -118,3 +118,20 @@ def test_oversized_angle_exponent_is_rejected_before_expansion() -> None:
     )
     with pytest.raises(OperationResourceAdmissionError):
         normalize_trigonometric_rational(request)
+
+
+def test_boundary_angle_is_kept_when_no_polynomial_reduction_is_needed() -> None:
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x"],
+            "expression": {
+                "kind": "SINE",
+                "angle": {"coefficients": [4_096]},
+            },
+        }
+    )
+    result = normalize_trigonometric_rational(request)
+    assert {term.exponents for term in result.numerator.terms} == {
+        (4_096,),
+        (-4_096,),
+    }

@@ -71,7 +71,6 @@ def test_native_discriminant_preserves_the_polynomial_domain() -> None:
 
 def test_exact_public_api_symbols() -> None:
     expected = (
-        "RationalDiscreteAntiderivativeRequest",
         "RationalDiscreteAntiderivativeResult",
         "derivative",
         "discriminant",
@@ -125,10 +124,8 @@ def test_exact_public_api_symbols() -> None:
 def test_native_discrete_antiderivative_api_returns_typed_result() -> None:
     source = _univariate("k", {2: 1})
     result = polynomials.rational_discrete_antiderivative(
-        polynomials.RationalDiscreteAntiderivativeRequest(
-            polynomial=source,
-            variable="k",
-        )
+        source,
+        "k",
     )
     assert isinstance(
         result,

@@ -41,7 +41,8 @@ class RationalDiscreteAntiderivativeRequest(StrictModel):
 class RationalDiscreteAntiderivativeResult(StrictModel):
     """A normalized antiderivative and its exact finite-difference reconstruction."""
 
-    source: RationalDiscreteAntiderivativeRequest
+    source: RationalPolynomial
+    variable: PolynomialVariable
     antiderivative: RationalPolynomial
     reconstructed_difference: RationalPolynomial
 
@@ -162,23 +163,29 @@ def _polynomial(
     )
 
 
-def rational_discrete_antiderivative(
-    request: RationalDiscreteAntiderivativeRequest,
+def _compute_discrete_antiderivative(
+    source: RationalPolynomial,
+    variable: PolynomialVariable,
 ) -> RationalDiscreteAntiderivativeResult:
-    if not isinstance(request, RationalDiscreteAntiderivativeRequest):
+    if not isinstance(source, RationalPolynomial):
         raise OperationDomainValidationError(
             location=(),
-            code="polynomial.discrete_antiderivative.request_type",
-            message="request must be a RationalDiscreteAntiderivativeRequest",
+            code="polynomial.discrete_antiderivative.polynomial_type",
+            message="polynomial must be a RationalPolynomial",
         )
-    source = request.polynomial
-    if request.variable not in source.variables:
+    if type(variable) is not str or not variable.isidentifier():
+        raise OperationDomainValidationError(
+            location=("variable",),
+            code="polynomial.discrete_antiderivative.variable_type",
+            message="variable must be a valid polynomial axis name",
+        )
+    if variable not in source.variables:
         raise OperationDomainValidationError(
             location=("variable",),
             code="polynomial.discrete_antiderivative.variable_axis",
             message="selected variable must belong to the polynomial axis",
         )
-    variable_index = source.variables.index(request.variable)
+    variable_index = source.variables.index(variable)
     output_bound = sum(
         term.exponents[variable_index] + 1 for term in source.polynomial.terms
     )
@@ -252,10 +259,20 @@ def rational_discrete_antiderivative(
     if difference != source:
         raise RuntimeError("discrete antiderivative reconstruction failed")
     return RationalDiscreteAntiderivativeResult(
-        source=request,
+        source=source,
+        variable=variable,
         antiderivative=antiderivative,
         reconstructed_difference=difference,
     )
+
+
+def rational_discrete_antiderivative(
+    polynomial: RationalPolynomial,
+    variable: PolynomialVariable,
+) -> RationalDiscreteAntiderivativeResult:
+    """Compute the normalized finite-difference inverse on one polynomial axis."""
+
+    return _compute_discrete_antiderivative(polynomial, variable)
 
 
 __all__ = ["rational_discrete_antiderivative"]

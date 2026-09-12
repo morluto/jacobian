@@ -4,8 +4,15 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.polynomials._discrete_antiderivative import (
     RationalDiscreteAntiderivativeRequest,
     RationalDiscreteAntiderivativeResult,
-    rational_discrete_antiderivative,
+    _compute_discrete_antiderivative,
 )
+
+
+def _run(
+    request: RationalDiscreteAntiderivativeRequest,
+) -> RationalDiscreteAntiderivativeResult:
+    return _compute_discrete_antiderivative(request.polynomial, request.variable)
+
 
 RATIONAL_DISCRETE_ANTIDERIVATIVE_OPERATION = MathTool(
     operation_id="polynomial.rational.discrete_antiderivative.compute",
@@ -13,7 +20,7 @@ RATIONAL_DISCRETE_ANTIDERIVATIVE_OPERATION = MathTool(
     description="Return the unique normalized Q with Q at the selected variable zero equal to zero and Q(x+1)-Q(x)=P, retaining other variables as coefficient parameters.",
     request_type=RationalDiscreteAntiderivativeRequest,
     result_type=RationalDiscreteAntiderivativeResult,
-    run=rational_discrete_antiderivative,
+    run=_run,
     tags=("polynomial", "finite-difference", "antiderivative", "rational", "exact"),
     examples=(
         OperationExample(

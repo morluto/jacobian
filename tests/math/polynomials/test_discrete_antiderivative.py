@@ -61,7 +61,8 @@ def _evaluate(polynomial: RationalPolynomial, values: dict[str, int]) -> Fractio
 def test_retained_k_squared_n_minus_k_squared_fixture() -> None:
     source = _polynomial(((1, (4, 0)), (-2, (3, 1)), (1, (2, 2))))
     result = rational_discrete_antiderivative(
-        RationalDiscreteAntiderivativeRequest(polynomial=source, variable="k")
+        source,
+        "k",
     )
     assert result.reconstructed_difference == source
     assert (
@@ -85,7 +86,8 @@ def test_retained_k_squared_n_minus_k_squared_fixture() -> None:
 def test_monomials_reconstruct_exactly_through_degree_five(degree: int) -> None:
     source = _polynomial(((1, (degree, 0)),))
     result = rational_discrete_antiderivative(
-        RationalDiscreteAntiderivativeRequest(polynomial=source, variable="k")
+        source,
+        "k",
     )
     assert result.reconstructed_difference == source
     assert result.antiderivative.variables == source.variables
@@ -97,13 +99,15 @@ def test_monomials_reconstruct_exactly_through_degree_five(degree: int) -> None:
 def test_zero_and_constant_sources_preserve_axes() -> None:
     zero = _polynomial(())
     zero_result = rational_discrete_antiderivative(
-        RationalDiscreteAntiderivativeRequest(polynomial=zero, variable="k")
+        zero,
+        "k",
     )
     assert zero_result.antiderivative.variables == ("k", "N")
     assert zero_result.antiderivative.polynomial.terms == ()
     constant = _polynomial(((7, (0, 0)),))
     constant_result = rational_discrete_antiderivative(
-        RationalDiscreteAntiderivativeRequest(polynomial=constant, variable="k")
+        constant,
+        "k",
     )
     assert constant_result.reconstructed_difference == constant
     assert tuple(
@@ -115,7 +119,8 @@ def test_zero_and_constant_sources_preserve_axes() -> None:
 def test_other_variable_is_a_coefficient_parameter() -> None:
     source = _polynomial(((1, (1, 1)),))
     result = rational_discrete_antiderivative(
-        RationalDiscreteAntiderivativeRequest(polynomial=source, variable="k")
+        source,
+        "k",
     )
     coefficients = {
         term.exponents: term.coefficient.as_fraction()
@@ -139,7 +144,8 @@ def test_denominator_growth_is_rejected_before_result_construction() -> None:
     )
     with pytest.raises(OperationResourceAdmissionError):
         rational_discrete_antiderivative(
-            RationalDiscreteAntiderivativeRequest(polynomial=source, variable="k")
+            source,
+            "k",
         )
 
 
@@ -147,17 +153,19 @@ def test_quadratic_triangular_work_is_rejected_before_expansion() -> None:
     source = _polynomial(((1, (1_024, 0)),))
     with pytest.raises(OperationResourceAdmissionError, match="work"):
         rational_discrete_antiderivative(
-            RationalDiscreteAntiderivativeRequest(polynomial=source, variable="k")
+            source,
+            "k",
         )
 
 
 def test_request_type_and_selected_axis_are_domain_errors() -> None:
-    with pytest.raises(OperationDomainValidationError, match="request must be"):
-        rational_discrete_antiderivative(object())  # type: ignore[arg-type]
+    with pytest.raises(OperationDomainValidationError, match="RationalPolynomial"):
+        rational_discrete_antiderivative(object(), "k")  # type: ignore[arg-type]
     source = _polynomial(((1, (1, 0)),))
     with pytest.raises(OperationDomainValidationError, match="selected variable"):
         rational_discrete_antiderivative(
-            RationalDiscreteAntiderivativeRequest(polynomial=source, variable="z")
+            source,
+            "z",
         )
 
 
@@ -180,6 +188,7 @@ def test_catalog_invocation_returns_the_declared_typed_result() -> None:
     )
     assert set(result.output) == {
         "source",
+        "variable",
         "antiderivative",
         "reconstructed_difference",
     }

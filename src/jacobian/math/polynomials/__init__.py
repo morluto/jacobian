@@ -1,7 +1,6 @@
 """Supported exact polynomial API."""
 
 from jacobian.math.polynomials._discrete_antiderivative import (
-    RationalDiscreteAntiderivativeRequest,
     RationalDiscreteAntiderivativeResult,
     rational_discrete_antiderivative,
 )
@@ -65,7 +64,6 @@ def __getattr__(name: str) -> object:
 
 
 __all__ = [
-    "RationalDiscreteAntiderivativeRequest",
     "RationalDiscreteAntiderivativeResult",
     "derivative",
     "discriminant",

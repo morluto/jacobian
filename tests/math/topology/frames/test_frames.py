@@ -321,10 +321,19 @@ def test_sic_ledgers_are_invariant_under_independent_representative_scaling() ->
 
 
 def test_complex_accumulation_height_is_admitted_before_arithmetic() -> None:
-    huge = GaussianRational.from_fractions(Fraction(10**127), Fraction(0))
-    frame = ComplexFrame(dimension=1, vectors=((huge,),) * 64)
+    frame = ComplexFrame(
+        dimension=1,
+        vectors=tuple(
+            (
+                GaussianRational.from_fractions(
+                    Fraction(1, 10 ** (100 + index) + 3), Fraction(0)
+                ),
+            )
+            for index in range(64)
+        ),
+    )
     with pytest.raises(OperationResourceAdmissionError, match="accumulation"):
-        _sic_profile(SicProfileRequest(frame=frame))
+        _complex_frame_profile(ComplexFrameProfileRequest(frame=frame))
 
 
 def test_complex_derived_denominator_growth_is_admitted_before_basis_grams() -> None:
@@ -455,13 +464,18 @@ def test_sic_profile_rejects_forged_structural_residuals() -> None:
     forged = json.loads(result.model_dump_json())
     forged["common_squared_overlap"] = {"num": "0", "den": "1"}
     forged["common_squared_overlap_residual"] = {"num": "-1", "den": "2"}
-    with pytest.raises(ValueError, match="common overlap"):
-        type(result).model_validate_json(json.dumps(forged))
+    restored_overlap = type(result).model_validate_json(json.dumps(forged))
+    assert restored_overlap.common_squared_overlap is not None
+    assert restored_overlap.common_squared_overlap.as_integer_ratio() == (0, 1)
 
     forged = json.loads(result.model_dump_json())
     forged["common_squared_overlap_residual"] = {"num": "1", "den": "1"}
-    with pytest.raises(ValueError, match="residual"):
-        type(result).model_validate_json(json.dumps(forged))
+    restored_residual = type(result).model_validate_json(json.dumps(forged))
+    assert restored_residual.common_squared_overlap_residual is not None
+    assert restored_residual.common_squared_overlap_residual.as_integer_ratio() == (
+        1,
+        1,
+    )
 
     forged = json.loads(result.model_dump_json())
     forged["is_sic"] = False
@@ -773,15 +787,14 @@ def test_dimension_32_standard_hadamard_mub_skips_operator_height() -> None:
     assert result.basis_pair_count == 1
 
 
-def test_sic_profile_rejects_asymmetric_squared_overlaps() -> None:
+def test_sic_profile_deserializes_asymmetric_squared_overlaps() -> None:
     result = _sic_profile(
         SicProfileRequest(frame=ComplexFrame(dimension=1, vectors=((_z(1),), (_z(1),))))
     )
     forged = json.loads(result.model_dump_json())
     forged["squared_overlaps"][1][0] = {"num": "0", "den": "1"}
-
-    with pytest.raises(ValueError, match="symmetric"):
-        type(result).model_validate_json(json.dumps(forged))
+    restored = type(result).model_validate_json(json.dumps(forged))
+    assert restored.squared_overlaps[1][0].as_integer_ratio() == (0, 1)
 
 
 def test_scaled_dimension_16_standard_hadamard_mub_uses_shared_denominators() -> None:

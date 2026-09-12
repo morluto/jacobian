@@ -1,6 +1,7 @@
 """Gaussian-rational projective cross ratios."""
 
 from fractions import Fraction
+from math import gcd
 from typing import NoReturn
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
@@ -48,6 +49,66 @@ def _determinant(
     a, b = (coordinate.as_fractions() for coordinate in left.coordinates)
     c, d = (coordinate.as_fractions() for coordinate in right.coordinates)
     return _subtract(_multiply(a, d), _multiply(b, c))
+
+
+def _integer_digits(value: int) -> int:
+    magnitude = abs(value)
+    if magnitude < 10:
+        return 1
+    return (magnitude.bit_length() * 30103) // 100000 + 1
+
+
+def _cancelled_product_digits(left: Fraction, right: Fraction) -> tuple[int, int]:
+    left_num, left_den = abs(left.numerator), left.denominator
+    right_num, right_den = abs(right.numerator), right.denominator
+    cross_left = gcd(left_num, right_den)
+    cross_right = gcd(right_num, left_den)
+    return (
+        _integer_digits(left_num // cross_left)
+        + _integer_digits(right_num // cross_right),
+        _integer_digits(left_den // cross_right)
+        + _integer_digits(right_den // cross_left),
+    )
+
+
+def _cancelled_sum_digits(
+    left: tuple[int, int], right: tuple[int, int]
+) -> tuple[int, int]:
+    left_num, left_den = left
+    right_num, right_den = right
+    return (
+        max(left_num + right_den, right_num + left_den) + 1,
+        left_den + right_den,
+    )
+
+
+def _gaussian_quotient_digit_bound(
+    numerator: tuple[Fraction, Fraction],
+    denominator: tuple[Fraction, Fraction],
+) -> int:
+    """Bound real/imaginary component digits of a Gaussian quotient."""
+
+    real, imag = numerator
+    denom_real, denom_imag = denominator
+    real_num = _cancelled_sum_digits(
+        _cancelled_product_digits(real, denom_real),
+        _cancelled_product_digits(imag, denom_imag),
+    )
+    imag_num = _cancelled_sum_digits(
+        _cancelled_product_digits(imag, denom_real),
+        _cancelled_product_digits(real, denom_imag),
+    )
+    norm = _cancelled_sum_digits(
+        _cancelled_product_digits(denom_real, denom_real),
+        _cancelled_product_digits(denom_imag, denom_imag),
+    )
+
+    def _divide_digits(payload: tuple[int, int], modulus: tuple[int, int]) -> int:
+        payload_num, payload_den = payload
+        modulus_num, modulus_den = modulus
+        return max(payload_num + modulus_den, payload_den + modulus_num)
+
+    return max(_divide_digits(real_num, norm), _divide_digits(imag_num, norm))
 
 
 def _fraction_component_digits(value: Fraction) -> int:
@@ -101,8 +162,22 @@ def _admit_request(request: GaussianCrossRatioSource) -> None:
             "intermediate_height_bound",
             "cross-ratio determinant products and quotient exceed the exact intermediate digit bound",
         )
-    result_digits = 2 * product_digits + 3
+    result_digits = _gaussian_quotient_digit_bound(numerator, denominator)
     if result_digits > MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS:
+        if numerator[1] == 0 and denominator[1] == 0 and denominator[0]:
+            reduced = numerator[0] / denominator[0]
+            if (
+                max(
+                    _fraction_component_digits(reduced),
+                    _fraction_component_digits(Fraction()),
+                )
+                <= MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS
+            ):
+                return
+        if numerator[0] == 0 and denominator[0] == 0 and denominator[1]:
+            reduced = numerator[1] / denominator[1]
+            if _fraction_component_digits(reduced) <= MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS:
+                return
         _reject_resource(
             "output_height_bound",
             "cross-ratio output exceeds the Gaussian-rational component bound",

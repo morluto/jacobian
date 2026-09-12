@@ -236,3 +236,41 @@ def test_output_height_is_admitted_before_result_construction() -> None:
         error.value.errors()[0]["type"]
         == "geometry.gaussian_cross_ratio.output_height_bound"
     )
+
+
+def test_mixed_denominator_output_height_is_rejected_before_quotient() -> None:
+    q = 10**1499 + 7
+    r = q + 1
+    request = GaussianCrossRatioSource(
+        first=_point(_z(1), _z(0)),
+        second=_point(_z(0), _z(1)),
+        third=_point(_z(1), _z(1)),
+        fourth=_point(
+            _z(1),
+            GaussianRational.from_fractions(Fraction(1, q), Fraction(1, r)),
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        gaussian_rational_cross_ratio(request)
+    assert (
+        error.value.errors()[0]["type"]
+        == "geometry.gaussian_cross_ratio.output_height_bound"
+    )
+
+
+def test_large_harmonic_quadruple_cancels_to_minus_one() -> None:
+    scale = 10**4095
+    request = GaussianCrossRatioSource(
+        first=_point(_z(0), _z(1)),
+        second=_point(_z(1), _z(0)),
+        third=_point(
+            GaussianRational.from_fractions(Fraction(scale), Fraction()),
+            _z(1),
+        ),
+        fourth=_point(
+            GaussianRational.from_fractions(Fraction(-scale), Fraction()),
+            _z(1),
+        ),
+    )
+    result = gaussian_rational_cross_ratio(request)
+    assert result.as_fractions() == (Fraction(-1), Fraction())

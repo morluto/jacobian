@@ -321,9 +321,7 @@ def test_result_payloads_are_preflighted_before_container_copy() -> None:
 
 
 def test_missing_arity_on_forged_source_is_a_typed_domain_error() -> None:
-    request = TupleFamilyOrbitSource.model_construct(
-        action=_swap_action(), family=()
-    )
+    request = TupleFamilyOrbitSource.model_construct(action=_swap_action(), family=())
     with pytest.raises(OperationDomainValidationError) as exc_info:
         tuple_family_orbit_profile(request)
     assert exc_info.value.errors()[0]["type"] == (

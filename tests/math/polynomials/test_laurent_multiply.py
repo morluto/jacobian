@@ -91,3 +91,16 @@ def test_opposite_boundary_exponents_multiply_to_one() -> None:
     assert result == RationalLaurentPolynomial(variables=("x",), terms=(term(1, 0),))
     restored = RationalLaurentPolynomial.model_validate_json(result.model_dump_json())
     assert rational_laurent_multiply(restored, left) == left
+
+
+def test_multiaxis_opposite_boundary_exponents_preserve_cancellation() -> None:
+    left = RationalLaurentPolynomial(
+        variables=("x", "y"), terms=(term(1, 32_768, -32_768),)
+    )
+    right = RationalLaurentPolynomial(
+        variables=("x", "y"), terms=(term(1, -32_768, 32_768),)
+    )
+
+    assert rational_laurent_multiply(left, right) == RationalLaurentPolynomial(
+        variables=("x", "y"), terms=(term(1, 0, 0),)
+    )

@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import time
 from collections import defaultdict
+from contextlib import suppress
 from itertools import combinations
+from threading import Event, Thread
 from typing import Any
 
 from jacobian._execution import (
+    OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
     bind_request_deadline,
+    current_request_cancellation,
     current_request_execution,
     request_checkpoint,
     request_execution,
@@ -17,6 +21,7 @@ from jacobian._execution import (
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.coloring.induced_edge_deletion_profile._models import (
     DEFAULT_INDUCED_SOLVER_CONFLICTS,
+    MAX_INDUCED_DELETION_R,
     MAX_INDUCED_DELETION_VERTICES,
     MAX_INDUCED_EDGE_MATERIALIZATION,
     MAX_INDUCED_LEDGER_CONFLICTS,
@@ -51,6 +56,52 @@ def _set_remaining_z3_timeout(solver: Any) -> None:
     if remaining_milliseconds <= 0:
         raise OperationExecutionTimeoutError("request deadline expired before Z3 call")
     solver.set("timeout", remaining_milliseconds)
+
+
+def _run_z3_check(solver: Any, stage: str) -> Any:
+    """Run one solver check with cooperative cancellation and deadline interrupts.
+
+    Z3's native timeout is necessary but cancellation signals are external to the
+    solver.  A small request-scoped watchdog interrupts the solver object itself,
+    so an in-process backend cannot outlive its request envelope.
+    """
+    execution = current_request_execution()
+    cancellation = current_request_cancellation() or (
+        execution.cancellation_signal if execution is not None else None
+    )
+    deadline = execution.deadline if execution is not None else None
+    stop = Event()
+    interrupted_for: list[str | None] = [None]
+
+    def watch() -> None:
+        while not stop.wait(0.005):
+            if cancellation is not None and cancellation.is_set():
+                interrupted_for[0] = "cancelled"
+                with suppress(Exception):
+                    solver.interrupt()
+                return
+            if deadline is not None and time.monotonic() >= deadline:
+                interrupted_for[0] = "deadline"
+                with suppress(Exception):
+                    solver.interrupt()
+                return
+
+    watcher = Thread(target=watch, name="jacobian-z3-watchdog", daemon=True)
+    watcher.start()
+    try:
+        outcome = solver.check()
+    finally:
+        stop.set()
+        watcher.join(timeout=0.1)
+
+    if cancellation is not None and cancellation.is_set():
+        raise OperationExecutionCancelledError(f"request cancelled {stage}")
+    if interrupted_for[0] == "cancelled":
+        raise OperationExecutionCancelledError(f"request cancelled {stage}")
+    _require_execution_active(f"after {stage}")
+    if interrupted_for[0] == "deadline":
+        raise OperationExecutionTimeoutError(f"request deadline expired {stage}")
+    return outcome
 
 
 def _is_bipartite_vertices_edges(
@@ -114,8 +165,7 @@ def _z3_is_r_colorable(
         solver.add(variable >= 0, variable < r)
     for a, b in edges:
         solver.add(var_map[a] != var_map[b])
-    outcome = solver.check()
-    _require_execution_active("after r-colourability check")
+    outcome = _run_z3_check(solver, "r-colourability check")
     if outcome == z3.sat:
         return True
     if outcome == z3.unsat:
@@ -175,8 +225,7 @@ def _z3_exists_deletion_leq_k(
                 solver.add(deletion_vars[idx])
             else:
                 solver.add(z3.Not(deletion_vars[idx]))
-    outcome = solver.check()
-    _require_execution_active("after deletion feasibility check")
+    outcome = _run_z3_check(solver, "deletion feasibility check")
     if outcome == z3.sat:
         return True
     if outcome == z3.unsat:
@@ -195,7 +244,7 @@ def _admit_induced_edge_deletion_profile(
     r: int,
     solver_conflicts: int,
 ) -> None:
-    if type(r) is not int or r < 1 or r.bit_length() > 53:
+    if type(r) is not int or not 1 <= r <= MAX_INDUCED_DELETION_R:
         raise OperationDomainValidationError(
             location=("r",),
             code="graph.induced_edge_deletion.r_out_of_range",
@@ -253,15 +302,13 @@ def _admit_induced_edge_deletion_profile(
             code="graph.induced_edge_deletion.materialization_exceeds_bound",
             message="induced-edge deletion profile induced-edge materialization exceeds its bound",
         )
-    # predicted solver calls: quick enumeration of induced edge counts per subset
+    # Predicted solver calls: quick enumeration of induced edge counts per subset.
+    # r=2 is solved exactly by finite cut enumeration below, so it must not be
+    # charged against the Z3 ledger at all.
     sorted_vertices = sorted(graph.vertices)
     sorted_edges = tuple(sorted(graph.edges))
     # quick map for counting
     predicted_calls = 0
-    # also track ledger
-    graph_is_bipartite = r == 2 and _is_bipartite_vertices_edges(
-        sorted_vertices, list(sorted_edges)
-    )
     for size in range(n + 1):
         for subset in combinations(sorted_vertices, size):
             _require_execution_active("during admission subset scan")
@@ -270,11 +317,11 @@ def _admit_induced_edge_deletion_profile(
             for a, b in sorted_edges:
                 if a in subset_set and b in subset_set:
                     m_s += 1
-            if m_s == 0 or r == 1 or r >= len(subset) or graph_is_bipartite:
+            if m_s == 0 or r in (1, 2) or r >= len(subset):
                 continue
-            # if we can shortcut 0-deletion check we still need at least 1 call worst
-            # need to estimate worst 2*m_s+1
-            predicted_calls += 2 * m_s + 1
+            # Initial feasibility + up to m_s optimum checks + up to m_s
+            # canonical tie-break checks + one reconstruction check.
+            predicted_calls += 2 * m_s + 2
             if predicted_calls > MAX_INDUCED_SOLVER_CALLS:
                 raise OperationDomainValidationError(
                     location=("graph",),
@@ -290,7 +337,31 @@ def _admit_induced_edge_deletion_profile(
         )
 
 
-def _compute_min_deletions_for_subset(
+def _min_bipartite_deletions(
+    subset_vertices: tuple[str, ...], induced_edges: list[tuple[str, str]]
+) -> tuple[int, tuple[tuple[str, str], ...]]:
+    """Return the exact canonical edge-bipartization witness for one subset."""
+    if _is_bipartite_vertices_edges(list(subset_vertices), induced_edges):
+        return 0, ()
+    vertex_index = {vertex: index for index, vertex in enumerate(subset_vertices)}
+    best: tuple[int, tuple[tuple[str, str], ...]] | None = None
+    for mask in range(1 << len(subset_vertices)):
+        _require_execution_active("during bipartite cut enumeration")
+        deleted = tuple(
+            edge
+            for edge in induced_edges
+            if not (
+                ((mask >> vertex_index[edge[0]]) ^ (mask >> vertex_index[edge[1]])) & 1
+            )
+        )
+        candidate = (len(deleted), deleted)
+        if best is None or candidate < best:
+            best = candidate
+    assert best is not None
+    return best
+
+
+def _compute_min_deletions_for_subset(  # noqa: C901
     subset_vertices: tuple[str, ...],
     induced_edges: list[tuple[str, str]],
     r: int,
@@ -306,6 +377,14 @@ def _compute_min_deletions_for_subset(
     if r == 1:
         # need to delete all edges to become edgeless
         return m, tuple(sorted(induced_edges))
+
+    if r == 2:
+        # Edge deletion to bipartiteness is the complement of a maximum cut.
+        # The admitted n<=8 envelope makes exhaustive Boolean cut enumeration
+        # exact, deterministic, and independent of the unrelated Z3 coloring
+        # backend.  Choosing by (deletion count, deleted-edge tuple) gives the
+        # required lexicographically smallest attaining source-edge set.
+        return _min_bipartite_deletions(subset_vertices, induced_edges)
 
     # quick check if already r-colourable with 0 deletions
     _require_execution_active("during subset optimisation")

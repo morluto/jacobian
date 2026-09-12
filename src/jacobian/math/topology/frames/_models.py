@@ -10,7 +10,9 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalRational, ExactInteger
 from jacobian._models import StrictModel
 from jacobian.math.matrices.values import IntegerMatrix
+from jacobian.math.number_theory.number_fields import GaussianRational
 from jacobian.math.topology.frames.values import (
+    MAX_COMPLEX_BASIS_COUNT,
     MAX_DIM,
     MAX_VECTOR_CELLS,
     ComplexFrame,
@@ -128,12 +130,14 @@ class TightEquiangularProfileResult(VectorFamily):
 
 
 class MutuallyUnbiasedBasesRequest(StrictModel):
-    dimension: int
-    bases: tuple[ComplexFrame, ...] = Field(min_length=1)
+    dimension: int = Field(ge=1, le=MAX_DIM)
+    bases: tuple[ComplexFrame, ...] = Field(
+        min_length=1, max_length=MAX_COMPLEX_BASIS_COUNT
+    )
 
     @model_validator(mode="after")
     def require_basis_axes(self) -> Self:
-        if self.dimension < 1 or any(
+        if any(
             basis.dimension != self.dimension or len(basis.vectors) != self.dimension
             for basis in self.bases
         ):
@@ -145,6 +149,8 @@ class MutuallyUnbiasedBasesRequest(StrictModel):
 
 
 class MutuallyUnbiasedBasesResult(MutuallyUnbiasedBasesRequest):
+    basis_grams: tuple[tuple[tuple[GaussianRational, ...], ...], ...]
+    cross_gram_squared: tuple[tuple[tuple[CanonicalRational, ...], ...], ...]
     is_mutually_unbiased: bool
     basis_pair_count: int
 
@@ -154,6 +160,17 @@ class MutuallyUnbiasedBasesResult(MutuallyUnbiasedBasesRequest):
             raise PydanticCustomError(
                 "frames.mub_profile_shape", "basis pair count is not canonical"
             )
+        dimension = self.dimension
+        if len(self.basis_grams) != len(self.bases) or any(
+            len(gram) != dimension or any(len(row) != dimension for row in gram)
+            for gram in self.basis_grams
+        ) or len(self.cross_gram_squared) != self.basis_pair_count or any(
+            len(gram) != dimension or any(len(row) != dimension for row in gram)
+            for gram in self.cross_gram_squared
+        ):
+            raise PydanticCustomError(
+                "frames.mub_profile_axes", "MUB ledgers must retain basis axes"
+            )
         return self
 
     @classmethod
@@ -161,48 +178,63 @@ class MutuallyUnbiasedBasesResult(MutuallyUnbiasedBasesRequest):
         cls,
         request: MutuallyUnbiasedBasesRequest,
         *,
+        basis_grams: tuple[tuple[tuple[GaussianRational, ...], ...], ...],
+        cross_gram_squared: tuple[tuple[tuple[CanonicalRational, ...], ...], ...],
         is_mutually_unbiased: bool,
     ) -> Self:
         return cls.model_construct(
             dimension=request.dimension,
             bases=request.bases,
+            basis_grams=basis_grams,
+            cross_gram_squared=cross_gram_squared,
             is_mutually_unbiased=is_mutually_unbiased,
             basis_pair_count=len(request.bases) * (len(request.bases) - 1) // 2,
         )
 
 
-class ComplexFrameDesignProfileRequest(StrictModel):
+class ComplexFrameProfileRequest(StrictModel):
     frame: ComplexFrame
 
 
-class ComplexFrameDesignProfileResult(ComplexFrameDesignProfileRequest):
+class ComplexFrameProfileResult(ComplexFrameProfileRequest):
     tight: bool
     equiangular: bool
     common_squared_overlap: CanonicalRational | None
+    frame_operator: tuple[tuple[GaussianRational, ...], ...]
+    tight_residual: tuple[tuple[GaussianRational, ...], ...]
 
     @model_validator(mode="after")
     def require_profile_shape(self) -> Self:
         if not self.equiangular and self.common_squared_overlap is not None:
             raise PydanticCustomError(
-                "frames.design_profile_shape",
+                "frames.complex_profile_shape",
                 "non-equiangular profile cannot carry a common overlap",
+            )
+        d = self.frame.dimension
+        if any(len(matrix) != d or any(len(row) != d for row in matrix) for matrix in (self.frame_operator, self.tight_residual)):
+            raise PydanticCustomError(
+                "frames.complex_profile_axes", "frame operator ledgers must retain ambient axes"
             )
         return self
 
     @classmethod
     def _from_kernel(
         cls,
-        request: ComplexFrameDesignProfileRequest,
+        request: ComplexFrameProfileRequest,
         *,
         tight: bool,
         equiangular: bool,
         common_squared_overlap: CanonicalRational | None,
+        frame_operator: tuple[tuple[GaussianRational, ...], ...],
+        tight_residual: tuple[tuple[GaussianRational, ...], ...],
     ) -> Self:
         return cls.model_construct(
             frame=request.frame,
             tight=tight,
             equiangular=equiangular,
             common_squared_overlap=common_squared_overlap,
+            frame_operator=frame_operator,
+            tight_residual=tight_residual,
         )
 
 
@@ -213,6 +245,9 @@ class SicProfileRequest(StrictModel):
 class SicProfileResult(SicProfileRequest):
     is_sic: bool
     common_squared_overlap: CanonicalRational | None
+    squared_overlaps: tuple[tuple[CanonicalRational, ...], ...]
+    frame_operator: tuple[tuple[GaussianRational, ...], ...]
+    tight_residual: tuple[tuple[GaussianRational, ...], ...]
 
     @model_validator(mode="after")
     def require_profile_shape(self) -> Self:
@@ -220,6 +255,16 @@ class SicProfileResult(SicProfileRequest):
             raise PydanticCustomError(
                 "frames.sic_profile_shape",
                 "a non-SIC profile cannot carry a common overlap",
+            )
+        d = self.frame.dimension
+        n = len(self.frame.vectors)
+        if (
+            len(self.squared_overlaps) != n
+            or any(len(row) != n for row in self.squared_overlaps)
+            or any(len(matrix) != d or any(len(row) != d for row in matrix) for matrix in (self.frame_operator, self.tight_residual))
+        ):
+            raise PydanticCustomError(
+                "frames.sic_profile_axes", "SIC ledgers must retain source axes"
             )
         return self
 
@@ -230,11 +275,17 @@ class SicProfileResult(SicProfileRequest):
         *,
         is_sic: bool,
         common_squared_overlap: CanonicalRational | None,
+        squared_overlaps: tuple[tuple[CanonicalRational, ...], ...],
+        frame_operator: tuple[tuple[GaussianRational, ...], ...],
+        tight_residual: tuple[tuple[GaussianRational, ...], ...],
     ) -> Self:
         return cls.model_construct(
             frame=request.frame,
             is_sic=is_sic,
             common_squared_overlap=common_squared_overlap,
+            squared_overlaps=squared_overlaps,
+            frame_operator=frame_operator,
+            tight_residual=tight_residual,
         )
 
 
@@ -242,8 +293,8 @@ __all__ = [
     "MAX_DIM",
     "MAX_VECTOR_CELLS",
     "CoherenceResult",
-    "ComplexFrameDesignProfileRequest",
-    "ComplexFrameDesignProfileResult",
+    "ComplexFrameProfileRequest",
+    "ComplexFrameProfileResult",
     "FramePotentialResult",
     "GramResult",
     "MutuallyUnbiasedBasesRequest",

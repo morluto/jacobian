@@ -2,7 +2,7 @@
 
 from jacobian.math.topology.frames.operations import (
     coherence,
-    complex_design_profile,
+    complex_frame_profile,
     frame_potential,
     gram,
     mutually_unbiased_bases,
@@ -12,16 +12,14 @@ from jacobian.math.topology.frames.operations import (
 )
 from jacobian.math.topology.frames.values import (
     ComplexFrame,
-    ExactComplex,
     VectorFamily,
 )
 
 __all__ = [
     "ComplexFrame",
-    "ExactComplex",
     "VectorFamily",
     "coherence",
-    "complex_design_profile",
+    "complex_frame_profile",
     "frame_potential",
     "gram",
     "mutually_unbiased_bases",

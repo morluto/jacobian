@@ -10,11 +10,12 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.matrices.values import IntegerMatrix
+from jacobian.math.number_theory.number_fields import GaussianRational
 from jacobian.math.topology.frames._flint import integer_gram, integer_gram_and_rank
 from jacobian.math.topology.frames._models import (
     CoherenceResult,
-    ComplexFrameDesignProfileRequest,
-    ComplexFrameDesignProfileResult,
+    ComplexFrameProfileRequest,
+    ComplexFrameProfileResult,
     FramePotentialResult,
     GramResult,
     MutuallyUnbiasedBasesRequest,
@@ -24,14 +25,17 @@ from jacobian.math.topology.frames._models import (
     TightEquiangularProfileResult,
 )
 from jacobian.math.topology.frames.values import (
+    MAX_COMPLEX_BASIS_PAIRS,
+    MAX_COMPLEX_COMPONENT_DIGITS,
+    MAX_COMPLEX_INNER_PRODUCT_WORK,
+    MAX_COMPLEX_PROFILE_CELLS,
     ComplexFrame,
-    ExactComplex,
     VectorFamily,
 )
 
 __all__ = [
     "coherence",
-    "complex_design_profile",
+    "complex_frame_profile",
     "frame_potential",
     "gram",
     "mutually_unbiased_bases",
@@ -45,12 +49,12 @@ MAX_FRAME_GRAM_ENTRIES = 2_097_152
 MAX_FRAME_GRAM_MULTIPLY_ADDS = 536_870_912
 
 
-def _complex_parts(value: ExactComplex) -> tuple[Fraction, Fraction]:
-    return value.real.as_fraction(), value.imaginary.as_fraction()
+def _complex_parts(value: GaussianRational) -> tuple[Fraction, Fraction]:
+    return value.as_fractions()
 
 
 def _inner_product(
-    left: tuple[ExactComplex, ...], right: tuple[ExactComplex, ...]
+    left: tuple[GaussianRational, ...], right: tuple[GaussianRational, ...]
 ) -> tuple[Fraction, Fraction]:
     real = Fraction(0)
     imaginary = Fraction(0)
@@ -62,7 +66,7 @@ def _inner_product(
     return real, imaginary
 
 
-def _norm_squared(vector: tuple[ExactComplex, ...]) -> Fraction:
+def _norm_squared(vector: tuple[GaussianRational, ...]) -> Fraction:
     real, imaginary = _inner_product(vector, vector)
     if imaginary:
         raise ValueError("complex Hermitian norm unexpectedly has an imaginary part")
@@ -70,6 +74,26 @@ def _norm_squared(vector: tuple[ExactComplex, ...]) -> Fraction:
 
 
 def _complex_frame_admitted(frame: ComplexFrame) -> tuple[Fraction, ...]:
+    if len(frame.vectors) * frame.dimension > MAX_COMPLEX_PROFILE_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("frame", "vectors"),
+            code="frames.complex_profile_cells",
+            message="complex profile cells exceed the admitted output envelope",
+        )
+    if any(
+        max(
+            len(str(abs(component.num))),
+            len(str(component.den)),
+        ) > MAX_COMPLEX_COMPONENT_DIGITS
+        for vector in frame.vectors
+        for scalar in vector
+        for component in (scalar.real, scalar.imaginary)
+    ):
+        raise OperationResourceAdmissionError(
+            location=("frame", "vectors"),
+            code="frames.complex_scalar_digits",
+            message="complex scalar components exceed the admitted profile height",
+        )
     norms = tuple(_norm_squared(vector) for vector in frame.vectors)
     if any(norm <= 0 for norm in norms):
         raise OperationDomainValidationError(
@@ -80,7 +104,31 @@ def _complex_frame_admitted(frame: ComplexFrame) -> tuple[Fraction, ...]:
     return norms
 
 
-def _tight_complex_frame(frame: ComplexFrame) -> bool:
+def _require_complex_profile_work(frame: ComplexFrame) -> None:
+    vectors = len(frame.vectors)
+    pair_cells = vectors * vectors
+    work = pair_cells * frame.dimension
+    if pair_cells + frame.dimension * frame.dimension > MAX_COMPLEX_PROFILE_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("frame",),
+            code="frames.complex_profile_output",
+            message="complex profile output cells exceed the admitted envelope",
+        )
+    if work > MAX_COMPLEX_INNER_PRODUCT_WORK:
+        raise OperationResourceAdmissionError(
+            location=("frame",),
+            code="frames.complex_profile_work",
+            message="complex profile inner-product work exceeds the admitted envelope",
+        )
+
+
+def _tight_complex_frame(
+    frame: ComplexFrame,
+) -> tuple[
+    bool,
+    tuple[tuple[GaussianRational, ...], ...],
+    tuple[tuple[GaussianRational, ...], ...],
+]:
     operator = [
         [
             (
@@ -98,11 +146,25 @@ def _tight_complex_frame(frame: ComplexFrame) -> bool:
         for row in range(frame.dimension)
     ]
     scalar = operator[0][0]
-    return all(
-        operator[row][column] == (scalar if row == column else (Fraction(0), Fraction(0)))
+    residual = [
+        [
+            (
+                operator[row][column][0] - (scalar[0] if row == column else 0),
+                operator[row][column][1] - (scalar[1] if row == column else 0),
+            )
+            for column in range(frame.dimension)
+        ]
         for row in range(frame.dimension)
-        for column in range(frame.dimension)
-    ) and scalar[1] == 0
+    ]
+    def to_value(pair: tuple[Fraction, Fraction]) -> GaussianRational:
+        return GaussianRational.from_fractions(*pair)
+    operator_value = tuple(tuple(to_value(entry) for entry in row) for row in operator)
+    residual_value = tuple(tuple(to_value(entry) for entry in row) for row in residual)
+    return (
+        all(entry == (0, 0) for row in residual for entry in row) and scalar[1] == 0,
+        operator_value,
+        residual_value,
+    )
 
 
 def _equiangular_complex_frame(
@@ -302,20 +364,26 @@ def tight_equiangular_profile(value: VectorFamily) -> TightEquiangularProfileRes
     )
 
 
-def complex_design_profile(
-    request: ComplexFrameDesignProfileRequest,
-) -> ComplexFrameDesignProfileResult:
-    """Return exact tightness and equal-norm equiangularity of a complex frame."""
+def complex_frame_profile(
+    request: ComplexFrameProfileRequest,
+) -> ComplexFrameProfileResult:
+    """Return an exact complex frame operator and tight/equiangular profile."""
 
+    _require_complex_profile_work(request.frame)
     norms = _complex_frame_admitted(request.frame)
     equiangular, common = _equiangular_complex_frame(request.frame, norms)
-    return ComplexFrameDesignProfileResult._from_kernel(
+    tight, frame_operator, tight_residual = _tight_complex_frame(request.frame)
+    return ComplexFrameProfileResult._from_kernel(
         request,
-        tight=_tight_complex_frame(request.frame),
+        tight=tight,
         equiangular=equiangular,
         common_squared_overlap=(
-            CanonicalRational.from_fraction(common) if equiangular and common is not None else None
+            CanonicalRational.from_fraction(common)
+            if equiangular and common is not None
+            else None
         ),
+        frame_operator=frame_operator,
+        tight_residual=tight_residual,
     )
 
 
@@ -324,9 +392,37 @@ def mutually_unbiased_bases(
 ) -> MutuallyUnbiasedBasesResult:
     """Decide exact mutual unbiasedness of a bounded complex basis family."""
 
+    dimension = request.dimension
+    basis_count = len(request.bases)
+    pair_count = basis_count * (basis_count - 1) // 2
+    work = pair_count * dimension * dimension * dimension
+    output_cells = (basis_count + pair_count) * dimension * dimension
+    if pair_count > MAX_COMPLEX_BASIS_PAIRS or work > MAX_COMPLEX_INNER_PRODUCT_WORK:
+        raise OperationResourceAdmissionError(
+            location=("bases",),
+            code="frames.mub_work",
+            message="MUB basis-pair work exceeds the admitted envelope",
+        )
+    if output_cells > MAX_COMPLEX_PROFILE_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("bases",),
+            code="frames.mub_output",
+            message="MUB ledger output exceeds the admitted envelope",
+        )
     basis_norms = tuple(_complex_frame_admitted(basis) for basis in request.bases)
     unbiased = True
-    dimension = request.dimension
+    basis_grams: list[tuple[tuple[GaussianRational, ...], ...]] = []
+    for basis in request.bases:
+        basis_grams.append(
+            tuple(
+                tuple(
+                    GaussianRational.from_fractions(*_inner_product(left, right))
+                    for right in basis.vectors
+                )
+                for left in basis.vectors
+            )
+        )
+    cross_gram_squared: list[tuple[tuple[CanonicalRational, ...], ...]] = []
     for basis, norms in zip(request.bases, basis_norms, strict=True):
         for left in range(dimension):
             for right in range(left + 1, dimension):
@@ -336,9 +432,11 @@ def mutually_unbiased_bases(
             unbiased = False
     for first in range(len(request.bases)):
         for second in range(first + 1, len(request.bases)):
+            cross: list[tuple[CanonicalRational, ...]] = []
             for left, left_norm in zip(
                 request.bases[first].vectors, basis_norms[first], strict=True
             ):
+                row: list[CanonicalRational] = []
                 for right, right_norm in zip(
                     request.bases[second].vectors, basis_norms[second], strict=True
                 ):
@@ -347,8 +445,19 @@ def mutually_unbiased_bases(
                         real * real + imaginary * imaginary
                     ) * dimension != left_norm * right_norm:
                         unbiased = False
+                    row.append(
+                        CanonicalRational.from_fraction(
+                            (real * real + imaginary * imaginary)
+                            / (left_norm * right_norm)
+                        )
+                    )
+                cross.append(tuple(row))
+            cross_gram_squared.append(tuple(cross))
     return MutuallyUnbiasedBasesResult._from_kernel(
-        request, is_mutually_unbiased=unbiased
+        request,
+        basis_grams=tuple(basis_grams),
+        cross_gram_squared=tuple(cross_gram_squared),
+        is_mutually_unbiased=unbiased,
     )
 
 
@@ -356,9 +465,21 @@ def sic_profile(request: SicProfileRequest) -> SicProfileResult:
     """Decide the exact SIC overlap equations for a complex vector family."""
 
     frame = request.frame
+    _require_complex_profile_work(frame)
     norms = _complex_frame_admitted(frame)
     expected_count = frame.dimension * frame.dimension
     is_sic = len(frame.vectors) == expected_count
+    squared_overlaps: list[tuple[CanonicalRational, ...]] = []
+    for left, left_norm in zip(frame.vectors, norms, strict=True):
+        row: list[CanonicalRational] = []
+        for right, right_norm in zip(frame.vectors, norms, strict=True):
+            real, imaginary = _inner_product(left, right)
+            row.append(
+                CanonicalRational.from_fraction(
+                    (real * real + imaginary * imaginary) / (left_norm * right_norm)
+                )
+            )
+        squared_overlaps.append(tuple(row))
     common: Fraction | None = None
     if is_sic:
         is_sic = all(norm == norms[0] for norm in norms)
@@ -371,6 +492,8 @@ def sic_profile(request: SicProfileRequest) -> SicProfileResult:
                 )
                 if overlap != common:
                     is_sic = False
+    tight, frame_operator, tight_residual = _tight_complex_frame(frame)
+    is_sic = is_sic and tight
     return SicProfileResult._from_kernel(
         request,
         is_sic=is_sic,
@@ -379,4 +502,7 @@ def sic_profile(request: SicProfileRequest) -> SicProfileResult:
             if is_sic
             else None
         ),
+        squared_overlaps=tuple(squared_overlaps),
+        frame_operator=frame_operator,
+        tight_residual=tight_residual,
     )

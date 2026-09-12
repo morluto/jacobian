@@ -3,8 +3,8 @@
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.topology.frames._models import (
     CoherenceResult,
-    ComplexFrameDesignProfileRequest,
-    ComplexFrameDesignProfileResult,
+    ComplexFrameProfileRequest,
+    ComplexFrameProfileResult,
     FramePotentialResult,
     GramResult,
     MutuallyUnbiasedBasesRequest,
@@ -15,7 +15,7 @@ from jacobian.math.topology.frames._models import (
 )
 from jacobian.math.topology.frames.operations import (
     coherence,
-    complex_design_profile,
+    complex_frame_profile,
     frame_potential,
     gram,
     mutually_unbiased_bases,
@@ -41,10 +41,10 @@ def _tight_equiangular_profile(request: VectorFamily) -> TightEquiangularProfile
     return tight_equiangular_profile(request)
 
 
-def _complex_design_profile(
-    request: ComplexFrameDesignProfileRequest,
-) -> ComplexFrameDesignProfileResult:
-    return complex_design_profile(request)
+def _complex_frame_profile(
+    request: ComplexFrameProfileRequest,
+) -> ComplexFrameProfileResult:
+    return complex_frame_profile(request)
 
 
 def _mutually_unbiased_bases(
@@ -72,13 +72,13 @@ _COMPLEX_HADAMARD = {
 
 TOOLS: MathTools = (
     MathTool(
-        operation_id="frame.complex_design_profile.compute",
-        title="Classify an exact complex frame design",
-        description="Return exact tightness and equal-norm equiangularity for a Gaussian-rational complex frame.",
-        request_type=ComplexFrameDesignProfileRequest,
-        result_type=ComplexFrameDesignProfileResult,
-        run=_complex_design_profile,
-        tags=("topology", "frame", "design", "complex", "exact"),
+        operation_id="frame.complex_profile.compute",
+        title="Profile an exact complex frame",
+        description="Return the exact frame operator, tight residual, and equal-norm equiangular profile for a Gaussian-rational complex frame.",
+        request_type=ComplexFrameProfileRequest,
+        result_type=ComplexFrameProfileResult,
+        run=_complex_frame_profile,
+        tags=("topology", "frame", "complex", "exact"),
         examples=(OperationExample(name="complex_standard", description="Profile the standard complex basis.", input={"frame": _COMPLEX_STANDARD}),),
     ),
     MathTool(

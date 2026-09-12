@@ -5,19 +5,22 @@ from fractions import Fraction
 
 import pytest
 
-from jacobian._exact import CanonicalRational
 from jacobian.canonical import encode_strict_json
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.matrices.values import IntegerMatrix
+from jacobian.math.number_theory.number_fields import GaussianRational
 from jacobian.math.topology.frames._models import (
-    ComplexFrameDesignProfileRequest,
+    ComplexFrameProfileRequest,
     GramResult,
     MutuallyUnbiasedBasesRequest,
     SicProfileRequest,
 )
 from jacobian.math.topology.frames._tools import (
     _coherence,
-    _complex_design_profile,
+    _complex_frame_profile,
     _frame_potential,
     _gram,
     _mutually_unbiased_bases,
@@ -28,16 +31,12 @@ from jacobian.math.topology.frames.operations import gram, verify_gram
 from jacobian.math.topology.frames.values import (
     MAX_VECTOR_CELLS,
     ComplexFrame,
-    ExactComplex,
     VectorFamily,
 )
 
 
-def _z(real: int, imaginary: int = 0) -> ExactComplex:
-    return ExactComplex(
-        real=CanonicalRational(num=real, den=1),
-        imaginary=CanonicalRational(num=imaginary, den=1),
-    )
+def _z(real: int, imaginary: int = 0) -> GaussianRational:
+    return GaussianRational.from_fractions(Fraction(real), Fraction(imaginary))
 
 
 def _repeated_standard_basis(
@@ -147,16 +146,24 @@ def test_exact_complex_mub_profile_and_forged_shape_rejection() -> None:
     result = _mutually_unbiased_bases(request)
     assert result.is_mutually_unbiased is True
     assert result.basis_pair_count == 1
+    assert result.cross_gram_squared[0][0][0].as_integer_ratio() == (1, 2)
+    assert result.basis_grams[0][0][1].as_fractions() == (Fraction(0), Fraction(0))
     assert type(result).model_validate_json(result.model_dump_json()) == result
     forged = json.loads(result.model_dump_json())
     forged["basis_pair_count"] = 0
     with pytest.raises(ValueError, match="pair count"):
         type(result).model_validate_json(json.dumps(forged))
+    non_mub = _mutually_unbiased_bases(
+        MutuallyUnbiasedBasesRequest(dimension=2, bases=(standard, standard))
+    )
+    assert non_mub.is_mutually_unbiased is False
+    with pytest.raises(ValueError, match="at most 16"):
+        MutuallyUnbiasedBasesRequest(dimension=2, bases=(standard,) * 17)
 
 
 def test_exact_complex_sic_and_design_profiles_are_decisions() -> None:
     basis = ComplexFrame(dimension=2, vectors=((_z(1), _z(0)), (_z(0), _z(1))))
-    design = _complex_design_profile(ComplexFrameDesignProfileRequest(frame=basis))
+    design = _complex_frame_profile(ComplexFrameProfileRequest(frame=basis))
     assert design.tight is True
     assert design.equiangular is True
     assert design.common_squared_overlap is not None
@@ -168,7 +175,32 @@ def test_exact_complex_sic_and_design_profiles_are_decisions() -> None:
     assert sic.is_sic is True
     assert sic.common_squared_overlap is not None
     assert sic.common_squared_overlap.as_integer_ratio() == (1, 2)
+    assert sic.squared_overlaps[0][0].as_integer_ratio() == (1, 1)
+    assert sic.tight_residual[0][0].as_fractions() == (Fraction(0), Fraction(0))
     assert type(sic).model_validate_json(sic.model_dump_json()) == sic
+    forged = json.loads(sic.model_dump_json())
+    forged["squared_overlaps"] = []
+    with pytest.raises(ValueError, match="SIC ledgers"):
+        type(sic).model_validate_json(json.dumps(forged))
+
+    phase_scaled = _sic_profile(
+        SicProfileRequest(
+            frame=ComplexFrame(
+                dimension=1,
+                vectors=((GaussianRational.from_fractions(Fraction(0), Fraction(3)),),),
+            )
+        )
+    )
+    assert phase_scaled.is_sic is True
+    non_sic = _sic_profile(SicProfileRequest(frame=basis))
+    assert non_sic.is_sic is False
+
+
+def test_complex_profile_rejects_scalar_height_before_expansion() -> None:
+    huge = GaussianRational.from_fractions(Fraction(10**129), Fraction(0))
+    frame = ComplexFrame(dimension=1, vectors=((huge,),))
+    with pytest.raises(OperationResourceAdmissionError, match="scalar components"):
+        _sic_profile(SicProfileRequest(frame=frame))
 
 
 def test_coherence_is_exact_and_carries_canonical_maximizer() -> None:

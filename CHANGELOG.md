@@ -1,5 +1,66 @@
 # Changelog
 
+## [0.21.0](https://github.com/morluto/jacobian/compare/jacobian-v0.20.0...jacobian-v0.21.0) (2026-09-12)
+
+
+### Features
+
+* **finite-fields:** expose exact polynomial point evaluation ([#3638](https://github.com/morluto/jacobian/issues/3638)) ([4ddc041](https://github.com/morluto/jacobian/commit/4ddc0419b565fef11707389a38a348d6bc9c5787))
+* **math:** close audited operation and execution gaps ([#3616](https://github.com/morluto/jacobian/issues/3616)) ([be36897](https://github.com/morluto/jacobian/commit/be368972417c7b200273def8bbf3ec2cb8a11b5c))
+* **polynomials:** complete rational map composition surface ([#3700](https://github.com/morluto/jacobian/issues/3700)) ([7817049](https://github.com/morluto/jacobian/commit/7817049aa1d5514f5b027a622fce70cf508c1aa4))
+* **semigroups:** profile regular and nilpotent elements ([#3643](https://github.com/morluto/jacobian/issues/3643)) ([37afd2d](https://github.com/morluto/jacobian/commit/37afd2dff52a8b722c3c4e8c7731870d7856c660))
+* **transducers:** expose rational relation inversion ([#3648](https://github.com/morluto/jacobian/issues/3648)) ([4e3d53c](https://github.com/morluto/jacobian/commit/4e3d53ca414c64289d3f1aaae3004cf3841c40e7))
+
+
+### Bug Fixes
+
+* **analysis:** expose endpoint-log improper integral enclosures ([#3640](https://github.com/morluto/jacobian/issues/3640)) ([cf91ea4](https://github.com/morluto/jacobian/commit/cf91ea4c609c380f535c46c31295e9c7077eb8b7))
+* **ci:** remove duplicate rational composition exports and math boundary imports ([6e3098a](https://github.com/morluto/jacobian/commit/6e3098a83ac9b7ebc1429946565a3edbf665fb56))
+* **codes:** defer canonicalization orbit expansion (follow-up) ([#3671](https://github.com/morluto/jacobian/issues/3671)) ([e408847](https://github.com/morluto/jacobian/commit/e4088473159e32424e5cb725ed56d5b457ca116b))
+* **codes:** reuse canonical finite-field row reduction ([#3639](https://github.com/morluto/jacobian/issues/3639)) ([508b900](https://github.com/morluto/jacobian/commit/508b9001b74c17d3610df1cedf84417cfd67cc65))
+* **execution:** route augmentation failures to errors ([eaa4f3d](https://github.com/morluto/jacobian/commit/eaa4f3d6fdaca75ba5082e9197a6dc3dbd400318))
+* **finite-geometry:** enforce projective sequence normalization ([#3626](https://github.com/morluto/jacobian/issues/3626)) ([795b4d2](https://github.com/morluto/jacobian/commit/795b4d2f700c23a5534bd3a057517607ffef1dbf))
+* **graphs:** admit exhaustive morphism searches ([#3582](https://github.com/morluto/jacobian/issues/3582)) ([90513de](https://github.com/morluto/jacobian/commit/90513de2b7c8564d5f6c6b600f7a8b3f915b0079))
+* **graphs:** bind clique candidate supports to source maps ([#3629](https://github.com/morluto/jacobian/issues/3629)) ([33a66d2](https://github.com/morluto/jacobian/commit/33a66d258ad2027825fef10923212b0e3dca63b4))
+* **graphs:** finish induced deletion profile bounds ([#3702](https://github.com/morluto/jacobian/issues/3702)) ([e29a15e](https://github.com/morluto/jacobian/commit/e29a15ee424fd96af404668cd7f52f19c5462aa0))
+* **graphs:** pre-admit complete morphism negative search before expansion ([ff90ebd](https://github.com/morluto/jacobian/commit/ff90ebdf8a5d2722cc9ba999c9024f79d6bc98ae))
+* **graphs:** preserve degree axes in graph realization ([#3670](https://github.com/morluto/jacobian/issues/3670)) ([6ed2a67](https://github.com/morluto/jacobian/commit/6ed2a67221719b5aff9101837fd41b5fb8c1980f))
+* **graphs:** publish full block-cut carrier envelope ([#3633](https://github.com/morluto/jacobian/issues/3633)) ([9697b63](https://github.com/morluto/jacobian/commit/9697b63733616d672eaf522d5200d3978818546c))
+* **graphs:** widen block-cut tree vertex envelope ([#3632](https://github.com/morluto/jacobian/issues/3632)) ([bdc32f1](https://github.com/morluto/jacobian/commit/bdc32f1f647d1b355aa993ae813c4c47832fb642))
+* **group-actions:** report tuple-family orbit completeness ([#3654](https://github.com/morluto/jacobian/issues/3654)) ([1086655](https://github.com/morluto/jacobian/commit/1086655bce537689dca175ce50dd08b1eefdc3fc))
+* **impartial-games:** bind profile results to source games ([#3634](https://github.com/morluto/jacobian/issues/3634)) ([b7d3e04](https://github.com/morluto/jacobian/commit/b7d3e041219875022eab7f3b5bc5bf9ac6e83683))
+* **logic:** allow minute-scale solver deadlines ([#3567](https://github.com/morluto/jacobian/issues/3567)) ([c257dda](https://github.com/morluto/jacobian/commit/c257dda7d142b60936044cb6fc06809e11b11bf3))
+* **majorization:** validate weak check direction ([#3623](https://github.com/morluto/jacobian/issues/3623)) ([e99e4cc](https://github.com/morluto/jacobian/commit/e99e4cc5840d82bacb73ff45b5ea64a13487e4be))
+* **math:** admit derived work and coefficient growth ([0efcfe8](https://github.com/morluto/jacobian/commit/0efcfe825ddf6f925cb49c91a6bc346be6e831f1))
+* **number-theory:** bound native Diophantine approximation requests ([#3628](https://github.com/morluto/jacobian/issues/3628)) ([896a18e](https://github.com/morluto/jacobian/commit/896a18efa7086f0b826a97cb329c6f7aa1e64195))
+* **optimization:** admit short exact LP certificates ([#3569](https://github.com/morluto/jacobian/issues/3569)) ([a248922](https://github.com/morluto/jacobian/commit/a248922c7acec9c95972a72e79a041586e8c9786))
+* **polynomials:** validate native vector field shapes ([#3625](https://github.com/morluto/jacobian/issues/3625)) ([3f5f133](https://github.com/morluto/jacobian/commit/3f5f1334e6b2d4693900fd38e5f588122d4ccd75))
+* **regular-languages:** bound DFA equivalence contract ([#3677](https://github.com/morluto/jacobian/issues/3677)) ([ebb6511](https://github.com/morluto/jacobian/commit/ebb6511350e9bc36200b2b4f82933ee673b53899))
+* **runtime:** surface operational solver failures ([#3563](https://github.com/morluto/jacobian/issues/3563)) ([164295c](https://github.com/morluto/jacobian/commit/164295cd30a37d79a3acbf96edb16c17c3284866))
+* **search:** return early exact witnesses within work limits ([#3571](https://github.com/morluto/jacobian/issues/3571)) ([b4bc7db](https://github.com/morluto/jacobian/commit/b4bc7db36ac76416fefc41e60c22d9e2a9837f96))
+* **search:** scale structural graph and hypergraph cases ([#3581](https://github.com/morluto/jacobian/issues/3581)) ([6c86b68](https://github.com/morluto/jacobian/commit/6c86b68cfaa97964345f47a2eca282536c796358))
+* **semidefinite:** reject oversized scalar lists before canonicalization ([a03643c](https://github.com/morluto/jacobian/commit/a03643ccdbb924710bc15f01c483f8f907dee867))
+* **topology:** reject forged canonical face closures ([#3622](https://github.com/morluto/jacobian/issues/3622)) ([184656d](https://github.com/morluto/jacobian/commit/184656d95c9ffcefe0b321f09bb0d4aa9b2b4b3e))
+
+
+### Performance Improvements
+
+* **codes:** admit generator reduction by matrix bounds ([#3666](https://github.com/morluto/jacobian/issues/3666)) ([c40dd28](https://github.com/morluto/jacobian/commit/c40dd2839af1c0d517317604beb868cad93e5401))
+* **combinatorics:** compute Bell numbers with FLINT ([#3674](https://github.com/morluto/jacobian/issues/3674)) ([c425d5f](https://github.com/morluto/jacobian/commit/c425d5f23a234b363fd2561ef6c2654a0f94550a))
+* **combinatorics:** count progression edges from torsion ([#3668](https://github.com/morluto/jacobian/issues/3668)) ([9a3de00](https://github.com/morluto/jacobian/commit/9a3de0023c45e99d8c7c23454932948d0eff833c))
+* **graphs:** decide equitable two-coloring by component balance ([#3667](https://github.com/morluto/jacobian/issues/3667)) ([e24306d](https://github.com/morluto/jacobian/commit/e24306d4be7172a0aeca90cee216c941f2543cda))
+* **matrices:** admit Hadamard products by carrier capacity ([#3675](https://github.com/morluto/jacobian/issues/3675)) ([760c5b2](https://github.com/morluto/jacobian/commit/760c5b2feaae723b96a9e7a95706a98228fb66bd))
+* **number-theory:** aggregate congruence boxes by residue ([#3672](https://github.com/morluto/jacobian/issues/3672)) ([6df7426](https://github.com/morluto/jacobian/commit/6df74269ead65b5e4ce787113791eb8bb4d7fcf5))
+* **polynomials:** admit gradients by active derivative support ([#3669](https://github.com/morluto/jacobian/issues/3669)) ([b45a023](https://github.com/morluto/jacobian/commit/b45a023834af79c10e697154c32651a885a8bca6))
+
+
+### Documentation
+
+* clarify execution layer ownership ([9035ec3](https://github.com/morluto/jacobian/commit/9035ec36810f861b5ddb46bac7439fdf53a2ef25))
+* **math:** codify contract and scale audit checks ([#3659](https://github.com/morluto/jacobian/issues/3659)) ([c2a4e00](https://github.com/morluto/jacobian/commit/c2a4e00137f6eb54c56bcac851bcccc7010452ab))
+* **math:** qualify native admission migration guidance ([#3662](https://github.com/morluto/jacobian/issues/3662)) ([77a09d9](https://github.com/morluto/jacobian/commit/77a09d9eda88f6a087b55bdea86df80903cb3c52))
+* **matrices:** document polynomial inertia cells ([#3685](https://github.com/morluto/jacobian/issues/3685)) ([752956f](https://github.com/morluto/jacobian/commit/752956fec2d1b993a0f86efbd75a7d8f155eab6b))
+
 ## [0.20.0](https://github.com/morluto/jacobian/compare/jacobian-v0.19.0...jacobian-v0.20.0) (2026-09-08)
 
 

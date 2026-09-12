@@ -207,9 +207,11 @@ class TupleFamilyOrbitResult(StrictModel):
         action = self.source.action
         degree = len(action.domain)
         family = self.source.family
-        if self.rows != tuple(sorted(self.rows, key=lambda row: row.representative)):
+        representatives = tuple(row.representative for row in self.rows)
+        if representatives != tuple(sorted(set(representatives))):
             raise _tuple_error(
-                "rows_not_canonical", "rows must be ordered by representative"
+                "rows_not_canonical",
+                "rows must be ordered by unique representatives",
             )
         covered: list[int] = []
         for row in self.rows:

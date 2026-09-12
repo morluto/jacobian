@@ -244,6 +244,21 @@ def test_negative_source_indices_are_rejected_before_family_lookup() -> None:
     assert "source_index_out_of_range" in source_index.value.errors()[0]["type"]
 
 
+def test_duplicate_orbit_representatives_are_rejected() -> None:
+    result = tuple_family_orbit_profile(
+        TupleFamilyOrbitSource(
+            action=FinitePermutationAction(domain=("a", "b"), generators=((0, 1),)),
+            arity=1,
+            family=((0,), (1,)),
+        )
+    )
+    payload = result.model_dump()
+    payload["rows"][1]["representative"] = payload["rows"][0]["representative"]
+    with pytest.raises(ValidationError) as duplicate:
+        TupleFamilyOrbitResult.model_validate(payload)
+    assert "rows_not_canonical" in duplicate.value.errors()[0]["type"]
+
+
 def test_distinct_source_rows_are_indexed_once_before_orbit_partition() -> None:
     action = FinitePermutationAction(
         domain=tuple(str(index) for index in range(40)),

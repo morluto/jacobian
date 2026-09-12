@@ -173,7 +173,7 @@ def test_unequal_thresholds_accept_the_opposite_orientation() -> None:
     assert (result.chromatic_a, result.chromatic_b) == (3, 2)
 
 
-def test_kernel_timeout_is_a_source_bound_unknown_result(
+def test_kernel_timeout_raises_an_execution_timeout(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     source = graph(
@@ -182,10 +182,8 @@ def test_kernel_timeout_is_a_source_bound_unknown_result(
     )
     request = ChromaticBipartitionRequest(graph=source, s=2, t=2)
     monkeypatch.setattr(operation, "remaining_ms", lambda *_args: 0)
-    result = operation._find_chromatic_bipartition_kernel(request)
-    assert result.status == "UNKNOWN"
-    assert result.graph == source
-    assert result.checked_partitions == 0
+    with pytest.raises(OperationExecutionTimeoutError):
+        operation._find_chromatic_bipartition_kernel(request)
 
 
 def test_worker_deadline_returns_source_bound_unknown_across_process_boundary() -> None:
@@ -495,6 +493,16 @@ def test_operation_rejects_a_result_axis_above_its_admitted_envelope() -> None:
     request = ChromaticBipartitionRequest(graph=graph(vertices, ()), s=1, t=1)
     with pytest.raises(OperationResourceAdmissionError, match="at most 256"):
         find_chromatic_bipartition(request)
+
+
+def test_edgeless_graph_above_the_witness_cap_is_exact_no_split() -> None:
+    vertices = tuple(f"v{i}" for i in range(257))
+    result = find_chromatic_bipartition(
+        ChromaticBipartitionRequest(graph=graph(vertices, ()), s=2, t=1)
+    )
+    assert result.status == "NO_SPLIT"
+    assert result.side_a is None
+    assert result.checked_partitions == 0
 
 
 def test_operation_rejects_excessive_retained_source_labels() -> None:

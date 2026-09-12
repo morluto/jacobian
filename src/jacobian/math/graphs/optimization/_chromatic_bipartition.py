@@ -8,6 +8,7 @@ from typing import Literal, Self
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._execution import OperationExecutionTimeoutError
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     MathTool,
@@ -236,15 +237,9 @@ def _chromatic_bipartition_reconstruction_work(
     return partitions * 2 * (order + edge_count)
 
 
-def _unknown_chromatic_bipartition(
-    request: ChromaticBipartitionRequest, checked_partitions: int
-) -> ChromaticBipartitionResult:
-    return ChromaticBipartitionResult(
-        graph=request.graph,
-        s=request.s,
-        t=request.t,
-        status="UNKNOWN",
-        checked_partitions=checked_partitions,
+def _chromatic_deadline_expired() -> None:
+    raise OperationExecutionTimeoutError(
+        "chromatic bipartition deadline expired during the kernel search"
     )
 
 
@@ -318,7 +313,7 @@ def _unit_threshold_bipartition(
             continue
         chromatic_b = _exact_induced_chromatic(request.graph, side_b, request, started)
         if chromatic_b is None:
-            return _unknown_chromatic_bipartition(request, index + 1)
+            _chromatic_deadline_expired()
         return ChromaticBipartitionResult(
             graph=request.graph,
             s=request.s,
@@ -330,7 +325,13 @@ def _unit_threshold_bipartition(
             chromatic_b=chromatic_b,
             checked_partitions=index + 1,
         )
-    return _unknown_chromatic_bipartition(request, 0)
+    return ChromaticBipartitionResult(
+        graph=request.graph,
+        s=request.s,
+        t=request.t,
+        status="NO_SPLIT",
+        checked_partitions=0,
+    )
 
 
 def _refuse_chromatic_bipartition_work() -> None:
@@ -372,7 +373,10 @@ def _admit_chromatic_bipartition(request: ChromaticBipartitionRequest) -> None:
     """Charge every unordered partition and its inner k-colorability encodings."""
 
     order = len(request.graph.vertices)
-    if order > MAX_CHROMATIC_BIPARTITION_VERTICES:
+    cheap_no_witness = _threshold_sum_exceeds_order(request) or (
+        not request.graph.edges and (request.s > 1 or request.t > 1)
+    )
+    if order > MAX_CHROMATIC_BIPARTITION_VERTICES and not cheap_no_witness:
         raise OperationResourceAdmissionError(
             location=("graph", "vertices"),
             code="graph.chromatic_bipartition.vertex_axis_bound",
@@ -438,13 +442,13 @@ def _find_chromatic_bipartition_kernel(
             if not mask & (1 << index)
         )
         if remaining_ms(started, request.resource_budget.wall_seconds) <= 0:
-            return _unknown_chromatic_bipartition(request, checked)
+            _chromatic_deadline_expired()
         chromatic_a = _chromatic_number(_induced_graph(graph, side_a), request, started)
         if chromatic_a is None:
-            return _unknown_chromatic_bipartition(request, checked)
+            _chromatic_deadline_expired()
         chromatic_b = _chromatic_number(_induced_graph(graph, side_b), request, started)
         if chromatic_b is None:
-            return _unknown_chromatic_bipartition(request, checked)
+            _chromatic_deadline_expired()
         checked += 1
         if chromatic_a >= request.s and chromatic_b >= request.t:
             return ChromaticBipartitionResult(
@@ -516,8 +520,8 @@ CHROMATIC_BIPARTITION_OPERATION = MathTool(
     description=(
         "Search a bounded simple graph for a canonical vertex bipartition whose "
         "two induced subgraphs have chromatic numbers at least s and t. "
-        "Return a witness, an exact NO_SPLIT after complete search, or a source-"
-        "bound UNKNOWN when the admitted search does not finish."
+        "Return a witness, an exact NO_SPLIT after complete search, or raise an "
+        "execution timeout when the admitted kernel deadline expires."
     ),
     request_type=ChromaticBipartitionRequest,
     result_type=ChromaticBipartitionResult,

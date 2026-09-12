@@ -167,16 +167,9 @@ def _admit_source(
             message="group element materialization exceeds the admitted work bound",
         )
     unique_family_size = len(set(request.family))
-    image_work = group_order * unique_family_size * (max(1, request.arity) + 1)
-    if image_work > MAX_TUPLE_ORBIT_ACTIONS:
-        raise OperationResourceAdmissionError(
-            location=("family",),
-            code="finite_group_action.tuple_family_action_work_bound",
-            message="diagonal tuple-action work exceeds the admitted bound",
-        )
-    # Image and transporter work are group_order per represented orbit, not
-    # per unique source tuple; the checkpointed partition loop owns those
-    # bounds.
+    # Diagonal action and transporter work are group_order per represented
+    # orbit, not per unique source tuple; the checkpointed partition loop
+    # owns those bounds.
     # Every output row retains a representative, source-index references, and
     # one full-axis transporter; this upper bound is independent of |X|^arity.
     output_upper = unique_family_size * (request.arity + degree + 4) + family_size
@@ -222,6 +215,8 @@ def tuple_family_orbit_profile(
     ambient_orbits: list[set[tuple[int, ...]]] = []
     generated_images = 0
     generated_transporters = 0
+    generated_actions = 0
+    action_cost = max(1, request.arity) + 1
 
     while unclassified:
         request_checkpoint("during tuple-family orbit partition")
@@ -231,11 +226,18 @@ def tuple_family_orbit_profile(
             request_checkpoint("during tuple-family image enumeration")
             image = tuple(element[value] for value in seed)
             generated_images += 1
+            generated_actions += action_cost
             if generated_images > MAX_TUPLE_ORBIT_IMAGES:
                 raise OperationResourceAdmissionError(
                     location=("family",),
                     code="finite_group_action.tuple_family_image_bound",
                     message="ambient tuple-image intermediates exceed the admitted bound",
+                )
+            if generated_actions > MAX_TUPLE_ORBIT_ACTIONS:
+                raise OperationResourceAdmissionError(
+                    location=("family",),
+                    code="finite_group_action.tuple_family_action_work_bound",
+                    message="diagonal tuple-action work exceeds the admitted bound",
                 )
             previous = images.get(image)
             if previous is None or element < previous:

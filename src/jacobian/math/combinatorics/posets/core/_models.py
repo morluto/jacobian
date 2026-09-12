@@ -356,11 +356,22 @@ def _compute_poset_extremal_elements(
 
 
 def _validate_poset_extremal_elements(
-    minimal_elements: tuple[str, ...],
-    maximal_elements: tuple[str, ...],
+    minimal_elements: object,
+    maximal_elements: object,
     expected_minimal: tuple[str, ...],
     expected_maximal: tuple[str, ...],
 ) -> None:
+    if type(minimal_elements) is not tuple or type(maximal_elements) is not tuple:
+        raise _validation_error(
+            "canonical_extremal_elements",
+            "extremal elements must be tuples",
+        )
+    for entry in (*minimal_elements, *maximal_elements):
+        if type(entry) is not str:
+            raise _validation_error(
+                "canonical_extremal_elements",
+                "extremal elements must be canonical strings",
+            )
     if minimal_elements != expected_minimal or maximal_elements != expected_maximal:
         raise _validation_error(
             "extremal_elements_complete", "minimal or maximal elements are incomplete"

@@ -39,6 +39,7 @@ from jacobian.math.combinatorics.posets.core._models import (
     MAX_ANTICHAIN_PROFILE_ELEMENTS,
     MAX_LINEAR_EXTENSION_ELEMENTS,
     AntichainProfileResult,
+    ElementLabel,
     ElementRank,
     FinitePoset,
     IncidenceConvolutionResult,
@@ -99,7 +100,7 @@ def _admit_finite_poset(
 
 def _admit_canonical_poset(poset: FinitePoset) -> None:
     """Admit the partial-order relation before running a consumer kernel."""
-    if not isinstance(poset, FinitePoset):
+    if type(poset) is not FinitePoset:
         raise OperationDomainValidationError(
             location=("poset",),
             code="poset.invalid_canonical_value",
@@ -156,6 +157,7 @@ def _revalidated_ranks(ranks: object) -> tuple[ElementRank, ...] | None:
 
 
 _SHA256_DIGEST = TypeAdapter(Sha256Digest)
+_ELEMENT_LABEL = TypeAdapter(ElementLabel)
 
 
 def _canonical_ordered_pairs(pairs: object) -> tuple[OrderedPair, ...]:
@@ -173,6 +175,17 @@ def _canonical_poset_digest(digest: object) -> str:
     if type(digest) is not str:
         raise TypeError("poset_digest must be a canonical sha256 string")
     return _SHA256_DIGEST.validate_python(digest, strict=True)
+
+
+def _canonical_element_labels(labels: object) -> tuple[str, ...]:
+    if type(labels) is not tuple:
+        raise TypeError("extremal labels must be a tuple")
+    canonical: list[str] = []
+    for entry in labels:
+        if type(entry) is not str:
+            raise TypeError("extremal labels must be canonical strings")
+        canonical.append(_ELEMENT_LABEL.validate_python(entry, strict=True))
+    return tuple(canonical)
 
 
 def _canonical_claims_match(
@@ -207,8 +220,8 @@ def _canonical_claims_match(
             poset.elements, strict
         )
         _validate_poset_extremal_elements(
-            poset.minimal_elements,
-            poset.maximal_elements,
+            _canonical_element_labels(poset.minimal_elements),
+            _canonical_element_labels(poset.maximal_elements),
             expected_minimal,
             expected_maximal,
         )
@@ -271,6 +284,8 @@ def induced_subposet(
 def verify_finite_poset(poset: FinitePoset) -> bool:
     """Verify all retained canonical order/profile claims of a poset value."""
     try:
+        if type(poset) is not FinitePoset:
+            return False
         if tuple(sorted(set(poset.elements))) != poset.elements:
             return False
         if type(poset.graded) is not bool:
@@ -303,8 +318,8 @@ def verify_finite_poset(poset: FinitePoset) -> bool:
             poset.elements, strict
         )
         _validate_poset_extremal_elements(
-            poset.minimal_elements,
-            poset.maximal_elements,
+            _canonical_element_labels(poset.minimal_elements),
+            _canonical_element_labels(poset.maximal_elements),
             expected_minimal,
             expected_maximal,
         )

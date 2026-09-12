@@ -19,6 +19,7 @@ from jacobian.math.combinatorics.posets.core.operations import (
     finite_poset_digest,
     linear_extension_count,
     materialize_finite_poset,
+    maximal_chains,
     verify_finite_poset,
     width,
 )
@@ -365,6 +366,57 @@ def test_consumers_reject_equality_forging_digest_subclasses_as_domain_errors() 
     assert verify_finite_poset(forged) is False
     with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
         width(forged)
+
+
+def test_consumers_reject_equality_forging_extremal_label_subclasses() -> None:
+    class ForeignMinimum(str):
+        def __eq__(self, other: object) -> bool:
+            return other == "a"
+
+        def __hash__(self) -> int:
+            return hash("a")
+
+    poset = _materialize(["a", "b"], [("a", "b")])
+    forged_minimal = (ForeignMinimum("x"),)
+    assert forged_minimal == poset.minimal_elements
+    assert "x" not in poset.elements
+    forged = poset.model_copy(
+        update={
+            "minimal_elements": forged_minimal,
+            "poset_digest": finite_poset_digest(
+                elements=poset.elements,
+                strict_order_pairs=poset.strict_order_pairs,
+                cover_relations=poset.cover_relations,
+                incomparable_pairs=poset.incomparable_pairs,
+                minimal_elements=forged_minimal,
+                maximal_elements=poset.maximal_elements,
+                graded=poset.graded,
+                ranks=poset.ranks,
+            ),
+        }
+    )
+
+    assert verify_finite_poset(forged) is False
+    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+        width(forged)
+    with pytest.raises(OperationDomainValidationError, match="canonical"):
+        maximal_chains(forged)
+
+
+def test_consumers_reject_finite_poset_subclasses_as_domain_errors() -> None:
+    class ForeignPoset(FinitePoset):
+        extra: str = "foreign"
+
+    poset = _materialize(["a", "b"], [("a", "b")])
+    forged = ForeignPoset(**poset.model_dump(mode="python"), extra="foreign")
+
+    assert isinstance(forged, FinitePoset)
+    assert type(forged) is not FinitePoset
+    assert verify_finite_poset(forged) is False
+    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+        width(forged)
+    with pytest.raises(OperationDomainValidationError, match="typed finite poset"):
+        maximal_chains(forged)
 
 
 def test_consumers_reject_boolean_rank_claims_as_domain_errors() -> None:

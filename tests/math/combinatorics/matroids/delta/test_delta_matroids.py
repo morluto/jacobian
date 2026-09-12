@@ -10,8 +10,15 @@ from jacobian.math.combinatorics.matroids.delta import FiniteDeltaMatroid
 from jacobian.math.combinatorics.matroids.delta._models import (
     DeltaMatroidFromFeasibleSetsRequest,
     DeltaMatroidRecognitionResult,
+    DeltaMatroidTwistRequest,
+    DeltaMatroidWidthRequest,
 )
-from jacobian.math.combinatorics.matroids.delta._tools import TOOLS, _from_feasible_sets
+from jacobian.math.combinatorics.matroids.delta._tools import (
+    TOOLS,
+    _from_feasible_sets,
+    _twist,
+    _width,
+)
 
 
 def _two_element_delta_matroid(*, scrambled: bool = False) -> FiniteFeasibleSetSystem:
@@ -22,7 +29,37 @@ def _two_element_delta_matroid(*, scrambled: bool = False) -> FiniteFeasibleSetS
 def test_catalog_contains_only_audited_agent_outcome() -> None:
     assert {tool.operation_id for tool in TOOLS} == {
         "delta_matroid.from_feasible_sets.compute",
+        "delta_matroid.twist.compute",
+        "delta_matroid.width.compute",
     }
+
+
+def test_twist_transforms_feasible_sets_and_round_trips() -> None:
+    source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((), (0,), (1,)))
+    request = DeltaMatroidTwistRequest(delta_matroid=source, subset=(0,))
+    result = _twist(request)
+
+    assert result.twisted == FiniteDeltaMatroid(
+        ground=("a", "b"), feasible=((), (0,), (0, 1))
+    )
+    assert (
+        DeltaMatroidTwistRequest.model_validate_json(request.model_dump_json())
+        == request
+    )
+
+
+def test_twist_rejects_forged_non_delta_source() -> None:
+    source = FiniteDeltaMatroid(ground=("a", "b", "c"), feasible=((), (0, 1), (2,)))
+    with pytest.raises(ValueError, match="source feasible family"):
+        _twist(DeltaMatroidTwistRequest(delta_matroid=source, subset=(1,)))
+
+
+def test_width_is_exact_and_preserves_source_binding() -> None:
+    source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((), (0,), (0, 1), (1,)))
+    result = _width(DeltaMatroidWidthRequest(delta_matroid=source))
+    assert result.width == 2
+    assert result.delta_matroid == source
+    assert type(result.model_dump()["width"]) is int
 
 
 def test_complete_feasible_family_constructs_canonical_delta_matroid() -> None:

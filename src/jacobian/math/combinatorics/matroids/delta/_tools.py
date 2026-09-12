@@ -9,8 +9,16 @@ from jacobian.catalog.models import (
 from jacobian.math.combinatorics.matroids.delta._models import (
     DeltaMatroidFromFeasibleSetsRequest,
     DeltaMatroidRecognitionResult,
+    DeltaMatroidTwistRequest,
+    DeltaMatroidTwistResult,
+    DeltaMatroidWidthRequest,
+    DeltaMatroidWidthResult,
 )
-from jacobian.math.combinatorics.matroids.delta.operations import from_feasible_sets
+from jacobian.math.combinatorics.matroids.delta.operations import (
+    from_feasible_sets,
+    twist,
+    width,
+)
 from jacobian.math.combinatorics.matroids.delta.values import DeltaMatroidAdmissionError
 
 
@@ -25,6 +33,28 @@ def _from_feasible_sets(
         raise OperationDomainValidationError(
             location=("system",),
             code=f"delta_matroid.{exc.reason}",
+            message=str(exc),
+        ) from exc
+
+
+def _twist(request: DeltaMatroidTwistRequest) -> DeltaMatroidTwistResult:
+    try:
+        return twist(request)
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("delta_matroid",),
+            code="delta_matroid.source_not_valid",
+            message=str(exc),
+        ) from exc
+
+
+def _width(request: DeltaMatroidWidthRequest) -> DeltaMatroidWidthResult:
+    try:
+        return width(request)
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("delta_matroid",),
+            code="delta_matroid.source_not_valid",
             message=str(exc),
         ) from exc
 
@@ -50,6 +80,62 @@ TOOLS: MathTools = (
                     "system": {
                         "ground": ["a", "b"],
                         "feasible": [[], [0], [1], [0, 1]],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="delta_matroid.twist.compute",
+        title="Twist a finite delta-matroid",
+        description=(
+            "Return the exact delta-matroid whose feasible sets are F symmetric "
+            "difference X for each source feasible set F; the subset uses sorted "
+            "ground indices and the source must satisfy symmetric exchange."
+        ),
+        request_type=DeltaMatroidTwistRequest,
+        result_type=DeltaMatroidTwistResult,
+        run=_twist,
+        tags=("delta-matroid", "twist", "exact"),
+        examples=(
+            OperationExample(
+                name="twist_by_first_element",
+                description=(
+                    "Twist {∅,{a},{b},{a,b}} by {a}; the subset must be sorted "
+                    "ground indices."
+                ),
+                input={
+                    "delta_matroid": {
+                        "ground": ["a", "b"],
+                        "feasible": [[], [0], [0, 1], [1]],
+                    },
+                    "subset": [0],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="delta_matroid.width.compute",
+        title="Compute the width of a finite delta-matroid",
+        description=(
+            "Return max(|F|) - min(|F|) over the complete feasible family; the "
+            "source must satisfy symmetric exchange."
+        ),
+        request_type=DeltaMatroidWidthRequest,
+        result_type=DeltaMatroidWidthResult,
+        run=_width,
+        tags=("delta-matroid", "width", "exact"),
+        examples=(
+            OperationExample(
+                name="uniform_two_element_family",
+                description=(
+                    "Compute the width of the complete two-element feasible family; "
+                    "the source must satisfy symmetric exchange."
+                ),
+                input={
+                    "delta_matroid": {
+                        "ground": ["a", "b"],
+                        "feasible": [[], [0], [0, 1], [1]],
                     }
                 },
             ),

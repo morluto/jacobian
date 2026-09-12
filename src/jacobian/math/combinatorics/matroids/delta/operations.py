@@ -5,6 +5,10 @@ from __future__ import annotations
 from jacobian.math.combinatorics.greedoids.values import FiniteFeasibleSetSystem
 from jacobian.math.combinatorics.matroids.delta._models import (
     DeltaMatroidRecognitionResult,
+    DeltaMatroidTwistRequest,
+    DeltaMatroidTwistResult,
+    DeltaMatroidWidthRequest,
+    DeltaMatroidWidthResult,
 )
 from jacobian.math.combinatorics.matroids.delta.values import (
     FiniteDeltaMatroid,
@@ -12,7 +16,12 @@ from jacobian.math.combinatorics.matroids.delta.values import (
     require_delta_matroid_admission,
 )
 
-__all__ = ["from_feasible_sets", "verify_from_feasible_sets"]
+__all__ = [
+    "from_feasible_sets",
+    "twist",
+    "verify_from_feasible_sets",
+    "width",
+]
 
 
 def from_feasible_sets(
@@ -50,4 +59,56 @@ def verify_from_feasible_sets(claim: DeltaMatroidRecognitionResult) -> bool:
         claim.status == "DELTA_MATROID"
         and claim.obstruction is None
         and claim.delta_matroid == FiniteDeltaMatroid._from_kernel(claim.source)
+    )
+
+
+def _require_delta_matroid(value: FiniteDeltaMatroid) -> None:
+    """Re-establish the source axiom before consuming a serialized claim."""
+
+    system = FiniteFeasibleSetSystem(ground=value.ground, feasible=value.feasible)
+    require_delta_matroid_admission(system)
+    obstruction = first_symmetric_exchange_obstruction(system)
+    if obstruction is not None:
+        raise ValueError("source feasible family is not a delta-matroid")
+
+
+def twist(request: DeltaMatroidTwistRequest) -> DeltaMatroidTwistResult:
+    """Return the delta-matroid twist by ``subset``.
+
+    Feasible sets are transformed as ``F △ X``.  The source axiom is replayed
+    at this consumer boundary because a deserialized ``FiniteDeltaMatroid`` is
+    caller-authored rather than trusted producer output.
+    """
+
+    _require_delta_matroid(request.delta_matroid)
+    subset = frozenset(request.subset)
+    rows = tuple(
+        sorted(
+            tuple(sorted(frozenset(row) ^ subset))
+            for row in request.delta_matroid.feasible
+        )
+    )
+    twisted_system = FiniteFeasibleSetSystem(
+        ground=request.delta_matroid.ground,
+        feasible=rows,
+    )
+    # Twisting preserves symmetric exchange; replay the finite defining axiom
+    # before constructing the theorem-bearing canonical value.
+    twisted_obstruction = first_symmetric_exchange_obstruction(twisted_system)
+    if twisted_obstruction is not None:
+        raise ValueError("twist did not preserve symmetric exchange")
+    return DeltaMatroidTwistResult._from_kernel(
+        request,
+        FiniteDeltaMatroid._from_kernel(twisted_system),
+    )
+
+
+def width(request: DeltaMatroidWidthRequest) -> DeltaMatroidWidthResult:
+    """Return the delta-matroid width ``max |F| - min |F|``."""
+
+    _require_delta_matroid(request.delta_matroid)
+    sizes = tuple(len(row) for row in request.delta_matroid.feasible)
+    return DeltaMatroidWidthResult._from_kernel(
+        request,
+        max(sizes) - min(sizes),
     )

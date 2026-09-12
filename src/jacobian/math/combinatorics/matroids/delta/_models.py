@@ -18,6 +18,58 @@ from jacobian.math.combinatorics.matroids.delta.values import (
 )
 
 
+class DeltaMatroidTwistRequest(StrictModel):
+    """Twist a delta-matroid by a canonical ground-index subset."""
+
+    delta_matroid: FiniteDeltaMatroid
+    subset: tuple[int, ...] = Field(default=())
+
+    @model_validator(mode="after")
+    def require_canonical_subset(self) -> Self:
+        if self.subset != tuple(sorted(set(self.subset))):
+            raise _validation_error(
+                "subset_not_canonical", "twist subset must be sorted and distinct"
+            )
+        if any(
+            index < 0 or index >= len(self.delta_matroid.ground)
+            for index in self.subset
+        ):
+            raise _validation_error(
+                "subset_out_of_range", "twist subset index is outside the ground set"
+            )
+        return self
+
+
+class DeltaMatroidTwistResult(DeltaMatroidTwistRequest):
+    """The exact feasible family obtained by symmetric-difference twist."""
+
+    twisted: FiniteDeltaMatroid
+
+    @classmethod
+    def _from_kernel(
+        cls, request: DeltaMatroidTwistRequest, twisted: FiniteDeltaMatroid
+    ) -> Self:
+        return cls.model_construct(
+            delta_matroid=request.delta_matroid,
+            subset=request.subset,
+            twisted=twisted,
+        )
+
+
+class DeltaMatroidWidthRequest(StrictModel):
+    """Compute the width (largest minus smallest feasible-set size)."""
+
+    delta_matroid: FiniteDeltaMatroid
+
+
+class DeltaMatroidWidthResult(DeltaMatroidWidthRequest):
+    width: int = Field(ge=0)
+
+    @classmethod
+    def _from_kernel(cls, request: DeltaMatroidWidthRequest, width: int) -> Self:
+        return cls.model_construct(delta_matroid=request.delta_matroid, width=width)
+
+
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"delta_matroid.{reason}", message)
 
@@ -104,4 +156,8 @@ class DeltaMatroidRecognitionResult(StrictModel):
 __all__ = [
     "DeltaMatroidFromFeasibleSetsRequest",
     "DeltaMatroidRecognitionResult",
+    "DeltaMatroidTwistRequest",
+    "DeltaMatroidTwistResult",
+    "DeltaMatroidWidthRequest",
+    "DeltaMatroidWidthResult",
 ]

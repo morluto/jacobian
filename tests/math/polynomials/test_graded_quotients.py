@@ -732,7 +732,9 @@ def test_standard_monomial_result_rejects_divisible_exponents() -> None:
     payload = standard_monomials(_ideal((2, 0)), 2).model_dump()
     payload["monomials"] = [(2, 0)]
     payload["count"] = 1
-    with pytest.raises(ValidationError, match="divisible by an initial-ideal generator"):
+    with pytest.raises(
+        ValidationError, match="divisible by an initial-ideal generator"
+    ):
         StandardMonomialsResult.model_validate(payload)
 
 

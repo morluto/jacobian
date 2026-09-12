@@ -6,6 +6,7 @@ from collections import Counter
 from typing import Any
 
 from pydantic import ValidationError
+from pydantic_core import PydanticCustomError
 
 from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import (
@@ -24,6 +25,7 @@ from jacobian.math.groups.tuple_orbits._models import (
     TupleFamilyOrbitResult,
     TupleFamilyOrbitSource,
     TupleOrbitRow,
+    _preflight_action_dimensions,
 )
 
 # These are mathematical execution-envelope bounds, not transport-byte caps.
@@ -50,13 +52,24 @@ def _revalidate_action(request: TupleFamilyOrbitSource) -> FinitePermutationActi
             code="finite_group_action.tuple_family_request_type",
             message="tuple-family operation requires TupleFamilyOrbitSource",
         )
-    action = request.action
+    action = getattr(request, "action", None)
     if not isinstance(action, FinitePermutationAction):
         raise OperationDomainValidationError(
             location=("action",),
             code="finite_group_action.tuple_family_action_type",
             message="tuple-family source must retain a finite permutation action",
         )
+    try:
+        _preflight_action_dimensions(
+            domain=getattr(action, "domain", None),
+            generators=getattr(action, "generators", None),
+        )
+    except PydanticCustomError as error:
+        raise OperationDomainValidationError(
+            location=("action",),
+            code=error.type,
+            message=str(error),
+        ) from error
     try:
         return FinitePermutationAction.model_validate(
             {"domain": action.domain, "generators": action.generators}
@@ -163,13 +176,8 @@ def _admit_source(
             code="finite_group_action.tuple_family_image_bound",
             message="ambient tuple-image intermediates exceed the admitted bound",
         )
-    transporter_work = group_order * unique_family_size
-    if transporter_work > MAX_TUPLE_ORBIT_TRANSPORTERS:
-        raise OperationResourceAdmissionError(
-            location=("family",),
-            code="finite_group_action.tuple_family_transporter_bound",
-            message="transporter enumeration exceeds the admitted bound",
-        )
+    # Transporter work is group_order per represented orbit, not per unique
+    # source tuple; the checkpointed partition loop owns that bound.
     # Every output row retains a representative, source-index references, and
     # one full-axis transporter; this upper bound is independent of |X|^arity.
     output_upper = unique_family_size * (request.arity + degree + 4) + family_size

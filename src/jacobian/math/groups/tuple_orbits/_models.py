@@ -32,6 +32,59 @@ def _tuple_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"finite_group_action.tuple_family_{reason}", message)
 
 
+def _preflight_action_dimensions(*, domain: object, generators: object) -> None:
+    if isinstance(domain, (list, tuple)) and len(domain) > MAX_DOMAIN_SIZE:
+        raise _tuple_error(
+            "action_domain_bound",
+            f"action domain admits at most {MAX_DOMAIN_SIZE} labels",
+        )
+    degree = len(domain) if isinstance(domain, (list, tuple)) else MAX_DOMAIN_SIZE
+    if not isinstance(generators, (list, tuple)):
+        return
+    if len(generators) > MAX_GENERATORS:
+        raise _tuple_error(
+            "action_generator_bound",
+            f"actions admit at most {MAX_GENERATORS} generators",
+        )
+    for generator in generators:
+        if isinstance(generator, (list, tuple)) and len(generator) > degree:
+            raise _tuple_error(
+                "generator_length_mismatch",
+                "every generator must be a permutation of the domain",
+            )
+
+
+def _preflight_source_mapping(data: Mapping[str, Any]) -> None:
+    action = data.get("action")
+    if isinstance(action, Mapping):
+        _preflight_action_dimensions(
+            domain=action.get("domain"), generators=action.get("generators")
+        )
+    family = data.get("family")
+    if not isinstance(family, (list, tuple)):
+        return
+    if len(family) > MAX_FAMILY_MEMBERS:
+        raise _tuple_error(
+            "input_bound",
+            f"at most {MAX_FAMILY_MEMBERS} tuple rows are admitted",
+        )
+    raw_arity = data.get("arity")
+    arity_is_int = isinstance(raw_arity, int) and not isinstance(raw_arity, bool)
+    for member in family:
+        if not isinstance(member, (list, tuple)):
+            continue
+        if arity_is_int and len(member) != raw_arity:
+            raise _tuple_error(
+                "arity_mismatch",
+                "every family member must have the declared arity",
+            )
+        if len(member) > MAX_TUPLE_ARITY:
+            raise _tuple_error(
+                "arity_out_of_range",
+                "tuple arity must be a non-negative action-domain-sized integer",
+            )
+
+
 class TupleFamilyOrbitSource(StrictModel):
     """One explicit family of tuples on a finite permutation action.
 
@@ -63,54 +116,7 @@ class TupleFamilyOrbitSource(StrictModel):
     def normalize_json_containers(cls, data: Any) -> Any:
         if not isinstance(data, Mapping):
             return data
-        action = data.get("action")
-        if isinstance(action, Mapping):
-            domain = action.get("domain")
-            generators = action.get("generators")
-            if isinstance(domain, (list, tuple)) and len(domain) > MAX_DOMAIN_SIZE:
-                raise _tuple_error(
-                    "action_domain_bound",
-                    f"action domain admits at most {MAX_DOMAIN_SIZE} labels",
-                )
-            degree = (
-                len(domain) if isinstance(domain, (list, tuple)) else MAX_DOMAIN_SIZE
-            )
-            if isinstance(generators, (list, tuple)):
-                if len(generators) > MAX_GENERATORS:
-                    raise _tuple_error(
-                        "action_generator_bound",
-                        f"actions admit at most {MAX_GENERATORS} generators",
-                    )
-                for generator in generators:
-                    if isinstance(generator, (list, tuple)) and len(generator) > degree:
-                        raise _tuple_error(
-                            "generator_length_mismatch",
-                            "every generator must be a permutation of the domain",
-                        )
-        family = data.get("family")
-        if isinstance(family, (list, tuple)):
-            if len(family) > MAX_FAMILY_MEMBERS:
-                raise _tuple_error(
-                    "input_bound",
-                    f"at most {MAX_FAMILY_MEMBERS} tuple rows are admitted",
-                )
-            raw_arity = data.get("arity")
-            arity_is_int = isinstance(raw_arity, int) and not isinstance(
-                raw_arity, bool
-            )
-            for member in family:
-                if not isinstance(member, (list, tuple)):
-                    continue
-                if arity_is_int and len(member) != raw_arity:
-                    raise _tuple_error(
-                        "arity_mismatch",
-                        "every family member must have the declared arity",
-                    )
-                if len(member) > MAX_TUPLE_ARITY:
-                    raise _tuple_error(
-                        "arity_out_of_range",
-                        "tuple arity must be a non-negative action-domain-sized integer",
-                    )
+        _preflight_source_mapping(data)
         return canonicalize_json_containers(dict(data))
 
     @model_validator(mode="after")
@@ -200,6 +206,47 @@ class TupleFamilyOrbitResult(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def normalize_json_containers(cls, data: Any) -> Any:
+        if isinstance(data, Mapping):
+            rows = data.get("rows")
+            if isinstance(rows, (list, tuple)):
+                if len(rows) > MAX_FAMILY_MEMBERS:
+                    raise _tuple_error(
+                        "input_bound",
+                        f"at most {MAX_FAMILY_MEMBERS} tuple rows are admitted",
+                    )
+                for row in rows:
+                    if not isinstance(row, Mapping):
+                        continue
+                    representative = row.get("representative")
+                    if (
+                        isinstance(representative, (list, tuple))
+                        and len(representative) > MAX_TUPLE_ARITY
+                    ):
+                        raise _tuple_error(
+                            "arity_out_of_range",
+                            "tuple arity must be a non-negative action-domain-sized integer",
+                        )
+                    source_indices = row.get("source_indices")
+                    if (
+                        isinstance(source_indices, (list, tuple))
+                        and len(source_indices) > MAX_FAMILY_MEMBERS
+                    ):
+                        raise _tuple_error(
+                            "input_bound",
+                            f"at most {MAX_FAMILY_MEMBERS} tuple rows are admitted",
+                        )
+                    transporter = row.get("least_transporter")
+                    if (
+                        isinstance(transporter, (list, tuple))
+                        and len(transporter) > MAX_GROUP_DEGREE
+                    ):
+                        raise _tuple_error(
+                            "transporter_axis",
+                            "transporters must be permutations of the action axis",
+                        )
+            source = data.get("source")
+            if isinstance(source, Mapping):
+                _preflight_source_mapping(source)
         return canonicalize_json_containers(data)
 
     @model_validator(mode="after")

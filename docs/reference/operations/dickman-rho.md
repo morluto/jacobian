@@ -4,7 +4,8 @@
 
 `number_theory.dickman_rho.piecewise_enclosure.compute` returns a reusable
 pointwise enclosure of the Dickman--de Bruijn function through a requested
-nonnegative rational endpoint `U`. The returned partition covers the complete
+nonnegative rational endpoint `U` in `[0, 8]` whose numerator and denominator
+have at most four decimal digits. The returned partition covers the complete
 integer interval `[0, ceil(U)]`, so a caller can evaluate or integrate at any
 point up to and including the final integer without rerunning the delay
 equation.

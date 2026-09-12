@@ -6,7 +6,10 @@ from math import log
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math import number_theory
 from jacobian.math.number_theory._dickman_rho import (
     DickmanRhoAffinePiece,
@@ -220,3 +223,14 @@ def test_dickman_native_api_exports_canonical_value_family() -> None:
     }
     assert expected <= set(number_theory.__all__)
     assert all(hasattr(number_theory, name) for name in expected)
+
+
+def test_native_endpoint_outside_the_contract_is_a_typed_domain_error() -> None:
+    from jacobian._exact import CanonicalRational
+    from jacobian.math.analysis._models import ExactDyadic
+
+    with pytest.raises(OperationDomainValidationError, match=r"\[0, 8\]"):
+        dickman_rho_piecewise_enclosure(
+            CanonicalRational(num=9, den=1),
+            ExactDyadic(mantissa=1, exponent=-5),
+        )

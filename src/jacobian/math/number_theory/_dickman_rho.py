@@ -26,6 +26,7 @@ from jacobian._exact import CanonicalRational, canonical_rational_component_digi
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     MathTool,
+    OperationDomainValidationError,
     OperationExample,
     OperationResourceAdmissionError,
 )
@@ -38,12 +39,21 @@ MAX_DICKMAN_PRECISION_BITS = 512
 DEFAULT_DICKMAN_PRECISION_BITS = 128
 MAX_DICKMAN_ENDPOINT_DIGITS = 4
 MAX_DICKMAN_RESULT_COEFFICIENTS = MAX_DICKMAN_ENDPOINT * (MAX_DICKMAN_DEGREE + 1)
-MAX_DICKMAN_WORK_UNITS = 50_000_000
-# If the preceding coefficients are bounded by A, the centered recurrence has
-# |b[0]| <= (d+1)A and |b[k+1]| <= A/2 + |b[k]|/2.  Across at most eight
-# pieces this gives a coefficient magnitude below 2**65, which is retained in
-# the exact intermediate and result envelope below.
-MAX_DICKMAN_INTERMEDIATE_BITS = MAX_DICKMAN_PRECISION_BITS + MAX_DICKMAN_DEGREE + 65
+MAX_DICKMAN_WORK_UNITS = 250_000_000
+# Exact recurrence coefficients are Fractions. Each of at most eight pieces
+# updates ``degree`` entries by dividing by an integer at most
+# ``(degree+1)*(2U+1)``, so component bit-width is charged below rather than
+# treating every coefficient as a dyadic of width ``precision_bits``.
+_DICKMAN_FACTOR_BITS = (MAX_DICKMAN_DEGREE + 1).bit_length() + (
+    2 * MAX_DICKMAN_ENDPOINT + 1
+).bit_length()
+MAX_DICKMAN_EXACT_COMPONENT_BITS = (
+    MAX_DICKMAN_ENDPOINT * MAX_DICKMAN_DEGREE * _DICKMAN_FACTOR_BITS + 64
+)
+MAX_DICKMAN_INTERMEDIATE_BITS = max(
+    MAX_DICKMAN_PRECISION_BITS + MAX_DICKMAN_DEGREE + 65,
+    MAX_DICKMAN_EXACT_COMPONENT_BITS,
+)
 MAX_DICKMAN_RESULT_BITS = (
     2 * MAX_DICKMAN_RESULT_COEFFICIENTS * MAX_DICKMAN_INTERMEDIATE_BITS
 )
@@ -52,8 +62,9 @@ MAX_DICKMAN_RESULT_BITS = (
 class DickmanRhoPiecewiseEnclosureParameters(StrictModel):
     endpoint: CanonicalRational = Field(
         description=(
-            "Requested nonnegative endpoint U. The returned partition covers "
-            "the complete integer interval [0, ceil(U)]."
+            "Requested nonnegative endpoint U in [0, 8] whose numerator and "
+            "denominator have at most four decimal digits. The returned "
+            "partition covers the complete integer interval [0, ceil(U)]."
         )
     )
     target_width: ExactDyadic = Field(
@@ -269,6 +280,18 @@ def _admit_request(request: DickmanRhoPiecewiseEnclosureParameters) -> int:
     """Compute the complete semantic envelope before recurrence expansion."""
 
     endpoint = request.endpoint.as_fraction()
+    if endpoint < 0 or endpoint > MAX_DICKMAN_ENDPOINT:
+        raise OperationDomainValidationError(
+            location=("endpoint",),
+            code="number_theory.dickman_rho.endpoint_range",
+            message="Dickman endpoint must lie in [0, 8]",
+        )
+    if request.target_width.as_fraction() <= 0:
+        raise OperationDomainValidationError(
+            location=("target_width",),
+            code="number_theory.dickman_rho.target_width",
+            message="target width must be positive",
+        )
     interval_count = (
         endpoint.numerator + endpoint.denominator - 1
     ) // endpoint.denominator
@@ -292,8 +315,9 @@ def _admit_request(request: DickmanRhoPiecewiseEnclosureParameters) -> int:
                 "rounding floor for the requested precision"
             ),
         )
-    candidate_work = interval_count * sum(
-        degree * (request.precision_bits + degree + 64)
+    exact_bits = interval_count * MAX_DICKMAN_DEGREE * _DICKMAN_FACTOR_BITS + 64
+    candidate_work = sum(
+        degree * max(request.precision_bits + degree + 64, exact_bits)
         for degree in range(8, MAX_DICKMAN_DEGREE + 1, 8)
     )
     if candidate_work > MAX_DICKMAN_WORK_UNITS:
@@ -306,7 +330,7 @@ def _admit_request(request: DickmanRhoPiecewiseEnclosureParameters) -> int:
         2
         * interval_count
         * (MAX_DICKMAN_DEGREE + 1)
-        * (request.precision_bits + MAX_DICKMAN_DEGREE + 64)
+        * MAX_DICKMAN_INTERMEDIATE_BITS
     )
     if result_bits > MAX_DICKMAN_RESULT_BITS:
         raise OperationResourceAdmissionError(
@@ -368,7 +392,16 @@ def dickman_rho_piecewise_enclosure(
 ) -> DickmanRhoPiecewiseEnclosureResult:
     """Return a certified centered polynomial enclosure through ``endpoint``."""
 
-    request = DickmanRhoPiecewiseEnclosureParameters(
+    if (
+        precision_bits < MIN_DICKMAN_PRECISION_BITS
+        or precision_bits > MAX_DICKMAN_PRECISION_BITS
+    ):
+        raise OperationDomainValidationError(
+            location=("precision_bits",),
+            code="number_theory.dickman_rho.precision_range",
+            message="precision_bits must lie in the admitted binary-precision envelope",
+        )
+    request = DickmanRhoPiecewiseEnclosureParameters.model_construct(
         endpoint=endpoint,
         target_width=target_width,
         precision_bits=precision_bits,

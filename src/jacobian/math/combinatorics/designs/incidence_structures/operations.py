@@ -19,6 +19,7 @@ from jacobian.math.combinatorics.designs.incidence_structures._kernel import (
     incidence_trade_data,
 )
 from jacobian.math.combinatorics.designs.incidence_structures._models import (
+    MAX_STEINER_SEARCH_STATES,
     ComplementResult,
     ContainmentProfileResult,
     DegreeProfileResult,
@@ -123,7 +124,7 @@ def _search_steiner_exact_cover(
 
 
 def construct_steiner_triple_system(
-    order: int, search_budget: int
+    order: int, search_budget: int = MAX_STEINER_SEARCH_STATES
 ) -> SteinerTripleSystemResult:
     """Construct one STS(order) using bounded exact cover over point pairs.
 

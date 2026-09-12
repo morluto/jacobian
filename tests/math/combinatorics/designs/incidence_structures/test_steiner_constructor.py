@@ -69,6 +69,12 @@ def test_construct_trivial_sts3() -> None:
     assert result.design.blocks == (("p0", "p1", "p2"),)
 
 
+def test_native_constructor_uses_request_default_budget() -> None:
+    result = construct_steiner_triple_system(3)
+    assert result.status == "COMPUTED"
+    assert result.states_explored < 100_000
+
+
 def test_budget_exhaustion_is_unknown() -> None:
     result = _steiner_triple_system(
         SteinerTripleSystemRequest(order=7, search_budget=1)

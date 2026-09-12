@@ -148,11 +148,24 @@ def test_consumers_reject_forged_noncanonical_carrier_order() -> None:
 
 def test_consumers_reject_model_bypassed_nested_claims_as_domain_errors() -> None:
     poset = _materialize(["a", "b"], [])
-    malformed = poset.model_copy(update={"incomparable_pairs": (object(),)})
+    malformed_claims = (
+        poset.model_copy(update={"incomparable_pairs": (object(),)}),
+        poset.model_copy(update={"strict_order_pairs": (object(),)}),
+        poset.model_copy(
+            update={
+                "strict_order_pairs": (
+                    OrderedPair.model_construct(lower=object(), upper="b"),
+                )
+            }
+        ),
+    )
 
-    assert verify_finite_poset(malformed) is False
-    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
-        width(malformed)
+    for malformed in malformed_claims:
+        assert verify_finite_poset(malformed) is False
+        with pytest.raises(
+            OperationDomainValidationError, match="canonical finite poset"
+        ):
+            width(malformed)
 
 
 def test_comparable_pairs_require_complete_transitive_relation() -> None:

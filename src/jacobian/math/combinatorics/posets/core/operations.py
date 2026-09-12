@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib
 from typing import Any, Literal
 
+from pydantic import ValidationError
 from pydantic_core import PydanticCustomError
 
 from jacobian.catalog.models import OperationDomainValidationError
@@ -115,6 +116,12 @@ def _admit_canonical_poset(poset: FinitePoset) -> None:
     except PydanticCustomError as exc:
         raise OperationDomainValidationError(
             location=("poset",), code=exc.type, message=exc.message()
+        ) from exc
+    except (AttributeError, TypeError, ValidationError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("poset",),
+            code="poset.invalid_canonical_value",
+            message="poset claims do not describe its canonical finite poset",
         ) from exc
     if not _canonical_claims_match(poset, strict, reduction):
         raise OperationDomainValidationError(
@@ -267,6 +274,7 @@ def verify_finite_poset(poset: FinitePoset) -> bool:
         OperationDomainValidationError,
         PydanticCustomError,
         TypeError,
+        ValidationError,
         ValueError,
     ):
         return False

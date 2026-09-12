@@ -87,9 +87,7 @@ def _convolve_pairs(pairs: tuple[_MergedPair, ...]) -> _RemainingTerms:
 def _admit_remaining_support(aggregate: _RemainingTerms) -> None:
     """Cap surviving monomials after signed convolution cancellation."""
 
-    if any(
-        len(terms) > MAX_DIFFERENTIAL_FORM_TERMS for terms in aggregate.values()
-    ):
+    if any(len(terms) > MAX_DIFFERENTIAL_FORM_TERMS for terms in aggregate.values()):
         raise OperationResourceAdmissionError(
             location=("left", "right"),
             code="differential_form.wedge.output_budget",

@@ -452,6 +452,8 @@ class FullGraphAutomorphismResult(StrictModel):
             or set(vertex_members) != set(self.vertices)
             or tuple(orbit.orbit_index for orbit in self.vertex_orbits)
             != tuple(range(len(self.vertex_orbits)))
+            or tuple(orbit.representative for orbit in self.vertex_orbits)
+            != tuple(sorted(orbit.representative for orbit in self.vertex_orbits))
         ):
             raise PydanticCustomError(
                 "graph.automorphism.vertex_orbits_must_partition_axis",
@@ -465,6 +467,8 @@ class FullGraphAutomorphismResult(StrictModel):
             or set(edge_members) != set(self.edges)
             or tuple(orbit.orbit_index for orbit in self.edge_orbits)
             != tuple(range(len(self.edge_orbits)))
+            or tuple(orbit.representative for orbit in self.edge_orbits)
+            != tuple(sorted(orbit.representative for orbit in self.edge_orbits))
         ):
             raise PydanticCustomError(
                 "graph.automorphism.edge_orbits_must_partition_axis",

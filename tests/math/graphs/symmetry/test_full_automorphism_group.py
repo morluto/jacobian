@@ -87,6 +87,23 @@ def test_empty_source_generators_require_the_nested_identity() -> None:
         FullGraphAutomorphismResult.model_validate(payload)
 
 
+def test_full_group_orbits_require_sorted_representatives() -> None:
+    result = full_graph_automorphism_group(
+        ColoredUndirectedGraph(
+            graph=SimpleUndirectedGraph(
+                vertices=("a", "b", "c"),
+                edges=(("a", "b"), ("a", "c")),
+            )
+        )
+    )
+    payload = result.model_dump()
+    payload["vertex_orbits"] = list(reversed(payload["vertex_orbits"]))
+    for index, orbit in enumerate(payload["vertex_orbits"]):
+        orbit["orbit_index"] = index
+    with pytest.raises(Exception, match="canonical partition"):
+        FullGraphAutomorphismResult.model_validate(payload)
+
+
 def test_complete_graph_aligns_declared_colors_with_sorted_action_axis() -> None:
     graph = ColoredUndirectedGraph(
         graph=SimpleUndirectedGraph(

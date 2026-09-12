@@ -61,5 +61,6 @@ sunflower construction.
 
 The older
 `set_system.sunflower_triple_hypergraph.construct` operation remains the
-specialized `r=3` contract. New callers needing a declared petal count should
+specialized `r=3` contract and uses the same ordinal `sunflower_k` edge IDs
+as this family construction. New callers needing a declared petal count should
 use `set_system.sunflower_family.construct`.

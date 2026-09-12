@@ -397,23 +397,13 @@ def test_distribution_normalization_bounds_intermediate_denominators() -> None:
     atoms = tuple(
         FiniteDistributionAtom(
             value=CanonicalRational.from_fraction(Fraction(index)),
-            probability=CanonicalRational.from_fraction(probability),
+            probability=CanonicalRational.from_fraction(Fraction(1, denominator)),
         )
-        for index, probability in enumerate(
-            probability
-            for probability in tuple(
-                Fraction(1, 6 * denominator) for denominator in denominators
-            )
-            + tuple(
-                Fraction(denominator - 1, 6 * denominator)
-                for denominator in denominators
-            )
-        )
+        for index, denominator in enumerate(denominators)
     )
 
-    distribution = FiniteRationalDistribution(atoms=atoms)
     with pytest.raises(OperationDomainValidationError, match="intermediate bound"):
-        event_probability(distribution, (atoms[0].value,))
+        FiniteRationalDistribution(atoms=atoms)
 
 
 def test_result_deserialization_does_not_repeat_power_admission() -> None:

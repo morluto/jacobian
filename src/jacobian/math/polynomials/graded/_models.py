@@ -139,6 +139,10 @@ class HilbertSeriesResult(StrictModel):
     def require_source_and_axes(self) -> Self:
         if self.ideal.variables != self.initial_ideal.variables:
             raise ValueError("Hilbert-series values must share the source ring")
+        if self.ambient_denominator_exponent != len(self.ideal.variables):
+            raise ValueError(
+                "ambient denominator exponent must equal the source-ring dimension"
+            )
         if self.ambient_numerator.variables != ("t",):
             raise ValueError("Hilbert-series numerators use the t axis")
         if (

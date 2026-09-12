@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
@@ -193,6 +194,31 @@ def test_graded_result_axes_publish_structural_transport_bounds() -> None:
         == 17
     )
     assert HVectorResult.model_json_schema()["properties"]["h_vector"]["maxItems"] == 65
+
+
+@pytest.mark.parametrize("degree", (-1, 33))
+def test_native_standard_monomial_degree_bounds_precede_ideal_inspection(
+    monkeypatch: pytest.MonkeyPatch, degree: int
+) -> None:
+    import jacobian.math.polynomials.graded.operations as graded_operations
+
+    def fail(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("inadmissible degrees must not inspect the monomial ideal")
+
+    monkeypatch.setattr(graded_operations, "_require_monomial_ideal", fail)
+    with pytest.raises(
+        OperationResourceAdmissionError, match="degrees from 0 through 32"
+    ):
+        standard_monomials(_ideal((2, 0)), degree)
+
+
+def test_hilbert_series_result_binds_ambient_denominator_to_source_ring() -> None:
+    result = hilbert_series(_ideal((2, 0)), prefix_degree=2)
+    forged = result.model_dump()
+    forged["ambient_denominator_exponent"] = 99
+
+    with pytest.raises(ValidationError, match="source-ring dimension"):
+        HilbertSeriesResult.model_validate(forged)
 
 
 @pytest.mark.parametrize(

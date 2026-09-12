@@ -177,6 +177,12 @@ def _compositions(degree: int, variables: int) -> tuple[tuple[int, ...], ...]:
 def standard_monomials(
     initial_ideal: RationalPolynomialIdeal, degree: int
 ) -> StandardMonomialsResult:
+    if degree < 0 or degree > MAX_GRADED_DEGREE:
+        raise OperationResourceAdmissionError(
+            location=("degree",),
+            code="graded_ideal.monomial_degree_budget",
+            message="standard monomials support degrees from 0 through 32",
+        )
     generators = _require_monomial_ideal(initial_ideal)
     variables = len(initial_ideal.variables)
     domain_size = comb(degree + variables - 1, variables - 1)

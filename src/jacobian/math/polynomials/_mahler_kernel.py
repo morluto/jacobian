@@ -29,21 +29,16 @@ from jacobian.math.number_theory.algebraic_numbers.real import (
 )
 from jacobian.math.polynomials._mahler_models import (
     MAX_MAHLER_COEFFICIENT_DIGITS,
-    ContentPrimitiveProfileRequest,
-    ContentPrimitiveProfileResult,
+    MAX_MAHLER_DEGREE,
     MahlerAlgebraicValue,
-    MahlerMeasureRequest,
     MahlerMeasureResult,
-    RealQuadraticRootProfileRequest,
     RealQuadraticRootProfileResult,
-    ReciprocalProfileRequest,
     ReciprocalProfileResult,
     RootLocation,
 )
 from jacobian.math.polynomials._models import IntegerPolynomial
 
 __all__ = [
-    "content_primitive_profile",
     "mahler_measure",
     "quadratic_root_profile",
     "reciprocal_profile",
@@ -256,44 +251,19 @@ def _admit_mahler_coefficient_digits(polynomial: IntegerPolynomial) -> None:
         )
 
 
-def content_primitive_profile(
-    request: ContentPrimitiveProfileRequest,
-) -> ContentPrimitiveProfileResult:
-    coefficients = request.polynomial.coefficients
-    if not any(coefficients):
-        zero = IntegerPolynomial(coefficients=(0,))
-        return ContentPrimitiveProfileResult._from_kernel(
-            sign=1,
-            content=0,
-            primitive_part=zero,
-            degree=0,
-            reconstruction=zero,
+def _require_integer_polynomial(polynomial: object) -> IntegerPolynomial:
+    if not isinstance(polynomial, IntegerPolynomial):
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="polynomial.mahler_polynomial_type",
+            message="Mahler-family operations require a canonical integer polynomial",
         )
-    source_digits = _coefficient_digit_total(coefficients)
-    # primitive_part and reconstruction each retain one coefficient tuple.
-    _admit_profile_result_digits(
-        2 * source_digits + 1,
-        location=("polynomial",),
-        code="polynomial.content_profile_result_digits",
-    )
-    sign: Literal[-1, 1] = 1 if coefficients[0] > 0 else -1
-    content = 0
-    for coefficient in coefficients:
-        content = gcd(content, abs(coefficient))
-    primitive = tuple((sign * coefficient) // content for coefficient in coefficients)
-    primitive_value = IntegerPolynomial(coefficients=primitive)
-    reconstruction = tuple(sign * content * value for value in primitive)
-    return ContentPrimitiveProfileResult._from_kernel(
-        sign=sign,
-        content=content,
-        primitive_part=primitive_value,
-        degree=len(primitive) - 1,
-        reconstruction=IntegerPolynomial(coefficients=reconstruction),
-    )
+    return polynomial
 
 
-def reciprocal_profile(request: ReciprocalProfileRequest) -> ReciprocalProfileResult:
-    coefficients = request.polynomial.coefficients
+def reciprocal_profile(polynomial: IntegerPolynomial) -> ReciprocalProfileResult:
+    polynomial = _require_integer_polynomial(polynomial)
+    coefficients = polynomial.coefficients
     _require_nonzero_polynomial(coefficients, location=("polynomial",))
     source_digits = _coefficient_digit_total(coefficients)
     # reversed_coefficients copies every source coefficient; the pair ledger
@@ -408,11 +378,27 @@ def _quadratic_root_data(
     )
 
 
+def _admit_quadratic_profile(polynomial: IntegerPolynomial) -> None:
+    _admit_mahler_coefficient_digits(polynomial)
+    if len(polynomial.coefficients) > MAX_MAHLER_DEGREE + 1:
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="polynomial.mahler_degree_bound",
+            message=f"a profile polynomial has degree at most {MAX_MAHLER_DEGREE}",
+        )
+    if len(polynomial.coefficients) != 3:
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="polynomial.mahler_quadratic_degree",
+            message="a real quadratic profile needs exactly three coefficients",
+        )
+
+
 def _quadratic_root_profile(
-    request: RealQuadraticRootProfileRequest,
+    polynomial: IntegerPolynomial,
 ) -> RealQuadraticRootProfileResult:
-    _admit_mahler_coefficient_digits(request.polynomial)
-    a, b, c = request.polynomial.coefficients
+    _admit_quadratic_profile(polynomial)
+    a, b, c = polynomial.coefficients
     if a == 0:
         raise OperationDomainValidationError(
             location=("polynomial", 0),
@@ -444,9 +430,31 @@ def _abs_parts(value: _QuadraticParts) -> _QuadraticParts:
     )
 
 
-def _mahler_measure(request: MahlerMeasureRequest) -> MahlerMeasureResult:
-    _admit_mahler_coefficient_digits(request.polynomial)
-    coefficients = request.polynomial.coefficients
+def _admit_mahler_measure(polynomial: IntegerPolynomial) -> None:
+    _admit_mahler_coefficient_digits(polynomial)
+    if len(polynomial.coefficients) > MAX_MAHLER_DEGREE + 1:
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="polynomial.mahler_degree_bound",
+            message=f"a profile polynomial has degree at most {MAX_MAHLER_DEGREE}",
+        )
+    if len(polynomial.coefficients) > 3:
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="polynomial.mahler_degree_bound",
+            message="the Mahler measure needs degree at most two",
+        )
+    if polynomial.coefficients[0] == 0:
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="polynomial.mahler_leading_nonzero",
+            message="the Mahler measure needs a nonzero leading coefficient",
+        )
+
+
+def _mahler_measure(polynomial: IntegerPolynomial) -> MahlerMeasureResult:
+    _admit_mahler_measure(polynomial)
+    coefficients = polynomial.coefficients
     leading = coefficients[0]
     roots: tuple[_QuadraticParts, ...]
     root_kind: Literal["DISTINCT_REAL", "DOUBLE_REAL", "COMPLEX_CONJUGATE"]
@@ -498,16 +506,18 @@ def _mahler_measure(request: MahlerMeasureRequest) -> MahlerMeasureResult:
 
 
 def quadratic_root_profile(
-    request: RealQuadraticRootProfileRequest,
+    polynomial: IntegerPolynomial,
 ) -> RealQuadraticRootProfileResult:
+    polynomial = _require_integer_polynomial(polynomial)
     if current_request_execution() is None:
         with request_execution(monotonic()):
-            return _quadratic_root_profile(request)
-    return _quadratic_root_profile(request)
+            return _quadratic_root_profile(polynomial)
+    return _quadratic_root_profile(polynomial)
 
 
-def mahler_measure(request: MahlerMeasureRequest) -> MahlerMeasureResult:
+def mahler_measure(polynomial: IntegerPolynomial) -> MahlerMeasureResult:
+    polynomial = _require_integer_polynomial(polynomial)
     if current_request_execution() is None:
         with request_execution(monotonic()):
-            return _mahler_measure(request)
-    return _mahler_measure(request)
+            return _mahler_measure(polynomial)
+    return _mahler_measure(polynomial)

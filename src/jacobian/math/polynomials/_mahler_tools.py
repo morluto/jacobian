@@ -1,15 +1,49 @@
 """Integer-polynomial profile and Mahler-measure operation declarations."""
 
 from jacobian.catalog.models import MathTool, OperationExample
-from jacobian.math.polynomials import _mahler_kernel as native
+from jacobian.math.polynomials._elementary_kernel import (
+    integer_polynomial_primitive_part,
+)
+from jacobian.math.polynomials._mahler_kernel import (
+    mahler_measure,
+    quadratic_root_profile,
+    reciprocal_profile,
+)
 from jacobian.math.polynomials._mahler_models import (
-    ContentPrimitiveProfileRequest,
-    ContentPrimitiveProfileResult,
     MahlerMeasureRequest,
     MahlerMeasureResult,
     RealQuadraticRootProfileRequest,
     RealQuadraticRootProfileResult,
+    ReciprocalProfileRequest,
+    ReciprocalProfileResult,
 )
+from jacobian.math.polynomials._models import (
+    IntegerPolynomialPrimitivePartResult,
+    IntegerPolynomialRequest,
+)
+
+
+def _run_content_primitive_profile(
+    request: IntegerPolynomialRequest,
+) -> IntegerPolynomialPrimitivePartResult:
+    return integer_polynomial_primitive_part(request.polynomial)
+
+
+def _run_reciprocal_profile(
+    request: ReciprocalProfileRequest,
+) -> ReciprocalProfileResult:
+    return reciprocal_profile(request.polynomial)
+
+
+def _run_quadratic_root_profile(
+    request: RealQuadraticRootProfileRequest,
+) -> RealQuadraticRootProfileResult:
+    return quadratic_root_profile(request.polynomial)
+
+
+def _run_mahler_measure(request: MahlerMeasureRequest) -> MahlerMeasureResult:
+    return mahler_measure(request.polynomial)
+
 
 INTEGER_POLYNOMIAL_PROFILE_OPERATIONS = (
     MathTool(
@@ -18,13 +52,13 @@ INTEGER_POLYNOMIAL_PROFILE_OPERATIONS = (
         description=(
             "Return the sign, the nonnegative coefficient gcd, the "
             "positive-leading primitive part, the degree, and the exact "
-            "reconstruction of one canonical integer polynomial. This makes the "
-            "content/leading-coefficient boundary explicit before factor-level "
-            "normalization."
+            "reconstruction of one canonical integer polynomial. This is the "
+            "same IntegerPolynomialPrimitivePartResult produced by the native "
+            "integer_polynomial_primitive_part contract."
         ),
-        request_type=ContentPrimitiveProfileRequest,
-        result_type=ContentPrimitiveProfileResult,
-        run=native.content_primitive_profile,
+        request_type=IntegerPolynomialRequest,
+        result_type=IntegerPolynomialPrimitivePartResult,
+        run=_run_content_primitive_profile,
         tags=("polynomial", "integer", "content", "primitive", "exact"),
         examples=(
             OperationExample(
@@ -49,7 +83,7 @@ INTEGER_POLYNOMIAL_PROFILE_OPERATIONS = (
         ),
         request_type=RealQuadraticRootProfileRequest,
         result_type=RealQuadraticRootProfileResult,
-        run=native.quadratic_root_profile,
+        run=_run_quadratic_root_profile,
         tags=("polynomial", "quadratic", "roots", "exact"),
         examples=(
             OperationExample(
@@ -73,7 +107,7 @@ INTEGER_POLYNOMIAL_PROFILE_OPERATIONS = (
         ),
         request_type=MahlerMeasureRequest,
         result_type=MahlerMeasureResult,
-        run=native.mahler_measure,
+        run=_run_mahler_measure,
         tags=("polynomial", "mahler", "measure", "exact"),
         examples=(
             OperationExample(

@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from functools import cache
-from typing import Any
+from math import gcd
+from typing import Any, Literal
 
 from pydantic_core import PydanticCustomError
 
@@ -11,7 +12,10 @@ from jacobian._exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
     CanonicalRational,
 )
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math import polynomials
 from jacobian.math.polynomials._conversions import (
     rational_from_sympy,
@@ -211,19 +215,52 @@ def integer_polynomial_content(
     )
 
 
+MAX_PRIMITIVE_PART_RESULT_DIGITS = 8_000_000
+
+
+def _retained_integer_digits(value: int) -> int:
+    if value == 0:
+        return 1
+    return (abs(value).bit_length() * 30103) // 100000 + 1
+
+
 def integer_polynomial_primitive_part(
     polynomial: IntegerPolynomial,
 ) -> IntegerPolynomialPrimitivePartResult:
-    """Return content, primitive part, and exact reconstruction."""
+    """Return sign, content, positive-leading primitive part, and reconstruction."""
 
     _run_admission(lambda: _admit_integer(polynomial))
-    source = _integer_poly(polynomial)
-    content, primitive = source.primitive()
-    reconstructed = primitive.mul_ground(content)
+    coefficients = polynomial.coefficients
+    if not any(coefficients):
+        zero = IntegerPolynomial(coefficients=(0,))
+        return IntegerPolynomialPrimitivePartResult(
+            sign=1,
+            content=0,
+            primitive_part=zero,
+            degree=0,
+            reconstruction=zero,
+        )
+    source_digits = sum(
+        _retained_integer_digits(coefficient) for coefficient in coefficients
+    )
+    if 2 * source_digits + 1 > MAX_PRIMITIVE_PART_RESULT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("polynomial",),
+            code="polynomial.content_profile_result_digits",
+            message="the retained profile coefficients exceed the exact output bound",
+        )
+    sign: Literal[-1, 1] = 1 if coefficients[0] > 0 else -1
+    content = 0
+    for coefficient in coefficients:
+        content = gcd(content, abs(coefficient))
+    primitive = tuple((sign * coefficient) // content for coefficient in coefficients)
+    reconstruction = tuple(sign * content * value for value in primitive)
     return IntegerPolynomialPrimitivePartResult(
-        content=int(content),
-        primitive_part=_integer_value(primitive),
-        reconstruction=_integer_value(reconstructed),
+        sign=sign,
+        content=content,
+        primitive_part=IntegerPolynomial(coefficients=primitive),
+        degree=len(primitive) - 1,
+        reconstruction=IntegerPolynomial(coefficients=reconstruction),
     )
 
 

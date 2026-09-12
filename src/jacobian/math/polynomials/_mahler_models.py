@@ -47,64 +47,6 @@ def _require_mahler_polynomial_envelope(polynomial: IntegerPolynomial) -> None:
         )
 
 
-class ContentPrimitiveProfileRequest(StrictModel):
-    polynomial: IntegerPolynomial
-
-
-class ContentPrimitiveProfileResult(StrictModel):
-    sign: Literal[-1, 1]
-    content: ExactInteger
-    primitive_part: IntegerPolynomial
-    degree: StrictInt = Field(ge=0, le=MAX_POLYNOMIAL_TERMS - 1)
-    reconstruction: IntegerPolynomial
-
-    @model_validator(mode="after")
-    def require_structural_reconstruction(self) -> Self:
-        if self.primitive_part.coefficients == (
-            0,
-        ) and self.reconstruction.coefficients == (0,):
-            if self.content != 0 or self.degree != 0 or self.sign != 1:
-                raise _validation_error(
-                    "polynomial.mahler_zero_content_profile",
-                    "the zero polynomial has content 0, sign 1, and degree 0",
-                )
-            return self
-        if self.content < 1:
-            raise _validation_error(
-                "polynomial.mahler_content_positive",
-                "content must be the positive coefficient gcd",
-            )
-        if self.primitive_part.coefficients[0] <= 0:
-            raise _validation_error(
-                "polynomial.mahler_positive_leading_required",
-                "a primitive part must have a positive leading coefficient",
-            )
-        scaled = tuple(
-            self.sign * self.content * coefficient
-            for coefficient in self.primitive_part.coefficients
-        )
-        if scaled != self.reconstruction.coefficients:
-            raise _validation_error(
-                "polynomial.mahler_content_reconstruction",
-                "sign*content*primitive_part must reconstruct the input polynomial",
-            )
-        if self.degree != len(self.primitive_part.coefficients) - 1:
-            raise _validation_error(
-                "polynomial.mahler_content_degree",
-                "the reported degree is the primitive part's degree",
-            )
-        if (self.reconstruction.coefficients[0] > 0) != (self.sign == 1):
-            raise _validation_error(
-                "polynomial.mahler_content_sign",
-                "the sign must match the reconstructed leading coefficient",
-            )
-        return self
-
-    @classmethod
-    def _from_kernel(cls, **values: object) -> Self:
-        return cls.model_construct(**values)
-
-
 class ReciprocalProfileRequest(StrictModel):
     polynomial: IntegerPolynomial
 
@@ -300,8 +242,6 @@ class MahlerMeasureResult(StrictModel):
 __all__ = [
     "MAX_MAHLER_COEFFICIENT_DIGITS",
     "MAX_MAHLER_DEGREE",
-    "ContentPrimitiveProfileRequest",
-    "ContentPrimitiveProfileResult",
     "MahlerAlgebraicValue",
     "MahlerMeasureRequest",
     "MahlerMeasureResult",

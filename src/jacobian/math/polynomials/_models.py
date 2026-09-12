@@ -392,10 +392,48 @@ class IntegerPolynomialContentResult(StrictModel):
 
 
 class IntegerPolynomialPrimitivePartResult(StrictModel):
+    sign: Literal[-1, 1]
     content: ExactInteger
     primitive_part: IntegerPolynomial
+    degree: StrictInt = Field(ge=0, le=MAX_POLYNOMIAL_TERMS - 1)
     reconstruction: IntegerPolynomial
-    convention: Literal["NONNEGATIVE_CONTENT"] = "NONNEGATIVE_CONTENT"
+    convention: Literal["NONNEGATIVE_CONTENT_POSITIVE_LEADING"] = (
+        "NONNEGATIVE_CONTENT_POSITIVE_LEADING"
+    )
+
+    @model_validator(mode="after")
+    def require_structural_reconstruction(self) -> Self:
+        if self.primitive_part.coefficients == (
+            0,
+        ) and self.reconstruction.coefficients == (0,):
+            if self.content != 0 or self.degree != 0 or self.sign != 1:
+                raise _validation_error(
+                    "the zero polynomial has content 0, sign 1, and degree 0"
+                )
+            return self
+        if self.content < 1:
+            raise _validation_error("content must be the positive coefficient gcd")
+        if self.primitive_part.coefficients[0] <= 0:
+            raise _validation_error(
+                "a primitive part must have a positive leading coefficient"
+            )
+        scaled = tuple(
+            self.sign * self.content * coefficient
+            for coefficient in self.primitive_part.coefficients
+        )
+        if scaled != self.reconstruction.coefficients:
+            raise _validation_error(
+                "sign*content*primitive_part must reconstruct the input polynomial"
+            )
+        if self.degree != len(self.primitive_part.coefficients) - 1:
+            raise _validation_error(
+                "the reported degree is the primitive part's degree"
+            )
+        if (self.reconstruction.coefficients[0] > 0) != (self.sign == 1):
+            raise _validation_error(
+                "the sign must match the reconstructed leading coefficient"
+            )
+        return self
 
 
 class IntegerPolynomialEvaluationRequest(IntegerPolynomialRequest):

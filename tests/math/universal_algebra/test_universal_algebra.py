@@ -158,7 +158,6 @@ def test_catalog_contains_only_audited_agent_outcomes() -> None:
     assert {tool.operation_id for tool in TOOLS} == {
         "universal_algebra.term.evaluate.compute",
         "universal_algebra.equation.profile.compute",
-        "universal_algebra.finite_magma.implication_countermodel.check",
         "universal_algebra.subalgebra.generated.compute",
         "universal_algebra.map.homomorphism_profile.compute",
         "universal_algebra.congruence.check.compute",

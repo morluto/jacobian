@@ -54,7 +54,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "base-b fractional digits. Rational values use the canonical "
             "terminating-zero convention; irrational values are compared "
             "exactly against a scaled defining polynomial, never by binary "
-            "floating point. The result asserts only the requested finite "
+            "floating point. Source growth, root-isolation precision, exact "
+            "arithmetic, and serialized result bytes are admitted before "
+            "backend expansion. The result asserts only the requested finite "
             "prefix."
         ),
         request_type=RadixPrefixRequest,

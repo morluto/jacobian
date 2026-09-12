@@ -86,12 +86,14 @@ def partition_dominance(
 # Row lengths that do not form a partition surface through the shared
 # IntegerPartition validator wrapped in a ValidationError. Those wrapped
 # shape codes are structural nonmembership, while any other wrapped failure
-# (or any operational fault) must keep propagating.
+# (or any operational fault) must keep propagating.  In particular the
+# tableau carriers enforce the 500-cell envelope at admission, so a size
+# budget failure is an operational limit and must never read as a false
+# mathematical nonmembership result.
 _MEMBERSHIP_SHAPE_ERRORS = frozenset(
     {
         "symmetric_function.partition_not_weakly_decreasing",
         "symmetric_function.partition_parts_not_positive",
-        "symmetric_function.partition_size_exceeded",
     }
 )
 

@@ -275,6 +275,25 @@ def test_tableau_checkers_return_false_for_non_partition_shapes() -> None:
     assert semistandard.is_member is False
 
 
+def test_tableau_checkers_reject_oversized_carriers_at_admission() -> None:
+    # Rows [[1, ..., 500], [501]] are mathematically a standard tableau of
+    # shape (500, 1), but 501 cells exceed the canonical budget: request
+    # admission must fail rather than report a false nonmembership.
+    oversized = [list(range(1, 501)), [501]]
+    with pytest.raises(ValidationError) as standard_error:
+        StandardTableauCheckRequest.model_validate({"tableau": {"rows": oversized}})
+    assert (
+        standard_error.value.errors()[0]["type"]
+        == "symmetric_function.tableau_size_exceeded"
+    )
+    with pytest.raises(ValidationError) as semistandard_error:
+        SemistandardTableauCheckRequest.model_validate({"tableau": {"rows": oversized}})
+    assert (
+        semistandard_error.value.errors()[0]["type"]
+        == "symmetric_function.tableau_size_exceeded"
+    )
+
+
 def test_tableau_checker_propagates_operational_failures(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

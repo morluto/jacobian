@@ -10,6 +10,7 @@ from pydantic import ValidationError
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.number_theory.sequences.core._models import (
+    AutocorrelationCell,
     AutocorrelationResult,
     FiniteIntegerSequence,
     FiniteRationalSequence,
@@ -88,8 +89,8 @@ def test_result_rejects_noncanonical_lag_axis_without_recomputing_coefficients()
             convention="cyclic",
             source=FiniteIntegerSequence(values=(1, 2)),
             cells=(
-                {"lag": 0, "value": 5},
-                {"lag": 2, "value": 5},
+                AutocorrelationCell(lag=0, value=5),
+                AutocorrelationCell(lag=2, value=5),
             ),
         )
 
@@ -132,9 +133,11 @@ def test_aperiodic_matches_defining_sum_for_signed_rational_lags() -> None:
 
     result = aperiodic_autocorrelation(source)
     assert [cell.lag for cell in result.cells] == list(range(-3, 4))
-    assert [Fraction(cell.value.num, cell.value.den) for cell in result.cells] == [
-        expected[lag] for lag in range(-3, 4)
-    ]
+    actual = []
+    for cell in result.cells:
+        assert isinstance(cell.value, CanonicalRational)
+        actual.append(cell.value.as_fraction())
+    assert actual == [expected[lag] for lag in range(-3, 4)]
 
 
 def test_reversing_source_preserves_aperiodic_profile() -> None:

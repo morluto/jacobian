@@ -22,6 +22,7 @@ from jacobian.math.polynomials._expression_normalize import (
     PolynomialExpressionSource,
     PolynomialPower,
     PolynomialVariableExpression,
+    _MAX_EXPRESSION_DEPTH,
     normalize_polynomial_expression,
 )
 
@@ -157,6 +158,22 @@ def test_wrapped_validated_expression_models_respect_depth() -> None:
     )
     for _ in range(64):
         expression = PolynomialPower(base=expression, exponent=1)
+    source = PolynomialExpressionSource.model_construct(
+        coefficient_domain="QQ",
+        variables=("x",),
+        expression=expression,
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        normalize_polynomial_expression(source)
+    assert error.value.errors()[0]["type"] == "polynomial.expression.expansion_bound"
+
+
+def test_forged_deep_ast_is_bounded_before_serialization() -> None:
+    expression: PolynomialAdd | PolynomialPower | PolynomialVariableExpression = (
+        PolynomialVariableExpression.model_construct(name="x")
+    )
+    for _ in range(_MAX_EXPRESSION_DEPTH + 8):
+        expression = PolynomialPower.model_construct(base=expression, exponent=1)
     source = PolynomialExpressionSource.model_construct(
         coefficient_domain="QQ",
         variables=("x",),

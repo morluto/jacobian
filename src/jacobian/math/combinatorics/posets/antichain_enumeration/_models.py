@@ -24,7 +24,9 @@ def require_antichain_enumeration_envelope(
     try:
         n = len(poset.elements)
     except (AttributeError, TypeError) as error:
-        raise ValueError("antichain enumeration requires a finite poset carrier") from error
+        raise ValueError(
+            "antichain enumeration requires a finite poset carrier"
+        ) from error
     if n > MAX_ELEMENTS:
         raise ValueError(
             f"antichain enumeration supports at most {MAX_ELEMENTS} elements"

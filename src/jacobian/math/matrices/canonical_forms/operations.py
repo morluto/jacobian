@@ -630,6 +630,118 @@ def _division_support_bound(
     return len(quotient_support)
 
 
+def _bounded_exact_division_presolve(
+    dividend: RationalPolynomial, divisor: MonicPolynomial
+) -> tuple[RationalPolynomial, RationalPolynomial] | None:
+    """Try exact division while bounding every presolve intermediate.
+
+    The support ledger deliberately ignores coefficients, so it can reject a
+    sparse quotient whose high-degree cancellations are obvious from the
+    source. This presolve recovers those cases without admitting unrestricted
+    exact arithmetic: every product and sum must fit one canonical rational
+    component, and the accumulated digit-work charge must stay within the
+    remainder-operation budget. ``None`` leaves the conservative support and
+    growth admission in charge.
+    """
+
+    variable = dividend.variables[0]
+    remaining = {
+        term.exponents[0]: term.coefficient.as_fraction()
+        for term in dividend.polynomial.terms
+    }
+    divisor_coefficients = {
+        term.exponents[0]: term.coefficient.as_fraction()
+        for term in divisor.polynomial.terms
+    }
+    divisor_degree = divisor.polynomial.terms[0].exponents[0]
+    quotient: dict[int, Fraction] = {}
+    digit_work = 0
+
+    while remaining and max(remaining) >= divisor_degree:
+        degree = max(remaining)
+        shift = degree - divisor_degree
+        factor = remaining[degree]
+        quotient[shift] = factor
+        if len(quotient) > MAX_POLYNOMIAL_TERMS:
+            return None
+        factor_digits = max(
+            _integer_decimal_digits(abs(factor.numerator)),
+            _integer_decimal_digits(factor.denominator),
+        )
+        for divisor_exponent, divisor_coefficient in divisor_coefficients.items():
+            old = remaining.get(divisor_exponent + shift)
+            coefficient_digits = max(
+                _integer_decimal_digits(abs(divisor_coefficient.numerator)),
+                _integer_decimal_digits(divisor_coefficient.denominator),
+            )
+            old_digits = (
+                max(
+                    _integer_decimal_digits(abs(old.numerator)),
+                    _integer_decimal_digits(old.denominator),
+                )
+                if old is not None
+                else 1
+            )
+            operation_digits = factor_digits + coefficient_digits + old_digits
+            digit_work += operation_digits**2
+            if digit_work > MAX_MATRIX_POLYNOMIAL_REMAINDER_DIGIT_WORK:
+                return None
+            # The product's unreduced components are bounded by the operand
+            # component sums. Refuse before materializing a wider integer.
+            if factor_digits + coefficient_digits > MAX_CANONICAL_RATIONAL_DIGITS:
+                return None
+            product = factor * divisor_coefficient
+            if old is None:
+                value = -product
+            else:
+                # Clearing both denominators gives a component bound before
+                # Fraction performs the exact reduction or cancellation.
+                if (
+                    max(
+                        _integer_decimal_digits(abs(old.numerator))
+                        + _integer_decimal_digits(product.denominator)
+                        + 1,
+                        _integer_decimal_digits(abs(product.numerator))
+                        + _integer_decimal_digits(old.denominator)
+                        + 1,
+                        _integer_decimal_digits(old.denominator)
+                        + _integer_decimal_digits(product.denominator),
+                    )
+                    > MAX_CANONICAL_RATIONAL_DIGITS
+                ):
+                    return None
+                value = old - product
+            if value:
+                if (
+                    max(
+                        _integer_decimal_digits(abs(value.numerator)),
+                        _integer_decimal_digits(value.denominator),
+                    )
+                    > MAX_CANONICAL_RATIONAL_DIGITS
+                ):
+                    return None
+                remaining[divisor_exponent + shift] = value
+            else:
+                remaining.pop(divisor_exponent + shift, None)
+
+    return (
+        _polynomial_from_coefficients(
+            [
+                quotient.get(index, Fraction(0))
+                for index in range(max(quotient, default=-1) + 1)
+            ],
+            variable,
+        ),
+        _polynomial_from_coefficients(
+            [
+                remaining.get(index, Fraction(0))
+                for index in range(max(remaining, default=-1) + 1)
+            ],
+            variable,
+        ),
+    )
+
+
 def reduce_matrix_polynomial(
     matrix: RationalMatrix, polynomial: RationalPolynomial
 ) -> tuple[MonicPolynomial, RationalPolynomial, RationalPolynomial]:
@@ -694,17 +806,18 @@ def reduce_matrix_polynomial(
     # through the source exponent. In particular, t^D divided by t has one
     # quotient term for any admitted exponent D.
     quotient_support = _division_support_bound(polynomial, minimal)
-    if quotient_support > MAX_POLYNOMIAL_TERMS:
-        raise OperationResourceAdmissionError(
-            location=("polynomial",),
-            code="matrix.polynomial.remainder.output",
-            message="polynomial remainder quotient support exceeds the canonical term bound",
-        )
+    support_rejected = quotient_support > MAX_POLYNOMIAL_TERMS
 
     # A monomial modulus only shifts source terms. There are no coefficient
     # products or accumulations to charge, so high exponents retain the source
     # component bound and the support ledger above is sufficient.
     if len(minimal_terms) == 1:
+        if support_rejected:
+            raise OperationResourceAdmissionError(
+                location=("polynomial",),
+                code="matrix.polynomial.remainder.output",
+                message="polynomial remainder quotient support exceeds the canonical term bound",
+            )
         quotient, remainder = _divide_polynomials(polynomial, minimal)
         return minimal, quotient, remainder
 
@@ -738,9 +851,21 @@ def reduce_matrix_polynomial(
         * max(1, nonleading_support)
         * (estimated_digits**2)
     )
-    if estimated_digits > MAX_CANONICAL_RATIONAL_DIGITS or (
+    growth_rejected = estimated_digits > MAX_CANONICAL_RATIONAL_DIGITS or (
         digit_work > MAX_MATRIX_POLYNOMIAL_REMAINDER_DIGIT_WORK
-    ):
+    )
+    if support_rejected or growth_rejected:
+        presolved = _bounded_exact_division_presolve(polynomial, minimal)
+        if presolved is not None:
+            quotient, remainder = presolved
+            return minimal, quotient, remainder
+    if support_rejected:
+        raise OperationResourceAdmissionError(
+            location=("polynomial",),
+            code="matrix.polynomial.remainder.output",
+            message="polynomial remainder quotient support exceeds the canonical term bound",
+        )
+    if growth_rejected:
         raise OperationResourceAdmissionError(
             location=("polynomial",),
             code="matrix.polynomial.remainder.output",

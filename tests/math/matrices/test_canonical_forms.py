@@ -249,6 +249,30 @@ def test_matrix_polynomial_remainder_accepts_sparse_zero_modulus_at_high_degree(
     assert result.remainder.polynomial.terms == ()
 
 
+def test_matrix_polynomial_remainder_preserves_high_degree_source_cancellation() -> (
+    None
+):
+    matrix = _diagonal(1)
+    polynomial = RationalPolynomial(
+        variables=("t",),
+        polynomial=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(
+                    coefficient=R(num=1, den=1), exponents=(32_768,)
+                ),
+                RationalPolynomialTerm(
+                    coefficient=R(num=-1, den=1), exponents=(32_767,)
+                ),
+            )
+        ),
+    )
+    result = compute_matrix_polynomial_remainder(matrix, polynomial)
+    assert result.quotient.polynomial.terms == (
+        RationalPolynomialTerm(coefficient=R(num=1, den=1), exponents=(32_767,)),
+    )
+    assert result.remainder.polynomial.terms == ()
+
+
 def test_matrix_polynomial_remainder_accepts_maximum_size_constant() -> None:
     coefficient = R(num=10**32_767, den=1)
     polynomial = RationalPolynomial(

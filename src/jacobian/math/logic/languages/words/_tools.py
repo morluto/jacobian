@@ -141,54 +141,6 @@ def compute_substitution_fixed_point_prefix(
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
-        operation_id="word.prefixes.compute",
-        title="Compute all prefixes of a finite word",
-        description=(
-            "Return the complete prefix family in increasing length order, "
-            "including the empty prefix; the source word alphabet is retained."
-        ),
-        request_type=WordFamilyRequest,
-        result_type=WordPrefixesResult,
-        run=compute_prefixes,
-        tags=("combinatorics", "words", "prefixes", "exact", "complete"),
-        examples=(
-            OperationExample(
-                name="abaab_prefixes",
-                description="Compute every prefix of abaab, including the empty prefix.",
-                input={
-                    "word": {
-                        "alphabet": ["a", "b"],
-                        "letters": ["a", "b", "a", "a", "b"],
-                    }
-                },
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="word.suffixes.compute",
-        title="Compute all suffixes of a finite word",
-        description=(
-            "Return the complete suffix family ordered by starting position, "
-            "including the empty suffix; the source word alphabet is retained."
-        ),
-        request_type=WordFamilyRequest,
-        result_type=WordSuffixesResult,
-        run=compute_suffixes,
-        tags=("combinatorics", "words", "suffixes", "exact", "complete"),
-        examples=(
-            OperationExample(
-                name="abaab_suffixes",
-                description="Compute every suffix of abaab, including the empty suffix.",
-                input={
-                    "word": {
-                        "alphabet": ["a", "b"],
-                        "letters": ["a", "b", "a", "a", "b"],
-                    }
-                },
-            ),
-        ),
-    ),
-    MathTool(
         operation_id="word.factors.length.compute",
         title="Compute all factors of one length",
         description=(

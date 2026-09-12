@@ -28,6 +28,7 @@ from jacobian.math.logic.languages.words import (
     parikh_vector,
     periods,
     prefix_function,
+    prefixes,
     primitive_root,
     substitution_dependency_graph,
     substitution_primitivity_profile,
@@ -155,14 +156,15 @@ def test_word_family_result_rejects_over_bound_serialized_axis(
 
 def test_large_word_family_json_round_trip_uses_bounded_validation() -> None:
     source = _word("ab" * (MAX_WORD_LENGTH // 2))
-    result = WordPrefixesResult(
-        word=source,
-        prefixes=prefixes(source),
+    result = WordPrefixesResult._from_kernel(
+        WordFamilyRequest(word=source), prefixes(source)
     )
+    payload = json.loads(result.model_dump_json())
+    payload["prefixes"][MAX_WORD_LENGTH // 2]["letters"][0] = "b"
 
-    decoded = WordPrefixesResult.model_validate_json(result.model_dump_json())
+    decoded = WordPrefixesResult.model_validate_json(json.dumps(payload))
 
-    assert decoded == result
+    assert decoded.prefixes[MAX_WORD_LENGTH // 2].letters[0] == "b"
 
 
 def test_word_family_operations_retain_empty_alphabet_and_empty_word() -> None:

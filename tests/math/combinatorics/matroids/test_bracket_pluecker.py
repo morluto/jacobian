@@ -17,6 +17,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.combinatorics.matroids.oriented._bracket_kernel import (
+    _bounded_integer_sum,
     bracket_polynomial_from_terms,
     bracket_syzygy_residual,
     grassmann_pluecker_relation,
@@ -948,4 +949,18 @@ def test_compressed_large_multiplicity_survives_residual_and_json() -> None:
     assert (
         bracket_syzygy_residual(BracketSyzygyResidualRequest(target=restored, terms=()))
         == target
+    )
+
+
+def test_pair_reduction_reuses_the_canonical_integer_limit() -> None:
+    """Same-sign pair sums must not reconstruct 10**digit_bound on every add."""
+
+    total = 0
+    for _ in range(20_000):
+        summed = _bounded_integer_sum(3, 5)
+        assert summed == 8
+        total += summed
+    assert total == 160_000
+    assert _bounded_integer_sum(1, -(10**MAX_CANONICAL_INTEGER_DIGITS)) == (
+        1 - 10**MAX_CANONICAL_INTEGER_DIGITS
     )

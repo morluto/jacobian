@@ -40,6 +40,11 @@ _RelationTerm = tuple[int, tuple[tuple[int, int, int], ...]]
 _MonomialKey = tuple[tuple[tuple[int, int, int], int], ...]
 _CoefficientComponent = tuple[Fraction, tuple[int, int]]
 
+# Cache the canonical-integer envelope once. Constructing
+# ``10 ** MAX_CANONICAL_INTEGER_DIGITS`` on every pair reduction recreates a
+# 32,769-digit integer and dominates otherwise cheap residual admission.
+_CANONICAL_INTEGER_LIMIT = 10**MAX_CANONICAL_INTEGER_DIGITS
+
 
 def _combined_coefficients(
     contributions: list[tuple[Fraction, tuple[tuple[CanonicalBracket, int], ...]]],
@@ -271,7 +276,7 @@ def _exceeds_canonical_integer_bound(value: int) -> bool:
 
     if value.bit_length() <= 3 * MAX_CANONICAL_INTEGER_DIGITS:
         return False
-    return bool(value >= 10**MAX_CANONICAL_INTEGER_DIGITS)
+    return bool(value >= _CANONICAL_INTEGER_LIMIT)
 
 
 def _bounded_integer_sum(left: int, right: int) -> int | None:
@@ -282,8 +287,7 @@ def _bounded_integer_sum(left: int, right: int) -> int | None:
     if right == 0:
         return left
     if (left < 0) == (right < 0):
-        limit = 10**MAX_CANONICAL_INTEGER_DIGITS
-        if abs(left) >= limit - abs(right):
+        if abs(left) >= _CANONICAL_INTEGER_LIMIT - abs(right):
             return None
     return left + right
 

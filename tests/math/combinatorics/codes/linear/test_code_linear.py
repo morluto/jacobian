@@ -7,7 +7,9 @@ import pytest
 import sympy
 from pydantic import ValidationError
 
+from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.dispatch import invoke_operation
 from jacobian.math.combinatorics.codes.linear._models import (
     CodeEqualRequest,
     CodewordCheckRequest,
@@ -31,6 +33,7 @@ from jacobian.math.combinatorics.codes.linear._tools import (
     compute_shorten,
     compute_syndrome,
 )
+from jacobian.math.combinatorics.codes.linear.operations import from_generator
 from jacobian.math.combinatorics.codes.linear.values import PrimeFieldLinearEncoder
 
 
@@ -98,6 +101,124 @@ def test_from_generator_canonicalizes_dependent_rows() -> None:
     assert result.encoder.generator_matrix == ((1, 1),)
     assert result.encoder.message_axis == ("m0",)
     assert result.encoder.coordinate_axis == ("left", "right")
+
+
+@pytest.mark.parametrize(
+    ("field_order", "generator_matrix", "expected_generator"),
+    (
+        # This is the motivating regression: both 2**20 and 3**11 exceed the
+        # former enumeration cap, although row reduction establishes ranks 20
+        # and 1 respectively without enumerating a codeword.
+        (
+            2,
+            tuple(
+                tuple(int(row == column) for column in range(20)) for row in range(20)
+            ),
+            tuple(
+                tuple(int(row == column) for column in range(20)) for row in range(20)
+            ),
+        ),
+        (2, tuple((1,) + (0,) * 19 for _ in range(20)), ((1,) + (0,) * 19,)),
+        (
+            3,
+            tuple((value, 0, 0, 0) for value in (1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1)),
+            ((1, 0, 0, 0),),
+        ),
+        (2, tuple((0,) * 20 for _ in range(20)), ()),
+    ),
+)
+def test_from_generator_admits_large_row_presentations_by_rref_rank(
+    field_order: int,
+    generator_matrix: tuple[tuple[int, ...], ...],
+    expected_generator: tuple[tuple[int, ...], ...],
+) -> None:
+    coordinate_axis = tuple(f"x{index}" for index in range(len(generator_matrix[0])))
+    request = GeneratorMatrixRequest(
+        field_order=field_order,
+        generator_matrix=generator_matrix,
+        coordinate_axis=coordinate_axis,
+    )
+
+    # Native and declared public adapters establish the same canonical rowspace.
+    native = from_generator(field_order, generator_matrix, coordinate_axis)
+    public = compute_from_generator(request)
+    assert native == public
+    assert public.encoder.generator_matrix == expected_generator
+    assert public.encoder.codeword_count == field_order ** len(expected_generator)
+
+
+def test_from_generator_scale_regression_dispatches_and_composes() -> None:
+    identity = [[int(row == column) for column in range(20)] for row in range(20)]
+    payload = {
+        "field_order": 2,
+        "generator_matrix": identity,
+        "coordinate_axis": [f"x{index}" for index in range(20)],
+    }
+    dispatched = invoke_operation(
+        "code.linear.from_generator.compute", payload, Catalog.open()
+    )
+    assert dispatched.output is not None
+    produced = compute_from_generator(GeneratorMatrixRequest.model_validate(payload))
+    replayed = type(produced).model_validate(dispatched.output)
+    assert replayed == produced
+    assert replayed.encoder.codeword_count == 2**20
+
+    # The encoder remains a composable bounded matrix value even though a
+    # codeword-enumerating consumer would refuse this cardinality.
+    serialized_encoder = replayed.model_dump(mode="json")["encoder"]
+    dual = compute_dual_code(
+        DualCodeRequest.model_validate({"encoder": serialized_encoder})
+    )
+    parity = compute_parity_check(
+        ParityCheckRequest.model_validate({"encoder": serialized_encoder})
+    )
+    member = compute_codeword_check(
+        CodewordCheckRequest.model_validate(
+            {"encoder": serialized_encoder, "word": [1] + [0] * 19}
+        )
+    )
+    assert dual.encoder.generator_matrix == ()
+    assert parity.parity_check.rows == ()
+    assert member.is_member
+    assert member.coefficients == (1,) + (0,) * 19
+
+
+@pytest.mark.parametrize(
+    ("field_order", "generator_matrix", "coordinate_axis", "error", "location"),
+    (
+        (2, (), (), "row_count", ("generator_matrix",)),
+        (2, tuple((1,) for _ in range(65)), ("x",), "row_count", ("generator_matrix",)),
+        (257, ((1,),), ("x",), "field_order_out_of_bounds", ("field_order",)),
+        (
+            2,
+            ((1,),),
+            (),
+            "coordinate_axis",
+            ("coordinate_axis",),
+        ),
+    ),
+)
+def test_from_generator_native_admits_shape_before_rref(
+    field_order: int,
+    generator_matrix: tuple[tuple[int, ...], ...],
+    coordinate_axis: tuple[str, ...],
+    error: str,
+    location: tuple[str, ...],
+) -> None:
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        from_generator(field_order, generator_matrix, coordinate_axis)
+    assert error in exc_info.value.errors()[0]["type"]
+    assert exc_info.value.errors()[0]["loc"] == location
+
+
+def test_from_generator_native_accepts_row_and_field_boundary() -> None:
+    result = from_generator(
+        251,
+        tuple((1,) for _ in range(64)),
+        ("x",),
+    )
+    assert result.encoder.field_order == 251
+    assert result.encoder.generator_matrix == ((1,),)
 
 
 def test_code_equal_admits_each_encoder_field_once(

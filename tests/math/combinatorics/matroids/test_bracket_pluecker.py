@@ -4,12 +4,17 @@ from __future__ import annotations
 
 import random
 from fractions import Fraction
+from itertools import combinations
 
 import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import encode_strict_json
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.matroids.oriented._bracket_kernel import (
     bracket_polynomial_from_terms,
     bracket_syzygy_residual,
@@ -18,8 +23,10 @@ from jacobian.math.combinatorics.matroids.oriented._bracket_kernel import (
 from jacobian.math.combinatorics.matroids.oriented._bracket_models import (
     BracketMonomial,
     BracketPolynomial,
+    BracketPolynomialTerm,
     BracketSyzygyResidualRequest,
     CanonicalBracket,
+    GrassmannPlueckerRelation,
     GrassmannPlueckerRelationRequest,
     GrassmannPlueckerRelationResult,
     ordered_bracket,
@@ -190,10 +197,10 @@ def test_syzygy_residual_cancels_a_supplied_relation() -> None:
             indices=(0, 1, 2, 3, 4),
             family="SHARED_INDEX_THREE_TERM",
         )
-    ).polynomial
+    )
     residual = bracket_syzygy_residual(
         BracketSyzygyResidualRequest(
-            target=relation,
+            target=relation.polynomial,
             terms=(
                 (
                     # The empty multiplier is the multiplicative unit.
@@ -205,6 +212,166 @@ def test_syzygy_residual_cancels_a_supplied_relation() -> None:
         )
     )
     assert residual.terms == ()
+
+
+def test_syzygy_rejects_anonymous_polynomial_sources() -> None:
+    relation = grassmann_pluecker_relation(
+        GrassmannPlueckerRelationRequest(
+            ground_size=5,
+            indices=(0, 1, 2, 3, 4),
+            family="SHARED_INDEX_THREE_TERM",
+        )
+    )
+    with pytest.raises(ValidationError):
+        BracketSyzygyResidualRequest(
+            target=relation.polynomial,
+            terms=(
+                (
+                    CanonicalRational(num=1, den=1),
+                    BracketMonomial(factors=()),
+                    relation.polynomial,
+                ),
+            ),
+        )
+
+
+def test_syzygy_rejects_a_forged_source_relation() -> None:
+    relation = grassmann_pluecker_relation(
+        GrassmannPlueckerRelationRequest(
+            ground_size=5,
+            indices=(0, 1, 2, 3, 4),
+            family="SHARED_INDEX_THREE_TERM",
+        )
+    )
+    forged = GrassmannPlueckerRelation(
+        ground_size=relation.ground_size,
+        indices=relation.indices,
+        family=relation.family,
+        polynomial=bracket_polynomial_from_terms(5, [(Fraction(1), ((0, 1, 2),))]),
+    )
+    with pytest.raises(OperationDomainValidationError, match="source metadata"):
+        bracket_syzygy_residual(
+            BracketSyzygyResidualRequest(
+                target=relation.polynomial,
+                terms=(
+                    (
+                        CanonicalRational(num=1, den=1),
+                        BracketMonomial(factors=()),
+                        forged,
+                    ),
+                ),
+            )
+        )
+
+
+def test_syzygy_rejects_multiplier_outside_target_ground() -> None:
+    relation = grassmann_pluecker_relation(
+        GrassmannPlueckerRelationRequest(
+            ground_size=5,
+            indices=(0, 1, 2, 3, 4),
+            family="SHARED_INDEX_THREE_TERM",
+        )
+    )
+    outside = CanonicalBracket(indices=(0, 1, 5))
+    with pytest.raises(ValidationError, match="multiplier_index_outside_ground"):
+        BracketSyzygyResidualRequest(
+            target=relation.polynomial,
+            terms=(
+                (
+                    CanonicalRational(num=1, den=1),
+                    BracketMonomial(factors=((outside, 1),)),
+                    relation,
+                ),
+            ),
+        )
+
+
+def test_syzygy_rejects_513_distinct_output_terms_before_expansion() -> None:
+    relation = grassmann_pluecker_relation(
+        GrassmannPlueckerRelationRequest(
+            ground_size=12,
+            indices=(0, 1, 2, 3, 4, 5),
+            family="FOUR_TERM",
+        )
+    )
+    relation_keys = {
+        tuple(
+            (factor.indices, multiplicity)
+            for factor, multiplicity in term.monomial.factors
+        )
+        for term in relation.polynomial.terms
+    }
+    brackets = [
+        CanonicalBracket(indices=triple) for triple in combinations(range(12), 3)
+    ]
+    target_terms = []
+    for left, right in combinations(brackets, 2):
+        factors = tuple(
+            sorted(((left, 1), (right, 1)), key=lambda item: item[0].indices)
+        )
+        key = tuple(
+            (factor.indices, multiplicity) for factor, multiplicity in factors
+        )
+        if key in relation_keys:
+            continue
+        target_terms.append(
+            BracketPolynomialTerm(
+                coefficient=CanonicalRational(num=1, den=1),
+                monomial=BracketMonomial(factors=factors),
+            )
+        )
+        if len(target_terms) == 512:
+            break
+    target = BracketPolynomial(
+        ground_size=12,
+        terms=tuple(
+            sorted(
+                target_terms,
+                key=lambda term: tuple(
+                    (factor.indices, multiplicity)
+                    for factor, multiplicity in term.monomial.factors
+                ),
+            )
+        ),
+    )
+    with pytest.raises(
+        OperationResourceAdmissionError, match="too many sparse output terms"
+    ):
+        bracket_syzygy_residual(
+            BracketSyzygyResidualRequest(
+                target=target,
+                terms=(
+                    (
+                        CanonicalRational(num=1, den=1),
+                        BracketMonomial(factors=()),
+                        relation,
+                    ),
+                ),
+            )
+        )
+
+
+def test_syzygy_rejects_unbounded_intermediate_coefficient_digits() -> None:
+    relation = grassmann_pluecker_relation(
+        GrassmannPlueckerRelationRequest(
+            ground_size=5,
+            indices=(0, 1, 2, 3, 4),
+            family="SHARED_INDEX_THREE_TERM",
+        )
+    )
+    large_base = 10**10_000
+    terms = tuple(
+        (
+            CanonicalRational(num=1, den=large_base + offset),
+            BracketMonomial(factors=((CanonicalBracket(indices=(0, 1, 2)), 1),)),
+            relation,
+        )
+        for offset in (1, 3, 7, 9)
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="digit bound"):
+        bracket_syzygy_residual(
+            BracketSyzygyResidualRequest(target=relation.polynomial, terms=terms)
+        )
 
 
 def test_compressed_large_multiplicity_survives_residual_and_json() -> None:

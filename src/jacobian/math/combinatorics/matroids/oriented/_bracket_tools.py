@@ -58,8 +58,9 @@ BRACKET_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         title="Compute a formal bracket-polynomial syzygy residual",
         description=(
             "Return target minus a finite scalar and monomial combination of "
-            "supplied formal bracket relations. This is exact free-commutative "
-            "algebra on canonical bracket atoms and makes no realizability claim."
+            "source-bound Grassmann-Pluecker relations. This is exact "
+            "free-commutative algebra on canonical bracket atoms and makes no "
+            "realizability claim."
         ),
         request_type=BracketSyzygyResidualRequest,
         result_type=BracketPolynomial,

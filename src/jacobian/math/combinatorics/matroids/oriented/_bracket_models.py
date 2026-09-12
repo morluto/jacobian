@@ -18,12 +18,19 @@ from typing import Literal, Self, cast
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational, ExactInteger
+from jacobian._exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    CanonicalRational,
+    ExactInteger,
+)
 from jacobian._models import StrictModel
 
 MAX_BRACKET_GROUND_SIZE = 12
 MAX_BRACKET_FACTORS = 4
 MAX_BRACKET_TERMS = 512
+MAX_BRACKET_CONTRIBUTIONS = 65_536
+MAX_BRACKET_COEFFICIENT_DIGITS = MAX_CANONICAL_RATIONAL_DIGITS
+MAX_BRACKET_OUTPUT_CELLS = MAX_BRACKET_TERMS * (MAX_BRACKET_FACTORS + 1)
 
 
 def _validation_error(code: str, message: str) -> PydanticCustomError:
@@ -193,16 +200,16 @@ class GrassmannPlueckerRelationRequest(StrictModel):
         return self
 
 
-class GrassmannPlueckerRelationResult(StrictModel):
-    """The canonical formal expression of one Grassmann-Pluecker relation."""
+class GrassmannPlueckerRelation(StrictModel):
+    """A formal relation polynomial bound to its indexed GP source."""
 
     ground_size: StrictInt = Field(ge=3, le=MAX_BRACKET_GROUND_SIZE)
-    indices: tuple[StrictInt, ...]
+    indices: tuple[StrictInt, ...] = Field(min_length=5, max_length=6)
     family: Literal["FOUR_TERM", "SHARED_INDEX_THREE_TERM"]
     polynomial: BracketPolynomial
 
     @model_validator(mode="after")
-    def require_nonempty_relation(self) -> Self:
+    def require_relation_shape(self) -> Self:
         expected = 6 if self.family == "FOUR_TERM" else 5
         if len(self.indices) != expected or len(set(self.indices)) != expected:
             raise _validation_error(
@@ -214,6 +221,11 @@ class GrassmannPlueckerRelationResult(StrictModel):
                 "bracket.relation_empty",
                 "a Grassmann-Pluecker relation must produce at least one bracket term",
             )
+        if any(index < 0 or index >= self.ground_size for index in self.indices):
+            raise _validation_error(
+                "bracket.relation_index_outside_ground",
+                "every relation index must lie inside the declared ground range",
+            )
         if self.polynomial.ground_size != self.ground_size:
             raise _validation_error(
                 "bracket.relation_ground_mismatch",
@@ -222,11 +234,17 @@ class GrassmannPlueckerRelationResult(StrictModel):
         return self
 
 
+class GrassmannPlueckerRelationResult(GrassmannPlueckerRelation):
+    """The canonical formal expression of one Grassmann-Pluecker relation."""
+
+
 class BracketSyzygyResidualRequest(StrictModel):
     """One target polynomial minus a finite combination of supplied relations."""
 
     target: BracketPolynomial
-    terms: tuple[tuple[CanonicalRational, BracketMonomial, BracketPolynomial], ...] = (
+    terms: tuple[
+        tuple[CanonicalRational, BracketMonomial, GrassmannPlueckerRelation], ...
+    ] = (
         Field(
             max_length=128,
             description=(
@@ -238,26 +256,36 @@ class BracketSyzygyResidualRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_common_ground(self) -> Self:
-        if any(
-            relation.ground_size != self.target.ground_size
-            for _, _, relation in self.terms
-        ):
-            raise _validation_error(
-                "bracket.syzygy_ground_mismatch",
-                "target and every supplied relation must share one ground range",
-            )
+        for _, multiplier, relation in self.terms:
+            if relation.ground_size != self.target.ground_size:
+                raise _validation_error(
+                    "bracket.syzygy_ground_mismatch",
+                    "target and every supplied relation must share one ground range",
+                )
+            if any(
+                factor.indices[2] >= self.target.ground_size
+                for factor, _ in multiplier.factors
+            ):
+                raise _validation_error(
+                    "bracket.syzygy_multiplier_index_outside_ground",
+                    "every multiplier bracket index must lie in the target ground range",
+                )
         return self
 
 
 __all__ = [
+    "MAX_BRACKET_COEFFICIENT_DIGITS",
+    "MAX_BRACKET_CONTRIBUTIONS",
     "MAX_BRACKET_FACTORS",
     "MAX_BRACKET_GROUND_SIZE",
+    "MAX_BRACKET_OUTPUT_CELLS",
     "MAX_BRACKET_TERMS",
     "BracketMonomial",
     "BracketPolynomial",
     "BracketPolynomialTerm",
     "BracketSyzygyResidualRequest",
     "CanonicalBracket",
+    "GrassmannPlueckerRelation",
     "GrassmannPlueckerRelationRequest",
     "GrassmannPlueckerRelationResult",
     "ordered_bracket",

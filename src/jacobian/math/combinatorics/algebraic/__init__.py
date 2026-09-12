@@ -1,7 +1,9 @@
 """Algebraic combinatorics operations."""
 
 from jacobian.math.combinatorics.algebraic._models import (
+    PartitionDominanceResult,
     SemistandardTableauCheckResult,
+    SemistandardYoungTableauCountResult,
     StandardTableauCheckResult,
 )
 from jacobian.math.combinatorics.algebraic.operations import (
@@ -29,8 +31,10 @@ from jacobian.math.combinatorics.algebraic.weighted_monotone.operations import (
 __all__ = [
     "EndpointProfileEntry",
     "EndpointProfileResult",
+    "PartitionDominanceResult",
     "RSKTableauPair",
     "SemistandardTableauCheckResult",
+    "SemistandardYoungTableauCountResult",
     "StandardTableauCheckResult",
     "WeightedOrderedWord",
     "check_semistandard_tableau",

@@ -18,8 +18,10 @@ from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.combinatorics.algebraic._models import (
     DominanceRelation,
+    PartitionDominanceResult,
     RSKResult,
     SemistandardTableauCheckResult,
+    SemistandardYoungTableauCountResult,
     StandardTableauCheckResult,
 )
 from jacobian.math.combinatorics.algebraic._rsk import (
@@ -173,7 +175,14 @@ def _log10_upper_units(value: int) -> int:
     units = (bit_length - 1) * _LOG10_2_UPPER_UNITS
     if remainder == 0:
         return units
-    return units + (remainder * _INV_LN10_UPPER_UNITS + leading - 1) // leading
+    # ln(1+x) < x - x^2/2 + x^3/3 for x = remainder/leading in (0, 1).
+    cubic = (
+        6 * remainder * leading * leading
+        - 3 * remainder * remainder * leading
+        + 2 * remainder * remainder * remainder
+    )
+    denominator = 6 * leading * leading * leading
+    return units + (cubic * _INV_LN10_UPPER_UNITS + denominator - 1) // denominator
 
 
 def _log10_lower_units(value: int) -> int:
@@ -185,14 +194,13 @@ def _log10_lower_units(value: int) -> int:
 def _digits_upper_from_log10_units(units: int) -> int:
     """Return a digit upper bound from a strict log10 upper bound.
 
-    Decimal width is ``floor(log10 n) + 1``. A floor of an approximate log can
-    undershoot that width, so this uses ``ceil(U) + 1`` for
-    U = units/_LOG10_SCALE > log10 n.
+    Decimal width is ``floor(log10 n) + 1``. Because ``U`` is a strict upper
+    bound, ``floor(U) + 1`` never undershoots that width.
     """
 
     if units <= 0:
         return 1
-    return (units + _LOG10_SCALE - 1) // _LOG10_SCALE + 1
+    return units // _LOG10_SCALE + 1
 
 
 def _ssyt_count_digit_bound(
@@ -374,7 +382,7 @@ def standard_young_tableaux_count(partition: IntegerPartition) -> int:
 
 def semistandard_young_tableaux_count(
     partition: IntegerPartition, alphabet_size: int
-) -> int:
+) -> SemistandardYoungTableauCountResult:
     """Count SSYTs of ``partition`` over ``1..alphabet_size`` exactly.
 
     The hook-content factors are private kernel intermediates. The public
@@ -392,30 +400,37 @@ def semistandard_young_tableaux_count(
     quotient = Fraction(numerator_product, hook_product)
     if quotient.denominator != 1:
         raise ValueError("hook-content formula did not produce an integer")
-    return quotient.numerator
+    return SemistandardYoungTableauCountResult(
+        partition=partition,
+        alphabet_size=alphabet_size,
+        count=quotient.numerator,
+    )
 
 
 def partition_dominance(
     left: IntegerPartition, right: IntegerPartition
-) -> DominanceRelation:
+) -> PartitionDominanceResult:
     """Compare partitions using leading-row prefix sums privately."""
     if sum(left.parts) != sum(right.parts):
-        return "NOT_COMPARABLE_DIFFERENT_SIZE"
-    length = max(len(left.parts), len(right.parts))
-    left_total = right_total = 0
-    left_ge = right_ge = True
-    for index in range(length):
-        left_total += left.parts[index] if index < len(left.parts) else 0
-        right_total += right.parts[index] if index < len(right.parts) else 0
-        left_ge = left_ge and left_total >= right_total
-        right_ge = right_ge and left_total <= right_total
-    if left_ge and right_ge:
-        return "EQUAL"
-    if left_ge:
-        return "LEFT_DOMINATES"
-    if right_ge:
-        return "RIGHT_DOMINATES"
-    return "INCOMPARABLE"
+        relation: DominanceRelation = "NOT_COMPARABLE_DIFFERENT_SIZE"
+    else:
+        length = max(len(left.parts), len(right.parts))
+        left_total = right_total = 0
+        left_ge = right_ge = True
+        for index in range(length):
+            left_total += left.parts[index] if index < len(left.parts) else 0
+            right_total += right.parts[index] if index < len(right.parts) else 0
+            left_ge = left_ge and left_total >= right_total
+            right_ge = right_ge and left_total <= right_total
+        if left_ge and right_ge:
+            relation = "EQUAL"
+        elif left_ge:
+            relation = "LEFT_DOMINATES"
+        elif right_ge:
+            relation = "RIGHT_DOMINATES"
+        else:
+            relation = "INCOMPARABLE"
+    return PartitionDominanceResult(left=left, right=right, relation=relation)
 
 
 _MEMBERSHIP_SHAPE_ERRORS = frozenset(

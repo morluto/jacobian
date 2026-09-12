@@ -59,25 +59,15 @@ def conjugate_partition(
 def semistandard_young_tableaux_count(
     request: SemistandardYoungTableauCountRequest,
 ) -> SemistandardYoungTableauCountResult:
-    count = native.semistandard_young_tableaux_count(
+    return native.semistandard_young_tableaux_count(
         request.partition, request.alphabet_size
-    )
-    return SemistandardYoungTableauCountResult(
-        partition=request.partition,
-        alphabet_size=request.alphabet_size,
-        count=count,
     )
 
 
 def partition_dominance(
     request: PartitionDominanceRequest,
 ) -> PartitionDominanceResult:
-    relation = native.partition_dominance(request.left, request.right)
-    return PartitionDominanceResult(
-        left=request.left,
-        right=request.right,
-        relation=relation,
-    )
+    return native.partition_dominance(request.left, request.right)
 
 
 def check_standard_tableau(

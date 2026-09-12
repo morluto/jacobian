@@ -27,6 +27,7 @@ from jacobian.math.combinatorics.algebraic import (
 )
 from jacobian.math.combinatorics.algebraic._models import (
     PartitionDominanceRequest,
+    PartitionDominanceResult,
     SemistandardTableauCheckRequest,
     SemistandardTableauCheckResult,
     SemistandardYoungTableauCountRequest,
@@ -246,6 +247,28 @@ def test_ssyt_count_admits_power_of_two_row_after_tighter_log_bound() -> None:
     assert result.count == exact
 
 
+def test_ssyt_count_admits_exact_digit_boundary_after_cancellation() -> None:
+    """C(151 * 2**218 + 499, 500) has exactly 32,768 digits."""
+
+    alphabet_size = 151 * 2**218
+    partition = IntegerPartition(parts=(500,))
+    bound = _ssyt_count_digit_bound(
+        partition,
+        alphabet_size,
+        _upper_decimal_digits(alphabet_size),
+    )
+    exact = math.comb(alphabet_size + 499, 500)
+    exact_digits = _upper_decimal_digits(exact)
+    assert exact_digits == 32768
+    assert bound >= exact_digits
+    assert bound <= _MAX_SSYT_COUNT_DIGITS
+    request = SemistandardYoungTableauCountRequest.model_validate(
+        {"partition": {"parts": [500]}, "alphabet_size": alphabet_size}
+    )
+    result = semistandard_young_tableaux_count(request)
+    assert result.count == exact
+
+
 def test_hook_content_rejects_column_count_beyond_digit_limit() -> None:
     # C(10**68, 500) has 32,866 digits. ceil(log10)+1 must exceed the
     # 32,768-digit ExactInteger envelope so admission rejects first.
@@ -440,12 +463,17 @@ def test_native_operations_are_published_from_algebraic_package() -> None:
     standard = StandardYoungTableau(rows=((1,),))
     semistandard = SemistandardYoungTableau(rows=((1,),))
 
-    assert public_semistandard_young_tableaux_count(partition, 501) == 501
-    assert (
-        public_partition_dominance(
-            IntegerPartition(parts=(2, 1)), IntegerPartition(parts=(1, 1, 1))
-        )
-        == "LEFT_DOMINATES"
+    assert public_semistandard_young_tableaux_count(
+        partition, 501
+    ) == SemistandardYoungTableauCountResult(
+        partition=partition, alphabet_size=501, count=501
+    )
+    assert public_partition_dominance(
+        IntegerPartition(parts=(2, 1)), IntegerPartition(parts=(1, 1, 1))
+    ) == PartitionDominanceResult(
+        left=IntegerPartition(parts=(2, 1)),
+        right=IntegerPartition(parts=(1, 1, 1)),
+        relation="LEFT_DOMINATES",
     )
     assert public_check_standard_tableau(standard) == StandardTableauCheckResult(
         tableau=standard, is_member=True

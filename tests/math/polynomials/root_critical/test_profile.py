@@ -180,6 +180,48 @@ def test_quartic_with_conjugates_is_refused_before_minpoly() -> None:
         root_critical_distance_profile(_polynomial((4, 1), (1, 1), (0, 1)))
 
 
+def test_pair_budget_is_rejected_before_exact_root_expansion() -> None:
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        root_critical_distance_profile(_polynomial((4, 1), (0, -2)), max_pair_rows=0)
+    assert (
+        error.value.errors()[0]["type"]
+        == "polynomial.root_critical.pair_output_bound"
+    )
+
+
+def test_shifted_quadratic_surd_profile_selects_square_root_distances() -> None:
+    # (z-5/2)(z^2-2) = z^3 - (5/2)z^2 - 2z + 5
+    source = RationalPolynomial(
+        variables=("z",),
+        polynomial=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=1, den=1),
+                    exponents=(3,),
+                ),
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=-5, den=2),
+                    exponents=(2,),
+                ),
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=-2, den=1),
+                    exponents=(1,),
+                ),
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=5, den=1),
+                    exponents=(0,),
+                ),
+            )
+        ),
+    )
+    result = root_critical_distance_profile(source)
+    assert len(result.pairs) == 6
+    assert all(row.kind == "POSITIVE" for row in result.pairs)
+    assert {(1, -12, 4), (4, -1)}.issubset(
+        {tuple(row.distance_squared.polynomial) for row in result.pairs}
+    )
+
+
 def test_native_pair_budget_matches_catalog_range() -> None:
     polynomial = _polynomial((3, 1), (0, -1))
     with pytest.raises(OperationDomainValidationError, match="0..64"):

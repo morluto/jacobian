@@ -223,7 +223,7 @@ def _nth_root_bounds(value: Fraction, n: int) -> tuple[Fraction, Fraction]:
     coarse_upper = Fraction(upper_int, denominator)
     if coarse_lower == coarse_upper:
         return coarse_lower, coarse_upper
-    scale = 1 << 20
+    scale = 1 << 32
     low = 0
     high = int(coarse_upper * scale) + 1
     while low < high:
@@ -560,6 +560,13 @@ def _admit(
             code="polynomial.root_critical.distance_degree_bound",
             message="the source can produce a distance algebraic degree beyond the admitted carrier",
         )
+    pair_count = root_count * critical_count
+    if pair_count > MAX_ROOT_CRITICAL_PAIRS or pair_count > max_pair_rows:
+        raise OperationResourceAdmissionError(
+            location=("max_pair_rows",),
+            code="polynomial.root_critical.pair_output_bound",
+            message="complete root-critical pair expansion exceeds the admitted row budget",
+        )
     if any(
         isinstance(root, sympy.RootOf)
         for factor, _ in (*source_factors, *derivative_factors)
@@ -569,13 +576,6 @@ def _admit(
             location=("polynomial",),
             code="polynomial.root_critical.root_carrier_backend_form",
             message="the exact-root carrier requires explicit maintained algebraic expressions",
-        )
-    pair_count = root_count * critical_count
-    if pair_count > MAX_ROOT_CRITICAL_PAIRS or pair_count > max_pair_rows:
-        raise OperationResourceAdmissionError(
-            location=("max_pair_rows",),
-            code="polynomial.root_critical.pair_output_bound",
-            message="complete root-critical pair expansion exceeds the admitted row budget",
         )
     return source, root_count, critical_count
 

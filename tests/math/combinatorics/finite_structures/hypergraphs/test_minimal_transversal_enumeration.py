@@ -539,6 +539,32 @@ def test_forced_rank_exhaustion_with_residual_edge_is_empty() -> None:
     ]
 
 
+def test_forced_rank_exhaustion_skips_domination_on_mixed_residuals(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    others = tuple(f"v{index:02d}" for index in range(45))
+    pairs = tuple(combinations(others, 2))[:2_000]
+    triples = tuple(combinations(others, 3))[:5_072]
+    source = FiniteHypergraph(
+        vertices=("a", "b", *others),
+        edges=(
+            ("fa", ("a",)),
+            ("fb", ("b",)),
+            *tuple((f"p{index:05d}", pair) for index, pair in enumerate(pairs)),
+            *tuple((f"t{index:05d}", triple) for index, triple in enumerate(triples)),
+        ),
+    )
+
+    def fail(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("exhausted rank must not scan domination")
+
+    monkeypatch.setattr(enumeration, "_minimal_edges", fail)
+    result = enumerate_minimal_transversals(
+        MinimalTransversalEnumerationRequest(hypergraph=source, maximum_cardinality=2)
+    )
+    assert result.transversals == ()
+
+
 def test_cardinality_one_skips_quadratic_domination_on_edge_cap() -> None:
     vertices = tuple(f"v{index:02d}" for index in range(45))
     triples = tuple(combinations(vertices, 3))[:12_000]

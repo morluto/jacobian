@@ -276,6 +276,8 @@ def _admit_enumeration(
         return maximum, remaining_unique, forced, False, False
     if not remaining_unique:
         return maximum, remaining_unique, forced, False, False
+    if len(forced) >= maximum:
+        return maximum, remaining_unique, forced, False, False
     # Cardinality-1 search never needs domination. Equal-cardinality distinct
     # remaining edges are already an antichain, so skip the pairwise subset scan.
     edge_sizes = {len(edge) for edge in remaining_unique}
@@ -285,8 +287,6 @@ def _admit_enumeration(
     )
     edges = _minimal_edges(remaining_unique) if need_domination else remaining_unique
     remaining_edges = edges
-    if len(forced) >= maximum:
-        return maximum, remaining_edges, forced, False, False
     if len(remaining_edges) == 1:
         return maximum, remaining_edges, forced, False, False
 

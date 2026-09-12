@@ -463,18 +463,14 @@ def construct_sunflower_family(
                 break
         if is_sunflower:
             next_count = len(plan) + 1
-            if (
-                next_count > MAX_EDGES
-                or next_count * petal_count > MAX_TOTAL_INCIDENCES
-            ):
-                _admit_qualifying_result(
-                    source,
-                    petal_count,
-                    member_count,
-                    source_units,
-                    next_count,
-                    maximum_size,
-                )
+            _admit_qualifying_result(
+                source,
+                petal_count,
+                member_count,
+                source_units,
+                next_count,
+                maximum_size,
+            )
             plan.append((indices, tuple(sorted(core))))
     _admit_qualifying_result(
         source,

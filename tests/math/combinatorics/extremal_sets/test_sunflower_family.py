@@ -222,6 +222,40 @@ def test_qualifying_plan_stops_once_the_output_bound_is_exceeded() -> None:
         construct_sunflower_family(source, 9)
 
 
+def test_large_core_allocation_is_checked_before_each_qualifying_row(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Six 100000-cores form 20 r=3 sunflowers; refuse before retaining every core tuple."""
+    row_counts: list[int] = []
+    original = sunflower_module._admit_qualifying_result
+
+    def record(
+        source: IndexedFiniteSetFamily,
+        petal_count: int,
+        member_count: int,
+        source_units: int,
+        row_count: int,
+        maximum_size: int,
+    ) -> None:
+        row_counts.append(row_count)
+        original(
+            source,
+            petal_count,
+            member_count,
+            source_units,
+            row_count,
+            maximum_size,
+        )
+
+    monkeypatch.setattr(sunflower_module, "_admit_qualifying_result", record)
+    core = tuple(range(100_000))
+    members = tuple((*core, 100_000 + index) for index in range(6))
+    with pytest.raises(OperationResourceAdmissionError, match="allocation units"):
+        construct_sunflower_family(_family(members, ground=100_006), 3)
+    assert row_counts
+    assert row_counts[-1] < 20
+
+
 def test_nested_chain_is_sunflower_free_without_candidate_output_rejection() -> None:
     """A nested chain has no 4-sunflowers; C(30, 4) candidates must not be an output bound."""
     members = tuple(tuple(range(index + 1)) for index in range(30))

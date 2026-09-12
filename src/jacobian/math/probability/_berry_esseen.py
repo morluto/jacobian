@@ -83,9 +83,15 @@ class BerryEsseenRequest(StrictModel):
         ref_template: str = "#/$defs/{model}",
         schema_generator: type[GenerateJsonSchema] = GenerateJsonSchema,
         mode: JsonSchemaMode = "validation",
+        *,
+        union_format: Literal["any_of", "primitive_type_array"] = "any_of",
     ) -> dict[str, Any]:
         schema = super().model_json_schema(
-            by_alias, ref_template, schema_generator, mode
+            by_alias,
+            ref_template,
+            schema_generator,
+            mode,
+            union_format=union_format,
         )
         atoms = (
             schema.get("$defs", {})

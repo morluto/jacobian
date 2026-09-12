@@ -78,6 +78,18 @@ class CliqueCandidateHypergraphResult(StrictModel):
                 "graph.clique_candidate.resource_coverage",
                 "resource map must cover exactly the source graph edges",
             )
+        if set(self.hypergraph.vertices) != set(resources):
+            raise _validation_error(
+                "graph.clique_candidate.hypergraph_resource_coverage",
+                "hypergraph vertices must be exactly the resource IDs",
+            )
+        if tuple(self.hypergraph.vertices) != tuple(
+            entry.resource for entry in self.resource_map
+        ):
+            raise _validation_error(
+                "graph.clique_candidate.hypergraph_resource_order",
+                "hypergraph vertices must use canonical resource order",
+            )
         candidates = [entry.candidate for entry in self.candidate_map]
         if len(set(candidates)) != len(candidates):
             raise _validation_error(
@@ -96,6 +108,13 @@ class CliqueCandidateHypergraphResult(StrictModel):
                 "graph.clique_candidate.candidate_order",
                 "candidate map entries must use canonical candidate order",
             )
+        _require_candidate_bindings(
+            self.graph,
+            self.hypergraph,
+            self.resource_map,
+            self.candidate_map,
+            candidates,
+        )
         return self
 
     @classmethod
@@ -116,6 +135,62 @@ class CliqueCandidateHypergraphResult(StrictModel):
             candidate_map=candidate_map,
             candidate_count=len(candidate_map),
         )
+
+
+def _require_candidate_bindings(
+    graph: SimpleUndirectedGraph,
+    hypergraph: FiniteHypergraph,
+    resource_map: tuple[ResourceEdgeMap, ...],
+    candidate_map: tuple[CandidateCliqueMap, ...],
+    candidates: list[str],
+) -> None:
+    resources = {entry.resource: entry.endpoints for entry in resource_map}
+    resource_for_edge = {
+        endpoints: resource for resource, endpoints in resources.items()
+    }
+    hyperedges = dict(hypergraph.edges)
+    if set(hyperedges) != set(candidates):
+        raise _validation_error(
+            "graph.clique_candidate.hypergraph_candidate_coverage",
+            "hypergraph edges must be exactly the candidate IDs",
+        )
+    for entry in candidate_map:
+        if len(set(entry.members)) != len(entry.members):
+            raise _validation_error(
+                "graph.clique_candidate.candidate_identity",
+                "candidate members must be distinct",
+            )
+        if not set(entry.members) <= set(graph.vertices):
+            raise _validation_error(
+                "graph.clique_candidate.candidate_vertex_unknown",
+                "candidate members must use declared graph vertices",
+            )
+        try:
+            expected_resources = tuple(
+                sorted(
+                    resource_for_edge[(left, right) if left < right else (right, left)]
+                    for index, left in enumerate(entry.members)
+                    for right in entry.members[index + 1 :]
+                )
+            )
+        except KeyError as error:
+            raise _validation_error(
+                "graph.clique_candidate.candidate_not_complete",
+                "candidate members must form a clique in the source graph",
+            ) from error
+        if (
+            len(expected_resources)
+            != len(entry.members) * (len(entry.members) - 1) // 2
+        ):
+            raise _validation_error(
+                "graph.clique_candidate.candidate_not_complete",
+                "candidate members must form a clique in the source graph",
+            )
+        if hyperedges[entry.candidate] != expected_resources:
+            raise _validation_error(
+                "graph.clique_candidate.hypergraph_candidate_binding",
+                "hypergraph edge resources must match candidate clique members",
+            )
 
 
 class AllCliqueCandidatesRequest(StrictModel):

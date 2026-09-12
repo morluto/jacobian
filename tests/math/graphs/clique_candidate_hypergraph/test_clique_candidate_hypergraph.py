@@ -81,6 +81,19 @@ class TestCompleteConstructor:
             == result
         )
 
+    def test_serialized_result_rejects_inconsistent_support_maps(self) -> None:
+        result = construct_all_clique_candidate_hypergraph(_graph(BOWTIE))
+        payload = result.model_dump(mode="json")
+
+        payload["hypergraph"]["edges"][0][1] = []
+        with pytest.raises(ValueError, match="hypergraph edge resources"):
+            CliqueCandidateHypergraphResult.model_validate(payload)
+
+        payload = result.model_dump(mode="json")
+        payload["hypergraph"]["vertices"] = payload["hypergraph"]["vertices"][1:]
+        with pytest.raises(ValueError, match="declared vertex"):
+            CliqueCandidateHypergraphResult.model_validate(payload)
+
     def test_request_path_matches_native(self) -> None:
         from jacobian.math.graphs.clique_candidate_hypergraph._tools import (
             _compute_all_clique_candidates,

@@ -12,8 +12,8 @@ from jacobian._exact import (
     ExactInteger,
     require_bounded_rational,
 )
-from jacobian.canonical import format_canonical_integer
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.geometry.polytopes.values import Halfspace as RationalHalfspace
 from jacobian.math.geometry.polytopes.values import Vertex as RationalVertex
 from jacobian.math.polynomials.values import RationalPolynomial

@@ -4,7 +4,7 @@ from math import gcd
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.counting._models import (
-    _MAX_BOX_COORD,
+    _MAX_BOX_COORD_DIGITS,
     _MAX_BOX_LINEAR_COEFFICIENT,
     _MAX_BOX_MODULUS,
     _MAX_FLOOR_SUM_N,
@@ -66,30 +66,35 @@ def congruence_box_count(
 ) -> int:
     """Count points in a bounded box satisfying one linear congruence."""
 
-    for name, value in (
+    coordinates = (
         ("x_lo", x_lo),
         ("x_hi", x_hi),
         ("y_lo", y_lo),
         ("y_hi", y_hi),
-    ):
-        if not -_MAX_BOX_COORD <= value <= _MAX_BOX_COORD:
+    )
+    for name, value in coordinates:
+        if type(value) is not int:
+            _reject((name,), f"{name}_type", f"{name} must be an exact integer")
+        if abs(value) >= 10**_MAX_BOX_COORD_DIGITS:
             _reject(
                 (name,),
                 f"{name}_out_of_range",
-                f"{name} is outside the admitted range",
+                f"{name} exceeds the {_MAX_BOX_COORD_DIGITS}-digit bound",
             )
     if x_lo > x_hi:
         _reject(("x_lo", "x_hi"), "x_interval_invalid", "x_lo must be <= x_hi")
     if y_lo > y_hi:
         _reject(("y_lo", "y_hi"), "y_interval_invalid", "y_lo must be <= y_hi")
-    if not 1 <= modulus <= _MAX_BOX_MODULUS:
+    if type(modulus) is not int or not 1 <= modulus <= _MAX_BOX_MODULUS:
         _reject(
             ("modulus",),
             "modulus_out_of_range",
             "modulus is outside the admitted range",
         )
     for name, value in (("u", u), ("v", v), ("c", c)):
-        if not -_MAX_BOX_LINEAR_COEFFICIENT <= value <= _MAX_BOX_LINEAR_COEFFICIENT:
+        if type(value) is not int or not (
+            -_MAX_BOX_LINEAR_COEFFICIENT <= value <= _MAX_BOX_LINEAR_COEFFICIENT
+        ):
             _reject(
                 (name,),
                 f"{name}_out_of_range",
@@ -100,6 +105,7 @@ def congruence_box_count(
     y_length = y_hi - y_lo + 1
     if y_length < x_length:
         x_lo, x_hi, y_lo, y_hi = y_lo, y_hi, x_lo, x_hi
+        x_length = y_length
         u, v = v, u
 
     divisor = gcd(v, modulus)
@@ -107,13 +113,23 @@ def congruence_box_count(
     inverse = 0 if reduced_modulus == 1 else pow(v // divisor, -1, reduced_modulus)
 
     count = 0
-    for x in range(x_lo, x_hi + 1):
-        right_hand_side = c - u * x
+    # A short axis exposes fewer than one full period, so visiting its actual
+    # representatives avoids turning a one-column box into a modulus-sized
+    # scan.  Otherwise one representative per residue captures all distinct
+    # congruence behavior and the multiplicity formula accounts for repeats.
+    residues = range(x_lo, x_hi + 1) if x_length < modulus else range(modulus)
+    for representative in residues:
+        residue = representative % modulus
+        x_count = (x_hi - residue) // modulus - (x_lo - 1 - residue) // modulus
+        if not x_count:
+            continue
+        right_hand_side = c - u * residue
         if right_hand_side % divisor:
             continue
-        residue = (right_hand_side // divisor * inverse) % reduced_modulus
-        count += (y_hi - residue) // reduced_modulus
-        count -= (y_lo - 1 - residue) // reduced_modulus
+        y_residue = (right_hand_side // divisor * inverse) % reduced_modulus
+        y_count = (y_hi - y_residue) // reduced_modulus
+        y_count -= (y_lo - 1 - y_residue) // reduced_modulus
+        count += x_count * y_count
     return count
 
 

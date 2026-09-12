@@ -7,6 +7,7 @@ from collections import Counter
 from fractions import Fraction
 from functools import reduce
 from itertools import pairwise
+from math import gcd
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import format_canonical_integer
@@ -18,6 +19,7 @@ from jacobian.math.number_theory.sequences.core._models import (
     AutocorrelationCell,
     AutocorrelationResult,
     FiniteIntegerSequence,
+    FiniteRationalSequence,
     FrequencyEntry,
     IntegerSequenceBooleanResult,
     IntegerSequenceFrequenciesResult,
@@ -34,6 +36,7 @@ from jacobian.math.number_theory.sequences.core.values import (
 )
 
 MAX_AUTOCORRELATION_MULTIPLICATIONS = 4_000_000
+MAX_AUTOCORRELATION_ADDITIONS = 4_000_000
 
 
 def _admit(
@@ -101,7 +104,107 @@ def _value_result(value: int) -> IntegerSequenceValueResult:
     return IntegerSequenceValueResult(value=value)
 
 
-def _admit_autocorrelation(request: FiniteIntegerSequence) -> tuple[int, ...]:
+def _admit_autocorrelation(
+    request: FiniteIntegerSequence | FiniteRationalSequence,
+    *,
+    output_items: int,
+) -> tuple[tuple[Fraction, ...], int, int]:
+    """Admit source, intermediate, and output bounds before expansion.
+
+    A common denominator gives a sound width bound without computing any
+    pairwise products.  Every coefficient is a sum of at most ``n`` products
+    whose denominator divides ``D**2``, where ``D`` is the lcm of source
+    denominators.  This also keeps cheap repeated rational inputs from being
+    rejected merely because their syntactic denominators are nontrivial.
+    """
+
+    if isinstance(request, FiniteIntegerSequence):
+        fractions = tuple(Fraction(value) for value in request.values)
+    else:
+        fractions = tuple(value.as_fraction() for value in request.values)
+    if not fractions:
+        return fractions, 1, 1
+
+    denominators = tuple(value.denominator for value in fractions)
+    common_denominator = 1
+    common_denominator_digits = 1
+    for denominator in denominators:
+        denominator_digits = len(format_canonical_integer(denominator))
+        if denominator_digits > MAX_CANONICAL_RATIONAL_DIGITS // 2:
+            raise OperationDomainValidationError(
+                location=("values",),
+                code="sequences.autocorrelation_result_digits_exceeded",
+                message="autocorrelation denominators exceed the exact rational digit bound",
+            )
+        divisor = gcd(common_denominator, denominator)
+        quotient = denominator // divisor
+        quotient_digits = len(format_canonical_integer(quotient))
+        if common_denominator_digits + quotient_digits > (
+            MAX_CANONICAL_RATIONAL_DIGITS // 2 + 1
+        ):
+            raise OperationDomainValidationError(
+                location=("values",),
+                code="sequences.autocorrelation_result_digits_exceeded",
+                message="autocorrelation denominators exceed the exact rational digit bound",
+            )
+        common_denominator *= quotient
+        common_denominator_digits = len(format_canonical_integer(common_denominator))
+        if common_denominator_digits > MAX_CANONICAL_RATIONAL_DIGITS // 2:
+            raise OperationDomainValidationError(
+                location=("values",),
+                code="sequences.autocorrelation_result_digits_exceeded",
+                message="autocorrelation denominators exceed the exact rational digit bound",
+            )
+    if any(
+        len(format_canonical_integer(abs(value.numerator))) + common_denominator_digits
+        > MAX_CANONICAL_RATIONAL_DIGITS
+        for value in fractions
+    ):
+        raise OperationDomainValidationError(
+            location=("values",),
+            code="sequences.autocorrelation_result_digits_exceeded",
+            message="autocorrelation values exceed the exact rational digit bound",
+        )
+    widest_numerator: dict[int, int] = {}
+    for value in fractions:
+        numerator = abs(value.numerator)
+        current = widest_numerator.get(value.denominator)
+        if current is None or numerator > current:
+            widest_numerator[value.denominator] = numerator
+    common_numerator_digits = max(
+        len(format_canonical_integer(numerator * (common_denominator // denominator)))
+        for denominator, numerator in widest_numerator.items()
+    )
+    denominator_digits = len(format_canonical_integer(common_denominator))
+    term_count_digits = len(str(len(fractions)))
+    result_numerator_digits = 2 * common_numerator_digits + term_count_digits
+    result_denominator_digits = 2 * denominator_digits
+    result_digits = max(result_numerator_digits, result_denominator_digits)
+    if result_digits > MAX_CANONICAL_RATIONAL_DIGITS:
+        raise OperationDomainValidationError(
+            location=("values",),
+            code="sequences.autocorrelation_result_digits_exceeded",
+            message="autocorrelation values exceed the exact rational digit bound",
+        )
+
+    result_representation_digits = (
+        result_numerator_digits + result_denominator_digits
+        if isinstance(request, FiniteRationalSequence)
+        else result_numerator_digits
+    )
+    if output_items * result_representation_digits > MAX_SEQUENCE_TOTAL_DIGITS:
+        raise OperationDomainValidationError(
+            location=("values",),
+            code="sequences.autocorrelation.result_representation_too_large",
+            message="autocorrelation output exceeds the exact representation bound",
+        )
+    operand_width = max(1, common_numerator_digits + denominator_digits)
+    return fractions, result_digits, operand_width
+
+
+def _admit_integer_sequence_for_shape(
+    request: FiniteIntegerSequence,
+) -> tuple[int, ...]:
     values = tuple(request.values)
     if not values:
         return values
@@ -116,20 +219,57 @@ def _admit_autocorrelation(request: FiniteIntegerSequence) -> tuple[int, ...]:
     return values
 
 
-def aperiodic_autocorrelation(request: FiniteIntegerSequence) -> AutocorrelationResult:
-    values = _admit_autocorrelation(request)
-    size = len(values)
-    if size * (size + 1) // 2 > MAX_AUTOCORRELATION_MULTIPLICATIONS:
+def _autocorrelation_scalar(
+    value: Fraction,
+    *,
+    rational_output: bool,
+) -> int | CanonicalRational:
+    if rational_output or value.denominator != 1:
+        return CanonicalRational.from_fraction(value)
+    return value.numerator
+
+
+def _require_autocorrelation_work(
+    multiplications: int, additions: int, operand_width: int, *, convention: str
+) -> None:
+    if (
+        multiplications * operand_width > MAX_AUTOCORRELATION_MULTIPLICATIONS
+        or additions * operand_width > MAX_AUTOCORRELATION_ADDITIONS
+    ):
         raise OperationResourceAdmissionError(
             location=("values",),
             code="sequences.autocorrelation.work_bound",
-            message="aperiodic autocorrelation exceeds the admitted multiplication bound",
+            message=(
+                f"{convention} autocorrelation exceeds the admitted arithmetic-work bound"
+            ),
         )
+
+
+def aperiodic_autocorrelation(
+    request: FiniteIntegerSequence | FiniteRationalSequence,
+) -> AutocorrelationResult:
+    size = len(request.values)
+    multiplications = size * (size + 1) // 2
+    additions = size * (size - 1) // 2
+    values, _, operand_width = _admit_autocorrelation(
+        request, output_items=max(2 * size - 1, 0)
+    )
+    _require_autocorrelation_work(
+        multiplications, additions, operand_width, convention="aperiodic"
+    )
+    rational_output = isinstance(request, FiniteRationalSequence)
     cells = tuple(
         AutocorrelationCell(
             lag=lag,
-            value=sum(
-                values[index] * values[index + lag] for index in range(size - lag)
+            value=_autocorrelation_scalar(
+                sum(
+                    (
+                        values[index] * values[index + lag]
+                        for index in range(size - lag)
+                    ),
+                    Fraction(0),
+                ),
+                rational_output=rational_output,
             ),
         )
         for lag in range(size)
@@ -138,26 +278,37 @@ def aperiodic_autocorrelation(request: FiniteIntegerSequence) -> Autocorrelation
         AutocorrelationCell(lag=-cell.lag, value=cell.value)
         for cell in reversed(cells[1:])
     )
-    return AutocorrelationResult(source=request, cells=negative + cells)
-
-
-def cyclic_autocorrelation(request: FiniteIntegerSequence) -> AutocorrelationResult:
-    values = _admit_autocorrelation(request)
-    size = len(values)
-    if size * size > MAX_AUTOCORRELATION_MULTIPLICATIONS:
-        raise OperationResourceAdmissionError(
-            location=("values",),
-            code="sequences.autocorrelation.work_bound",
-            message="cyclic autocorrelation exceeds the admitted multiplication bound",
-        )
     return AutocorrelationResult(
+        convention="aperiodic", source=request, cells=negative + cells
+    )
+
+
+def cyclic_autocorrelation(
+    request: FiniteIntegerSequence | FiniteRationalSequence,
+) -> AutocorrelationResult:
+    size = len(request.values)
+    multiplications = size * size
+    additions = size * max(size - 1, 0)
+    values, _, operand_width = _admit_autocorrelation(request, output_items=size)
+    _require_autocorrelation_work(
+        multiplications, additions, operand_width, convention="cyclic"
+    )
+    rational_output = isinstance(request, FiniteRationalSequence)
+    return AutocorrelationResult(
+        convention="cyclic",
         source=request,
         cells=tuple(
             AutocorrelationCell(
                 lag=lag,
-                value=sum(
-                    values[index] * values[(index + lag) % size]
-                    for index in range(size)
+                value=_autocorrelation_scalar(
+                    sum(
+                        (
+                            values[index] * values[(index + lag) % size]
+                            for index in range(size)
+                        ),
+                        Fraction(0),
+                    ),
+                    rational_output=rational_output,
                 ),
             )
             for lag in range(size)
@@ -166,7 +317,7 @@ def cyclic_autocorrelation(request: FiniteIntegerSequence) -> AutocorrelationRes
 
 
 def sequence_order_shape(request: FiniteIntegerSequence) -> SequenceOrderShapeResult:
-    values = _admit_autocorrelation(request)
+    values = _admit_integer_sequence_for_shape(request)
     nondecreasing_violation = next(
         (
             index

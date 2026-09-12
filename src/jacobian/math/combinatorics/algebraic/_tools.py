@@ -11,8 +11,6 @@ from jacobian.math.combinatorics.algebraic import operations as native
 from jacobian.math.combinatorics.algebraic._models import (
     ConjugatePartitionRequest,
     ConjugatePartitionResult,
-    HookContentCountRequest,
-    HookContentCountResult,
     HookLengthRequest,
     HookLengthResult,
     PartitionDominanceRequest,
@@ -23,6 +21,8 @@ from jacobian.math.combinatorics.algebraic._models import (
     RSKWordRequest,
     SemistandardTableauCheckRequest,
     SemistandardTableauCheckResult,
+    SemistandardYoungTableauCountRequest,
+    SemistandardYoungTableauCountResult,
     StandardTableauCheckRequest,
     StandardTableauCheckResult,
     StandardYoungTableauCountRequest,
@@ -56,9 +56,13 @@ def conjugate_partition(
     )
 
 
-def hook_content_count(request: HookContentCountRequest) -> HookContentCountResult:
-    count = native.hook_content_count(request.partition, request.alphabet_size)
-    return HookContentCountResult(
+def semistandard_young_tableaux_count(
+    request: SemistandardYoungTableauCountRequest,
+) -> SemistandardYoungTableauCountResult:
+    count = native.semistandard_young_tableaux_count(
+        request.partition, request.alphabet_size
+    )
+    return SemistandardYoungTableauCountResult(
         partition=request.partition,
         alphabet_size=request.alphabet_size,
         count=count,
@@ -258,9 +262,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         description="Return the exact number of semistandard Young tableaux of a "
         "partition shape with entries in 1..m, bound to the source shape and "
         "alphabet.",
-        request_type=HookContentCountRequest,
-        result_type=HookContentCountResult,
-        run=hook_content_count,
+        request_type=SemistandardYoungTableauCountRequest,
+        result_type=SemistandardYoungTableauCountResult,
+        run=semistandard_young_tableaux_count,
         tags=("combinatorics", "young-tableaux", "exact"),
         examples=(
             OperationExample(

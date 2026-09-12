@@ -94,7 +94,7 @@ class ConjugatePartitionResult(StrictModel):
     conjugate: IntegerPartition
 
 
-class HookContentCountRequest(StrictModel):
+class SemistandardYoungTableauCountRequest(StrictModel):
     """Count semistandard tableaux with entries in ``1..alphabet_size``."""
 
     partition: IntegerPartition
@@ -116,7 +116,7 @@ class HookContentCountRequest(StrictModel):
         return self
 
 
-class HookContentCountResult(StrictModel):
+class SemistandardYoungTableauCountResult(StrictModel):
     """Exact SSYT count bound to its source shape and alphabet."""
 
     partition: IntegerPartition
@@ -288,8 +288,6 @@ __all__ = [
     "ConjugatePartitionRequest",
     "ConjugatePartitionResult",
     "DominanceRelation",
-    "HookContentCountRequest",
-    "HookContentCountResult",
     "HookLengthRequest",
     "HookLengthResult",
     "PartitionDominanceRequest",
@@ -300,6 +298,8 @@ __all__ = [
     "RSKWordRequest",
     "SemistandardTableauCheckRequest",
     "SemistandardTableauCheckResult",
+    "SemistandardYoungTableauCountRequest",
+    "SemistandardYoungTableauCountResult",
     "StandardTableauCheckRequest",
     "StandardTableauCheckResult",
     "StandardYoungTableauCountRequest",

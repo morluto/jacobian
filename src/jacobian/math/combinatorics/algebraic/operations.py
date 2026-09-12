@@ -45,11 +45,11 @@ __all__ = [
     "check_semistandard_tableau",
     "check_standard_tableau",
     "conjugate_partition",
-    "hook_content_count",
     "hook_lengths",
     "inverse_row_insertion_rsk",
     "partition_dominance",
     "row_insertion_rsk",
+    "semistandard_young_tableaux_count",
     "standard_young_tableaux_count",
     "verify_rsk",
 ]
@@ -155,30 +155,44 @@ def _upper_decimal_digits(value: int) -> int:
     return estimate
 
 
-def _log10_upper_units(value: int) -> int:
-    """Return U such that log10(value) < U / 100000 for value >= 1."""
+# log10(2) is in (0.301029995, 0.301029996). 1/ln(10) is in
+# (0.434294481, 0.434294482). These 1e-9 units keep the per-factor bound
+# sound while removing the bit_length * log10(2) slack on powers of two.
+_LOG10_SCALE = 1_000_000_000
+_LOG10_2_UPPER_UNITS = 301_029_996
+_LOG10_2_LOWER_UNITS = 301_029_995
+_INV_LN10_UPPER_UNITS = 434_294_482
 
-    return value.bit_length() * 30103
+
+def _log10_upper_units(value: int) -> int:
+    """Return U such that log10(value) < U / _LOG10_SCALE for value >= 1."""
+
+    bit_length = value.bit_length()
+    leading = 1 << (bit_length - 1)
+    remainder = value - leading
+    units = (bit_length - 1) * _LOG10_2_UPPER_UNITS
+    if remainder == 0:
+        return units
+    return units + (remainder * _INV_LN10_UPPER_UNITS + leading - 1) // leading
 
 
 def _log10_lower_units(value: int) -> int:
-    """Return L such that log10(value) >= L / 100000 for value >= 1."""
+    """Return L such that log10(value) >= L / _LOG10_SCALE for value >= 1."""
 
-    # 0.30102 < log10(2), so (bit_length-1) * 0.30102 underestimates log10(2^{b-1}).
-    return max(value.bit_length() - 1, 0) * 30102
+    return max(value.bit_length() - 1, 0) * _LOG10_2_LOWER_UNITS
 
 
 def _digits_upper_from_log10_units(units: int) -> int:
-    """Return a digit upper bound from a strict log10 upper bound in 1e-5 units.
+    """Return a digit upper bound from a strict log10 upper bound.
 
-    ``floor(log10 n)`` is not a digit count. Decimal width is
-    ``floor(log10 n) + 1``, and a floor of an approximate log can undershoot
-    that width, so this uses ``ceil(U) + 1`` for U = units/100000 > log10 n.
+    Decimal width is ``floor(log10 n) + 1``. A floor of an approximate log can
+    undershoot that width, so this uses ``ceil(U) + 1`` for
+    U = units/_LOG10_SCALE > log10 n.
     """
 
     if units <= 0:
         return 1
-    return (units + 99_999) // 100_000 + 1
+    return (units + _LOG10_SCALE - 1) // _LOG10_SCALE + 1
 
 
 def _ssyt_count_digit_bound(
@@ -358,7 +372,9 @@ def standard_young_tableaux_count(partition: IntegerPartition) -> int:
     return factorial(n) // _hook_length_product(hooks)
 
 
-def hook_content_count(partition: IntegerPartition, alphabet_size: int) -> int:
+def semistandard_young_tableaux_count(
+    partition: IntegerPartition, alphabet_size: int
+) -> int:
     """Count SSYTs of ``partition`` over ``1..alphabet_size`` exactly.
 
     The hook-content factors are private kernel intermediates. The public

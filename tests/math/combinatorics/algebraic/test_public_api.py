@@ -18,11 +18,11 @@ def test_exact_public_api_symbols() -> None:
         "check_standard_tableau",
         "compute_endpoint_profile",
         "conjugate_partition",
-        "hook_content_count",
         "hook_lengths",
         "inverse_row_insertion_rsk",
         "partition_dominance",
         "row_insertion_rsk",
+        "semistandard_young_tableaux_count",
         "standard_young_tableaux_count",
         "verify_rsk",
     )

@@ -18,7 +18,7 @@ __all__ = ["decide_equitable_k_coloring", "verify_equitable_coloring"]
 
 
 def _admit(graph: SimpleUndirectedGraph, k: int) -> None:
-    """Admit the bounded search once at the native operation boundary."""
+    """Admit the bounded generic-search or bipartite-DP envelope once."""
     if k <= 0:
         raise OperationDomainValidationError(
             location=("k",),
@@ -29,7 +29,7 @@ def _admit(graph: SimpleUndirectedGraph, k: int) -> None:
     needs_search = bool(graph.edges) and 0 < k < n and not _is_complete(graph) and k > 1
     if needs_search and (
         n > MAX_EQUITABLE_COLORING_SEARCH_DEPTH
-        or k**n > MAX_EQUITABLE_COLORING_SEARCH_NODES
+        or (k != 2 and k**n > MAX_EQUITABLE_COLORING_SEARCH_NODES)
     ):
         raise OperationDomainValidationError(
             location=("graph", "k"),
@@ -66,6 +66,8 @@ def decide_equitable_k_coloring(
     direct_result = _direct_result(graph, k)
     if direct_result is not None:
         return direct_result
+    if k == 2:
+        return _bipartite_equitable_result(graph)
     n = len(graph.vertices)
     if n > MAX_EQUITABLE_COLORING_SEARCH_DEPTH:
         raise OperationDomainValidationError(
@@ -76,6 +78,14 @@ def decide_equitable_k_coloring(
                 f"{MAX_EQUITABLE_COLORING_SEARCH_DEPTH} vertices"
             ),
         )
+    return _backtracking_result(graph, k)
+
+
+def _backtracking_result(
+    graph: SimpleUndirectedGraph, k: int
+) -> EquitableColoringResult:
+    """Run the admitted generic equitable-colouring search."""
+    n = len(graph.vertices)
     nx_graph: nx.Graph[str] = nx.Graph()
     for v in graph.vertices:
         nx_graph.add_node(v)
@@ -124,6 +134,82 @@ def decide_equitable_k_coloring(
     if result_colors is not None:
         return _result(graph, k, True, tuple(result_colors))
     return _result(graph, k, False)
+
+
+def _bipartite_equitable_result(
+    graph: SimpleUndirectedGraph,
+) -> EquitableColoringResult:
+    """Decide equitable 2-colourability from bipartite component orientations.
+
+    A connected bipartite component has exactly two proper 2-colourings, which
+    exchange its two bipartition classes.  Selecting one orientation per
+    component is therefore sufficient and necessary.  The dynamic program
+    records achievable size-zero classes, using at most ``n * (n + 1)``
+    states; the graph carrier bounds ``n`` by the admitted search depth.
+    A non-bipartite graph has no proper 2-colouring and therefore returns the
+    exact negative decision without entering the generic search.
+    """
+    vertices = graph.vertices
+    index_of = {vertex: index for index, vertex in enumerate(vertices)}
+    adjacency: list[list[int]] = [[] for _ in vertices]
+    for left, right in graph.edges:
+        left_index = index_of[left]
+        right_index = index_of[right]
+        adjacency[left_index].append(right_index)
+        adjacency[right_index].append(left_index)
+
+    parity = [-1] * len(vertices)
+    components: list[tuple[tuple[int, ...], tuple[int, ...]]] = []
+    for start in range(len(vertices)):
+        if parity[start] != -1:
+            continue
+        parity[start] = 0
+        stack = [start]
+        sides: tuple[list[int], list[int]] = ([], [])
+        while stack:
+            vertex = stack.pop()
+            sides[parity[vertex]].append(vertex)
+            for neighbor in adjacency[vertex]:
+                if parity[neighbor] == -1:
+                    parity[neighbor] = 1 - parity[vertex]
+                    stack.append(neighbor)
+                elif parity[neighbor] == parity[vertex]:
+                    return _result(graph, 2, False)
+        components.append((tuple(sides[0]), tuple(sides[1])))
+
+    target_sizes = (len(vertices) // 2, (len(vertices) + 1) // 2)
+    reachable_sizes = {0}
+    predecessors: list[dict[int, tuple[int, bool]]] = []
+    for first_side, second_side in components:
+        next_predecessors: dict[int, tuple[int, bool]] = {}
+        for size in reachable_sizes:
+            next_predecessors.setdefault(size + len(first_side), (size, True))
+            next_predecessors.setdefault(size + len(second_side), (size, False))
+        predecessors.append(next_predecessors)
+        reachable_sizes = set(next_predecessors)
+
+    target = next(
+        (target for target in target_sizes if target in reachable_sizes),
+        None,
+    )
+    if target is None:
+        return _result(graph, 2, False)
+
+    orientations: list[bool] = []
+    for predecessor_map in reversed(predecessors):
+        target, first_is_zero = predecessor_map[target]
+        orientations.append(first_is_zero)
+    orientations.reverse()
+
+    coloring = [0] * len(vertices)
+    for (first_side, second_side), first_is_zero in zip(
+        components, orientations, strict=True
+    ):
+        for vertex in first_side:
+            coloring[vertex] = 0 if first_is_zero else 1
+        for vertex in second_side:
+            coloring[vertex] = 1 if first_is_zero else 0
+    return _result(graph, 2, True, tuple(coloring))
 
 
 def _direct_result(

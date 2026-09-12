@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 from math import factorial, prod
+
 from pydantic import ValidationError
 from pydantic_core import PydanticCustomError
 

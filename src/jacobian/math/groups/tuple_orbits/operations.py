@@ -25,6 +25,7 @@ from jacobian.math.groups.tuple_orbits._models import (
     TupleFamilyOrbitResult,
     TupleFamilyOrbitSource,
     TupleOrbitRow,
+    _declared_attr,
     _preflight_action_dimensions,
 )
 
@@ -59,8 +60,8 @@ def _revalidate_action(request: TupleFamilyOrbitSource) -> FinitePermutationActi
             code="finite_group_action.tuple_family_action_type",
             message="tuple-family source must retain a finite permutation action",
         )
-    domain = getattr(action, "domain", None)
-    generators = getattr(action, "generators", None)
+    domain = _declared_attr(action, "domain")
+    generators = _declared_attr(action, "generators")
     try:
         _preflight_action_dimensions(domain=domain, generators=generators)
     except PydanticCustomError as error:
@@ -93,25 +94,27 @@ def _admit_source(
 ) -> tuple[Any | None, int, int, TupleFamilyOrbitSource]:
     request_checkpoint("before tuple-family orbit admission")
     action = _revalidate_action(request)
+    arity = _declared_attr(request, "arity")
+    family = _declared_attr(request, "family")
     if (
-        not isinstance(request.arity, int)
-        or isinstance(request.arity, bool)
-        or not 0 <= request.arity <= MAX_TUPLE_ARITY
+        not isinstance(arity, int)
+        or isinstance(arity, bool)
+        or not 0 <= arity <= MAX_TUPLE_ARITY
     ):
         raise OperationDomainValidationError(
             location=("arity",),
             code="finite_group_action.tuple_family_arity_out_of_range",
             message="tuple arity must be a non-negative action-domain-sized integer",
         )
-    if not isinstance(request.family, tuple) or any(
-        not isinstance(member, tuple) for member in request.family
+    if not isinstance(family, tuple) or any(
+        not isinstance(member, tuple) for member in family
     ):
         raise OperationDomainValidationError(
             location=("family",),
             code="finite_group_action.tuple_family_shape",
             message="tuple families must use immutable tuple rows",
         )
-    family_size = len(request.family)
+    family_size = len(family)
     if family_size > MAX_FAMILY_MEMBERS:
         raise OperationResourceAdmissionError(
             location=("family",),
@@ -122,7 +125,7 @@ def _admit_source(
     # forged model or a plain object. Recheck only cheap structural facts here;
     # no group enumeration is repeated by result construction.
     degree = len(action.domain)
-    if any(len(member) != request.arity for member in request.family):
+    if any(len(member) != arity for member in family):
         raise OperationDomainValidationError(
             location=("family",),
             code="finite_group_action.tuple_family_arity_mismatch",
@@ -132,7 +135,7 @@ def _admit_source(
         not isinstance(coordinate, int)
         or isinstance(coordinate, bool)
         or not 0 <= coordinate < degree
-        for member in request.family
+        for member in family
         for coordinate in member
     ):
         raise OperationDomainValidationError(
@@ -142,8 +145,8 @@ def _admit_source(
         )
     admitted = TupleFamilyOrbitSource(
         action=action,
-        arity=request.arity,
-        family=request.family,
+        arity=arity,
+        family=family,
     )
     if family_size == 0:
         return None, 0, degree, admitted
@@ -166,13 +169,13 @@ def _admit_source(
             code="finite_group_action.tuple_family_group_work_bound",
             message="group element materialization exceeds the admitted work bound",
         )
-    unique_family_size = len(set(request.family))
+    unique_family_size = len(set(family))
     # Diagonal action and transporter work are group_order per represented
     # orbit, not per unique source tuple; the checkpointed partition loop
     # owns those bounds.
     # Every output row retains a representative, source-index references, and
     # one full-axis transporter; this upper bound is independent of |X|^arity.
-    output_upper = unique_family_size * (request.arity + degree + 4) + family_size
+    output_upper = unique_family_size * (arity + degree + 4) + family_size
     if output_upper > MAX_TUPLE_ORBIT_RESULT_CELLS:
         raise OperationResourceAdmissionError(
             location=("family",),

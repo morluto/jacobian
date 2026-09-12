@@ -54,24 +54,94 @@ def _preflight_action_dimensions(*, domain: object, generators: object) -> None:
             )
 
 
+def _declared_attr(owner: object, name: str) -> object | None:
+    if isinstance(owner, Mapping):
+        return owner.get(name)
+    fields_set = getattr(owner, "__pydantic_fields_set__", None)
+    if isinstance(fields_set, (set, frozenset)) and name not in fields_set:
+        return None
+    return getattr(owner, name, None)
+
+
 def _preflight_action_payload(action: object) -> None:
-    if isinstance(action, Mapping):
-        _preflight_action_dimensions(
-            domain=action.get("domain"), generators=action.get("generators")
-        )
-        return
     if action is None:
         return
     _preflight_action_dimensions(
-        domain=getattr(action, "domain", None),
-        generators=getattr(action, "generators", None),
+        domain=_declared_attr(action, "domain"),
+        generators=_declared_attr(action, "generators"),
     )
 
 
 def _row_field(row: object, name: str) -> object:
+    return _declared_attr(row, name)
+
+
+def _action_mapping(action: object) -> dict[str, Any] | None:
+    if action is None:
+        return None
+    if isinstance(action, Mapping):
+        return {
+            "domain": action.get("domain"),
+            "generators": action.get("generators"),
+        }
+    return {
+        "domain": _declared_attr(action, "domain"),
+        "generators": _declared_attr(action, "generators"),
+    }
+
+
+def _row_mapping(row: object) -> dict[str, Any]:
     if isinstance(row, Mapping):
-        return row.get(name)
-    return getattr(row, name, None)
+        return dict(row)
+    return {
+        "representative": _declared_attr(row, "representative"),
+        "source_indices": _declared_attr(row, "source_indices"),
+        "orbit_size": _declared_attr(row, "orbit_size"),
+        "stabilizer_size": _declared_attr(row, "stabilizer_size"),
+        "least_transporter": _declared_attr(row, "least_transporter"),
+    }
+
+
+def _source_mapping(data: object) -> dict[str, Any]:
+    if isinstance(data, Mapping):
+        payload = dict(data)
+    else:
+        payload = {
+            "action": _declared_attr(data, "action"),
+            "arity": _declared_attr(data, "arity"),
+            "family": _declared_attr(data, "family"),
+        }
+    action = _action_mapping(payload.get("action"))
+    if action is not None:
+        payload["action"] = action
+    return payload
+
+
+def _preflight_source_payload(data: object) -> None:
+    _preflight_action_payload(_declared_attr(data, "action"))
+    family = _declared_attr(data, "family")
+    raw_arity = _declared_attr(data, "arity")
+    if not isinstance(family, (list, tuple)):
+        return
+    if len(family) > MAX_FAMILY_MEMBERS:
+        raise _tuple_error(
+            "input_bound",
+            f"at most {MAX_FAMILY_MEMBERS} tuple rows are admitted",
+        )
+    arity_is_int = isinstance(raw_arity, int) and not isinstance(raw_arity, bool)
+    for member in family:
+        if not isinstance(member, (list, tuple)):
+            continue
+        if arity_is_int and len(member) != raw_arity:
+            raise _tuple_error(
+                "arity_mismatch",
+                "every family member must have the declared arity",
+            )
+        if len(member) > MAX_TUPLE_ARITY:
+            raise _tuple_error(
+                "arity_out_of_range",
+                "tuple arity must be a non-negative action-domain-sized integer",
+            )
 
 
 def _preflight_row_payload(row: object) -> None:
@@ -99,39 +169,6 @@ def _preflight_row_payload(row: object) -> None:
             "transporter_axis",
             "transporters must be permutations of the action axis",
         )
-
-
-def _preflight_source_payload(data: object) -> None:
-    if isinstance(data, Mapping):
-        action = data.get("action")
-        family = data.get("family")
-        raw_arity = data.get("arity")
-    else:
-        action = getattr(data, "action", None)
-        family = getattr(data, "family", None)
-        raw_arity = getattr(data, "arity", None)
-    _preflight_action_payload(action)
-    if not isinstance(family, (list, tuple)):
-        return
-    if len(family) > MAX_FAMILY_MEMBERS:
-        raise _tuple_error(
-            "input_bound",
-            f"at most {MAX_FAMILY_MEMBERS} tuple rows are admitted",
-        )
-    arity_is_int = isinstance(raw_arity, int) and not isinstance(raw_arity, bool)
-    for member in family:
-        if not isinstance(member, (list, tuple)):
-            continue
-        if arity_is_int and len(member) != raw_arity:
-            raise _tuple_error(
-                "arity_mismatch",
-                "every family member must have the declared arity",
-            )
-        if len(member) > MAX_TUPLE_ARITY:
-            raise _tuple_error(
-                "arity_out_of_range",
-                "tuple arity must be a non-negative action-domain-sized integer",
-            )
 
 
 class TupleFamilyOrbitSource(StrictModel):
@@ -163,11 +200,8 @@ class TupleFamilyOrbitSource(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def normalize_json_containers(cls, data: Any) -> Any:
-        if not isinstance(data, Mapping):
-            _preflight_source_payload(data)
-            return data
         _preflight_source_payload(data)
-        return canonicalize_json_containers(dict(data))
+        return canonicalize_json_containers(_source_mapping(data))
 
     @model_validator(mode="after")
     def bind_family_axis(self) -> Self:
@@ -227,9 +261,9 @@ class TupleOrbitRow(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def normalize_json_containers(cls, data: Any) -> Any:
-        if isinstance(data, Mapping):
-            _preflight_row_payload(data)
-        return canonicalize_json_containers(data)
+        payload = data if isinstance(data, Mapping) else _row_mapping(data)
+        _preflight_row_payload(payload)
+        return canonicalize_json_containers(payload)
 
     @model_validator(mode="after")
     def bind_row_shape(self) -> Self:
@@ -258,29 +292,36 @@ class TupleFamilyOrbitResult(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def normalize_json_containers(cls, data: Any) -> Any:
-        if isinstance(data, Mapping):
-            rows = data.get("rows")
-            if isinstance(rows, (list, tuple)):
-                if len(rows) > MAX_FAMILY_MEMBERS:
-                    raise _tuple_error(
-                        "input_bound",
-                        f"at most {MAX_FAMILY_MEMBERS} tuple rows are admitted",
-                    )
-                total_source_indices = 0
-                for row in rows:
-                    _preflight_row_payload(row)
-                    source_indices = _row_field(row, "source_indices")
-                    if isinstance(source_indices, (list, tuple)):
-                        total_source_indices += len(source_indices)
-                        if total_source_indices > MAX_FAMILY_MEMBERS:
-                            raise _tuple_error(
-                                "input_bound",
-                                f"at most {MAX_FAMILY_MEMBERS} tuple rows are admitted",
-                            )
-            source = data.get("source")
-            if source is not None:
-                _preflight_source_payload(source)
-        return canonicalize_json_containers(data)
+        if not isinstance(data, Mapping):
+            return data
+        payload = dict(data)
+        rows = payload.get("rows")
+        if isinstance(rows, (list, tuple)):
+            if len(rows) > MAX_FAMILY_MEMBERS:
+                raise _tuple_error(
+                    "input_bound",
+                    f"at most {MAX_FAMILY_MEMBERS} tuple rows are admitted",
+                )
+            materialized_rows = []
+            total_source_indices = 0
+            for row in rows:
+                mapped = _row_mapping(row)
+                _preflight_row_payload(mapped)
+                source_indices = mapped.get("source_indices")
+                if isinstance(source_indices, (list, tuple)):
+                    total_source_indices += len(source_indices)
+                    if total_source_indices > MAX_FAMILY_MEMBERS:
+                        raise _tuple_error(
+                            "input_bound",
+                            f"at most {MAX_FAMILY_MEMBERS} tuple rows are admitted",
+                        )
+                materialized_rows.append(mapped)
+            payload["rows"] = materialized_rows
+        source = payload.get("source")
+        if source is not None:
+            _preflight_source_payload(source)
+            payload["source"] = _source_mapping(source)
+        return canonicalize_json_containers(payload)
 
     @model_validator(mode="after")
     def bind_result_axes(self) -> Self:

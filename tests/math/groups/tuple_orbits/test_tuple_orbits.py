@@ -320,7 +320,18 @@ def test_result_payloads_are_preflighted_before_container_copy() -> None:
     assert "input_bound" in rows_bound.value.errors()[0]["type"]
 
 
-def test_constructed_result_rows_are_preflighted_before_container_copy() -> None:
+def test_missing_arity_on_forged_source_is_a_typed_domain_error() -> None:
+    request = TupleFamilyOrbitSource.model_construct(
+        action=_swap_action(), family=()
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        tuple_family_orbit_profile(request)
+    assert exc_info.value.errors()[0]["type"] == (
+        "finite_group_action.tuple_family_arity_out_of_range"
+    )
+
+
+def test_constructed_result_rows_are_revalidated() -> None:
     class _HugeRepresentative(tuple):
         def __len__(self) -> int:
             return 2_000_000
@@ -344,6 +355,27 @@ def test_constructed_result_rows_are_preflighted_before_container_copy() -> None
     with pytest.raises(ValidationError) as arity:
         TupleFamilyOrbitResult.model_validate(payload)
     assert "arity_out_of_range" in arity.value.errors()[0]["type"]
+
+
+def test_constructed_result_rows_reject_noncanonical_orbit_size() -> None:
+    row = TupleOrbitRow.model_construct(
+        representative=(),
+        source_indices=(0,),
+        orbit_size="bogus",
+        stabilizer_size=1,
+        least_transporter=(0,),
+    )
+    payload = {
+        "source": {
+            "action": {"domain": ["a"], "generators": [[0]]},
+            "arity": 0,
+            "family": [()],
+        },
+        "rows": [row],
+        "is_union_of_complete_ambient_orbits": True,
+    }
+    with pytest.raises(ValidationError):
+        TupleFamilyOrbitResult.model_validate(payload)
 
 
 def test_aggregate_source_indices_are_bounded_before_container_copy() -> None:

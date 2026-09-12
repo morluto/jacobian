@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import time
+from itertools import combinations, product
 
 import pytest
 from pydantic import ValidationError
@@ -9,7 +10,6 @@ from pydantic import ValidationError
 from jacobian._execution import (
     BackendFailureReason,
     OperationBackendError,
-    OperationExecutionTimeoutError,
     OperationResourceExhaustedError,
     bind_request_deadline,
     request_execution,
@@ -36,6 +36,42 @@ def graph(
     return SimpleUndirectedGraph(vertices=vertices, edges=edges)
 
 
+def _brute_chromatic_number(
+    vertices: tuple[str, ...], edges: tuple[tuple[str, str], ...]
+) -> int:
+    if not vertices:
+        return 0
+    for colors in range(1, len(vertices) + 1):
+        assignments = range(colors)
+        for coloring in product(assignments, repeat=len(vertices)):
+            if all(
+                coloring[vertices.index(left)] != coloring[vertices.index(right)]
+                for left, right in edges
+            ):
+                return colors
+    raise AssertionError("every finite graph has a finite coloring")
+
+
+def _brute_splittable(source: SimpleUndirectedGraph, s: int, t: int) -> bool:
+    vertices = source.vertices
+    for size in range(1, len(vertices)):
+        for selected in combinations(vertices, size):
+            side_a = tuple(selected)
+            side_b = tuple(vertex for vertex in vertices if vertex not in side_a)
+            edges_a = tuple(
+                edge for edge in source.edges if edge[0] in side_a and edge[1] in side_a
+            )
+            edges_b = tuple(
+                edge for edge in source.edges if edge[0] in side_b and edge[1] in side_b
+            )
+            if (
+                _brute_chromatic_number(side_a, edges_a) >= s
+                and _brute_chromatic_number(side_b, edges_b) >= t
+            ):
+                return True
+    return False
+
+
 def test_k4_returns_canonical_split_and_exact_induced_values() -> None:
     source = graph(
         ("a", "b", "c", "d"),
@@ -50,6 +86,38 @@ def test_k4_returns_canonical_split_and_exact_induced_values() -> None:
     assert (result.chromatic_a, result.chromatic_b) == (2, 2)
     assert result.checked_partitions == 3
     assert result.model_validate_json(result.model_dump_json()) == result
+
+
+def test_kernel_matches_independent_exhaustive_oracle_on_all_four_vertex_graphs() -> (
+    None
+):
+    vertices = ("a", "b", "c", "d")
+    possible_edges = tuple((left, right) for left, right in combinations(vertices, 2))
+    for edge_count in range(len(possible_edges) + 1):
+        for selected_edges in combinations(possible_edges, edge_count):
+            source = graph(vertices, selected_edges)
+            for s, t in ((1, 1), (2, 1), (1, 2), (2, 2)):
+                request = ChromaticBipartitionRequest(graph=source, s=s, t=t)
+                result = operation._find_chromatic_bipartition_kernel(request)
+                assert (result.status == "SPLIT") == _brute_splittable(source, s, t)
+                if result.status == "SPLIT":
+                    assert result.side_a is not None and result.side_b is not None
+                    assert result.chromatic_a == _brute_chromatic_number(
+                        result.side_a,
+                        tuple(
+                            edge
+                            for edge in source.edges
+                            if edge[0] in result.side_a and edge[1] in result.side_a
+                        ),
+                    )
+                    assert result.chromatic_b == _brute_chromatic_number(
+                        result.side_b,
+                        tuple(
+                            edge
+                            for edge in source.edges
+                            if edge[0] in result.side_b and edge[1] in result.side_b
+                        ),
+                    )
 
 
 def test_k3_unit_thresholds_report_the_induced_k2_chromatic_number() -> None:
@@ -104,7 +172,7 @@ def test_unequal_thresholds_accept_the_opposite_orientation() -> None:
     assert (result.chromatic_a, result.chromatic_b) == (3, 2)
 
 
-def test_kernel_timeout_is_an_operational_error(
+def test_kernel_timeout_is_a_source_bound_unknown_result(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     source = graph(
@@ -113,11 +181,13 @@ def test_kernel_timeout_is_an_operational_error(
     )
     request = ChromaticBipartitionRequest(graph=source, s=2, t=2)
     monkeypatch.setattr(operation, "remaining_ms", lambda *_args: 0)
-    with pytest.raises(OperationExecutionTimeoutError):
-        operation._find_chromatic_bipartition_kernel(request)
+    result = operation._find_chromatic_bipartition_kernel(request)
+    assert result.status == "UNKNOWN"
+    assert result.graph == source
+    assert result.checked_partitions == 1
 
 
-def test_worker_deadline_times_out_across_the_process_boundary() -> None:
+def test_worker_deadline_returns_source_bound_unknown_across_process_boundary() -> None:
     source = graph(
         ("a", "b", "c", "d"),
         (("a", "b"), ("a", "c"), ("a", "d"), ("b", "c"), ("b", "d"), ("c", "d")),
@@ -130,8 +200,9 @@ def test_worker_deadline_times_out_across_the_process_boundary() -> None:
     )
     with request_execution(time.monotonic()):
         bind_request_deadline(time.monotonic() + 0.02)
-        with pytest.raises(OperationExecutionTimeoutError):
-            process_owner.find_chromatic_bipartition(request)
+        result = process_owner.find_chromatic_bipartition(request)
+    assert result.status == "UNKNOWN"
+    assert result.graph == source
 
 
 def test_edgeless_twenty_vertex_request_is_exactly_decidable() -> None:
@@ -263,7 +334,7 @@ def _completed(
     )
 
 
-def test_worker_timeout_is_an_operational_error(
+def test_worker_timeout_is_a_source_bound_unknown_result(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     source = graph(("a", "b"), (("a", "b"),))
@@ -272,10 +343,11 @@ def test_worker_timeout_is_an_operational_error(
         "run_bounded_process",
         lambda *_args, **_kwargs: _completed(returncode=None, timed_out=True),
     )
-    with pytest.raises(OperationExecutionTimeoutError):
-        operation.find_chromatic_bipartition(
-            ChromaticBipartitionRequest(graph=source, s=1, t=1)
-        )
+    result = operation.find_chromatic_bipartition(
+        ChromaticBipartitionRequest(graph=source, s=1, t=1)
+    )
+    assert result.status == "UNKNOWN"
+    assert result.graph == source
 
 
 @pytest.mark.parametrize(
@@ -359,6 +431,66 @@ def test_split_below_submitted_thresholds_cannot_bind() -> None:
             chromatic_b=1,
             checked_partitions=1,
         )
+
+
+def test_unknown_result_is_source_bound_and_cannot_claim_a_witness() -> None:
+    source = graph(("a", "b"), (("a", "b"),))
+    result = ChromaticBipartitionResult(
+        graph=source,
+        s=2,
+        t=2,
+        status="UNKNOWN",
+        checked_partitions=0,
+    )
+    assert result.model_validate_json(result.model_dump_json()) == result
+    with pytest.raises(ValidationError):
+        ChromaticBipartitionResult(
+            graph=source,
+            s=1,
+            t=1,
+            status="UNKNOWN",
+            side_a=("a",),
+            side_b=("b",),
+            checked_partitions=0,
+        )
+
+
+def test_split_sides_must_follow_the_source_vertex_axis() -> None:
+    source = graph(
+        ("b", "a", "d", "c"),
+        (("a", "b"), ("a", "c"), ("a", "d"), ("b", "c"), ("b", "d"), ("c", "d")),
+    )
+    with pytest.raises(ValidationError, match="source vertex axis"):
+        ChromaticBipartitionResult(
+            graph=source,
+            s=2,
+            t=2,
+            status="SPLIT",
+            side_a=("a", "b"),
+            side_b=("d", "c"),
+            chromatic_a=2,
+            chromatic_b=2,
+            checked_partitions=3,
+        )
+
+
+def test_operation_rejects_a_result_axis_above_its_admitted_envelope() -> None:
+    vertices = tuple(f"v{i}" for i in range(257))
+    request = ChromaticBipartitionRequest(graph=graph(vertices, ()), s=1, t=1)
+    with pytest.raises(OperationResourceAdmissionError, match="at most 256"):
+        find_chromatic_bipartition(request)
+
+
+def test_operation_rejects_excessive_retained_source_labels() -> None:
+    vertices = tuple(f"v{i:03d}" + "x" * 60 for i in range(256))
+    edges = tuple(
+        (left, right)
+        for index, left in enumerate(vertices)
+        for right in vertices[index + 1 :]
+    )
+    request = ChromaticBipartitionRequest(graph=graph(vertices, edges), s=2, t=2)
+    with pytest.raises(OperationResourceAdmissionError, match="label"):
+        find_chromatic_bipartition(request)
 
 
 def test_long_nfc_labels_on_k2_return_split_through_the_worker() -> None:

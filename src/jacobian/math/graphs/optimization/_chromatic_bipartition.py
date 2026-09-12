@@ -8,7 +8,6 @@ from typing import Literal, Self
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._execution import OperationExecutionTimeoutError
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     MathTool,
@@ -25,6 +24,9 @@ from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 MAX_CHROMATIC_BIPARTITION_WORK = 2_000_000
 MAX_CHROMATIC_BACKEND_ORDER = 32
+MAX_CHROMATIC_BIPARTITION_VERTICES = 256
+MAX_CHROMATIC_BIPARTITION_PARTITIONS = MAX_CHROMATIC_BIPARTITION_WORK
+MAX_CHROMATIC_BIPARTITION_LABEL_CHARACTERS = 1_000_000
 
 
 class ChromaticBipartitionRequest(StrictModel):
@@ -44,12 +46,12 @@ class ChromaticBipartitionResult(StrictModel):
     graph: SimpleUndirectedGraph
     s: StrictInt = Field(ge=1, le=32)
     t: StrictInt = Field(ge=1, le=32)
-    status: Literal["SPLIT", "NO_SPLIT"]
-    side_a: tuple[str, ...] | None = None
-    side_b: tuple[str, ...] | None = None
+    status: Literal["SPLIT", "NO_SPLIT", "UNKNOWN"]
+    side_a: tuple[str, ...] | None = Field(default=None, max_length=256)
+    side_b: tuple[str, ...] | None = Field(default=None, max_length=256)
     chromatic_a: StrictInt | None = Field(default=None, ge=0, le=32)
     chromatic_b: StrictInt | None = Field(default=None, ge=0, le=32)
-    checked_partitions: StrictInt = Field(ge=0)
+    checked_partitions: StrictInt = Field(ge=0, le=MAX_CHROMATIC_BIPARTITION_PARTITIONS)
 
     @model_validator(mode="after")
     def bind_result_to_source(self) -> Self:
@@ -84,6 +86,18 @@ class ChromaticBipartitionResult(StrictModel):
                     "graph.chromatic_bipartition_must_partition_vertices",
                     "split sides must partition graph vertices exactly once",
                 )
+            if (
+                tuple(vertex for vertex in self.graph.vertices if vertex in self.side_a)
+                != self.side_a
+                or tuple(
+                    vertex for vertex in self.graph.vertices if vertex in self.side_b
+                )
+                != self.side_b
+            ):
+                raise PydanticCustomError(
+                    "graph.chromatic_bipartition_sides_not_canonical",
+                    "split sides must preserve the source vertex axis order",
+                )
             if self.chromatic_a < self.s or self.chromatic_b < self.t:
                 raise PydanticCustomError(
                     "graph.chromatic_bipartition_thresholds_not_met",
@@ -98,6 +112,13 @@ class ChromaticBipartitionResult(StrictModel):
             raise PydanticCustomError(
                 "graph.chromatic_bipartition_non_split_must_not_claim_witness",
                 "non-split results cannot carry a witness or chromatic values",
+            )
+        if self.checked_partitions > _unordered_partition_count(
+            len(self.graph.vertices)
+        ):
+            raise PydanticCustomError(
+                "graph.chromatic_bipartition_checked_axis_exceeded",
+                "checked_partitions cannot exceed the unordered partition axis",
             )
         return self
 
@@ -198,6 +219,35 @@ def _chromatic_search_work(order: int, edge_count: int) -> int:
     return order * (encoding + order + edge_count + 1)
 
 
+def _retained_label_characters(graph: SimpleUndirectedGraph) -> int:
+    """Charge the source graph and the two repeated witness vertex axes."""
+
+    source = sum(map(len, graph.vertices)) + sum(
+        len(left) + len(right) for left, right in graph.edges
+    )
+    return source + 2 * sum(map(len, graph.vertices))
+
+
+def _chromatic_bipartition_reconstruction_work(
+    order: int, edge_count: int, partitions: int
+) -> int:
+    """Charge the two induced-graph scans performed for each partition."""
+
+    return partitions * 2 * (order + edge_count)
+
+
+def _unknown_chromatic_bipartition(
+    request: ChromaticBipartitionRequest, checked_partitions: int
+) -> ChromaticBipartitionResult:
+    return ChromaticBipartitionResult(
+        graph=request.graph,
+        s=request.s,
+        t=request.t,
+        status="UNKNOWN",
+        checked_partitions=checked_partitions,
+    )
+
+
 def _induced_edge_core(
     graph: SimpleUndirectedGraph, vertices: tuple[str, ...]
 ) -> SimpleUndirectedGraph:
@@ -260,11 +310,7 @@ def _unit_threshold_bipartition(
             continue
         chromatic_b = _exact_induced_chromatic(request.graph, side_b, request, started)
         if chromatic_b is None:
-            raise OperationExecutionTimeoutError(
-                "chromatic bipartition solver deadline expired",
-                configured_seconds=request.resource_budget.wall_seconds,
-                adjustable_field_path=("resource_budget", "wall_seconds"),
-            )
+            return _unknown_chromatic_bipartition(request, 0)
         return ChromaticBipartitionResult(
             graph=request.graph,
             s=request.s,
@@ -276,11 +322,7 @@ def _unit_threshold_bipartition(
             chromatic_b=chromatic_b,
             checked_partitions=0,
         )
-    raise OperationExecutionTimeoutError(
-        "chromatic bipartition solver did not finish",
-        configured_seconds=request.resource_budget.wall_seconds,
-        adjustable_field_path=("resource_budget", "wall_seconds"),
-    )
+    return _unknown_chromatic_bipartition(request, 0)
 
 
 def _refuse_chromatic_bipartition_work() -> None:
@@ -298,9 +340,16 @@ def _admit_unit_threshold_chromatic(request: ChromaticBipartitionRequest) -> Non
     """Admit a singleton split whose remainder is cheaply colorable."""
 
     vertices = request.graph.vertices
+    extraction_work = 0
     for index in range(len(vertices)):
         _, side_b = _unit_threshold_remainder(vertices, index)
-        if _unit_threshold_core_is_admitted(_induced_edge_core(request.graph, side_b)):
+        extraction_work += 2 * (len(vertices) + len(request.graph.edges))
+        core = _induced_edge_core(request.graph, side_b)
+        if _unit_threshold_core_is_admitted(core) and (
+            extraction_work
+            + _chromatic_search_work(len(core.vertices), len(core.edges))
+            <= MAX_CHROMATIC_BIPARTITION_WORK
+        ):
             return
     _refuse_chromatic_bipartition_work()
 
@@ -309,6 +358,26 @@ def _admit_chromatic_bipartition(request: ChromaticBipartitionRequest) -> None:
     """Charge every unordered partition and its inner k-colorability encodings."""
 
     order = len(request.graph.vertices)
+    if order > MAX_CHROMATIC_BIPARTITION_VERTICES:
+        raise OperationResourceAdmissionError(
+            location=("graph", "vertices"),
+            code="graph.chromatic_bipartition.vertex_axis_bound",
+            message=(
+                "chromatic bipartition results support at most "
+                f"{MAX_CHROMATIC_BIPARTITION_VERTICES} vertices"
+            ),
+        )
+    if _retained_label_characters(request.graph) > (
+        MAX_CHROMATIC_BIPARTITION_LABEL_CHARACTERS
+    ):
+        raise OperationResourceAdmissionError(
+            location=("graph",),
+            code="graph.chromatic_bipartition.retained_labels_exceed_bound",
+            message=(
+                "chromatic bipartition source and witness labels exceed the "
+                "admitted character bound"
+            ),
+        )
     if not request.graph.edges or _threshold_sum_exceeds_order(request):
         return
     if request.s == 1 and request.t == 1 and order >= 2:
@@ -320,6 +389,7 @@ def _admit_chromatic_bipartition(request: ChromaticBipartitionRequest) -> None:
     # Two induced graphs, each trying up to n color counts. One encoding of
     # order n and k<=n uses n*k vertex literals plus m*k^2 edge separations.
     work = partitions * 2 * _chromatic_search_work(n, m)
+    work += _chromatic_bipartition_reconstruction_work(n, m, partitions)
     if work > MAX_CHROMATIC_BIPARTITION_WORK:
         _refuse_chromatic_bipartition_work()
 
@@ -355,25 +425,13 @@ def _find_chromatic_bipartition_kernel(
         )
         checked += 1
         if remaining_ms(started, request.resource_budget.wall_seconds) <= 0:
-            raise OperationExecutionTimeoutError(
-                "chromatic bipartition deadline expired",
-                configured_seconds=request.resource_budget.wall_seconds,
-                adjustable_field_path=("resource_budget", "wall_seconds"),
-            )
+            return _unknown_chromatic_bipartition(request, checked)
         chromatic_a = _chromatic_number(_induced_graph(graph, side_a), request, started)
         if chromatic_a is None:
-            raise OperationExecutionTimeoutError(
-                "chromatic bipartition solver deadline expired",
-                configured_seconds=request.resource_budget.wall_seconds,
-                adjustable_field_path=("resource_budget", "wall_seconds"),
-            )
+            return _unknown_chromatic_bipartition(request, checked)
         chromatic_b = _chromatic_number(_induced_graph(graph, side_b), request, started)
         if chromatic_b is None:
-            raise OperationExecutionTimeoutError(
-                "chromatic bipartition solver deadline expired",
-                configured_seconds=request.resource_budget.wall_seconds,
-                adjustable_field_path=("resource_budget", "wall_seconds"),
-            )
+            return _unknown_chromatic_bipartition(request, checked)
         if chromatic_a >= request.s and chromatic_b >= request.t:
             return ChromaticBipartitionResult(
                 graph=graph,
@@ -444,7 +502,8 @@ CHROMATIC_BIPARTITION_OPERATION = MathTool(
     description=(
         "Search a bounded simple graph for a canonical vertex bipartition whose "
         "two induced subgraphs have chromatic numbers at least s and t. "
-        "Return a witness or an exact NO_SPLIT after complete search."
+        "Return a witness, an exact NO_SPLIT after complete search, or a source-"
+        "bound UNKNOWN when the admitted search does not finish."
     ),
     request_type=ChromaticBipartitionRequest,
     result_type=ChromaticBipartitionResult,
@@ -475,6 +534,9 @@ CHROMATIC_BIPARTITION_OPERATION = MathTool(
 
 __all__ = [
     "CHROMATIC_BIPARTITION_OPERATION",
+    "MAX_CHROMATIC_BIPARTITION_LABEL_CHARACTERS",
+    "MAX_CHROMATIC_BIPARTITION_PARTITIONS",
+    "MAX_CHROMATIC_BIPARTITION_VERTICES",
     "MAX_CHROMATIC_BIPARTITION_WORK",
     "ChromaticBipartitionRequest",
     "ChromaticBipartitionResult",

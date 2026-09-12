@@ -249,3 +249,28 @@ def test_point_evaluation_preserves_extension_field_coordinates() -> None:
         if operation.operation_id == "finite_field.polynomial.evaluate.compute"
     )
     assert operation.run(request).coordinates == (1, 22)
+
+
+@pytest.mark.parametrize("constant", [0, 1])
+def test_point_evaluation_handles_zero_and_constant_polynomials_and_matches_table(
+    constant: int,
+) -> None:
+    field = finite_field(2, (1, 1, 1))
+    zero = element(field, (0, 0))
+    one = element(field, (1, 0))
+    polynomial = finite_polynomial(field, (zero if constant == 0 else one,))
+    value = element(field, (0, 1))
+    operation = next(
+        operation
+        for operation in TOOLS
+        if operation.operation_id == "finite_field.polynomial.evaluate.compute"
+    )
+
+    result = operation.run(
+        FinitePolynomialEvaluationRequest(polynomial=polynomial, value=value)
+    )
+    table = finite_map_table(finite_polynomial_map(polynomial))
+    table_value = next(target for source, target in table.entries if source == value)
+
+    assert result == (zero if constant == 0 else one)
+    assert result == table_value

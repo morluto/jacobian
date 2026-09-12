@@ -108,7 +108,9 @@ TOOLS: MathTools = (
         description=(
             "Return the exact delta-matroid whose feasible sets are F symmetric "
             "difference X for each source feasible set F; the subset uses sorted "
-            "ground indices and the source must satisfy symmetric exchange."
+            "ground indices. Source and output families are admitted at 16,384 "
+            "memberships, 2,048 UTF-8 label bytes, and 250,000 symmetric-exchange "
+            "candidate checks."
         ),
         request_type=DeltaMatroidTwistRequest,
         result_type=FiniteDeltaMatroid,

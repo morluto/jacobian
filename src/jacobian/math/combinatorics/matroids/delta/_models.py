@@ -38,7 +38,34 @@ def require_twist_subset(
 class DeltaMatroidTwistRequest(StrictModel):
     """Twist a delta-matroid by a canonical ground-index subset."""
 
-    delta_matroid: FiniteDeltaMatroid
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Twist one complete finite delta-matroid by a sorted ground-index "
+                "subset. Source recognition and the twisted family share the "
+                f"{MAX_DELTA_MEMBERSHIPS}-membership, {MAX_DELTA_LABEL_BYTES}-byte "
+                "label, and "
+                f"{MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS}-candidate envelopes."
+            ),
+            "admission_limits": {
+                "max_feasible_set_memberships": MAX_DELTA_MEMBERSHIPS,
+                "max_ground_label_utf8_bytes": MAX_DELTA_LABEL_BYTES,
+                "max_symmetric_exchange_candidate_checks_per_replay": (
+                    MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS
+                ),
+            },
+        }
+    )
+
+    delta_matroid: FiniteDeltaMatroid = Field(
+        description=(
+            "Canonical finite delta-matroid. Twist admission allows at most "
+            f"{MAX_DELTA_MEMBERSHIPS} total feasible-row memberships, "
+            f"{MAX_DELTA_LABEL_BYTES} UTF-8 ground-label bytes, and "
+            f"{MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS} symmetric-exchange candidate "
+            "checks before using the source family."
+        )
+    )
     subset: tuple[int, ...] = Field(default=())
 
     @model_validator(mode="after")

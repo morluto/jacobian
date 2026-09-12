@@ -9,11 +9,11 @@ from jacobian.math.combinatorics.matroids.delta._models import (
 )
 from jacobian.math.combinatorics.matroids.delta.values import (
     MAX_DELTA_MEMBERSHIPS,
+    MAX_DELTA_WIDTH_ROWS,
     DeltaMatroidAdmissionError,
     FiniteDeltaMatroid,
     first_symmetric_exchange_obstruction,
     require_delta_matroid_admission,
-    require_delta_matroid_envelope,
 )
 
 __all__ = [
@@ -112,10 +112,12 @@ def twist(
 def width(delta_matroid: FiniteDeltaMatroid) -> int:
     """Return the delta-matroid width ``max |F| - min |F|``."""
 
-    require_delta_matroid_envelope(
-        FiniteFeasibleSetSystem(
-            ground=delta_matroid.ground, feasible=delta_matroid.feasible
+    row_count = len(delta_matroid.feasible)
+    if row_count > MAX_DELTA_WIDTH_ROWS:
+        raise DeltaMatroidAdmissionError(
+            "width_rows_exceeded",
+            "delta-matroid width row scan exceeds the "
+            f"{MAX_DELTA_WIDTH_ROWS}-row envelope",
         )
-    )
     sizes = tuple(len(row) for row in delta_matroid.feasible)
     return max(sizes) - min(sizes)

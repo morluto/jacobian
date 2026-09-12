@@ -13,6 +13,7 @@ from jacobian.math.combinatorics.greedoids.values import FiniteFeasibleSetSystem
 MAX_DELTA_MEMBERSHIPS = 16_384
 MAX_DELTA_LABEL_BYTES = 2_048
 MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS = 250_000
+MAX_DELTA_WIDTH_ROWS = 16_384
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -191,6 +192,7 @@ __all__ = [
     "MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS",
     "MAX_DELTA_LABEL_BYTES",
     "MAX_DELTA_MEMBERSHIPS",
+    "MAX_DELTA_WIDTH_ROWS",
     "DeltaMatroidObstruction",
     "FiniteDeltaMatroid",
     "canonical_feasible_rows",

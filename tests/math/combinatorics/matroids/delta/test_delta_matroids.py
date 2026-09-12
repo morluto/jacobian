@@ -33,7 +33,16 @@ def test_catalog_contains_only_audited_agent_outcome() -> None:
     }
 
 
-def test_twist_transforms_feasible_sets_and_round_trips() -> None:
+def test_twist_request_publishes_admission_limits() -> None:
+    schema = DeltaMatroidTwistRequest.model_json_schema()
+    limits = schema["admission_limits"]
+    assert limits["max_feasible_set_memberships"] == 16_384
+    assert limits["max_ground_label_utf8_bytes"] == 2_048
+    assert limits["max_symmetric_exchange_candidate_checks_per_replay"] == 250_000
+    description = schema["properties"]["delta_matroid"]["description"]
+    assert "16384" in description.replace(",", "")
+    assert "2048" in description.replace(",", "")
+    assert "250000" in description.replace(",", "")
     source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((), (0,), (1,)))
     request = DeltaMatroidTwistRequest(delta_matroid=source, subset=(0,))
     result = _twist(request)
@@ -358,3 +367,10 @@ def test_even_subset_width_uses_linear_admission() -> None:
         ),
     )
     assert width(source) == 8
+
+
+def test_width_ignores_recognition_label_envelope() -> None:
+    from jacobian.math.combinatorics.matroids.delta import width
+
+    source = FiniteDeltaMatroid(ground=("a" * 2049,), feasible=((),))
+    assert width(source) == 0

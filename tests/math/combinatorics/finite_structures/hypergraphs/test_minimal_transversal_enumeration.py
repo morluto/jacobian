@@ -232,7 +232,9 @@ def test_candidate_edge_and_minimality_work_is_admitted_before_search() -> None:
     triples = tuple(combinations(vertices, 3))[:200]
     source = FiniteHypergraph(
         vertices=vertices,
-        edges=tuple((f"edge{index:05d}", triple) for index, triple in enumerate(triples)),
+        edges=tuple(
+            (f"edge{index:05d}", triple) for index, triple in enumerate(triples)
+        ),
     )
     with pytest.raises(OperationResourceAdmissionError, match="work"):
         enumerate_minimal_transversals(

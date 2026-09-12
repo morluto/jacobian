@@ -306,9 +306,7 @@ def enumerate_minimal_transversals(
     forced_row = tuple(vertex for vertex in vertices if vertex in forced)
     if source_empty:
         results: tuple[tuple[str, ...], ...] = ((),)
-    elif has_empty_edge or maximum == 0:
-        results = ()
-    elif len(forced) > maximum:
+    elif has_empty_edge or maximum == 0 or len(forced) > maximum:
         results = ()
     elif not remaining_edges:
         results = (forced_row,)
@@ -331,8 +329,7 @@ def enumerate_minimal_transversals(
                     continue
                 has_redundant_vertex, _ = _candidate_has_redundant_vertex(
                     selected,
-                    remaining_edges
-                    + tuple(frozenset({vertex}) for vertex in forced),
+                    remaining_edges + tuple(frozenset({vertex}) for vertex in forced),
                 )
                 if has_redundant_vertex:
                     continue

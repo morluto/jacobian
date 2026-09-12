@@ -101,6 +101,40 @@ def _reachable_states_without_index(dfa: DFA) -> set[int]:
     return reachable
 
 
+def _parikh_states_per_count_vector(dfa: DFA, reachable: set[int]) -> int:
+    """Bound how many states one symbol-count vector can occupy.
+
+    Pairwise-commuting letter actions on the reachable subgraph send each
+    Parikh vector to a single state, matching the DP cell count. Otherwise
+    fall back to the reachable-state cardinality.
+    """
+
+    by_source: dict[int, dict[int, int]] = {}
+    for transition in dfa.transitions:
+        if transition.source not in reachable:
+            continue
+        by_source.setdefault(transition.source, {})[transition.symbol] = (
+            transition.target
+        )
+    alphabet = range(dfa.alphabet_size)
+    for source in reachable:
+        outgoing = by_source.get(source, {})
+        for first in alphabet:
+            image_first = outgoing.get(first)
+            if image_first is None or image_first not in reachable:
+                return len(reachable)
+            first_outgoing = by_source.get(image_first, {})
+            for second in alphabet:
+                image_second = outgoing.get(second)
+                if image_second is None or image_second not in reachable:
+                    return len(reachable)
+                if first_outgoing.get(second) != by_source.get(image_second, {}).get(
+                    first
+                ):
+                    return len(reachable)
+    return 1
+
+
 def _extend_profile_layer(
     layer: dict[tuple[int, tuple[int, ...]], int],
     transitions: dict[tuple[int, int], int],
@@ -168,6 +202,7 @@ def symbol_parikh_profile(
             message="symbol-Parikh multiplicities exceed the exact integer digit bound",
         )
     reachable = _reachable_states_without_index(dfa)
+    states_per_vector = _parikh_states_per_count_vector(dfa, reachable)
     # A DP layer has at most one entry per word of that length.  Capping the
     # composition bound by the possible word count keeps unreachable states
     # from charging combinations that the layer cannot contain.
@@ -176,13 +211,13 @@ def symbol_parikh_profile(
     for step in range(length):
         layer_composition_bound = comb(step + alphabet_size - 1, alphabet_size - 1)
         extension_cells += min(
-            len(reachable) * layer_composition_bound,
+            states_per_vector * layer_composition_bound,
             possible_word_count,
         )
         possible_word_count *= alphabet_size
     extension_coordinate_work = extension_cells * alphabet_size * max(1, alphabet_size)
     output_materialization_cells = min(
-        len(reachable) * output_bound,
+        states_per_vector * output_bound,
         possible_word_count,
     )
     output_materialization_work = output_materialization_cells * max(1, alphabet_size)

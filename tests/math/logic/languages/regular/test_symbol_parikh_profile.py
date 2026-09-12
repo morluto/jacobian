@@ -443,3 +443,27 @@ def test_empty_alphabet_has_only_the_empty_word() -> None:
     assert result.alphabet == ()
     assert result.cells[0].symbol_counts == ()
     assert result.total_accepted_words == 1
+
+
+def test_commuting_counter_dfa_admits_length_408_profile() -> None:
+    state_count = 6
+    dfa = DFA(
+        state_count=state_count,
+        alphabet_size=2,
+        transitions=tuple(
+            DFATransition(
+                source=source,
+                symbol=symbol,
+                target=source if symbol == 0 else (source + 1) % state_count,
+            )
+            for source in range(state_count)
+            for symbol in range(2)
+        ),
+        initial_state=0,
+        accepting_states=tuple(range(state_count)),
+    )
+    result = symbol_parikh_profile(
+        SymbolParikhProfileRequest(dfa=dfa, word_length=408)
+    )
+    assert result.total_accepted_words == 2**408
+    assert len(result.cells) == 409

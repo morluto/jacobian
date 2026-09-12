@@ -9,7 +9,10 @@ from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import encode_strict_json
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.probability._site_reliability import (
     GraphSiteReliabilityResult,
@@ -185,6 +188,51 @@ def test_terminal_order_does_not_change_the_result() -> None:
         _source(("a", "b"), (("a", "b"),), (Fraction(1, 3), Fraction(1, 3)), ("b", "a"))
     )
     assert forward.connection_probability == reverse.connection_probability
+
+
+def test_declared_vertex_axis_is_authoritative() -> None:
+    source = GraphSiteReliabilitySource(
+        graph=SimpleUndirectedGraph(
+            vertices=("b", "a"),
+            edges=(("a", "b"),),
+        ),
+        vertex_probabilities=(
+            SiteReliabilityVertexProbability(
+                vertex="b", open_probability=_probability(Fraction(1, 2))
+            ),
+            SiteReliabilityVertexProbability(
+                vertex="a", open_probability=_probability(Fraction(1, 3))
+            ),
+        ),
+        terminals=("b", "a"),
+    )
+    result = compute_site_connection_probability(source)
+    assert result.states[1].open_vertices == ("b",)
+
+
+def test_forged_site_state_subset_is_rejected_after_json_round_trip() -> None:
+    result = compute_site_connection_probability(
+        _source(("a", "b"), (("a", "b"),), (Fraction(1, 2),) * 2, ("a", "b"))
+    )
+    payload = result.model_dump(mode="json")
+    payload["states"][1]["open_vertices"] = ["b"]
+    with pytest.raises(ValidationError, match="state vertices"):
+        GraphSiteReliabilityResult.model_validate_json(
+            encode_strict_json(payload), strict=True
+        )
+
+
+def test_site_resource_bound_uses_resource_admission_error() -> None:
+    vertices = tuple(sorted(f"v{index}" for index in range(12)))
+    edges = tuple(
+        (left, right)
+        for index, left in enumerate(vertices)
+        for right in vertices[index + 1 :]
+    )
+    with pytest.raises(OperationResourceAdmissionError):
+        compute_site_connection_probability(
+            _source(vertices, edges, (Fraction(1, 2),) * len(vertices), vertices[:2])
+        )
 
 
 def test_matches_independent_brute_force() -> None:

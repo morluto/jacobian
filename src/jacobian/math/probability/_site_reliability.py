@@ -20,6 +20,7 @@ from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
     OperationExample,
+    OperationResourceAdmissionError,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.probability._models import MAX_INPUT_RATIONAL_DIGITS
@@ -69,8 +70,9 @@ class GraphSiteReliabilitySource(StrictModel):
 
     @model_validator(mode="after")
     def require_bound_vertex_axis(self) -> Self:
-        if tuple(item.vertex for item in self.vertex_probabilities) != tuple(
-            sorted(self.graph.vertices)
+        if (
+            tuple(item.vertex for item in self.vertex_probabilities)
+            != self.graph.vertices
         ):
             raise _validation_error(
                 "site reliability vertex probabilities must follow the declared "
@@ -108,7 +110,7 @@ class GraphSiteReliabilityState(StrictModel):
             raise _validation_error(
                 "site reliability state probability must lie in [0, 1]"
             )
-        if self.open_vertices != tuple(sorted(set(self.open_vertices))):
+        if len(set(self.open_vertices)) != len(self.open_vertices):
             raise _validation_error(
                 "site reliability state vertex lists must be canonical"
             )
@@ -154,6 +156,17 @@ class GraphSiteReliabilityResult(StrictModel):
             raise _validation_error(
                 "state ledger indices must be complete and canonical"
             )
+        vertex_axis = self.source.graph.vertices
+        for state in self.states:
+            expected = tuple(
+                vertex
+                for index, vertex in enumerate(vertex_axis)
+                if state.state_index & (1 << index)
+            )
+            if state.open_vertices != expected:
+                raise _validation_error(
+                    "site reliability state vertices do not match their state index"
+                )
         return self
 
     @classmethod
@@ -196,7 +209,7 @@ def _admit_site_request(
     request: GraphSiteReliabilitySource,
 ) -> None:
     if len(request.graph.vertices) > MAX_SITE_RELIABILITY_VERTICES:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("graph", "vertices"),
             code="probability.site_reliability.vertex_bound",
             message=(
@@ -205,15 +218,16 @@ def _admit_site_request(
             ),
         )
     if len(request.graph.edges) > MAX_SITE_RELIABILITY_EDGES:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("graph", "edges"),
             code="probability.site_reliability.edge_bound",
             message=(
                 f"site reliability exceeds the {MAX_SITE_RELIABILITY_EDGES}-edge bound"
             ),
         )
-    if tuple(item.vertex for item in request.vertex_probabilities) != tuple(
-        sorted(request.graph.vertices)
+    if (
+        tuple(item.vertex for item in request.vertex_probabilities)
+        != request.graph.vertices
     ):
         raise OperationDomainValidationError(
             location=("vertex_probabilities",),
@@ -255,7 +269,7 @@ def _admit_site_request(
     state_count = 1 << len(request.graph.vertices)
     rational_digits = factor_digits + len(str(state_count))
     if rational_digits > MAX_SITE_RELIABILITY_RATIONAL_DIGITS:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("vertex_probabilities",),
             code="probability.site_reliability.rational_height_bound",
             message=(
@@ -283,7 +297,7 @@ def _admit_site_request(
         )
     )
     if ledger_units > MAX_SITE_RELIABILITY_LEDGER_UNITS:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("states",),
             code="probability.site_reliability.output_bound",
             message="complete site-reliability ledger exceeds its output bound",
@@ -307,7 +321,7 @@ def compute_site_connection_probability(
             message=str(error["msg"]),
         ) from None
     _admit_site_request(source)
-    vertices = tuple(sorted(source.graph.vertices))
+    vertices = source.graph.vertices
     probabilities = tuple(
         fmpq(
             item.open_probability.as_fraction().numerator,

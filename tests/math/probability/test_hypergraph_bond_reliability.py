@@ -237,3 +237,20 @@ def test_result_round_trips_through_strict_json() -> None:
         encode_strict_json(result.model_dump(mode="json")), strict=True
     )
     assert restored == result
+
+
+def test_forged_hyperedge_state_ids_are_rejected_after_json_round_trip() -> None:
+    result = compute_hypergraph_bond_connection_probability(
+        _source(
+            ("a", "b"),
+            (("ab", ("a", "b")),),
+            {"ab": Fraction(1, 2)},
+            ("a", "b"),
+        )
+    )
+    payload = result.model_dump(mode="json")
+    payload["states"][1]["open_hyperedge_ids"] = []
+    with pytest.raises(ValidationError, match="state IDs"):
+        HypergraphBondConnectionProbabilityResult.model_validate_json(
+            encode_strict_json(payload), strict=True
+        )

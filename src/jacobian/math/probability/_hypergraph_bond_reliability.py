@@ -20,6 +20,7 @@ from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
     OperationExample,
+    OperationResourceAdmissionError,
 )
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
@@ -158,6 +159,17 @@ class HypergraphBondConnectionProbabilityResult(StrictModel):
             raise _validation_error(
                 "state ledger indices must be complete and canonical"
             )
+        hyperedge_axis = tuple(edge_id for edge_id, _ in self.source.hypergraph.edges)
+        for state in self.states:
+            expected = tuple(
+                edge_id
+                for index, edge_id in enumerate(hyperedge_axis)
+                if state.state_index & (1 << index)
+            )
+            if state.open_hyperedge_ids != expected:
+                raise _validation_error(
+                    "hypergraph state IDs do not match their state index"
+                )
         return self
 
     @classmethod
@@ -192,7 +204,7 @@ def _admit_hypergraph_request(
     request: HypergraphBondReliabilitySource,
 ) -> None:
     if len(request.hypergraph.vertices) > MAX_HYPERGRAPH_RELIABILITY_VERTICES:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("hypergraph", "vertices"),
             code="probability.hypergraph_reliability.vertex_bound",
             message=(
@@ -201,7 +213,7 @@ def _admit_hypergraph_request(
             ),
         )
     if len(request.hypergraph.edges) > MAX_HYPERGRAPH_RELIABILITY_HYPEREDGES:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("hypergraph", "edges"),
             code="probability.hypergraph_reliability.hyperedge_bound",
             message=(
@@ -251,7 +263,7 @@ def _admit_hypergraph_request(
     state_count = 1 << len(request.hypergraph.edges)
     rational_digits = factor_digits + len(str(state_count))
     if rational_digits > MAX_HYPERGRAPH_RELIABILITY_RATIONAL_DIGITS:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("hyperedge_probabilities",),
             code="probability.hypergraph_reliability.rational_height_bound",
             message=(
@@ -282,7 +294,7 @@ def _admit_hypergraph_request(
         )
     )
     if ledger_units > MAX_HYPERGRAPH_RELIABILITY_LEDGER_UNITS:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("states",),
             code="probability.hypergraph_reliability.output_bound",
             message="complete hypergraph-reliability ledger exceeds its output bound",

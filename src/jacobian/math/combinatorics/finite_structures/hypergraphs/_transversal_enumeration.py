@@ -204,11 +204,7 @@ def _forced_vertices(edges: tuple[frozenset[str], ...]) -> frozenset[str]:
 def _minimal_edges(
     edges: tuple[frozenset[str], ...],
 ) -> tuple[frozenset[str], ...]:
-    return tuple(
-        edge
-        for edge in edges
-        if not any(other < edge for other in edges)
-    )
+    return tuple(edge for edge in edges if not any(other < edge for other in edges))
 
 
 def _admit_enumeration(
@@ -338,8 +334,7 @@ def enumerate_minimal_transversals(
         free_vertices = tuple(
             vertex
             for vertex in vertices
-            if vertex not in forced
-            and any(vertex in edge for edge in remaining_edges)
+            if vertex not in forced and any(vertex in edge for edge in remaining_edges)
         )
         free_maximum = maximum - len(forced)
         for size in range(0 if forced else 1, free_maximum + 1):

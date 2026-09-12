@@ -53,6 +53,7 @@ from jacobian.math.geometry.polytopes.lattice._models import (
     MAX_FACET_TESTS,
     MAX_LATTICE_POINTS,
     CountLatticePointsResult,
+    EhrhartRequest,
     EhrhartResult,
     EnumerateLatticePointsResult,
     LatticePoint,
@@ -484,8 +485,16 @@ def ehrhart_polynomial(
     and every requested extra value is replayed against the resulting
     polynomial before a result is returned.
     """
-    if type(degree_bound) is not int or type(max_dilation) is not int:
-        raise TypeError("Ehrhart degree and dilation bounds must be integers")
+    try:
+        EhrhartRequest(
+            vertices=vertices, degree_bound=degree_bound, max_dilation=max_dilation
+        )
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("vertices", "degree_bound", "max_dilation"),
+            code="polytope.ehrhart.invalid_source",
+            message=str(exc),
+        ) from exc
     values: list[int] = [1]
     for dilation in range(1, max_dilation + 1):
         scaled = tuple(

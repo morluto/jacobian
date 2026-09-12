@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from math import gcd
 
 from jacobian._exact import (
     MAX_CANONICAL_INTEGER_DIGITS,
     CanonicalRational,
 )
+from jacobian._execution import request_checkpoint
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -27,23 +29,83 @@ from jacobian.math.polynomials.values import (
     SparseRationalPolynomial,
 )
 
+_MergedPair = tuple[FormComponent, FormComponent, tuple[int, ...], int]
+_RemainingTerms = dict[tuple[int, ...], dict[tuple[int, ...], Fraction]]
+_CONVOLUTION_CHECKPOINT_INTERVAL = 4_096
 
-def _multiply_components(
-    left: RationalPolynomial, right: RationalPolynomial, sign: int
-) -> dict[tuple[int, ...], Fraction]:
-    values: dict[tuple[int, ...], Fraction] = {}
-    for first in left.polynomial.terms:
-        for second in right.polynomial.terms:
-            exponents = tuple(
-                a + b for a, b in zip(first.exponents, second.exponents, strict=True)
-            )
-            value = (
-                sign
-                * first.coefficient.as_fraction()
-                * second.coefficient.as_fraction()
-            )
-            values[exponents] = values.get(exponents, Fraction()) + value
-    return {exponents: value for exponents, value in values.items() if value}
+
+def _fraction_component_digits(value: Fraction) -> int:
+    return max(
+        len(format_canonical_integer(abs(value.numerator))),
+        len(format_canonical_integer(value.denominator)),
+    )
+
+
+def _unit_coefficient(value: CanonicalRational) -> bool:
+    return value.den == 1 and value.num in (-1, 1)
+
+
+def _cancelled_product_digit_bound(
+    left: CanonicalRational, right: CanonicalRational
+) -> int:
+    """Upper-bound digits of ``left*right`` after num/den cross-cancellation."""
+
+    if _unit_coefficient(left):
+        return max(
+            len(format_canonical_integer(abs(right.num))),
+            len(format_canonical_integer(right.den)),
+        )
+    if _unit_coefficient(right):
+        return max(
+            len(format_canonical_integer(abs(left.num))),
+            len(format_canonical_integer(left.den)),
+        )
+    left_num, left_den = abs(left.num), left.den
+    right_num, right_den = abs(right.num), right.den
+    cross_left = gcd(left_num, right_den)
+    cross_right = gcd(right_num, left_den)
+    return max(
+        len(format_canonical_integer(left_num // cross_left))
+        + len(format_canonical_integer(right_num // cross_right)),
+        len(format_canonical_integer(left_den // cross_right))
+        + len(format_canonical_integer(right_den // cross_left)),
+    )
+
+
+def _coefficient_budget() -> None:
+    raise OperationResourceAdmissionError(
+        location=("left", "right"),
+        code="differential_form.wedge.coefficient_budget",
+        message="wedge coefficient growth exceeds the admitted digit-work or output envelope",
+    )
+
+
+def _admit_cancelled_product_heights(pairs: tuple[_MergedPair, ...]) -> None:
+    """Reject oversized rational products before convolution materializes them."""
+
+    completed = 0
+    for first, second, _, _ in pairs:
+        for left_term in first.coefficient.polynomial.terms:
+            for right_term in second.coefficient.polynomial.terms:
+                completed += 1
+                if completed % _CONVOLUTION_CHECKPOINT_INTERVAL == 0:
+                    request_checkpoint(
+                        "during differential wedge product-height admission"
+                    )
+                bound = _cancelled_product_digit_bound(
+                    left_term.coefficient, right_term.coefficient
+                )
+                if bound <= MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS:
+                    continue
+                product = (
+                    left_term.coefficient.as_fraction()
+                    * right_term.coefficient.as_fraction()
+                )
+                if (
+                    _fraction_component_digits(product)
+                    > MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS
+                ):
+                    _coefficient_budget()
 
 
 def _merged_indices(
@@ -55,25 +117,35 @@ def _merged_indices(
     return tuple(sorted((*left, *right))), -1 if inversions % 2 else 1
 
 
-_MergedPair = tuple[FormComponent, FormComponent, tuple[int, ...], int]
-_RemainingTerms = dict[tuple[int, ...], dict[tuple[int, ...], Fraction]]
-
-
-def _fraction_component_digits(value: Fraction) -> int:
-    return max(
-        len(format_canonical_integer(abs(value.numerator))),
-        len(format_canonical_integer(value.denominator)),
-    )
-
-
 def _convolve_pairs(pairs: tuple[_MergedPair, ...]) -> _RemainingTerms:
     aggregate: _RemainingTerms = {}
+    completed = 0
     for first, second, indices, sign in pairs:
         terms = aggregate.setdefault(indices, {})
-        for exponents, coefficient in _multiply_components(
-            first.coefficient, second.coefficient, sign
-        ).items():
-            terms[exponents] = terms.get(exponents, Fraction()) + coefficient
+        for left_term in first.coefficient.polynomial.terms:
+            for right_term in second.coefficient.polynomial.terms:
+                completed += 1
+                if completed % _CONVOLUTION_CHECKPOINT_INTERVAL == 0:
+                    request_checkpoint("during differential wedge convolution")
+                exponents = tuple(
+                    a + b
+                    for a, b in zip(
+                        left_term.exponents, right_term.exponents, strict=True
+                    )
+                )
+                value = (
+                    sign
+                    * left_term.coefficient.as_fraction()
+                    * right_term.coefficient.as_fraction()
+                )
+                combined = terms.get(exponents, Fraction()) + value
+                if (
+                    combined
+                    and _fraction_component_digits(combined)
+                    > MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS
+                ):
+                    _coefficient_budget()
+                terms[exponents] = combined
     return {
         indices: {
             exponents: coefficient
@@ -107,11 +179,7 @@ def _admit_remaining_coefficients(aggregate: _RemainingTerms) -> None:
         any(height > MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS for height in bounds)
         or sum(height * height for height in bounds) > 100_000_000
     ):
-        raise OperationResourceAdmissionError(
-            location=("left", "right"),
-            code="differential_form.wedge.coefficient_budget",
-            message="wedge coefficient growth exceeds the admitted digit-work or output envelope",
-        )
+        _coefficient_budget()
 
 
 def _admit_degree(degree: int) -> None:
@@ -175,6 +243,7 @@ def wedge(
             code="differential_form.wedge.term_budget",
             message="wedge polynomial convolution exceeds the bounded work envelope",
         )
+    _admit_cancelled_product_heights(pairs)
     aggregate = _convolve_pairs(pairs)
     _admit_remaining_support(aggregate)
     _admit_remaining_coefficients(aggregate)

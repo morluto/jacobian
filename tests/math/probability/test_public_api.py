@@ -13,6 +13,8 @@ def test_exact_public_api_symbols() -> None:
         "AsymmetricLocalLemmaInequality",
         "AsymmetricLocalLemmaWitness",
         "AsymmetricLocalLemmaWitnessCheckResult",
+        "CompoundPoissonCumulantRequest",
+        "CompoundPoissonCumulantResult",
         "FiniteJointTable",
         "GraphConnectionProbabilityResult",
         "GraphReliabilityEdgeProbability",
@@ -23,6 +25,7 @@ def test_exact_public_api_symbols() -> None:
         "MutualInformationTerm",
         "all_terminal_reliability",
         "check_asymmetric_local_lemma_witness",
+        "compound_poisson_cumulant_prefix",
         "compute_graph_connection_probability",
         "condition",
         "convolution",
@@ -44,6 +47,7 @@ def test_exact_public_api_symbols() -> None:
 def test_exact_operations_module_exports() -> None:
     """Native operations.py __all__ publishes the finite-distribution kernels."""
     expected = (
+        "compound_poisson_cumulant_prefix",
         "condition",
         "convolution",
         "convolution_peak",

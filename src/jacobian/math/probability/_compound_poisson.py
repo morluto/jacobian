@@ -1,95 +1,313 @@
-"""Exact compound-Poisson cumulant prefixes."""
+"""Exact compound-Poisson cumulant prefixes.
+
+The compound-Poisson law is generally infinite, so this module deliberately
+returns only the finite invariant that can be represented exactly here:
+``kappa_n = lambda * E[J**n]`` for a requested prefix of orders.  It never
+constructs a truncated PMF or claims that the returned rows are a complete
+distribution.
+"""
 
 from fractions import Fraction
-from typing import Self
+from math import gcd
+from typing import Final
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, StrictInt
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.probability._distribution import (
+    FiniteDistributionAtom,
     FiniteRationalDistribution,
     require_input_distribution,
 )
-from jacobian.math.probability._models import (
-    MAX_RESULT_RATIONAL_DIGITS,
-    _require_bounded_fraction,
+from jacobian.math.probability._models import MAX_RESULT_RATIONAL_DIGITS
+
+MAX_COMPOUND_POISSON_ATOMS: Final = 256
+MAX_COMPOUND_POISSON_ORDER: Final = 128
+MAX_COMPOUND_POISSON_MOMENT_PRODUCTS: Final = (
+    MAX_COMPOUND_POISSON_ATOMS * MAX_COMPOUND_POISSON_ORDER
 )
-from jacobian.math.probability.operations import _plan_raw_moment
+_RESULT_VALUE_LIMIT: Final = 10**MAX_RESULT_RATIONAL_DIGITS - 1
 
 
 class CompoundPoissonCumulantRequest(StrictModel):
-    intensity: CanonicalRational
-    jump_distribution: FiniteRationalDistribution
-    max_order: StrictInt = Field(ge=0, le=128)
-
-    @model_validator(mode="after")
-    def require_nonnegative_intensity(self) -> Self:
-        require_bounded_rational(
-            self.intensity, max_digits=256, label="compound-Poisson intensity"
+    intensity: CanonicalRational = Field(
+        description=(
+            "Nonnegative Poisson intensity. It is a reduced exact rational; "
+            "execution admits at most 128 decimal digits per component."
+        ),
+        examples=[{"num": "2", "den": "1"}],
+    )
+    jump_distribution: FiniteRationalDistribution = Field(
+        description=(
+            "Normalized finite rational law for one independent jump, with "
+            "strictly increasing support values."
         )
-        if self.intensity.num < 0:
-            raise ValueError("compound-Poisson intensity must be nonnegative")
-        require_input_distribution(
-            self.jump_distribution.atoms, require_canonical=True, max_digits=256
-        )
-        return self
+    )
+    max_order: StrictInt = Field(
+        ge=0,
+        le=MAX_COMPOUND_POISSON_ORDER,
+        description=(
+            "Number of positive orders to return. Zero returns an empty "
+            "prefix and is useful for representing no requested moments."
+        ),
+        examples=[3],
+    )
 
 
 class CompoundPoissonCumulantRow(StrictModel):
-    order: StrictInt = Field(ge=1, le=128)
+    order: StrictInt = Field(ge=1, le=MAX_COMPOUND_POISSON_ORDER)
     jump_raw_moment: CanonicalRational
     cumulant: CanonicalRational
 
 
 class CompoundPoissonCumulantResult(StrictModel):
     source: CompoundPoissonCumulantRequest
-    cumulants: tuple[CompoundPoissonCumulantRow, ...] = Field(max_length=128)
+    cumulants: tuple[CompoundPoissonCumulantRow, ...] = Field(
+        max_length=MAX_COMPOUND_POISSON_ORDER
+    )
+
+
+def _resource_error(
+    *, location: tuple[str, ...], code: str, message: str
+) -> OperationResourceAdmissionError:
+    return OperationResourceAdmissionError(
+        location=location, code=code, message=message
+    )
+
+
+def _domain_error(
+    *, location: tuple[str, ...], code: str, message: str
+) -> OperationDomainValidationError:
+    return OperationDomainValidationError(location=location, code=code, message=message)
+
+
+def _bounded_product(
+    left: Fraction,
+    right: Fraction,
+    *,
+    location: tuple[str, ...],
+    label: str,
+) -> Fraction:
+    """Multiply with cross-cancellation before enforcing exact-height bounds."""
+
+    left_numerator, left_denominator = left.numerator, left.denominator
+    right_numerator, right_denominator = right.numerator, right.denominator
+    first = gcd(abs(left_numerator), right_denominator)
+    second = gcd(abs(right_numerator), left_denominator)
+    left_numerator //= first
+    right_denominator //= first
+    right_numerator //= second
+    left_denominator //= second
+    if (
+        right_numerator != 0
+        and abs(left_numerator) > _RESULT_VALUE_LIMIT // abs(right_numerator)
+    ) or left_denominator > _RESULT_VALUE_LIMIT // right_denominator:
+        raise _resource_error(
+            location=location,
+            code="probability.compound_poisson.intermediate_height_bound",
+            message=(
+                f"{label} exceeds the {MAX_RESULT_RATIONAL_DIGITS}-digit "
+                "exact intermediate bound"
+            ),
+        )
+    numerator = left_numerator * right_numerator
+    denominator = left_denominator * right_denominator
+    return Fraction(numerator, denominator)
+
+
+def _bounded_sum(
+    left: Fraction,
+    right: Fraction,
+    *,
+    location: tuple[str, ...],
+    label: str,
+) -> Fraction:
+    """Add two exact terms while bounding common-denominator arithmetic."""
+
+    common = gcd(left.denominator, right.denominator)
+    left_scale = right.denominator // common
+    right_scale = left.denominator // common
+    if (
+        left_scale > _RESULT_VALUE_LIMIT // max(1, abs(left.numerator))
+        or right_scale > _RESULT_VALUE_LIMIT // max(1, abs(right.numerator))
+        or left_scale > _RESULT_VALUE_LIMIT // left.denominator
+    ):
+        raise _resource_error(
+            location=location,
+            code="probability.compound_poisson.intermediate_height_bound",
+            message=(
+                f"{label} exceeds the {MAX_RESULT_RATIONAL_DIGITS}-digit "
+                "exact intermediate bound"
+            ),
+        )
+    left_numerator = left.numerator * left_scale
+    right_numerator = right.numerator * right_scale
+    denominator = left.denominator * left_scale
+    numerator = left_numerator + right_numerator
+    if abs(numerator) > _RESULT_VALUE_LIMIT:
+        raise _resource_error(
+            location=location,
+            code="probability.compound_poisson.intermediate_height_bound",
+            message=(
+                f"{label} exceeds the {MAX_RESULT_RATIONAL_DIGITS}-digit "
+                "exact intermediate bound"
+            ),
+        )
+    return Fraction(numerator, denominator)
+
+
+def _admit_and_plan(
+    request: CompoundPoissonCumulantRequest,
+) -> tuple[tuple[int, Fraction, Fraction], ...]:
+    """Admit all semantic work once and return its reusable arithmetic ledger."""
+
+    if not isinstance(request, CompoundPoissonCumulantRequest):
+        raise _domain_error(
+            location=("request",),
+            code="probability.compound_poisson.request_type",
+            message="compound-Poisson input must be a CompoundPoissonCumulantRequest",
+        )
+    if (
+        type(request.max_order) is not int
+        or not 0 <= request.max_order <= MAX_COMPOUND_POISSON_ORDER
+    ):
+        raise _domain_error(
+            location=("max_order",),
+            code="probability.compound_poisson.order_bound",
+            message=(
+                "compound-Poisson order must be between 0 and "
+                f"{MAX_COMPOUND_POISSON_ORDER}"
+            ),
+        )
+    if not isinstance(request.intensity, CanonicalRational):
+        raise _domain_error(
+            location=("intensity",),
+            code="probability.compound_poisson.intensity_type",
+            message="compound-Poisson intensity must be a canonical rational",
+        )
+    try:
+        require_bounded_rational(
+            request.intensity,
+            max_digits=128,
+            label="compound-Poisson intensity",
+        )
+    except ValueError as exc:
+        raise _resource_error(
+            location=("intensity",),
+            code="probability.compound_poisson.input_height_bound",
+            message=str(exc),
+        ) from exc
+    if request.intensity.num < 0:
+        raise _domain_error(
+            location=("intensity",),
+            code="probability.compound_poisson.nonnegative_intensity",
+            message="compound-Poisson intensity must be nonnegative",
+        )
+    if not isinstance(request.jump_distribution, FiniteRationalDistribution):
+        raise _domain_error(
+            location=("jump_distribution",),
+            code="probability.compound_poisson.distribution_type",
+            message="jump_distribution must be a FiniteRationalDistribution",
+        )
+    atoms = request.jump_distribution.atoms
+    if type(atoms) is not tuple or not all(
+        isinstance(atom, FiniteDistributionAtom) for atom in atoms
+    ):
+        raise _domain_error(
+            location=("jump_distribution", "atoms"),
+            code="probability.compound_poisson.atom_type",
+            message="jump_distribution atoms must be finite-distribution atoms",
+        )
+    if not 1 <= len(atoms) <= MAX_COMPOUND_POISSON_ATOMS:
+        raise _resource_error(
+            location=("jump_distribution", "atoms"),
+            code="probability.compound_poisson.support_bound",
+            message=(
+                "compound-Poisson jump laws accept at most "
+                f"{MAX_COMPOUND_POISSON_ATOMS} support atoms"
+            ),
+        )
+    try:
+        require_input_distribution(
+            atoms,
+            require_canonical=True,
+            max_digits=128,
+        )
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise _domain_error(
+            location=("jump_distribution",),
+            code="probability.compound_poisson.distribution_admission",
+            message=str(exc),
+        ) from exc
+    products = len(atoms) * request.max_order
+    if products > MAX_COMPOUND_POISSON_MOMENT_PRODUCTS:
+        raise _resource_error(
+            location=("jump_distribution", "max_order"),
+            code="probability.compound_poisson.work_bound",
+            message="compound-Poisson moment work exceeds the admitted bound",
+        )
+
+    values = tuple(atom.value.as_fraction() for atom in atoms)
+    probabilities = tuple(atom.probability.as_fraction() for atom in atoms)
+    intensity = request.intensity.as_fraction()
+    powers = [Fraction(1) for _ in atoms]
+    rows: list[tuple[int, Fraction, Fraction]] = []
+    for order in range(1, request.max_order + 1):
+        for index, value in enumerate(values):
+            powers[index] = _bounded_product(
+                powers[index],
+                value,
+                location=("jump_distribution", "atoms", str(index), "value"),
+                label="powered jump value",
+            )
+        moment = Fraction()
+        for index, (probability, power) in enumerate(
+            zip(probabilities, powers, strict=True)
+        ):
+            contribution = _bounded_product(
+                probability,
+                power,
+                location=("jump_distribution", "atoms", str(index)),
+                label="jump-moment contribution",
+            )
+            moment = _bounded_sum(
+                moment,
+                contribution,
+                location=("jump_distribution", "atoms"),
+                label="jump raw moment",
+            )
+        cumulant = _bounded_product(
+            intensity,
+            moment,
+            location=("intensity",),
+            label="compound-Poisson cumulant",
+        )
+        rows.append((order, moment, cumulant))
+    return tuple(rows)
 
 
 def compound_poisson_cumulant_prefix(
     request: CompoundPoissonCumulantRequest,
 ) -> CompoundPoissonCumulantResult:
-    atoms = request.jump_distribution.atoms
-    intensity = request.intensity.as_fraction()
-    for order in range(1, request.max_order + 1):
-        moment = _plan_raw_moment(atoms, order).total
-        try:
-            _require_bounded_fraction(
-                intensity * moment,
-                max_digits=MAX_RESULT_RATIONAL_DIGITS,
-                label="compound-Poisson cumulant",
-            )
-        except ValueError as exc:
-            raise OperationResourceAdmissionError(
-                location=("intensity",),
-                code="probability.compound_poisson.cumulant_height_bound",
-                message=str(exc),
-            ) from exc
-    powers = [Fraction(1) for _ in atoms]
-    values = [atom.value.as_fraction() for atom in atoms]
-    probabilities = [atom.probability.as_fraction() for atom in atoms]
-    rows = []
-    for order in range(1, request.max_order + 1):
-        for index, value in enumerate(values):
-            powers[index] *= value
-        moment = sum(
-            (
-                probability * power
-                for probability, power in zip(probabilities, powers, strict=True)
-            ),
-            Fraction(),
+    plan = _admit_and_plan(request)
+    rows = tuple(
+        CompoundPoissonCumulantRow(
+            order=order,
+            jump_raw_moment=CanonicalRational.from_fraction(moment),
+            cumulant=CanonicalRational.from_fraction(cumulant),
         )
-        cumulant = intensity * moment
-        rows.append(
-            CompoundPoissonCumulantRow(
-                order=order,
-                jump_raw_moment=CanonicalRational.from_fraction(moment),
-                cumulant=CanonicalRational.from_fraction(cumulant),
-            )
-        )
-    return CompoundPoissonCumulantResult(source=request, cumulants=tuple(rows))
+        for order, moment, cumulant in plan
+    )
+    return CompoundPoissonCumulantResult(source=request, cumulants=rows)
 
 
-__all__ = ["compound_poisson_cumulant_prefix"]
+__all__ = [
+    "CompoundPoissonCumulantRequest",
+    "CompoundPoissonCumulantResult",
+    "compound_poisson_cumulant_prefix",
+]

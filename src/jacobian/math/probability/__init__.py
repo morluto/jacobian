@@ -1,5 +1,9 @@
 """Supported native exact finite-probability APIs."""
 
+from jacobian.math.probability._compound_poisson import (
+    CompoundPoissonCumulantRequest,
+    CompoundPoissonCumulantResult,
+)
 from jacobian.math.probability._graph_connection_probability import (
     GraphConnectionProbabilityResult,
     GraphReliabilityEdgeProbability,
@@ -20,6 +24,7 @@ from jacobian.math.probability.local_lemma import (
 )
 from jacobian.math.probability.mutual_information import mutual_information
 from jacobian.math.probability.operations import (
+    compound_poisson_cumulant_prefix,
     condition,
     convolution,
     convolution_peak,
@@ -41,6 +46,8 @@ __all__ = [
     "AsymmetricLocalLemmaInequality",
     "AsymmetricLocalLemmaWitness",
     "AsymmetricLocalLemmaWitnessCheckResult",
+    "CompoundPoissonCumulantRequest",
+    "CompoundPoissonCumulantResult",
     "FiniteJointTable",
     "GraphConnectionProbabilityResult",
     "GraphReliabilityEdgeProbability",
@@ -51,6 +58,7 @@ __all__ = [
     "MutualInformationTerm",
     "all_terminal_reliability",
     "check_asymmetric_local_lemma_witness",
+    "compound_poisson_cumulant_prefix",
     "compute_graph_connection_probability",
     "condition",
     "convolution",

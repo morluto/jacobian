@@ -47,6 +47,20 @@ class RationalDiscreteAntiderivativeResult(StrictModel):
     reconstructed_difference: RationalPolynomial
 
 
+def _parse_native_polynomial(source: RationalPolynomial) -> RationalPolynomial:
+    """Reparse nested values for native callers bypassing Pydantic validation."""
+
+    try:
+        payload = source.model_dump(mode="python", warnings=False)
+        return RationalPolynomial.model_validate(payload)
+    except (AttributeError, RecursionError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="polynomial.discrete_antiderivative.polynomial_structure",
+            message="polynomial contains malformed canonical nested values",
+        ) from exc
+
+
 # The current deterministic pure-Python triangular kernel performs one exact
 # rational update per charged unit. Keep the admitted envelope below the
 # sparse carrier's maximum so a valid but pathological high-degree source
@@ -173,6 +187,7 @@ def _compute_discrete_antiderivative(
             code="polynomial.discrete_antiderivative.polynomial_type",
             message="polynomial must be a RationalPolynomial",
         )
+    source = _parse_native_polynomial(source)
     if type(variable) is not str or not variable.isidentifier():
         raise OperationDomainValidationError(
             location=("variable",),

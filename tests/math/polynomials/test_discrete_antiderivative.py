@@ -169,6 +169,32 @@ def test_request_type_and_selected_axis_are_domain_errors() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    "forged_polynomial",
+    (
+        RationalPolynomial.model_construct(
+            variables=("k",),
+            polynomial=object(),
+        ),
+        RationalPolynomial.model_construct(
+            variables=("k",),
+            polynomial=SparseRationalPolynomial.model_construct(terms=(object(),)),
+        ),
+        RationalPolynomial.model_construct(
+            variables=("k",),
+            polynomial=SparseRationalPolynomial.model_construct(
+                terms=(RationalPolynomialTerm.model_construct(),)
+            ),
+        ),
+    ),
+)
+def test_native_boundary_rejects_malformed_nested_polynomial_values(
+    forged_polynomial: RationalPolynomial,
+) -> None:
+    with pytest.raises(OperationDomainValidationError):
+        rational_discrete_antiderivative(forged_polynomial, "k")
+
+
 def test_schema_and_example_explain_selected_axis_contract() -> None:
     schema = RationalDiscreteAntiderivativeRequest.model_json_schema()
     assert "variable" in schema["properties"]

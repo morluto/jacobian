@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from jacobian.math.logic.games.impartial._models import (
     DisjunctiveSumRequest,
+    DisjunctiveSumResult,
 )
 from jacobian.math.logic.games.impartial._tools import (
     TOOLS,
@@ -143,6 +144,28 @@ class TestDisjunctiveSum:
         forged = type(result).model_validate_json(json.dumps(payload))
         assert verify_disjunctive_sum(forged) is False
         assert verify_disjunctive_sum(result) is True
+
+    def test_verifier_rejects_structurally_valid_cyclic_claim(self) -> None:
+        claim = DisjunctiveSumResult.model_validate(
+            {
+                "components": [
+                    {
+                        "positions": ["a", "b"],
+                        "moves": [
+                            {"source": "a", "target": "b"},
+                            {"source": "b", "target": "a"},
+                        ],
+                    }
+                ],
+                "start_positions": ["a"],
+                "grundy_value": 0,
+                "component_grundy_values": [0],
+                "is_p_position": True,
+                "component_count": 1,
+            }
+        )
+
+        assert verify_disjunctive_sum(claim) is False
 
 
 class TestDisjunctiveSumValidation:

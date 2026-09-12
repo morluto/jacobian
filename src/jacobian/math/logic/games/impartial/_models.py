@@ -329,6 +329,7 @@ class OutcomeProfileResult(StrictModel):
             or len(self.n_positions) != len(set(self.n_positions))
             or len(self.terminal_positions) != len(set(self.terminal_positions))
             or len(self.grundy_values) != len(positions)
+            or tuple(position for position, _ in self.grundy_values) != positions
             or set(self.p_positions) | set(self.n_positions) != set(positions)
             or set(self.p_positions) & set(self.n_positions)
             or set(values) != set(positions)

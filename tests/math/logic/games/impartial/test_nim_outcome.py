@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from jacobian.math.logic.games.impartial._models import (
     NimSumRequest,
     OutcomeProfileRequest,
+    OutcomeProfileResult,
 )
 from jacobian.math.logic.games.impartial._tools import (
     compute_nim_sum,
@@ -116,3 +117,31 @@ class TestOutcomeProfile:
         forged = type(result).model_validate_json(json.dumps(coherent))
         assert verify_outcome_profile(forged) is False
         assert verify_outcome_profile(result)
+
+    def test_result_requires_canonical_grundy_row_order(self) -> None:
+        request = OutcomeProfileRequest.model_validate({"game": _GAME})
+        result = compute_outcome_profile(request)
+        payload = result.model_dump(mode="json")
+        payload["grundy_values"] = list(reversed(payload["grundy_values"]))
+
+        with pytest.raises(ValidationError):
+            type(result).model_validate_json(json.dumps(payload))
+
+    def test_verifier_rejects_structurally_valid_cyclic_claim(self) -> None:
+        claim = OutcomeProfileResult.model_validate(
+            {
+                "game": {
+                    "positions": ["a", "b"],
+                    "moves": [
+                        {"source": "a", "target": "b"},
+                        {"source": "b", "target": "a"},
+                    ],
+                },
+                "p_positions": ["a", "b"],
+                "n_positions": [],
+                "grundy_values": [["a", 0], ["b", 0]],
+                "terminal_positions": [],
+            }
+        )
+
+        assert verify_outcome_profile(claim) is False

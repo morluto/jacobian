@@ -143,12 +143,20 @@ def _disjunctive_sum_result(
 
 def verify_outcome_profile(claim: OutcomeProfileResult) -> bool:
     """Verify a serialized outcome profile against its retained game."""
-    return _outcome_profile_result(claim.game) == claim
+    try:
+        expected = _outcome_profile_result(claim.game)
+    except ValueError:
+        return False
+    return expected == claim
 
 
 def verify_disjunctive_sum(claim: DisjunctiveSumResult) -> bool:
     """Verify a serialized disjunctive sum against its retained components."""
-    return _disjunctive_sum_result(claim.components, claim.start_positions) == claim
+    try:
+        expected = _disjunctive_sum_result(claim.components, claim.start_positions)
+    except ValueError:
+        return False
+    return expected == claim
 
 
 def grundy_classes(game: ImpartialGame) -> tuple[tuple[int, tuple[str, ...]], ...]:

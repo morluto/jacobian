@@ -223,8 +223,6 @@ def test_discriminant_admission_does_not_factor_inside_perfect_power(
     def fail_if_factoring(candidate: object, factor: bool = True) -> bool:
         assert factor is False
         return False
-        assert factor is False
-        return False
 
     monkeypatch.setattr(
         "sympy.ntheory.perfect_power",

@@ -224,7 +224,7 @@ def test_final_layer_scan_charges_every_reachable_state() -> None:
             DFATransition(
                 source=source,
                 symbol=symbol,
-                target=(source + symbol + 1) % 3,
+                target=0 if symbol == 0 else (source + symbol) % 3,
             )
             for source in range(3)
             for symbol in range(3)
@@ -303,10 +303,28 @@ def test_transition_index_charge_rejects_before_indexing(
     reachable_state_count = 14
     state_count = 56
     alphabet_size = 16
-    dfa = _source_sensitive_dfa(
-        reachable_state_count=reachable_state_count,
+    dfa = DFA(
         state_count=state_count,
         alphabet_size=alphabet_size,
+        transitions=tuple(
+            DFATransition(
+                source=source,
+                symbol=symbol,
+                target=(
+                    0
+                    if symbol == 1
+                    else source + 1
+                    if symbol == 0 and source < reachable_state_count - 1
+                    else 0
+                    if symbol == 0
+                    else source
+                ),
+            )
+            for source in range(state_count)
+            for symbol in range(alphabet_size)
+        ),
+        initial_state=0,
+        accepting_states=tuple(range(state_count)),
     )
     length = 4
     transition_count = dfa.state_count * dfa.alphabet_size

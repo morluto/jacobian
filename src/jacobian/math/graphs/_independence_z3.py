@@ -159,13 +159,14 @@ def _solve_independence_number_values_kernel(
         ):
             if canonicalize_witness:
                 remaining_ms = int(
-                    (resource_budget.wall_seconds - (time.monotonic() - started))
-                    * 1000
+                    (resource_budget.wall_seconds - (time.monotonic() - started)) * 1000
                 )
                 if remaining_ms > 0:
                     lex_optimizer = z3.Optimize()
                     lex_optimizer.set(priority="lex")
-                    lex_optimizer.set(timeout=remaining_timeout_ms(max(1, remaining_ms)))
+                    lex_optimizer.set(
+                        timeout=remaining_timeout_ms(max(1, remaining_ms))
+                    )
                     lex_selected = {
                         vertex: z3.Bool(f"lex_{index}")
                         for index, vertex in enumerate(vertices)
@@ -179,10 +180,7 @@ def _solve_independence_number_values_kernel(
                         )
                     lex_optimizer.add(
                         z3.Sum(
-                            [
-                                z3.If(lex_selected[vertex], 1, 0)
-                                for vertex in vertices
-                            ]
+                            [z3.If(lex_selected[vertex], 1, 0) for vertex in vertices]
                         )
                         == len(incumbent)
                     )

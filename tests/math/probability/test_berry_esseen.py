@@ -252,11 +252,16 @@ def test_atom_count_boundary_is_admitted_and_overflow_is_preflighted() -> None:
         == count
     )
 
-    over_bound = _request(
-        _distribution(*((value, Fraction(1, count + 1)) for value in range(count + 1)))
+    over_bound = _distribution(
+        *((value, Fraction(1, count + 1)) for value in range(count + 1))
     )
-    with pytest.raises(OperationResourceAdmissionError, match="atom"):
-        berry_esseen_bound(over_bound)
+    with pytest.raises(ValueError):
+        BerryEsseenRequest.model_validate(
+            {"distribution": over_bound, "sample_count": 1}
+        )
+    schema = BerryEsseenRequest.model_json_schema()
+    atoms_schema = schema["$defs"]["BerryEsseenDistribution"]["properties"]["atoms"]
+    assert atoms_schema["maxItems"] == MAX_BERRY_ESSEEN_ATOMS
 
 
 def test_input_rational_height_boundary_is_enforced() -> None:
@@ -273,7 +278,7 @@ def test_input_rational_height_boundary_is_enforced() -> None:
     )
     assert accepted.source.distribution.atoms[-1].value.as_fraction() == second_value
 
-    with pytest.raises(OperationDomainValidationError, match="128-digit bound"):
+    with pytest.raises(OperationResourceAdmissionError, match="128-digit bound"):
         berry_esseen_bound(
             _request(_distribution((0, Fraction(1, 2)), (10**128, Fraction(1, 2))))
         )

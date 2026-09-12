@@ -14,13 +14,18 @@ from typing import Annotated, Literal, Self
 
 from pydantic import Field, model_validator
 
-from jacobian._exact import CanonicalRational, DecimalIntegerEncoding
+from jacobian._exact import (
+    CanonicalRational,
+    DecimalIntegerEncoding,
+    require_bounded_rational,
+)
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.probability._distribution import (
+    FiniteDistributionAtom,
     FiniteRationalDistribution,
     require_input_distribution,
 )
@@ -43,10 +48,19 @@ BERRY_ESSEEN_THEOREM_VARIANT: Literal[
 ] = "IID_SPECIALIZATION_OF_GENERAL_INDEPENDENT_BERRY_ESSEEN_C_05600"
 
 
+class BerryEsseenDistribution(FiniteRationalDistribution):
+    """Finite law whose atom count matches the Berry--Esseen work envelope."""
+
+    atoms: tuple[FiniteDistributionAtom, ...] = Field(
+        min_length=1,
+        max_length=MAX_BERRY_ESSEEN_ATOMS,
+    )
+
+
 class BerryEsseenRequest(StrictModel):
     """One finite rational law and a positive i.i.d. sample count."""
 
-    distribution: FiniteRationalDistribution
+    distribution: BerryEsseenDistribution
     sample_count: Annotated[
         int, DecimalIntegerEncoding(max_digits=MAX_RESULT_RATIONAL_DIGITS)
     ] = Field(
@@ -293,12 +307,30 @@ def berry_esseen_bound(request: BerryEsseenRequest) -> BerryEsseenResult:
         require_input_distribution(
             request.distribution.atoms,
             require_canonical=True,
-            max_digits=MAX_INPUT_RATIONAL_DIGITS,
+            max_digits=None,
         )
     except ValueError as exc:
         raise OperationDomainValidationError(
             location=location,
             code="probability.berry_esseen.input_distribution",
+            message=str(exc),
+        ) from exc
+    try:
+        for atom in request.distribution.atoms:
+            require_bounded_rational(
+                atom.value,
+                max_digits=MAX_INPUT_RATIONAL_DIGITS,
+                label="finite-distribution input atom",
+            )
+            require_bounded_rational(
+                atom.probability,
+                max_digits=MAX_INPUT_RATIONAL_DIGITS,
+                label="finite-distribution input probability",
+            )
+    except ValueError as exc:
+        raise OperationResourceAdmissionError(
+            location=location,
+            code="probability.berry_esseen.input_height",
             message=str(exc),
         ) from exc
 

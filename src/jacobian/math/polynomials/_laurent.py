@@ -73,16 +73,19 @@ def _operand_coefficient_digits(
     terms: tuple[RationalLaurentPolynomialTerm, ...],
 ) -> tuple[int, bool]:
     height = 1
-    integer_coefficients = True
+    shared_denominator: int | None = None
     for index, term in enumerate(terms):
         if index % 128 == 0:
             request_checkpoint("during Laurent coefficient-height admission")
         digits = canonical_rational_component_digits(term.coefficient)
         if digits > height:
             height = digits
-        if term.coefficient.den != 1:
-            integer_coefficients = False
-    return height, integer_coefficients
+        denominator = term.coefficient.den
+        if shared_denominator is None:
+            shared_denominator = denominator
+        elif denominator != shared_denominator:
+            shared_denominator = 0
+    return height, shared_denominator is not None and shared_denominator != 0
 
 
 def _maximum_coefficient_digits(
@@ -91,11 +94,11 @@ def _maximum_coefficient_digits(
     """Bound one collected coefficient before exact convolution begins."""
 
     collisions = min(len(left.terms), len(right.terms))
-    left_digits, left_integers = _operand_coefficient_digits(left.terms)
-    right_digits, right_integers = _operand_coefficient_digits(right.terms)
+    left_digits, left_shared = _operand_coefficient_digits(left.terms)
+    right_digits, right_shared = _operand_coefficient_digits(right.terms)
     addition_digits = len(str(collisions)) if collisions > 1 else 0
     product_digits = left_digits + right_digits
-    if left_integers and right_integers:
+    if left_shared and right_shared:
         return product_digits + addition_digits
     return collisions * product_digits + addition_digits
 

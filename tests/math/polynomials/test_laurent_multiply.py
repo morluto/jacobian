@@ -117,6 +117,26 @@ def test_two_term_integer_product_stays_inside_the_output_envelope() -> None:
     )
 
 
+def test_shared_denominator_two_term_product_stays_inside_the_output_envelope() -> None:
+    denominator = 10**8191 + 1
+    coefficient = CanonicalRational(num=1, den=denominator)
+    factor = RationalLaurentPolynomial(
+        variables=("x",),
+        terms=(
+            RationalLaurentPolynomialTerm(coefficient=coefficient, exponents=(1,)),
+            RationalLaurentPolynomialTerm(coefficient=coefficient, exponents=(0,)),
+        ),
+    )
+    product = rational_laurent_multiply(factor, factor)
+    square = CanonicalRational(num=1, den=denominator * denominator)
+    doubled = CanonicalRational(num=2, den=denominator * denominator)
+    assert product.terms == (
+        RationalLaurentPolynomialTerm(coefficient=square, exponents=(2,)),
+        RationalLaurentPolynomialTerm(coefficient=doubled, exponents=(1,)),
+        RationalLaurentPolynomialTerm(coefficient=square, exponents=(0,)),
+    )
+
+
 def test_forged_operands_are_rejected_with_typed_domain_errors() -> None:
     forged = RationalLaurentPolynomial.model_construct(
         domain="QQ",

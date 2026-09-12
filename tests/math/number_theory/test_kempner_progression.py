@@ -5,10 +5,13 @@ from __future__ import annotations
 from itertools import combinations
 
 import pytest
+from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.number_theory._kempner_models import (
+    _KEMPNER_ARITY_PATTERN,
+    _KEMPNER_BASE_PATTERN,
     KempnerArithmeticProgressionRequest,
     KempnerArithmeticProgressionResult,
     KempnerDigitSet,
@@ -133,9 +136,30 @@ def test_oversized_arity_is_a_typed_resource_error() -> None:
 
 def test_wire_schema_rejects_base_outside_two_through_sixty_four() -> None:
     schema = KempnerDigitSet.model_json_schema()
-    assert schema["properties"]["base"]["pattern"] == r"^(?:[2-9]|[1-5][0-9]|6[0-4])$"
+    assert schema["properties"]["base"]["pattern"] == _KEMPNER_BASE_PATTERN
     with pytest.raises(ValidationError):
         KempnerDigitSet.model_validate({"base": "999", "allowed_digits": ["1"]})
+    with pytest.raises(ValidationError):
+        KempnerDigitSet.model_validate({"base": "2\n", "allowed_digits": ["1"]})
+    validator = Draft202012Validator(schema)
+    assert list(
+        validator.iter_errors({"base": "2\n", "allowed_digits": ["1"]})
+    )
+
+
+def test_wire_schema_encodes_arity_lower_bound() -> None:
+    request_schema = KempnerArithmeticProgressionRequest.model_json_schema()
+    result_schema = KempnerArithmeticProgressionResult.model_json_schema()
+    assert request_schema["properties"]["arity"]["pattern"] == _KEMPNER_ARITY_PATTERN
+    assert result_schema["properties"]["arity"]["pattern"] == _KEMPNER_ARITY_PATTERN
+    for arity in ("0", "1", "2"):
+        with pytest.raises(ValidationError):
+            KempnerArithmeticProgressionRequest.model_validate(
+                {
+                    "digit_set": {"base": "3", "allowed_digits": ["1"]},
+                    "arity": arity,
+                }
+            )
 
 
 def test_progression_free_result_rejects_undefined_arity() -> None:

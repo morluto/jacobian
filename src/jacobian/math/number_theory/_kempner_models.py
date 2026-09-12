@@ -13,6 +13,10 @@ from jacobian._models import StrictModel
 MAX_KEMPNER_BASE = 64
 MAX_KEMPNER_INTEGER_DIGITS = 8_192
 MAX_ALLOWED_DIGITS = MAX_KEMPNER_BASE - 1
+MIN_KEMPNER_ARITY = 3
+MAX_KEMPNER_ARITY = 999
+_KEMPNER_BASE_PATTERN = r"^(?:[2-9]|[1-5][0-9]|6[0-4])(?![\s\S])"
+_KEMPNER_ARITY_PATTERN = r"^(?:[3-9]|[1-9][0-9]{1,2})(?![\s\S])"
 
 KempnerSmallInteger = Annotated[int, DecimalIntegerEncoding(max_digits=3)]
 KempnerInteger = Annotated[
@@ -37,7 +41,7 @@ class KempnerDigitSet(StrictModel):
         ge=2,
         le=MAX_KEMPNER_BASE,
         description=f"Integer base in [2, {MAX_KEMPNER_BASE}].",
-        json_schema_extra={"pattern": r"^(?:[2-9]|[1-5][0-9]|6[0-4])$"},
+        json_schema_extra={"pattern": _KEMPNER_BASE_PATTERN},
     )
     allowed_digits: tuple[KempnerSmallInteger, ...] = Field(
         min_length=1,
@@ -74,8 +78,10 @@ class KempnerArithmeticProgressionRequest(StrictModel):
 
     digit_set: KempnerDigitSet
     arity: KempnerSmallInteger = Field(
-        ge=3,
+        ge=MIN_KEMPNER_ARITY,
+        le=MAX_KEMPNER_ARITY,
         description="Number of terms in the nontrivial progression, at least three.",
+        json_schema_extra={"pattern": _KEMPNER_ARITY_PATTERN},
     )
 
 
@@ -123,8 +129,10 @@ class KempnerArithmeticProgressionResult(StrictModel):
 
     digit_set: KempnerDigitSet
     arity: KempnerSmallInteger = Field(
-        ge=3,
+        ge=MIN_KEMPNER_ARITY,
+        le=MAX_KEMPNER_ARITY,
         description="Number of terms in the nontrivial progression, at least three.",
+        json_schema_extra={"pattern": _KEMPNER_ARITY_PATTERN},
     )
     conclusion: Annotated[
         KempnerProgressionFree | KempnerContainsProgression,

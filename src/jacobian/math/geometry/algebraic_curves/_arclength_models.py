@@ -30,6 +30,7 @@ MAX_ARCLENGTH_PRECISION_BITS = 4096
 MAX_ARCLENGTH_SEGMENTS = 1024
 MAX_ARCLENGTH_WALL_SECONDS = 120
 
+
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"plane_curve.arclength.{reason}", message)
 
@@ -37,7 +38,9 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 class PlaneCurveArclengthBudget(StrictModel):
     """Request-scoped bounds charged before any Arb evaluation."""
 
-    precision_bits: StrictInt = Field(default=192, ge=32, le=MAX_ARCLENGTH_PRECISION_BITS)
+    precision_bits: StrictInt = Field(
+        default=192, ge=32, le=MAX_ARCLENGTH_PRECISION_BITS
+    )
     max_segments: StrictInt = Field(default=128, ge=1, le=MAX_ARCLENGTH_SEGMENTS)
     wall_seconds: StrictInt = Field(default=60, ge=1, le=MAX_ARCLENGTH_WALL_SECONDS)
 
@@ -50,7 +53,9 @@ class PlaneCurveArclengthRequest(StrictModel):
     target_width: CanonicalRational = Field(
         description="Positive rational width for the returned lower/upper enclosure."
     )
-    resource_budget: PlaneCurveArclengthBudget = Field(default_factory=PlaneCurveArclengthBudget)
+    resource_budget: PlaneCurveArclengthBudget = Field(
+        default_factory=PlaneCurveArclengthBudget
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -81,13 +86,18 @@ class PlaneCurveArclengthRequest(StrictModel):
                     )
         except ValueError as exc:
             raise _validation_error("source_bound", str(exc)) from exc
-        if len(self.polynomial.variables) != 2 or self.box.variables != self.polynomial.variables:
+        if (
+            len(self.polynomial.variables) != 2
+            or self.box.variables != self.polynomial.variables
+        ):
             raise _validation_error(
                 "axis",
                 "the curve and box must use the same complete ordered two-variable axis",
             )
         if len(self.box.intervals) != 2:
-            raise _validation_error("box", "a plane-curve box requires exactly two intervals")
+            raise _validation_error(
+                "box", "a plane-curve box requires exactly two intervals"
+            )
         if self.target_width.as_fraction() <= 0:
             raise _validation_error("target_width", "target width must be positive")
         return self
@@ -103,10 +113,23 @@ class ArclengthSegment(StrictModel):
 
     @model_validator(mode="after")
     def require_ordered_segment(self) -> Self:
-        if self.lower is not None and self.upper is not None and self.lower.as_fraction() >= self.upper.as_fraction():
-            raise _validation_error("segment_order", "arclength segment endpoints must be strictly ordered")
-        if self.contribution_lower.as_fraction() < 0 or self.contribution_upper.as_fraction() < self.contribution_lower.as_fraction():
-            raise _validation_error("segment_contribution", "segment contribution must be nonnegative and ordered")
+        if (
+            self.lower is not None
+            and self.upper is not None
+            and self.lower.as_fraction() >= self.upper.as_fraction()
+        ):
+            raise _validation_error(
+                "segment_order", "arclength segment endpoints must be strictly ordered"
+            )
+        if (
+            self.contribution_lower.as_fraction() < 0
+            or self.contribution_upper.as_fraction()
+            < self.contribution_lower.as_fraction()
+        ):
+            raise _validation_error(
+                "segment_contribution",
+                "segment contribution must be nonnegative and ordered",
+            )
         return self
 
 
@@ -114,16 +137,41 @@ class ArclengthEnclosed(StrictModel):
     status: Literal["ENCLOSED"] = "ENCLOSED"
     lower: CanonicalRational
     upper: CanonicalRational
-    segments: tuple[ArclengthSegment, ...] = Field(min_length=1, max_length=MAX_ARCLENGTH_SEGMENTS)
+    segments: tuple[ArclengthSegment, ...] = Field(
+        min_length=1, max_length=MAX_ARCLENGTH_SEGMENTS
+    )
 
     @model_validator(mode="after")
     def require_enclosure(self) -> Self:
-        if self.lower.as_fraction() < 0 or self.upper.as_fraction() < self.lower.as_fraction():
-            raise _validation_error("enclosure_order", "arclength enclosure must be nonnegative and ordered")
-        if sum((segment.contribution_lower.as_fraction() for segment in self.segments), start=0) > self.lower.as_fraction():
-            raise _validation_error("lower_reconstruction", "segment lower contributions exceed the aggregate lower bound")
-        if sum((segment.contribution_upper.as_fraction() for segment in self.segments), start=0) < self.upper.as_fraction():
-            raise _validation_error("upper_reconstruction", "segment upper contributions do not reach the aggregate upper bound")
+        if (
+            self.lower.as_fraction() < 0
+            or self.upper.as_fraction() < self.lower.as_fraction()
+        ):
+            raise _validation_error(
+                "enclosure_order", "arclength enclosure must be nonnegative and ordered"
+            )
+        if (
+            sum(
+                (segment.contribution_lower.as_fraction() for segment in self.segments),
+                start=0,
+            )
+            > self.lower.as_fraction()
+        ):
+            raise _validation_error(
+                "lower_reconstruction",
+                "segment lower contributions exceed the aggregate lower bound",
+            )
+        if (
+            sum(
+                (segment.contribution_upper.as_fraction() for segment in self.segments),
+                start=0,
+            )
+            < self.upper.as_fraction()
+        ):
+            raise _validation_error(
+                "upper_reconstruction",
+                "segment upper contributions do not reach the aggregate upper bound",
+            )
         return self
 
 
@@ -141,11 +189,19 @@ class ArclengthSingularUnsupported(StrictModel):
 
 class ArclengthUnknown(StrictModel):
     status: Literal["UNKNOWN"] = "UNKNOWN"
-    reason: Literal["BACKEND_UNAVAILABLE", "REFINEMENT_INCOMPLETE", "TOPOLOGY_UNRESOLVED", "DEADLINE_EXPIRED"]
+    reason: Literal[
+        "BACKEND_UNAVAILABLE",
+        "REFINEMENT_INCOMPLETE",
+        "TOPOLOGY_UNRESOLVED",
+        "DEADLINE_EXPIRED",
+    ]
 
 
 type PlaneCurveArclengthOutcome = Annotated[
-    ArclengthEnclosed | ArclengthEmpty | ArclengthSingularUnsupported | ArclengthUnknown,
+    ArclengthEnclosed
+    | ArclengthEmpty
+    | ArclengthSingularUnsupported
+    | ArclengthUnknown,
     Field(discriminator="status"),
 ]
 
@@ -157,12 +213,20 @@ class PlaneCurveArclengthResult(PlaneCurveArclengthRequest):
 
     @model_validator(mode="after")
     def bind_result_source(self) -> Self:
-        if isinstance(self.outcome, ArclengthEnclosed) and self.outcome.upper.as_fraction() - self.outcome.lower.as_fraction() > self.target_width.as_fraction():
-            raise _validation_error("target_width", "ENCLOSED result exceeds the requested width")
+        if (
+            isinstance(self.outcome, ArclengthEnclosed)
+            and self.outcome.upper.as_fraction() - self.outcome.lower.as_fraction()
+            > self.target_width.as_fraction()
+        ):
+            raise _validation_error(
+                "target_width", "ENCLOSED result exceeds the requested width"
+            )
         return self
 
     @classmethod
-    def _from_kernel(cls, request: PlaneCurveArclengthRequest, *, outcome: PlaneCurveArclengthOutcome) -> Self:
+    def _from_kernel(
+        cls, request: PlaneCurveArclengthRequest, *, outcome: PlaneCurveArclengthOutcome
+    ) -> Self:
         return cls.model_construct(
             polynomial=request.polynomial,
             box=request.box,

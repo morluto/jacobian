@@ -143,7 +143,14 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         request_type=PlaneCurveArclengthRequest,
         result_type=PlaneCurveArclengthResult,
         run=enclose_arclength,
-        tags=("real-algebraic", "plane-curve", "arclength", "validated", "arb", "enclosure"),
+        tags=(
+            "real-algebraic",
+            "plane-curve",
+            "arclength",
+            "validated",
+            "arb",
+            "enclosure",
+        ),
         examples=(
             OperationExample(
                 name="unit_circle",
@@ -159,12 +166,22 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         "domain": "QQ",
                         "variables": ["x", "y"],
                         "intervals": [
-                            {"lower": {"num": "-2", "den": "1"}, "upper": {"num": "2", "den": "1"}},
-                            {"lower": {"num": "-2", "den": "1"}, "upper": {"num": "2", "den": "1"}},
+                            {
+                                "lower": {"num": "-2", "den": "1"},
+                                "upper": {"num": "2", "den": "1"},
+                            },
+                            {
+                                "lower": {"num": "-2", "den": "1"},
+                                "upper": {"num": "2", "den": "1"},
+                            },
                         ],
                     },
                     "target_width": {"num": "1", "den": "100"},
-                    "resource_budget": {"precision_bits": 192, "max_segments": 128, "wall_seconds": 60},
+                    "resource_budget": {
+                        "precision_bits": 192,
+                        "max_segments": 128,
+                        "wall_seconds": 60,
+                    },
                 },
             ),
         ),

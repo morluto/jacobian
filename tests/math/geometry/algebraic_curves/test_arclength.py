@@ -24,8 +24,12 @@ def _polynomial(*terms: tuple[int, tuple[int, int]]) -> RationalPolynomial:
         variables=("x", "y"),
         polynomial=SparseRationalPolynomial(
             terms=tuple(
-                RationalPolynomialTerm(coefficient=_rational(coefficient), exponents=exponents)
-                for coefficient, exponents in sorted(terms, key=lambda term: term[1], reverse=True)
+                RationalPolynomialTerm(
+                    coefficient=_rational(coefficient), exponents=exponents
+                )
+                for coefficient, exponents in sorted(
+                    terms, key=lambda term: term[1], reverse=True
+                )
             )
         ),
     )
@@ -41,12 +45,18 @@ def _box(x_lower: int, x_upper: int, y_lower: int, y_upper: int) -> RationalBox:
     )
 
 
-def _request(polynomial: RationalPolynomial, box: RationalBox, width: Fraction = Fraction(1, 10)) -> PlaneCurveArclengthRequest:
+def _request(
+    polynomial: RationalPolynomial, box: RationalBox, width: Fraction = Fraction(1, 10)
+) -> PlaneCurveArclengthRequest:
     return PlaneCurveArclengthRequest(
         polynomial=polynomial,
         box=box,
         target_width=_rational(width),
-        resource_budget={"precision_bits": 192, "max_segments": 128, "wall_seconds": 120},
+        resource_budget={
+            "precision_bits": 192,
+            "max_segments": 128,
+            "wall_seconds": 120,
+        },
     )
 
 
@@ -87,7 +97,10 @@ def test_transverse_clipped_circle_has_a_certified_nonzero_length() -> None:
     assert result.outcome.status == "ENCLOSED"
     assert result.outcome.lower.as_fraction() > 3
     assert result.outcome.upper.as_fraction() < 4
-    assert result.outcome.upper.as_fraction() - result.outcome.lower.as_fraction() <= Fraction(1, 10)
+    assert (
+        result.outcome.upper.as_fraction() - result.outcome.lower.as_fraction()
+        <= Fraction(1, 10)
+    )
 
 
 def test_unit_circle_enclosure_contains_two_pi() -> None:
@@ -101,7 +114,10 @@ def test_unit_circle_enclosure_contains_two_pi() -> None:
     assert result.outcome.status == "ENCLOSED"
     assert result.outcome.lower.as_fraction() < Fraction(6284, 1000)
     assert result.outcome.upper.as_fraction() > Fraction(6283, 1000)
-    assert result.outcome.upper.as_fraction() - result.outcome.lower.as_fraction() <= Fraction(1, 100)
+    assert (
+        result.outcome.upper.as_fraction() - result.outcome.lower.as_fraction()
+        <= Fraction(1, 100)
+    )
 
 
 def test_nonconverged_integral_is_unknown(monkeypatch) -> None:

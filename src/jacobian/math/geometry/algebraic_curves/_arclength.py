@@ -66,7 +66,10 @@ def _square_root_rational(value: Fraction) -> Fraction | None:
         return None
     numerator = isqrt(value.numerator)
     denominator = isqrt(value.denominator)
-    if numerator * numerator != value.numerator or denominator * denominator != value.denominator:
+    if (
+        numerator * numerator != value.numerator
+        or denominator * denominator != value.denominator
+    ):
         return None
     return Fraction(numerator, denominator)
 
@@ -132,7 +135,9 @@ def _coordinate_numerator(
     return (ellipse.k - boundary, 2 * b, ellipse.k - boundary)
 
 
-def _quadratic_roots(coefficients: tuple[Fraction, Fraction, Fraction]) -> tuple[Fraction, ...] | None:
+def _quadratic_roots(
+    coefficients: tuple[Fraction, Fraction, Fraction],
+) -> tuple[Fraction, ...] | None:
     constant, linear, quadratic = coefficients
     if quadratic == 0:
         if linear == 0:
@@ -146,7 +151,9 @@ def _quadratic_roots(coefficients: tuple[Fraction, Fraction, Fraction]) -> tuple
         return None
     if root == 0:
         raise ValueError("BOUNDARY_NONTRANSVERSE")
-    return tuple(sorted({(-linear - root) / (2 * quadratic), (-linear + root) / (2 * quadratic)}))
+    return tuple(
+        sorted({(-linear - root) / (2 * quadratic), (-linear + root) / (2 * quadratic)})
+    )
 
 
 def _parameter_coordinates(ellipse: _Ellipse, t: Fraction) -> tuple[Fraction, Fraction]:
@@ -161,7 +168,9 @@ def _parameter_coordinates(ellipse: _Ellipse, t: Fraction) -> tuple[Fraction, Fr
     )
 
 
-def _cells_for_box(ellipse: _Ellipse, request: PlaneCurveArclengthRequest) -> tuple[_ParameterCell, ...] | str:
+def _cells_for_box(
+    ellipse: _Ellipse, request: PlaneCurveArclengthRequest
+) -> tuple[_ParameterCell, ...] | str:
     """Return exact cells on the half-angle projective line.
 
     Irrational edge intersections are a deliberate UNKNOWN boundary in this
@@ -175,14 +184,24 @@ def _cells_for_box(ellipse: _Ellipse, request: PlaneCurveArclengthRequest) -> tu
     if a is None or b is None:
         # A full containment check does not require representing an algebraic
         # boundary endpoint.  A disjoint coordinate range proves emptiness.
-        if box_x.upper.as_fraction() < ellipse.h - _sqrt_lower_bound(ellipse.a2) or box_x.lower.as_fraction() > ellipse.h + _sqrt_upper_bound(ellipse.a2):
+        if box_x.upper.as_fraction() < ellipse.h - _sqrt_lower_bound(
+            ellipse.a2
+        ) or box_x.lower.as_fraction() > ellipse.h + _sqrt_upper_bound(ellipse.a2):
             return ()
-        if box_y.upper.as_fraction() < ellipse.k - _sqrt_lower_bound(ellipse.b2) or box_y.lower.as_fraction() > ellipse.k + _sqrt_upper_bound(ellipse.b2):
+        if box_y.upper.as_fraction() < ellipse.k - _sqrt_lower_bound(
+            ellipse.b2
+        ) or box_y.lower.as_fraction() > ellipse.k + _sqrt_upper_bound(ellipse.b2):
             return ()
         return "IRRATIONAL_BOUNDARY"
-    if box_x.upper.as_fraction() < ellipse.h - a or box_x.lower.as_fraction() > ellipse.h + a:
+    if (
+        box_x.upper.as_fraction() < ellipse.h - a
+        or box_x.lower.as_fraction() > ellipse.h + a
+    ):
         return ()
-    if box_y.upper.as_fraction() < ellipse.k - b or box_y.lower.as_fraction() > ellipse.k + b:
+    if (
+        box_y.upper.as_fraction() < ellipse.k - b
+        or box_y.lower.as_fraction() > ellipse.k + b
+    ):
         return ()
 
     boundaries: dict[Fraction, set[str]] = {}
@@ -191,7 +210,9 @@ def _cells_for_box(ellipse: _Ellipse, request: PlaneCurveArclengthRequest) -> tu
             (f"{axis}-lower", interval.lower.as_fraction()),
             (f"{axis}-upper", interval.upper.as_fraction()),
         ):
-            roots = _quadratic_roots(_coordinate_numerator(ellipse, axis=axis, boundary=boundary))
+            roots = _quadratic_roots(
+                _coordinate_numerator(ellipse, axis=axis, boundary=boundary)
+            )
             if roots is None:
                 return "IRRATIONAL_BOUNDARY"
             for root in roots:
@@ -208,7 +229,10 @@ def _cells_for_box(ellipse: _Ellipse, request: PlaneCurveArclengthRequest) -> tu
         else:
             sample = (lower + upper) / 2
         x, y = _parameter_coordinates(ellipse, sample)
-        if box_x.lower.as_fraction() <= x <= box_x.upper.as_fraction() and box_y.lower.as_fraction() <= y <= box_y.upper.as_fraction():
+        if (
+            box_x.lower.as_fraction() <= x <= box_x.upper.as_fraction()
+            and box_y.lower.as_fraction() <= y <= box_y.upper.as_fraction()
+        ):
             cells.append(_ParameterCell(lower=lower, upper=upper))
     return tuple(cells)
 
@@ -230,14 +254,18 @@ def _sqrt_upper_bound(value: Fraction) -> Fraction:
 
 
 def _const(value: Fraction) -> IntervalExpressionNode:
-    return IntervalExpressionNode(op="const", value=CanonicalRational.from_fraction(value))
+    return IntervalExpressionNode(
+        op="const", value=CanonicalRational.from_fraction(value)
+    )
 
 
 def _var(variable: str) -> IntervalExpressionNode:
     return IntervalExpressionNode(op="var", variable=variable)
 
 
-def _integrand(variable: str, first: Fraction, second: Fraction) -> IntervalExpressionNode:
+def _integrand(
+    variable: str, first: Fraction, second: Fraction
+) -> IntervalExpressionNode:
     t = _var(variable)
     t2 = IntervalExpressionNode(op="pow", children=(t,), exponent=2)
     if first == second:
@@ -247,7 +275,9 @@ def _integrand(variable: str, first: Fraction, second: Fraction) -> IntervalExpr
                 op="div",
                 children=(
                     _const(2 * radius),
-                    IntervalExpressionNode(op="add", children=(_const(Fraction(1)), t2)),
+                    IntervalExpressionNode(
+                        op="add", children=(_const(Fraction(1)), t2)
+                    ),
                 ),
             )
     one_minus_t2 = IntervalExpressionNode(op="sub", children=(_const(Fraction(1)), t2))
@@ -259,15 +289,25 @@ def _integrand(variable: str, first: Fraction, second: Fraction) -> IntervalExpr
                 op="mul",
                 children=(
                     _const(second),
-                    IntervalExpressionNode(op="pow", children=(one_minus_t2,), exponent=2),
+                    IntervalExpressionNode(
+                        op="pow", children=(one_minus_t2,), exponent=2
+                    ),
                 ),
             ),
         ),
     )
-    numerator = IntervalExpressionNode(op="mul", children=(_const(Fraction(2)), IntervalExpressionNode(op="sqrt", children=(numerator_inside,))))
+    numerator = IntervalExpressionNode(
+        op="mul",
+        children=(
+            _const(Fraction(2)),
+            IntervalExpressionNode(op="sqrt", children=(numerator_inside,)),
+        ),
+    )
     denominator = IntervalExpressionNode(
         op="pow",
-        children=(IntervalExpressionNode(op="add", children=(_const(Fraction(1)), t2)),),
+        children=(
+            IntervalExpressionNode(op="add", children=(_const(Fraction(1)), t2)),
+        ),
         exponent=2,
     )
     return IntervalExpressionNode(op="div", children=(numerator, denominator))
@@ -308,16 +348,20 @@ def _integrate_cell(
         midpoint = (left + right) / 2
         for piece_left, piece_right in ((left, midpoint), (midpoint, right)):
             if monotonic() >= deadline:
-                raise OperationExecutionTimeoutError("arclength deadline expired before Arb integration")
+                raise OperationExecutionTimeoutError(
+                    "arclength deadline expired before Arb integration"
+                )
             remaining = max(1, int(deadline - monotonic()))
             integral_request = DefiniteIntegralEnclosureRequest(
                 expression=_integrand("t", first, second),
                 box=RationalIntervalBox(
                     variables=("t",),
-                    intervals=(ClosedRationalInterval(
-                        lower=CanonicalRational.from_fraction(piece_left),
-                        upper=CanonicalRational.from_fraction(piece_right),
-                    ),),
+                    intervals=(
+                        ClosedRationalInterval(
+                            lower=CanonicalRational.from_fraction(piece_left),
+                            upper=CanonicalRational.from_fraction(piece_right),
+                        ),
+                    ),
                 ),
                 precision_bits=request.resource_budget.precision_bits,
                 target_width=_dyadic_target(target / 2),
@@ -329,9 +373,15 @@ def _integrate_cell(
                 max_leaves=1024,
                 # The request execution context owns the single absolute deadline;
                 # this per-phase value only keeps standalone native calls bounded.
-                wall_seconds=(request.resource_budget.wall_seconds if request.resource_budget.wall_seconds > remaining else remaining),
+                wall_seconds=(
+                    request.resource_budget.wall_seconds
+                    if request.resource_budget.wall_seconds > remaining
+                    else remaining
+                ),
             )
-            result: DefiniteIntegralEnclosureResult = _compute_definite_integral_enclosure(integral_request)
+            result: DefiniteIntegralEnclosureResult = (
+                _compute_definite_integral_enclosure(integral_request)
+            )
             if not isinstance(result.outcome, DefiniteIntegralTargetMet):
                 return None
             lower_total += result.outcome.enclosure.lower.as_fraction()
@@ -350,37 +400,53 @@ def enclose_arclength(  # noqa: C901
         if int(source.total_degree()) == 0:
             if source.as_expr() == 0:
                 return PlaneCurveArclengthResult._from_kernel(
-                    request, outcome=ArclengthSingularUnsupported(reason="DEGENERATE_SOURCE")
+                    request,
+                    outcome=ArclengthSingularUnsupported(reason="DEGENERATE_SOURCE"),
                 )
-            return PlaneCurveArclengthResult._from_kernel(request, outcome=ArclengthEmpty())
+            return PlaneCurveArclengthResult._from_kernel(
+                request, outcome=ArclengthEmpty()
+            )
         try:
             ellipse = _source_ellipse(request)
         except ValueError as exc:
             if str(exc) == "DEGENERATE_SOURCE":
                 return PlaneCurveArclengthResult._from_kernel(
-                    request, outcome=ArclengthSingularUnsupported(reason="DEGENERATE_SOURCE")
+                    request,
+                    outcome=ArclengthSingularUnsupported(reason="DEGENERATE_SOURCE"),
                 )
             if str(exc) == "BOUNDARY_NONTRANSVERSE":
                 return PlaneCurveArclengthResult._from_kernel(
-                    request, outcome=ArclengthSingularUnsupported(reason="BOUNDARY_NONTRANSVERSE")
+                    request,
+                    outcome=ArclengthSingularUnsupported(
+                        reason="BOUNDARY_NONTRANSVERSE"
+                    ),
                 )
             if str(exc) == "SINGULAR_LEVEL_SET":
                 return PlaneCurveArclengthResult._from_kernel(
-                    request, outcome=ArclengthSingularUnsupported(reason="SINGULAR_LEVEL_SET")
+                    request,
+                    outcome=ArclengthSingularUnsupported(reason="SINGULAR_LEVEL_SET"),
                 )
             raise
         if ellipse is None:
-            return PlaneCurveArclengthResult._from_kernel(request, outcome=ArclengthEmpty())
+            return PlaneCurveArclengthResult._from_kernel(
+                request, outcome=ArclengthEmpty()
+            )
         cells = _cells_for_box(ellipse, request)
         if isinstance(cells, str):
-            reason = "BOUNDARY_NONTRANSVERSE" if cells == "BOUNDARY_CORNER" else "TOPOLOGY_UNRESOLVED"
+            reason = (
+                "BOUNDARY_NONTRANSVERSE"
+                if cells == "BOUNDARY_CORNER"
+                else "TOPOLOGY_UNRESOLVED"
+            )
             if reason == "BOUNDARY_NONTRANSVERSE":
                 outcome = ArclengthSingularUnsupported(reason=reason)
             else:
                 outcome = ArclengthUnknown(reason=reason)
             return PlaneCurveArclengthResult._from_kernel(request, outcome=outcome)
         if not cells:
-            return PlaneCurveArclengthResult._from_kernel(request, outcome=ArclengthEmpty())
+            return PlaneCurveArclengthResult._from_kernel(
+                request, outcome=ArclengthEmpty()
+            )
         if len(cells) > request.resource_budget.max_segments:
             return PlaneCurveArclengthResult._from_kernel(
                 request, outcome=ArclengthUnknown(reason="REFINEMENT_INCOMPLETE")
@@ -402,8 +468,16 @@ def enclose_arclength(  # noqa: C901
             upper_total += upper
             segments.append(
                 ArclengthSegment(
-                    lower=(CanonicalRational.from_fraction(cell.lower) if cell.lower is not None else None),
-                    upper=(CanonicalRational.from_fraction(cell.upper) if cell.upper is not None else None),
+                    lower=(
+                        CanonicalRational.from_fraction(cell.lower)
+                        if cell.lower is not None
+                        else None
+                    ),
+                    upper=(
+                        CanonicalRational.from_fraction(cell.upper)
+                        if cell.upper is not None
+                        else None
+                    ),
                     contribution_lower=CanonicalRational.from_fraction(lower),
                     contribution_upper=CanonicalRational.from_fraction(upper),
                 )

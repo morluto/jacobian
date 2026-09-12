@@ -553,6 +553,46 @@ def _chordless_four_cycle_count(part_sizes: tuple[int, ...]) -> int:
     return count
 
 
+def _core_connected_components(
+    core_vertices: tuple[str, ...],
+    adjacency_sets: dict[str, set[str]],
+) -> tuple[tuple[str, ...], ...]:
+    remaining = set(core_vertices)
+    components: list[tuple[str, ...]] = []
+    while remaining:
+        start = min(remaining)
+        remaining.remove(start)
+        stack = [start]
+        found = [start]
+        while stack:
+            vertex = stack.pop()
+            for neighbor in adjacency_sets[vertex]:
+                if neighbor in remaining:
+                    remaining.remove(neighbor)
+                    stack.append(neighbor)
+                    found.append(neighbor)
+        components.append(tuple(sorted(found)))
+    return tuple(components)
+
+
+def _chordless_multipartite_cycle_bound(
+    components: tuple[tuple[str, ...], ...],
+    adjacency_sets: dict[str, set[str]],
+    cycle_length: int,
+) -> int | None:
+    """Exact chordless bound when every core component is complete multipartite."""
+
+    total = 0
+    for component in components:
+        part_sizes = _complete_multipartite_part_sizes(component, adjacency_sets)
+        if part_sizes is None:
+            return None
+        if cycle_length >= 5:
+            continue
+        total += _chordless_four_cycle_count(part_sizes)
+    return total
+
+
 def _reject_fixed_cycle_resource(code: str, message: str) -> None:
     raise OperationResourceAdmissionError(
         location=("cycle_length",), code=code, message=message
@@ -621,29 +661,20 @@ def _admit_fixed_cycle_enumeration(
     max_core_degree = max(
         (len(neighbors) for neighbors in adjacency_sets.values()), default=0
     )
-    part_sizes = (
-        _complete_multipartite_part_sizes(core_vertices, adjacency_sets)
-        if chordless
-        else None
-    )
     chordless_four_cycle_bound: int | None = None
-    # Complete-multipartite 2-cores have no induced cycle of length 5 or more,
-    # and their induced 4-cycles are exactly the 2+2 selections from distinct
-    # parts. Empty families and the exact C4 count are therefore linear in the
-    # core adjacency instead of inheriting a complete-graph traversal bound.
-    if chordless and part_sizes is not None:
-        if cycle_length >= 5:
-            _admit_fixed_cycle_result(
-                graph,
-                cycle_length,
-                cycle_upper_bound=0,
-                source_characters=source_characters,
-                largest_label=largest_label,
-            )
-            return None
-        if cycle_length == 4:
-            chordless_four_cycle_bound = _chordless_four_cycle_count(part_sizes)
-            if chordless_four_cycle_bound == 0:
+    # Induced cycles cannot leave a connected core component. Complete
+    # multipartite components have no induced cycle of length 5 or more,
+    # and their induced 4-cycles are the 2+2 selections from distinct parts.
+    # Summing those exact bounds keeps a disjoint union of cheap bipartite
+    # cores from inheriting a disconnected complete-graph output envelope.
+    if chordless and cycle_length >= 4:
+        multipartite_bound = _chordless_multipartite_cycle_bound(
+            _core_connected_components(core_vertices, adjacency_sets),
+            adjacency_sets,
+            cycle_length,
+        )
+        if multipartite_bound is not None:
+            if cycle_length >= 5 or multipartite_bound == 0:
                 _admit_fixed_cycle_result(
                     graph,
                     cycle_length,
@@ -652,6 +683,7 @@ def _admit_fixed_cycle_enumeration(
                     largest_label=largest_label,
                 )
                 return None
+            chordless_four_cycle_bound = multipartite_bound
     # A complete 2-core is a clique: every simple k-cycle with k >= 4 has a
     # chord. Chordless enumeration therefore returns the empty family after a
     # linear core inspection instead of inheriting the all-simple-cycle bound.

@@ -290,6 +290,27 @@ def test_complete_bipartite_chordless_four_cycles_use_the_exact_count() -> None:
     assert len(result.cycles) == 3_025
 
 
+def test_disjoint_complete_bipartite_chordless_four_cycles_sum_component_bounds() -> (
+    None
+):
+    def bipartite(prefix: str) -> tuple[tuple[str, ...], tuple[tuple[str, str], ...]]:
+        left = tuple(f"{prefix}a{index:02}" for index in range(11))
+        right = tuple(f"{prefix}b{index:02}" for index in range(11))
+        return left + right, tuple((a, b) for a in left for b in right)
+
+    first_vertices, first_edges = bipartite("p")
+    second_vertices, second_edges = bipartite("q")
+    graph = SimpleUndirectedGraph(
+        vertices=first_vertices + second_vertices,
+        edges=first_edges + second_edges,
+    )
+
+    result = enumerate_chordless_fixed_length_cycles(graph, 4)
+
+    assert result.cycle_count == 2 * 55 * 55
+    assert len(result.cycles) == 6_050
+
+
 def test_empty_clique_family_honors_cancellation_during_assembly(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

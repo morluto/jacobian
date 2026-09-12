@@ -457,6 +457,10 @@ class FullGraphAutomorphismResult(StrictModel):
                     "graph.automorphism.trivial_group_requires_identity",
                     "empty source generators require the nested identity permutation",
                 )
+        self._require_canonical_orbit_partitions()
+        return self
+
+    def _require_canonical_orbit_partitions(self) -> None:
         vertex_members = tuple(
             member for orbit in self.vertex_orbits for member in orbit.members
         )
@@ -487,7 +491,6 @@ class FullGraphAutomorphismResult(StrictModel):
                 "graph.automorphism.edge_orbits_must_partition_axis",
                 "edge orbits must be a complete canonical partition",
             )
-        return self
 
     @classmethod
     def _from_kernel(

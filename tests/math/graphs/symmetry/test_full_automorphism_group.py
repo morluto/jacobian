@@ -413,8 +413,8 @@ def test_complete_graph_with_class_pair_edge_colors_stays_compact() -> None:
     red = tuple(f"r{index:02d}" for index in range(10))
     blue = tuple(f"b{index:02d}" for index in range(10))
     vertices = (*red, *blue)
-    vertex_color = {vertex: "red" for vertex in red}
-    vertex_color.update({vertex: "blue" for vertex in blue})
+    vertex_color = dict.fromkeys(red, "red")
+    vertex_color.update(dict.fromkeys(blue, "blue"))
     edges = tuple(
         canonical_edge(left, right)
         for index, left in enumerate(vertices)

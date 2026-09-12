@@ -38,6 +38,7 @@ from jacobian.math.polynomials.ideals.operations import groebner_basis
 from jacobian.math.polynomials.values import (
     MAX_RATIONAL_FUNCTION_EXPONENT,
     MAX_RATIONAL_FUNCTION_TERMS,
+    RationalFunction,
     RationalPolynomial,
     RationalPolynomialIdeal,
     RationalPolynomialTerm,
@@ -122,6 +123,7 @@ def initial_monomial_ideal(
             reverse=True,
         )
     )
+    generators: tuple[RationalPolynomial, ...]
     if zero_basis and not minimal:
         generators = (
             RationalPolynomial(
@@ -273,7 +275,7 @@ def _series_data(
     prefix_degree: int,
 ) -> tuple[
     RationalPolynomial,
-    object,
+    RationalFunction,
     RationalPolynomial,
     RationalPolynomial,
     int,

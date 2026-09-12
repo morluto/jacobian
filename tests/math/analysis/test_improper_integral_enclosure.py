@@ -59,6 +59,8 @@ def test_left_logarithm_encloses_its_exact_unit_integral() -> None:
     assert lower <= 1 <= upper
     assert result.left_quadrature.outcome.status == "TARGET_MET"
     assert result.right_quadrature.outcome.status == "TARGET_MET"
+    assert result.enclosure.lower.as_fraction() == lower
+    assert result.enclosure.upper.as_fraction() == upper
     assert result.model_validate_json(result.model_dump_json()) == result
 
 
@@ -95,7 +97,15 @@ def test_tail_target_beyond_the_admitted_truncation_is_rejected() -> None:
 
 def test_forged_tail_does_not_round_trip() -> None:
     result = enclose_endpoint_log_improper_integral(_request())
-    forged = result.model_dump(mode="json")
+    forged = result.model_dump()
     forged["left_tail"]["enclosure"]["upper"] = {"num": 0, "den": 1}
+    with pytest.raises(ValidationError):
+        EndpointLogImproperIntegralResult.model_validate(forged)
+
+
+def test_forged_combined_enclosure_does_not_round_trip() -> None:
+    result = enclose_endpoint_log_improper_integral(_request())
+    forged = result.model_dump()
+    forged["enclosure"]["upper"] = {"num": 0, "den": 1}
     with pytest.raises(ValidationError):
         EndpointLogImproperIntegralResult.model_validate(forged)

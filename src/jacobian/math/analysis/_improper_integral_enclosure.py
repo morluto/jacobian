@@ -4,12 +4,18 @@ from __future__ import annotations
 
 from fractions import Fraction
 from math import factorial
+from time import monotonic
 from typing import Self
 
 from pydantic import Field, StrictInt, model_validator
 
 from jacobian._exact import CanonicalRational
-from jacobian._execution import BackendFailureReason, OperationBackendError
+from jacobian._execution import (
+    BackendFailureReason,
+    OperationBackendError,
+    current_request_execution,
+    request_execution,
+)
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     MathTool,
@@ -94,6 +100,7 @@ class EndpointLogImproperIntegralResult(StrictModel):
     right_quadrature: DefiniteIntegralEnclosureResult
     left_tail: EndpointTailEnclosure
     right_tail: EndpointTailEnclosure
+    enclosure: ClosedRationalInterval
 
     @model_validator(mode="after")
     def bind_proof_decomposition(self) -> Self:
@@ -111,6 +118,27 @@ class EndpointLogImproperIntegralResult(StrictModel):
         ):
             raise ValueError(
                 "improper-integral quadratures and tails must match the source decomposition"
+            )
+        expected_lower = Fraction()
+        expected_upper = Fraction()
+        for quadrature in (self.left_quadrature, self.right_quadrature):
+            outcome = quadrature.outcome
+            if isinstance(outcome, DefiniteIntegralDomainUnproven):
+                raise ValueError(
+                    "an improper-integral result requires concluded quadratures"
+                )
+            expected_lower += outcome.enclosure.lower.as_fraction()
+            expected_upper += outcome.enclosure.upper.as_fraction()
+        expected_lower += self.left_tail.enclosure.lower.as_fraction()
+        expected_lower += self.right_tail.enclosure.lower.as_fraction()
+        expected_upper += self.left_tail.enclosure.upper.as_fraction()
+        expected_upper += self.right_tail.enclosure.upper.as_fraction()
+        if (
+            self.enclosure.lower.as_fraction() != expected_lower
+            or self.enclosure.upper.as_fraction() != expected_upper
+        ):
+            raise ValueError(
+                "combined improper-integral enclosure must sum both quadratures and tails"
             )
         return self
 
@@ -322,7 +350,7 @@ def _quadrature_shape_matches(
     )
 
 
-def enclose_endpoint_log_improper_integral(
+def _enclose_endpoint_log_improper_integral(
     request: EndpointLogImproperIntegralRequest,
 ) -> EndpointLogImproperIntegralResult:
     truncation, left_tail, right_tail = _tail_plan(request)
@@ -340,6 +368,20 @@ def enclose_endpoint_log_improper_integral(
         right.outcome, DefiniteIntegralDomainUnproven
     ):
         raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    # The tails are symmetric, so adding their exact lower/upper bounds keeps
+    # the returned interval an exact replay of the proof decomposition.
+    lower = (
+        left.outcome.enclosure.lower.as_fraction()
+        + right.outcome.enclosure.lower.as_fraction()
+        - left_tail
+        - right_tail
+    )
+    upper = (
+        left.outcome.enclosure.upper.as_fraction()
+        + right.outcome.enclosure.upper.as_fraction()
+        + left_tail
+        + right_tail
+    )
     return EndpointLogImproperIntegralResult(
         source=request,
         left_quadrature=left,
@@ -350,7 +392,22 @@ def enclose_endpoint_log_improper_integral(
         right_tail=EndpointTailEnclosure(
             truncation=truncation, enclosure=_tail_interval(right_tail)
         ),
+        enclosure=ClosedRationalInterval(
+            lower=CanonicalRational.from_fraction(lower),
+            upper=CanonicalRational.from_fraction(upper),
+        ),
     )
+
+
+def enclose_endpoint_log_improper_integral(
+    request: EndpointLogImproperIntegralRequest,
+) -> EndpointLogImproperIntegralResult:
+    """Enclose one endpoint-logarithmic integral under one request deadline."""
+
+    if current_request_execution() is None:
+        with request_execution(monotonic()):
+            return _enclose_endpoint_log_improper_integral(request)
+    return _enclose_endpoint_log_improper_integral(request)
 
 
 IMPROPER_INTEGRAL_OPERATIONS = (

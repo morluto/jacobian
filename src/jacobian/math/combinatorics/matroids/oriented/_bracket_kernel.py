@@ -407,27 +407,41 @@ def _apply_coefficient_merge(
     return _cancel_opposite_components(remaining)
 
 
-def _greedy_component_sum(
+def _search_component_sum(
     pending: list[_CoefficientComponent],
     work_digit_bound: int,
+    failed: set[tuple[tuple[int, int], ...]],
 ) -> tuple[Fraction, int] | None:
-    """Reduce by always taking the locally cheapest representable pair."""
+    """Backtrack over representable pair merges until one order completes."""
 
-    while pending:
-        if len(pending) == 1:
-            value, _ = pending[0]
-            return value, max(
-                work_digit_bound,
-                _integer_digit_upper_bound(value.numerator),
-                _integer_digit_upper_bound(value.denominator),
-            )
-        merges = _representable_coefficient_merges(pending)
-        if not merges:
-            return None
-        _, left_index, right_index, merged, merged_width = merges[0]
-        pending = _apply_coefficient_merge(pending, left_index, right_index, merged)
-        work_digit_bound = max(work_digit_bound, merged_width)
-    return Fraction(0), work_digit_bound
+    if not pending:
+        return Fraction(0), work_digit_bound
+    if len(pending) == 1:
+        value, _ = pending[0]
+        return value, max(
+            work_digit_bound,
+            _integer_digit_upper_bound(value.numerator),
+            _integer_digit_upper_bound(value.denominator),
+        )
+    key = tuple(
+        sorted((value.numerator, value.denominator) for value, _ in pending)
+    )
+    if key in failed:
+        return None
+    merges = _representable_coefficient_merges(pending)
+    if not merges:
+        failed.add(key)
+        return None
+    for _, left_index, right_index, merged, merged_width in merges:
+        reduced = _search_component_sum(
+            _apply_coefficient_merge(pending, left_index, right_index, merged),
+            max(work_digit_bound, merged_width),
+            failed,
+        )
+        if reduced is not None:
+            return reduced
+    failed.add(key)
+    return None
 
 
 def _bounded_component_sum(
@@ -437,23 +451,15 @@ def _bounded_component_sum(
 
     The reduction order is part of admission: an arbitrary left-to-right sum
     can create a numerator or denominator wider than the canonical rational
-    envelope even when a cancellation-first order is cheap and exact. A purely
-    greedy cheapest-pair order can also reach a dead end, so a failed greedy
-    path retries every other first representable merge.
+    envelope even when a cancellation-first order is cheap and exact. Greedy
+    cheapest-pair reduction can also reach a dead end, so every representable
+    merge is backtracked, including choices after the first pair.
     """
 
     pending = _cancel_opposite_components(components)
-    reduced = _greedy_component_sum(pending, 0)
+    reduced = _search_component_sum(pending, 0, set())
     if reduced is not None:
         return reduced
-    merges = _representable_coefficient_merges(pending)
-    for _, left_index, right_index, merged, merged_width in merges[1:]:
-        reduced = _greedy_component_sum(
-            _apply_coefficient_merge(pending, left_index, right_index, merged),
-            merged_width,
-        )
-        if reduced is not None:
-            return reduced
     raise OperationResourceAdmissionError(
         location=("terms",),
         code="bracket.syzygy_coefficient_digit_bound",

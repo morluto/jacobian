@@ -1052,3 +1052,63 @@ def test_syzygy_retries_a_bounded_reduction_order() -> None:
     expected = Fraction(2 * (bound + 1), 3)
     masses = {abs(term.coefficient.as_fraction()) for term in residual.terms}
     assert masses == {expected}
+
+
+def test_syzygy_backtracks_later_coefficient_merges() -> None:
+    """A later merge choice must be retried, not only the first pair."""
+
+    limit = 10**MAX_CANONICAL_INTEGER_DIGITS
+    width = (limit - 1) // 85
+    total, _ = _bounded_component_sum(
+        [
+            (Fraction(-7 * width, 4), (0, 0)),
+            (Fraction(14 * width, 3), (0, 0)),
+            (Fraction(-85 * width, 18), (0, 0)),
+            (Fraction(-13 * width, 9), (0, 0)),
+            (Fraction(28 * width, 5), (0, 0)),
+        ]
+    )
+    assert total == Fraction(47 * width, 20)
+
+    relation = grassmann_pluecker_relation(
+        GrassmannPlueckerRelationRequest(
+            ground_size=6,
+            indices=(0, 1, 2, 3, 4, 5),
+            family="FOUR_TERM",
+        )
+    )
+    residual = bracket_syzygy_residual(
+        BracketSyzygyResidualRequest(
+            target=BracketPolynomial(ground_size=6, terms=()),
+            terms=(
+                (
+                    CanonicalRational(num=-7 * width, den=4),
+                    BracketMonomial(factors=()),
+                    relation,
+                ),
+                (
+                    CanonicalRational(num=14 * width, den=3),
+                    BracketMonomial(factors=()),
+                    relation,
+                ),
+                (
+                    CanonicalRational(num=-85 * width, den=18),
+                    BracketMonomial(factors=()),
+                    relation,
+                ),
+                (
+                    CanonicalRational(num=-13 * width, den=9),
+                    BracketMonomial(factors=()),
+                    relation,
+                ),
+                (
+                    CanonicalRational(num=28 * width, den=5),
+                    BracketMonomial(factors=()),
+                    relation,
+                ),
+            ),
+        )
+    )
+    expected = Fraction(47 * width, 20)
+    masses = {abs(term.coefficient.as_fraction()) for term in residual.terms}
+    assert masses == {expected}

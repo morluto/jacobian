@@ -38,8 +38,6 @@ from jacobian.math.polynomials._mahler_models import (
     MAX_MAHLER_RADICAND_DIGITS,
     ContentPrimitiveProfileRequest,
     ContentPrimitiveProfileResult,
-    IntegerPolynomialProfileValue,
-    IntegerPolynomialValue,
     MahlerAlgebraicValue,
     MahlerMeasureRequest,
     MahlerMeasureResult,
@@ -49,6 +47,7 @@ from jacobian.math.polynomials._mahler_models import (
     ReciprocalProfileResult,
     RootLocation,
 )
+from jacobian.math.polynomials._models import IntegerPolynomial
 
 __all__ = [
     "content_primitive_profile",
@@ -279,26 +278,26 @@ def _require_nonzero_polynomial(
 def content_primitive_profile(
     request: ContentPrimitiveProfileRequest,
 ) -> ContentPrimitiveProfileResult:
-    coefficients = request.polynomial.coefficients_descending
+    coefficients = request.polynomial.coefficients
     _require_nonzero_polynomial(coefficients, location=("polynomial",))
     sign: Literal[-1, 1] = 1 if coefficients[0] > 0 else -1
     content = 0
     for coefficient in coefficients:
         content = gcd(content, abs(coefficient))
     primitive = tuple((sign * coefficient) // content for coefficient in coefficients)
-    primitive_value = IntegerPolynomialProfileValue(coefficients_descending=primitive)
+    primitive_value = IntegerPolynomial(coefficients=primitive)
     reconstruction = tuple(sign * content * value for value in primitive)
     return ContentPrimitiveProfileResult(
         sign=sign,
         content=content,
         primitive_part=primitive_value,
-        degree=primitive_value.degree,
-        reconstruction=IntegerPolynomialValue(coefficients_descending=reconstruction),
+        degree=len(primitive) - 1,
+        reconstruction=IntegerPolynomial(coefficients=reconstruction),
     )
 
 
 def reciprocal_profile(request: ReciprocalProfileRequest) -> ReciprocalProfileResult:
-    coefficients = request.polynomial.coefficients_descending
+    coefficients = request.polynomial.coefficients
     _require_nonzero_polynomial(coefficients, location=("polynomial",))
     degree = len(coefficients) - 1
     leading, constant = coefficients[0], coefficients[-1]
@@ -411,16 +410,16 @@ def _quadratic_root_data(
 def _quadratic_root_profile(
     request: RealQuadraticRootProfileRequest,
 ) -> RealQuadraticRootProfileResult:
-    a, b, c = request.coefficients_descending
+    a, b, c = request.polynomial.coefficients
     if a == 0:
         raise OperationDomainValidationError(
-            location=("coefficients_descending", 0),
+            location=("polynomial", 0),
             code="polynomial.mahler_quadratic_leading",
             message="a real quadratic profile needs a nonzero leading coefficient",
         )
     root_kind, private_roots, root_locations = _quadratic_root_data((a, b, c))
     return RealQuadraticRootProfileResult(
-        coefficients_descending=(a, b, c),
+        polynomial=IntegerPolynomial(coefficients=(a, b, c)),
         discriminant=b * b - 4 * a * c,
         root_kind=root_kind,
         sum_of_roots=CanonicalRational.from_fraction(Fraction(-b, a)),
@@ -444,7 +443,7 @@ def _abs_parts(value: _QuadraticParts) -> _QuadraticParts:
 
 
 def _mahler_measure(request: MahlerMeasureRequest) -> MahlerMeasureResult:
-    coefficients = request.coefficients_descending
+    coefficients = request.polynomial.coefficients
     leading = coefficients[0]
     roots: tuple[_QuadraticParts, ...]
     root_kind: Literal["DISTINCT_REAL", "DOUBLE_REAL", "COMPLEX_CONJUGATE"]
@@ -462,7 +461,7 @@ def _mahler_measure(request: MahlerMeasureRequest) -> MahlerMeasureResult:
         )
     if any(location == "UNRESOLVED" for location in root_locations):
         raise OperationResourceAdmissionError(
-            location=("coefficients_descending",),
+            location=("polynomial",),
             code="polynomial.mahler_unresolved_location",
             message="the root-location ledger is incomplete, so no Mahler-measure claim is made",
         )
@@ -486,7 +485,7 @@ def _mahler_measure(request: MahlerMeasureRequest) -> MahlerMeasureResult:
     outside_value = _parts_to_value(outside)
     measure_value = _parts_to_value(measure)
     return MahlerMeasureResult(
-        coefficients_descending=coefficients,
+        polynomial=IntegerPolynomial(coefficients=coefficients),
         degree=len(coefficients) - 1,
         leading_coefficient=leading,
         root_locations=root_ledger,

@@ -32,7 +32,7 @@ INTEGER_POLYNOMIAL_PROFILE_OPERATIONS = (
             OperationExample(
                 name="scaled_quadratic",
                 description="6x^2-6 has content 6 and primitive part x^2-1.",
-                input={"polynomial": {"coefficients_descending": ["6", "0", "-6"]}},
+                input={"polynomial": {"coefficients": ["6", "0", "-6"]}},
             ),
         ),
     ),
@@ -52,7 +52,7 @@ INTEGER_POLYNOMIAL_PROFILE_OPERATIONS = (
             OperationExample(
                 name="palindromic_quadratic",
                 description="x^2+1 is reciprocal with coefficient pairs (1,1) and (0,0).",
-                input={"polynomial": {"coefficients_descending": ["1", "0", "1"]}},
+                input={"polynomial": {"coefficients": ["1", "0", "1"]}},
             ),
         ),
     ),
@@ -76,7 +76,7 @@ INTEGER_POLYNOMIAL_PROFILE_OPERATIONS = (
             OperationExample(
                 name="golden_quadratic",
                 description="x^2-x-1 has one root inside and one outside the unit disk.",
-                input={"coefficients_descending": ["1", "-1", "-1"]},
+                input={"polynomial": {"coefficients": ["1", "-1", "-1"]}},
             ),
         ),
     ),
@@ -100,7 +100,7 @@ INTEGER_POLYNOMIAL_PROFILE_OPERATIONS = (
             OperationExample(
                 name="golden_measure",
                 description="The Mahler measure of x^2-x-1 is the golden ratio.",
-                input={"coefficients_descending": ["1", "-1", "-1"]},
+                input={"polynomial": {"coefficients": ["1", "-1", "-1"]}},
             ),
         ),
     ),

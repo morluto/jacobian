@@ -21,6 +21,7 @@ from jacobian._exact import CanonicalRational, ExactInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.number_theory.algebraic_numbers.real import RealAlgebraicValue
+from jacobian.math.polynomials._models import IntegerPolynomial
 
 MAX_MAHLER_DEGREE = 64
 MAX_MAHLER_COEFFICIENT_DIGITS = 256
@@ -43,81 +44,39 @@ def _validation_error(code: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(code, message)
 
 
-class IntegerPolynomialValue(StrictModel):
-    """One canonical nonzero integer polynomial, retaining its leading sign."""
+def _require_mahler_polynomial_envelope(polynomial: IntegerPolynomial) -> None:
+    """Enforce the profile execution limits on a canonical carrier value."""
 
-    coefficients_descending: tuple[ExactInteger, ...] = Field(
-        min_length=1, max_length=MAX_MAHLER_DEGREE + 1
-    )
-
-    @model_validator(mode="after")
-    def require_nonzero_leading_and_bounded_digits(self) -> Self:
-        if self.coefficients_descending[0] == 0:
-            raise _validation_error(
-                "polynomial.mahler_zero_leading",
-                "an integer polynomial cannot have a zero leading coefficient",
-            )
-        if any(
-            len(format_canonical_integer(abs(coefficient)))
-            > MAX_MAHLER_COEFFICIENT_DIGITS
-            for coefficient in self.coefficients_descending
-        ):
-            raise _validation_error(
-                "polynomial.mahler_coefficient_bound",
-                "a profile polynomial coefficient exceeds the admitted digit bound",
-            )
-        return self
-
-    @property
-    def degree(self) -> int:
-        return len(self.coefficients_descending) - 1
-
-
-class IntegerPolynomialProfileValue(IntegerPolynomialValue):
-    """One canonical integer polynomial with a positive leading coefficient.
-
-    This is the carrier for primitive factors and keeps their normalization
-    explicit. Requests use :class:`IntegerPolynomialValue` so content/sign
-    operations can represent arbitrary source polynomials.
-    """
-
-    coefficients_descending: tuple[ExactInteger, ...] = Field(
-        min_length=1, max_length=MAX_MAHLER_DEGREE + 1
-    )
-
-    @model_validator(mode="after")
-    def require_positive_leading_and_bounded_digits(self) -> Self:
-        if self.coefficients_descending[0] <= 0:
-            raise _validation_error(
-                "polynomial.mahler_positive_leading_required",
-                "a profile polynomial must have a positive leading coefficient",
-            )
-        if any(
-            len(format_canonical_integer(abs(coefficient)))
-            > MAX_MAHLER_COEFFICIENT_DIGITS
-            for coefficient in self.coefficients_descending
-        ):
-            raise _validation_error(
-                "polynomial.mahler_coefficient_bound",
-                "a profile polynomial coefficient exceeds the admitted digit bound",
-            )
-        return self
-
-    @property
-    def degree(self) -> int:
-        return len(self.coefficients_descending) - 1
+    if len(polynomial.coefficients) > MAX_MAHLER_DEGREE + 1:
+        raise _validation_error(
+            "polynomial.mahler_degree_bound",
+            f"a profile polynomial has degree at most {MAX_MAHLER_DEGREE}",
+        )
+    if any(
+        len(format_canonical_integer(abs(coefficient))) > MAX_MAHLER_COEFFICIENT_DIGITS
+        for coefficient in polynomial.coefficients
+    ):
+        raise _validation_error(
+            "polynomial.mahler_coefficient_bound",
+            "a profile polynomial coefficient exceeds the admitted digit bound",
+        )
 
 
 class ContentPrimitiveProfileRequest(StrictModel):
-    polynomial: IntegerPolynomialValue
+    polynomial: IntegerPolynomial
+
+    @model_validator(mode="after")
+    def require_profile_envelope(self) -> Self:
+        _require_mahler_polynomial_envelope(self.polynomial)
+        return self
 
 
 class ContentPrimitiveProfileResult(StrictModel):
     sign: Literal[-1, 1]
     content: ExactInteger
-    primitive_part: IntegerPolynomialProfileValue
+    primitive_part: IntegerPolynomial
     degree: StrictInt = Field(ge=0, le=MAX_MAHLER_DEGREE)
-    reconstruction: IntegerPolynomialValue
+    reconstruction: IntegerPolynomial
 
     @model_validator(mode="after")
     def require_exact_reconstruction(self) -> Self:
@@ -126,8 +85,15 @@ class ContentPrimitiveProfileResult(StrictModel):
                 "polynomial.mahler_content_positive",
                 "content must be the positive coefficient gcd",
             )
+        if self.primitive_part.coefficients[0] <= 0:
+            raise _validation_error(
+                "polynomial.mahler_positive_leading_required",
+                "a primitive part must have a positive leading coefficient",
+            )
+        _require_mahler_polynomial_envelope(self.primitive_part)
+        _require_mahler_polynomial_envelope(self.reconstruction)
         primitive_content = 0
-        for coefficient in self.primitive_part.coefficients_descending:
+        for coefficient in self.primitive_part.coefficients:
             primitive_content = gcd(primitive_content, abs(coefficient))
         if primitive_content != 1:
             raise _validation_error(
@@ -136,19 +102,19 @@ class ContentPrimitiveProfileResult(StrictModel):
             )
         scaled = tuple(
             self.sign * self.content * coefficient
-            for coefficient in self.primitive_part.coefficients_descending
+            for coefficient in self.primitive_part.coefficients
         )
-        if scaled != self.reconstruction.coefficients_descending:
+        if scaled != self.reconstruction.coefficients:
             raise _validation_error(
                 "polynomial.mahler_content_reconstruction",
                 "sign*content*primitive_part must reconstruct the input polynomial",
             )
-        if self.degree != self.primitive_part.degree:
+        if self.degree != len(self.primitive_part.coefficients) - 1:
             raise _validation_error(
                 "polynomial.mahler_content_degree",
                 "the reported degree is the primitive part's degree",
             )
-        if (self.reconstruction.coefficients_descending[0] > 0) != (self.sign == 1):
+        if (self.reconstruction.coefficients[0] > 0) != (self.sign == 1):
             raise _validation_error(
                 "polynomial.mahler_content_sign",
                 "the sign must match the reconstructed leading coefficient",
@@ -157,7 +123,12 @@ class ContentPrimitiveProfileResult(StrictModel):
 
 
 class ReciprocalProfileRequest(StrictModel):
-    polynomial: IntegerPolynomialValue
+    polynomial: IntegerPolynomial
+
+    @model_validator(mode="after")
+    def require_profile_envelope(self) -> Self:
+        _require_mahler_polynomial_envelope(self.polynomial)
+        return self
 
 
 class ReciprocalProfileResult(StrictModel):
@@ -226,28 +197,21 @@ class ReciprocalProfileResult(StrictModel):
 class RealQuadraticRootProfileRequest(StrictModel):
     """One real quadratic ``a x^2 + b x + c`` with nonzero leading coefficient."""
 
-    coefficients_descending: tuple[ExactInteger, ExactInteger, ExactInteger]
+    polynomial: IntegerPolynomial
 
     @model_validator(mode="after")
-    def require_nonzero_leading(self) -> Self:
-        if any(
-            abs(coefficient) >= 10**MAX_MAHLER_COEFFICIENT_DIGITS
-            for coefficient in self.coefficients_descending
-        ):
+    def require_quadratic_envelope(self) -> Self:
+        _require_mahler_polynomial_envelope(self.polynomial)
+        if len(self.polynomial.coefficients) != 3:
             raise _validation_error(
-                "polynomial.mahler_coefficient_bound",
-                "coefficients exceed the 256-digit bound",
-            )
-        if self.coefficients_descending[0] == 0:
-            raise _validation_error(
-                "polynomial.mahler_quadratic_leading",
-                "a real quadratic profile needs a nonzero leading coefficient",
+                "polynomial.mahler_quadratic_degree",
+                "a real quadratic profile needs exactly three coefficients",
             )
         return self
 
 
 class RealQuadraticRootProfileResult(StrictModel):
-    coefficients_descending: tuple[ExactInteger, ExactInteger, ExactInteger]
+    polynomial: IntegerPolynomial
     discriminant: ExactInteger
     root_kind: Literal["DISTINCT_REAL", "DOUBLE_REAL", "COMPLEX_CONJUGATE"]
     sum_of_roots: CanonicalRational
@@ -258,10 +222,11 @@ class RealQuadraticRootProfileResult(StrictModel):
 
     @model_validator(mode="after")
     def require_ledger_length(self) -> Self:
-        if self.coefficients_descending[0] == 0:
+        _require_mahler_polynomial_envelope(self.polynomial)
+        if len(self.polynomial.coefficients) != 3:
             raise _validation_error(
-                "polynomial.mahler_quadratic_leading",
-                "a root profile needs a nonzero leading coefficient",
+                "polynomial.mahler_quadratic_degree",
+                "a root profile needs exactly three coefficients",
             )
         if any(location == "UNRESOLVED" for location in self.root_locations):
             raise _validation_error(
@@ -299,21 +264,17 @@ class RealQuadraticRootProfileResult(StrictModel):
 class MahlerMeasureRequest(StrictModel):
     """One bounded integer polynomial of degree zero, one, or two."""
 
-    coefficients_descending: tuple[ExactInteger, ...] = Field(
-        min_length=1, max_length=3
-    )
+    polynomial: IntegerPolynomial
 
     @model_validator(mode="after")
-    def require_nonzero_leading(self) -> Self:
-        if any(
-            abs(coefficient) >= 10**MAX_MAHLER_COEFFICIENT_DIGITS
-            for coefficient in self.coefficients_descending
-        ):
+    def require_low_degree_envelope(self) -> Self:
+        _require_mahler_polynomial_envelope(self.polynomial)
+        if len(self.polynomial.coefficients) > 3:
             raise _validation_error(
-                "polynomial.mahler_coefficient_bound",
-                "coefficients exceed the 256-digit bound",
+                "polynomial.mahler_degree_bound",
+                "the Mahler measure needs degree at most two",
             )
-        if self.coefficients_descending[0] == 0:
+        if self.polynomial.coefficients[0] == 0:
             raise _validation_error(
                 "polynomial.mahler_leading_nonzero",
                 "the Mahler measure needs a nonzero leading coefficient",
@@ -322,13 +283,13 @@ class MahlerMeasureRequest(StrictModel):
 
     @property
     def degree(self) -> int:
-        return len(self.coefficients_descending) - 1
+        return len(self.polynomial.coefficients) - 1
 
 
 class MahlerMeasureResult(StrictModel):
     """The exact Mahler measure ``|a_d| * prod_i max(1, |alpha_i|)``."""
 
-    coefficients_descending: tuple[ExactInteger, ...]
+    polynomial: IntegerPolynomial
     degree: StrictInt = Field(ge=0, le=2)
     leading_coefficient: ExactInteger
     root_locations: tuple[RootLocation, ...]
@@ -340,17 +301,18 @@ class MahlerMeasureResult(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_root_ledger(self) -> Self:
-        if len(self.coefficients_descending) != self.degree + 1:
+        _require_mahler_polynomial_envelope(self.polynomial)
+        if len(self.polynomial.coefficients) != self.degree + 1:
             raise _validation_error(
                 "polynomial.mahler_result_degree",
                 "the coefficient tuple length must equal degree+1",
             )
-        if self.coefficients_descending[0] == 0:
+        if self.polynomial.coefficients[0] == 0:
             raise _validation_error(
                 "polynomial.mahler_result_leading",
                 "the result polynomial must have a nonzero leading coefficient",
             )
-        if self.leading_coefficient != self.coefficients_descending[0]:
+        if self.leading_coefficient != self.polynomial.coefficients[0]:
             raise _validation_error(
                 "polynomial.mahler_result_leading_binding",
                 "the retained leading coefficient must match the source polynomial",
@@ -361,11 +323,8 @@ class MahlerMeasureResult(StrictModel):
                 "a Mahler-measure result must resolve every root location",
             )
         expected = 0 if self.degree == 0 else 1 if self.degree == 1 else 2
-        if (
-            self.degree == 2
-            and self.coefficients_descending[1] == 0
-            and self.coefficients_descending[2] != 0
-        ):
+        coefficients = self.polynomial.coefficients
+        if self.degree == 2 and coefficients[1] == 0 and coefficients[2] != 0:
             # Pure quadratic a x^2 + c has two real or two conjugate roots.
             expected = 2
         if len(self.root_locations) != expected:
@@ -383,8 +342,6 @@ __all__ = [
     "MAX_MAHLER_RADICAND_DIGITS",
     "ContentPrimitiveProfileRequest",
     "ContentPrimitiveProfileResult",
-    "IntegerPolynomialProfileValue",
-    "IntegerPolynomialValue",
     "MahlerAlgebraicValue",
     "MahlerMeasureRequest",
     "MahlerMeasureResult",

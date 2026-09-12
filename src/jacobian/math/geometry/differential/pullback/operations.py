@@ -36,6 +36,7 @@ from jacobian.math.polynomials._conversions import (
 )
 from jacobian.math.polynomials.rational_functions.values import RationalFunctionMap
 from jacobian.math.polynomials.values import (
+    MAX_POLYNOMIAL_VARIABLES,
     RationalFunction,
     require_canonical_rational_function,
 )
@@ -111,11 +112,14 @@ def pullback_metric(
             message="map target coordinates must equal metric coordinate axis",
         )
     n = len(map_value.source_variables)
-    if not 1 <= n <= 4:
+    if not 1 <= n <= MAX_POLYNOMIAL_VARIABLES:
         raise OperationDomainValidationError(
             location=("map", "source_variables"),
             code="differential_geometry.rational_metric.pullback.axis",
-            message="source coordinate axis must have between 1 and 4 coordinates",
+            message=(
+                "source coordinate axis must have between 1 and "
+                f"{MAX_POLYNOMIAL_VARIABLES} coordinates"
+            ),
         )
     plan = build_plan(metric, map_value)
     request_checkpoint("after complete rational metric pullback admission")

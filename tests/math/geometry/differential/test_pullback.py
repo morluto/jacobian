@@ -352,3 +352,13 @@ def test_locus_fields_must_agree_exactly() -> None:
     dumped["pullback_locus_guard"] = ()
     with pytest.raises(ValueError, match="agree exactly"):
         type(result).model_validate(dumped)
+
+
+def test_five_source_coordinates_pull_back_a_one_dimensional_metric() -> None:
+    sources = symbols("x0 x1 x2 x3 x4")
+    result = pullback_metric(
+        metric((1,), ("y",)),
+        map_value((sources[0],), tuple(str(item) for item in sources), ("y",)),
+    )
+    assert result.pullback.coordinate_axis == tuple(str(item) for item in sources)
+    assert len(result.pullback.components) == 25

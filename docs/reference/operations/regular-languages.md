@@ -32,5 +32,5 @@ and aggregate accepted-word count remain attached for composition.
 The operation admits transition-index construction, reachable-state discovery,
 all extended weak-composition DP layers, vector-coordinate updates, final-layer
 scans, exact count digits, and complete output materialization before running.
-A zero-symbol alphabet is valid; a positive alphabet is still required to be
-total.
+A zero-symbol DFA admits only the empty word; a positive alphabet is still
+required to be a complete transition carrier.

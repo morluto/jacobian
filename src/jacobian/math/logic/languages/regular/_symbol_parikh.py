@@ -79,7 +79,8 @@ class SymbolParikhProfileResult(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        request: SymbolParikhProfileRequest,
+        dfa: DFA,
+        word_length: int,
         *,
         cells: tuple[SymbolParikhCell, ...],
         total_accepted_words: ExactInteger,
@@ -87,9 +88,9 @@ class SymbolParikhProfileResult(StrictModel):
         """Construct a profile after the trusted DP established its invariants."""
 
         return cls.model_construct(
-            dfa=request.dfa,
-            alphabet=tuple(range(request.dfa.alphabet_size)),
-            word_length=request.word_length,
+            dfa=dfa,
+            alphabet=tuple(range(dfa.alphabet_size)),
+            word_length=word_length,
             cells=cells,
             total_accepted_words=total_accepted_words,
         )
@@ -141,21 +142,21 @@ def _reachable_states_without_index(dfa: DFA) -> set[int]:
     return reachable
 
 
-def _symbol_parikh_profile_request(
-    request: SymbolParikhProfileRequest,
+def _compute_symbol_parikh_profile(
+    dfa: DFA,
+    length: int,
 ) -> SymbolParikhProfileResult:
-    dfa = request.dfa
-    length = request.word_length
     alphabet_size = dfa.alphabet_size
     if alphabet_size == 0:
-        total = count_accepted_words(dfa, length)
-        cells = (SymbolParikhCell(symbol_counts=(), multiplicity=1),) if total else ()
-        return SymbolParikhProfileResult(
-            dfa=dfa,
-            alphabet=(),
-            word_length=length,
+        accepted = length == 0 and dfa.initial_state in dfa.accepting_states
+        cells = (
+            (SymbolParikhCell(symbol_counts=(), multiplicity=1),) if accepted else ()
+        )
+        return SymbolParikhProfileResult._from_kernel(
+            dfa,
+            length,
             cells=cells,
-            total_accepted_words=total,
+            total_accepted_words=int(accepted),
         )
     output_bound = comb(length + alphabet_size - 1, alphabet_size - 1)
     transition_count = dfa.state_count * alphabet_size
@@ -221,13 +222,20 @@ def _symbol_parikh_profile_request(
             profile[counts] = profile.get(counts, 0) + multiplicity
     total = sum(profile.values())
     return SymbolParikhProfileResult._from_kernel(
-        request,
+        dfa,
+        length,
         cells=tuple(
             SymbolParikhCell(symbol_counts=counts, multiplicity=multiplicity)
             for counts, multiplicity in sorted(profile.items())
         ),
         total_accepted_words=total,
     )
+
+
+def _symbol_parikh_profile_request(
+    request: SymbolParikhProfileRequest,
+) -> SymbolParikhProfileResult:
+    return symbol_parikh_profile(request.dfa, request.word_length)
 
 
 def symbol_parikh_profile(dfa: DFA, word_length: int) -> SymbolParikhProfileResult:
@@ -252,6 +260,4 @@ def symbol_parikh_profile(dfa: DFA, word_length: int) -> SymbolParikhProfileResu
                 f"{MAX_SYMBOL_PARIKH_LENGTH}"
             ),
         )
-    return _symbol_parikh_profile_request(
-        SymbolParikhProfileRequest(dfa=dfa, word_length=word_length)
-    )
+    return _compute_symbol_parikh_profile(dfa, word_length)

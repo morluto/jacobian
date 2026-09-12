@@ -6,10 +6,16 @@ from math import comb
 from typing import Any, cast
 
 import pytest
+from pydantic import ValidationError
 
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
+from jacobian.math.logic.languages.regular import _symbol_parikh as profile_module
 from jacobian.math.logic.languages.regular._symbol_parikh import (
     MAX_SYMBOL_PARIKH_DP_WORK,
+    SymbolParikhCell,
     SymbolParikhProfileRequest,
     SymbolParikhProfileResult,
     symbol_parikh_profile,
@@ -48,8 +54,6 @@ def test_catalog_request_adapter_delegates_to_native_signature() -> None:
 
 
 def test_native_entry_point_rejects_unparsed_arguments_with_domain_errors() -> None:
-    from jacobian.catalog.models import OperationDomainValidationError
-
     with pytest.raises(OperationDomainValidationError) as length_error:
         symbol_parikh_profile(ending_in_one(), -1)
     assert length_error.value.errors()[0]["loc"] == ("word_length",)
@@ -88,13 +92,6 @@ def test_length_zero_retains_empty_count_vector() -> None:
 
 
 def test_profile_result_rejects_noncanonical_claimed_cells() -> None:
-    from pydantic import ValidationError
-
-    from jacobian.math.logic.languages.regular._symbol_parikh import (
-        SymbolParikhCell,
-        SymbolParikhProfileResult,
-    )
-
     with pytest.raises(ValidationError):
         SymbolParikhCell(symbol_counts=(4, -1), multiplicity=1)
 
@@ -134,7 +131,6 @@ def test_large_accepted_profile_uses_trusted_result_construction(
         initial_state=0,
         accepting_states=(0,),
     )
-    import jacobian.math.logic.languages.regular._symbol_parikh as profile
 
     calls = 0
     builtin_sorted = sorted
@@ -146,7 +142,7 @@ def test_large_accepted_profile_uses_trusted_result_construction(
             raise AssertionError("profile result construction replayed cell sorting")
         return builtin_sorted(*args, **kwargs)
 
-    monkeypatch.setattr(profile, "sorted", cast(Any, counted_sorted), raising=False)
+    monkeypatch.setattr(profile_module, "sorted", cast(Any, counted_sorted), raising=False)
     result = symbol_parikh_profile(dfa, 3)
 
     assert len(result.cells) == 5_984
@@ -157,16 +153,14 @@ def test_large_accepted_profile_uses_trusted_result_construction(
 def test_profile_does_not_replay_count_operation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import jacobian.math.logic.languages.regular._symbol_parikh as profile
-
     def fail(*_args: object, **_kwargs: object) -> int:
         raise AssertionError("profile kernel must not replay accepted-word counting")
 
     # The pre-fix implementation imported this binding into the profile
     # module. Patching that binding makes the regression fail on the base if
     # the profile still delegates to the separate count operation.
-    monkeypatch.setattr(profile, "count_accepted_words", fail, raising=False)
-    result = profile.symbol_parikh_profile(ending_in_one(), 3)
+    monkeypatch.setattr(profile_module, "count_accepted_words", fail, raising=False)
+    result = profile_module.symbol_parikh_profile(ending_in_one(), 3)
     assert result.total_accepted_words == 4
 
 
@@ -317,17 +311,15 @@ def test_transition_index_charge_rejects_before_indexing(
     assert without_index_work <= MAX_SYMBOL_PARIKH_DP_WORK
     assert without_index_work + transition_count > MAX_SYMBOL_PARIKH_DP_WORK
 
-    import jacobian.math.logic.languages.regular._symbol_parikh as profile
-
     def fail(*_args: object, **_kwargs: object) -> dict[tuple[int, int], int]:
         raise AssertionError("transition index built before admission")
 
-    monkeypatch.setattr(profile, "_build_transition_index", fail)
+    monkeypatch.setattr(profile_module, "_build_transition_index", fail)
     with pytest.raises(
         OperationResourceAdmissionError,
         match="symbol-Parikh DP or output exceeds",
     ):
-        profile.symbol_parikh_profile(dfa, length)
+        profile_module.symbol_parikh_profile(dfa, length)
 
 
 def test_empty_alphabet_has_only_the_empty_word() -> None:

@@ -108,8 +108,35 @@ def test_request_wire_model_is_not_a_native_export() -> None:
 def test_factor_coefficients_are_canonical_decimal_integers() -> None:
     import json
 
+    from jacobian.math.number_theory.algebraic_numbers.complex import (
+        ComplexAlgebraicValue,
+    )
+    from jacobian.math.number_theory.algebraic_numbers.real import RealAlgebraicValue
+
     profile = root_critical_distance_profile(_polynomial((3, 1), (0, -1)))
     dumped = json.loads(profile.model_dump_json())
     for root in (*dumped["roots"], *dumped["critical_points"]):
-        assert root["factor"]
-        assert all(isinstance(coefficient, str) for coefficient in root["factor"])
+        assert "polynomial" in root["value"]
+        assert "factor" not in root
+    assert isinstance(profile.critical_points[0].value, RealAlgebraicValue)
+    assert any(isinstance(root.value, ComplexAlgebraicValue) for root in profile.roots)
+
+
+def test_cube_root_cubic_returns_exact_squared_distances() -> None:
+    result = root_critical_distance_profile(_polynomial((3, 1), (0, -2)))
+    assert len(result.pairs) == 3
+    values = {tuple(row.distance_squared.polynomial) for row in result.pairs}
+    assert values == {(1, 0, 0, -4)}
+
+
+def test_quartic_with_conjugates_is_refused_before_minpoly() -> None:
+    with pytest.raises(OperationResourceAdmissionError, match="distance"):
+        root_critical_distance_profile(_polynomial((4, 1), (1, 1), (0, 1)))
+
+
+def test_native_pair_budget_matches_catalog_range() -> None:
+    polynomial = _polynomial((3, 1), (0, -1))
+    with pytest.raises(OperationDomainValidationError, match="0..64"):
+        root_critical_distance_profile(polynomial, max_pair_rows=65)
+    with pytest.raises(OperationDomainValidationError, match="non-boolean"):
+        root_critical_distance_profile(polynomial, max_pair_rows="64")  # type: ignore[arg-type]

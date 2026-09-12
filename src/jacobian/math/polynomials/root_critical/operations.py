@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from math import isqrt
 from typing import Any, Literal
 
 import sympy
@@ -13,6 +12,9 @@ from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
+)
+from jacobian.math.number_theory.algebraic_numbers.complex import (
+    ComplexAlgebraicValue,
 )
 from jacobian.math.number_theory.algebraic_numbers.real import (
     RationalIsolatingInterval,
@@ -104,6 +106,39 @@ def _root_value(root_index: int, roots: tuple[Any, ...]) -> Any:
     return value
 
 
+def _algebraic_root_value(
+    factor: sympy.Poly, root_index: int, rectangle: RootCriticalRectangle
+) -> RealAlgebraicValue | ComplexAlgebraicValue:
+    coefficients = tuple(int(value) for value in factor.all_coeffs())
+    imag_zero = (
+        rectangle.imaginary_lower.as_fraction() == 0
+        and rectangle.imaginary_upper.as_fraction() == 0
+    )
+    if imag_zero:
+        selected = None
+        target_lower = rectangle.real_lower.as_fraction()
+        target_upper = rectangle.real_upper.as_fraction()
+        for index, candidate in enumerate(factor.intervals()):
+            lower, upper = candidate[0]
+            if Fraction(lower) <= target_lower and target_upper <= Fraction(upper):
+                selected = index
+                break
+        if selected is None:
+            raise OperationDomainValidationError(
+                location=("polynomial",),
+                code="polynomial.root_critical.real_root_index",
+                message="real algebraic root index could not be selected",
+            )
+        return RealAlgebraicValue._from_admitted_polynomial(
+            polynomial=coefficients,
+            real_root_index=selected,
+        )
+    return ComplexAlgebraicValue._from_admitted_polynomial(
+        polynomial=coefficients,
+        root_index=root_index,
+    )
+
+
 def _family(
     poly: sympy.Poly,
 ) -> tuple[tuple[RootCriticalRoot, ...], tuple[Any, ...]]:
@@ -117,30 +152,17 @@ def _family(
         exact_roots = tuple(factor.all_roots())
         for root_index in range(factor.degree()):
             root = _root_value(root_index, exact_roots)
+            rectangle = _rectangle(factor, root_index, root)
             records.append(
                 RootCriticalRoot(
                     axis_index=len(records),
-                    factor=tuple(int(value) for value in factor.all_coeffs()),
-                    root_index=root_index,
+                    value=_algebraic_root_value(factor, root_index, rectangle),
                     multiplicity=multiplicity,
-                    rectangle=_rectangle(factor, root_index, root),
+                    rectangle=rectangle,
                 )
             )
             values.append(root)
     return tuple(records), tuple(values)
-
-
-def _sqrt_bounds(value: Fraction) -> tuple[Fraction, Fraction]:
-    if value < 0:
-        raise ValueError("certified square root requires a nonnegative radicand")
-    if value == 0:
-        return Fraction(), Fraction()
-    scaled = value.numerator * value.denominator
-    root = isqrt(scaled)
-    lower = Fraction(root, value.denominator)
-    if root * root == scaled:
-        return lower, lower
-    return lower, Fraction(root + 1, value.denominator)
 
 
 def _enclose_add(expr: Any) -> tuple[Fraction, Fraction, Fraction, Fraction]:
@@ -166,17 +188,88 @@ def _enclose_mul(expr: Any) -> tuple[Fraction, Fraction, Fraction, Fraction]:
     return result
 
 
+def _integer_nth_root_bounds(value: int, n: int) -> tuple[int, int]:
+    if value < 0:
+        raise ValueError("certified real radical requires a nonnegative radicand")
+    if value <= 1:
+        return value, value
+    high = 1 << ((value.bit_length() + n - 1) // n)
+    low = 0
+    while low < high:
+        mid = (low + high + 1) // 2
+        power = mid**n
+        if power == value:
+            return mid, mid
+        if power < value:
+            low = mid
+        else:
+            high = mid - 1
+    return low, low + 1
+
+
+def _nth_root_bounds(value: Fraction, n: int) -> tuple[Fraction, Fraction]:
+    if value < 0:
+        if n % 2 == 0:
+            raise ValueError("certified even root requires a nonnegative radicand")
+        lower, upper = _nth_root_bounds(-value, n)
+        return -upper, -lower
+    if value == 0:
+        return Fraction(), Fraction()
+    scaled = value.numerator * value.denominator ** (n - 1)
+    lower_int, upper_int = _integer_nth_root_bounds(scaled, n)
+    denominator = value.denominator
+    coarse_lower = Fraction(lower_int, denominator)
+    coarse_upper = Fraction(upper_int, denominator)
+    if coarse_lower == coarse_upper:
+        return coarse_lower, coarse_upper
+    scale = 1 << 20
+    low = 0
+    high = int(coarse_upper * scale) + 1
+    while low < high:
+        mid = (low + high + 1) // 2
+        if Fraction(mid, scale) ** n <= value:
+            low = mid
+        else:
+            high = mid - 1
+    lower = Fraction(low, scale)
+    if lower**n == value:
+        return lower, lower
+    return lower, Fraction(low + 1, scale)
+
+
 def _enclose_pow(expr: Any) -> tuple[Fraction, Fraction, Fraction, Fraction]:
     base, exponent = expr.args
     if exponent == 2:
         r0, r1, i0, i1 = _enclose_sympy(base)
         return _square_box(r0, r1, i0, i1)
-    if exponent == sympy.Rational(1, 2) or exponent == Fraction(1, 2):
-        r0, r1, i0, i1 = _enclose_sympy(base)
-        if i0 != 0 or i1 != 0 or r0 < 0:
-            raise ValueError("certified square root requires a nonnegative real box")
-        lower, upper = _sqrt_bounds(r0)[0], _sqrt_bounds(r1)[1]
-        return lower, upper, Fraction(), Fraction()
+    if getattr(exponent, "is_Rational", False) or isinstance(exponent, Fraction):
+        numerator = int(exponent.p if hasattr(exponent, "p") else exponent.numerator)
+        denominator = int(exponent.q if hasattr(exponent, "q") else exponent.denominator)
+        if denominator in {1, 2, 3} and numerator >= 0:
+            r0, r1, i0, i1 = _enclose_sympy(base)
+            if i0 != 0 or i1 != 0:
+                raise ValueError("certified radical requires a real box")
+            if denominator > 1:
+                if r0 < 0 and denominator % 2 == 0:
+                    raise ValueError(
+                        "certified even root requires a nonnegative real box"
+                    )
+                r0, r1 = _nth_root_bounds(r0, denominator)[0], _nth_root_bounds(
+                    r1, denominator
+                )[1]
+            if numerator == 0:
+                return Fraction(1), Fraction(1), Fraction(), Fraction()
+            result = (r0, r1, Fraction(), Fraction())
+            factor = result
+            remaining = numerator
+            power_result = (Fraction(1), Fraction(1), Fraction(), Fraction())
+            while remaining:
+                if remaining & 1:
+                    power_result = _multiply_boxes(power_result, factor)
+                remaining >>= 1
+                if remaining:
+                    factor = _multiply_boxes(factor, factor)
+            return power_result
     if getattr(exponent, "is_Integer", False):
         power = int(exponent)
         if power < 0:
@@ -346,11 +439,39 @@ def _distance_value(
     return value, interval, kind
 
 
+def _conjugate_field_multiplier(factor: sympy.Poly) -> int:
+    degree = int(factor.degree())
+    if degree <= 1:
+        return 1
+    real_count = int(factor.count_roots())
+    if real_count == degree:
+        return 1
+    return 2
+
+
 def _admit(
-    polynomial: RationalPolynomial,
+    polynomial: object,
     *,
-    max_pair_rows: int,
+    max_pair_rows: object,
 ) -> tuple[sympy.Poly, int, int]:
+    if type(max_pair_rows) is not int or isinstance(max_pair_rows, bool):
+        raise OperationDomainValidationError(
+            location=("max_pair_rows",),
+            code="polynomial.root_critical.pair_budget_type",
+            message="max_pair_rows must be a non-boolean integer",
+        )
+    if max_pair_rows < 0 or max_pair_rows > MAX_ROOT_CRITICAL_PAIRS:
+        raise OperationDomainValidationError(
+            location=("max_pair_rows",),
+            code="polynomial.root_critical.pair_budget_range",
+            message="max_pair_rows must lie in the admitted 0..64 row budget",
+        )
+    if not isinstance(polynomial, RationalPolynomial):
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="polynomial.root_critical.polynomial_type",
+            message="root-critical profiles require a canonical rational polynomial",
+        )
     if len(polynomial.variables) != 1:
         raise OperationDomainValidationError(
             location=("polynomial",),
@@ -397,16 +518,6 @@ def _admit(
             code="polynomial.root_critical.root_carrier_bound",
             message="the exact-root carrier admits irreducible factors through degree four",
         )
-    if any(
-        isinstance(root, sympy.RootOf)
-        for factor, _ in (*source_factors, *derivative_factors)
-        for root in factor.all_roots()
-    ):
-        raise OperationResourceAdmissionError(
-            location=("polynomial",),
-            code="polynomial.root_critical.root_carrier_backend_form",
-            message="the exact-root carrier requires explicit maintained algebraic expressions",
-        )
     root_count = sum(factor.degree() for factor, _ in source_factors)
     critical_count = (
         sum(factor.degree() for factor, _ in derivative_factors)
@@ -415,7 +526,10 @@ def _admit(
     )
     max_distance_degree = max(
         (
-            source_factor.degree() * critical_factor.degree()
+            _conjugate_field_multiplier(source_factor)
+            * source_factor.degree()
+            * _conjugate_field_multiplier(critical_factor)
+            * critical_factor.degree()
             for source_factor, _ in source_factors
             for critical_factor, _ in derivative_factors
         ),
@@ -426,6 +540,16 @@ def _admit(
             location=("polynomial",),
             code="polynomial.root_critical.distance_degree_bound",
             message="the source can produce a distance algebraic degree beyond the admitted carrier",
+        )
+    if any(
+        isinstance(root, sympy.RootOf)
+        for factor, _ in (*source_factors, *derivative_factors)
+        for root in factor.all_roots()
+    ):
+        raise OperationResourceAdmissionError(
+            location=("polynomial",),
+            code="polynomial.root_critical.root_carrier_backend_form",
+            message="the exact-root carrier requires explicit maintained algebraic expressions",
         )
     pair_count = root_count * critical_count
     if pair_count > MAX_ROOT_CRITICAL_PAIRS or pair_count > max_pair_rows:

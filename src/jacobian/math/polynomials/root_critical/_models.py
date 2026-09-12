@@ -1,22 +1,22 @@
 """Typed contracts for exact root--critical-point distance profiles.
 
-The current carrier is deliberately a small, self-contained algebraic-root
-carrier.  It keeps the exact indexed root identity and rational rectangle
-needed by the profile while the general normal/splitting-field values are
-being developed by the number-field owner.
+Source and critical roots reuse the domain-owned real and complex algebraic
+carriers. Multiplicity and isolating rectangles remain profile metadata.
 """
 
 from __future__ import annotations
 
-from math import gcd
-from typing import Annotated, Literal, Self
+from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational, DecimalIntegerEncoding
+from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
+from jacobian.math.number_theory.algebraic_numbers.complex import (
+    ComplexAlgebraicValue,
+)
 from jacobian.math.number_theory.algebraic_numbers.real import (
     RationalIsolatingInterval,
     RealAlgebraicValue,
@@ -27,9 +27,6 @@ MAX_ROOT_CRITICAL_DEGREE = 8
 MAX_ROOT_CRITICAL_DISTANCE_DEGREE = 16
 MAX_ROOT_CRITICAL_PAIRS = 64
 MAX_ROOT_CRITICAL_ROOT_COMPONENT_DIGITS = 256
-RootCriticalFactorCoefficient = Annotated[
-    int, DecimalIntegerEncoding(max_digits=MAX_ROOT_CRITICAL_ROOT_COMPONENT_DIGITS)
-]
 
 
 def _error(reason: str, message: str) -> PydanticCustomError:
@@ -74,27 +71,9 @@ class RootCriticalRoot(StrictModel):
     """One distinct source or derivative root with source multiplicity."""
 
     axis_index: StrictInt = Field(ge=0, le=MAX_ROOT_CRITICAL_DEGREE - 1)
-    factor: tuple[RootCriticalFactorCoefficient, ...] = Field(
-        min_length=2, max_length=MAX_ROOT_CRITICAL_DEGREE + 1
-    )
-    root_index: StrictInt = Field(ge=0, le=MAX_ROOT_CRITICAL_DEGREE - 1)
+    value: RealAlgebraicValue | ComplexAlgebraicValue
     multiplicity: StrictInt = Field(ge=1, le=MAX_ROOT_CRITICAL_DEGREE)
     rectangle: RootCriticalRectangle
-
-    @model_validator(mode="after")
-    def require_canonical_factor(self) -> Self:
-        if self.factor[0] <= 0:
-            raise _error(
-                "factor_leading_sign", "root factors need positive leading coefficient"
-            )
-        content = 0
-        for coefficient in self.factor:
-            content = gcd(content, abs(coefficient))
-        if content != 1:
-            raise _error("factor_content", "root factors must be primitive")
-        if self.root_index >= len(self.factor) - 1:
-            raise _error("factor_root_index", "root index exceeds factor degree")
-        return self
 
 
 class RootCriticalDistanceRow(StrictModel):

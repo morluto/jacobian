@@ -8,6 +8,7 @@ deterministic integer arithmetic rather than a floating-point round.
 
 from __future__ import annotations
 
+from fractions import Fraction
 from math import isqrt
 from typing import Literal, Self
 
@@ -98,6 +99,28 @@ class ScaledFloorValue(StrictModel):
     square_lower: ExactInteger
     square_upper: ExactInteger
 
+    @model_validator(mode="after")
+    def require_canonical_bracket_shape(self) -> Self:
+        if not is_surd_radicand(self.radicand):
+            raise _validation_error(
+                "diophantine.surd_radicand_must_not_be_square",
+                "a quadratic irrational requires a nonsquare radicand",
+            )
+        if self.floor < 0 or self.ceiling != self.floor + 1:
+            raise _validation_error(
+                "diophantine.scaled_floor_bracket_shape",
+                "floor and ceiling must be consecutive nonnegative integers",
+            )
+        if (
+            self.square_lower != self.floor * self.floor
+            or self.square_upper != self.ceiling * self.ceiling
+        ):
+            raise _validation_error(
+                "diophantine.scaled_floor_square_shape",
+                "endpoint squares must match the retained floor and ceiling",
+            )
+        return self
+
 
 class NearestIntegerDistanceRequest(StrictModel):
     """Certify ``||n sqrt(d)||`` at a requested binary precision."""
@@ -125,6 +148,39 @@ class NearestIntegerDistanceValue(StrictModel):
     scale_bits: StrictInt = Field(ge=1, le=MAX_SURD_SCALE_BITS)
     distance_enclosure: ClosedRationalInterval
     distance_upper_scaled: ExactInteger
+
+    @model_validator(mode="after")
+    def require_canonical_distance_shape(self) -> Self:
+        if not is_surd_radicand(self.radicand):
+            raise _validation_error(
+                "diophantine.surd_radicand_must_not_be_square",
+                "a quadratic irrational requires a nonsquare radicand",
+            )
+        if self.floor < 0 or self.ceiling != self.floor + 1:
+            raise _validation_error(
+                "diophantine.nearest_integer_bracket_shape",
+                "floor and ceiling must be consecutive nonnegative integers",
+            )
+        expected_nearest = self.floor if self.side == "FLOOR" else self.ceiling
+        if self.nearest_integer != expected_nearest:
+            raise _validation_error(
+                "diophantine.nearest_integer_side_mismatch",
+                "nearest_integer must agree with the certified branch",
+            )
+        if self.distance_enclosure.lower.as_fraction() < 0:
+            raise _validation_error(
+                "diophantine.nearest_integer_negative_distance",
+                "a nearest-integer distance enclosure must be nonnegative",
+            )
+        expected_upper = Fraction(self.distance_upper_scaled, 2**self.scale_bits)
+        if self.distance_upper_scaled < 1 or (
+            self.distance_enclosure.upper.as_fraction() != expected_upper
+        ):
+            raise _validation_error(
+                "diophantine.nearest_integer_upper_mismatch",
+                "distance_upper_scaled must retain the enclosure upper endpoint",
+            )
+        return self
 
 
 class SimultaneousProductRequest(StrictModel):
@@ -167,6 +223,16 @@ class SimultaneousProductResult(StrictModel):
 
     @model_validator(mode="after")
     def require_factor_axis_alignment(self) -> Self:
+        if any(not is_surd_radicand(radicand) for radicand in self.radicands):
+            raise _validation_error(
+                "diophantine.surd_radicand_must_not_be_square",
+                "a quadratic irrational requires nonsquare radicands",
+            )
+        if len(set(self.radicands)) != len(self.radicands):
+            raise _validation_error(
+                "diophantine.surd_radicands_must_be_distinct",
+                "an ordered radicand axis requires distinct radicands",
+            )
         if tuple(factor.radicand for factor in self.factors) != self.radicands:
             raise _validation_error(
                 "diophantine.product_factor_axis_mismatch",
@@ -238,6 +304,16 @@ class RangeProfileResult(StrictModel):
 
     @model_validator(mode="after")
     def require_complete_range(self) -> Self:
+        if any(not is_surd_radicand(radicand) for radicand in self.radicands):
+            raise _validation_error(
+                "diophantine.surd_radicand_must_not_be_square",
+                "a quadratic irrational requires nonsquare radicands",
+            )
+        if len(set(self.radicands)) != len(self.radicands):
+            raise _validation_error(
+                "diophantine.surd_radicands_must_be_distinct",
+                "an ordered radicand axis requires distinct radicands",
+            )
         if len(self.rows) != self.limit:
             raise _validation_error(
                 "diophantine.range_profile_incomplete",
@@ -310,6 +386,51 @@ class RecordMinimaResult(StrictModel):
     unresolved_incumbent_enclosure: ClosedRationalInterval | None = None
 
     @model_validator(mode="after")
+    def require_surd_axis(self) -> Self:
+        if any(not is_surd_radicand(radicand) for radicand in self.radicands):
+            raise _validation_error(
+                "diophantine.surd_radicand_must_not_be_square",
+                "a quadratic irrational requires nonsquare radicands",
+            )
+        if len(set(self.radicands)) != len(self.radicands):
+            raise _validation_error(
+                "diophantine.surd_radicands_must_be_distinct",
+                "an ordered radicand axis requires distinct radicands",
+            )
+        return self
+
+    @model_validator(mode="after")
+    def require_record_history(self) -> Self:
+        if not self.records or self.records[0].multiplier != 1:
+            raise _validation_error(
+                "diophantine.record_sequence_must_start_at_one",
+                "a finite record sequence must retain its first row at multiplier one",
+            )
+        if any(
+            record.product_enclosure.lower.as_fraction() < 0
+            or record.incumbent_enclosure.lower.as_fraction() < 0
+            for record in self.records
+        ):
+            raise _validation_error(
+                "diophantine.record_negative_product_enclosure",
+                "record product enclosures must be nonnegative",
+            )
+        if self.records[0].incumbent_enclosure != self.records[0].product_enclosure:
+            raise _validation_error(
+                "diophantine.first_record_incumbent_mismatch",
+                "the first record's incumbent enclosure must equal its product",
+            )
+        if any(
+            current.incumbent_enclosure != previous.product_enclosure
+            for previous, current in zip(self.records, self.records[1:], strict=False)
+        ):
+            raise _validation_error(
+                "diophantine.record_incumbent_source_mismatch",
+                "each record must retain the prior record's product enclosure",
+            )
+        return self
+
+    @model_validator(mode="after")
     def require_outcome_shape(self) -> Self:
         if self.outcome == "COMPLETE":
             if (
@@ -378,6 +499,34 @@ class RecordMinimaResult(StrictModel):
                 raise _validation_error(
                     "diophantine.unresolved_record_order",
                     "the unresolved multiplier must follow all certified records",
+                )
+        return self
+
+    @model_validator(mode="after")
+    def require_complete_record_separation(self) -> Self:
+        if self.outcome == "COMPLETE" and any(
+            current.product_enclosure.upper.as_fraction()
+            >= current.incumbent_enclosure.lower.as_fraction()
+            for current in self.records[1:]
+        ):
+            raise _validation_error(
+                "diophantine.record_not_strictly_separated",
+                "each retained record must be strictly below its incumbent",
+            )
+        return self
+
+    @model_validator(mode="after")
+    def require_unresolved_overlap(self) -> Self:
+        if self.outcome == "UNRESOLVED":
+            assert self.unresolved_product_enclosure is not None
+            assert self.unresolved_incumbent_enclosure is not None
+            if (
+                self.unresolved_product_enclosure.lower.as_fraction()
+                >= self.unresolved_incumbent_enclosure.upper.as_fraction()
+            ):
+                raise _validation_error(
+                    "diophantine.unresolved_record_not_overlapping",
+                    "an unresolved comparison must retain overlapping enclosures",
                 )
         return self
 

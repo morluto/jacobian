@@ -761,6 +761,51 @@ def test_nearest_integer_distance_round_trips_through_strict_json() -> None:
     assert restored == result
 
 
+def test_serialized_surd_values_reject_forged_structural_fields() -> None:
+    """Canonical carriers retain their domain and branch bindings on decode."""
+    floor = scaled_floor(ScaledFloorRequest(multiplier=6, radicand=3))
+    floor_payload = floor.model_dump(mode="json")
+    floor_payload["radicand"] = 4
+    with pytest.raises(ValidationError):
+        ScaledFloorValue.model_validate_json(
+            encode_strict_json(floor_payload), strict=True
+        )
+
+    distance = nearest_integer_distance(
+        NearestIntegerDistanceRequest(multiplier=5, radicand=7, scale_bits=32)
+    )
+    distance_payload = distance.model_dump(mode="json")
+    distance_payload["nearest_integer"] = distance.ceiling
+    with pytest.raises(ValidationError):
+        NearestIntegerDistanceValue.model_validate_json(
+            encode_strict_json(distance_payload), strict=True
+        )
+
+
+def test_serialized_record_result_rejects_missing_or_unbound_history() -> None:
+    """A record result cannot lose its first row or incumbent source binding."""
+    result = record_minima(
+        RecordMinimaRequest(radicands=(2, 3), limit=20, scale_bits=64)
+    )
+    assert result.outcome == "COMPLETE"
+
+    missing_first = result.model_dump(mode="json")
+    missing_first["records"] = []
+    with pytest.raises(ValidationError):
+        RecordMinimaResult.model_validate_json(
+            encode_strict_json(missing_first), strict=True
+        )
+
+    unbound_incumbent = result.model_dump(mode="json")
+    unbound_incumbent["records"][1]["incumbent_enclosure"] = unbound_incumbent[
+        "records"
+    ][1]["product_enclosure"]
+    with pytest.raises(ValidationError):
+        RecordMinimaResult.model_validate_json(
+            encode_strict_json(unbound_incumbent), strict=True
+        )
+
+
 def test_large_multiplier_uses_exact_json_integer_encoding() -> None:
     request = ScaledFloorRequest(multiplier=2**53, radicand=2)
     result = scaled_floor(request)

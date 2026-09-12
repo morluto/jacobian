@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import pytest
+from jsonschema import Draft202012Validator
+from jsonschema import ValidationError as JSONSchemaValidationError
 from pydantic import ValidationError
 
 from jacobian.math.graphs.decomposition._models import (
@@ -90,6 +92,7 @@ class TestBlockCutTreeRequest:
     def test_full_indexed_vertex_envelope_and_schema_parity(self) -> None:
         schema = BlockCutTreeRequest.model_json_schema()
         graph_schema = schema["properties"]["graph"]
+        assert graph_schema["properties"]["vertex_count"]["minimum"] == 1
         assert graph_schema["properties"]["vertex_count"]["maximum"] == 1024
         graph = IndexedSimpleUndirectedGraph(
             vertex_count=1024,
@@ -99,6 +102,12 @@ class TestBlockCutTreeRequest:
         assert len(result.blocks) == 1023
         assert len(result.articulation_points) == 1022
         assert len(result.tree) == 2044
+
+    def test_schema_rejects_empty_graph_vertex_count(self) -> None:
+        validator = Draft202012Validator(BlockCutTreeRequest.model_json_schema())
+        validator.validate({"graph": {"vertex_count": 1, "edges": []}})
+        with pytest.raises(JSONSchemaValidationError):
+            validator.validate({"graph": {"vertex_count": 0, "edges": []}})
 
     def test_full_indexed_star_envelope_is_admitted(self) -> None:
         graph = IndexedSimpleUndirectedGraph(

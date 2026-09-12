@@ -62,6 +62,7 @@ def _block_cut_graph_schema() -> JsonSchemaValue:
         f"at most {MAX_BLOCK_CUT_TREE_VERTICES} vertices."
     )
     schema["properties"]["vertex_count"].update(
+        minimum=1,
         maximum=MAX_BLOCK_CUT_TREE_VERTICES,
     )
     return schema

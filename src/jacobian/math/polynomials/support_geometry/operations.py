@@ -36,7 +36,9 @@ __all__ = [
     "exponent_support",
     "initial_form",
     "newton_polytope",
+    "verify_polynomial_face_data",
     "verify_polynomial_support",
+    "verify_polynomial_weight_profile",
     "weight_profile",
 ]
 
@@ -665,3 +667,35 @@ def initial_form(
         weight=weight,
         initial_form=value,
     )
+
+
+def verify_polynomial_weight_profile(claim: PolynomialWeightProfile) -> bool:
+    """Verify a serialized weight profile against its retained source."""
+    if not isinstance(claim, PolynomialWeightProfile):
+        return False
+    try:
+        return weight_profile(claim.polynomial, claim.weight) == claim
+    except (
+        AttributeError,
+        IndexError,
+        TypeError,
+        ValueError,
+        OperationDomainValidationError,
+    ):
+        return False
+
+
+def verify_polynomial_face_data(claim: PolynomialFaceData) -> bool:
+    """Verify a serialized initial form against its retained source and weight."""
+    if not isinstance(claim, PolynomialFaceData):
+        return False
+    try:
+        return initial_form(claim.polynomial, claim.weight) == claim
+    except (
+        AttributeError,
+        IndexError,
+        TypeError,
+        ValueError,
+        OperationDomainValidationError,
+    ):
+        return False

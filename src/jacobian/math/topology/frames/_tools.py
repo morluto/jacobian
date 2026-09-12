@@ -79,7 +79,13 @@ TOOLS: MathTools = (
         result_type=ComplexFrameProfileResult,
         run=_complex_frame_profile,
         tags=("topology", "frame", "complex", "exact"),
-        examples=(OperationExample(name="complex_standard", description="Profile the standard complex basis.", input={"frame": _COMPLEX_STANDARD}),),
+        examples=(
+            OperationExample(
+                name="complex_standard",
+                description="Profile the standard complex basis.",
+                input={"frame": _COMPLEX_STANDARD},
+            ),
+        ),
     ),
     MathTool(
         operation_id="frame.mutually_unbiased_bases.compute",
@@ -89,7 +95,13 @@ TOOLS: MathTools = (
         result_type=MutuallyUnbiasedBasesResult,
         run=_mutually_unbiased_bases,
         tags=("topology", "frame", "MUB", "complex", "exact"),
-        examples=(OperationExample(name="standard_and_hadamard", description="Two mutually unbiased real bases in dimension two.", input={"dimension": 2, "bases": [_COMPLEX_STANDARD, _COMPLEX_HADAMARD]}),),
+        examples=(
+            OperationExample(
+                name="standard_and_hadamard",
+                description="Two mutually unbiased real bases in dimension two.",
+                input={"dimension": 2, "bases": [_COMPLEX_STANDARD, _COMPLEX_HADAMARD]},
+            ),
+        ),
     ),
     MathTool(
         operation_id="frame.sic_profile.compute",
@@ -99,7 +111,13 @@ TOOLS: MathTools = (
         result_type=SicProfileResult,
         run=_sic_profile,
         tags=("topology", "frame", "SIC", "complex", "exact"),
-        examples=(OperationExample(name="dimension_one_sic", description="The canonical one-dimensional SIC profile.", input={"frame": {"dimension": 1, "vectors": [[_C1]]}}),),
+        examples=(
+            OperationExample(
+                name="dimension_one_sic",
+                description="The canonical one-dimensional SIC profile.",
+                input={"frame": {"dimension": 1, "vectors": [[_C1]]}},
+            ),
+        ),
     ),
     MathTool(
         operation_id="frame.tight_equiangular_profile.compute",
@@ -109,7 +127,13 @@ TOOLS: MathTools = (
         result_type=TightEquiangularProfileResult,
         run=_tight_equiangular_profile,
         tags=("topology", "frame", "tight", "equiangular", "exact"),
-        examples=(OperationExample(name="orthonormal_frame", description="Classify an orthonormal frame.", input=_ORTHONORMAL),),
+        examples=(
+            OperationExample(
+                name="orthonormal_frame",
+                description="Classify an orthonormal frame.",
+                input=_ORTHONORMAL,
+            ),
+        ),
     ),
     MathTool(
         operation_id="frame.gram.compute",

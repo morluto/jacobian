@@ -68,7 +68,9 @@ class ComplexFrame(StrictModel):
     """A bounded finite family of exact complex vectors."""
 
     dimension: int = Field(ge=1, le=MAX_DIM)
-    vectors: tuple[tuple[GaussianRational, ...], ...] = Field(max_length=MAX_VECTOR_CELLS)
+    vectors: tuple[tuple[GaussianRational, ...], ...] = Field(
+        max_length=MAX_VECTOR_CELLS
+    )
 
     @model_validator(mode="after")
     def require_rectangular_family(self) -> Self:

@@ -84,7 +84,8 @@ def _complex_frame_admitted(frame: ComplexFrame) -> tuple[Fraction, ...]:
         max(
             len(str(abs(component.num))),
             len(str(component.den)),
-        ) > MAX_COMPLEX_COMPONENT_DIGITS
+        )
+        > MAX_COMPLEX_COMPONENT_DIGITS
         for vector in frame.vectors
         for scalar in vector
         for component in (scalar.real, scalar.imaginary)
@@ -156,8 +157,10 @@ def _tight_complex_frame(
         ]
         for row in range(frame.dimension)
     ]
+
     def to_value(pair: tuple[Fraction, Fraction]) -> GaussianRational:
         return GaussianRational.from_fractions(*pair)
+
     operator_value = tuple(tuple(to_value(entry) for entry in row) for row in operator)
     residual_value = tuple(tuple(to_value(entry) for entry in row) for row in residual)
     return (
@@ -486,7 +489,9 @@ def sic_profile(request: SicProfileRequest) -> SicProfileResult:
         common = Fraction(1, frame.dimension + 1)
         for left in range(len(frame.vectors)):
             for right in range(left + 1, len(frame.vectors)):
-                real, imaginary = _inner_product(frame.vectors[left], frame.vectors[right])
+                real, imaginary = _inner_product(
+                    frame.vectors[left], frame.vectors[right]
+                )
                 overlap = (real * real + imaginary * imaginary) / (
                     norms[left] * norms[right]
                 )

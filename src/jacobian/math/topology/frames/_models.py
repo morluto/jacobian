@@ -104,7 +104,8 @@ class TightEquiangularProfileResult(VectorFamily):
             )
         if not self.equiangular and self.common_squared_inner_product is not None:
             raise PydanticCustomError(
-                "frames.profile_shape", "non-equiangular frames cannot carry a common value"
+                "frames.profile_shape",
+                "non-equiangular frames cannot carry a common value",
             )
         return self
 
@@ -161,12 +162,17 @@ class MutuallyUnbiasedBasesResult(MutuallyUnbiasedBasesRequest):
                 "frames.mub_profile_shape", "basis pair count is not canonical"
             )
         dimension = self.dimension
-        if len(self.basis_grams) != len(self.bases) or any(
-            len(gram) != dimension or any(len(row) != dimension for row in gram)
-            for gram in self.basis_grams
-        ) or len(self.cross_gram_squared) != self.basis_pair_count or any(
-            len(gram) != dimension or any(len(row) != dimension for row in gram)
-            for gram in self.cross_gram_squared
+        if (
+            len(self.basis_grams) != len(self.bases)
+            or any(
+                len(gram) != dimension or any(len(row) != dimension for row in gram)
+                for gram in self.basis_grams
+            )
+            or len(self.cross_gram_squared) != self.basis_pair_count
+            or any(
+                len(gram) != dimension or any(len(row) != dimension for row in gram)
+                for gram in self.cross_gram_squared
+            )
         ):
             raise PydanticCustomError(
                 "frames.mub_profile_axes", "MUB ledgers must retain basis axes"
@@ -211,9 +217,13 @@ class ComplexFrameProfileResult(ComplexFrameProfileRequest):
                 "non-equiangular profile cannot carry a common overlap",
             )
         d = self.frame.dimension
-        if any(len(matrix) != d or any(len(row) != d for row in matrix) for matrix in (self.frame_operator, self.tight_residual)):
+        if any(
+            len(matrix) != d or any(len(row) != d for row in matrix)
+            for matrix in (self.frame_operator, self.tight_residual)
+        ):
             raise PydanticCustomError(
-                "frames.complex_profile_axes", "frame operator ledgers must retain ambient axes"
+                "frames.complex_profile_axes",
+                "frame operator ledgers must retain ambient axes",
             )
         return self
 
@@ -261,7 +271,10 @@ class SicProfileResult(SicProfileRequest):
         if (
             len(self.squared_overlaps) != n
             or any(len(row) != n for row in self.squared_overlaps)
-            or any(len(matrix) != d or any(len(row) != d for row in matrix) for matrix in (self.frame_operator, self.tight_residual))
+            or any(
+                len(matrix) != d or any(len(row) != d for row in matrix)
+                for matrix in (self.frame_operator, self.tight_residual)
+            )
         ):
             raise PydanticCustomError(
                 "frames.sic_profile_axes", "SIC ledgers must retain source axes"

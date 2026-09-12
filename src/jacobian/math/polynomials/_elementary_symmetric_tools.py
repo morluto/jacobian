@@ -8,11 +8,12 @@ from jacobian.math.polynomials._elementary_symmetric import (
 )
 
 ELEMENTARY_SYMMETRIC_FAMILY_OPERATION = MathTool(
-    operation_id="polynomial.elementary_symmetric.family.compute",
+    operation_id="polynomial.symmetric.elementary_family.compute",
     title="Compute an elementary symmetric polynomial family",
     description=(
-        "Return the canonical sparse rational polynomials e_0 through e_k on "
-        "an ordered variable axis, including e_0 = 1 for the empty axis."
+        "Return the complete canonical sparse rational family e_0 through e_k "
+        "on an ordered variable axis, including e_0 = 1; k must not exceed "
+        "the number of distinct variables."
     ),
     request_type=ElementarySymmetricFamilyRequest,
     result_type=ElementarySymmetricFamilyResult,

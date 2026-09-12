@@ -6,6 +6,8 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.logic.automata.transducers._models import (
     ComposeRequest,
     ComposeResult,
+    RelationInverseRequest,
+    RelationInverseResult,
     RelationPathReplayRequest,
     RelationPathReplayResult,
     SubseqRunRequest,
@@ -13,6 +15,7 @@ from jacobian.math.logic.automata.transducers._models import (
 )
 from jacobian.math.logic.automata.transducers.operations import (
     compose_subsequential,
+    invert_rational,
     replay_rational_path,
     run_subsequential,
 )
@@ -55,6 +58,14 @@ def compute_relation_path_replay(
     )
 
 
+def compute_relation_inverse(
+    request: RelationInverseRequest,
+) -> RelationInverseResult:
+    return RelationInverseResult._from_kernel(
+        request, inverse=invert_rational(request.transducer)
+    )
+
+
 _IDENTITY = {
     "input_alphabet_size": 2,
     "output_alphabet_size": 2,
@@ -89,6 +100,25 @@ _RELATION = {
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    MathTool(
+        operation_id="transducer.relation.inverse.compute",
+        title="Invert a rational transducer relation",
+        description=(
+            "Return the converse rational relation by swapping every finite edge "
+            "input/output label pair and the two alphabet sizes."
+        ),
+        request_type=RelationInverseRequest,
+        result_type=RelationInverseResult,
+        run=compute_relation_inverse,
+        tags=("transducer", "rational-relation", "inverse", "exact"),
+        examples=(
+            OperationExample(
+                name="binary_flip_relation",
+                description="Invert a two-edge binary rational relation.",
+                input={"transducer": _RELATION},
+            ),
+        ),
+    ),
     MathTool(
         operation_id="transducer.subsequential.run.compute",
         title="Run a subsequential transducer on a word",

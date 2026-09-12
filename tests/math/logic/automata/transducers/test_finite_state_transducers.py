@@ -21,12 +21,15 @@ from jacobian.math.logic.automata.transducers import (
 )
 from jacobian.math.logic.automata.transducers._models import (
     ComposeRequest,
+    RelationInverseRequest,
+    RelationInverseResult,
     RelationPathReplayRequest,
     SubseqRunRequest,
 )
 from jacobian.math.logic.automata.transducers._tools import (
     TOOLS,
     compute_compose,
+    compute_relation_inverse,
     compute_relation_path_replay,
     compute_run,
 )
@@ -203,11 +206,21 @@ class TestNativeTransformations:
         assert inverse.edges[0].input_label == (1,)
         assert inverse.edges[0].output_label == (0,)
 
+        result = compute_relation_inverse(
+            RelationInverseRequest(transducer=_relation())
+        )
+        assert result.inverse == inverse
+        assert (
+            RelationInverseResult.model_validate_json(result.model_dump_json())
+            == result
+        )
+
     def test_only_audited_outcomes_are_public(self) -> None:
         assert {tool.operation_id for tool in TOOLS} == {
             "transducer.relation.path.replay.compute",
             "transducer.subsequential.compose.compute",
             "transducer.subsequential.run.compute",
+            "transducer.relation.inverse.compute",
         }
 
 

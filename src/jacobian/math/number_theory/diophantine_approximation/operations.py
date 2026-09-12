@@ -25,8 +25,7 @@ def _require_periodic_discriminant(discriminant: int) -> None:
             location=("discriminant",),
             code="diophantine.discriminant_out_of_range",
             message=(
-                "discriminant must be an integer between 2 and "
-                f"{_MAX_DISCRIMINANT}"
+                f"discriminant must be an integer between 2 and {_MAX_DISCRIMINANT}"
             ),
         )
     root = isqrt(discriminant)

@@ -121,6 +121,11 @@ def _solve_independence_number_values_kernel(
     objective = optimizer.maximize(
         z3.Sum([z3.If(selected[vertex], 1, 0) for vertex in vertices])
     )
+    # With a fixed cardinality, maximizing each membership bit in canonical
+    # vertex order yields the lexicographically smallest sorted witness.
+    # Keep cardinality as the authoritative objective handle below.
+    for vertex in vertices:
+        optimizer.maximize(z3.If(selected[vertex], 1, 0))
 
     status = optimizer.check()
     if status == z3.sat:

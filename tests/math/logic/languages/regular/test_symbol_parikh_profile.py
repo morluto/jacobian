@@ -462,8 +462,6 @@ def test_commuting_counter_dfa_admits_length_408_profile() -> None:
         initial_state=0,
         accepting_states=tuple(range(state_count)),
     )
-    result = symbol_parikh_profile(
-        SymbolParikhProfileRequest(dfa=dfa, word_length=408)
-    )
+    result = symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=408))
     assert result.total_accepted_words == 2**408
     assert len(result.cells) == 409

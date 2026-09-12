@@ -45,10 +45,12 @@ Admission is semantic. Coprimality recognition and curvature-plan expansion
 each create their own 50,000,000-unit work ledger; those phases do not share
 one envelope, so a request can consume up to that allowance twice. The
 recognition ledger charges only coprimality of authored source components.
-DAG-node growth, determinant and cofactor expansion, derivatives, rational
-products, complete tensor output, retained locus guards, coordinate
-allocation, and the 4-coordinate / 16,384-node / 256-term / 128-digit /
-768-guard caps belong to the curvature-plan ledger. Transport byte limits
+    DAG-node growth, determinant and cofactor expansion, derivatives, rational
+    products, complete tensor output, retained locus guards, and the 16,384-node /
+    256-term / 128-digit / 768-guard caps belong to the curvature-plan ledger.
+    Four coordinate axes are a metric-model cap applied during
+    `RationalCoordinateMetric` validation, before any curvature-plan ledger is
+    created. Transport byte limits
 are not used as mathematical admission quantities.
 
 The metric must be symmetric and its determinant must be a nonzero rational

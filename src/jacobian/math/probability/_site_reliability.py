@@ -306,15 +306,28 @@ def _admit_site_request(
     # retained state rows.  Charge both membership slots and the repeated
     # source-label code points in those rows so projection cannot explode
     # from a compact request whose labels are copied into thousands of states.
+    # The retained source also copies each vertex into the probability axis
+    # and the terminal pair, and copies edge endpoints, so those occurrences
+    # belong to the same allocation envelope.
     state_memberships = (
         len(request.graph.vertices) * (state_count // 2)
         if request.graph.vertices
         else 0
     )
     label_units = sum(len(vertex) for vertex in request.graph.vertices)
+    probability_label_units = sum(
+        len(item.vertex) for item in request.vertex_probabilities
+    )
+    terminal_label_units = sum(len(terminal) for terminal in request.terminals)
+    edge_label_units = sum(
+        len(left) + len(right) for left, right in request.graph.edges
+    )
     repeated_label_units = label_units * (state_count // 2) if state_count else 0
     source_units = (
         label_units
+        + probability_label_units
+        + terminal_label_units
+        + edge_label_units
         + 2 * len(request.graph.edges)
         + 4 * len(request.vertex_probabilities)
         + 2

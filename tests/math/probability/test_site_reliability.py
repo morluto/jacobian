@@ -324,6 +324,31 @@ def test_site_ledger_allocation_is_admitted_before_enumeration(
         compute_site_connection_probability(source)
 
 
+def test_site_ledger_charges_every_retained_source_label(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Copied vertex labels in probabilities and terminals count toward allocation."""
+
+    monkeypatch.setattr(site_module, "MAX_SITE_RELIABILITY_LEDGER_UNITS", 50_000)
+    left = "a" * 10_000
+    right = "b" * 10_000
+    source = GraphSiteReliabilitySource(
+        graph=SimpleUndirectedGraph(vertices=(left, right), edges=()),
+        vertex_probabilities=(
+            SiteReliabilityVertexProbability(
+                vertex=left, open_probability=_probability(Fraction(1, 2))
+            ),
+            SiteReliabilityVertexProbability(
+                vertex=right, open_probability=_probability(Fraction(1, 2))
+            ),
+        ),
+        terminals=(left, right),
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        compute_site_connection_probability(source)
+    assert error.value.code == "probability.site_reliability.output_bound"
+
+
 def test_matches_independent_brute_force() -> None:
     """Several small graphs agree with an independent vertex-subset enumeration."""
     cases = (

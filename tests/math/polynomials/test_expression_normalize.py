@@ -161,6 +161,22 @@ def test_wrapped_validated_expression_models_respect_depth() -> None:
     assert error.value.errors()[0]["type"] == "polynomial.expression.expansion_bound"
 
 
+def test_forged_negative_exponent_is_rejected_before_metrics() -> None:
+    forged = PolynomialPower.model_construct(
+        kind="POWER",
+        base=PolynomialVariableExpression(name="x"),
+        exponent=-1,
+    )
+    source = PolynomialExpressionSource.model_construct(
+        coefficient_domain="QQ",
+        variables=("x",),
+        expression=forged,
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        normalize_polynomial_expression(source)
+    assert error.value.errors()[0]["type"] == "polynomial.expression.invalid_source"
+
+
 def test_oversized_literal_is_a_typed_resource_rejection() -> None:
     with pytest.raises(OperationResourceAdmissionError) as error:
         _normalize(

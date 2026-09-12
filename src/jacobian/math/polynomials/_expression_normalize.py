@@ -8,7 +8,7 @@ from fractions import Fraction
 from math import ceil, log2
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, StrictInt, ValidationError, model_validator
 
 from jacobian._exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
@@ -217,6 +217,8 @@ def _bounded_product(left: int, right: int, limit: int) -> int:
 
 
 def _bounded_power(value: int, exponent: int, limit: int) -> int:
+    if exponent < 0:
+        return limit + 1
     result = 1
     while exponent:
         if exponent & 1:
@@ -337,6 +339,12 @@ def _metrics(
     if isinstance(expression, PolynomialPower):
         base = _metrics(expression.base, variable_count)
         exponent = expression.exponent
+        if exponent < 0:
+            raise OperationDomainValidationError(
+                location=("expression",),
+                code="polynomial.expression.invalid_source",
+                message="expression nodes must satisfy the closed grammar before expansion",
+            )
         if exponent == 0:
             return _ExpressionMetrics(
                 nodes=min(_MAX_EXPRESSION_NODES + 1, base.nodes + 1),
@@ -576,9 +584,35 @@ def _multiply(
     }
 
 
+def _revalidate_expression_source(
+    source: PolynomialExpressionSource,
+) -> PolynomialExpressionSource:
+    """Reject forged native AST nodes before expansion metrics."""
+
+    try:
+        return PolynomialExpressionSource.model_validate(
+            source.model_dump(mode="python")
+        )
+    except ValidationError as exc:
+        details = exc.errors()
+        text = " ".join(str(item.get("msg", "")) for item in details)
+        if "depth" in text or "node count" in text:
+            raise OperationResourceAdmissionError(
+                location=("expression",),
+                code="polynomial.expression.expansion_bound",
+                message=text or "expression expansion exceeds the admitted bound",
+            ) from exc
+        raise OperationDomainValidationError(
+            location=("expression",),
+            code="polynomial.expression.invalid_source",
+            message="expression nodes must satisfy the closed grammar before expansion",
+        ) from exc
+
+
 def normalize_polynomial_expression(  # noqa: C901
     source: PolynomialExpressionSource,
 ) -> PolynomialExpressionNormalizeResult:
+    source = _revalidate_expression_source(source)
     try:
         _bound_raw_expression(source.expression)
     except ValueError as exc:

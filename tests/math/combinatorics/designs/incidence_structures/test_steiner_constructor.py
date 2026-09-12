@@ -176,6 +176,34 @@ def test_result_round_trip_preserves_composable_design() -> None:
     assert matrix.matrix.column_count == 7
 
 
+def test_package_exports_the_native_constructor() -> None:
+    from jacobian.math.combinatorics.designs import incidence_structures
+
+    assert incidence_structures.construct_steiner_triple_system is (
+        construct_steiner_triple_system
+    )
+    assert "construct_steiner_triple_system" in incidence_structures.__all__
+
+
+def test_infeasible_continuation_retains_the_source_shard() -> None:
+    """NO_COVER on a continuation is shard-local, not global nonexistence."""
+    shard = SteinerTripleSystemShard(order=13, fixed_triples=((0, 1, 2),))
+    result = construct_steiner_triple_system(13, 100_000, shard)
+    assert result.status == "NOT_FOUND"
+    assert result.design is None
+    assert result.source_shard == shard
+    complete = construct_steiner_triple_system(13, 100_000)
+    assert complete.status == "COMPUTED"
+
+
+def test_nonsemantic_shard_prefix_is_a_typed_domain_error() -> None:
+    """A schema-valid prefix that is not a first exact-cover choice is rejected."""
+    with pytest.raises(OperationDomainValidationError, match="semantic traversal"):
+        construct_steiner_triple_system(
+            7, 100, SteinerTripleSystemShard(order=7, fixed_triples=((0, 2, 3),))
+        )
+
+
 def test_constructor_executes_through_public_catalog_boundary() -> None:
     result = invoke_operation(
         "combinatorics.design.steiner_triple_system.construct",

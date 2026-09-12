@@ -7,6 +7,8 @@ from collections.abc import Callable
 from itertools import combinations
 from typing import Literal
 
+from pydantic_core import PydanticCustomError
+
 from jacobian._execution import (
     bind_request_deadline,
     current_request_execution,
@@ -158,9 +160,16 @@ def construct_steiner_triple_system(
                 f"triple:{a:02d}:{b:02d}:{c:02d}" for a, b, c in shard.fixed_triples
             ),
         )
-    cover = find_generalized_exact_cover(
-        exact_cover, search_node_limit=search_budget, shard=cover_shard
-    )
+    try:
+        cover = find_generalized_exact_cover(
+            exact_cover, search_node_limit=search_budget, shard=cover_shard
+        )
+    except PydanticCustomError as exc:
+        raise OperationDomainValidationError(
+            location=("shard",),
+            code="incidence_structure.steiner_shard_prefix",
+            message=str(exc),
+        ) from exc
     states = cover.searched_node_count
     if cover.status != "FOUND":
         if cover.status == "UNKNOWN":
@@ -181,6 +190,7 @@ def construct_steiner_triple_system(
             order=order,
             states_explored=states,
             unresolved_frontier=frontier,
+            source_shard=shard,
         )
 
     # Replay the defining incidence axiom independently of the cover search.
@@ -203,7 +213,11 @@ def construct_steiner_triple_system(
         ),
     )
     return SteinerTripleSystemResult(
-        status="COMPUTED", order=order, design=design, states_explored=states
+        status="COMPUTED",
+        order=order,
+        design=design,
+        states_explored=states,
+        source_shard=shard,
     )
 
 

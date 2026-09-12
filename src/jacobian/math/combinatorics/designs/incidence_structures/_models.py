@@ -246,6 +246,14 @@ class SteinerTripleSystemResult(StrictModel):
     unresolved_frontier: tuple[SteinerTripleSystemShard, ...] = Field(
         default=(), max_length=MAX_STEINER_FRONTIER_SHARDS
     )
+    source_shard: SteinerTripleSystemShard | None = Field(
+        default=None,
+        description=(
+            "The continuation prefix actually searched. A NOT_FOUND result "
+            "with this field set is shard-local infeasibility, not global "
+            "nonexistence of an STS of this order."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_status_payload(self) -> Self:
@@ -255,6 +263,11 @@ class SteinerTripleSystemResult(StrictModel):
                 "a Steiner triple system requires order congruent to 1 or 3 modulo 6",
             )
         _require_steiner_frontier_order(self.order, self.unresolved_frontier)
+        if self.source_shard is not None and self.source_shard.order != self.order:
+            raise _validation_error(
+                "steiner_source_shard_order",
+                "a searched source shard must have the result order",
+            )
         if self.status == "COMPUTED":
             if self.unresolved_frontier:
                 raise _validation_error(

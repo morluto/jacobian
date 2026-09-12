@@ -2,8 +2,6 @@
 
 from typing import Any
 
-from pydantic import ValidationError
-
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,

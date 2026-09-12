@@ -17,6 +17,7 @@ from jacobian._execution import (
     request_execution,
 )
 from jacobian._models import StrictModel
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.canonical import canonicalize_json
 from jacobian.math._labels import OpaqueLabel
 
@@ -464,6 +465,13 @@ class MinimumGeneralizedExactCoverResult(StrictModel):
             raise _combinatorics_validation_error(
                 "minimum exact-cover multiplicities must bind the instance item axis"
             )
+        if any(
+            entry.kind == "PRIMARY" and entry.multiplicity != 1
+            for entry in self.item_multiplicities
+        ):
+            raise _combinatorics_validation_error(
+                "an exact or bounded minimum must cover every primary item once"
+            )
         if self.upper_bound != len(self.selected_row_ids):
             raise _combinatorics_validation_error(
                 "minimum exact-cover upper bound must equal its witness cardinality"
@@ -774,8 +782,6 @@ def minimum_generalized_exact_cover(  # noqa: C901
     bind_request_deadline(deadline)
     request_checkpoint("before minimum exact-cover admission")
 
-    from jacobian.catalog.models import OperationResourceAdmissionError
-
     if not isinstance(instance, GeneralizedExactCoverInstance):
         raise TypeError("instance must be a GeneralizedExactCoverInstance")
     if type(search_node_limit) is not int or not (
@@ -855,14 +861,45 @@ def minimum_generalized_exact_cover(  # noqa: C901
     index_work = (len(items) + row_count + incidence_count) * mask_words
     scan_work = search_node_limit * primary_count * mask_words
     # At each node, branching enumerates only rows that cover the chosen
-    # primary item. Its degree bounds both materializing the candidate list and
-    # pushing its child states; empty and secondary-only source rows never enter
-    # that loop.
+    # min-degree remaining primary. After forcing degree-1 items, a one-item
+    # remainder has a linear node ceiling; do not charge the global node limit
+    # at the global maximum degree.
+    remaining_primary = set(instance.primary_items)
+    remaining_rows = list(active_rows)
+    while remaining_primary:
+        coverage: dict[str, list[ExactCoverRow]] = {
+            item: [] for item in remaining_primary
+        }
+        for row in remaining_rows:
+            for row_item in row.items:
+                if row_item in coverage:
+                    coverage[row_item].append(row)
+        if any(not coverage[item] for item in remaining_primary):
+            remaining_rows = []
+            break
+        unit_items = [item for item, rows in coverage.items() if len(rows) == 1]
+        if not unit_items:
+            break
+        selected = coverage[unit_items[0]][0]
+        selected_items = set(selected.items)
+        remaining_primary -= remaining_primary.intersection(selected_items)
+        remaining_rows = [
+            row
+            for row in remaining_rows
+            if set(row.items).isdisjoint(selected_items)
+        ]
+    remaining_degrees = [0]
+    if remaining_primary:
+        remaining_degrees = [
+            sum(1 for row in remaining_rows if item in row.items)
+            for item in remaining_primary
+        ]
+    remaining_max_degree = max(remaining_degrees, default=0)
+    estimated_nodes = search_node_limit
+    if len(remaining_primary) <= 1:
+        estimated_nodes = min(search_node_limit, 1 + 2 * max(len(remaining_rows), 0))
     candidate_work = (
-        2
-        * search_node_limit
-        * max(primary_row_degrees.values(), default=0)
-        * mask_words
+        2 * estimated_nodes * remaining_max_degree * mask_words
     )
     if (
         shortcut_work + index_work + scan_work + candidate_work

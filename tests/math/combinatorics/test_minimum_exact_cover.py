@@ -268,3 +268,31 @@ def test_large_node_by_item_scan_is_rejected_before_search() -> None:
     )
     with pytest.raises(OperationResourceAdmissionError):
         minimum_generalized_exact_cover(instance)
+
+
+def test_sparse_high_degree_instance_is_admitted_after_unit_forcing() -> None:
+    rows = (ExactCoverRow(row_id="pair", items=("p1", "p2")),) + tuple(
+        ExactCoverRow(row_id=f"solo-{index:04d}", items=("p0",))
+        for index in range(2_047)
+    )
+    instance = GeneralizedExactCoverInstance(
+        primary_items=("p0", "p1", "p2"),
+        secondary_items=(),
+        rows=rows,
+    )
+    result = minimum_generalized_exact_cover(instance)
+    assert result.status == "EXACT"
+    assert result.selected_row_ids is not None
+    assert "pair" in result.selected_row_ids
+    assert result.lower_bound == result.upper_bound == 2
+
+
+def test_deserialized_exact_result_rejects_zero_primary_multiplicity() -> None:
+    genuine = minimum_generalized_exact_cover(
+        _instance((("a-p", ("p",)), ("b-q", ("q",))))
+    )
+    payload = genuine.model_dump()
+    assert payload["item_multiplicities"] is not None
+    payload["item_multiplicities"][0]["multiplicity"] = 0
+    with pytest.raises(ValueError, match="primary item"):
+        MinimumGeneralizedExactCoverResult.model_validate(payload)

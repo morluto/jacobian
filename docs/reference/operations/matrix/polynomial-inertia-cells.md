@@ -24,14 +24,11 @@ isolating intervals. The partition is exact; it is not a sampled eigenvalue
 plot. In particular, `diag(t² - 2, 0)` on `[-2, 2]` retains both `±√2` even
 though its determinant is identically zero.
 
-The kernel first bounds the source, characteristic-polynomial growth,
-transition isolation, exact coefficient-sign work, sampling, and output size.
-It then processes disconnected support blocks independently, isolates all roots
-of the lowest nonzero characteristic coefficient, and uses exact specialization
-at point cells. The eigenvalue signs are obtained from the real-rooted
-characteristic polynomial's Descartes sign variations; no floating-point
-eigenvalue calculation is used. A request that exceeds any admitted bound or
-does not complete exactly is rejected rather than returning a partial profile.
+The operation admits a request only when its source representation, exact
+computation, intermediate growth, and materialized profile fit the declared
+bounds. Accepted requests return a complete exact profile. A request that
+exceeds an admitted bound or cannot complete exactly is rejected rather than
+returning a partial profile.
 
 The operation is available natively as
 `jacobian.math.matrices.inertia_cells.compute_inertia_cells` and through

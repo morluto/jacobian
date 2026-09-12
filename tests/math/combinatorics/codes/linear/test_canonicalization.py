@@ -1,7 +1,13 @@
 """Prime-field linear-code canonicalization tests."""
 
+import pytest
+from pydantic import ValidationError
+
+from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.math.combinatorics.codes.linear import _canonicalization
 from jacobian.math.combinatorics.codes.linear._canonicalization import (
     LinearCodeCanonicalizationRequest,
+    LinearCodeCanonicalizationResult,
     canonicalize_linear_code,
 )
 from jacobian.math.combinatorics.codes.linear._models import GeneratorMatrixRequest
@@ -86,3 +92,32 @@ def test_zero_code_and_full_space_keep_degenerate_rref_shapes() -> None:
     assert full_result.canonical_encoder.generator_matrix == ((1, 0), (0, 1))
     assert full_result.orbit_size == 1
     assert full_result.stabilizer_size == 2
+
+
+def test_structural_result_validation_does_not_accept_a_bad_transporter() -> None:
+    source = _encoder()
+    result = canonicalize_linear_code(LinearCodeCanonicalizationRequest(encoder=source))
+    payload = result.model_dump()
+    payload["transporter"] = (0, 0, 1)
+    with pytest.raises(ValidationError):
+        LinearCodeCanonicalizationResult.model_validate(payload)
+
+
+def test_full_symmetric_action_is_admitted_before_orbit_materialization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = PrimeFieldLinearEncoder(
+        field_order=2,
+        message_axis=("m",),
+        coordinate_axis=tuple(f"x{index}" for index in range(10)),
+        generator_matrix=((1, 0, 0, 0, 0, 0, 0, 0, 0, 0),),
+    )
+
+    def orbit_must_not_be_materialized(_width: int) -> object:
+        raise AssertionError("permutation orbit was materialized before admission")
+
+    monkeypatch.setattr(
+        _canonicalization, "permutations", orbit_must_not_be_materialized
+    )
+    with pytest.raises(OperationResourceAdmissionError):
+        canonicalize_linear_code(LinearCodeCanonicalizationRequest(encoder=source))

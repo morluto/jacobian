@@ -4,7 +4,8 @@ from itertools import permutations
 from math import factorial
 from typing import Literal, Self
 
-from pydantic import model_validator
+from pydantic import StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 from sympy import isprime
 
 from jacobian._exact import ExactInteger
@@ -44,10 +45,70 @@ class LinearCodeCanonicalizationRequest(StrictModel):
 class LinearCodeCanonicalizationResult(StrictModel):
     source: LinearCodeCanonicalizationRequest
     canonical_encoder: PrimeFieldLinearEncoder
-    transporter: tuple[int, ...]
+    transporter: tuple[StrictInt, ...]
     transported_axis: tuple[str, ...]
     orbit_size: ExactInteger
     stabilizer_size: ExactInteger
+
+    @model_validator(mode="after")
+    def require_structural_canonicalization(self) -> Self:
+        """Check result wiring without replaying finite-field elimination."""
+
+        source_encoder = self.source.encoder
+        width = len(source_encoder.coordinate_axis)
+        if len(self.transporter) != width or sorted(self.transporter) != list(
+            range(width)
+        ):
+            raise PydanticCustomError(
+                "code_linear.canonicalization_transporter_not_permutation",
+                "transporter must be a permutation of the source coordinates",
+            )
+        expected_axis = tuple(
+            source_encoder.coordinate_axis[index] for index in self.transporter
+        )
+        if self.transported_axis != expected_axis:
+            raise PydanticCustomError(
+                "code_linear.canonicalization_transported_axis_mismatch",
+                "transported axis must follow the transporter",
+            )
+        if self.canonical_encoder.field_order != source_encoder.field_order:
+            raise PydanticCustomError(
+                "code_linear.canonicalization_field_mismatch",
+                "canonical encoder must retain the source field",
+            )
+        if self.canonical_encoder.coordinate_axis != self.transported_axis:
+            raise PydanticCustomError(
+                "code_linear.canonicalization_axis_mismatch",
+                "canonical encoder must retain the transported coordinate axis",
+            )
+        if len(self.canonical_encoder.generator_matrix) != len(
+            source_encoder.generator_matrix
+        ):
+            raise PydanticCustomError(
+                "code_linear.canonicalization_dimension_mismatch",
+                "canonical encoder must retain the source dimension",
+            )
+        if self.canonical_encoder.message_axis != tuple(
+            f"m{index}" for index in range(len(self.canonical_encoder.generator_matrix))
+        ):
+            raise PydanticCustomError(
+                "code_linear.canonicalization_message_axis",
+                "canonical encoder message labels must be m0, m1, and so on",
+            )
+        if self.orbit_size < 1 or self.stabilizer_size < 1:
+            raise PydanticCustomError(
+                "code_linear.canonicalization_orbit_stabilizer_positive",
+                "orbit and stabilizer sizes must be positive",
+            )
+        if (
+            self.orbit_size * self.stabilizer_size
+            > MAX_CODE_CANONICALIZATION_ACTION_ORDER
+        ):
+            raise PydanticCustomError(
+                "code_linear.canonicalization_orbit_stabilizer_bound",
+                "orbit-stabilizer product exceeds the admitted action bound",
+            )
+        return self
 
 
 def _rref(
@@ -93,7 +154,7 @@ def canonicalize_linear_code(
                 code="code.canonicalization.factorial_bound",
                 message="full symmetric coordinate action exceeds its factorial bound",
             )
-        elements = tuple(permutations(range(width)))
+        backend = None
     else:
         assert request.permutation_group is not None
         backend = _backend_group(request.permutation_group)
@@ -104,17 +165,24 @@ def canonicalize_linear_code(
                 code="code.canonicalization.group_order_bound",
                 message="generated coordinate group exceeds its enumeration bound",
             )
-        elements = tuple(
-            sorted(
-                _full_permutation_form(element, width) for element in backend.elements
-            )
-        )
     work = order * max(1, len(encoder.message_axis)) * max(1, width * width)
     if work > MAX_CODE_CANONICALIZATION_RREF_WORK:
         raise OperationResourceAdmissionError(
             location=("encoder",),
             code="code.canonicalization.rref_work_bound",
             message="coordinate-action RREF traversal exceeds its admitted work bound",
+        )
+    # Do not materialize an action orbit until the complete traversal has been
+    # admitted. In particular, S_10 has 3.6M elements but is rejected by the
+    # RREF-work bound for every nontrivial encoder before tuple construction.
+    if request.action == "FULL_SYMMETRIC":
+        elements = tuple(permutations(range(width)))
+    else:
+        assert backend is not None
+        elements = tuple(
+            sorted(
+                _full_permutation_form(element, width) for element in backend.elements
+            )
         )
     candidates: list[
         tuple[tuple[tuple[int, ...], ...], tuple[int, ...], tuple[str, ...]]

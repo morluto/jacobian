@@ -6,6 +6,7 @@ import json
 from typing import NoReturn
 
 import pytest
+from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 
 from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS
@@ -43,15 +44,13 @@ from jacobian.math.combinatorics.symmetric_functions.values import (
 )
 
 
-def test_hook_content_count_and_factors() -> None:
+def test_hook_content_count() -> None:
     result = hook_content_count(
         HookContentCountRequest.model_validate(
             {"partition": {"parts": [2, 1]}, "alphabet_size": 2}
         )
     )
     assert result.count == 2
-    assert result.numerators == (2, 3, 1)
-    assert result.hook_product == 3
 
 
 def test_hook_content_zero_when_alphabet_is_too_small() -> None:
@@ -70,8 +69,6 @@ def test_hook_content_empty_shape() -> None:
         )
     )
     assert result.count == 1
-    assert result.numerators == ()
-    assert result.hook_product == 1
 
 
 def test_hook_content_alphabet_is_independent_of_partition_size() -> None:
@@ -81,15 +78,23 @@ def test_hook_content_alphabet_is_independent_of_partition_size() -> None:
         )
     )
     assert result.count == 501
-    assert result.numerators == (501,)
-    assert result.hook_product == 1
 
 
-def test_hook_content_admits_wire_bound_but_rejects_work_before_expansion() -> None:
+def test_hook_content_accepts_maximum_digit_one_cell_alphabet() -> None:
+    alphabet_size = 10**MAX_CANONICAL_INTEGER_DIGITS - 1
+    result = hook_content_count(
+        HookContentCountRequest.model_validate(
+            {"partition": {"parts": [1]}, "alphabet_size": alphabet_size}
+        )
+    )
+    assert result.count == alphabet_size
+
+
+def test_hook_content_rejects_wire_bound_growth_before_expansion() -> None:
     request = HookContentCountRequest.model_validate_json(
         json.dumps(
             {
-                "partition": {"parts": [1]},
+                "partition": {"parts": [1] * 500},
                 "alphabet_size": "1" + "0" * (MAX_CANONICAL_INTEGER_DIGITS - 1),
             }
         ),
@@ -102,7 +107,7 @@ def test_hook_content_admits_wire_bound_but_rejects_work_before_expansion() -> N
         HookContentCountRequest.model_validate_json(
             json.dumps(
                 {
-                    "partition": {"parts": [1]},
+                    "partition": {"parts": [1] * 500},
                     "alphabet_size": "1" + "0" * MAX_CANONICAL_INTEGER_DIGITS,
                 }
             ),
@@ -120,11 +125,23 @@ def test_hook_content_large_exact_integers_roundtrip_strict_json() -> None:
     wire = json.loads(result.model_dump_json())
 
     assert wire["alphabet_size"] == str(alphabet_size)
-    assert wire["numerators"] == [str(alphabet_size)]
+    assert set(wire) == {"partition", "alphabet_size", "count"}
     assert (
         HookContentCountResult.model_validate_json(json.dumps(wire), strict=True)
         == result
     )
+
+
+def test_hook_content_result_rejects_derivation_artifacts() -> None:
+    payload = {
+        "partition": {"parts": [2, 1]},
+        "alphabet_size": "2",
+        "count": "2",
+        "numerators": ["2", "3", "1"],
+        "hook_product": "3",
+    }
+    with pytest.raises(ValidationError):
+        HookContentCountResult.model_validate_json(json.dumps(payload), strict=True)
 
 
 def test_hook_content_charges_growing_product_work() -> None:
@@ -179,8 +196,10 @@ def test_tableau_checkers_replay_membership() -> None:
             {"tableau": {"rows": [[1, 1], [2]]}}
         )
     )
-    assert standard.rows == ((1, 2), (3,))
-    assert semistandard.rows == ((1, 1), (2,))
+    assert standard.tableau.rows == ((1, 2), (3,))
+    assert standard.is_member is True
+    assert semistandard.tableau.rows == ((1, 1), (2,))
+    assert semistandard.is_member is True
 
 
 @pytest.mark.parametrize(
@@ -194,19 +213,23 @@ def test_tableau_checkers_replay_membership() -> None:
         ),
     ],
 )
-def test_standard_tableau_checker_rejects_row_or_column_failure(
+def test_standard_tableau_checker_returns_source_bound_false_for_nonmembers(
     candidate: StandardTableauCheckRequest,
 ) -> None:
-    with pytest.raises(ValueError):
-        check_standard_tableau(candidate)
+    result = check_standard_tableau(candidate)
+    assert result.tableau == candidate.tableau
+    assert result.is_member is False
 
 
-def test_semistandard_tableau_checker_rejects_column_failure() -> None:
+def test_semistandard_tableau_checker_returns_source_bound_false_for_nonmembers() -> (
+    None
+):
     request = SemistandardTableauCheckRequest.model_validate(
         {"tableau": {"rows": [[1, 2], [1]]}}
     )
-    with pytest.raises(ValueError):
-        check_semistandard_tableau(request)
+    result = check_semistandard_tableau(request)
+    assert result.tableau == request.tableau
+    assert result.is_member is False
 
 
 def test_tableau_checker_propagates_operational_failures(
@@ -222,11 +245,49 @@ def test_tableau_checker_propagates_operational_failures(
         check_standard_tableau(request)
 
 
-def test_hook_content_alphabet_bound_is_published() -> None:
+@pytest.mark.parametrize("value", ["0", "-1", "01", "1\n"])
+def test_hook_content_positive_exact_integer_schema_matches_runtime(
+    value: str,
+) -> None:
+    request_schema = HookContentCountRequest.model_json_schema()
+    result_schema = HookContentCountResult.model_json_schema()
+    request_payload = {"partition": {"parts": [1]}, "alphabet_size": value}
+    result_payload = {
+        "partition": {"parts": [1]},
+        "alphabet_size": value,
+        "count": "0",
+    }
+
+    assert list(Draft202012Validator(request_schema).iter_errors(request_payload))
+    assert list(Draft202012Validator(result_schema).iter_errors(result_payload))
     with pytest.raises(ValidationError):
-        HookContentCountRequest.model_validate(
-            {"partition": {"parts": [1]}, "alphabet_size": 0}
+        HookContentCountRequest.model_validate_json(
+            json.dumps(request_payload), strict=True
         )
+    with pytest.raises(ValidationError):
+        HookContentCountResult.model_validate_json(
+            json.dumps(result_payload), strict=True
+        )
+
+
+def test_hook_content_count_schema_publishes_nonnegative_count() -> None:
+    schema = HookContentCountResult.model_json_schema()
+    count_schema = schema["properties"]["count"]
+    assert count_schema["examples"] == ["0", "2"]
+    assert "(?:0|" in count_schema["pattern"]
+    assert (
+        HookContentCountResult.model_validate_json(
+            json.dumps(
+                {
+                    "partition": {"parts": [1, 1]},
+                    "alphabet_size": "1",
+                    "count": "0",
+                }
+            ),
+            strict=True,
+        ).count
+        == 0
+    )
 
 
 def test_native_operations_are_published_from_algebraic_package() -> None:
@@ -234,7 +295,7 @@ def test_native_operations_are_published_from_algebraic_package() -> None:
     standard = StandardYoungTableau(rows=((1,),))
     semistandard = SemistandardYoungTableau(rows=((1,),))
 
-    assert public_hook_content_count(partition, 501) == (501, (501,), 1)
+    assert public_hook_content_count(partition, 501) == 501
     assert (
         public_partition_dominance(
             IntegerPartition(parts=(2, 1)), IntegerPartition(parts=(1, 1, 1))

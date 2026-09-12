@@ -2,7 +2,6 @@
 
 from typing import Any
 
-from pydantic import ValidationError
 from pydantic_core import PydanticCustomError
 
 from jacobian.catalog.models import (
@@ -25,38 +24,14 @@ from jacobian.math.combinatorics.algebraic._models import (
     RSKResult,
     RSKWordRequest,
     SemistandardTableauCheckRequest,
+    SemistandardTableauCheckResult,
     StandardTableauCheckRequest,
+    StandardTableauCheckResult,
     StandardYoungTableauCountRequest,
     StandardYoungTableauCountResult,
 )
 from jacobian.math.combinatorics.algebraic.values import RSKTableauPair
-from jacobian.math.combinatorics.symmetric_functions.values import (
-    SemistandardYoungTableau,
-    StandardYoungTableau,
-)
 from jacobian.math.logic.languages.words.values import FiniteWord
-
-
-def _tableau_validation_error(
-    exc: PydanticCustomError | ValidationError,
-    *,
-    fallback_code: str,
-) -> OperationDomainValidationError:
-    if isinstance(exc, PydanticCustomError):
-        code = exc.type
-        message = exc.message()
-    else:
-        errors = exc.errors()
-        if errors:
-            error = errors[0]
-            code = str(error.get("type", fallback_code))
-            message = str(error.get("msg", str(exc)))
-        else:
-            code = fallback_code
-            message = str(exc)
-    return OperationDomainValidationError(
-        location=("tableau",), code=code, message=message
-    )
 
 
 def hook_lengths(request: HookLengthRequest) -> HookLengthResult:
@@ -84,15 +59,11 @@ def conjugate_partition(
 
 
 def hook_content_count(request: HookContentCountRequest) -> HookContentCountResult:
-    count, numerators, hook_product = native.hook_content_count(
-        request.partition, request.alphabet_size
-    )
+    count = native.hook_content_count(request.partition, request.alphabet_size)
     return HookContentCountResult(
         partition=request.partition,
         alphabet_size=request.alphabet_size,
         count=count,
-        numerators=numerators,
-        hook_product=hook_product,
     )
 
 
@@ -113,24 +84,22 @@ def partition_dominance(
 
 def check_standard_tableau(
     request: StandardTableauCheckRequest,
-) -> StandardYoungTableau:
+) -> StandardTableauCheckResult:
     try:
-        return native.check_standard_tableau(request.tableau)
-    except (PydanticCustomError, ValidationError) as exc:
-        raise _tableau_validation_error(
-            exc, fallback_code="algebraic_combinatorics.standard_tableau_invalid"
-        ) from exc
+        native.check_standard_tableau(request.tableau)
+    except PydanticCustomError:
+        return StandardTableauCheckResult(tableau=request.tableau, is_member=False)
+    return StandardTableauCheckResult(tableau=request.tableau, is_member=True)
 
 
 def check_semistandard_tableau(
     request: SemistandardTableauCheckRequest,
-) -> SemistandardYoungTableau:
+) -> SemistandardTableauCheckResult:
     try:
-        return native.check_semistandard_tableau(request.tableau)
-    except (PydanticCustomError, ValidationError) as exc:
-        raise _tableau_validation_error(
-            exc, fallback_code="algebraic_combinatorics.semistandard_tableau_invalid"
-        ) from exc
+        native.check_semistandard_tableau(request.tableau)
+    except PydanticCustomError:
+        return SemistandardTableauCheckResult(tableau=request.tableau, is_member=False)
+    return SemistandardTableauCheckResult(tableau=request.tableau, is_member=True)
 
 
 def rsk_permutation(request: RSKPermutationRequest) -> RSKResult:
@@ -301,8 +270,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         operation_id="combinatorics.partition.hook_content.count",
         title="Count semistandard tableaux by the hook-content formula",
         description="Return the exact number of semistandard Young tableaux of a "
-        "partition shape with entries in 1..m, together with the row-major "
-        "hook-content numerators and hook product.",
+        "partition shape with entries in 1..m, bound to the source shape and "
+        "alphabet.",
         request_type=HookContentCountRequest,
         result_type=HookContentCountResult,
         run=hook_content_count,
@@ -340,9 +309,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         operation_id="combinatorics.tableau.standard.check",
         title="Check standard Young tableau membership",
         description="Replay the complete shape, row, column, and 1..n entry "
-        "conditions and return the checked standard tableau.",
+        "conditions and return the source-bound membership decision.",
         request_type=StandardTableauCheckRequest,
-        result_type=StandardYoungTableau,
+        result_type=StandardTableauCheckResult,
         run=check_standard_tableau,
         tags=("combinatorics", "young-tableaux", "validation", "exact"),
         examples=(
@@ -357,9 +326,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         operation_id="combinatorics.tableau.semistandard.check",
         title="Check semistandard Young tableau membership",
         description="Replay the complete shape and weak-row/strict-column "
-        "conditions and return the checked semistandard tableau.",
+        "conditions and return the source-bound membership decision.",
         request_type=SemistandardTableauCheckRequest,
-        result_type=SemistandardYoungTableau,
+        result_type=SemistandardTableauCheckResult,
         run=check_semistandard_tableau,
         tags=("combinatorics", "young-tableaux", "validation", "exact"),
         examples=(

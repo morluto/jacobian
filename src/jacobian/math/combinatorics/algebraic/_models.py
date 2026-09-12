@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, StrictInt, WithJsonSchema, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import ExactInteger
+from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS, ExactInteger
 from jacobian._models import StrictModel
 from jacobian.math.combinatorics.algebraic.values import (
     MAX_RSK_ROW_SEARCH_COMPARISONS,
@@ -30,6 +30,30 @@ from jacobian.math.logic.languages.words.values import FiniteWord
 # kernel and produces two N-cell tableaux, so the canonical tableau cell
 # budget derives the permutation envelope.
 MAX_RSK_PERMUTATION_LENGTH = MAX_RSK_WORD_LENGTH
+
+_POSITIVE_EXACT_INTEGER_SCHEMA = {
+    "type": "string",
+    "pattern": rf"^[1-9][0-9]{{0,{MAX_CANONICAL_INTEGER_DIGITS - 1}}}(?![\s\S])",
+    "maxLength": MAX_CANONICAL_INTEGER_DIGITS,
+    "examples": ["2"],
+}
+_NONNEGATIVE_EXACT_INTEGER_SCHEMA = {
+    "type": "string",
+    "pattern": rf"^(?:0|[1-9][0-9]{{0,{MAX_CANONICAL_INTEGER_DIGITS - 1}}})(?![\s\S])",
+    "maxLength": MAX_CANONICAL_INTEGER_DIGITS,
+    "examples": ["0", "2"],
+}
+
+_PositiveExactInteger = Annotated[
+    ExactInteger,
+    Field(ge=1),
+    WithJsonSchema(_POSITIVE_EXACT_INTEGER_SCHEMA),
+]
+_NonnegativeExactInteger = Annotated[
+    ExactInteger,
+    Field(ge=0),
+    WithJsonSchema(_NONNEGATIVE_EXACT_INTEGER_SCHEMA),
+]
 
 
 class HookLengthRequest(StrictModel):
@@ -80,7 +104,7 @@ class HookContentCountRequest(StrictModel):
     # The alphabet is an exact mathematical parameter and may exceed the
     # interoperable JSON number range.  ExactInteger keeps Python values as
     # ints while encoding JSON values as canonical decimal strings.
-    alphabet_size: ExactInteger = Field(ge=1)
+    alphabet_size: _PositiveExactInteger
 
     @model_validator(mode="after")
     def require_positive_alphabet(self) -> Self:
@@ -93,30 +117,25 @@ class HookContentCountRequest(StrictModel):
 
 
 class HookContentCountResult(StrictModel):
-    """Exact hook-content count and the factors used to derive it."""
+    """Exact hook-content count bound to its source shape and alphabet."""
 
     partition: IntegerPartition
-    alphabet_size: ExactInteger = Field(ge=1)
-    count: ExactInteger
-    numerators: tuple[ExactInteger, ...] = Field(
-        max_length=MAX_CANONICAL_PARTITION_SIZE
-    )
-    hook_product: ExactInteger
+    alphabet_size: _PositiveExactInteger
+    count: _NonnegativeExactInteger
 
-    @model_validator(mode="after")
-    def require_factor_shape(self) -> Self:
-        if self.alphabet_size < 1:
-            raise PydanticCustomError(
-                "algebraic_combinatorics.alphabet_size_not_positive",
-                "alphabet_size must be positive",
-            )
-        cell_count = sum(self.partition.parts)
-        if len(self.numerators) != cell_count:
-            raise PydanticCustomError(
-                "algebraic_combinatorics.hook_content_factor_shape",
-                "one hook-content numerator is required per partition cell",
-            )
-        return self
+
+class StandardTableauCheckResult(StrictModel):
+    """Standard-tableau membership bound to the checked structural source."""
+
+    tableau: StandardYoungTableau
+    is_member: bool
+
+
+class SemistandardTableauCheckResult(StrictModel):
+    """Semistandard-tableau membership bound to the checked structural source."""
+
+    tableau: SemistandardYoungTableau
+    is_member: bool
 
 
 class PartitionDominanceRequest(StrictModel):
@@ -282,7 +301,9 @@ __all__ = [
     "RSKResult",
     "RSKWordRequest",
     "SemistandardTableauCheckRequest",
+    "SemistandardTableauCheckResult",
     "StandardTableauCheckRequest",
+    "StandardTableauCheckResult",
     "StandardYoungTableauCountRequest",
     "StandardYoungTableauCountResult",
 ]

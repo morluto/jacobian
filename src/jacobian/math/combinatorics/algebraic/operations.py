@@ -55,8 +55,11 @@ MAX_HOOK_CONTENT_WORK = 8_000_000
 
 
 def _upper_decimal_digits(value: int) -> int:
-    """Return a conservative decimal-digit bound without converting to text."""
-    return (value.bit_length() * 30103) // 100000 + 1
+    """Return the exact decimal-digit count without converting to text."""
+    estimate = (value.bit_length() * 30103) // 100000 + 1
+    if value < 10 ** (estimate - 1):
+        return estimate - 1
+    return estimate
 
 
 def _admit_hook_content(partition: IntegerPartition, alphabet_size: int) -> None:
@@ -65,11 +68,27 @@ def _admit_hook_content(partition: IntegerPartition, alphabet_size: int) -> None
         raise ValueError("alphabet_size must be a positive integer")
 
     cell_count = sum(partition.parts)
-    largest_factor = alphabet_size + cell_count
-    factor_digits = _upper_decimal_digits(largest_factor)
+    alphabet_digits = _upper_decimal_digits(alphabet_size)
+    if cell_count:
+        # The positive numerator maximum is attained at the top-right cell;
+        # the greatest negative magnitude is attained at the bottom-left
+        # cell.  Use those actual offsets instead of charging alphabet + N,
+        # which rejects a one-cell result when the alphabet is at the exact
+        # scalar digit boundary.
+        largest_positive = alphabet_size + partition.parts[0] - 1
+        largest_negative = max(0, len(partition.parts) - 1 - alphabet_size)
+        factor_digits = _upper_decimal_digits(max(largest_positive, largest_negative))
+    else:
+        factor_digits = 1
     # The alphabet is retained in the result even for the empty shape, so its
     # own serialized size is part of the output bound.
-    output_digits = max(factor_digits, cell_count * factor_digits)
+    hook_digits = _upper_decimal_digits(max(1, cell_count))
+    output_digits = max(
+        alphabet_digits,
+        factor_digits,
+        cell_count * factor_digits,
+        cell_count * hook_digits,
+    )
     if output_digits > MAX_CANONICAL_INTEGER_DIGITS:
         raise OperationResourceAdmissionError(
             location=("alphabet_size",),
@@ -77,15 +96,15 @@ def _admit_hook_content(partition: IntegerPartition, alphabet_size: int) -> None
             message="hook-content factors exceed the exact output digit bound",
         )
 
-    # ``prod`` multiplies a growing accumulator from left to right.  At the
-    # i-th numerator factor that accumulator can have i*d digits, so charge
-    # the sum of those multiplication costs rather than treating every
-    # multiplication as a fixed-size d-by-d product.  This is checked from
-    # bit-length-derived dimensions, before any factor or product is
-    # materialized.
-    numerator_work = cell_count * (cell_count + 1) // 2 * factor_digits * factor_digits
-    hook_digits = _upper_decimal_digits(max(1, cell_count))
-    hook_work = cell_count * (cell_count + 1) // 2 * hook_digits * hook_digits
+    # ``prod`` multiplies a growing accumulator from left to right.  After
+    # the first factor, the accumulator can have i*d digits at the i-th
+    # multiplication, so charge the sum of those costs rather than treating
+    # every multiplication as a fixed-size d-by-d product.  The first factor
+    # is only copied into the accumulator and must not make a one-cell result
+    # pay a quadratic bigint cost.
+    multiplication_count = cell_count * (cell_count - 1) // 2
+    numerator_work = multiplication_count * factor_digits * factor_digits
+    hook_work = multiplication_count * hook_digits * hook_digits
     work = max(1, numerator_work + hook_work)
     if work > MAX_HOOK_CONTENT_WORK:
         raise OperationResourceAdmissionError(
@@ -190,15 +209,11 @@ def standard_young_tableaux_count(partition: IntegerPartition) -> int:
     return factorial(n) // _hook_length_product(hooks)
 
 
-def hook_content_count(
-    partition: IntegerPartition, alphabet_size: int
-) -> tuple[int, tuple[int, ...], int]:
+def hook_content_count(partition: IntegerPartition, alphabet_size: int) -> int:
     """Count SSYTs of ``partition`` over ``1..alphabet_size`` exactly.
 
-    The returned factors are in row-major cell order and are the numerators
-    ``m + j - i`` in the hook-content formula.  Keeping the hook product
-    alongside them makes the integer divisibility computation replayable
-    without introducing a generic certificate envelope.
+    The hook-content factors are private kernel intermediates. The public
+    result carries only the exact count and its source shape and alphabet.
     """
     _admit_hook_content(partition, alphabet_size)
     hooks = hook_lengths(partition)
@@ -212,7 +227,7 @@ def hook_content_count(
     quotient = Fraction(numerator_product, hook_product)
     if quotient.denominator != 1:
         raise ValueError("hook-content formula did not produce an integer")
-    return quotient.numerator, numerators, hook_product
+    return quotient.numerator
 
 
 def partition_dominance(

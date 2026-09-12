@@ -10,12 +10,6 @@ from jacobian.math.combinatorics.matroids.oriented import (
     bracket_syzygy_residual,
     grassmann_pluecker_relation,
 )
-from jacobian.math.combinatorics.matroids.oriented._bracket_models import (
-    BracketSyzygyResidualRequest,
-    GrassmannPlueckerRelationRequest,
-)
-
-
 def test_public_api_exports_bracket_operations_and_values() -> None:
     assert oriented_matroids.__all__ == [
         "BracketMonomial",

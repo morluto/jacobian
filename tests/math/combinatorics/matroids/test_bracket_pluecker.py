@@ -121,15 +121,14 @@ def test_relation_rejects_duplicate_indices() -> None:
     """A relation needs six distinct indices."""
     with pytest.raises(OperationDomainValidationError) as error:
         grassmann_pluecker_relation(6, (0, 1, 2, 3, 4, 4), "FOUR_TERM")
-    assert "bracket.relation_indices_not_distinct" in str(error.value)
+    assert error.value.errors()[0]["type"] == "bracket.relation_indices_not_distinct"
 
 
 def test_relation_rejects_indices_outside_the_ground_range() -> None:
     """Every relation index lies inside the declared ground range."""
-    with pytest.raises(
-        OperationDomainValidationError, match="relation_index_outside_ground"
-    ):
+    with pytest.raises(OperationDomainValidationError) as error:
         grassmann_pluecker_relation(6, (0, 1, 2, 3, 4, 9), "FOUR_TERM")
+    assert error.value.errors()[0]["type"] == "bracket.relation_index_outside_ground"
 
 
 def test_normalized_relation_agrees_with_the_permuted_presentation() -> None:
@@ -290,9 +289,7 @@ def test_syzygy_rejects_multiplier_outside_target_ground() -> None:
         5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM"
     )
     outside = CanonicalBracket(indices=(0, 1, 5))
-    with pytest.raises(
-        OperationDomainValidationError, match="multiplier_index_outside_ground"
-    ):
+    with pytest.raises(OperationDomainValidationError) as error:
         bracket_syzygy_residual(
             relation.polynomial,
             (
@@ -303,6 +300,10 @@ def test_syzygy_rejects_multiplier_outside_target_ground() -> None:
                 ),
             ),
         )
+    assert (
+        error.value.errors()[0]["type"]
+        == "bracket.syzygy_multiplier_index_outside_ground"
+    )
 
 
 def test_syzygy_rejects_513_distinct_output_terms_before_expansion() -> None:
@@ -947,7 +948,6 @@ def test_syzygy_rejects_coprime_wide_denominators_before_fraction_sum() -> None:
         127,
         131,
     )
-    lower = 10 ** (MAX_CANONICAL_INTEGER_DIGITS - 1)
     upper = 10**MAX_CANONICAL_INTEGER_DIGITS
     components: list[tuple[Fraction, tuple[int, int]]] = []
     terms = []
@@ -955,11 +955,17 @@ def test_syzygy_rejects_coprime_wide_denominators_before_fraction_sum() -> None:
         5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM"
     )
     for prime in primes:
-        exponent = math.floor((MAX_CANONICAL_INTEGER_DIGITS - 1) / math.log10(prime))
-        denominator = pow(prime, exponent)
-        if denominator < lower:
-            denominator *= prime
-        assert lower <= denominator < upper
+        exponent = (
+            math.floor(
+                MAX_CANONICAL_INTEGER_DIGITS * math.log(10) / math.log(prime)
+            )
+            - 1
+        )
+        denominator = pow(prime, max(exponent, 1))
+        while denominator >= upper:
+            denominator //= prime
+        # Distinct prime powers remain pairwise coprime; two such widths already
+        # exceed the canonical integer envelope under LCM.
         components.append((Fraction(1, denominator), (1, MAX_CANONICAL_INTEGER_DIGITS)))
         terms.append(
             (

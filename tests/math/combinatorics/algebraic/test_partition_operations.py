@@ -202,6 +202,19 @@ def test_hook_content_admits_multi_cell_count_near_digit_limit() -> None:
     assert result.alphabet_size == alphabet_size
 
 
+def test_hook_content_admits_column_count_after_hook_cancellation() -> None:
+    # The 500-row column with alphabet 10**67 has an uncancelled numerator
+    # bound past 32,768 digits, but C(10**67, 500) has 32,366 digits and is
+    # cheap once hook cancellation is charged in admission.
+    alphabet_size = 10**67
+    request = HookContentCountRequest.model_validate(
+        {"partition": {"parts": [1] * 500}, "alphabet_size": alphabet_size}
+    )
+    result = hook_content_count(request)
+    assert result.count == math.comb(alphabet_size, 500)
+    assert result.alphabet_size == alphabet_size
+
+
 @pytest.mark.parametrize(
     ("left", "right", "relation"),
     [
@@ -211,7 +224,7 @@ def test_hook_content_admits_multi_cell_count_near_digit_limit() -> None:
         ((3, 1, 1, 1), (2, 2, 2), "INCOMPARABLE"),
     ],
 )
-def test_partition_dominance_ledger(
+def test_partition_dominance_relation(
     left: tuple[int, ...], right: tuple[int, ...], relation: str
 ) -> None:
     result = partition_dominance(
@@ -220,8 +233,9 @@ def test_partition_dominance_ledger(
         )
     )
     assert result.relation == relation
-    assert len(result.left_prefix_sums) == max(len(left), len(right))
-    assert result.left_prefix_sums[-1] == result.right_prefix_sums[-1]
+    assert not hasattr(result, "left_prefix_sums")
+    assert result.left.parts[: len(left)] == left
+    assert result.right.parts[: len(right)] == right
 
 
 def test_partition_dominance_different_sizes_is_distinct() -> None:
@@ -231,7 +245,6 @@ def test_partition_dominance_different_sizes_is_distinct() -> None:
         )
     )
     assert result.relation == "NOT_COMPARABLE_DIFFERENT_SIZE"
-    assert result.left_prefix_sums == ()
 
 
 def test_tableau_checkers_replay_membership() -> None:
@@ -380,7 +393,7 @@ def test_native_operations_are_published_from_algebraic_package() -> None:
     assert (
         public_partition_dominance(
             IntegerPartition(parts=(2, 1)), IntegerPartition(parts=(1, 1, 1))
-        )[0]
+        )
         == "LEFT_DOMINATES"
     )
     assert public_check_standard_tableau(standard) == StandardTableauCheckResult(

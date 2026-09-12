@@ -70,15 +70,11 @@ def hook_content_count(request: HookContentCountRequest) -> HookContentCountResu
 def partition_dominance(
     request: PartitionDominanceRequest,
 ) -> PartitionDominanceResult:
-    relation, left_sums, right_sums = native.partition_dominance(
-        request.left, request.right
-    )
+    relation = native.partition_dominance(request.left, request.right)
     return PartitionDominanceResult(
         left=request.left,
         right=request.right,
         relation=relation,
-        left_prefix_sums=left_sums,
-        right_prefix_sums=right_sums,
     )
 
 
@@ -259,15 +255,15 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
     ),
     MathTool(
-        operation_id="combinatorics.partition.hook_content.count",
-        title="Count semistandard tableaux by the hook-content formula",
+        operation_id="combinatorics.semistandard_young_tableaux.count",
+        title="Count semistandard Young tableaux",
         description="Return the exact number of semistandard Young tableaux of a "
         "partition shape with entries in 1..m, bound to the source shape and "
         "alphabet.",
         request_type=HookContentCountRequest,
         result_type=HookContentCountResult,
         run=hook_content_count,
-        tags=("combinatorics", "young-tableaux", "hook-content", "exact"),
+        tags=("combinatorics", "young-tableaux", "exact"),
         examples=(
             OperationExample(
                 name="shape_21_alphabet_2",
@@ -279,9 +275,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="combinatorics.partition.dominance.compare",
         title="Compare partitions in dominance order",
-        description="Compare equal-size integer partitions using the complete "
-        "leading-row prefix-sum ledger; different sizes are reported as "
-        "not comparable.",
+        description="Compare equal-size integer partitions in dominance order; "
+        "different sizes are reported as not comparable.",
         request_type=PartitionDominanceRequest,
         result_type=PartitionDominanceResult,
         run=partition_dominance,

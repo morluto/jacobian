@@ -117,7 +117,7 @@ class HookContentCountRequest(StrictModel):
 
 
 class HookContentCountResult(StrictModel):
-    """Exact hook-content count bound to its source shape and alphabet."""
+    """Exact SSYT count bound to its source shape and alphabet."""
 
     partition: IntegerPartition
     alphabet_size: _PositiveExactInteger
@@ -155,13 +155,11 @@ DominanceRelation = Literal[
 
 
 class PartitionDominanceResult(StrictModel):
-    """Dominance relation with the complete prefix-sum ledger."""
+    """Dominance relation bound to the compared partitions."""
 
     left: IntegerPartition
     right: IntegerPartition
     relation: DominanceRelation
-    left_prefix_sums: tuple[StrictInt, ...]
-    right_prefix_sums: tuple[StrictInt, ...]
 
 
 class StandardTableauCheckRequest(StrictModel):

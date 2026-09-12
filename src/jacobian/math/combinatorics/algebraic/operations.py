@@ -155,6 +155,32 @@ def _upper_decimal_digits(value: int) -> int:
     return estimate
 
 
+def _cancelled_hook_content_digit_bound(
+    partition: IntegerPartition, alphabet_size: int, alphabet_digits: int
+) -> int:
+    """Upper-bound the exact SSYT count digits after hook cancellation."""
+
+    cell_count = sum(partition.parts)
+    if cell_count == 0:
+        return max(1, alphabet_digits)
+    conjugate = conjugate_partition(partition).parts
+    numerator_log_units = 0
+    hook_log_lower_units = 0
+    for row, length in enumerate(partition.parts):
+        for column in range(length):
+            content = alphabet_size + column - row
+            if content <= 0:
+                return max(1, alphabet_digits)
+            # log10(v) < bit_length(v) * log10(2); log10(v) >= (bit_length-1)*log10(2).
+            numerator_log_units += content.bit_length() * 30103
+            hook = length - column + conjugate[column] - row - 1
+            hook_log_lower_units += max(hook.bit_length() - 1, 0) * 30103
+    cancelled_units = numerator_log_units - hook_log_lower_units
+    if cancelled_units < 0:
+        return max(1, alphabet_digits)
+    return max(cancelled_units // 100000 + 1, alphabet_digits)
+
+
 def _admit_hook_content(partition: IntegerPartition, alphabet_size: int) -> None:
     """Admit hook-content arithmetic before constructing any factors."""
     if type(alphabet_size) is not int or alphabet_size < 1:
@@ -178,9 +204,7 @@ def _admit_hook_content(partition: IntegerPartition, alphabet_size: int) -> None
     hook_digits = _upper_decimal_digits(max(1, cell_count))
     output_digits = max(
         alphabet_digits,
-        factor_digits,
-        cell_count * factor_digits,
-        cell_count * hook_digits,
+        _cancelled_hook_content_digit_bound(partition, alphabet_size, alphabet_digits),
     )
     if output_digits > MAX_CANONICAL_INTEGER_DIGITS:
         raise OperationResourceAdmissionError(
@@ -193,8 +217,6 @@ def _admit_hook_content(partition: IntegerPartition, alphabet_size: int) -> None
     # exact division by the hook product.  Left-to-right accumulation of many
     # similar-width factors overcharges cheap multi-cell counts near the
     # exact-output digit boundary.
-    factor_limbs = _limbs_for_digits(factor_digits)
-    hook_limbs = _limbs_for_digits(hook_digits)
     hook_product_digits = cell_count * hook_digits
     work = _product_tree_work(cell_count, factor_digits)
     work += _product_tree_work(cell_count, hook_digits)
@@ -333,31 +355,30 @@ def hook_content_count(partition: IntegerPartition, alphabet_size: int) -> int:
 
 def partition_dominance(
     left: IntegerPartition, right: IntegerPartition
-) -> tuple[DominanceRelation, tuple[int, ...], tuple[int, ...]]:
-    """Compare partitions using all leading-row prefix sums."""
+) -> DominanceRelation:
+    """Compare partitions using leading-row prefix sums privately."""
     if sum(left.parts) != sum(right.parts):
-        return "NOT_COMPARABLE_DIFFERENT_SIZE", (), ()
+        return "NOT_COMPARABLE_DIFFERENT_SIZE"
     length = max(len(left.parts), len(right.parts))
-    left_sums: list[int] = []
-    right_sums: list[int] = []
     left_total = right_total = 0
+    left_ge = right_ge = True
     for index in range(length):
         left_total += left.parts[index] if index < len(left.parts) else 0
         right_total += right.parts[index] if index < len(right.parts) else 0
-        left_sums.append(left_total)
-        right_sums.append(right_total)
-    left_ge = all(a >= b for a, b in zip(left_sums, right_sums, strict=True))
-    right_ge = all(a <= b for a, b in zip(left_sums, right_sums, strict=True))
-    relation = (
-        "EQUAL"
-        if left_ge and right_ge
-        else "LEFT_DOMINATES"
-        if left_ge
-        else "RIGHT_DOMINATES"
-        if right_ge
-        else "INCOMPARABLE"
+        left_ge = left_ge and left_total >= right_total
+        right_ge = right_ge and left_total <= right_total
+    return cast(
+        DominanceRelation,
+        (
+            "EQUAL"
+            if left_ge and right_ge
+            else "LEFT_DOMINATES"
+            if left_ge
+            else "RIGHT_DOMINATES"
+            if right_ge
+            else "INCOMPARABLE"
+        ),
     )
-    return cast(DominanceRelation, relation), tuple(left_sums), tuple(right_sums)
 
 
 _MEMBERSHIP_SHAPE_ERRORS = frozenset(

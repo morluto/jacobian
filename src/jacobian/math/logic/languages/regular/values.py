@@ -18,6 +18,18 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 MAX_DFA_STATES = 64
 MAX_DFA_ALPHABET = 32
 MAX_DFA_TRANSITIONS = 4096
+# Equivalence explores a reachable subset of the Cartesian product. These
+# bounds are derived from the carrier limits so admission can account for the
+# whole product before allocating BFS state.
+MAX_DFA_EQUIVALENCE_PRODUCT_STATES = MAX_DFA_STATES * MAX_DFA_STATES
+MAX_DFA_EQUIVALENCE_PRODUCT_TRANSITIONS = (
+    MAX_DFA_EQUIVALENCE_PRODUCT_STATES * MAX_DFA_ALPHABET
+)
+MAX_DFA_EQUIVALENCE_WORK = 2_000_000
+MAX_DFA_EQUIVALENCE_INTERMEDIATE_ALLOCATION = 4_000_000
+MAX_DFA_EQUIVALENCE_OUTPUT_ALLOCATION = 100_000
+MAX_DFA_EQUIVALENCE_WITNESS_LENGTH = MAX_DFA_EQUIVALENCE_PRODUCT_STATES - 1
+MAX_DFA_EQUIVALENCE_TRACE_ROWS = 2 * MAX_DFA_EQUIVALENCE_PRODUCT_STATES
 MAX_WORD_LENGTH = 1000
 # Raw JSON integers remain exactly interoperable through this exponent. FLINT
 # accepts the full range, while owner-local work and result admission narrow it.
@@ -61,7 +73,7 @@ class DFA(StrictModel):
     """
 
     state_count: int = Field(ge=1, le=MAX_DFA_STATES)
-    alphabet_size: int = Field(ge=1, le=MAX_DFA_ALPHABET)
+    alphabet_size: int = Field(ge=0, le=MAX_DFA_ALPHABET)
     transitions: tuple[DFATransition, ...] = Field(
         min_length=0,
         max_length=MAX_DFA_TRANSITIONS,

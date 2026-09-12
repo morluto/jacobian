@@ -4,6 +4,8 @@ from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.matrices.canonical_forms._models import (
     MatrixPolynomialEvaluationRequest,
     MatrixPolynomialEvaluationResult,
+    MatrixPolynomialRemainderRequest,
+    MatrixPolynomialRemainderResult,
     MinimalPolynomialResult,
     PrimaryDecompositionResult,
     RationalCanonicalFormResult,
@@ -14,6 +16,7 @@ from jacobian.math.matrices.canonical_forms.operations import (
     _primary_decomposition_components,
     _rational_canonical_components,
     evaluate_matrix_polynomial_value,
+    reduce_matrix_polynomial,
 )
 from jacobian.math.matrices.values import RationalMatrix
 from jacobian.math.polynomials.values import RationalPolynomial
@@ -27,6 +30,20 @@ def compute_matrix_polynomial_evaluation(
         matrix=matrix,
         polynomial=polynomial,
         value=evaluate_matrix_polynomial_value(matrix, polynomial),
+    )
+
+
+def compute_matrix_polynomial_remainder(
+    matrix: RationalMatrix,
+    polynomial: RationalPolynomial,
+) -> MatrixPolynomialRemainderResult:
+    minimal, quotient, remainder = reduce_matrix_polynomial(matrix, polynomial)
+    return MatrixPolynomialRemainderResult._from_kernel(
+        matrix=matrix,
+        polynomial=polynomial,
+        minimal_polynomial=minimal,
+        quotient=quotient,
+        remainder=remainder,
     )
 
 
@@ -68,6 +85,12 @@ def _run_matrix_polynomial_evaluation(
     return compute_matrix_polynomial_evaluation(request.matrix, request.polynomial)
 
 
+def _run_matrix_polynomial_remainder(
+    request: MatrixPolynomialRemainderRequest,
+) -> MatrixPolynomialRemainderResult:
+    return compute_matrix_polynomial_remainder(request.matrix, request.polynomial)
+
+
 def _run_minimal_polynomial(request: SquareMatrixRequest) -> MinimalPolynomialResult:
     return compute_minimal_polynomial(request.matrix)
 
@@ -85,6 +108,58 @@ def _run_primary_decomposition(
 
 
 TOOLS: MathTools = (
+    MathTool(
+        operation_id="matrix.polynomial.remainder.compute",
+        title="Reduce a rational polynomial modulo a matrix minimal polynomial",
+        description=(
+            "Compute the exact Euclidean quotient and remainder of a univariate "
+            "QQ polynomial by the source matrix's minimal polynomial. The "
+            "returned source variable is retained and the remainder degree is "
+            "strictly smaller than the minimal-polynomial degree."
+        ),
+        request_type=MatrixPolynomialRemainderRequest,
+        result_type=MatrixPolynomialRemainderResult,
+        run=_run_matrix_polynomial_remainder,
+        tags=("matrix", "polynomial", "minimal-polynomial", "remainder", "exact"),
+        examples=(
+            OperationExample(
+                name="nilpotent_reduction",
+                description=(
+                    "Reduce t^3+2t+1 modulo the minimal polynomial t^2 of a "
+                    "nilpotent Jordan block; the matrix must be nonempty and "
+                    "square and the polynomial must be univariate."
+                ),
+                input={
+                    "matrix": {
+                        "domain": "QQ",
+                        "entries": [
+                            [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
+                            [{"num": "0", "den": "1"}, {"num": "0", "den": "1"}],
+                        ],
+                    },
+                    "polynomial": {
+                        "variables": ["t"],
+                        "polynomial": {
+                            "terms": [
+                                {
+                                    "coefficient": {"num": "1", "den": "1"},
+                                    "exponents": [3],
+                                },
+                                {
+                                    "coefficient": {"num": "2", "den": "1"},
+                                    "exponents": [1],
+                                },
+                                {
+                                    "coefficient": {"num": "1", "den": "1"},
+                                    "exponents": [0],
+                                },
+                            ]
+                        },
+                    },
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="matrix.polynomial.evaluate.compute",
         title="Evaluate an exact rational polynomial at a square matrix",

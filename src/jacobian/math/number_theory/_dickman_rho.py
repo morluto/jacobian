@@ -314,15 +314,12 @@ def _admit_request(request: DickmanRhoPiecewiseEnclosureParameters) -> int:
             code="number_theory.dickman_rho.endpoint_representation",
             message="endpoint components exceed the admitted exact preflight bound",
         )
-<<<<<<< Updated upstream
     if request.target_width.exponent < -1_000_000:
         raise OperationResourceAdmissionError(
             location=("target_width",),
             code="number_theory.dickman_rho.target_width_representation",
             message="target width exponent exceeds the admitted exact preflight bound",
         )
-=======
->>>>>>> Stashed changes
     precision_floor = ExactDyadic(mantissa=1, exponent=-request.precision_bits)
     if interval_count > 1 and request.target_width.compare(precision_floor) < 0:
         raise OperationResourceAdmissionError(
@@ -419,16 +416,7 @@ def dickman_rho_piecewise_enclosure(
             code="number_theory.dickman_rho.target_width_type",
             message="target_width must be an ExactDyadic",
         )
-<<<<<<< Updated upstream
     precision_bits = _require_precision_bits(precision_bits)
-=======
-    if type(precision_bits) is not int:
-        raise OperationDomainValidationError(
-            location=("precision_bits",),
-            code="number_theory.dickman_rho.precision_type",
-            message="precision_bits must be an int",
-        )
->>>>>>> Stashed changes
     if (
         precision_bits < MIN_DICKMAN_PRECISION_BITS
         or precision_bits > MAX_DICKMAN_PRECISION_BITS

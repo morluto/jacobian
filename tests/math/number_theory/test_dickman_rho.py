@@ -12,11 +12,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math import number_theory
-<<<<<<< Updated upstream
 from jacobian.math.analysis._models import MAX_DYADIC_EXPONENT, ExactDyadic
-=======
-from jacobian.math.analysis._models import ExactDyadic
->>>>>>> Stashed changes
 from jacobian.math.number_theory._dickman_rho import (
     DickmanRhoAffinePiece,
     DickmanRhoPiecewiseEnclosureRequest,
@@ -260,12 +256,8 @@ def test_endpoint_eight_work_estimate_is_admitted() -> None:
     assert result.pieces[0].lower == 0
     assert result.pieces[-1].upper == 8
 
-<<<<<<< Updated upstream
-    _admit_request(_request(8, -5, precision_bits=32))
-
 
 def test_extreme_dyadic_target_width_is_rejected_without_fraction_expansion() -> None:
-
     with pytest.raises(OperationResourceAdmissionError, match="exponent"):
         dickman_rho_piecewise_enclosure(
             CanonicalRational(num=2, den=1),
@@ -274,7 +266,6 @@ def test_extreme_dyadic_target_width_is_rejected_without_fraction_expansion() ->
 
 
 def test_precision_bits_must_be_a_strict_int() -> None:
-
     with pytest.raises(OperationDomainValidationError, match="int"):
         dickman_rho_piecewise_enclosure(
             CanonicalRational(num=2, den=1),
@@ -286,13 +277,4 @@ def test_precision_bits_must_be_a_strict_int() -> None:
             CanonicalRational(num=2, den=1),
             ExactDyadic(mantissa=1, exponent=-5),
             precision_bits=128.0,  # type: ignore[arg-type]
-=======
-
-def test_native_precision_bits_must_be_an_int() -> None:
-    with pytest.raises(OperationDomainValidationError, match="precision_bits"):
-        dickman_rho_piecewise_enclosure(
-            CanonicalRational(num=1, den=1),
-            ExactDyadic(mantissa=1, exponent=-5),
-            precision_bits="32",  # type: ignore[arg-type]
->>>>>>> Stashed changes
         )

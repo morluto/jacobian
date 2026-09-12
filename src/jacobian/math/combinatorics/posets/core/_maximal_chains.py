@@ -113,7 +113,7 @@ class MaximalChainEnumerationResult(StrictModel):
         minimal = set(self.poset.minimal_elements)
         maximal = set(self.poset.maximal_elements)
         row_keys = tuple(row.elements for row in self.chains)
-        if row_keys != tuple(sorted(set(row_keys))):
+        if any(left >= right for left, right in pairwise(row_keys)):
             raise _validation_error(
                 "chains_canonical",
                 "chains must be unique and lexicographically ordered",
@@ -157,15 +157,10 @@ class MaximalChainEnumerationResult(StrictModel):
             raise _validation_error(
                 "empty_source_chain", "the empty poset has exactly one empty chain"
             )
-        histogram = tuple(
-            (length, count)
-            for length, count in sorted(
-                {
-                    row.length: sum(item.length == row.length for item in self.chains)
-                    for row in self.chains
-                }.items()
-            )
-        )
+        histogram_counts: dict[int, int] = {}
+        for row in self.chains:
+            histogram_counts[row.length] = histogram_counts.get(row.length, 0) + 1
+        histogram = tuple(sorted(histogram_counts.items()))
         actual_histogram = tuple(
             (item.length, item.count) for item in self.length_histogram
         )

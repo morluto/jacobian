@@ -5,6 +5,7 @@ from fractions import Fraction
 
 import pytest
 
+from jacobian._exact import CanonicalRational
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -173,8 +174,12 @@ def test_exact_complex_sic_and_design_profiles_are_decisions() -> None:
         SicProfileRequest(frame=ComplexFrame(dimension=1, vectors=((_z(1),),)))
     )
     assert sic.is_sic is True
+    assert sic.cardinality_residual == 0
+    assert sic.equiangular is True
     assert sic.common_squared_overlap is not None
     assert sic.common_squared_overlap.as_integer_ratio() == (1, 2)
+    assert sic.common_squared_overlap_residual is not None
+    assert sic.common_squared_overlap_residual.as_integer_ratio() == (0, 1)
     assert sic.squared_overlaps[0][0].as_integer_ratio() == (1, 1)
     assert sic.tight_residual[0][0].as_fractions() == (Fraction(0), Fraction(0))
     assert type(sic).model_validate_json(sic.model_dump_json()) == sic
@@ -198,6 +203,35 @@ def test_exact_complex_sic_and_design_profiles_are_decisions() -> None:
     )
     non_sic = _sic_profile(SicProfileRequest(frame=basis))
     assert non_sic.is_sic is False
+    assert non_sic.cardinality_residual == -2
+    assert non_sic.equiangular is True
+    assert non_sic.common_squared_overlap is not None
+    assert non_sic.common_squared_overlap.as_integer_ratio() == (0, 1)
+    assert non_sic.common_squared_overlap_residual is not None
+    assert non_sic.common_squared_overlap_residual.as_integer_ratio() == (-1, 3)
+    assert type(non_sic).model_validate_json(non_sic.model_dump_json()) == non_sic
+
+    equal_norm_wrong_overlap = _sic_profile(
+        SicProfileRequest(
+            frame=ComplexFrame(
+                dimension=2,
+                vectors=((_z(1), _z(0)),) * 4,
+            )
+        )
+    )
+    assert equal_norm_wrong_overlap.cardinality_residual == 0
+    assert equal_norm_wrong_overlap.equiangular is True
+    assert equal_norm_wrong_overlap.common_squared_overlap is not None
+    assert equal_norm_wrong_overlap.common_squared_overlap.as_integer_ratio() == (1, 1)
+    assert equal_norm_wrong_overlap.common_squared_overlap_residual is not None
+    assert (
+        equal_norm_wrong_overlap.common_squared_overlap_residual.as_integer_ratio()
+        == (
+            2,
+            3,
+        )
+    )
+    assert equal_norm_wrong_overlap.is_sic is False
 
 
 def test_complex_operator_uses_vector_times_conjugate_vector_and_trace_average() -> (
@@ -267,9 +301,23 @@ def test_sic_ledgers_are_invariant_under_independent_representative_scaling() ->
     scaled_result = _sic_profile(SicProfileRequest(frame=scaled))
 
     assert scaled_result.is_sic == base_result.is_sic
+    assert scaled_result.cardinality_residual == base_result.cardinality_residual
+    assert scaled_result.equiangular == base_result.equiangular
+    assert scaled_result.common_squared_overlap == base_result.common_squared_overlap
+    assert (
+        scaled_result.common_squared_overlap_residual
+        == base_result.common_squared_overlap_residual
+    )
     assert scaled_result.squared_overlaps == base_result.squared_overlaps
     assert scaled_result.frame_operator == base_result.frame_operator
     assert scaled_result.tight_residual == base_result.tight_residual
+    assert base_result.equiangular is False
+    assert base_result.common_squared_overlap is None
+    assert base_result.common_squared_overlap_residual is None
+    assert (
+        type(base_result).model_validate_json(base_result.model_dump_json())
+        == base_result
+    )
 
 
 def test_complex_accumulation_height_is_admitted_before_arithmetic() -> None:
@@ -279,11 +327,146 @@ def test_complex_accumulation_height_is_admitted_before_arithmetic() -> None:
         _sic_profile(SicProfileRequest(frame=frame))
 
 
+def test_complex_derived_denominator_growth_is_admitted_before_basis_grams() -> None:
+    primes = (
+        2,
+        3,
+        5,
+        7,
+        11,
+        13,
+        17,
+        19,
+        23,
+        29,
+        31,
+        37,
+        41,
+        43,
+        47,
+        53,
+        59,
+        61,
+        67,
+        71,
+        73,
+        79,
+        83,
+        89,
+        97,
+        101,
+        103,
+        107,
+        109,
+        113,
+        127,
+        131,
+        137,
+    )
+    denominators = []
+    for prime in primes:
+        denominator = prime
+        while len(str(denominator)) < 70:
+            denominator *= prime
+        denominators.append(denominator)
+    vector = tuple(
+        GaussianRational.from_fractions(Fraction(1, denominator), Fraction(0))
+        for denominator in denominators
+    )
+    frame = ComplexFrame(dimension=33, vectors=(vector,) * 33)
+
+    with pytest.raises(OperationResourceAdmissionError, match="height") as error:
+        _mutually_unbiased_bases(
+            MutuallyUnbiasedBasesRequest(dimension=33, bases=(frame,))
+        )
+    assert error.value.errors()[0]["type"] == "frames.complex_scalar_height"
+
+
+@pytest.mark.parametrize("operation", (_complex_frame_profile, _sic_profile))
+def test_complex_profiles_reject_empty_frames_before_tightness(
+    operation: object,
+) -> None:
+    empty = ComplexFrame(dimension=2, vectors=())
+    request_type = (
+        ComplexFrameProfileRequest
+        if operation is _complex_frame_profile
+        else SicProfileRequest
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        operation(request_type(frame=empty))  # type: ignore[operator]
+    assert error.value.errors()[0]["type"] == "frames.empty_complex_frame"
+
+
+def test_complex_profile_rejects_forged_vector_axes_at_native_boundary() -> None:
+    malformed = ComplexFrame.model_construct(dimension=2, vectors=((_z(1),),))
+    request = ComplexFrameProfileRequest.model_construct(frame=malformed)
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        _complex_frame_profile(request)
+    assert error.value.errors()[0]["type"] == (
+        "frames.complex_vector_dimension_mismatch"
+    )
+
+
+def test_complex_profile_rejects_forged_noncanonical_or_oversized_scalars() -> None:
+    noncanonical = CanonicalRational.model_construct(num=2, den=4)
+    scalar = GaussianRational.model_construct(real=noncanonical, imaginary=_z(0).real)
+    frame = ComplexFrame.model_construct(dimension=1, vectors=((scalar,),))
+    request = ComplexFrameProfileRequest.model_construct(frame=frame)
+    with pytest.raises(OperationDomainValidationError) as error:
+        _complex_frame_profile(request)
+    assert error.value.errors()[0]["type"] == "frames.complex_scalar_component"
+
+    oversized = CanonicalRational.model_construct(num=10**5000, den=1)
+    scalar = GaussianRational.model_construct(real=oversized, imaginary=_z(0).imaginary)
+    frame = ComplexFrame.model_construct(dimension=1, vectors=((scalar,),))
+    request = ComplexFrameProfileRequest.model_construct(frame=frame)
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        _complex_frame_profile(request)
+    assert error.value.errors()[0]["type"] == "frames.complex_scalar_height"
+
+
 def test_complex_profile_rejects_scalar_height_before_expansion() -> None:
     huge = GaussianRational.from_fractions(Fraction(10**129), Fraction(0))
     frame = ComplexFrame(dimension=1, vectors=((huge,),))
     with pytest.raises(OperationResourceAdmissionError, match="scalar components"):
         _sic_profile(SicProfileRequest(frame=frame))
+
+
+def test_sic_profile_rejects_forged_structural_residuals() -> None:
+    result = _sic_profile(
+        SicProfileRequest(frame=ComplexFrame(dimension=1, vectors=((_z(1),),)))
+    )
+    forged = json.loads(result.model_dump_json())
+    forged["cardinality_residual"] = "1"
+    with pytest.raises(ValueError, match="cardinality residual"):
+        type(result).model_validate_json(json.dumps(forged))
+
+    forged = json.loads(result.model_dump_json())
+    forged["common_squared_overlap_residual"] = None
+    with pytest.raises(ValueError, match="present together"):
+        type(result).model_validate_json(json.dumps(forged))
+
+    forged = json.loads(result.model_dump_json())
+    forged["equiangular"] = False
+    with pytest.raises(ValueError, match="equiangular status"):
+        type(result).model_validate_json(json.dumps(forged))
+
+    forged = json.loads(result.model_dump_json())
+    forged["common_squared_overlap"] = {"num": "0", "den": "1"}
+    forged["common_squared_overlap_residual"] = {"num": "-1", "den": "2"}
+    with pytest.raises(ValueError, match="common overlap"):
+        type(result).model_validate_json(json.dumps(forged))
+
+    forged = json.loads(result.model_dump_json())
+    forged["common_squared_overlap_residual"] = {"num": "1", "den": "1"}
+    with pytest.raises(ValueError, match="residual"):
+        type(result).model_validate_json(json.dumps(forged))
+
+    forged = json.loads(result.model_dump_json())
+    forged["is_sic"] = False
+    with pytest.raises(ValueError, match="SIC status"):
+        type(result).model_validate_json(json.dumps(forged))
 
 
 @pytest.mark.parametrize(
@@ -298,10 +481,36 @@ def test_complex_profile_rejects_scalar_height_before_expansion() -> None:
 def test_new_frame_operations_reject_untyped_native_requests(
     operation: object, request_type: type[object]
 ) -> None:
-    with pytest.raises(OperationDomainValidationError, match="request") as error:
+    expected_message = (
+        "VectorFamily" if operation is _tight_equiangular_profile else "request"
+    )
+    with pytest.raises(OperationDomainValidationError, match=expected_message) as error:
         operation({})  # type: ignore[operator]
-    assert error.value.errors()[0]["type"] == "frames.request_type"
+    expected_code = (
+        "frames.vector_family_type"
+        if operation is _tight_equiangular_profile
+        else "frames.request_type"
+    )
+    assert error.value.errors()[0]["type"] == expected_code
     assert request_type.__name__ in str(error.value)
+
+
+@pytest.mark.parametrize("operation", (_gram, _coherence, _frame_potential))
+def test_existing_frame_operations_reject_untyped_native_requests(
+    operation: object,
+) -> None:
+    with pytest.raises(OperationDomainValidationError) as error:
+        operation({})  # type: ignore[operator]
+    assert error.value.errors()[0]["type"] == "frames.vector_family_type"
+
+
+def test_existing_frame_operations_reject_forged_vector_axes_at_native_boundary() -> (
+    None
+):
+    malformed = VectorFamily.model_construct(dimension=2, vectors=((1,),))
+    with pytest.raises(OperationDomainValidationError) as error:
+        _gram(malformed)
+    assert error.value.errors()[0]["type"] == "frames.vector_dimension_mismatch"
 
 
 def test_coherence_is_exact_and_carries_canonical_maximizer() -> None:

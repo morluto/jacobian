@@ -1,6 +1,11 @@
 """Immutable declarations for finite-frame operations."""
 
-from jacobian.catalog.models import MathTool, MathTools, OperationExample
+from jacobian.catalog.models import (
+    MathTool,
+    MathTools,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.topology.frames._models import (
     CoherenceResult,
     ComplexFrameProfileRequest,
@@ -37,6 +42,15 @@ def _frame_potential(request: VectorFamily) -> FramePotentialResult:
     return frame_potential(request)
 
 
+def _require_request(request: object, expected: type[object]) -> None:
+    if type(request) is not expected:
+        raise OperationDomainValidationError(
+            location=(),
+            code="frames.request_type",
+            message=f"operation requires a {expected.__name__} request",
+        )
+
+
 def _tight_equiangular_profile(request: VectorFamily) -> TightEquiangularProfileResult:
     return tight_equiangular_profile(request)
 
@@ -44,17 +58,20 @@ def _tight_equiangular_profile(request: VectorFamily) -> TightEquiangularProfile
 def _complex_frame_profile(
     request: ComplexFrameProfileRequest,
 ) -> ComplexFrameProfileResult:
-    return complex_frame_profile(request)
+    _require_request(request, ComplexFrameProfileRequest)
+    return complex_frame_profile(request.frame)
 
 
 def _mutually_unbiased_bases(
     request: MutuallyUnbiasedBasesRequest,
 ) -> MutuallyUnbiasedBasesResult:
-    return mutually_unbiased_bases(request)
+    _require_request(request, MutuallyUnbiasedBasesRequest)
+    return mutually_unbiased_bases(request.dimension, request.bases)
 
 
 def _sic_profile(request: SicProfileRequest) -> SicProfileResult:
-    return sic_profile(request)
+    _require_request(request, SicProfileRequest)
+    return sic_profile(request.frame)
 
 
 _ORTHONORMAL = {"dimension": 2, "vectors": [[1, 0], [0, 1]]}

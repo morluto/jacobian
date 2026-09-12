@@ -3,8 +3,14 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from math import gcd
 
-from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
+from jacobian._exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    CanonicalRational,
+    canonical_rational_component_digits,
+    require_bounded_rational,
+)
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -18,21 +24,23 @@ from jacobian.math.number_theory.number_fields.values import (
 from jacobian.math.topology.frames._flint import integer_gram, integer_gram_and_rank
 from jacobian.math.topology.frames._models import (
     CoherenceResult,
-    ComplexFrameProfileRequest,
     ComplexFrameProfileResult,
     FramePotentialResult,
     GramResult,
-    MutuallyUnbiasedBasesRequest,
     MutuallyUnbiasedBasesResult,
-    SicProfileRequest,
     SicProfileResult,
     TightEquiangularProfileResult,
 )
 from jacobian.math.topology.frames.values import (
+    _MAX_VECTOR_ENTRY,
+    MAX_COMPLEX_BASIS_COUNT,
     MAX_COMPLEX_BASIS_PAIRS,
     MAX_COMPLEX_COMPONENT_DIGITS,
+    MAX_COMPLEX_FRAME_CELLS,
     MAX_COMPLEX_INNER_PRODUCT_WORK,
     MAX_COMPLEX_PROFILE_CELLS,
+    MAX_DIM,
+    MAX_VECTOR_CELLS,
     ComplexFrame,
     VectorFamily,
 )
@@ -53,13 +61,217 @@ MAX_FRAME_GRAM_ENTRIES = 2_097_152
 MAX_FRAME_GRAM_MULTIPLY_ADDS = 536_870_912
 
 
-def _require_request_type(value: object, expected: type[object]) -> None:
-    if not isinstance(value, expected):
+def _admit_canonical_component(
+    component: object, *, location: tuple[str | int, ...]
+) -> None:
+    if type(component) is not CanonicalRational:
+        raise OperationDomainValidationError(
+            location=location,
+            code="frames.complex_scalar_component_type",
+            message="Gaussian-rational components must be canonical rationals",
+        )
+    assert isinstance(component, CanonicalRational)
+    numerator = getattr(component, "num", None)
+    denominator = getattr(component, "den", None)
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
+        raise OperationDomainValidationError(
+            location=location,
+            code="frames.complex_scalar_component",
+            message="Gaussian-rational components must be canonical rationals",
+        )
+    try:
+        require_bounded_rational(
+            component,
+            max_digits=MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS,
+            label="Gaussian-rational component",
+        )
+    except ValueError:
+        raise OperationResourceAdmissionError(
+            location=location,
+            code="frames.complex_scalar_height",
+            message="Gaussian-rational components exceed the admitted height",
+        ) from None
+    if (numerator == 0 and denominator != 1) or gcd(abs(numerator), denominator) != 1:
+        raise OperationDomainValidationError(
+            location=location,
+            code="frames.complex_scalar_component",
+            message="Gaussian-rational components must be canonical rationals",
+        )
+
+
+def _admit_complex_frame(
+    frame: object, *, location: tuple[str | int, ...] = ("frame",)
+) -> None:
+    """Recheck the runtime shape of a complex frame at native boundaries.
+
+    ``model_construct`` is intentionally available to trusted producers and
+    therefore bypasses Pydantic validators.  Native callers can still provide
+    such a value, so every operation that indexes complex coordinates must
+    establish the frame's carrier, axes, and scalar shape before doing work.
+    """
+
+    if type(frame) is not ComplexFrame:
+        raise OperationDomainValidationError(
+            location=location,
+            code="frames.complex_frame_type",
+            message="complex frame must be a ComplexFrame value",
+        )
+    dimension = getattr(frame, "dimension", None)
+    if type(dimension) is not int or not 1 <= dimension <= MAX_DIM:
+        raise OperationDomainValidationError(
+            location=(*location, "dimension"),
+            code="frames.complex_frame_dimension",
+            message="complex frame dimension must be a positive bounded integer",
+        )
+    vectors = getattr(frame, "vectors", None)
+    if type(vectors) is not tuple:
+        raise OperationDomainValidationError(
+            location=(*location, "vectors"),
+            code="frames.complex_frame_vectors",
+            message="complex frame vectors must be an exact tuple",
+        )
+    if not vectors:
+        raise OperationDomainValidationError(
+            location=(*location, "vectors"),
+            code="frames.empty_complex_frame",
+            message="complex frame must contain at least one vector",
+        )
+    if len(vectors) * dimension > MAX_COMPLEX_FRAME_CELLS:
+        raise OperationResourceAdmissionError(
+            location=(*location, "vectors"),
+            code="frames.complex_vector_cell_budget",
+            message="complex vector family exceeds the materialized-cell budget",
+        )
+    for vector_index, vector in enumerate(vectors):
+        vector_location = (*location, "vectors", vector_index)
+        if type(vector) is not tuple:
+            raise OperationDomainValidationError(
+                location=vector_location,
+                code="frames.complex_vector_type",
+                message="complex frame vectors must be exact tuples",
+            )
+        if len(vector) != dimension:
+            raise OperationDomainValidationError(
+                location=vector_location,
+                code="frames.complex_vector_dimension_mismatch",
+                message="all complex vectors must have equal dimension",
+            )
+        for coordinate_index, scalar in enumerate(vector):
+            scalar_location = (*vector_location, coordinate_index)
+            if type(scalar) is not GaussianRational:
+                raise OperationDomainValidationError(
+                    location=scalar_location,
+                    code="frames.complex_scalar_type",
+                    message="complex coordinates must be GaussianRational values",
+                )
+            for component_name in ("real", "imaginary"):
+                component = getattr(scalar, component_name, None)
+                _admit_canonical_component(
+                    component, location=(*scalar_location, component_name)
+                )
+
+
+def _admit_vector_family(
+    value: object, *, expected_type: type[VectorFamily] = VectorFamily
+) -> VectorFamily:
+    """Admit a native vector-family value before integer-kernel work."""
+
+    if type(value) is not expected_type:
         raise OperationDomainValidationError(
             location=(),
-            code="frames.request_type",
-            message=f"operation requires a {expected.__name__} request",
+            code="frames.vector_family_type",
+            message=f"operation requires a {expected_type.__name__} value",
         )
+    dimension = getattr(value, "dimension", None)
+    if type(dimension) is not int or not 0 <= dimension <= MAX_DIM:
+        raise OperationDomainValidationError(
+            location=("dimension",),
+            code="frames.vector_family_dimension",
+            message="vector-family dimension must be a bounded nonnegative integer",
+        )
+    vectors = getattr(value, "vectors", None)
+    if type(vectors) is not tuple:
+        raise OperationDomainValidationError(
+            location=("vectors",),
+            code="frames.vector_family_vectors",
+            message="vector-family vectors must be an exact tuple",
+        )
+    if len(vectors) * dimension > MAX_VECTOR_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("vectors",),
+            code="frames.vector_cell_budget",
+            message="vector family exceeds the materialized-cell budget",
+        )
+    for vector_index, vector in enumerate(vectors):
+        vector_location = ("vectors", vector_index)
+        if type(vector) is not tuple:
+            raise OperationDomainValidationError(
+                location=vector_location,
+                code="frames.vector_type",
+                message="vectors must be exact tuples",
+            )
+        if len(vector) != dimension:
+            raise OperationDomainValidationError(
+                location=vector_location,
+                code="frames.vector_dimension_mismatch",
+                message="all vectors must have equal dimension",
+            )
+        for coordinate_index, entry in enumerate(vector):
+            entry_location = (*vector_location, coordinate_index)
+            if type(entry) is not int:
+                raise OperationDomainValidationError(
+                    location=entry_location,
+                    code="frames.vector_entry_type",
+                    message="vector entries must be exact integers",
+                )
+            if abs(entry) > _MAX_VECTOR_ENTRY:
+                raise OperationDomainValidationError(
+                    location=entry_location,
+                    code="frames.vector_entry_out_of_range",
+                    message="vector entries must be bounded",
+                )
+    assert isinstance(value, VectorFamily)
+    return value
+
+
+def _admit_mub(
+    dimension: object, bases: object
+) -> tuple[int, tuple[ComplexFrame, ...]]:
+    """Admit MUB axes before indexing basis vectors."""
+
+    if type(dimension) is not int or not 1 <= dimension <= MAX_DIM:
+        raise OperationDomainValidationError(
+            location=("dimension",),
+            code="frames.mub_dimension",
+            message="MUB dimension must be a positive bounded integer",
+        )
+    if type(bases) is not tuple:
+        raise OperationDomainValidationError(
+            location=("bases",),
+            code="frames.mub_bases",
+            message="MUB bases must be an exact tuple",
+        )
+    if not 1 <= len(bases) <= MAX_COMPLEX_BASIS_COUNT:
+        raise OperationDomainValidationError(
+            location=("bases",),
+            code="frames.mub_basis_count",
+            message=(
+                "MUB requests must contain between one and "
+                f"{MAX_COMPLEX_BASIS_COUNT} bases"
+            ),
+        )
+    for basis_index, basis in enumerate(bases):
+        _admit_complex_frame(basis, location=("bases", basis_index))
+        assert type(basis) is ComplexFrame
+        if basis.dimension != dimension or len(basis.vectors) != dimension:
+            raise OperationDomainValidationError(
+                location=("bases", basis_index),
+                code="frames.mub_basis_shape",
+                message="every basis must have exactly dimension vectors of that dimension",
+            )
+    assert type(dimension) is int
+    assert type(bases) is tuple
+    return dimension, bases
 
 
 def _complex_parts(value: GaussianRational) -> tuple[Fraction, Fraction]:
@@ -116,21 +328,22 @@ def _require_complex_accumulation_height(
     *,
     normalized_operator: bool,
     normalized_overlaps: bool,
+    inner_product_output: bool,
 ) -> None:
     """Admit rational growth before constructing any exact arithmetic values."""
 
     source = _maximum_component_height(frame)
     product = _complex_product_height(source)
-    norm = _complex_sum_height(product, 2 * frame.dimension)
+    inner_product = _complex_sum_height(product, frame.dimension)
+    norm = inner_product
 
     operator_term = product
     if normalized_operator:
         operator_term = product.quotient(norm)
     operator = _complex_sum_height(operator_term, len(frame.vectors))
-    trace = _complex_sum_height(operator, frame.dimension).quotient(
-        RationalHeight(1, max(1, len(str(frame.dimension))))
-    )
-    residual = sum_heights((operator, trace))
+    trace = _complex_sum_height(operator, frame.dimension)
+    scalar = trace.quotient(RationalHeight(len(str(frame.dimension)), 1))
+    residual = sum_heights((operator, scalar))
     if (
         max(
             operator.numerator_digits,
@@ -146,8 +359,16 @@ def _require_complex_accumulation_height(
             message="Gaussian-rational frame accumulation exceeds its admitted height",
         )
 
+    if inner_product_output and inner_product.exceeds(
+        MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS
+    ):
+        raise OperationResourceAdmissionError(
+            location=("frame", "vectors"),
+            code="frames.complex_inner_product_height",
+            message="Gaussian-rational inner products exceed their admitted height",
+        )
+
     if normalized_overlaps:
-        inner_product = _complex_sum_height(product, frame.dimension)
         squared_magnitude = sum_heights((inner_product.product(inner_product),) * 2)
         denominator = norm.product(norm)
         overlap = squared_magnitude.quotient(denominator)
@@ -164,6 +385,7 @@ def _complex_frame_admitted(
     *,
     normalized_operator: bool = False,
     normalized_overlaps: bool = False,
+    inner_product_output: bool = False,
 ) -> tuple[Fraction, ...]:
     if len(frame.vectors) * frame.dimension > MAX_COMPLEX_PROFILE_CELLS:
         raise OperationResourceAdmissionError(
@@ -172,11 +394,7 @@ def _complex_frame_admitted(
             message="complex profile cells exceed the admitted output envelope",
         )
     if any(
-        max(
-            len(str(abs(component.num))),
-            len(str(component.den)),
-        )
-        > MAX_COMPLEX_COMPONENT_DIGITS
+        canonical_rational_component_digits(component) > MAX_COMPLEX_COMPONENT_DIGITS
         for vector in frame.vectors
         for scalar in vector
         for component in (scalar.real, scalar.imaginary)
@@ -190,6 +408,7 @@ def _complex_frame_admitted(
         frame,
         normalized_operator=normalized_operator,
         normalized_overlaps=normalized_overlaps,
+        inner_product_output=inner_product_output,
     )
     norms = tuple(_norm_squared(vector) for vector in frame.vectors)
     if any(norm <= 0 for norm in norms):
@@ -352,6 +571,7 @@ def _admit_frame_shape(value: VectorFamily) -> None:
 
 def gram(value: VectorFamily) -> GramResult:
     """Compute the exact Gram matrix of a vector family."""
+    value = _admit_vector_family(value)
     _require_gram_work_budget(value)
     return _gram_result(value)
 
@@ -359,13 +579,14 @@ def gram(value: VectorFamily) -> GramResult:
 def verify_gram(claim: GramResult) -> bool:
     """Verify the retained vector-family Gram relation for a decoded claim."""
     try:
+        _admit_vector_family(claim, expected_type=GramResult)
         if (
             claim.gram.row_count != len(claim.vectors)
             or claim.gram.column_count != len(claim.vectors)
             or any(len(vector) != claim.dimension for vector in claim.vectors)
         ):
             return False
-    except (AttributeError, IndexError, TypeError):
+    except (AttributeError, IndexError, TypeError, OperationDomainValidationError):
         return False
     _require_gram_work_budget(claim)
     return claim.gram.entries == integer_gram(claim.vectors)
@@ -373,6 +594,7 @@ def verify_gram(claim: GramResult) -> bool:
 
 def coherence(value: VectorFamily) -> CoherenceResult:
     """Compute exact normalized squared coherence of a finite frame."""
+    value = _admit_vector_family(value)
     _require_gram_work_budget(value)
     if any(not any(vector) for vector in value.vectors):
         raise OperationDomainValidationError(
@@ -414,6 +636,7 @@ def coherence(value: VectorFamily) -> CoherenceResult:
 
 def frame_potential(value: VectorFamily) -> FramePotentialResult:
     """Compute the exact frame potential of a finite frame."""
+    value = _admit_vector_family(value)
     _require_gram_work_budget(value)
     _admit_frame_shape(value)
     rank, matrix = integer_gram_and_rank(value.vectors, dimension=value.dimension)
@@ -428,7 +651,7 @@ def frame_potential(value: VectorFamily) -> FramePotentialResult:
 def tight_equiangular_profile(value: VectorFamily) -> TightEquiangularProfileResult:
     """Classify tightness and equiangularity using exact integer Gram data."""
 
-    _require_request_type(value, VectorFamily)
+    value = _admit_vector_family(value)
     _require_gram_work_budget(value)
     if any(not any(vector) for vector in value.vectors):
         raise OperationDomainValidationError(
@@ -480,21 +703,17 @@ def tight_equiangular_profile(value: VectorFamily) -> TightEquiangularProfileRes
     )
 
 
-def complex_frame_profile(
-    request: ComplexFrameProfileRequest,
-) -> ComplexFrameProfileResult:
+def complex_frame_profile(frame: ComplexFrame) -> ComplexFrameProfileResult:
     """Return an exact complex frame operator and tight/equiangular profile."""
 
-    _require_request_type(request, ComplexFrameProfileRequest)
-    dimension = request.frame.dimension
-    _require_complex_profile_work(
-        request.frame, emitted_matrix_cells=2 * dimension * dimension
-    )
-    norms = _complex_frame_admitted(request.frame, normalized_overlaps=True)
-    equiangular, common = _equiangular_complex_frame(request.frame, norms)
-    tight, frame_operator, tight_residual = _tight_complex_frame(request.frame)
+    _admit_complex_frame(frame)
+    dimension = frame.dimension
+    _require_complex_profile_work(frame, emitted_matrix_cells=2 * dimension * dimension)
+    norms = _complex_frame_admitted(frame, normalized_overlaps=True)
+    equiangular, common = _equiangular_complex_frame(frame, norms)
+    tight, frame_operator, tight_residual = _tight_complex_frame(frame)
     return ComplexFrameProfileResult._from_kernel(
-        request,
+        frame,
         tight=tight,
         equiangular=equiangular,
         common_squared_overlap=(
@@ -508,13 +727,12 @@ def complex_frame_profile(
 
 
 def mutually_unbiased_bases(
-    request: MutuallyUnbiasedBasesRequest,
+    dimension: int, bases: tuple[ComplexFrame, ...]
 ) -> MutuallyUnbiasedBasesResult:
     """Decide exact mutual unbiasedness of a bounded complex basis family."""
 
-    _require_request_type(request, MutuallyUnbiasedBasesRequest)
-    dimension = request.dimension
-    basis_count = len(request.bases)
+    dimension, bases = _admit_mub(dimension, bases)
+    basis_count = len(bases)
     pair_count = basis_count * (basis_count - 1) // 2
     work = (pair_count + basis_count) * dimension * dimension * dimension
     output_cells = (basis_count + pair_count) * dimension * dimension
@@ -531,12 +749,14 @@ def mutually_unbiased_bases(
             message="MUB ledger output exceeds the admitted envelope",
         )
     basis_norms = tuple(
-        _complex_frame_admitted(basis, normalized_overlaps=True)
-        for basis in request.bases
+        _complex_frame_admitted(
+            basis, normalized_overlaps=True, inner_product_output=True
+        )
+        for basis in bases
     )
     unbiased = True
     basis_grams: list[tuple[tuple[GaussianRational, ...], ...]] = []
-    for basis in request.bases:
+    for basis in bases:
         basis_grams.append(
             tuple(
                 tuple(
@@ -547,7 +767,7 @@ def mutually_unbiased_bases(
             )
         )
     cross_gram_squared: list[tuple[tuple[CanonicalRational, ...], ...]] = []
-    for basis, norms in zip(request.bases, basis_norms, strict=True):
+    for basis, norms in zip(bases, basis_norms, strict=True):
         for left_index in range(dimension):
             for right_index in range(left_index + 1, dimension):
                 if _inner_product(
@@ -556,15 +776,15 @@ def mutually_unbiased_bases(
                     unbiased = False
         if any(norm <= 0 for norm in norms):
             unbiased = False
-    for first in range(len(request.bases)):
-        for second in range(first + 1, len(request.bases)):
+    for first in range(len(bases)):
+        for second in range(first + 1, len(bases)):
             cross: list[tuple[CanonicalRational, ...]] = []
             for left_vector, left_norm in zip(
-                request.bases[first].vectors, basis_norms[first], strict=True
+                bases[first].vectors, basis_norms[first], strict=True
             ):
                 row: list[CanonicalRational] = []
                 for right_vector, right_norm in zip(
-                    request.bases[second].vectors, basis_norms[second], strict=True
+                    bases[second].vectors, basis_norms[second], strict=True
                 ):
                     real, imaginary = _inner_product(left_vector, right_vector)
                     if (
@@ -580,18 +800,18 @@ def mutually_unbiased_bases(
                 cross.append(tuple(row))
             cross_gram_squared.append(tuple(cross))
     return MutuallyUnbiasedBasesResult._from_kernel(
-        request,
+        dimension=dimension,
+        bases=bases,
         basis_grams=tuple(basis_grams),
         cross_gram_squared=tuple(cross_gram_squared),
         is_mutually_unbiased=unbiased,
     )
 
 
-def sic_profile(request: SicProfileRequest) -> SicProfileResult:
+def sic_profile(frame: ComplexFrame) -> SicProfileResult:
     """Decide the exact SIC overlap equations for a complex vector family."""
 
-    _require_request_type(request, SicProfileRequest)
-    frame = request.frame
+    _admit_complex_frame(frame)
     _require_complex_profile_work(
         frame,
         emitted_matrix_cells=len(frame.vectors) ** 2
@@ -601,7 +821,7 @@ def sic_profile(request: SicProfileRequest) -> SicProfileResult:
         frame, normalized_operator=True, normalized_overlaps=True
     )
     expected_count = frame.dimension * frame.dimension
-    is_sic = len(frame.vectors) == expected_count
+    cardinality_residual = len(frame.vectors) - expected_count
     squared_overlaps: list[tuple[CanonicalRational, ...]] = []
     for left_vector, left_norm in zip(frame.vectors, norms, strict=True):
         row: list[CanonicalRational] = []
@@ -614,30 +834,48 @@ def sic_profile(request: SicProfileRequest) -> SicProfileResult:
             )
         squared_overlaps.append(tuple(row))
     common: Fraction | None = None
-    if is_sic:
-        common = Fraction(1, frame.dimension + 1)
-        for left_index in range(len(frame.vectors)):
-            for right_index in range(left_index + 1, len(frame.vectors)):
-                real, imaginary = _inner_product(
-                    frame.vectors[left_index], frame.vectors[right_index]
-                )
-                overlap = (real * real + imaginary * imaginary) / (
-                    norms[left_index] * norms[right_index]
-                )
-                if overlap != common:
-                    is_sic = False
+    equiangular = True
+    for left_index in range(len(squared_overlaps)):
+        for right_index in range(left_index + 1, len(squared_overlaps)):
+            overlap = squared_overlaps[left_index][right_index].as_fraction()
+            if common is None:
+                common = overlap
+            elif overlap != common:
+                equiangular = False
+    if not equiangular:
+        common = None
+    expected_overlap = Fraction(1, frame.dimension + 1)
+    # A one-dimensional, one-line SIC has no off-diagonal pair from which to
+    # observe a common value; its defining target is still canonical.
+    if common is None and cardinality_residual != 0:
+        equiangular = False
+    if common is None and equiangular and cardinality_residual == 0:
+        common = expected_overlap
+        equiangular = True
+    common_residual = (
+        CanonicalRational.from_fraction(common - expected_overlap)
+        if common is not None
+        else None
+    )
     tight, frame_operator, tight_residual = _tight_complex_frame(
         frame, normalized_projectors=True, norms=norms
     )
-    is_sic = is_sic and tight
+    is_sic = (
+        cardinality_residual == 0
+        and equiangular
+        and common_residual is not None
+        and common_residual.as_fraction() == 0
+        and tight
+    )
     return SicProfileResult._from_kernel(
-        request,
+        frame,
         is_sic=is_sic,
+        cardinality_residual=cardinality_residual,
+        equiangular=equiangular,
         common_squared_overlap=(
-            CanonicalRational.from_fraction(Fraction(1, frame.dimension + 1))
-            if is_sic
-            else None
+            CanonicalRational.from_fraction(common) if common is not None else None
         ),
+        common_squared_overlap_residual=common_residual,
         squared_overlaps=tuple(squared_overlaps),
         frame_operator=frame_operator,
         tight_residual=tight_residual,

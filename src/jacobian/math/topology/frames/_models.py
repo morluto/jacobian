@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
 from typing import Self
 
 from pydantic import Field, model_validator
@@ -188,19 +189,20 @@ class MutuallyUnbiasedBasesResult(MutuallyUnbiasedBasesRequest):
     @classmethod
     def _from_kernel(
         cls,
-        request: MutuallyUnbiasedBasesRequest,
         *,
+        dimension: int,
+        bases: tuple[ComplexFrame, ...],
         basis_grams: tuple[tuple[tuple[GaussianRational, ...], ...], ...],
         cross_gram_squared: tuple[tuple[tuple[CanonicalRational, ...], ...], ...],
         is_mutually_unbiased: bool,
     ) -> Self:
         return cls.model_construct(
-            dimension=request.dimension,
-            bases=request.bases,
+            dimension=dimension,
+            bases=bases,
             basis_grams=basis_grams,
             cross_gram_squared=cross_gram_squared,
             is_mutually_unbiased=is_mutually_unbiased,
-            basis_pair_count=len(request.bases) * (len(request.bases) - 1) // 2,
+            basis_pair_count=len(bases) * (len(bases) - 1) // 2,
         )
 
 
@@ -236,7 +238,7 @@ class ComplexFrameProfileResult(ComplexFrameProfileRequest):
     @classmethod
     def _from_kernel(
         cls,
-        request: ComplexFrameProfileRequest,
+        frame: ComplexFrame,
         *,
         tight: bool,
         equiangular: bool,
@@ -245,7 +247,7 @@ class ComplexFrameProfileResult(ComplexFrameProfileRequest):
         tight_residual: tuple[tuple[GaussianRational, ...], ...],
     ) -> Self:
         return cls.model_construct(
-            frame=request.frame,
+            frame=frame,
             tight=tight,
             equiangular=equiangular,
             common_squared_overlap=common_squared_overlap,
@@ -264,17 +266,43 @@ class SicProfileResult(SicProfileRequest):
     """A scale-invariant SIC ledger and its normalized frame operator."""
 
     is_sic: bool
-    common_squared_overlap: CanonicalRational | None
+    cardinality_residual: ExactInteger = Field(
+        description="The supplied line count minus dimension squared."
+    )
+    equiangular: bool = Field(
+        description="Whether all observed off-diagonal normalized overlaps agree."
+    )
+    common_squared_overlap: CanonicalRational | None = Field(
+        description="The common off-diagonal normalized overlap when equiangular."
+    )
+    common_squared_overlap_residual: CanonicalRational | None = Field(
+        description="The common overlap minus the SIC target 1/(dimension+1)."
+    )
     squared_overlaps: tuple[tuple[CanonicalRational, ...], ...]
     frame_operator: tuple[tuple[GaussianRational, ...], ...]
     tight_residual: tuple[tuple[GaussianRational, ...], ...]
 
     @model_validator(mode="after")
     def require_profile_shape(self) -> Self:
-        if not self.is_sic and self.common_squared_overlap is not None:
+        expected_cardinality_residual = (
+            len(self.frame.vectors) - self.frame.dimension * self.frame.dimension
+        )
+        if self.cardinality_residual != expected_cardinality_residual:
+            raise PydanticCustomError(
+                "frames.sic_profile_cardinality",
+                "SIC cardinality residual must match the source family",
+            )
+        if (self.common_squared_overlap is None) != (
+            self.common_squared_overlap_residual is None
+        ):
             raise PydanticCustomError(
                 "frames.sic_profile_shape",
-                "a non-SIC profile cannot carry a common overlap",
+                "common overlap and its residual must be present together",
+            )
+        if self.equiangular != (self.common_squared_overlap is not None):
+            raise PydanticCustomError(
+                "frames.sic_profile_shape",
+                "equiangular status must agree with the common overlap",
             )
         d = self.frame.dimension
         n = len(self.frame.vectors)
@@ -289,23 +317,89 @@ class SicProfileResult(SicProfileRequest):
             raise PydanticCustomError(
                 "frames.sic_profile_axes", "SIC ledgers must retain source axes"
             )
+        if any(
+            overlap.as_fraction() != 1
+            for index, row in enumerate(self.squared_overlaps)
+            for column, overlap in enumerate(row)
+            if index == column
+        ):
+            raise PydanticCustomError(
+                "frames.sic_profile_diagonal",
+                "SIC overlap diagonals must equal one",
+            )
+        off_diagonal = tuple(
+            self.squared_overlaps[left][right].as_fraction()
+            for left in range(n)
+            for right in range(left + 1, n)
+        )
+        observed_equiangular = (d == 1 and n == 1) or (
+            bool(off_diagonal) and len(set(off_diagonal)) == 1
+        )
+        if self.equiangular != observed_equiangular:
+            raise PydanticCustomError(
+                "frames.sic_profile_equiangular",
+                "equiangular status must agree with off-diagonal overlaps",
+            )
+        if self.equiangular:
+            assert self.common_squared_overlap is not None
+            common = self.common_squared_overlap.as_fraction()
+            if off_diagonal and any(overlap != common for overlap in off_diagonal):
+                raise PydanticCustomError(
+                    "frames.sic_profile_common_overlap",
+                    "common overlap must equal every off-diagonal overlap",
+                )
+            if not off_diagonal and common != Fraction(1, d + 1):
+                raise PydanticCustomError(
+                    "frames.sic_profile_common_overlap",
+                    "common overlap must equal the SIC target when no pair is observed",
+                )
+            expected_residual = common - Fraction(1, d + 1)
+            assert self.common_squared_overlap_residual is not None
+            if self.common_squared_overlap_residual.as_fraction() != expected_residual:
+                raise PydanticCustomError(
+                    "frames.sic_profile_common_residual",
+                    "common overlap residual must equal the SIC target difference",
+                )
+        tight = all(
+            entry.as_fractions() == (Fraction(0), Fraction(0))
+            for row in self.tight_residual
+            for entry in row
+        )
+        expected_is_sic = (
+            self.cardinality_residual == 0
+            and self.equiangular
+            and self.common_squared_overlap_residual is not None
+            and self.common_squared_overlap_residual.as_fraction() == 0
+            and tight
+        )
+        if self.is_sic != expected_is_sic:
+            raise PydanticCustomError(
+                "frames.sic_profile_status",
+                "SIC status must agree with cardinality, overlap, and tight residuals",
+            )
         return self
 
     @classmethod
     def _from_kernel(
         cls,
-        request: SicProfileRequest,
+        frame: ComplexFrame,
         *,
         is_sic: bool,
+        cardinality_residual: ExactInteger,
+        equiangular: bool,
         common_squared_overlap: CanonicalRational | None,
+        common_squared_overlap_residual: CanonicalRational | None,
         squared_overlaps: tuple[tuple[CanonicalRational, ...], ...],
         frame_operator: tuple[tuple[GaussianRational, ...], ...],
         tight_residual: tuple[tuple[GaussianRational, ...], ...],
     ) -> Self:
         return cls.model_construct(
-            frame=request.frame,
+            frame=frame,
             is_sic=is_sic,
+            cardinality_residual=cardinality_residual,
+            equiangular=equiangular,
             common_squared_overlap=common_squared_overlap,
+            common_squared_overlap_residual=common_squared_overlap_residual,
             squared_overlaps=squared_overlaps,
             frame_operator=frame_operator,
             tight_residual=tight_residual,

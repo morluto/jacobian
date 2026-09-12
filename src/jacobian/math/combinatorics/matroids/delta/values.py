@@ -85,8 +85,8 @@ def _exchange_work(
     return instances, candidate_space
 
 
-def require_delta_matroid_admission(system: FiniteFeasibleSetSystem) -> None:
-    """Bound all work and the canonical recognition result before replay."""
+def require_delta_matroid_envelope(system: FiniteFeasibleSetSystem) -> None:
+    """Bound linear source size without replaying symmetric exchange."""
 
     memberships = sum(len(row) for row in system.feasible)
     if memberships > MAX_DELTA_MEMBERSHIPS:
@@ -108,6 +108,12 @@ def require_delta_matroid_admission(system: FiniteFeasibleSetSystem) -> None:
             "delta-matroid ground labels exceed the "
             f"{MAX_DELTA_LABEL_BYTES}-byte envelope",
         )
+
+
+def require_delta_matroid_admission(system: FiniteFeasibleSetSystem) -> None:
+    """Bound all work and the canonical recognition result before replay."""
+
+    require_delta_matroid_envelope(system)
     # Every nonempty row carries at least one membership, so the membership
     # envelope bounds the row count and keeps this ordered-pair scan bounded.
     _, candidate_space = _exchange_work(canonical_feasible_rows(system))
@@ -190,4 +196,5 @@ __all__ = [
     "canonical_feasible_rows",
     "first_symmetric_exchange_obstruction",
     "require_delta_matroid_admission",
+    "require_delta_matroid_envelope",
 ]

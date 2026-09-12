@@ -5,8 +5,6 @@ from __future__ import annotations
 from jacobian.math.combinatorics.greedoids.values import FiniteFeasibleSetSystem
 from jacobian.math.combinatorics.matroids.delta._models import (
     DeltaMatroidRecognitionResult,
-    DeltaMatroidTwistResult,
-    DeltaMatroidWidthResult,
     require_twist_subset,
 )
 from jacobian.math.combinatorics.matroids.delta.values import (
@@ -15,6 +13,7 @@ from jacobian.math.combinatorics.matroids.delta.values import (
     FiniteDeltaMatroid,
     first_symmetric_exchange_obstruction,
     require_delta_matroid_admission,
+    require_delta_matroid_envelope,
 )
 
 __all__ = [
@@ -75,7 +74,7 @@ def _require_delta_matroid(value: FiniteDeltaMatroid) -> None:
 
 def twist(
     delta_matroid: FiniteDeltaMatroid, subset: tuple[int, ...]
-) -> DeltaMatroidTwistResult:
+) -> FiniteDeltaMatroid:
     """Return the delta-matroid twist by ``subset``.
 
     Feasible sets are transformed as ``F △ X``.  The source axiom is replayed
@@ -107,19 +106,16 @@ def twist(
     )
     # Twisting preserves symmetric differences, hence symmetric exchange and
     # its candidate-work bound. The output membership bound was admitted above.
-    return DeltaMatroidTwistResult._from_kernel(
-        delta_matroid,
-        subset,
-        FiniteDeltaMatroid._from_kernel(twisted_system),
-    )
+    return FiniteDeltaMatroid._from_kernel(twisted_system)
 
 
-def width(delta_matroid: FiniteDeltaMatroid) -> DeltaMatroidWidthResult:
+def width(delta_matroid: FiniteDeltaMatroid) -> int:
     """Return the delta-matroid width ``max |F| - min |F|``."""
 
-    _require_delta_matroid(delta_matroid)
-    sizes = tuple(len(row) for row in delta_matroid.feasible)
-    return DeltaMatroidWidthResult._from_kernel(
-        delta_matroid,
-        max(sizes) - min(sizes),
+    require_delta_matroid_envelope(
+        FiniteFeasibleSetSystem(
+            ground=delta_matroid.ground, feasible=delta_matroid.feasible
+        )
     )
+    sizes = tuple(len(row) for row in delta_matroid.feasible)
+    return max(sizes) - min(sizes)

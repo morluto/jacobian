@@ -11,7 +11,6 @@ from jacobian.math.combinatorics.matroids.delta._models import (
     DeltaMatroidFromFeasibleSetsRequest,
     DeltaMatroidRecognitionResult,
     DeltaMatroidTwistRequest,
-    DeltaMatroidTwistResult,
     DeltaMatroidWidthRequest,
     DeltaMatroidWidthResult,
 )
@@ -20,7 +19,10 @@ from jacobian.math.combinatorics.matroids.delta.operations import (
     twist,
     width,
 )
-from jacobian.math.combinatorics.matroids.delta.values import DeltaMatroidAdmissionError
+from jacobian.math.combinatorics.matroids.delta.values import (
+    DeltaMatroidAdmissionError,
+    FiniteDeltaMatroid,
+)
 
 
 def _from_feasible_sets(
@@ -38,7 +40,7 @@ def _from_feasible_sets(
         ) from exc
 
 
-def _twist(request: DeltaMatroidTwistRequest) -> DeltaMatroidTwistResult:
+def _twist(request: DeltaMatroidTwistRequest) -> FiniteDeltaMatroid:
     try:
         return twist(request.delta_matroid, request.subset)
     except DeltaMatroidAdmissionError as exc:
@@ -57,7 +59,9 @@ def _twist(request: DeltaMatroidTwistRequest) -> DeltaMatroidTwistResult:
 
 def _width(request: DeltaMatroidWidthRequest) -> DeltaMatroidWidthResult:
     try:
-        return width(request.delta_matroid)
+        return DeltaMatroidWidthResult._from_kernel(
+            request.delta_matroid, width(request.delta_matroid)
+        )
     except DeltaMatroidAdmissionError as exc:
         raise OperationResourceAdmissionError(
             location=("delta_matroid",),
@@ -107,7 +111,7 @@ TOOLS: MathTools = (
             "ground indices and the source must satisfy symmetric exchange."
         ),
         request_type=DeltaMatroidTwistRequest,
-        result_type=DeltaMatroidTwistResult,
+        result_type=FiniteDeltaMatroid,
         run=_twist,
         tags=("delta-matroid", "twist", "exact"),
         examples=(
@@ -123,33 +127,6 @@ TOOLS: MathTools = (
                         "feasible": [[], [0], [0, 1], [1]],
                     },
                     "subset": [0],
-                },
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="delta_matroid.width.compute",
-        title="Compute the width of a finite delta-matroid",
-        description=(
-            "Return max(|F|) - min(|F|) over the complete feasible family; the "
-            "source must satisfy symmetric exchange."
-        ),
-        request_type=DeltaMatroidWidthRequest,
-        result_type=DeltaMatroidWidthResult,
-        run=_width,
-        tags=("delta-matroid", "width", "exact"),
-        examples=(
-            OperationExample(
-                name="uniform_two_element_family",
-                description=(
-                    "Compute the width of the complete two-element feasible family; "
-                    "the source must satisfy symmetric exchange."
-                ),
-                input={
-                    "delta_matroid": {
-                        "ground": ["a", "b"],
-                        "feasible": [[], [0], [0, 1], [1]],
-                    }
                 },
             ),
         ),

@@ -30,7 +30,6 @@ def test_catalog_contains_only_audited_agent_outcome() -> None:
     assert {tool.operation_id for tool in TOOLS} == {
         "delta_matroid.from_feasible_sets.compute",
         "delta_matroid.twist.compute",
-        "delta_matroid.width.compute",
     }
 
 
@@ -39,7 +38,7 @@ def test_twist_transforms_feasible_sets_and_round_trips() -> None:
     request = DeltaMatroidTwistRequest(delta_matroid=source, subset=(0,))
     result = _twist(request)
 
-    assert result.twisted == FiniteDeltaMatroid(
+    assert result == FiniteDeltaMatroid(
         ground=("a", "b"), feasible=((), (0,), (0, 1))
     )
     assert (
@@ -317,11 +316,11 @@ def test_dense_twist_composes_with_width_and_inverse_twist() -> None:
     )
     subset = tuple(range(33))
     result = _twist(DeltaMatroidTwistRequest(delta_matroid=source, subset=subset))
-    restored = FiniteDeltaMatroid.model_validate_json(result.twisted.model_dump_json())
+    restored = FiniteDeltaMatroid.model_validate_json(result.model_dump_json())
     assert sum(map(len, restored.feasible)) == 1089
     assert _width(DeltaMatroidWidthRequest(delta_matroid=restored)).width == 1
     assert (
-        _twist(DeltaMatroidTwistRequest(delta_matroid=restored, subset=subset)).twisted
+        _twist(DeltaMatroidTwistRequest(delta_matroid=restored, subset=subset))
         == source
     )
 
@@ -343,7 +342,23 @@ def test_native_transforms_accept_canonical_mathematical_values() -> None:
     source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((), (0,), (1,)))
     result = twist(source, (0,))
     assert result == _twist(DeltaMatroidTwistRequest(delta_matroid=source, subset=(0,)))
-    assert width(result.twisted) == _width(
-        DeltaMatroidWidthRequest(delta_matroid=result.twisted)
+    assert width(result) == _width(
+        DeltaMatroidWidthRequest(delta_matroid=result)
+    ).width
+    assert twist(result, (0,)) == source
+
+
+def test_even_subset_width_uses_linear_admission() -> None:
+    from jacobian.math.combinatorics.matroids.delta import width
+
+    source = FiniteDeltaMatroid(
+        ground=tuple(f"e{index}" for index in range(8)),
+        feasible=tuple(
+            sorted(
+                tuple(bit for bit in range(8) if (index >> bit) & 1)
+                for index in range(256)
+                if index.bit_count() % 2 == 0
+            )
+        ),
     )
-    assert twist(result.twisted, (0,)).twisted == source
+    assert width(source) == 8

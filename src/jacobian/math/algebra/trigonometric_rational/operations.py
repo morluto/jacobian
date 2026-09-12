@@ -256,6 +256,22 @@ def _admit_gcd_support(support: Support) -> Support:
     return support
 
 
+def _bounding_box_term_count(polynomial: Polynomial) -> int:
+    """Bound monomials that exact division of this Laurent polynomial can retain."""
+
+    if not polynomial:
+        return 0
+    axis = len(next(iter(polynomial)))
+    total = 1
+    for index in range(axis):
+        exponents = [support[index] for support in polynomial]
+        width = max(exponents) - min(exponents) + 1
+        if width > MAX_TRIG_LAURENT_TERMS or total > MAX_TRIG_LAURENT_TERMS // width:
+            return MAX_TRIG_LAURENT_TERMS + 1
+        total *= width
+    return total
+
+
 def _one(axis: int) -> Polynomial:
     return {(0,) * axis: (Fraction(1), Fraction())}
 
@@ -449,22 +465,6 @@ def _polynomial_from_payload(payload: object) -> Polynomial:
     return result
 
 
-def _bounding_box_term_count(polynomial: Polynomial) -> int:
-    """Sound dense-support bound for a Laurent polynomial after cancellation."""
-
-    if not polynomial:
-        return 0
-    axis = len(next(iter(polynomial)))
-    bound = 1
-    for index in range(axis):
-        lo = min(support[index] for support in polynomial)
-        hi = max(support[index] for support in polynomial)
-        bound *= hi - lo + 1
-        if bound > MAX_TRIG_LAURENT_TERMS:
-            return bound
-    return bound
-
-
 def _reduce_common_laurent_factor(
     numerator: Polynomial, denominator: Polynomial
 ) -> RationalFunction:
@@ -503,14 +503,14 @@ def _reduce_common_laurent_factor(
         ): coefficient
         for support, coefficient in denominator.items()
     }
+    if shifted_numerator == shifted_denominator:
+        unit = {(0,) * axis: (Fraction(1), Fraction())}
+        return _canonicalize(unit, unit)
     if len(shifted_numerator) * len(shifted_denominator) > MAX_TRIG_LAURENT_TERMS:
         _refuse_growth()
     if (
-        max(
-            _bounding_box_term_count(shifted_numerator),
-            _bounding_box_term_count(shifted_denominator),
-        )
-        > MAX_TRIG_LAURENT_TERMS
+        _bounding_box_term_count(shifted_numerator) > MAX_TRIG_LAURENT_TERMS
+        or _bounding_box_term_count(shifted_denominator) > MAX_TRIG_LAURENT_TERMS
     ):
         _refuse_growth()
 

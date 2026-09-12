@@ -9,8 +9,6 @@ from __future__ import annotations
 
 from fractions import Fraction
 from math import factorial, prod
-from typing import cast
-
 from pydantic import ValidationError
 from pydantic_core import PydanticCustomError
 
@@ -394,18 +392,13 @@ def partition_dominance(
         right_total += right.parts[index] if index < len(right.parts) else 0
         left_ge = left_ge and left_total >= right_total
         right_ge = right_ge and left_total <= right_total
-    return cast(
-        DominanceRelation,
-        (
-            "EQUAL"
-            if left_ge and right_ge
-            else "LEFT_DOMINATES"
-            if left_ge
-            else "RIGHT_DOMINATES"
-            if right_ge
-            else "INCOMPARABLE"
-        ),
-    )
+    if left_ge and right_ge:
+        return "EQUAL"
+    if left_ge:
+        return "LEFT_DOMINATES"
+    if right_ge:
+        return "RIGHT_DOMINATES"
+    return "INCOMPARABLE"
 
 
 _MEMBERSHIP_SHAPE_ERRORS = frozenset(

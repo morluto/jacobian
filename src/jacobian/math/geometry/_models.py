@@ -29,6 +29,12 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 MAX_CONFIGURATION_POINTS = 32
 MAX_COORDINATE_DIGITS = 256
 MAX_SPANNED_CIRCLE_WORK = 2_000_000
+MAX_SPANNED_CIRCLES = (
+    MAX_CONFIGURATION_POINTS
+    * (MAX_CONFIGURATION_POINTS - 1)
+    * (MAX_CONFIGURATION_POINTS - 2)
+    // 6
+)
 # Joint work bound for the exhaustive general-position search.  The sweep
 # performs one exact 4x4 determinant per point quadruple, so the determinant
 # count grows as C(n,4) while every Fraction multiplication grows
@@ -1442,9 +1448,11 @@ class SpannedCircleProfileRequest(StrictModel):
             f"Bounded configuration of 3..{MAX_CONFIGURATION_POINTS} distinct "
             "rational planar points. Every non-collinear triple determines one "
             "circle; collinear triples are omitted. Each coordinate numerator "
-            f"and denominator is at most {MAX_COORDINATE_DIGITS} digits, and "
-            f"n*C(n,3)*max_digits^2 <= {MAX_SPANNED_CIRCLE_WORK} bounds the "
-            "complete circumcircle and incidence work."
+            f"and denominator is at most {MAX_COORDINATE_DIGITS} digits. "
+            f"Collinearity work C(n,3)*max_digits^2 and incidence work "
+            f"n*(non-collinear triples)*max_digits^2 together stay at most "
+            f"{MAX_SPANNED_CIRCLE_WORK}. The result has at most C(n,3) circle "
+            f"rows, globally at most {MAX_SPANNED_CIRCLES}."
         ),
     )
 
@@ -1488,7 +1496,7 @@ class SpannedCircleProfileResult(StrictModel):
         min_length=3, max_length=MAX_CONFIGURATION_POINTS
     )
     num_points: int = Field(ge=3, le=MAX_CONFIGURATION_POINTS)
-    circles: tuple[SpannedCircleEntry, ...]
+    circles: tuple[SpannedCircleEntry, ...] = Field(max_length=MAX_SPANNED_CIRCLES)
 
     @model_validator(mode="after")
     def require_canonical(self) -> Self:
@@ -1502,6 +1510,12 @@ class SpannedCircleProfileResult(StrictModel):
                 "num_points_len_points", "num_points must equal len(points)"
             )
         n = len(self.points)
+        triple_count = n * (n - 1) * (n - 2) // 6
+        if len(self.circles) > triple_count:
+            raise _validation_error(
+                "spanned_circle_row_count",
+                "circle rows cannot exceed the number of source triples",
+            )
         for circle in self.circles:
             if any(index < 0 or index >= n for index in circle.point_indices):
                 raise _validation_error(

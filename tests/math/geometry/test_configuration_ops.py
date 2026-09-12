@@ -5,6 +5,8 @@ from fractions import Fraction
 
 import pytest
 
+from pydantic import ValidationError
+
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -14,10 +16,13 @@ from jacobian.math.geometry._models import (
     CircumradiusProfileRequest,
     GeneralPositionRequest,
     GeometryCircleResult,
+    MAX_SPANNED_CIRCLES,
     PointQuadrupleRequest,
     PointTripleRequest,
     RationalPoint2D,
+    SpannedCircleEntry,
     SpannedCircleProfileRequest,
+    SpannedCircleProfileResult,
 )
 from jacobian.math.geometry._tools import (
     circumradius_profile,
@@ -285,10 +290,42 @@ class TestSpannedCircleProfile:
         ]
         assert second.circles[0].point_indices == (0, 1, 2, 3)
 
-    def test_work_ceiling_is_a_resource_admission(self) -> None:
+    def test_collinear_configuration_is_admitted_without_incidence_work(self) -> None:
         points = tuple(_point(str(index), str(1000 + index)) for index in range(32))
+        result = spanned_circle_profile(SpannedCircleProfileRequest(points=points))
+        assert result.circles == ()
+
+    def test_non_collinear_work_ceiling_is_a_resource_admission(self) -> None:
+        points = tuple(
+            _point(str(index), str(1000 + index * index)) for index in range(32)
+        )
         with pytest.raises(OperationResourceAdmissionError, match="2000000"):
             spanned_circle_profile(SpannedCircleProfileRequest(points=points))
+
+    def test_result_rejects_more_circles_than_source_triples(self) -> None:
+        points = (_point("0", "0"), _point("1", "0"), _point("0", "1"))
+        first = GeometryCircleResult(
+            center=_point("1/2", "1/2"),
+            radius_squared=CanonicalRational(num=1, den=2),
+        )
+        second = GeometryCircleResult(
+            center=_point("2", "2"),
+            radius_squared=CanonicalRational(num=8, den=1),
+        )
+        with pytest.raises(ValidationError, match="source triples"):
+            SpannedCircleProfileResult(
+                points=points,
+                num_points=3,
+                circles=(
+                    SpannedCircleEntry(circle=first, point_indices=(0, 1, 2)),
+                    SpannedCircleEntry(circle=second, point_indices=(0, 1, 2)),
+                ),
+            )
+
+    def test_request_publishes_circle_row_envelope(self) -> None:
+        schema = SpannedCircleProfileResult.model_json_schema()
+        assert schema["properties"]["circles"]["maxItems"] == MAX_SPANNED_CIRCLES
+        assert MAX_SPANNED_CIRCLES == 4960
 
 
 @pytest.mark.parametrize("coordinates", [((0, 0), (1, 0)), ((0, 0), (1, 0), (0, 0))])

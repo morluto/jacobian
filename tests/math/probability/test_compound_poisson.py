@@ -19,6 +19,7 @@ from jacobian.math.probability._compound_poisson import (
 from jacobian.math.probability._distribution import (
     FiniteDistributionAtom,
     FiniteRationalDistribution,
+    require_input_distribution,
 )
 
 
@@ -416,6 +417,44 @@ def test_normalized_masses_with_large_partial_denominators_are_admitted() -> Non
             probability=_q(Fraction(prime - 1, 6 * prime)),
         )
         for index, prime in enumerate(primes)
+    )
+    jumps = FiniteRationalDistribution(atoms=atoms)
+    result = compound_poisson_cumulant_prefix(_q(Fraction(1)), jumps, 0)
+    assert result.cumulants == ()
+
+
+def test_power_of_two_denominators_are_stripped_without_linear_division() -> None:
+    power = 2**1680
+    jumps = FiniteRationalDistribution(
+        atoms=(
+            FiniteDistributionAtom(
+                value=_q(Fraction(0)), probability=_q(Fraction(1, power))
+            ),
+            FiniteDistributionAtom(
+                value=_q(Fraction(1)),
+                probability=_q(Fraction(power - 1, power)),
+            ),
+        )
+    )
+    values = require_input_distribution(
+        jumps.atoms, require_canonical=True, max_digits=None
+    )
+    assert len(values) == 2
+
+
+def test_nested_power_denominators_are_admitted_by_lcm_budget() -> None:
+    atoms = (
+        *(
+            FiniteDistributionAtom(
+                value=_q(Fraction(index)),
+                probability=_q(Fraction(4, 5 ** (index + 1))),
+            )
+            for index in range(60)
+        ),
+        FiniteDistributionAtom(
+            value=_q(Fraction(60)),
+            probability=_q(Fraction(1, 5**60)),
+        ),
     )
     jumps = FiniteRationalDistribution(atoms=atoms)
     result = compound_poisson_cumulant_prefix(_q(Fraction(1)), jumps, 0)

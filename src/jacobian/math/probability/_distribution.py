@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from fractions import Fraction
 from itertools import pairwise
+from math import gcd
 from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._execution import request_checkpoint
 from jacobian._models import StrictModel
 from jacobian.math.probability._models import (
     MAX_INPUT_RATIONAL_DIGITS,
@@ -32,13 +34,28 @@ def _decimal_digits(value: int) -> int:
     return magnitude.bit_length() * 30_103 // 100_000 + 1
 
 
+def _remove_prime_power(value: int, prime: int) -> int:
+    if value % prime:
+        return value
+    powers = [prime]
+    square = prime * prime
+    while value % square == 0:
+        powers.append(square)
+        if square > value // square:
+            break
+        square *= square
+    for power in reversed(powers):
+        if value % power == 0:
+            value //= power
+    return value
+
+
 def _two_three_kernel(value: int) -> int:
     kernel = abs(value) or 1
-    while kernel % 2 == 0:
-        kernel //= 2
-    while kernel % 3 == 0:
-        kernel //= 3
-    return kernel
+    trailing_twos = (kernel & -kernel).bit_length() - 1
+    if trailing_twos > 0:
+        kernel >>= trailing_twos
+    return _remove_prime_power(kernel, 3)
 
 
 def _bounded_fraction_sum(
@@ -55,23 +72,27 @@ def _bounded_fraction_sum(
     """
 
     buckets: dict[int, Fraction] = {}
-    for value in values:
+    for index, value in enumerate(values):
+        if index % 128 == 0:
+            request_checkpoint("during finite-distribution normalization")
         kernel = _two_three_kernel(value.denominator)
         buckets[kernel] = buckets.get(kernel, Fraction()) + value
-    seen_denominators: set[int] = set()
-    denominator_digits = 0
-    reduced: list[Fraction] = []
-    for term in buckets.values():
-        reduced.append(term)
-        if term.denominator in seen_denominators:
-            continue
-        seen_denominators.add(term.denominator)
-        denominator_digits += _decimal_digits(term.denominator)
-        if denominator_digits > MAX_FINITE_DISTRIBUTION_SUM_DIGITS:
+    reduced = list(buckets.values())
+    running = 1
+    running_digits = 1
+    for term in reduced:
+        denominator = term.denominator
+        shared = gcd(running, denominator)
+        next_digits = (
+            running_digits + _decimal_digits(denominator) - _decimal_digits(shared)
+        )
+        if next_digits > MAX_FINITE_DISTRIBUTION_SUM_DIGITS:
             raise _validation_error(
                 f"{label} normalization exceeds the "
                 f"{MAX_FINITE_DISTRIBUTION_SUM_DIGITS}-digit intermediate bound"
             )
+        running = running // shared * denominator
+        running_digits = _decimal_digits(running)
     total = Fraction()
     limit = 10**MAX_FINITE_DISTRIBUTION_SUM_DIGITS
     for term in reduced:

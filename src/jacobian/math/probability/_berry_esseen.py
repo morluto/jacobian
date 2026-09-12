@@ -20,6 +20,7 @@ from jacobian._exact import (
     DecimalIntegerEncoding,
     require_bounded_rational,
 )
+from jacobian._execution import request_checkpoint
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -304,6 +305,12 @@ def _sqrt_interval(value: Fraction) -> tuple[Fraction, Fraction]:
 def berry_esseen_bound(request: BerryEsseenRequest) -> BerryEsseenResult:
     """Compute the exact i.i.d. Berry--Esseen upper bound."""
 
+    if type(request.sample_count) is not int:
+        raise OperationDomainValidationError(
+            location=("sample_count",),
+            code="probability.berry_esseen.sample_count_type",
+            message="Berry--Esseen sample_count must be an integer",
+        )
     if request.sample_count < 1:
         raise OperationDomainValidationError(
             location=("sample_count",),
@@ -321,6 +328,26 @@ def berry_esseen_bound(request: BerryEsseenRequest) -> BerryEsseenResult:
         )
 
     location = ("distribution",)
+    try:
+        for index, atom in enumerate(request.distribution.atoms):
+            if index % 256 == 0:
+                request_checkpoint("during Berry--Esseen input-height admission")
+            require_bounded_rational(
+                atom.value,
+                max_digits=MAX_INPUT_RATIONAL_DIGITS,
+                label="finite-distribution input atom",
+            )
+            require_bounded_rational(
+                atom.probability,
+                max_digits=MAX_INPUT_RATIONAL_DIGITS,
+                label="finite-distribution input probability",
+            )
+    except ValueError as exc:
+        raise OperationResourceAdmissionError(
+            location=location,
+            code="probability.berry_esseen.input_height",
+            message=str(exc),
+        ) from exc
     try:
         require_input_distribution(
             request.distribution.atoms,
@@ -340,27 +367,11 @@ def berry_esseen_bound(request: BerryEsseenRequest) -> BerryEsseenResult:
             code="probability.berry_esseen.input_distribution",
             message=message,
         ) from exc
-    try:
-        for atom in request.distribution.atoms:
-            require_bounded_rational(
-                atom.value,
-                max_digits=MAX_INPUT_RATIONAL_DIGITS,
-                label="finite-distribution input atom",
-            )
-            require_bounded_rational(
-                atom.probability,
-                max_digits=MAX_INPUT_RATIONAL_DIGITS,
-                label="finite-distribution input probability",
-            )
-    except ValueError as exc:
-        raise OperationResourceAdmissionError(
-            location=location,
-            code="probability.berry_esseen.input_height",
-            message=str(exc),
-        ) from exc
 
     mean = Fraction()
-    for atom in request.distribution.atoms:
+    for index, atom in enumerate(request.distribution.atoms):
+        if index % 256 == 0:
+            request_checkpoint("during Berry--Esseen mean scan")
         mean = _add(
             mean,
             _mul(
@@ -375,7 +386,9 @@ def berry_esseen_bound(request: BerryEsseenRequest) -> BerryEsseenResult:
 
     variance = Fraction()
     third = Fraction()
-    for atom in request.distribution.atoms:
+    for index, atom in enumerate(request.distribution.atoms):
+        if index % 256 == 0:
+            request_checkpoint("during Berry--Esseen moment scan")
         centered = _admission_fraction(
             atom.value.as_fraction() - mean,
             location=location,

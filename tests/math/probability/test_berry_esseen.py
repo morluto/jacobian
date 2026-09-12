@@ -1,6 +1,7 @@
 """Behavioral tests for the pinned finite i.i.d. Berry--Esseen operation."""
 
 import json
+import time
 from collections.abc import Callable
 from fractions import Fraction
 from importlib import import_module
@@ -9,10 +10,16 @@ from typing import cast
 
 import pytest
 
+from jacobian._execution import (
+    OperationExecutionTimeoutError,
+    bind_request_deadline,
+    request_execution,
+)
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.probability import _berry_esseen as berry_module
 from jacobian.math.probability._berry_esseen import (
     BERRY_ESSEEN_CONSTANT,
     BERRY_ESSEEN_THEOREM_VARIANT,
@@ -284,6 +291,41 @@ def test_input_rational_height_boundary_is_enforced() -> None:
         berry_esseen_bound(
             _request(_distribution((0, Fraction(1, 2)), (10**128, Fraction(1, 2))))
         )
+
+
+def test_input_height_is_checked_before_normalization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("normalization must not precede input-height admission")
+
+    monkeypatch.setattr(berry_module, "require_input_distribution", fail)
+    with pytest.raises(OperationResourceAdmissionError, match="128-digit bound"):
+        berry_esseen_bound(
+            _request(_distribution((0, Fraction(1, 2)), (10**128, Fraction(1, 2))))
+        )
+
+
+def test_native_sample_count_rejects_non_integers() -> None:
+    request = _request(_distribution((0, Fraction(1, 2)), (1, Fraction(1, 2))))
+    for sample_count in ("4", True):
+        with pytest.raises(
+            OperationDomainValidationError, match="sample_count must be an integer"
+        ):
+            berry_esseen_bound(
+                BerryEsseenRequest.model_construct(
+                    distribution=request.distribution,
+                    sample_count=sample_count,  # type: ignore[arg-type]
+                )
+            )
+
+
+def test_berry_esseen_moment_scan_honors_an_expired_deadline() -> None:
+    request = _request(_distribution((0, Fraction(1, 2)), (1, Fraction(1, 2))))
+    with request_execution(time.monotonic()):
+        bind_request_deadline(time.monotonic() - 1)
+        with pytest.raises(OperationExecutionTimeoutError, match="deadline expired"):
+            berry_esseen_bound(request)
 
 
 def test_serialized_result_preserves_source_and_interval_invariants() -> None:

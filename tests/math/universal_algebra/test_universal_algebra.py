@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import pytest
 from pydantic import ValidationError
 
@@ -12,8 +14,10 @@ from jacobian.math.universal_algebra import (
     FiniteAlgebraCarrierMap,
     FiniteAlgebraHomomorphism,
     FlatTerm,
+    MagmaEquation,
     OperationSymbol,
     VariableTerm,
+    implication_countermodel_check,
 )
 from jacobian.math.universal_algebra._models import (
     CongruenceRequest,
@@ -21,7 +25,7 @@ from jacobian.math.universal_algebra._models import (
     EvaluateRequest,
     HomomorphismProfileRequest,
     ImplicationCountermodelCheckRequest,
-    MagmaEquation,
+    ImplicationCountermodelCheckResult,
     QuotientRequest,
     SubalgebraRequest,
 )
@@ -344,6 +348,69 @@ class TestMagmaImplicationCountermodel:
                     target=MagmaEquation(left=term, right=term),
                 )
             )
+
+    def test_duplicate_premises_are_rejected_before_evaluation(self) -> None:
+        magma = _cyclic_addition_algebra(2)
+        equation = MagmaEquation(left=_variable_term(0), right=_variable_term(0))
+        with pytest.raises(OperationDomainValidationError, match="unique"):
+            compute_implication_countermodel_check(
+                ImplicationCountermodelCheckRequest(
+                    algebra=magma,
+                    premises=(equation, equation),
+                    target=equation,
+                )
+            )
+
+    def test_native_implication_check_rejects_malformed_arguments_typed(self) -> None:
+        magma = _cyclic_addition_algebra(2)
+        equation = MagmaEquation(left=_variable_term(0), right=_variable_term(0))
+        with pytest.raises(OperationDomainValidationError, match="FiniteAlgebra"):
+            implication_countermodel_check(cast(FiniteAlgebra, None), (), equation)
+        with pytest.raises(OperationDomainValidationError, match="tuple"):
+            implication_countermodel_check(
+                magma, cast(tuple[MagmaEquation, ...], [equation]), equation
+            )
+        with pytest.raises(OperationDomainValidationError, match="MagmaEquation"):
+            implication_countermodel_check(magma, (), cast(MagmaEquation, None))
+
+    def test_result_rejects_terms_outside_retained_signature(self) -> None:
+        magma = _cyclic_addition_algebra(2)
+        result = compute_implication_countermodel_check(
+            ImplicationCountermodelCheckRequest(
+                algebra=magma,
+                premises=(),
+                target=MagmaEquation(left=_variable_term(0), right=_variable_term(1)),
+            )
+        )
+        payload = result.model_dump(mode="json")
+        payload["target"]["left"] = {
+            "nodes": [
+                {"kind": "variable", "variable_id": 0},
+                {"kind": "variable", "variable_id": 1},
+                {
+                    "kind": "application",
+                    "operation": 1,
+                    "children": [0, 1],
+                },
+            ],
+            "root": 2,
+        }
+        with pytest.raises(ValidationError, match="retained magma"):
+            ImplicationCountermodelCheckResult.model_validate(payload)
+
+    def test_result_rejects_counterassignment_off_dense_axis(self) -> None:
+        magma = _cyclic_addition_algebra(2)
+        result = compute_implication_countermodel_check(
+            ImplicationCountermodelCheckRequest(
+                algebra=magma,
+                premises=(),
+                target=MagmaEquation(left=_variable_term(0), right=_variable_term(1)),
+            )
+        )
+        payload = result.model_dump(mode="json")
+        payload["target"]["first_counterassignment"]["assignment"] = [0]
+        with pytest.raises(ValidationError, match="dense variable axis"):
+            ImplicationCountermodelCheckResult.model_validate(payload)
 
 
 # ---------------------------------------------------------------------------

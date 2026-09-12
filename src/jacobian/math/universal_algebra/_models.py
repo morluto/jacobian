@@ -16,6 +16,9 @@ from jacobian.math.universal_algebra.values import (
     FiniteAlgebraCarrierMap,
     FiniteAlgebraHomomorphism,
     FlatTerm,
+    UniversalAlgebraAdmissionError,
+    VariableTerm,
+    require_term_for_algebra,
 )
 
 MAX_ENUMERATION_WORK = 1_000_000
@@ -163,6 +166,61 @@ class ImplicationCountermodelCheckResult(StrictModel):
                 "countermodel_source_mismatch",
                 "all equation profiles must retain the checked magma",
             )
+        for profile_index, profile in enumerate((*self.premises, self.target)):
+            for term_name, term in (("left", profile.left), ("right", profile.right)):
+                try:
+                    require_term_for_algebra(term, self.algebra)
+                except UniversalAlgebraAdmissionError as exc:
+                    raise _validation_error(
+                        "countermodel_result_term_signature",
+                        f"profile {profile_index} {term_name} term is not bound to the retained magma: {exc}",
+                    ) from exc
+            variable_ids = tuple(
+                sorted(
+                    {
+                        node.variable_id
+                        for term in (profile.left, profile.right)
+                        for node in term.nodes
+                        if isinstance(node, VariableTerm)
+                    }
+                )
+            )
+            if variable_ids != tuple(range(len(variable_ids))):
+                raise _validation_error(
+                    "countermodel_result_sparse_variable_axis",
+                    f"profile {profile_index} terms must use the dense variable axis 0..variable_count-1",
+                )
+            if profile.variable_count != len(variable_ids):
+                raise _validation_error(
+                    "countermodel_result_variable_count",
+                    f"profile {profile_index} variable_count must match its dense variable axis",
+                )
+            counterexample = profile.first_counterassignment
+            if counterexample is not None:
+                if len(counterexample.assignment) != profile.variable_count:
+                    raise _validation_error(
+                        "countermodel_result_assignment_axis",
+                        f"profile {profile_index} counterassignment must cover its dense variable axis",
+                    )
+                if any(
+                    value < 0 or value >= len(self.algebra.carrier)
+                    for value in counterexample.assignment
+                ):
+                    raise _validation_error(
+                        "countermodel_result_assignment_range",
+                        f"profile {profile_index} counterassignment value is outside the retained magma carrier",
+                    )
+                if any(
+                    value < 0 or value >= len(self.algebra.carrier)
+                    for value in (
+                        counterexample.left_value,
+                        counterexample.right_value,
+                    )
+                ):
+                    raise _validation_error(
+                        "countermodel_result_value_range",
+                        f"profile {profile_index} counterexample value is outside the retained magma carrier",
+                    )
         return self
 
 

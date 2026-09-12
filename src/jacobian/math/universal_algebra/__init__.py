@@ -1,5 +1,6 @@
 """Supported native universal-algebra API."""
 
+from jacobian.math.universal_algebra._models import MagmaEquation
 from jacobian.math.universal_algebra.operations import (
     congruence_check,
     equation_profile,
@@ -30,6 +31,7 @@ __all__ = [
     "FiniteAlgebraCarrierMap",
     "FiniteAlgebraHomomorphism",
     "FlatTerm",
+    "MagmaEquation",
     "OperationSymbol",
     "Term",
     "VariableTerm",

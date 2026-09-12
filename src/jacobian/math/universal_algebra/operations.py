@@ -108,6 +108,61 @@ def _admit_equation_profile(
         )
 
 
+def _require_implication_input_types(
+    algebra: FiniteAlgebra,
+    premises: tuple[MagmaEquation, ...],
+    target: MagmaEquation,
+) -> None:
+    if not isinstance(algebra, FiniteAlgebra):
+        _reject(
+            location=("algebra",),
+            code="algebra_type",
+            message="algebra must be a FiniteAlgebra value",
+        )
+    if not isinstance(premises, tuple):
+        _reject(
+            location=("premises",),
+            code="premises_type",
+            message="premises must be a tuple of MagmaEquation values",
+        )
+    if not isinstance(target, MagmaEquation):
+        _reject(
+            location=("target",),
+            code="target_type",
+            message="target must be a MagmaEquation value",
+        )
+    for premise_index, premise in enumerate(premises):
+        if not isinstance(premise, MagmaEquation):
+            _reject(
+                location=("premises", premise_index),
+                code="premise_type",
+                message="each premise must be a MagmaEquation value",
+            )
+
+    for equation_name, equation in (
+        ("target", target),
+        *(("premises", premise) for premise in premises),
+    ):
+        left = getattr(equation, "left", None)
+        right = getattr(equation, "right", None)
+        if not isinstance(left, FlatTerm) or not isinstance(right, FlatTerm):
+            _reject(
+                location=(equation_name,),
+                code="equation_terms_type",
+                message="equation terms must be FlatTerm values",
+            )
+
+
+def _reject_duplicate_premises(premises: tuple[MagmaEquation, ...]) -> None:
+    for premise_index, premise in enumerate(premises):
+        if premise in premises[:premise_index]:
+            _reject(
+                location=("premises", premise_index),
+                code="duplicate_premise",
+                message="premises must be unique in canonical order",
+            )
+
+
 def _admit_implication_countermodel(
     algebra: FiniteAlgebra,
     premises: tuple[MagmaEquation, ...],
@@ -115,12 +170,14 @@ def _admit_implication_countermodel(
 ) -> tuple[int, ...]:
     """Admit one complete finite-magma implication check before evaluation."""
 
+    _require_implication_input_types(algebra, premises, target)
     if len(premises) > 16:
         _reject(
             location=("premises",),
             code="premise_count",
             message="at most sixteen premises are admitted",
         )
+    _reject_duplicate_premises(premises)
     if len(algebra.operations) != 1 or algebra.operations[0].arity != 2:
         _reject(
             location=("algebra",),

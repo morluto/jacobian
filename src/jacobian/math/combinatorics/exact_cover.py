@@ -749,13 +749,25 @@ def minimum_generalized_exact_cover(  # noqa: C901
     )
     stack: list[tuple[int, int, tuple[int, ...]]] = [(all_primary, all_rows, ())]
     incumbent: tuple[int, ...] | None = None
+    incumbent_ids: tuple[str, ...] | None = None
     visited = 0
     while stack and visited < search_node_limit:
         uncovered, available, selected = stack.pop()
         visited += 1
         if uncovered == 0:
-            if incumbent is None or len(selected) < len(incumbent):
+            selected_ids = tuple(
+                sorted(instance.rows[index].row_id for index in selected)
+            )
+            if (
+                incumbent is None
+                or len(selected) < len(incumbent)
+                or (
+                    len(selected) == len(incumbent)
+                    and (incumbent_ids is None or selected_ids < incumbent_ids)
+                )
+            ):
                 incumbent = selected
+                incumbent_ids = selected_ids
             continue
         if incumbent is not None and len(selected) >= len(incumbent) - 1:
             continue
@@ -800,7 +812,8 @@ def minimum_generalized_exact_cover(  # noqa: C901
             lower_bound=root_lower_bound,
             searched_node_count=visited,
         )
-    selected_ids = tuple(sorted(instance.rows[index].row_id for index in incumbent))
+    assert incumbent_ids is not None
+    selected_ids = incumbent_ids
     upper_bound = len(selected_ids)
     return MinimumGeneralizedExactCoverResult(
         instance=instance,

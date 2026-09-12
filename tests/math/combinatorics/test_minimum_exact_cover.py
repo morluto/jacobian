@@ -35,6 +35,21 @@ def test_minimum_cover_beats_first_larger_cover() -> None:
     assert result.lower_bound == result.upper_bound == 1
 
 
+def test_tied_minima_use_lexicographically_canonical_row_ids() -> None:
+    result = minimum_generalized_exact_cover(
+        _instance(
+            (
+                ("a-p", ("p",)),
+                ("b-q", ("q",)),
+                ("c-p", ("p",)),
+                ("d-q", ("q",)),
+            )
+        )
+    )
+    assert result.status == "EXACT"
+    assert result.selected_row_ids == ("a-p", "b-q")
+
+
 def test_infeasibility_requires_exhaustion() -> None:
     instance = GeneralizedExactCoverInstance(
         primary_items=("p",), secondary_items=(), rows=()

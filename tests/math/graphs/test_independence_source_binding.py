@@ -256,6 +256,14 @@ class _StubObjective:
         return _StubBound(2)
 
 
+class _StubClosedObjective(_StubObjective):
+    def lower(self) -> _StubBound:
+        return _StubBound(1)
+
+    def upper(self) -> _StubBound:
+        return _StubBound(1)
+
+
 class _StubOptimizer:
     def set(self, *args: object, **kwargs: object) -> None:
         return None
@@ -310,6 +318,38 @@ class _StubZ3:
         return isinstance(value, _StubBound)
 
     Optimize = _StubOptimizer
+
+
+class _StubCardinalityAndFirstTieClosedOptimizer(_StubOptimizer):
+    """Cardinality and one tie-break close before a later tie-break stays open."""
+
+    def __init__(self) -> None:
+        self._maximize_calls = 0
+
+    def maximize(self, expression: object) -> _StubObjective:
+        self._maximize_calls += 1
+        if self._maximize_calls <= 2:
+            return _StubClosedObjective()
+        return _StubObjective()
+
+
+class _StubCardinalityAndFirstTieClosedZ3(_StubZ3):
+    Optimize = _StubCardinalityAndFirstTieClosedOptimizer
+
+
+def test_exact_requires_all_tie_break_objective_bounds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A closed cardinality objective cannot certify an unresolved tie-break."""
+
+    monkeypatch.setitem(sys.modules, "z3", _StubCardinalityAndFirstTieClosedZ3())
+    result = z3_backend._solve_independence_number_values_kernel(
+        _path_graph(), IndependenceNumberBudget()
+    )
+    assert result.status == "UNKNOWN"
+    assert result.optimum_value is None
+    assert result.upper_bound == result.order == 3
+    assert IndependenceNumberResult.model_validate(result.model_dump()) == result
 
 
 def test_sat_with_open_objective_bounds_reports_order_as_upper_bound(

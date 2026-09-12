@@ -102,6 +102,11 @@ class MaximumInducedMatchingResult(StrictModel):
             for edge in source_edges
             if edge[0] in selected_vertices and edge[1] in selected_vertices
         )
+        if set(expected_endpoint_edges) != set(selected_edges):
+            raise PydanticCustomError(
+                "graph.induced_matching.selected_edges_must_induce_no_cross_edges",
+                "selected source edges must be the complete source subgraph on their endpoints",
+            )
         expected_endpoint_vertices = tuple(sorted(selected_vertices))
         if (
             self.induced_endpoint_graph.vertices != expected_endpoint_vertices
@@ -127,5 +132,10 @@ class MaximumInducedMatchingResult(StrictModel):
             raise PydanticCustomError(
                 "graph.induced_matching.exact_bounds_must_coincide",
                 "an exact induced matching result must have coincident bounds",
+            )
+        if self.status == "UNKNOWN" and self.upper_bound != len(source_edges):
+            raise PydanticCustomError(
+                "graph.induced_matching.unknown_upper_bound_must_be_source_edge_count",
+                "an incomplete induced matching result must report the source edge count as its safe upper bound",
             )
         return self

@@ -68,6 +68,20 @@ def _integer_bound(value: Any, fallback: int) -> int:
     return value.as_long() if z3.is_int_value(value) else fallback
 
 
+def _closed_objective_value(objective: Any) -> int | None:
+    """Return an objective value only when both Optimize bounds are closed."""
+
+    import z3
+
+    lower = objective.lower()
+    upper = objective.upper()
+    if not (z3.is_int_value(lower) and z3.is_int_value(upper)):
+        return None
+    lower_value = lower.as_long()
+    upper_value = upper.as_long()
+    return lower_value if lower_value == upper_value else None
+
+
 def _solve_independence_number_values_kernel(
     graph: SimpleUndirectedGraph,
     resource_budget: IndependenceNumberBudget,
@@ -124,9 +138,11 @@ def _solve_independence_number_values_kernel(
     )
     # With a fixed cardinality, maximizing each membership bit in canonical
     # vertex order yields the lexicographically smallest sorted witness.
-    # Keep cardinality as the authoritative objective handle below.
-    for vertex in vertices:
-        optimizer.maximize(z3.If(selected[vertex], 1, 0))
+    # Keep cardinality as the authoritative objective handle below, but retain
+    # every membership handle so an exact result also proves its tie-break.
+    tie_break_objectives = [
+        optimizer.maximize(z3.If(selected[vertex], 1, 0)) for vertex in vertices
+    ]
 
     status = optimizer.check()
     if status == z3.sat:
@@ -144,7 +160,14 @@ def _solve_independence_number_values_kernel(
         upper = objective.upper()
         lower_bound = max(len(incumbent), _integer_bound(lower, len(incumbent)))
         upper_bound = max(lower_bound, min(order, _integer_bound(upper, order)))
-        if lower_bound == upper_bound == len(incumbent):
+        if (
+            lower_bound == upper_bound == len(incumbent)
+            and _closed_objective_value(objective) == len(incumbent)
+            and all(
+                _closed_objective_value(tie_break) is not None
+                for tie_break in tie_break_objectives
+            )
+        ):
             return IndependenceNumberResult._from_kernel(
                 graph=graph,
                 status="EXACT",

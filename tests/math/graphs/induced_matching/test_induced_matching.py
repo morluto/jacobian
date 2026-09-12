@@ -189,6 +189,44 @@ def test_result_rejects_incomplete_endpoint_subgraph() -> None:
         MaximumInducedMatchingResult.model_validate(payload)
 
 
+def test_result_rejects_cross_edges_between_selected_edges() -> None:
+    graph = SimpleUndirectedGraph(
+        vertices=("a", "b", "c", "d"),
+        edges=(("a", "b"), ("a", "c"), ("c", "d")),
+    )
+    payload = maximum_induced_matching(graph).model_dump(mode="python")
+    payload["status"] = "EXACT"
+    payload["selected_edge_ids"] = ["e0", "e2"]
+    payload["cardinality"] = 2
+    payload["lower_bound"] = 2
+    payload["upper_bound"] = 2
+    payload["induced_endpoint_graph"] = {
+        "vertices": ["a", "b", "c", "d"],
+        "edges": [["a", "b"], ["a", "c"], ["c", "d"]],
+    }
+    with pytest.raises(ValidationError):
+        MaximumInducedMatchingResult.model_validate(payload)
+
+
+def test_unknown_result_must_use_source_edge_count_as_upper_bound() -> None:
+    graph = SimpleUndirectedGraph(
+        vertices=("a", "b", "c", "d"),
+        edges=(("a", "b"), ("c", "d")),
+    )
+    payload = maximum_induced_matching(graph).model_dump(mode="python")
+    payload["status"] = "UNKNOWN"
+    payload["selected_edge_ids"] = ["e0"]
+    payload["cardinality"] = 1
+    payload["lower_bound"] = 1
+    payload["upper_bound"] = 1
+    payload["induced_endpoint_graph"] = {
+        "vertices": ["a", "b"],
+        "edges": [["a", "b"]],
+    }
+    with pytest.raises(ValidationError):
+        MaximumInducedMatchingResult.model_validate(payload)
+
+
 def test_double_digit_conflict_ids_are_canonically_oriented() -> None:
     vertices = tuple(f"v{i}" for i in range(12))
     graph = SimpleUndirectedGraph(

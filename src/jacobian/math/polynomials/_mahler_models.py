@@ -21,6 +21,12 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalRational, ExactInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
+from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.math.number_theory._certification_models import (
+    MAX_CERTIFIED_FACTORIZATION_DIGITS,
+    CertifiedFactorizationRequest,
+)
+from jacobian.math.number_theory._factorization_kernels import factorize_certified
 
 MAX_MAHLER_DEGREE = 64
 MAX_MAHLER_COEFFICIENT_DIGITS = 256
@@ -40,7 +46,7 @@ class QuadraticSurd(StrictModel):
 
     rational_part: CanonicalRational
     radical_coefficient: CanonicalRational
-    radicand: StrictInt = Field(ge=0)
+    radicand: ExactInteger = Field(ge=0)
 
     @model_validator(mode="after")
     def require_canonical_surd(self) -> Self:
@@ -90,16 +96,32 @@ class QuadraticSurd(StrictModel):
 
         if radicand == 0 or radical == 0:
             return cls.rational(rational)
+        root = isqrt(radicand)
+        if root * root == radicand:
+            return cls.rational(rational + radical * root)
+        if radicand >= 10**MAX_CERTIFIED_FACTORIZATION_DIGITS:
+            raise OperationResourceAdmissionError(
+                location=("radicand",),
+                code="polynomial.mahler.squarefree_factorization_bound",
+                message="nonsquare radicand exceeds the maintained 30-digit factorization envelope",
+            )
         square = 1
         remaining = radicand
-        factor = 2
-        while factor * factor <= remaining:
-            while remaining % (factor * factor) == 0:
-                remaining //= factor * factor
-                square *= factor
-            factor += 1
-        if remaining == 1:
-            return cls.rational(rational)
+        if radicand <= 1_000_000:
+            factor = 2
+            while factor * factor <= remaining:
+                while remaining % (factor * factor) == 0:
+                    remaining //= factor * factor
+                    square *= factor
+                factor += 1
+        else:
+            decomposition = factorize_certified(
+                CertifiedFactorizationRequest(value=radicand)
+            )
+            remaining = 1
+            for factor_row in decomposition.factors:
+                square *= factor_row.prime ** (factor_row.exponent // 2)
+                remaining *= factor_row.prime ** (factor_row.exponent % 2)
         return cls(
             rational_part=CanonicalRational(
                 num=rational.numerator, den=rational.denominator
@@ -341,6 +363,14 @@ class RealQuadraticRootProfileRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_nonzero_leading(self) -> Self:
+        if any(
+            abs(coefficient) >= 10**MAX_MAHLER_COEFFICIENT_DIGITS
+            for coefficient in self.coefficients_descending
+        ):
+            raise _validation_error(
+                "polynomial.mahler_coefficient_bound",
+                "coefficients exceed the 256-digit bound",
+            )
         if self.coefficients_descending[0] == 0:
             raise _validation_error(
                 "polynomial.mahler_quadratic_leading",
@@ -356,6 +386,7 @@ class RealQuadraticRootProfileResult(StrictModel):
     sum_of_roots: tuple[ExactInteger, ExactInteger]
     product_of_roots: tuple[ExactInteger, ExactInteger]
     roots: tuple[QuadraticSurd, ...]
+    complex_pair_squared_modulus: CanonicalRational | None = None
     root_locations: tuple[RootLocation, ...]
 
     @model_validator(mode="after")
@@ -368,10 +399,26 @@ class RealQuadraticRootProfileResult(StrictModel):
                 "polynomial.mahler_quadratic_location_count",
                 "the location ledger covers each distinct root of the quadratic",
             )
-        if len(self.roots) != len(self.root_locations):
+        expected_roots = 0 if self.root_kind == "COMPLEX_CONJUGATE" else expected
+        if self.root_kind == "COMPLEX_CONJUGATE":
+            a, _, c = self.coefficients_descending
+            if (
+                self.complex_pair_squared_modulus is None
+                or self.complex_pair_squared_modulus.as_fraction() != Fraction(c, a)
+            ):
+                raise _validation_error(
+                    "polynomial.mahler_quadratic_modulus",
+                    "complex pair must retain its exact squared modulus",
+                )
+        elif self.complex_pair_squared_modulus is not None:
+            raise _validation_error(
+                "polynomial.mahler_quadratic_modulus",
+                "real roots must not carry a complex-pair modulus",
+            )
+        if len(self.roots) != expected_roots:
             raise _validation_error(
                 "polynomial.mahler_quadratic_root_count",
-                "the root and location ledgers must have equal length",
+                "the root ledger must contain exactly the distinct real roots",
             )
         return self
 
@@ -385,6 +432,14 @@ class MahlerMeasureRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_nonzero_leading(self) -> Self:
+        if any(
+            abs(coefficient) >= 10**MAX_MAHLER_COEFFICIENT_DIGITS
+            for coefficient in self.coefficients_descending
+        ):
+            raise _validation_error(
+                "polynomial.mahler_coefficient_bound",
+                "coefficients exceed the 256-digit bound",
+            )
         if self.coefficients_descending[0] == 0:
             raise _validation_error(
                 "polynomial.mahler_leading_nonzero",

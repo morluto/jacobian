@@ -62,9 +62,10 @@ INTEGER_POLYNOMIAL_PROFILE_OPERATIONS = (
         description=(
             "For one quadratic a x^2 + b x + c with nonzero leading coefficient, "
             "return the exact discriminant, root kind, sums and products, the "
-            "exact roots as quadratic surds, and the exact unit-disk location of "
-            "every root. Locations are decided by exact comparison, never by "
-            "numerical tolerance."
+            "distinct real roots as quadratic surds or the squared modulus of a "
+            "complex conjugate pair, and exact unit-disk locations. Coefficients "
+            "have at most 256 digits; nonsquare discriminants requiring "
+            "squarefree normalization admit at most 30 digits."
         ),
         request_type=RealQuadraticRootProfileRequest,
         result_type=RealQuadraticRootProfileResult,
@@ -86,7 +87,9 @@ INTEGER_POLYNOMIAL_PROFILE_OPERATIONS = (
             "one canonical integer polynomial of degree at most two, together "
             "with the complete root-location ledger. The leading coefficient is "
             "never dropped, and an unresolved root location is a typed refusal "
-            "rather than a silently ignored root."
+            "rather than a silently ignored root. Coefficients have at most 256 "
+            "digits; nonsquare discriminants requiring squarefree normalization "
+            "admit at most 30 digits."
         ),
         request_type=MahlerMeasureRequest,
         result_type=MahlerMeasureResult,

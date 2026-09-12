@@ -10,7 +10,11 @@ from __future__ import annotations
 
 from fractions import Fraction
 from math import gcd, isqrt
+from time import monotonic
+from typing import Literal
 
+from jacobian._exact import CanonicalRational
+from jacobian._execution import current_request_execution, request_execution
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -56,7 +60,7 @@ def content_primitive_profile(
 
     coefficients = request.polynomial.coefficients_descending
     _require_nonzero_polynomial(coefficients, location=("polynomial",))
-    sign = 1 if coefficients[0] > 0 else -1
+    sign: Literal[-1, 1] = 1 if coefficients[0] > 0 else -1
     content = 0
     for coefficient in coefficients:
         content = gcd(content, abs(coefficient))
@@ -79,6 +83,7 @@ def reciprocal_profile(request: ReciprocalProfileRequest) -> ReciprocalProfileRe
     _require_nonzero_polynomial(coefficients, location=("polynomial",))
     degree = len(coefficients) - 1
     leading, constant = coefficients[0], coefficients[-1]
+    state: Literal["RECIPROCAL", "ANTIRECIPROCAL", "NEITHER"]
     if constant != 0 and all(
         coefficients[index] == coefficients[degree - index]
         for index in range(degree + 1)
@@ -132,7 +137,7 @@ def _unit_disk_location_of_surd(value: QuadraticSurd) -> RootLocation:
     return "OUTSIDE_UNIT_DISK" if difference.is_nonnegative() else "INSIDE_UNIT_DISK"
 
 
-def quadratic_root_profile(
+def _quadratic_root_profile(
     request: RealQuadraticRootProfileRequest,
 ) -> RealQuadraticRootProfileResult:
     """Return exact roots and unit-disk locations of one real quadratic."""
@@ -145,6 +150,8 @@ def quadratic_root_profile(
             message="a real quadratic profile needs a nonzero leading coefficient",
         )
     discriminant = b * b - 4 * a * c
+    root_kind: Literal["DISTINCT_REAL", "DOUBLE_REAL", "COMPLEX_CONJUGATE"]
+    roots: tuple[QuadraticSurd, ...]
     if discriminant > 0:
         root_kind = "DISTINCT_REAL"
         square = isqrt(discriminant)
@@ -167,10 +174,7 @@ def quadratic_root_profile(
         roots = (QuadraticSurd.rational(Fraction(-b, 2 * a)),)
     else:
         root_kind = "COMPLEX_CONJUGATE"
-        # The conjugate pair shares |root|^2 = c/a; that squared modulus is the
-        # exact quantity the unit-disk comparison needs, so the profile carries
-        # it as a rational surrogate rather than a non-real radical value.
-        roots = (QuadraticSurd.from_fractions(Fraction(c, a), Fraction(0), 0),)
+        roots = ()
     return RealQuadraticRootProfileResult(
         coefficients_descending=(a, b, c),
         discriminant=discriminant,
@@ -178,14 +182,22 @@ def quadratic_root_profile(
         sum_of_roots=(-b, a),
         product_of_roots=(c, a),
         roots=roots,
-        root_locations=tuple(
-            _unit_disk_location_of_quadratic(root, root_kind, a, c) for root in roots
+        complex_pair_squared_modulus=CanonicalRational.from_fraction(Fraction(c, a))
+        if root_kind == "COMPLEX_CONJUGATE"
+        else None,
+        root_locations=(
+            (_unit_disk_location_of_quadratic(None, root_kind, a, c),)
+            if root_kind == "COMPLEX_CONJUGATE"
+            else tuple(
+                _unit_disk_location_of_quadratic(root, root_kind, a, c)
+                for root in roots
+            )
         ),
     )
 
 
 def _unit_disk_location_of_quadratic(
-    root: QuadraticSurd, root_kind: str, a: int, c: int
+    root: QuadraticSurd | None, root_kind: str, a: int, c: int
 ) -> RootLocation:
     if root_kind == "COMPLEX_CONJUGATE":
         # |root|^2 = c/a exactly; classify the square, then report the location.
@@ -199,6 +211,7 @@ def _unit_disk_location_of_quadratic(
             if squared > 1
             else "INSIDE_UNIT_DISK"
         )
+    assert root is not None
     return _unit_disk_location_of_surd(root)
 
 
@@ -215,11 +228,14 @@ def _abs_of_surd(value: QuadraticSurd) -> QuadraticSurd:
     )
 
 
-def mahler_measure(request: MahlerMeasureRequest) -> MahlerMeasureResult:
+def _mahler_measure(request: MahlerMeasureRequest) -> MahlerMeasureResult:
     """Return ``|a_d| * prod_i max(1, |alpha_i|)`` exactly for degree <= 2."""
 
     coefficients = request.coefficients_descending
     leading = coefficients[0]
+    roots: tuple[QuadraticSurd, ...]
+    root_locations: tuple[RootLocation, ...]
+    roots_ledger: tuple[RootLocation, ...]
     if len(coefficients) == 2:
         # a x + c has the single rational root -c/a.
         root = QuadraticSurd.rational(Fraction(-coefficients[1], leading))
@@ -229,7 +245,13 @@ def mahler_measure(request: MahlerMeasureRequest) -> MahlerMeasureResult:
         root_kind = "DISTINCT_REAL"
     else:
         profile = quadratic_root_profile(
-            RealQuadraticRootProfileRequest(coefficients_descending=coefficients)
+            RealQuadraticRootProfileRequest(
+                coefficients_descending=(
+                    coefficients[0],
+                    coefficients[1],
+                    coefficients[2],
+                )
+            )
         )
         root_kind = profile.root_kind
         roots = profile.roots
@@ -269,3 +291,19 @@ def mahler_measure(request: MahlerMeasureRequest) -> MahlerMeasureResult:
         outside_root_product=outside,
         mahler_measure=measure,
     )
+
+
+def quadratic_root_profile(
+    request: RealQuadraticRootProfileRequest,
+) -> RealQuadraticRootProfileResult:
+    if current_request_execution() is None:
+        with request_execution(monotonic()):
+            return _quadratic_root_profile(request)
+    return _quadratic_root_profile(request)
+
+
+def mahler_measure(request: MahlerMeasureRequest) -> MahlerMeasureResult:
+    if current_request_execution() is None:
+        with request_execution(monotonic()):
+            return _mahler_measure(request)
+    return _mahler_measure(request)

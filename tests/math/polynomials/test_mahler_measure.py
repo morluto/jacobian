@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from math import sqrt
 
 import pytest
 from pydantic import ValidationError
@@ -35,7 +36,7 @@ def _surds_equal(value: QuadraticSurd, expected: float) -> bool:
     a, b = value.as_fractions()
     if value.radicand == 0:
         return abs(float(a) - expected) < 1e-9
-    return abs(float(a) + float(b) * value.radicand**0.5 - expected) < 1e-9
+    return abs(float(a) + float(b) * sqrt(value.radicand) - expected) < 1e-9
 
 
 def test_content_primitive_profile_reconstructs_the_source() -> None:
@@ -255,3 +256,28 @@ def test_reciprocal_result_rejects_endpoint_only_forgery() -> None:
             constant_coefficient=1,
             coefficient_pair_ledger=((1, 1), (3, 2)),
         )
+
+
+def test_complex_pair_has_modulus_instead_of_fake_real_root() -> None:
+    result = quadratic_root_profile(
+        RealQuadraticRootProfileRequest(coefficients_descending=(1, 0, 4))
+    )
+    assert result.roots == ()
+    assert result.complex_pair_squared_modulus is not None
+    assert result.complex_pair_squared_modulus.as_fraction() == 4
+    assert mahler_measure(
+        MahlerMeasureRequest(coefficients_descending=(1, 0, 4))
+    ).mahler_measure == QuadraticSurd.rational(Fraction(4))
+
+
+def test_large_nonsquare_discriminant_uses_bounded_factorization() -> None:
+    result = mahler_measure(
+        MahlerMeasureRequest(coefficients_descending=(1, 1, -(10**24)))
+    )
+    assert result.mahler_measure == QuadraticSurd.rational(Fraction(10**24))
+
+
+def test_perfect_square_radical_keeps_its_rational_contribution() -> None:
+    assert QuadraticSurd.from_fractions(
+        Fraction(1), Fraction(2), 9
+    ) == QuadraticSurd.rational(Fraction(7))

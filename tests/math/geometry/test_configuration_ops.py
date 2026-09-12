@@ -34,7 +34,13 @@ from jacobian.math.geometry.exact._models import (
     LabelledRationalPoint,
     PointConfiguration,
 )
-from jacobian.math.geometry.operations import verify_collinearity, verify_concyclicity
+from jacobian.math.geometry.operations import (
+    spanned_circle_profile as native_spanned_circle_profile,
+)
+from jacobian.math.geometry.operations import (
+    verify_collinearity,
+    verify_concyclicity,
+)
 
 
 def _point(x: str, y: str) -> RationalPoint2D:
@@ -430,6 +436,47 @@ class TestSpannedCircleProfile:
                 SpannedCircleProfileRequest(configuration=_configuration(*points))
             )
 
+    def test_translated_coordinate_error_uses_request_path(self) -> None:
+        points = (
+            _point("0", "0"),
+            _point(str(10**256), "0"),
+            _point("0", "1"),
+        )
+        with pytest.raises(OperationDomainValidationError) as error:
+            native_spanned_circle_profile(_configuration(*points))
+        assert error.value.errors()[0]["loc"] == (
+            "configuration",
+            "points",
+            1,
+            "coordinates",
+            0,
+        )
+
+    def test_native_rejects_malformed_configuration_without_index_errors(self) -> None:
+        planar = LabelledRationalPoint(
+            label="a",
+            coordinates=(
+                CanonicalRational(num=0, den=1),
+                CanonicalRational(num=0, den=1),
+            ),
+        )
+        short = LabelledRationalPoint.model_construct(
+            label="b",
+            coordinates=(CanonicalRational(num=1, den=1),),
+        )
+        third = LabelledRationalPoint(
+            label="c",
+            coordinates=(
+                CanonicalRational(num=0, den=1),
+                CanonicalRational(num=1, den=1),
+            ),
+        )
+        forged = PointConfiguration.model_construct(points=(planar, short, third))
+        with pytest.raises(OperationDomainValidationError):
+            native_spanned_circle_profile(forged)
+        with pytest.raises(OperationDomainValidationError):
+            native_spanned_circle_profile(object())  # type: ignore[arg-type]
+
     def test_request_publishes_circle_row_envelope(self) -> None:
         schema = SpannedCircleProfileResult.model_json_schema()
         assert schema["properties"]["circles"]["maxItems"] == MAX_SPANNED_CIRCLES
@@ -440,8 +487,6 @@ class TestSpannedCircleProfile:
 def test_native_spanned_circles_reject_invalid_source(
     coordinates: tuple[tuple[int, int], ...],
 ) -> None:
-    from jacobian.math.geometry.operations import spanned_circle_profile as native
-
     points = tuple(_point(str(x), str(y)) for x, y in coordinates)
     with pytest.raises(OperationDomainValidationError):
-        native(_configuration(*points))
+        native_spanned_circle_profile(_configuration(*points))

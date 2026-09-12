@@ -6,6 +6,8 @@ from fractions import Fraction
 from itertools import combinations
 from typing import Any, cast
 
+from pydantic import ValidationError
+
 from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS, CanonicalRational
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
@@ -203,13 +205,30 @@ def _admit_circumcircle(
 def _admit_spanned_circle_source(
     configuration: PointConfiguration,
 ) -> tuple[RationalPoint2D, ...]:
-    points = configuration.points
-    if points and len(points[0].coordinates) != 2:
+    if not isinstance(configuration, PointConfiguration):
         _reject_geometry_domain(
             location=("configuration",),
-            code="geometry.spanned_circle_requires_planar_points",
-            message="spanned-circle profiles require planar source points",
+            code="geometry.spanned_circle_requires_point_configuration",
+            message="spanned-circle profiles require a labelled PointConfiguration",
         )
+    try:
+        configuration = PointConfiguration.model_validate(
+            configuration.model_dump(warnings="none")
+        )
+    except ValidationError as error:
+        detail = error.errors()[0]
+        _reject_geometry_domain(
+            location=("configuration", *tuple(detail.get("loc", ()))),
+            code=str(detail["type"]),
+            message=str(detail["msg"]),
+        )
+    except AttributeError:
+        _reject_geometry_domain(
+            location=("configuration",),
+            code="geometry.spanned_circle_requires_point_configuration",
+            message="spanned-circle profiles require a labelled PointConfiguration",
+        )
+    points = configuration.points
     if not 3 <= len(points) <= MAX_CONFIGURATION_POINTS:
         _reject_geometry_domain(
             location=("configuration",),
@@ -219,6 +238,14 @@ def _admit_spanned_circle_source(
                 f"{MAX_CONFIGURATION_POINTS} source points"
             ),
         )
+    for index, point in enumerate(points):
+        coordinates = getattr(point, "coordinates", None)
+        if not isinstance(coordinates, tuple) or len(coordinates) != 2:
+            _reject_geometry_domain(
+                location=("configuration", "points", index, "coordinates"),
+                code="geometry.spanned_circle_requires_planar_points",
+                message="spanned-circle profiles require planar source points",
+            )
     planar = tuple(
         RationalPoint2D(x=point.coordinates[0], y=point.coordinates[1])
         for point in points
@@ -856,7 +883,13 @@ def spanned_circle_profile(
         for axis, value in enumerate(point):
             if _fraction_digits(value) > MAX_COORDINATE_DIGITS:
                 _reject_geometry_domain(
-                    location=("configuration", index, ("x", "y")[axis]),
+                    location=(
+                        "configuration",
+                        "points",
+                        index,
+                        "coordinates",
+                        axis,
+                    ),
                     code="geometry.coordinate_digits_max",
                     message=(
                         "translated spanned-circle coordinates exceed the "

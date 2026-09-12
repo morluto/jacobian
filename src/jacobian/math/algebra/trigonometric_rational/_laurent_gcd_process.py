@@ -24,11 +24,7 @@ _WORKER_PATH = Path(__file__).resolve().with_name("_laurent_gcd_worker.py")
 # coefficients (real/imag numerator and denominator), plus JSON scaffolding.
 _MAX_LAURENT_TERMS = 4_096
 _MAX_COEFFICIENT_DIGITS = 4_096
-_STDOUT_BYTES = (
-    4
-    * _MAX_LAURENT_TERMS
-    * (64 + 4 * (_MAX_COEFFICIENT_DIGITS + 8))
-)
+_STDOUT_BYTES = 4 * _MAX_LAURENT_TERMS * (64 + 4 * (_MAX_COEFFICIENT_DIGITS + 8))
 _STDERR_BYTES = 64 * 1024
 _ADDRESS_SPACE_BYTES = 1024 * 1024 * 1024
 

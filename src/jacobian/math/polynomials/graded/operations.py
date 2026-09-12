@@ -428,10 +428,11 @@ def _series_data(
     ambient_expression = rational_polynomial_to_sympy(ambient_numerator).as_expr()
     unreduced = ambient_expression / (1 - t) ** variable_count
     numerator_expression, denominator_expression = fraction(cancel(unreduced))
+    numerator_poly = Poly(numerator_expression, t, domain=QQ)
+    denominator_poly = Poly(denominator_expression, t, domain=QQ)
     reduced_degree = max(
-        int(Poly(numerator_expression, t, domain=QQ).degree()),
-        int(Poly(denominator_expression, t, domain=QQ).degree()),
-        0,
+        0 if numerator_poly.is_zero else int(numerator_poly.degree()),
+        0 if denominator_poly.is_zero else int(denominator_poly.degree()),
     )
     if reduced_degree > MAX_RATIONAL_FUNCTION_EXPONENT:
         raise OperationResourceAdmissionError(

@@ -278,7 +278,9 @@ def test_hilbert_series_rejects_reduced_numerator_beyond_exponent_bound() -> Non
     generators = tuple(
         tuple(20 if axis == index else 0 for axis in range(8)) for index in range(8)
     )
-    with pytest.raises(OperationResourceAdmissionError, match="series_degree_budget"):
+    with pytest.raises(
+        OperationResourceAdmissionError, match="rational-function envelope"
+    ):
         hilbert_series(_ideal(*generators))
 
 

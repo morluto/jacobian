@@ -55,6 +55,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         result_type=GaloisFactorResult,
         run=_galois_factor,
         tags=("galois-theory", "factorization", "exact"),
+        discovery_terms=(
+            "factor a polynomial over a finite field with Frobenius splitting",
+            "decide finite-field polynomial irreducibility from coefficients",
+        ),
         examples=(
             OperationExample(
                 name="factor_x2_plus_1_over_f5",

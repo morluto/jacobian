@@ -18,6 +18,7 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.number_fields._integral_basis import (
     integral_basis_coordinates,
     recognized_integral_basis,
+    require_factorizable_discriminant,
 )
 from jacobian.math.number_theory.number_fields._models import (
     MAX_INTEGRAL_BASIS_DEGREE,
@@ -117,6 +118,7 @@ def ring_of_integers(
                 f"{MAX_INTEGRAL_BASIS_DEGREE}"
             ),
         )
+    require_factorizable_discriminant(field)
     recognized = recognized_integral_basis(field)
     if recognized is None:
         raise OperationDomainValidationError(

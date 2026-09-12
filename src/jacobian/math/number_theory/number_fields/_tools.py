@@ -104,7 +104,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "basis member represented as a canonical field element on the "
             "presentation's own ascending power basis, together with the field "
             "discriminant. The defining polynomial must be irreducible over QQ "
-            "and have degree at most 31."
+            "and have degree at most 31. Admission additionally proves the "
+            "defining-polynomial discriminant factors within a bounded trial "
+            "envelope (remaining cofactor one, prime, or a prime power), so "
+            "the exact backend completes instead of timing out."
         ),
         request_type=NumberFieldRingOfIntegersRequest,
         result_type=NumberFieldRingOfIntegersResult,

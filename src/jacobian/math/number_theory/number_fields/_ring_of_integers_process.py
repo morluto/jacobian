@@ -10,6 +10,9 @@ from jacobian._execution import (
     request_execution,
 )
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.number_theory.number_fields._integral_basis import (
+    require_factorizable_discriminant,
+)
 from jacobian.math.number_theory.number_fields._integral_basis_process import (
     run_integral_basis_worker,
 )
@@ -41,6 +44,7 @@ def compute_nf_ring_of_integers(
                 f"{MAX_INTEGRAL_BASIS_DEGREE}"
             ),
         )
+    require_factorizable_discriminant(request.field)
     worker_result = run_integral_basis_worker(
         NumberFieldRequest(field=request.field),
         include_basis=True,

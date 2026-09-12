@@ -153,6 +153,63 @@ def test_ring_of_integers_request_schema_and_parser_share_degree_boundary() -> N
         )
 
 
+def test_package_entry_point_uses_the_typed_implementation() -> None:
+    """Native package callers receive the composable typed result."""
+
+    from jacobian.math.number_theory import number_fields
+    from jacobian.math.number_theory.number_fields import _ring_of_integers
+
+    assert number_fields.ring_of_integers is _ring_of_integers.ring_of_integers
+    result = number_fields.ring_of_integers(
+        SimpleNumberFieldPresentation(coefficients_descending=(1, 0, -5))
+    )
+    assert isinstance(result, NumberFieldRingOfIntegersResult)
+    assert result.field_discriminant == 5
+
+
+def test_semiprime_discriminant_is_rejected_before_backend_expansion() -> None:
+    """A semiprime discriminant is not factorable, so admission rejects it.
+
+    ``x^2 - N`` with ``N`` a product of two primes above the trial envelope
+    fits the coefficient carrier, but round_two would have to factor the
+    discriminant ``4N``. Both the native and process entry points must raise
+    the typed admission error instead of launching unbounded work.
+    """
+
+    field = SimpleNumberFieldPresentation(
+        coefficients_descending=(1, 0, -100003 * 100019)
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        ring_of_integers(field)
+    assert error.value.errors()[0]["type"] == (
+        "number_field.ring_of_integers_discriminant_factorization_bound"
+    )
+
+
+def test_semiprime_discriminant_is_rejected_before_worker_launch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian import process as process_runtime
+    from jacobian.math.number_theory.number_fields._ring_of_integers_process import (
+        compute_nf_ring_of_integers,
+    )
+
+    def fail_to_launch(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("unbounded discriminant must not launch a worker")
+
+    monkeypatch.setattr(process_runtime, "run_bounded_process", fail_to_launch)
+    request = NumberFieldRingOfIntegersRequest(
+        field=SimpleNumberFieldPresentation(
+            coefficients_descending=(1, 0, -100003 * 100019)
+        )
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        compute_nf_ring_of_integers(request)
+    assert error.value.errors()[0]["type"] == (
+        "number_field.ring_of_integers_discriminant_factorization_bound"
+    )
+
+
 def test_ring_of_integers_result_rejects_malformed_basis_on_deserialization() -> None:
     result = ring_of_integers(
         SimpleNumberFieldPresentation(coefficients_descending=(1, 0, -5))

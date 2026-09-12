@@ -214,6 +214,12 @@ def test_number_theory_native_api_is_explicit() -> None:
     from jacobian.math import number_theory
 
     assert tuple(number_theory.__all__) == (
+        "DickmanRhoAffineAxis",
+        "DickmanRhoAffinePiece",
+        "DickmanRhoPiecewiseEnclosureParameters",
+        "DickmanRhoPiecewiseEnclosureRequest",
+        "DickmanRhoPiecewiseEnclosureResult",
+        "DyadicCoefficientBall",
         "FriableCountResult",
         "PrimeShiftProfileResult",
         "RFullEnumerateResult",
@@ -221,6 +227,7 @@ def test_number_theory_native_api_is_explicit() -> None:
         "chinese_remainder",
         "contiguous_sum_profile",
         "count_friable",
+        "dickman_rho_piecewise_enclosure",
         "divisibility_poset",
         "enumerate_friable",
         "enumerate_r_full",

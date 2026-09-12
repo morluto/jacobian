@@ -782,3 +782,42 @@ def test_sic_profile_rejects_asymmetric_squared_overlaps() -> None:
 
     with pytest.raises(ValueError, match="symmetric"):
         type(result).model_validate_json(json.dumps(forged))
+
+
+def test_scaled_dimension_16_standard_hadamard_mub_uses_shared_denominators() -> None:
+    dimension = 16
+    scale = 10**127 + 19
+    standard = ComplexFrame(
+        dimension=dimension,
+        vectors=tuple(
+            tuple(_z(int(row == column)) for column in range(dimension))
+            for row in range(dimension)
+        ),
+    )
+    hadamard = ComplexFrame(
+        dimension=dimension,
+        vectors=tuple(
+            tuple(
+                GaussianRational.from_fractions(Fraction(entry, scale), Fraction(0))
+                for entry in row
+            )
+            for row in _sylvester_hadamard(dimension)
+        ),
+    )
+    result = _mutually_unbiased_bases(
+        MutuallyUnbiasedBasesRequest(dimension=dimension, bases=(standard, hadamard))
+    )
+    assert result.is_mutually_unbiased is True
+    assert result.cross_gram_squared[0][0][0].as_integer_ratio() == (1, dimension)
+
+
+def test_mub_status_agrees_with_retained_overlap_ledgers() -> None:
+    standard = ComplexFrame(dimension=2, vectors=((_z(1), _z(0)), (_z(0), _z(1))))
+    result = _mutually_unbiased_bases(
+        MutuallyUnbiasedBasesRequest(dimension=2, bases=(standard, standard))
+    )
+    assert result.is_mutually_unbiased is False
+    forged = json.loads(result.model_dump_json())
+    forged["is_mutually_unbiased"] = True
+    with pytest.raises(ValueError, match="MUB status"):
+        type(result).model_validate_json(json.dumps(forged))

@@ -29,9 +29,11 @@ from jacobian.math.polynomials.values import (
 R = CanonicalRational
 
 
-def _poly(*terms: tuple[int, tuple[int, int]]) -> RationalPolynomial:
+def _poly_on_axis(
+    variables: tuple[str, ...], *terms: tuple[int, tuple[int, ...]]
+) -> RationalPolynomial:
     return RationalPolynomial(
-        variables=("x", "y"),
+        variables=variables,
         polynomial=SparseRationalPolynomial(
             terms=tuple(
                 RationalPolynomialTerm(
@@ -42,6 +44,10 @@ def _poly(*terms: tuple[int, tuple[int, int]]) -> RationalPolynomial:
             )
         ),
     )
+
+
+def _poly(*terms: tuple[int, tuple[int, int]]) -> RationalPolynomial:
+    return _poly_on_axis(("x", "y"), *terms)
 
 
 def _form(
@@ -71,6 +77,69 @@ def test_wedge_computes_permutation_sign_and_exact_product() -> None:
     )
 
 
+def test_degree_two_sign_and_basis_cancellation() -> None:
+    variables = ("x", "y", "z")
+    unit = _poly_on_axis(variables, (1, (0, 0, 0)))
+    left = PolynomialDifferentialForm(
+        variables=variables,
+        degree=2,
+        components=(
+            FormComponent(indices=(0, 1), coefficient=unit),
+            FormComponent(indices=(0, 2), coefficient=unit),
+        ),
+    )
+    right = PolynomialDifferentialForm(
+        variables=variables,
+        degree=1,
+        components=(
+            FormComponent(indices=(1,), coefficient=unit),
+            FormComponent(indices=(2,), coefficient=unit),
+        ),
+    )
+    assert wedge(left, right).components == ()
+
+    dxz = PolynomialDifferentialForm(
+        variables=variables,
+        degree=2,
+        components=(FormComponent(indices=(0, 2), coefficient=unit),),
+    )
+    dy = PolynomialDifferentialForm(
+        variables=variables,
+        degree=1,
+        components=(FormComponent(indices=(1,), coefficient=unit),),
+    )
+    result = wedge(dxz, dy)
+    assert result.components[0].indices == (0, 1, 2)
+    assert result.components[0].coefficient.polynomial.terms[0].coefficient == R(
+        num=-1, den=1
+    )
+
+
+def test_zero_forms_on_zero_dimensional_axis_and_graded_zero_label() -> None:
+    scalar = PolynomialDifferentialForm(
+        variables=(),
+        degree=0,
+        components=(
+            FormComponent(
+                indices=(),
+                coefficient=_poly_on_axis((), (3, ())),
+            ),
+        ),
+    )
+    product = wedge(scalar, scalar)
+    assert product.variables == ()
+    assert product.degree == 0
+    assert product.components[0].coefficient.polynomial.terms[0].coefficient == R(
+        num=9, den=1
+    )
+
+    top = _form(2)
+    graded_zero = wedge(top, top)
+    assert graded_zero.degree == 4
+    assert graded_zero.components == ()
+    assert wedge(graded_zero, _form(0)).degree == 4
+
+
 def test_wedge_repeated_differentials_and_overdimension_are_zero() -> None:
     dx = _form(1, ((0,), _poly((1, (0, 0)))))
     assert wedge(dx, dx).components == ()
@@ -95,6 +164,17 @@ def test_wedge_reserves_output_support_before_convolution() -> None:
     with pytest.raises(OperationResourceAdmissionError) as error:
         wedge(left, right)
     assert error.value.errors()[0]["type"] == "differential_form.wedge.output_budget"
+
+
+def test_wedge_admits_coefficient_height_before_convolution() -> None:
+    coefficient = 10**4_095
+    left = _form(0, ((), _poly((coefficient, (0, 0)))))
+    right = _form(0, ((), _poly((coefficient, (0, 0)))))
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        wedge(left, right)
+    assert error.value.errors()[0]["type"] == (
+        "differential_form.wedge.coefficient_budget"
+    )
 
 
 def test_wedge_is_associative_and_serializable() -> None:
@@ -126,8 +206,16 @@ def test_form_rejects_unsorted_or_mismatched_components() -> None:
 
 
 def test_duplicate_differential_indices_are_rejected() -> None:
-    with pytest.raises(ValidationError, match="component_basis"):
+    with pytest.raises(ValidationError, match="component_indices"):
         _form(2, ((0, 0), _poly((1, (0, 0)))))
+
+
+@pytest.mark.parametrize("indices", ((1, 0), (-1,)))
+def test_exported_component_rejects_noncanonical_indices(
+    indices: tuple[int, ...],
+) -> None:
+    with pytest.raises(ValidationError, match="component_indices"):
+        FormComponent(indices=indices, coefficient=_poly((1, (0, 0))))
 
 
 def test_overflowing_zero_form_degree_is_typed_admission() -> None:

@@ -38,12 +38,26 @@ class FormComponent(StrictModel):
     )
     coefficient: RationalPolynomial
 
+    @model_validator(mode="after")
+    def require_local_canonical_indices(self) -> Self:
+        if any(index < 0 for index in self.indices):
+            raise _error(
+                "component_indices",
+                "differential indices must be nonnegative",
+            )
+        if self.indices != tuple(sorted(set(self.indices))):
+            raise _error(
+                "component_indices",
+                "differential indices must be strictly increasing",
+            )
+        return self
+
 
 class PolynomialDifferentialForm(StrictModel):
     """A sparse polynomial k-form on an ordered affine QQ coordinate axis."""
 
     variables: tuple[PolynomialVariable, ...] = Field(
-        min_length=1, max_length=MAX_POLYNOMIAL_VARIABLES
+        min_length=0, max_length=MAX_POLYNOMIAL_VARIABLES
     )
     degree: ExactInteger = Field(ge=0)
     components: tuple[FormComponent, ...] = Field(
@@ -56,6 +70,8 @@ class PolynomialDifferentialForm(StrictModel):
         if len(set(self.variables)) != dimension:
             raise _error("variable_axis", "form variables must be unique")
         if self.degree > dimension:
+            # The zero of an over-dimensioned graded piece retains its target
+            # degree so repeated wedge composition remains deterministic.
             if self.components:
                 raise _error(
                     "degree",

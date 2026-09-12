@@ -22,7 +22,8 @@ TOOLS = (
             "increasing differential-index basis and exact permutation signs. "
             "Both forms must use the same ordered variable axis; repeated "
             "differentials vanish and a degree above the ambient dimension "
-            "returns the canonical zero form."
+            "returns a degree-labelled canonical zero form so the graded "
+            "target and subsequent compositions remain deterministic."
         ),
         request_type=WedgeRequest,
         result_type=PolynomialDifferentialForm,

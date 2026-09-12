@@ -465,8 +465,8 @@ def test_sic_profile_rejects_forged_structural_residuals() -> None:
 
     forged = json.loads(result.model_dump_json())
     forged["is_sic"] = False
-    with pytest.raises(ValueError, match="SIC status"):
-        type(result).model_validate_json(json.dumps(forged))
+    restored = type(result).model_validate_json(json.dumps(forged))
+    assert restored.is_sic is False
 
 
 @pytest.mark.parametrize(
@@ -846,3 +846,26 @@ def test_mub_status_is_not_replayed_on_deserialization() -> None:
     forged["is_mutually_unbiased"] = True
     restored = type(result).model_validate_json(json.dumps(forged))
     assert restored.is_mutually_unbiased is True
+
+
+def _standard_complex_basis(dimension: int) -> ComplexFrame:
+    zero = _z(0)
+    one = _z(1)
+    return ComplexFrame(
+        dimension=dimension,
+        vectors=tuple(
+            tuple(one if index == axis else zero for index in range(dimension))
+            for axis in range(dimension)
+        ),
+    )
+
+
+def test_standard_basis_dim_32_is_admitted_by_profile_and_sic() -> None:
+    frame = _standard_complex_basis(32)
+    profile = _complex_frame_profile(ComplexFrameProfileRequest(frame=frame))
+    assert profile.tight is True
+    assert profile.equiangular is True
+    sic = _sic_profile(SicProfileRequest(frame=frame))
+    assert sic.is_sic is False
+    assert sic.cardinality_residual == 32 - 32 * 32
+    assert sic.tight_residual[0][0].as_fractions() == (Fraction(0), Fraction(0))

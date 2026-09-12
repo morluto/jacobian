@@ -298,31 +298,6 @@ def _norm_squared(vector: tuple[GaussianRational, ...]) -> Fraction:
     return real
 
 
-def _maximum_component_height(frame: ComplexFrame) -> RationalHeight:
-    heights = tuple(
-        RationalHeight.from_canonical(component)
-        for vector in frame.vectors
-        for scalar in vector
-        for component in (scalar.real, scalar.imaginary)
-    )
-    if not heights:
-        return RationalHeight(1, 1)
-    return RationalHeight(
-        max(height.numerator_digits for height in heights),
-        max(height.denominator_digits for height in heights),
-    )
-
-
-def _complex_product_height(source: RationalHeight) -> RationalHeight:
-    product = source.product(source)
-    # Both real and imaginary parts are sums of two rational products.
-    return sum_heights((product, product))
-
-
-def _complex_sum_height(term: RationalHeight, count: int) -> RationalHeight:
-    return sum_heights((term,) * count)
-
-
 def _product_denominator(left: CanonicalRational, right: CanonicalRational) -> int:
     return (left.as_fraction() * right.as_fraction()).denominator
 
@@ -426,6 +401,88 @@ def _frame_inner_product_height(frame: ComplexFrame) -> RationalHeight:
     )
 
 
+def _height_from_fraction(value: Fraction) -> RationalHeight:
+    return RationalHeight.from_canonical(CanonicalRational.from_fraction(value))
+
+
+def _operator_entry_height(
+    frame: ComplexFrame,
+    row: int,
+    column: int,
+    norms: tuple[Fraction, ...] | None,
+) -> RationalHeight:
+    real_terms: list[RationalHeight] = []
+    imaginary_terms: list[RationalHeight] = []
+    real_denominators: list[int] = []
+    imaginary_denominators: list[int] = []
+    for index, vector in enumerate(frame.vectors):
+        first = vector[row]
+        second = vector[column]
+        if _scalar_is_zero(first) or _scalar_is_zero(second):
+            continue
+        real_height, imaginary_height = _hermitian_term_heights(first, second)
+        real_part, imaginary_part = _hermitian_parts(first, second)
+        if norms is not None:
+            divisor = norms[index]
+            if divisor == 0:
+                continue
+            divisor_height = _height_from_fraction(divisor)
+            real_height = real_height.quotient(divisor_height)
+            imaginary_height = imaginary_height.quotient(divisor_height)
+            real_part = real_part / divisor
+            imaginary_part = imaginary_part / divisor
+        real_terms.append(real_height)
+        imaginary_terms.append(imaginary_height)
+        real_denominators.append(real_part.denominator)
+        imaginary_denominators.append(imaginary_part.denominator)
+    real = _sum_shared_denominator_heights(tuple(real_terms), tuple(real_denominators))
+    imaginary = _sum_shared_denominator_heights(
+        tuple(imaginary_terms), tuple(imaginary_denominators)
+    )
+    return RationalHeight(
+        max(real.numerator_digits, imaginary.numerator_digits),
+        max(real.denominator_digits, imaginary.denominator_digits),
+    )
+
+
+def _complex_operator_residual_height(
+    frame: ComplexFrame, *, normalized_operator: bool
+) -> tuple[RationalHeight, RationalHeight]:
+    """Bound the frame operator and tightness residual entrywise."""
+
+    norms = (
+        tuple(_norm_squared(vector) for vector in frame.vectors)
+        if normalized_operator
+        else None
+    )
+    dimension = frame.dimension
+    entries = tuple(
+        _operator_entry_height(frame, row, column, norms)
+        for row in range(dimension)
+        for column in range(dimension)
+    )
+    operator = RationalHeight(
+        max(item.numerator_digits for item in entries),
+        max(item.denominator_digits for item in entries),
+    )
+    diagonal = tuple(entries[axis * dimension + axis] for axis in range(dimension))
+    trace = _sum_shared_denominator_heights(diagonal, tuple(1 for _ in diagonal))
+    scalar = trace.quotient(RationalHeight(len(str(dimension)), 1))
+    residual_entries = []
+    for row in range(dimension):
+        for column in range(dimension):
+            entry = entries[row * dimension + column]
+            if row == column:
+                residual_entries.append(sum_heights((entry, scalar)))
+            else:
+                residual_entries.append(entry)
+    residual = RationalHeight(
+        max(item.numerator_digits for item in residual_entries),
+        max(item.denominator_digits for item in residual_entries),
+    )
+    return operator, residual
+
+
 def _require_complex_accumulation_height(
     frame: ComplexFrame,
     *,
@@ -436,19 +493,13 @@ def _require_complex_accumulation_height(
 ) -> None:
     """Admit rational growth before constructing any exact arithmetic values."""
 
-    source = _maximum_component_height(frame)
-    product = _complex_product_height(source)
     inner_product = _frame_inner_product_height(frame)
     norm = inner_product
 
     if estimate_operator:
-        operator_term = product
-        if normalized_operator:
-            operator_term = product.quotient(norm)
-        operator = _complex_sum_height(operator_term, len(frame.vectors))
-        trace = _complex_sum_height(operator, frame.dimension)
-        scalar = trace.quotient(RationalHeight(len(str(frame.dimension)), 1))
-        residual = sum_heights((operator, scalar))
+        operator, residual = _complex_operator_residual_height(
+            frame, normalized_operator=normalized_operator
+        )
         if (
             max(
                 operator.numerator_digits,

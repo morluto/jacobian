@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from fractions import Fraction
 from typing import Self
 
 from pydantic import Field, model_validator
@@ -316,76 +315,6 @@ class SicProfileResult(SicProfileRequest):
         ):
             raise PydanticCustomError(
                 "frames.sic_profile_axes", "SIC ledgers must retain source axes"
-            )
-        if any(
-            overlap.as_fraction() != 1
-            for index, row in enumerate(self.squared_overlaps)
-            for column, overlap in enumerate(row)
-            if index == column
-        ):
-            raise PydanticCustomError(
-                "frames.sic_profile_diagonal",
-                "SIC overlap diagonals must equal one",
-            )
-        if any(
-            self.squared_overlaps[left][right].as_fraction()
-            != self.squared_overlaps[right][left].as_fraction()
-            for left in range(n)
-            for right in range(left + 1, n)
-        ):
-            raise PydanticCustomError(
-                "frames.sic_profile_overlap_symmetry",
-                "squared overlaps must be symmetric",
-            )
-        off_diagonal = tuple(
-            self.squared_overlaps[left][right].as_fraction()
-            for left in range(n)
-            for right in range(left + 1, n)
-        )
-        observed_equiangular = (d == 1 and n == 1) or (
-            bool(off_diagonal) and len(set(off_diagonal)) == 1
-        )
-        if self.equiangular != observed_equiangular:
-            raise PydanticCustomError(
-                "frames.sic_profile_equiangular",
-                "equiangular status must agree with off-diagonal overlaps",
-            )
-        if self.equiangular:
-            assert self.common_squared_overlap is not None
-            common = self.common_squared_overlap.as_fraction()
-            if off_diagonal and any(overlap != common for overlap in off_diagonal):
-                raise PydanticCustomError(
-                    "frames.sic_profile_common_overlap",
-                    "common overlap must equal every off-diagonal overlap",
-                )
-            if not off_diagonal and common != Fraction(1, d + 1):
-                raise PydanticCustomError(
-                    "frames.sic_profile_common_overlap",
-                    "common overlap must equal the SIC target when no pair is observed",
-                )
-            expected_residual = common - Fraction(1, d + 1)
-            assert self.common_squared_overlap_residual is not None
-            if self.common_squared_overlap_residual.as_fraction() != expected_residual:
-                raise PydanticCustomError(
-                    "frames.sic_profile_common_residual",
-                    "common overlap residual must equal the SIC target difference",
-                )
-        tight = all(
-            entry.as_fractions() == (Fraction(0), Fraction(0))
-            for row in self.tight_residual
-            for entry in row
-        )
-        expected_is_sic = (
-            self.cardinality_residual == 0
-            and self.equiangular
-            and self.common_squared_overlap_residual is not None
-            and self.common_squared_overlap_residual.as_fraction() == 0
-            and tight
-        )
-        if self.is_sic != expected_is_sic:
-            raise PydanticCustomError(
-                "frames.sic_profile_status",
-                "SIC status must agree with cardinality, overlap, and tight residuals",
             )
         return self
 

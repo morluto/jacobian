@@ -430,7 +430,9 @@ def enumerate_fixed_length_cycles(
     for block in plan.blocks:
         adjacency = block.adjacency
 
-        def search_from(start: str) -> None:
+        def search_from(
+            start: str, block_adjacency: dict[str, tuple[str, ...]]
+        ) -> None:
             path = [start]
             used = {start}
 
@@ -440,7 +442,7 @@ def enumerate_fixed_length_cycles(
                 if visited_prefixes % 1024 == 0:
                     request_checkpoint("during fixed-length cycle enumeration")
                 if len(path) == cycle_length:
-                    if start not in adjacency[current]:
+                    if start not in block_adjacency[current]:
                         return
                     cycle = tuple(path)
                     if chordless and any(
@@ -452,7 +454,7 @@ def enumerate_fixed_length_cycles(
                         return
                     cycles.add(_canonicalize_cycle(cycle))
                     return
-                for neighbor in adjacency[current]:
+                for neighbor in block_adjacency[current]:
                     if neighbor <= start or neighbor in used:
                         continue
                     used.add(neighbor)
@@ -464,8 +466,20 @@ def enumerate_fixed_length_cycles(
             visit(start)
 
         for start in block.core_vertices:
-            search_from(start)
+            search_from(start, adjacency)
     ordered = tuple(sorted(cycles))
+    return _cycle_enumeration_result(
+        graph, cycle_length, ordered, chordless=chordless
+    )
+
+
+def _cycle_enumeration_result(
+    graph: SimpleUndirectedGraph,
+    cycle_length: int,
+    ordered: tuple[tuple[str, ...], ...],
+    *,
+    chordless: bool,
+) -> FixedLengthCycleEnumerationResult:
     request_checkpoint("before fixed-length cycle result construction")
     vertex_indices: dict[str, list[int]] = {vertex: [] for vertex in graph.vertices}
     edge_indices: dict[frozenset[str], list[int]] = {
@@ -660,6 +674,35 @@ def _block_fixed_cycle_bounds(
     return min(complete_work, topology_work), cycle_upper_bound, adjacency
 
 
+def _core_adjacency_sets(
+    graph: SimpleUndirectedGraph,
+) -> tuple[tuple[str, ...], dict[str, set[str]]]:
+    core_vertices = tuple(sorted(_cycle_core_vertices(graph)))
+    core_set = set(core_vertices)
+    adjacency_sets: dict[str, set[str]] = {vertex: set() for vertex in core_vertices}
+    for left, right in graph.edges:
+        if left in core_set and right in core_set:
+            adjacency_sets[left].add(right)
+            adjacency_sets[right].add(left)
+    return core_vertices, adjacency_sets
+
+
+def _admit_empty_fixed_cycle(
+    graph: SimpleUndirectedGraph,
+    cycle_length: int,
+    *,
+    source_characters: int,
+    largest_label: int,
+) -> None:
+    _admit_fixed_cycle_result(
+        graph,
+        cycle_length,
+        cycle_upper_bound=0,
+        source_characters=source_characters,
+        largest_label=largest_label,
+    )
+
+
 def _admit_fixed_cycle_enumeration(
     graph: SimpleUndirectedGraph, cycle_length: int, *, chordless: bool = False
 ) -> _FixedCyclePlan | None:
@@ -689,43 +732,48 @@ def _admit_fixed_cycle_enumeration(
             f"cycle_length must be an integer in 3..{MAX_VERTICES}",
         )
     vertex_count = len(graph.vertices)
-
-    core_vertices = tuple(sorted(_cycle_core_vertices(graph)))
-    core_set = set(core_vertices)
-    adjacency_sets: dict[str, set[str]] = {vertex: set() for vertex in core_vertices}
-    for left, right in graph.edges:
-        # Every simple cycle is contained in the 2-core. Restricting the
-        # search carrier here keeps attached trees out of the charged DFS.
-        if left in core_set and right in core_set:
-            adjacency_sets[left].add(right)
-            adjacency_sets[right].add(left)
+    core_vertices, adjacency_sets = _core_adjacency_sets(graph)
     source_characters = sum(len(vertex) for vertex in graph.vertices) + sum(
         len(left) + len(right) for left, right in graph.edges
     )
     largest_label = max((len(vertex) for vertex in graph.vertices), default=0)
-    # A length above the 2-core order is an exact empty result.  This cheap
-    # presolve keeps bridge-heavy graphs from inheriting the ambient order.
     if cycle_length > len(core_vertices):
-        _admit_fixed_cycle_result(
+        _admit_empty_fixed_cycle(
             graph,
             cycle_length,
-            cycle_upper_bound=0,
             source_characters=source_characters,
             largest_label=largest_label,
         )
         return None
+    return _admit_fixed_cycle_search_plan(
+        graph,
+        cycle_length,
+        chordless=chordless,
+        vertex_count=vertex_count,
+        core_vertices=core_vertices,
+        adjacency_sets=adjacency_sets,
+        source_characters=source_characters,
+        largest_label=largest_label,
+    )
 
+
+def _admit_fixed_cycle_search_plan(
+    graph: SimpleUndirectedGraph,
+    cycle_length: int,
+    *,
+    chordless: bool,
+    vertex_count: int,
+    core_vertices: tuple[str, ...],
+    adjacency_sets: dict[str, set[str]],
+    source_characters: int,
+    largest_label: int,
+) -> _FixedCyclePlan | None:
     cyclic_blocks = _core_cyclic_blocks(core_vertices, adjacency_sets)
     core_order = len(core_vertices)
     max_core_degree = max(
         (len(neighbors) for neighbors in adjacency_sets.values()), default=0
     )
     chordless_four_cycle_bound: int | None = None
-    # Induced cycles cannot leave a biconnected block. Complete multipartite
-    # blocks have no induced cycle of length 5 or more, and their induced
-    # 4-cycles are the 2+2 selections from distinct parts. Summing those exact
-    # bounds keeps a bridge joining cheap bipartite blocks from inheriting a
-    # disconnected complete-graph output envelope.
     if chordless and cycle_length >= 4:
         multipartite_bound = _chordless_multipartite_cycle_bound(
             cyclic_blocks,
@@ -734,18 +782,14 @@ def _admit_fixed_cycle_enumeration(
         )
         if multipartite_bound is not None:
             if cycle_length >= 5 or multipartite_bound == 0:
-                _admit_fixed_cycle_result(
+                _admit_empty_fixed_cycle(
                     graph,
                     cycle_length,
-                    cycle_upper_bound=0,
                     source_characters=source_characters,
                     largest_label=largest_label,
                 )
                 return None
             chordless_four_cycle_bound = multipartite_bound
-    # A complete 2-core is a clique: every simple k-cycle with k >= 4 has a
-    # chord. Chordless enumeration therefore returns the empty family after a
-    # linear core inspection instead of inheriting the all-simple-cycle bound.
     if (
         chordless
         and cycle_length >= 4
@@ -756,10 +800,9 @@ def _admit_fixed_cycle_enumeration(
             len(neighbors) == core_order - 1 for neighbors in adjacency_sets.values()
         )
     ):
-        _admit_fixed_cycle_result(
+        _admit_empty_fixed_cycle(
             graph,
             cycle_length,
-            cycle_upper_bound=0,
             source_characters=source_characters,
             largest_label=largest_label,
         )

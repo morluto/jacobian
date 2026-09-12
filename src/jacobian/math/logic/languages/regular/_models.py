@@ -12,6 +12,7 @@ from jacobian._models import StrictModel
 from jacobian.math.logic.languages.regular.values import (
     DFA,
     MAX_COUNT_WORD_LENGTH,
+    MAX_DFA_EQUIVALENCE_WITNESS_LENGTH,
     MAX_DFA_STATES,
     MAX_LABELED_AUTOMATON_STATES,
     MAX_TRANSITION_PROFILE_PATH_LENGTH,
@@ -47,8 +48,18 @@ class ComplementRequest(StrictModel):
 class EquivalenceRequest(StrictModel):
     """Two total DFAs over one common ordered alphabet."""
 
-    left: DFA
-    right: DFA
+    left: DFA = Field(
+        description=(
+            "Complete deterministic finite automaton; it must use the same "
+            "ordered alphabet axis as right."
+        )
+    )
+    right: DFA = Field(
+        description=(
+            "Complete deterministic finite automaton; it must use the same "
+            "ordered alphabet axis as left."
+        )
+    )
 
 
 class EquivalenceResult(StrictModel):
@@ -58,13 +69,18 @@ class EquivalenceResult(StrictModel):
     right: DFA
     equivalent: bool
     distinguishing_word: tuple[int, ...] | None = Field(
-        default=None, max_length=MAX_DFA_STATES * MAX_DFA_STATES
+        default=None, max_length=MAX_DFA_EQUIVALENCE_WITNESS_LENGTH
     )
     left_state_trace: tuple[int, ...] | None = None
     right_state_trace: tuple[int, ...] | None = None
 
     @model_validator(mode="after")
     def require_counterexample_shape(self) -> Self:
+        if self.left.alphabet_size != self.right.alphabet_size:
+            raise _validation_error(
+                "alphabet_mismatch",
+                "equivalence results must retain DFAs over one common alphabet",
+            )
         fields = (
             self.distinguishing_word,
             self.left_state_trace,
@@ -93,6 +109,31 @@ class EquivalenceResult(StrictModel):
             raise _validation_error(
                 "counterexample_trace_length",
                 "each counterexample trace must contain one state per word prefix",
+            )
+        if self.distinguishing_word is not None and any(
+            not 0 <= symbol < self.left.alphabet_size
+            for symbol in self.distinguishing_word
+        ):
+            raise _validation_error(
+                "counterexample_symbol_out_of_range",
+                "distinguishing word contains a symbol outside the common alphabet",
+            )
+        if (
+            self.left_state_trace[0] != self.left.initial_state
+            or self.right_state_trace[0] != self.right.initial_state
+            or any(
+                not 0 <= state < self.left.state_count
+                for state in self.left_state_trace
+            )
+            or any(
+                not 0 <= state < self.right.state_count
+                for state in self.right_state_trace
+            )
+        ):
+            raise _validation_error(
+                "counterexample_trace_state",
+                "counterexample traces must start at each initial state and stay on "
+                "their source state axes",
             )
         return self
 

@@ -112,6 +112,7 @@ def _solve_independence_number_values_kernel(
     import z3
 
     optimizer = z3.Optimize()
+    optimizer.set(priority="lex")
     optimizer.set(timeout=remaining_timeout_ms(max(1, remaining_ms)))
     selected = {
         vertex: z3.Bool(f"selected_{index}") for index, vertex in enumerate(vertices)

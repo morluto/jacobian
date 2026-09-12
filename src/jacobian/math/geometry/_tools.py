@@ -31,6 +31,8 @@ from jacobian.math.geometry._models import (
     SegmentIntersectionResult,
     SimplePolygonDecisionResult,
     SimplePolygonPointRequest,
+    SpannedCircleProfileRequest,
+    SpannedCircleProfileResult,
 )
 
 
@@ -115,6 +117,12 @@ def circumradius_profile(
     request: CircumradiusProfileRequest,
 ) -> CircumradiusProfileResult:
     return _native.circumradius_profile(request.points)
+
+
+def spanned_circle_profile(
+    request: SpannedCircleProfileRequest,
+) -> SpannedCircleProfileResult:
+    return _native.spanned_circle_profile(request.points)
 
 
 from jacobian.math.geometry._configuration import CONFIGURATION_OPERATIONS  # noqa: E402

@@ -38,8 +38,11 @@ from jacobian.math.geometry._models import (
     RationalPoint2D,
     SegmentIntersectionResult,
     SimplePolygonDecisionResult,
+    SpannedCircleEntry,
+    SpannedCircleProfileResult,
     _inverted_components_within_bound,
     _is_simple_ring,
+    _max_coordinate_digits,
     _point_key,
     _require_bounded_configuration,
     _require_general_position_work_bound,
@@ -65,6 +68,7 @@ __all__ = [
     "segment_intersection",
     "signed_area",
     "simple_polygon",
+    "spanned_circle_profile",
     "squared_distance",
     "verify_collinearity",
     "verify_concyclicity",
@@ -790,4 +794,78 @@ def circumradius_profile(
     return CircumradiusProfileResult._from_kernel(
         points=points,
         entries=tuple(entries),
+    )
+
+
+def spanned_circle_profile(
+    points: tuple[RationalPoint2D, ...],
+) -> SpannedCircleProfileResult:
+    """Return every distinct circle spanned by a non-collinear source triple."""
+    from itertools import combinations
+
+    _admit_configuration(points, output_bound=True)
+    point_values = _points_to_fractions(points)
+    n = len(point_values)
+    triples = n * (n - 1) * (n - 2) // 6
+    # The operation performs one exact point-membership test for each source
+    # point and generated triple.  Keep this separate from the general-position
+    # determinant budget: it is a distinct complete result with its own work.
+    max_digits = _max_coordinate_digits(points)
+    work = n * triples * max_digits * max_digits
+    if work > 2_000_000:
+        _reject_geometry_domain(
+            location=("points",),
+            code="geometry.spanned_circle_profile_work_bound",
+            message=(
+                "spanned-circle incidence work exceeds the 2000000-unit bound; "
+                "reduce point count or coordinate size"
+            ),
+        )
+
+    grouped: dict[
+        tuple[Fraction, Fraction, Fraction],
+        tuple[tuple[Fraction, Fraction], tuple[int, ...]],
+    ] = {}
+    for i, j, k in combinations(range(n), 3):
+        first, second, third = point_values[i], point_values[j], point_values[k]
+        cross = (second[0] - first[0]) * (third[1] - first[1]) - (
+            second[1] - first[1]
+        ) * (third[0] - first[0])
+        if cross == 0:
+            continue
+        first_norm = first[0] * first[0] + first[1] * first[1]
+        second_norm = second[0] * second[0] + second[1] * second[1]
+        third_norm = third[0] * third[0] + third[1] * third[1]
+        center_x = (
+            first_norm * (second[1] - third[1])
+            + second_norm * (third[1] - first[1])
+            + third_norm * (first[1] - second[1])
+        ) / (2 * cross)
+        center_y = (
+            first_norm * (third[0] - second[0])
+            + second_norm * (first[0] - third[0])
+            + third_norm * (second[0] - first[0])
+        ) / (2 * cross)
+        radius_squared = (center_x - first[0]) ** 2 + (center_y - first[1]) ** 2
+        key = (center_x, center_y, radius_squared)
+        if key not in grouped:
+            incidence = tuple(
+                source_index
+                for source_index, point in enumerate(point_values)
+                if (point[0] - center_x) ** 2 + (point[1] - center_y) ** 2
+                == radius_squared
+            )
+            grouped[key] = ((center_x, center_y), incidence)
+
+    entries = tuple(
+        SpannedCircleEntry(
+            center=RationalPoint2D(x=_wire_rational(key[0]), y=_wire_rational(key[1])),
+            radius_squared=_wire_rational(key[2]),
+            point_indices=grouped[key][1],
+        )
+        for key in sorted(grouped)
+    )
+    return SpannedCircleProfileResult._from_kernel(
+        points=points,
+        circles=entries,
     )

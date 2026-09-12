@@ -1429,3 +1429,108 @@ class CircumradiusProfileResult(StrictModel):
         return cls.model_construct(
             points=points, num_points=len(points), entries=entries
         )
+
+
+class SpannedCircleProfileRequest(StrictModel):
+    """Compute the distinct circles determined by triples of rational points."""
+
+    points: tuple[RationalPoint2D, ...] = Field(
+        min_length=3,
+        max_length=MAX_CONFIGURATION_POINTS,
+        description=(
+            f"Bounded configuration of 3..{MAX_CONFIGURATION_POINTS} distinct "
+            "rational planar points. Every non-collinear triple determines one "
+            "circle; collinear triples are omitted."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_unique(self) -> Self:
+        keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in self.points)
+        if len(keys) != len(set(keys)):
+            raise _validation_error(
+                "point_set_coordinates_unique", "point-set coordinates must be unique"
+            )
+        return self
+
+
+class SpannedCircleEntry(StrictModel):
+    """One distinct triple-spanned circle and all source points on it."""
+
+    center: RationalPoint2D
+    radius_squared: CanonicalRational
+    point_indices: tuple[StrictInt, ...] = Field(
+        min_length=3, max_length=MAX_CONFIGURATION_POINTS
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_indices(self) -> Self:
+        if self.point_indices != tuple(sorted(set(self.point_indices))):
+            raise _validation_error(
+                "spanned_circle_point_indices_sorted_unique",
+                "circle point indices must be sorted and distinct",
+            )
+        if self.radius_squared.as_fraction() <= 0:
+            raise _validation_error(
+                "spanned_circle_radius_squared_positive",
+                "a spanned circle must have positive radius squared",
+            )
+        return self
+
+
+class SpannedCircleProfileResult(StrictModel):
+    """Complete source-bound partition of all non-collinear triples by circle."""
+
+    points: tuple[RationalPoint2D, ...] = Field(
+        min_length=3, max_length=MAX_CONFIGURATION_POINTS
+    )
+    num_points: int = Field(ge=3, le=MAX_CONFIGURATION_POINTS)
+    circles: tuple[SpannedCircleEntry, ...]
+
+    @model_validator(mode="after")
+    def require_canonical(self) -> Self:
+        keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in self.points)
+        if len(keys) != len(set(keys)):
+            raise _validation_error(
+                "point_set_coordinates_unique", "point-set coordinates must be unique"
+            )
+        if self.num_points != len(self.points):
+            raise _validation_error(
+                "num_points_len_points", "num_points must equal len(points)"
+            )
+        n = len(self.points)
+        for circle in self.circles:
+            if any(index < 0 or index >= n for index in circle.point_indices):
+                raise _validation_error(
+                    "spanned_circle_index_out_of_range",
+                    "circle point index must refer to the source configuration",
+                )
+        circle_keys = tuple(
+            (
+                circle.center.x.as_fraction(),
+                circle.center.y.as_fraction(),
+                circle.radius_squared.as_fraction(),
+            )
+            for circle in self.circles
+        )
+        if len(circle_keys) != len(set(circle_keys)):
+            raise _validation_error(
+                "spanned_circle_duplicate", "spanned circles must be distinct"
+            )
+        if circle_keys != tuple(sorted(circle_keys)):
+            raise _validation_error(
+                "spanned_circle_order",
+                "spanned circles must use canonical geometric order",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        points: tuple[RationalPoint2D, ...],
+        circles: tuple[SpannedCircleEntry, ...],
+    ) -> Self:
+        return cls.model_construct(
+            points=points, num_points=len(points), circles=circles
+        )

@@ -6,10 +6,13 @@ from jacobian.math.geometry._models import (
     CircumradiusProfileResult,
     GeneralPositionRequest,
     GeneralPositionResult,
+    SpannedCircleProfileRequest,
+    SpannedCircleProfileResult,
 )
 from jacobian.math.geometry._tools import (
     circumradius_profile,
     general_position_search,
+    spanned_circle_profile,
 )
 
 CONFIGURATION_OPERATIONS: MathTools = (
@@ -39,6 +42,38 @@ CONFIGURATION_OPERATIONS: MathTools = (
                         {"x": {"num": "1", "den": "1"}, "y": {"num": "1", "den": "1"}},
                         {"x": {"num": "0", "den": "1"}, "y": {"num": "1", "den": "1"}},
                     ],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="geometry.points.spanned_circle_profile.compute",
+        title="Compute the exact spanned-circle incidence profile",
+        description=(
+            "Given a bounded rational planar point configuration, enumerate every "
+            "distinct circle determined by a non-collinear source triple and return "
+            "its exact center, squared radius, and complete source-point incidence "
+            "set. Collinear triples are omitted; exhaustive triple generation and "
+            "point-membership work are bounded before execution."
+        ),
+        request_type=SpannedCircleProfileRequest,
+        result_type=SpannedCircleProfileResult,
+        run=spanned_circle_profile,
+        tags=("geometry", "circle", "incidence", "configuration"),
+        examples=(
+            OperationExample(
+                name="unit_square_one_circle",
+                description=(
+                    "Compute the one circle through all four unit-square vertices; "
+                    "the source points must be distinct rational planar points."
+                ),
+                input={
+                    "points": [
+                        {"x": {"num": "0", "den": "1"}, "y": {"num": "0", "den": "1"}},
+                        {"x": {"num": "1", "den": "1"}, "y": {"num": "0", "den": "1"}},
+                        {"x": {"num": "1", "den": "1"}, "y": {"num": "1", "den": "1"}},
+                        {"x": {"num": "0", "den": "1"}, "y": {"num": "1", "den": "1"}},
+                    ]
                 },
             ),
         ),

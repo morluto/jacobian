@@ -13,12 +13,14 @@ from jacobian.math.geometry._models import (
     PointQuadrupleRequest,
     PointTripleRequest,
     RationalPoint2D,
+    SpannedCircleProfileRequest,
 )
 from jacobian.math.geometry._tools import (
     circumradius_profile,
     collinear,
     concyclic,
     general_position_search,
+    spanned_circle_profile,
 )
 from jacobian.math.geometry.operations import verify_collinearity, verify_concyclicity
 
@@ -222,3 +224,58 @@ class TestAdmissionBounds:
         result = general_position_search(GeneralPositionRequest(points=points))
         assert result.has_concyclic_quadruple
         assert not result.has_collinear_triple
+
+
+class TestSpannedCircleProfile:
+    def test_square_merges_all_triples_and_round_trips(self) -> None:
+        points = [
+            _point("0", "0"),
+            _point("1", "0"),
+            _point("1", "1"),
+            _point("0", "1"),
+        ]
+        result = spanned_circle_profile(
+            SpannedCircleProfileRequest(points=tuple(points))
+        )
+        assert len(result.circles) == 1
+        circle = result.circles[0]
+        assert circle.center == _point("1/2", "1/2")
+        assert circle.radius_squared == CanonicalRational(num=1, den=2)
+        assert circle.point_indices == (0, 1, 2, 3)
+        assert type(result).model_validate_json(result.model_dump_json()) == result
+
+    def test_collinear_triples_are_omitted_and_distinct_circles_remain_distinct(
+        self,
+    ) -> None:
+        points = [
+            _point("0", "0"),
+            _point("1", "0"),
+            _point("2", "0"),
+            _point("0", "1"),
+            _point("0", "2"),
+        ]
+        result = spanned_circle_profile(
+            SpannedCircleProfileRequest(points=tuple(points))
+        )
+        assert len(result.circles) == 5
+        assert all(len(circle.point_indices) >= 3 for circle in result.circles)
+        assert len({tuple(circle.point_indices) for circle in result.circles}) == 5
+
+    def test_reorders_geometry_rows_but_preserves_exact_circle_values(self) -> None:
+        points = [
+            _point("0", "0"),
+            _point("1", "0"),
+            _point("0", "1"),
+            _point("1", "1"),
+        ]
+        reordered = [points[2], points[0], points[3], points[1]]
+        first = spanned_circle_profile(
+            SpannedCircleProfileRequest(points=tuple(points))
+        )
+        second = spanned_circle_profile(
+            SpannedCircleProfileRequest(points=tuple(reordered))
+        )
+        assert [(c.center, c.radius_squared) for c in first.circles] == [
+            (c.center, c.radius_squared) for c in second.circles
+        ]
+        assert second.circles[0].point_indices == (0, 1, 2, 3)

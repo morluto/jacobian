@@ -30,6 +30,7 @@ from jacobian.math.graphs.optimization._chromatic_bipartition import (
     MAX_CHROMATIC_BIPARTITION_PARTITIONS,
     ChromaticBipartitionRequest,
     ChromaticBipartitionResult,
+    _chromatic_bipartition_can_return_split,
     _unordered_partition_count,
 )
 from jacobian.process import (
@@ -46,18 +47,6 @@ _WORKER_FILE_SIZE_BYTES = 1_024 * 1_024
 
 def _serialized_result_bytes(result: ChromaticBipartitionResult) -> int:
     return len(encode_worker_result_frame(result.model_dump(mode="json")))
-
-
-def _unknown_result(
-    request: ChromaticBipartitionRequest, checked_partitions: int = 0
-) -> ChromaticBipartitionResult:
-    return ChromaticBipartitionResult(
-        graph=request.graph,
-        s=request.s,
-        t=request.t,
-        status="UNKNOWN",
-        checked_partitions=checked_partitions,
-    )
 
 
 def _chromatic_bipartition_worker_stdout_limit(
@@ -77,10 +66,9 @@ def _chromatic_bipartition_worker_stdout_limit(
             t=request.t,
             status="NO_SPLIT",
             checked_partitions=checked,
-        ),
-        _unknown_result(request, checked),
+        )
     ]
-    if len(vertices) >= 2:
+    if _chromatic_bipartition_can_return_split(request):
         envelopes.append(
             ChromaticBipartitionResult(
                 graph=request.graph,

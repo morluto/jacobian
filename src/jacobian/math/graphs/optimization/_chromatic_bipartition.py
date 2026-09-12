@@ -42,12 +42,12 @@ class ChromaticBipartitionRequest(StrictModel):
 
 
 class ChromaticBipartitionResult(StrictModel):
-    """Exact split, exact negative result, or an unresolved search."""
+    """Exact split or exact negative result after a complete admitted search."""
 
     graph: SimpleUndirectedGraph
     s: StrictInt = Field(ge=1, le=32)
     t: StrictInt = Field(ge=1, le=32)
-    status: Literal["SPLIT", "NO_SPLIT", "UNKNOWN"]
+    status: Literal["SPLIT", "NO_SPLIT"]
     side_a: tuple[str, ...] | None = Field(default=None, max_length=256)
     side_b: tuple[str, ...] | None = Field(default=None, max_length=256)
     chromatic_a: StrictInt | None = Field(default=None, ge=0, le=32)
@@ -220,12 +220,30 @@ def _chromatic_search_work(order: int, edge_count: int) -> int:
     return order * (encoding + order + edge_count + 1)
 
 
-def _retained_label_characters(graph: SimpleUndirectedGraph) -> int:
-    """Charge the source graph and the two repeated witness vertex axes."""
+def _chromatic_bipartition_can_return_split(
+    request: ChromaticBipartitionRequest,
+) -> bool:
+    """True when an admitted search can still return a SPLIT witness."""
+
+    if len(request.graph.vertices) < 2:
+        return False
+    if _threshold_sum_exceeds_order(request):
+        return False
+    if not request.graph.edges and (request.s > 1 or request.t > 1):
+        return False
+    return True
+
+
+def _retained_label_characters(
+    graph: SimpleUndirectedGraph, *, charge_witness_axes: bool
+) -> int:
+    """Charge the source graph, and witness axes only when a SPLIT is possible."""
 
     source = sum(map(len, graph.vertices)) + sum(
         len(left) + len(right) for left, right in graph.edges
     )
+    if not charge_witness_axes:
+        return source
     return source + 2 * sum(map(len, graph.vertices))
 
 
@@ -373,9 +391,7 @@ def _admit_chromatic_bipartition(request: ChromaticBipartitionRequest) -> None:
     """Charge every unordered partition and its inner k-colorability encodings."""
 
     order = len(request.graph.vertices)
-    cheap_no_witness = _threshold_sum_exceeds_order(request) or (
-        not request.graph.edges and (request.s > 1 or request.t > 1)
-    )
+    cheap_no_witness = not _chromatic_bipartition_can_return_split(request)
     if order > MAX_CHROMATIC_BIPARTITION_VERTICES and not cheap_no_witness:
         raise OperationResourceAdmissionError(
             location=("graph", "vertices"),
@@ -385,7 +401,10 @@ def _admit_chromatic_bipartition(request: ChromaticBipartitionRequest) -> None:
                 f"{MAX_CHROMATIC_BIPARTITION_VERTICES} vertices"
             ),
         )
-    if _retained_label_characters(request.graph) > (
+    if _retained_label_characters(
+        request.graph,
+        charge_witness_axes=_chromatic_bipartition_can_return_split(request),
+    ) > (
         MAX_CHROMATIC_BIPARTITION_LABEL_CHARACTERS
     ):
         raise OperationResourceAdmissionError(

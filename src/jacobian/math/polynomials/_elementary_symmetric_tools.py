@@ -29,7 +29,10 @@ ELEMENTARY_SYMMETRIC_FAMILY_OPERATION = MathTool(
     examples=(
         OperationExample(
             name="three_variables",
-            description="Compute e_0, e_1, and e_2 in x, y, z.",
+            description=(
+                "Compute e_0, e_1, and e_2 in x, y, z; maximum_degree must not "
+                "exceed the variable count."
+            ),
             input={"variables": ["x", "y", "z"], "maximum_degree": 2},
         ),
     ),

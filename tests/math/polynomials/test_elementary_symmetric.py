@@ -145,6 +145,20 @@ def test_catalog_declaration_uses_requested_operation_id_and_round_trips() -> No
     assert decoded == result
 
 
+def test_published_example_states_degree_precondition_and_is_admitted() -> None:
+    example = ELEMENTARY_SYMMETRIC_FAMILY_OPERATION.examples[0]
+    assert "must not exceed the variable count" in example.description
+    variables = example.input["variables"]
+    maximum_degree = example.input["maximum_degree"]
+    assert isinstance(variables, list)
+    assert isinstance(maximum_degree, int)
+    assert maximum_degree <= len(variables)
+    result = ELEMENTARY_SYMMETRIC_FAMILY_OPERATION.run(
+        ElementarySymmetricFamilyRequest.model_validate(example.input)
+    )
+    assert len(result.polynomials) == maximum_degree + 1
+
+
 def test_result_rejects_forged_nonunit_e_zero_without_replaying_the_family() -> None:
     result = elementary_symmetric_family(
         ("x", "y"),

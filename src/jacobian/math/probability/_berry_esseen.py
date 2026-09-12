@@ -94,14 +94,27 @@ class BerryEsseenRequest(StrictModel):
             mode,
             union_format=union_format,
         )
-        atoms = (
-            schema.get("$defs", {})
-            .get("FiniteRationalDistribution", {})
-            .get("properties", {})
-            .get("atoms")
-        )
+        defs = schema.get("$defs")
+        properties = schema.get("properties")
+        if not isinstance(defs, dict) or not isinstance(properties, dict):
+            return schema
+        shared = defs.get("FiniteRationalDistribution")
+        if not isinstance(shared, dict):
+            return schema
+        cloned = dict(shared)
+        cloned_properties = dict(cloned.get("properties", {}))
+        atoms = cloned_properties.get("atoms")
         if isinstance(atoms, dict):
-            atoms["maxItems"] = MAX_BERRY_ESSEEN_ATOMS
+            cloned_atoms = dict(atoms)
+            cloned_atoms["maxItems"] = MAX_BERRY_ESSEEN_ATOMS
+            cloned_properties["atoms"] = cloned_atoms
+            cloned["properties"] = cloned_properties
+        defs = dict(defs)
+        defs["BerryEsseenFiniteDistribution"] = cloned
+        schema["$defs"] = defs
+        properties = dict(properties)
+        properties["distribution"] = {"$ref": "#/$defs/BerryEsseenFiniteDistribution"}
+        schema["properties"] = properties
         return schema
 
 

@@ -60,7 +60,7 @@ def _brute_force(
             mass *= probability if vertex in open_set else 1 - probability
         if terminals[0] not in open_set or terminals[1] not in open_set:
             continue
-        adjacency = {vertex: set() for vertex in open_set}
+        adjacency: dict[str, set[str]] = {vertex: set() for vertex in open_set}
         for left, right in edges:
             if left in adjacency and right in adjacency:
                 adjacency[left].add(right)

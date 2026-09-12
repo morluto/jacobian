@@ -77,12 +77,31 @@ def _admit_scalar_field(polynomial: RationalPolynomial) -> None:
 
 
 def _admit_vector_field(components: tuple[RationalPolynomial, ...]) -> None:
+    if not components:
+        raise OperationDomainValidationError(
+            location=("components",),
+            code="polynomial_vector_calc.empty_vector_field",
+            message="vector field must contain at least one component",
+        )
+    variables = components[0].variables
+    if len(components) != len(variables):
+        raise OperationDomainValidationError(
+            location=("components",),
+            code="polynomial_vector_calc.component_count",
+            message="vector field must have one component per variable",
+        )
     for index, component in enumerate(components):
         _admit_field_polynomial(
             component,
             label="vector-field component",
             location=("components", index),
         )
+        if component.variables != variables:
+            raise OperationDomainValidationError(
+                location=("components", index),
+                code="polynomial_vector_calc.ordered_ring",
+                message="vector-field components must use one ordered ring",
+            )
     if sum(len(item.polynomial.terms) for item in components) > _MAX_TERMS:
         raise OperationDomainValidationError(
             location=("components",),
@@ -142,6 +161,12 @@ def curl(components: tuple[RationalPolynomial, ...]) -> VectorResult:
 
     _admit_vector_field(components)
     variables = components[0].variables
+    if len(variables) != 3:
+        raise OperationDomainValidationError(
+            location=("components",),
+            code="polynomial_vector_calc.curl_dimensions",
+            message="curl requires exactly three variables and components",
+        )
     x, y, z = symbols_for_variables(variables)
     fx, fy, fz = _expressions(components)
     return VectorResult._from_kernel(

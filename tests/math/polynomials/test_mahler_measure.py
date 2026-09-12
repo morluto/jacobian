@@ -370,9 +370,13 @@ def test_content_profile_admits_carrier_length_beyond_elementary_degree() -> Non
 
 def test_mahler_measure_rejects_empty_native_coefficients() -> None:
     forged = IntegerPolynomial.model_construct(coefficients=())
-    with pytest.raises(OperationDomainValidationError, match="at least one coefficient"):
+    with pytest.raises(
+        OperationDomainValidationError, match="at least one coefficient"
+    ):
         mahler_measure(forged)
-    with pytest.raises(OperationDomainValidationError, match="at least one coefficient"):
+    with pytest.raises(
+        OperationDomainValidationError, match="at least one coefficient"
+    ):
         reciprocal_profile(forged)
 
 

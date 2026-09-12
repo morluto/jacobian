@@ -97,3 +97,21 @@ def test_form_rejects_unsorted_or_mismatched_components() -> None:
                 components=(),
             ),
         )
+
+
+def test_duplicate_differential_indices_are_rejected() -> None:
+    with pytest.raises(ValidationError, match="component_basis"):
+        _form(2, ((0, 0), _poly((1, (0, 0)))))
+
+
+def test_high_coefficients_and_zero_degrees_compose() -> None:
+    scalar = _form(0, ((), _poly((10**100, (0, 0)))))
+    product = wedge(scalar, scalar)
+    assert (
+        product.components[0].coefficient.polynomial.terms[0].coefficient.num == 10**200
+    )
+    assert type(product).model_validate_json(product.model_dump_json()) == product
+    zero = _form(16)
+    squared = wedge(zero, zero)
+    assert squared.degree == 32 and squared.components == ()
+    assert wedge(squared, zero).degree == 48

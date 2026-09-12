@@ -158,7 +158,7 @@ def _quadratic_roots(
     if root is None:
         return None
     if root == 0:
-        return ( -linear / (2 * quadratic), )
+        return (-linear / (2 * quadratic),)
     return tuple(
         sorted({(-linear - root) / (2 * quadratic), (-linear + root) / (2 * quadratic)})
     )

@@ -289,6 +289,7 @@ def _scaled_integer_part(
     *,
     scale: int,
     isolation_bits: int,
+    deadline: float,
 ) -> int:
     """Exact floor of ``base**places * alpha`` for the selected root.
 
@@ -298,17 +299,12 @@ def _scaled_integer_part(
     positive scalar substitution of ``f``.
     """
 
-    execution = current_request_execution()
-    if execution is not None and execution.deadline is not None:
-        return run_scaled_integer_part_worker(
-            polynomial=value.polynomial,
-            real_root_index=value.real_root_index,
-            scale=scale,
-            isolation_bits=isolation_bits,
-            deadline=execution.deadline,
-        )
-    return _scaled_integer_part_in_process(
-        value, scale=scale, isolation_bits=isolation_bits
+    return run_scaled_integer_part_worker(
+        polynomial=value.polynomial,
+        real_root_index=value.real_root_index,
+        scale=scale,
+        isolation_bits=isolation_bits,
+        deadline=deadline,
     )
 
 
@@ -376,7 +372,7 @@ def radix_prefix(
     if execution is None:
         with request_execution(time.monotonic()):
             return radix_prefix(value, base, fractional_places)
-    execution_deadline(RADIX_ISOLATION_OWNER_SECONDS)
+    deadline = execution_deadline(RADIX_ISOLATION_OWNER_SECONDS)
 
     _require_request(base, fractional_places)
     request = RadixPrefixRequest(
@@ -406,6 +402,7 @@ def radix_prefix(
         request.value,
         scale=admission.scale,
         isolation_bits=admission.isolation_bits,
+        deadline=deadline,
     )
     scale = admission.scale
     integer_part, remainder = divmod(scaled, scale)

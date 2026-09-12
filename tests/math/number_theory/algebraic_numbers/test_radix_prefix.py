@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 import pytest
 
 from jacobian.canonical import encode_strict_json
@@ -222,25 +224,12 @@ def test_owner_envelope_is_the_calibrated_isolation_budget(
     )
 
     bound: list[float] = []
+    seen: list[float] = []
     original = radix_module.execution_deadline
 
     def capture(seconds: float) -> float:
         bound.append(seconds)
         return original(seconds)
-
-    monkeypatch.setattr(radix_module, "execution_deadline", capture)
-    radix_prefix(_value((1, 0, -2), 1), 10, 1)
-    assert bound == [RADIX_ISOLATION_OWNER_SECONDS]
-
-
-def test_shorter_caller_deadline_is_passed_to_the_killable_worker(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    import time
-
-    from jacobian._execution import request_execution
-
-    seen: list[float] = []
 
     def fake(
         *,
@@ -257,10 +246,94 @@ def test_shorter_caller_deadline_is_passed_to_the_killable_worker(
             isolation_bits=isolation_bits,
         )
 
+    monkeypatch.setattr(radix_module, "execution_deadline", capture)
+    monkeypatch.setattr(radix_module, "run_scaled_integer_part_worker", fake)
+    started = time.monotonic()
+    radix_prefix(_value((1, 0, -2), 1), 10, 1)
+    assert bound == [RADIX_ISOLATION_OWNER_SECONDS]
+    assert seen
+    assert abs(seen[0] - (started + RADIX_ISOLATION_OWNER_SECONDS)) < 1.0
+
+
+def test_shorter_caller_deadline_is_passed_to_the_killable_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian._execution import request_execution
+
+    seen: list[float] = []
+    envelopes: list[float] = []
+    original = radix_module.execution_deadline
+
+    def capture(seconds: float) -> float:
+        deadline = original(seconds)
+        envelopes.append(deadline)
+        return deadline
+
+    def fake(
+        *,
+        polynomial: tuple[int, ...],
+        real_root_index: int,
+        scale: int,
+        isolation_bits: int,
+        deadline: float,
+    ) -> int:
+        seen.append(deadline)
+        return radix_module._scaled_integer_part_in_process(
+            _value(polynomial, real_root_index),
+            scale=scale,
+            isolation_bits=isolation_bits,
+        )
+
+    monkeypatch.setattr(radix_module, "execution_deadline", capture)
     monkeypatch.setattr(radix_module, "run_scaled_integer_part_worker", fake)
     started = time.monotonic()
     caller_deadline = started + 12
     with request_execution(started, outer_deadline=caller_deadline):
         radix_prefix(_value((1, 0, -2), 1), 10, 1)
-    assert seen
+    assert envelopes
+    assert seen == envelopes
     assert seen[0] <= caller_deadline + 1e-3
+
+
+def test_later_enclosing_deadline_does_not_replace_the_owner_envelope(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian._execution import request_execution
+    from jacobian.math.number_theory.algebraic_numbers._radix_prefix_process import (
+        RADIX_ISOLATION_OWNER_SECONDS,
+    )
+
+    seen: list[float] = []
+    envelopes: list[float] = []
+    original = radix_module.execution_deadline
+
+    def capture(seconds: float) -> float:
+        deadline = original(seconds)
+        envelopes.append(deadline)
+        return deadline
+
+    def fake(
+        *,
+        polynomial: tuple[int, ...],
+        real_root_index: int,
+        scale: int,
+        isolation_bits: int,
+        deadline: float,
+    ) -> int:
+        seen.append(deadline)
+        return radix_module._scaled_integer_part_in_process(
+            _value(polynomial, real_root_index),
+            scale=scale,
+            isolation_bits=isolation_bits,
+        )
+
+    monkeypatch.setattr(radix_module, "execution_deadline", capture)
+    monkeypatch.setattr(radix_module, "run_scaled_integer_part_worker", fake)
+    started = time.monotonic()
+    enclosing_later = started + RADIX_ISOLATION_OWNER_SECONDS + 30
+    with request_execution(started, outer_deadline=enclosing_later):
+        radix_prefix(_value((1, 0, -2), 1), 10, 1)
+    assert envelopes
+    assert seen == envelopes
+    assert seen[0] < enclosing_later
+    assert abs(seen[0] - (started + RADIX_ISOLATION_OWNER_SECONDS)) < 1.0

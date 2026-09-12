@@ -60,6 +60,21 @@ def test_schur_result_is_bound_and_verifiable() -> None:
     assert not verify_schur_evaluation(object())
 
 
+def test_schur_verifier_rejects_unvalidated_claim_copies() -> None:
+    result = schur_evaluation(IntegerPartition(parts=(1,)), (1,), ("x",))
+    invalid_copies = (
+        result.model_copy(update={"variables": ()}),
+        SchurExpansionResult.model_construct(
+            partition=result.partition,
+            variables=result.variables,
+            point=result.point,
+            value=True,
+        ),
+    )
+
+    assert all(not verify_schur_evaluation(claim) for claim in invalid_copies)
+
+
 def test_schur_verifier_propagates_claim_outside_execution_envelope() -> None:
     claim = SchurExpansionResult(
         partition=IntegerPartition(parts=(1,) * 51),

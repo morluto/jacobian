@@ -151,8 +151,18 @@ def _determinant(matrix: list[list[int]]) -> int:
 def verify_schur_evaluation(claim: object) -> bool:
     if not isinstance(claim, SchurExpansionResult):
         return False
-    expected = schur_evaluation(claim.partition, claim.point, claim.variables)
-    return expected == claim
+    try:
+        canonical_claim = SchurExpansionResult.model_validate(
+            claim.model_dump(mode="python"), strict=True
+        )
+    except (AttributeError, TypeError, ValueError):
+        return False
+    expected = schur_evaluation(
+        canonical_claim.partition,
+        canonical_claim.point,
+        canonical_claim.variables,
+    )
+    return expected == canonical_claim
 
 
 __all__ = [

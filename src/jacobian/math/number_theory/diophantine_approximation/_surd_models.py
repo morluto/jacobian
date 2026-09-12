@@ -552,6 +552,10 @@ class RecordMinimaResult(StrictModel):
             record.product_enclosure.lower.num < 0
             or record.incumbent_enclosure.lower.num < 0
             for record in self.records
+        ) or (
+            self.outcome == "UNRESOLVED"
+            and self.unresolved_product_enclosure is not None
+            and self.unresolved_product_enclosure.lower.num < 0
         ):
             raise _validation_error(
                 "diophantine.record_negative_product_enclosure",

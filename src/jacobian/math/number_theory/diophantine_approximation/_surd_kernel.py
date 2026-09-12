@@ -55,17 +55,17 @@ def _require_multiplier(multiplier: int) -> None:
             code="diophantine.multiplier_type",
             message="multiplier must be a strict integer",
         )
-    if multiplier.bit_length() > MAX_SURD_MULTIPLIER_BITS:
-        raise OperationResourceAdmissionError(
-            location=("multiplier",),
-            code="diophantine.multiplier_bit_bound",
-            message="multiplier exceeds the 4096-bit exact-work bound",
-        )
     if multiplier < 1:
         raise OperationDomainValidationError(
             location=("multiplier",),
             code="diophantine.multiplier_out_of_range",
             message="multiplier must be at least 1",
+        )
+    if multiplier.bit_length() > MAX_SURD_MULTIPLIER_BITS:
+        raise OperationResourceAdmissionError(
+            location=("multiplier",),
+            code="diophantine.multiplier_bit_bound",
+            message="multiplier exceeds the 4096-bit exact-work bound",
         )
 
 

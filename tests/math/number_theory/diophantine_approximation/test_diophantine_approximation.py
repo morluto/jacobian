@@ -516,6 +516,13 @@ def test_scaled_floor_rejects_square_radicand() -> None:
         scaled_floor(2, 9)
 
 
+def test_native_multiplier_domain_precedes_bit_admission() -> None:
+    """An invalid sign remains a domain error regardless of its magnitude."""
+    with pytest.raises(OperationDomainValidationError) as error:
+        scaled_floor(-(1 << 4096), 2)
+    assert error.value.errors()[0]["type"] == "diophantine.multiplier_out_of_range"
+
+
 def test_nearest_integer_distance_branches_on_both_sides() -> None:
     """The nearest integer can come from either endpoint of the bracket."""
     floor_side = nearest_integer_distance(1, 2, 48)
@@ -859,6 +866,19 @@ def test_serialized_unresolved_record_result_rejects_impossible_history() -> Non
         RecordMinimaResult.model_validate_json(
             encode_strict_json(malformed_incumbent), strict=True
         )
+
+    malformed_product = result.model_dump(mode="json")
+    malformed_product["unresolved_product_enclosure"]["lower"] = {
+        "num": "-1",
+        "den": "1",
+    }
+    with pytest.raises(ValidationError) as error:
+        RecordMinimaResult.model_validate_json(
+            encode_strict_json(malformed_product), strict=True
+        )
+    assert error.value.errors()[0]["type"] == (
+        "diophantine.record_negative_product_enclosure"
+    )
 
 
 def test_large_multiplier_uses_exact_json_integer_encoding() -> None:

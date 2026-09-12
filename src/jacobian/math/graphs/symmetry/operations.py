@@ -495,13 +495,11 @@ def _special_repeated_cliques(
     components = _connected_components(
         len(vertices), _indexed_adjacency(len(vertices), edges)
     )
-    if len(components) <= 1 or len({len(component) for component in components}) != 1:
+    if len(components) <= 1:
         return None
-    size = len(components[0])
-    clique_edges = size * (size - 1) // 2
     if any(
         sum(left in component and right in component for left, right in edges)
-        != clique_edges
+        != len(component) * (len(component) - 1) // 2
         for component in components
     ):
         return None
@@ -538,7 +536,7 @@ def _special_repeated_cliques(
         }
         if len(component_edge_colors) != 1:
             return None
-        profile = (vertex_profile, next(iter(component_edge_colors)))
+        profile = (len(aligned), vertex_profile, next(iter(component_edge_colors)))
         groups.setdefault(profile, []).append(aligned)
     generators: list[tuple[int, ...]] = []
     order = 1

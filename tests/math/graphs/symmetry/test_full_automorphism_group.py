@@ -283,6 +283,32 @@ def test_patterned_clique_colors_keep_compact_presentation() -> None:
     assert len(result.generators) < result.automorphism_count
 
 
+def test_mixed_size_clique_union_keeps_compact_presentation() -> None:
+    sizes = (5, 6, 7)
+    vertices = tuple(
+        f"v{component}{position}"
+        for component, size in enumerate(sizes)
+        for position in range(size)
+    )
+    starts = (0, 5, 11)
+    edges = tuple(
+        (left, right)
+        for start, size in zip(starts, sizes, strict=True)
+        for left in vertices[start : start + size]
+        for right in vertices[start : start + size]
+        if left < right
+    )
+    graph = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(vertices=vertices, edges=edges)
+    )
+
+    result = full_graph_automorphism_group(graph)
+
+    assert result.automorphism_count == factorial(5) * factorial(6) * factorial(7)
+    assert result.generated_group_order == result.automorphism_count
+    assert len(result.generators) == 6
+
+
 def test_uniform_vertex_colored_cliques_keep_compact_presentation() -> None:
     vertices = tuple(
         f"v{component}{position}" for component in range(3) for position in range(3)

@@ -268,9 +268,12 @@ def test_atom_count_boundary_is_admitted_and_overflow_is_preflighted() -> None:
     with pytest.raises(OperationResourceAdmissionError, match="16384"):
         berry_esseen_bound(overflow_request)
     schema = BerryEsseenRequest.model_json_schema()
-    atoms_schema = schema["$defs"]["FiniteRationalDistribution"]["properties"]["atoms"]
-    assert atoms_schema["maxItems"] == MAX_BERRY_ESSEEN_ATOMS
-    assert "BerryEsseenDistribution" not in schema.get("$defs", {})
+    finite_atoms = schema["$defs"]["FiniteRationalDistribution"]["properties"]["atoms"]
+    assert finite_atoms["maxItems"] == 32_768
+    request_atoms = schema["$defs"]["BerryEsseenFiniteDistribution"]["properties"][
+        "atoms"
+    ]
+    assert request_atoms["maxItems"] == MAX_BERRY_ESSEEN_ATOMS
 
 
 def test_input_rational_height_boundary_is_enforced() -> None:

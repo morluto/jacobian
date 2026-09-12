@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-from fractions import Fraction
-from math import sqrt
-
 import pytest
 from pydantic import ValidationError
 
@@ -14,36 +11,32 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.number_theory.algebraic_numbers.real import RealAlgebraicValue
 from jacobian.math.polynomials._mahler_kernel import (
     content_primitive_profile,
     mahler_measure,
     quadratic_root_profile,
-    quadratic_surd_from_fractions,
     reciprocal_profile,
 )
 from jacobian.math.polynomials._mahler_models import (
     MAX_MAHLER_RADICAND_BITS,
-    MAX_MAHLER_RADICAND_DIGITS,
     ContentPrimitiveProfileRequest,
     ContentPrimitiveProfileResult,
     IntegerPolynomialProfileValue,
     IntegerPolynomialValue,
+    MahlerAlgebraicValue,
     MahlerMeasureRequest,
     MahlerMeasureResult,
-    QuadraticSurd,
     RealQuadraticRootProfileRequest,
     ReciprocalProfileRequest,
     ReciprocalProfileResult,
 )
 
 
-def _surds_equal(value: QuadraticSurd, expected: float) -> bool:
-    """Numeric comparison against an independent high-precision expectation."""
-
-    a, b = value.as_fractions()
-    if value.radicand == 0:
-        return abs(float(a) - expected) < 1e-9
-    return abs(float(a) + float(b) * sqrt(value.radicand) - expected) < 1e-9
+def _assert_golden_root(value: MahlerAlgebraicValue, index: int) -> None:
+    assert isinstance(value, RealAlgebraicValue)
+    assert value.polynomial == (1, -1, -1)
+    assert value.real_root_index == index
 
 
 def test_content_primitive_profile_reconstructs_the_source() -> None:
@@ -138,8 +131,9 @@ def test_quadratic_root_profile_classifies_each_real_root() -> None:
     assert result.root_kind == "DISTINCT_REAL"
     assert result.sum_of_roots == (1, 1)
     assert result.product_of_roots == (-1, 1)
-    assert set(result.root_locations) == {"INSIDE_UNIT_DISK", "OUTSIDE_UNIT_DISK"}
-    assert _surds_equal(result.roots[1], (1 + 5**0.5) / 2)
+    assert result.root_locations == ("INSIDE_UNIT_DISK", "OUTSIDE_UNIT_DISK")
+    _assert_golden_root(result.roots[0], 0)
+    _assert_golden_root(result.roots[1], 1)
 
 
 def test_quadratic_root_profile_reports_on_circle_roots() -> None:
@@ -154,59 +148,78 @@ def test_quadratic_root_profile_reports_on_circle_roots() -> None:
 def test_mahler_measure_of_golden_quadratic_is_the_golden_ratio() -> None:
     """M(x^2-x-1) = (1+sqrt(5))/2."""
     result = mahler_measure(MahlerMeasureRequest(coefficients_descending=(1, -1, -1)))
-    assert _surds_equal(result.mahler_measure, (1 + 5**0.5) / 2)
+    _assert_golden_root(result.mahler_measure, 1)
     assert result.leading_coefficient == 1
 
 
 def test_mahler_measure_keeps_the_leading_coefficient() -> None:
     """M(2x^2-2x-2) = 2*phi = 1+sqrt(5), not the monic value."""
     result = mahler_measure(MahlerMeasureRequest(coefficients_descending=(2, -2, -2)))
-    assert _surds_equal(result.mahler_measure, 1 + 5**0.5)
+    assert isinstance(result.mahler_measure, RealAlgebraicValue)
+    assert result.mahler_measure.polynomial == (1, -2, -4)
+    assert result.mahler_measure.real_root_index == 1
     assert result.leading_coefficient == 2
     # The audited mistake (dropping |a_d|) would return the monic measure.
-    assert not _surds_equal(result.mahler_measure, (1 + 5**0.5) / 2)
+    assert (
+        result.mahler_measure
+        != mahler_measure(
+            MahlerMeasureRequest(coefficients_descending=(1, -1, -1))
+        ).mahler_measure
+    )
 
 
 def test_mahler_measure_of_on_circle_polynomial_is_one() -> None:
     """M(x^2+x+1) = 1 because every root lies on the unit circle."""
     result = mahler_measure(MahlerMeasureRequest(coefficients_descending=(1, 1, 1)))
-    assert result.mahler_measure.rational_part.as_fraction() == Fraction(1)
-    assert result.mahler_measure.radicand == 0
+    assert result.mahler_measure == CanonicalRational(num=1, den=1)
 
 
 def test_mahler_measure_accepts_a_pure_quadratic_monomial() -> None:
     """Trailing zero coefficients do not make a nonzero polynomial zero."""
     result = mahler_measure(MahlerMeasureRequest(coefficients_descending=(3, 0, 0)))
-    assert result.mahler_measure.rational_part.as_fraction() == Fraction(3)
+    assert result.mahler_measure == CanonicalRational(num=3, den=1)
     assert result.root_locations == ("INSIDE_UNIT_DISK", "INSIDE_UNIT_DISK")
 
 
 def test_mahler_measure_uses_the_absolute_leading_coefficient() -> None:
     """M(3x^2-3) = 3 * max(1,1)^2 = 3."""
     result = mahler_measure(MahlerMeasureRequest(coefficients_descending=(3, 0, -3)))
-    assert result.mahler_measure.rational_part.as_fraction() == Fraction(3)
-    assert result.mahler_measure.radicand == 0
+    assert result.mahler_measure == CanonicalRational(num=3, den=1)
 
 
 def test_mahler_measure_of_a_linear_polynomial() -> None:
     """M(2x-4) = 2 * |2| = 4 for the single outside root two."""
     result = mahler_measure(MahlerMeasureRequest(coefficients_descending=(2, -4)))
-    assert result.mahler_measure.rational_part.as_fraction() == Fraction(4)
+    assert result.mahler_measure == CanonicalRational(num=4, den=1)
     assert result.root_locations == ("OUTSIDE_UNIT_DISK",)
 
 
 def test_mahler_measure_of_a_unit_root_linear_polynomial() -> None:
     """M(x-1) = 1 because the only root lies on the unit circle."""
     result = mahler_measure(MahlerMeasureRequest(coefficients_descending=(1, -1)))
-    assert result.mahler_measure.rational_part.as_fraction() == Fraction(1)
+    assert result.mahler_measure == CanonicalRational(num=1, den=1)
     assert result.root_locations == ("ON_UNIT_CIRCLE",)
 
 
-def test_surd_canonicalization_pulls_square_factors() -> None:
-    """sqrt(20) is represented as 2*sqrt(5) so equal values serialize equally."""
-    value = quadratic_surd_from_fractions(Fraction(0), Fraction(1), 20)
-    assert value.radicand == 5
-    assert value.radical_coefficient.as_fraction() == Fraction(2)
+def test_quadratic_roots_use_the_canonical_algebraic_carrier() -> None:
+    result = quadratic_root_profile(
+        RealQuadraticRootProfileRequest(coefficients_descending=(1, 0, -20))
+    )
+    first, second = result.roots
+    assert isinstance(first, RealAlgebraicValue)
+    assert isinstance(second, RealAlgebraicValue)
+    assert first.polynomial == (1, 0, -20)
+    assert first.real_root_index == 0
+    assert second.real_root_index == 1
+
+
+def test_negative_leading_quadratic_roots_are_increasing() -> None:
+    result = quadratic_root_profile(
+        RealQuadraticRootProfileRequest(coefficients_descending=(-1, 1, 1))
+    )
+    assert result.root_locations == ("INSIDE_UNIT_DISK", "OUTSIDE_UNIT_DISK")
+    _assert_golden_root(result.roots[0], 0)
+    _assert_golden_root(result.roots[1], 1)
 
 
 def test_result_round_trips_through_strict_json() -> None:
@@ -293,6 +306,17 @@ def test_mahler_result_binds_degree_leading_coefficient_and_locations() -> None:
     with pytest.raises(ValidationError):
         MahlerMeasureResult.model_validate_json(encode_strict_json(forged), strict=True)
 
+
+def test_mahler_result_validator_does_not_replay_measure_mathematics() -> None:
+    """The trusted kernel owns the value; the model checks only source shape."""
+    result = mahler_measure(MahlerMeasureRequest(coefficients_descending=(1, -1)))
+    forged = result.model_dump(mode="json")
+    forged["mahler_measure"] = {"num": "99", "den": "1"}
+    restored = MahlerMeasureResult.model_validate_json(
+        encode_strict_json(forged), strict=True
+    )
+    assert restored.mahler_measure == CanonicalRational(num=99, den=1)
+
     forged = result.model_dump(mode="json")
     forged["leading_coefficient"] = 99
     with pytest.raises(ValidationError):
@@ -302,24 +326,6 @@ def test_mahler_result_binds_degree_leading_coefficient_and_locations() -> None:
     forged["root_locations"] = ["UNRESOLVED"]
     with pytest.raises(ValidationError):
         MahlerMeasureResult.model_validate_json(encode_strict_json(forged), strict=True)
-
-
-def test_quadratic_surd_rejects_radical_beyond_operation_envelope() -> None:
-    with pytest.raises(ValidationError):
-        QuadraticSurd(
-            rational_part=CanonicalRational(num=0, den=1),
-            radical_coefficient=CanonicalRational(num=1, den=1),
-            radicand=(1 << MAX_MAHLER_RADICAND_BITS) + 3,
-        )
-
-
-def test_quadratic_surd_rejects_decimal_boundary_before_isqrt() -> None:
-    with pytest.raises(ValidationError):
-        QuadraticSurd(
-            rational_part=CanonicalRational(num=0, den=1),
-            radical_coefficient=CanonicalRational(num=1, den=1),
-            radicand=10**MAX_MAHLER_RADICAND_DIGITS,
-        )
 
 
 def test_quadratic_discriminant_is_admitted_before_isqrt() -> None:
@@ -340,17 +346,37 @@ def test_complex_pair_has_modulus_instead_of_fake_real_root() -> None:
     assert result.complex_pair_squared_modulus.as_fraction() == 4
     assert mahler_measure(
         MahlerMeasureRequest(coefficients_descending=(1, 0, 4))
-    ).mahler_measure == QuadraticSurd.rational(Fraction(4))
+    ).mahler_measure == CanonicalRational(num=4, den=1)
 
 
 def test_large_nonsquare_discriminant_uses_bounded_factorization() -> None:
     result = mahler_measure(
         MahlerMeasureRequest(coefficients_descending=(1, 1, -(10**24)))
     )
-    assert result.mahler_measure == QuadraticSurd.rational(Fraction(10**24))
+    assert result.mahler_measure == CanonicalRational(num=10**24, den=1)
 
 
-def test_perfect_square_radical_keeps_its_rational_contribution() -> None:
-    assert quadratic_surd_from_fractions(
-        Fraction(1), Fraction(2), 9
-    ) == QuadraticSurd.rational(Fraction(7))
+def test_factorization_backend_failure_is_a_typed_resource_outcome(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail(_request: object) -> None:
+        raise RuntimeError("backend unavailable")
+
+    monkeypatch.setattr(
+        "jacobian.math.polynomials._mahler_kernel.factorize_certified", fail
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        quadratic_root_profile(
+            RealQuadraticRootProfileRequest(coefficients_descending=(1, 0, -1000003))
+        )
+    assert error.value.errors()[0]["type"] == "polynomial.mahler_factorization_backend"
+
+
+def test_perfect_square_discriminant_keeps_its_rational_roots() -> None:
+    result = quadratic_root_profile(
+        RealQuadraticRootProfileRequest(coefficients_descending=(1, 0, -9))
+    )
+    assert result.roots == (
+        CanonicalRational(num=-3, den=1),
+        CanonicalRational(num=3, den=1),
+    )

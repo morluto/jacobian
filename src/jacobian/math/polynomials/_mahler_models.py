@@ -11,8 +11,7 @@ step the audited partial formula dropped.
 
 from __future__ import annotations
 
-from fractions import Fraction
-from math import gcd, isqrt
+from math import gcd
 from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
@@ -21,6 +20,7 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalRational, ExactInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
+from jacobian.math.number_theory.algebraic_numbers.real import RealAlgebraicValue
 
 MAX_MAHLER_DEGREE = 64
 MAX_MAHLER_COEFFICIENT_DIGITS = 256
@@ -36,151 +36,7 @@ RootLocation = Literal[
 ]
 
 
-class QuadraticSurd(StrictModel):
-    """An exact element ``a + b*sqrt(d)`` with ``d`` squarefree or zero.
-
-    ``d = 0`` denotes a rational value and requires ``b = 0``; otherwise the
-    radical coefficient is nonzero.  The representation is canonical, so two
-    equal surd values have byte-identical serializations.
-    """
-
-    rational_part: CanonicalRational
-    radical_coefficient: CanonicalRational
-    radicand: ExactInteger = Field(ge=0)
-
-    @model_validator(mode="after")
-    def require_canonical_surd(self) -> Self:
-        if self.radicand.bit_length() > MAX_MAHLER_RADICAND_BITS:
-            raise _validation_error(
-                "polynomial.mahler_surd_radicand_bound",
-                "quadratic-surd radicand exceeds the admitted factorization envelope",
-            )
-        if len(format_canonical_integer(self.radicand)) > MAX_MAHLER_RADICAND_DIGITS:
-            raise _validation_error(
-                "polynomial.mahler_surd_radicand_digits",
-                "quadratic-surd radicand exceeds the admitted factorization digits",
-            )
-        if self.radicand == 0:
-            if self.radical_coefficient.as_fraction() != 0:
-                raise _validation_error(
-                    "polynomial.mahler_surd_radical_with_zero_radicand",
-                    "a rational surd must have zero radical coefficient",
-                )
-            return self
-        root = isqrt(self.radicand)
-        if root * root == self.radicand:
-            raise _validation_error(
-                "polynomial.mahler_surd_square_radicand",
-                "a quadratic-surd radicand must not be a perfect square",
-            )
-        if self.radical_coefficient.as_fraction() == 0:
-            raise _validation_error(
-                "polynomial.mahler_surd_zero_radical",
-                "a nonrational surd must have a nonzero radical coefficient",
-            )
-        return self
-
-    def as_fractions(self) -> tuple[Fraction, Fraction]:
-        return (
-            self.rational_part.as_fraction(),
-            self.radical_coefficient.as_fraction(),
-        )
-
-    @classmethod
-    def rational(cls, value: Fraction) -> QuadraticSurd:
-        return cls(
-            rational_part=CanonicalRational(num=value.numerator, den=value.denominator),
-            radical_coefficient=CanonicalRational(num=0, den=1),
-            radicand=0,
-        )
-
-    @classmethod
-    def from_squarefree_parts(
-        cls,
-        rational: Fraction,
-        radical: Fraction,
-        square_factor: int,
-        squarefree_radicand: int,
-    ) -> QuadraticSurd:
-        """Build a surd from a kernel-admitted squarefree decomposition."""
-
-        if squarefree_radicand == 0 or radical == 0:
-            return cls.rational(rational)
-        if square_factor < 1 or squarefree_radicand < 1:
-            raise ValueError("surd squarefree parts must be positive")
-        adjusted_radical = radical * square_factor
-        if squarefree_radicand == 1:
-            return cls.rational(rational + adjusted_radical)
-        return cls(
-            rational_part=CanonicalRational(
-                num=rational.numerator, den=rational.denominator
-            ),
-            radical_coefficient=CanonicalRational(
-                num=adjusted_radical.numerator, den=adjusted_radical.denominator
-            ),
-            radicand=squarefree_radicand,
-        )
-
-    def multiply(self, other: QuadraticSurd) -> QuadraticSurd:
-        """Exact product; the radicands either agree, or one side is rational."""
-
-        left_a, left_b = self.as_fractions()
-        right_a, right_b = other.as_fractions()
-        if self.radicand == 0 or other.radicand == 0:
-            radicand = self.radicand or other.radicand
-            return QuadraticSurd.from_squarefree_parts(
-                left_a * right_a,
-                left_a * right_b + left_b * right_a,
-                1,
-                radicand,
-            )
-        if self.radicand != other.radicand:
-            raise _validation_error(
-                "polynomial.mahler_surd_mixed_radicands",
-                "combining surds with different radicands is outside this envelope",
-            )
-        radicand = self.radicand
-        return QuadraticSurd.from_squarefree_parts(
-            left_a * right_a + left_b * right_b * radicand,
-            left_a * right_b + right_a * left_b,
-            1,
-            radicand,
-        )
-
-    def __pow__(self, exponent: int) -> QuadraticSurd:
-        result = QuadraticSurd.rational(Fraction(1))
-        for _ in range(exponent):
-            result = result.multiply(self)
-        return result
-
-    def is_zero(self) -> bool:
-        """Exact test of ``a + b*sqrt(d) == 0``."""
-
-        a, b = self.as_fractions()
-        return a == 0 and (b == 0 or self.radicand == 0)
-
-    def is_one(self) -> bool:
-        """Exact test of ``a + b*sqrt(d) == 1``."""
-
-        a, b = self.as_fractions()
-        return a == 1 and (b == 0 or self.radicand == 0)
-
-    def is_nonnegative(self) -> bool:
-        """Exact test of ``a + b*sqrt(d) >= 0``."""
-
-        a, b = self.as_fractions()
-        if b == 0:
-            return a >= 0
-        if self.radicand == 0:
-            return a >= 0
-        # Compare a and -b*sqrt(d) exactly by squaring with sign analysis.
-        if a >= 0 and b >= 0:
-            return True
-        if a < 0 and b < 0:
-            return False
-        if a >= 0:
-            return a * a >= b * b * self.radicand
-        return b * b * self.radicand >= a * a
+MahlerAlgebraicValue = CanonicalRational | RealAlgebraicValue
 
 
 def _validation_error(code: str, message: str) -> PydanticCustomError:
@@ -396,7 +252,7 @@ class RealQuadraticRootProfileResult(StrictModel):
     root_kind: Literal["DISTINCT_REAL", "DOUBLE_REAL", "COMPLEX_CONJUGATE"]
     sum_of_roots: tuple[ExactInteger, ExactInteger]
     product_of_roots: tuple[ExactInteger, ExactInteger]
-    roots: tuple[QuadraticSurd, ...]
+    roots: tuple[MahlerAlgebraicValue, ...]
     complex_pair_squared_modulus: CanonicalRational | None = None
     root_locations: tuple[RootLocation, ...]
 
@@ -422,14 +278,10 @@ class RealQuadraticRootProfileResult(StrictModel):
             )
         expected_roots = 0 if self.root_kind == "COMPLEX_CONJUGATE" else expected
         if self.root_kind == "COMPLEX_CONJUGATE":
-            a, _, c = self.coefficients_descending
-            if (
-                self.complex_pair_squared_modulus is None
-                or self.complex_pair_squared_modulus.as_fraction() != Fraction(c, a)
-            ):
+            if self.complex_pair_squared_modulus is None:
                 raise _validation_error(
                     "polynomial.mahler_quadratic_modulus",
-                    "complex pair must retain its exact squared modulus",
+                    "complex pair must retain its squared-modulus carrier",
                 )
         elif self.complex_pair_squared_modulus is not None:
             raise _validation_error(
@@ -480,8 +332,8 @@ class MahlerMeasureResult(StrictModel):
     degree: StrictInt = Field(ge=1, le=2)
     leading_coefficient: ExactInteger
     root_locations: tuple[RootLocation, ...]
-    outside_root_product: QuadraticSurd
-    mahler_measure: QuadraticSurd
+    outside_root_product: MahlerAlgebraicValue
+    mahler_measure: MahlerAlgebraicValue
     convention: Literal["ABSOLUTE_LEADING_TIMES_OUTSIDE_ROOT_PRODUCT"] = (
         "ABSOLUTE_LEADING_TIMES_OUTSIDE_ROOT_PRODUCT"
     )
@@ -533,9 +385,9 @@ __all__ = [
     "ContentPrimitiveProfileResult",
     "IntegerPolynomialProfileValue",
     "IntegerPolynomialValue",
+    "MahlerAlgebraicValue",
     "MahlerMeasureRequest",
     "MahlerMeasureResult",
-    "QuadraticSurd",
     "RealQuadraticRootProfileRequest",
     "RealQuadraticRootProfileResult",
     "ReciprocalProfileRequest",

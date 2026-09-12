@@ -402,8 +402,9 @@ def test_distribution_normalization_bounds_intermediate_denominators() -> None:
         for index, denominator in enumerate(denominators)
     )
 
+    distribution = FiniteRationalDistribution(atoms=atoms)
     with pytest.raises(OperationDomainValidationError, match="intermediate bound"):
-        FiniteRationalDistribution(atoms=atoms)
+        event_probability(distribution, (atoms[0].value,))
 
 
 def test_result_deserialization_does_not_repeat_power_admission() -> None:

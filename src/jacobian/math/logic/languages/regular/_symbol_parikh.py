@@ -372,7 +372,7 @@ def symbol_parikh_profile(
         layer_states[length] * output_bound,
         possible_word_count,
     )
-    output_materialization_work = output_materialization_cells * max(1, alphabet_size)
+    output_materialization_work = output_materialization_cells
     # The transition index is built from every DFA edge, including edges from
     # states that are unreachable from the initial state.
     transition_index_work = transition_count

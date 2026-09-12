@@ -1,5 +1,10 @@
 """Exact regular language operations."""
 
+from jacobian.math.logic.languages.regular._symbol_parikh import (
+    SymbolParikhCell,
+    SymbolParikhProfileResult,
+    symbol_parikh_profile,
+)
 from jacobian.math.logic.languages.regular.operations import (
     count_accepted_words,
     dfa_complement,
@@ -25,6 +30,8 @@ __all__ = [
     "AutomatonTransition",
     "DFATransition",
     "FiniteLabeledAutomaton",
+    "SymbolParikhCell",
+    "SymbolParikhProfileResult",
     "TransitionParikhCell",
     "TransitionParikhProfile",
     "count_accepted_words",
@@ -32,6 +39,7 @@ __all__ = [
     "dfa_equivalence",
     "dfa_run",
     "dfa_transition_carrier",
+    "symbol_parikh_profile",
     "transition_parikh_profile",
     "verify_accepted_word_count",
     "verify_dfa_run",

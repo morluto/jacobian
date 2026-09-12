@@ -1,13 +1,17 @@
 """Exact symbol-level Parikh profiles for accepted DFA words."""
 
 from math import comb
-from typing import Self
+from typing import Annotated, Self
 
 from pydantic import Field, StrictInt, model_validator
 
 from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
+from jacobian.math.logic.languages.regular.operations import count_accepted_words
 from jacobian.math.logic.languages.regular.values import (
     DFA,
     MAX_COUNT_RESULT_DIGITS,
@@ -20,26 +24,63 @@ MAX_SYMBOL_PARIKH_CELLS = 43_000
 
 
 class SymbolParikhProfileRequest(StrictModel):
-    dfa: DFA
-    word_length: StrictInt = Field(ge=0, le=MAX_SYMBOL_PARIKH_LENGTH)
+    """Request for the complete accepted-word symbol-count profile."""
+
+    dfa: DFA = Field(
+        description=(
+            "Complete deterministic finite automaton; symbol coordinates use its "
+            "ordered zero-based alphabet axis."
+        )
+    )
+    word_length: StrictInt = Field(
+        ge=0,
+        le=MAX_SYMBOL_PARIKH_LENGTH,
+        description="Exact nonnegative length of every counted accepted word.",
+    )
 
 
 class SymbolParikhCell(StrictModel):
-    symbol_counts: tuple[StrictInt, ...] = Field(max_length=MAX_DFA_ALPHABET)
-    multiplicity: ExactInteger = Field(ge=1)
+    """One canonical symbol-count vector and its positive exact multiplicity."""
+
+    symbol_counts: tuple[Annotated[StrictInt, Field(ge=0)], ...] = Field(
+        max_length=MAX_DFA_ALPHABET,
+        description=(
+            "Dense nonnegative counts on the DFA alphabet axis; coordinates sum "
+            "to the requested word length."
+        ),
+    )
+    multiplicity: ExactInteger = Field(
+        ge=1,
+        description="Positive exact number of accepted words with this vector.",
+    )
 
 
 class SymbolParikhProfileResult(StrictModel):
-    dfa: DFA
-    alphabet: tuple[StrictInt, ...] = Field(max_length=MAX_DFA_ALPHABET)
-    word_length: StrictInt = Field(ge=0, le=MAX_SYMBOL_PARIKH_LENGTH)
-    cells: tuple[SymbolParikhCell, ...] = Field(max_length=MAX_SYMBOL_PARIKH_CELLS)
-    total_accepted_words: ExactInteger
+    """Complete canonical map from symbol-count vectors to accepted words."""
+
+    dfa: DFA = Field(description="The source DFA retained for composition.")
+    alphabet: tuple[StrictInt, ...] = Field(
+        max_length=MAX_DFA_ALPHABET,
+        description="Ordered zero-based alphabet axis retained by every vector.",
+    )
+    word_length: StrictInt = Field(
+        ge=0,
+        le=MAX_SYMBOL_PARIKH_LENGTH,
+        description="Exact length shared by every profile vector.",
+    )
+    cells: tuple[SymbolParikhCell, ...] = Field(
+        max_length=MAX_SYMBOL_PARIKH_CELLS,
+        description="Lexicographically sorted, unique nonzero profile cells.",
+    )
+    total_accepted_words: ExactInteger = Field(
+        description="Exact sum of all cell multiplicities.",
+    )
 
     @classmethod
     def _from_kernel(
         cls,
-        request: SymbolParikhProfileRequest,
+        dfa: DFA,
+        word_length: int,
         *,
         cells: tuple[SymbolParikhCell, ...],
         total_accepted_words: ExactInteger,
@@ -47,9 +88,9 @@ class SymbolParikhProfileResult(StrictModel):
         """Construct a profile after the trusted DP established its invariants."""
 
         return cls.model_construct(
-            dfa=request.dfa,
-            alphabet=tuple(range(request.dfa.alphabet_size)),
-            word_length=request.word_length,
+            dfa=dfa,
+            alphabet=tuple(range(dfa.alphabet_size)),
+            word_length=word_length,
             cells=cells,
             total_accepted_words=total_accepted_words,
         )
@@ -313,17 +354,17 @@ def _collect_profile(
     return profile
 
 
-def symbol_parikh_profile(
-    request: SymbolParikhProfileRequest,
+def _compute_symbol_parikh_profile(
+    dfa: DFA,
+    length: int,
 ) -> SymbolParikhProfileResult:
-    dfa = request.dfa
-    length = request.word_length
     alphabet_size = dfa.alphabet_size
     if alphabet_size == 0:
         total = int(length == 0 and dfa.initial_state in dfa.accepting_states)
         cells = (SymbolParikhCell(symbol_counts=(), multiplicity=1),) if total else ()
         return SymbolParikhProfileResult._from_kernel(
-            request,
+            dfa,
+            length,
             cells=cells,
             total_accepted_words=total,
         )
@@ -431,10 +472,42 @@ def symbol_parikh_profile(
     profile = _collect_profile(layer, accepting)
     total = sum(profile.values())
     return SymbolParikhProfileResult._from_kernel(
-        request,
+        dfa,
+        length,
         cells=tuple(
             SymbolParikhCell(symbol_counts=counts, multiplicity=multiplicity)
             for counts, multiplicity in sorted(profile.items())
         ),
         total_accepted_words=total,
     )
+
+
+def _symbol_parikh_profile_request(
+    request: SymbolParikhProfileRequest,
+) -> SymbolParikhProfileResult:
+    return symbol_parikh_profile(request.dfa, request.word_length)
+
+
+def symbol_parikh_profile(dfa: DFA, word_length: int) -> SymbolParikhProfileResult:
+    """Return the accepted-word symbol Parikh profile for one exact length."""
+
+    if not isinstance(dfa, DFA):
+        raise OperationDomainValidationError(
+            location=("dfa",),
+            code="regular_language.symbol_parikh.dfa_type",
+            message="dfa must be a canonical DFA value",
+        )
+    if (
+        type(word_length) is not int
+        or word_length < 0
+        or word_length > MAX_SYMBOL_PARIKH_LENGTH
+    ):
+        raise OperationDomainValidationError(
+            location=("word_length",),
+            code="regular_language.symbol_parikh.word_length",
+            message=(
+                "word_length must be an integer from 0 through "
+                f"{MAX_SYMBOL_PARIKH_LENGTH}"
+            ),
+        )
+    return _compute_symbol_parikh_profile(dfa, word_length)

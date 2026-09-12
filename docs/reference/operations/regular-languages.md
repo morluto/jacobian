@@ -20,3 +20,17 @@ envelopes are admitted before traversal. Resource refusal is not an equivalence
 result. The result model checks witness and trace shape without replaying the
 automata; use `regular_language.run.check` when an independent run result is
 needed.
+
+`regular_language.symbol_parikh_profile.compute` returns the complete exact
+histogram of accepted words of one length, keyed by dense vectors of symbol
+multiplicities on the DFA's ordered alphabet axis. Paths are merged as soon as
+their state and symbol counts agree, so transitions carrying the same symbol do
+not create a finer transition-level profile. Cells are lexicographically
+ordered and omit zero multiplicities; the source DFA, alphabet axis, length,
+and aggregate accepted-word count remain attached for composition.
+
+The operation admits transition-index construction, reachable-state discovery,
+all extended weak-composition DP layers, vector-coordinate updates, final-layer
+scans, exact count digits, and complete output materialization before running.
+A zero-symbol DFA admits only the empty word; a positive alphabet is still
+required to be a complete transition carrier.

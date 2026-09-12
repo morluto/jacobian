@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from time import monotonic
 
 import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
+from jacobian._execution import (
+    OperationExecutionTimeoutError,
+    request_execution,
+)
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -311,6 +316,40 @@ def test_hypergraph_ledger_allocation_is_admitted_before_enumeration(
         ("a", "b"),
     )
     with pytest.raises(OperationResourceAdmissionError, match="allocation bound"):
+        compute_hypergraph_bond_connection_probability(source)
+
+
+def test_hypergraph_enumeration_observes_an_expired_deadline() -> None:
+    source = _source(
+        ("a", "b", "c", "d"),
+        (
+            ("ab", ("a", "b")),
+            ("bc", ("b", "c")),
+            ("cd", ("c", "d")),
+        ),
+        {"ab": Fraction(1, 2), "bc": Fraction(1, 2), "cd": Fraction(1, 2)},
+        ("a", "d"),
+    )
+    with (
+        request_execution(monotonic(), outer_deadline=monotonic() - 1),
+        pytest.raises(OperationExecutionTimeoutError),
+    ):
+        compute_hypergraph_bond_connection_probability(source)
+
+
+def test_twelve_hyperedge_enumeration_observes_an_expired_deadline() -> None:
+    vertices = tuple(f"v{index}" for index in range(13))
+    edges = tuple((f"e{index}", (f"v{index}", f"v{index + 1}")) for index in range(12))
+    source = _source(
+        vertices,
+        edges,
+        {edge_id: Fraction(1, 2) for edge_id, _ in edges},
+        ("v0", "v12"),
+    )
+    with (
+        request_execution(monotonic(), outer_deadline=monotonic() - 1),
+        pytest.raises(OperationExecutionTimeoutError),
+    ):
         compute_hypergraph_bond_connection_probability(source)
 
 

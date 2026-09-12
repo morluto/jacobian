@@ -626,6 +626,8 @@ def _division_support_bound(
         remaining.remove(degree)
         shift = degree - divisor_degree
         quotient_support.add(shift)
+        if len(quotient_support) > MAX_POLYNOMIAL_TERMS:
+            return len(quotient_support)
         remaining.update(shift + exponent for exponent in lower_support)
     return len(quotient_support)
 

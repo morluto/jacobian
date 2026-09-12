@@ -8,7 +8,10 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.geometry.polytopes.lattice._models import (
     EhrhartRequest,
     EhrhartResult,
@@ -101,7 +104,7 @@ def test_all_dilation_scans_are_admitted_before_any_scan(
         raise AssertionError("scan started before aggregate admission")
 
     monkeypatch.setattr(operations, "_scan_box", fail_if_scanned)
-    with pytest.raises(OperationDomainValidationError, match="aggregate"):
+    with pytest.raises(OperationResourceAdmissionError, match="aggregate"):
         native_ehrhart(
             tuple(
                 Vertex.model_validate(_vertex(*point))
@@ -127,7 +130,7 @@ def test_aggregate_scan_budget_rejects_before_scaled_geometry(
         return original(*args, **kwargs)
 
     monkeypatch.setattr(operations, "_facets_and_box", count_geometry)
-    with pytest.raises(OperationDomainValidationError, match="aggregate"):
+    with pytest.raises(OperationResourceAdmissionError, match="aggregate"):
         native_ehrhart(
             tuple(
                 Vertex.model_validate(_vertex(*point))
@@ -153,7 +156,7 @@ def test_axis_span_budget_rejects_before_scaled_geometry(
         return original(*args, **kwargs)
 
     monkeypatch.setattr(operations, "_facets_and_box", count_geometry)
-    with pytest.raises(OperationDomainValidationError, match="per-axis span"):
+    with pytest.raises(OperationResourceAdmissionError, match="per-axis span"):
         native_ehrhart(
             tuple(
                 Vertex.model_validate(_vertex(*point))

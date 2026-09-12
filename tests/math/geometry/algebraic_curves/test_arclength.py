@@ -132,3 +132,55 @@ def test_nonconverged_integral_is_unknown(monkeypatch) -> None:
     )
     assert result.outcome.status == "UNKNOWN"
     assert result.outcome.reason == "REFINEMENT_INCOMPLETE"
+
+
+def test_left_of_irrational_ellipse_is_not_declared_empty() -> None:
+    result = enclose_arclength(
+        _request(
+            _polynomial((1, (2, 0)), (2, (0, 2)), (-2, (0, 0))),
+            RationalBox(
+                variables=("x", "y"),
+                intervals=(
+                    ClosedRationalInterval(
+                        lower=_rational(-1), upper=_rational(Fraction(-1, 2))
+                    ),
+                    ClosedRationalInterval(lower=_rational(-2), upper=_rational(2)),
+                ),
+            ),
+        )
+    )
+    assert result.outcome.status != "EMPTY"
+
+
+def test_contained_irrational_ellipse_is_enclosed() -> None:
+    result = enclose_arclength(
+        _request(
+            _polynomial((1, (2, 0)), (2, (0, 2)), (-2, (0, 0))),
+            _box(-2, 2, -2, 2),
+            Fraction(1, 10),
+        )
+    )
+    assert result.outcome.status == "ENCLOSED"
+    assert result.outcome.lower.as_fraction() > 0
+
+
+def test_finite_tangency_is_singular_unsupported() -> None:
+    result = enclose_arclength(
+        _request(
+            _polynomial((1, (2, 0)), (1, (0, 2)), (-1, (0, 0))),
+            _box(-1, 1, -2, 2),
+        )
+    )
+    assert result.outcome.status == "SINGULAR_CASE_UNSUPPORTED"
+    assert result.outcome.reason == "BOUNDARY_NONTRANSVERSE"
+
+
+def test_projective_left_tangency_is_singular_unsupported() -> None:
+    result = enclose_arclength(
+        _request(
+            _polynomial((1, (2, 0)), (1, (0, 2)), (-1, (0, 0))),
+            _box(-1, 0, -2, 2),
+        )
+    )
+    assert result.outcome.status == "SINGULAR_CASE_UNSUPPORTED"
+    assert result.outcome.reason == "BOUNDARY_NONTRANSVERSE"

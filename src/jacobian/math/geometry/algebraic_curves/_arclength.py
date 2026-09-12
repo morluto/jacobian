@@ -18,7 +18,10 @@ import sympy
 
 from jacobian._exact import CanonicalRational
 from jacobian._execution import OperationExecutionTimeoutError, bind_request_deadline
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.analysis._definite_integral_enclosure import (
     DefiniteIntegralEnclosureRequest,
     DefiniteIntegralEnclosureResult,
@@ -26,6 +29,7 @@ from jacobian.math.analysis._definite_integral_enclosure import (
     _compute_definite_integral_enclosure,
 )
 from jacobian.math.analysis._models import (
+    MAX_RATIONAL_DIGITS,
     ExactDyadic,
     IntervalExpressionNode,
     RationalIntervalBox,
@@ -141,7 +145,7 @@ def _quadratic_roots(
     constant, linear, quadratic = coefficients
     if quadratic == 0:
         if linear == 0:
-            return ()
+            raise ValueError("BOUNDARY_NONTRANSVERSE")
         return (-constant / linear,)
     discriminant = linear * linear - 4 * quadratic * constant
     if discriminant < 0:
@@ -168,7 +172,7 @@ def _parameter_coordinates(ellipse: _Ellipse, t: Fraction) -> tuple[Fraction, Fr
     )
 
 
-def _cells_for_box(
+def _cells_for_box(  # noqa: C901
     ellipse: _Ellipse, request: PlaneCurveArclengthRequest
 ) -> tuple[_ParameterCell, ...] | str:
     """Return exact cells on the half-angle projective line.
@@ -182,16 +186,30 @@ def _cells_for_box(
     b = _square_root_rational(ellipse.b2)
     box_x, box_y = (interval for interval in request.box.intervals)
     if a is None or b is None:
-        # A full containment check does not require representing an algebraic
-        # boundary endpoint.  A disjoint coordinate range proves emptiness.
-        if box_x.upper.as_fraction() < ellipse.h - _sqrt_lower_bound(
-            ellipse.a2
-        ) or box_x.lower.as_fraction() > ellipse.h + _sqrt_upper_bound(ellipse.a2):
+        a_hi = _sqrt_upper_bound(ellipse.a2)
+        b_hi = _sqrt_upper_bound(ellipse.b2)
+        if (
+            box_x.upper.as_fraction() < ellipse.h - a_hi
+            or box_x.lower.as_fraction() > ellipse.h + a_hi
+        ):
             return ()
-        if box_y.upper.as_fraction() < ellipse.k - _sqrt_lower_bound(
-            ellipse.b2
-        ) or box_y.lower.as_fraction() > ellipse.k + _sqrt_upper_bound(ellipse.b2):
+        if (
+            box_y.upper.as_fraction() < ellipse.k - b_hi
+            or box_y.lower.as_fraction() > ellipse.k + b_hi
+        ):
             return ()
+        if (
+            box_x.lower.as_fraction() <= ellipse.h - a_hi
+            and box_x.upper.as_fraction() >= ellipse.h + a_hi
+            and box_y.lower.as_fraction() <= ellipse.k - b_hi
+            and box_y.upper.as_fraction() >= ellipse.k + b_hi
+        ):
+            return (
+                _ParameterCell(lower=None, upper=Fraction(-1)),
+                _ParameterCell(lower=Fraction(-1), upper=Fraction()),
+                _ParameterCell(lower=Fraction(), upper=Fraction(1)),
+                _ParameterCell(lower=Fraction(1), upper=None),
+            )
         return "IRRATIONAL_BOUNDARY"
     if (
         box_x.upper.as_fraction() < ellipse.h - a
@@ -244,19 +262,21 @@ def _cells_for_box(
 
 
 def _sqrt_lower_bound(value: Fraction) -> Fraction:
-    # A rational lower bound used only to prove a coordinate-range disjointness.
     if value <= 0:
         return Fraction()
-    numerator = isqrt(value.numerator * 10**12)
-    denominator = isqrt(value.denominator * 10**12)
-    return Fraction(numerator, denominator * 10**6)
+    product = value.numerator * value.denominator
+    root = isqrt(product)
+    return Fraction(root, value.denominator)
 
 
 def _sqrt_upper_bound(value: Fraction) -> Fraction:
-    lower = _sqrt_lower_bound(value)
-    while lower * lower < value:
-        lower += Fraction(1, 10**6)
-    return lower
+    if value <= 0:
+        return Fraction()
+    product = value.numerator * value.denominator
+    root = isqrt(product)
+    if root * root == product:
+        return Fraction(root, value.denominator)
+    return Fraction(root + 1, value.denominator)
 
 
 def _const(value: Fraction) -> IntervalExpressionNode:
@@ -379,11 +399,7 @@ def _integrate_cell(
                 max_leaves=1024,
                 # The request execution context owns the single absolute deadline;
                 # this per-phase value only keeps standalone native calls bounded.
-                wall_seconds=(
-                    request.resource_budget.wall_seconds
-                    if request.resource_budget.wall_seconds > remaining
-                    else remaining
-                ),
+                wall_seconds=remaining,
             )
             result: DefiniteIntegralEnclosureResult = (
                 _compute_definite_integral_enclosure(integral_request)
@@ -437,7 +453,28 @@ def enclose_arclength(  # noqa: C901
             return PlaneCurveArclengthResult._from_kernel(
                 request, outcome=ArclengthEmpty()
             )
-        cells = _cells_for_box(ellipse, request)
+        derived = (ellipse.a2, ellipse.b2, 4 * ellipse.a2)
+        if any(
+            max(len(str(abs(value.numerator))), len(str(value.denominator)))
+            > MAX_RATIONAL_DIGITS
+            for value in derived
+        ):
+            raise OperationResourceAdmissionError(
+                location=("polynomial",),
+                code="real_algebra.plane_curve.arclength.derived_coefficient_bound",
+                message="derived arclength integrand coefficients exceed the nested interval-expression digit bound",
+            )
+        try:
+            cells = _cells_for_box(ellipse, request)
+        except ValueError as exc:
+            if str(exc) == "BOUNDARY_NONTRANSVERSE":
+                return PlaneCurveArclengthResult._from_kernel(
+                    request,
+                    outcome=ArclengthSingularUnsupported(
+                        reason="BOUNDARY_NONTRANSVERSE"
+                    ),
+                )
+            raise
         if isinstance(cells, str):
             if cells == "BOUNDARY_CORNER":
                 return PlaneCurveArclengthResult._from_kernel(

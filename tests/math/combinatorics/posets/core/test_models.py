@@ -295,7 +295,7 @@ def test_consumers_reject_foreign_incomparable_pair_models_as_domain_errors() ->
         width(forged)
 
 
-def test_consumers_reject_foreign_ordered_pair_models_as_domain_errors() -> None:
+def test_consumers_reject_duck_typed_ordered_pair_carriers_as_domain_errors() -> None:
     class ForeignOrder:
         def __init__(self, lower: str, upper: str) -> None:
             self.lower = lower

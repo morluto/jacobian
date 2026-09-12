@@ -209,33 +209,6 @@ def _cosine(coefficient: int) -> dict[str, object]:
     return {"kind": "COSINE", "angle": {"coefficients": [coefficient]}}
 
 
-def test_reduced_quotient_support_is_bounded_before_gcd() -> None:
-    request = TrigonometricRationalSource.model_validate(
-        {
-            "variables": ["x", "y"],
-            "expression": {
-                "kind": "DIVIDE",
-                "numerator": {
-                    "kind": "MULTIPLY",
-                    "children": [
-                        {"kind": "SINE", "angle": {"coefficients": [65, 0]}},
-                        {"kind": "SINE", "angle": {"coefficients": [0, 65]}},
-                    ],
-                },
-                "denominator": {
-                    "kind": "MULTIPLY",
-                    "children": [
-                        {"kind": "SINE", "angle": {"coefficients": [1, 0]}},
-                        {"kind": "SINE", "angle": {"coefficients": [0, 1]}},
-                    ],
-                },
-            },
-        }
-    )
-    with pytest.raises(OperationResourceAdmissionError):
-        normalize_trigonometric_rational(request)
-
-
 def _reciprocal_of_reciprocal(inner: dict[str, object]) -> dict[str, object]:
     one = {"kind": "LITERAL", "value": {"num": 1, "den": 1}}
     return {

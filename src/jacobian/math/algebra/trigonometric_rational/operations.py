@@ -265,9 +265,7 @@ def _axis_stride(exponents: list[int]) -> int:
     return stride or 1
 
 
-def _quotient_support_term_count(
-    numerator: Polynomial, denominator: Polynomial
-) -> int:
+def _quotient_support_term_count(numerator: Polynomial, denominator: Polynomial) -> int:
     """Bound reduced quotient support, preserving per-axis exponent stride."""
 
     if not numerator or not denominator:

@@ -11,10 +11,12 @@ from pydantic import ValidationError
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.dispatch import invoke_operation
+from jacobian.math.combinatorics.designs.incidence_structures import _models as models
 from jacobian.math.combinatorics.designs.incidence_structures._models import (
     IncidenceStructure,
     SteinerTripleSystemRequest,
     SteinerTripleSystemResult,
+    SteinerTripleSystemShard,
 )
 from jacobian.math.combinatorics.designs.incidence_structures._tools import (
     _steiner_triple_system,
@@ -81,6 +83,32 @@ def test_budget_exhaustion_is_unknown() -> None:
     )
     assert result.status == "UNKNOWN"
     assert result.design is None
+    assert result.unresolved_frontier
+
+
+def test_unknown_frontier_can_resume_exact_cover_search() -> None:
+    limited = construct_steiner_triple_system(7, 1)
+    assert limited.status == "UNKNOWN"
+    assert limited.unresolved_frontier
+    resumed = construct_steiner_triple_system(
+        7, 100_000, limited.unresolved_frontier[0]
+    )
+    assert resumed.status == "COMPUTED"
+    assert resumed.design is not None
+
+
+def test_shard_requires_canonical_in_range_triples() -> None:
+    with pytest.raises(ValidationError, match="sorted, distinct, and in range"):
+        SteinerTripleSystemShard(order=7, fixed_triples=((0, 2, 1),))
+    with pytest.raises(ValidationError, match="must be unique"):
+        SteinerTripleSystemShard(order=7, fixed_triples=((0, 1, 2), (0, 1, 2)))
+
+
+def test_native_continuation_rejects_mismatched_shard_order() -> None:
+    with pytest.raises(OperationDomainValidationError, match="same order"):
+        construct_steiner_triple_system(
+            7, 100, SteinerTripleSystemShard(order=9, fixed_triples=())
+        )
 
 
 def test_necessary_parameter_condition_rejects_order() -> None:
@@ -96,6 +124,16 @@ def test_native_admission_rejects_invalid_order_before_materialization() -> None
     assert exc_info.value.errors()[0]["type"] == (
         "incidence_structure.steiner_order_necessary_condition"
     )
+
+
+def test_native_admission_uses_semantic_result_allocation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(models, "MAX_STEINER_RESULT_ALLOCATION_UNITS", 1)
+    with pytest.raises(
+        OperationDomainValidationError, match="retained result allocation"
+    ):
+        construct_steiner_triple_system(7, 100)
 
 
 def test_computed_result_rejects_noncanonical_design_axes() -> None:

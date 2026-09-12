@@ -35,6 +35,7 @@ from jacobian.math.combinatorics.designs.incidence_structures._models import (
     LeviGraphResult,
     RestrictionResult,
     SteinerTripleSystemResult,
+    SteinerTripleSystemShard,
     _require_containment_profile_admitted,
     _require_incidence_trade_admitted,
     _require_steiner_triple_system_admitted,
@@ -42,6 +43,8 @@ from jacobian.math.combinatorics.designs.incidence_structures._models import (
 from jacobian.math.combinatorics.exact_cover import (
     ExactCoverRow,
     GeneralizedExactCoverInstance,
+    GeneralizedExactCoverShard,
+    exact_cover_instance_digest,
     find_generalized_exact_cover,
 )
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
@@ -83,22 +86,34 @@ def containment_profile(
 
 
 def construct_steiner_triple_system(
-    order: int, search_budget: int = MAX_STEINER_SEARCH_STATES
+    order: int,
+    search_budget: int = MAX_STEINER_SEARCH_STATES,
+    shard: SteinerTripleSystemShard | None = None,
 ) -> SteinerTripleSystemResult:
     """Construct one STS(order) using bounded exact cover over point pairs.
 
     Each candidate triple covers exactly three pair constraints. The canonical
-    instance is solved by the maintained generalized exact-cover backend, and
-    the returned design is independently checked by replaying all pair
-    multiplicities before it crosses the operation boundary.
+    instance is solved by the maintained generalized exact-cover backend. An
+    UNKNOWN result retains canonical fixed-triple frontier shards so callers
+    can continue one unresolved branch. A found design is independently
+    checked by replaying all pair multiplicities before crossing the operation
+    boundary.
     """
     if type(order) is not int or type(search_budget) is not int:
         raise TypeError("order and search_budget must be integers")
+    if shard is not None and not isinstance(shard, SteinerTripleSystemShard):
+        raise TypeError("shard must be a SteinerTripleSystemShard or None")
+    if shard is not None and shard.order != order:
+        raise OperationDomainValidationError(
+            location=("order", "shard"),
+            code="incidence_structure.steiner_shard_order",
+            message="a continuation shard must have the same order as the request",
+        )
 
     execution = current_request_execution()
     if execution is None:
         with request_execution(time.monotonic()):
-            return construct_steiner_triple_system(order, search_budget)
+            return construct_steiner_triple_system(order, search_budget, shard)
     deadline = execution.started_at + 60
     if execution.deadline is not None:
         deadline = min(deadline, execution.deadline)
@@ -135,13 +150,37 @@ def construct_steiner_triple_system(
             for row_id, triple in triple_by_row_id.items()
         ),
     )
-    cover = find_generalized_exact_cover(exact_cover, search_node_limit=search_budget)
+    cover_shard = None
+    if shard is not None:
+        cover_shard = GeneralizedExactCoverShard(
+            instance_digest=exact_cover_instance_digest(exact_cover),
+            fixed_row_prefix=tuple(
+                f"triple:{a:02d}:{b:02d}:{c:02d}" for a, b, c in shard.fixed_triples
+            ),
+        )
+    cover = find_generalized_exact_cover(
+        exact_cover, search_node_limit=search_budget, shard=cover_shard
+    )
     states = cover.searched_node_count
     if cover.status != "FOUND":
+        if cover.status == "UNKNOWN":
+            frontier = tuple(
+                SteinerTripleSystemShard(
+                    order=order,
+                    fixed_triples=tuple(
+                        triple_by_row_id[row_id]
+                        for row_id in frontier_shard.fixed_row_prefix
+                    ),
+                )
+                for frontier_shard in cover.unresolved_frontier
+            )
+        else:
+            frontier = ()
         return SteinerTripleSystemResult(
             status="UNKNOWN" if cover.status == "UNKNOWN" else "NOT_FOUND",
             order=order,
             states_explored=states,
+            unresolved_frontier=frontier,
         )
 
     # Replay the defining incidence axiom independently of the cover search.

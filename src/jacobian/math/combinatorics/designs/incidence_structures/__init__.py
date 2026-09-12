@@ -7,6 +7,7 @@ from jacobian.math.combinatorics.designs.incidence_structures._models import (
     IncidenceTradeResult,
     SteinerTripleSystemRequest,
     SteinerTripleSystemResult,
+    SteinerTripleSystemShard,
 )
 from jacobian.math.combinatorics.designs.incidence_structures.operations import (
     check_incidence_trade,
@@ -30,6 +31,7 @@ __all__ = [
     "IncidenceTradeResult",
     "SteinerTripleSystemRequest",
     "SteinerTripleSystemResult",
+    "SteinerTripleSystemShard",
     "check_incidence_trade",
     "complement",
     "construct_steiner_triple_system",

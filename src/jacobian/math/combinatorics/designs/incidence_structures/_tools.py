@@ -93,7 +93,9 @@ def _gram(request: GramRequest) -> GramResult:
 def _steiner_triple_system(
     request: SteinerTripleSystemRequest,
 ) -> SteinerTripleSystemResult:
-    return construct_steiner_triple_system(request.order, request.search_budget)
+    return construct_steiner_triple_system(
+        request.order, request.search_budget, request.shard
+    )
 
 
 _STRUCTURE = {
@@ -339,7 +341,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         description="Construct one Steiner triple system STS(v) by an exact bounded "
         "cover search over all point pairs. A COMPUTED design is replayed to "
         "ensure every pair occurs in exactly one 3-point block; budget "
-        "exhaustion is UNKNOWN.",
+        "exhaustion is UNKNOWN with resumable frontier shards.",
         request_type=SteinerTripleSystemRequest,
         result_type=SteinerTripleSystemResult,
         run=_steiner_triple_system,
@@ -348,7 +350,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             OperationExample(
                 name="fano_plane",
-                description="Construct the Fano-plane Steiner triple system STS(7).",
+                description=(
+                    "Construct the Fano-plane Steiner triple system STS(7); the "
+                    "order must be congruent to 1 or 3 modulo 6."
+                ),
                 input={"order": 7, "search_budget": 100_000},
             ),
         ),

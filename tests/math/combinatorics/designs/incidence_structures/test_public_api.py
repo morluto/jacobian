@@ -11,6 +11,7 @@ def test_exact_public_api_symbols() -> None:
         "IncidenceTradeResult",
         "SteinerTripleSystemRequest",
         "SteinerTripleSystemResult",
+        "SteinerTripleSystemShard",
         "check_incidence_trade",
         "complement",
         "construct_steiner_triple_system",

@@ -40,7 +40,12 @@ MAX_TRADE_DIFFERENCES = MAX_POINTS + MAX_SUBSETS
 # candidate representation and its deterministic node-by-item scan.
 MAX_STEINER_TRIPLE_ORDER = 15
 MAX_STEINER_SEARCH_STATES = 100_000
-MAX_STEINER_OUTPUT_BYTES = 64 * 1024
+MAX_STEINER_BLOCKS = MAX_STEINER_TRIPLE_ORDER * (MAX_STEINER_TRIPLE_ORDER - 1) // 6
+MAX_STEINER_FRONTIER_SHARDS = 4_096
+# Intrinsic allocation envelope for the retained design and resumable search
+# frontier: axis entries, block IDs, point memberships, and fixed-prefix
+# positions. Concrete transports own their encoded-byte ceilings independently.
+MAX_STEINER_RESULT_ALLOCATION_UNITS = 1_048_576
 _MAX_STEINER_EXACT_COVER_WORK_UNITS = 256 * 100_000 * 64
 _MAX_STEINER_INTERMEDIATE_UNITS = 8_192
 
@@ -135,8 +140,8 @@ class SteinerTripleSystemRequest(StrictModel):
             "description": (
                 "Construct one canonical Steiner triple system of order v. "
                 "The order must be congruent to 1 or 3 modulo 6; a bounded "
-                "search may return UNKNOWN without a design when its state "
-                "budget is exhausted."
+                "search may return UNKNOWN with resumable frontier shards "
+                "when its state budget is exhausted."
             )
         }
     )
@@ -155,7 +160,14 @@ class SteinerTripleSystemRequest(StrictModel):
         le=MAX_STEINER_SEARCH_STATES,
         description=(
             "Maximum exact-cover search states; exhaustion is reported as "
-            "UNKNOWN rather than as a failed construction."
+            "UNKNOWN with resumable frontier shards."
+        ),
+    )
+    shard: SteinerTripleSystemShard | None = Field(
+        default=None,
+        description=(
+            "Optional unresolved fixed-triple prefix from an earlier UNKNOWN "
+            "result; the order must match."
         ),
     )
 
@@ -168,6 +180,59 @@ class SteinerTripleSystemRequest(StrictModel):
                 "steiner_order_necessary_condition",
                 "a Steiner triple system requires order congruent to 1 or 3 modulo 6",
             )
+        if self.shard is not None and self.shard.order != self.order:
+            raise _validation_error(
+                "steiner_shard_order",
+                "a continuation shard must have the same order as the request",
+            )
+        return self
+
+
+class SteinerTripleSystemShard(StrictModel):
+    """A canonical fixed-triple prefix for deterministic continuation."""
+
+    order: StrictInt = Field(
+        ge=3,
+        le=MAX_STEINER_TRIPLE_ORDER,
+        description="Steiner order associated with this search prefix.",
+    )
+    fixed_triples: tuple[tuple[StrictInt, StrictInt, StrictInt], ...] = Field(
+        default=(),
+        max_length=MAX_STEINER_BLOCKS,
+        description=(
+            "Canonical fixed triple prefix in deterministic traversal order; "
+            "each triple is sorted and uses point positions in the range 0 "
+            "through order-1."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_prefix(self) -> Self:
+        if self.order % 6 not in (1, 3):
+            raise _validation_error(
+                "steiner_order_necessary_condition",
+                "a Steiner triple system requires order congruent to 1 or 3 modulo 6",
+            )
+        if len(self.fixed_triples) > self.order * (self.order - 1) // 6:
+            raise _validation_error(
+                "steiner_shard_length",
+                "a continuation prefix cannot contain more triples than the design",
+            )
+        if any(
+            triple != tuple(sorted(triple))
+            or any(point < 0 or point >= self.order for point in triple)
+            or len(set(triple)) != 3
+            for triple in self.fixed_triples
+        ):
+            raise _validation_error(
+                "steiner_shard_triple",
+                "continuation triples must be sorted, distinct, and in range",
+            )
+        if len(set(self.fixed_triples)) != len(self.fixed_triples):
+            raise _validation_error(
+                "steiner_shard_order",
+                "continuation triples must be unique",
+            )
         return self
 
 
@@ -178,6 +243,9 @@ class SteinerTripleSystemResult(StrictModel):
     order: StrictInt = Field(ge=3, le=MAX_STEINER_TRIPLE_ORDER)
     design: IncidenceStructure | None = None
     states_explored: StrictInt = Field(ge=0, le=MAX_STEINER_SEARCH_STATES)
+    unresolved_frontier: tuple[SteinerTripleSystemShard, ...] = Field(
+        default=(), max_length=MAX_STEINER_FRONTIER_SHARDS
+    )
 
     @model_validator(mode="after")
     def require_status_payload(self) -> Self:
@@ -186,7 +254,13 @@ class SteinerTripleSystemResult(StrictModel):
                 "steiner_order_necessary_condition",
                 "a Steiner triple system requires order congruent to 1 or 3 modulo 6",
             )
+        _require_steiner_frontier_order(self.order, self.unresolved_frontier)
         if self.status == "COMPUTED":
+            if self.unresolved_frontier:
+                raise _validation_error(
+                    "steiner_computed_frontier",
+                    "COMPUTED results cannot carry unresolved frontier shards",
+                )
             if self.design is None:
                 raise _validation_error(
                     "steiner_computed_without_design",
@@ -229,20 +303,42 @@ class SteinerTripleSystemResult(StrictModel):
                     "steiner_block_order",
                     "computed blocks must be in canonical lexicographic order",
                 )
-        elif self.design is not None:
+        elif self.status == "UNKNOWN":
+            if self.design is not None:
+                raise _validation_error(
+                    "steiner_unknown_design",
+                    "UNKNOWN outcomes cannot carry a design",
+                )
+            if not self.unresolved_frontier:
+                raise _validation_error(
+                    "steiner_unknown_frontier",
+                    "UNKNOWN outcomes must retain unresolved frontier shards",
+                )
+        elif self.design is not None or self.unresolved_frontier:
             raise _validation_error(
-                "steiner_noncomputed_design",
-                "non-COMPUTED outcomes cannot carry a design",
+                "steiner_noncomputed_payload",
+                "non-COMPUTED, non-UNKNOWN outcomes cannot carry a design or frontier",
             )
         return self
 
 
-def _steiner_output_bytes_bound(order: int) -> int:
-    """Return a conservative JSON-size bound for the canonical result."""
+def _require_steiner_frontier_order(
+    order: int, frontier: tuple[SteinerTripleSystemShard, ...]
+) -> None:
+    if any(shard.order != order for shard in frontier):
+        raise _validation_error(
+            "steiner_frontier_order",
+            "every frontier shard must have the result order",
+        )
+
+
+def _steiner_result_allocation_units(order: int) -> int:
+    """Return retained structural slots for every canonical result state."""
 
     block_count = order * (order - 1) // 6
-    # Canonical pN/bN labels are at most three bytes in the admitted range.
-    return 4_096 + 32 * order + 64 * block_count + 32 * 3 * block_count
+    design_units = order + block_count + 3 * block_count
+    frontier_units = MAX_STEINER_FRONTIER_SHARDS * (1 + 3 * MAX_STEINER_BLOCKS)
+    return 8 + design_units + frontier_units
 
 
 def _require_steiner_triple_system_admitted(order: int, search_budget: int) -> None:
@@ -281,10 +377,10 @@ def _require_steiner_triple_system_admitted(order: int, search_budget: int) -> N
             "steiner_intermediate_budget_exceeded",
             "Steiner construction exceeds its candidate-family allocation budget",
         )
-    if _steiner_output_bytes_bound(order) > MAX_STEINER_OUTPUT_BYTES:
+    if _steiner_result_allocation_units(order) > MAX_STEINER_RESULT_ALLOCATION_UNITS:
         raise IncidenceStructureAdmissionError(
-            "steiner_output_budget_exceeded",
-            "Steiner construction exceeds its exact output-size budget",
+            "steiner_result_allocation_exceeded",
+            "Steiner construction exceeds its retained result allocation budget",
         )
 
 

@@ -97,6 +97,15 @@ def test_linear_code_dual_and_syndrome_have_one_operation_family() -> None:
     }
 
 
+def test_finite_magma_countermodel_check_remains_native_only() -> None:
+    assert (
+        Catalog.open().operation(
+            "universal_algebra.finite_magma.implication_countermodel.check"
+        )
+        is None
+    )
+
+
 def test_match_browse_and_inspect_results_stay_within_the_public_catalog() -> None:
     catalog = Catalog.open()
     public_ids = {

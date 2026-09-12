@@ -252,4 +252,3 @@ def test_shorter_caller_deadline_is_passed_to_the_killable_worker(
         radix_prefix(_value((1, 0, -2), 1), 10, 1)
     assert seen
     assert seen[0] <= caller_deadline + 1e-3
-

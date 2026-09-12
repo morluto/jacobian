@@ -29,7 +29,9 @@ def _scaled_integer_part(
         domain=sympy.ZZ,
     )
     if source.is_irreducible is not True:
-        raise ValueError("real algebraic minimal polynomial must be irreducible over QQ")
+        raise ValueError(
+            "real algebraic minimal polynomial must be irreducible over QQ"
+        )
     scaled_coefficients = [
         coefficient * scale**position
         for position, coefficient in enumerate(coefficients)
@@ -64,11 +66,7 @@ def main() -> int:
         )
     except ValueError as exc:
         message = str(exc)
-        code = (
-            "not_irreducible"
-            if "irreducible" in message
-            else "root_index"
-        )
+        code = "not_irreducible" if "irreducible" in message else "root_index"
         json.dump({"ok": False, "code": code, "message": message}, sys.stdout)
         return 0
     except TimeoutError as exc:

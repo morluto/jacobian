@@ -137,16 +137,16 @@ def test_shared_denominator_two_term_product_stays_inside_the_output_envelope() 
     )
 
 
-def test_related_denominator_two_term_product_stays_inside_the_output_envelope() -> None:
+def test_related_denominator_two_term_product_stays_inside_the_output_envelope() -> (
+    None
+):
     denominator = 10**8191 + 1
     left_coefficient = CanonicalRational(num=1, den=denominator)
     right_coefficient = CanonicalRational(num=1, den=2 * denominator)
     factor = RationalLaurentPolynomial(
         variables=("x",),
         terms=(
-            RationalLaurentPolynomialTerm(
-                coefficient=left_coefficient, exponents=(1,)
-            ),
+            RationalLaurentPolynomialTerm(coefficient=left_coefficient, exponents=(1,)),
             RationalLaurentPolynomialTerm(
                 coefficient=right_coefficient, exponents=(0,)
             ),

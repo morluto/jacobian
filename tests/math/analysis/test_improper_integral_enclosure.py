@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from time import sleep
 
 import pytest
 from pydantic import ValidationError
 
+from jacobian._execution import OperationExecutionTimeoutError
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.analysis import _improper_integral_enclosure as improper_module
 from jacobian.math.analysis._definite_integral_enclosure import (
     DefiniteIntegralDomainUnproven,
 )
@@ -17,6 +20,7 @@ from jacobian.math.analysis._improper_integral_enclosure import (
     EndpointLogImproperIntegralResult,
     enclose_endpoint_log_improper_integral,
 )
+from jacobian.math.analysis._models import MAX_DYADIC_EXPONENT
 
 
 def _request(**updates: object) -> EndpointLogImproperIntegralRequest:
@@ -71,6 +75,33 @@ def test_squared_left_logarithm_encloses_its_exact_integral() -> None:
 
     assert result.enclosure.lower.as_fraction() <= 2
     assert result.enclosure.upper.as_fraction() >= 2
+
+
+@pytest.mark.parametrize(
+    ("left_log_power", "right_log_power", "exact"),
+    ((1, 0, Fraction(33, 4)), (0, 1, Fraction(51, 4))),
+)
+def test_endpoint_log_orientation_on_an_asymmetric_interval(
+    left_log_power: int, right_log_power: int, exact: Fraction
+) -> None:
+    result = enclose_endpoint_log_improper_integral(
+        _request(
+            smooth_expression={"op": "var", "variable": "x"},
+            interval={
+                "lower": {"num": 2, "den": 1},
+                "upper": {"num": 5, "den": 1},
+            },
+            left_log_power=left_log_power,
+            right_log_power=right_log_power,
+            target_width={"mantissa": 1, "exponent": -3},
+        )
+    )
+
+    assert (
+        result.enclosure.lower.as_fraction()
+        <= exact
+        <= (result.enclosure.upper.as_fraction())
+    )
 
 
 def test_both_endpoint_log_factors_use_the_same_truncation() -> None:
@@ -148,6 +179,57 @@ def test_divergent_smooth_factor_is_outside_the_proved_class() -> None:
                 }
             )
         )
+
+
+def test_smooth_factor_intermediate_overflow_is_typed_admission() -> None:
+    with pytest.raises(
+        OperationDomainValidationError,
+        match="smooth factor exceeds the admitted exact preflight bound",
+    ):
+        enclose_endpoint_log_improper_integral(
+            _request(
+                smooth_expression={
+                    "op": "exp",
+                    "children": [{"op": "var", "variable": "x"}],
+                },
+                interval={
+                    "lower": {"num": 10_000, "den": 1},
+                    "upper": {"num": 10_001, "den": 1},
+                },
+            )
+        )
+
+
+def test_large_positive_target_width_does_not_require_a_large_fraction() -> None:
+    result = enclose_endpoint_log_improper_integral(
+        _request(target_width={"mantissa": 1, "exponent": MAX_DYADIC_EXPONENT})
+    )
+
+    assert result.left_tail.truncation == 1
+    assert result.right_tail.truncation == 1
+
+
+def test_direct_native_call_checks_deadline_after_combined_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_compute = improper_module.__dict__["_compute_definite_integral_enclosure"]
+    calls = 0
+
+    def delayed_second_quadrature(request: object) -> object:
+        nonlocal calls
+        result = original_compute(request)
+        calls += 1
+        if calls == 2:
+            sleep(1.05)
+        return result
+
+    monkeypatch.setattr(
+        improper_module,
+        "_compute_definite_integral_enclosure",
+        delayed_second_quadrature,
+    )
+    with pytest.raises(OperationExecutionTimeoutError):
+        enclose_endpoint_log_improper_integral(_request(wall_seconds=1))
 
 
 def test_tail_target_beyond_the_admitted_truncation_is_rejected() -> None:

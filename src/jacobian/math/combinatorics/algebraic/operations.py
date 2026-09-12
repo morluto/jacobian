@@ -12,6 +12,7 @@ from math import factorial, prod
 from typing import cast
 
 from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS
+from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.combinatorics.algebraic._models import DominanceRelation, RSKResult
 from jacobian.math.combinatorics.algebraic._rsk import (
@@ -49,9 +50,45 @@ __all__ = [
 
 # Hook-content evaluation performs exact products of one factor per cell.  The
 # first bound protects the serialized integer fields; the second bounds the
-# estimated quadratic cost of those bigint products.  Both are computed from
-# canonical source dimensions and the supplied alphabet before expansion.
+# bigint arithmetic.  CPython multiplies limb vectors with schoolbook
+# products below 70 limbs and Karatsuba-style recursion above, so each
+# multiplication of limb sizes (a, b) is charged by splitting the larger
+# operand into ceil(a/b) blocks of the smaller size: schoolbook block cost
+# below the threshold and the Karatsuba recurrence
+# T(m) <= 3T(ceil(m/2)) + 32m above it, unrolled to schoolbook leaves.  All
+# quantities derive from canonical source dimensions and the supplied
+# alphabet before expansion.
 MAX_HOOK_CONTENT_WORK = 8_000_000
+
+_KARATSUBA_LIMB_THRESHOLD = 70
+_KARATSUBA_SCHOOLBOOK_LEAF_COST = _KARATSUBA_LIMB_THRESHOLD * _KARATSUBA_LIMB_THRESHOLD
+
+
+def _limbs_for_digits(digits: int) -> int:
+    """Return a limb upper bound for a decimal-digit count (30-bit limbs)."""
+
+    return (digits * 1108) // 10_000 + 1
+
+
+def _balanced_multiplication_work(limbs: int) -> int:
+    """Bound one balanced multiplication of the given limb size."""
+
+    if limbs <= _KARATSUBA_LIMB_THRESHOLD:
+        return limbs * limbs + 2 * limbs
+    ratio = (limbs + _KARATSUBA_LIMB_THRESHOLD - 1) // _KARATSUBA_LIMB_THRESHOLD
+    levels = (ratio - 1).bit_length()
+    return (3**levels) * (_KARATSUBA_SCHOOLBOOK_LEAF_COST + 32 * limbs)
+
+
+def _multiplication_work(a_limbs: int, b_limbs: int) -> int:
+    """Bound one multiplication of the given limb sizes via blocking."""
+
+    if a_limbs < b_limbs:
+        a_limbs, b_limbs = b_limbs, a_limbs
+    if b_limbs <= 0:
+        return a_limbs
+    blocks = (a_limbs + b_limbs - 1) // b_limbs
+    return blocks * _balanced_multiplication_work(b_limbs)
 
 
 def _upper_decimal_digits(value: int) -> int:
@@ -96,16 +133,30 @@ def _admit_hook_content(partition: IntegerPartition, alphabet_size: int) -> None
             message="hook-content factors exceed the exact output digit bound",
         )
 
-    # ``prod`` multiplies a growing accumulator from left to right.  After
-    # the first factor, the accumulator can have i*d digits at the i-th
-    # multiplication, so charge the sum of those costs rather than treating
-    # every multiplication as a fixed-size d-by-d product.  The first factor
-    # is only copied into the accumulator and must not make a one-cell result
-    # pay a quadratic bigint cost.
-    multiplication_count = cell_count * (cell_count - 1) // 2
-    numerator_work = multiplication_count * factor_digits * factor_digits
-    hook_work = multiplication_count * hook_digits * hook_digits
-    work = max(1, numerator_work + hook_work)
+    # The kernel accumulates each product left to right, so the i-th numerator
+    # multiplication joins an accumulator of at most i factor widths with one
+    # new factor; hooks accumulate likewise.  Charge every multiplication at
+    # its own admitted size (not at the final size, and not as a fixed-size
+    # digit-square product, which excludes cheap large-scalar requests), plus
+    # the final exact division charged by the divisor width.
+    factor_limbs = _limbs_for_digits(factor_digits)
+    hook_limbs = _limbs_for_digits(hook_digits)
+    hook_product_digits = cell_count * hook_digits
+    work = 0
+    for step in range(1, cell_count):
+        accumulator_limbs = _limbs_for_digits(step * factor_digits)
+        work += _multiplication_work(accumulator_limbs, factor_limbs)
+        accumulator_hook_limbs = _limbs_for_digits(step * hook_digits)
+        work += _multiplication_work(accumulator_hook_limbs, hook_limbs)
+        if work > MAX_HOOK_CONTENT_WORK:
+            raise OperationResourceAdmissionError(
+                location=("alphabet_size",),
+                code="algebraic_combinatorics.hook_content_work",
+                message="hook-content arithmetic exceeds the admitted work bound",
+            )
+    work += _multiplication_work(
+        _limbs_for_digits(output_digits), _limbs_for_digits(hook_product_digits)
+    )
     if work > MAX_HOOK_CONTENT_WORK:
         raise OperationResourceAdmissionError(
             location=("alphabet_size",),
@@ -222,8 +273,17 @@ def hook_content_count(partition: IntegerPartition, alphabet_size: int) -> int:
         for row, length in enumerate(partition.parts)
         for column in range(length)
     )
-    hook_product = _hook_length_product(hooks)
-    numerator_product = prod(numerators)
+    numerator_product = 1
+    for index, factor in enumerate(numerators):
+        if index and index % 32 == 0:
+            request_checkpoint("during hook-content numerator accumulation")
+        numerator_product *= factor
+    hook_product = 1
+    for index, row in enumerate(hooks):
+        for position, hook in enumerate(row):
+            if (index + position) and (index + position) % 32 == 0:
+                request_checkpoint("during hook-content hook accumulation")
+            hook_product *= hook
     quotient = Fraction(numerator_product, hook_product)
     if quotient.denominator != 1:
         raise ValueError("hook-content formula did not produce an integer")

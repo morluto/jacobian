@@ -145,14 +145,28 @@ def test_hook_content_result_rejects_derivation_artifacts() -> None:
 
 
 def test_hook_content_charges_growing_product_work() -> None:
+    # 500 cells over a 64-digit alphabet fit the 32,768-digit output bound
+    # (32,000 digits) but exceed the admitted bigint work envelope.
     request = HookContentCountRequest.model_validate(
-        {"partition": {"parts": [1] * 500}, "alphabet_size": 10_000_000}
+        {"partition": {"parts": [1] * 500}, "alphabet_size": 10**63}
     )
     with pytest.raises(
         OperationResourceAdmissionError,
         match="hook-content arithmetic exceeds the admitted work bound",
     ):
         hook_content_count(request)
+
+
+def test_hook_content_admits_two_cell_large_alphabet() -> None:
+    # One 3000-digit multiplication plus an exact division: microseconds of
+    # Karatsuba work returning a 6000-digit count within the output bound.
+    alphabet_size = 10**3000
+    request = HookContentCountRequest.model_validate(
+        {"partition": {"parts": [2]}, "alphabet_size": alphabet_size}
+    )
+    result = hook_content_count(request)
+    assert result.count == alphabet_size * (alphabet_size + 1) // 2
+    assert result.alphabet_size == alphabet_size
 
 
 @pytest.mark.parametrize(
@@ -230,6 +244,21 @@ def test_semistandard_tableau_checker_returns_source_bound_false_for_nonmembers(
     result = check_semistandard_tableau(request)
     assert result.tableau == request.tableau
     assert result.is_member is False
+
+
+def test_tableau_checkers_return_false_for_non_partition_shapes() -> None:
+    # Row lengths (1, 2) do not form a Young diagram; the shared partition
+    # validator wraps that shape failure, which must read as nonmembership.
+    standard = check_standard_tableau(
+        StandardTableauCheckRequest.model_validate({"tableau": {"rows": [[1], [2, 3]]}})
+    )
+    assert standard.is_member is False
+    semistandard = check_semistandard_tableau(
+        SemistandardTableauCheckRequest.model_validate(
+            {"tableau": {"rows": [[1], [1, 1]]}}
+        )
+    )
+    assert semistandard.is_member is False
 
 
 def test_tableau_checker_propagates_operational_failures(

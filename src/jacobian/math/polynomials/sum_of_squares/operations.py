@@ -74,7 +74,7 @@ def _compute_sos_sum(
                         coefficient=CanonicalRational.from_integer_ratio(
                             int(coefficient.p), int(coefficient.q)
                         ),
-                        exponents=exponents,
+                        exponents=tuple(int(exponent) for exponent in exponents),
                     )
                     for exponents, coefficient in total.terms()
                 )

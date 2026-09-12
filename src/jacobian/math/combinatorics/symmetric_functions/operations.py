@@ -164,9 +164,10 @@ def verify_schur_evaluation(claim: object) -> bool:
             return False
         if not 1 <= len(variables) <= 20 or not 1 <= len(point) <= 20:
             return False
+        partition = claim.partition
         canonical_claim = SchurExpansionResult.model_validate(
             {
-                "partition": claim.partition,
+                "partition": {"parts": partition.parts},
                 "variables": variables,
                 "point": point,
                 "value": claim.value,

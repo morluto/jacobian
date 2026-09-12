@@ -76,6 +76,15 @@ def test_schur_verifier_rejects_oversized_constructed_axes_without_dumping() -> 
     assert not verify_schur_evaluation(claim)
 
 
+def test_schur_verifier_rejects_forged_nested_partition_parts() -> None:
+    result = schur_evaluation(IntegerPartition(parts=(1,)), (1,), ("x",))
+    forged = result.model_copy(
+        update={"partition": IntegerPartition.model_construct(parts=(0,))}
+    )
+
+    assert not verify_schur_evaluation(forged)
+
+
 def test_schur_verifier_rejects_unvalidated_claim_copies() -> None:
     result = schur_evaluation(IntegerPartition(parts=(1,)), (1,), ("x",))
     invalid_copies = (

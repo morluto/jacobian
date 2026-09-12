@@ -6,12 +6,13 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS, CanonicalRational
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.geometry._models import (
+    MAX_SPANNED_CIRCLE_WORK,
     MAX_SPANNED_CIRCLES,
     CircumradiusProfileRequest,
     GeneralPositionRequest,
@@ -506,6 +507,50 @@ class TestSpannedCircleProfile:
         schema = SpannedCircleProfileResult.model_json_schema()
         assert schema["properties"]["circles"]["maxItems"] == MAX_SPANNED_CIRCLES
         assert MAX_SPANNED_CIRCLES == 4960
+        request_text = SpannedCircleProfileRequest.model_json_schema()["properties"][
+            "configuration"
+        ]["description"]
+        assert str(MAX_CANONICAL_INTEGER_DIGITS) in request_text
+        assert str(MAX_SPANNED_CIRCLE_WORK) in request_text
+        # Imported after `_tools` so `_configuration` is fully initialized.
+        from jacobian.math.geometry._configuration import CONFIGURATION_OPERATIONS
+
+        tool = next(
+            item
+            for item in CONFIGURATION_OPERATIONS
+            if item.operation_id == "geometry.points.spanned_circle_profile.compute"
+        )
+        assert str(MAX_CANONICAL_INTEGER_DIGITS) in tool.description
+        assert str(MAX_SPANNED_CIRCLE_WORK) in tool.description
+
+    def test_native_result_keeps_validated_configuration(self) -> None:
+        source = _configuration(_point("0", "0"), _point("1", "0"), _point("0", "1"))
+        forged = PointConfiguration.model_construct(points=list(source.points))
+        result = native_spanned_circle_profile(forged)
+        forged.points.clear()  # type: ignore[union-attr]
+        assert len(result.configuration.points) == 3
+        assert type(result).model_validate_json(result.model_dump_json()) == result
+
+    def test_circle_enumeration_checkpoints(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        observed: list[str] = []
+
+        def _observe(stage: str) -> None:
+            observed.append(stage)
+
+        monkeypatch.setattr(
+            "jacobian.math.geometry.operations.request_checkpoint", _observe
+        )
+        monkeypatch.setattr(
+            "jacobian.math.geometry.operations._CIRCLE_CHECKPOINT_INTERVAL", 1
+        )
+        native_spanned_circle_profile(
+            _configuration(_point("0", "0"), _point("1", "0"), _point("0", "1"))
+        )
+        assert any("collinearity" in stage for stage in observed)
+        assert any("construction" in stage for stage in observed)
+        assert any("incidence" in stage for stage in observed)
 
 
 @pytest.mark.parametrize("coordinates", [((0, 0), (1, 0)), ((0, 0), (1, 0), (0, 0))])

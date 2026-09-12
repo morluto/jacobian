@@ -9,6 +9,7 @@ from typing import Any, cast
 from pydantic import ValidationError
 
 from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS, CanonicalRational
+from jacobian._execution import request_checkpoint
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -204,7 +205,7 @@ def _admit_circumcircle(
 
 def _admit_spanned_circle_source(
     configuration: PointConfiguration,
-) -> tuple[RationalPoint2D, ...]:
+) -> tuple[PointConfiguration, tuple[RationalPoint2D, ...]]:
     if not isinstance(configuration, PointConfiguration):
         _reject_geometry_domain(
             location=("configuration",),
@@ -257,7 +258,7 @@ def _admit_spanned_circle_source(
             code="geometry.spanned_circle_points_unique",
             message="spanned-circle source point coordinates must be unique",
         )
-    return planar
+    return configuration, planar
 
 
 def _admit_simple_polygon_point(
@@ -901,12 +902,22 @@ def _minimum_height_origin(
     )
 
 
+_CIRCLE_CHECKPOINT_INTERVAL = 64
+
+
+def _checkpoint_circle_work(completed: int, stage: str) -> int:
+    completed += 1
+    if completed % _CIRCLE_CHECKPOINT_INTERVAL == 0:
+        request_checkpoint(stage)
+    return completed
+
+
 def spanned_circle_profile(
     configuration: PointConfiguration,
 ) -> SpannedCircleProfileResult:
     """Return every distinct circle spanned by a non-collinear source triple."""
 
-    points = _admit_spanned_circle_source(configuration)
+    configuration, points = _admit_spanned_circle_source(configuration)
     point_values = _points_to_fractions(points)
     origin = _minimum_height_origin(point_values)
     translated = tuple(
@@ -948,7 +959,11 @@ def spanned_circle_profile(
         )
 
     generated: list[tuple[int, int, int]] = []
+    completed = 0
     for i, j, k in combinations(range(n), 3):
+        completed = _checkpoint_circle_work(
+            completed, "during spanned-circle collinearity enumeration"
+        )
         first, second, third = translated[i], translated[j], translated[k]
         cross = (second[0] - first[0]) * (third[1] - first[1]) - (
             second[1] - first[1]
@@ -967,7 +982,11 @@ def spanned_circle_profile(
         )
 
     grouped: dict[tuple[Fraction, Fraction, Fraction], None] = {}
+    completed = 0
     for i, j, k in generated:
+        completed = _checkpoint_circle_work(
+            completed, "during spanned-circle construction"
+        )
         first, second, third = translated[i], translated[j], translated[k]
         cross = (second[0] - first[0]) * (third[1] - first[1]) - (
             second[1] - first[1]
@@ -1000,7 +1019,11 @@ def spanned_circle_profile(
         )
 
     incidences: dict[tuple[Fraction, Fraction, Fraction], tuple[int, ...]] = {}
+    completed = 0
     for key in grouped:
+        completed = _checkpoint_circle_work(
+            completed, "during spanned-circle incidence"
+        )
         center_x, center_y, radius_squared = key
         incidences[key] = tuple(
             source_index
@@ -1019,7 +1042,11 @@ def spanned_circle_profile(
         )
 
     restored_digit_total = 0
+    completed = 0
     for key in grouped:
+        completed = _checkpoint_circle_work(
+            completed, "during spanned-circle translated-back admission"
+        )
         restored_x = key[0] + origin[0]
         restored_y = key[1] + origin[1]
         restored_digits = (

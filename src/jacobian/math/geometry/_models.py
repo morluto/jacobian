@@ -11,6 +11,7 @@ from pydantic import ConfigDict, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
+    MAX_CANONICAL_INTEGER_DIGITS,
     MAX_CANONICAL_RATIONAL_DIGITS,
     CanonicalRational,
     require_bounded_rational,
@@ -1451,7 +1452,10 @@ class SpannedCircleProfileRequest(StrictModel):
             f"C(n,3)*max_digits^2, circumcircle construction for each "
             "non-collinear triple, and incidence work "
             f"n*(distinct circles)*max_digits^2 together stay at most "
-            f"{MAX_SPANNED_CIRCLE_WORK}. The result has at most C(n,3) circle "
+            f"{MAX_SPANNED_CIRCLE_WORK}. Restored circle centers and radii have "
+            f"at most {MAX_CANONICAL_INTEGER_DIGITS} digits each, and their "
+            f"aggregate digit count stays at most {MAX_SPANNED_CIRCLE_WORK}. "
+            f"The result has at most C(n,3) circle "
             f"rows, globally at most {MAX_SPANNED_CIRCLES}."
         ),
     )

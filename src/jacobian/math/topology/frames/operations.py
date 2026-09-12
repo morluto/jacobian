@@ -130,16 +130,22 @@ def _tight_complex_frame(
     tuple[tuple[GaussianRational, ...], ...],
     tuple[tuple[GaussianRational, ...], ...],
 ]:
-    operator = [
+    operator: list[list[tuple[Fraction, Fraction]]] = [
         [
             (
                 sum(
-                    _inner_product((vector[row],), (vector[column],))[0]
-                    for vector in frame.vectors
+                    (
+                        _inner_product((vector[row],), (vector[column],))[0]
+                        for vector in frame.vectors
+                    ),
+                    Fraction(0),
                 ),
                 sum(
-                    _inner_product((vector[row],), (vector[column],))[1]
-                    for vector in frame.vectors
+                    (
+                        _inner_product((vector[row],), (vector[column],))[1]
+                        for vector in frame.vectors
+                    ),
+                    Fraction(0),
                 ),
             )
             for column in range(frame.dimension)
@@ -147,11 +153,13 @@ def _tight_complex_frame(
         for row in range(frame.dimension)
     ]
     scalar = operator[0][0]
-    residual = [
+    residual: list[list[tuple[Fraction, Fraction]]] = [
         [
             (
-                operator[row][column][0] - (scalar[0] if row == column else 0),
-                operator[row][column][1] - (scalar[1] if row == column else 0),
+                operator[row][column][0]
+                - (scalar[0] if row == column else Fraction(0)),
+                operator[row][column][1]
+                - (scalar[1] if row == column else Fraction(0)),
             )
             for column in range(frame.dimension)
         ]
@@ -164,7 +172,10 @@ def _tight_complex_frame(
     operator_value = tuple(tuple(to_value(entry) for entry in row) for row in operator)
     residual_value = tuple(tuple(to_value(entry) for entry in row) for row in residual)
     return (
-        all(entry == (0, 0) for row in residual for entry in row) and scalar[1] == 0,
+        all(
+            entry == (Fraction(0), Fraction(0)) for row in residual for entry in row
+        )
+        and scalar[1] == 0,
         operator_value,
         residual_value,
     )
@@ -427,23 +438,25 @@ def mutually_unbiased_bases(
         )
     cross_gram_squared: list[tuple[tuple[CanonicalRational, ...], ...]] = []
     for basis, norms in zip(request.bases, basis_norms, strict=True):
-        for left in range(dimension):
-            for right in range(left + 1, dimension):
-                if _inner_product(basis.vectors[left], basis.vectors[right]) != (0, 0):
+        for left_index in range(dimension):
+            for right_index in range(left_index + 1, dimension):
+                if _inner_product(
+                    basis.vectors[left_index], basis.vectors[right_index]
+                ) != (Fraction(0), Fraction(0)):
                     unbiased = False
         if any(norm <= 0 for norm in norms):
             unbiased = False
     for first in range(len(request.bases)):
         for second in range(first + 1, len(request.bases)):
             cross: list[tuple[CanonicalRational, ...]] = []
-            for left, left_norm in zip(
+            for left_vector, left_norm in zip(
                 request.bases[first].vectors, basis_norms[first], strict=True
             ):
                 row: list[CanonicalRational] = []
-                for right, right_norm in zip(
+                for right_vector, right_norm in zip(
                     request.bases[second].vectors, basis_norms[second], strict=True
                 ):
-                    real, imaginary = _inner_product(left, right)
+                    real, imaginary = _inner_product(left_vector, right_vector)
                     if (
                         real * real + imaginary * imaginary
                     ) * dimension != left_norm * right_norm:
@@ -473,10 +486,10 @@ def sic_profile(request: SicProfileRequest) -> SicProfileResult:
     expected_count = frame.dimension * frame.dimension
     is_sic = len(frame.vectors) == expected_count
     squared_overlaps: list[tuple[CanonicalRational, ...]] = []
-    for left, left_norm in zip(frame.vectors, norms, strict=True):
+    for left_vector, left_norm in zip(frame.vectors, norms, strict=True):
         row: list[CanonicalRational] = []
-        for right, right_norm in zip(frame.vectors, norms, strict=True):
-            real, imaginary = _inner_product(left, right)
+        for right_vector, right_norm in zip(frame.vectors, norms, strict=True):
+            real, imaginary = _inner_product(left_vector, right_vector)
             row.append(
                 CanonicalRational.from_fraction(
                     (real * real + imaginary * imaginary) / (left_norm * right_norm)
@@ -487,13 +500,13 @@ def sic_profile(request: SicProfileRequest) -> SicProfileResult:
     if is_sic:
         is_sic = all(norm == norms[0] for norm in norms)
         common = Fraction(1, frame.dimension + 1)
-        for left in range(len(frame.vectors)):
-            for right in range(left + 1, len(frame.vectors)):
+        for left_index in range(len(frame.vectors)):
+            for right_index in range(left_index + 1, len(frame.vectors)):
                 real, imaginary = _inner_product(
-                    frame.vectors[left], frame.vectors[right]
+                    frame.vectors[left_index], frame.vectors[right_index]
                 )
                 overlap = (real * real + imaginary * imaginary) / (
-                    norms[left] * norms[right]
+                    norms[left_index] * norms[right_index]
                 )
                 if overlap != common:
                     is_sic = False

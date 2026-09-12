@@ -11,6 +11,7 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.logic.languages.regular.operations import count_accepted_words
 from jacobian.math.logic.languages.regular.values import (
     DFA,
     MAX_COUNT_RESULT_DIGITS,

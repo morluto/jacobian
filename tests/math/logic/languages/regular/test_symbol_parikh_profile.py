@@ -338,7 +338,7 @@ def test_empty_alphabet_has_only_the_empty_word() -> None:
         initial_state=0,
         accepting_states=(0,),
     )
-    result = symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=0))
+    result = symbol_parikh_profile(dfa, 0)
     assert result.alphabet == ()
     assert result.cells[0].symbol_counts == ()
     assert result.total_accepted_words == 1

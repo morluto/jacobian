@@ -258,7 +258,9 @@ def test_pullback_dag_is_bound_to_pullback_admission_errors(
     assert reject is not None
     assert label == "rational metric pullback"
     with pytest.raises(OperationResourceAdmissionError) as error:
-        reject("work", "complete rational metric pullback DAG exceeds 50,000,000 work units")
+        reject(
+            "work",
+            "complete rational metric pullback DAG exceeds 50,000,000 work units",
+        )
     assert "pullback" in error.value.errors()[0]["type"]
     assert "curvature" not in error.value.errors()[0]["type"]
-

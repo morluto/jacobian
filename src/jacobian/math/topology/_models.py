@@ -308,13 +308,6 @@ class FiniteSimplicialComplex(StrictModel):
                 "topology.require_complete_canonical_complex_2",
                 "maximal simplices must be canonical",
             )
-        expected_closure = face_closure(canonical_facets)
-        actual_closure = tuple(item.faces for item in self.faces_by_dimension)
-        if actual_closure != expected_closure:
-            raise _validation_error(
-                "topology.require_complete_canonical_complex_3",
-                "faces_by_dimension must be exactly the non-empty face closure of maximal simplices",
-            )
         expected_f_vector = tuple(len(item.faces) for item in self.faces_by_dimension)
         if (
             self.dimension != len(self.faces_by_dimension) - 1

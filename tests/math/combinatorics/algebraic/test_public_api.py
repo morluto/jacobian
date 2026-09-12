@@ -11,6 +11,8 @@ def test_exact_public_api_symbols() -> None:
         "EndpointProfileEntry",
         "EndpointProfileResult",
         "RSKTableauPair",
+        "SemistandardTableauCheckResult",
+        "StandardTableauCheckResult",
         "WeightedOrderedWord",
         "check_semistandard_tableau",
         "check_standard_tableau",

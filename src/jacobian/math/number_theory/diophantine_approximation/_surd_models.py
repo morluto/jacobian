@@ -39,8 +39,7 @@ _SURD_AXIS_DESCRIPTION = (
     f"range 2..{MAX_SURD_RADICAND}."
 )
 _SURD_SCALAR_RADICAND_DESCRIPTION = (
-    "Nonsquare integer radicand in the admitted range "
-    f"2..{MAX_SURD_RADICAND}."
+    f"Nonsquare integer radicand in the admitted range 2..{MAX_SURD_RADICAND}."
 )
 
 

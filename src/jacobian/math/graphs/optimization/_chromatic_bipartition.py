@@ -358,7 +358,8 @@ def _admit_unit_threshold_chromatic(request: ChromaticBipartitionRequest) -> Non
         if not _unit_threshold_core_is_admitted(core):
             continue
         has_admitted_candidate = True
-        coloring_work += _unit_threshold_coloring_work(core)
+        coloring_work = _unit_threshold_coloring_work(core)
+        break
     if (
         has_admitted_candidate
         and extraction_work + coloring_work <= MAX_CHROMATIC_BIPARTITION_WORK
@@ -436,7 +437,6 @@ def _find_chromatic_bipartition_kernel(
             for index, vertex in enumerate(source_vertices)
             if not mask & (1 << index)
         )
-        checked += 1
         if remaining_ms(started, request.resource_budget.wall_seconds) <= 0:
             return _unknown_chromatic_bipartition(request, checked)
         chromatic_a = _chromatic_number(_induced_graph(graph, side_a), request, started)
@@ -445,6 +445,7 @@ def _find_chromatic_bipartition_kernel(
         chromatic_b = _chromatic_number(_induced_graph(graph, side_b), request, started)
         if chromatic_b is None:
             return _unknown_chromatic_bipartition(request, checked)
+        checked += 1
         if chromatic_a >= request.s and chromatic_b >= request.t:
             return ChromaticBipartitionResult(
                 graph=graph,

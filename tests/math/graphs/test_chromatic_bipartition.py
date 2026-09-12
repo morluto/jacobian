@@ -10,6 +10,7 @@ from pydantic import ValidationError
 from jacobian._execution import (
     BackendFailureReason,
     OperationBackendError,
+    OperationExecutionTimeoutError,
     OperationResourceExhaustedError,
     bind_request_deadline,
     request_execution,
@@ -184,7 +185,7 @@ def test_kernel_timeout_is_a_source_bound_unknown_result(
     result = operation._find_chromatic_bipartition_kernel(request)
     assert result.status == "UNKNOWN"
     assert result.graph == source
-    assert result.checked_partitions == 1
+    assert result.checked_partitions == 0
 
 
 def test_worker_deadline_returns_source_bound_unknown_across_process_boundary() -> None:
@@ -200,9 +201,8 @@ def test_worker_deadline_returns_source_bound_unknown_across_process_boundary() 
     )
     with request_execution(time.monotonic()):
         bind_request_deadline(time.monotonic() + 0.02)
-        result = process_owner.find_chromatic_bipartition(request)
-    assert result.status == "UNKNOWN"
-    assert result.graph == source
+        with pytest.raises(OperationExecutionTimeoutError):
+            process_owner.find_chromatic_bipartition(request)
 
 
 def test_edgeless_twenty_vertex_request_is_exactly_decidable() -> None:
@@ -304,6 +304,23 @@ def test_unit_threshold_tries_another_singleton_before_backend_overflow() -> Non
     assert result.model_validate_json(result.model_dump_json()) == result
 
 
+def test_unit_threshold_charges_only_the_first_usable_remainder() -> None:
+    isolates = tuple(f"u{i:03d}" for i in range(248))
+    clique = tuple(f"k{i}" for i in range(8))
+    edges = tuple(
+        (clique[left], clique[right])
+        for left in range(8)
+        for right in range(left + 1, 8)
+    )
+    request = ChromaticBipartitionRequest(
+        graph=graph((*isolates, *clique), edges), s=1, t=1
+    )
+    result = find_chromatic_bipartition(request)
+    assert result.status == "SPLIT"
+    assert result.side_a == ("u000",)
+    assert result.chromatic_b == 8
+
+
 def test_unit_threshold_nonbipartite_core_above_backend_order_is_refused() -> None:
     vertices = tuple(f"v{i:02d}" for i in range(34))
     edges = tuple(
@@ -343,11 +360,10 @@ def test_worker_timeout_is_a_source_bound_unknown_result(
         "run_bounded_process",
         lambda *_args, **_kwargs: _completed(returncode=None, timed_out=True),
     )
-    result = operation.find_chromatic_bipartition(
-        ChromaticBipartitionRequest(graph=source, s=1, t=1)
-    )
-    assert result.status == "UNKNOWN"
-    assert result.graph == source
+    with pytest.raises(OperationExecutionTimeoutError):
+        operation.find_chromatic_bipartition(
+            ChromaticBipartitionRequest(graph=source, s=1, t=1)
+        )
 
 
 @pytest.mark.parametrize(

@@ -14,6 +14,7 @@ from jacobian._execution import (
     ExecutionResource,
     OperationBackendError,
     OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
     OperationResourceExhaustedError,
     current_request_execution,
     lease_operation_phases,
@@ -121,7 +122,9 @@ def find_chromatic_bipartition(
         with TemporaryDirectory(prefix="jacobian-graph-bipartition-") as directory:
             remaining_seconds = lease.backend_deadline - time.monotonic()
             if remaining_seconds <= 0:
-                return _unknown_result(request)
+                raise OperationExecutionTimeoutError(
+                    "chromatic bipartition deadline expired before the worker started"
+                )
             completed = run_bounded_process(
                 [sys.executable, str(_BIPARTITION_WORKER)],
                 input_bytes=json.dumps(
@@ -148,14 +151,18 @@ def find_chromatic_bipartition(
     if completed.cancelled:
         raise OperationExecutionCancelledError("chromatic bipartition worker cancelled")
     if completed.timed_out:
-        return _unknown_result(request)
+        raise OperationExecutionTimeoutError(
+            "chromatic bipartition deadline expired during the worker"
+        )
     request_checkpoint("after chromatic bipartition worker")
     if completed.stdout_exceeded or completed.stderr_exceeded:
         raise OperationResourceExhaustedError(ExecutionResource.OUTPUT)
     if completed.returncode != 0:
         raise OperationBackendError(BackendFailureReason.ABNORMAL_EXIT)
     if time.monotonic() >= deadline:
-        return _unknown_result(request)
+        raise OperationExecutionTimeoutError(
+            "chromatic bipartition deadline expired after the worker returned"
+        )
     try:
         result = decode_checked_worker_output(
             completed.stdout,

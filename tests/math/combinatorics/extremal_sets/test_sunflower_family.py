@@ -7,10 +7,16 @@ import itertools
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.extremal_sets._sunflower_r import (
+    MAX_SUNFLOWER_GROUND_SET_SIZE,
+    MAX_SUNFLOWER_MEMBERSHIPS,
     MAX_SUNFLOWER_PETALS,
     SunflowerFamilyRequest,
+    SunflowerFamilyResult,
     construct_sunflower_family,
 )
 from jacobian.math.combinatorics.extremal_sets.values import IndexedFiniteSetFamily
@@ -152,7 +158,7 @@ def test_petals_sharing_one_point_with_a_larger_member_are_not_a_sunflower() -> 
 
 def test_petal_count_below_two_is_rejected() -> None:
     """A single-member subfamily is not a sunflower relation."""
-    with pytest.raises(OperationResourceAdmissionError):
+    with pytest.raises(OperationDomainValidationError):
         construct_sunflower_family(
             SunflowerFamilyRequest(source=_family(((0,), (1,))), petal_count=1)
         )
@@ -185,3 +191,81 @@ def test_projection_uses_canonical_multi_digit_member_order() -> None:
     )
     assert result.hypergraph_edges == result.hypergraph.edges
     assert type(result).model_validate_json(result.model_dump_json()) == result
+
+
+def test_output_edge_bound_is_admitted_before_row_construction() -> None:
+    """The complete candidate envelope rejects 156 disjoint singleton pairs."""
+    source = _family(tuple((index,) for index in range(156)), ground=156)
+    with pytest.raises(OperationResourceAdmissionError, match="output bound"):
+        construct_sunflower_family(SunflowerFamilyRequest(source=source, petal_count=2))
+
+
+def test_exact_candidate_count_at_the_output_boundary_is_admitted() -> None:
+    source = _family(tuple((index,) for index in range(155)), ground=155)
+    result = construct_sunflower_family(
+        SunflowerFamilyRequest(source=source, petal_count=2)
+    )
+    assert result.sunflower_count == 155 * 154 // 2
+
+
+def test_ground_and_membership_bounds_apply_to_vacuous_requests() -> None:
+    with pytest.raises(OperationResourceAdmissionError, match="ground set"):
+        construct_sunflower_family(
+            SunflowerFamilyRequest(
+                source=_family((), ground=MAX_SUNFLOWER_GROUND_SET_SIZE + 1),
+                petal_count=2,
+            )
+        )
+    member = tuple(range(MAX_SUNFLOWER_MEMBERSHIPS // 2 + 1))
+    second_member = tuple(
+        range(MAX_SUNFLOWER_MEMBERSHIPS // 2 - 1, MAX_SUNFLOWER_MEMBERSHIPS)
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="memberships"):
+        construct_sunflower_family(
+            SunflowerFamilyRequest(
+                source=_family(
+                    (member, second_member), ground=MAX_SUNFLOWER_MEMBERSHIPS
+                ),
+                petal_count=2,
+            )
+        )
+
+
+def test_forged_summary_fields_cannot_contradict_rows() -> None:
+    result = construct_sunflower_family(
+        SunflowerFamilyRequest(source=_family(((0, 1), (0, 2), (0, 3))), petal_count=3)
+    )
+    forged = result.model_dump(mode="json")
+    forged["sunflower_count"] = 0
+    forged["sunflower_free"] = True
+    with pytest.raises(ValidationError):
+        SunflowerFamilyResult.model_validate(forged)
+
+
+def test_forged_core_shape_is_rejected_without_replaying_the_relation() -> None:
+    result = construct_sunflower_family(
+        SunflowerFamilyRequest(source=_family(((0, 1), (0, 2), (0, 3))), petal_count=3)
+    )
+    forged = result.model_dump(mode="json")
+    forged["sunflowers"][0]["core"] = [1, 0]
+    with pytest.raises(ValidationError):
+        SunflowerFamilyResult.model_validate(forged)
+
+
+def test_independent_pairwise_intersection_oracle() -> None:
+    """The public rows agree with an independently enumerated exact oracle."""
+    members = ((0, 1), (0, 2), (0, 4), (0, 5), (1, 2), (4, 5))
+    result = construct_sunflower_family(
+        SunflowerFamilyRequest(source=_family(members, ground=6), petal_count=3)
+    )
+    expected = []
+    for indices in itertools.combinations(range(len(members)), 3):
+        intersections = [
+            set(members[left]).intersection(members[right])
+            for left, right in itertools.combinations(indices, 2)
+        ]
+        if intersections and all(
+            intersection == intersections[0] for intersection in intersections[1:]
+        ):
+            expected.append((indices, tuple(sorted(intersections[0]))))
+    assert [(row.source_indices, row.core) for row in result.sunflowers] == expected

@@ -30,22 +30,24 @@ enumerate candidates, select a kernel, reserve result work, or retain an
 execution plan in a Pydantic private attribute. The owner admission function
 runs after parsing and is shared by native and MCP execution.
 
-When a native callable is being published or audited as the implementation of a
-public operation, treat it as the admission boundary. Python type annotations
-and Pydantic field declarations do not validate values supplied directly to
-that callable. The implementation must validate strict runtime types, shape,
-axes, domain, work, intermediate growth, and materialized output before
-indexing, unpacking, backend work, or result allocation. Equivalent native and
-catalog invocations must use the same owner admission helper. Expected invalid
-native values raise `OperationDomainValidationError` or the operation's
-declared subtype while preserving its stable owner code and domain/resource
-classification. Use `OperationResourceAdmissionError` when the operation
-contract distinguishes execution-envelope refusal from other domain
-rejections. Neither path may leak helper `ValueError`, `IndexError`,
-tuple-unpacking errors, or Pydantic validation exceptions. This is the
-migration target for public operations; legacy native-only helpers may still
-require migration and must not be described as satisfying this boundary until
-audited.
+Every native callable that backs a public operation is itself an admission
+boundary. Python type annotations and Pydantic field declarations do not
+validate values supplied directly to that callable. The implementation must
+validate strict runtime types, shape, axes, and domain; enforce the same
+owner-defined work and intermediate limits; and enforce the same exact-output
+or materialization bounds before indexing, unpacking, backend work, or result
+allocation. Equivalent native and catalog invocations must use the same owner
+admission helper. Expected invalid native values, shapes, axes, and dimensions
+raise `OperationDomainValidationError` or the operation's declared subtype
+while preserving its stable owner code and domain/resource classification. Use
+`OperationResourceAdmissionError` when the operation contract distinguishes
+execution-envelope refusal from other domain rejections. Neither path may leak
+helper `ValueError`, `IndexError`, tuple-unpacking errors, or Pydantic
+validation exceptions.
+
+Legacy native-only helpers that have not yet been audited may violate this
+boundary; each such violation is migration debt. Audit and repair them before
+publishing them as public-operation implementations.
 
 Every built-in `MathTool` declaration must publish at least one small valid
 invocation example. An example is part of the public contract: it must validate

@@ -64,20 +64,24 @@ than constructing a wire Pydantic model. Native and wire parity tests should
 assert equal exact results and typed outcomes, and should document any
 difference as an explicit transport-only constraint.
 
-When a native function is being published or audited as the implementation of a
-public operation, treat it as the admitted boundary. Its implementation must
-apply strict Python type and domain checks, the same owner-defined work and
-intermediate limits, and the same exact-output or materialization bounds before
-calling a backend or allocating expanded results. Put reusable admission in one
-owner helper used by native and catalog paths. Expected invalid values, shapes,
-axes, and dimensions produce `OperationDomainValidationError` or the
-operation's declared subtype while preserving its stable owner code and
-domain/resource classification. Use `OperationResourceAdmissionError` when the
-operation distinguishes execution-envelope refusal from other domain
-rejections. Neither path may leak raw `IndexError`, tuple-unpacking errors,
-helper `ValueError`, or Pydantic validation exceptions. This is the migration
-target for public operations; legacy native-only helpers may still require
-migration and must not be described as satisfying this boundary until audited.
+Every native callable that backs a public operation is itself an admission
+boundary. Python type annotations and Pydantic field declarations do not
+validate values supplied directly to that callable. The implementation must
+validate strict runtime types, shape, axes, and domain; enforce the same
+owner-defined work and intermediate limits; and enforce the same exact-output
+or materialization bounds before indexing, unpacking, backend work, or result
+allocation. Equivalent native and catalog invocations must use the same owner
+admission helper. Expected invalid native values, shapes, axes, and dimensions
+raise `OperationDomainValidationError` or the operation's declared subtype
+while preserving its stable owner code and domain/resource classification. Use
+`OperationResourceAdmissionError` when the operation contract distinguishes
+execution-envelope refusal from other domain rejections. Neither path may leak
+helper `ValueError`, `IndexError`, tuple-unpacking errors, or Pydantic
+validation exceptions.
+
+Legacy native-only helpers that have not yet been audited may violate this
+boundary; each such violation is migration debt. Audit and repair them before
+publishing them as public-operation implementations.
 
 Pydantic request models are transport contracts, not containers for hidden
 execution state. They may enforce typed shape, canonical representation, and

@@ -165,6 +165,22 @@ def test_petal_count_below_two_is_rejected() -> None:
         construct_sunflower_family(_family(((0,), (1,))), 1)
 
 
+def test_native_bool_petal_count_is_a_typed_domain_error() -> None:
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        construct_sunflower_family(_family(((0,), (1,))), True)  # type: ignore[arg-type]
+    error = exc_info.value.errors()[0]
+    assert error["loc"] == ("petal_count",)
+    assert error["type"] == "set_system.sunflower.petal_count_type"
+
+
+def test_native_non_family_source_is_a_typed_domain_error() -> None:
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        construct_sunflower_family({"members": ((0,), (1,))}, 2)  # type: ignore[arg-type]
+    error = exc_info.value.errors()[0]
+    assert error["loc"] == ("source",)
+    assert error["type"] == "set_system.sunflower.source_type"
+
+
 def test_hypergraph_projection_is_empty_but_source_bound_when_no_rows() -> None:
     result = construct_sunflower_family(_family(((0, 1), (0, 2), (1, 2))), 3)
     assert result.hypergraph.vertices == ("0", "1", "2")
@@ -222,6 +238,13 @@ def test_qualifying_plan_stops_once_the_output_bound_is_exceeded() -> None:
         construct_sunflower_family(source, 9)
 
 
+def test_qualifying_plan_stops_once_the_output_cannot_fit() -> None:
+    """182 disjoint singletons form C(182, 3) empty-core triples, over MAX_EDGES."""
+    source = _family(tuple((index,) for index in range(182)), ground=182)
+    with pytest.raises(OperationResourceAdmissionError, match="output bound"):
+        construct_sunflower_family(source, 3)
+
+
 def test_large_core_allocation_is_checked_before_each_qualifying_row(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -235,7 +258,7 @@ def test_large_core_allocation_is_checked_before_each_qualifying_row(
         member_count: int,
         source_units: int,
         row_count: int,
-        maximum_size: int,
+        core_elements: int,
     ) -> None:
         row_counts.append(row_count)
         original(
@@ -244,7 +267,7 @@ def test_large_core_allocation_is_checked_before_each_qualifying_row(
             member_count,
             source_units,
             row_count,
-            maximum_size,
+            core_elements,
         )
 
     monkeypatch.setattr(sunflower_module, "_admit_qualifying_result", record)
@@ -254,6 +277,14 @@ def test_large_core_allocation_is_checked_before_each_qualifying_row(
         construct_sunflower_family(_family(members, ground=100_006), 3)
     assert row_counts
     assert row_counts[-1] < 20
+
+
+def test_empty_cores_are_not_charged_at_an_unrelated_member_size() -> None:
+    huge = tuple(range(100_000))
+    isolates = tuple((100_000 + index,) for index in range(154))
+    result = construct_sunflower_family(_family((huge, *isolates), ground=100_154), 2)
+    assert result.sunflower_count == 155 * 154 // 2
+    assert all(row.core == () for row in result.sunflowers)
 
 
 def test_nested_chain_is_sunflower_free_without_candidate_output_rejection() -> None:
@@ -273,6 +304,25 @@ def test_sparse_large_member_does_not_price_every_pair_at_global_max() -> None:
     result = construct_sunflower_family(_family(members, ground=10_000), 4)
     assert result.sunflowers == ()
     assert result.sunflower_free is True
+
+
+def test_core_bounds_are_summed_over_actual_candidates() -> None:
+    """A 10_000/10_001 tail must not price every 4-candidate at the global max."""
+    members = (
+        *(tuple(range(index + 1)) for index in range(28)),
+        tuple(range(10_000)),
+        tuple(range(10_001)),
+    )
+    result = construct_sunflower_family(_family(members, ground=10_001), 4)
+    assert result.sunflowers == ()
+    assert result.sunflower_free is True
+
+
+def test_shared_core_allocation_is_rejected_while_enumerating() -> None:
+    core = tuple(range(280))
+    members = tuple((*core, 280 + index) for index in range(155))
+    with pytest.raises(OperationResourceAdmissionError, match="allocation units"):
+        construct_sunflower_family(_family(members, ground=435), 2)
 
 
 def test_result_allocation_is_admitted_before_row_construction(
@@ -392,7 +442,7 @@ def test_wide_single_candidate_checkpoints_inside_pairwise_scans(
     members = tuple((index,) for index in range(24))
     result = construct_sunflower_family(_family(members, ground=24), 24)
     assert result.sunflower_count == 1
-    assert "during sunflower pairwise intersection" in labels
+    assert "during sunflower intersection work" in labels
 
 
 def test_few_large_pairwise_intersections_checkpoint_by_element_work(
@@ -411,7 +461,7 @@ def test_few_large_pairwise_intersections_checkpoint_by_element_work(
     pairwise = [
         label
         for label in labels
-        if label == "during sunflower pairwise intersection"
+        if label == "during sunflower intersection work"
     ]
     # One r=9 candidate has 36 pairs, so a scan-count modulo 64 never fires.
     assert len(pairwise) >= 36
@@ -469,3 +519,20 @@ def test_cancellation_is_checkpointed_before_member_expansion(
         2,
     )
     assert "before sunflower member expansion" in messages
+
+
+def test_pair_comparisons_checkpoint_inside_a_single_candidate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    messages: list[str] = []
+
+    def capture(message: str) -> None:
+        messages.append(message)
+
+    monkeypatch.setattr(sunflower_module, "request_checkpoint", capture)
+    monkeypatch.setattr(sunflower_module, "SUNFLOWER_PAIRWISE_CHECKPOINT_WORK", 1)
+    construct_sunflower_family(
+        _family(((0, 1, 2), (0, 1, 3), (0, 1, 4)), ground=5),
+        3,
+    )
+    assert messages.count("during sunflower intersection work") >= 3

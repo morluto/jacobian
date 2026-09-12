@@ -140,23 +140,21 @@ def _admit_source(
 
 
 def _intersection_search_work(sizes: tuple[int, ...], petal_count: int) -> int:
-    """Charge pairwise work from participating member sizes, not a global max."""
+    """Charge pairwise and core-bound work from each actual candidate."""
 
     member_count = len(sizes)
     if member_count < petal_count:
         return 0
     pair_occurrences = comb(member_count - 2, petal_count - 2)
-    pair_min_sum = 0
-    max_pair_min = 0
-    for left, right in combinations(range(member_count), 2):
-        pair_min = min(sizes[left], sizes[right])
-        pair_min_sum += pair_min
-        if pair_min > max_pair_min:
-            max_pair_min = pair_min
-    candidate_bound = comb(member_count, petal_count)
-    # Intersection and equality for every pair in every r-tuple, plus one
-    # core materialization bounded by the largest participating pair min.
-    return 2 * pair_occurrences * pair_min_sum + 2 * candidate_bound * max_pair_min
+    pair_min_sum = sum(
+        min(sizes[left], sizes[right])
+        for left, right in combinations(range(member_count), 2)
+    )
+    core_bound_sum = sum(
+        min(sizes[index] for index in indices)
+        for indices in combinations(range(member_count), petal_count)
+    )
+    return 2 * pair_occurrences * pair_min_sum + 2 * core_bound_sum
 
 
 def _admit_candidates(
@@ -180,18 +178,22 @@ def _admit_candidates(
                 f"the {MAX_SUNFLOWER_CANDIDATES}-candidate exact-work bound"
             ),
         )
-    # Every pair is a sunflower, so the candidate bound is the exact row count
-    # and allocation can refuse before the pairwise work scan.
+    sizes = tuple(len(member) for member in source.members)
+    # Every pair is a sunflower; bound stored cores by pairwise size mins
+    # without enumerating intersection tuples.
     if petal_count == 2 and candidate_bound:
+        core_bound = sum(
+            min(sizes[left], sizes[right])
+            for left, right in combinations(range(member_count), 2)
+        )
         _admit_qualifying_result(
             source,
             petal_count,
             member_count,
             source_units,
             candidate_bound,
-            max((len(member) for member in source.members), default=0),
+            core_bound,
         )
-    sizes = tuple(len(member) for member in source.members)
     search_work = _intersection_search_work(sizes, petal_count)
     total_work = source_work + search_work
     if total_work > MAX_SUNFLOWER_INTERSECTION_WORK:
@@ -212,7 +214,7 @@ def _admit_qualifying_result(
     member_count: int,
     source_units: int,
     row_count: int,
-    maximum_size: int,
+    core_elements: int,
 ) -> None:
     """Admit retained rows after the exact qualifying plan is known."""
 
@@ -226,21 +228,13 @@ def _admit_qualifying_result(
                 f"{MAX_EDGES}-edge/{MAX_TOTAL_INCIDENCES}-incidence output bound"
             ),
         )
-    member_digits = len(str(max(member_count - 1, 0)))
-    ground_digits = len(str(max(source.ground_set_size - 1, 0)))
-    # Row IDs are bounded ordinals (``sunflower_<position>``) over the found
-    # rows, so the longest ID fits the qualifying count, not the petal width.
-    edge_id_units = 10 + len(str(max(row_count, 1)))
-    row_units = (
-        128
-        + edge_id_units
-        + petal_count * (member_digits + 2)
-        + maximum_size * (ground_digits + 1)
-    )
-    edge_projection_units = 64 + edge_id_units + petal_count * (member_digits + 2)
-    base_result_units = source_units + 1024 + member_count * (member_digits + 3)
-    allocation_units = base_result_units + row_count * (
-        row_units + 2 * edge_projection_units
+    allocation_units = _result_allocation_units(
+        source=source,
+        petal_count=petal_count,
+        member_count=member_count,
+        source_units=source_units,
+        row_count=row_count,
+        core_elements=core_elements,
     )
     if allocation_units > MAX_SUNFLOWER_RESULT_ALLOCATION_UNITS:
         raise OperationResourceAdmissionError(
@@ -254,14 +248,70 @@ def _admit_qualifying_result(
         )
 
 
-def _charge_pairwise_checkpoint(accumulated: int, pair_work: int) -> int:
-    """Checkpoint before an intersection whose element work fills the stride."""
+def _result_allocation_units(
+    *,
+    source: IndexedFiniteSetFamily,
+    petal_count: int,
+    member_count: int,
+    source_units: int,
+    row_count: int,
+    core_elements: int,
+) -> int:
+    member_digits = len(str(max(member_count - 1, 0)))
+    ground_digits = len(str(max(source.ground_set_size - 1, 0)))
+    # Row IDs are bounded ordinals (``sunflower_<position>``).
+    edge_id_units = 10 + len(str(max(row_count, 1)))
+    fixed_row_units = 128 + edge_id_units + petal_count * (member_digits + 2)
+    edge_projection_units = 64 + edge_id_units + petal_count * (member_digits + 2)
+    base_result_units = source_units + 1024 + member_count * (member_digits + 3)
+    return (
+        base_result_units
+        + row_count * (fixed_row_units + 2 * edge_projection_units)
+        + core_elements * (ground_digits + 1)
+    )
 
-    accumulated += max(pair_work, 1)
-    if accumulated >= SUNFLOWER_PAIRWISE_CHECKPOINT_WORK:
-        request_checkpoint("during sunflower pairwise intersection")
+
+def _charge_intersection_work(
+    work_since_checkpoint: int, units: int, checkpoint_units: int
+) -> int:
+    work_since_checkpoint += units
+    if work_since_checkpoint >= checkpoint_units:
+        request_checkpoint("during sunflower intersection work")
         return 0
-    return accumulated
+    return work_since_checkpoint
+
+
+def _candidate_common_core(
+    sets: tuple[frozenset[int], ...],
+    sizes: tuple[int, ...],
+    indices: tuple[int, ...],
+    work_since_checkpoint: int,
+    checkpoint_units: int,
+) -> tuple[frozenset[int] | None, int]:
+    pairs = combinations(indices, 2)
+    first_left, first_right = next(pairs)
+    work_since_checkpoint = _charge_intersection_work(
+        work_since_checkpoint,
+        2 * min(sizes[first_left], sizes[first_right]),
+        checkpoint_units,
+    )
+    core = sets[first_left] & sets[first_right]
+    for left, right in pairs:
+        work_since_checkpoint = _charge_intersection_work(
+            work_since_checkpoint,
+            2 * min(sizes[left], sizes[right]),
+            checkpoint_units,
+        )
+        if sets[left] & sets[right] != core:
+            return None, work_since_checkpoint
+    return (
+        core,
+        _charge_intersection_work(
+            work_since_checkpoint,
+            2 * min(sizes[index] for index in indices),
+            checkpoint_units,
+        ),
+    )
 
 
 class SunflowerFamilyRequest(StrictModel):
@@ -440,47 +490,35 @@ def construct_sunflower_family(
     sets = tuple(frozenset(member) for member in source.members)
     sizes = tuple(len(member) for member in source.members)
     plan: list[tuple[tuple[int, ...], tuple[int, ...]]] = []
-    maximum_size = max(sizes, default=0)
-    pairwise_work = 0
-    for candidate_index, indices in enumerate(
-        combinations(range(member_count), petal_count), start=1
-    ):
-        if candidate_index % 256 == 0:
-            request_checkpoint("during sunflower candidate enumeration")
-        first_left = sets[indices[0]]
-        first_right = sets[indices[1]]
-        pairwise_work = _charge_pairwise_checkpoint(
-            pairwise_work, min(len(first_left), len(first_right))
+    core_elements = 0
+    work_since_checkpoint = 0
+    checkpoint_units = SUNFLOWER_PAIRWISE_CHECKPOINT_WORK
+    for indices in combinations(range(member_count), petal_count):
+        core, work_since_checkpoint = _candidate_common_core(
+            sets, sizes, indices, work_since_checkpoint, checkpoint_units
         )
-        core = first_left & first_right
-        is_sunflower = True
-        for left, right in combinations(indices, 2):
-            left_set = sets[left]
-            right_set = sets[right]
-            pairwise_work = _charge_pairwise_checkpoint(
-                pairwise_work, min(len(left_set), len(right_set))
-            )
-            if left_set & right_set != core:
-                is_sunflower = False
-                break
-        if is_sunflower:
-            next_count = len(plan) + 1
-            _admit_qualifying_result(
-                source,
-                petal_count,
-                member_count,
-                source_units,
-                next_count,
-                maximum_size,
-            )
-            plan.append((indices, tuple(sorted(core))))
+        if core is None:
+            continue
+        next_rows = len(plan) + 1
+        ordered_core = tuple(sorted(core))
+        next_core_elements = core_elements + len(ordered_core)
+        _admit_qualifying_result(
+            source,
+            petal_count,
+            member_count,
+            source_units,
+            next_rows,
+            next_core_elements,
+        )
+        plan.append((indices, ordered_core))
+        core_elements = next_core_elements
     _admit_qualifying_result(
         source,
         petal_count,
         member_count,
         source_units,
         len(plan),
-        maximum_size,
+        core_elements,
     )
     rows = tuple(
         SunflowerFamily.model_construct(

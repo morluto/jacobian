@@ -8,6 +8,7 @@ from pydantic import Field, ValidationInfo, model_validator
 from pydantic_core import PydanticCustomError, core_schema
 
 from jacobian._exact import (
+    MAX_CANONICAL_INTEGER_DIGITS,
     MAX_CANONICAL_RATIONAL_DIGITS,
     CanonicalRational,
     ExactInteger,
@@ -156,6 +157,13 @@ class FiniteRationalSequence(FiniteSequence):
                 converted.append({"num": value, "den": 1})
                 continue
             if isinstance(value, str):
+                digits = value[1:] if value.startswith("-") else value
+                if digits.isdigit() and len(digits) > MAX_CANONICAL_INTEGER_DIGITS:
+                    raise _validation_error(
+                        "integer_digits_exceeded",
+                        "canonical integer entries exceed the "
+                        f"{MAX_CANONICAL_INTEGER_DIGITS}-digit bound",
+                    )
                 try:
                     integer = parse_canonical_integer(value)
                 except ValueError:

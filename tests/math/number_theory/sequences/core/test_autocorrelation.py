@@ -7,7 +7,7 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, MAX_CANONICAL_INTEGER_DIGITS
 from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
@@ -260,6 +260,22 @@ def test_wide_rational_cyclic_work_is_rejected_before_kernel() -> None:
     )
     with pytest.raises(OperationResourceAdmissionError, match="work"):
         cyclic_autocorrelation(source)
+
+
+def test_mixed_denominator_widths_are_preflighted_without_scaled_copies() -> None:
+    wide = CanonicalRational(num=1, den=10**15_999)
+    ones = (CanonicalRational(num=1, den=1),) * 2_000
+    source = FiniteRationalSequence(values=(wide, *ones))
+    with pytest.raises(
+        (OperationResourceAdmissionError, OperationDomainValidationError)
+    ):
+        cyclic_autocorrelation(source)
+
+
+def test_oversized_integer_wire_entries_are_rejected_before_parsing() -> None:
+    payload = {"domain": "rational", "values": ["1" * (MAX_CANONICAL_INTEGER_DIGITS + 1)]}
+    with pytest.raises(ValidationError, match="digit"):
+        FiniteRationalSequence.model_validate(payload)
 
 
 def test_autocorrelation_catalog_schema_registers_canonical_rational_defs() -> None:

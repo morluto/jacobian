@@ -165,12 +165,19 @@ def _admit_autocorrelation(
             code="sequences.autocorrelation_result_digits_exceeded",
             message="autocorrelation values exceed the exact rational digit bound",
         )
-    common_numerators = tuple(
-        abs(value.numerator) * (common_denominator // value.denominator)
-        for value in fractions
-    )
+    widest_numerator: dict[int, int] = {}
+    for value in fractions:
+        numerator = abs(value.numerator)
+        current = widest_numerator.get(value.denominator)
+        if current is None or numerator > current:
+            widest_numerator[value.denominator] = numerator
     common_numerator_digits = max(
-        len(format_canonical_integer(value)) for value in common_numerators
+        len(
+            format_canonical_integer(
+                numerator * (common_denominator // denominator)
+            )
+        )
+        for denominator, numerator in widest_numerator.items()
     )
     denominator_digits = len(format_canonical_integer(common_denominator))
     term_count_digits = len(str(len(fractions)))

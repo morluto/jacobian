@@ -51,9 +51,7 @@ def _integer_digits(value: int) -> int:
     return (magnitude.bit_length() * 30103) // 100000 + 1
 
 
-def _cancelled_product_digits(
-    left: Fraction, right: Fraction
-) -> tuple[int, int, int]:
+def _cancelled_product_digits(left: Fraction, right: Fraction) -> tuple[int, int, int]:
     left_num, left_den = abs(left.numerator), left.denominator
     right_num, right_den = abs(right.numerator), right.denominator
     cross_left = gcd(left_num, right_den)
@@ -167,9 +165,8 @@ def _admitted_multiply(
     left: tuple[Fraction, Fraction], right: tuple[Fraction, Fraction]
 ) -> tuple[Fraction, Fraction]:
     bound = _gaussian_multiply_digit_bound(left, right)
-    if (
-        bound > MAX_CROSS_RATIO_INTERMEDIATE_DIGITS
-        or _exceeds_intermediate_digits(bound)
+    if bound > MAX_CROSS_RATIO_INTERMEDIATE_DIGITS or _exceeds_intermediate_digits(
+        bound
     ):
         _reject_resource(
             "intermediate_height_bound",

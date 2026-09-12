@@ -53,10 +53,37 @@ class WordFamilyRequest(StrictModel):
     word: FiniteWord
 
 
+class WordFamilyMapEntry(StrictModel):
+    """Map one family row to its half-open source-word interval.
+
+    Prefix rows use ``[0, source_end)`` and suffix rows use
+    ``[source_start, word_length)``.  Keeping the interval explicit makes the
+    family composable without requiring consumers to infer meaning from tuple
+    position alone.
+    """
+
+    family_index: int = Field(ge=0, le=MAX_WORD_LENGTH)
+    source_start: int = Field(ge=0, le=MAX_WORD_LENGTH)
+    source_end: int = Field(ge=0, le=MAX_WORD_LENGTH)
+    length: int = Field(ge=0, le=MAX_WORD_LENGTH)
+
+    @model_validator(mode="after")
+    def require_interval_shape(self) -> Self:
+        if self.source_end < self.source_start or self.length != (
+            self.source_end - self.source_start
+        ):
+            raise _validation_error(
+                "family_map_interval",
+                "family map rows must use a nonempty-or-empty half-open interval",
+            )
+        return self
+
+
 class WordPrefixesResult(WordFamilyRequest):
     """Complete prefix family, including the empty prefix."""
 
     prefixes: tuple[FiniteWord, ...] = Field(max_length=MAX_WORD_LENGTH + 1)
+    prefix_map: tuple[WordFamilyMapEntry, ...] = Field(max_length=MAX_WORD_LENGTH + 1)
     prefix_lengths: tuple[int, ...] = Field(max_length=MAX_WORD_LENGTH + 1)
     prefix_indices: tuple[int, ...] = Field(max_length=MAX_WORD_LENGTH + 1)
 
@@ -66,6 +93,14 @@ class WordPrefixesResult(WordFamilyRequest):
         expected_axis = tuple(range(len(letters) + 1))
         if (
             len(self.prefixes) != len(letters) + 1
+            or len(self.prefix_map) != len(letters) + 1
+            or any(
+                entry.family_index != index
+                or entry.source_start != 0
+                or entry.source_end != index
+                or entry.length != index
+                for index, entry in enumerate(self.prefix_map)
+            )
             or self.prefix_lengths != expected_axis
             or self.prefix_indices != expected_axis
             or any(
@@ -75,7 +110,7 @@ class WordPrefixesResult(WordFamilyRequest):
         ):
             raise _validation_error(
                 "prefix_family_shape",
-                "prefixes and their length/index axes must be complete and ordered",
+                "prefixes and their typed length/index maps must be complete and ordered",
             )
         return self
 
@@ -84,9 +119,19 @@ class WordPrefixesResult(WordFamilyRequest):
         cls, request: WordFamilyRequest, prefixes: tuple[FiniteWord, ...]
     ) -> Self:
         axis = tuple(range(len(request.word.letters) + 1))
+        prefix_map = tuple(
+            WordFamilyMapEntry(
+                family_index=index,
+                source_start=0,
+                source_end=index,
+                length=index,
+            )
+            for index in axis
+        )
         return cls.model_construct(
             word=request.word,
             prefixes=prefixes,
+            prefix_map=prefix_map,
             prefix_lengths=axis,
             prefix_indices=axis,
         )
@@ -96,6 +141,7 @@ class WordSuffixesResult(WordFamilyRequest):
     """Complete suffix family, including the empty suffix."""
 
     suffixes: tuple[FiniteWord, ...] = Field(max_length=MAX_WORD_LENGTH + 1)
+    suffix_map: tuple[WordFamilyMapEntry, ...] = Field(max_length=MAX_WORD_LENGTH + 1)
     suffix_lengths: tuple[int, ...] = Field(max_length=MAX_WORD_LENGTH + 1)
     suffix_indices: tuple[int, ...] = Field(max_length=MAX_WORD_LENGTH + 1)
 
@@ -106,6 +152,14 @@ class WordSuffixesResult(WordFamilyRequest):
         expected_lengths = tuple(len(letters) - index for index in expected_indices)
         if (
             len(self.suffixes) != len(letters) + 1
+            or len(self.suffix_map) != len(letters) + 1
+            or any(
+                entry.family_index != index
+                or entry.source_start != index
+                or entry.source_end != len(letters)
+                or entry.length != len(letters) - index
+                for index, entry in enumerate(self.suffix_map)
+            )
             or self.suffix_lengths != expected_lengths
             or self.suffix_indices != expected_indices
             or any(
@@ -117,7 +171,7 @@ class WordSuffixesResult(WordFamilyRequest):
         ):
             raise _validation_error(
                 "suffix_family_shape",
-                "suffixes and their length/index axes must be complete and ordered",
+                "suffixes and their typed length/index maps must be complete and ordered",
             )
         return self
 
@@ -126,9 +180,19 @@ class WordSuffixesResult(WordFamilyRequest):
         cls, request: WordFamilyRequest, suffixes: tuple[FiniteWord, ...]
     ) -> Self:
         indices = tuple(range(len(request.word.letters) + 1))
+        suffix_map = tuple(
+            WordFamilyMapEntry(
+                family_index=index,
+                source_start=index,
+                source_end=len(request.word.letters),
+                length=len(request.word.letters) - index,
+            )
+            for index in indices
+        )
         return cls.model_construct(
             word=request.word,
             suffixes=suffixes,
+            suffix_map=suffix_map,
             suffix_lengths=tuple(
                 len(request.word.letters) - index for index in indices
             ),

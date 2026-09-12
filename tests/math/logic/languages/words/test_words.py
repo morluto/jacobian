@@ -94,6 +94,8 @@ def _substitution(
 def test_public_catalog_surface_is_the_audited_operations() -> None:
     operation_ids = tuple(tool.operation_id for tool in TOOLS)
     assert operation_ids == (
+        "word.prefixes.compute",
+        "word.suffixes.compute",
         "word.factors.length.compute",
         "word.periods.compute",
         "word_morphism.incidence_matrix.compute",
@@ -101,8 +103,6 @@ def test_public_catalog_surface_is_the_audited_operations() -> None:
         "substitution.primitivity_profile.compute",
         "substitution.fixed_point_prefix.compute",
     )
-    assert "word.prefixes.compute" not in operation_ids
-    assert "word.suffixes.compute" not in operation_ids
 
 
 def test_prefix_and_suffix_families_are_complete_and_serializable() -> None:
@@ -127,8 +127,16 @@ def test_prefix_and_suffix_families_are_complete_and_serializable() -> None:
     )
     assert prefix_result.prefix_lengths == (0, 1, 2, 3, 4, 5)
     assert prefix_result.prefix_indices == (0, 1, 2, 3, 4, 5)
+    assert tuple(
+        (entry.family_index, entry.source_start, entry.source_end, entry.length)
+        for entry in prefix_result.prefix_map
+    ) == tuple((index, 0, index, index) for index in range(6))
     assert suffix_result.suffix_lengths == (5, 4, 3, 2, 1, 0)
     assert suffix_result.suffix_indices == (0, 1, 2, 3, 4, 5)
+    assert tuple(
+        (entry.family_index, entry.source_start, entry.source_end, entry.length)
+        for entry in suffix_result.suffix_map
+    ) == tuple((index, index, 5, 5 - index) for index in range(6))
     assert (
         WordPrefixesResult.model_validate_json(prefix_result.model_dump_json())
         == prefix_result
@@ -140,12 +148,18 @@ def test_prefix_and_suffix_families_are_complete_and_serializable() -> None:
 
 
 @pytest.mark.parametrize(
-    ("result_type", "field_name"),
-    ((WordPrefixesResult, "prefix_lengths"), (WordSuffixesResult, "suffix_indices")),
+    ("result_type", "field_name", "message"),
+    (
+        (WordPrefixesResult, "prefix_lengths", "typed length/index maps"),
+        (WordPrefixesResult, "prefix_map", "family map rows"),
+        (WordSuffixesResult, "suffix_indices", "typed length/index maps"),
+        (WordSuffixesResult, "suffix_map", "family map rows"),
+    ),
 )
 def test_word_family_result_rejects_forged_length_or_index_axis(
     result_type: type[WordPrefixesResult] | type[WordSuffixesResult],
     field_name: str,
+    message: str,
 ) -> None:
     source = _word("abaab")
     result = (
@@ -154,9 +168,12 @@ def test_word_family_result_rejects_forged_length_or_index_axis(
         else compute_suffixes(WordFamilyRequest(word=source))
     )
     payload = result.model_dump(mode="json")
-    payload[field_name][2] = 99
+    if field_name.endswith("_map"):
+        payload[field_name][2]["source_end"] = 99
+    else:
+        payload[field_name][2] = 99
 
-    with pytest.raises(ValidationError, match="length/index axes"):
+    with pytest.raises(ValidationError, match=message):
         result_type.model_validate(payload)
 
 

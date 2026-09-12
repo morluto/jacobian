@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import ConfigDict, Field, ValidationInfo, model_validator
-from pydantic_core import PydanticCustomError
+from pydantic import Field, GetJsonSchemaHandler, ValidationInfo, model_validator
+from pydantic.json_schema import JsonSchemaValue
+from pydantic_core import CoreSchema, PydanticCustomError
 
 from jacobian._exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
@@ -115,8 +116,6 @@ class FiniteRationalSequence(StrictModel):
     from silently receiving a rational sequence.
     """
 
-    model_config = ConfigDict(json_schema_extra=_rational_sequence_schema)
-
     values: tuple[CanonicalRational, ...] = Field(
         min_length=0,
         max_length=MAX_SEQUENCE_LENGTH,
@@ -125,6 +124,17 @@ class FiniteRationalSequence(StrictModel):
             "are also accepted at the JSON boundary."
         ),
     )
+
+    @classmethod
+    def __get_pydantic_json_schema__(
+        cls,
+        core_schema: CoreSchema,
+        handler: GetJsonSchemaHandler,
+    ) -> JsonSchemaValue:
+        json_schema = handler(core_schema)
+        if handler.mode == "validation":
+            _rational_sequence_schema(json_schema)
+        return json_schema
 
     @model_validator(mode="before")
     @classmethod
@@ -240,14 +250,19 @@ class SequenceOrderShapeResult(StrictModel):
         ):
             if index is not None and index >= max(size - 1, 0):
                 raise ValueError(f"{field_name} must identify an adjacent source pair")
-        if self.first_log_concavity_violation is not None and (
-            self.first_log_concavity_violation not in row_indices
-        ):
-            raise ValueError("log-concavity violation must identify an interior row")
         if self.first_negative_index is not None and self.first_negative_index >= size:
             raise ValueError("negative index must identify a source position")
         if self.first_internal_zero_index is not None and (
             self.first_internal_zero_index not in row_indices
         ):
             raise ValueError("internal-zero index must identify an interior position")
+        first_false = next(
+            (row.index for row in self.log_concavity_rows if not row.holds),
+            None,
+        )
+        if self.first_log_concavity_violation != first_false:
+            raise ValueError(
+                "first log-concavity violation must be the first interior row "
+                "whose comparison fails"
+            )
         return self

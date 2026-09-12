@@ -158,14 +158,14 @@ def _admit_order_shape(
             code="sequences.order_shape.work_bound",
             message="order-shape comparisons exceed the admitted exact-work bound",
         )
+    row_count = max(0, size - 2)
     product_digits = 2 * component_digits
-    if product_digits > MAX_CANONICAL_RATIONAL_DIGITS:
+    if row_count and product_digits > MAX_CANONICAL_RATIONAL_DIGITS:
         raise OperationDomainValidationError(
             location=("values",),
             code="sequences.order_shape.result_digits_exceeded",
             message="order-shape cross-products exceed the exact rational digit bound",
         )
-    row_count = max(0, size - 2)
     # The result retains the source, one peak-position slot per source entry,
     # and four slots (index, two exact products, decision) per interior row.
     result_allocations = size + size + 4 * row_count + 8
@@ -179,9 +179,10 @@ def _admit_order_shape(
                 f"{MAX_ORDER_SHAPE_RESULT_ALLOCATIONS}"
             ),
         )
-    # Every row retains two rationals. Each product can have up to
+    # Interior rows retain two rationals. Each product can have up to
     # ``product_digits`` digits in both its numerator and denominator, and the
-    # result also retains the complete rational source.
+    # result also retains the complete rational source. Empty, singleton, and
+    # adjacent pairs construct no product rows.
     result_digits = source_digits + row_count * 4 * product_digits
     if result_digits > MAX_SEQUENCE_TOTAL_DIGITS:
         raise OperationDomainValidationError(

@@ -156,6 +156,35 @@ def test_order_shape_native_guard_rejects_unrelated_integer_sequence_value() -> 
         )
 
 
+def test_order_shape_skips_product_bounds_when_no_interior_rows() -> None:
+    wide = CanonicalRational(num=10**16_384, den=1)
+    result = sequence_order_shape(FiniteRationalSequence(values=(wide,)))
+    assert result.log_concavity_rows == ()
+    assert result.first_log_concavity_violation is None
+    pair = sequence_order_shape(FiniteRationalSequence(values=(wide, wide)))
+    assert pair.log_concavity_rows == ()
+
+
+def test_order_shape_rejects_contradictory_log_concavity_witness() -> None:
+    result = sequence_order_shape(rational_sequence((1, 1, 3)))
+    forged = result.model_dump()
+    forged["log_concavity_rows"][0]["holds"] = True
+    with pytest.raises(ValueError, match="first log-concavity"):
+        SequenceOrderShapeResult.model_validate(forged)
+    forged_null = result.model_dump()
+    forged_null["first_log_concavity_violation"] = None
+    with pytest.raises(ValueError, match="first log-concavity"):
+        SequenceOrderShapeResult.model_validate(forged_null)
+
+
+def test_order_shape_serialization_schema_omits_integer_wire_alternative() -> None:
+    serialized = SequenceOrderShapeResult.model_json_schema(mode="serialization")
+    source_values = serialized["$defs"]["FiniteRationalSequence"]["properties"]["values"]
+    assert "anyOf" not in source_values["items"]
+    validation = FiniteRationalSequence.model_json_schema(mode="validation")
+    assert "anyOf" in validation["properties"]["values"]["items"]
+
+
 def test_order_shape_result_checks_structure_without_replaying_values() -> None:
     result = sequence_order_shape(
         FiniteRationalSequence(

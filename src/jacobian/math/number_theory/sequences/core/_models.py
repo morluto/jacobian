@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
-from pydantic import Field, model_validator
+from typing import Any
+
+from pydantic import ConfigDict, Field, ValidationInfo, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
     CanonicalRational,
     ExactInteger,
 )
@@ -19,6 +22,25 @@ from jacobian.math.number_theory.sequences.core.values import (
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"sequences.{reason}", message)
+
+
+def _rational_sequence_schema(schema: dict[str, Any]) -> None:
+    """Publish the legacy denominator-one integer wire alternative."""
+
+    values = schema["properties"]["values"]
+    values["items"] = {
+        "anyOf": [
+            values["items"],
+            {
+                "type": "string",
+                "pattern": (
+                    rf"^(?:0|-?[1-9][0-9]{{0,{MAX_CANONICAL_RATIONAL_DIGITS - 1}}})"
+                    r"(?![\s\S])"
+                ),
+                "maxLength": MAX_CANONICAL_RATIONAL_DIGITS + 1,
+            },
+        ]
+    }
 
 
 class IntegerSequenceValueResult(StrictModel):
@@ -93,13 +115,20 @@ class FiniteRationalSequence(StrictModel):
     from silently receiving a rational sequence.
     """
 
+    model_config = ConfigDict(json_schema_extra=_rational_sequence_schema)
+
     values: tuple[CanonicalRational, ...] = Field(
-        min_length=0, max_length=MAX_SEQUENCE_LENGTH
+        min_length=0,
+        max_length=MAX_SEQUENCE_LENGTH,
+        description=(
+            "Finite canonical rationals; denominator-one canonical integer strings "
+            "are also accepted at the JSON boundary."
+        ),
     )
 
     @model_validator(mode="before")
     @classmethod
-    def accept_integer_wire_entries(cls, data: object) -> object:
+    def accept_integer_wire_entries(cls, data: object, info: ValidationInfo) -> object:
         """Normalize canonical integer JSON to denominator-one rationals."""
 
         if not isinstance(data, dict) or not isinstance(
@@ -108,10 +137,14 @@ class FiniteRationalSequence(StrictModel):
             return data
         converted: list[object] = []
         for value in data["values"]:
-            if isinstance(value, int) and not isinstance(value, bool):
-                converted.append({"num": format_canonical_integer(value), "den": "1"})
+            if (
+                info.mode == "python"
+                and isinstance(value, int)
+                and not isinstance(value, bool)
+            ):
+                converted.append({"num": value, "den": 1})
                 continue
-            if isinstance(value, str):
+            if info.mode == "json" and isinstance(value, str):
                 try:
                     integer = int(value)
                 except ValueError:

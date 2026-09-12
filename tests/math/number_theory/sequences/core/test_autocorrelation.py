@@ -4,6 +4,7 @@ from collections.abc import Callable
 from typing import cast
 
 import pytest
+from jsonschema import Draft202012Validator, ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationResourceAdmissionError
@@ -86,11 +87,21 @@ def test_rational_profile_is_exact_and_round_trips() -> None:
 
 def test_rational_profile_accepts_integer_wire_entries_as_canonical_values() -> None:
     source = FiniteRationalSequence.model_validate_json(
-        '{"values":["1",{"num":"3","den":"1"},2]}'
+        '{"values":["1",{"num":"3","den":"1"},"2"]}'
     )
     assert source.values == (
         CanonicalRational(num=1, den=1),
         CanonicalRational(num=3, den=1),
+        CanonicalRational(num=2, den=1),
+    )
+    Draft202012Validator(FiniteRationalSequence.model_json_schema()).validate(
+        {"values": ["1", {"num": "3", "den": "1"}, "2"]}
+    )
+    with pytest.raises(ValidationError):
+        Draft202012Validator(FiniteRationalSequence.model_json_schema()).validate(
+            {"values": [2]}
+        )
+    assert FiniteRationalSequence(values=(2,)).values == (
         CanonicalRational(num=2, den=1),
     )
 

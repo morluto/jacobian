@@ -34,7 +34,7 @@ SURD_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="three_sqrt_two",
                 description="floor(3*sqrt(2)) = 4 and ceiling 5.",
-                input={"multiplier": 3, "radicand": 2},
+                input={"multiplier": "3", "radicand": 2},
             ),
         ),
     ),
@@ -56,7 +56,7 @@ SURD_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="sqrt_two_distance",
                 description="||sqrt(2)|| is enclosed near 0.414 at 32-bit precision.",
-                input={"multiplier": 1, "radicand": 2, "scale_bits": 32},
+                input={"multiplier": "1", "radicand": 2, "scale_bits": 32},
             ),
         ),
     ),
@@ -76,7 +76,7 @@ SURD_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="sqrt_two_sqrt_three",
                 description="Product factor for sqrt(2) and sqrt(3) at n = 1.",
-                input={"multiplier": 1, "radicands": [2, 3], "scale_bits": 32},
+                input={"multiplier": "1", "radicands": [2, 3], "scale_bits": 32},
             ),
         ),
     ),

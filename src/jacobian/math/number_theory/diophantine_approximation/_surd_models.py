@@ -41,7 +41,7 @@ _SURD_AXIS_DESCRIPTION = (
 _SURD_SCALAR_RADICAND_DESCRIPTION = (
     f"Nonsquare integer radicand in the admitted range 2..{MAX_SURD_RADICAND}."
 )
-_POSITIVE_MULTIPLIER_PATTERN = r"^[1-9][0-9]*$"
+_POSITIVE_MULTIPLIER_PATTERN = r"^[1-9][0-9]*(?![\s\S])"
 _POSITIVE_MULTIPLIER_DESCRIPTION = (
     "Positive exact multiplier; computation admits at most 4096 bits."
 )

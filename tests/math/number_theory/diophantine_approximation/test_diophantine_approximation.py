@@ -543,9 +543,11 @@ def test_surd_request_schemas_encode_positive_multipliers() -> None:
     )
     for request_type, payload in (*payloads, *negative):
         schema = request_type.model_json_schema()["properties"]["multiplier"]
-        assert schema["pattern"] == r"^[1-9][0-9]*$"
+        assert schema["pattern"] == r"^[1-9][0-9]*(?![\s\S])"
         with pytest.raises(ValidationError):
             request_type.model_validate_json(payload)
+    with pytest.raises(ValidationError):
+        ScaledFloorRequest.model_validate_json('{"multiplier":"1\\n","radicand":2}')
 
 
 def test_scaled_floor_deserialization_does_not_replay_endpoint_squares() -> None:

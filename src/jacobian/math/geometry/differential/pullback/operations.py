@@ -111,11 +111,11 @@ def pullback_metric(
             message="map target coordinates must equal metric coordinate axis",
         )
     n = len(map_value.source_variables)
-    if not 1 <= n <= 4:
+    if n < 1:
         raise OperationDomainValidationError(
             location=("map", "source_variables"),
             code="differential_geometry.rational_metric.pullback.axis",
-            message="source coordinate axis must have between 1 and 4 coordinates",
+            message="source coordinate axis must be nonempty",
         )
     plan = build_plan(metric, map_value)
     request_checkpoint("after complete rational metric pullback admission")

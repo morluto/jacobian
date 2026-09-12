@@ -81,8 +81,8 @@ def build_plan(
     metric: RationalCoordinateMetric, map_value: RationalFunctionMap
 ) -> Plan:
     n, m = len(map_value.source_variables), len(metric.tensor.coordinate_axis)
-    if not 1 <= n <= 4 or not 1 <= m <= 4:
-        reject("shape", "source and target dimensions must be between 1 and 4")
+    if n < 1 or m < 1:
+        reject("shape", "source and target dimensions must be positive")
     dag = Dag(n, reject=reject, label="rational metric pullback")
     # Metric components are authored on the target axis. Reserve their raw
     # parsing, backend conversion, and canonical recognition before any

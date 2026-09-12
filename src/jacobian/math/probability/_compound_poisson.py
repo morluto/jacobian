@@ -281,13 +281,15 @@ def _admit_and_plan(
             ),
         )
     for index, atom in enumerate(atoms):
+        value = getattr(atom, "value", None)
+        probability = getattr(atom, "probability", None)
         _require_canonical_rational(
-            atom.value,
+            value,
             location=("jump_distribution", "atoms", str(index), "value"),
             label="jump value",
         )
         probability = _require_canonical_rational(
-            atom.probability,
+            probability,
             location=("jump_distribution", "atoms", str(index), "probability"),
             label="jump probability",
         )
@@ -297,7 +299,11 @@ def _admit_and_plan(
                 code="probability.compound_poisson.nonnegative_probability",
                 message="jump probabilities must be nonnegative canonical rationals",
             )
-    active_atoms = tuple(atom for atom in atoms if atom.probability.num != 0)
+    active_atoms = tuple(
+        (index, atom)
+        for index, atom in enumerate(atoms)
+        if atom.probability.num != 0
+    )
     try:
         require_input_distribution(
             atoms,
@@ -331,22 +337,22 @@ def _admit_and_plan(
             message="compound-Poisson moment work exceeds the admitted bound",
         )
 
-    values = tuple(atom.value.as_fraction() for atom in active_atoms)
+    values = tuple((index, atom.value.as_fraction()) for index, atom in active_atoms)
     intensity_value = intensity.as_fraction()
-    weighted_powers = [atom.probability.as_fraction() for atom in active_atoms]
+    weighted_powers = [atom.probability.as_fraction() for _, atom in active_atoms]
     rows: list[tuple[int, Fraction, Fraction]] = []
     for order in range(1, max_order + 1):
         moment = Fraction()
-        for index, value in enumerate(values):
-            weighted_powers[index] = _bounded_product(
-                weighted_powers[index],
+        for slot, (source_index, value) in enumerate(values):
+            weighted_powers[slot] = _bounded_product(
+                weighted_powers[slot],
                 value,
-                location=("jump_distribution", "atoms", str(index)),
+                location=("jump_distribution", "atoms", str(source_index)),
                 label="jump-moment contribution",
             )
             moment = _bounded_sum(
                 moment,
-                weighted_powers[index],
+                weighted_powers[slot],
                 location=("jump_distribution", "atoms"),
                 label="jump raw moment",
             )

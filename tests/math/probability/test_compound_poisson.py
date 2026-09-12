@@ -194,6 +194,19 @@ def test_forged_noncanonical_rationals_are_rejected_before_arithmetic() -> None:
         "probability.compound_poisson.canonical_rational_components"
     )
 
+    missing_value = FiniteDistributionAtom.model_construct(
+        probability=_q(Fraction(1))
+    )
+    with pytest.raises(OperationDomainValidationError) as atom_value:
+        compound_poisson_cumulant_prefix(
+            _q(Fraction(1)),
+            FiniteRationalDistribution.model_construct(atoms=(missing_value,)),
+            1,
+        )
+    assert atom_value.value.errors()[0]["type"] == (
+        "probability.compound_poisson.canonical_rational_type"
+    )
+
     forged_value = FiniteDistributionAtom.model_construct(
         value=CanonicalRational.model_construct(num=2, den=2),
         probability=_q(Fraction(1)),
@@ -294,6 +307,25 @@ def test_probability_weighted_powers_admit_cancelled_tall_jumps() -> None:
         tall**3,
         tall**4,
     ]
+
+
+def test_height_errors_keep_source_atom_indices_after_zero_mass_filter() -> None:
+    tall = 10**127
+    jumps = FiniteRationalDistribution(
+        atoms=(
+            FiniteDistributionAtom(
+                value=_q(Fraction(0)), probability=_q(Fraction(0))
+            ),
+            FiniteDistributionAtom(
+                value=_q(Fraction(tall)), probability=_q(Fraction(1))
+            ),
+        )
+    )
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
+        compound_poisson_cumulant_prefix(_q(Fraction(1)), jumps, 5)
+    error = exc_info.value.errors()[0]
+    assert error["type"] == "probability.compound_poisson.intermediate_height_bound"
+    assert error["loc"] == ("jump_distribution", "atoms", "1")
 
 
 def test_jump_law_schema_publishes_the_execution_envelope() -> None:

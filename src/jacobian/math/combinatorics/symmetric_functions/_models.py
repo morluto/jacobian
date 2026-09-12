@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from typing import Annotated, Self
 
-from pydantic import Field, WithJsonSchema, model_validator
+from pydantic import Field, StrictInt, WithJsonSchema, model_validator
 from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
+from jacobian.math._labels import MAX_OPAQUE_LABEL_LENGTH, OpaqueLabel
 from jacobian.math.combinatorics.symmetric_functions.values import (
     MAX_PARTITION_SIZE,
     IntegerPartition,
@@ -20,6 +21,7 @@ _MAX_POINT_COORDINATE_DIGITS = 6
 _MAX_POINT_COORDINATE_ABS = 10**_MAX_POINT_COORDINATE_DIGITS - 1
 _MAX_SCHUR_RESULT_DIGITS = 4000
 _MAX_SCHUR_PARTITION_LENGTH = 50
+_MAX_SCHUR_VARIABLE_NAME_LENGTH = MAX_OPAQUE_LABEL_LENGTH
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -29,7 +31,7 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 
 
 PointCoordinate = Annotated[
-    int,
+    StrictInt,
     Field(
         ge=-_MAX_POINT_COORDINATE_ABS,
         le=_MAX_POINT_COORDINATE_ABS,
@@ -40,6 +42,10 @@ PointCoordinate = Annotated[
     ),
 ]
 """One bounded evaluation coordinate: ``abs(value) <= 10**6 - 1``."""
+
+
+SchurVariableName = OpaqueLabel
+"""One canonical bounded variable label retained in a Schur context."""
 
 
 def _schur_partition_schema() -> JsonSchemaValue:
@@ -84,12 +90,13 @@ class SchurExpansionRequest(StrictModel):
             "parts for the admitted Jacobi-Trudi determinant."
         )
     )
-    variables: tuple[str, ...] = Field(
+    variables: tuple[SchurVariableName, ...] = Field(
         min_length=1,
         max_length=20,
         description=(
             "Distinct variable names; the length must equal the length of "
-            "point (between 1 and 20)."
+            "point (between 1 and 20), and each name must contain at most "
+            f"{_MAX_SCHUR_VARIABLE_NAME_LENGTH} characters."
         ),
         json_schema_extra={"uniqueItems": True},
     )
@@ -125,10 +132,31 @@ class SchurExpansionRequest(StrictModel):
 
 
 class SchurExpansionResult(StrictModel):
+    partition: IntegerPartition
+    variables: tuple[SchurVariableName, ...] = Field(
+        min_length=1,
+        max_length=20,
+        description=(
+            "Distinct variable names, each containing at most "
+            f"{_MAX_SCHUR_VARIABLE_NAME_LENGTH} characters."
+        ),
+        json_schema_extra={"uniqueItems": True},
+    )
+    point: tuple[PointCoordinate, ...] = Field(min_length=1, max_length=20)
     value: ExactInteger
 
     @model_validator(mode="after")
-    def require_bounded_value(self) -> Self:
+    def require_bounded_result(self) -> Self:
+        if len(self.variables) != len(self.point):
+            raise _validation_error(
+                "schur_dimensions_mismatch",
+                "variables and point must have the same length",
+            )
+        if len(set(self.variables)) != len(self.variables):
+            raise _validation_error(
+                "schur_variables_not_distinct",
+                "variables must be distinct (duplicate axis)",
+            )
         if len(format_canonical_integer(abs(self.value))) > _MAX_SCHUR_RESULT_DIGITS:
             raise _validation_error(
                 "schur_value_digits_exceeded",
@@ -143,4 +171,5 @@ __all__ = [
     "PartitionRequest",
     "SchurExpansionRequest",
     "SchurExpansionResult",
+    "SchurVariableName",
 ]

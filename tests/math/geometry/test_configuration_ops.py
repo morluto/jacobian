@@ -4,7 +4,6 @@ import json
 from fractions import Fraction
 
 import pytest
-
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
@@ -13,10 +12,10 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.geometry._models import (
+    MAX_SPANNED_CIRCLES,
     CircumradiusProfileRequest,
     GeneralPositionRequest,
     GeometryCircleResult,
-    MAX_SPANNED_CIRCLES,
     PointQuadrupleRequest,
     PointTripleRequest,
     RationalPoint2D,

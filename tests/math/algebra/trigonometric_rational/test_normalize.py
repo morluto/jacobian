@@ -203,3 +203,78 @@ def test_zero_power_of_reciprocal_keeps_denominator_locus() -> None:
     assert result.denominator.terms[0].exponents == (0,)
     assert len(result.denominator_nonzero.terms) == 2
     assert result.denominator != result.denominator_nonzero
+
+
+def _cosine(coefficient: int) -> dict[str, object]:
+    return {"kind": "COSINE", "angle": {"coefficients": [coefficient]}}
+
+
+def _reciprocal_of_reciprocal(inner: dict[str, object]) -> dict[str, object]:
+    one = {"kind": "LITERAL", "value": {"num": 1, "den": 1}}
+    return {
+        "kind": "DIVIDE",
+        "numerator": one,
+        "denominator": {
+            "kind": "DIVIDE",
+            "numerator": one,
+            "denominator": inner,
+        },
+    }
+
+
+def test_retained_loci_are_admitted_before_the_gcd_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _forbidden(payload: dict[str, object]) -> dict[str, object]:
+        raise AssertionError(f"GCD worker started: {payload}")
+
+    monkeypatch.setattr(
+        "jacobian.math.algebra.trigonometric_rational.operations.cancel_common_factor",
+        _forbidden,
+    )
+    product = {
+        "kind": "MULTIPLY",
+        "children": [
+            {"kind": "COSINE", "angle": {"coefficients": [int(index == axis) for axis in range(7)]}}
+            for index in range(7)
+        ],
+    }
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": [f"x{index}" for index in range(7)],
+            "expression": {
+                "kind": "DIVIDE",
+                "numerator": _reciprocal_of_reciprocal(product),
+                "denominator": _reciprocal_of_reciprocal(product),
+            },
+        }
+    )
+    with pytest.raises(OperationResourceAdmissionError):
+        normalize_trigonometric_rational(request)
+
+
+def test_monomial_numerator_skips_the_gcd_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _forbidden(payload: dict[str, object]) -> dict[str, object]:
+        raise AssertionError("GCD worker started for a monomial numerator")
+
+    monkeypatch.setattr(
+        "jacobian.math.algebra.trigonometric_rational.operations.cancel_common_factor",
+        _forbidden,
+    )
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x"],
+            "expression": {
+                "kind": "DIVIDE",
+                "numerator": {"kind": "LITERAL", "value": {"num": 1, "den": 1}},
+                "denominator": {
+                    "kind": "MULTIPLY",
+                    "children": [_cosine(1), _cosine(2), _cosine(3)],
+                },
+            },
+        }
+    )
+    result = normalize_trigonometric_rational(request)
+    assert len(result.numerator.terms) == 1

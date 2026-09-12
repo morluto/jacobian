@@ -15,6 +15,7 @@ from pydantic import Field, StrictInt, ValidationError, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._execution import request_checkpoint
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     MathTool,
@@ -221,6 +222,7 @@ def _connected_in_incidence_graph(
     reached = {terminals[0]}
     changed = True
     while changed:
+        request_checkpoint("during hypergraph bond connectivity traversal")
         changed = False
         for members in open_edges:
             member_set = set(members)
@@ -370,6 +372,7 @@ def compute_hypergraph_bond_connection_probability(
     states: list[HypergraphBondReliabilityState] = []
     connection_probability = fmpq(0)
     for state_index in range(1 << len(edges)):
+        request_checkpoint("during hypergraph bond state enumeration")
         open_edges = tuple(
             members for index, members in enumerate(edges) if state_index & (1 << index)
         )

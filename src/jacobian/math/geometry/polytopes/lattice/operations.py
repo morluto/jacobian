@@ -41,7 +41,10 @@ from typing import Literal
 from sympy import Matrix, Rational
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.geometry.polytopes import _rational_geometry
 from jacobian.math.geometry.polytopes._rational_geometry import (
     recession_cone_is_trivial,
@@ -595,6 +598,12 @@ def ehrhart_polynomial(
     try:
         require_ehrhart_source(vertices, degree_bound, max_dilation)
         plans = _ehrhart_scan_plans(vertices, max_dilation)
+    except LatticePointBudgetError as exc:
+        raise OperationResourceAdmissionError(
+            location=("vertices", "max_dilation"),
+            code="polytope.ehrhart.scan_budget",
+            message=str(exc),
+        ) from exc
     except LatticePolytopeAdmissionError as exc:
         raise OperationDomainValidationError(
             location=("vertices", "max_dilation"),

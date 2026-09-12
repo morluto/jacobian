@@ -13,7 +13,7 @@ lexicographic order. Omitted rows are infeasible; they are never unknown.
 
 The operation checks every ordered pair of feasible sets and every element of
 their symmetric difference. It bounds the complete family before executing its
-axiom and explicit verification passes: 1,024 total row memberships, 2,048
+axiom and explicit verification passes: 16,384 total row memberships, 2,048
 UTF-8 bytes of ground labels
 (each label must be UTF-8-representable), 250,000 symmetric-exchange candidate
 checks per complete axiom replay. There
@@ -35,3 +35,8 @@ This initial operation deliberately does not construct twists, minors, binary
 matrix presentations, graph conversions, or interlace polynomials. Those are
 separate mathematical postconditions rather than fields of the recognition
 result.
+
+`delta_matroid.twist.compute` returns the canonical twisted `FiniteDeltaMatroid`.
+Width `max(|F|)-min(|F|)` is a native projection of the feasible family and is
+not a catalog operation. It scans every retained feasible-row length of the
+canonical value and has no extra row ceiling.

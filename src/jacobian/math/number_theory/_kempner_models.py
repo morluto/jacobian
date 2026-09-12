@@ -144,10 +144,10 @@ class KempnerArithmeticProgressionResult(StrictModel):
         if isinstance(self.conclusion, KempnerContainsProgression) and len(
             self.conclusion.values
         ) != self.arity:
-                raise _validation_error(
-                    "witness_shape",
-                    "a positive result must retain one ordered value for each source index",
-                )
+            raise _validation_error(
+                "witness_shape",
+                "a positive result must retain one ordered value for each source index",
+            )
         return self
 
     @property

@@ -151,6 +151,12 @@ class FiniteRationalSequence(FiniteSequence):
             data.get("values"), (list, tuple)
         ):
             return data
+        if len(data["values"]) > MAX_SEQUENCE_LENGTH:
+            raise _validation_error(
+                "sequence_length_exceeded",
+                "rational sequence exceeds the "
+                f"{MAX_SEQUENCE_LENGTH}-entry length bound",
+            )
         converted: list[object] = []
         for value in data["values"]:
             if isinstance(value, int) and not isinstance(value, bool):

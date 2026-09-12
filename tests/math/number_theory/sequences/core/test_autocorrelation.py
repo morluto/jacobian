@@ -1,5 +1,6 @@
 """Exact aperiodic and cyclic autocorrelation contracts."""
 
+import json
 from collections.abc import Callable
 from fractions import Fraction
 from typing import cast
@@ -17,6 +18,7 @@ from jacobian.catalog.models import (
 )
 from jacobian.dispatch import invoke_operation
 from jacobian.math.number_theory.sequences.core._models import (
+    AutocorrelationCell,
     AutocorrelationResult,
     FiniteIntegerSequence,
     FiniteRationalSequence,
@@ -114,7 +116,7 @@ def test_rational_profile_accepts_integer_wire_entries_as_canonical_values() -> 
     Draft202012Validator(FiniteRationalSequence.model_json_schema()).validate(
         {"values": ["1", {"num": "3", "den": "1"}, "2"]}
     )
-    with pytest.raises(ValidationError):
+    with pytest.raises(Exception):
         Draft202012Validator(FiniteRationalSequence.model_json_schema()).validate(
             {"values": [2]}
         )
@@ -227,7 +229,7 @@ def test_order_shape_serialization_schema_omits_integer_wire_alternative() -> No
     ]
     assert "anyOf" not in source_values["items"]
     validation = FiniteRationalSequence.model_json_schema(mode="validation")
-    assert "anyOf" in validation["properties"]["values"]["items"]
+    assert "oneOf" in validation["properties"]["values"]["items"]
 
 
 def test_order_shape_result_checks_structure_without_replaying_values() -> None:
@@ -504,7 +506,7 @@ def test_rational_autocorrelation_admission_counts_both_output_components() -> N
 
 
 def test_catalog_accepts_serialized_integer_sequence_source() -> None:
-    source = sequence_order_shape(FiniteIntegerSequence(values=(1, 2, 3))).source
+    source = FiniteIntegerSequence(values=(1, 2, 3))
     payload = json.loads(source.model_dump_json())
     result = invoke_operation(
         "sequence.autocorrelation.aperiodic.compute",

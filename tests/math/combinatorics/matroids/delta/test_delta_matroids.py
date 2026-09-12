@@ -38,9 +38,7 @@ def test_twist_transforms_feasible_sets_and_round_trips() -> None:
     request = DeltaMatroidTwistRequest(delta_matroid=source, subset=(0,))
     result = _twist(request)
 
-    assert result == FiniteDeltaMatroid(
-        ground=("a", "b"), feasible=((), (0,), (0, 1))
-    )
+    assert result == FiniteDeltaMatroid(ground=("a", "b"), feasible=((), (0,), (0, 1)))
     assert (
         DeltaMatroidTwistRequest.model_validate_json(request.model_dump_json())
         == request
@@ -342,9 +340,7 @@ def test_native_transforms_accept_canonical_mathematical_values() -> None:
     source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((), (0,), (1,)))
     result = twist(source, (0,))
     assert result == _twist(DeltaMatroidTwistRequest(delta_matroid=source, subset=(0,)))
-    assert width(result) == _width(
-        DeltaMatroidWidthRequest(delta_matroid=result)
-    ).width
+    assert width(result) == _width(DeltaMatroidWidthRequest(delta_matroid=result)).width
     assert twist(result, (0,)) == source
 
 

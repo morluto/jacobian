@@ -182,7 +182,7 @@ def test_scaled_coordinate_height_is_rejected_before_carrier_construction() -> N
         }
     )
     assert request.max_dilation == 3
-    with pytest.raises(OperationResourceAdmissionError, match="maximum-dilation"):
+    with pytest.raises(OperationDomainValidationError, match="maximum-dilation"):
         native_ehrhart(vertices, degree_bound=1, max_dilation=3)
 
 

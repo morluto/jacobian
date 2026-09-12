@@ -207,6 +207,31 @@ class TestFactorValuesAndOperations:
 
         assert result.table == (CanonicalRational.from_integer_ratio(32, denominator),)
 
+    def test_two_entry_marginal_cancels_shared_denominator_before_the_bound(
+        self,
+    ) -> None:
+        """A cheap reduced sum is admitted even when the unreduced LCM is huge."""
+
+        shared = 10**254 + 1
+        left_prime = 97
+        right_prime = 89
+        left_numerator = 55
+        right_numerator = (shared - right_prime * left_numerator) // left_prime
+        factor = Factor(
+            variables=(0,),
+            domain_sizes=(2,),
+            table=(
+                CanonicalRational(num=left_numerator, den=shared * left_prime),
+                CanonicalRational(num=right_numerator, den=shared * right_prime),
+            ),
+        )
+
+        result = factor_marginalize(factor, 0)
+
+        assert result.table == (
+            CanonicalRational.from_integer_ratio(1, left_prime * right_prime),
+        )
+
     def test_product_at_four_thousand_ninety_six_cell_boundary_is_admitted(
         self,
     ) -> None:

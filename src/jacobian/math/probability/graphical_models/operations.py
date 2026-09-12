@@ -157,16 +157,11 @@ def _admit_bounded_sum(values: Sequence[CanonicalRational], operation: str) -> N
         if numerator == 0:
             numerator, denominator = value.num, value.den
             continue
-        denominator_gcd = gcd(denominator, value.den)
-        left_scale = value.den // denominator_gcd
-        right_scale = denominator // denominator_gcd
-        next_denominator = _bounded_integer_product(
-            denominator,
-            left_scale,
-            max_digits=MAX_RATIONAL_DIGITS,
-            operation=operation,
-            phase="intermediate denominator",
-        )
+        # Match Fraction._add: form the lifted numerator, cancel against the
+        # shared denominator gcd, then multiply only the reduced denominator.
+        shared = gcd(denominator, value.den)
+        left_scale = value.den // shared
+        right_scale = denominator // shared
         left_term = _bounded_integer_product(
             numerator,
             left_scale,
@@ -181,12 +176,18 @@ def _admit_bounded_sum(values: Sequence[CanonicalRational], operation: str) -> N
             operation=operation,
             phase="intermediate numerator",
         )
-        next_numerator = left_term + right_term
-        if _integer_digits(next_numerator) > MAX_RATIONAL_DIGITS + 1:
+        lifted_numerator = left_term + right_term
+        if _integer_digits(lifted_numerator) > MAX_RATIONAL_DIGITS + 1:
             _reject_rational_growth(operation, "intermediate numerator")
-        common = gcd(next_numerator, next_denominator)
-        numerator = next_numerator // common
-        denominator = next_denominator // common
+        cancelled = gcd(lifted_numerator, shared)
+        numerator = lifted_numerator // cancelled
+        denominator = _bounded_integer_product(
+            right_scale,
+            value.den // cancelled,
+            max_digits=MAX_RATIONAL_DIGITS,
+            operation=operation,
+            phase="intermediate denominator",
+        )
         if max(_integer_digits(numerator), _integer_digits(denominator)) > (
             MAX_RATIONAL_DIGITS
         ):

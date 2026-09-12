@@ -10,6 +10,7 @@ from jacobian.catalog.models import (
 from jacobian.math.groups.actions._models import MAX_FAMILY_MEMBERS, FinitePermutationAction
 from jacobian.math.groups.tuple_orbits._models import (
     MAX_TUPLE_ARITY,
+    TupleFamilyOrbitResult,
     TupleFamilyOrbitSource,
 )
 from jacobian.math.groups.tuple_orbits.operations import tuple_family_orbit_profile
@@ -212,6 +213,32 @@ def test_raw_family_dimensions_are_rejected_before_container_copy() -> None:
     with pytest.raises(ValidationError) as arity_mismatch:
         TupleFamilyOrbitSource.model_validate(oversized_row)
     assert "arity_mismatch" in arity_mismatch.value.errors()[0]["type"]
+
+
+def test_raw_action_generator_dimensions_are_rejected_before_container_copy() -> None:
+    class _HugeGenerator(tuple):
+        def __len__(self) -> int:
+            return 2_000_000
+
+    payload = {
+        "action": {"domain": ["a"], "generators": [_HugeGenerator()]},
+        "arity": 0,
+        "family": [],
+    }
+    with pytest.raises(ValidationError) as generator_length:
+        TupleFamilyOrbitSource.model_validate(payload)
+    assert "generator_length_mismatch" in generator_length.value.errors()[0]["type"]
+
+
+def test_negative_source_indices_are_rejected_before_family_lookup() -> None:
+    result = tuple_family_orbit_profile(
+        TupleFamilyOrbitSource(action=_swap_action(), arity=1, family=((0,), (1,)))
+    )
+    payload = result.model_dump()
+    payload["rows"][0]["source_indices"] = [-3]
+    with pytest.raises(ValidationError) as source_index:
+        TupleFamilyOrbitResult.model_validate(payload)
+    assert "source_index_out_of_range" in source_index.value.errors()[0]["type"]
 
 
 def test_distinct_source_rows_are_indexed_once_before_orbit_partition() -> None:

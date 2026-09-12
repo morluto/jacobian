@@ -18,7 +18,9 @@ from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.groups._models import MAX_GROUP_DEGREE
 from jacobian.math.groups.actions._models import (
+    MAX_DOMAIN_SIZE,
     MAX_FAMILY_MEMBERS,
+    MAX_GENERATORS,
     MAX_GROUP_ORDER,
     FinitePermutationAction,
 )
@@ -61,6 +63,32 @@ class TupleFamilyOrbitSource(StrictModel):
     def normalize_json_containers(cls, data: Any) -> Any:
         if not isinstance(data, Mapping):
             return data
+        action = data.get("action")
+        if isinstance(action, Mapping):
+            domain = action.get("domain")
+            generators = action.get("generators")
+            if isinstance(domain, (list, tuple)) and len(domain) > MAX_DOMAIN_SIZE:
+                raise _tuple_error(
+                    "action_domain_bound",
+                    f"action domain admits at most {MAX_DOMAIN_SIZE} labels",
+                )
+            degree = (
+                len(domain)
+                if isinstance(domain, (list, tuple))
+                else MAX_DOMAIN_SIZE
+            )
+            if isinstance(generators, (list, tuple)):
+                if len(generators) > MAX_GENERATORS:
+                    raise _tuple_error(
+                        "action_generator_bound",
+                        f"actions admit at most {MAX_GENERATORS} generators",
+                    )
+                for generator in generators:
+                    if isinstance(generator, (list, tuple)) and len(generator) > degree:
+                        raise _tuple_error(
+                            "generator_length_mismatch",
+                            "every generator must be a permutation of the domain",
+                        )
         family = data.get("family")
         if isinstance(family, (list, tuple)):
             if len(family) > MAX_FAMILY_MEMBERS:
@@ -192,7 +220,9 @@ class TupleFamilyOrbitResult(StrictModel):
                     "representative_axis",
                     "representatives must use the source arity and action axis",
                 )
-            if any(index >= len(family) for index in row.source_indices):
+            if any(
+                index < 0 or index >= len(family) for index in row.source_indices
+            ):
                 raise _tuple_error(
                     "source_index_out_of_range",
                     "source indices must index the retained family",

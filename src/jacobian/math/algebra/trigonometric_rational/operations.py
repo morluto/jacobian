@@ -486,6 +486,9 @@ def _reduce_common_laurent_factor(
         ): coefficient
         for support, coefficient in denominator.items()
     }
+    if shifted_numerator == shifted_denominator:
+        unit = {(0,) * axis: (Fraction(1), Fraction())}
+        return _canonicalize(unit, unit)
     if len(shifted_numerator) * len(shifted_denominator) > MAX_TRIG_LAURENT_TERMS:
         _refuse_growth()
     if (

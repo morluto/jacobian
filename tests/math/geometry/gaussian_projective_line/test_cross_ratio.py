@@ -350,3 +350,32 @@ def test_nonreal_cancelled_quotient_is_one_plus_i() -> None:
     )
     result = gaussian_rational_cross_ratio(request)
     assert result.as_fractions() == (Fraction(1), Fraction(1))
+
+
+def test_stereographic_conjugate_product_keeps_shared_denominators() -> None:
+    scale = 10**1099
+    modulus = 1 + scale * scale
+    gauss = GaussianRational.from_fractions(
+        Fraction(1 - scale * scale, modulus),
+        Fraction(2 * scale, modulus),
+    )
+    conjugate = GaussianRational.from_fractions(*gauss.as_fractions())
+    conjugate = GaussianRational.from_fractions(
+        conjugate.as_fractions()[0],
+        -conjugate.as_fractions()[1],
+    )
+    one_plus = GaussianRational.from_fractions(
+        Fraction(1) + conjugate.as_fractions()[0],
+        conjugate.as_fractions()[1],
+    )
+    result = gaussian_rational_cross_ratio(
+        GaussianCrossRatioSource(
+            first=_point(_z(1), _z(0)),
+            second=_point(_z(1), _z(1)),
+            third=_point(_z(1), gauss),
+            fourth=_point(_z(1), one_plus),
+        )
+    )
+    real, imag = result.as_fractions()
+    assert real == 0
+    assert imag == Fraction(-(1 + scale * scale), 4 * scale)

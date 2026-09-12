@@ -51,27 +51,42 @@ def _integer_digits(value: int) -> int:
     return (magnitude.bit_length() * 30103) // 100000 + 1
 
 
-def _cancelled_product_digits(left: Fraction, right: Fraction) -> tuple[int, int]:
+def _cancelled_product_digits(
+    left: Fraction, right: Fraction
+) -> tuple[int, int, int]:
     left_num, left_den = abs(left.numerator), left.denominator
     right_num, right_den = abs(right.numerator), right.denominator
     cross_left = gcd(left_num, right_den)
     cross_right = gcd(right_num, left_den)
+    cancelled_den = (left_den // cross_right) * (right_den // cross_left)
     return (
         _integer_digits(left_num // cross_left)
         + _integer_digits(right_num // cross_right),
-        _integer_digits(left_den // cross_right)
-        + _integer_digits(right_den // cross_left),
+        _integer_digits(cancelled_den),
+        cancelled_den,
     )
 
 
 def _cancelled_sum_digits(
-    left: tuple[int, int], right: tuple[int, int]
-) -> tuple[int, int]:
-    left_num, left_den = left
-    right_num, right_den = right
+    left: tuple[int, int, int], right: tuple[int, int, int]
+) -> tuple[int, int, int]:
+    left_num, left_den_digits, left_den = left
+    right_num, right_den_digits, right_den = right
+    common = gcd(left_den, right_den)
+    common_digits = _integer_digits(common)
+    left_scale_digits = right_den_digits - common_digits
+    right_scale_digits = left_den_digits - common_digits
+    if left_scale_digits < 0:
+        left_scale_digits = 0
+    if right_scale_digits < 0:
+        right_scale_digits = 0
+    lcm_digits = left_den_digits + right_scale_digits
+    if lcm_digits < max(left_den_digits, right_den_digits):
+        lcm_digits = max(left_den_digits, right_den_digits)
     return (
-        max(left_num + right_den, right_num + left_den) + 1,
-        left_den + right_den,
+        max(left_num + left_scale_digits, right_num + right_scale_digits) + 1,
+        lcm_digits,
+        (left_den // common) * right_den,
     )
 
 
@@ -107,9 +122,11 @@ def _gaussian_quotient_digit_bound(
         _cancelled_product_digits(denom_imag, denom_imag),
     )
 
-    def _divide_digits(payload: tuple[int, int], modulus: tuple[int, int]) -> int:
-        payload_num, payload_den = payload
-        modulus_num, modulus_den = modulus
+    def _divide_digits(
+        payload: tuple[int, int, int], modulus: tuple[int, int, int]
+    ) -> int:
+        payload_num, payload_den, _payload_value = payload
+        modulus_num, modulus_den, _modulus_value = modulus
         return max(payload_num + modulus_den, payload_den + modulus_num)
 
     coarse = max(_divide_digits(real_num, norm), _divide_digits(imag_num, norm))
@@ -133,20 +150,27 @@ def _reject_resource(code: str, message: str) -> NoReturn:
 def _gaussian_multiply_digit_bound(
     left: tuple[Fraction, Fraction], right: tuple[Fraction, Fraction]
 ) -> int:
-    return (
-        2
-        * (
-            _gaussian_component_digits(left)
-            + _gaussian_component_digits(right)
-        )
-        + 1
+    real, imag = left
+    other_real, other_imag = right
+    real_part = _cancelled_sum_digits(
+        _cancelled_product_digits(real, other_real),
+        _cancelled_product_digits(imag, other_imag),
     )
+    imag_part = _cancelled_sum_digits(
+        _cancelled_product_digits(real, other_imag),
+        _cancelled_product_digits(imag, other_real),
+    )
+    return max(*real_part[:2], *imag_part[:2])
 
 
 def _admitted_multiply(
     left: tuple[Fraction, Fraction], right: tuple[Fraction, Fraction]
 ) -> tuple[Fraction, Fraction]:
-    if _gaussian_multiply_digit_bound(left, right) > MAX_CROSS_RATIO_INTERMEDIATE_DIGITS:
+    bound = _gaussian_multiply_digit_bound(left, right)
+    if (
+        bound > MAX_CROSS_RATIO_INTERMEDIATE_DIGITS
+        or _exceeds_intermediate_digits(bound)
+    ):
         _reject_resource(
             "intermediate_height_bound",
             "cross-ratio determinant products and quotient exceed the exact intermediate digit bound",

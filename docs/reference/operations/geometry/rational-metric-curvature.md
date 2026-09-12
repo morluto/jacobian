@@ -43,14 +43,13 @@ denominator guards required by the canonical returned fields.
 
 Admission is semantic. Coprimality recognition and curvature-plan expansion
 each create their own 50,000,000-unit work ledger; those phases do not share
-one envelope, so a request can consume up to that allowance twice. Each
-phase still accounts for source support and coefficient height,
-determinant/cofactor growth, derivatives, rational products, shared
-expression-DAG nodes, complete tensor output, retained locus guards, and
-mathematical coordinate allocation. The first envelope admits at most 4
-coordinates, 16,384 DAG nodes, 256 terms per canonical polynomial, 128
-coefficient digits, and 768 retained locus guards. Transport byte limits are
-not used as mathematical admission quantities.
+one envelope, so a request can consume up to that allowance twice. The
+recognition ledger charges only coprimality of authored source components.
+DAG-node growth, determinant and cofactor expansion, derivatives, rational
+products, complete tensor output, retained locus guards, coordinate
+allocation, and the 4-coordinate / 16,384-node / 256-term / 128-digit /
+768-guard caps belong to the curvature-plan ledger. Transport byte limits
+are not used as mathematical admission quantities.
 
 The metric must be symmetric and its determinant must be a nonzero rational
 function. A singular metric, excessive exact work or growth, noncanonical

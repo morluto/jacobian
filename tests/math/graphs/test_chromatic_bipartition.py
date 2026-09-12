@@ -299,6 +299,7 @@ def test_unit_threshold_tries_another_singleton_before_backend_overflow() -> Non
     assert result.chromatic_a == 1
     assert result.chromatic_b == 2
     assert len(result.side_a) == 1
+    assert result.checked_partitions == 1
     assert result.model_validate_json(result.model_dump_json()) == result
 
 
@@ -358,10 +359,12 @@ def test_worker_timeout_is_an_execution_failure(
         "run_bounded_process",
         lambda *_args, **_kwargs: _completed(returncode=None, timed_out=True),
     )
-    with pytest.raises(OperationExecutionTimeoutError):
+    with pytest.raises(OperationExecutionTimeoutError) as caught:
         operation.find_chromatic_bipartition(
             ChromaticBipartitionRequest(graph=source, s=1, t=1)
         )
+    assert caught.value.configured_seconds == 5
+    assert caught.value.adjustable_field_path == ("resource_budget", "wall_seconds")
 
 
 def test_worker_timeout_retains_recovery_metadata(

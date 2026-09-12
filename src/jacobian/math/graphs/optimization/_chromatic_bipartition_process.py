@@ -85,6 +85,16 @@ def _chromatic_bipartition_worker_stdout_limit(
     return max(_serialized_result_bytes(result) for result in envelopes)
 
 
+def _chromatic_bipartition_timeout(
+    message: str, request: ChromaticBipartitionRequest
+) -> None:
+    raise OperationExecutionTimeoutError(
+        message,
+        configured_seconds=request.resource_budget.wall_seconds,
+        adjustable_field_path=("resource_budget", "wall_seconds"),
+    )
+
+
 def find_chromatic_bipartition(
     request: ChromaticBipartitionRequest,
 ) -> ChromaticBipartitionResult:
@@ -110,10 +120,9 @@ def find_chromatic_bipartition(
         with TemporaryDirectory(prefix="jacobian-graph-bipartition-") as directory:
             remaining_seconds = lease.backend_deadline - time.monotonic()
             if remaining_seconds <= 0:
-                raise OperationExecutionTimeoutError(
+                _chromatic_bipartition_timeout(
                     "chromatic bipartition deadline expired before the worker started",
-                    configured_seconds=request.resource_budget.wall_seconds,
-                    adjustable_field_path=("resource_budget", "wall_seconds"),
+                    request,
                 )
             completed = run_bounded_process(
                 [sys.executable, str(_BIPARTITION_WORKER)],
@@ -141,10 +150,9 @@ def find_chromatic_bipartition(
     if completed.cancelled:
         raise OperationExecutionCancelledError("chromatic bipartition worker cancelled")
     if completed.timed_out:
-        raise OperationExecutionTimeoutError(
+        _chromatic_bipartition_timeout(
             "chromatic bipartition deadline expired during the worker",
-            configured_seconds=request.resource_budget.wall_seconds,
-            adjustable_field_path=("resource_budget", "wall_seconds"),
+            request,
         )
     request_checkpoint("after chromatic bipartition worker")
     if completed.stdout_exceeded or completed.stderr_exceeded:
@@ -152,10 +160,9 @@ def find_chromatic_bipartition(
     if completed.returncode != 0:
         raise OperationBackendError(BackendFailureReason.ABNORMAL_EXIT)
     if time.monotonic() >= deadline:
-        raise OperationExecutionTimeoutError(
+        _chromatic_bipartition_timeout(
             "chromatic bipartition deadline expired after the worker returned",
-            configured_seconds=request.resource_budget.wall_seconds,
-            adjustable_field_path=("resource_budget", "wall_seconds"),
+            request,
         )
     try:
         result = decode_checked_worker_output(

@@ -8,7 +8,9 @@ import pytest
 
 from jacobian._execution import (
     BackendFailureReason,
+    ExecutionResource,
     OperationBackendError,
+    OperationResourceExhaustedError,
 )
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import (
@@ -388,3 +390,57 @@ def test_worker_refinement_code_is_a_backend_failure(
             deadline=time.monotonic() + 30,
         )
     assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT
+
+
+def _worker_process_result(
+    *,
+    returncode: int = 0,
+    stdout: bytes = b'{"ok": true, "scaled_floor": "1"}',
+    stdout_exceeded: bool = False,
+    stderr_exceeded: bool = False,
+    timed_out: bool = False,
+) -> BoundedProcessResult:
+    return BoundedProcessResult(
+        returncode=returncode,
+        stdout=stdout,
+        stderr=b"",
+        stdout_exceeded=stdout_exceeded,
+        stderr_exceeded=stderr_exceeded,
+        timed_out=timed_out,
+    )
+
+
+def test_worker_stdout_overflow_is_resource_exhausted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "jacobian.process.run_bounded_process",
+        lambda *_args, **_kwargs: _worker_process_result(stdout_exceeded=True),
+    )
+    with pytest.raises(OperationResourceExhaustedError) as exc_info:
+        process.run_scaled_integer_part_worker(
+            polynomial=(1, 0, -2),
+            real_root_index=1,
+            scale=10,
+            isolation_bits=8,
+            deadline=time.monotonic() + 30,
+        )
+    assert exc_info.value.resource is ExecutionResource.OUTPUT
+
+
+def test_worker_abnormal_exit_is_a_backend_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "jacobian.process.run_bounded_process",
+        lambda *_args, **_kwargs: _worker_process_result(returncode=1, stdout=b""),
+    )
+    with pytest.raises(OperationBackendError) as exc_info:
+        process.run_scaled_integer_part_worker(
+            polynomial=(1, 0, -2),
+            real_root_index=1,
+            scale=10,
+            isolation_bits=8,
+            deadline=time.monotonic() + 30,
+        )
+    assert exc_info.value.reason is BackendFailureReason.ABNORMAL_EXIT

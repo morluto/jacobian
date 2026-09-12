@@ -12,11 +12,16 @@ from tempfile import TemporaryDirectory
 from jacobian._execution import (
     BackendFailureReason,
     OperationBackendError,
-    OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
 )
 from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.process import (
+    ProcessResourceLimits,
+    check_bounded_process_result,
+    run_bounded_process,
+    worker_environment,
+)
 
 _WORKER = Path(__file__).resolve().with_name("_radix_prefix_worker.py")
 RADIX_ISOLATION_OWNER_SECONDS = 600.0
@@ -36,12 +41,6 @@ def run_scaled_integer_part_worker(
     deadline: float,
 ) -> int:
     """Isolate one scaled algebraic integer part in a killable child."""
-
-    from jacobian.process import (
-        ProcessResourceLimits,
-        run_bounded_process,
-        worker_environment,
-    )
 
     timeout_seconds = deadline - time.monotonic()
     if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
@@ -73,24 +72,12 @@ def run_scaled_integer_part_worker(
                 cwd=worker_directory,
             )
     except OSError as exc:
-        raise RuntimeError(
-            "bounded radix isolation worker could not be started"
-        ) from exc
-    if completed.cancelled:
-        raise OperationExecutionCancelledError(
-            "request cancelled during radix root isolation"
-        )
-    if completed.timed_out:
-        raise OperationExecutionTimeoutError(
-            "request deadline expired during radix root isolation"
-        )
-    if (
-        completed.stdout_exceeded
-        or completed.stderr_exceeded
-        or completed.returncode != 0
-    ):
-        raise RuntimeError("bounded radix isolation worker did not establish a result")
-    response = json.loads(completed.stdout.decode("utf-8"))
+        raise OperationBackendError(BackendFailureReason.STARTUP) from exc
+    check_bounded_process_result(completed)
+    try:
+        response = json.loads(completed.stdout.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
+        raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE) from exc
     if not response.get("ok"):
         code = response.get("code")
         message = str(response.get("message", "radix isolation failed"))

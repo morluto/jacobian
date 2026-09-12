@@ -170,11 +170,13 @@ def _gadd(left: Gaussian, right: Gaussian) -> Gaussian:
 
 
 def _gmul(left: Gaussian, right: Gaussian) -> Gaussian:
-    return _admit_gaussian(
-        (
-            left[0] * right[0] - left[1] * right[1],
-            left[0] * right[1] + left[1] * right[0],
-        )
+    return _admit_gaussian(_gmul_raw(left, right))
+
+
+def _gmul_raw(left: Gaussian, right: Gaussian) -> Gaussian:
+    return (
+        left[0] * right[0] - left[1] * right[1],
+        left[0] * right[1] + left[1] * right[0],
     )
 
 
@@ -197,12 +199,14 @@ def _gzero(value: Gaussian) -> bool:
 def _gaussian_proportional(left: Polynomial, right: Polynomial) -> bool:
     if left.keys() != right.keys() or not left:
         return False
+    if left == right:
+        return True
     first = next(iter(left))
     scale_left, scale_right = left[first], right[first]
     if _gzero(scale_right):
         return False
     return all(
-        _gmul(left[support], scale_right) == _gmul(right[support], scale_left)
+        _gmul_raw(left[support], scale_right) == _gmul_raw(right[support], scale_left)
         for support in left
     )
 
@@ -266,24 +270,37 @@ def _axis_stride(exponents: list[int]) -> int:
 
 
 def _quotient_support_term_count(numerator: Polynomial, denominator: Polynomial) -> int:
-    """Bound reduced quotient support, preserving per-axis exponent stride."""
+    """Bound reduced numerator and denominator support, preserving lattice stride."""
 
     if not numerator or not denominator:
         return 0
     axis = len(next(iter(numerator)))
-    total = 1
+    numerator_total = 1
+    denominator_total = 1
     for index in range(axis):
         n_exps = [support[index] for support in numerator]
         d_exps = [support[index] for support in denominator]
         stride = gcd(_axis_stride(n_exps), _axis_stride(d_exps))
-        width = (max(n_exps) - min(n_exps)) - (max(d_exps) - min(d_exps))
-        if width < 0:
-            width = max(n_exps) - min(n_exps)
-        count = width // stride + 1
-        if count > MAX_TRIG_LAURENT_TERMS or total > MAX_TRIG_LAURENT_TERMS // count:
+        n_span = max(n_exps) - min(n_exps)
+        d_span = max(d_exps) - min(d_exps)
+        n_width = n_span - d_span
+        if n_width < 0:
+            n_width = n_span
+        d_width = d_span - n_span
+        if d_width < 0:
+            d_width = d_span
+        n_count = n_width // stride + 1
+        d_count = d_width // stride + 1
+        if (
+            n_count > MAX_TRIG_LAURENT_TERMS
+            or d_count > MAX_TRIG_LAURENT_TERMS
+            or numerator_total > MAX_TRIG_LAURENT_TERMS // n_count
+            or denominator_total > MAX_TRIG_LAURENT_TERMS // d_count
+        ):
             return MAX_TRIG_LAURENT_TERMS + 1
-        total *= count
-    return total
+        numerator_total *= n_count
+        denominator_total *= d_count
+    return max(numerator_total, denominator_total)
 
 
 def _one(axis: int) -> Polynomial:
@@ -583,14 +600,32 @@ def _wire(
     )
 
 
+def _scalar_unit(polynomial: Polynomial) -> Polynomial:
+    """Divide out the leading coefficient, leaving the Laurent support unchanged."""
+
+    leading = polynomial[max(polynomial)]
+    if leading == (Fraction(1), Fraction()):
+        return polynomial
+    return {
+        support: _gdiv(coefficient, leading)
+        for support, coefficient in polynomial.items()
+    }
+
+
 def _combine_loci(loci: tuple[Polynomial, ...], axis: int) -> Polynomial:
-    result = _one(axis)
+    unique: list[Polynomial] = []
     for polynomial in loci:
         if not polynomial:
             continue
         support = next(iter(polynomial))
         if len(polynomial) == 1 and not any(support):
             continue
+        normalized = _scalar_unit(polynomial)
+        if any(_gaussian_proportional(normalized, existing) for existing in unique):
+            continue
+        unique.append(normalized)
+    result = _one(axis)
+    for polynomial in unique:
         result = _poly_mul(result, polynomial)
     return result
 

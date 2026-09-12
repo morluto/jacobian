@@ -225,9 +225,7 @@ def _cells_for_box(
     cells: list[_ParameterCell] = []
     left_edges: tuple[Fraction | None, ...] = (None, *parameter_roots)
     right_edges: tuple[Fraction | None, ...] = (*parameter_roots, None)
-    for lower, upper in zip(
-        left_edges, right_edges, strict=True
-    ):
+    for lower, upper in zip(left_edges, right_edges, strict=True):
         if lower is None:
             assert upper is not None
             sample = upper - Fraction(1)

@@ -80,9 +80,14 @@ _SEMIGROUP = {
     ],
 }
 
-_ZERO_SEMIGROUP = {
-    "elements": ["0", "a", "b"],
-    "multiplication": [["0", "0", "0"], ["0", "0", "0"], ["0", "0", "0"]],
+_NILPOTENT_CHAIN = {
+    "elements": ["0", "a", "b", "c"],
+    "multiplication": [
+        ["0", "0", "0", "0"],
+        ["0", "b", "0", "0"],
+        ["0", "0", "0", "0"],
+        ["0", "0", "0", "0"],
+    ],
 }
 
 
@@ -193,8 +198,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         operation_id="semigroup.regular_elements.compute",
         title="Find regular elements of a finite semigroup",
         description=(
-            "Return every element a for which some element x satisfies a*x*a=a, "
-            "in the source semigroup's declared order."
+            "Return source-ordered (a, x) rows for every regular element, using "
+            "the first declared witness x satisfying a*x*a=a."
         ),
         request_type=RegularElementsRequest,
         result_type=RegularElementsResult,
@@ -212,8 +217,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         operation_id="semigroup.nilpotent_elements.compute",
         title="Find nilpotent elements relative to a zero",
         description=(
-            "Return every element with a positive power equal to the supplied "
-            "absorbing zero; the zero must absorb every source element on both sides."
+            "Return source-ordered (a, k) rows where k is the least positive "
+            "exponent with a^k equal to the supplied absorbing zero; the zero "
+            "must absorb every source element on both sides."
         ),
         request_type=NilpotentElementsRequest,
         result_type=NilpotentElementsResult,
@@ -221,12 +227,12 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         tags=("algebra", "semigroup", "nilpotent", "exact"),
         examples=(
             OperationExample(
-                name="nilpotents_in_zero_semigroup",
+                name="nilpotents_in_absorbing_chain",
                 description=(
-                    "Find elements eventually reaching zero in a zero semigroup; "
-                    "the supplied zero must be absorbing."
+                    "Find elements and least exponents reaching zero in a nilpotent "
+                    "chain; the supplied zero must be absorbing."
                 ),
-                input={"semigroup": _ZERO_SEMIGROUP, "zero": "0"},
+                input={"semigroup": _NILPOTENT_CHAIN, "zero": "0"},
             ),
         ),
     ),

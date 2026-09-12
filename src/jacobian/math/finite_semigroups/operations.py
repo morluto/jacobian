@@ -257,12 +257,13 @@ def regular_elements(semigroup: "FiniteSemigroup") -> RegularElementsResult:
     regular = []
     for a in semigroup.elements:
         ai = index[a]
-        if any(
-            semigroup.multiplication[index[semigroup.multiplication[ai][index[x]]]][ai]
-            == a
-            for x in semigroup.elements
-        ):
-            regular.append(a)
+        for x in semigroup.elements:
+            if (
+                semigroup.multiplication[index[semigroup.multiplication[ai][index[x]]]][ai]
+                == a
+            ):
+                regular.append((a, x))
+                break
     return RegularElementsResult._from_kernel(semigroup, tuple(regular))
 
 
@@ -295,8 +296,10 @@ def nilpotent_elements(
         powers, _, _, _, _ = _power_profile_data(
             semigroup.elements, semigroup.multiplication, element
         )
-        if zero in powers:
-            values.append(element)
+        for exponent, power in enumerate(powers, start=1):
+            if power == zero:
+                values.append((element, exponent))
+                break
     return NilpotentElementsResult._from_kernel(semigroup, zero, tuple(values))
 
 

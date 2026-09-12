@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -221,14 +221,40 @@ class RegularElementsRequest(StrictModel):
 
 
 class RegularElementsResult(StrictModel):
-    """All regular elements of a finite semigroup, in source order."""
+    """Regular elements with their source-ordered ``a*x*a=a`` witnesses."""
 
     semigroup: FiniteSemigroup
-    regular_elements: tuple[OpaqueLabel, ...]
+    regular_elements: tuple[tuple[OpaqueLabel, OpaqueLabel], ...] = Field(
+        max_length=MAX_ELEMENTS
+    )
+
+    @model_validator(mode="after")
+    def require_source_axes_and_order(self) -> Self:
+        declared = set(self.semigroup.elements)
+        elements = tuple(element for element, _witness in self.regular_elements)
+        if any(
+            element not in declared or witness not in declared
+            for element, witness in self.regular_elements
+        ):
+            raise _validation_error(
+                "regular_row_axis", "regular rows must use the source semigroup axis"
+            )
+        if len(set(elements)) != len(elements):
+            raise _validation_error(
+                "regular_rows_duplicate", "regular rows must identify distinct elements"
+            )
+        expected = tuple(element for element in self.semigroup.elements if element in elements)
+        if elements != expected:
+            raise _validation_error(
+                "regular_rows_order", "regular rows must retain source element order"
+            )
+        return self
 
     @classmethod
     def _from_kernel(
-        cls, semigroup: FiniteSemigroup, regular_elements: tuple[OpaqueLabel, ...]
+        cls,
+        semigroup: FiniteSemigroup,
+        regular_elements: tuple[tuple[OpaqueLabel, OpaqueLabel], ...],
     ) -> Self:
         return cls.model_construct(
             semigroup=semigroup, regular_elements=regular_elements
@@ -243,18 +269,52 @@ class NilpotentElementsRequest(StrictModel):
 
 
 class NilpotentElementsResult(StrictModel):
-    """All nilpotent elements relative to a validated absorbing zero."""
+    """Nilpotent elements with their least positive exponents to the zero."""
 
     semigroup: FiniteSemigroup
     zero: OpaqueLabel
-    nilpotent_elements: tuple[OpaqueLabel, ...]
+    nilpotent_elements: tuple[tuple[OpaqueLabel, StrictInt], ...] = Field(
+        max_length=MAX_ELEMENTS
+    )
+
+    @model_validator(mode="after")
+    def require_source_axes_and_order(self) -> Self:
+        declared = set(self.semigroup.elements)
+        if self.zero not in declared:
+            raise _validation_error(
+                "nilpotent_zero_axis", "nilpotent zero must use the source semigroup axis"
+            )
+        elements = tuple(element for element, _exponent in self.nilpotent_elements)
+        if any(element not in declared for element in elements):
+            raise _validation_error(
+                "nilpotent_row_axis", "nilpotent rows must use the source semigroup axis"
+            )
+        if any(
+            exponent < 1 or exponent > len(self.semigroup.elements)
+            for _element, exponent in self.nilpotent_elements
+        ):
+            raise _validation_error(
+                "nilpotent_exponent_bound",
+                "nilpotent exponents must be positive and bounded by the source size",
+            )
+        if len(set(elements)) != len(elements):
+            raise _validation_error(
+                "nilpotent_rows_duplicate",
+                "nilpotent rows must identify distinct elements",
+            )
+        expected = tuple(element for element in self.semigroup.elements if element in elements)
+        if elements != expected:
+            raise _validation_error(
+                "nilpotent_rows_order", "nilpotent rows must retain source element order"
+            )
+        return self
 
     @classmethod
     def _from_kernel(
         cls,
         semigroup: FiniteSemigroup,
         zero: OpaqueLabel,
-        nilpotent_elements: tuple[OpaqueLabel, ...],
+        nilpotent_elements: tuple[tuple[OpaqueLabel, int], ...],
     ) -> Self:
         return cls.model_construct(
             semigroup=semigroup,

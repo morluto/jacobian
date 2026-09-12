@@ -100,21 +100,48 @@ def test_native_surface_accepts_semigroup_value() -> None:
     assert idempotents(semigroup).idempotents == ("0",)
     assert principal_ideals(semigroup, ("1",)).ideals == (("0", "1", "2"),)
     assert len(green_relations(semigroup).L) == 1
-    assert regular_elements(semigroup).regular_elements == semigroup.elements
+    assert tuple(
+        element for element, _witness in regular_elements(semigroup).regular_elements
+    ) == semigroup.elements
 
 
 def test_regular_elements_use_the_ax_a_definition() -> None:
     semigroup = _finite_semigroup(MATRIX_UNITS)
     result = regular_elements(semigroup)
-    assert result.regular_elements == semigroup.elements
+    assert result.regular_elements == (
+        ("0", "0"),
+        ("e11", "e11"),
+        ("e12", "e21"),
+        ("e21", "e12"),
+        ("e22", "e22"),
+    )
+    restored = type(result).model_validate_json(result.model_dump_json())
+    assert restored == result
+
+    forged = result.model_dump(mode="json")
+    forged["regular_elements"][0][1] = "not-in-source"
+    with pytest.raises(ValidationError, match="source semigroup axis"):
+        type(result).model_validate(forged)
 
 
-def test_nilpotent_elements_require_and_reach_an_absorbing_zero() -> None:
-    semigroup = _finite_semigroup(NULL_SG)
+def test_nilpotent_elements_return_least_exponents_and_require_absorbing_zero() -> None:
+    semigroup = _finite_semigroup(NILPOTENT_CHAIN)
     result = compute_nilpotent_elements(
         NilpotentElementsRequest(semigroup=semigroup, zero="0")
     )
-    assert result.nilpotent_elements == semigroup.elements
+    assert result.nilpotent_elements == (
+        ("0", 1),
+        ("a", 3),
+        ("b", 2),
+        ("c", 2),
+    )
+    restored = type(result).model_validate_json(result.model_dump_json())
+    assert restored == result
+
+    forged = result.model_dump(mode="json")
+    forged["nilpotent_elements"][1][0] = "not-in-source"
+    with pytest.raises(ValidationError, match="source semigroup axis"):
+        type(result).model_validate(forged)
     with pytest.raises(OperationDomainValidationError) as error:
         nilpotent_elements(_finite_semigroup(Z3), "0")
     assert error.value.errors()[0]["type"] == "finite_semigroup.not_absorbing_zero"
@@ -146,6 +173,18 @@ NULL_SG: SemigroupWire = {
         ["0", "0", "0"],
         ["0", "0", "0"],
         ["0", "0", "0"],
+    ],
+}
+
+# A nilpotent chain with distinct least exponents: a^2=b, a^3=0, b^2=0,
+# and c^2=0.
+NILPOTENT_CHAIN: SemigroupWire = {
+    "elements": ["0", "a", "b", "c"],
+    "multiplication": [
+        ["0", "0", "0", "0"],
+        ["0", "b", "0", "0"],
+        ["0", "0", "0", "0"],
+        ["0", "0", "0", "0"],
     ],
 }
 

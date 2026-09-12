@@ -77,10 +77,16 @@ def _admit_hook_content(partition: IntegerPartition, alphabet_size: int) -> None
             message="hook-content factors exceed the exact output digit bound",
         )
 
-    # Multiplying n integers of at most d digits has a conservative n*d^2
-    # work estimate.  This is checked from bit-length-derived d, before any
-    # hook-content factor or product is materialized.
-    work = max(1, cell_count) * factor_digits * factor_digits
+    # ``prod`` multiplies a growing accumulator from left to right.  At the
+    # i-th numerator factor that accumulator can have i*d digits, so charge
+    # the sum of those multiplication costs rather than treating every
+    # multiplication as a fixed-size d-by-d product.  This is checked from
+    # bit-length-derived dimensions, before any factor or product is
+    # materialized.
+    numerator_work = cell_count * (cell_count + 1) // 2 * factor_digits * factor_digits
+    hook_digits = _upper_decimal_digits(max(1, cell_count))
+    hook_work = cell_count * (cell_count + 1) // 2 * hook_digits * hook_digits
+    work = max(1, numerator_work + hook_work)
     if work > MAX_HOOK_CONTENT_WORK:
         raise OperationResourceAdmissionError(
             location=("alphabet_size",),

@@ -46,9 +46,14 @@ def _tableau_validation_error(
         code = exc.type
         message = exc.message()
     else:
-        error = exc.errors()[0] if exc.errors() else {}
-        code = str(error.get("type", fallback_code))
-        message = str(error.get("msg", str(exc)))
+        errors = exc.errors()
+        if errors:
+            error = errors[0]
+            code = str(error.get("type", fallback_code))
+            message = str(error.get("msg", str(exc)))
+        else:
+            code = fallback_code
+            message = str(exc)
     return OperationDomainValidationError(
         location=("tableau",), code=code, message=message
     )
@@ -306,7 +311,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="shape_21_alphabet_2",
                 description="Count SSYTs of shape (2,1) over the alphabet {1,2}.",
-                input={"partition": {"parts": [2, 1]}, "alphabet_size": 2},
+                input={"partition": {"parts": [2, 1]}, "alphabet_size": "2"},
             ),
         ),
     ),

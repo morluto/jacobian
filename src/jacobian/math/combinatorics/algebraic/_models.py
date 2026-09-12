@@ -77,20 +77,39 @@ class HookContentCountRequest(StrictModel):
     # The alphabet is bounded by the operation's derived admission estimate,
     # not by the number of cells in the partition.  In particular, a one-cell
     # shape has an exact count equal to the alphabet size.
-    alphabet_size: StrictInt = Field(ge=1)
+    # The alphabet is an exact mathematical parameter and may exceed the
+    # interoperable JSON number range.  ExactInteger keeps Python values as
+    # ints while encoding JSON values as canonical decimal strings.
+    alphabet_size: ExactInteger = Field(ge=1)
+
+    @model_validator(mode="after")
+    def require_positive_alphabet(self) -> Self:
+        if self.alphabet_size < 1:
+            raise PydanticCustomError(
+                "algebraic_combinatorics.alphabet_size_not_positive",
+                "alphabet_size must be positive",
+            )
+        return self
 
 
 class HookContentCountResult(StrictModel):
     """Exact hook-content count and the factors used to derive it."""
 
     partition: IntegerPartition
-    alphabet_size: StrictInt = Field(ge=1)
+    alphabet_size: ExactInteger = Field(ge=1)
     count: ExactInteger
-    numerators: tuple[StrictInt, ...] = Field(max_length=MAX_CANONICAL_PARTITION_SIZE)
+    numerators: tuple[ExactInteger, ...] = Field(
+        max_length=MAX_CANONICAL_PARTITION_SIZE
+    )
     hook_product: ExactInteger
 
     @model_validator(mode="after")
     def require_factor_shape(self) -> Self:
+        if self.alphabet_size < 1:
+            raise PydanticCustomError(
+                "algebraic_combinatorics.alphabet_size_not_positive",
+                "alphabet_size must be positive",
+            )
         cell_count = sum(self.partition.parts)
         if len(self.numerators) != cell_count:
             raise PydanticCustomError(

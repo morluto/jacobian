@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+from typing import NoReturn
+
 import pytest
 from pydantic import ValidationError
 
@@ -22,6 +25,7 @@ from jacobian.math.combinatorics.algebraic import (
 )
 from jacobian.math.combinatorics.algebraic._models import (
     HookContentCountRequest,
+    HookContentCountResult,
     PartitionDominanceRequest,
     SemistandardTableauCheckRequest,
     StandardTableauCheckRequest,
@@ -81,14 +85,56 @@ def test_hook_content_alphabet_is_independent_of_partition_size() -> None:
     assert result.hook_product == 1
 
 
-def test_hook_content_rejects_excessive_result_digits_before_expansion() -> None:
-    request = HookContentCountRequest.model_validate(
-        {
-            "partition": {"parts": [1]},
-            "alphabet_size": 10**MAX_CANONICAL_INTEGER_DIGITS,
-        }
+def test_hook_content_admits_wire_bound_but_rejects_work_before_expansion() -> None:
+    request = HookContentCountRequest.model_validate_json(
+        json.dumps(
+            {
+                "partition": {"parts": [1]},
+                "alphabet_size": "1" + "0" * (MAX_CANONICAL_INTEGER_DIGITS - 1),
+            }
+        ),
+        strict=True,
     )
     with pytest.raises(OperationResourceAdmissionError):
+        hook_content_count(request)
+
+    with pytest.raises(ValidationError):
+        HookContentCountRequest.model_validate_json(
+            json.dumps(
+                {
+                    "partition": {"parts": [1]},
+                    "alphabet_size": "1" + "0" * MAX_CANONICAL_INTEGER_DIGITS,
+                }
+            ),
+            strict=True,
+        )
+
+
+def test_hook_content_large_exact_integers_roundtrip_strict_json() -> None:
+    alphabet_size = (1 << 53) + 1
+    request = HookContentCountRequest.model_validate_json(
+        json.dumps({"partition": {"parts": [1]}, "alphabet_size": str(alphabet_size)}),
+        strict=True,
+    )
+    result = hook_content_count(request)
+    wire = json.loads(result.model_dump_json())
+
+    assert wire["alphabet_size"] == str(alphabet_size)
+    assert wire["numerators"] == [str(alphabet_size)]
+    assert (
+        HookContentCountResult.model_validate_json(json.dumps(wire), strict=True)
+        == result
+    )
+
+
+def test_hook_content_charges_growing_product_work() -> None:
+    request = HookContentCountRequest.model_validate(
+        {"partition": {"parts": [1] * 500}, "alphabet_size": 10_000_000}
+    )
+    with pytest.raises(
+        OperationResourceAdmissionError,
+        match="hook-content arithmetic exceeds the admitted work bound",
+    ):
         hook_content_count(request)
 
 
@@ -163,12 +209,12 @@ def test_semistandard_tableau_checker_rejects_column_failure() -> None:
         check_semistandard_tableau(request)
 
 
-def test_tableau_checker_propagates_operational_failures(monkeypatch) -> None:
-    request = StandardTableauCheckRequest.model_validate(
-        {"tableau": {"rows": [[1]]}}
-    )
+def test_tableau_checker_propagates_operational_failures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = StandardTableauCheckRequest.model_validate({"tableau": {"rows": [[1]]}})
 
-    def fail(_tableau):
+    def fail(_tableau: StandardYoungTableau) -> NoReturn:
         raise RuntimeError("backend failure")
 
     monkeypatch.setattr(native, "check_standard_tableau", fail)
@@ -189,8 +235,11 @@ def test_native_operations_are_published_from_algebraic_package() -> None:
     semistandard = SemistandardYoungTableau(rows=((1,),))
 
     assert public_hook_content_count(partition, 501) == (501, (501,), 1)
-    assert public_partition_dominance(
-        IntegerPartition(parts=(2, 1)), IntegerPartition(parts=(1, 1, 1))
-    )[0] == "LEFT_DOMINATES"
+    assert (
+        public_partition_dominance(
+            IntegerPartition(parts=(2, 1)), IntegerPartition(parts=(1, 1, 1))
+        )[0]
+        == "LEFT_DOMINATES"
+    )
     assert public_check_standard_tableau(standard) == standard
     assert public_check_semistandard_tableau(semistandard) == semistandard

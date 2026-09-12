@@ -85,6 +85,39 @@ def test_schur_verifier_rejects_forged_nested_partition_parts() -> None:
     assert not verify_schur_evaluation(forged)
 
 
+def test_schur_result_rejects_non_integer_point_coordinates() -> None:
+    result = schur_evaluation(IntegerPartition(parts=(1,)), (1,), ("x",))
+    with pytest.raises(ValidationError):
+        SchurExpansionResult(
+            partition=result.partition,
+            variables=result.variables,
+            point=(True,),
+            value=result.value,
+        )
+    with pytest.raises(ValidationError):
+        SchurExpansionResult(
+            partition=result.partition,
+            variables=result.variables,
+            point=(1.0,),
+            value=result.value,
+        )
+    with pytest.raises(ValidationError):
+        SchurExpansionResult(
+            partition=result.partition,
+            variables=result.variables,
+            point=("1",),
+            value=result.value,
+        )
+    for coordinate in (True, 1.0, "1"):
+        forged = SchurExpansionResult.model_construct(
+            partition=result.partition,
+            variables=result.variables,
+            point=(coordinate,),
+            value=result.value,
+        )
+        assert not verify_schur_evaluation(forged)
+
+
 def test_schur_verifier_rejects_unvalidated_claim_copies() -> None:
     result = schur_evaluation(IntegerPartition(parts=(1,)), (1,), ("x",))
     invalid_copies = (

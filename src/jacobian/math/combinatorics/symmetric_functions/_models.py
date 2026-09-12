@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Self
 
-from pydantic import Field, WithJsonSchema, model_validator
+from pydantic import Field, StrictInt, WithJsonSchema, model_validator
 from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import PydanticCustomError
 
@@ -31,7 +31,7 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 
 
 PointCoordinate = Annotated[
-    int,
+    StrictInt,
     Field(
         ge=-_MAX_POINT_COORDINATE_ABS,
         le=_MAX_POINT_COORDINATE_ABS,

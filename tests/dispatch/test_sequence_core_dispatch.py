@@ -43,6 +43,8 @@ def test_sequence_core_manifest_publishes_every_recovered_operation() -> None:
         "sequence.decide.strictly_increasing",
         "sequence.compute.frequencies",
         "sequence.compute.zero_indices",
+        "sequence.autocorrelation.aperiodic.compute",
+        "sequence.autocorrelation.cyclic.compute",
     } <= ids
 
 
@@ -55,3 +57,18 @@ def test_dispatch_matches_native_sum_value() -> None:
     )
 
     assert dispatched.output == native.model_dump(mode="json")
+
+
+def test_dispatch_accepts_exact_rational_autocorrelation_input() -> None:
+    dispatched = invoke_operation(
+        "sequence.autocorrelation.aperiodic.compute",
+        {"values": [{"num": "1", "den": "2"}, {"num": "1", "den": "3"}]},
+        Catalog.open(),
+    )
+
+    assert dispatched.output["convention"] == "aperiodic"
+    assert dispatched.output["cells"] == [
+        {"lag": -1, "value": {"num": "1", "den": "6"}},
+        {"lag": 0, "value": {"num": "13", "den": "36"}},
+        {"lag": 1, "value": {"num": "1", "den": "6"}},
+    ]

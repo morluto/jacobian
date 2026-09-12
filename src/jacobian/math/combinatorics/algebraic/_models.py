@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Annotated, Literal, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, StrictInt, WithJsonSchema, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import ExactInteger
+from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS, ExactInteger
 from jacobian._models import StrictModel
 from jacobian.math.combinatorics.algebraic.values import (
     MAX_RSK_ROW_SEARCH_COMPARISONS,
@@ -21,6 +21,7 @@ from jacobian.math.combinatorics.symmetric_functions.values import (
 )
 from jacobian.math.combinatorics.symmetric_functions.values import (
     IntegerPartition,
+    SemistandardYoungTableau,
     StandardYoungTableau,
 )
 from jacobian.math.logic.languages.words.values import FiniteWord
@@ -29,6 +30,30 @@ from jacobian.math.logic.languages.words.values import FiniteWord
 # kernel and produces two N-cell tableaux, so the canonical tableau cell
 # budget derives the permutation envelope.
 MAX_RSK_PERMUTATION_LENGTH = MAX_RSK_WORD_LENGTH
+
+_POSITIVE_EXACT_INTEGER_SCHEMA = {
+    "type": "string",
+    "pattern": rf"^[1-9][0-9]{{0,{MAX_CANONICAL_INTEGER_DIGITS - 1}}}(?![\s\S])",
+    "maxLength": MAX_CANONICAL_INTEGER_DIGITS,
+    "examples": ["2"],
+}
+_NONNEGATIVE_EXACT_INTEGER_SCHEMA = {
+    "type": "string",
+    "pattern": rf"^(?:0|[1-9][0-9]{{0,{MAX_CANONICAL_INTEGER_DIGITS - 1}}})(?![\s\S])",
+    "maxLength": MAX_CANONICAL_INTEGER_DIGITS,
+    "examples": ["0", "2"],
+}
+
+_PositiveExactInteger = Annotated[
+    ExactInteger,
+    Field(ge=1),
+    WithJsonSchema(_POSITIVE_EXACT_INTEGER_SCHEMA),
+]
+_NonnegativeExactInteger = Annotated[
+    ExactInteger,
+    Field(ge=0),
+    WithJsonSchema(_NONNEGATIVE_EXACT_INTEGER_SCHEMA),
+]
 
 
 class HookLengthRequest(StrictModel):
@@ -67,6 +92,86 @@ class ConjugatePartitionResult(StrictModel):
     """The conjugate (transpose) partition."""
 
     conjugate: IntegerPartition
+
+
+class SemistandardYoungTableauCountRequest(StrictModel):
+    """Count semistandard tableaux with entries in ``1..alphabet_size``."""
+
+    partition: IntegerPartition
+    # The alphabet is bounded by the operation's derived admission estimate,
+    # not by the number of cells in the partition.  In particular, a one-cell
+    # shape has an exact count equal to the alphabet size.
+    # The alphabet is an exact mathematical parameter and may exceed the
+    # interoperable JSON number range.  ExactInteger keeps Python values as
+    # ints while encoding JSON values as canonical decimal strings.
+    alphabet_size: _PositiveExactInteger
+
+    @model_validator(mode="after")
+    def require_positive_alphabet(self) -> Self:
+        if self.alphabet_size < 1:
+            raise PydanticCustomError(
+                "algebraic_combinatorics.alphabet_size_not_positive",
+                "alphabet_size must be positive",
+            )
+        return self
+
+
+class SemistandardYoungTableauCountResult(StrictModel):
+    """Exact SSYT count bound to its source shape and alphabet."""
+
+    partition: IntegerPartition
+    alphabet_size: _PositiveExactInteger
+    count: _NonnegativeExactInteger
+
+
+class StandardTableauCheckResult(StrictModel):
+    """Standard-tableau membership bound to the checked structural source."""
+
+    tableau: StandardYoungTableau
+    is_member: bool
+
+
+class SemistandardTableauCheckResult(StrictModel):
+    """Semistandard-tableau membership bound to the checked structural source."""
+
+    tableau: SemistandardYoungTableau
+    is_member: bool
+
+
+class PartitionDominanceRequest(StrictModel):
+    """Compare two equal-size partitions in dominance order."""
+
+    left: IntegerPartition
+    right: IntegerPartition
+
+
+DominanceRelation = Literal[
+    "LEFT_DOMINATES",
+    "RIGHT_DOMINATES",
+    "EQUAL",
+    "INCOMPARABLE",
+    "NOT_COMPARABLE_DIFFERENT_SIZE",
+]
+
+
+class PartitionDominanceResult(StrictModel):
+    """Dominance relation bound to the compared partitions."""
+
+    left: IntegerPartition
+    right: IntegerPartition
+    relation: DominanceRelation
+
+
+class StandardTableauCheckRequest(StrictModel):
+    """Check a candidate standard Young tableau."""
+
+    tableau: StandardYoungTableau
+
+
+class SemistandardTableauCheckRequest(StrictModel):
+    """Check a candidate semistandard Young tableau."""
+
+    tableau: SemistandardYoungTableau
 
 
 # ---------------------------------------------------------------------------
@@ -182,12 +287,21 @@ class RSKInverseWordRequest(StrictModel):
 __all__ = [
     "ConjugatePartitionRequest",
     "ConjugatePartitionResult",
+    "DominanceRelation",
     "HookLengthRequest",
     "HookLengthResult",
+    "PartitionDominanceRequest",
+    "PartitionDominanceResult",
     "RSKInverseWordRequest",
     "RSKPermutationRequest",
     "RSKResult",
     "RSKWordRequest",
+    "SemistandardTableauCheckRequest",
+    "SemistandardTableauCheckResult",
+    "SemistandardYoungTableauCountRequest",
+    "SemistandardYoungTableauCountResult",
+    "StandardTableauCheckRequest",
+    "StandardTableauCheckResult",
     "StandardYoungTableauCountRequest",
     "StandardYoungTableauCountResult",
 ]

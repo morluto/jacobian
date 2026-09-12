@@ -13,10 +13,18 @@ from jacobian.math.combinatorics.algebraic._models import (
     ConjugatePartitionResult,
     HookLengthRequest,
     HookLengthResult,
+    PartitionDominanceRequest,
+    PartitionDominanceResult,
     RSKInverseWordRequest,
     RSKPermutationRequest,
     RSKResult,
     RSKWordRequest,
+    SemistandardTableauCheckRequest,
+    SemistandardTableauCheckResult,
+    SemistandardYoungTableauCountRequest,
+    SemistandardYoungTableauCountResult,
+    StandardTableauCheckRequest,
+    StandardTableauCheckResult,
     StandardYoungTableauCountRequest,
     StandardYoungTableauCountResult,
 )
@@ -46,6 +54,32 @@ def conjugate_partition(
     return ConjugatePartitionResult(
         conjugate=native.conjugate_partition(request.partition)
     )
+
+
+def semistandard_young_tableaux_count(
+    request: SemistandardYoungTableauCountRequest,
+) -> SemistandardYoungTableauCountResult:
+    return native.semistandard_young_tableaux_count(
+        request.partition, request.alphabet_size
+    )
+
+
+def partition_dominance(
+    request: PartitionDominanceRequest,
+) -> PartitionDominanceResult:
+    return native.partition_dominance(request.left, request.right)
+
+
+def check_standard_tableau(
+    request: StandardTableauCheckRequest,
+) -> StandardTableauCheckResult:
+    return native.check_standard_tableau(request.tableau)
+
+
+def check_semistandard_tableau(
+    request: SemistandardTableauCheckRequest,
+) -> SemistandardTableauCheckResult:
+    return native.check_semistandard_tableau(request.tableau)
 
 
 def rsk_permutation(request: RSKPermutationRequest) -> RSKResult:
@@ -209,6 +243,78 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     },
                     "convention": "ROW_INSERTION_RSK_V1",
                 },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="combinatorics.semistandard_young_tableaux.count",
+        title="Count semistandard Young tableaux",
+        description="Return the exact number of semistandard Young tableaux of a "
+        "partition shape with entries in 1..m, bound to the source shape and "
+        "alphabet.",
+        request_type=SemistandardYoungTableauCountRequest,
+        result_type=SemistandardYoungTableauCountResult,
+        run=semistandard_young_tableaux_count,
+        tags=("combinatorics", "young-tableaux", "exact"),
+        examples=(
+            OperationExample(
+                name="shape_21_alphabet_2",
+                description="Count SSYTs of shape (2,1) over the alphabet {1,2}.",
+                input={"partition": {"parts": [2, 1]}, "alphabet_size": "2"},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="combinatorics.partition.dominance.compare",
+        title="Compare partitions in dominance order",
+        description="Compare equal-size integer partitions in dominance order; "
+        "different sizes are reported as not comparable.",
+        request_type=PartitionDominanceRequest,
+        result_type=PartitionDominanceResult,
+        run=partition_dominance,
+        tags=("combinatorics", "partition", "dominance", "exact"),
+        examples=(
+            OperationExample(
+                name="partition_21_vs_111",
+                description="The partition (2,1) dominates (1,1,1).",
+                input={
+                    "left": {"parts": [2, 1]},
+                    "right": {"parts": [1, 1, 1]},
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="combinatorics.tableau.standard.check",
+        title="Check standard Young tableau membership",
+        description="Replay the complete shape, row, column, and 1..n entry "
+        "conditions and return the source-bound membership decision.",
+        request_type=StandardTableauCheckRequest,
+        result_type=StandardTableauCheckResult,
+        run=check_standard_tableau,
+        tags=("combinatorics", "young-tableaux", "validation", "exact"),
+        examples=(
+            OperationExample(
+                name="standard_shape_21",
+                description="Check a standard tableau of shape (2,1).",
+                input={"tableau": {"rows": [[1, 2], [3]]}},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="combinatorics.tableau.semistandard.check",
+        title="Check semistandard Young tableau membership",
+        description="Replay the complete shape and weak-row/strict-column "
+        "conditions and return the source-bound membership decision.",
+        request_type=SemistandardTableauCheckRequest,
+        result_type=SemistandardTableauCheckResult,
+        run=check_semistandard_tableau,
+        tags=("combinatorics", "young-tableaux", "validation", "exact"),
+        examples=(
+            OperationExample(
+                name="semistandard_shape_21",
+                description="Check a semistandard tableau of shape (2,1).",
+                input={"tableau": {"rows": [[1, 1], [2]]}},
             ),
         ),
     ),

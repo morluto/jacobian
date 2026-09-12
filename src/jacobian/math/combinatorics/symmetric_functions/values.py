@@ -148,6 +148,20 @@ class SemistandardYoungTableau(StrictModel):
         ),
     )
 
+    @model_validator(mode="after")
+    def require_cell_budget(self) -> Self:
+        # The row-length envelope alone does not bound the diagram: without a
+        # total cell check, an oversized carrier would pass request admission
+        # and only fail later inside the shared partition validator, where a
+        # membership checker could misread the operational budget as a false
+        # mathematical nonmembership result.
+        if sum(len(row) for row in self.rows) > MAX_PARTITION_SIZE:
+            raise _validation_error(
+                "tableau_size_exceeded",
+                "tableau cell count exceeds the supported bound",
+            )
+        return self
+
     @property
     def shape(self) -> IntegerPartition:
         """Return the tableau shape derived from its row lengths."""
@@ -169,6 +183,17 @@ class StandardYoungTableau(StrictModel):
             f"cell count, which is at most {MAX_PARTITION_SIZE}."
         ),
     )
+
+    @model_validator(mode="after")
+    def require_cell_budget(self) -> Self:
+        # See SemistandardYoungTableau: enforce the documented cell envelope
+        # at admission so oversized carriers never reach membership replay.
+        if sum(len(row) for row in self.rows) > MAX_PARTITION_SIZE:
+            raise _validation_error(
+                "tableau_size_exceeded",
+                "tableau cell count exceeds the supported bound",
+            )
+        return self
 
     @property
     def shape(self) -> IntegerPartition:

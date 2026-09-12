@@ -98,3 +98,23 @@ def test_tableau_shape_domain_is_closed_under_transposition_extremes() -> None:
         ).shape.parts
         == (1,) * 100
     )
+
+
+def test_tableaux_enforce_the_documented_cell_envelope_at_admission() -> None:
+    # Each row fits its own length envelope, but 501 total cells exceed the
+    # canonical budget the tableau contracts document; the carriers must fail
+    # at admission instead of surfacing later as a wrapped partition error.
+    oversized = (tuple(range(1, 501)), (501,))
+    with pytest.raises(ValidationError) as standard_error:
+        StandardYoungTableau(rows=oversized)
+    assert (
+        standard_error.value.errors()[0]["type"]
+        == "symmetric_function.tableau_size_exceeded"
+    )
+    with pytest.raises(ValidationError) as semistandard_error:
+        SemistandardYoungTableau(rows=oversized)
+    assert (
+        semistandard_error.value.errors()[0]["type"]
+        == "symmetric_function.tableau_size_exceeded"
+    )
+    assert StandardYoungTableau(rows=(tuple(range(1, 501)),)).shape.parts == (500,)

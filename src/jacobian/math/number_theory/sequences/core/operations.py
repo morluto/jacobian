@@ -108,7 +108,7 @@ def _admit_autocorrelation(
     request: FiniteIntegerSequence | FiniteRationalSequence,
     *,
     output_items: int,
-) -> tuple[tuple[Fraction, ...], int]:
+) -> tuple[tuple[Fraction, ...], int, int]:
     """Admit source, intermediate, and output bounds before expansion.
 
     A common denominator gives a sound width bound without computing any
@@ -123,7 +123,7 @@ def _admit_autocorrelation(
     else:
         fractions = tuple(value.as_fraction() for value in request.values)
     if not fractions:
-        return fractions, 1
+        return fractions, 1, 1
 
     denominators = tuple(value.denominator for value in fractions)
     common_denominator = 1
@@ -195,7 +195,8 @@ def _admit_autocorrelation(
             code="sequences.autocorrelation.result_representation_too_large",
             message="autocorrelation output exceeds the exact representation bound",
         )
-    return fractions, result_digits
+    operand_width = max(1, common_numerator_digits + denominator_digits)
+    return fractions, result_digits, operand_width
 
 
 def _admit_integer_sequence_for_shape(
@@ -225,22 +226,34 @@ def _autocorrelation_scalar(
     return value.numerator
 
 
+def _require_autocorrelation_work(
+    multiplications: int, additions: int, operand_width: int, *, convention: str
+) -> None:
+    if (
+        multiplications * operand_width > MAX_AUTOCORRELATION_MULTIPLICATIONS
+        or additions * operand_width > MAX_AUTOCORRELATION_ADDITIONS
+    ):
+        raise OperationResourceAdmissionError(
+            location=("values",),
+            code="sequences.autocorrelation.work_bound",
+            message=(
+                f"{convention} autocorrelation exceeds the admitted arithmetic-work bound"
+            ),
+        )
+
+
 def aperiodic_autocorrelation(
     request: FiniteIntegerSequence | FiniteRationalSequence,
 ) -> AutocorrelationResult:
     size = len(request.values)
     multiplications = size * (size + 1) // 2
     additions = size * (size - 1) // 2
-    if (
-        multiplications > MAX_AUTOCORRELATION_MULTIPLICATIONS
-        or additions > MAX_AUTOCORRELATION_ADDITIONS
-    ):
-        raise OperationResourceAdmissionError(
-            location=("values",),
-            code="sequences.autocorrelation.work_bound",
-            message="aperiodic autocorrelation exceeds the admitted arithmetic-work bound",
-        )
-    values, _ = _admit_autocorrelation(request, output_items=max(2 * size - 1, 0))
+    values, _, operand_width = _admit_autocorrelation(
+        request, output_items=max(2 * size - 1, 0)
+    )
+    _require_autocorrelation_work(
+        multiplications, additions, operand_width, convention="aperiodic"
+    )
     rational_output = isinstance(request, FiniteRationalSequence)
     cells = tuple(
         AutocorrelationCell(
@@ -273,16 +286,10 @@ def cyclic_autocorrelation(
     size = len(request.values)
     multiplications = size * size
     additions = size * max(size - 1, 0)
-    if (
-        multiplications > MAX_AUTOCORRELATION_MULTIPLICATIONS
-        or additions > MAX_AUTOCORRELATION_ADDITIONS
-    ):
-        raise OperationResourceAdmissionError(
-            location=("values",),
-            code="sequences.autocorrelation.work_bound",
-            message="cyclic autocorrelation exceeds the admitted arithmetic-work bound",
-        )
-    values, _ = _admit_autocorrelation(request, output_items=size)
+    values, _, operand_width = _admit_autocorrelation(request, output_items=size)
+    _require_autocorrelation_work(
+        multiplications, additions, operand_width, convention="cyclic"
+    )
     rational_output = isinstance(request, FiniteRationalSequence)
     return AutocorrelationResult(
         convention="cyclic",

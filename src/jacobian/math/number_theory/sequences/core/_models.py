@@ -269,13 +269,10 @@ def _finite_sequence_json_schema(
 ) -> dict[str, Any]:
     if cls is not FiniteSequence:
         return handler(core_schema_obj)
-    return {
-        "type": "object",
-        "anyOf": [
-            FiniteIntegerSequence.model_json_schema(mode=handler.mode),
-            FiniteRationalSequence.model_json_schema(mode=handler.mode),
-        ],
-    }
+    schema = dict(handler(core_schema_obj))
+    if "type" not in schema:
+        schema["type"] = "object"
+    return schema
 
 
 FiniteSequence.__get_pydantic_core_schema__ = _finite_sequence_core_schema

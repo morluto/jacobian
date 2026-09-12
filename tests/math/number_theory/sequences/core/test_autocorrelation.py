@@ -20,6 +20,7 @@ from jacobian.math.number_theory.sequences.core._models import (
     AutocorrelationResult,
     FiniteIntegerSequence,
     FiniteRationalSequence,
+    FiniteSequence,
 )
 from jacobian.math.number_theory.sequences.core.operations import (
     aperiodic_autocorrelation,
@@ -250,3 +251,24 @@ def test_catalog_accepts_serialized_integer_sequence_source() -> None:
     restored = AutocorrelationResult.model_validate_json(json.dumps(result.output))
     assert isinstance(restored.source, FiniteIntegerSequence)
     assert restored.source.values == (1, 2, 3)
+
+
+def test_wide_rational_cyclic_work_is_rejected_before_kernel() -> None:
+    denominator = 10**15_999
+    source = FiniteRationalSequence(
+        values=(CanonicalRational(num=1, den=denominator),) * 153
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="work"):
+        cyclic_autocorrelation(source)
+
+
+def test_autocorrelation_catalog_schema_registers_canonical_rational_defs() -> None:
+    schema = FiniteSequence.model_json_schema()
+    assert "CanonicalRational" in json.dumps(schema)
+    catalog = Catalog.open()
+    descriptor = next(
+        operation
+        for operation in catalog.snapshot().operations
+        if operation.operation_id == "sequence.autocorrelation.aperiodic.compute"
+    )
+    assert "CanonicalRational" in json.dumps(descriptor.input_schema)

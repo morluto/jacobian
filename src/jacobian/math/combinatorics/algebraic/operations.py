@@ -11,10 +11,18 @@ from fractions import Fraction
 from math import factorial, prod
 from typing import cast
 
+from pydantic import ValidationError
+from pydantic_core import PydanticCustomError
+
 from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS
 from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import OperationResourceAdmissionError
-from jacobian.math.combinatorics.algebraic._models import DominanceRelation, RSKResult
+from jacobian.math.combinatorics.algebraic._models import (
+    DominanceRelation,
+    RSKResult,
+    SemistandardTableauCheckResult,
+    StandardTableauCheckResult,
+)
 from jacobian.math.combinatorics.algebraic._rsk import (
     _row_insert,
 )
@@ -352,15 +360,46 @@ def partition_dominance(
     return cast(DominanceRelation, relation), tuple(left_sums), tuple(right_sums)
 
 
-def check_standard_tableau(tableau: StandardYoungTableau) -> StandardYoungTableau:
-    """Return a candidate after replaying standard-tableau membership."""
-    require_standard(tableau)
-    return tableau
+_MEMBERSHIP_SHAPE_ERRORS = frozenset(
+    {
+        "symmetric_function.partition_not_weakly_decreasing",
+        "symmetric_function.partition_parts_not_positive",
+    }
+)
+
+
+def _is_shape_rejection(error: ValidationError) -> bool:
+    """Decide whether a wrapped failure is only a diagram-shape rejection."""
+
+    types = [item["type"] for item in error.errors()]
+    return bool(types) and all(item in _MEMBERSHIP_SHAPE_ERRORS for item in types)
+
+
+def check_standard_tableau(tableau: StandardYoungTableau) -> StandardTableauCheckResult:
+    """Return a source-bound membership decision for one standard candidate."""
+
+    try:
+        require_standard(tableau)
+    except PydanticCustomError:
+        return StandardTableauCheckResult(tableau=tableau, is_member=False)
+    except ValidationError as error:
+        if _is_shape_rejection(error):
+            return StandardTableauCheckResult(tableau=tableau, is_member=False)
+        raise
+    return StandardTableauCheckResult(tableau=tableau, is_member=True)
 
 
 def check_semistandard_tableau(
     tableau: SemistandardYoungTableau,
-) -> SemistandardYoungTableau:
-    """Return a candidate after replaying semistandard membership."""
-    require_semistandard(tableau)
-    return tableau
+) -> SemistandardTableauCheckResult:
+    """Return a source-bound membership decision for one semistandard candidate."""
+
+    try:
+        require_semistandard(tableau)
+    except PydanticCustomError:
+        return SemistandardTableauCheckResult(tableau=tableau, is_member=False)
+    except ValidationError as error:
+        if _is_shape_rejection(error):
+            return SemistandardTableauCheckResult(tableau=tableau, is_member=False)
+        raise
+    return SemistandardTableauCheckResult(tableau=tableau, is_member=True)

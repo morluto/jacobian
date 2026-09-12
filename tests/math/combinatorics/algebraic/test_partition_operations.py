@@ -30,7 +30,9 @@ from jacobian.math.combinatorics.algebraic._models import (
     HookContentCountResult,
     PartitionDominanceRequest,
     SemistandardTableauCheckRequest,
+    SemistandardTableauCheckResult,
     StandardTableauCheckRequest,
+    StandardTableauCheckResult,
 )
 from jacobian.math.combinatorics.algebraic._tools import (
     check_semistandard_tableau,
@@ -381,5 +383,20 @@ def test_native_operations_are_published_from_algebraic_package() -> None:
         )[0]
         == "LEFT_DOMINATES"
     )
-    assert public_check_standard_tableau(standard) == standard
-    assert public_check_semistandard_tableau(semistandard) == semistandard
+    assert public_check_standard_tableau(standard) == StandardTableauCheckResult(
+        tableau=standard, is_member=True
+    )
+    assert public_check_semistandard_tableau(
+        semistandard
+    ) == SemistandardTableauCheckResult(tableau=semistandard, is_member=True)
+
+
+def test_native_tableau_checks_return_typed_nonmembership() -> None:
+    standard = StandardYoungTableau(rows=((1, 1), (2,)))
+    semistandard = SemistandardYoungTableau(rows=((1, 2), (1,)))
+    assert native.check_standard_tableau(standard) == StandardTableauCheckResult(
+        tableau=standard, is_member=False
+    )
+    assert native.check_semistandard_tableau(
+        semistandard
+    ) == SemistandardTableauCheckResult(tableau=semistandard, is_member=False)

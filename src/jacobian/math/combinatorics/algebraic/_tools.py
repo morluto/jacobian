@@ -3,7 +3,6 @@
 from typing import Any
 
 from pydantic import ValidationError
-from pydantic_core import PydanticCustomError
 
 from jacobian.catalog.models import (
     MathTool,
@@ -83,56 +82,16 @@ def partition_dominance(
     )
 
 
-# Row lengths that do not form a partition surface through the shared
-# IntegerPartition validator wrapped in a ValidationError. Those wrapped
-# shape codes are structural nonmembership, while any other wrapped failure
-# (or any operational fault) must keep propagating.  In particular the
-# tableau carriers enforce the 500-cell envelope at admission, so a size
-# budget failure is an operational limit and must never read as a false
-# mathematical nonmembership result.
-_MEMBERSHIP_SHAPE_ERRORS = frozenset(
-    {
-        "symmetric_function.partition_not_weakly_decreasing",
-        "symmetric_function.partition_parts_not_positive",
-    }
-)
-
-
-def _is_shape_rejection(error: ValidationError) -> bool:
-    """Decide whether a wrapped failure is only a diagram-shape rejection."""
-
-    types = [item["type"] for item in error.errors()]
-    return bool(types) and all(item in _MEMBERSHIP_SHAPE_ERRORS for item in types)
-
-
 def check_standard_tableau(
     request: StandardTableauCheckRequest,
 ) -> StandardTableauCheckResult:
-    try:
-        native.check_standard_tableau(request.tableau)
-    except PydanticCustomError:
-        return StandardTableauCheckResult(tableau=request.tableau, is_member=False)
-    except ValidationError as error:
-        if _is_shape_rejection(error):
-            return StandardTableauCheckResult(tableau=request.tableau, is_member=False)
-        raise
-    return StandardTableauCheckResult(tableau=request.tableau, is_member=True)
+    return native.check_standard_tableau(request.tableau)
 
 
 def check_semistandard_tableau(
     request: SemistandardTableauCheckRequest,
 ) -> SemistandardTableauCheckResult:
-    try:
-        native.check_semistandard_tableau(request.tableau)
-    except PydanticCustomError:
-        return SemistandardTableauCheckResult(tableau=request.tableau, is_member=False)
-    except ValidationError as error:
-        if _is_shape_rejection(error):
-            return SemistandardTableauCheckResult(
-                tableau=request.tableau, is_member=False
-            )
-        raise
-    return SemistandardTableauCheckResult(tableau=request.tableau, is_member=True)
+    return native.check_semistandard_tableau(request.tableau)
 
 
 def rsk_permutation(request: RSKPermutationRequest) -> RSKResult:

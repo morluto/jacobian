@@ -313,6 +313,28 @@ def test_wide_single_candidate_checkpoints_inside_pairwise_scans(
     assert "during sunflower pairwise intersection" in labels
 
 
+def test_few_large_pairwise_intersections_checkpoint_by_element_work(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    labels: list[str] = []
+    monkeypatch.setattr(
+        sunflower_module,
+        "request_checkpoint",
+        lambda label: labels.append(label),
+    )
+    core = tuple(range(128))
+    members = tuple((*core, 128 + index) for index in range(9))
+    result = construct_sunflower_family(_family(members, ground=137), 9)
+    assert result.sunflower_count == 1
+    pairwise = [
+        label
+        for label in labels
+        if label == "during sunflower pairwise intersection"
+    ]
+    # One r=9 candidate has 36 pairs, so a scan-count modulo 64 never fires.
+    assert len(pairwise) >= 36
+
+
 def test_native_signature_is_source_and_petal_count() -> None:
     source = _family(((0, 1), (0, 2), (0, 3)))
     via_native = construct_sunflower_family(source, 3)

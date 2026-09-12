@@ -46,6 +46,10 @@ MAX_SUNFLOWER_CANDIDATES = 1_000_000
 MAX_SUNFLOWER_GROUND_SET_SIZE = 1_000_000
 MAX_SUNFLOWER_MEMBERSHIPS = 1_000_000
 MAX_SUNFLOWER_RESULT_ALLOCATION_UNITS = 16 * 1024 * 1024
+# Pairwise frozenset intersection cost tracks admitted element work, not scan
+# count: one large pair can dominate, so a modulo-64 scan cadence can skip an
+# entire admitted candidate.
+SUNFLOWER_PAIRWISE_CHECKPOINT_WORK = 64
 
 
 def _result_error(reason: str, message: str) -> PydanticCustomError:
@@ -212,6 +216,16 @@ def _admit_candidates(
     return candidate_bound
 
 
+def _charge_pairwise_checkpoint(accumulated: int, pair_work: int) -> int:
+    """Checkpoint before an intersection whose element work fills the stride."""
+
+    accumulated += max(pair_work, 1)
+    if accumulated >= SUNFLOWER_PAIRWISE_CHECKPOINT_WORK:
+        request_checkpoint("during sunflower pairwise intersection")
+        return 0
+    return accumulated
+
+
 class SunflowerFamilyRequest(StrictModel):
     """One canonical indexed family plus a declared petal count."""
 
@@ -364,19 +378,26 @@ def construct_sunflower_family(
         )
     sets = tuple(frozenset(member) for member in source.members)
     rows: list[SunflowerFamily] = []
-    pairwise_scans = 0
+    pairwise_work = 0
     for candidate_index, indices in enumerate(
         combinations(range(member_count), petal_count), start=1
     ):
         if candidate_index % 256 == 0:
             request_checkpoint("during sunflower candidate enumeration")
-        core = sets[indices[0]] & sets[indices[1]]
+        first_left = sets[indices[0]]
+        first_right = sets[indices[1]]
+        pairwise_work = _charge_pairwise_checkpoint(
+            pairwise_work, min(len(first_left), len(first_right))
+        )
+        core = first_left & first_right
         is_sunflower = True
         for left, right in combinations(indices, 2):
-            pairwise_scans += 1
-            if pairwise_scans % 64 == 0:
-                request_checkpoint("during sunflower pairwise intersection")
-            if sets[left] & sets[right] != core:
+            left_set = sets[left]
+            right_set = sets[right]
+            pairwise_work = _charge_pairwise_checkpoint(
+                pairwise_work, min(len(left_set), len(right_set))
+            )
+            if left_set & right_set != core:
                 is_sunflower = False
                 break
         if is_sunflower:

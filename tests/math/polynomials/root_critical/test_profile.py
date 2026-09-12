@@ -180,6 +180,25 @@ def test_quartic_with_conjugates_is_refused_before_minpoly() -> None:
         root_critical_distance_profile(_polynomial((4, 1), (1, 1), (0, 1)))
 
 
+def test_shifted_quadratic_square_root_pair_selects_the_distance() -> None:
+    # (z - 5/2)(z^2 - 2) stays in the square-root grammar; the pair √2 and 2
+    # has squared distance 6 - 4√2 whose coarse box is wider than one isolating
+    # interval, but unique intersection still selects the smaller root.
+    result = root_critical_distance_profile(
+        _polynomial((3, 2), (2, -5), (1, -4), (0, 5))
+    )
+    assert len(result.pairs) >= 1
+    values = {tuple(row.distance_squared.polynomial) for row in result.pairs}
+    assert (1, -12, 4) in values
+
+
+def test_zero_pair_budget_rejects_before_root_expansion() -> None:
+    with pytest.raises(OperationResourceAdmissionError, match="row budget"):
+        root_critical_distance_profile(
+            _polynomial((4, 1), (0, -5)), max_pair_rows=0
+        )
+
+
 def test_native_pair_budget_matches_catalog_range() -> None:
     polynomial = _polynomial((3, 1), (0, -1))
     with pytest.raises(OperationDomainValidationError, match="0..64"):

@@ -396,6 +396,11 @@ class FullGraphAutomorphismResult(StrictModel):
                 "graph.automorphism.order_fields_must_agree",
                 "automorphism count and generated group order must agree",
             )
+        if not self.generators and self.automorphism_count != 1:
+            raise PydanticCustomError(
+                "graph.automorphism.empty_generators_have_order_one",
+                "a result with no source generators must have automorphism order 1",
+            )
         if tuple(generator.generator_id for generator in self.generators) != tuple(
             f"g{index}" for index in range(len(self.generators))
         ):

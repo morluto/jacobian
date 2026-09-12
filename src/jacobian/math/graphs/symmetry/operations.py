@@ -528,6 +528,36 @@ def _connected_components(
     return tuple(components)
 
 
+def _component_class_pair_edge_profile(
+    aligned: tuple[int, ...],
+    vertices: tuple[str, ...],
+    vertex_colors: dict[str, str],
+    edge_colors: dict[tuple[str, str], str],
+) -> tuple[tuple[tuple[str, str], str], ...] | None:
+    """Return the edge-color map by endpoint vertex colors, or None if mixed."""
+
+    pair_color: dict[tuple[str, str], str] = {}
+    for left in aligned:
+        for right in aligned:
+            if left >= right:
+                continue
+            key = tuple(
+                sorted(
+                    (
+                        vertex_colors[vertices[left]],
+                        vertex_colors[vertices[right]],
+                    )
+                )
+            )
+            color = edge_colors[canonical_edge(vertices[left], vertices[right])]
+            previous = pair_color.get(key)
+            if previous is None:
+                pair_color[key] = color
+            elif previous != color:
+                return None
+    return tuple(sorted(pair_color.items()))
+
+
 def _special_repeated_cliques(
     graph: ColoredUndirectedGraph,
     vertices: tuple[str, ...],
@@ -569,20 +599,11 @@ def _special_repeated_cliques(
         vertex_profile = tuple(
             sorted(Counter(vertex_colors[vertices[index]] for index in aligned).items())
         )
-        component_edge_colors = {
-            edge_colors[canonical_edge(vertices[left], vertices[right])]
-            for left in aligned
-            for right in aligned
-            if left < right
-        }
-        if not component_edge_colors:
-            if len(aligned) != 1:
-                return None
-            edge_profile: object = _UNCOLORED
-        elif len(component_edge_colors) != 1:
+        edge_profile = _component_class_pair_edge_profile(
+            aligned, vertices, vertex_colors, edge_colors
+        )
+        if edge_profile is None:
             return None
-        else:
-            edge_profile = next(iter(component_edge_colors))
         profile = (len(aligned), vertex_profile, edge_profile)
         groups.setdefault(profile, []).append(aligned)
     generators: list[tuple[int, ...]] = []

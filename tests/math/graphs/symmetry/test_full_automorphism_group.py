@@ -88,6 +88,22 @@ def test_empty_source_generators_require_the_nested_identity() -> None:
         FullGraphAutomorphismResult.model_validate(payload)
 
 
+def test_empty_source_generators_must_report_order_one() -> None:
+    result = full_graph_automorphism_group(
+        ColoredUndirectedGraph(
+            graph=SimpleUndirectedGraph(
+                vertices=("a", "b", "c"), edges=(("a", "b"), ("b", "c"))
+            ),
+            vertex_colors=("left", "middle", "right"),
+        )
+    )
+    payload = result.model_dump()
+    payload["automorphism_count"] = 2
+    payload["generated_group_order"] = 2
+    with pytest.raises(Exception, match="order 1"):
+        FullGraphAutomorphismResult.model_validate(payload)
+
+
 def test_full_group_orbits_require_sorted_representatives() -> None:
     result = full_graph_automorphism_group(
         ColoredUndirectedGraph(
@@ -273,6 +289,43 @@ def test_patterned_clique_colors_keep_compact_presentation() -> None:
             for _component in range(3)
             for position in range(5)
         ),
+    )
+
+    result = full_graph_automorphism_group(graph)
+
+    assert result.automorphism_count == (factorial(3) * factorial(2)) ** 3 * factorial(
+        3
+    )
+    assert result.generated_group_order == 10_368
+    assert len(result.generators) < result.automorphism_count
+
+
+def test_class_pair_colored_clique_union_keeps_compact_presentation() -> None:
+    vertices = tuple(
+        f"v{component}{position}" for component in range(3) for position in range(5)
+    )
+    vertex_color = {
+        vertex: "red" if int(vertex[-1]) < 3 else "blue" for vertex in vertices
+    }
+    edges = tuple(
+        canonical_edge(left, right)
+        for component in range(3)
+        for left in vertices[component * 5 : component * 5 + 5]
+        for right in vertices[component * 5 : component * 5 + 5]
+        if left < right
+    )
+    edge_colors = tuple(
+        "red-red"
+        if vertex_color[left] == vertex_color[right] == "red"
+        else "blue-blue"
+        if vertex_color[left] == vertex_color[right] == "blue"
+        else "mixed"
+        for left, right in edges
+    )
+    graph = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(vertices=vertices, edges=edges),
+        vertex_colors=tuple(vertex_color[vertex] for vertex in vertices),
+        edge_colors=edge_colors,
     )
 
     result = full_graph_automorphism_group(graph)

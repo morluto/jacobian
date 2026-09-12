@@ -4,9 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from jacobian.catalog.models import (
-    OperationDomainValidationError,
-)
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.extremal_sets._models import (
     BinaryUnionRelationResult,
     UnionRelationRow,
@@ -25,7 +23,10 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
 )
 
-__all__ = ["construct_binary_union_relation", "construct_sunflower_hypergraph"]
+__all__ = [
+    "construct_binary_union_relation",
+    "construct_sunflower_hypergraph",
+]
 
 MAX_BINARY_UNION_MEMBERSHIP_WORK = 20_000_000
 

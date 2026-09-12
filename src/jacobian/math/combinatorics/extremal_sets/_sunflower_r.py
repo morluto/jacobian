@@ -1,9 +1,9 @@
 """Complete bounded sunflower construction for any admitted petal count.
 
 A sunflower of petal count ``r >= 2`` over the source family is an ``r``-member
-subfamily whose pairwise intersections are all equal to one common core.
-This module owns that complete relation for every admitted ``r``, including
-the former specialized ``r = 3`` slice.
+subfamily whose pairwise intersections are all equal to one common core.  This
+module is the atomic complete-construction owner for every admitted ``r``,
+including the former specialized ``r = 3`` slice.
 """
 
 from __future__ import annotations
@@ -89,7 +89,6 @@ def _admit_source(
                 "complete construction"
             ),
         )
-    source = source
     member_count = len(source.members)
     if member_count > MAX_VERTICES:
         raise OperationResourceAdmissionError(
@@ -140,12 +139,31 @@ def _admit_source(
     return source, petal_count, member_count, source_work, source_units
 
 
+def _intersection_search_work(sizes: tuple[int, ...], petal_count: int) -> int:
+    """Charge pairwise work from participating member sizes, not a global max."""
+
+    member_count = len(sizes)
+    if member_count < petal_count:
+        return 0
+    pair_occurrences = comb(member_count - 2, petal_count - 2)
+    pair_min_sum = 0
+    max_pair_min = 0
+    for left, right in combinations(range(member_count), 2):
+        pair_min = min(sizes[left], sizes[right])
+        pair_min_sum += pair_min
+        if pair_min > max_pair_min:
+            max_pair_min = pair_min
+    candidate_bound = comb(member_count, petal_count)
+    # Intersection and equality for every pair in every r-tuple, plus one
+    # core materialization bounded by the largest participating pair min.
+    return 2 * pair_occurrences * pair_min_sum + 2 * candidate_bound * max_pair_min
+
+
 def _admit_candidates(
     source: IndexedFiniteSetFamily,
     petal_count: int,
     member_count: int,
     source_work: int,
-    source_units: int,
 ) -> int:
     """Admit candidate, intersection-work, and complete-output envelopes."""
 
@@ -161,10 +179,9 @@ def _admit_candidates(
                 f"the {MAX_SUNFLOWER_CANDIDATES}-candidate exact-work bound"
             ),
         )
-    maximum_size = max((len(member) for member in source.members), default=0)
-    intersection_pairs = comb(petal_count, 2)
-    intersection_work = (intersection_pairs + 1) * maximum_size * candidate_bound
-    total_work = source_work + intersection_work
+    sizes = tuple(len(member) for member in source.members)
+    search_work = _intersection_search_work(sizes, petal_count)
+    total_work = source_work + search_work
     if total_work > MAX_SUNFLOWER_INTERSECTION_WORK:
         raise OperationResourceAdmissionError(
             location=("source", "members"),
@@ -174,24 +191,34 @@ def _admit_candidates(
                 "declared petal count"
             ),
         )
-    if (
-        candidate_bound > MAX_EDGES
-        or candidate_bound * petal_count > MAX_TOTAL_INCIDENCES
-    ):
+    return candidate_bound
+
+
+def _admit_qualifying_result(
+    source: IndexedFiniteSetFamily,
+    petal_count: int,
+    member_count: int,
+    source_units: int,
+    row_count: int,
+    maximum_size: int,
+) -> None:
+    """Admit retained rows after the exact qualifying plan is known."""
+
+    if row_count > MAX_EDGES or row_count * petal_count > MAX_TOTAL_INCIDENCES:
         raise OperationResourceAdmissionError(
             location=("source", "members"),
             code="set_system.sunflower.output_bound",
             message=(
-                f"the complete candidate family may require {candidate_bound} edges "
-                f"and {candidate_bound * petal_count} incidences, exceeding the "
+                f"the complete family requires {row_count} edges "
+                f"and {row_count * petal_count} incidences, exceeding the "
                 f"{MAX_EDGES}-edge/{MAX_TOTAL_INCIDENCES}-incidence output bound"
             ),
         )
     member_digits = len(str(max(member_count - 1, 0)))
     ground_digits = len(str(max(source.ground_set_size - 1, 0)))
     # Row IDs are bounded ordinals (``sunflower_<position>``) over the found
-    # rows, so the longest ID fits the candidate count, not the petal width.
-    edge_id_units = 10 + len(str(max(candidate_bound, 1)))
+    # rows, so the longest ID fits the qualifying count, not the petal width.
+    edge_id_units = 10 + len(str(max(row_count, 1)))
     row_units = (
         128
         + edge_id_units
@@ -200,20 +227,19 @@ def _admit_candidates(
     )
     edge_projection_units = 64 + edge_id_units + petal_count * (member_digits + 2)
     base_result_units = source_units + 1024 + member_count * (member_digits + 3)
-    allocation_upper_bound = base_result_units + candidate_bound * (
+    allocation_units = base_result_units + row_count * (
         row_units + 2 * edge_projection_units
     )
-    if allocation_upper_bound > MAX_SUNFLOWER_RESULT_ALLOCATION_UNITS:
+    if allocation_units > MAX_SUNFLOWER_RESULT_ALLOCATION_UNITS:
         raise OperationResourceAdmissionError(
             location=("source", "members"),
             code="set_system.sunflower.result_allocation_bound",
             message=(
                 "the complete sunflower result may require "
-                f"{allocation_upper_bound} allocation units, exceeding the "
+                f"{allocation_units} allocation units, exceeding the "
                 f"{MAX_SUNFLOWER_RESULT_ALLOCATION_UNITS}-unit result bound"
             ),
         )
-    return candidate_bound
 
 
 def _charge_pairwise_checkpoint(accumulated: int, pair_work: int) -> int:
@@ -326,10 +352,17 @@ class SunflowerFamilyResult(StrictModel):
                 )
             seen_indices.add(indices)
             seen_edge_ids.add(row.edge_id)
-            # FiniteHypergraph canonicalizes string labels lexicographically;
-            # retain that exact projection for multi-digit source IDs.
             expected_edges.append(
                 (row.edge_id, tuple(sorted(str(index) for index in indices)))
+            )
+        if any(
+            self.sunflowers[index].source_indices
+            >= self.sunflowers[index + 1].source_indices
+            for index in range(len(self.sunflowers) - 1)
+        ):
+            raise _result_error(
+                "row_order",
+                "sunflower rows must be strictly ordered by source_indices",
             )
         canonical_edges = tuple(expected_edges)
         if self.sunflower_count != len(self.sunflowers):
@@ -350,6 +383,27 @@ class SunflowerFamilyResult(StrictModel):
             )
         return self
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        source: IndexedFiniteSetFamily,
+        petal_count: int,
+        sunflowers: tuple[SunflowerFamily, ...],
+        hypergraph: FiniteHypergraph,
+    ) -> Self:
+        """Bind a kernel-established family without replaying core scans."""
+
+        return cls.model_construct(
+            source=source,
+            petal_count=petal_count,
+            sunflowers=sunflowers,
+            sunflower_count=len(sunflowers),
+            sunflower_free=not sunflowers,
+            hypergraph_edges=hypergraph.edges,
+            hypergraph=hypergraph,
+        )
+
 
 def construct_sunflower_family(
     source: IndexedFiniteSetFamily,
@@ -360,24 +414,23 @@ def construct_sunflower_family(
     source, petal_count, member_count, source_work, source_units = _admit_source(
         source, petal_count
     )
-    _admit_candidates(source, petal_count, member_count, source_work, source_units)
+    _admit_candidates(source, petal_count, member_count, source_work)
+    vertices = tuple(str(index) for index in range(member_count))
     if member_count < petal_count:
-        # No subfamily of the requested size exists; the complete family is
-        # empty and the source is vacuously sunflower-free at this petal count.
-        return SunflowerFamilyResult(
+        _admit_qualifying_result(
+            source, petal_count, member_count, source_units, 0, 0
+        )
+        return SunflowerFamilyResult._from_kernel(
             source=source,
             petal_count=petal_count,
             sunflowers=(),
-            sunflower_count=0,
-            sunflower_free=True,
-            hypergraph_edges=(),
-            hypergraph=FiniteHypergraph(
-                vertices=tuple(str(index) for index in range(member_count)),
-                edges=(),
-            ),
+            hypergraph=FiniteHypergraph(vertices=vertices, edges=()),
         )
+    request_checkpoint("before sunflower member expansion")
     sets = tuple(frozenset(member) for member in source.members)
-    rows: list[SunflowerFamily] = []
+    sizes = tuple(len(member) for member in source.members)
+    plan: list[tuple[tuple[int, ...], tuple[int, ...]]] = []
+    maximum_size = max(sizes, default=0)
     pairwise_work = 0
     for candidate_index, indices in enumerate(
         combinations(range(member_count), petal_count), start=1
@@ -401,27 +454,34 @@ def construct_sunflower_family(
                 is_sunflower = False
                 break
         if is_sunflower:
-            rows.append(
-                SunflowerFamily(
-                    edge_id=f"sunflower_{len(rows) + 1}",
-                    source_indices=indices,
-                    core=tuple(sorted(core)),
-                )
-            )
+            plan.append((indices, tuple(sorted(core))))
+    _admit_qualifying_result(
+        source,
+        petal_count,
+        member_count,
+        source_units,
+        len(plan),
+        maximum_size,
+    )
+    rows = tuple(
+        SunflowerFamily.model_construct(
+            edge_id=f"sunflower_{position}",
+            source_indices=indices,
+            core=core,
+        )
+        for position, (indices, core) in enumerate(plan, start=1)
+    )
     hypergraph = FiniteHypergraph(
-        vertices=tuple(str(index) for index in range(member_count)),
+        vertices=vertices,
         edges=tuple(
             (row.edge_id, tuple(str(index) for index in row.source_indices))
             for row in rows
         ),
     )
-    return SunflowerFamilyResult(
+    return SunflowerFamilyResult._from_kernel(
         source=source,
         petal_count=petal_count,
-        sunflowers=tuple(rows),
-        sunflower_count=len(rows),
-        sunflower_free=not rows,
-        hypergraph_edges=hypergraph.edges,
+        sunflowers=rows,
         hypergraph=hypergraph,
     )
 
@@ -433,6 +493,7 @@ __all__ = [
     "MAX_SUNFLOWER_PETALS",
     "MAX_SUNFLOWER_RESULT_ALLOCATION_UNITS",
     "SunflowerFamily",
+    "SunflowerFamilyRequest",
     "SunflowerFamilyResult",
     "construct_sunflower_family",
 ]

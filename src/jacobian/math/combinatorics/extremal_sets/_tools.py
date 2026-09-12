@@ -44,6 +44,7 @@ TOOLS: MathTools = (
         result_type=SunflowerFamilyResult,
         run=compute_sunflower_family,
         tags=("combinatorics", "set-system", "sunflower", "hypergraph", "complete"),
+        discovery_terms=("sunflower triple hypergraph construction",),
         examples=(
             OperationExample(
                 name="four_petals",

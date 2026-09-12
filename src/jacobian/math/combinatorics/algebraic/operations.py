@@ -164,21 +164,18 @@ def _cancelled_hook_content_digit_bound(
     if cell_count == 0:
         return max(1, alphabet_digits)
     conjugate = conjugate_partition(partition).parts
-    numerator_log_units = 0
-    hook_log_lower_units = 0
+    numerator_digit_excess = 0
+    hook_product = 1
     for row, length in enumerate(partition.parts):
         for column in range(length):
             content = alphabet_size + column - row
             if content <= 0:
                 return max(1, alphabet_digits)
-            # log10(v) < bit_length(v) * log10(2); log10(v) >= (bit_length-1)*log10(2).
-            numerator_log_units += content.bit_length() * 30103
-            hook = length - column + conjugate[column] - row - 1
-            hook_log_lower_units += max(hook.bit_length() - 1, 0) * 30103
-    cancelled_units = numerator_log_units - hook_log_lower_units
-    if cancelled_units < 0:
-        return max(1, alphabet_digits)
-    return max(cancelled_units // 100000 + 1, alphabet_digits)
+            numerator_digit_excess += _upper_decimal_digits(content) - 1
+            hook_product *= length - column + conjugate[column] - row - 1
+    numerator_digit_bound = numerator_digit_excess + 1
+    hook_digits = _upper_decimal_digits(hook_product)
+    return max(1, alphabet_digits, numerator_digit_bound - hook_digits + 1)
 
 
 def _admit_hook_content(partition: IntegerPartition, alphabet_size: int) -> None:

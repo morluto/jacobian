@@ -17,6 +17,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.graphs.symmetry import operations
+from jacobian.math.graphs.symmetry._edges import canonical_edge
 from jacobian.math.graphs.symmetry._models import FullGraphAutomorphismResult
 from jacobian.math.graphs.symmetry.operations import (
     full_graph_automorphism_group,
@@ -313,7 +314,7 @@ def test_disconnected_path_degree_sequence_does_not_take_the_path_shortcut() -> 
     graph = ColoredUndirectedGraph(
         graph=SimpleUndirectedGraph(
             vertices=("c0", "c1", "c2", "k0", "k1"),
-            edges=(("c0", "c1"), ("c1", "c2"), ("c2", "c0"), ("k0", "k1")),
+            edges=(("c0", "c1"), ("c0", "c2"), ("c1", "c2"), ("k0", "k1")),
         )
     )
 
@@ -346,7 +347,7 @@ def test_complete_graph_with_class_pair_edge_colors_stays_compact() -> None:
     vertex_color = {vertex: "red" for vertex in red}
     vertex_color.update({vertex: "blue" for vertex in blue})
     edges = tuple(
-        (left, right)
+        canonical_edge(left, right)
         for index, left in enumerate(vertices)
         for right in vertices[index + 1 :]
     )

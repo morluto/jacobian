@@ -17,6 +17,7 @@ from jacobian.math.logic.languages.words._models import (
     SubstitutionDependencyGraphResult,
     SubstitutionFixedPointPrefixResult,
     SubstitutionPrimitivityProfileResult,
+    require_word_family_output,
 )
 from jacobian.math.logic.languages.words.values import (
     MAX_MORPHISM_OUTPUT_LENGTH,
@@ -68,6 +69,7 @@ class PrimitivityAnalysis:
 def prefixes(word: FiniteWord) -> tuple[FiniteWord, ...]:
     """Return every prefix, ordered by increasing length, including empty."""
 
+    require_word_family_output(word, "prefixes")
     return tuple(
         FiniteWord(alphabet=word.alphabet, letters=word.letters[:length])
         for length in range(len(word.letters) + 1)
@@ -77,6 +79,7 @@ def prefixes(word: FiniteWord) -> tuple[FiniteWord, ...]:
 def suffixes(word: FiniteWord) -> tuple[FiniteWord, ...]:
     """Return every suffix, ordered by starting position, including empty."""
 
+    require_word_family_output(word, "suffixes")
     return tuple(
         FiniteWord(alphabet=word.alphabet, letters=word.letters[start:])
         for start in range(len(word.letters) + 1)

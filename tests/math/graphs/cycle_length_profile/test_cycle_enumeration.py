@@ -1,13 +1,20 @@
 """Complete fixed-length cycle enumeration tests."""
 
 import json
+from threading import Event
 
 import pytest
 
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    request_cancellation,
+    request_checkpoint,
+)
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.graphs.cycle_length_profile import operations as cycle_operations
 from jacobian.math.graphs.cycle_length_profile._models import (
     CycleFamilyKind,
     FixedLengthCycleEnumerationResult,
@@ -246,6 +253,49 @@ def test_large_serialized_family_round_trips_with_linear_incidence_checks() -> N
 
     assert restored.cycle_count == 19_600
     assert restored.cycles == result.cycles
+
+
+def test_complete_graph_chordless_four_cycles_are_empty_without_simple_bound() -> None:
+    vertices = tuple(str(index) for index in range(22))
+    graph = SimpleUndirectedGraph(
+        vertices=vertices,
+        edges=tuple(
+            (left, right) for left in vertices for right in vertices if left < right
+        ),
+    )
+
+    result = enumerate_chordless_fixed_length_cycles(graph, 4)
+
+    assert result.cycles == ()
+    assert result.cycle_count == 0
+    assert result.family_kind is CycleFamilyKind.CHORDLESS
+    assert len(result.vertex_incidence) == 22
+    assert len(result.edge_incidence) == 231
+
+
+def test_incidence_assembly_honors_cancellation_after_search(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    vertices = tuple(str(index) for index in range(8))
+    graph = SimpleUndirectedGraph(
+        vertices=vertices,
+        edges=tuple(
+            (left, right) for left in vertices for right in vertices if left < right
+        ),
+    )
+    cancelled = Event()
+
+    def checkpoint(stage: str) -> None:
+        request_checkpoint(stage)
+        if stage == "during fixed-length cycle incidence assembly":
+            cancelled.set()
+
+    monkeypatch.setattr(cycle_operations, "request_checkpoint", checkpoint)
+    with (
+        request_cancellation(cancelled),
+        pytest.raises(OperationExecutionCancelledError),
+    ):
+        enumerate_fixed_length_cycles(graph, 3)
 
 
 def test_exact_catalog_ids_are_published() -> None:

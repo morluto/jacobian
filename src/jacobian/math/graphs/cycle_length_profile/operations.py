@@ -471,6 +471,8 @@ def enumerate_fixed_length_cycles(
         frozenset(edge): [] for edge in graph.edges
     }
     for index, cycle in enumerate(ordered):
+        if index % 1024 == 0:
+            request_checkpoint("during fixed-length cycle incidence assembly")
         for vertex in cycle:
             vertex_indices[vertex].append(index)
         for position in range(cycle_length):
@@ -488,6 +490,7 @@ def enumerate_fixed_length_cycles(
         )
         for edge in graph.edges
     )
+    request_checkpoint("after fixed-length cycle incidence assembly")
     return FixedLengthCycleEnumerationResult._from_kernel(
         graph=graph,
         cycle_length=cycle_length,
@@ -582,6 +585,26 @@ def _admit_fixed_cycle_enumeration(
     max_core_degree = max(
         (len(neighbors) for neighbors in adjacency_sets.values()), default=0
     )
+    # A complete 2-core is a clique: every simple k-cycle with k >= 4 has a
+    # chord. Chordless enumeration therefore returns the empty family after a
+    # linear core inspection instead of inheriting the all-simple-cycle bound.
+    if (
+        chordless
+        and cycle_length >= 4
+        and core_order >= 2
+        and max_core_degree == core_order - 1
+        and all(
+            len(neighbors) == core_order - 1 for neighbors in adjacency_sets.values()
+        )
+    ):
+        _admit_fixed_cycle_result(
+            graph,
+            cycle_length,
+            cycle_upper_bound=0,
+            source_characters=source_characters,
+            largest_label=largest_label,
+        )
+        return None
     # Complete-graph bounds over the core order. They stay sound for dense
     # graphs but reject cheaply executable sparse instances (for example a
     # bare ring, whose only cycles are found by a linear DFS).

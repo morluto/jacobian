@@ -5,9 +5,9 @@ import pytest
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials.graded._models import (
-    HVectorResult,
     HilbertFunctionResult,
     HilbertSeriesResult,
+    HVectorResult,
     StandardMonomialsResult,
 )
 from jacobian.math.polynomials.graded.operations import (

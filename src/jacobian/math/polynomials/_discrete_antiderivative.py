@@ -87,6 +87,37 @@ def _factorial_digits_upper(degree: int) -> int:
     return max(1, int(lgamma(degree + 2) / log(10)) + 2)
 
 
+def _exceeds_canonical_digits(value: Fraction) -> bool:
+    limit = 10**MAX_CANONICAL_RATIONAL_DIGITS
+    return abs(value.numerator) >= limit or value.denominator >= limit
+
+
+def _admit_linear_group(coefficients: dict[int, Fraction]) -> None:
+    """Admit degree-1 slices from the exact closed-form inverse.
+
+    For ``P(x) = a x + b`` the zero-based inverse is ``Q(x) = (a/2) x^2 +
+    (b - a/2) x``.  The triangular factorial/binomial envelope overcounts this
+    by several digits, so a source coefficient already at the 32768-digit
+    carrier limit would be refused even when ``Q`` stays representable.
+    """
+
+    linear = coefficients.get(1, Fraction())
+    constant = coefficients.get(0, Fraction())
+    quadratic = linear / 2
+    linear_term = constant - quadratic
+    if any(
+        _exceeds_canonical_digits(value) for value in (quadratic, linear_term, linear)
+    ):
+        raise OperationResourceAdmissionError(
+            location=("polynomial",),
+            code="polynomial.discrete_antiderivative.intermediate_growth",
+            message=(
+                "discrete-antiderivative intermediate coefficients exceed the "
+                "exact-output bound"
+            ),
+        )
+
+
 def _admit_group(
     coefficients: dict[int, Fraction],
     *,
@@ -101,6 +132,9 @@ def _admit_group(
     """
 
     if maximum_degree == 0:
+        return
+    if maximum_degree == 1:
+        _admit_linear_group(coefficients)
         return
 
     common_denominator = 1

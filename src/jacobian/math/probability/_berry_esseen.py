@@ -10,9 +10,10 @@ from __future__ import annotations
 
 from fractions import Fraction
 from math import isqrt
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic.json_schema import GenerateJsonSchema, JsonSchemaMode
 
 from jacobian._exact import (
     CanonicalRational,
@@ -76,8 +77,16 @@ class BerryEsseenRequest(StrictModel):
         return self
 
     @classmethod
-    def model_json_schema(cls, *args: object, **kwargs: object) -> dict[str, object]:
-        schema = super().model_json_schema(*args, **kwargs)
+    def model_json_schema(
+        cls,
+        by_alias: bool = True,
+        ref_template: str = "#/$defs/{model}",
+        schema_generator: type[GenerateJsonSchema] = GenerateJsonSchema,
+        mode: JsonSchemaMode = "validation",
+    ) -> dict[str, Any]:
+        schema = super().model_json_schema(
+            by_alias, ref_template, schema_generator, mode
+        )
         atoms = (
             schema.get("$defs", {})
             .get("FiniteRationalDistribution", {})

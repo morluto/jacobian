@@ -55,13 +55,13 @@ __all__ = [
 # multiplication of limb sizes (a, b) is charged by splitting the larger
 # operand into ceil(a/b) blocks of the smaller size: schoolbook block cost
 # below the threshold and the Karatsuba recurrence
-# T(m) <= 3T(ceil(m/2)) + 32m above it, unrolled to schoolbook leaves.  All
-# quantities derive from canonical source dimensions and the supplied
-# alphabet before expansion.
+# T(m) <= 3T(ceil(m/2)) + 32m above it, unrolled one level at a time so each
+# level contributes its own shrunken linear term, down to schoolbook leaves
+# at their actual shrunken size.  All quantities derive from canonical source
+# dimensions and the supplied alphabet before expansion.
 MAX_HOOK_CONTENT_WORK = 8_000_000
 
 _KARATSUBA_LIMB_THRESHOLD = 70
-_KARATSUBA_SCHOOLBOOK_LEAF_COST = _KARATSUBA_LIMB_THRESHOLD * _KARATSUBA_LIMB_THRESHOLD
 
 
 def _limbs_for_digits(digits: int) -> int:
@@ -75,9 +75,14 @@ def _balanced_multiplication_work(limbs: int) -> int:
 
     if limbs <= _KARATSUBA_LIMB_THRESHOLD:
         return limbs * limbs + 2 * limbs
-    ratio = (limbs + _KARATSUBA_LIMB_THRESHOLD - 1) // _KARATSUBA_LIMB_THRESHOLD
-    levels = (ratio - 1).bit_length()
-    return (3**levels) * (_KARATSUBA_SCHOOLBOOK_LEAF_COST + 32 * limbs)
+    work = 0
+    size = limbs
+    count = 1
+    while size > _KARATSUBA_LIMB_THRESHOLD:
+        work += count * 32 * size
+        size = (size + 1) // 2
+        count *= 3
+    return work + count * (size * size + 2 * size)
 
 
 def _multiplication_work(a_limbs: int, b_limbs: int) -> int:

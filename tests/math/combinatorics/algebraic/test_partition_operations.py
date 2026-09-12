@@ -169,6 +169,20 @@ def test_hook_content_admits_two_cell_large_alphabet() -> None:
     assert result.alphabet_size == alphabet_size
 
 
+def test_hook_content_admits_two_cell_count_near_digit_limit() -> None:
+    # One ~16000-digit multiplication plus an exact division returns a
+    # 32,000-digit count within the output bound; the level-by-level
+    # Karatsuba estimate charges about 1.6M units against the 8M envelope
+    # instead of recreating the large-scalar rejection at the boundary.
+    alphabet_size = 10**16000
+    request = HookContentCountRequest.model_validate(
+        {"partition": {"parts": [2]}, "alphabet_size": alphabet_size}
+    )
+    result = hook_content_count(request)
+    assert result.count == alphabet_size * (alphabet_size + 1) // 2
+    assert result.alphabet_size == alphabet_size
+
+
 @pytest.mark.parametrize(
     ("left", "right", "relation"),
     [

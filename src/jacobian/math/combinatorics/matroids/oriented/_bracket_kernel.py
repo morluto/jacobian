@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from math import gcd
 
 from pydantic_core import PydanticCustomError
 
@@ -273,6 +274,61 @@ def _exceeds_canonical_integer_bound(value: int) -> bool:
     return bool(value >= 10**MAX_CANONICAL_INTEGER_DIGITS)
 
 
+def _bounded_integer_sum(left: int, right: int) -> int | None:
+    """Add integers only when their exact sum fits the canonical envelope."""
+
+    if left == 0:
+        return right
+    if right == 0:
+        return left
+    if (left < 0) == (right < 0):
+        limit = 10**MAX_CANONICAL_INTEGER_DIGITS
+        if abs(left) >= limit - abs(right):
+            return None
+    return left + right
+
+
+def _integer_product_digit_upper_bound(left: int, right: int) -> int:
+    """Bound a product's digits without charging multiplication by a unit."""
+
+    left_digits = _integer_digit_upper_bound(left)
+    right_digits = _integer_digit_upper_bound(right)
+    if abs(left) == 1:
+        return right_digits
+    if abs(right) == 1:
+        return left_digits
+    return left_digits + right_digits
+
+
+def _bounded_fraction_pair_sum(left: Fraction, right: Fraction) -> Fraction | None:
+    """Return a bounded exact pair sum without oversized cross-products."""
+
+    if left == -right:
+        return Fraction(0)
+    common_factor = gcd(left.denominator, right.denominator)
+    left_scale = right.denominator // common_factor
+    right_scale = left.denominator // common_factor
+    lcm_digit_bound = _integer_product_digit_upper_bound(
+        left.denominator // common_factor, right.denominator
+    )
+    if lcm_digit_bound > MAX_BRACKET_COEFFICIENT_DIGITS:
+        return None
+    if (
+        _integer_product_digit_upper_bound(left.numerator, left_scale)
+        > MAX_BRACKET_COEFFICIENT_DIGITS
+        or _integer_product_digit_upper_bound(right.numerator, right_scale)
+        > MAX_BRACKET_COEFFICIENT_DIGITS
+    ):
+        return None
+    left_product = left.numerator * left_scale
+    right_product = right.numerator * right_scale
+    numerator = _bounded_integer_sum(left_product, right_product)
+    if numerator is None:
+        return None
+    denominator = (left.denominator // common_factor) * right.denominator
+    return Fraction(numerator, denominator)
+
+
 def _bounded_component_sum(
     components: list[_CoefficientComponent],
 ) -> tuple[Fraction, int]:
@@ -304,25 +360,23 @@ def _bounded_component_sum(
                 if left == -right:
                     candidate = (left_index, right_index, Fraction(0), 0)
                     break
+                merged: Fraction | None
                 if left.denominator == right.denominator:
-                    numerator = left.numerator + right.numerator
-                    if _exceeds_canonical_integer_bound(abs(numerator)):
+                    numerator = _bounded_integer_sum(left.numerator, right.numerator)
+                    if numerator is None:
                         continue
                     merged = Fraction(numerator, left.denominator)
                 else:
-                    denominator_bound = _integer_digit_upper_bound(
-                        left.denominator
-                    ) + _integer_digit_upper_bound(right.denominator)
-                    if denominator_bound > MAX_BRACKET_COEFFICIENT_DIGITS:
+                    merged = _bounded_fraction_pair_sum(left, right)
+                    if merged is None:
                         continue
-                    merged = left + right
-                    if _exceeds_canonical_integer_bound(
-                        abs(merged.numerator)
-                    ) or _exceeds_canonical_integer_bound(merged.denominator):
-                        continue
-                merged_width = max(
-                    _integer_digit_upper_bound(merged.numerator),
-                    _integer_digit_upper_bound(merged.denominator),
+                merged_width = (
+                    0
+                    if merged == 0
+                    else max(
+                        _integer_digit_upper_bound(merged.numerator),
+                        _integer_digit_upper_bound(merged.denominator),
+                    )
                 )
                 score = (merged_width, abs(merged.numerator).bit_length())
                 if candidate is None or score < (
@@ -361,20 +415,27 @@ def _bounded_component_sum(
 
 
 def _admit_result_allocation(
-    output_keys: set[tuple[tuple[tuple[int, int, int], int], ...]],
-    coefficient_digit_bound: int,
+    coefficients: dict[_MonomialKey, Fraction],
     ground_size: int,
 ) -> None:
     """Admit retained scalar digits and structural slots for the residual."""
 
     index_digits = _integer_digit_upper_bound(ground_size - 1)
-    term_cells = len(output_keys)
-    factor_cells = sum(len(key) for key in output_keys)
+    term_cells = len(coefficients)
+    factor_cells = sum(len(key) for key in coefficients)
     output_cells = term_cells + factor_cells
-    allocation_units = 256 + term_cells * (256 + 2 * coefficient_digit_bound)
+    allocation_units = 256 + sum(
+        256
+        + 2
+        * max(
+            _integer_digit_upper_bound(coefficient.numerator),
+            _integer_digit_upper_bound(coefficient.denominator),
+        )
+        for coefficient in coefficients.values()
+    )
     allocation_units += sum(
         128 + 3 * index_digits + _integer_digit_upper_bound(multiplicity)
-        for key in output_keys
+        for key in coefficients
         for _, multiplicity in key
     )
     # Keep the cell count explicit: this prevents a future change to the
@@ -517,9 +578,7 @@ def _admit_residual_envelope(
             code="bracket.syzygy_coefficient_digit_bound",
             message="exact residual coefficient growth exceeds the supported digit bound",
         )
-    _admit_result_allocation(
-        set(coefficients), coefficient_digit_bound, request.target.ground_size
-    )
+    _admit_result_allocation(coefficients, request.target.ground_size)
     return coefficients
 
 

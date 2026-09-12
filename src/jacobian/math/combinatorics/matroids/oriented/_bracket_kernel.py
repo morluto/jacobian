@@ -318,8 +318,9 @@ def _bounded_component_sum(
         next_digits = _integer_digit_upper_bound(
             running_denominator
         ) + _integer_digit_upper_bound(extra)
-        if next_digits > MAX_BRACKET_COEFFICIENT_DIGITS or _exceeds_canonical_integer_bound(
-            extra
+        if (
+            next_digits > MAX_BRACKET_COEFFICIENT_DIGITS
+            or _exceeds_canonical_integer_bound(extra)
         ):
             raise OperationResourceAdmissionError(
                 location=("terms",),

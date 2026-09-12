@@ -196,15 +196,20 @@ def test_repeated_bracket_factors_retain_their_exponent() -> None:
 
 
 def test_syzygy_residual_cancels_a_supplied_relation() -> None:
-    relation = grassmann_pluecker_relation(5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM")
-    residual = bracket_syzygy_residual(relation.polynomial, (
-                (
-                    # The empty multiplier is the multiplicative unit.
-                    CanonicalRational(num=1, den=1),
-                    BracketMonomial(factors=()),
-                    relation,
-                ),
-            ),)
+    relation = grassmann_pluecker_relation(
+        5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM"
+    )
+    residual = bracket_syzygy_residual(
+        relation.polynomial,
+        (
+            (
+                # The empty multiplier is the multiplicative unit.
+                CanonicalRational(num=1, den=1),
+                BracketMonomial(factors=()),
+                relation,
+            ),
+        ),
+    )
     assert residual.terms == ()
 
 
@@ -217,21 +222,27 @@ def test_syzygy_skips_zero_scaled_oversized_multiplier() -> None:
             (CanonicalBracket(indices=(6, 10, 11)), 1),
         )
     )
-    residual = bracket_syzygy_residual(relation.polynomial, ((CanonicalRational(num=0, den=1), multiplier, relation),),)
+    residual = bracket_syzygy_residual(
+        relation.polynomial,
+        ((CanonicalRational(num=0, den=1), multiplier, relation),),
+    )
     assert residual == relation.polynomial
 
 
 def test_syzygy_residual_retains_nonzero_scalar_and_multiplier() -> None:
-    relation = grassmann_pluecker_relation(5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM")
-    residual = bracket_syzygy_residual(relation.polynomial, (
-                (
-                    CanonicalRational(num=2, den=1),
-                    BracketMonomial(
-                        factors=((CanonicalBracket(indices=(0, 1, 2)), 1),)
-                    ),
-                    relation,
-                ),
-            ),)
+    relation = grassmann_pluecker_relation(
+        5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM"
+    )
+    residual = bracket_syzygy_residual(
+        relation.polynomial,
+        (
+            (
+                CanonicalRational(num=2, den=1),
+                BracketMonomial(factors=((CanonicalBracket(indices=(0, 1, 2)), 1),)),
+                relation,
+            ),
+        ),
+    )
     expected = bracket_polynomial_from_terms(
         5,
         [
@@ -248,7 +259,9 @@ def test_syzygy_residual_retains_nonzero_scalar_and_multiplier() -> None:
 
 
 def test_syzygy_rejects_anonymous_polynomial_sources() -> None:
-    relation = grassmann_pluecker_relation(5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM")
+    relation = grassmann_pluecker_relation(
+        5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM"
+    )
     with pytest.raises(ValidationError):
         BracketSyzygyResidualRequest(
             target=relation.polynomial,
@@ -263,7 +276,9 @@ def test_syzygy_rejects_anonymous_polynomial_sources() -> None:
 
 
 def test_syzygy_rejects_a_forged_source_relation() -> None:
-    relation = grassmann_pluecker_relation(5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM")
+    relation = grassmann_pluecker_relation(
+        5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM"
+    )
     forged = GrassmannPlueckerRelation(
         ground_size=relation.ground_size,
         indices=relation.indices,
@@ -271,17 +286,22 @@ def test_syzygy_rejects_a_forged_source_relation() -> None:
         polynomial=bracket_polynomial_from_terms(5, [(Fraction(1), ((0, 1, 2),))]),
     )
     with pytest.raises(OperationDomainValidationError, match="source metadata"):
-        bracket_syzygy_residual(relation.polynomial, (
-                    (
-                        CanonicalRational(num=1, den=1),
-                        BracketMonomial(factors=()),
-                        forged,
-                    ),
-                ),)
+        bracket_syzygy_residual(
+            relation.polynomial,
+            (
+                (
+                    CanonicalRational(num=1, den=1),
+                    BracketMonomial(factors=()),
+                    forged,
+                ),
+            ),
+        )
 
 
 def test_syzygy_rejects_multiplier_outside_target_ground() -> None:
-    relation = grassmann_pluecker_relation(5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM")
+    relation = grassmann_pluecker_relation(
+        5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM"
+    )
     outside = CanonicalBracket(indices=(0, 1, 5))
     with pytest.raises(ValidationError, match="multiplier_index_outside_ground"):
         BracketSyzygyResidualRequest(
@@ -339,13 +359,16 @@ def test_syzygy_rejects_513_distinct_output_terms_before_expansion() -> None:
     with pytest.raises(
         OperationResourceAdmissionError, match="too many sparse output terms"
     ):
-        bracket_syzygy_residual(target, (
-                    (
-                        CanonicalRational(num=1, den=1),
-                        BracketMonomial(factors=()),
-                        relation,
-                    ),
-                ),)
+        bracket_syzygy_residual(
+            target,
+            (
+                (
+                    CanonicalRational(num=1, den=1),
+                    BracketMonomial(factors=()),
+                    relation,
+                ),
+            ),
+        )
 
 
 def test_syzygy_accepts_512_terms_after_two_relation_cancellations() -> None:
@@ -391,18 +414,23 @@ def test_syzygy_accepts_512_terms_after_two_relation_cancellations() -> None:
             )
         ),
     )
-    residual = bracket_syzygy_residual(target, (
-                (
-                    CanonicalRational(num=1, den=1),
-                    BracketMonomial(factors=()),
-                    relation,
-                ),
-            ),)
+    residual = bracket_syzygy_residual(
+        target,
+        (
+            (
+                CanonicalRational(num=1, den=1),
+                BracketMonomial(factors=()),
+                relation,
+            ),
+        ),
+    )
     assert len(residual.terms) == 512
 
 
 def test_syzygy_rejects_unbounded_intermediate_coefficient_digits() -> None:
-    relation = grassmann_pluecker_relation(5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM")
+    relation = grassmann_pluecker_relation(
+        5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM"
+    )
     large_base = 10**10_000
     terms = tuple(
         (
@@ -417,7 +445,9 @@ def test_syzygy_rejects_unbounded_intermediate_coefficient_digits() -> None:
 
 
 def test_syzygy_rejects_assembled_multiplicity_overflow_before_combine() -> None:
-    relation = grassmann_pluecker_relation(5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM")
+    relation = grassmann_pluecker_relation(
+        5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM"
+    )
     multiplier = BracketMonomial(
         factors=(
             (
@@ -427,17 +457,25 @@ def test_syzygy_rejects_assembled_multiplicity_overflow_before_combine() -> None
         )
     )
     with pytest.raises(OperationResourceAdmissionError) as error:
-        bracket_syzygy_residual(BracketPolynomial(ground_size=5, terms=()), ((CanonicalRational(num=1, den=1), multiplier, relation),),)
+        bracket_syzygy_residual(
+            BracketPolynomial(ground_size=5, terms=()),
+            ((CanonicalRational(num=1, den=1), multiplier, relation),),
+        )
     assert error.value.errors()[0]["type"] == "bracket.syzygy_multiplicity_digit_bound"
 
 
 def test_syzygy_accepts_maximum_assembled_multiplicity() -> None:
-    relation = grassmann_pluecker_relation(5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM")
+    relation = grassmann_pluecker_relation(
+        5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM"
+    )
     maximum = 10**MAX_CANONICAL_INTEGER_DIGITS - 1
     multiplier = BracketMonomial(
         factors=((CanonicalBracket(indices=(0, 1, 2)), maximum - 1),)
     )
-    residual = bracket_syzygy_residual(BracketPolynomial(ground_size=5, terms=()), ((CanonicalRational(num=1, den=1), multiplier, relation),),)
+    residual = bracket_syzygy_residual(
+        BracketPolynomial(ground_size=5, terms=()),
+        ((CanonicalRational(num=1, den=1), multiplier, relation),),
+    )
     assert any(
         multiplicity == maximum
         for term in residual.terms
@@ -511,65 +549,145 @@ def test_syzygy_allocation_charges_each_surviving_coefficient_width() -> None:
 
 
 def test_syzygy_cancels_opposite_large_coefficients_before_bound() -> None:
-    relation = grassmann_pluecker_relation(5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM")
+    relation = grassmann_pluecker_relation(
+        5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM"
+    )
     denominator = 10**20_000
-    residual = bracket_syzygy_residual(BracketPolynomial(ground_size=5, terms=()), (
-                (
-                    CanonicalRational(num=1, den=denominator),
-                    BracketMonomial(factors=()),
-                    relation,
-                ),
-                (
-                    CanonicalRational(num=-1, den=denominator),
-                    BracketMonomial(factors=()),
-                    relation,
-                ),
-            ),)
+    residual = bracket_syzygy_residual(
+        BracketPolynomial(ground_size=5, terms=()),
+        (
+            (
+                CanonicalRational(num=1, den=denominator),
+                BracketMonomial(factors=()),
+                relation,
+            ),
+            (
+                CanonicalRational(num=-1, den=denominator),
+                BracketMonomial(factors=()),
+                relation,
+            ),
+        ),
+    )
     assert residual.terms == ()
 
 
 def test_syzygy_cancels_equal_denominator_non_pair_components_before_bound() -> None:
-    relation = grassmann_pluecker_relation(5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM")
+    relation = grassmann_pluecker_relation(
+        5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM"
+    )
     denominator = 10**20_000 + 1
-    residual = bracket_syzygy_residual(BracketPolynomial(ground_size=5, terms=()), (
-                (
-                    CanonicalRational(num=1, den=denominator),
-                    BracketMonomial(factors=()),
-                    relation,
-                ),
-                (
-                    CanonicalRational(num=1, den=denominator),
-                    BracketMonomial(factors=()),
-                    relation,
-                ),
-                (
-                    CanonicalRational(num=-2, den=denominator),
-                    BracketMonomial(factors=()),
-                    relation,
-                ),
-            ),)
+    residual = bracket_syzygy_residual(
+        BracketPolynomial(ground_size=5, terms=()),
+        (
+            (
+                CanonicalRational(num=1, den=denominator),
+                BracketMonomial(factors=()),
+                relation,
+            ),
+            (
+                CanonicalRational(num=1, den=denominator),
+                BracketMonomial(factors=()),
+                relation,
+            ),
+            (
+                CanonicalRational(num=-2, den=denominator),
+                BracketMonomial(factors=()),
+                relation,
+            ),
+        ),
+    )
     assert residual.terms == ()
 
 
 def test_syzygy_bounds_same_denominator_reduction_before_accumulation() -> None:
-    relation = grassmann_pluecker_relation(5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM")
+    relation = grassmann_pluecker_relation(
+        5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM"
+    )
     maximum = 10**MAX_CANONICAL_INTEGER_DIGITS - 1
-    residual = bracket_syzygy_residual(BracketPolynomial(ground_size=5, terms=()), tuple(
-                (
-                    CanonicalRational(num=scalar, den=1),
-                    BracketMonomial(factors=()),
-                    relation,
-                )
-                for scalar in (maximum, maximum, -maximum, -maximum)
-            ),)
+    residual = bracket_syzygy_residual(
+        BracketPolynomial(ground_size=5, terms=()),
+        tuple(
+            (
+                CanonicalRational(num=scalar, den=1),
+                BracketMonomial(factors=()),
+                relation,
+            )
+            for scalar in (maximum, maximum, -maximum, -maximum)
+        ),
+    )
     assert residual.terms == ()
 
 
 def test_syzygy_cancels_distinct_denominators_before_bound() -> None:
-    relation = grassmann_pluecker_relation(5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM")
+    relation = grassmann_pluecker_relation(
+        5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM"
+    )
     first_denominator = 10**12_000 + 1
     second_denominator = 10**12_000 + 3
-    residual = bracket_syzygy_residual(BracketPolynomial(ground_size=5, terms=()), (
+    residual = bracket_syzygy_residual(
+        BracketPolynomial(ground_size=5, terms=()),
+        (
+            (
+                CanonicalRational(num=1, den=first_denominator),
+                BracketMonomial(factors=()),
+                relation,
+            ),
+            (
+                CanonicalRational(num=1, den=second_denominator),
+                BracketMonomial(factors=()),
+                relation,
+            ),
+            (
+                CanonicalRational(
+                    num=-(first_denominator + second_denominator),
+                    den=first_denominator * second_denominator,
+                ),
+                BracketMonomial(factors=()),
+                relation,
+            ),
+        ),
+    )
+    assert residual.terms == ()
+
+
+def test_syzygy_cancels_shared_denominator_factors_before_bound() -> None:
+    relation = grassmann_pluecker_relation(
+        5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM"
+    )
+    common_factor = 10**20_000 + 1
+    residual = bracket_syzygy_residual(
+        BracketPolynomial(ground_size=5, terms=()),
+        (
+            (
+                CanonicalRational(num=1, den=2 * common_factor),
+                BracketMonomial(factors=()),
+                relation,
+            ),
+            (
+                CanonicalRational(num=1, den=3 * common_factor),
+                BracketMonomial(factors=()),
+                relation,
+            ),
+            (
+                CanonicalRational(num=-5, den=6 * common_factor),
+                BracketMonomial(factors=()),
+                relation,
+            ),
+        ),
+    )
+    assert residual.terms == ()
+
+
+def test_syzygy_rejects_cross_products_before_oversized_fraction() -> None:
+    relation = grassmann_pluecker_relation(
+        5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM"
+    )
+    first_denominator = 10**20_000 + 1
+    second_denominator = 10**20_000 + 3
+    with pytest.raises(OperationResourceAdmissionError, match="digit bound"):
+        bracket_syzygy_residual(
+            BracketPolynomial(ground_size=5, terms=()),
+            (
                 (
                     CanonicalRational(num=1, den=first_denominator),
                     BracketMonomial(factors=()),
@@ -580,81 +698,36 @@ def test_syzygy_cancels_distinct_denominators_before_bound() -> None:
                     BracketMonomial(factors=()),
                     relation,
                 ),
-                (
-                    CanonicalRational(
-                        num=-(first_denominator + second_denominator),
-                        den=first_denominator * second_denominator,
-                    ),
-                    BracketMonomial(factors=()),
-                    relation,
-                ),
-            ),)
-    assert residual.terms == ()
-
-
-def test_syzygy_cancels_shared_denominator_factors_before_bound() -> None:
-    relation = grassmann_pluecker_relation(5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM")
-    common_factor = 10**20_000 + 1
-    residual = bracket_syzygy_residual(BracketPolynomial(ground_size=5, terms=()), (
-                (
-                    CanonicalRational(num=1, den=2 * common_factor),
-                    BracketMonomial(factors=()),
-                    relation,
-                ),
-                (
-                    CanonicalRational(num=1, den=3 * common_factor),
-                    BracketMonomial(factors=()),
-                    relation,
-                ),
-                (
-                    CanonicalRational(num=-5, den=6 * common_factor),
-                    BracketMonomial(factors=()),
-                    relation,
-                ),
-            ),)
-    assert residual.terms == ()
-
-
-def test_syzygy_rejects_cross_products_before_oversized_fraction() -> None:
-    relation = grassmann_pluecker_relation(5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM")
-    first_denominator = 10**20_000 + 1
-    second_denominator = 10**20_000 + 3
-    with pytest.raises(OperationResourceAdmissionError, match="digit bound"):
-        bracket_syzygy_residual(BracketPolynomial(ground_size=5, terms=()), (
-                    (
-                        CanonicalRational(num=1, den=first_denominator),
-                        BracketMonomial(factors=()),
-                        relation,
-                    ),
-                    (
-                        CanonicalRational(num=1, den=second_denominator),
-                        BracketMonomial(factors=()),
-                        relation,
-                    ),
-                ),)
+            ),
+        )
 
 
 def test_syzygy_constructs_from_cancellation_admission_plan() -> None:
-    relation = grassmann_pluecker_relation(5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM")
+    relation = grassmann_pluecker_relation(
+        5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM"
+    )
     first_denominator = 10**20_000 + 1
     surviving_denominator = 10**20_000 + 3
-    residual = bracket_syzygy_residual(BracketPolynomial(ground_size=5, terms=()), (
-                (
-                    CanonicalRational(num=1, den=first_denominator),
-                    BracketMonomial(factors=()),
-                    relation,
-                ),
-                (
-                    CanonicalRational(num=1, den=surviving_denominator),
-                    BracketMonomial(factors=()),
-                    relation,
-                ),
-                (
-                    CanonicalRational(num=-1, den=first_denominator),
-                    BracketMonomial(factors=()),
-                    relation,
-                ),
-            ),)
+    residual = bracket_syzygy_residual(
+        BracketPolynomial(ground_size=5, terms=()),
+        (
+            (
+                CanonicalRational(num=1, den=first_denominator),
+                BracketMonomial(factors=()),
+                relation,
+            ),
+            (
+                CanonicalRational(num=1, den=surviving_denominator),
+                BracketMonomial(factors=()),
+                relation,
+            ),
+            (
+                CanonicalRational(num=-1, den=first_denominator),
+                BracketMonomial(factors=()),
+                relation,
+            ),
+        ),
+    )
     actual = {
         tuple(
             (factor.indices, multiplicity)
@@ -675,13 +748,16 @@ def test_syzygy_constructs_from_cancellation_admission_plan() -> None:
 def test_syzygy_unit_relation_coefficients_preserve_maximum_scalar_width() -> None:
     relation = grassmann_pluecker_relation(6, (0, 1, 2, 3, 4, 5), "FOUR_TERM")
     scalar = 10**32_767
-    residual = bracket_syzygy_residual(BracketPolynomial(ground_size=6, terms=()), (
-                (
-                    CanonicalRational(num=scalar, den=1),
-                    BracketMonomial(factors=()),
-                    relation,
-                ),
-            ),)
+    residual = bracket_syzygy_residual(
+        BracketPolynomial(ground_size=6, terms=()),
+        (
+            (
+                CanonicalRational(num=scalar, den=1),
+                BracketMonomial(factors=()),
+                relation,
+            ),
+        ),
+    )
     assert len(residual.terms) == 4
     assert {abs(term.coefficient.num) for term in residual.terms} == {scalar}
     assert {term.coefficient.den for term in residual.terms} == {1}
@@ -708,10 +784,7 @@ def test_compressed_large_multiplicity_survives_residual_and_json() -> None:
     restored = BracketPolynomial.model_validate_json(
         encode_strict_json(result.model_dump(mode="json")), strict=True
     )
-    assert (
-        bracket_syzygy_residual(restored, ())
-        == target
-    )
+    assert bracket_syzygy_residual(restored, ()) == target
 
 
 def test_oversized_repeated_coefficient_rejects_without_partition_search() -> None:
@@ -727,9 +800,7 @@ def test_coprime_denominator_product_rejects_before_lcm_construction() -> None:
 
     digits = MAX_CANONICAL_INTEGER_DIGITS
     base = 10 ** (digits - 1)
-    components = [
-        (Fraction(1, base + index), (1, digits)) for index in range(32)
-    ]
+    components = [(Fraction(1, base + index), (1, digits)) for index in range(32)]
     with pytest.raises(OperationResourceAdmissionError, match="digit bound"):
         _bounded_component_sum(components)
 
@@ -738,19 +809,24 @@ def test_syzygy_admits_near_bound_denominator_products() -> None:
     """Products 3N and 2N that still have 32,768 digits remain representable."""
 
     modulus = 10 ** (MAX_CANONICAL_INTEGER_DIGITS - 1) + 1
-    relation = grassmann_pluecker_relation(5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM")
-    residual = bracket_syzygy_residual(BracketPolynomial(ground_size=5, terms=()), (
-                (
-                    CanonicalRational(num=-modulus, den=2),
-                    BracketMonomial(factors=()),
-                    relation,
-                ),
-                (
-                    CanonicalRational(num=modulus, den=3),
-                    BracketMonomial(factors=()),
-                    relation,
-                ),
-            ),)
+    relation = grassmann_pluecker_relation(
+        5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM"
+    )
+    residual = bracket_syzygy_residual(
+        BracketPolynomial(ground_size=5, terms=()),
+        (
+            (
+                CanonicalRational(num=-modulus, den=2),
+                BracketMonomial(factors=()),
+                relation,
+            ),
+            (
+                CanonicalRational(num=modulus, den=3),
+                BracketMonomial(factors=()),
+                relation,
+            ),
+        ),
+    )
     masses = {term.coefficient.as_fraction() for term in residual.terms}
     assert masses <= {Fraction(modulus, 6), Fraction(-modulus, 6)}
     assert masses
@@ -772,28 +848,31 @@ def test_syzygy_retries_a_bounded_reduction_order() -> None:
     assert total == Fraction(2) * width / 3
 
     relation = grassmann_pluecker_relation(6, (0, 1, 2, 3, 4, 5), "FOUR_TERM")
-    residual = bracket_syzygy_residual(BracketPolynomial(ground_size=6, terms=()), (
-                (
-                    CanonicalRational(num=-7 * (bound + 1), den=3),
-                    BracketMonomial(factors=()),
-                    relation,
-                ),
-                (
-                    CanonicalRational(num=bound + 1, den=2),
-                    BracketMonomial(factors=()),
-                    relation,
-                ),
-                (
-                    CanonicalRational(num=3 * (bound + 1), den=2),
-                    BracketMonomial(factors=()),
-                    relation,
-                ),
-                (
-                    CanonicalRational(num=-(bound + 1), den=3),
-                    BracketMonomial(factors=()),
-                    relation,
-                ),
-            ),)
+    residual = bracket_syzygy_residual(
+        BracketPolynomial(ground_size=6, terms=()),
+        (
+            (
+                CanonicalRational(num=-7 * (bound + 1), den=3),
+                BracketMonomial(factors=()),
+                relation,
+            ),
+            (
+                CanonicalRational(num=bound + 1, den=2),
+                BracketMonomial(factors=()),
+                relation,
+            ),
+            (
+                CanonicalRational(num=3 * (bound + 1), den=2),
+                BracketMonomial(factors=()),
+                relation,
+            ),
+            (
+                CanonicalRational(num=-(bound + 1), den=3),
+                BracketMonomial(factors=()),
+                relation,
+            ),
+        ),
+    )
     expected = Fraction(2 * (bound + 1), 3)
     masses = {abs(term.coefficient.as_fraction()) for term in residual.terms}
     assert masses == {expected}
@@ -816,33 +895,36 @@ def test_syzygy_backtracks_later_coefficient_merges() -> None:
     assert total == Fraction(47 * width, 20)
 
     relation = grassmann_pluecker_relation(6, (0, 1, 2, 3, 4, 5), "FOUR_TERM")
-    residual = bracket_syzygy_residual(BracketPolynomial(ground_size=6, terms=()), (
-                (
-                    CanonicalRational(num=-7 * width, den=4),
-                    BracketMonomial(factors=()),
-                    relation,
-                ),
-                (
-                    CanonicalRational(num=14 * width, den=3),
-                    BracketMonomial(factors=()),
-                    relation,
-                ),
-                (
-                    CanonicalRational(num=-85 * width, den=18),
-                    BracketMonomial(factors=()),
-                    relation,
-                ),
-                (
-                    CanonicalRational(num=-13 * width, den=9),
-                    BracketMonomial(factors=()),
-                    relation,
-                ),
-                (
-                    CanonicalRational(num=28 * width, den=5),
-                    BracketMonomial(factors=()),
-                    relation,
-                ),
-            ),)
+    residual = bracket_syzygy_residual(
+        BracketPolynomial(ground_size=6, terms=()),
+        (
+            (
+                CanonicalRational(num=-7 * width, den=4),
+                BracketMonomial(factors=()),
+                relation,
+            ),
+            (
+                CanonicalRational(num=14 * width, den=3),
+                BracketMonomial(factors=()),
+                relation,
+            ),
+            (
+                CanonicalRational(num=-85 * width, den=18),
+                BracketMonomial(factors=()),
+                relation,
+            ),
+            (
+                CanonicalRational(num=-13 * width, den=9),
+                BracketMonomial(factors=()),
+                relation,
+            ),
+            (
+                CanonicalRational(num=28 * width, den=5),
+                BracketMonomial(factors=()),
+                relation,
+            ),
+        ),
+    )
     expected = Fraction(47 * width, 20)
     masses = {abs(term.coefficient.as_fraction()) for term in residual.terms}
     assert masses == {expected}

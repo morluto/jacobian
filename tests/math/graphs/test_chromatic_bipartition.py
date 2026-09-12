@@ -608,3 +608,16 @@ def test_unit_threshold_counts_only_computed_remainders() -> None:
     )
     assert result.status == "SPLIT"
     assert result.checked_partitions == 1
+
+
+def test_split_charges_partition_labels_once() -> None:
+    left = "a" * 140_000
+    right = "b" * 140_000
+    result = find_chromatic_bipartition(
+        ChromaticBipartitionRequest(
+            graph=graph((left, right), ((left, right),)),
+            s=1,
+            t=1,
+        )
+    )
+    assert result.status == "SPLIT"

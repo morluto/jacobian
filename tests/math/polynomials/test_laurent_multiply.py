@@ -75,9 +75,7 @@ def test_catalog_admits_exponent_growth_before_convolution_bound() -> None:
         variables=("x",),
         terms=tuple(term(1, exponent) for exponent in range(32_768, 30_719, -1)),
     )
-    right = RationalLaurentPolynomial(
-        variables=("x",), terms=(term(1, 1), term(1, 0))
-    )
+    right = RationalLaurentPolynomial(variables=("x",), terms=(term(1, 1), term(1, 0)))
     request = operation.request_type(left=left, right=right)
 
     with pytest.raises(OperationResourceAdmissionError) as error:

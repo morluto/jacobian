@@ -50,12 +50,8 @@ def _fraction_component_digits(value: Fraction) -> int:
     return max(len(str(abs(value.numerator))), len(str(value.denominator)))
 
 
-def _point_component_digits(point: GaussianProjectiveLinePoint) -> int:
-    return max(
-        _fraction_component_digits(component)
-        for coordinate in point.coordinates
-        for component in coordinate.as_fractions()
-    )
+def _gaussian_component_digits(value: tuple[Fraction, Fraction]) -> int:
+    return max(_fraction_component_digits(component) for component in value)
 
 
 def _reject_resource(code: str, message: str) -> NoReturn:
@@ -79,17 +75,20 @@ def _admit_request(request: GaussianCrossRatioSource) -> None:
                     message="cross-ratio inputs must be pairwise projectively distinct",
                 )
 
-    source_digits = max(_point_component_digits(point) for point in points)
-    # A complex determinant is one subtraction of two complex products; the
-    # following products and quotient are then bounded independently.  The +1
-    # terms cover a carry from adding two signed integers.
-    determinant_digits = 8 * source_digits + 3
-    product_digits = 4 * determinant_digits + 1
-    # Complex division forms a norm (one more sum of products), then multiplies
-    # the numerator by that norm's denominator.  Both the norm and the complex
-    # numerator can reach 4*product_digits+1, so the final Fraction components
-    # need twice that height.
-    quotient_digits = 8 * product_digits + 3
+    numerator = _multiply(
+        _determinant(request.first, request.third),
+        _determinant(request.second, request.fourth),
+    )
+    denominator = _multiply(
+        _determinant(request.first, request.fourth),
+        _determinant(request.second, request.third),
+    )
+    # Bound the quotient from the actual determinant products so structurally
+    # sparse points are not charged a dense worst-case height.
+    product_digits = max(
+        _gaussian_component_digits(numerator), _gaussian_component_digits(denominator)
+    )
+    quotient_digits = 4 * product_digits + 3
     if quotient_digits > MAX_CROSS_RATIO_INTERMEDIATE_DIGITS:
         _reject_resource(
             "intermediate_height_bound",

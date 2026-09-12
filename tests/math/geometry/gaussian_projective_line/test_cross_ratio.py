@@ -4,9 +4,10 @@ from fractions import Fraction
 from itertools import permutations
 
 import pytest
-from pydantic import ValidationError
 
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.catalog import Catalog
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.dispatch import OperationRequestValidationError, invoke_operation
 from jacobian.math.geometry.gaussian_projective_line._models import (
     GaussianCrossRatioSource,
     GaussianProjectiveLinePoint,
@@ -119,25 +120,64 @@ def test_permutations_have_the_six_cross_ratio_values() -> None:
 
 
 def test_coincident_points_are_rejected_before_division() -> None:
-    with pytest.raises(ValidationError, match="pairwise projectively distinct"):
-        GaussianCrossRatioSource(
-            first=_point(_z(0), _z(1)),
-            second=_point(_z(0), _z(1)),
-            third=_point(_z(1), _z(1)),
-            fourth=_point(_z(1), _z(0)),
+    request = GaussianCrossRatioSource(
+        first=_point(_z(0), _z(1)),
+        second=_point(_z(0), _z(1)),
+        third=_point(_z(1), _z(1)),
+        fourth=_point(_z(1), _z(0)),
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        gaussian_rational_cross_ratio(request)
+    assert error.value.errors()[0]["type"] == "geometry.gaussian_cross_ratio.points_not_distinct"
+
+
+def test_coincident_points_reach_operation_admission_on_dispatch() -> None:
+    payload = {
+        "first": {
+            "coordinates": [
+                {"real": {"num": "0", "den": "1"}, "imaginary": {"num": "0", "den": "1"}},
+                {"real": {"num": "1", "den": "1"}, "imaginary": {"num": "0", "den": "1"}},
+            ]
+        },
+        "second": {
+            "coordinates": [
+                {"real": {"num": "0", "den": "1"}, "imaginary": {"num": "0", "den": "1"}},
+                {"real": {"num": "1", "den": "1"}, "imaginary": {"num": "0", "den": "1"}},
+            ]
+        },
+        "third": {
+            "coordinates": [
+                {"real": {"num": "1", "den": "1"}, "imaginary": {"num": "0", "den": "1"}},
+                {"real": {"num": "1", "den": "1"}, "imaginary": {"num": "0", "den": "1"}},
+            ]
+        },
+        "fourth": {
+            "coordinates": [
+                {"real": {"num": "1", "den": "1"}, "imaginary": {"num": "0", "den": "1"}},
+                {"real": {"num": "0", "den": "1"}, "imaginary": {"num": "0", "den": "1"}},
+            ]
+        },
+    }
+    with pytest.raises(OperationDomainValidationError) as error:
+        invoke_operation(
+            "geometry.projective_line.cross_ratio.gaussian_rational.compute",
+            payload,
+            Catalog.open(),
         )
+    assert not isinstance(error.value, OperationRequestValidationError)
+    assert error.value.errors()[0]["type"] == "geometry.gaussian_cross_ratio.points_not_distinct"
 
 
-def test_cross_ratio_intermediate_height_is_admitted_semantically() -> None:
+def test_sparse_large_coordinate_cross_ratio_is_admitted() -> None:
     large = 10**255 + 1
     request = GaussianCrossRatioSource(
         first=_point(
-            GaussianRational.from_fractions(Fraction(large), Fraction(1)),
+            GaussianRational.from_fractions(Fraction(large), Fraction()),
             _z(1),
         ),
         second=_point(_z(0), _z(1)),
         third=_point(_z(1), _z(1)),
         fourth=_point(_z(1), _z(0)),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="intermediate digit"):
-        gaussian_rational_cross_ratio(request)
+    result = gaussian_rational_cross_ratio(request)
+    assert result.as_fractions() == (Fraction(-(10**255)), Fraction())

@@ -15,7 +15,10 @@ from jacobian.math.number_theory.number_fields.values import (
 
 PROJECTIVE_LINE_FIELD = "Q(i)"
 PROJECTIVE_LINE_AXES = ("X", "Y")
-CROSS_RATIO_ORDER = "(X1-X3)(X2-X4) / ((X1-X4)(X2-X3))"
+CROSS_RATIO_ORDER = (
+    "det(p1,p3)det(p2,p4)/(det(p1,p4)det(p2,p3)) with "
+    "det(pi,pj)=Xi Yj - Yi Xj"
+)
 
 
 def _divide(
@@ -71,18 +74,6 @@ class GaussianCrossRatioSource(StrictModel):
     second: GaussianProjectiveLinePoint
     third: GaussianProjectiveLinePoint
     fourth: GaussianProjectiveLinePoint
-
-    @model_validator(mode="after")
-    def require_pairwise_distinct_points(self) -> Self:
-        points = (self.first, self.second, self.third, self.fourth)
-        for left_index, left in enumerate(points):
-            for right in points[left_index + 1 :]:
-                if left.coordinates == right.coordinates:
-                    raise PydanticCustomError(
-                        "geometry.projective_points_distinct",
-                        "cross-ratio inputs must be pairwise projectively distinct",
-                    )
-        return self
 
 
 __all__ = [

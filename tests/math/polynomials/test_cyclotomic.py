@@ -107,7 +107,7 @@ def test_backend_failure_is_typed(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(sympy, "cyclotomic_poly", fail)
     with pytest.raises(OperationBackendError) as exc_info:
-        _run(CyclotomicRequest(index=3))
+        _run(CyclotomicRequest(index=12))
     assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT
 
 
@@ -124,7 +124,7 @@ def test_backend_nonintegral_coefficients_are_not_truncated(
         sympy, "cyclotomic_poly", lambda *args, **kwargs: FakePolynomial()
     )
     with pytest.raises(OperationBackendError) as exc_info:
-        _run(CyclotomicRequest(index=2))
+        _run(CyclotomicRequest(index=12))
     assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT
 
 
@@ -141,7 +141,7 @@ def test_backend_wrong_constant_is_rejected_on_the_native_path(
         sympy, "cyclotomic_poly", lambda *args, **kwargs: FakePolynomial()
     )
     with pytest.raises(OperationBackendError) as exc_info:
-        cyclotomic(2)
+        cyclotomic(12)
     assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT
 
 

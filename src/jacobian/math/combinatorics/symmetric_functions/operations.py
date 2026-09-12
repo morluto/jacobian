@@ -4,13 +4,19 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from pydantic import TypeAdapter, ValidationError
+
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.symmetric_functions._models import (
     _MAX_POINT_COORDINATE_ABS,
     _MAX_SCHUR_PARTITION_LENGTH,
+    _MAX_SCHUR_VARIABLE_NAME_LENGTH,
     IntegerPartition,
     SchurExpansionResult,
+    SchurVariableName,
 )
+
+_SCHUR_VARIABLE_NAME_ADAPTER = TypeAdapter(SchurVariableName)
 
 
 def partition_conjugate(partition: IntegerPartition) -> IntegerPartition:
@@ -46,6 +52,7 @@ def _complete_homogeneous(variables: Sequence[int], k: int) -> int:
 def schur_evaluation(
     partition: IntegerPartition,
     point: tuple[int, ...],
+    variables: tuple[SchurVariableName, ...] | None = None,
 ) -> SchurExpansionResult:
     """Evaluate a Schur function s_lambda at a point using the Jacobi-Trudi formula.
 
@@ -72,10 +79,48 @@ def schur_evaluation(
             message="point must contain 1..20 bounded integer coordinates",
         )
 
+    if variables is None:
+        variables = tuple(f"x{i}" for i in range(len(point)))
+    else:
+        try:
+            variable_count = len(variables)
+        except TypeError as error:
+            raise OperationDomainValidationError(
+                location=("variables",),
+                code="symmetric_function.schur_dimensions_mismatch",
+                message="variables and point must have the same length",
+            ) from error
+        if variable_count != len(point):
+            raise OperationDomainValidationError(
+                location=("variables",),
+                code="symmetric_function.schur_dimensions_mismatch",
+                message="variables and point must have the same length",
+            )
+    for variable in variables:
+        try:
+            _SCHUR_VARIABLE_NAME_ADAPTER.validate_python(variable, strict=True)
+        except ValidationError as error:
+            raise OperationDomainValidationError(
+                location=("variables",),
+                code="symmetric_function.schur_variable_name_bounded",
+                message=(
+                    "variable names must be canonical nonempty labels of at most "
+                    f"{_MAX_SCHUR_VARIABLE_NAME_LENGTH} characters"
+                ),
+            ) from error
+    if len(set(variables)) != len(variables):
+        raise OperationDomainValidationError(
+            location=("variables",),
+            code="symmetric_function.schur_variables_not_distinct",
+            message="variables must be distinct (duplicate axis)",
+        )
+
     parts = list(partition.parts)
     n = len(parts)
     if not parts:
-        return SchurExpansionResult(value=1)
+        return SchurExpansionResult(
+            partition=partition, variables=variables, point=point, value=1
+        )
 
     def h(k: int) -> int:
         if k < 0:
@@ -89,7 +134,9 @@ def schur_evaluation(
             matrix[i][j] = h(parts[i] - (i + 1) + (j + 1))
 
     result = _determinant(matrix)
-    return SchurExpansionResult(value=result)
+    return SchurExpansionResult(
+        partition=partition, variables=variables, point=point, value=result
+    )
 
 
 def _determinant(matrix: list[list[int]]) -> int:
@@ -107,8 +154,34 @@ def _determinant(matrix: list[list[int]]) -> int:
     return int(Matrix(matrix).det())
 
 
-def verify_schur_evaluation(claim: SchurExpansionResult) -> bool:
-    return type(claim.value) is int
+def verify_schur_evaluation(claim: object) -> bool:
+    if not isinstance(claim, SchurExpansionResult):
+        return False
+    try:
+        variables = claim.variables
+        point = claim.point
+        if type(variables) is not tuple or type(point) is not tuple:
+            return False
+        if not 1 <= len(variables) <= 20 or not 1 <= len(point) <= 20:
+            return False
+        partition = claim.partition
+        canonical_claim = SchurExpansionResult.model_validate(
+            {
+                "partition": {"parts": partition.parts},
+                "variables": variables,
+                "point": point,
+                "value": claim.value,
+            },
+            strict=True,
+        )
+    except (AttributeError, TypeError, ValueError):
+        return False
+    expected = schur_evaluation(
+        canonical_claim.partition,
+        canonical_claim.point,
+        canonical_claim.variables,
+    )
+    return expected == canonical_claim
 
 
 __all__ = [

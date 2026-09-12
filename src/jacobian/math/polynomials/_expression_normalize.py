@@ -561,34 +561,48 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
         degree = max(row.degree for row in child_metrics)
         disjoint = _addends_are_disjoint(child_metrics)
         constant: Fraction | None
-        if child_metrics and all(
+        all_constant = bool(child_metrics) and all(
             child.constant is not None for child in child_metrics
-        ):
+        )
+        projected_denominator = (
+            1
+            if child_metrics and all(child.zero for child in child_metrics)
+            else _bounded_denominator_lcm(child_metrics, skip_zero=True)
+        )
+        if all_constant and projected_denominator is not None:
             constant = sum(
                 (child.constant for child in child_metrics),
                 start=Fraction(),
             )
             zero = constant == 0
+        elif all_constant:
+            constant = None
+            zero = False
         else:
             constant = None
             zero = all(child.zero for child in child_metrics) or _is_literal_zero_add(
                 expression
             )
+        active_metrics = [child for child in child_metrics if not child.zero]
         if zero:
             common_denominator = 1
             common_numerator_bits = 1
         elif disjoint:
             common_denominator = 1
+            for child in child_metrics:
+                if child.zero:
+                    continue
+                if child.denominator is None:
+                    common_denominator = None
+                    break
+                if child.denominator > common_denominator:
+                    common_denominator = child.denominator
             common_numerator_bits = max(
                 (child.numerator_bits for child in child_metrics if not child.zero),
                 default=1,
             )
         else:
-            active_metrics = [child for child in child_metrics if not child.zero]
-            common_denominator = _bounded_denominator_lcm(
-                child_metrics,
-                skip_zero=True,
-            )
+            common_denominator = projected_denominator
             common_numerator_bits = _addition_numerator_bits(
                 active_metrics,
                 common_denominator,

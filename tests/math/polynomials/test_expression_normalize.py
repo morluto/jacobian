@@ -492,3 +492,82 @@ def test_nested_constant_powers_are_capped_before_evaluation(
     }
     with pytest.raises(OperationResourceAdmissionError):
         normalize_polynomial_expression(_request("ZZ", expression))
+
+
+def test_powered_disjoint_sum_preserves_child_denominators() -> None:
+    first = 10**127 + 39
+    second = 10**127 + 79
+    expression = {
+        "kind": "POWER",
+        "base": {
+            "kind": "ADD",
+            "operands": [
+                {
+                    "kind": "MULTIPLY",
+                    "operands": [
+                        {"kind": "VARIABLE", "name": "x"},
+                        {
+                            "kind": "POWER",
+                            "base": {
+                                "kind": "LITERAL",
+                                "value": {"num": 1, "den": first},
+                            },
+                            "exponent": 32,
+                        },
+                    ],
+                },
+                {
+                    "kind": "MULTIPLY",
+                    "operands": [
+                        {"kind": "VARIABLE", "name": "y"},
+                        {
+                            "kind": "POWER",
+                            "base": {
+                                "kind": "LITERAL",
+                                "value": {"num": 1, "den": second},
+                            },
+                            "exponent": 32,
+                        },
+                    ],
+                },
+            ],
+        },
+        "exponent": 9,
+    }
+    with pytest.raises(OperationResourceAdmissionError):
+        normalize_polynomial_expression(_request("QQ", expression, variables=("x", "y")))
+
+
+def test_constant_add_caps_denominators_before_fraction_sum(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_add = Fraction.__add__
+
+    def fail_huge_add(self: Fraction, other: object) -> Fraction:
+        if (
+            isinstance(other, Fraction)
+            and self.denominator.bit_length() > 8_000
+            and other.denominator.bit_length() > 8_000
+        ):
+            raise AssertionError("unadmitted constant sum materialized")
+        return original_add(self, other)
+
+    monkeypatch.setattr(Fraction, "__add__", fail_huge_add)
+    primes = [10**127 + 3 + 2 * index for index in range(8)]
+    expression = {
+        "kind": "ADD",
+        "operands": [
+            {
+                "kind": "POWER",
+                "base": {
+                    "kind": "LITERAL",
+                    "value": {"num": 1, "den": prime},
+                },
+                "exponent": 32,
+            }
+            for prime in primes
+        ],
+    }
+    with pytest.raises(OperationResourceAdmissionError):
+        normalize_polynomial_expression(_request("QQ", expression))
+

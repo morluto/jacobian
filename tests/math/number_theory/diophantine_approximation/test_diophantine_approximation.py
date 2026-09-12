@@ -815,7 +815,6 @@ def test_record_minima_remains_native_only() -> None:
     )
 
 
-
 def test_surd_request_schemas_describe_radical_axis_constraints() -> None:
     """Request schemas expose the constraints enforced by execution."""
     for request_type in (

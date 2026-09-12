@@ -107,7 +107,6 @@ def test_catalog_admits_exponent_growth_before_convolution_bound() -> None:
     assert error.value.errors()[0]["type"] == "polynomial.laurent.exponent_growth"
 
 
-
 def test_opposite_boundary_exponents_multiply_to_one() -> None:
     left = RationalLaurentPolynomial(variables=("x",), terms=(term(1, 32_768),))
     right = RationalLaurentPolynomial(variables=("x",), terms=(term(1, -32_768),))

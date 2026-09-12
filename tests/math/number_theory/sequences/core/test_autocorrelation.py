@@ -253,7 +253,6 @@ def test_catalog_accepts_serialized_integer_sequence_source() -> None:
     assert restored.source.values == (1, 2, 3)
 
 
-
 def test_wide_rational_cyclic_work_is_rejected_before_kernel() -> None:
     denominator = 10**15_999
     source = FiniteRationalSequence(

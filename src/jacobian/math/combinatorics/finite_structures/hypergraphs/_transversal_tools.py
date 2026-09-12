@@ -12,8 +12,11 @@ MINIMAL_TRANSVERSAL_ENUMERATION_OPERATION = MathTool(
     title="Enumerate bounded-cardinality minimal hypergraph transversals",
     description=(
         "Enumerate every inclusion-minimal transversal of cardinality at most k "
-        "after admitting the sound sum of binomial candidate bound. An edge-free "
-        "hypergraph returns its unique empty minimal transversal."
+        "with a complete cardinality profile. The owner admits exhaustive "
+        "candidate-edge and minimality work plus row, incidence, and transport "
+        "bounds before search. An edge-free hypergraph returns its unique empty "
+        "minimal transversal; a family containing an empty edge returns no "
+        "transversals."
     ),
     request_type=MinimalTransversalEnumerationRequest,
     result_type=MinimalTransversalEnumerationResult,
@@ -22,7 +25,11 @@ MINIMAL_TRANSVERSAL_ENUMERATION_OPERATION = MathTool(
     examples=(
         OperationExample(
             name="two_crossing_edges",
-            description="Enumerate minimal transversals of {a,b} and {b,c} through size two.",
+            description=(
+                "Enumerate minimal transversals of {a,b} and {b,c} through size "
+                "two; the complete bounded slice must fit the admitted work and "
+                "transport envelope."
+            ),
             input={
                 "hypergraph": {
                     "vertices": ["a", "b", "c"],

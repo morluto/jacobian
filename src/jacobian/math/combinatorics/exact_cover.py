@@ -920,9 +920,7 @@ def minimum_generalized_exact_cover(  # noqa: C901
             remaining_primary <= set(row.items) for row in remaining_rows
         )
         for secondary in instance.secondary_items:
-            without = sum(
-                1 for row in remaining_rows if secondary not in row.items
-            )
+            without = sum(1 for row in remaining_rows if secondary not in row.items)
             with_secondary = remaining_row_count - without
             if with_secondary < 2:
                 continue
@@ -943,9 +941,9 @@ def minimum_generalized_exact_cover(  # noqa: C901
                     else min(estimated_nodes_ceiling, universal_ceiling)
                 )
                 continue
-            near_universal_ceiling = 1 + remaining_primary_count + (
-                without + 1
-            ) * remaining_max_degree
+            near_universal_ceiling = (
+                1 + remaining_primary_count + (without + 1) * remaining_max_degree
+            )
             estimated_nodes_ceiling = (
                 near_universal_ceiling
                 if estimated_nodes_ceiling is None

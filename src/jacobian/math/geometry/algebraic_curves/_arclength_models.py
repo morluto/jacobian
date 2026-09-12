@@ -155,22 +155,22 @@ class ArclengthEnclosed(StrictModel):
                 (segment.contribution_lower.as_fraction() for segment in self.segments),
                 start=0,
             )
-            > self.lower.as_fraction()
+            < self.lower.as_fraction()
         ):
             raise _validation_error(
                 "lower_reconstruction",
-                "segment lower contributions exceed the aggregate lower bound",
+                "segment lower contributions do not reach the aggregate lower bound",
             )
         if (
             sum(
                 (segment.contribution_upper.as_fraction() for segment in self.segments),
                 start=0,
             )
-            < self.upper.as_fraction()
+            > self.upper.as_fraction()
         ):
             raise _validation_error(
                 "upper_reconstruction",
-                "segment upper contributions do not reach the aggregate upper bound",
+                "segment upper contributions exceed the aggregate upper bound",
             )
         return self
 

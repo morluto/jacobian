@@ -19,8 +19,8 @@ import sympy
 from jacobian._exact import CanonicalRational
 from jacobian._execution import (
     OperationExecutionTimeoutError,
-    bind_request_deadline,
     current_request_execution,
+    execution_deadline,
 )
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -450,9 +450,7 @@ def _integrate_cell(
 def enclose_arclength(  # noqa: C901
     request: PlaneCurveArclengthRequest,
 ) -> PlaneCurveArclengthResult:
-    started = monotonic()
-    deadline = started + request.resource_budget.wall_seconds
-    bind_request_deadline(deadline)
+    deadline = execution_deadline(request.resource_budget.wall_seconds)
     try:
         source = rational_polynomial_to_sympy(request.polynomial)
         if source.is_zero:
@@ -572,10 +570,6 @@ def enclose_arclength(  # noqa: C901
                 upper=CanonicalRational.from_fraction(upper_total),
                 segments=tuple(segments),
             ),
-        )
-    except OperationExecutionTimeoutError:
-        return PlaneCurveArclengthResult._from_kernel(
-            request, outcome=ArclengthUnknown(reason="DEADLINE_EXPIRED")
         )
     except (ImportError, ModuleNotFoundError):
         return PlaneCurveArclengthResult._from_kernel(

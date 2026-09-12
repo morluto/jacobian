@@ -371,9 +371,6 @@ class FullGraphAutomorphismResult(StrictModel):
     action: Literal["FULL_COLOR_PRESERVING_AUTOMORPHISM_GROUP"] = (
         "FULL_COLOR_PRESERVING_AUTOMORPHISM_GROUP"
     )
-    completeness: Literal["FULL_COLOR_PRESERVING_AUTOMORPHISM_GROUP"] = (
-        "FULL_COLOR_PRESERVING_AUTOMORPHISM_GROUP"
-    )
 
     @model_validator(mode="after")
     def require_canonical_source_bound_group(self) -> Self:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unicodedata
+from dataclasses import dataclass
 from math import factorial
 from typing import Any
 
@@ -48,7 +49,16 @@ def _uniform(values: tuple[str, ...]) -> bool:
     return not values or len(set(values)) == 1
 
 
-def _admit_full_graph_automorphism(graph: ColoredUndirectedGraph) -> None:
+@dataclass(frozen=True)
+class _FullGraphAdmission:
+    vertices: tuple[str, ...]
+    special: tuple[tuple[tuple[int, ...], ...], int] | None
+    refinement: tuple[tuple[str, int, tuple[tuple[str, str], ...]], ...] | None
+
+
+def _admit_full_graph_automorphism(
+    graph: ColoredUndirectedGraph,
+) -> _FullGraphAdmission:
     """Admit every expansion used by the full-group kernel before searching."""
 
     if not isinstance(graph, ColoredUndirectedGraph):
@@ -96,14 +106,13 @@ def _admit_full_graph_automorphism(graph: ColoredUndirectedGraph) -> None:
     for left, right in graph.graph.edges:
         adjacency[left].add(right)
         adjacency[right].add(left)
-    if (
-        _special_graph_generators(graph, tuple(sorted(graph.graph.vertices)))
-        is not None
-    ):
-        return
+    vertices = _full_graph_vertex_axis(graph)
+    special = _special_graph_generators(graph, vertices)
+    if special is not None:
+        return _FullGraphAdmission(vertices, special, None)
     classes: dict[tuple[Any, ...], list[str]] = {}
-    for vertex in graph.graph.vertices:
-        signature = (
+    refinement = tuple(
+        (
             vertex_colors[vertex],
             len(adjacency[vertex]),
             tuple(
@@ -116,6 +125,9 @@ def _admit_full_graph_automorphism(graph: ColoredUndirectedGraph) -> None:
                 )
             ),
         )
+        for vertex in vertices
+    )
+    for vertex, signature in zip(vertices, refinement, strict=True):
         classes.setdefault(signature, []).append(vertex)
     permutation_bound = 1
     for vertex_class in classes.values():
@@ -133,20 +145,19 @@ def _admit_full_graph_automorphism(graph: ColoredUndirectedGraph) -> None:
                 "exceed the admitted full-automorphism envelope"
             ),
         )
+    return _FullGraphAdmission(vertices, None, refinement)
 
 
-def _networkx_graph(graph: ColoredUndirectedGraph, vertices: tuple[str, ...]) -> Any:
+def _networkx_graph(
+    graph: ColoredUndirectedGraph,
+    vertices: tuple[str, ...],
+    node_colors: tuple[Any, ...],
+) -> Any:
     import networkx as nx
 
     indexed = {vertex: index for index, vertex in enumerate(vertices)}
     candidate: Any = nx.Graph()
-    colors = dict(
-        zip(
-            graph.graph.vertices,
-            graph.vertex_colors or (_UNCOLORED,) * len(graph.graph.vertices),
-            strict=True,
-        )
-    )
+    colors = dict(zip(vertices, node_colors, strict=True))
     candidate.add_nodes_from(
         (index, {"color": colors[vertex]}) for vertex, index in indexed.items()
     )
@@ -169,13 +180,15 @@ def _networkx_graph(graph: ColoredUndirectedGraph, vertices: tuple[str, ...]) ->
 
 
 def _networkx_automorphisms(
-    graph: ColoredUndirectedGraph, vertices: tuple[str, ...]
+    graph: ColoredUndirectedGraph,
+    vertices: tuple[str, ...],
+    refinement: tuple[tuple[str, int, tuple[tuple[str, str], ...]], ...],
 ) -> tuple[tuple[int, ...], ...]:
     """Enumerate only the admitted generic automorphisms through VF2."""
 
     import networkx.algorithms.isomorphism as iso
 
-    source = _networkx_graph(graph, vertices)
+    source = _networkx_graph(graph, vertices, refinement)
     matcher = iso.GraphMatcher(
         source,
         source,
@@ -213,10 +226,17 @@ def _special_complete_or_empty(
     n = len(vertices)
     if len(edges) not in (0, n * (n - 1) // 2) or not _uniform(graph.edge_colors):
         return None
-    colors = graph.vertex_colors or (_UNCOLORED,) * n
+    colors = dict(
+        zip(
+            graph.graph.vertices,
+            graph.vertex_colors or (_UNCOLORED,) * n,
+            strict=True,
+        )
+    )
     classes: dict[str, list[int]] = {}
     for position, color in sorted(
-        zip(range(n), colors, strict=True), key=lambda item: item[1]
+        ((position, colors[vertex]) for position, vertex in enumerate(vertices)),
+        key=lambda item: item[1],
     ):
         classes.setdefault(color, []).append(position)
     generators: list[tuple[int, ...]] = []
@@ -555,11 +575,13 @@ def full_graph_automorphism_group(
 
     from sympy.combinatorics import Permutation as SympyPermutation
 
-    _admit_full_graph_automorphism(graph)
-    vertices = _full_graph_vertex_axis(graph)
-    special = _special_graph_generators(graph, vertices)
+    admission = _admit_full_graph_automorphism(graph)
+    vertices = admission.vertices
+    special = admission.special
     if special is None:
-        candidates = _networkx_automorphisms(graph, vertices)
+        if admission.refinement is None:
+            raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+        candidates = _networkx_automorphisms(graph, vertices, admission.refinement)
         identity = tuple(range(len(vertices)))
         candidate_generators = tuple(
             candidate for candidate in candidates if candidate != identity

@@ -61,6 +61,29 @@ def test_vertex_colors_restrict_the_full_group() -> None:
     assert result.generators == ()
 
 
+def test_complete_graph_aligns_declared_colors_with_sorted_action_axis() -> None:
+    graph = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(
+            vertices=("b", "a", "c"),
+            edges=(("a", "b"), ("a", "c"), ("b", "c")),
+        ),
+        vertex_colors=("left", "right", "left"),
+    )
+
+    result = full_graph_automorphism_group(graph)
+
+    assert result.automorphism_count == 2
+    assert result.generators[0].mapping == (
+        ("b", "c"),
+        ("a", "a"),
+        ("c", "b"),
+    )
+    assert tuple(orbit.members for orbit in result.vertex_orbits) == (
+        ("a",),
+        ("b", "c"),
+    )
+
+
 @pytest.mark.parametrize("complete", [False, True])
 def test_complete_and_empty_graphs_use_compact_symmetric_generators(
     complete: bool,
@@ -101,6 +124,24 @@ def test_edge_colors_can_break_an_uncolored_cycle_symmetry() -> None:
     assert result.generators == ()
 
 
+def test_vf2_accepts_and_uses_refined_edge_signatures() -> None:
+    vertices = tuple("v" + str(index) for index in range(10))
+    edges = tuple(
+        sorted((vertices[index], vertices[(index + 1) % len(vertices)]))
+        for index in range(len(vertices))
+    )
+    graph = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(vertices=vertices, edges=edges),
+        vertex_colors=("same",) * len(vertices),
+        edge_colors=tuple(f"edge-{index}" for index in range(len(edges))),
+    )
+
+    result = full_graph_automorphism_group(graph)
+
+    assert result.automorphism_count == 1
+    assert result.generators == ()
+
+
 def test_group_and_source_generators_compose_after_result_serialization() -> None:
     graph = ColoredUndirectedGraph(
         graph=SimpleUndirectedGraph(
@@ -117,6 +158,7 @@ def test_group_and_source_generators_compose_after_result_serialization() -> Non
     assert group_order(reconstructed.group) == reconstructed.automorphism_count
     assert replay.vertex_orbits == reconstructed.vertex_orbits
     assert replay.edge_orbits == reconstructed.edge_orbits
+    assert "completeness" not in reconstructed.model_dump()
 
 
 def test_repeated_three_cliques_use_a_compact_complete_presentation() -> None:

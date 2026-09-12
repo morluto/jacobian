@@ -242,6 +242,43 @@ def test_syzygy_residual_cancels_a_supplied_relation() -> None:
     assert residual.terms == ()
 
 
+def test_syzygy_residual_retains_nonzero_scalar_and_multiplier() -> None:
+    relation = grassmann_pluecker_relation(
+        GrassmannPlueckerRelationRequest(
+            ground_size=5,
+            indices=(0, 1, 2, 3, 4),
+            family="SHARED_INDEX_THREE_TERM",
+        )
+    )
+    residual = bracket_syzygy_residual(
+        BracketSyzygyResidualRequest(
+            target=relation.polynomial,
+            terms=(
+                (
+                    CanonicalRational(num=2, den=1),
+                    BracketMonomial(
+                        factors=((CanonicalBracket(indices=(0, 1, 2)), 1),)
+                    ),
+                    relation,
+                ),
+            ),
+        )
+    )
+    expected = bracket_polynomial_from_terms(
+        5,
+        [
+            (Fraction(1), ((0, 1, 2), (0, 3, 4))),
+            (Fraction(-1), ((0, 1, 3), (0, 2, 4))),
+            (Fraction(1), ((0, 1, 4), (0, 2, 3))),
+            (Fraction(-2), ((0, 1, 2), (0, 1, 2), (0, 3, 4))),
+            (Fraction(2), ((0, 1, 2), (0, 1, 3), (0, 2, 4))),
+            (Fraction(-2), ((0, 1, 2), (0, 1, 4), (0, 2, 3))),
+        ],
+    )
+    assert residual == expected
+    assert residual.terms
+
+
 def test_syzygy_rejects_anonymous_polynomial_sources() -> None:
     relation = grassmann_pluecker_relation(
         GrassmannPlueckerRelationRequest(

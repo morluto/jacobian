@@ -208,13 +208,6 @@ def _finite_polynomial_evaluation(
             code="finite_field.finite_polynomial_evaluation_parent_mismatch",
             message="polynomial and value must share their exact presentation",
         )
-    from jacobian.math.finite_fields._admission import require_field
-    from jacobian.math.finite_fields.operations import (
-        _admit_polynomial_point_evaluation,
-    )
-
-    require_field(request.polynomial.presentation)
-    _admit_polynomial_point_evaluation(request.polynomial, location=("polynomial",))
     return evaluate_finite_polynomial(request.polynomial, request.value)
 
 

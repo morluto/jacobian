@@ -1,7 +1,13 @@
+from typing import Any
+
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.models import MathTool, OperationDomainValidationError
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.finite_fields import (
     Axis,
     AxisBoundMatrix,
@@ -29,6 +35,28 @@ from jacobian.math.finite_fields._models import (
     ProjectiveLineRequest,
 )
 from jacobian.math.finite_fields._tools import TOOLS
+
+
+def _point_evaluation_operation() -> MathTool[
+    FinitePolynomialEvaluationRequest, FiniteFieldElement
+]:
+    return next(
+        operation
+        for operation in TOOLS
+        if operation.operation_id == "finite_field.polynomial.evaluate.compute"
+    )
+
+
+def _max_point_evaluation_request() -> FinitePolynomialEvaluationRequest:
+    presentation = finite_field(
+        2,
+        (1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1),
+    )
+    one = element(presentation, (1,) + (0,) * 15)
+    return FinitePolynomialEvaluationRequest(
+        polynomial=finite_polynomial(presentation, (one,) * 65_536),
+        value=element(presentation, (0,) * 16),
+    )
 
 
 def test_bundle_declares_atomic_inline_typed_operations() -> None:
@@ -196,11 +224,7 @@ def test_point_evaluation_has_no_complete_field_enumeration_factor() -> None:
     )
     # 512 coefficients * degree 8 is admitted; the complete table's extra
     # factor of |F| is intentionally not charged by this operation.
-    operation = next(
-        operation
-        for operation in TOOLS
-        if operation.operation_id == "finite_field.polynomial.evaluate.compute"
-    )
+    operation = _point_evaluation_operation()
     restored_request = operation.request_type.model_validate_json(
         request.model_dump_json(), strict=True
     )
@@ -210,6 +234,44 @@ def test_point_evaluation_has_no_complete_field_enumeration_factor() -> None:
         FiniteFieldElement.model_validate_json(result.model_dump_json(), strict=True)
         == result
     )
+
+
+def test_catalog_point_evaluation_recognizes_field_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.finite_fields import _admission
+
+    field = finite_field(2, (1, 1, 1))
+    one = element(field, (1, 0))
+    request = FinitePolynomialEvaluationRequest(
+        polynomial=finite_polynomial(field, (one,)),
+        value=element(field, (0, 1)),
+    )
+    calls = 0
+    original = _admission.require_field
+
+    def tracked(presentation: FiniteFieldPresentation) -> Any:
+        nonlocal calls
+        calls += 1
+        return original(presentation)
+
+    monkeypatch.setattr(_admission, "require_field", tracked)
+
+    assert _point_evaluation_operation().run(request) == one
+    assert calls == 1
+
+
+def test_catalog_point_evaluation_has_same_typed_resource_refusal_as_native() -> None:
+    from jacobian.math.finite_fields import evaluate_finite_polynomial
+
+    request = _max_point_evaluation_request()
+
+    with pytest.raises(OperationResourceAdmissionError) as native_error:
+        evaluate_finite_polynomial(request.polynomial, request.value)
+    with pytest.raises(OperationResourceAdmissionError) as catalog_error:
+        _point_evaluation_operation().run(request)
+
+    assert catalog_error.value.errors() == native_error.value.errors()
 
 
 def test_point_evaluation_rejects_mismatched_parent() -> None:

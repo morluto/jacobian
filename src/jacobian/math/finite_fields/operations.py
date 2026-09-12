@@ -988,6 +988,7 @@ def evaluate_finite_polynomial(
 
     if value.presentation != polynomial.presentation:
         raise ValueError("polynomial and value must share their exact presentation")
+    _admit_polynomial_point_evaluation(polynomial, location=("polynomial",))
     from jacobian.math.finite_fields import _flint
 
     return FiniteFieldElement(

@@ -2,11 +2,17 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from typing import Any
 
 import pytest
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.finite_fields import (
+    FiniteFieldElement,
+    FiniteFieldPresentation,
     FiniteMapTable,
     FinitePolynomialMap,
     analyze_collisions,
@@ -24,6 +30,16 @@ from jacobian.math.finite_fields import (
 )
 
 pytestmark = pytest.mark.requires_backend("flint")
+
+
+def _max_point_evaluation() -> tuple[FinitePolynomialMap, FiniteFieldElement]:
+    presentation = finite_field(
+        2,
+        (1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1),
+    )
+    one = element(presentation, (1,) + (0,) * 15)
+    polynomial = finite_polynomial(presentation, (one,) * 65_536)
+    return finite_polynomial_map(polynomial), element(presentation, (0,) * 16)
 
 
 def _map(*exponents: int) -> FinitePolynomialMap:
@@ -57,6 +73,44 @@ def test_complete_table_and_fibers_reuse_exact_slice_a_field_identity() -> None:
     assert tuple(target for _source, target in table.entries) == tuple(
         evaluate_finite_polynomial(polynomial_map.polynomial, source)
         for source, _target in table.entries
+    )
+
+
+def test_native_point_evaluation_recognizes_field_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.finite_fields import _admission
+
+    polynomial_map = _map(3)
+    calls = 0
+    original = _admission.require_field
+
+    def tracked(presentation: FiniteFieldPresentation) -> Any:
+        nonlocal calls
+        calls += 1
+        return original(presentation)
+
+    monkeypatch.setattr(_admission, "require_field", tracked)
+
+    assert evaluate_finite_polynomial(
+        polynomial_map.polynomial,
+        element(polynomial_map.domain, (0, 1)),
+    ).coordinates == (1, 0)
+    assert calls == 1
+
+
+def test_native_point_evaluation_rejects_maximum_degree_work() -> None:
+    polynomial_map, value = _max_point_evaluation()
+
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        evaluate_finite_polynomial(polynomial_map.polynomial, value)
+
+    assert error.value.errors() == (
+        {
+            "loc": ("polynomial",),
+            "type": "finite_field.finite_polynomial_evaluation_exceeds_operation_work_budget",
+            "msg": "finite polynomial evaluation exceeds the operation work budget",
+        },
     )
 
 

@@ -144,6 +144,22 @@ def test_petal_count_below_two_is_rejected() -> None:
         construct_sunflower_family(_family(((0,), (1,))), 1)
 
 
+def test_native_bool_petal_count_is_a_typed_domain_error() -> None:
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        construct_sunflower_family(_family(((0,), (1,))), True)  # type: ignore[arg-type]
+    error = exc_info.value.errors()[0]
+    assert error["loc"] == ("petal_count",)
+    assert error["type"] == "set_system.sunflower.petal_count_type"
+
+
+def test_native_non_family_source_is_a_typed_domain_error() -> None:
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        construct_sunflower_family({"members": ((0,), (1,))}, 2)  # type: ignore[arg-type]
+    error = exc_info.value.errors()[0]
+    assert error["loc"] == ("source",)
+    assert error["type"] == "set_system.sunflower.source_type"
+
+
 def test_hypergraph_projection_is_empty_but_source_bound_when_no_rows() -> None:
     result = construct_sunflower_family(_family(((0, 1), (0, 2), (1, 2))), 3)
     assert result.hypergraph.vertices == ("0", "1", "2")

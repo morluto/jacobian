@@ -1,11 +1,17 @@
 """Minimum generalized exact-cover tests."""
 
+import time
+from typing import Any, NoReturn
+
 import pytest
 
+import jacobian.math.combinatorics.exact_cover as exact_cover_module
+from jacobian._execution import OperationExecutionTimeoutError, request_execution
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.combinatorics.exact_cover import (
     ExactCoverRow,
     GeneralizedExactCoverInstance,
+    MinimumGeneralizedExactCoverResult,
     minimum_generalized_exact_cover,
 )
 
@@ -87,6 +93,59 @@ def test_infeasibility_requires_exhaustion() -> None:
         primary_items=("p",), secondary_items=(), rows=()
     )
     assert minimum_generalized_exact_cover(instance).status == "INFEASIBLE"
+
+
+def test_empty_primary_axis_has_empty_minimum_even_with_secondary_rows() -> None:
+    result = minimum_generalized_exact_cover(
+        GeneralizedExactCoverInstance(
+            primary_items=(),
+            secondary_items=("s",),
+            rows=(ExactCoverRow(row_id="unused", items=("s",)),),
+        )
+    )
+    assert result.status == "EXACT"
+    assert result.selected_row_ids == ()
+    assert result.lower_bound == result.upper_bound == 0
+    assert result.item_multiplicities is not None
+    assert result.item_multiplicities[0].item_id == "s"
+    assert result.item_multiplicities[0].multiplicity == 0
+
+
+def test_secondary_conflict_is_infeasible() -> None:
+    result = minimum_generalized_exact_cover(
+        GeneralizedExactCoverInstance(
+            primary_items=("p", "q"),
+            secondary_items=("s",),
+            rows=(
+                ExactCoverRow(row_id="p-s", items=("p", "s")),
+                ExactCoverRow(row_id="q-s", items=("q", "s")),
+            ),
+        )
+    )
+    assert result.status == "INFEASIBLE"
+
+
+def test_minimum_result_round_trip_does_not_replay_coverage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    result = minimum_generalized_exact_cover(_instance((("both", ("p", "q")),)))
+    payload = result.model_dump_json()
+
+    def fail_if_replayed(*args: Any, **kwargs: Any) -> NoReturn:
+        raise AssertionError("result parsing must not replay coverage")
+
+    monkeypatch.setattr(exact_cover_module, "_expected_coverage", fail_if_replayed)
+    restored = MinimumGeneralizedExactCoverResult.model_validate_json(payload)
+    assert restored.selected_row_ids == result.selected_row_ids
+    assert restored.item_multiplicities == result.item_multiplicities
+
+
+def test_minimum_search_honors_request_deadline() -> None:
+    with (
+        request_execution(time.monotonic(), outer_deadline=time.monotonic() - 1),
+        pytest.raises(OperationExecutionTimeoutError),
+    ):
+        minimum_generalized_exact_cover(_instance((("both", ("p", "q")),)))
 
 
 def test_node_limit_without_incumbent_is_an_operational_failure() -> None:

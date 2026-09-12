@@ -237,7 +237,7 @@ def test_final_layer_scan_charges_every_reachable_state() -> None:
         OperationResourceAdmissionError,
         match="symbol-Parikh DP or output exceeds",
     ):
-        symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=75))
+        symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=76))
 
 
 def _source_sensitive_dfa(
@@ -372,9 +372,9 @@ def test_near_envelope_profile_execution_matches_admission_charge(
 ) -> None:
     import jacobian.math.logic.languages.regular._symbol_parikh as profile
 
-    reachable_count = 12
-    alphabet_size = 37
-    length = 3
+    reachable_count = 15
+    alphabet_size = 11
+    length = 5
     dfa = DFA(
         state_count=reachable_count,
         alphabet_size=alphabet_size,
@@ -491,7 +491,7 @@ def test_near_envelope_profile_execution_matches_admission_charge(
     assert executed["transition_index"] == transition_count
     assert executed["commute_preflight"] == commute_preflight
     assert all(executed.values())
-    assert sum(charged.values()) == MAX_SYMBOL_PARIKH_DP_WORK - 520
+    assert sum(charged.values()) == MAX_SYMBOL_PARIKH_DP_WORK - 1_630
     assert_charged_work_parity(charged=charged, executed=executed)
 
 

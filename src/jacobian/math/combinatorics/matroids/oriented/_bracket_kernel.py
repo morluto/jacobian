@@ -55,17 +55,18 @@ def _combine(
             )
         canonical_key = tuple(sorted(multiplicities.items()))
         combined[canonical_key] = combined.get(canonical_key, Fraction(0)) + coefficient
-    if len(combined) > MAX_BRACKET_TERMS:
+    nonzero = {
+        key: coefficient for key, coefficient in combined.items() if coefficient != 0
+    }
+    if len(nonzero) > MAX_BRACKET_TERMS:
         raise OperationResourceAdmissionError(
             location=("terms",),
             code="bracket.syzygy_output_term_bound",
             message="the formal residual has too many sparse output terms",
         )
     terms = []
-    for monomial_key in sorted(combined):
-        coefficient = combined[monomial_key]
-        if coefficient == 0:
-            continue
+    for monomial_key in sorted(nonzero):
+        coefficient = nonzero[monomial_key]
         terms.append(
             BracketPolynomialTerm(
                 coefficient=CanonicalRational(
@@ -209,6 +210,42 @@ def _rational_component_digit_upper_bound(value: CanonicalRational) -> tuple[int
     )
 
 
+def _rational_product_digit_upper_bound(
+    left: CanonicalRational, right: CanonicalRational
+) -> tuple[int, int]:
+    """Bound component widths for a rational product without charging units."""
+
+    left_num_digits, left_den_digits = _rational_component_digit_upper_bound(left)
+    right_num_digits, right_den_digits = _rational_component_digit_upper_bound(right)
+    if right.den == 1 and abs(right.num) == 1:
+        return left_num_digits, left_den_digits
+    if left.den == 1 and abs(left.num) == 1:
+        return right_num_digits, right_den_digits
+    return left_num_digits + right_num_digits, left_den_digits + right_den_digits
+
+
+def _cancel_opposite_components(
+    components: list[tuple[Fraction, tuple[int, int]]],
+) -> list[tuple[Fraction, tuple[int, int]]]:
+    """Remove equal and opposite exact coefficient components."""
+
+    pending: dict[Fraction, list[tuple[int, int]]] = {}
+    for value, widths in components:
+        opposite = -value
+        opposite_widths = pending.get(opposite)
+        if opposite_widths:
+            opposite_widths.pop()
+            if not opposite_widths:
+                del pending[opposite]
+        else:
+            pending.setdefault(value, []).append(widths)
+    return [
+        (value, widths)
+        for value, component_widths in pending.items()
+        for widths in component_widths
+    ]
+
+
 def _exceeds_canonical_integer_bound(value: int) -> bool:
     """Check a nonnegative output integer without formatting huge values."""
 
@@ -250,11 +287,51 @@ def _admit_result_allocation(
         )
 
 
+def _admit_surviving_components(
+    coefficient_components: dict[
+        tuple[tuple[tuple[int, int, int], int], ...],
+        list[tuple[Fraction, tuple[int, int]]],
+    ],
+) -> tuple[set[tuple[tuple[tuple[int, int, int], int], ...]], int]:
+    """Return surviving support and its conservative coefficient-width bound."""
+
+    output_keys: set[tuple[tuple[tuple[int, int, int], int], ...]] = set()
+    coefficient_digit_bound = 0
+    for key, components in coefficient_components.items():
+        components = _cancel_opposite_components(components)
+        if not components:
+            continue
+        denominator_digit_bound = sum(widths[1] for _, widths in components)
+        if (
+            denominator_digit_bound <= MAX_BRACKET_COEFFICIENT_DIGITS
+            and sum((value for value, _ in components), Fraction(0)) == 0
+        ):
+            continue
+        output_keys.add(key)
+        numerator_digit_bound = max(
+            widths[0] + denominator_digit_bound - widths[1] for _, widths in components
+        )
+        sum_digit_overhead = (
+            0 if len(components) <= 1 else _integer_digit_upper_bound(len(components))
+        )
+        coefficient_digit_bound = max(
+            coefficient_digit_bound,
+            denominator_digit_bound,
+            numerator_digit_bound + sum_digit_overhead,
+        )
+    return output_keys, coefficient_digit_bound
+
+
 def _admit_residual_envelope(request: BracketSyzygyResidualRequest) -> None:
     """Admit source claims, sparse output, and exact coefficient growth up front."""
 
+    active_terms = tuple(
+        (scalar, multiplier, relation)
+        for scalar, multiplier, relation in request.terms
+        if scalar.num != 0
+    )
     contribution_count = len(request.target.terms) + sum(
-        len(relation.polynomial.terms) for _, _, relation in request.terms
+        len(relation.polynomial.terms) for _, _, relation in active_terms
     )
     if contribution_count > MAX_BRACKET_CONTRIBUTIONS:
         raise OperationResourceAdmissionError(
@@ -263,10 +340,8 @@ def _admit_residual_envelope(request: BracketSyzygyResidualRequest) -> None:
             message="the formal residual contribution count exceeds the bound",
         )
 
-    for _, _, relation in request.terms:
+    for _, _, relation in active_terms:
         _admit_source_relation(relation)
-
-    output_keys: set[tuple[tuple[tuple[int, int, int], int], ...]] = set()
 
     def admit_monomial(
         factors: tuple[tuple[CanonicalBracket, int], ...],
@@ -293,58 +368,42 @@ def _admit_residual_envelope(request: BracketSyzygyResidualRequest) -> None:
                 code="bracket.syzygy_monomial_factors",
                 message="every assembled monomial must fit the bracket-factor bound",
             )
-        output_keys.add(tuple(sorted(multiplicities.items())))
-        if len(output_keys) > MAX_BRACKET_TERMS:
-            raise OperationResourceAdmissionError(
-                location=("terms",),
-                code="bracket.syzygy_output_term_bound",
-                message="the formal residual has too many sparse output terms",
-            )
         return tuple(sorted(multiplicities.items()))
 
     coefficient_components: dict[
-        tuple[tuple[tuple[int, int, int], int], ...], list[tuple[int, int]]
+        tuple[tuple[tuple[int, int, int], int], ...],
+        list[tuple[Fraction, tuple[int, int]]],
     ] = {}
     for term in request.target.terms:
         key = admit_monomial(term.monomial.factors)
         coefficient_components.setdefault(key, []).append(
-            _rational_component_digit_upper_bound(term.coefficient)
+            (
+                term.coefficient.as_fraction(),
+                _rational_component_digit_upper_bound(term.coefficient),
+            )
         )
-    for scalar, multiplier, relation in request.terms:
-        scalar_num_digits, scalar_den_digits = _rational_component_digit_upper_bound(
-            scalar
-        )
+    for scalar, multiplier, relation in active_terms:
+        scalar_value = scalar.as_fraction()
         for term in relation.polynomial.terms:
             key = admit_monomial(multiplier.factors + term.monomial.factors)
-            term_num_digits, term_den_digits = _rational_component_digit_upper_bound(
-                term.coefficient
-            )
+            if term.coefficient.num == 1:
+                coefficient = -scalar_value
+            elif term.coefficient.num == -1:
+                coefficient = scalar_value
+            else:
+                coefficient = -scalar_value * term.coefficient.as_fraction()
             coefficient_components.setdefault(key, []).append(
                 (
-                    scalar_num_digits + term_num_digits,
-                    scalar_den_digits + term_den_digits,
+                    coefficient,
+                    _rational_product_digit_upper_bound(scalar, term.coefficient),
                 )
             )
 
     if not coefficient_components:
         return
-    coefficient_digit_bound = 0
-    for components in coefficient_components.values():
-        denominator_digit_bound = sum(
-            denominator_digits for _, denominator_digits in components
-        )
-        numerator_digit_bound = max(
-            numerator_digits + denominator_digit_bound - denominator_digits
-            for numerator_digits, denominator_digits in components
-        )
-        sum_digit_overhead = (
-            0 if len(components) <= 1 else _integer_digit_upper_bound(len(components))
-        )
-        coefficient_digit_bound = max(
-            coefficient_digit_bound,
-            denominator_digit_bound,
-            numerator_digit_bound + sum_digit_overhead,
-        )
+    output_keys, coefficient_digit_bound = _admit_surviving_components(
+        coefficient_components
+    )
     if coefficient_digit_bound > MAX_BRACKET_COEFFICIENT_DIGITS:
         raise OperationResourceAdmissionError(
             location=("terms",),
@@ -384,6 +443,8 @@ def bracket_syzygy_residual(request: BracketSyzygyResidualRequest) -> BracketPol
     for term in request.target.terms:
         contributions.append((term.coefficient.as_fraction(), term.monomial.factors))
     for scalar, multiplier, relation in request.terms:
+        if scalar.num == 0:
+            continue
         for term in relation.polynomial.terms:
             contributions.append(
                 (

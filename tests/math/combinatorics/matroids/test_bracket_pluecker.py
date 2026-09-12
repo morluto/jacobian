@@ -242,6 +242,30 @@ def test_syzygy_residual_cancels_a_supplied_relation() -> None:
     assert residual.terms == ()
 
 
+def test_syzygy_skips_zero_scaled_oversized_multiplier() -> None:
+    relation = grassmann_pluecker_relation(
+        GrassmannPlueckerRelationRequest(
+            ground_size=12,
+            indices=(0, 1, 2, 3, 4, 5),
+            family="FOUR_TERM",
+        )
+    )
+    multiplier = BracketMonomial(
+        factors=(
+            (CanonicalBracket(indices=(6, 7, 8)), 1),
+            (CanonicalBracket(indices=(6, 7, 9)), 1),
+            (CanonicalBracket(indices=(6, 10, 11)), 1),
+        )
+    )
+    residual = bracket_syzygy_residual(
+        BracketSyzygyResidualRequest(
+            target=relation.polynomial,
+            terms=((CanonicalRational(num=0, den=1), multiplier, relation),),
+        )
+    )
+    assert residual == relation.polynomial
+
+
 def test_syzygy_residual_retains_nonzero_scalar_and_multiplier() -> None:
     relation = grassmann_pluecker_relation(
         GrassmannPlueckerRelationRequest(
@@ -414,6 +438,70 @@ def test_syzygy_rejects_513_distinct_output_terms_before_expansion() -> None:
         )
 
 
+def test_syzygy_accepts_512_terms_after_two_relation_cancellations() -> None:
+    relation = grassmann_pluecker_relation(
+        GrassmannPlueckerRelationRequest(
+            ground_size=12,
+            indices=(0, 1, 2, 3, 4, 5),
+            family="FOUR_TERM",
+        )
+    )
+    relation_keys = {
+        tuple(
+            (factor.indices, multiplicity)
+            for factor, multiplicity in term.monomial.factors
+        )
+        for term in relation.polynomial.terms
+    }
+    target_terms = list(relation.polynomial.terms[:2])
+    brackets = [
+        CanonicalBracket(indices=triple) for triple in combinations(range(12), 3)
+    ]
+    unrelated_keys = set(relation_keys)
+    for left, right in combinations(brackets, 2):
+        factors = tuple(
+            sorted(((left, 1), (right, 1)), key=lambda item: item[0].indices)
+        )
+        key = tuple((factor.indices, multiplicity) for factor, multiplicity in factors)
+        if key in unrelated_keys:
+            continue
+        target_terms.append(
+            BracketPolynomialTerm(
+                coefficient=CanonicalRational(num=1, den=1),
+                monomial=BracketMonomial(factors=factors),
+            )
+        )
+        unrelated_keys.add(key)
+        if len(target_terms) == 512:
+            break
+    assert len(target_terms) == 512
+    target = BracketPolynomial(
+        ground_size=12,
+        terms=tuple(
+            sorted(
+                target_terms,
+                key=lambda term: tuple(
+                    (factor.indices, multiplicity)
+                    for factor, multiplicity in term.monomial.factors
+                ),
+            )
+        ),
+    )
+    residual = bracket_syzygy_residual(
+        BracketSyzygyResidualRequest(
+            target=target,
+            terms=(
+                (
+                    CanonicalRational(num=1, den=1),
+                    BracketMonomial(factors=()),
+                    relation,
+                ),
+            ),
+        )
+    )
+    assert len(residual.terms) == 512
+
+
 def test_syzygy_rejects_unbounded_intermediate_coefficient_digits() -> None:
     relation = grassmann_pluecker_relation(
         GrassmannPlueckerRelationRequest(
@@ -520,6 +608,61 @@ def test_syzygy_rejects_result_allocation_growth_before_combine() -> None:
     with pytest.raises(OperationResourceAdmissionError) as error:
         bracket_syzygy_residual(BracketSyzygyResidualRequest(target=target, terms=()))
     assert error.value.errors()[0]["type"] == "bracket.syzygy_result_allocation_bound"
+
+
+def test_syzygy_cancels_opposite_large_coefficients_before_bound() -> None:
+    relation = grassmann_pluecker_relation(
+        GrassmannPlueckerRelationRequest(
+            ground_size=5,
+            indices=(0, 1, 2, 3, 4),
+            family="SHARED_INDEX_THREE_TERM",
+        )
+    )
+    denominator = 10**20_000
+    residual = bracket_syzygy_residual(
+        BracketSyzygyResidualRequest(
+            target=BracketPolynomial(ground_size=5, terms=()),
+            terms=(
+                (
+                    CanonicalRational(num=1, den=denominator),
+                    BracketMonomial(factors=()),
+                    relation,
+                ),
+                (
+                    CanonicalRational(num=-1, den=denominator),
+                    BracketMonomial(factors=()),
+                    relation,
+                ),
+            ),
+        )
+    )
+    assert residual.terms == ()
+
+
+def test_syzygy_unit_relation_coefficients_preserve_maximum_scalar_width() -> None:
+    relation = grassmann_pluecker_relation(
+        GrassmannPlueckerRelationRequest(
+            ground_size=6,
+            indices=(0, 1, 2, 3, 4, 5),
+            family="FOUR_TERM",
+        )
+    )
+    scalar = 10**32_767
+    residual = bracket_syzygy_residual(
+        BracketSyzygyResidualRequest(
+            target=BracketPolynomial(ground_size=6, terms=()),
+            terms=(
+                (
+                    CanonicalRational(num=scalar, den=1),
+                    BracketMonomial(factors=()),
+                    relation,
+                ),
+            ),
+        )
+    )
+    assert len(residual.terms) == 4
+    assert {abs(term.coefficient.num) for term in residual.terms} == {scalar}
+    assert {term.coefficient.den for term in residual.terms} == {1}
 
 
 def test_compressed_large_multiplicity_survives_residual_and_json() -> None:

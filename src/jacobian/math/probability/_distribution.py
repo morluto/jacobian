@@ -25,6 +25,22 @@ MAX_FINITE_CONVOLUTION_POWER = 10**15
 MAX_FINITE_DISTRIBUTION_SUM_DIGITS = MAX_RESULT_RATIONAL_DIGITS
 
 
+def _decimal_digits(value: int) -> int:
+    magnitude = abs(value)
+    if magnitude <= 1:
+        return 1
+    return magnitude.bit_length() * 30_103 // 100_000 + 1
+
+
+def _two_three_kernel(value: int) -> int:
+    kernel = abs(value) or 1
+    while kernel % 2 == 0:
+        kernel //= 2
+    while kernel % 3 == 0:
+        kernel //= 3
+    return kernel
+
+
 def _bounded_fraction_sum(
     values: tuple[Fraction, ...],
     *,
@@ -32,22 +48,34 @@ def _bounded_fraction_sum(
 ) -> Fraction:
     """Sum nonnegative rationals without paying source-order LCD growth.
 
-    Equal-denominator numerators are collected first so complementary masses
-    on a shared denominator reduce before distinct primes are combined. The
-    512-digit intermediate bound then applies to the reduced running total,
-    except when that total is exactly one.
+    Masses are bucketed by the 2-3-free kernel of each denominator so
+    complementary pairs such as ``1/(6p)`` and ``(p-1)/(6p)`` reduce before
+    unrelated primes are combined. Unique reduced denominators are then
+    digit-budgeted so a unit-sum law cannot force unbounded GCD work.
     """
 
-    numerators_by_denominator: dict[int, int] = {}
+    buckets: dict[int, Fraction] = {}
     for value in values:
-        denominator = value.denominator
-        numerators_by_denominator[denominator] = (
-            numerators_by_denominator.get(denominator, 0) + value.numerator
-        )
+        kernel = _two_three_kernel(value.denominator)
+        buckets[kernel] = buckets.get(kernel, Fraction()) + value
+    seen_denominators: set[int] = set()
+    denominator_digits = 0
+    reduced: list[Fraction] = []
+    for term in buckets.values():
+        reduced.append(term)
+        if term.denominator in seen_denominators:
+            continue
+        seen_denominators.add(term.denominator)
+        denominator_digits += _decimal_digits(term.denominator)
+        if denominator_digits > MAX_FINITE_DISTRIBUTION_SUM_DIGITS:
+            raise _validation_error(
+                f"{label} normalization exceeds the "
+                f"{MAX_FINITE_DISTRIBUTION_SUM_DIGITS}-digit intermediate bound"
+            )
     total = Fraction()
     limit = 10**MAX_FINITE_DISTRIBUTION_SUM_DIGITS
-    for denominator, numerator in numerators_by_denominator.items():
-        total += Fraction(numerator, denominator)
+    for term in reduced:
+        total += term
         if total == 1:
             continue
         if abs(total.numerator) >= limit or total.denominator >= limit:

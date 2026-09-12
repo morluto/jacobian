@@ -179,3 +179,19 @@ def test_prefix_round_trips_through_strict_json() -> None:
         encode_strict_json(result.model_dump(mode="json")), strict=True
     )
     assert restored == result
+
+
+@pytest.mark.parametrize("polynomial", [(2, 0, -4), (1, 0, -1), (1, 0, 0, -2, 0)])
+def test_noncanonical_algebraic_sources_are_rejected(
+    polynomial: tuple[int, ...],
+) -> None:
+    from jacobian.catalog.models import OperationDomainValidationError
+
+    with pytest.raises(OperationDomainValidationError):
+        radix_prefix(
+            RadixPrefixRequest(
+                value=RealAlgebraicValue(polynomial=polynomial, real_root_index=0),
+                base=10,
+                fractional_places=10,
+            )
+        )

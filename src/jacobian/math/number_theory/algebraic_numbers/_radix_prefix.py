@@ -24,6 +24,7 @@ from jacobian.catalog.models import (
 from jacobian.math.number_theory.algebraic_numbers.real import (
     RealAlgebraicInteger,
     RealAlgebraicValue,
+    _admit_real_polynomial,
 )
 
 MAX_RADIX_BASE = 36
@@ -135,12 +136,12 @@ def _rational_prefix(
     scaled = value * scale
     scaled_floor = scaled.numerator // scaled.denominator
     integer_part, remainder = divmod(scaled_floor, scale)
-    digits: list[int] = []
+    fractional_digits: list[int] = []
     for _ in range(fractional_places):
         remainder *= base
         digit, remainder = divmod(remainder, scale)
-        digits.append(int(digit))
-    return int(integer_part), tuple(digits)
+        fractional_digits.append(int(digit))
+    return int(integer_part), tuple(fractional_digits)
 
 
 def _selected_root_value(value: RealAlgebraicValue) -> Fraction | None:
@@ -199,8 +200,15 @@ def radix_prefix(request: RadixPrefixRequest) -> RadixPrefixResult:
     """Return the exact base-b prefix of one canonical real algebraic value."""
 
     _require_request(request.base, request.fractional_places)
+    _admit_real_polynomial(request.value)
     rational = _rational_value(request.value)
     if rational is not None:
+        if request.value.real_root_index != 0:
+            raise OperationDomainValidationError(
+                location=("value", "real_root_index"),
+                code="algebraic_number.radix_root_index",
+                message="a linear polynomial has exactly one real root",
+            )
         integer_part, digits = _rational_prefix(
             rational, request.base, request.fractional_places
         )
@@ -216,15 +224,15 @@ def radix_prefix(request: RadixPrefixRequest) -> RadixPrefixResult:
     )
     scale = request.base**request.fractional_places
     integer_part, remainder = divmod(scaled, scale)
-    digits: list[int] = []
+    fractional_digits: list[int] = []
     for _ in range(request.fractional_places):
         remainder *= request.base
         digit, remainder = divmod(remainder, scale)
-        digits.append(int(digit))
+        fractional_digits.append(int(digit))
     return RadixPrefixResult(
         value=request.value,
         base=request.base,
         fractional_places=request.fractional_places,
         integer_part=integer_part,
-        fractional_digits=tuple(digits),
+        fractional_digits=tuple(fractional_digits),
     )

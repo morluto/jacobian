@@ -85,6 +85,49 @@ def _balanced_multiplication_work(limbs: int) -> int:
     return work + count * (size * size + 2 * size)
 
 
+def _product_tree_work(factor_count: int, factor_digits: int) -> int:
+    """Bound a balanced product tree of equal-width factors."""
+
+    if factor_count <= 1:
+        return 0
+    work = 0
+    widths = [factor_digits] * factor_count
+    while len(widths) > 1:
+        nxt: list[int] = []
+        for index in range(0, len(widths), 2):
+            if index + 1 == len(widths):
+                nxt.append(widths[index])
+                continue
+            left = widths[index]
+            right = widths[index + 1]
+            work += _multiplication_work(
+                _limbs_for_digits(left), _limbs_for_digits(right)
+            )
+            if work > MAX_HOOK_CONTENT_WORK:
+                return work
+            nxt.append(left + right)
+        widths = nxt
+    return work
+
+
+def _balanced_product(values: tuple[int, ...]) -> int:
+    """Multiply factors in a balanced tree matching the admission cost model."""
+
+    if not values:
+        return 1
+    pending = list(values)
+    while len(pending) > 1:
+        nxt: list[int] = []
+        for index in range(0, len(pending), 2):
+            if index + 1 == len(pending):
+                nxt.append(pending[index])
+            else:
+                nxt.append(pending[index] * pending[index + 1])
+        pending = nxt
+        request_checkpoint("during hook-content product tree")
+    return pending[0]
+
+
 def _multiplication_work(a_limbs: int, b_limbs: int) -> int:
     """Bound one multiplication of the given limb sizes via blocking."""
 
@@ -138,27 +181,21 @@ def _admit_hook_content(partition: IntegerPartition, alphabet_size: int) -> None
             message="hook-content factors exceed the exact output digit bound",
         )
 
-    # The kernel accumulates each product left to right, so the i-th numerator
-    # multiplication joins an accumulator of at most i factor widths with one
-    # new factor; hooks accumulate likewise.  Charge every multiplication at
-    # its own admitted size (not at the final size, and not as a fixed-size
-    # digit-square product, which excludes cheap large-scalar requests), plus
-    # the final exact division charged by the divisor width.
+    # Charge a balanced product tree of the admitted factor widths, then the
+    # exact division by the hook product.  Left-to-right accumulation of many
+    # similar-width factors overcharges cheap multi-cell counts near the
+    # exact-output digit boundary.
     factor_limbs = _limbs_for_digits(factor_digits)
     hook_limbs = _limbs_for_digits(hook_digits)
     hook_product_digits = cell_count * hook_digits
-    work = 0
-    for step in range(1, cell_count):
-        accumulator_limbs = _limbs_for_digits(step * factor_digits)
-        work += _multiplication_work(accumulator_limbs, factor_limbs)
-        accumulator_hook_limbs = _limbs_for_digits(step * hook_digits)
-        work += _multiplication_work(accumulator_hook_limbs, hook_limbs)
-        if work > MAX_HOOK_CONTENT_WORK:
-            raise OperationResourceAdmissionError(
-                location=("alphabet_size",),
-                code="algebraic_combinatorics.hook_content_work",
-                message="hook-content arithmetic exceeds the admitted work bound",
-            )
+    work = _product_tree_work(cell_count, factor_digits)
+    work += _product_tree_work(cell_count, hook_digits)
+    if work > MAX_HOOK_CONTENT_WORK:
+        raise OperationResourceAdmissionError(
+            location=("alphabet_size",),
+            code="algebraic_combinatorics.hook_content_work",
+            message="hook-content arithmetic exceeds the admitted work bound",
+        )
     work += _multiplication_work(
         _limbs_for_digits(output_digits), _limbs_for_digits(hook_product_digits)
     )
@@ -278,17 +315,8 @@ def hook_content_count(partition: IntegerPartition, alphabet_size: int) -> int:
         for row, length in enumerate(partition.parts)
         for column in range(length)
     )
-    numerator_product = 1
-    for index, factor in enumerate(numerators):
-        if index and index % 32 == 0:
-            request_checkpoint("during hook-content numerator accumulation")
-        numerator_product *= factor
-    hook_product = 1
-    for index, row in enumerate(hooks):
-        for position, hook in enumerate(row):
-            if (index + position) and (index + position) % 32 == 0:
-                request_checkpoint("during hook-content hook accumulation")
-            hook_product *= hook
+    numerator_product = _balanced_product(numerators)
+    hook_product = _balanced_product(tuple(hook for row in hooks for hook in row))
     quotient = Fraction(numerator_product, hook_product)
     if quotient.denominator != 1:
         raise ValueError("hook-content formula did not produce an integer")

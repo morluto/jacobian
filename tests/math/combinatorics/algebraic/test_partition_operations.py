@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from typing import NoReturn
 
 import pytest
@@ -180,6 +181,23 @@ def test_hook_content_admits_two_cell_count_near_digit_limit() -> None:
     )
     result = hook_content_count(request)
     assert result.count == alphabet_size * (alphabet_size + 1) // 2
+    assert result.alphabet_size == alphabet_size
+
+
+def test_hook_content_admits_multi_cell_count_near_digit_limit() -> None:
+    # Fifty ~655-digit factors yield a 32,636-digit count. A balanced product
+    # tree keeps the work well below the 8M envelope; left-to-right charging
+    # of growing accumulators previously rejected this cheap request.
+    alphabet_size = 10**654
+    request = HookContentCountRequest.model_validate(
+        {"partition": {"parts": [50]}, "alphabet_size": alphabet_size}
+    )
+    result = hook_content_count(request)
+    expected = 1
+    for column in range(50):
+        expected *= alphabet_size + column
+    expected //= math.factorial(50)
+    assert result.count == expected
     assert result.alphabet_size == alphabet_size
 
 

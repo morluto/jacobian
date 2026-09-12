@@ -1,7 +1,7 @@
 """Exact symbol-level Parikh profiles for accepted DFA words."""
 
 from math import comb
-from typing import Self
+from typing import Annotated, Self
 
 from pydantic import Field, StrictInt, model_validator
 
@@ -41,7 +41,7 @@ class SymbolParikhProfileRequest(StrictModel):
 class SymbolParikhCell(StrictModel):
     """One canonical symbol-count vector and its positive exact multiplicity."""
 
-    symbol_counts: tuple[StrictInt, ...] = Field(
+    symbol_counts: tuple[Annotated[StrictInt, Field(ge=0)], ...] = Field(
         max_length=MAX_DFA_ALPHABET,
         description=(
             "Dense nonnegative counts on the DFA alphabet axis; coordinates sum "

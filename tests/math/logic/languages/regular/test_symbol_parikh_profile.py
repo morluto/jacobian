@@ -88,17 +88,25 @@ def test_length_zero_retains_empty_count_vector() -> None:
 
 
 def test_profile_result_rejects_noncanonical_claimed_cells() -> None:
+    from pydantic import ValidationError
+
     from jacobian.math.logic.languages.regular._symbol_parikh import (
         SymbolParikhCell,
         SymbolParikhProfileResult,
     )
+
+    with pytest.raises(ValidationError):
+        SymbolParikhCell(symbol_counts=(4, -1), multiplicity=1)
+
+    with pytest.raises(ValidationError):
+        SymbolParikhCell(symbol_counts=(-1, 2), multiplicity=1)
 
     with pytest.raises(ValueError, match="nonnegative and sum"):
         SymbolParikhProfileResult(
             dfa=ending_in_one(),
             alphabet=(0, 1),
             word_length=3,
-            cells=(SymbolParikhCell(symbol_counts=(4, -1), multiplicity=1),),
+            cells=(SymbolParikhCell(symbol_counts=(4, 0), multiplicity=1),),
             total_accepted_words=1,
         )
 

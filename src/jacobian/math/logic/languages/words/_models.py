@@ -10,6 +10,7 @@ from pydantic_core import PydanticCustomError
 from jacobian._models import StrictModel
 from jacobian.math.logic.languages.words.values import (
     MAX_MORPHISM_OUTPUT_LENGTH,
+    MAX_WORD_LENGTH,
     FiniteWord,
     ProlongableSubstitution,
     Substitution,
@@ -32,7 +33,7 @@ class WordFamilyRequest(StrictModel):
 class WordPrefixesResult(WordFamilyRequest):
     """Complete prefix family, including the empty prefix."""
 
-    prefixes: tuple[FiniteWord, ...]
+    prefixes: tuple[FiniteWord, ...] = Field(max_length=MAX_WORD_LENGTH + 1)
 
     @model_validator(mode="after")
     def require_prefix_axis(self) -> Self:
@@ -57,7 +58,7 @@ class WordPrefixesResult(WordFamilyRequest):
 class WordSuffixesResult(WordFamilyRequest):
     """Complete suffix family, including the empty suffix."""
 
-    suffixes: tuple[FiniteWord, ...]
+    suffixes: tuple[FiniteWord, ...] = Field(max_length=MAX_WORD_LENGTH + 1)
 
     @model_validator(mode="after")
     def require_suffix_axis(self) -> Self:

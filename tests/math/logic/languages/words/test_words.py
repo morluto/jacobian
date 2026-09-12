@@ -60,6 +60,10 @@ from jacobian.math.logic.languages.words._tools import (
     compute_substitution_primitivity_profile,
     compute_suffixes,
 )
+from jacobian.math.logic.languages.words.values import (
+    MAX_ALPHABET_SIZE,
+    MAX_WORD_LENGTH,
+)
 
 
 @contextmanager
@@ -127,6 +131,55 @@ def test_prefix_and_suffix_families_are_complete_and_serializable() -> None:
         WordSuffixesResult.model_validate_json(suffix_result.model_dump_json())
         == suffix_result
     )
+
+
+@pytest.mark.parametrize(
+    ("result_type", "field_name"),
+    ((WordPrefixesResult, "prefixes"), (WordSuffixesResult, "suffixes")),
+)
+def test_word_family_result_rejects_over_bound_serialized_axis(
+    result_type: type[WordPrefixesResult] | type[WordSuffixesResult],
+    field_name: str,
+) -> None:
+    source = _word("")
+    payload = {
+        "word": source.model_dump(mode="json"),
+        field_name: [source.model_dump(mode="json")] * (MAX_WORD_LENGTH + 2),
+    }
+
+    with pytest.raises(ValidationError) as error:
+        result_type.model_validate_json(json.dumps(payload))
+    assert error.value.errors()[0]["type"] == "too_long"
+
+
+def test_word_family_operations_retain_empty_alphabet_and_empty_word() -> None:
+    source = FiniteWord(alphabet=(), letters=())
+
+    prefixes_result = compute_prefixes(WordFamilyRequest(word=source))
+    suffixes_result = compute_suffixes(WordFamilyRequest(word=source))
+
+    assert prefixes_result.prefixes == (source,)
+    assert suffixes_result.suffixes == (source,)
+
+
+def test_word_family_operations_retain_both_maximum_axes() -> None:
+    alphabet = tuple(f"s{index}" for index in range(MAX_ALPHABET_SIZE))
+    source = FiniteWord(
+        alphabet=alphabet,
+        letters=(alphabet[0],) * MAX_WORD_LENGTH,
+    )
+
+    prefixes_result = compute_prefixes(WordFamilyRequest(word=source))
+    suffixes_result = compute_suffixes(WordFamilyRequest(word=source))
+
+    assert len(prefixes_result.prefixes) == MAX_WORD_LENGTH + 1
+    assert len(suffixes_result.suffixes) == MAX_WORD_LENGTH + 1
+    assert prefixes_result.prefixes[0] == FiniteWord(alphabet=alphabet, letters=())
+    assert prefixes_result.prefixes[-1] == source
+    assert suffixes_result.suffixes[0] == source
+    assert suffixes_result.suffixes[-1] == FiniteWord(alphabet=alphabet, letters=())
+    assert all(item.alphabet == alphabet for item in prefixes_result.prefixes)
+    assert all(item.alphabet == alphabet for item in suffixes_result.suffixes)
 
 
 def test_narrowed_scalar_symbol_contract_rejects_lone_surrogates() -> None:

@@ -193,6 +193,19 @@ def _gzero(value: Gaussian) -> bool:
     return not value[0] and not value[1]
 
 
+def _gaussian_proportional(left: Polynomial, right: Polynomial) -> bool:
+    if left.keys() != right.keys() or not left:
+        return False
+    first = next(iter(left))
+    scale_left, scale_right = left[first], right[first]
+    if _gzero(scale_right):
+        return False
+    return all(
+        _gmul(left[support], scale_right) == _gmul(right[support], scale_left)
+        for support in left
+    )
+
+
 def _poly_add(left: Polynomial, right: Polynomial) -> Polynomial:
     result = dict(left)
     for support, coefficient in right.items():
@@ -436,6 +449,22 @@ def _polynomial_from_payload(payload: object) -> Polynomial:
     return result
 
 
+def _bounding_box_term_count(polynomial: Polynomial) -> int:
+    """Sound dense-support bound for a Laurent polynomial after cancellation."""
+
+    if not polynomial:
+        return 0
+    axis = len(next(iter(polynomial)))
+    bound = 1
+    for index in range(axis):
+        lo = min(support[index] for support in polynomial)
+        hi = max(support[index] for support in polynomial)
+        bound *= hi - lo + 1
+        if bound > MAX_TRIG_LAURENT_TERMS:
+            return bound
+    return bound
+
+
 def _reduce_common_laurent_factor(
     numerator: Polynomial, denominator: Polynomial
 ) -> RationalFunction:
@@ -446,6 +475,10 @@ def _reduce_common_laurent_factor(
     axis = len(next(iter(denominator)))
     if axis == 0 or len(numerator) == 1 or len(denominator) == 1:
         return _canonicalize(numerator, denominator)
+    if _gaussian_proportional(numerator, denominator):
+        first = next(iter(numerator))
+        constant = _gdiv(numerator[first], denominator[first])
+        return _canonicalize(_scale(_one(axis), constant), _one(axis))
 
     # Shift both Laurent polynomials into an ordinary polynomial ring.  This
     # is multiplication by one common torus monomial and does not change the
@@ -471,6 +504,14 @@ def _reduce_common_laurent_factor(
         for support, coefficient in denominator.items()
     }
     if len(shifted_numerator) * len(shifted_denominator) > MAX_TRIG_LAURENT_TERMS:
+        _refuse_growth()
+    if (
+        max(
+            _bounding_box_term_count(shifted_numerator),
+            _bounding_box_term_count(shifted_denominator),
+        )
+        > MAX_TRIG_LAURENT_TERMS
+    ):
         _refuse_growth()
 
     response = cancel_common_factor(

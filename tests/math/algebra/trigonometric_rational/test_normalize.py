@@ -281,3 +281,30 @@ def test_monomial_numerator_skips_the_gcd_worker(
     )
     result = normalize_trigonometric_rational(request)
     assert len(result.numerator.terms) == 1
+
+
+def test_reduced_quotient_support_is_bounded_before_gcd() -> None:
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x", "y"],
+            "expression": {
+                "kind": "DIVIDE",
+                "numerator": {
+                    "kind": "MULTIPLY",
+                    "children": [
+                        {"kind": "SINE", "angle": {"coefficients": [65, 0]}},
+                        {"kind": "SINE", "angle": {"coefficients": [0, 65]}},
+                    ],
+                },
+                "denominator": {
+                    "kind": "MULTIPLY",
+                    "children": [
+                        {"kind": "SINE", "angle": {"coefficients": [1, 0]}},
+                        {"kind": "SINE", "angle": {"coefficients": [0, 1]}},
+                    ],
+                },
+            },
+        }
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="support"):
+        normalize_trigonometric_rational(request)

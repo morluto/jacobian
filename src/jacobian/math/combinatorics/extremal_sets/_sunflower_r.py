@@ -424,6 +424,16 @@ def construct_sunflower_family(
             sunflowers=(),
             hypergraph=FiniteHypergraph(vertices=vertices, edges=()),
         )
+    # Every distinct pair is a sunflower, so C(m, 2) is the exact row count.
+    if petal_count == 2:
+        _admit_qualifying_result(
+            source,
+            petal_count,
+            member_count,
+            source_units,
+            comb(member_count, 2),
+            max((len(member) for member in source.members), default=0),
+        )
     request_checkpoint("before sunflower member expansion")
     sets = tuple(frozenset(member) for member in source.members)
     sizes = tuple(len(member) for member in source.members)

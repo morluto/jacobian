@@ -254,6 +254,23 @@ def test_result_allocation_is_admitted_before_row_construction(
         construct_sunflower_family(source, 2)
 
 
+def test_r2_allocation_is_refused_before_enumerating_every_pair(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """155 members of a 350-core plus a unique petal exceed the 16M-unit result bound."""
+    labels: list[str] = []
+    monkeypatch.setattr(
+        sunflower_module,
+        "request_checkpoint",
+        lambda label: labels.append(label),
+    )
+    core = tuple(range(350))
+    members = tuple((*core, 350 + index) for index in range(155))
+    with pytest.raises(OperationResourceAdmissionError, match="allocation units"):
+        construct_sunflower_family(_family(members, ground=505), 2)
+    assert "before sunflower member expansion" not in labels
+
+
 def test_exact_candidate_count_at_the_output_boundary_is_admitted() -> None:
     source = _family(tuple((index,) for index in range(155)), ground=155)
     result = construct_sunflower_family(source, 2)

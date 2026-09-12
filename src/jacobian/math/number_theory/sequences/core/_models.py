@@ -348,18 +348,16 @@ def _finite_sequence_json_schema(
     core_schema_obj: core_schema.CoreSchema,
     handler: GetJsonSchemaHandler,
 ) -> dict[str, Any]:
-    if cls is not FiniteSequence:
-        return handler(core_schema_obj)
     schema = dict(handler(core_schema_obj))
-    if "type" not in schema:
+    if cls is FiniteSequence and "type" not in schema:
         schema["type"] = "object"
     return schema
 
 
-FiniteSequence.__get_pydantic_core_schema__ = classmethod(  # type: ignore[method-assign, assignment]
+FiniteSequence.__get_pydantic_core_schema__ = classmethod(  # type: ignore[method-assign,assignment]
     _finite_sequence_core_schema
 )
-FiniteSequence.__get_pydantic_json_schema__ = classmethod(  # type: ignore[method-assign, assignment]
+FiniteSequence.__get_pydantic_json_schema__ = classmethod(  # type: ignore[method-assign,assignment]
     _finite_sequence_json_schema
 )
 FiniteSequence.model_rebuild(force=True)

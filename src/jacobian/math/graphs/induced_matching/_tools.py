@@ -18,7 +18,12 @@ TOOLS: MathTools = (
     MathTool(
         operation_id="graph.induced_matching.maximum.compute",
         title="Compute a maximum induced matching",
-        description="Reduce source edges to an admitted conflict graph and return an exact or bounded induced matching with its induced endpoint graph.",
+        description=(
+            "Reduce source edges to a private conflict graph and return an exact "
+            "or bounded maximum induced matching with its complete endpoint "
+            "subgraph; the input must be a canonical finite simple graph with "
+            "no more than the declared conflict-graph edge-order budget."
+        ),
         request_type=MaximumInducedMatchingRequest,
         result_type=MaximumInducedMatchingResult,
         run=_compute,
@@ -26,7 +31,11 @@ TOOLS: MathTools = (
         examples=(
             OperationExample(
                 name="path_four",
-                description="The three-edge path has induced matching number one.",
+                description=(
+                    "Compute the maximum induced matching of the three-edge path; "
+                    "the graph is a canonical finite simple graph and fits the "
+                    "declared conflict-graph order budget."
+                ),
                 input={
                     "graph": {
                         "vertices": ["0", "1", "2", "3"],

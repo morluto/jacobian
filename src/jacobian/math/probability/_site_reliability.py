@@ -16,7 +16,6 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
-from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -38,8 +37,10 @@ MAX_SITE_RELIABILITY_RATIONAL_DIGITS = (
     MAX_INPUT_RATIONAL_DIGITS * MAX_SITE_RELIABILITY_VERTICES
     + MAX_SITE_RELIABILITY_VERTICES
 )
-MAX_SITE_RELIABILITY_OUTPUT_BYTES = 64_000_000
-MAX_SITE_RELIABILITY_LEDGER_UNITS = MAX_SITE_RELIABILITY_OUTPUT_BYTES
+# One unit reserves either a retained scalar digit, label code point, container
+# slot, or fixed record field.  This is a mathematical allocation envelope;
+# concrete transports own their independent encoded-byte ceilings.
+MAX_SITE_RELIABILITY_LEDGER_UNITS = 64_000_000
 MAX_SITE_RELIABILITY_LOGICAL_WORK = MAX_SITE_RELIABILITY_STATES * (
     4 * MAX_SITE_RELIABILITY_VERTICES + 4 * MAX_SITE_RELIABILITY_EDGES + 16
 )
@@ -304,54 +305,37 @@ def _admit_site_request(
             ),
         )
 
-    def json_string_size(value: str) -> int:
-        return len(encode_strict_json(value))
-
-    def json_array_size(item_sizes: tuple[int, ...]) -> int:
-        return 2 + max(len(item_sizes) - 1, 0) + sum(item_sizes)
-
-    def json_object_size(fields: tuple[tuple[str, int], ...]) -> int:
-        return (
-            2
-            + max(len(fields) - 1, 0)
-            + sum(
-                json_string_size(name) + 1 + value_size for name, value_size in fields
-            )
-        )
-
-    source_bytes = len(encode_strict_json(request.model_dump(mode="json")))
-    rational_bytes = len(
-        encode_strict_json({"num": "9" * rational_digits, "den": "9" * rational_digits})
+    # Across a complete powerset, every vertex occurs in exactly half of the
+    # retained state rows.  Rational digit units cover both exact components
+    # of every state mass and of the final sum.  Source strings are counted as
+    # code points and graph incidences as slots, independently of any wire
+    # encoding chosen by a caller.
+    state_memberships = (
+        len(request.graph.vertices) * (state_count // 2)
+        if request.graph.vertices
+        else 0
     )
-    open_vertices_bytes = json_array_size(
-        tuple(json_string_size(vertex) for vertex in request.graph.vertices)
+    label_units = sum(len(vertex) for vertex in request.graph.vertices)
+    source_units = (
+        label_units
+        + 2 * len(request.graph.edges)
+        + 4 * len(request.vertex_probabilities)
+        + 2
     )
-    state_bytes = json_object_size(
-        (
-            ("state_index", len(encode_strict_json(state_count - 1))),
-            ("open_vertices", open_vertices_bytes),
-            ("terminals_connected", len(encode_strict_json(True))),
-            ("state_probability", rational_bytes),
-        )
+    ledger_units = (
+        source_units
+        + state_count * 4
+        + state_memberships
+        + 2 * (state_count + 1) * rational_digits
     )
-    states_bytes = 2 + max(state_count - 1, 0) + state_count * state_bytes
-    result_bytes = json_object_size(
-        (
-            ("source", source_bytes),
-            ("connection_probability", rational_bytes),
-            ("vertex_count", len(encode_strict_json(len(request.graph.vertices)))),
-            ("visited_states", len(encode_strict_json(state_count))),
-            ("states", states_bytes),
-            ("event", json_string_size("TERMINALS_OPEN_AND_CONNECTED")),
-            ("vertex_independence", json_string_size("INDEPENDENT_BERNOULLI")),
-            ("enumeration", json_string_size("COMPLETE_VERTEX_SUBSETS")),
-        )
-    )
-    if result_bytes > MAX_SITE_RELIABILITY_OUTPUT_BYTES:
+    if ledger_units > MAX_SITE_RELIABILITY_LEDGER_UNITS:
         raise OperationResourceAdmissionError(
             location=("states",),
             code="probability.site_reliability.output_bound",
-            message="complete site-reliability ledger exceeds its output bound",
+            message=(
+                "complete site-reliability ledger exceeds its retained allocation "
+                "bound"
+            ),
         )
 
 
@@ -454,7 +438,6 @@ __all__ = [
     "MAX_SITE_RELIABILITY_EDGES",
     "MAX_SITE_RELIABILITY_LEDGER_UNITS",
     "MAX_SITE_RELIABILITY_LOGICAL_WORK",
-    "MAX_SITE_RELIABILITY_OUTPUT_BYTES",
     "MAX_SITE_RELIABILITY_STATES",
     "MAX_SITE_RELIABILITY_VERTICES",
     "SITE_CONNECTION_PROBABILITY_OPERATION",

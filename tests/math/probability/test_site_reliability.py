@@ -14,6 +14,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.probability import _site_reliability as site_module
 from jacobian.math.probability._site_reliability import (
     GraphSiteReliabilityResult,
     GraphSiteReliabilitySource,
@@ -249,6 +250,20 @@ def test_site_vertex_bound_is_owned_by_operation_admission() -> None:
         ("v0", "v1"),
     )
     with pytest.raises(OperationResourceAdmissionError, match="vertex bound"):
+        compute_site_connection_probability(source)
+
+
+def test_site_ledger_allocation_is_admitted_before_enumeration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(site_module, "MAX_SITE_RELIABILITY_LEDGER_UNITS", 1)
+    source = _source(
+        ("a", "b"),
+        (("a", "b"),),
+        (Fraction(1, 2), Fraction(1, 2)),
+        ("a", "b"),
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="allocation bound"):
         compute_site_connection_probability(source)
 
 

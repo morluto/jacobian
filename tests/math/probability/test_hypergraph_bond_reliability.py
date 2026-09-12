@@ -16,6 +16,9 @@ from jacobian.catalog.models import (
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
 )
+from jacobian.math.probability import (
+    _hypergraph_bond_reliability as hypergraph_reliability_module,
+)
 from jacobian.math.probability._hypergraph_bond_reliability import (
     HyperedgeOpenProbability,
     HypergraphBondConnectionProbabilityResult,
@@ -269,6 +272,24 @@ def test_hyperedge_bound_is_owned_by_operation_admission() -> None:
         ("v0", "v1"),
     )
     with pytest.raises(OperationResourceAdmissionError, match="hyperedge bound"):
+        compute_hypergraph_bond_connection_probability(source)
+
+
+def test_hypergraph_ledger_allocation_is_admitted_before_enumeration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        hypergraph_reliability_module,
+        "MAX_HYPERGRAPH_RELIABILITY_LEDGER_UNITS",
+        1,
+    )
+    source = _source(
+        ("a", "b"),
+        (("ab", ("a", "b")),),
+        {"ab": Fraction(1, 2)},
+        ("a", "b"),
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="allocation bound"):
         compute_hypergraph_bond_connection_probability(source)
 
 

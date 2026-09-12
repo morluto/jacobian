@@ -16,7 +16,6 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
-from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -39,8 +38,9 @@ MAX_HYPERGRAPH_RELIABILITY_RATIONAL_DIGITS = (
     MAX_INPUT_RATIONAL_DIGITS * MAX_HYPERGRAPH_RELIABILITY_HYPEREDGES
     + MAX_HYPERGRAPH_RELIABILITY_HYPEREDGES
 )
-MAX_HYPERGRAPH_RELIABILITY_OUTPUT_BYTES = 64_000_000
-MAX_HYPERGRAPH_RELIABILITY_LEDGER_UNITS = MAX_HYPERGRAPH_RELIABILITY_OUTPUT_BYTES
+# One unit reserves either a retained scalar digit, label code point, container
+# slot, or fixed record field.  Concrete transports own encoded-byte ceilings.
+MAX_HYPERGRAPH_RELIABILITY_LEDGER_UNITS = 64_000_000
 MAX_HYPERGRAPH_RELIABILITY_LOGICAL_WORK = MAX_HYPERGRAPH_RELIABILITY_STATES * (
     4 * MAX_HYPERGRAPH_RELIABILITY_HYPEREDGES
     + 4 * MAX_HYPERGRAPH_RELIABILITY_VERTICES
@@ -312,58 +312,33 @@ def _admit_hypergraph_request(
             ),
         )
 
-    def json_string_size(value: str) -> int:
-        return len(encode_strict_json(value))
-
-    def json_array_size(item_sizes: tuple[int, ...]) -> int:
-        return 2 + max(len(item_sizes) - 1, 0) + sum(item_sizes)
-
-    def json_object_size(fields: tuple[tuple[str, int], ...]) -> int:
-        return (
-            2
-            + max(len(fields) - 1, 0)
-            + sum(
-                json_string_size(name) + 1 + value_size for name, value_size in fields
-            )
-        )
-
-    source_bytes = len(encode_strict_json(request.model_dump(mode="json")))
-    rational_bytes = len(
-        encode_strict_json({"num": "9" * rational_digits, "den": "9" * rational_digits})
+    hyperedge_count = len(request.hypergraph.edges)
+    state_memberships = (
+        hyperedge_count * (state_count // 2) if hyperedge_count else 0
     )
-    open_hyperedge_bytes = json_array_size(
-        tuple(json_string_size(edge_id) for edge_id, _ in request.hypergraph.edges)
+    label_units = sum(len(vertex) for vertex in request.hypergraph.vertices) + sum(
+        len(edge_id) for edge_id, _ in request.hypergraph.edges
     )
-    state_bytes = json_object_size(
-        (
-            ("state_index", len(encode_strict_json(state_count - 1))),
-            ("open_hyperedge_ids", open_hyperedge_bytes),
-            ("terminals_connected", len(encode_strict_json(True))),
-            ("state_probability", rational_bytes),
-        )
+    source_units = (
+        label_units
+        + sum(len(members) for _, members in request.hypergraph.edges)
+        + 4 * len(request.hyperedge_probabilities)
+        + 2
     )
-    states_bytes = 2 + max(state_count - 1, 0) + state_count * state_bytes
-    result_bytes = json_object_size(
-        (
-            ("source", source_bytes),
-            ("connection_probability", rational_bytes),
-            ("hyperedge_count", len(encode_strict_json(len(request.hypergraph.edges)))),
-            ("visited_states", len(encode_strict_json(state_count))),
-            ("states", states_bytes),
-            (
-                "event",
-                json_string_size("TERMINALS_CONNECTED_IN_INCIDENCE_GRAPH"),
-            ),
-            ("hyperedge_independence", json_string_size("INDEPENDENT_BERNOULLI")),
-            ("connectivity_convention", json_string_size("INCIDENCE_GRAPH_CHAIN")),
-            ("enumeration", json_string_size("COMPLETE_HYPEREDGE_SUBSETS")),
-        )
+    ledger_units = (
+        source_units
+        + state_count * 4
+        + state_memberships
+        + 2 * (state_count + 1) * rational_digits
     )
-    if result_bytes > MAX_HYPERGRAPH_RELIABILITY_OUTPUT_BYTES:
+    if ledger_units > MAX_HYPERGRAPH_RELIABILITY_LEDGER_UNITS:
         raise OperationResourceAdmissionError(
             location=("states",),
             code="probability.hypergraph_reliability.output_bound",
-            message="complete hypergraph-reliability ledger exceeds its output bound",
+            message=(
+                "complete hypergraph-reliability ledger exceeds its retained "
+                "allocation bound"
+            ),
         )
 
 
@@ -477,7 +452,6 @@ __all__ = [
     "MAX_HYPERGRAPH_RELIABILITY_HYPEREDGES",
     "MAX_HYPERGRAPH_RELIABILITY_LEDGER_UNITS",
     "MAX_HYPERGRAPH_RELIABILITY_LOGICAL_WORK",
-    "MAX_HYPERGRAPH_RELIABILITY_OUTPUT_BYTES",
     "MAX_HYPERGRAPH_RELIABILITY_STATES",
     "MAX_HYPERGRAPH_RELIABILITY_VERTICES",
     "HyperedgeOpenProbability",

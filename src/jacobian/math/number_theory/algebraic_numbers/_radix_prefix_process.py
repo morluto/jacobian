@@ -20,7 +20,8 @@ from jacobian.catalog.models import (
 )
 
 _WORKER = Path(__file__).resolve().with_name("_radix_prefix_worker.py")
-_WORKER_WALL_SECONDS = 600.0
+RADIX_ISOLATION_OWNER_SECONDS = 600.0
+_WORKER_WALL_SECONDS = RADIX_ISOLATION_OWNER_SECONDS
 _WORKER_ADDRESS_SPACE_BYTES = 1024 * 1024 * 1024
 _WORKER_FILE_SIZE_BYTES = 1024 * 1024
 _WORKER_STDOUT_BYTES = 256 * 1024
@@ -100,6 +101,12 @@ def run_scaled_integer_part_worker(
                 code="algebraic_number.radix_root_index",
                 message=message,
             )
+        if code == "not_irreducible":
+            raise OperationDomainValidationError(
+                location=("value",),
+                code="real_algebraic.not_irreducible",
+                message=message,
+            )
         raise OperationResourceAdmissionError(
             location=("value",),
             code="algebraic_number.radix_refinement_bound",
@@ -108,4 +115,4 @@ def run_scaled_integer_part_worker(
     return int(parse_canonical_integer(response["scaled_floor"]))
 
 
-__all__ = ["run_scaled_integer_part_worker"]
+__all__ = ["RADIX_ISOLATION_OWNER_SECONDS", "run_scaled_integer_part_worker"]

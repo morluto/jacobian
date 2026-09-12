@@ -195,3 +195,61 @@ def test_package_exports_the_native_radix_entrypoint() -> None:
 
     assert algebraic_numbers.radix_prefix is radix_prefix
     assert "radix_prefix" in algebraic_numbers.__all__
+
+
+def test_reducible_polynomial_is_rejected_inside_isolation_admission() -> None:
+    with pytest.raises(OperationDomainValidationError, match="irreducible"):
+        radix_prefix(_value((1, 0, -1), 0), 10, 2)
+
+
+def test_owner_envelope_is_the_calibrated_isolation_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.number_theory.algebraic_numbers._radix_prefix_process import (
+        RADIX_ISOLATION_OWNER_SECONDS,
+    )
+
+    bound: list[float] = []
+    original = radix_module.execution_deadline
+
+    def capture(seconds: float) -> float:
+        bound.append(seconds)
+        return original(seconds)
+
+    monkeypatch.setattr(radix_module, "execution_deadline", capture)
+    radix_prefix(_value((1, 0, -2), 1), 10, 1)
+    assert bound == [RADIX_ISOLATION_OWNER_SECONDS]
+
+
+def test_shorter_caller_deadline_is_passed_to_the_killable_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import time
+
+    from jacobian._execution import request_execution
+
+    seen: list[float] = []
+
+    def fake(
+        *,
+        polynomial: tuple[int, ...],
+        real_root_index: int,
+        scale: int,
+        isolation_bits: int,
+        deadline: float,
+    ) -> int:
+        seen.append(deadline)
+        return radix_module._scaled_integer_part_in_process(
+            _value(polynomial, real_root_index),
+            scale=scale,
+            isolation_bits=isolation_bits,
+        )
+
+    monkeypatch.setattr(radix_module, "run_scaled_integer_part_worker", fake)
+    started = time.monotonic()
+    caller_deadline = started + 12
+    with request_execution(started, outer_deadline=caller_deadline):
+        radix_prefix(_value((1, 0, -2), 1), 10, 1)
+    assert seen
+    assert seen[0] <= caller_deadline + 1e-3
+

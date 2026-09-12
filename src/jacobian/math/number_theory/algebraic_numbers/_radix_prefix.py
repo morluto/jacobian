@@ -21,8 +21,8 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import DecimalIntegerEncoding
 from jacobian._execution import (
-    bind_request_deadline,
     current_request_execution,
+    execution_deadline,
     request_execution,
 )
 from jacobian._models import StrictModel
@@ -32,12 +32,13 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.number_theory.algebraic_numbers._radix_prefix_process import (
+    RADIX_ISOLATION_OWNER_SECONDS,
     run_scaled_integer_part_worker,
 )
 from jacobian.math.number_theory.algebraic_numbers.real import (
     MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS,
     RealAlgebraicValue,
-    _admit_real_polynomial,
+    require_primitive_real_algebraic_value,
 )
 
 MAX_RADIX_BASE = 36
@@ -305,6 +306,17 @@ def _scaled_integer_part_in_process(
     import sympy
 
     symbol = sympy.Symbol("x")
+    source = sympy.Poly.from_list(
+        [int(coefficient) for coefficient in value.polynomial],
+        gens=symbol,
+        domain=sympy.ZZ,
+    )
+    if source.is_irreducible is not True:
+        raise OperationDomainValidationError(
+            location=("value",),
+            code="real_algebraic.not_irreducible",
+            message="real algebraic minimal polynomial must be irreducible over QQ",
+        )
     scaled_coefficients = [
         coefficient * scale**position
         for position, coefficient in enumerate(value.polynomial)
@@ -349,17 +361,14 @@ def radix_prefix(
     if execution is None:
         with request_execution(time.monotonic()):
             return radix_prefix(value, base, fractional_places)
-    deadline = execution.started_at + 60
-    if execution.deadline is not None:
-        deadline = min(deadline, execution.deadline)
-    bind_request_deadline(deadline)
+    execution_deadline(RADIX_ISOLATION_OWNER_SECONDS)
 
     _require_request(base, fractional_places)
     request = RadixPrefixRequest(
         value=value, base=base, fractional_places=fractional_places
     )
     admission = _admit_request(request)
-    _admit_real_polynomial(request.value)
+    require_primitive_real_algebraic_value(request.value)
     rational = _rational_value(request.value)
     if rational is not None:
         if request.value.real_root_index != 0:

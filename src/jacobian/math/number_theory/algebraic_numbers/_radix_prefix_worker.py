@@ -23,6 +23,13 @@ def _scaled_integer_part(
     import sympy
 
     symbol = sympy.Symbol("x")
+    source = sympy.Poly.from_list(
+        [int(coefficient) for coefficient in coefficients],
+        gens=symbol,
+        domain=sympy.ZZ,
+    )
+    if source.is_irreducible is not True:
+        raise ValueError("real algebraic minimal polynomial must be irreducible over QQ")
     scaled_coefficients = [
         coefficient * scale**position
         for position, coefficient in enumerate(coefficients)
@@ -56,7 +63,13 @@ def main() -> int:
             int(payload["isolation_bits"]),
         )
     except ValueError as exc:
-        json.dump({"ok": False, "code": "root_index", "message": str(exc)}, sys.stdout)
+        message = str(exc)
+        code = (
+            "not_irreducible"
+            if "irreducible" in message
+            else "root_index"
+        )
+        json.dump({"ok": False, "code": code, "message": message}, sys.stdout)
         return 0
     except TimeoutError as exc:
         json.dump({"ok": False, "code": "refinement", "message": str(exc)}, sys.stdout)

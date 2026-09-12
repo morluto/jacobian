@@ -24,6 +24,10 @@ from jacobian.math.number_theory.number_fields._models import (
 from jacobian.math.number_theory.number_fields._real_embedding_order import (
     NumberFieldRealEmbeddingOrderError,
 )
+from jacobian.math.number_theory.number_fields._ring_of_integers import (
+    NumberFieldRingOfIntegersResult,
+    ring_of_integers,
+)
 from jacobian.math.number_theory.number_fields.operations import (
     NumberFieldEmbeddingAdmissionError,
     binary_power_sum_gap_profile,
@@ -34,6 +38,12 @@ from jacobian.math.number_theory.number_fields.values import (
     NumberFieldEmbeddingProfile,
     SimpleNumberFieldRealEmbeddingOrder,
 )
+
+
+def compute_ring_of_integers(
+    request: NumberFieldRequest,
+) -> NumberFieldRingOfIntegersResult:
+    return ring_of_integers(request.field)
 
 
 def _compute_embeddings(
@@ -82,6 +92,33 @@ def _compute_binary_power_sum_gap_profile(
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    MathTool(
+        operation_id="number_field.ring_of_integers.compute",
+        title="Compute the ring-of-integers basis of a number field",
+        description=(
+            "Return one deterministic integral-basis witness for the ring of "
+            "integers of a presented simple number field QQ(alpha), with every "
+            "basis vector expressed as exact rational coordinates on the "
+            "presentation's own ascending power basis, together with the field "
+            "discriminant. The defining polynomial must be irreducible over QQ."
+        ),
+        request_type=NumberFieldRequest,
+        result_type=NumberFieldRingOfIntegersResult,
+        run=compute_ring_of_integers,
+        tags=("number-field", "ring-of-integers", "exact"),
+        examples=(
+            OperationExample(
+                name="golden_field",
+                description="The ring of integers of QQ(sqrt(5)) has basis 1 and (1+sqrt(5))/2.",
+                input={
+                    "field": {
+                        "domain": "QQ",
+                        "coefficients_descending": ["1", "0", "-5"],
+                    }
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="number_field.discriminant.compute",
         title="Compute the discriminant of a number field",

@@ -49,7 +49,7 @@ denominator that becomes the zero rational function is rejected.
 Admission accounts for every source component, denominator-clearing
 intermediate, normalization/GCD phase, guard, and complete canonical output
 before exact backend expansion. The native entry point is
-`jacobian.math.polynomials.rational_functions.compose_maps(outer, inner)`;
+`jacobian.math.polynomials.rational_functions.composition.compose_maps(outer, inner)`;
 native callers pass canonical `RationalFunctionMap` values rather than the
 wire request model.
 

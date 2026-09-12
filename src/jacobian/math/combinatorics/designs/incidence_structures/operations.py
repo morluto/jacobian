@@ -45,8 +45,6 @@ from jacobian.math.combinatorics.designs.incidence_structures._models import (
 from jacobian.math.combinatorics.exact_cover import (
     ExactCoverRow,
     GeneralizedExactCoverInstance,
-    GeneralizedExactCoverShard,
-    exact_cover_instance_digest,
     find_generalized_exact_cover,
 )
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
@@ -96,10 +94,10 @@ def construct_steiner_triple_system(
 
     Each candidate triple covers exactly three pair constraints. The canonical
     instance is solved by the maintained generalized exact-cover backend. An
-    UNKNOWN result retains canonical fixed-triple frontier shards so callers
-    can continue one unresolved branch. A found design is independently
-    checked by replaying all pair multiplicities before crossing the operation
-    boundary.
+    UNKNOWN result retains algorithm-independent fixed-triple constraints so
+    callers can continue one unresolved subdomain. A found design is
+    independently checked by replaying all pair multiplicities before crossing
+    the operation boundary.
     """
     if type(order) is not int or type(search_budget) is not int:
         raise TypeError("order and search_budget must be integers")
@@ -139,54 +137,86 @@ def construct_steiner_triple_system(
         f"triple:{triple[0]:02d}:{triple[1]:02d}:{triple[2]:02d}": triple
         for triple in triples
     }
-    exact_cover = GeneralizedExactCoverInstance(
-        primary_items=tuple(sorted(pair_labels.values())),
-        secondary_items=(),
-        rows=tuple(
-            ExactCoverRow(
-                row_id=row_id,
-                items=tuple(
-                    sorted(pair_labels[pair] for pair in combinations(triple, 2))
-                ),
-            )
-            for row_id, triple in triple_by_row_id.items()
-        ),
+    selected_triples = () if shard is None else shard.fixed_triples
+    covered_pairs: set[tuple[int, int]] = set()
+    for triple in selected_triples:
+        for pair in combinations(triple, 2):
+            if pair in covered_pairs:
+                raise OperationDomainValidationError(
+                    location=("shard", "fixed_triples"),
+                    code="incidence_structure.steiner_shard_overlap",
+                    message="fixed triples must cover distinct pairs",
+                )
+            covered_pairs.add(pair)
+    remaining_pair_labels = tuple(
+        pair_labels[pair] for pair in pairs if pair not in covered_pairs
     )
-    cover_shard = None
-    if shard is not None:
-        cover_shard = GeneralizedExactCoverShard(
-            instance_digest=exact_cover_instance_digest(exact_cover),
-            fixed_row_prefix=tuple(
-                f"triple:{a:02d}:{b:02d}:{c:02d}" for a, b, c in shard.fixed_triples
+    remaining_rows = tuple(
+        ExactCoverRow(
+            row_id=row_id,
+            items=tuple(
+                sorted(pair_labels[pair] for pair in combinations(triple, 2))
             ),
         )
-    try:
-        cover = find_generalized_exact_cover(
-            exact_cover, search_node_limit=search_budget, shard=cover_shard
+        for row_id, triple in triple_by_row_id.items()
+        if triple not in selected_triples
+        and not any(pair in covered_pairs for pair in combinations(triple, 2))
+    )
+    if not remaining_pair_labels:
+        cover_status = "FOUND"
+        selected_row_ids = tuple(
+            f"triple:{a:02d}:{b:02d}:{c:02d}" for a, b, c in selected_triples
         )
-    except PydanticCustomError as exc:
-        raise OperationDomainValidationError(
-            location=("shard",),
-            code="incidence_structure.steiner_shard_prefix",
-            message=str(exc),
-        ) from exc
-    states = cover.searched_node_count
-    if cover.status != "FOUND":
-        if cover.status == "UNKNOWN":
+        states = 0
+        frontier: tuple[SteinerTripleSystemShard, ...] = ()
+    else:
+        exact_cover = GeneralizedExactCoverInstance(
+            primary_items=tuple(sorted(remaining_pair_labels)),
+            secondary_items=(),
+            rows=remaining_rows,
+        )
+        try:
+            cover = find_generalized_exact_cover(
+                exact_cover, search_node_limit=search_budget
+            )
+        except PydanticCustomError as exc:
+            raise OperationDomainValidationError(
+                location=("shard",),
+                code="incidence_structure.steiner_shard_prefix",
+                message=str(exc),
+            ) from exc
+        states = cover.searched_node_count
+        cover_status = cover.status
+        if cover_status == "FOUND":
+            selected_row_ids = tuple(
+                f"triple:{a:02d}:{b:02d}:{c:02d}" for a, b, c in selected_triples
+            ) + (cover.selected_row_ids or ())
+            frontier = ()
+        elif cover_status == "UNKNOWN":
+            selected_row_ids = ()
             frontier = tuple(
                 SteinerTripleSystemShard(
                     order=order,
                     fixed_triples=tuple(
-                        triple_by_row_id[row_id]
-                        for row_id in frontier_shard.fixed_row_prefix
+                        sorted(
+                            (
+                                *selected_triples,
+                                *(
+                                    triple_by_row_id[row_id]
+                                    for row_id in frontier_shard.fixed_row_prefix
+                                ),
+                            )
+                        )
                     ),
                 )
                 for frontier_shard in cover.unresolved_frontier
             )
         else:
+            selected_row_ids = ()
             frontier = ()
+    if cover_status != "FOUND":
         return SteinerTripleSystemResult(
-            status="UNKNOWN" if cover.status == "UNKNOWN" else "NOT_FOUND",
+            status="UNKNOWN" if cover_status == "UNKNOWN" else "NOT_FOUND",
             order=order,
             states_explored=states,
             unresolved_frontier=frontier,
@@ -195,9 +225,6 @@ def construct_steiner_triple_system(
 
     # Replay the defining incidence axiom independently of the cover search.
     pair_multiplicity = dict.fromkeys(pairs, 0)
-    selected_row_ids = cover.selected_row_ids
-    if selected_row_ids is None:
-        raise RuntimeError("FOUND exact-cover result omitted selected rows")
     chosen = tuple(triple_by_row_id[row_id] for row_id in selected_row_ids)
     for triple in chosen:
         for pair in combinations(triple, 2):

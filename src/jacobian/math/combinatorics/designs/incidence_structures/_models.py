@@ -166,8 +166,9 @@ class SteinerTripleSystemRequest(StrictModel):
     shard: SteinerTripleSystemShard | None = Field(
         default=None,
         description=(
-            "Optional unresolved fixed-triple prefix from an earlier UNKNOWN "
-            "result; the order must match."
+            "Optional unresolved fixed-triple constraints from an earlier "
+            "UNKNOWN result; the order must match. Continuation treats the "
+            "triples as included blocks, not as a private search-path prefix."
         ),
     )
 
@@ -189,7 +190,7 @@ class SteinerTripleSystemRequest(StrictModel):
 
 
 class SteinerTripleSystemShard(StrictModel):
-    """A canonical fixed-triple prefix for deterministic continuation."""
+    """Algorithm-independent fixed triples that constrain one continuation."""
 
     order: StrictInt = Field(
         ge=3,
@@ -200,9 +201,9 @@ class SteinerTripleSystemShard(StrictModel):
         default=(),
         max_length=MAX_STEINER_BLOCKS,
         description=(
-            "Canonical fixed triple prefix in deterministic traversal order; "
-            "each triple is sorted and uses point positions in the range 0 "
-            "through order-1."
+            "Fixed triples that must appear in any completion. They are "
+            "block constraints, not a backend traversal prefix; each triple "
+            "is sorted and uses point positions in the range 0 through order-1."
         ),
     )
 

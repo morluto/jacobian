@@ -220,11 +220,25 @@ def test_infeasible_continuation_retains_the_source_shard() -> None:
 
 
 def test_nonsemantic_shard_prefix_is_a_typed_domain_error() -> None:
-    """A schema-valid prefix that is not a first exact-cover choice is rejected."""
-    with pytest.raises(OperationDomainValidationError, match="semantic traversal"):
+    """Overlapping pair constraints are rejected independently of traversal."""
+    with pytest.raises(OperationDomainValidationError, match="distinct pairs"):
         construct_steiner_triple_system(
-            7, 100, SteinerTripleSystemShard(order=7, fixed_triples=((0, 2, 3),))
+            7,
+            100,
+            SteinerTripleSystemShard(
+                order=7, fixed_triples=((0, 1, 2), (0, 1, 3))
+            ),
         )
+
+
+def test_continuation_treats_fixed_triples_as_block_constraints() -> None:
+    """A first-item non-choice is still a valid included Steiner block."""
+    result = construct_steiner_triple_system(
+        7, 100_000, SteinerTripleSystemShard(order=7, fixed_triples=((0, 2, 3),))
+    )
+    assert result.status == "COMPUTED"
+    assert result.design is not None
+    assert ("p0", "p2", "p3") in result.design.blocks
 
 
 def test_constructor_executes_through_public_catalog_boundary() -> None:

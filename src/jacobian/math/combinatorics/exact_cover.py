@@ -17,8 +17,8 @@ from jacobian._execution import (
     request_execution,
 )
 from jacobian._models import StrictModel
-from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.canonical import canonicalize_json
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math._labels import OpaqueLabel
 
 

@@ -231,9 +231,11 @@ def test_minimum_search_honors_request_deadline() -> None:
 
 
 def test_node_limit_without_incumbent_is_an_operational_failure() -> None:
-    rows = tuple(
-        ExactCoverRow(row_id=f"p0-{index:04d}", items=("p0",)) for index in range(8)
-    ) + (
+    rows = (
+        *(
+            ExactCoverRow(row_id=f"p0-{index:04d}", items=("p0",))
+            for index in range(8)
+        ),
         ExactCoverRow(row_id="p1-a", items=("p1",)),
         ExactCoverRow(row_id="p1-b", items=("p1",)),
     )
@@ -279,9 +281,12 @@ def test_large_node_by_item_scan_is_rejected_before_search() -> None:
 
 
 def test_sparse_high_degree_instance_is_admitted_after_unit_forcing() -> None:
-    rows = (ExactCoverRow(row_id="pair", items=("p1", "p2")),) + tuple(
-        ExactCoverRow(row_id=f"solo-{index:04d}", items=("p0",))
-        for index in range(2_047)
+    rows = (
+        ExactCoverRow(row_id="pair", items=("p1", "p2")),
+        *(
+            ExactCoverRow(row_id=f"solo-{index:04d}", items=("p0",))
+            for index in range(2_047)
+        ),
     )
     instance = GeneralizedExactCoverInstance(
         primary_items=("p0", "p1", "p2"),
@@ -307,9 +312,11 @@ def test_deserialized_exact_result_rejects_zero_primary_multiplicity() -> None:
 
 
 def test_two_primary_min_degree_branching_is_admitted() -> None:
-    rows = tuple(
-        ExactCoverRow(row_id=f"p0-{index:04d}", items=("p0",)) for index in range(2_047)
-    ) + (
+    rows = (
+        *(
+            ExactCoverRow(row_id=f"p0-{index:04d}", items=("p0",))
+            for index in range(2_047)
+        ),
         ExactCoverRow(row_id="p1-a", items=("p1",)),
         ExactCoverRow(row_id="p1-b", items=("p1",)),
     )

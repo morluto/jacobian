@@ -177,6 +177,20 @@ def test_order_shape_rejects_contradictory_log_concavity_witness() -> None:
         SequenceOrderShapeResult.model_validate(forged_null)
 
 
+def test_order_shape_rejects_contradictory_boolean_witnesses() -> None:
+    result = sequence_order_shape(rational_sequence((1, 2, 1)))
+    forged = result.model_dump()
+    forged["is_nonnegative"] = True
+    forged["first_negative_index"] = 0
+    with pytest.raises(ValueError, match="nonnegativity"):
+        SequenceOrderShapeResult.model_validate(forged)
+    signed = sequence_order_shape(rational_sequence((-1, 0, -2)))
+    forged_zero = signed.model_dump()
+    forged_zero["has_internal_zero"] = False
+    with pytest.raises(ValueError, match="internal-zero"):
+        SequenceOrderShapeResult.model_validate(forged_zero)
+
+
 def test_order_shape_serialization_schema_omits_integer_wire_alternative() -> None:
     serialized = SequenceOrderShapeResult.model_json_schema(mode="serialization")
     source_values = serialized["$defs"]["FiniteRationalSequence"]["properties"][

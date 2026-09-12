@@ -256,6 +256,15 @@ class SequenceOrderShapeResult(StrictModel):
             self.first_internal_zero_index not in row_indices
         ):
             raise ValueError("internal-zero index must identify an interior position")
+        if self.is_nonnegative is (self.first_negative_index is not None):
+            raise ValueError(
+                "nonnegativity must agree with the presence of the first negative index"
+            )
+        if self.has_internal_zero is not (self.first_internal_zero_index is not None):
+            raise ValueError(
+                "internal-zero status must agree with the presence of the first "
+                "internal-zero index"
+            )
         first_false = next(
             (row.index for row in self.log_concavity_rows if not row.holds),
             None,

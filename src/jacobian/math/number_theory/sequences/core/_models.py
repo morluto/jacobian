@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal, Self
 
-from pydantic import Field, ValidationInfo, model_validator
+from pydantic import (
+    Field,
+    GetCoreSchemaHandler,
+    GetJsonSchemaHandler,
+    ValidationInfo,
+    model_validator,
+)
 from pydantic_core import PydanticCustomError, core_schema
 
 from jacobian._exact import (
@@ -257,9 +263,10 @@ class SequenceOrderShapeResult(StrictModel):
     has_internal_zero: bool
 
 
-@classmethod
 def _finite_sequence_core_schema(
-    cls, source_type: Any, handler: Any
+    cls: type[FiniteSequence],
+    source_type: Any,
+    handler: GetCoreSchemaHandler,
 ) -> core_schema.CoreSchema:
     if cls is not FiniteSequence:
         return handler(source_type)
@@ -271,18 +278,21 @@ def _finite_sequence_core_schema(
     )
 
 
-@classmethod
 def _finite_sequence_json_schema(
-    cls, core_schema_obj: Any, handler: Any
+    cls: type[FiniteSequence],
+    core_schema_obj: core_schema.CoreSchema,
+    handler: GetJsonSchemaHandler,
 ) -> dict[str, Any]:
-    if cls is not FiniteSequence:
-        return handler(core_schema_obj)
     schema = dict(handler(core_schema_obj))
-    if "type" not in schema:
+    if cls is FiniteSequence and "type" not in schema:
         schema["type"] = "object"
     return schema
 
 
-FiniteSequence.__get_pydantic_core_schema__ = _finite_sequence_core_schema
-FiniteSequence.__get_pydantic_json_schema__ = _finite_sequence_json_schema
+FiniteSequence.__get_pydantic_core_schema__ = classmethod(  # type: ignore[method-assign,assignment]
+    _finite_sequence_core_schema
+)
+FiniteSequence.__get_pydantic_json_schema__ = classmethod(  # type: ignore[method-assign,assignment]
+    _finite_sequence_json_schema
+)
 FiniteSequence.model_rebuild(force=True)

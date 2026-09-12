@@ -184,7 +184,9 @@ def _unique_edges(
 ) -> tuple[frozenset[str], ...]:
     seen: set[frozenset[str]] = set()
     edges: list[frozenset[str]] = []
-    for _, members in request.hypergraph.edges:
+    for index, (_, members) in enumerate(request.hypergraph.edges):
+        if index % 256 == 0:
+            request_checkpoint("during minimal transversal edge dedup")
         edge = frozenset(members)
         if edge in seen:
             continue
@@ -204,7 +206,34 @@ def _forced_vertices(edges: tuple[frozenset[str], ...]) -> frozenset[str]:
 def _minimal_edges(
     edges: tuple[frozenset[str], ...],
 ) -> tuple[frozenset[str], ...]:
-    return tuple(edge for edge in edges if not any(other < edge for other in edges))
+    """Drop dominated edges after admitting the pairwise subset scan."""
+
+    edge_count = len(edges)
+    comparison_count = edge_count * max(edge_count - 1, 0)
+    if comparison_count > MAX_TRANSVERSAL_ENUMERATION_WORK:
+        raise OperationResourceAdmissionError(
+            location=("hypergraph", "edges"),
+            code="hypergraph.minimal_transversal.antichain_work_bound",
+            message=(
+                "edge-domination presolve has "
+                f"{comparison_count} subset comparisons; maximum is "
+                f"{MAX_TRANSVERSAL_ENUMERATION_WORK}"
+            ),
+        )
+    kept: list[frozenset[str]] = []
+    comparisons = 0
+    for edge in edges:
+        dominated = False
+        for other in edges:
+            comparisons += 1
+            if comparisons % 256 == 0:
+                request_checkpoint("during minimal transversal domination")
+            if other < edge:
+                dominated = True
+                break
+        if not dominated:
+            kept.append(edge)
+    return tuple(kept)
 
 
 def _admit_enumeration(
@@ -214,7 +243,10 @@ def _admit_enumeration(
 
     vertices = request.hypergraph.vertices
     maximum = min(request.maximum_cardinality, len(vertices))
-    edges = _minimal_edges(_unique_edges(request))
+    unique_edges = _unique_edges(request)
+    # Cardinality-1 search never needs domination: every hitting singleton is
+    # already minimal, and the residual scan is linear in incidences.
+    edges = unique_edges if maximum <= 1 else _minimal_edges(unique_edges)
     if not edges:
         return maximum, edges, frozenset(), True, False
     if any(not edge for edge in edges):
@@ -225,6 +257,8 @@ def _admit_enumeration(
         return maximum, edges, forced, False, False
     remaining_edges = tuple(edge for edge in edges if not edge & forced)
     if not remaining_edges:
+        return maximum, remaining_edges, forced, False, False
+    if len(forced) >= maximum:
         return maximum, remaining_edges, forced, False, False
     if len(remaining_edges) == 1:
         return maximum, remaining_edges, forced, False, False
@@ -319,10 +353,12 @@ def enumerate_minimal_transversals(
     forced_row = tuple(vertex for vertex in vertices if vertex in forced)
     if source_empty:
         results: tuple[tuple[str, ...], ...] = ((),)
-    elif has_empty_edge or maximum == 0 or len(forced) > maximum:
+    elif has_empty_edge or len(forced) > maximum:
         results = ()
     elif not remaining_edges:
         results = (forced_row,)
+    elif len(forced) >= maximum:
+        results = ()
     elif len(remaining_edges) == 1:
         results = tuple(
             tuple(vertex for vertex in vertices if vertex in forced or vertex == extra)

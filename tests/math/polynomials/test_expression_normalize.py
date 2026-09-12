@@ -307,3 +307,76 @@ def test_large_exact_result_is_rejected_before_expansion() -> None:
     assert error.value.errors()[0]["type"] == (
         "polynomial.expression.result_representation_bound"
     )
+
+
+def test_non_literal_exact_cancellations_are_admitted() -> None:
+    primes = (10**127 + 39, 10**127 + 79, 10**127 + 121)
+
+    def cancelling_powers(prime: int) -> dict[str, Any]:
+        return {
+            "kind": "ADD",
+            "operands": [
+                {
+                    "kind": "POWER",
+                    "base": {"kind": "LITERAL", "value": {"num": 1, "den": prime}},
+                    "exponent": 31,
+                },
+                {
+                    "kind": "POWER",
+                    "base": {"kind": "LITERAL", "value": {"num": -1, "den": prime}},
+                    "exponent": 31,
+                },
+            ],
+        }
+
+    expression = {
+        "kind": "ADD",
+        "operands": [cancelling_powers(prime) for prime in primes],
+    }
+    result = normalize_polynomial_expression(_request("QQ", expression))
+    assert result.polynomial.polynomial.terms == ()
+
+
+def test_heterogeneous_coefficient_heights_use_aggregate_digits() -> None:
+    product: dict[str, Any] = {"kind": "LITERAL", "value": {"num": 1, "den": 1}}
+    variables = tuple(f"x{index}" for index in range(7))
+    for name in variables:
+        product = {
+            "kind": "MULTIPLY",
+            "operands": [
+                product,
+                {
+                    "kind": "ADD",
+                    "operands": [
+                        {"kind": "LITERAL", "value": {"num": 1, "den": 1}},
+                        {"kind": "VARIABLE", "name": name},
+                        {
+                            "kind": "POWER",
+                            "base": {"kind": "VARIABLE", "name": name},
+                            "exponent": 2,
+                        },
+                    ],
+                },
+            ],
+        }
+    expression = {
+        "kind": "ADD",
+        "operands": [
+            {
+                "kind": "POWER",
+                "base": {"kind": "LITERAL", "value": {"num": 10**127, "den": 1}},
+                "exponent": 32,
+            },
+            product,
+        ],
+    }
+    result = normalize_polynomial_expression(
+        _request("ZZ", expression, variables=variables)
+    )
+    assert len(result.polynomial.polynomial.terms) == 3**7
+    constant = next(
+        term.coefficient.as_fraction()
+        for term in result.polynomial.polynomial.terms
+        if term.exponents == (0,) * 7
+    )
+    assert constant == 10 ** (127 * 32) + 1

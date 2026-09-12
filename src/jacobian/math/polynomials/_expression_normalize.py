@@ -116,6 +116,8 @@ class _ExpressionMetrics:
     numerator_bits: int
     denominator: int | None
     zero: bool
+    constant: Fraction | None
+    total_coefficient_digits: int
     maximum_numerator_bits: int
     maximum_denominator_bits: int
     work: int
@@ -308,6 +310,33 @@ def _representation_digits(
     )
 
 
+def _digits_of_rational(value: Fraction) -> int:
+    return _decimal_digits_from_bits(
+        max(1, abs(value.numerator).bit_length())
+    ) + _decimal_digits_from_bits(_denominator_bits(value.denominator))
+
+
+def _product_total_coefficient_digits(
+    left_support: int,
+    left_digits: int,
+    right_support: int,
+    right_digits: int,
+) -> int:
+    """Bound the aggregate coefficient digits of a sparse product.
+
+    Distinct monomial products charge ``|g| * digits(f) + |f| * digits(g)``.
+    Collisions can only reduce the number of terms, so this remains sound.
+    """
+
+    return min(
+        _MAX_EXPRESSION_TOTAL_COEFFICIENT_DIGITS + 1,
+        _bounded_product(left_support, right_digits, _MAX_EXPRESSION_TOTAL_COEFFICIENT_DIGITS)
+        + _bounded_product(
+            right_support, left_digits, _MAX_EXPRESSION_TOTAL_COEFFICIENT_DIGITS
+        ),
+    )
+
+
 def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
     denominator: int | None
     if isinstance(expression, PolynomialLiteral):
@@ -322,6 +351,10 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
             numerator_bits=numerator_bits,
             denominator=expression.value.den,
             zero=expression.value.num == 0,
+            constant=expression.value.as_fraction(),
+            total_coefficient_digits=_digits_of_rational(
+                expression.value.as_fraction()
+            ),
             maximum_numerator_bits=numerator_bits,
             maximum_denominator_bits=_denominator_bits(expression.value.den),
             work=1,
@@ -340,6 +373,8 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
             numerator_bits=1,
             denominator=1,
             zero=False,
+            constant=None,
+            total_coefficient_digits=2,
             maximum_numerator_bits=1,
             maximum_denominator_bits=0,
             work=1,
@@ -358,6 +393,8 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
                 numerator_bits=1,
                 denominator=1,
                 zero=False,
+                constant=Fraction(1),
+                total_coefficient_digits=2,
                 maximum_numerator_bits=max(base.maximum_numerator_bits, 1),
                 maximum_denominator_bits=base.maximum_denominator_bits,
                 work=base.work,
@@ -374,10 +411,20 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
             base.expansion_terms, exponent, MAX_POLYNOMIAL_TERMS
         )
         zero = base.zero
+        constant: Fraction | None
         if zero:
             numerator_bits = 1
             denominator = 1
+            constant = Fraction(0)
+        elif base.constant is not None:
+            constant = base.constant**exponent
+            numerator_bits = min(
+                _MAX_EXPRESSION_COEFFICIENT_BITS + 1,
+                max(1, abs(constant.numerator).bit_length()),
+            )
+            denominator = constant.denominator
         else:
+            constant = None
             numerator_bits = min(
                 _MAX_EXPRESSION_COEFFICIENT_BITS + 1,
                 base.numerator_bits * exponent
@@ -429,6 +476,14 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
             numerator_bits=numerator_bits,
             denominator=denominator,
             zero=zero,
+            constant=constant,
+            total_coefficient_digits=(
+                _digits_of_rational(constant)
+                if constant is not None
+                else _representation_digits(
+                    support, numerator_bits, _denominator_bits(denominator)
+                )
+            ),
             maximum_numerator_bits=max(base.maximum_numerator_bits, numerator_bits),
             maximum_denominator_bits=max(
                 base.maximum_denominator_bits,
@@ -450,20 +505,34 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
             tuple(row.expansion_terms for row in child_metrics), MAX_POLYNOMIAL_TERMS
         )
         degree = max(row.degree for row in child_metrics)
-        active_metrics = [child for child in child_metrics if not child.zero]
-        common_denominator = _bounded_denominator_lcm(
-            child_metrics,
-            skip_zero=True,
-        )
-        common_numerator_bits = _addition_numerator_bits(
-            active_metrics,
-            common_denominator,
-        )
+        constant: Fraction | None
+        if child_metrics and all(
+            child.constant is not None for child in child_metrics
+        ):
+            constant = sum(
+                (child.constant for child in child_metrics),
+                start=Fraction(),
+            )
+            zero = constant == 0
+        else:
+            constant = None
+            zero = all(child.zero for child in child_metrics) or _is_literal_zero_add(
+                expression
+            )
+        if zero:
+            common_denominator = 1
+            common_numerator_bits = 1
+        else:
+            active_metrics = [child for child in child_metrics if not child.zero]
+            common_denominator = _bounded_denominator_lcm(
+                child_metrics,
+                skip_zero=True,
+            )
+            common_numerator_bits = _addition_numerator_bits(
+                active_metrics,
+                common_denominator,
+            )
         raw_denominator = common_denominator
-        raw_numerator_bits = common_numerator_bits
-        zero = all(child.zero for child in child_metrics) or _is_literal_zero_add(
-            expression
-        )
         denominator = 1 if zero else common_denominator
         numerator_bits = 1 if zero else common_numerator_bits
         support = _support_bound(
@@ -476,6 +545,22 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
         work = _bounded_sum(
             tuple(row.work + row.expansion_terms for row in child_metrics),
             _MAX_EXPRESSION_WORK,
+        )
+        carry_digits = _decimal_digits_from_bits(
+            _ceil_log2(max(1, len(child_metrics)))
+        )
+        total_coefficient_digits = (
+            1
+            if zero
+            else min(
+                _MAX_EXPRESSION_TOTAL_COEFFICIENT_DIGITS + 1,
+                sum(child.total_coefficient_digits for child in child_metrics)
+                + _bounded_product(
+                    support,
+                    carry_digits,
+                    _MAX_EXPRESSION_TOTAL_COEFFICIENT_DIGITS,
+                ),
+            )
         )
         maximum_numerator_bits = max(
             common_numerator_bits,
@@ -490,9 +575,20 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
         support = 1
         work = 0
         current_expansion_terms = 1
+        total_coefficient_digits = 1
+        accumulated_support = 1
         for child in child_metrics:
             expansion_terms = _bounded_product(
                 expansion_terms, child.expansion_terms, MAX_POLYNOMIAL_TERMS
+            )
+            total_coefficient_digits = _product_total_coefficient_digits(
+                accumulated_support,
+                total_coefficient_digits,
+                child.support,
+                child.total_coefficient_digits,
+            )
+            accumulated_support = _bounded_product(
+                accumulated_support, child.support, MAX_POLYNOMIAL_TERMS
             )
             support = _bounded_product(support, child.support, MAX_POLYNOMIAL_TERMS)
             work = min(
@@ -535,11 +631,23 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
             if denominator is None:
                 break
         raw_denominator = denominator
-        raw_numerator_bits = common_numerator_bits
-        zero = any(child.zero for child in child_metrics)
+        if any(child.zero for child in child_metrics):
+            constant = Fraction(0)
+        elif child_metrics and all(
+            child.constant is not None for child in child_metrics
+        ):
+            constant = Fraction(1)
+            for child in child_metrics:
+                constant *= child.constant
+        else:
+            constant = None
+        zero = constant == 0 if constant is not None else any(
+            child.zero for child in child_metrics
+        )
         numerator_bits = 1 if zero else common_numerator_bits
         if zero:
             denominator = 1
+            total_coefficient_digits = 1
         maximum_numerator_bits = max(
             common_numerator_bits,
             *(child.maximum_numerator_bits for child in child_metrics),
@@ -552,19 +660,7 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
         (row.intermediate_digits for row in child_metrics),
         default=0,
     )
-    intermediate_digits = max(
-        intermediate_digits,
-        _representation_digits(
-            support,
-            raw_numerator_bits,
-            _denominator_bits(raw_denominator),
-        ),
-        _representation_digits(
-            support,
-            numerator_bits,
-            _denominator_bits(denominator),
-        ),
-    )
+    intermediate_digits = max(intermediate_digits, total_coefficient_digits)
     return _ExpressionMetrics(
         nodes=nodes,
         support=support,
@@ -574,6 +670,8 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
         numerator_bits=numerator_bits,
         denominator=denominator,
         zero=zero,
+        constant=constant,
+        total_coefficient_digits=total_coefficient_digits,
         maximum_numerator_bits=maximum_numerator_bits,
         maximum_denominator_bits=maximum_denominator_bits,
         work=work,

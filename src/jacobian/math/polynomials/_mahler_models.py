@@ -101,8 +101,22 @@ class ContentPrimitiveProfileResult(StrictModel):
         return self
 
     @classmethod
-    def _from_kernel(cls, **values: object) -> Self:
-        return cls.model_construct(**values)
+    def _from_kernel(
+        cls,
+        *,
+        sign: Literal[-1, 1],
+        content: ExactInteger,
+        primitive_part: IntegerPolynomial,
+        degree: int,
+        reconstruction: IntegerPolynomial,
+    ) -> Self:
+        return cls.model_construct(
+            sign=sign,
+            content=content,
+            primitive_part=primitive_part,
+            degree=degree,
+            reconstruction=reconstruction,
+        )
 
 
 class ReciprocalProfileRequest(StrictModel):
@@ -152,8 +166,24 @@ class ReciprocalProfileResult(StrictModel):
         return self
 
     @classmethod
-    def _from_kernel(cls, **values: object) -> Self:
-        return cls.model_construct(**values)
+    def _from_kernel(
+        cls,
+        *,
+        degree: int,
+        reversed_coefficients: tuple[ExactInteger, ...],
+        state: Literal["RECIPROCAL", "ANTIRECIPROCAL", "NEITHER"],
+        leading_coefficient: ExactInteger,
+        constant_coefficient: ExactInteger,
+        coefficient_pair_ledger: tuple[tuple[ExactInteger, ExactInteger], ...],
+    ) -> Self:
+        return cls.model_construct(
+            degree=degree,
+            reversed_coefficients=reversed_coefficients,
+            state=state,
+            leading_coefficient=leading_coefficient,
+            constant_coefficient=constant_coefficient,
+            coefficient_pair_ledger=coefficient_pair_ledger,
+        )
 
 
 class RealQuadraticRootProfileRequest(StrictModel):

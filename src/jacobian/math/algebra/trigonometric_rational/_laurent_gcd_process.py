@@ -14,6 +14,7 @@ from jacobian._execution import (
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
     current_request_execution,
+    lease_operation_phases,
     request_checkpoint,
     request_execution,
 )
@@ -27,7 +28,6 @@ _MAX_COEFFICIENT_DIGITS = 4_096
 _STDOUT_BYTES = 4 * _MAX_LAURENT_TERMS * (64 + 4 * (_MAX_COEFFICIENT_DIGITS + 8))
 _STDERR_BYTES = 64 * 1024
 _ADDRESS_SPACE_BYTES = 1024 * 1024 * 1024
-_PARENT_FINALIZATION_SECONDS = 1.0
 
 
 def cancel_common_factor(payload: dict[str, Any]) -> dict[str, Any]:
@@ -37,12 +37,14 @@ def cancel_common_factor(payload: dict[str, Any]) -> dict[str, Any]:
     if execution is None:
         with request_execution(monotonic()):
             return cancel_common_factor(payload)
-    deadline = execution.deadline
-    if deadline is None:
-        deadline = execution.started_at + 120.0
     request_checkpoint("before trigonometric Laurent GCD encoding")
     encoded = encode_strict_json(payload)
-    remaining = deadline - monotonic() - _PARENT_FINALIZATION_SECONDS
+    lease = lease_operation_phases(
+        120.0,
+        admitted_response_bytes=_STDOUT_BYTES,
+        validation_work=8 * _MAX_LAURENT_TERMS,
+    )
+    remaining = lease.backend_deadline - monotonic()
     if remaining <= 0:
         raise OperationExecutionTimeoutError(
             "trigonometric Laurent GCD deadline expired before the worker started"
@@ -91,6 +93,7 @@ def cancel_common_factor(payload: dict[str, Any]) -> dict[str, Any]:
             max_output_bytes=_STDOUT_BYTES,
         ),
     )
+    request_checkpoint("after trigonometric Laurent GCD decoding")
     if not isinstance(response, dict):
         raise RuntimeError(
             "bounded trigonometric Laurent GCD worker returned malformed output"

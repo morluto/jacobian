@@ -5,6 +5,7 @@ from typing import NoReturn
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
 from jacobian._execution import request_checkpoint
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -15,6 +16,9 @@ from jacobian.math.geometry.gaussian_projective_line._models import (
     _divide,
 )
 from jacobian.math.number_theory.number_fields import GaussianRational
+from jacobian.math.number_theory.number_fields.values import (
+    MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS,
+)
 
 # The exact kernel is a fixed number of Gaussian additions and multiplications.
 # This bound is deliberately on coefficient height, not transport bytes.  It
@@ -47,7 +51,10 @@ def _determinant(
 
 
 def _fraction_component_digits(value: Fraction) -> int:
-    return max(len(str(abs(value.numerator))), len(str(value.denominator)))
+    return max(
+        len(format_canonical_integer(abs(value.numerator))),
+        len(format_canonical_integer(value.denominator)),
+    )
 
 
 def _gaussian_component_digits(value: tuple[Fraction, Fraction]) -> int:
@@ -93,6 +100,12 @@ def _admit_request(request: GaussianCrossRatioSource) -> None:
         _reject_resource(
             "intermediate_height_bound",
             "cross-ratio determinant products and quotient exceed the exact intermediate digit bound",
+        )
+    result_digits = 2 * product_digits + 3
+    if result_digits > MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS:
+        _reject_resource(
+            "output_height_bound",
+            "cross-ratio output exceeds the Gaussian-rational component bound",
         )
 
 

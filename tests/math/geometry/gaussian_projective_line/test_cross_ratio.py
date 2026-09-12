@@ -6,7 +6,10 @@ from itertools import permutations
 import pytest
 
 from jacobian.catalog.catalog import Catalog
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.dispatch import OperationRequestValidationError, invoke_operation
 from jacobian.math.geometry.gaussian_projective_line._models import (
     GaussianCrossRatioSource,
@@ -211,3 +214,25 @@ def test_sparse_large_coordinate_cross_ratio_is_admitted() -> None:
     )
     result = gaussian_rational_cross_ratio(request)
     assert result.as_fractions() == (Fraction(-(10**255)), Fraction())
+
+
+def test_output_height_is_admitted_before_result_construction() -> None:
+    large = 10**2100
+    request = GaussianCrossRatioSource(
+        first=_point(_z(0), _z(1)),
+        second=_point(_z(1), _z(1)),
+        third=_point(
+            GaussianRational.from_fractions(Fraction(large), Fraction()),
+            _z(1),
+        ),
+        fourth=_point(
+            GaussianRational.from_fractions(Fraction(large + 1), Fraction()),
+            _z(1),
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        gaussian_rational_cross_ratio(request)
+    assert (
+        error.value.errors()[0]["type"]
+        == "geometry.gaussian_cross_ratio.output_height_bound"
+    )

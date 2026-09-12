@@ -10,10 +10,10 @@ from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.number_theory._kempner_models import (
-    MAX_KEMPNER_ARITY,
-    MIN_KEMPNER_ARITY,
     _KEMPNER_ARITY_PATTERN,
     _KEMPNER_BASE_PATTERN,
+    MAX_KEMPNER_ARITY,
+    MIN_KEMPNER_ARITY,
     KempnerArithmeticProgressionRequest,
     KempnerArithmeticProgressionResult,
     KempnerContainsProgression,

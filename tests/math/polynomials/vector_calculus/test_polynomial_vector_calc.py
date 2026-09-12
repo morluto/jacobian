@@ -88,6 +88,25 @@ def test_catalog_contains_only_audited_operations() -> None:
     }
 
 
+def test_native_vector_operations_reject_malformed_fields_at_admission() -> None:
+    with pytest.raises(OperationDomainValidationError, match="at least one component"):
+        divergence(())
+
+    x = _polynomial(("x", "y", "z"), {(1, 0, 0): 1})
+    with pytest.raises(
+        OperationDomainValidationError, match="one component per variable"
+    ):
+        divergence((x, x))
+
+    planar = _polynomial(("x", "y"), {(1, 0): 1})
+    with pytest.raises(OperationDomainValidationError, match="exactly three variables"):
+        curl((planar, planar))
+
+    y = _polynomial(("y", "x", "z"), {(0, 1, 0): 1})
+    with pytest.raises(OperationDomainValidationError, match="one ordered ring"):
+        divergence((x, y, x))
+
+
 def test_gradient_returns_composable_polynomials() -> None:
     source = _polynomial(("x", "y"), {(2, 0): 1, (0, 2): 1})
     result = _run_gradient(ScalarFieldRequest(polynomial=source))

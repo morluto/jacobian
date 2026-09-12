@@ -20,6 +20,7 @@ MAX_TRIG_VARIABLES = 8
 MAX_TRIG_AST_NODES = 128
 MAX_TRIG_LAURENT_TERMS = 4_096
 MAX_TRIG_EXPONENT = 4_096
+MAX_TRIG_GCD_EXPONENT = 2 * MAX_TRIG_EXPONENT
 _GAUSSIAN_COMPONENT_LIMIT = 10**MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS
 
 
@@ -233,6 +234,12 @@ def _admit_support(support: Support) -> Support:
     return support
 
 
+def _admit_gcd_support(support: Support) -> Support:
+    if any(abs(value) > MAX_TRIG_GCD_EXPONENT for value in support):
+        _refuse_growth()
+    return support
+
+
 def _one(axis: int) -> Polynomial:
     return {(0,) * axis: (Fraction(1), Fraction())}
 
@@ -425,13 +432,13 @@ def _reduce_common_laurent_factor(
         for index in range(axis)
     )
     shifted_numerator = {
-        _admit_support(
+        _admit_gcd_support(
             tuple(value - minimum[index] for index, value in enumerate(support))
         ): coefficient
         for support, coefficient in numerator.items()
     }
     shifted_denominator = {
-        _admit_support(
+        _admit_gcd_support(
             tuple(value - minimum[index] for index, value in enumerate(support))
         ): coefficient
         for support, coefficient in denominator.items()
@@ -466,6 +473,34 @@ def _reduce_common_laurent_factor(
     )
 
 
+def _canonicalize_nonzero_locus(denominator: Polynomial) -> Polynomial:
+    """Normalize a source denominator while keeping its bounded Laurent support."""
+
+    shift = tuple(
+        min(support[index] for support in denominator)
+        for index in range(len(next(iter(denominator))))
+    )
+    shifted_supports = tuple(
+        tuple(value - shift[index] for index, value in enumerate(support))
+        for support in denominator
+    )
+    if all(
+        abs(value) <= MAX_TRIG_EXPONENT
+        for support in shifted_supports
+        for value in support
+    ):
+        return _canonicalize(_one(len(shift)), denominator)[1]
+
+    # A monomial is nonzero everywhere on the algebraic torus. If the
+    # canonical min-shift would exceed the output envelope, retain the source
+    # signed supports and normalize only the scalar unit.
+    leading = denominator[max(denominator)]
+    return {
+        support: _gdiv(coefficient, leading)
+        for support, coefficient in denominator.items()
+    }
+
+
 def _wire(
     variables: tuple[str, ...], polynomial: Polynomial
 ) -> GaussianLaurentPolynomial:
@@ -493,7 +528,7 @@ def normalize_trigonometric_rational(
     numerator, denominator = _reduce_common_laurent_factor(
         raw_numerator, raw_denominator
     )
-    _, denominator_nonzero = _canonicalize(_one(axis), raw_denominator)
+    denominator_nonzero = _canonicalize_nonzero_locus(raw_denominator)
     denominator_wire = _wire(request.variables, denominator)
     return TrigonometricRationalNormalizeResult(
         numerator=_wire(request.variables, numerator),

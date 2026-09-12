@@ -135,3 +135,28 @@ def test_boundary_angle_is_kept_when_no_polynomial_reduction_is_needed() -> None
         (4_096,),
         (-4_096,),
     }
+
+
+def test_boundary_frequency_cancellation_keeps_the_source_locus() -> None:
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x"],
+            "expression": {
+                "kind": "DIVIDE",
+                "numerator": {
+                    "kind": "SINE",
+                    "angle": {"coefficients": [4_096]},
+                },
+                "denominator": {
+                    "kind": "SINE",
+                    "angle": {"coefficients": [4_096]},
+                },
+            },
+        }
+    )
+    result = normalize_trigonometric_rational(request)
+    assert result.denominator.terms[0].exponents == (0,)
+    assert {term.exponents for term in result.denominator_nonzero.terms} == {
+        (4_096,),
+        (-4_096,),
+    }

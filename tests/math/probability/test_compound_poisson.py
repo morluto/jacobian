@@ -254,6 +254,48 @@ def test_zero_mass_atoms_are_excluded_from_the_power_plan() -> None:
     assert [row.cumulant.as_fraction() for row in result.cumulants] == [0] * 5
 
 
+def test_missing_atoms_member_is_a_typed_domain_error() -> None:
+    forged = FiniteRationalDistribution.model_construct()
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        compound_poisson_cumulant_prefix(_q(Fraction(1)), forged, 1)
+    assert exc_info.value.errors()[0]["type"] == (
+        "probability.compound_poisson.atom_type"
+    )
+
+
+def test_empty_support_is_a_domain_error() -> None:
+    empty = FiniteRationalDistribution.model_construct(atoms=())
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        compound_poisson_cumulant_prefix(_q(Fraction(1)), empty, 1)
+    assert exc_info.value.errors()[0]["type"] == (
+        "probability.compound_poisson.empty_support"
+    )
+
+
+def test_probability_weighted_powers_admit_cancelled_tall_jumps() -> None:
+    tall = 10**127
+    jumps = FiniteRationalDistribution(
+        atoms=(
+            FiniteDistributionAtom(
+                value=_q(Fraction(0)),
+                probability=_q(Fraction(tall - 1, tall)),
+            ),
+            FiniteDistributionAtom(
+                value=_q(Fraction(tall)),
+                probability=_q(Fraction(1, tall)),
+            ),
+        )
+    )
+    result = compound_poisson_cumulant_prefix(_q(Fraction(1)), jumps, 5)
+    assert [row.jump_raw_moment.as_fraction() for row in result.cumulants] == [
+        1,
+        tall,
+        tall**2,
+        tall**3,
+        tall**4,
+    ]
+
+
 def test_jump_law_schema_publishes_the_execution_envelope() -> None:
     schema = CompoundPoissonCumulantSource.model_json_schema()["properties"][
         "jump_distribution"

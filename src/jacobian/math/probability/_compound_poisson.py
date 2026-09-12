@@ -256,7 +256,7 @@ def _admit_and_plan(
             code="probability.compound_poisson.distribution_type",
             message="jump_distribution must be a FiniteRationalDistribution",
         )
-    atoms = jump_distribution.atoms
+    atoms = getattr(jump_distribution, "atoms", None)
     if type(atoms) is not tuple or not all(
         isinstance(atom, FiniteDistributionAtom) for atom in atoms
     ):
@@ -265,7 +265,13 @@ def _admit_and_plan(
             code="probability.compound_poisson.atom_type",
             message="jump_distribution atoms must be finite-distribution atoms",
         )
-    if not 1 <= len(atoms) <= MAX_COMPOUND_POISSON_ATOMS:
+    if len(atoms) == 0:
+        raise _domain_error(
+            location=("jump_distribution", "atoms"),
+            code="probability.compound_poisson.empty_support",
+            message="jump_distribution must contain at least one support atom",
+        )
+    if len(atoms) > MAX_COMPOUND_POISSON_ATOMS:
         raise _resource_error(
             location=("jump_distribution", "atoms"),
             code="probability.compound_poisson.support_bound",
@@ -326,31 +332,21 @@ def _admit_and_plan(
         )
 
     values = tuple(atom.value.as_fraction() for atom in active_atoms)
-    probabilities = tuple(atom.probability.as_fraction() for atom in active_atoms)
     intensity_value = intensity.as_fraction()
-    powers = [Fraction(1) for _ in active_atoms]
+    weighted_powers = [atom.probability.as_fraction() for atom in active_atoms]
     rows: list[tuple[int, Fraction, Fraction]] = []
     for order in range(1, max_order + 1):
-        for index, value in enumerate(values):
-            powers[index] = _bounded_product(
-                powers[index],
-                value,
-                location=("jump_distribution", "atoms", str(index), "value"),
-                label="powered jump value",
-            )
         moment = Fraction()
-        for index, (probability, power) in enumerate(
-            zip(probabilities, powers, strict=True)
-        ):
-            contribution = _bounded_product(
-                probability,
-                power,
+        for index, value in enumerate(values):
+            weighted_powers[index] = _bounded_product(
+                weighted_powers[index],
+                value,
                 location=("jump_distribution", "atoms", str(index)),
                 label="jump-moment contribution",
             )
             moment = _bounded_sum(
                 moment,
-                contribution,
+                weighted_powers[index],
                 location=("jump_distribution", "atoms"),
                 label="jump raw moment",
             )

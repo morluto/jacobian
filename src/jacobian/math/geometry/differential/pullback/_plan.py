@@ -3,6 +3,7 @@
 from dataclasses import dataclass, replace
 from fractions import Fraction
 from itertools import permutations
+from typing import NoReturn
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -21,7 +22,7 @@ from jacobian.math.polynomials.rational_functions.values import RationalFunction
 from jacobian.math.polynomials.values import SparseRationalPolynomial
 
 
-def reject(reason: str, message: str) -> None:
+def reject(reason: str, message: str) -> NoReturn:
     raise OperationResourceAdmissionError(
         location=("metric", "map"),
         code=f"differential_geometry.rational_metric.pullback.{reason}",

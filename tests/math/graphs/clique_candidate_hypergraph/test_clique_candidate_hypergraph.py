@@ -59,13 +59,15 @@ class TestCompleteConstructor:
     def test_hyperedges_hold_exactly_internal_resources(self) -> None:
         graph = _graph(BOWTIE)
         result = construct_all_clique_candidate_hypergraph(graph)
-        resource_of = {entry.endpoints: entry.resource for entry in result.resource_map}
+        resource_of: dict[tuple[str, str], str] = {
+            entry.endpoints: entry.resource for entry in result.resource_map
+        }
         by_candidate = {
             entry.candidate: entry.members for entry in result.candidate_map
         }
         for edge_id, members in result.hypergraph.edges:
             expected = {
-                resource_of[tuple(sorted((left, right)))]
+                resource_of[(left, right) if left < right else (right, left)]
                 for left in by_candidate[edge_id]
                 for right in by_candidate[edge_id]
                 if left < right

@@ -295,6 +295,18 @@ def test_consumers_reject_foreign_incomparable_pair_models_as_domain_errors() ->
         width(forged)
 
 
+def test_consumers_reject_list_incomparable_pair_containers_as_domain_errors() -> None:
+    poset = _materialize(["a", "b"], [])
+    forged = poset.model_copy(
+        update={"incomparable_pairs": list(poset.incomparable_pairs)}
+    )
+
+    assert type(forged.incomparable_pairs) is list
+    assert verify_finite_poset(forged) is False
+    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+        width(forged)
+
+
 def test_consumers_reject_duck_typed_ordered_pair_carriers_as_domain_errors() -> None:
     class ForeignOrder:
         def __init__(self, lower: str, upper: str) -> None:

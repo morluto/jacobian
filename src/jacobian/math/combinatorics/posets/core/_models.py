@@ -310,9 +310,14 @@ def _validate_canonical_poset_elements_and_pairs(
 
 def _validate_poset_incomparable_pairs(
     elements: tuple[str, ...],
-    incomparable_pairs: tuple[IncomparablePair, ...],
+    incomparable_pairs: object,
     closure: set[tuple[str, str]],
 ) -> None:
+    if type(incomparable_pairs) is not tuple:
+        raise _validation_error(
+            "canonical_incomparable_pairs",
+            "incomparable_pairs must be a tuple",
+        )
     expected_incomparable = tuple(
         (left, right)
         for index, left in enumerate(elements)

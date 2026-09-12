@@ -190,9 +190,7 @@ def test_sample_count_boundary_is_bounded_and_preflighted() -> None:
     with pytest.raises(ValueError, match="digit bound"):
         BerryEsseenRequest.model_validate(
             {
-                "distribution": _distribution(
-                    (0, Fraction(1, 2)), (1, Fraction(1, 2))
-                ),
+                "distribution": _distribution((0, Fraction(1, 2)), (1, Fraction(1, 2))),
                 "sample_count": int(over_digits),
             }
         )

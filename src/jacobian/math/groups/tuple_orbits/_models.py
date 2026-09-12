@@ -54,13 +54,63 @@ def _preflight_action_dimensions(*, domain: object, generators: object) -> None:
             )
 
 
-def _preflight_source_mapping(data: Mapping[str, Any]) -> None:
-    action = data.get("action")
+def _preflight_action_payload(action: object) -> None:
     if isinstance(action, Mapping):
         _preflight_action_dimensions(
             domain=action.get("domain"), generators=action.get("generators")
         )
-    family = data.get("family")
+        return
+    if action is None:
+        return
+    _preflight_action_dimensions(
+        domain=getattr(action, "domain", None),
+        generators=getattr(action, "generators", None),
+    )
+
+
+def _row_field(row: object, name: str) -> object:
+    if isinstance(row, Mapping):
+        return row.get(name)
+    return getattr(row, name, None)
+
+
+def _preflight_row_payload(row: object) -> None:
+    representative = _row_field(row, "representative")
+    if (
+        isinstance(representative, (list, tuple))
+        and len(representative) > MAX_TUPLE_ARITY
+    ):
+        raise _tuple_error(
+            "arity_out_of_range",
+            "tuple arity must be a non-negative action-domain-sized integer",
+        )
+    source_indices = _row_field(row, "source_indices")
+    if (
+        isinstance(source_indices, (list, tuple))
+        and len(source_indices) > MAX_FAMILY_MEMBERS
+    ):
+        raise _tuple_error(
+            "input_bound",
+            f"at most {MAX_FAMILY_MEMBERS} tuple rows are admitted",
+        )
+    transporter = _row_field(row, "least_transporter")
+    if isinstance(transporter, (list, tuple)) and len(transporter) > MAX_GROUP_DEGREE:
+        raise _tuple_error(
+            "transporter_axis",
+            "transporters must be permutations of the action axis",
+        )
+
+
+def _preflight_source_payload(data: object) -> None:
+    if isinstance(data, Mapping):
+        action = data.get("action")
+        family = data.get("family")
+        raw_arity = data.get("arity")
+    else:
+        action = getattr(data, "action", None)
+        family = getattr(data, "family", None)
+        raw_arity = getattr(data, "arity", None)
+    _preflight_action_payload(action)
     if not isinstance(family, (list, tuple)):
         return
     if len(family) > MAX_FAMILY_MEMBERS:
@@ -68,7 +118,6 @@ def _preflight_source_mapping(data: Mapping[str, Any]) -> None:
             "input_bound",
             f"at most {MAX_FAMILY_MEMBERS} tuple rows are admitted",
         )
-    raw_arity = data.get("arity")
     arity_is_int = isinstance(raw_arity, int) and not isinstance(raw_arity, bool)
     for member in family:
         if not isinstance(member, (list, tuple)):
@@ -115,8 +164,9 @@ class TupleFamilyOrbitSource(StrictModel):
     @classmethod
     def normalize_json_containers(cls, data: Any) -> Any:
         if not isinstance(data, Mapping):
+            _preflight_source_payload(data)
             return data
-        _preflight_source_mapping(data)
+        _preflight_source_payload(data)
         return canonicalize_json_containers(dict(data))
 
     @model_validator(mode="after")
@@ -177,6 +227,8 @@ class TupleOrbitRow(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def normalize_json_containers(cls, data: Any) -> Any:
+        if isinstance(data, Mapping):
+            _preflight_row_payload(data)
         return canonicalize_json_containers(data)
 
     @model_validator(mode="after")
@@ -215,38 +267,10 @@ class TupleFamilyOrbitResult(StrictModel):
                         f"at most {MAX_FAMILY_MEMBERS} tuple rows are admitted",
                     )
                 for row in rows:
-                    if not isinstance(row, Mapping):
-                        continue
-                    representative = row.get("representative")
-                    if (
-                        isinstance(representative, (list, tuple))
-                        and len(representative) > MAX_TUPLE_ARITY
-                    ):
-                        raise _tuple_error(
-                            "arity_out_of_range",
-                            "tuple arity must be a non-negative action-domain-sized integer",
-                        )
-                    source_indices = row.get("source_indices")
-                    if (
-                        isinstance(source_indices, (list, tuple))
-                        and len(source_indices) > MAX_FAMILY_MEMBERS
-                    ):
-                        raise _tuple_error(
-                            "input_bound",
-                            f"at most {MAX_FAMILY_MEMBERS} tuple rows are admitted",
-                        )
-                    transporter = row.get("least_transporter")
-                    if (
-                        isinstance(transporter, (list, tuple))
-                        and len(transporter) > MAX_GROUP_DEGREE
-                    ):
-                        raise _tuple_error(
-                            "transporter_axis",
-                            "transporters must be permutations of the action axis",
-                        )
+                    _preflight_row_payload(row)
             source = data.get("source")
-            if isinstance(source, Mapping):
-                _preflight_source_mapping(source)
+            if source is not None:
+                _preflight_source_payload(source)
         return canonicalize_json_containers(data)
 
     @model_validator(mode="after")

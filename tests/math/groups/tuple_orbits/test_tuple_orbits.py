@@ -15,6 +15,7 @@ from jacobian.math.groups.tuple_orbits._models import (
     MAX_TUPLE_ARITY,
     TupleFamilyOrbitResult,
     TupleFamilyOrbitSource,
+    TupleOrbitRow,
 )
 from jacobian.math.groups.tuple_orbits.operations import tuple_family_orbit_profile
 
@@ -233,6 +234,23 @@ def test_raw_action_generator_dimensions_are_rejected_before_container_copy() ->
     assert "generator_length_mismatch" in generator_length.value.errors()[0]["type"]
 
 
+def test_nested_constructed_action_is_preflighted_on_source_validate() -> None:
+    class _HugeGenerator(tuple):
+        def __len__(self) -> int:
+            return 2_000_000
+
+    payload = {
+        "action": FinitePermutationAction.model_construct(
+            domain=("a",), generators=(_HugeGenerator(),)
+        ),
+        "arity": 0,
+        "family": [],
+    }
+    with pytest.raises(ValidationError) as generator_length:
+        TupleFamilyOrbitSource.model_validate(payload)
+    assert "generator_length_mismatch" in generator_length.value.errors()[0]["type"]
+
+
 def test_forged_action_generators_are_preflighted_before_pydantic() -> None:
     class _HugeGenerator(tuple):
         def __len__(self) -> int:
@@ -258,6 +276,23 @@ def test_missing_action_on_forged_source_is_a_typed_domain_error() -> None:
     )
 
 
+def test_orbit_row_payloads_are_preflighted_before_container_copy() -> None:
+    class _HugeRepresentative(tuple):
+        def __len__(self) -> int:
+            return 2_000_000
+
+    payload = {
+        "representative": _HugeRepresentative(),
+        "source_indices": [0],
+        "orbit_size": 1,
+        "stabilizer_size": 1,
+        "least_transporter": [0],
+    }
+    with pytest.raises(ValidationError) as arity:
+        TupleOrbitRow.model_validate(payload)
+    assert "arity_out_of_range" in arity.value.errors()[0]["type"]
+
+
 def test_result_payloads_are_preflighted_before_container_copy() -> None:
     payload = {
         "source": {
@@ -271,6 +306,32 @@ def test_result_payloads_are_preflighted_before_container_copy() -> None:
     with pytest.raises(ValidationError) as rows_bound:
         TupleFamilyOrbitResult.model_validate(payload)
     assert "input_bound" in rows_bound.value.errors()[0]["type"]
+
+
+def test_constructed_result_rows_are_preflighted_before_container_copy() -> None:
+    class _HugeRepresentative(tuple):
+        def __len__(self) -> int:
+            return 2_000_000
+
+    row = TupleOrbitRow.model_construct(
+        representative=_HugeRepresentative(),
+        source_indices=(0,),
+        orbit_size=1,
+        stabilizer_size=1,
+        least_transporter=(0,),
+    )
+    payload = {
+        "source": {
+            "action": {"domain": ["a"], "generators": [[0]]},
+            "arity": 0,
+            "family": [],
+        },
+        "rows": [row],
+        "is_union_of_complete_ambient_orbits": True,
+    }
+    with pytest.raises(ValidationError) as arity:
+        TupleFamilyOrbitResult.model_validate(payload)
+    assert "arity_out_of_range" in arity.value.errors()[0]["type"]
 
 
 def test_complete_orbit_family_is_not_rejected_by_tuple_count_times_order() -> None:

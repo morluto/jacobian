@@ -975,8 +975,9 @@ def test_native_implication_check_bounds_raw_premise_tuple_before_deduplication(
 
     magma = _cyclic_addition_algebra(2)
     premise = MagmaEquation(left=_variable_term(0), right=_variable_term(0))
+    oversized = (premise,) * 16 + (cast(MagmaEquation, None),)
     with pytest.raises(OperationDomainValidationError, match="sixteen premises"):
-        implication_countermodel_check(magma, (premise,) * 17, premise)
+        implication_countermodel_check(magma, oversized, premise)
 
 
 def test_native_implication_check_preserves_sparse_variable_axis() -> None:

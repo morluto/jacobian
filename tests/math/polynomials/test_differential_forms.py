@@ -519,3 +519,137 @@ def test_wedge_binds_owner_deadline_before_expansion() -> None:
         )
         assert bound is not None
         assert bound == started + 60.0
+
+
+def test_wedge_cancels_denominator_contributions_before_lcm_cap() -> None:
+    first = 10**4095 + 1
+    second = 10**4095 + 3
+    left = _form(
+        0,
+        (
+            (),
+            _poly(
+                (Fraction(1, first), (3, 0)),
+                (Fraction(1, second), (1, 0)),
+                (Fraction(-1, first), (0, 0)),
+            ),
+        ),
+    )
+    right = _form(
+        0,
+        (
+            (),
+            _poly((1, (3, 0)), (1, (2, 0)), (1, (0, 0))),
+        ),
+    )
+    product = wedge(left, right)
+    terms = {
+        term.exponents: term.coefficient
+        for term in product.components[0].coefficient.polynomial.terms
+    }
+    assert terms[(3, 0)] == R.from_fraction(Fraction(1, second))
+    assert max(len(str(abs(term.num))) for term in terms.values()) <= 4096
+    assert max(len(str(term.den)) for term in terms.values()) <= 4096
+    assert type(product).model_validate_json(product.model_dump_json()) == product
+
+
+def test_proportional_odd_forms_cancel_before_product_height_cap() -> None:
+    coefficient = 10**3000
+    alpha = _form(
+        1,
+        ((0,), _poly((coefficient, (0, 0)))),
+        ((1,), _poly((coefficient, (0, 0)))),
+    )
+    beta = _form(
+        1,
+        ((0,), _poly((2 * coefficient, (0, 0)))),
+        ((1,), _poly((2 * coefficient, (0, 0)))),
+    )
+    product = wedge(alpha, beta)
+    assert product.degree == 2
+    assert product.components == ()
+    assert type(product).model_validate_json(product.model_dump_json()) == product
+
+
+def test_wedge_weights_convolution_budget_by_coefficient_size(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "jacobian.math.polynomials.differential_forms.operations.MAX_WEDGE_DIGIT_WORK",
+        50,
+    )
+    left = _form(
+        0,
+        ((), _poly((10**4, (1, 0)), (10**4, (0, 0)))),
+    )
+    right = _form(
+        0,
+        ((), _poly((10**4, (1, 0)), (10**4, (0, 0)))),
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        wedge(left, right)
+    assert error.value.errors()[0]["type"] == "differential_form.wedge.term_budget"
+
+
+def test_wedge_bounds_aggregate_serialized_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "jacobian.math.polynomials.differential_forms.operations.MAX_WEDGE_OUTPUT_DIGITS",
+        20,
+    )
+    coefficient = 10**20
+    left = _form(
+        0,
+        ((), _poly((coefficient, (1, 0)), (coefficient, (0, 0)))),
+    )
+    right = _form(
+        0,
+        ((), _poly((coefficient, (0, 1)), (coefficient, (0, 0)))),
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        wedge(left, right)
+    assert error.value.errors()[0]["type"] == "differential_form.wedge.output_budget"
+
+
+def test_wedge_checkpoints_while_admitting_operands(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed: list[str] = []
+
+    def _observe(phase: str) -> None:
+        observed.append(phase)
+
+    monkeypatch.setattr(
+        "jacobian.math.polynomials.differential_forms.operations.request_checkpoint",
+        _observe,
+    )
+    monkeypatch.setattr(
+        "jacobian.math.polynomials.differential_forms.operations._CONVOLUTION_CHECKPOINT_INTERVAL",
+        1,
+    )
+    alpha = _form(1, ((0,), _poly((2, (1, 0)))), ((1,), _poly((3, (0, 1)))))
+    unit = _form(0, ((), _poly((1, (0, 0)))))
+    assert wedge(alpha, unit) == alpha
+    assert any("operand admission" in phase for phase in observed)
+
+
+def test_wedge_constructs_trusted_result_without_budget_replay(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    left = _form(1, ((0,), _poly((2, (1, 0)))))
+    right = _form(1, ((1,), _poly((3, (0, 1)))))
+
+    def _boom(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("replayed polynomial budget")
+
+    monkeypatch.setattr(
+        "jacobian.math.polynomials.differential_forms.values.require_polynomial_budget",
+        _boom,
+    )
+    result = wedge(left, right)
+    assert result.degree == 2
+    assert result.components[0].indices == (0, 1)
+    assert result.components[0].coefficient.polynomial.terms[0].coefficient == R(
+        num=6, den=1
+    )

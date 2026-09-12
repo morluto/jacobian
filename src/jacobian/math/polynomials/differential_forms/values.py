@@ -128,6 +128,22 @@ class PolynomialDifferentialForm(StrictModel):
                 raise _error("coefficient_budget", str(exc)) from exc
         return self
 
+    @classmethod
+    def _from_admitted(
+        cls,
+        *,
+        variables: tuple[PolynomialVariable, ...],
+        degree: ExactInteger,
+        components: tuple[FormComponent, ...],
+    ) -> Self:
+        """Construct after owner admission established support and coefficient bounds."""
+
+        return cls.model_construct(
+            variables=variables,
+            degree=degree,
+            components=components,
+        )
+
 
 __all__ = [
     "MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS",

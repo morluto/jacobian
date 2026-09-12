@@ -199,6 +199,14 @@ def _require_canonical_rational(
             code="probability.compound_poisson.canonical_rational",
             message=f"{label} must have a positive denominator",
         )
+    try:
+        require_bounded_rational(value, max_digits=128, label=label)
+    except ValueError as exc:
+        raise _resource_error(
+            location=location,
+            code="probability.compound_poisson.input_height_bound",
+            message=str(exc),
+        ) from exc
     if gcd(abs(numerator), denominator) != 1 or (numerator == 0 and denominator != 1):
         raise _domain_error(
             location=location,
@@ -218,9 +226,7 @@ def _require_jump_atoms(
             message="jump_distribution must be a FiniteRationalDistribution",
         )
     atoms = getattr(jump_distribution, "atoms", None)
-    if type(atoms) is not tuple or not all(
-        isinstance(atom, FiniteDistributionAtom) for atom in atoms
-    ):
+    if type(atoms) is not tuple:
         raise _domain_error(
             location=("jump_distribution", "atoms"),
             code="probability.compound_poisson.atom_type",
@@ -240,6 +246,12 @@ def _require_jump_atoms(
                 "compound-Poisson jump laws accept at most "
                 f"{MAX_COMPOUND_POISSON_ATOMS} support atoms"
             ),
+        )
+    if not all(isinstance(atom, FiniteDistributionAtom) for atom in atoms):
+        raise _domain_error(
+            location=("jump_distribution", "atoms"),
+            code="probability.compound_poisson.atom_type",
+            message="jump_distribution atoms must be finite-distribution atoms",
         )
     for index, atom in enumerate(atoms):
         value = getattr(atom, "value", None)
@@ -342,19 +354,23 @@ def _admit_and_plan(
     weighted_powers = [atom.probability.as_fraction() for _, atom in active_atoms]
     rows: list[tuple[int, Fraction, Fraction]] = []
     for order in range(1, max_order + 1):
-        moment = Fraction()
-        for slot, (source_index, value) in enumerate(values):
-            weighted_powers[slot] = _bounded_product(
-                weighted_powers[slot],
-                value,
-                location=("jump_distribution", "atoms", str(source_index)),
-                label="jump-moment contribution",
-            )
-            moment = _bounded_sum(
-                moment,
-                weighted_powers[slot],
-                location=("jump_distribution", "atoms"),
-                label="jump raw moment",
+        for slot, (_source_index, value) in enumerate(values):
+            weighted_powers[slot] *= value
+        moment = sum(weighted_powers, start=Fraction())
+        if (
+            abs(moment.numerator) > _RESULT_VALUE_LIMIT
+            or moment.denominator > _RESULT_VALUE_LIMIT
+        ):
+            location: tuple[str, ...] = ("jump_distribution", "atoms")
+            if len(values) == 1:
+                location = ("jump_distribution", "atoms", str(values[0][0]))
+            raise _resource_error(
+                location=location,
+                code="probability.compound_poisson.intermediate_height_bound",
+                message=(
+                    "jump raw moment exceeds the "
+                    f"{MAX_RESULT_RATIONAL_DIGITS}-digit exact intermediate bound"
+                ),
             )
         cumulant = _bounded_product(
             intensity_value,

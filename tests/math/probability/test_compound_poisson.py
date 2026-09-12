@@ -322,6 +322,54 @@ def test_height_errors_keep_source_atom_indices_after_zero_mass_filter() -> None
     assert error["loc"] == ("jump_distribution", "atoms", "1")
 
 
+def test_signed_jump_moments_cancel_before_the_height_bound() -> None:
+    tall = 10**127
+    jumps = FiniteRationalDistribution(
+        atoms=(
+            FiniteDistributionAtom(
+                value=_q(Fraction(-tall)), probability=_q(Fraction(1, 2))
+            ),
+            FiniteDistributionAtom(
+                value=_q(Fraction(tall)), probability=_q(Fraction(1, 2))
+            ),
+        )
+    )
+    result = compound_poisson_cumulant_prefix(_q(Fraction(1)), jumps, 5)
+    assert [row.jump_raw_moment.as_fraction() for row in result.cumulants] == [
+        0,
+        tall**2,
+        0,
+        tall**4,
+        0,
+    ]
+
+
+def test_oversized_support_is_rejected_before_atom_type_scan() -> None:
+    atom = FiniteDistributionAtom(value=_q(Fraction(0)), probability=_q(Fraction(1)))
+    forged = FiniteRationalDistribution.model_construct(
+        atoms=(atom,) * (MAX_COMPOUND_POISSON_ATOMS + 1)
+    )
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
+        compound_poisson_cumulant_prefix(_q(Fraction(1)), forged, 1)
+    assert exc_info.value.errors()[0]["type"] == (
+        "probability.compound_poisson.support_bound"
+    )
+
+
+def test_forged_tall_rationals_are_rejected_before_gcd() -> None:
+    huge = CanonicalRational.model_construct(num=10**10_000, den=10**10_000 + 1)
+    jumps = FiniteRationalDistribution(
+        atoms=(
+            FiniteDistributionAtom(value=_q(Fraction(1)), probability=_q(Fraction(1))),
+        )
+    )
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
+        compound_poisson_cumulant_prefix(huge, jumps, 1)
+    assert exc_info.value.errors()[0]["type"] == (
+        "probability.compound_poisson.input_height_bound"
+    )
+
+
 def test_jump_law_schema_publishes_the_execution_envelope() -> None:
     schema = CompoundPoissonCumulantSource.model_json_schema()["properties"][
         "jump_distribution"

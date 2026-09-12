@@ -126,8 +126,9 @@ def _cofactor_is_factorizable(cofactor: int) -> bool:
             return False
         power = perfect_power(candidate, factor=False)
         if power is False:
-            return isprime(candidate)
+            return bool(isprime(candidate))
         candidate, _ = power
+    return False
 
 
 def require_factorizable_discriminant(
@@ -195,8 +196,9 @@ def _poly_with_admitted_discriminant(polynomial: Any, admitted: int) -> Any:
     import sympy
 
     admitted_value = sympy.Integer(admitted)
+    poly_type = type(polynomial)
 
-    class _AdmittedDiscriminantPoly(type(polynomial)):
+    class _AdmittedDiscriminantPoly(poly_type):  # type: ignore[misc, valid-type]
         def discriminant(self, *args: object, **kwargs: object) -> Any:
             return admitted_value
 

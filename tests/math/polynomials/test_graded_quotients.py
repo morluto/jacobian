@@ -364,7 +364,7 @@ def test_hilbert_function_rejects_eight_variable_degree_eleven_before_groebner(
                     terms=(
                         RationalPolynomialTerm(
                             coefficient=CanonicalRational(num=1, den=1),
-                            exponents=(1,) + (0,) * 7,
+                            exponents=(2,) + (0,) * 7,
                         ),
                     )
                 ),
@@ -725,8 +725,8 @@ def test_initial_ideal_result_rejects_multiterm_generators() -> None:
     result = initial_monomial_ideal(_ideal((2, 0)))
     payload = result.model_dump()
     payload["initial_ideal"]["generators"][0]["polynomial"]["terms"] = [
-        {"coefficient": {"num": "1", "den": "1"}, "exponents": [1, 0]},
-        {"coefficient": {"num": "1", "den": "1"}, "exponents": [0, 1]},
+        {"coefficient": {"num": 1, "den": 1}, "exponents": [1, 0]},
+        {"coefficient": {"num": 1, "den": 1}, "exponents": [0, 1]},
     ]
     with pytest.raises(ValidationError, match="unit monomials"):
         InitialMonomialIdealResult.model_validate(payload)

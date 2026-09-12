@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from math import comb
-from typing import Literal, Self
+from typing import Any, Literal, Self
 
 from pydantic import (
     ConfigDict,
@@ -206,6 +206,25 @@ class SteinerTripleSystemShard(StrictModel):
             "is sorted and uses point positions in the range 0 through order-1."
         ),
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def canonicalize_fixed_triple_family(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        triples = data.get("fixed_triples")
+        if triples is None:
+            return data
+        payload = dict(data)
+        payload["fixed_triples"] = tuple(
+            tuple(triple) if isinstance(triple, list) else triple for triple in triples
+        )
+        if all(
+            isinstance(triple, tuple) and len(triple) == 3
+            for triple in payload["fixed_triples"]
+        ):
+            payload["fixed_triples"] = tuple(sorted(payload["fixed_triples"]))
+        return payload
 
     @model_validator(mode="after")
     def require_canonical_prefix(self) -> Self:

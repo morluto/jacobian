@@ -104,6 +104,19 @@ def test_shard_requires_canonical_in_range_triples() -> None:
         SteinerTripleSystemShard(order=7, fixed_triples=((0, 1, 2), (0, 1, 2)))
 
 
+def test_fixed_triple_family_is_lexicographically_canonical() -> None:
+    """An unordered block family has one serialization, independent of tuple order."""
+    first = SteinerTripleSystemShard(
+        order=7, fixed_triples=((0, 3, 6), (0, 1, 2))
+    )
+    second = SteinerTripleSystemShard(
+        order=7, fixed_triples=((0, 1, 2), (0, 3, 6))
+    )
+    assert first == second
+    assert first.fixed_triples == ((0, 1, 2), (0, 3, 6))
+    assert first.model_dump(mode="json") == second.model_dump(mode="json")
+
+
 def test_native_continuation_rejects_mismatched_shard_order() -> None:
     with pytest.raises(OperationDomainValidationError, match="same order"):
         construct_steiner_triple_system(

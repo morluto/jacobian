@@ -16,6 +16,8 @@ from jacobian.math.universal_algebra.values import (
     FiniteAlgebraCarrierMap,
     FiniteAlgebraHomomorphism,
     FlatTerm,
+    UniversalAlgebraAdmissionError,
+    require_term_for_algebra,
 )
 
 MAX_ENUMERATION_WORK = 1_000_000
@@ -103,6 +105,149 @@ class EquationProfileResult(StrictModel):
                 "counterexample_status_mismatch",
                 "FAILS must carry exactly one first counterassignment",
             )
+        return self
+
+
+def _require_countermodel_profile_intrinsics(
+    profile: EquationProfileResult,
+    carrier_size: int,
+    profile_index: int,
+) -> None:
+    assignment_count = carrier_size**profile.variable_count
+    if profile.satisfying_count > assignment_count:
+        raise _validation_error(
+            "countermodel_result_satisfying_count",
+            f"profile {profile_index} satisfying_count cannot exceed its assignment space",
+        )
+    if profile.status == "HOLDS" and profile.satisfying_count != assignment_count:
+        raise _validation_error(
+            "countermodel_result_holds_count",
+            f"profile {profile_index} HOLDS must cover its complete assignment space",
+        )
+    if profile.status == "FAILS" and profile.satisfying_count >= assignment_count:
+        raise _validation_error(
+            "countermodel_result_fails_count",
+            f"profile {profile_index} FAILS must leave an assignment unsatisfied",
+        )
+    counterexample = profile.first_counterassignment
+    if (
+        counterexample is not None
+        and counterexample.left_value == counterexample.right_value
+    ):
+        raise _validation_error(
+            "countermodel_result_equal_values",
+            f"profile {profile_index} counterexample values must differ",
+        )
+
+
+class MagmaEquation(StrictModel):
+    """One equation over a source-bound binary magma term language."""
+
+    left: FlatTerm
+    right: FlatTerm
+
+
+class ImplicationCountermodelCheckRequest(StrictModel):
+    """Check an explicit finite magma against premises and one target."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "The algebra must have exactly one binary operation. Terms use "
+                "the algebra's operation index and variable axis; every assignment "
+                "to the variables occurring in an equation is exhausted."
+            )
+        }
+    )
+
+    algebra: FiniteAlgebra = Field(
+        description="A finite algebra with exactly one binary operation (a magma)."
+    )
+    premises: tuple[MagmaEquation, ...] = Field(
+        max_length=16,
+        description="Premise equations checked universally over this magma.",
+    )
+    target: MagmaEquation = Field(
+        description="The target equation whose failure is sought after premise checks."
+    )
+
+
+class ImplicationCountermodelCheckResult(StrictModel):
+    """Complete premise and target profiles for one explicit finite magma."""
+
+    algebra: FiniteAlgebra
+    premises: tuple[EquationProfileResult, ...] = Field(max_length=16)
+    target: EquationProfileResult
+    is_countermodel: bool
+
+    @model_validator(mode="after")
+    def bind_countermodel_status(self) -> Self:
+        expected = all(profile.status == "HOLDS" for profile in self.premises) and (
+            self.target.status == "FAILS"
+        )
+        if self.is_countermodel != expected:
+            raise _validation_error(
+                "countermodel_status_mismatch",
+                "is_countermodel must mean all premises hold and the target fails",
+            )
+        if any(profile.algebra != self.algebra for profile in self.premises) or (
+            self.target.algebra != self.algebra
+        ):
+            raise _validation_error(
+                "countermodel_source_mismatch",
+                "all equation profiles must retain the checked magma",
+            )
+        if len(self.algebra.operations) != 1 or self.algebra.operations[0].arity != 2:
+            raise _validation_error(
+                "countermodel_magma_signature",
+                "a finite-magma countermodel result must retain exactly one binary operation",
+            )
+        for profile_index, profile in enumerate((*self.premises, self.target)):
+            for term_name, term in (("left", profile.left), ("right", profile.right)):
+                try:
+                    require_term_for_algebra(term, self.algebra)
+                except UniversalAlgebraAdmissionError as exc:
+                    raise _validation_error(
+                        "countermodel_result_term_signature",
+                        f"profile {profile_index} {term_name} term is not bound to the retained magma: {exc}",
+                    ) from exc
+            declared_variable_count = max(
+                profile.left.variable_count, profile.right.variable_count
+            )
+            if profile.variable_count != declared_variable_count:
+                raise _validation_error(
+                    "countermodel_result_variable_count",
+                    f"profile {profile_index} variable_count must match the declared variable axis",
+                )
+            _require_countermodel_profile_intrinsics(
+                profile, len(self.algebra.carrier), profile_index
+            )
+            counterexample = profile.first_counterassignment
+            if counterexample is not None:
+                if len(counterexample.assignment) != profile.variable_count:
+                    raise _validation_error(
+                        "countermodel_result_assignment_axis",
+                        f"profile {profile_index} counterassignment must cover its declared variable axis",
+                    )
+                if any(
+                    value < 0 or value >= len(self.algebra.carrier)
+                    for value in counterexample.assignment
+                ):
+                    raise _validation_error(
+                        "countermodel_result_assignment_range",
+                        f"profile {profile_index} counterassignment value is outside the retained magma carrier",
+                    )
+                if any(
+                    value < 0 or value >= len(self.algebra.carrier)
+                    for value in (
+                        counterexample.left_value,
+                        counterexample.right_value,
+                    )
+                ):
+                    raise _validation_error(
+                        "countermodel_result_value_range",
+                        f"profile {profile_index} counterexample value is outside the retained magma carrier",
+                    )
         return self
 
 
@@ -308,6 +453,9 @@ __all__ = [
     "HomomorphismObstruction",
     "HomomorphismProfileRequest",
     "HomomorphismProfileResult",
+    "ImplicationCountermodelCheckRequest",
+    "ImplicationCountermodelCheckResult",
+    "MagmaEquation",
     "QuotientRequest",
     "SubalgebraRequest",
     "SubalgebraResult",

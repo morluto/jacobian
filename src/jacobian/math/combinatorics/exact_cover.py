@@ -790,6 +790,41 @@ def minimum_generalized_exact_cover(  # noqa: C901
     row_count = len(instance.rows)
     mask_words = max(1, (max(row_count, primary_count) + 63) // 64)
     incidence_count = sum(len(row.items) for row in instance.rows)
+    shortcut_work = len(items) + row_count + 2 * incidence_count
+    if shortcut_work > _MINIMUM_EXACT_COVER_WORK_LIMIT:
+        raise OperationResourceAdmissionError(
+            location=("search_node_limit",),
+            code="combinatorics.minimum_exact_cover_work",
+            message=(
+                "minimum exact-cover shortcut recognition exceeds the admitted "
+                "work envelope"
+            ),
+        )
+    primary_items = frozenset(instance.primary_items)
+    selected_row_ids: tuple[str, ...] | None = None
+    if not primary_items:
+        selected_row_ids = ()
+    else:
+        for row in instance.rows:
+            if len(row.items) >= primary_count and primary_items.issubset(row.items):
+                # Rows are stored in canonical ID order, so the first one is the
+                # canonical witness among all one-row covers.
+                selected_row_ids = (row.row_id,)
+                break
+    if selected_row_ids is not None:
+        request_checkpoint("after minimum exact-cover shortcut admission")
+        upper_bound = len(selected_row_ids)
+        result = MinimumGeneralizedExactCoverResult._from_kernel(
+            instance=instance,
+            status="EXACT",
+            selected_row_ids=selected_row_ids,
+            item_multiplicities=_expected_coverage(instance, selected_row_ids),
+            lower_bound=upper_bound,
+            upper_bound=upper_bound,
+            searched_node_count=1,
+        )
+        request_checkpoint("after minimum exact-cover result construction")
+        return result
     index_work = (len(items) + row_count + incidence_count) * mask_words
     scan_work = search_node_limit * primary_count * mask_words
     candidate_work = search_node_limit * row_count

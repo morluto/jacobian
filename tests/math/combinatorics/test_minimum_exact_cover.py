@@ -111,6 +111,27 @@ def test_empty_primary_axis_has_empty_minimum_even_with_secondary_rows() -> None
     assert result.item_multiplicities[0].multiplicity == 0
 
 
+def test_single_row_cover_avoids_generic_search_admission() -> None:
+    primary = tuple(f"p{index:03d}" for index in range(256))
+    instance = GeneralizedExactCoverInstance(
+        primary_items=primary,
+        secondary_items=(),
+        rows=(
+            ExactCoverRow(row_id="r0000", items=primary),
+            *(
+                ExactCoverRow(row_id=f"r{index:04d}", items=())
+                for index in range(1, 4096)
+            ),
+        ),
+    )
+
+    result = minimum_generalized_exact_cover(instance)
+
+    assert result.status == "EXACT"
+    assert result.selected_row_ids == ("r0000",)
+    assert result.lower_bound == result.upper_bound == 1
+
+
 def test_secondary_conflict_is_infeasible() -> None:
     result = minimum_generalized_exact_cover(
         GeneralizedExactCoverInstance(
@@ -158,12 +179,19 @@ def test_node_limit_without_incumbent_is_an_operational_failure() -> None:
 
 def test_node_limit_with_incumbent_returns_witness_backed_bounds() -> None:
     result = minimum_generalized_exact_cover(
-        _instance((("a-both", ("p", "q")), ("b-p", ("p",)), ("c-q", ("q",)))),
-        search_node_limit=2,
+        _instance(
+            (
+                ("a-p", ("p",)),
+                ("b-q", ("q",)),
+                ("c-p", ("p",)),
+                ("d-q", ("q",)),
+            )
+        ),
+        search_node_limit=3,
     )
     assert result.status == "BOUNDED"
-    assert result.selected_row_ids == ("a-both",)
-    assert result.lower_bound == result.upper_bound == 1
+    assert result.selected_row_ids == ("a-p", "b-q")
+    assert result.lower_bound == result.upper_bound == 2
 
 
 def test_large_node_by_item_scan_is_rejected_before_search() -> None:

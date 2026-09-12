@@ -455,9 +455,7 @@ def test_cardinality_one_skips_quadratic_domination_on_edge_cap() -> None:
     triples = tuple(combinations(vertices, 3))[:12_000]
     source = FiniteHypergraph(
         vertices=vertices,
-        edges=tuple(
-            (f"e{index:05d}", triple) for index, triple in enumerate(triples)
-        ),
+        edges=tuple((f"e{index:05d}", triple) for index, triple in enumerate(triples)),
     )
     result = enumerate_minimal_transversals(
         MinimalTransversalEnumerationRequest(hypergraph=source, maximum_cardinality=1)
@@ -478,9 +476,7 @@ def test_domination_presolve_is_admitted_before_subset_comparisons() -> None:
     triples = tuple(combinations(vertices, 3))[:12_000]
     source = FiniteHypergraph(
         vertices=vertices,
-        edges=tuple(
-            (f"e{index:05d}", triple) for index, triple in enumerate(triples)
-        ),
+        edges=tuple((f"e{index:05d}", triple) for index, triple in enumerate(triples)),
     )
     with pytest.raises(OperationResourceAdmissionError, match="subset comparisons"):
         enumerate_minimal_transversals(

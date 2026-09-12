@@ -25,10 +25,13 @@ from jacobian.math.combinatorics.designs.incidence_structures._models import (
     LeviGraphResult,
     RestrictionRequest,
     RestrictionResult,
+    SteinerTripleSystemRequest,
+    SteinerTripleSystemResult,
 )
 from jacobian.math.combinatorics.designs.incidence_structures.operations import (
     check_incidence_trade,
     complement,
+    construct_steiner_triple_system,
     containment_profile,
     degree_profile,
     derived_residual,
@@ -85,6 +88,14 @@ def _levi_graph(request: LeviGraphRequest) -> LeviGraphResult:
 
 def _gram(request: GramRequest) -> GramResult:
     return gram(request.incidence, request.axis)
+
+
+def _steiner_triple_system(
+    request: SteinerTripleSystemRequest,
+) -> SteinerTripleSystemResult:
+    return construct_steiner_triple_system(
+        request.order, request.search_budget, request.shard
+    )
 
 
 _STRUCTURE = {
@@ -321,6 +332,29 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 description="Compute the point-axis Gram matrix N N^T of a 3-point, "
                 "2-block structure.",
                 input={"incidence": _STRUCTURE, "axis": "point"},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="combinatorics.design.steiner_triple_system.construct",
+        title="Construct a bounded Steiner triple system",
+        description="Construct one Steiner triple system STS(v): a 3-uniform design "
+        "on v points in which every unordered pair of points lies in exactly "
+        "one block. COMPUTED returns such a design; budget exhaustion is "
+        "UNKNOWN with a resumable frontier.",
+        request_type=SteinerTripleSystemRequest,
+        result_type=SteinerTripleSystemResult,
+        run=_steiner_triple_system,
+        tags=("combinatorics", "design", "steiner", "exact"),
+        discovery_terms=("STS", "Steiner system", "triple system"),
+        examples=(
+            OperationExample(
+                name="fano_plane",
+                description=(
+                    "Construct the Fano-plane Steiner triple system STS(7); the "
+                    "order must be congruent to 1 or 3 modulo 6."
+                ),
+                input={"order": 7, "search_budget": 100_000},
             ),
         ),
     ),

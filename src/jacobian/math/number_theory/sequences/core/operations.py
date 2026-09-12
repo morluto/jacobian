@@ -130,9 +130,7 @@ def _order_shape_rationals(
     raise TypeError("sequence_order_shape requires FiniteRationalSequence")
 
 
-def _product_component_digits(
-    left: CanonicalRational, right: CanonicalRational
-) -> int:
+def _product_component_digits(left: CanonicalRational, right: CanonicalRational) -> int:
     """Bound retained numerator/denominator digits of one exact product."""
 
     if left.num == 0 or right.num == 0:

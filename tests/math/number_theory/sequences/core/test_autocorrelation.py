@@ -6,7 +6,7 @@ from typing import cast
 import pytest
 from jsonschema import Draft202012Validator, ValidationError
 
-from jacobian._exact import CanonicalRational, MAX_CANONICAL_INTEGER_DIGITS
+from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS, CanonicalRational
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
@@ -14,7 +14,6 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.dispatch import invoke_operation
-from jacobian.math.number_theory.sequences.core.values import MAX_SEQUENCE_LENGTH
 from jacobian.math.number_theory.sequences.core._models import (
     AutocorrelationResult,
     FiniteIntegerSequence,
@@ -27,6 +26,7 @@ from jacobian.math.number_theory.sequences.core.operations import (
     cyclic_autocorrelation,
     sequence_order_shape,
 )
+from jacobian.math.number_theory.sequences.core.values import MAX_SEQUENCE_LENGTH
 
 
 def values(result: AutocorrelationResult) -> list[tuple[int, int]]:

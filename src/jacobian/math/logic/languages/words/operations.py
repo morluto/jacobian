@@ -17,6 +17,7 @@ from jacobian.math.logic.languages.words._models import (
     SubstitutionDependencyGraphResult,
     SubstitutionFixedPointPrefixResult,
     SubstitutionPrimitivityProfileResult,
+    require_word_family_allocation,
 )
 from jacobian.math.logic.languages.words.values import (
     MAX_MORPHISM_OUTPUT_LENGTH,
@@ -63,6 +64,26 @@ class PrimitivityAnalysis:
     obstruction: Literal[
         "NONE", "REDUCIBLE_DEPENDENCY_GRAPH", "PERIODIC_DEPENDENCY_GRAPH"
     ]
+
+
+def prefixes(word: FiniteWord) -> tuple[FiniteWord, ...]:
+    """Return every prefix, ordered by increasing length, including empty."""
+
+    require_word_family_allocation(word, "prefixes")
+    return tuple(
+        FiniteWord(alphabet=word.alphabet, letters=word.letters[:length])
+        for length in range(len(word.letters) + 1)
+    )
+
+
+def suffixes(word: FiniteWord) -> tuple[FiniteWord, ...]:
+    """Return every suffix, ordered by starting position, including empty."""
+
+    require_word_family_allocation(word, "suffixes")
+    return tuple(
+        FiniteWord(alphabet=word.alphabet, letters=word.letters[start:])
+        for start in range(len(word.letters) + 1)
+    )
 
 
 def factors_of_length(word: FiniteWord, factor_length: int) -> FactorAnalysis:
@@ -360,9 +381,11 @@ __all__ = [
     "parikh_vector",
     "periods",
     "prefix_function",
+    "prefixes",
     "primitive_root",
     "substitution_dependency_graph",
     "substitution_primitivity_profile",
+    "suffixes",
     "verify_factors_length",
     "verify_incidence_matrix",
     "verify_periods",

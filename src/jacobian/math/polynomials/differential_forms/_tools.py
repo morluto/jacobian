@@ -1,16 +1,32 @@
 """Publication of the polynomial differential-form wedge operation."""
 
+from pydantic import Field
+
 from jacobian._models import StrictModel
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.polynomials.differential_forms.operations import wedge
 from jacobian.math.polynomials.differential_forms.values import (
+    MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS,
+    MAX_DIFFERENTIAL_FORM_EXPONENT,
+    MAX_DIFFERENTIAL_FORM_TERMS,
     PolynomialDifferentialForm,
+)
+
+_FORM_ENVELOPE = (
+    "Each form coefficient admits at most "
+    f"{MAX_DIFFERENTIAL_FORM_TERMS} terms, exponents at most "
+    f"{MAX_DIFFERENTIAL_FORM_EXPONENT}, and rational components at most "
+    f"{MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS} digits."
 )
 
 
 class WedgeRequest(StrictModel):
-    left: PolynomialDifferentialForm
-    right: PolynomialDifferentialForm
+    left: PolynomialDifferentialForm = Field(
+        description="Left polynomial differential form. " + _FORM_ENVELOPE,
+    )
+    right: PolynomialDifferentialForm = Field(
+        description="Right polynomial differential form. " + _FORM_ENVELOPE,
+    )
 
 
 TOOLS = (
@@ -23,7 +39,7 @@ TOOLS = (
             "Both forms must use the same ordered variable axis; repeated "
             "differentials vanish and a degree above the ambient dimension "
             "returns a degree-labelled canonical zero form so the graded "
-            "target and subsequent compositions remain deterministic."
+            "target and subsequent compositions remain deterministic. " + _FORM_ENVELOPE
         ),
         request_type=WedgeRequest,
         result_type=PolynomialDifferentialForm,

@@ -16,8 +16,11 @@ from jacobian.math.polynomials.differential_forms import (
     PolynomialDifferentialForm,
     wedge,
 )
+from jacobian.math.polynomials.differential_forms._tools import WedgeRequest
 from jacobian.math.polynomials.differential_forms.values import (
+    MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS,
     MAX_DIFFERENTIAL_FORM_EXPONENT,
+    MAX_DIFFERENTIAL_FORM_TERMS,
 )
 from jacobian.math.polynomials.values import (
     MAX_POLYNOMIAL_VARIABLES,
@@ -413,3 +416,24 @@ def test_wedge_convolution_checkpoints_during_nested_products(
     squared = wedge(zero, zero)
     assert squared.degree == 32 and squared.components == ()
     assert wedge(squared, zero).degree == 48
+
+
+def test_wedge_schema_publishes_coefficient_envelope() -> None:
+    coefficient = FormComponent.model_json_schema()["properties"]["coefficient"]
+    assert str(MAX_DIFFERENTIAL_FORM_TERMS) in coefficient["description"]
+    assert str(MAX_DIFFERENTIAL_FORM_EXPONENT) in coefficient["description"]
+    assert str(MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS) in coefficient["description"]
+    left = WedgeRequest.model_json_schema()["properties"]["left"]
+    assert str(MAX_DIFFERENTIAL_FORM_TERMS) in left["description"]
+
+
+def test_native_wedge_revalidates_forged_operands() -> None:
+    forged = PolynomialDifferentialForm.model_construct(
+        variables=("x", "y"),
+        degree=-1,
+        components=(),
+    )
+    with pytest.raises(OperationDomainValidationError):
+        wedge(forged, forged)
+    with pytest.raises(OperationDomainValidationError):
+        wedge(object(), _form(0))

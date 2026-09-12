@@ -5,6 +5,8 @@ from __future__ import annotations
 from fractions import Fraction
 from math import gcd
 
+from pydantic import ValidationError
+
 from jacobian._exact import (
     MAX_CANONICAL_INTEGER_DIGITS,
     CanonicalRational,
@@ -221,6 +223,37 @@ def _admit_remaining_coefficients(aggregate: _RemainingTerms) -> None:
         _coefficient_budget()
 
 
+def _admit_form(
+    value: object, *, location: tuple[str, ...]
+) -> PolynomialDifferentialForm:
+    """Revalidate a native operand before reading fields or expanding products."""
+
+    if not isinstance(value, PolynomialDifferentialForm):
+        raise OperationDomainValidationError(
+            location=location,
+            code="differential_form.operand_type",
+            message="wedge operands must be polynomial differential forms",
+        )
+    degree = getattr(value, "degree", None)
+    if not isinstance(degree, int) or degree < 0:
+        raise OperationDomainValidationError(
+            location=(*location, "degree"),
+            code="differential_form.degree",
+            message="wedge operands must have a nonnegative degree",
+        )
+    try:
+        return PolynomialDifferentialForm.model_validate(
+            value.model_dump(warnings="none")
+        )
+    except ValidationError as error:
+        detail = error.errors()[0]
+        raise OperationDomainValidationError(
+            location=(*location, *tuple(detail.get("loc", ()))),
+            code=str(detail["type"]),
+            message=str(detail["msg"]),
+        ) from error
+
+
 def _admit_degree(degree: int) -> None:
     """Keep an overflowing canonical zero degree a typed resource rejection."""
 
@@ -239,6 +272,8 @@ def wedge(
 ) -> PolynomialDifferentialForm:
     """Return the exact graded-commutative wedge product."""
 
+    left = _admit_form(left, location=("left",))
+    right = _admit_form(right, location=("right",))
     if left.variables != right.variables:
         raise OperationDomainValidationError(
             location=("right", "variables"),

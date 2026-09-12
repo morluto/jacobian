@@ -36,7 +36,15 @@ class FormComponent(StrictModel):
         max_length=MAX_POLYNOMIAL_VARIABLES,
         description="Strictly increasing coordinate indices in the differential basis.",
     )
-    coefficient: RationalPolynomial
+    coefficient: RationalPolynomial = Field(
+        description=(
+            "Sparse QQ coefficient on the form variable axis. Differential-form "
+            f"coefficients admit at most {MAX_DIFFERENTIAL_FORM_TERMS} terms, "
+            f"exponents at most {MAX_DIFFERENTIAL_FORM_EXPONENT}, and numerator "
+            "or denominator components at most "
+            f"{MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS} digits."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_local_canonical_indices(self) -> Self:
@@ -61,7 +69,14 @@ class PolynomialDifferentialForm(StrictModel):
     )
     degree: ExactInteger = Field(ge=0)
     components: tuple[FormComponent, ...] = Field(
-        default=(), max_length=MAX_DIFFERENTIAL_FORM_COMPONENTS
+        default=(),
+        max_length=MAX_DIFFERENTIAL_FORM_COMPONENTS,
+        description=(
+            "Ordered differential-basis components. Each coefficient is bounded "
+            f"to {MAX_DIFFERENTIAL_FORM_TERMS} terms, exponent "
+            f"{MAX_DIFFERENTIAL_FORM_EXPONENT}, and "
+            f"{MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS}-digit rationals."
+        ),
     )
 
     @model_validator(mode="after")

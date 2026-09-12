@@ -417,12 +417,30 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
             denominator = 1
             constant = Fraction(0)
         elif base.constant is not None:
-            constant = base.constant**exponent
-            numerator_bits = min(
+            projected_numerator_bits = min(
                 _MAX_EXPRESSION_COEFFICIENT_BITS + 1,
-                max(1, abs(constant.numerator).bit_length()),
+                max(1, base.numerator_bits) * exponent
+                + _ceil_log2(max(1, base.support)) * exponent,
             )
-            denominator = constant.denominator
+            projected_denominator = _bounded_denominator_power(
+                base.denominator, exponent
+            )
+            if (
+                projected_numerator_bits > _MAX_EXPRESSION_COEFFICIENT_BITS
+                or projected_denominator is None
+                or _denominator_bits(projected_denominator)
+                > _MAX_EXPRESSION_COEFFICIENT_BITS
+            ):
+                constant = None
+                numerator_bits = projected_numerator_bits
+                denominator = projected_denominator
+            else:
+                constant = base.constant**exponent
+                numerator_bits = min(
+                    _MAX_EXPRESSION_COEFFICIENT_BITS + 1,
+                    max(1, abs(constant.numerator).bit_length()),
+                )
+                denominator = constant.denominator
         else:
             constant = None
             numerator_bits = min(

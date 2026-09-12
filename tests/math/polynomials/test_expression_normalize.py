@@ -380,3 +380,29 @@ def test_heterogeneous_coefficient_heights_use_aggregate_digits() -> None:
         if term.exponents == (0,) * 7
     )
     assert constant == 10 ** (127 * 32) + 1
+
+
+def test_nested_constant_powers_are_capped_before_evaluation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from fractions import Fraction as ExactFraction
+
+    original_pow = ExactFraction.__pow__
+
+    def fail_huge_power(self: ExactFraction, exponent: object) -> ExactFraction:
+        if isinstance(exponent, int) and exponent == 32 and abs(self.numerator) > 10**200:
+            raise AssertionError("exact constant power evaluated past the digit envelope")
+        return original_pow(self, exponent)
+
+    monkeypatch.setattr(ExactFraction, "__pow__", fail_huge_power)
+    expression = {
+        "kind": "POWER",
+        "base": {
+            "kind": "POWER",
+            "base": {"kind": "LITERAL", "value": {"num": 10**127, "den": 1}},
+            "exponent": 32,
+        },
+        "exponent": 32,
+    }
+    with pytest.raises(OperationResourceAdmissionError):
+        normalize_polynomial_expression(_request("ZZ", expression))

@@ -10,7 +10,12 @@ from jacobian.math.matrices.values import IntegerMatrix
 from jacobian.math.topology.frames._models import (
     GramResult,
 )
-from jacobian.math.topology.frames._tools import _coherence, _frame_potential, _gram
+from jacobian.math.topology.frames._tools import (
+    _coherence,
+    _frame_potential,
+    _gram,
+    _tight_equiangular_profile,
+)
 from jacobian.math.topology.frames.operations import gram, verify_gram
 from jacobian.math.topology.frames.values import (
     MAX_VECTOR_CELLS,
@@ -104,6 +109,18 @@ def test_coherence_rejects_zero_vector() -> None:
     with pytest.raises(OperationDomainValidationError) as error:
         _coherence(request)
     assert error.value.errors()[0]["type"] == "frames.zero_vector"
+
+
+def test_tight_equiangular_profile_is_exact_and_serializable() -> None:
+    result = _tight_equiangular_profile(
+        VectorFamily(dimension=2, vectors=((1, 0), (0, 1)))
+    )
+    assert result.tight is True
+    assert result.tight_constant == 1
+    assert result.equiangular is True
+    assert result.common_squared_inner_product is not None
+    assert result.common_squared_inner_product.as_integer_ratio() == (0, 1)
+    assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
 def test_coherence_is_exact_and_carries_canonical_maximizer() -> None:

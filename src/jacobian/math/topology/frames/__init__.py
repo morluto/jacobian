@@ -4,8 +4,9 @@ from jacobian.math.topology.frames.operations import (
     coherence,
     frame_potential,
     gram,
+    tight_equiangular_profile,
     verify_gram,
 )
 from jacobian.math.topology.frames.values import VectorFamily
 
-__all__ = ["VectorFamily", "coherence", "frame_potential", "gram", "verify_gram"]
+__all__ = ["VectorFamily", "coherence", "frame_potential", "gram", "tight_equiangular_profile", "verify_gram"]

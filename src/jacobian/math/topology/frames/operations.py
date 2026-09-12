@@ -15,10 +15,11 @@ from jacobian.math.topology.frames._models import (
     CoherenceResult,
     FramePotentialResult,
     GramResult,
+    TightEquiangularProfileResult,
 )
 from jacobian.math.topology.frames.values import VectorFamily
 
-__all__ = ["coherence", "frame_potential", "gram", "verify_gram"]
+__all__ = ["coherence", "frame_potential", "gram", "tight_equiangular_profile", "verify_gram"]
 
 
 MAX_FRAME_GRAM_ENTRIES = 2_097_152
@@ -146,4 +147,58 @@ def frame_potential(value: VectorFamily) -> FramePotentialResult:
     total = sum(entry**2 for row in matrix for entry in row)
     return FramePotentialResult._from_kernel(
         vectors=value.vectors, dimension=value.dimension, potential=total
+    )
+
+
+def tight_equiangular_profile(value: VectorFamily) -> TightEquiangularProfileResult:
+    """Classify tightness and equiangularity using exact integer Gram data."""
+
+    _require_gram_work_budget(value)
+    if any(not any(vector) for vector in value.vectors):
+        raise OperationDomainValidationError(
+            location=("vectors",),
+            code="frames.zero_vector",
+            message="frame profiles require every vector to be nonzero",
+        )
+    _admit_frame_shape(value)
+    rank, matrix = integer_gram_and_rank(value.vectors, dimension=value.dimension)
+    _admit_frame(value, rank=rank)
+    assert matrix is not None
+    dimension = value.dimension
+    frame_operator = [
+        [
+            sum(vector[row] * vector[column] for vector in value.vectors)
+            for column in range(dimension)
+        ]
+        for row in range(dimension)
+    ]
+    diagonal = frame_operator[0][0] if dimension else 0
+    tight = all(
+        frame_operator[row][column] == (diagonal if row == column else 0)
+        for row in range(dimension)
+        for column in range(dimension)
+    )
+    common: Fraction | None = None
+    equiangular = True
+    for left in range(len(value.vectors)):
+        for right in range(left + 1, len(value.vectors)):
+            candidate = Fraction(
+                matrix[left][right] ** 2,
+                matrix[left][left] * matrix[right][right],
+            )
+            if common is None:
+                common = candidate
+            elif candidate != common:
+                equiangular = False
+    return TightEquiangularProfileResult._from_kernel(
+        vectors=value.vectors,
+        dimension=value.dimension,
+        tight=tight,
+        tight_constant=diagonal if tight else None,
+        equiangular=equiangular,
+        common_squared_inner_product=(
+            CanonicalRational.from_fraction(common)
+            if equiangular and common is not None
+            else None
+        ),
     )

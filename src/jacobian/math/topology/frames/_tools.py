@@ -5,11 +5,13 @@ from jacobian.math.topology.frames._models import (
     CoherenceResult,
     FramePotentialResult,
     GramResult,
+    TightEquiangularProfileResult,
 )
 from jacobian.math.topology.frames.operations import (
     coherence,
     frame_potential,
     gram,
+    tight_equiangular_profile,
 )
 from jacobian.math.topology.frames.values import VectorFamily
 
@@ -26,9 +28,23 @@ def _frame_potential(request: VectorFamily) -> FramePotentialResult:
     return frame_potential(request)
 
 
+def _tight_equiangular_profile(request: VectorFamily) -> TightEquiangularProfileResult:
+    return tight_equiangular_profile(request)
+
+
 _ORTHONORMAL = {"dimension": 2, "vectors": [[1, 0], [0, 1]]}
 
 TOOLS: MathTools = (
+    MathTool(
+        operation_id="frame.tight_equiangular_profile.compute",
+        title="Classify tightness and equiangularity of a frame",
+        description="Return exact tight-frame and equiangular-frame predicates for an integer vector family.",
+        request_type=VectorFamily,
+        result_type=TightEquiangularProfileResult,
+        run=_tight_equiangular_profile,
+        tags=("topology", "frame", "tight", "equiangular", "exact"),
+        examples=(OperationExample(name="orthonormal_frame", description="Classify an orthonormal frame.", input=_ORTHONORMAL),),
+    ),
     MathTool(
         operation_id="frame.gram.compute",
         title="Compute the Gram matrix of a vector family",

@@ -84,10 +84,52 @@ class FramePotentialResult(VectorFamily):
         )
 
 
+class TightEquiangularProfileResult(VectorFamily):
+    """Exact tightness and equiangularity predicates for one frame."""
+
+    tight: bool
+    tight_constant: ExactInteger | None
+    equiangular: bool
+    common_squared_inner_product: CanonicalRational | None
+
+    @model_validator(mode="after")
+    def require_profile_shape(self) -> Self:
+        if self.tight != (self.tight_constant is not None):
+            raise PydanticCustomError(
+                "frames.profile_shape", "tightness must agree with its scalar constant"
+            )
+        if not self.equiangular and self.common_squared_inner_product is not None:
+            raise PydanticCustomError(
+                "frames.profile_shape", "non-equiangular frames cannot carry a common value"
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        vectors: tuple[tuple[int, ...], ...],
+        dimension: int,
+        tight: bool,
+        tight_constant: ExactInteger | None,
+        equiangular: bool,
+        common_squared_inner_product: CanonicalRational | None,
+    ) -> Self:
+        return cls.model_construct(
+            vectors=vectors,
+            dimension=dimension,
+            tight=tight,
+            tight_constant=tight_constant,
+            equiangular=equiangular,
+            common_squared_inner_product=common_squared_inner_product,
+        )
+
+
 __all__ = [
     "MAX_DIM",
     "MAX_VECTOR_CELLS",
     "CoherenceResult",
     "FramePotentialResult",
     "GramResult",
+    "TightEquiangularProfileResult",
 ]

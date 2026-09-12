@@ -413,11 +413,11 @@ def test_explicit_unit_generator_short_circuits_before_homogeneity() -> None:
             terms=(
                 RationalPolynomialTerm(
                     coefficient=CanonicalRational(num=1, den=1),
-                    exponents=(1,),
+                    exponents=(2,),
                 ),
                 RationalPolynomialTerm(
                     coefficient=CanonicalRational(num=1, den=1),
-                    exponents=(2,),
+                    exponents=(1,),
                 ),
             )
         ),

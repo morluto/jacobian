@@ -1,6 +1,7 @@
 """Complete maximal-chain enumeration from canonical cover relations."""
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -8,6 +9,7 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.combinatorics.posets.core._maximal_chains import (
     MAX_MAXIMAL_CHAIN_RESULT_BYTES,
+    MaximalChainEnumerationResult,
     enumerate_maximal_chains,
 )
 from jacobian.math.combinatorics.posets.core._models import (
@@ -72,6 +74,27 @@ def test_singleton_and_disconnected_posets_are_complete() -> None:
     assert [(cell.length, cell.count) for cell in result.length_histogram] == [(1, 2)]
 
 
+def test_inclusion_maximal_chains_include_different_lengths() -> None:
+    poset = materialize_finite_poset(
+        ("s", "a", "b", "t"),
+        tuple(
+            PresentationPair(lower=lower, upper=upper)
+            for lower, upper in (("s", "a"), ("s", "b"), ("b", "t"))
+        ),
+        RelationInterpretation.COVER_EDGES,
+        ReflexivePairPolicy.FORBIDDEN,
+    )
+    result = enumerate_maximal_chains(PosetRequest(poset=poset))
+    assert tuple(row.elements for row in result.chains) == (
+        ("s", "a"),
+        ("s", "b", "t"),
+    )
+    assert [(cell.length, cell.count) for cell in result.length_histogram] == [
+        (2, 1),
+        (3, 1),
+    ]
+
+
 def test_dual_reverses_each_chain_and_preserves_histogram() -> None:
     poset = materialize_finite_poset(
         ("0", "a", "b", "1"),
@@ -104,6 +127,25 @@ def test_serialized_result_round_trips_and_rejects_tampered_cover_claim() -> Non
     tampered = poset.model_copy(update={"cover_relations": ()})
     with pytest.raises(OperationDomainValidationError, match="canonical"):
         enumerate_maximal_chains(PosetRequest.model_construct(poset=tampered))
+
+
+def test_serialized_result_rejects_contradictory_structural_row() -> None:
+    poset = materialize_finite_poset(
+        ("a", "b"),
+        (PresentationPair(lower="a", upper="b"),),
+        RelationInterpretation.COVER_EDGES,
+        ReflexivePairPolicy.FORBIDDEN,
+    )
+    result = enumerate_maximal_chains(PosetRequest(poset=poset))
+    payload = result.model_dump(mode="json")
+    payload["chains"][0]["length"] = 1
+    with pytest.raises(ValidationError, match="chain length"):
+        MaximalChainEnumerationResult.model_validate(payload)
+
+
+def test_direct_native_guard_rejects_untyped_request() -> None:
+    with pytest.raises(OperationDomainValidationError, match="typed finite-poset"):
+        enumerate_maximal_chains(PosetRequest.model_construct())
 
 
 def test_complete_profile_rejects_predicted_result_explosion() -> None:

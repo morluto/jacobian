@@ -11,8 +11,10 @@ MAXIMAL_CHAIN_ENUMERATION_OPERATION = MathTool(
     operation_id="poset.maximal_chains.enumerate",
     title="Enumerate all maximal chains of a finite poset",
     description=(
-        "Enumerate every source-bound maximal chain from the Hasse cover relation, "
-        "with endpoints, cardinality histogram, and the single empty chain for the empty poset."
+        "Enumerate every source-bound inclusion-maximal chain from the Hasse cover "
+        "relation (not only maximum-cardinality chains), with adjacent cover "
+        "steps, endpoints, cardinality histogram, and the single empty chain "
+        "for the empty poset."
     ),
     request_type=PosetRequest,
     result_type=MaximalChainEnumerationResult,

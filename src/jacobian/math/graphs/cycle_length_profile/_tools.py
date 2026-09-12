@@ -9,6 +9,7 @@ from jacobian.math.graphs.cycle_length_profile._models import (
 )
 from jacobian.math.graphs.cycle_length_profile.operations import (
     compute_cycle_length_profile,
+    enumerate_chordless_fixed_length_cycles,
     enumerate_fixed_length_cycles,
 )
 
@@ -28,9 +29,7 @@ def _enumerate_cycles(
 def _enumerate_chordless_cycles(
     request: FixedLengthCycleEnumerationRequest,
 ) -> FixedLengthCycleEnumerationResult:
-    return enumerate_fixed_length_cycles(
-        request.graph, request.cycle_length, chordless=True
-    )
+    return enumerate_chordless_fixed_length_cycles(request.graph, request.cycle_length)
 
 
 TOOLS: MathTools = (
@@ -62,9 +61,15 @@ TOOLS: MathTools = (
         ),
     ),
     MathTool(
-        operation_id="graph.simple_cycle.fixed_length.enumerate",
+        operation_id="graph.cycle.fixed_length.enumerate",
         title="Enumerate fixed-length simple cycles",
-        description="Return every simple cycle of one length with dihedral canonicalization and source incidence profiles.",
+        description=(
+            "Return every simple cycle of the requested length in dihedral "
+            "canonical form, with the exact count and complete source vertex "
+            "and edge incidence indexes; the input must be a canonical finite "
+            "simple undirected graph and the complete family must fit the "
+            "admitted traversal and result envelope."
+        ),
         request_type=FixedLengthCycleEnumerationRequest,
         result_type=FixedLengthCycleEnumerationResult,
         run=_enumerate_cycles,
@@ -84,9 +89,15 @@ TOOLS: MathTools = (
         ),
     ),
     MathTool(
-        operation_id="graph.chordless_cycle.fixed_length.enumerate",
+        operation_id="graph.cycle.chordless_fixed_length.enumerate",
         title="Enumerate fixed-length chordless cycles",
-        description="Return every induced cycle of one length with dihedral canonicalization and source incidence profiles.",
+        description=(
+            "Return every induced (chordless) cycle of the requested length in "
+            "dihedral canonical form, with the exact count and complete source "
+            "vertex and edge incidence indexes; the input must be a canonical "
+            "finite simple undirected graph and the complete family must fit "
+            "the admitted traversal and result envelope."
+        ),
         request_type=FixedLengthCycleEnumerationRequest,
         result_type=FixedLengthCycleEnumerationResult,
         run=_enumerate_chordless_cycles,

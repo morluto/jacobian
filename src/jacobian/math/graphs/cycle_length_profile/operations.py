@@ -7,7 +7,11 @@ from itertools import pairwise
 
 import networkx as nx
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian._execution import request_checkpoint
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.graphs._networkx import biconnected_components
 from jacobian.math.graphs.cycle_length_profile._models import (
     MAX_VERTICES,
@@ -19,7 +23,11 @@ from jacobian.math.graphs.cycle_length_profile._models import (
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 __all__ = [
+    "MAX_FIXED_CYCLES",
+    "MAX_FIXED_CYCLE_WORK",
     "compute_cycle_length_profile",
+    "enumerate_chordless_fixed_length_cycles",
+    "enumerate_fixed_length_cycles",
     "verify_cycle_length_profile",
     "verify_cycle_length_row",
 ]
@@ -28,6 +36,7 @@ MAX_SEARCH_WORK = 10_000_000
 MAX_CYCLE_PROFILE_RETAINED_LABEL_CHARACTERS = 100_000_000
 MAX_FIXED_CYCLE_WORK = 10_000_000
 MAX_FIXED_CYCLES = 20_000
+MAX_FIXED_CYCLE_RETAINED_LABEL_CHARACTERS = 100_000_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -407,42 +416,26 @@ def enumerate_fixed_length_cycles(
     *,
     chordless: bool = False,
 ) -> FixedLengthCycleEnumerationResult:
-    """Return all simple cycles of the requested length."""
+    """Return every simple (or, privately, chordless) cycle of one length."""
 
-    vertex_count = len(graph.vertices)
-    if not 3 <= cycle_length <= vertex_count:
-        _reject(
-            "cycle_enumeration.length",
-            "cycle_length must be between 3 and the graph order",
-        )
-    prefix_bound = 0
-    falling = 1
-    for depth in range(1, cycle_length):
-        falling *= vertex_count - depth
-        prefix_bound += vertex_count * falling
-    output_bound = falling * vertex_count // (2 * cycle_length)
-    if prefix_bound * max(1, vertex_count) > MAX_FIXED_CYCLE_WORK:
-        _reject(
-            "cycle_enumeration.path_bound",
-            "fixed-length DFS path bound exceeds the admitted work envelope",
-        )
-    if output_bound > MAX_FIXED_CYCLES:
-        _reject(
-            "cycle_enumeration.output_bound",
-            "fixed-length cycle output bound exceeds the admitted result envelope",
-        )
-    adjacency: dict[str, set[str]] = {vertex: set() for vertex in graph.vertices}
-    for left, right in graph.edges:
-        adjacency[left].add(right)
-        adjacency[right].add(left)
+    request_checkpoint("before fixed-length cycle enumeration")
+    plan = _admit_fixed_cycle_enumeration(graph, cycle_length, chordless=chordless)
+    if plan is None:
+        return _empty_cycle_enumeration_result(graph, cycle_length)
+    adjacency = plan.adjacency
     edge_set = {frozenset(edge) for edge in graph.edges}
     cycles: set[tuple[str, ...]] = set()
+    visited_prefixes = 0
 
     def search_from(start: str) -> None:
         path = [start]
         used = {start}
 
         def visit(current: str) -> None:
+            nonlocal visited_prefixes
+            visited_prefixes += 1
+            if visited_prefixes % 1024 == 0:
+                request_checkpoint("during fixed-length cycle enumeration")
             if len(path) == cycle_length:
                 if start not in adjacency[current]:
                     return
@@ -456,7 +449,7 @@ def enumerate_fixed_length_cycles(
                     return
                 cycles.add(_canonicalize_cycle(cycle))
                 return
-            for neighbor in sorted(adjacency[current]):
+            for neighbor in adjacency[current]:
                 if neighbor <= start or neighbor in used:
                     continue
                 used.add(neighbor)
@@ -467,37 +460,235 @@ def enumerate_fixed_length_cycles(
 
         visit(start)
 
-    for start in graph.vertices:
+    for start in plan.core_vertices:
         search_from(start)
     ordered = tuple(sorted(cycles))
+    request_checkpoint("before fixed-length cycle result construction")
+    vertex_indices: dict[str, list[int]] = {vertex: [] for vertex in graph.vertices}
+    edge_indices: dict[frozenset[str], list[int]] = {
+        frozenset(edge): [] for edge in graph.edges
+    }
+    for index, cycle in enumerate(ordered):
+        for vertex in cycle:
+            vertex_indices[vertex].append(index)
+        for position in range(cycle_length):
+            edge_indices[
+                frozenset((cycle[position], cycle[(position + 1) % cycle_length]))
+            ].append(index)
     vertex_rows = tuple(
-        CycleIncidenceRow(
-            source=(vertex,),
-            cycle_indices=tuple(
-                index for index, cycle in enumerate(ordered) if vertex in cycle
-            ),
-        )
+        CycleIncidenceRow(source=(vertex,), cycle_indices=tuple(vertex_indices[vertex]))
         for vertex in graph.vertices
     )
     edge_rows = tuple(
         CycleIncidenceRow(
-            source=(left, right),
-            cycle_indices=tuple(
-                index
-                for index, cycle in enumerate(ordered)
-                if frozenset((left, right))
-                in {
-                    frozenset((cycle[i], cycle[(i + 1) % cycle_length]))
-                    for i in range(cycle_length)
-                }
-            ),
+            source=edge,
+            cycle_indices=tuple(edge_indices[frozenset(edge)]),
         )
-        for left, right in graph.edges
+        for edge in graph.edges
     )
-    return FixedLengthCycleEnumerationResult(
+    return FixedLengthCycleEnumerationResult._from_kernel(
         graph=graph,
         cycle_length=cycle_length,
         cycles=ordered,
         vertex_incidence=vertex_rows,
         edge_incidence=edge_rows,
+    )
+
+
+def enumerate_chordless_fixed_length_cycles(
+    graph: SimpleUndirectedGraph, cycle_length: int
+) -> FixedLengthCycleEnumerationResult:
+    """Return every induced simple cycle of one fixed length."""
+
+    return enumerate_fixed_length_cycles(graph, cycle_length, chordless=True)
+
+
+@dataclass(frozen=True, slots=True)
+class _FixedCyclePlan:
+    adjacency: dict[str, tuple[str, ...]]
+    core_vertices: tuple[str, ...]
+
+
+def _reject_fixed_cycle_resource(code: str, message: str) -> None:
+    raise OperationResourceAdmissionError(
+        location=("cycle_length",), code=code, message=message
+    )
+
+
+def _falling_factorial(n: int, k: int) -> int:
+    result = 1
+    for offset in range(k):
+        result *= n - offset
+    return result
+
+
+def _admit_fixed_cycle_enumeration(
+    graph: SimpleUndirectedGraph, cycle_length: int, *, chordless: bool = False
+) -> _FixedCyclePlan | None:
+    """Admit all traversal, intermediate, output, and retained-value quantities."""
+
+    if not isinstance(graph, SimpleUndirectedGraph):
+        _reject(
+            "cycle_enumeration.graph_type",
+            "graph must be a canonical simple undirected graph",
+        )
+    _validate_graph_carrier(graph)
+    if type(cycle_length) is not int or not 3 <= cycle_length <= MAX_VERTICES:
+        _reject(
+            "cycle_enumeration.length",
+            f"cycle_length must be an integer in 3..{MAX_VERTICES}",
+        )
+    vertex_count = len(graph.vertices)
+    if vertex_count > MAX_VERTICES:
+        _reject(
+            "cycle_enumeration.vertex_bound",
+            f"cycle enumeration supports at most {MAX_VERTICES} vertices",
+        )
+
+    core_vertices = tuple(sorted(_cycle_core_vertices(graph)))
+    core_set = set(core_vertices)
+    adjacency_sets: dict[str, set[str]] = {vertex: set() for vertex in core_vertices}
+    for left, right in graph.edges:
+        # Every simple cycle is contained in the 2-core. Restricting the
+        # search carrier here keeps attached trees out of the charged DFS.
+        if left in core_set and right in core_set:
+            adjacency_sets[left].add(right)
+            adjacency_sets[right].add(left)
+    adjacency = {
+        vertex: tuple(sorted(neighbors)) for vertex, neighbors in adjacency_sets.items()
+    }
+    source_characters = sum(len(vertex) for vertex in graph.vertices) + sum(
+        len(left) + len(right) for left, right in graph.edges
+    )
+    largest_label = max((len(vertex) for vertex in graph.vertices), default=0)
+    # A length above the 2-core order is an exact empty result.  This cheap
+    # presolve keeps bridge-heavy graphs from inheriting the ambient order.
+    if cycle_length > len(core_vertices):
+        _admit_fixed_cycle_result(
+            graph,
+            cycle_length,
+            cycle_upper_bound=0,
+            source_characters=source_characters,
+            largest_label=largest_label,
+        )
+        return None
+
+    core_order = len(core_vertices)
+    prefix_bound = core_order
+    for depth in range(1, cycle_length):
+        prefix_bound += core_order * _falling_factorial(core_order - 1, depth)
+    # Each visited prefix scans at most the whole core adjacency tuple. A
+    # terminal prefix also pays for canonicalization and, for the chordless
+    # operation, every unordered vertex pair.
+    scan_bound = prefix_bound * max(1, core_order)
+    terminal_bound = _falling_factorial(core_order, cycle_length)
+    cycle_upper_bound = terminal_bound // (2 * cycle_length)
+    terminal_checks = 1 + 2 * cycle_length
+    if chordless:
+        terminal_checks += cycle_length * (cycle_length - 1) // 2
+    assembly_bound = terminal_bound * terminal_checks
+    source_scan_bound = 3 * (vertex_count + len(graph.edges))
+    complete_work = scan_bound + assembly_bound + source_scan_bound
+    if complete_work > MAX_FIXED_CYCLE_WORK:
+        _reject_fixed_cycle_resource(
+            "cycle_enumeration.work_bound",
+            "complete fixed-length traversal and incidence assembly exceed the admitted work envelope",
+        )
+    _admit_fixed_cycle_result(
+        graph,
+        cycle_length,
+        cycle_upper_bound=cycle_upper_bound,
+        source_characters=source_characters,
+        largest_label=largest_label,
+    )
+    return _FixedCyclePlan(adjacency=adjacency, core_vertices=core_vertices)
+
+
+def _validate_graph_carrier(graph: SimpleUndirectedGraph) -> None:
+    """Keep forged direct-native graph carriers on the typed error path."""
+
+    vertices = graph.vertices
+    if type(vertices) is not tuple or any(
+        type(vertex) is not str for vertex in vertices
+    ):
+        _reject(
+            "cycle_enumeration.graph_structure",
+            "graph vertices must be a tuple of string labels",
+        )
+    vertex_set = set(vertices)
+    if len(vertex_set) != len(vertices):
+        _reject(
+            "cycle_enumeration.graph_structure",
+            "graph vertices must be unique",
+        )
+    edges = graph.edges
+    if type(edges) is not tuple:
+        _reject(
+            "cycle_enumeration.graph_structure",
+            "graph edges must be a tuple of canonical pairs",
+        )
+    seen: set[tuple[str, str]] = set()
+    for edge in edges:
+        if (
+            type(edge) is not tuple
+            or len(edge) != 2
+            or any(type(endpoint) is not str for endpoint in edge)
+            or edge[0] >= edge[1]
+            or edge[0] not in vertex_set
+            or edge[1] not in vertex_set
+            or edge in seen
+        ):
+            _reject(
+                "cycle_enumeration.graph_structure",
+                "graph edges must be unique canonical pairs of declared vertices",
+            )
+        seen.add(edge)
+
+
+def _admit_fixed_cycle_result(
+    graph: SimpleUndirectedGraph,
+    cycle_length: int,
+    *,
+    cycle_upper_bound: int,
+    source_characters: int,
+    largest_label: int,
+) -> None:
+    if cycle_upper_bound > MAX_FIXED_CYCLES:
+        _reject_fixed_cycle_resource(
+            "cycle_enumeration.output_bound",
+            "the complete fixed-length cycle family exceeds the admitted result envelope",
+        )
+    # Reserve source axes, cycle labels, incidence indexes, and index
+    # materialization before the first DFS branch.
+    incidence_rows = len(graph.vertices) + len(graph.edges)
+    index_digits = len(str(max(1, cycle_upper_bound)))
+    retained_characters = (
+        source_characters * 2
+        + cycle_upper_bound * cycle_length * largest_label
+        + incidence_rows * (2 * largest_label + index_digits + 32)
+        + cycle_upper_bound * cycle_length * index_digits * 2
+    )
+    if retained_characters > MAX_FIXED_CYCLE_RETAINED_LABEL_CHARACTERS:
+        _reject_fixed_cycle_resource(
+            "cycle_enumeration.retained_labels_exceed_bound",
+            "the complete fixed-length cycle result exceeds the admitted retained-label envelope",
+        )
+
+
+def _empty_cycle_enumeration_result(
+    graph: SimpleUndirectedGraph, cycle_length: int
+) -> FixedLengthCycleEnumerationResult:
+    """Construct an admitted empty family with all source axes retained."""
+
+    return FixedLengthCycleEnumerationResult._from_kernel(
+        graph=graph,
+        cycle_length=cycle_length,
+        cycles=(),
+        vertex_incidence=tuple(
+            CycleIncidenceRow(source=(vertex,), cycle_indices=())
+            for vertex in graph.vertices
+        ),
+        edge_incidence=tuple(
+            CycleIncidenceRow(source=edge, cycle_indices=()) for edge in graph.edges
+        ),
     )

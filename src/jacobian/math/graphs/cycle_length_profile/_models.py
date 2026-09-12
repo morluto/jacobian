@@ -105,27 +105,187 @@ class CycleLengthProfileResult(StrictModel):
 
 
 class FixedLengthCycleEnumerationRequest(StrictModel):
-    """Enumerate every simple cycle of one fixed length."""
+    """Enumerate every simple cycle of one fixed length.
 
-    graph: SimpleUndirectedGraph
-    cycle_length: StrictInt = Field(ge=3, le=MAX_VERTICES)
+    The graph is the canonical finite simple undirected carrier.  A length
+    above the graph order is a valid empty family; the owner can answer that
+    case without search.
+    """
+
+    graph: SimpleUndirectedGraph = Field(
+        description="Canonical finite simple undirected graph; directed and multigraph values are not in this operation's domain."
+    )
+    cycle_length: StrictInt = Field(
+        ge=3,
+        le=MAX_VERTICES,
+        description="The exact number k of distinct vertices in each returned cycle; k greater than the graph order returns an empty family.",
+    )
 
 
 class CycleIncidenceRow(StrictModel):
     """Cycles incident with one source vertex or edge."""
 
     source: tuple[str, ...] = Field(min_length=1, max_length=2)
-    cycle_indices: tuple[StrictInt, ...]
+    cycle_indices: tuple[StrictInt, ...] = Field(
+        description="Zero-based indices into the complete, lexicographically sorted cycle family."
+    )
 
 
 class FixedLengthCycleEnumerationResult(StrictModel):
-    """Complete dihedrally canonical fixed-length cycle family."""
+    """Complete dihedrally canonical fixed-length cycle family.
+
+    The incidence rows are structural indexes over the retained source axes.
+    They bind every source vertex and edge to the cycle indices. Deserialization
+    checks only the local cycle-edge relation and these indexes; complete-family
+    and chordlessness claims are established by the producing operation.
+    """
 
     graph: SimpleUndirectedGraph
     cycle_length: StrictInt = Field(ge=3, le=MAX_VERTICES)
+    cycle_count: StrictInt = Field(ge=0, le=20_000)
     cycles: tuple[tuple[str, ...], ...] = Field(max_length=20_000)
     vertex_incidence: tuple[CycleIncidenceRow, ...]
     edge_incidence: tuple[CycleIncidenceRow, ...]
+
+    @model_validator(mode="after")
+    def require_structural_family(self) -> Self:  # noqa: C901
+        if self.cycle_count != len(self.cycles):
+            raise PydanticCustomError(
+                "cycle_enumeration.cycle_count_mismatch",
+                "cycle_count must equal the number of returned cycles",
+            )
+        if tuple(self.cycles) != tuple(sorted(self.cycles)):
+            raise PydanticCustomError(
+                "cycle_enumeration.cycles_must_be_sorted",
+                "cycles must use lexicographic canonical order",
+            )
+        if len(set(self.cycles)) != len(self.cycles):
+            raise PydanticCustomError(
+                "cycle_enumeration.cycles_must_be_unique",
+                "cycles must be unique after dihedral canonicalization",
+            )
+
+        vertices = set(self.graph.vertices)
+        graph_edges = {frozenset(edge) for edge in self.graph.edges}
+        for cycle in self.cycles:
+            if len(cycle) != self.cycle_length:
+                raise PydanticCustomError(
+                    "cycle_enumeration.cycle_length_mismatch",
+                    "every cycle must contain exactly cycle_length vertices",
+                )
+            if len(set(cycle)) != len(cycle) or not set(cycle) <= vertices:
+                raise PydanticCustomError(
+                    "cycle_enumeration.cycle_vertices_invalid",
+                    "cycles must contain distinct declared graph vertices",
+                )
+            if any(
+                frozenset((cycle[position], cycle[(position + 1) % self.cycle_length]))
+                not in graph_edges
+                for position in range(self.cycle_length)
+            ):
+                raise PydanticCustomError(
+                    "cycle_enumeration.cycle_edges_invalid",
+                    "every cycle must close through declared graph edges",
+                )
+            rotations = [cycle[index:] + cycle[:index] for index in range(len(cycle))]
+            reversed_cycle = (cycle[0], *reversed(cycle[1:]))
+            rotations.extend(
+                reversed_cycle[index:] + reversed_cycle[:index]
+                for index in range(len(cycle))
+            )
+            if cycle != min(rotations):
+                raise PydanticCustomError(
+                    "cycle_enumeration.cycle_must_be_canonical",
+                    "cycles must use canonical rotation and orientation",
+                )
+
+        expected_vertex_sources = tuple((vertex,) for vertex in self.graph.vertices)
+        if (
+            tuple(row.source for row in self.vertex_incidence)
+            != expected_vertex_sources
+        ):
+            raise PydanticCustomError(
+                "cycle_enumeration.vertex_axis_mismatch",
+                "vertex incidence must cover the source vertex axis in source order",
+            )
+        expected_edge_sources = tuple(self.graph.edges)
+        if tuple(row.source for row in self.edge_incidence) != expected_edge_sources:
+            raise PydanticCustomError(
+                "cycle_enumeration.edge_axis_mismatch",
+                "edge incidence must cover the source edge axis in source order",
+            )
+
+        valid_indices = range(self.cycle_count)
+        for row in (*self.vertex_incidence, *self.edge_incidence):
+            if tuple(row.cycle_indices) != tuple(sorted(set(row.cycle_indices))):
+                raise PydanticCustomError(
+                    "cycle_enumeration.incidence_indices_must_be_sorted_unique",
+                    "incidence indices must be sorted and unique",
+                )
+            if any(index not in valid_indices for index in row.cycle_indices):
+                raise PydanticCustomError(
+                    "cycle_enumeration.incidence_index_out_of_range",
+                    "incidence indices must refer to returned cycles",
+                )
+
+        expected_vertex_incidence = tuple(
+            tuple(index for index, cycle in enumerate(self.cycles) if vertex in cycle)
+            for vertex in self.graph.vertices
+        )
+        if (
+            tuple(row.cycle_indices for row in self.vertex_incidence)
+            != expected_vertex_incidence
+        ):
+            raise PydanticCustomError(
+                "cycle_enumeration.vertex_incidence_mismatch",
+                "vertex incidence does not bind to the returned cycle family",
+            )
+
+        expected_edge_incidence = []
+        for edge in self.graph.edges:
+            edge_key = frozenset(edge)
+            expected_edge_incidence.append(
+                tuple(
+                    index
+                    for index, cycle in enumerate(self.cycles)
+                    if any(
+                        frozenset(
+                            (cycle[position], cycle[(position + 1) % self.cycle_length])
+                        )
+                        == edge_key
+                        for position in range(self.cycle_length)
+                    )
+                )
+            )
+        if tuple(row.cycle_indices for row in self.edge_incidence) != tuple(
+            expected_edge_incidence
+        ):
+            raise PydanticCustomError(
+                "cycle_enumeration.edge_incidence_mismatch",
+                "edge incidence does not bind to the returned cycle family",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        graph: SimpleUndirectedGraph,
+        cycle_length: int,
+        cycles: tuple[tuple[str, ...], ...],
+        vertex_incidence: tuple[CycleIncidenceRow, ...],
+        edge_incidence: tuple[CycleIncidenceRow, ...],
+    ) -> Self:
+        """Construct a complete family after owner admission and enumeration."""
+
+        return cls.model_construct(
+            graph=graph,
+            cycle_length=cycle_length,
+            cycle_count=len(cycles),
+            cycles=cycles,
+            vertex_incidence=vertex_incidence,
+            edge_incidence=edge_incidence,
+        )
 
 
 __all__ = [

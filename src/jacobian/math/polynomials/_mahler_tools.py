@@ -64,8 +64,9 @@ INTEGER_POLYNOMIAL_PROFILE_OPERATIONS = (
             "return the exact discriminant, root kind, sums and products, the "
             "distinct real roots as quadratic surds or the squared modulus of a "
             "complex conjugate pair, and exact unit-disk locations. Coefficients "
-            "have at most 256 digits; nonsquare discriminants requiring "
-            "squarefree normalization admit at most 30 digits."
+            "have at most 256 digits; after common-content normalization, "
+            "nonsquare discriminants requiring squarefree normalization admit "
+            "at most 30 digits."
         ),
         request_type=RealQuadraticRootProfileRequest,
         result_type=RealQuadraticRootProfileResult,
@@ -84,12 +85,12 @@ INTEGER_POLYNOMIAL_PROFILE_OPERATIONS = (
         title="Compute the exact Mahler measure of a bounded polynomial",
         description=(
             "Return the exact Mahler measure |a_d| * prod_i max(1, |alpha_i|) of "
-            "one canonical integer polynomial of degree at most two, together "
+            "one canonical integer polynomial of degree zero through two, together "
             "with the complete root-location ledger. The leading coefficient is "
             "never dropped, and an unresolved root location is a typed refusal "
             "rather than a silently ignored root. Coefficients have at most 256 "
-            "digits; nonsquare discriminants requiring squarefree normalization "
-            "admit at most 30 digits."
+            "digits; after common-content normalization, nonsquare discriminants "
+            "requiring squarefree normalization admit at most 30 digits."
         ),
         request_type=MahlerMeasureRequest,
         result_type=MahlerMeasureResult,

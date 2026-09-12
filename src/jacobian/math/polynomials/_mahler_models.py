@@ -250,8 +250,8 @@ class RealQuadraticRootProfileResult(StrictModel):
     coefficients_descending: tuple[ExactInteger, ExactInteger, ExactInteger]
     discriminant: ExactInteger
     root_kind: Literal["DISTINCT_REAL", "DOUBLE_REAL", "COMPLEX_CONJUGATE"]
-    sum_of_roots: tuple[ExactInteger, ExactInteger]
-    product_of_roots: tuple[ExactInteger, ExactInteger]
+    sum_of_roots: CanonicalRational
+    product_of_roots: CanonicalRational
     roots: tuple[MahlerAlgebraicValue, ...]
     complex_pair_squared_modulus: CanonicalRational | None = None
     root_locations: tuple[RootLocation, ...]
@@ -297,10 +297,10 @@ class RealQuadraticRootProfileResult(StrictModel):
 
 
 class MahlerMeasureRequest(StrictModel):
-    """One bounded integer polynomial of degree at most two."""
+    """One bounded integer polynomial of degree zero, one, or two."""
 
     coefficients_descending: tuple[ExactInteger, ...] = Field(
-        min_length=2, max_length=3
+        min_length=1, max_length=3
     )
 
     @model_validator(mode="after")
@@ -329,7 +329,7 @@ class MahlerMeasureResult(StrictModel):
     """The exact Mahler measure ``|a_d| * prod_i max(1, |alpha_i|)``."""
 
     coefficients_descending: tuple[ExactInteger, ...]
-    degree: StrictInt = Field(ge=1, le=2)
+    degree: StrictInt = Field(ge=0, le=2)
     leading_coefficient: ExactInteger
     root_locations: tuple[RootLocation, ...]
     outside_root_product: MahlerAlgebraicValue
@@ -360,7 +360,7 @@ class MahlerMeasureResult(StrictModel):
                 "polynomial.mahler_result_unresolved_location",
                 "a Mahler-measure result must resolve every root location",
             )
-        expected = 1 if self.degree == 1 else 2
+        expected = 0 if self.degree == 0 else 1 if self.degree == 1 else 2
         if (
             self.degree == 2
             and self.coefficients_descending[1] == 0

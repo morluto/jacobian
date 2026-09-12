@@ -20,6 +20,7 @@ from jacobian._execution import (
     current_request_execution,
     request_execution,
 )
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -58,7 +59,6 @@ __all__ = [
 
 _SMALL_SQUAREFREE_FACTOR_LIMIT = 1_000_000
 _MAX_FACTORIZATION_WORK = 1_000_000
-_MAX_RESULT_BYTES = 64 * 1024
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,15 +84,17 @@ class _QuadraticParts:
 
     def multiply(self, other: _QuadraticParts) -> _QuadraticParts:
         if self.radicand == 0 or self.radical == 0:
-            return _quadratic_parts(
+            return _quadratic_parts_from_squarefree(
                 self.rational * other.rational,
                 self.rational * other.radical,
+                1,
                 other.radicand,
             )
         if other.radicand == 0 or other.radical == 0:
-            return _quadratic_parts(
+            return _quadratic_parts_from_squarefree(
                 self.rational * other.rational,
                 other.rational * self.radical,
+                1,
                 self.radicand,
             )
         if self.radicand != other.radicand:
@@ -101,10 +103,11 @@ class _QuadraticParts:
                 code="polynomial.mahler_mixed_quadratic_fields",
                 message="quadratic products require one shared squarefree field",
             )
-        return _quadratic_parts(
+        return _quadratic_parts_from_squarefree(
             self.rational * other.rational
             + self.radical * other.radical * self.radicand,
             self.rational * other.radical + other.rational * self.radical,
+            1,
             self.radicand,
         )
 
@@ -164,12 +167,14 @@ def _squarefree_parts(radicand: int) -> tuple[int, int]:
     return square_factor, squarefree_radicand
 
 
-def _quadratic_parts(
-    rational: Fraction, radical: Fraction, radicand: int
+def _quadratic_parts_from_squarefree(
+    rational: Fraction,
+    radical: Fraction,
+    square_factor: int,
+    squarefree: int,
 ) -> _QuadraticParts:
-    if radicand == 0 or radical == 0:
+    if squarefree == 0 or radical == 0:
         return _QuadraticParts(rational, Fraction(0), 0)
-    square_factor, squarefree = _squarefree_parts(radicand)
     if squarefree == 1:
         return _QuadraticParts(rational + radical * square_factor, Fraction(0), 0)
     return _QuadraticParts(rational, radical * square_factor, squarefree)
@@ -177,15 +182,17 @@ def _quadratic_parts(
 
 def _parts_difference(left: _QuadraticParts, right: _QuadraticParts) -> _QuadraticParts:
     if left.radicand == 0 or left.radical == 0:
-        return _quadratic_parts(
+        return _quadratic_parts_from_squarefree(
             left.rational - right.rational,
             -right.radical,
+            1,
             right.radicand,
         )
     if right.radicand == 0 or right.radical == 0:
-        return _quadratic_parts(
+        return _quadratic_parts_from_squarefree(
             left.rational - right.rational,
             left.radical,
+            1,
             left.radicand,
         )
     if left.radicand != right.radicand:
@@ -240,17 +247,17 @@ def _parts_to_value(value: _QuadraticParts) -> MahlerAlgebraicValue:
             -coefficient for coefficient in integer_coefficients
         )
     coefficient_digits = [
-        len(str(abs(coefficient))) for coefficient in integer_coefficients
+        len(format_canonical_integer(abs(coefficient)))
+        for coefficient in integer_coefficients
     ]
-    estimated_bytes = sum(digits + 8 for digits in coefficient_digits) + 128
-    if (
-        max(coefficient_digits) > MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS
-        or estimated_bytes > _MAX_RESULT_BYTES
-    ):
+    if max(coefficient_digits) > MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS:
         raise OperationResourceAdmissionError(
             location=("result",),
             code="polynomial.mahler_algebraic_result_bound",
-            message="quadratic algebraic result exceeds its admitted height or byte bound",
+            message=(
+                "quadratic algebraic result exceeds its admitted coefficient "
+                "digit bound"
+            ),
         )
     return RealAlgebraicValue._from_admitted_polynomial(
         polynomial=integer_coefficients,
@@ -332,10 +339,11 @@ def _unit_disk_location_of_parts(value: _QuadraticParts) -> RootLocation:
             if magnitude > 1
             else "INSIDE_UNIT_DISK"
         )
-    squared = _quadratic_parts(
+    squared = _quadratic_parts_from_squarefree(
         value.rational * value.rational
         + value.radical * value.radical * value.radicand,
         2 * value.rational * value.radical,
+        1,
         value.radicand,
     )
     difference = _parts_difference(
@@ -353,20 +361,9 @@ def _quadratic_root_data(
     tuple[_QuadraticParts, ...],
     tuple[RootLocation, ...],
 ]:
-    a, b, c = coefficients
+    content = gcd(gcd(abs(coefficients[0]), abs(coefficients[1])), abs(coefficients[2]))
+    a, b, c = (coefficient // content for coefficient in coefficients)
     discriminant = b * b - 4 * a * c
-    if discriminant > 0 and discriminant.bit_length() > MAX_MAHLER_RADICAND_BITS:
-        raise OperationResourceAdmissionError(
-            location=("coefficients_descending",),
-            code="polynomial.mahler_surd_radicand_bound",
-            message="quadratic discriminant exceeds the admitted surd-factorization envelope",
-        )
-    if discriminant > 0 and len(str(discriminant)) > MAX_MAHLER_RADICAND_DIGITS:
-        raise OperationResourceAdmissionError(
-            location=("coefficients_descending",),
-            code="polynomial.mahler_surd_radicand_digits",
-            message="quadratic discriminant exceeds the admitted factorization digits",
-        )
     if discriminant < 0:
         squared = Fraction(c, a)
         locations: tuple[RootLocation, ...]
@@ -391,9 +388,14 @@ def _quadratic_root_data(
             _QuadraticParts(Fraction(-b + square, 2 * a), Fraction(0), 0),
         )
     else:
+        square_factor, squarefree = _squarefree_parts(discriminant)
         candidates = (
-            _quadratic_parts(Fraction(-b, 2 * a), Fraction(-1, 2 * a), discriminant),
-            _quadratic_parts(Fraction(-b, 2 * a), Fraction(1, 2 * a), discriminant),
+            _quadratic_parts_from_squarefree(
+                Fraction(-b, 2 * a), Fraction(-1, 2 * a), square_factor, squarefree
+            ),
+            _quadratic_parts_from_squarefree(
+                Fraction(-b, 2 * a), Fraction(1, 2 * a), square_factor, squarefree
+            ),
         )
     # The two roots are in one field.  Compare the exact algebraic values,
     # rather than relying on the sign of ``a`` in the quadratic formula.
@@ -421,8 +423,8 @@ def _quadratic_root_profile(
         coefficients_descending=(a, b, c),
         discriminant=b * b - 4 * a * c,
         root_kind=root_kind,
-        sum_of_roots=(-b, a),
-        product_of_roots=(c, a),
+        sum_of_roots=CanonicalRational.from_fraction(Fraction(-b, a)),
+        product_of_roots=CanonicalRational.from_fraction(Fraction(c, a)),
         roots=tuple(_parts_to_value(root) for root in private_roots),
         complex_pair_squared_modulus=(
             CanonicalRational.from_fraction(Fraction(c, a))
@@ -445,19 +447,18 @@ def _mahler_measure(request: MahlerMeasureRequest) -> MahlerMeasureResult:
     coefficients = request.coefficients_descending
     leading = coefficients[0]
     roots: tuple[_QuadraticParts, ...]
-    if len(coefficients) == 2:
+    root_kind: Literal["DISTINCT_REAL", "DOUBLE_REAL", "COMPLEX_CONJUGATE"]
+    if len(coefficients) == 1:
+        roots = ()
+        root_kind = "DISTINCT_REAL"
+        root_locations: tuple[RootLocation, ...] = ()
+    elif len(coefficients) == 2:
         roots = (_QuadraticParts(Fraction(-coefficients[1], leading), Fraction(0), 0),)
-        root_kind: Literal["DISTINCT_REAL", "DOUBLE_REAL", "COMPLEX_CONJUGATE"] = (
-            "DISTINCT_REAL"
-        )
+        root_kind = "DISTINCT_REAL"
         root_locations = tuple(_unit_disk_location_of_parts(root) for root in roots)
-        discriminant = 0
     else:
         root_kind, roots, root_locations = _quadratic_root_data(
             (coefficients[0], coefficients[1], coefficients[2])
-        )
-        discriminant = (
-            coefficients[1] * coefficients[1] - 4 * coefficients[0] * coefficients[2]
         )
     if any(location == "UNRESOLVED" for location in root_locations):
         raise OperationResourceAdmissionError(
@@ -484,12 +485,6 @@ def _mahler_measure(request: MahlerMeasureRequest) -> MahlerMeasureResult:
     measure = _QuadraticParts(Fraction(abs(leading)), Fraction(0), 0).multiply(outside)
     outside_value = _parts_to_value(outside)
     measure_value = _parts_to_value(measure)
-    if len(str(abs(leading))) + len(str(discriminant)) + 512 > _MAX_RESULT_BYTES:
-        raise OperationResourceAdmissionError(
-            location=("result",),
-            code="polynomial.mahler_result_bytes_bound",
-            message="Mahler result exceeds its admitted output byte bound",
-        )
     return MahlerMeasureResult(
         coefficients_descending=coefficients,
         degree=len(coefficients) - 1,

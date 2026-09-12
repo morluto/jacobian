@@ -11,7 +11,11 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.number_theory._certification_models import (
+    CertifiedFactorizationRequest,
+)
 from jacobian.math.number_theory.algebraic_numbers.real import RealAlgebraicValue
+from jacobian.math.polynomials import _mahler_kernel
 from jacobian.math.polynomials._mahler_kernel import (
     content_primitive_profile,
     mahler_measure,
@@ -129,8 +133,8 @@ def test_quadratic_root_profile_classifies_each_real_root() -> None:
     )
     assert result.discriminant == 5
     assert result.root_kind == "DISTINCT_REAL"
-    assert result.sum_of_roots == (1, 1)
-    assert result.product_of_roots == (-1, 1)
+    assert result.sum_of_roots == CanonicalRational(num=1, den=1)
+    assert result.product_of_roots == CanonicalRational(num=-1, den=1)
     assert result.root_locations == ("INSIDE_UNIT_DISK", "OUTSIDE_UNIT_DISK")
     _assert_golden_root(result.roots[0], 0)
     _assert_golden_root(result.roots[1], 1)
@@ -192,6 +196,13 @@ def test_mahler_measure_of_a_linear_polynomial() -> None:
     result = mahler_measure(MahlerMeasureRequest(coefficients_descending=(2, -4)))
     assert result.mahler_measure == CanonicalRational(num=4, den=1)
     assert result.root_locations == ("OUTSIDE_UNIT_DISK",)
+
+
+def test_mahler_measure_of_a_nonzero_constant_is_its_absolute_value() -> None:
+    result = mahler_measure(MahlerMeasureRequest(coefficients_descending=(-5,)))
+    assert result.degree == 0
+    assert result.root_locations == ()
+    assert result.mahler_measure == CanonicalRational(num=5, den=1)
 
 
 def test_mahler_measure_of_a_unit_root_linear_polynomial() -> None:
@@ -332,7 +343,11 @@ def test_quadratic_discriminant_is_admitted_before_isqrt() -> None:
     with pytest.raises(OperationResourceAdmissionError):
         quadratic_root_profile(
             RealQuadraticRootProfileRequest(
-                coefficients_descending=(1, 0, -(1 << MAX_MAHLER_RADICAND_BITS))
+                coefficients_descending=(
+                    1,
+                    0,
+                    -((1 << MAX_MAHLER_RADICAND_BITS) + 1),
+                )
             )
         )
 
@@ -354,6 +369,38 @@ def test_large_nonsquare_discriminant_uses_bounded_factorization() -> None:
         MahlerMeasureRequest(coefficients_descending=(1, 1, -(10**24)))
     )
     assert result.mahler_measure == CanonicalRational(num=10**24, den=1)
+
+
+def test_scaled_quadratic_normalizes_content_before_surd_admission() -> None:
+    scale = 10**20
+    result = quadratic_root_profile(
+        RealQuadraticRootProfileRequest(coefficients_descending=(scale, -scale, -scale))
+    )
+    assert result.discriminant == 5 * scale * scale
+    assert result.root_locations == ("INSIDE_UNIT_DISK", "OUTSIDE_UNIT_DISK")
+    assert all(
+        isinstance(root, RealAlgebraicValue) and root.polynomial == (1, -1, -1)
+        for root in result.roots
+    )
+
+
+def test_quadratic_surd_normalization_is_not_replayed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[int] = []
+    original = _mahler_kernel.factorize_certified
+
+    def count_calls(request: CertifiedFactorizationRequest) -> object:
+        calls.append(request.value)
+        return original(request)
+
+    monkeypatch.setattr(
+        "jacobian.math.polynomials._mahler_kernel.factorize_certified", count_calls
+    )
+    quadratic_root_profile(
+        RealQuadraticRootProfileRequest(coefficients_descending=(1, 0, -1000003))
+    )
+    assert calls == [4 * 1000003]
 
 
 def test_factorization_backend_failure_is_a_typed_resource_outcome(
@@ -379,4 +426,15 @@ def test_perfect_square_discriminant_keeps_its_rational_roots() -> None:
     assert result.roots == (
         CanonicalRational(num=-3, den=1),
         CanonicalRational(num=3, den=1),
+    )
+
+
+def test_large_perfect_square_discriminant_avoids_surd_admission() -> None:
+    root = 10**20
+    result = quadratic_root_profile(
+        RealQuadraticRootProfileRequest(coefficients_descending=(1, 0, -(root * root)))
+    )
+    assert result.roots == (
+        CanonicalRational(num=-root, den=1),
+        CanonicalRational(num=root, den=1),
     )

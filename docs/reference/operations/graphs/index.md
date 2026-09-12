@@ -16,4 +16,5 @@ there is no graph artifact carrier or invariant-batch registry.
 - [Small exact graph reliability](graph-reliability.md)
 - [Exact finite directed bond reliability](directed-bond-reliability.md)
 - [Declared graph-symmetry orbits](graph-symmetry-orbits.md)
+- [Full graph automorphism group](graph-automorphism-group.md)
 - [Induced edge-deletion profiles](induced-edge-deletion-profile.md)

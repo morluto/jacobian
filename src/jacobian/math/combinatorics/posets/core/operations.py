@@ -129,6 +129,8 @@ def _canonical_claims_match(
     strict: set[tuple[str, str]],
     reduction: set[tuple[str, str]],
 ) -> bool:
+    if tuple(sorted(set(poset.elements))) != poset.elements:
+        return False
     if (
         tuple(OrderedPair(lower=a, upper=b) for a, b in sorted(strict))
         != poset.strict_order_pairs
@@ -204,6 +206,8 @@ def induced_subposet(
 def verify_finite_poset(poset: FinitePoset) -> bool:
     """Verify all retained canonical order/profile claims of a poset value."""
     try:
+        if tuple(sorted(set(poset.elements))) != poset.elements:
+            return False
         strict, reduction = _validated_presentation(
             poset.elements,
             tuple(

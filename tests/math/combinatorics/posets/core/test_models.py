@@ -7,12 +7,15 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.posets.core._closure_models import LowerClosureRequest
 from jacobian.math.combinatorics.posets.core._closure_tools import lower_closure
 from jacobian.math.combinatorics.posets.core._models import (
+    ElementRank,
     FinitePoset,
     FinitePosetRequest,
     LinearExtensionRequest,
     MobiusFunctionRequest,
+    OrderedPair,
 )
 from jacobian.math.combinatorics.posets.core.operations import (
+    finite_poset_digest,
     linear_extension_count,
     materialize_finite_poset,
     verify_finite_poset,
@@ -109,6 +112,38 @@ def test_serialized_poset_keeps_order_profile_as_a_claim() -> None:
         width(poset)
     with pytest.raises(OperationDomainValidationError, match="antisymmetric"):
         lower_closure(LowerClosureRequest.model_construct(poset=poset, subset=("a",)))
+
+
+def test_consumers_reject_forged_noncanonical_carrier_order() -> None:
+    poset = _materialize(["a", "b"], [("a", "b")])
+    assert verify_finite_poset(poset) is True
+    strict_order_pairs = (OrderedPair(lower="a", upper="b"),)
+    cover_relations = (OrderedPair(lower="a", upper="b"),)
+    ranks = (ElementRank(element="b", rank=1), ElementRank(element="a", rank=0))
+    forged = FinitePoset.model_construct(
+        elements=("b", "a"),
+        strict_order_pairs=strict_order_pairs,
+        cover_relations=cover_relations,
+        incomparable_pairs=(),
+        minimal_elements=("a",),
+        maximal_elements=("b",),
+        graded=True,
+        ranks=ranks,
+        poset_digest=finite_poset_digest(
+            elements=("b", "a"),
+            strict_order_pairs=strict_order_pairs,
+            cover_relations=cover_relations,
+            incomparable_pairs=(),
+            minimal_elements=("a",),
+            maximal_elements=("b",),
+            graded=True,
+            ranks=ranks,
+        ),
+    )
+
+    assert verify_finite_poset(forged) is False
+    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+        lower_closure(LowerClosureRequest.model_construct(poset=forged, subset=("b",)))
 
 
 def test_comparable_pairs_require_complete_transitive_relation() -> None:

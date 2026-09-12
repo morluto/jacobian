@@ -133,10 +133,7 @@ def _determinant(matrix: list[list[int]]) -> int:
 def verify_schur_evaluation(claim: SchurExpansionResult) -> bool:
     if not isinstance(claim, SchurExpansionResult):
         return False
-    try:
-        expected = schur_evaluation(claim.partition, claim.point, claim.variables)
-    except (OperationDomainValidationError, TypeError, ValueError):
-        return False
+    expected = schur_evaluation(claim.partition, claim.point, claim.variables)
     return expected == claim
 
 

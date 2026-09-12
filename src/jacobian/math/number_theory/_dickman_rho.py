@@ -327,10 +327,7 @@ def _admit_request(request: DickmanRhoPiecewiseEnclosureParameters) -> int:
             message="Dickman recurrence work exceeds the admitted exact envelope",
         )
     result_bits = (
-        2
-        * interval_count
-        * (MAX_DICKMAN_DEGREE + 1)
-        * MAX_DICKMAN_INTERMEDIATE_BITS
+        2 * interval_count * (MAX_DICKMAN_DEGREE + 1) * MAX_DICKMAN_INTERMEDIATE_BITS
     )
     if result_bits > MAX_DICKMAN_RESULT_BITS:
         raise OperationResourceAdmissionError(

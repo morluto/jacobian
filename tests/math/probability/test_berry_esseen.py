@@ -107,14 +107,28 @@ def test_large_positive_count_is_admitted_without_sample_expansion() -> None:
     assert result.bound_squared.as_fraction() == Fraction(196, 625 * 257)
 
 
+def test_native_large_count_is_admitted_when_pinned_growth_fits() -> None:
+    source = _request(_distribution((0, Fraction(1, 2)), (1, Fraction(1, 2))))
+    forged = BerryEsseenRequest.model_construct(
+        distribution=source.distribution,
+        sample_count=10**12 + 1,
+    )
+
+    result = berry_esseen_bound(forged)
+
+    assert result.source.sample_count == 10**12 + 1
+    assert result.bound_squared.as_fraction() == Fraction(196, 625 * (10**12 + 1))
+
+
 def test_sample_count_boundary_is_bounded_and_preflighted() -> None:
     distribution = _request(
         _distribution((0, Fraction(1, 2)), (1, Fraction(1, 2))),
         MAX_BERRY_ESSEEN_SAMPLE_COUNT,
     )
-    assert berry_esseen_bound(distribution).source.sample_count == (
-        MAX_BERRY_ESSEEN_SAMPLE_COUNT
-    )
+    assert distribution.sample_count == MAX_BERRY_ESSEEN_SAMPLE_COUNT
+
+    with pytest.raises(OperationResourceAdmissionError, match="squared bound"):
+        berry_esseen_bound(distribution)
 
     over_bound = BerryEsseenRequest.model_construct(
         distribution=distribution.distribution,

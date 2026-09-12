@@ -24,7 +24,10 @@ BERRY_ESSEEN_OPERATION = MathTool(
         "using Shevtsova's published general-independent constant C=0.5600=14/25 "
         "as a valid specialization to the i.i.d. request. Admission envelope: "
         "at most 16,384 atoms, 128 decimal digits per input rational component, "
-        "and 512 decimal digits per intermediate or result rational component."
+        "and 512 decimal digits per intermediate or result rational component. "
+        "The sample count may use up to 512 decimal digits; the exact "
+        "variance^3*n product and resulting bound are admitted against the "
+        "same intermediate/result envelope."
     ),
     request_type=BerryEsseenRequest,
     result_type=BerryEsseenResult,

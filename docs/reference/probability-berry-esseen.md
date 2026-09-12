@@ -10,9 +10,12 @@ with universal constant
 
 The operation's admission envelope is at most 16,384 atoms, 128 decimal
 digits in each input rational numerator or denominator, and 512 decimal digits
-in every intermediate or result rational numerator or denominator. The sample
-count is admitted separately in the bounded interval documented by the request
-schema.
+in every intermediate or result rational numerator or denominator. The
+sample count is admitted as a positive integer with at most 512 decimal digits.
+In this pinned variant, the count occurs once as the exact factor \(n\) in
+\(\sigma^6 n\); the resulting `variance^3*n` product and the final bound are
+also checked against the 512-digit rational envelope, so those derived checks
+can reject a particular count and source law earlier than the field ceiling.
 
 For one finite rational law \(X\) with positive variance and a positive i.i.d.
 sample count \(n\), the operation returns exact rational values

@@ -32,7 +32,10 @@ from jacobian.math.probability._models import (
 )
 
 MAX_BERRY_ESSEEN_ATOMS = 16_384
-MAX_BERRY_ESSEEN_SAMPLE_COUNT = 10**12
+# The pinned bound contains the sample count only as the exact factor n in
+# variance**3 * n. Keep n within the result carrier's integer height; the
+# resulting products and the bound itself are admitted separately below.
+MAX_BERRY_ESSEEN_SAMPLE_COUNT = 10**MAX_RESULT_RATIONAL_DIGITS - 1
 BERRY_ESSEEN_CONSTANT = Fraction(14, 25)
 BERRY_ESSEEN_BOUND_BITS = 64
 BERRY_ESSEEN_THEOREM_VARIANT: Literal[
@@ -48,8 +51,10 @@ class BerryEsseenRequest(StrictModel):
         ge=1,
         le=MAX_BERRY_ESSEEN_SAMPLE_COUNT,
         description=(
-            "Positive i.i.d. sample count n admitted in the bounded interval "
-            f"[1, {MAX_BERRY_ESSEEN_SAMPLE_COUNT}]."
+            "Positive i.i.d. sample count n with at most "
+            f"{MAX_RESULT_RATIONAL_DIGITS} decimal digits. The exact products "
+            "variance^3*n and the resulting bound remain subject to the same "
+            f"{MAX_RESULT_RATIONAL_DIGITS}-digit admission envelope."
         ),
     )
 
@@ -228,8 +233,8 @@ def berry_esseen_bound(request: BerryEsseenRequest) -> BerryEsseenResult:
             location=("sample_count",),
             code="probability.berry_esseen.sample_count_bound",
             message=(
-                "Berry--Esseen admission allows sample_count in [1, "
-                f"{MAX_BERRY_ESSEEN_SAMPLE_COUNT}]"
+                "Berry--Esseen admission allows sample_count with at most "
+                f"{MAX_RESULT_RATIONAL_DIGITS} decimal digits"
             ),
         )
     if len(request.distribution.atoms) > MAX_BERRY_ESSEEN_ATOMS:

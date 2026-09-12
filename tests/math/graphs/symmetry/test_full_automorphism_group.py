@@ -17,6 +17,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.graphs.symmetry import operations
+from jacobian.math.graphs.symmetry._edges import canonical_edge
 from jacobian.math.graphs.symmetry._models import FullGraphAutomorphismResult
 from jacobian.math.graphs.symmetry.operations import (
     full_graph_automorphism_group,
@@ -307,6 +308,68 @@ def test_mixed_size_clique_union_keeps_compact_presentation() -> None:
     assert result.automorphism_count == factorial(5) * factorial(6) * factorial(7)
     assert result.generated_group_order == result.automorphism_count
     assert len(result.generators) == 6
+
+
+def test_disconnected_path_degree_sequence_does_not_take_the_path_shortcut() -> None:
+    graph = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(
+            vertices=("c0", "c1", "c2", "k0", "k1"),
+            edges=(("c0", "c1"), ("c0", "c2"), ("c1", "c2"), ("k0", "k1")),
+        )
+    )
+
+    result = full_graph_automorphism_group(graph)
+
+    assert result.automorphism_count == factorial(3) * factorial(2)
+    assert result.generated_group_order == result.automorphism_count
+    assert len(result.generators) == 3
+
+
+def test_clique_with_an_isolated_vertex_keeps_compact_presentation() -> None:
+    clique = tuple(f"k{index}" for index in range(9))
+    vertices = (*clique, "iso")
+    edges = tuple((left, right) for left in clique for right in clique if left < right)
+    graph = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(vertices=vertices, edges=edges)
+    )
+
+    result = full_graph_automorphism_group(graph)
+
+    assert result.automorphism_count == factorial(9)
+    assert result.generated_group_order == result.automorphism_count
+    assert len(result.generators) == 2
+
+
+def test_complete_graph_with_class_pair_edge_colors_stays_compact() -> None:
+    red = tuple(f"r{index:02d}" for index in range(10))
+    blue = tuple(f"b{index:02d}" for index in range(10))
+    vertices = (*red, *blue)
+    vertex_color = {vertex: "red" for vertex in red}
+    vertex_color.update({vertex: "blue" for vertex in blue})
+    edges = tuple(
+        canonical_edge(left, right)
+        for index, left in enumerate(vertices)
+        for right in vertices[index + 1 :]
+    )
+    edge_colors = tuple(
+        "red-red"
+        if vertex_color[left] == vertex_color[right] == "red"
+        else "blue-blue"
+        if vertex_color[left] == vertex_color[right] == "blue"
+        else "mixed"
+        for left, right in edges
+    )
+    graph = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(vertices=vertices, edges=edges),
+        vertex_colors=tuple(vertex_color[vertex] for vertex in vertices),
+        edge_colors=edge_colors,
+    )
+
+    result = full_graph_automorphism_group(graph)
+
+    assert result.automorphism_count == factorial(10) * factorial(10)
+    assert result.generated_group_order == result.automorphism_count
+    assert len(result.generators) == 4
 
 
 def test_uniform_vertex_colored_cliques_keep_compact_presentation() -> None:

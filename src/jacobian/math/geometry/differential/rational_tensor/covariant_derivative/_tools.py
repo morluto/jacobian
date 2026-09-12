@@ -39,7 +39,11 @@ TOOLS = (
         examples=(
             OperationExample(
                 name="polar_metric_scalar",
-                description="Differentiate r^2 covariantly in the polar Euclidean chart.",
+                description=(
+                    "Differentiate r^2 covariantly in the polar Euclidean chart; "
+                    "the metric and scalar tensor must use the same ordered "
+                    "(r, theta) coordinate axis."
+                ),
                 input={
                     "metric": {
                         "tensor": {

@@ -58,6 +58,39 @@ def _two_three_kernel(value: int) -> int:
     return _remove_prime_power(kernel, 3)
 
 
+_SUM_VALUE_LIMIT = 10**MAX_FINITE_DISTRIBUTION_SUM_DIGITS
+
+
+def _raise_normalization_bound(label: str) -> None:
+    raise _validation_error(
+        f"{label} normalization exceeds the "
+        f"{MAX_FINITE_DISTRIBUTION_SUM_DIGITS}-digit intermediate bound"
+    )
+
+
+def _add_height_bounded(left: Fraction, right: Fraction, *, label: str) -> Fraction:
+    """Add two nonnegative rationals after bounding common-denominator growth."""
+
+    if right == 0:
+        return left
+    if left == 0:
+        return right
+    common = gcd(left.denominator, right.denominator)
+    left_scale = right.denominator // common
+    right_scale = left.denominator // common
+    if (
+        left_scale > _SUM_VALUE_LIMIT // max(1, abs(left.numerator))
+        or right_scale > _SUM_VALUE_LIMIT // max(1, abs(right.numerator))
+        or left_scale > _SUM_VALUE_LIMIT // left.denominator
+    ):
+        _raise_normalization_bound(label)
+    numerator = left.numerator * left_scale + right.numerator * right_scale
+    denominator = left.denominator * left_scale
+    if abs(numerator) >= _SUM_VALUE_LIMIT or denominator >= _SUM_VALUE_LIMIT:
+        _raise_normalization_bound(label)
+    return Fraction(numerator, denominator)
+
+
 def _bounded_fraction_sum(
     values: tuple[Fraction, ...],
     *,
@@ -68,7 +101,9 @@ def _bounded_fraction_sum(
     Masses are bucketed by the 2-3-free kernel of each denominator so
     complementary pairs such as ``1/(6p)`` and ``(p-1)/(6p)`` reduce before
     unrelated primes are combined. Unique reduced denominators are then
-    digit-budgeted so a unit-sum law cannot force unbounded GCD work.
+    digit-budgeted, and each addition bounds its cancelled scales before any
+    common-denominator multiply, so a unit-sum law cannot force unbounded GCD
+    work.
     """
 
     buckets: dict[int, Fraction] = {}
@@ -76,7 +111,11 @@ def _bounded_fraction_sum(
         if index % 128 == 0:
             request_checkpoint("during finite-distribution normalization")
         kernel = _two_three_kernel(value.denominator)
-        buckets[kernel] = buckets.get(kernel, Fraction()) + value
+        buckets[kernel] = _add_height_bounded(
+            buckets.get(kernel, Fraction()),
+            value,
+            label=label,
+        )
     reduced = list(buckets.values())
     running = 1
     running_digits = 1
@@ -87,23 +126,12 @@ def _bounded_fraction_sum(
             running_digits + _decimal_digits(denominator) - _decimal_digits(shared)
         )
         if next_digits > MAX_FINITE_DISTRIBUTION_SUM_DIGITS:
-            raise _validation_error(
-                f"{label} normalization exceeds the "
-                f"{MAX_FINITE_DISTRIBUTION_SUM_DIGITS}-digit intermediate bound"
-            )
+            _raise_normalization_bound(label)
         running = running // shared * denominator
         running_digits = _decimal_digits(running)
     total = Fraction()
-    limit = 10**MAX_FINITE_DISTRIBUTION_SUM_DIGITS
     for term in reduced:
-        total += term
-        if total == 1:
-            continue
-        if abs(total.numerator) >= limit or total.denominator >= limit:
-            raise _validation_error(
-                f"{label} normalization exceeds the "
-                f"{MAX_FINITE_DISTRIBUTION_SUM_DIGITS}-digit intermediate bound"
-            )
+        total = _add_height_bounded(total, term, label=label)
     return total
 
 

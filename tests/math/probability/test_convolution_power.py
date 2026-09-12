@@ -407,6 +407,24 @@ def test_distribution_normalization_bounds_intermediate_denominators() -> None:
         event_probability(distribution, (atoms[0].value,))
 
 
+def test_complementary_two_three_free_masses_cancel_before_lcd_growth() -> None:
+    prime = 10**12 + 39
+    density = 6 * prime
+    atoms = (
+        FiniteDistributionAtom(
+            value=CanonicalRational.from_fraction(Fraction(0)),
+            probability=CanonicalRational.from_fraction(Fraction(1, density)),
+        ),
+        FiniteDistributionAtom(
+            value=CanonicalRational.from_fraction(Fraction(1)),
+            probability=CanonicalRational.from_fraction(Fraction(density - 1, density)),
+        ),
+    )
+    distribution = FiniteRationalDistribution(atoms=atoms)
+    result = event_probability(distribution, (atoms[0].value,))
+    assert result.event_probability.as_fraction() == Fraction(1, density)
+
+
 def test_result_deserialization_does_not_repeat_power_admission() -> None:
     source = _distribution(
         (

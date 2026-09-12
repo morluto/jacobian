@@ -198,6 +198,32 @@ def test_quadratic_coefficient_at_the_digit_limit_has_an_exact_inverse() -> None
     assert result.reconstructed_difference == source
 
 
+def test_cubic_coefficient_at_the_digit_limit_has_an_exact_inverse() -> None:
+    coefficient = 10**32_767 + 1
+    source = RationalPolynomial(
+        variables=("x",),
+        polynomial=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=coefficient, den=1),
+                    exponents=(3,),
+                ),
+            )
+        ),
+    )
+    result = rational_discrete_antiderivative(source, "x")
+    terms = {
+        term.exponents: term.coefficient.as_fraction()
+        for term in result.antiderivative.polynomial.terms
+    }
+    assert terms == {
+        (4,): Fraction(coefficient, 4),
+        (3,): Fraction(-coefficient, 2),
+        (2,): Fraction(coefficient, 4),
+    }
+    assert result.reconstructed_difference == source
+
+
 def test_quadratic_triangular_work_is_rejected_before_expansion() -> None:
     source = _polynomial(((1, (1_024, 0)),))
     with pytest.raises(OperationResourceAdmissionError, match="work"):

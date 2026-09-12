@@ -140,6 +140,36 @@ def _admit_quadratic_group(coefficients: dict[int, Fraction]) -> None:
     )
 
 
+def _admit_cubic_group(coefficients: dict[int, Fraction]) -> None:
+    """Admit degree-3 slices from the exact closed-form inverse.
+
+    For ``P(x) = a x^3`` the zero-based inverse is
+    ``Q(x) = a (x^4 - 2 x^3 + x^2) / 4``.  Superposition with the quadratic
+    inverse keeps every denominator at most 12, so a source coefficient at
+    the digit limit stays representable.
+    """
+
+    cubic = coefficients.get(3, Fraction())
+    quadratic = coefficients.get(2, Fraction())
+    linear = coefficients.get(1, Fraction())
+    constant = coefficients.get(0, Fraction())
+    quartic_term = cubic / 4
+    cubic_term = -cubic / 2 + quadratic / 3
+    quadratic_term = cubic / 4 - quadratic / 2 + linear / 2
+    linear_term = quadratic / 6 - linear / 2 + constant
+    _admit_closed_form_coefficients(
+        (
+            quartic_term,
+            cubic_term,
+            quadratic_term,
+            linear_term,
+            cubic,
+            quadratic,
+            linear,
+        )
+    )
+
+
 def _admit_group(
     coefficients: dict[int, Fraction],
     *,
@@ -160,6 +190,9 @@ def _admit_group(
         return
     if maximum_degree == 2:
         _admit_quadratic_group(coefficients)
+        return
+    if maximum_degree == 3:
+        _admit_cubic_group(coefficients)
         return
 
     common_denominator = 1

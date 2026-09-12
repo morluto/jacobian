@@ -2,12 +2,14 @@
 
 import json
 from itertools import product
+from math import comb
 from typing import Any, cast
 
 import pytest
 
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.logic.languages.regular._symbol_parikh import (
+    MAX_SYMBOL_PARIKH_DP_WORK,
     SymbolParikhProfileRequest,
     SymbolParikhProfileResult,
     symbol_parikh_profile,
@@ -237,13 +239,10 @@ def test_final_layer_scan_charges_every_reachable_state() -> None:
         symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=75))
 
 
-def test_transition_index_work_is_admitted_before_indexing(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    state_count = 64
-    alphabet_size = 15
-    reachable_state_count = 49
-    dfa = DFA(
+def _source_sensitive_dfa(reachable_state_count: int) -> DFA:
+    state_count = 13
+    alphabet_size = 5
+    return DFA(
         state_count=state_count,
         alphabet_size=alphabet_size,
         transitions=tuple(
@@ -262,8 +261,42 @@ def test_transition_index_work_is_admitted_before_indexing(
             for symbol in range(alphabet_size)
         ),
         initial_state=0,
-        accepting_states=(0,),
+        accepting_states=tuple(range(state_count)),
     )
+
+
+def test_profile_preserves_cheap_unreachable_state_case() -> None:
+    result = symbol_parikh_profile(
+        SymbolParikhProfileRequest(
+            dfa=_source_sensitive_dfa(reachable_state_count=11),
+            word_length=13,
+        )
+    )
+
+    assert len(result.cells) == comb(17, 4)
+    assert result.total_accepted_words == 5**13
+
+
+def test_transition_index_charge_rejects_before_indexing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    reachable_state_count = 12
+    dfa = _source_sensitive_dfa(reachable_state_count=reachable_state_count)
+    length = 13
+    alphabet_size = dfa.alphabet_size
+    transition_count = dfa.state_count * dfa.alphabet_size
+    without_index_work = (
+        reachable_state_count
+        * comb(length + alphabet_size - 1, alphabet_size)
+        * alphabet_size
+        * max(1, alphabet_size)
+        + reachable_state_count
+        * comb(length + alphabet_size - 1, alphabet_size - 1)
+        * max(1, alphabet_size)
+        + reachable_state_count * transition_count
+    )
+    assert without_index_work <= MAX_SYMBOL_PARIKH_DP_WORK
+    assert without_index_work + transition_count > MAX_SYMBOL_PARIKH_DP_WORK
 
     import jacobian.math.logic.languages.regular._symbol_parikh as profile
 
@@ -276,5 +309,5 @@ def test_transition_index_work_is_admitted_before_indexing(
         match="symbol-Parikh DP or output exceeds",
     ):
         profile.symbol_parikh_profile(
-            SymbolParikhProfileRequest(dfa=dfa, word_length=3)
+            SymbolParikhProfileRequest(dfa=dfa, word_length=length)
         )

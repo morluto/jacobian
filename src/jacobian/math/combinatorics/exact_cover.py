@@ -874,9 +874,9 @@ def minimum_generalized_exact_cover(  # noqa: C901
         unit_items = [item for item, rows in coverage.items() if len(rows) == 1]
         if not unit_items:
             break
-        selected = coverage[unit_items[0]][0]
-        forced_selected.append(selected)
-        selected_items = set(selected.items)
+        forced_row = coverage[unit_items[0]][0]
+        forced_selected.append(forced_row)
+        selected_items = set(forced_row.items)
         remaining_primary -= remaining_primary.intersection(selected_items)
         remaining_rows = [
             row for row in remaining_rows if set(row.items).isdisjoint(selected_items)
@@ -1027,22 +1027,22 @@ def minimum_generalized_exact_cover(  # noqa: C901
     incumbent_ids: tuple[str, ...] | None = None
     visited = 0
     while stack and visited < search_node_limit:
-        uncovered, available, selected = stack.pop()
+        uncovered, available, selected_indices = stack.pop()
         visited += 1
         request_checkpoint("during minimum exact-cover search")
         if uncovered == 0:
             selected_ids = tuple(
-                sorted(active_rows[index].row_id for index in selected)
+                sorted(active_rows[index].row_id for index in selected_indices)
             )
             if (
                 incumbent is None
-                or len(selected) < len(incumbent)
+                or len(selected_indices) < len(incumbent)
                 or (
-                    len(selected) == len(incumbent)
+                    len(selected_indices) == len(incumbent)
                     and (incumbent_ids is None or selected_ids < incumbent_ids)
                 )
             ):
-                incumbent = selected
+                incumbent = selected_indices
                 incumbent_ids = selected_ids
             continue
         # A partial family with fewer than the incumbent's rows can still tie
@@ -1050,7 +1050,7 @@ def minimum_generalized_exact_cover(  # noqa: C901
         # cardinality: they cannot reach a cover of equal or smaller size while
         # primary items remain uncovered. Keeping the equal-size frontier is
         # necessary for the canonical lexicographic tie witness.
-        if incumbent is not None and len(selected) >= len(incumbent):
+        if incumbent is not None and len(selected_indices) >= len(incumbent):
             continue
         chosen_rows = 0
         fewest = row_count + 1
@@ -1073,7 +1073,7 @@ def minimum_generalized_exact_cover(  # noqa: C901
                 (
                     uncovered & ~row_primary_masks[row_index],
                     available & ~row_conflicts[row_index],
-                    (*selected, row_index),
+                    (*selected_indices, row_index),
                 )
             )
     exhausted = not stack

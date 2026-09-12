@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import Literal, Self
+from typing import Literal, NoReturn, Self
 
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
@@ -237,7 +237,7 @@ def _chromatic_bipartition_reconstruction_work(
     return partitions * 2 * (order + edge_count)
 
 
-def _chromatic_deadline_expired() -> None:
+def _chromatic_deadline_expired() -> NoReturn:
     raise OperationExecutionTimeoutError(
         "chromatic bipartition deadline expired during the kernel search"
     )

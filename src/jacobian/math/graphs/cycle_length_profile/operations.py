@@ -423,46 +423,48 @@ def enumerate_fixed_length_cycles(
     if plan is None:
         request_checkpoint("before empty fixed-length cycle result construction")
         return _empty_cycle_enumeration_result(graph, cycle_length, chordless=chordless)
-    adjacency = plan.adjacency
     edge_set = {frozenset(edge) for edge in graph.edges}
     cycles: set[tuple[str, ...]] = set()
     visited_prefixes = 0
 
-    def search_from(start: str) -> None:
-        path = [start]
-        used = {start}
+    for block in plan.blocks:
+        adjacency = block.adjacency
 
-        def visit(current: str) -> None:
-            nonlocal visited_prefixes
-            visited_prefixes += 1
-            if visited_prefixes % 1024 == 0:
-                request_checkpoint("during fixed-length cycle enumeration")
-            if len(path) == cycle_length:
-                if start not in adjacency[current]:
+        def search_from(start: str) -> None:
+            path = [start]
+            used = {start}
+
+            def visit(current: str) -> None:
+                nonlocal visited_prefixes
+                visited_prefixes += 1
+                if visited_prefixes % 1024 == 0:
+                    request_checkpoint("during fixed-length cycle enumeration")
+                if len(path) == cycle_length:
+                    if start not in adjacency[current]:
+                        return
+                    cycle = tuple(path)
+                    if chordless and any(
+                        frozenset((cycle[left], cycle[right])) in edge_set
+                        for left in range(cycle_length)
+                        for right in range(left + 1, cycle_length)
+                        if (right - left) not in (1, cycle_length - 1)
+                    ):
+                        return
+                    cycles.add(_canonicalize_cycle(cycle))
                     return
-                cycle = tuple(path)
-                if chordless and any(
-                    frozenset((cycle[left], cycle[right])) in edge_set
-                    for left in range(cycle_length)
-                    for right in range(left + 1, cycle_length)
-                    if (right - left) not in (1, cycle_length - 1)
-                ):
-                    return
-                cycles.add(_canonicalize_cycle(cycle))
-                return
-            for neighbor in adjacency[current]:
-                if neighbor <= start or neighbor in used:
-                    continue
-                used.add(neighbor)
-                path.append(neighbor)
-                visit(neighbor)
-                path.pop()
-                used.remove(neighbor)
+                for neighbor in adjacency[current]:
+                    if neighbor <= start or neighbor in used:
+                        continue
+                    used.add(neighbor)
+                    path.append(neighbor)
+                    visit(neighbor)
+                    path.pop()
+                    used.remove(neighbor)
 
-        visit(start)
+            visit(start)
 
-    for start in plan.core_vertices:
-        search_from(start)
+        for start in block.core_vertices:
+            search_from(start)
     ordered = tuple(sorted(cycles))
     request_checkpoint("before fixed-length cycle result construction")
     vertex_indices: dict[str, list[int]] = {vertex: [] for vertex in graph.vertices}
@@ -511,9 +513,14 @@ def enumerate_chordless_fixed_length_cycles(
 
 
 @dataclass(frozen=True, slots=True)
-class _FixedCyclePlan:
+class _FixedCycleBlock:
     adjacency: dict[str, tuple[str, ...]]
     core_vertices: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _FixedCyclePlan:
+    blocks: tuple[_FixedCycleBlock, ...]
 
 
 def _complete_multipartite_part_sizes(
@@ -614,6 +621,45 @@ def _falling_factorial(n: int, k: int) -> int:
     return result
 
 
+def _block_fixed_cycle_bounds(
+    block: tuple[str, ...],
+    adjacency_sets: dict[str, set[str]],
+    cycle_length: int,
+    *,
+    chordless: bool,
+) -> tuple[int, int, dict[str, tuple[str, ...]]]:
+    """Return traversal work, cycle-count bound, and adjacency for one block."""
+
+    local = _block_adjacency(block, adjacency_sets)
+    core_order = len(block)
+    adjacency = {vertex: tuple(sorted(local[vertex])) for vertex in block}
+    if cycle_length > core_order:
+        return 0, 0, adjacency
+    max_core_degree = max((len(local[vertex]) for vertex in block), default=0)
+    prefix_bound = core_order
+    for depth in range(1, cycle_length):
+        prefix_bound += core_order * _falling_factorial(core_order - 1, depth)
+    scan_bound = prefix_bound * max(1, core_order)
+    terminal_bound = _falling_factorial(core_order, cycle_length)
+    complete_cycle_upper_bound = terminal_bound // (2 * cycle_length)
+    terminal_checks = 1 + 2 * cycle_length
+    if chordless:
+        terminal_checks += cycle_length * (cycle_length - 1) // 2
+    complete_work = scan_bound + terminal_bound * terminal_checks
+    branching = max(max_core_degree - 1, 0)
+    directed_paths = core_order * max_core_degree
+    topology_prefix_total = core_order + directed_paths
+    for _depth in range(2, cycle_length):
+        directed_paths *= branching
+        topology_prefix_total += directed_paths
+    topology_work = (
+        topology_prefix_total * max(max_core_degree, 1)
+        + directed_paths * terminal_checks
+    )
+    cycle_upper_bound = min(complete_cycle_upper_bound, directed_paths)
+    return min(complete_work, topology_work), cycle_upper_bound, adjacency
+
+
 def _admit_fixed_cycle_enumeration(
     graph: SimpleUndirectedGraph, cycle_length: int, *, chordless: bool = False
 ) -> _FixedCyclePlan | None:
@@ -653,9 +699,6 @@ def _admit_fixed_cycle_enumeration(
         if left in core_set and right in core_set:
             adjacency_sets[left].add(right)
             adjacency_sets[right].add(left)
-    adjacency = {
-        vertex: tuple(sorted(neighbors)) for vertex, neighbors in adjacency_sets.items()
-    }
     source_characters = sum(len(vertex) for vertex in graph.vertices) + sum(
         len(left) + len(right) for left, right in graph.edges
     )
@@ -672,6 +715,7 @@ def _admit_fixed_cycle_enumeration(
         )
         return None
 
+    cyclic_blocks = _core_cyclic_blocks(core_vertices, adjacency_sets)
     core_order = len(core_vertices)
     max_core_degree = max(
         (len(neighbors) for neighbors in adjacency_sets.values()), default=0
@@ -684,7 +728,7 @@ def _admit_fixed_cycle_enumeration(
     # disconnected complete-graph output envelope.
     if chordless and cycle_length >= 4:
         multipartite_bound = _chordless_multipartite_cycle_bound(
-            _core_cyclic_blocks(core_vertices, adjacency_sets),
+            cyclic_blocks,
             adjacency_sets,
             cycle_length,
         )
@@ -720,48 +764,23 @@ def _admit_fixed_cycle_enumeration(
             largest_label=largest_label,
         )
         return None
-    # Complete-graph bounds over the core order. They stay sound for dense
-    # graphs but reject cheaply executable sparse instances (for example a
-    # bare ring, whose only cycles are found by a linear DFS).
-    prefix_bound = core_order
-    for depth in range(1, cycle_length):
-        prefix_bound += core_order * _falling_factorial(core_order - 1, depth)
-    # Each visited prefix scans at most the whole core adjacency tuple. A
-    # terminal prefix also pays for canonicalization and, for the chordless
-    # operation, every unordered vertex pair.
-    scan_bound = prefix_bound * max(1, core_order)
-    terminal_bound = _falling_factorial(core_order, cycle_length)
-    complete_cycle_upper_bound = terminal_bound // (2 * cycle_length)
-    terminal_checks = 1 + 2 * cycle_length
-    if chordless:
-        terminal_checks += cycle_length * (cycle_length - 1) // 2
-    complete_work = (
-        scan_bound
-        + terminal_bound * terminal_checks
-        + 3 * (vertex_count + len(graph.edges))
-    )
-    # Topology-sensitive bounds from the built core adjacency. From each
-    # start, length-d simple paths number at most Δ·(Δ-1)^(d-1): the first
-    # step has at most Δ choices and every later step revisits the
-    # predecessor, leaving at most Δ-1 unvisited neighbors. Each found cycle
-    # needs at least one length-(k-1) terminal visit, so those visits also
-    # bound the output. Taking the minimum with the complete-graph bounds
-    # keeps dense-graph behavior unchanged while admitting sparse graphs.
-    branching = max(max_core_degree - 1, 0)
-    directed_paths = core_order * max_core_degree
-    topology_prefix_total = core_order + directed_paths
-    for _depth in range(2, cycle_length):
-        directed_paths *= branching
-        topology_prefix_total += directed_paths
-    topology_work = (
-        topology_prefix_total * max(max_core_degree, 1)
-        + directed_paths * terminal_checks
-        + 3 * (vertex_count + len(graph.edges))
-    )
-    cycle_upper_bound = min(complete_cycle_upper_bound, directed_paths)
+    source_scan = 3 * (vertex_count + len(graph.edges))
+    complete_work = source_scan
+    cycle_upper_bound = 0
+    search_blocks: list[_FixedCycleBlock] = []
+    for block in cyclic_blocks:
+        block_work, block_cycles, block_adjacency = _block_fixed_cycle_bounds(
+            block, adjacency_sets, cycle_length, chordless=chordless
+        )
+        complete_work += block_work
+        cycle_upper_bound += block_cycles
+        if block_cycles:
+            search_blocks.append(
+                _FixedCycleBlock(adjacency=block_adjacency, core_vertices=block)
+            )
     if chordless_four_cycle_bound is not None:
         cycle_upper_bound = chordless_four_cycle_bound
-    if min(complete_work, topology_work) > MAX_FIXED_CYCLE_WORK:
+    if complete_work > MAX_FIXED_CYCLE_WORK:
         _reject_fixed_cycle_resource(
             "cycle_enumeration.work_bound",
             "complete fixed-length traversal and incidence assembly exceed the admitted work envelope",
@@ -773,7 +792,9 @@ def _admit_fixed_cycle_enumeration(
         source_characters=source_characters,
         largest_label=largest_label,
     )
-    return _FixedCyclePlan(adjacency=adjacency, core_vertices=core_vertices)
+    if not search_blocks or cycle_upper_bound == 0:
+        return None
+    return _FixedCyclePlan(blocks=tuple(search_blocks))
 
 
 def _validate_graph_carrier(graph: SimpleUndirectedGraph) -> None:

@@ -153,7 +153,8 @@ class FixedLengthCycleEnumerationResult(StrictModel):
 
     The incidence rows are structural indexes over the retained source axes.
     They bind every source vertex and edge to the cycle indices. Deserialization
-    checks only the local cycle-edge relation and these indexes. ``family_kind``
+    checks the local cycle-edge relation, chordless inducedness when
+    ``family_kind`` is ``CHORDLESS``, and these indexes. ``family_kind``
     records whether completeness is over all simple or only chordless cycles.
     """
 
@@ -212,6 +213,16 @@ class FixedLengthCycleEnumerationResult(StrictModel):
                 raise PydanticCustomError(
                     "cycle_enumeration.cycle_edges_invalid",
                     "every cycle must close through declared graph edges",
+                )
+            if self.family_kind is CycleFamilyKind.CHORDLESS and any(
+                frozenset((cycle[left], cycle[right])) in graph_edges
+                for left in range(self.cycle_length)
+                for right in range(left + 1, self.cycle_length)
+                if (right - left) not in (1, self.cycle_length - 1)
+            ):
+                raise PydanticCustomError(
+                    "cycle_enumeration.chordless_cycle_has_a_chord",
+                    "chordless cycles must not contain nonconsecutive graph edges",
                 )
             if not is_dihedral_canonical_cycle(cycle):
                 raise PydanticCustomError(

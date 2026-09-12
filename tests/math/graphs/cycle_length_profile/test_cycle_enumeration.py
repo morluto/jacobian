@@ -242,6 +242,36 @@ def test_serialized_family_checks_axes_and_incidence_without_replaying_edges() -
         )
 
 
+def test_chordless_family_rejects_cycles_that_retain_a_chord() -> None:
+    graph = _square_with_diagonal()
+    simple = enumerate_fixed_length_cycles(graph, 4)
+    payload = simple.model_dump(mode="json")
+    payload["family_kind"] = "CHORDLESS"
+    with pytest.raises(ValueError, match="nonconsecutive"):
+        FixedLengthCycleEnumerationResult.model_validate(payload)
+
+
+def _ring_edges(vertices: tuple[str, ...]) -> tuple[tuple[str, str], ...]:
+    return tuple(
+        (left, right) if left < right else (right, left)
+        for left, right in zip(vertices, vertices[1:] + vertices[:1], strict=True)
+    )
+
+
+def test_bridged_rings_enumerate_per_biconnected_block() -> None:
+    left = tuple(f"a{index:02d}" for index in range(15))
+    right = tuple(f"b{index:02d}" for index in range(15))
+    bridge = (left[0], right[0]) if left[0] < right[0] else (right[0], left[0])
+    graph = SimpleUndirectedGraph(
+        vertices=(*left, *right),
+        edges=(*_ring_edges(left), *_ring_edges(right), bridge),
+    )
+    result = enumerate_fixed_length_cycles(graph, 15)
+    assert result.cycle_count == 2
+    families = {frozenset(cycle) for cycle in result.cycles}
+    assert families == {frozenset(left), frozenset(right)}
+
+
 def test_large_serialized_family_round_trips_with_linear_incidence_checks() -> None:
     vertices = tuple(f"v{i:02}" for i in range(50))
     graph = SimpleUndirectedGraph(

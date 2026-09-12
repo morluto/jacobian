@@ -36,6 +36,24 @@ class SymbolParikhProfileResult(StrictModel):
     cells: tuple[SymbolParikhCell, ...] = Field(max_length=MAX_SYMBOL_PARIKH_CELLS)
     total_accepted_words: ExactInteger
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: SymbolParikhProfileRequest,
+        *,
+        cells: tuple[SymbolParikhCell, ...],
+        total_accepted_words: ExactInteger,
+    ) -> Self:
+        """Construct a profile after the trusted DP established its invariants."""
+
+        return cls.model_construct(
+            dfa=request.dfa,
+            alphabet=tuple(range(request.dfa.alphabet_size)),
+            word_length=request.word_length,
+            cells=cells,
+            total_accepted_words=total_accepted_words,
+        )
+
     @model_validator(mode="after")
     def require_canonical_cells(self) -> Self:
         if self.alphabet != tuple(range(self.dfa.alphabet_size)):
@@ -122,10 +140,8 @@ def symbol_parikh_profile(
         if state in accepting:
             profile[counts] = profile.get(counts, 0) + multiplicity
     total = sum(profile.values())
-    return SymbolParikhProfileResult(
-        dfa=dfa,
-        alphabet=tuple(range(alphabet_size)),
-        word_length=length,
+    return SymbolParikhProfileResult._from_kernel(
+        request,
         cells=tuple(
             SymbolParikhCell(symbol_counts=counts, multiplicity=multiplicity)
             for counts, multiplicity in sorted(profile.items())

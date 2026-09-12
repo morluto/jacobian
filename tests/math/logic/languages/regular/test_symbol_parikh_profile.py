@@ -1,6 +1,8 @@
 """Exact accepted-word symbol Parikh profiles."""
 
+import json
 from itertools import product
+from typing import Any, cast
 
 import pytest
 
@@ -75,6 +77,51 @@ def test_profile_result_rejects_noncanonical_claimed_cells() -> None:
             cells=(SymbolParikhCell(symbol_counts=(4, -1), multiplicity=1),),
             total_accepted_words=1,
         )
+
+
+def test_profile_result_rejects_forged_json_cells() -> None:
+    result = symbol_parikh_profile(
+        SymbolParikhProfileRequest(dfa=ending_in_one(), word_length=3)
+    )
+    payload = result.model_dump(mode="json")
+    payload["cells"][0]["symbol_counts"] = [0, 4]
+
+    with pytest.raises(ValueError, match="nonnegative and sum"):
+        SymbolParikhProfileResult.model_validate_json(json.dumps(payload))
+
+
+def test_large_accepted_profile_uses_trusted_result_construction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    alphabet_size = 32
+    dfa = DFA(
+        state_count=1,
+        alphabet_size=alphabet_size,
+        transitions=tuple(
+            DFATransition(source=0, symbol=symbol, target=0)
+            for symbol in range(alphabet_size)
+        ),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+    import jacobian.math.logic.languages.regular._symbol_parikh as profile
+
+    calls = 0
+    builtin_sorted = sorted
+
+    def counted_sorted(*args: Any, **kwargs: Any) -> object:
+        nonlocal calls
+        calls += 1
+        if calls > 1:
+            raise AssertionError("profile result construction replayed cell sorting")
+        return builtin_sorted(*args, **kwargs)
+
+    monkeypatch.setattr(profile, "sorted", cast(Any, counted_sorted), raising=False)
+    result = symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=3))
+
+    assert len(result.cells) == 5_984
+    assert result.total_accepted_words == alphabet_size**3
+    assert calls == 1
 
 
 def test_profile_does_not_replay_count_operation(

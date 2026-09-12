@@ -370,19 +370,37 @@ def _select_real_algebraic_root(minimal: sympy.Poly, distance: Any) -> int:
             code="polynomial.root_critical.distance_root_selection",
             message="exact real distance root could not be selected",
         )
-    intervals = list(minimal.intervals())
-    hits = [
-        index
-        for index, ((lower, upper), _multiplicity) in enumerate(intervals)
-        if Fraction(lower) <= real_lo and real_hi <= Fraction(upper)
-    ]
-    if len(hits) == 1:
-        return hits[0]
+    hits = _unique_interval_hit(list(minimal.intervals()), real_lo, real_hi)
+    if hits is not None:
+        return hits
+    eps = Fraction(1, 1 << 20)
+    for _ in range(8):
+        hits = _unique_interval_hit(
+            list(minimal.intervals(eps=eps)), real_lo, real_hi
+        )
+        if hits is not None:
+            return hits
+        eps /= 4
     raise OperationDomainValidationError(
         location=("pairs",),
         code="polynomial.root_critical.distance_root_selection",
         message="exact real distance root could not be selected",
     )
+
+
+def _unique_interval_hit(
+    intervals: list[Any], real_lo: Fraction, real_hi: Fraction
+) -> int | None:
+    """Return the unique isolating interval that meets a certified enclosure."""
+
+    hits = [
+        index
+        for index, ((lower, upper), _multiplicity) in enumerate(intervals)
+        if not (real_hi < Fraction(lower) or real_lo > Fraction(upper))
+    ]
+    if len(hits) == 1:
+        return hits[0]
+    return None
 
 
 def _distance_value(
@@ -537,12 +555,19 @@ def _admit(
             code="polynomial.root_critical.root_carrier_bound",
             message="the exact-root carrier admits irreducible factors through degree four",
         )
-    root_count = sum(factor.degree() for factor, _ in source_factors)
+    root_count = sum(int(factor.degree()) for factor, _ in source_factors)
     critical_count = (
-        sum(factor.degree() for factor, _ in derivative_factors)
+        sum(int(factor.degree()) for factor, _ in derivative_factors)
         if critical_degree
         else 0
     )
+    pair_count = root_count * critical_count
+    if pair_count > MAX_ROOT_CRITICAL_PAIRS or pair_count > max_pair_rows:
+        raise OperationResourceAdmissionError(
+            location=("max_pair_rows",),
+            code="polynomial.root_critical.pair_output_bound",
+            message="complete root-critical pair expansion exceeds the admitted row budget",
+        )
     max_distance_degree = max(
         (
             _conjugate_field_multiplier(source_factor)
@@ -559,13 +584,6 @@ def _admit(
             location=("polynomial",),
             code="polynomial.root_critical.distance_degree_bound",
             message="the source can produce a distance algebraic degree beyond the admitted carrier",
-        )
-    pair_count = root_count * critical_count
-    if pair_count > MAX_ROOT_CRITICAL_PAIRS or pair_count > max_pair_rows:
-        raise OperationResourceAdmissionError(
-            location=("max_pair_rows",),
-            code="polynomial.root_critical.pair_output_bound",
-            message="complete root-critical pair expansion exceeds the admitted row budget",
         )
     if any(
         isinstance(root, sympy.RootOf)

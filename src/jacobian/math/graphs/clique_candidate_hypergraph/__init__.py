@@ -3,9 +3,11 @@
 from jacobian.math.graphs.clique_candidate_hypergraph.operations import (
     construct_all_clique_candidate_hypergraph,
     convert_candidate_cliques,
+    verify_clique_candidate_hypergraph,
 )
 
 __all__ = [
     "construct_all_clique_candidate_hypergraph",
     "convert_candidate_cliques",
+    "verify_clique_candidate_hypergraph",
 ]

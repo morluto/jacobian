@@ -9,5 +9,7 @@ def test_public_api_is_small_and_canonical() -> None:
     assert delta_matroids.__all__ == [
         "FiniteDeltaMatroid",
         "from_feasible_sets",
+        "twist",
         "verify_from_feasible_sets",
+        "width",
     ]

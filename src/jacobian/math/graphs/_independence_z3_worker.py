@@ -31,7 +31,11 @@ def main() -> int:
         resource_budget = IndependenceNumberBudget.model_validate(
             payload["resource_budget"]
         )
-        result = _solve_independence_number_values_kernel(graph, resource_budget)
+        result = _solve_independence_number_values_kernel(
+            graph,
+            resource_budget,
+            canonicalize_witness=bool(payload.get("canonicalize_witness", False)),
+        )
         sys.stdout.buffer.write(
             encode_worker_result_frame(
                 result.model_dump(mode="json", exclude={"graph"}),

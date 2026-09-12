@@ -232,12 +232,6 @@ def _require_jump_atoms(
             code="probability.compound_poisson.atom_type",
             message="jump_distribution atoms must be finite-distribution atoms",
         )
-    if len(atoms) == 0:
-        raise _domain_error(
-            location=("jump_distribution", "atoms"),
-            code="probability.compound_poisson.empty_support",
-            message="jump_distribution must contain at least one support atom",
-        )
     if len(atoms) > MAX_COMPOUND_POISSON_ATOMS:
         raise _resource_error(
             location=("jump_distribution", "atoms"),
@@ -246,6 +240,12 @@ def _require_jump_atoms(
                 "compound-Poisson jump laws accept at most "
                 f"{MAX_COMPOUND_POISSON_ATOMS} support atoms"
             ),
+        )
+    if len(atoms) == 0:
+        raise _domain_error(
+            location=("jump_distribution", "atoms"),
+            code="probability.compound_poisson.empty_support",
+            message="jump_distribution must contain at least one support atom",
         )
     if not all(isinstance(atom, FiniteDistributionAtom) for atom in atoms):
         raise _domain_error(

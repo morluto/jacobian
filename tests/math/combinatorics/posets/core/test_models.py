@@ -174,7 +174,22 @@ def test_consumers_reject_mixed_carrier_elements_as_domain_errors() -> None:
 
     assert verify_finite_poset(malformed) is False
     with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
-        width(malformed)
+            width(malformed)
+
+
+def test_consumers_reject_boolean_rank_claims_as_domain_errors() -> None:
+    poset = _materialize(["a", "b"], [("a", "b")])
+    forged_ranks = tuple(
+        ElementRank.model_construct(element=entry.element, rank=False)
+        if entry.rank == 0
+        else entry
+        for entry in poset.ranks or ()
+    )
+    forged = poset.model_copy(update={"ranks": forged_ranks})
+
+    assert verify_finite_poset(forged) is False
+    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+        width(forged)
 
 
 def test_comparable_pairs_require_complete_transitive_relation() -> None:

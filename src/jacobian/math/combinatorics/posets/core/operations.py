@@ -38,6 +38,7 @@ from jacobian.math.combinatorics.posets.core._models import (
     MAX_ANTICHAIN_PROFILE_ELEMENTS,
     MAX_LINEAR_EXTENSION_ELEMENTS,
     AntichainProfileResult,
+    ElementRank,
     FinitePoset,
     IncidenceConvolutionResult,
     IncomparablePair,
@@ -139,6 +140,20 @@ def _admit_canonical_poset(poset: FinitePoset) -> None:
         )
 
 
+def _revalidated_ranks(ranks: object) -> tuple[ElementRank, ...] | None:
+    if ranks is None:
+        return None
+    if type(ranks) is not tuple:
+        raise TypeError("ranks must be a tuple")
+    return tuple(
+        ElementRank.model_validate(
+            {"element": getattr(entry, "element"), "rank": getattr(entry, "rank")},
+            strict=True,
+        )
+        for entry in ranks
+    )
+
+
 def _canonical_claims_match(
     poset: FinitePoset,
     strict: set[tuple[str, str]],
@@ -173,7 +188,7 @@ def _canonical_claims_match(
         _validate_poset_rank_structure(
             poset.elements,
             poset.graded,
-            poset.ranks,
+            _revalidated_ranks(poset.ranks),
             expected_ranks,
             expected_minimal,
             expected_maximal,
@@ -258,7 +273,7 @@ def verify_finite_poset(poset: FinitePoset) -> bool:
         _validate_poset_rank_structure(
             poset.elements,
             poset.graded,
-            poset.ranks,
+            _revalidated_ranks(poset.ranks),
             expected_ranks,
             expected_minimal,
             expected_maximal,

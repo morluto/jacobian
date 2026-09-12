@@ -162,3 +162,23 @@ def test_enumeration_admits_before_inspecting_the_carrier() -> None:
         enumerate_antichains(malformed, 1, 1)
     with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
         enumerate_antichains(cast(FinitePoset, object()), 1, 1)
+
+
+def test_enumeration_rejects_size_bound_before_strict_closure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.combinatorics.posets.core import _models as poset_models
+    from jacobian.math.combinatorics.posets.core import operations as poset_operations
+
+    poset = _make_antichain_poset(25)
+
+    def fail_presentation(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("presentation ran before the enumeration bound")
+
+    monkeypatch.setattr(poset_models, "_validated_presentation", fail_presentation)
+    monkeypatch.setattr(poset_operations, "_validated_presentation", fail_presentation)
+    monkeypatch.setattr(poset_models, "_strict_closure", fail_presentation)
+    with pytest.raises(
+        OperationDomainValidationError, match="at most 24 elements"
+    ):
+        enumerate_antichains(poset, 1, 1)

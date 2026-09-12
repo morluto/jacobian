@@ -173,13 +173,13 @@ def _admit_implication_countermodel(
     """Admit one complete finite-magma implication check before evaluation."""
 
     _require_implication_input_types(algebra, premises, target)
-    premises = _deduplicate_premises(premises)
     if len(premises) > 16:
         _reject(
             location=("premises",),
             code="premise_count",
             message="at most sixteen premises are admitted",
         )
+    premises = _deduplicate_premises(premises)
     if len(algebra.operations) != 1 or algebra.operations[0].arity != 2:
         _reject(
             location=("algebra",),

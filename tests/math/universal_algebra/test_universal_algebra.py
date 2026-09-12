@@ -966,9 +966,15 @@ def test_native_implication_check_uses_mathematical_arguments() -> None:
         ImplicationCountermodelCheckRequest(algebra=magma, premises=(), target=target)
     )
     assert result.is_countermodel
-    repeated = implication_countermodel_check(magma, (target,) * 17, target)
-    unique = implication_countermodel_check(magma, (target,), target)
-    assert repeated == unique
+
+
+def test_native_implication_check_bounds_raw_premise_tuple_before_deduplication() -> None:
+    from jacobian.math.universal_algebra import implication_countermodel_check
+
+    magma = _cyclic_addition_algebra(2)
+    premise = MagmaEquation(left=_variable_term(0), right=_variable_term(0))
+    with pytest.raises(OperationDomainValidationError, match="sixteen premises"):
+        implication_countermodel_check(magma, (premise,) * 17, premise)
 
 
 def test_native_implication_check_preserves_sparse_variable_axis() -> None:

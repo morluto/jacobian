@@ -9,10 +9,12 @@ from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import parse_canonical_integer
+from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.dispatch import invoke_operation
 from jacobian.math.number_theory.sequences.core._models import (
     AutocorrelationCell,
     AutocorrelationResult,
@@ -233,3 +235,18 @@ def test_constant_sequence_peak_scan_is_linear() -> None:
     source = FiniteIntegerSequence(values=(1,) * 10_000)
     result = sequence_order_shape(source)
     assert result.weak_unimodal_peak_positions == tuple(range(10_000))
+
+
+def test_catalog_accepts_serialized_integer_sequence_source() -> None:
+    source = sequence_order_shape(FiniteIntegerSequence(values=(1, 2, 3))).source
+    payload = json.loads(source.model_dump_json())
+    result = invoke_operation(
+        "sequence.autocorrelation.aperiodic.compute",
+        payload,
+        Catalog.open(),
+    )
+    native = aperiodic_autocorrelation(source)
+    assert result.output == native.model_dump(mode="json")
+    restored = AutocorrelationResult.model_validate_json(json.dumps(result.output))
+    assert isinstance(restored.source, FiniteIntegerSequence)
+    assert restored.source.values == (1, 2, 3)

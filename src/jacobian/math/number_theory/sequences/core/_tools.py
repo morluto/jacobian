@@ -6,7 +6,7 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.number_theory.sequences.core._models import (
     AutocorrelationResult,
     FiniteIntegerSequence,
-    FiniteRationalSequence,
+    FiniteSequence,
     IntegerSequenceBooleanResult,
     IntegerSequenceFrequenciesResult,
     IntegerSequenceIndexListResult,
@@ -83,7 +83,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "as denominator-one rationals, and an empty sequence returns an "
             "empty profile."
         ),
-        request_type=FiniteRationalSequence,
+        request_type=FiniteSequence,
         result_type=AutocorrelationResult,
         run=aperiodic_autocorrelation,
         tags=("sequence", "autocorrelation", "aperiodic", "exact"),
@@ -105,7 +105,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "denominator-one rationals, and an empty sequence returns an empty "
             "profile."
         ),
-        request_type=FiniteRationalSequence,
+        request_type=FiniteSequence,
         result_type=AutocorrelationResult,
         run=cyclic_autocorrelation,
         tags=("sequence", "autocorrelation", "cyclic", "exact"),

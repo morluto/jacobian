@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Any, Literal, Self
 
 from pydantic import Field, ValidationInfo, model_validator
-from pydantic_core import PydanticCustomError
+from pydantic_core import PydanticCustomError, core_schema
 
 from jacobian._exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
@@ -102,7 +102,11 @@ class IntegerSequenceBooleanResult(StrictModel):
     holds: bool
 
 
-class FiniteIntegerSequence(StrictModel):
+class FiniteSequence(StrictModel):
+    """Catalog request base for canonical integer or rational sequences."""
+
+
+class FiniteIntegerSequence(FiniteSequence):
     """A possibly empty finite integer sequence."""
 
     domain: Literal["integer"] = "integer"
@@ -124,7 +128,7 @@ class FiniteIntegerSequence(StrictModel):
         return self
 
 
-class FiniteRationalSequence(StrictModel):
+class FiniteRationalSequence(FiniteSequence):
     """A possibly empty finite sequence of canonical real rationals.
 
     Integer wire entries are accepted as denominator-one rationals.  The
@@ -243,3 +247,37 @@ class SequenceOrderShapeResult(StrictModel):
     )
     is_nonnegative: bool
     has_internal_zero: bool
+
+
+@classmethod
+def _finite_sequence_core_schema(
+    cls, source_type: Any, handler: Any
+) -> core_schema.CoreSchema:
+    if cls is not FiniteSequence:
+        return handler(source_type)
+    return core_schema.union_schema(
+        [
+            handler.generate_schema(FiniteRationalSequence),
+            handler.generate_schema(FiniteIntegerSequence),
+        ]
+    )
+
+
+@classmethod
+def _finite_sequence_json_schema(
+    cls, core_schema_obj: Any, handler: Any
+) -> dict[str, Any]:
+    if cls is not FiniteSequence:
+        return handler(core_schema_obj)
+    return {
+        "type": "object",
+        "anyOf": [
+            FiniteIntegerSequence.model_json_schema(mode=handler.mode),
+            FiniteRationalSequence.model_json_schema(mode=handler.mode),
+        ],
+    }
+
+
+FiniteSequence.__get_pydantic_core_schema__ = _finite_sequence_core_schema
+FiniteSequence.__get_pydantic_json_schema__ = _finite_sequence_json_schema
+FiniteSequence.model_rebuild(force=True)

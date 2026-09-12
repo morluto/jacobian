@@ -7,9 +7,11 @@ the public operations.
 
 from __future__ import annotations
 
+from fractions import Fraction
 from math import factorial, prod
+from typing import cast
 
-from jacobian.math.combinatorics.algebraic._models import RSKResult
+from jacobian.math.combinatorics.algebraic._models import DominanceRelation, RSKResult
 from jacobian.math.combinatorics.algebraic._rsk import (
     _row_insert,
 )
@@ -21,7 +23,12 @@ from jacobian.math.combinatorics.algebraic._rsk import (
 )
 from jacobian.math.combinatorics.algebraic.values import RSKTableauPair
 from jacobian.math.combinatorics.symmetric_functions.values import (
+    MAX_PARTITION_SIZE as MAX_CANONICAL_PARTITION_SIZE,
+)
+from jacobian.math.combinatorics.symmetric_functions.values import (
     IntegerPartition,
+    SemistandardYoungTableau,
+    StandardYoungTableau,
     require_semistandard,
     require_standard,
 )
@@ -29,8 +36,10 @@ from jacobian.math.logic.languages.words.values import FiniteWord
 
 __all__ = [
     "conjugate_partition",
+    "hook_content_count",
     "hook_lengths",
     "inverse_row_insertion_rsk",
+    "partition_dominance",
     "row_insertion_rsk",
     "standard_young_tableaux_count",
     "verify_rsk",
@@ -130,3 +139,75 @@ def standard_young_tableaux_count(partition: IntegerPartition) -> int:
     hooks = hook_lengths(partition)
     n = sum(partition.parts)
     return factorial(n) // _hook_length_product(hooks)
+
+
+def hook_content_count(
+    partition: IntegerPartition, alphabet_size: int
+) -> tuple[int, tuple[int, ...], int]:
+    """Count SSYTs of ``partition`` over ``1..alphabet_size`` exactly.
+
+    The returned factors are in row-major cell order and are the numerators
+    ``m + j - i`` in the hook-content formula.  Keeping the hook product
+    alongside them makes the integer divisibility computation replayable
+    without introducing a generic certificate envelope.
+    """
+    if (
+        type(alphabet_size) is not int
+        or not 1 <= alphabet_size <= MAX_CANONICAL_PARTITION_SIZE
+    ):
+        raise ValueError("alphabet_size must be between 1 and the partition-size bound")
+    hooks = hook_lengths(partition)
+    numerators = tuple(
+        alphabet_size + column - row
+        for row, length in enumerate(partition.parts)
+        for column in range(length)
+    )
+    hook_product = _hook_length_product(hooks)
+    numerator_product = prod(numerators)
+    quotient = Fraction(numerator_product, hook_product)
+    if quotient.denominator != 1:
+        raise ValueError("hook-content formula did not produce an integer")
+    return quotient.numerator, numerators, hook_product
+
+
+def partition_dominance(
+    left: IntegerPartition, right: IntegerPartition
+) -> tuple[DominanceRelation, tuple[int, ...], tuple[int, ...]]:
+    """Compare partitions using all leading-row prefix sums."""
+    if sum(left.parts) != sum(right.parts):
+        return "NOT_COMPARABLE_DIFFERENT_SIZE", (), ()
+    length = max(len(left.parts), len(right.parts))
+    left_sums: list[int] = []
+    right_sums: list[int] = []
+    left_total = right_total = 0
+    for index in range(length):
+        left_total += left.parts[index] if index < len(left.parts) else 0
+        right_total += right.parts[index] if index < len(right.parts) else 0
+        left_sums.append(left_total)
+        right_sums.append(right_total)
+    left_ge = all(a >= b for a, b in zip(left_sums, right_sums, strict=True))
+    right_ge = all(a <= b for a, b in zip(left_sums, right_sums, strict=True))
+    relation = (
+        "EQUAL"
+        if left_ge and right_ge
+        else "LEFT_DOMINATES"
+        if left_ge
+        else "RIGHT_DOMINATES"
+        if right_ge
+        else "INCOMPARABLE"
+    )
+    return cast(DominanceRelation, relation), tuple(left_sums), tuple(right_sums)
+
+
+def check_standard_tableau(tableau: StandardYoungTableau) -> StandardYoungTableau:
+    """Return a candidate after replaying standard-tableau membership."""
+    require_standard(tableau)
+    return tableau
+
+
+def check_semistandard_tableau(
+    tableau: SemistandardYoungTableau,
+) -> SemistandardYoungTableau:
+    """Return a candidate after replaying semistandard membership."""
+    require_semistandard(tableau)
+    return tableau

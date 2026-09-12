@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
@@ -21,6 +21,7 @@ from jacobian.math.combinatorics.symmetric_functions.values import (
 )
 from jacobian.math.combinatorics.symmetric_functions.values import (
     IntegerPartition,
+    SemistandardYoungTableau,
     StandardYoungTableau,
 )
 from jacobian.math.logic.languages.words.values import FiniteWord
@@ -67,6 +68,71 @@ class ConjugatePartitionResult(StrictModel):
     """The conjugate (transpose) partition."""
 
     conjugate: IntegerPartition
+
+
+class HookContentCountRequest(StrictModel):
+    """Count semistandard tableaux with entries in ``1..alphabet_size``."""
+
+    partition: IntegerPartition
+    alphabet_size: StrictInt = Field(ge=1, le=MAX_CANONICAL_PARTITION_SIZE)
+
+
+class HookContentCountResult(StrictModel):
+    """Exact hook-content count and the factors used to derive it."""
+
+    partition: IntegerPartition
+    alphabet_size: StrictInt = Field(ge=1, le=MAX_CANONICAL_PARTITION_SIZE)
+    count: ExactInteger
+    numerators: tuple[StrictInt, ...] = Field(max_length=MAX_CANONICAL_PARTITION_SIZE)
+    hook_product: ExactInteger
+
+    @model_validator(mode="after")
+    def require_factor_shape(self) -> Self:
+        cell_count = sum(self.partition.parts)
+        if len(self.numerators) != cell_count:
+            raise PydanticCustomError(
+                "algebraic_combinatorics.hook_content_factor_shape",
+                "one hook-content numerator is required per partition cell",
+            )
+        return self
+
+
+class PartitionDominanceRequest(StrictModel):
+    """Compare two equal-size partitions in dominance order."""
+
+    left: IntegerPartition
+    right: IntegerPartition
+
+
+DominanceRelation = Literal[
+    "LEFT_DOMINATES",
+    "RIGHT_DOMINATES",
+    "EQUAL",
+    "INCOMPARABLE",
+    "NOT_COMPARABLE_DIFFERENT_SIZE",
+]
+
+
+class PartitionDominanceResult(StrictModel):
+    """Dominance relation with the complete prefix-sum ledger."""
+
+    left: IntegerPartition
+    right: IntegerPartition
+    relation: DominanceRelation
+    left_prefix_sums: tuple[StrictInt, ...]
+    right_prefix_sums: tuple[StrictInt, ...]
+
+
+class StandardTableauCheckRequest(StrictModel):
+    """Check a candidate standard Young tableau."""
+
+    tableau: StandardYoungTableau
+
+
+class SemistandardTableauCheckRequest(StrictModel):
+    """Check a candidate semistandard Young tableau."""
+
+    tableau: SemistandardYoungTableau
 
 
 # ---------------------------------------------------------------------------
@@ -182,12 +248,19 @@ class RSKInverseWordRequest(StrictModel):
 __all__ = [
     "ConjugatePartitionRequest",
     "ConjugatePartitionResult",
+    "DominanceRelation",
+    "HookContentCountRequest",
+    "HookContentCountResult",
     "HookLengthRequest",
     "HookLengthResult",
+    "PartitionDominanceRequest",
+    "PartitionDominanceResult",
     "RSKInverseWordRequest",
     "RSKPermutationRequest",
     "RSKResult",
     "RSKWordRequest",
+    "SemistandardTableauCheckRequest",
+    "StandardTableauCheckRequest",
     "StandardYoungTableauCountRequest",
     "StandardYoungTableauCountResult",
 ]

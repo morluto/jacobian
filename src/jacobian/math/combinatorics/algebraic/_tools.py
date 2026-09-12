@@ -11,16 +11,26 @@ from jacobian.math.combinatorics.algebraic import operations as native
 from jacobian.math.combinatorics.algebraic._models import (
     ConjugatePartitionRequest,
     ConjugatePartitionResult,
+    HookContentCountRequest,
+    HookContentCountResult,
     HookLengthRequest,
     HookLengthResult,
+    PartitionDominanceRequest,
+    PartitionDominanceResult,
     RSKInverseWordRequest,
     RSKPermutationRequest,
     RSKResult,
     RSKWordRequest,
+    SemistandardTableauCheckRequest,
+    StandardTableauCheckRequest,
     StandardYoungTableauCountRequest,
     StandardYoungTableauCountResult,
 )
 from jacobian.math.combinatorics.algebraic.values import RSKTableauPair
+from jacobian.math.combinatorics.symmetric_functions.values import (
+    SemistandardYoungTableau,
+    StandardYoungTableau,
+)
 from jacobian.math.logic.languages.words.values import FiniteWord
 
 
@@ -46,6 +56,64 @@ def conjugate_partition(
     return ConjugatePartitionResult(
         conjugate=native.conjugate_partition(request.partition)
     )
+
+
+def hook_content_count(request: HookContentCountRequest) -> HookContentCountResult:
+    count, numerators, hook_product = native.hook_content_count(
+        request.partition, request.alphabet_size
+    )
+    return HookContentCountResult(
+        partition=request.partition,
+        alphabet_size=request.alphabet_size,
+        count=count,
+        numerators=numerators,
+        hook_product=hook_product,
+    )
+
+
+def partition_dominance(
+    request: PartitionDominanceRequest,
+) -> PartitionDominanceResult:
+    relation, left_sums, right_sums = native.partition_dominance(
+        request.left, request.right
+    )
+    return PartitionDominanceResult(
+        left=request.left,
+        right=request.right,
+        relation=relation,
+        left_prefix_sums=left_sums,
+        right_prefix_sums=right_sums,
+    )
+
+
+def check_standard_tableau(
+    request: StandardTableauCheckRequest,
+) -> StandardYoungTableau:
+    try:
+        return native.check_standard_tableau(request.tableau)
+    except Exception as exc:
+        message = str(exc)
+        error_type = getattr(
+            exc, "type", "algebraic_combinatorics.standard_tableau_invalid"
+        )
+        raise OperationDomainValidationError(
+            location=("tableau",), code=error_type, message=message
+        ) from exc
+
+
+def check_semistandard_tableau(
+    request: SemistandardTableauCheckRequest,
+) -> SemistandardYoungTableau:
+    try:
+        return native.check_semistandard_tableau(request.tableau)
+    except Exception as exc:
+        message = str(exc)
+        error_type = getattr(
+            exc, "type", "algebraic_combinatorics.semistandard_tableau_invalid"
+        )
+        raise OperationDomainValidationError(
+            location=("tableau",), code=error_type, message=message
+        ) from exc
 
 
 def rsk_permutation(request: RSKPermutationRequest) -> RSKResult:
@@ -209,6 +277,79 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     },
                     "convention": "ROW_INSERTION_RSK_V1",
                 },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="combinatorics.partition.hook_content.count",
+        title="Count semistandard tableaux by the hook-content formula",
+        description="Return the exact number of semistandard Young tableaux of a "
+        "partition shape with entries in 1..m, together with the row-major "
+        "hook-content numerators and hook product.",
+        request_type=HookContentCountRequest,
+        result_type=HookContentCountResult,
+        run=hook_content_count,
+        tags=("combinatorics", "young-tableaux", "hook-content", "exact"),
+        examples=(
+            OperationExample(
+                name="shape_21_alphabet_2",
+                description="Count SSYTs of shape (2,1) over the alphabet {1,2}.",
+                input={"partition": {"parts": [2, 1]}, "alphabet_size": 2},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="combinatorics.partition.dominance.compare",
+        title="Compare partitions in dominance order",
+        description="Compare equal-size integer partitions using the complete "
+        "leading-row prefix-sum ledger; different sizes are reported as "
+        "not comparable.",
+        request_type=PartitionDominanceRequest,
+        result_type=PartitionDominanceResult,
+        run=partition_dominance,
+        tags=("combinatorics", "partition", "dominance", "exact"),
+        examples=(
+            OperationExample(
+                name="partition_21_vs_111",
+                description="The partition (2,1) dominates (1,1,1).",
+                input={
+                    "left": {"parts": [2, 1]},
+                    "right": {"parts": [1, 1, 1]},
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="combinatorics.tableau.standard.check",
+        title="Check standard Young tableau membership",
+        description="Replay the complete shape, row, column, and 1..n entry "
+        "conditions and return the checked standard tableau.",
+        request_type=StandardTableauCheckRequest,
+        result_type=StandardYoungTableau,
+        run=check_standard_tableau,
+        tags=("combinatorics", "young-tableaux", "validation", "exact"),
+        examples=(
+            OperationExample(
+                name="standard_shape_21",
+                description="Check a standard tableau of shape (2,1).",
+                input={"tableau": {"rows": [[1, 2], [3]]}},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="combinatorics.tableau.semistandard.check",
+        title="Check semistandard Young tableau membership",
+        description="Replay the complete shape and weak-row/strict-column "
+        "conditions and return the checked semistandard tableau.",
+        request_type=SemistandardTableauCheckRequest,
+        result_type=SemistandardYoungTableau,
+        run=check_semistandard_tableau,
+        tags=("combinatorics", "young-tableaux", "validation", "exact"),
+        examples=(
+            OperationExample(
+                name="semistandard_shape_21",
+                description="Check a semistandard tableau of shape (2,1).",
+                input={"tableau": {"rows": [[1, 1], [2]]}},
             ),
         ),
     ),

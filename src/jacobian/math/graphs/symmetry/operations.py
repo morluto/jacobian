@@ -50,6 +50,37 @@ def _uniform(values: tuple[str, ...]) -> bool:
     return not values or len(set(values)) == 1
 
 
+def _complete_edge_colors_determined_by_vertex_classes(
+    graph: ColoredUndirectedGraph,
+) -> bool:
+    """True when each edge color is a function of its endpoint vertex colors."""
+
+    vertex_colors = dict(
+        zip(
+            graph.graph.vertices,
+            graph.vertex_colors or (_UNCOLORED,) * len(graph.graph.vertices),
+            strict=True,
+        )
+    )
+    edge_colors = dict(
+        zip(
+            graph.graph.edges,
+            graph.edge_colors or (_UNCOLORED,) * len(graph.graph.edges),
+            strict=True,
+        )
+    )
+    pair_color: dict[tuple[str, str], str] = {}
+    for left, right in graph.graph.edges:
+        key = tuple(sorted((vertex_colors[left], vertex_colors[right])))
+        color = edge_colors[canonical_edge(left, right)]
+        previous = pair_color.get(key)
+        if previous is None:
+            pair_color[key] = color
+        elif previous != color:
+            return False
+    return True
+
+
 @dataclass(frozen=True)
 class _FullGraphAdmission:
     vertices: tuple[str, ...]
@@ -230,7 +261,11 @@ def _special_complete_or_empty(
     edges: set[tuple[int, int]],
 ) -> tuple[tuple[tuple[int, ...], ...], int] | None:
     n = len(vertices)
-    if len(edges) not in (0, n * (n - 1) // 2) or not _uniform(graph.edge_colors):
+    complete = len(edges) == n * (n - 1) // 2
+    empty = len(edges) == 0
+    if not empty and not complete:
+        return None
+    if complete and not _complete_edge_colors_determined_by_vertex_classes(graph):
         return None
     colors = dict(
         zip(
@@ -432,8 +467,14 @@ def _special_path_or_cycle(
         previous = -1
         while len(path) < n:
             next_vertices = sorted(adjacency[path[-1]] - {previous})
+            if len(next_vertices) != 1:
+                return None
             previous, current = path[-1], next_vertices[0]
+            if current in path:
+                return None
             path.append(current)
+        if len(set(path)) != n:
+            return None
         if not colored:
             reflection = list(range(n))
             for source, target in zip(path, reversed(path), strict=True):
@@ -534,9 +575,15 @@ def _special_repeated_cliques(
             for right in aligned
             if left < right
         }
-        if len(component_edge_colors) != 1:
+        if not component_edge_colors:
+            if len(aligned) != 1:
+                return None
+            edge_profile: object = _UNCOLORED
+        elif len(component_edge_colors) != 1:
             return None
-        profile = (len(aligned), vertex_profile, next(iter(component_edge_colors)))
+        else:
+            edge_profile = next(iter(component_edge_colors))
+        profile = (len(aligned), vertex_profile, edge_profile)
         groups.setdefault(profile, []).append(aligned)
     generators: list[tuple[int, ...]] = []
     order = 1

@@ -491,11 +491,6 @@ def _special_repeated_cliques(
     vertices: tuple[str, ...],
     edges: set[tuple[int, int]],
 ) -> tuple[tuple[tuple[int, ...], ...], int] | None:
-    # A uniform vertex-color tuple removes no automorphisms, so it shares the
-    # uncolored compact presentation; only a non-uniform coloring falls
-    # through to generic admission.
-    if not _uniform(graph.vertex_colors or ()) or not _uniform(graph.edge_colors or ()):
-        return None
     components = _connected_components(
         len(vertices), _indexed_adjacency(len(vertices), edges)
     )
@@ -509,28 +504,58 @@ def _special_repeated_cliques(
         for component in components
     ):
         return None
-    generators: list[tuple[int, ...]] = []
-    for component in components:
-        if size >= 2:
-            swap = list(range(len(vertices)))
-            swap[component[0]], swap[component[1]] = component[1], component[0]
-            generators.append(tuple(swap))
-        if size >= 3:
-            cycle = list(range(len(vertices)))
-            for source, target in zip(
-                component, component[1:] + component[:1], strict=True
-            ):
-                cycle[source] = target
-            generators.append(tuple(cycle))
-    first = components[0]
-    for component in components[1:]:
-        swap = list(range(len(vertices)))
-        for left, right in zip(first, component, strict=True):
-            swap[left], swap[right] = right, left
-        generators.append(tuple(swap))
-    return tuple(generators), factorial(size) ** len(components) * factorial(
-        len(components)
+    vertex_colors = dict(
+        zip(
+            graph.graph.vertices,
+            graph.vertex_colors or (_UNCOLORED,) * len(graph.graph.vertices),
+            strict=True,
+        )
     )
+    edge_colors = dict(
+        zip(
+            graph.graph.edges,
+            graph.edge_colors or (_UNCOLORED,) * len(graph.graph.edges),
+            strict=True,
+        )
+    )
+    groups: dict[tuple[str, str], list[tuple[int, ...]]] = {}
+    for component in components:
+        vertex_color_set = {vertex_colors[vertices[index]] for index in component}
+        if len(vertex_color_set) != 1:
+            return None
+        component_edge_colors = {
+            edge_colors[canonical_edge(vertices[left], vertices[right])]
+            for left in component
+            for right in component
+            if left < right
+        }
+        if len(component_edge_colors) != 1:
+            return None
+        profile = (next(iter(vertex_color_set)), next(iter(component_edge_colors)))
+        groups.setdefault(profile, []).append(component)
+    generators: list[tuple[int, ...]] = []
+    order = 1
+    for group in groups.values():
+        for component in group:
+            if size >= 2:
+                swap = list(range(len(vertices)))
+                swap[component[0]], swap[component[1]] = component[1], component[0]
+                generators.append(tuple(swap))
+            if size >= 3:
+                cycle = list(range(len(vertices)))
+                for source, target in zip(
+                    component, component[1:] + component[:1], strict=True
+                ):
+                    cycle[source] = target
+                generators.append(tuple(cycle))
+        first = group[0]
+        for component in group[1:]:
+            swap = list(range(len(vertices)))
+            for left, right in zip(first, component, strict=True):
+                swap[left], swap[right] = right, left
+            generators.append(tuple(swap))
+        order *= factorial(size) ** len(group) * factorial(len(group))
+    return tuple(generators), order
 
 
 def _special_graph_generators(

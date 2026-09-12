@@ -194,6 +194,31 @@ def test_periodic_colored_cycle_filters_dihedral_maps() -> None:
     assert len(result.generators) == 2
 
 
+def test_componentwise_colored_cliques_keep_compact_presentation() -> None:
+    vertices = tuple(
+        f"v{component}{position}" for component in range(3) for position in range(5)
+    )
+    edges = tuple(
+        (left, right)
+        for component in range(3)
+        for left in vertices[component * 5 : component * 5 + 5]
+        for right in vertices[component * 5 : component * 5 + 5]
+        if left < right
+    )
+    graph = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(vertices=vertices, edges=edges),
+        vertex_colors=tuple(
+            f"color-{component}" for component in range(3) for _ in range(5)
+        ),
+    )
+
+    result = full_graph_automorphism_group(graph)
+
+    assert result.automorphism_count == 120**3
+    assert result.generated_group_order == 120**3
+    assert len(result.generators) == 6
+
+
 def test_uniform_vertex_colored_cliques_keep_compact_presentation() -> None:
     vertices = tuple(
         f"v{component}{position}" for component in range(3) for position in range(3)

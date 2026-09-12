@@ -3,6 +3,7 @@
 from jacobian.math.matrices.canonical_forms._models import (
     InvariantFactorEntry,
     MatrixPolynomialEvaluationResult,
+    MatrixPolynomialRemainderResult,
     MinimalPolynomialResult,
     MonicPolynomial,
     PrimaryDecompositionResult,
@@ -14,6 +15,7 @@ from jacobian.math.matrices.canonical_forms.operations import (
     invariant_factors,
     minimal_polynomial,
     primary_decomposition,
+    reduce_matrix_polynomial,
     verify_minimal_polynomial,
     verify_primary_decomposition,
     verify_rational_canonical_form,
@@ -22,6 +24,7 @@ from jacobian.math.matrices.canonical_forms.operations import (
 __all__ = [
     "InvariantFactorEntry",
     "MatrixPolynomialEvaluationResult",
+    "MatrixPolynomialRemainderResult",
     "MinimalPolynomialResult",
     "MonicPolynomial",
     "PrimaryDecompositionResult",
@@ -31,6 +34,7 @@ __all__ = [
     "invariant_factors",
     "minimal_polynomial",
     "primary_decomposition",
+    "reduce_matrix_polynomial",
     "verify_minimal_polynomial",
     "verify_primary_decomposition",
     "verify_rational_canonical_form",

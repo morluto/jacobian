@@ -12,18 +12,24 @@ from jacobian.math.finite_semigroups._models import (
     GreenRelationsResult,
     IdempotentsRequest,
     IdempotentsResult,
+    NilpotentElementsRequest,
+    NilpotentElementsResult,
     PowerProfileRequest,
     PowerProfileResult,
     PrincipalIdealsRequest,
     PrincipalIdealsResult,
+    RegularElementsRequest,
+    RegularElementsResult,
 )
 from jacobian.math.finite_semigroups.operations import (
     element_power,
     generated_subsemigroup,
     green_relations,
     idempotents,
+    nilpotent_elements,
     power_profile,
     principal_ideals,
+    regular_elements,
 )
 
 
@@ -45,6 +51,16 @@ def _run_idempotents(request: IdempotentsRequest) -> IdempotentsResult:
     return idempotents(request.semigroup)
 
 
+def _run_regular_elements(request: RegularElementsRequest) -> RegularElementsResult:
+    return regular_elements(request.semigroup)
+
+
+def _run_nilpotent_elements(
+    request: NilpotentElementsRequest,
+) -> NilpotentElementsResult:
+    return nilpotent_elements(request.semigroup, request.zero)
+
+
 def _run_principal_ideals(request: PrincipalIdealsRequest) -> PrincipalIdealsResult:
     return principal_ideals(request.semigroup, request.elements)
 
@@ -61,6 +77,16 @@ _SEMIGROUP = {
         ["0", "1", "2"],
         ["1", "2", "0"],
         ["2", "0", "1"],
+    ],
+}
+
+_NILPOTENT_CHAIN = {
+    "elements": ["0", "a", "b", "c"],
+    "multiplication": [
+        ["0", "0", "0", "0"],
+        ["0", "b", "0", "0"],
+        ["0", "0", "0", "0"],
+        ["0", "0", "0", "0"],
     ],
 }
 
@@ -165,6 +191,48 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "semigroup": _SEMIGROUP,
                     "elements": ["1"],
                 },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="semigroup.regular_elements.compute",
+        title="Find regular elements of a finite semigroup",
+        description=(
+            "Return source-ordered (a, x) rows for every regular element, using "
+            "the first declared witness x satisfying a*x*a=a."
+        ),
+        request_type=RegularElementsRequest,
+        result_type=RegularElementsResult,
+        run=_run_regular_elements,
+        tags=("algebra", "semigroup", "regular", "exact"),
+        examples=(
+            OperationExample(
+                name="regular_elements_z3",
+                description="Find regular elements in Z/3Z; the semigroup must be associative.",
+                input={"semigroup": _SEMIGROUP},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="semigroup.nilpotent_elements.compute",
+        title="Find nilpotent elements relative to a zero",
+        description=(
+            "Return source-ordered (a, k) rows where k is the least positive "
+            "exponent with a^k equal to the supplied absorbing zero; the zero "
+            "must absorb every source element on both sides."
+        ),
+        request_type=NilpotentElementsRequest,
+        result_type=NilpotentElementsResult,
+        run=_run_nilpotent_elements,
+        tags=("algebra", "semigroup", "nilpotent", "exact"),
+        examples=(
+            OperationExample(
+                name="nilpotents_in_absorbing_chain",
+                description=(
+                    "Find elements and least exponents reaching zero in a nilpotent "
+                    "chain; the supplied zero must be absorbing."
+                ),
+                input={"semigroup": _NILPOTENT_CHAIN, "zero": "0"},
             ),
         ),
     ),

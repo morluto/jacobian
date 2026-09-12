@@ -325,9 +325,7 @@ def test_native_sample_count_rejects_non_integers() -> None:
 
 def test_native_sample_count_rejects_over_digit_cap() -> None:
     request = _request(_distribution((0, Fraction(1, 2)), (1, Fraction(1, 2))))
-    with pytest.raises(
-        OperationDomainValidationError, match="512 decimal digits"
-    ):
+    with pytest.raises(OperationDomainValidationError, match="512 decimal digits"):
         berry_esseen_bound(
             BerryEsseenRequest.model_construct(
                 distribution=request.distribution,
@@ -337,9 +335,7 @@ def test_native_sample_count_rejects_over_digit_cap() -> None:
 
 
 def test_native_distribution_must_be_a_finite_rational_law() -> None:
-    with pytest.raises(
-        OperationDomainValidationError, match="finite rational law"
-    ):
+    with pytest.raises(OperationDomainValidationError, match="finite rational law"):
         berry_esseen_bound(
             BerryEsseenRequest.model_construct(distribution="bad", sample_count=1)
         )

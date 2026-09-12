@@ -8,7 +8,10 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.matrices.canonical_forms import (
     invariant_factors,
     minimal_polynomial,
@@ -20,16 +23,23 @@ from jacobian.math.matrices.canonical_forms import (
 from jacobian.math.matrices.canonical_forms import operations as canonical_operations
 from jacobian.math.matrices.canonical_forms._models import (
     InvariantFactorEntry,
+    MatrixPolynomialRemainderResult,
     MonicPolynomial,
     RationalCanonicalFormResult,
 )
 from jacobian.math.matrices.canonical_forms._tools import (
+    compute_matrix_polynomial_remainder,
     compute_minimal_polynomial,
     compute_primary_decomposition,
     compute_rational_canonical_form,
 )
 from jacobian.math.matrices.values import RationalMatrix
-from jacobian.math.polynomials.values import monic_polynomial_from_coefficients
+from jacobian.math.polynomials.values import (
+    RationalPolynomial,
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
+    monic_polynomial_from_coefficients,
+)
 
 R = CanonicalRational
 
@@ -97,13 +107,215 @@ def test_nilpotent_jordan_block_minimal_polynomial_is_t_squared() -> None:
     assert result.degree == 2
 
 
+def test_matrix_polynomial_remainder_retains_variable_and_reconstructs_source() -> None:
+    req = _mat(
+        (_pair(0, 1), _pair(1, 1)),
+        (_pair(0, 1), _pair(0, 1)),
+    )
+    polynomial = RationalPolynomial(
+        variables=("u",),
+        polynomial=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(coefficient=R(num=1, den=1), exponents=(5,)),
+                RationalPolynomialTerm(coefficient=R(num=3, den=2), exponents=(2,)),
+                RationalPolynomialTerm(coefficient=R(num=-1, den=1), exponents=(0,)),
+            )
+        ),
+    )
+    result = compute_matrix_polynomial_remainder(req, polynomial)
+    assert isinstance(result, MatrixPolynomialRemainderResult)
+    assert result.minimal_polynomial.variables == ("u",)
+    assert result.quotient.variables == result.remainder.variables == ("u",)
+    assert result.remainder.polynomial.terms[0].exponents[0] < 2
+    import sympy
+
+    u = sympy.Symbol("u")
+
+    def expr(value: RationalPolynomial) -> sympy.Expr:
+        return sum(
+            sympy.Rational(term.coefficient.num, term.coefficient.den)
+            * u ** term.exponents[0]
+            for term in value.polynomial.terms
+        )
+
+    assert sympy.expand(expr(result.polynomial)) == sympy.expand(
+        expr(result.quotient) * expr(result.minimal_polynomial) + expr(result.remainder)
+    )
+    assert result == MatrixPolynomialRemainderResult.model_validate_json(
+        result.model_dump_json()
+    )
+
+
+def test_matrix_polynomial_remainder_handles_nonconstant_minimal_polynomial() -> None:
+    """A diagonal matrix supplies a nonconstant modulus to exact division."""
+    polynomial = RationalPolynomial(
+        variables=("u",),
+        polynomial=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(coefficient=R(num=1, den=1), exponents=(3,)),
+                RationalPolynomialTerm(coefficient=R(num=2, den=1), exponents=(1,)),
+                RationalPolynomialTerm(coefficient=R(num=1, den=1), exponents=(0,)),
+            )
+        ),
+    )
+    result = compute_matrix_polynomial_remainder(_diagonal(2, 3), polynomial)
+
+    assert _coeffs(result.minimal_polynomial) == [
+        Fraction(6),
+        Fraction(-5),
+        Fraction(1),
+    ]
+    assert {
+        term.exponents[0]: term.coefficient.as_fraction()
+        for term in result.quotient.polynomial.terms
+    } == {1: Fraction(1), 0: Fraction(5)}
+    assert {
+        term.exponents[0]: term.coefficient.as_fraction()
+        for term in result.remainder.polynomial.terms
+    } == {1: Fraction(21), 0: Fraction(-29)}
+
+
+def test_matrix_polynomial_remainder_rejects_unbounded_quotient_growth() -> None:
+    matrix = _diagonal(1)
+    polynomial = RationalPolynomial(
+        variables=("t",),
+        polynomial=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(
+                    coefficient=R(num=1, den=1), exponents=(32_768,)
+                ),
+            )
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="support"):
+        compute_matrix_polynomial_remainder(matrix, polynomial)
+
+
+def test_matrix_polynomial_remainder_accepts_bounded_high_degree_prefix() -> None:
+    matrix = _diagonal(1)
+    polynomial = RationalPolynomial(
+        variables=("t",),
+        polynomial=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(coefficient=R(num=1, den=1), exponents=(1_800,)),
+            )
+        ),
+    )
+    result = compute_matrix_polynomial_remainder(matrix, polynomial)
+    assert result.remainder.polynomial.terms[0].coefficient == R(num=1, den=1)
+
+
+def test_matrix_polynomial_remainder_rejects_cumulative_source_denominator_growth() -> (
+    None
+):
+    """Unrelated source denominators are admitted as one aggregate bound."""
+    from math import lcm
+
+    denominator_base = 10**164 * lcm(*range(1, 201))
+    denominators = tuple(denominator_base * index + 1 for index in range(1, 201))
+    polynomial = RationalPolynomial(
+        variables=("t",),
+        polynomial=SparseRationalPolynomial(
+            terms=tuple(
+                RationalPolynomialTerm(
+                    coefficient=R(num=1, den=denominator),
+                    exponents=(index,),
+                )
+                for index, denominator in reversed(tuple(enumerate(denominators)))
+            )
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="denominator"):
+        compute_matrix_polynomial_remainder(_diagonal(1), polynomial)
+
+
+def test_matrix_polynomial_remainder_accepts_sparse_zero_modulus_at_high_degree() -> (
+    None
+):
+    matrix = _diagonal(0)
+    polynomial = RationalPolynomial(
+        variables=("t",),
+        polynomial=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(coefficient=R(num=1, den=1), exponents=(2_311,)),
+            )
+        ),
+    )
+    result = compute_matrix_polynomial_remainder(matrix, polynomial)
+    assert _coeffs(result.minimal_polynomial) == [Fraction(0), Fraction(1)]
+    assert result.quotient.polynomial.terms == (
+        RationalPolynomialTerm(coefficient=R(num=1, den=1), exponents=(2_310,)),
+    )
+    assert result.remainder.polynomial.terms == ()
+
+
+def test_matrix_polynomial_remainder_preserves_high_degree_source_cancellation() -> (
+    None
+):
+    matrix = _diagonal(1)
+    polynomial = RationalPolynomial(
+        variables=("t",),
+        polynomial=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(
+                    coefficient=R(num=1, den=1), exponents=(32_768,)
+                ),
+                RationalPolynomialTerm(
+                    coefficient=R(num=-1, den=1), exponents=(32_767,)
+                ),
+            )
+        ),
+    )
+    result = compute_matrix_polynomial_remainder(matrix, polynomial)
+    assert result.quotient.polynomial.terms == (
+        RationalPolynomialTerm(coefficient=R(num=1, den=1), exponents=(32_767,)),
+    )
+    assert result.remainder.polynomial.terms == ()
+
+
+def test_matrix_polynomial_remainder_accepts_maximum_size_constant() -> None:
+    coefficient = R(num=10**32_767, den=1)
+    polynomial = RationalPolynomial(
+        variables=("t",),
+        polynomial=SparseRationalPolynomial(
+            terms=(RationalPolynomialTerm(coefficient=coefficient, exponents=(0,)),)
+        ),
+    )
+    result = compute_matrix_polynomial_remainder(_diagonal(0), polynomial)
+    assert result.quotient.polynomial.terms == ()
+    assert result.remainder == polynomial
+
+
+def test_matrix_polynomial_remainder_accepts_zero_polynomial() -> None:
+    polynomial = RationalPolynomial(
+        variables=("t",), polynomial=SparseRationalPolynomial(terms=())
+    )
+    result = compute_matrix_polynomial_remainder(_diagonal(0), polynomial)
+    assert result.quotient == polynomial
+    assert result.remainder == polynomial
+
+
+def test_matrix_polynomial_remainder_result_rejects_empty_source() -> None:
+    zero = RationalPolynomial(
+        variables=("t",), polynomial=SparseRationalPolynomial(terms=())
+    )
+    with pytest.raises(ValidationError, match="source matrix must be nonempty"):
+        MatrixPolynomialRemainderResult(
+            source_matrix=RationalMatrix(entries=()),
+            polynomial=zero,
+            minimal_polynomial=_mono(0, 1),
+            quotient=zero,
+            remainder=zero,
+        )
+
+
 def test_trusted_canonical_form_producers_run_each_kernel_once(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     request = _diagonal(2, 3)
     names = (
         "invariant_factors",
-        "minimal_polynomial",
+        "_minimal_polynomial_coefficients",
         "characteristic_polynomial",
         "primary_decomposition",
     )
@@ -126,7 +338,7 @@ def test_trusted_canonical_form_producers_run_each_kernel_once(
     compute_minimal_polynomial(request)
     assert calls == {
         "invariant_factors": 0,
-        "minimal_polynomial": 1,
+        "_minimal_polynomial_coefficients": 1,
         "characteristic_polynomial": 1,
         "primary_decomposition": 0,
     }
@@ -136,7 +348,7 @@ def test_trusted_canonical_form_producers_run_each_kernel_once(
     compute_rational_canonical_form(request)
     assert calls == {
         "invariant_factors": 1,
-        "minimal_polynomial": 1,
+        "_minimal_polynomial_coefficients": 1,
         "characteristic_polynomial": 1,
         "primary_decomposition": 0,
     }
@@ -146,7 +358,7 @@ def test_trusted_canonical_form_producers_run_each_kernel_once(
     compute_primary_decomposition(request)
     assert calls == {
         "invariant_factors": 0,
-        "minimal_polynomial": 1,
+        "_minimal_polynomial_coefficients": 1,
         "characteristic_polynomial": 0,
         "primary_decomposition": 1,
     }

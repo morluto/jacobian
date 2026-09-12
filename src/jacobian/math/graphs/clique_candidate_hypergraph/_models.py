@@ -9,9 +9,15 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
+    MAX_EDGES,
+    MAX_TOTAL_INCIDENCES,
     FiniteHypergraph,
 )
-from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.graphs.values import (
+    MAX_SIMPLE_GRAPH_EDGES,
+    MAX_SIMPLE_GRAPH_VERTICES,
+    SimpleUndirectedGraph,
+)
 
 
 def _validation_error(code: str, message: str) -> PydanticCustomError:
@@ -38,7 +44,7 @@ class CandidateCliqueMap(StrictModel):
     """One candidate ID bound to its original vertex subset."""
 
     candidate: str = Field(min_length=1)
-    members: tuple[str, ...] = Field(min_length=2)
+    members: tuple[str, ...] = Field(min_length=2, max_length=MAX_SIMPLE_GRAPH_VERTICES)
 
 
 class CliqueCandidateHypergraphResult(StrictModel):
@@ -53,12 +59,29 @@ class CliqueCandidateHypergraphResult(StrictModel):
 
     graph: SimpleUndirectedGraph
     hypergraph: FiniteHypergraph
-    resource_map: tuple[ResourceEdgeMap, ...]
-    candidate_map: tuple[CandidateCliqueMap, ...]
+    resource_map: tuple[ResourceEdgeMap, ...] = Field(max_length=MAX_SIMPLE_GRAPH_EDGES)
+    candidate_map: tuple[CandidateCliqueMap, ...] = Field(max_length=MAX_EDGES)
     candidate_count: StrictInt = Field(ge=0)
 
     @model_validator(mode="after")
     def bind_maps_to_source(self) -> Self:
+        if any(
+            len(entry.members) > MAX_SIMPLE_GRAPH_VERTICES
+            for entry in self.candidate_map
+        ):
+            raise _validation_error(
+                "graph.clique_candidate.candidate_size",
+                "candidate members cannot exceed the graph vertex bound",
+            )
+        pair_work = sum(
+            len(entry.members) * (len(entry.members) - 1) // 2
+            for entry in self.candidate_map
+        )
+        if pair_work > MAX_TOTAL_INCIDENCES:
+            raise _validation_error(
+                "graph.clique_candidate.incidence_bound",
+                "candidate internal-edge supports exceed the incidence bound",
+            )
         resources = {entry.resource: entry.endpoints for entry in self.resource_map}
         if len(resources) != len(self.resource_map):
             raise _validation_error(
@@ -78,6 +101,18 @@ class CliqueCandidateHypergraphResult(StrictModel):
                 "graph.clique_candidate.resource_coverage",
                 "resource map must cover exactly the source graph edges",
             )
+        if set(self.hypergraph.vertices) != set(resources):
+            raise _validation_error(
+                "graph.clique_candidate.hypergraph_resource_coverage",
+                "hypergraph vertices must be exactly the resource IDs",
+            )
+        if tuple(self.hypergraph.vertices) != tuple(
+            entry.resource for entry in self.resource_map
+        ):
+            raise _validation_error(
+                "graph.clique_candidate.hypergraph_resource_order",
+                "hypergraph vertices must use canonical resource order",
+            )
         candidates = [entry.candidate for entry in self.candidate_map]
         if len(set(candidates)) != len(candidates):
             raise _validation_error(
@@ -96,6 +131,24 @@ class CliqueCandidateHypergraphResult(StrictModel):
                 "graph.clique_candidate.candidate_order",
                 "candidate map entries must use canonical candidate order",
             )
+        hypergraph_candidates = {candidate for candidate, _ in self.hypergraph.edges}
+        if hypergraph_candidates != set(candidates):
+            raise _validation_error(
+                "graph.clique_candidate.hypergraph_candidate_coverage",
+                "hypergraph edges must be exactly the candidate IDs",
+            )
+        graph_vertices = set(self.graph.vertices)
+        for entry in self.candidate_map:
+            if len(set(entry.members)) != len(entry.members):
+                raise _validation_error(
+                    "graph.clique_candidate.candidate_identity",
+                    "candidate members must be distinct",
+                )
+            if not set(entry.members) <= graph_vertices:
+                raise _validation_error(
+                    "graph.clique_candidate.candidate_vertex_unknown",
+                    "candidate members must use declared graph vertices",
+                )
         return self
 
     @classmethod

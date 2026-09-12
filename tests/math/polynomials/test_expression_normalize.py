@@ -17,6 +17,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.polynomials._expression_normalize import (
+    _MAX_EXPRESSION_DEPTH,
     PolynomialAdd,
     PolynomialExpressionNormalizeRequest,
     PolynomialExpressionNormalizeResult,
@@ -24,7 +25,6 @@ from jacobian.math.polynomials._expression_normalize import (
     PolynomialLiteral,
     PolynomialPower,
     PolynomialVariableExpression,
-    _MAX_EXPRESSION_DEPTH,
     normalize_polynomial_expression,
 )
 

@@ -675,13 +675,14 @@ def _admit_source_domain_claims(source: PolynomialExpressionSource) -> None:
                     code="polynomial.expression.nonintegral_literal",
                     message="ZZ expressions require integral literals",
                 )
-        elif isinstance(node, PolynomialVariableExpression):
-            if node.name not in declared:
-                raise OperationDomainValidationError(
-                    location=("expression",),
-                    code="polynomial.expression.undeclared_variable",
-                    message="every expression variable must belong to the declared axis",
-                )
+        elif (
+            isinstance(node, PolynomialVariableExpression) and node.name not in declared
+        ):
+            raise OperationDomainValidationError(
+                location=("expression",),
+                code="polynomial.expression.undeclared_variable",
+                message="every expression variable must belong to the declared axis",
+            )
         stack.extend(_expression_children(node))
 
 

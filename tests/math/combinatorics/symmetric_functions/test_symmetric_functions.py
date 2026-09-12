@@ -48,9 +48,7 @@ def test_native_surface_accepts_canonical_partition_values() -> None:
 
 
 def test_schur_result_is_bound_and_verifiable() -> None:
-    result = schur_evaluation(
-        IntegerPartition(parts=(1,)), (1, 1), ("x1", "x2")
-    )
+    result = schur_evaluation(IntegerPartition(parts=(1,)), (1, 1), ("x1", "x2"))
     assert result.partition.parts == (1,)
     assert result.variables == ("x1", "x2")
     assert result.point == (1, 1)

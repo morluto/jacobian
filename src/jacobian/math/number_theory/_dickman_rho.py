@@ -39,7 +39,7 @@ MAX_DICKMAN_PRECISION_BITS = 512
 DEFAULT_DICKMAN_PRECISION_BITS = 128
 MAX_DICKMAN_ENDPOINT_DIGITS = 4
 MAX_DICKMAN_RESULT_COEFFICIENTS = MAX_DICKMAN_ENDPOINT * (MAX_DICKMAN_DEGREE + 1)
-MAX_DICKMAN_WORK_UNITS = 250_000_000
+MAX_DICKMAN_WORK_UNITS = 1_500_000_000
 # Exact recurrence coefficients are Fractions. Each of at most eight pieces
 # updates ``degree`` entries by dividing by an integer at most
 # ``(degree+1)*(2U+1)``, so component bit-width is charged below rather than
@@ -316,7 +316,7 @@ def _admit_request(request: DickmanRhoPiecewiseEnclosureParameters) -> int:
             ),
         )
     exact_bits = interval_count * MAX_DICKMAN_DEGREE * _DICKMAN_FACTOR_BITS + 64
-    candidate_work = sum(
+    candidate_work = interval_count * sum(
         degree * max(request.precision_bits + degree + 64, exact_bits)
         for degree in range(8, MAX_DICKMAN_DEGREE + 1, 8)
     )
@@ -389,6 +389,18 @@ def dickman_rho_piecewise_enclosure(
 ) -> DickmanRhoPiecewiseEnclosureResult:
     """Return a certified centered polynomial enclosure through ``endpoint``."""
 
+    if not isinstance(endpoint, CanonicalRational):
+        raise OperationDomainValidationError(
+            location=("endpoint",),
+            code="number_theory.dickman_rho.endpoint_type",
+            message="endpoint must be a CanonicalRational",
+        )
+    if not isinstance(target_width, ExactDyadic):
+        raise OperationDomainValidationError(
+            location=("target_width",),
+            code="number_theory.dickman_rho.target_width_type",
+            message="target_width must be an ExactDyadic",
+        )
     if (
         precision_bits < MIN_DICKMAN_PRECISION_BITS
         or precision_bits > MAX_DICKMAN_PRECISION_BITS

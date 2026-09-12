@@ -234,3 +234,19 @@ def test_native_endpoint_outside_the_contract_is_a_typed_domain_error() -> None:
             CanonicalRational(num=9, den=1),
             ExactDyadic(mantissa=1, exponent=-5),
         )
+
+
+def test_native_noncanonical_argument_types_are_rejected() -> None:
+    from jacobian.math.analysis._models import ExactDyadic
+
+    with pytest.raises(OperationDomainValidationError, match="CanonicalRational"):
+        dickman_rho_piecewise_enclosure(
+            Fraction(2),  # type: ignore[arg-type]
+            ExactDyadic(mantissa=1, exponent=-5),
+        )
+
+
+def test_endpoint_eight_work_estimate_is_admitted() -> None:
+    from jacobian.math.number_theory._dickman_rho import _admit_request
+
+    _admit_request(_request(8, -5, precision_bits=32))

@@ -248,6 +248,11 @@ class SimultaneousProductResult(StrictModel):
                 "diophantine.product_factor_scale_mismatch",
                 "every factor row must share the requested precision",
             )
+        if self.product_enclosure.lower.as_fraction() < 0:
+            raise _validation_error(
+                "diophantine.product_negative_enclosure",
+                "a simultaneous product enclosure must be nonnegative",
+            )
         return self
 
 
@@ -336,6 +341,11 @@ class RangeProfileResult(StrictModel):
                 raise _validation_error(
                     "diophantine.range_profile_factor_scale_mismatch",
                     "every row factor must share the profile precision",
+                )
+            if row.product_enclosure.lower.as_fraction() < 0:
+                raise _validation_error(
+                    "diophantine.range_profile_negative_product",
+                    "a range product enclosure must be nonnegative",
                 )
         return self
 

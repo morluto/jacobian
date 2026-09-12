@@ -39,6 +39,7 @@ from jacobian.math.number_theory.diophantine_approximation._surd_models import (
     ScaledFloorRequest,
     ScaledFloorValue,
     SimultaneousProductRequest,
+    SimultaneousProductResult,
 )
 from jacobian.math.number_theory.diophantine_approximation._tools import (
     compute_continued_fraction,
@@ -779,6 +780,16 @@ def test_serialized_surd_values_reject_forged_structural_fields() -> None:
     with pytest.raises(ValidationError):
         NearestIntegerDistanceValue.model_validate_json(
             encode_strict_json(distance_payload), strict=True
+        )
+
+    product = simultaneous_product(
+        SimultaneousProductRequest(multiplier=1, radicands=(2, 3), scale_bits=32)
+    )
+    product_payload = product.model_dump(mode="json")
+    product_payload["product_enclosure"]["lower"] = {"num": "-1", "den": "1"}
+    with pytest.raises(ValidationError):
+        SimultaneousProductResult.model_validate_json(
+            encode_strict_json(product_payload), strict=True
         )
 
 

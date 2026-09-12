@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 import unicodedata
 from hashlib import sha256
 from typing import Literal, Self
@@ -9,8 +10,15 @@ from typing import Literal, Self
 from pydantic import ConfigDict, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._execution import (
+    bind_request_deadline,
+    current_request_execution,
+    request_checkpoint,
+    request_execution,
+)
 from jacobian._models import StrictModel
 from jacobian.canonical import canonicalize_json
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math._labels import OpaqueLabel
 
 
@@ -32,6 +40,8 @@ MAX_EXACT_COVER_INCIDENCES = 65_536
 # 100,000 nodes per pass is a measured conservative execution fallback,
 # independent of the broader 4096-item representation bound.
 MAX_EXACT_COVER_SEARCH_NODES_PER_PASS = 100_000
+_MINIMUM_EXACT_COVER_WALL_SECONDS = 60.0
+_MINIMUM_EXACT_COVER_WORK_LIMIT = 256 * 100_000 * 64
 
 ExactCoverSearchStatus = Literal["FOUND", "NO_COVER", "UNKNOWN"]
 MinimumExactCoverStatus = Literal["EXACT", "INFEASIBLE", "BOUNDED"]
@@ -369,9 +379,31 @@ class GeneralizedExactCoverResult(StrictModel):
 class MinimumGeneralizedExactCoverRequest(StrictModel):
     """Minimize the number of selected rows in a generalized exact cover."""
 
-    instance: GeneralizedExactCoverInstance
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Compute the minimum cardinality of a row family covering every "
+                "primary item exactly once and every secondary item at most once. "
+                "The search-node limit bounds one deterministic pass; exhaustive "
+                "search is required for EXACT or INFEASIBLE."
+            )
+        }
+    )
+
+    instance: GeneralizedExactCoverInstance = Field(
+        description=(
+            "Canonical generalized exact-cover instance whose rows are the only "
+            "candidates; row IDs and item labels retain their source binding."
+        )
+    )
     search_node_limit: StrictInt = Field(
-        default=100_000, ge=1, le=MAX_EXACT_COVER_SEARCH_NODES_PER_PASS
+        default=100_000,
+        ge=1,
+        le=MAX_EXACT_COVER_SEARCH_NODES_PER_PASS,
+        description=(
+            "Maximum partial row families visited in this pass. A non-exhausted "
+            "pass returns BOUNDED only after finding an attaining witness."
+        ),
     )
 
 
@@ -414,10 +446,31 @@ class MinimumGeneralizedExactCoverResult(StrictModel):
             raise _combinatorics_validation_error(
                 "an exact or bounded minimum result must carry an upper bound witness"
             )
-        expected = _expected_coverage(self.instance, self.selected_row_ids)
-        if expected != self.item_multiplicities:
+        if self.selected_row_ids != tuple(sorted(set(self.selected_row_ids))):
             raise _combinatorics_validation_error(
-                "minimum exact-cover multiplicities must reconstruct the witness"
+                "minimum exact-cover selected row IDs must be sorted and unique"
+            )
+        declared_row_ids = {row.row_id for row in self.instance.rows}
+        if any(row_id not in declared_row_ids for row_id in self.selected_row_ids):
+            raise _combinatorics_validation_error(
+                "minimum exact-cover selected rows must belong to the instance"
+            )
+        expected_axes = tuple(
+            (item, "PRIMARY") for item in self.instance.primary_items
+        ) + tuple((item, "SECONDARY") for item in self.instance.secondary_items)
+        actual_axes = tuple(
+            (entry.item_id, entry.kind) for entry in self.item_multiplicities
+        )
+        if actual_axes != expected_axes:
+            raise _combinatorics_validation_error(
+                "minimum exact-cover multiplicities must bind the instance item axis"
+            )
+        if any(
+            entry.kind == "PRIMARY" and entry.multiplicity != 1
+            for entry in self.item_multiplicities
+        ):
+            raise _combinatorics_validation_error(
+                "an exact or bounded minimum must cover every primary item once"
             )
         if self.upper_bound != len(self.selected_row_ids):
             raise _combinatorics_validation_error(
@@ -432,6 +485,30 @@ class MinimumGeneralizedExactCoverResult(StrictModel):
                 "an exact minimum must have coincident objective bounds"
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        instance: GeneralizedExactCoverInstance,
+        status: MinimumExactCoverStatus,
+        selected_row_ids: tuple[OpaqueLabel, ...] | None = None,
+        item_multiplicities: tuple[ExactCoverItemMultiplicity, ...] | None = None,
+        lower_bound: int,
+        upper_bound: int | None = None,
+        searched_node_count: int,
+    ) -> Self:
+        """Construct a result after the minimum kernel established its claims."""
+
+        return cls.model_construct(
+            instance=instance,
+            status=status,
+            selected_row_ids=selected_row_ids,
+            item_multiplicities=item_multiplicities,
+            lower_bound=lower_bound,
+            upper_bound=upper_bound,
+            searched_node_count=searched_node_count,
+        )
 
 
 class GeneralizedExactCoverShardSplitRequest(StrictModel):
@@ -693,7 +770,17 @@ def minimum_generalized_exact_cover(  # noqa: C901
 ) -> MinimumGeneralizedExactCoverResult:
     """Minimize selected-row cardinality with honest exhaustive or bounded output."""
 
-    from jacobian.catalog.models import OperationResourceAdmissionError
+    execution = current_request_execution()
+    if execution is None:
+        with request_execution(time.monotonic()):
+            return minimum_generalized_exact_cover(
+                instance, search_node_limit=search_node_limit
+            )
+    deadline = execution.started_at + _MINIMUM_EXACT_COVER_WALL_SECONDS
+    if execution.deadline is not None:
+        deadline = min(deadline, execution.deadline)
+    bind_request_deadline(deadline)
+    request_checkpoint("before minimum exact-cover admission")
 
     if not isinstance(instance, GeneralizedExactCoverInstance):
         raise TypeError("instance must be a GeneralizedExactCoverInstance")
@@ -703,26 +790,213 @@ def minimum_generalized_exact_cover(  # noqa: C901
         raise _combinatorics_validation_error(
             "search_node_limit must be within the exact-cover node bound"
         )
-    items = (*instance.primary_items, *instance.secondary_items)
-    item_index = {item: index for index, item in enumerate(items)}
     primary_count = len(instance.primary_items)
-    row_count = len(instance.rows)
-    scan_work = (
-        search_node_limit
-        * primary_count
-        * max(1, (max(row_count, primary_count) + 63) // 64)
-    )
-    if scan_work > 256 * 100_000 * 64:
+    item_count = primary_count + len(instance.secondary_items)
+    primary_items = frozenset(instance.primary_items)
+    source_rows = instance.rows
+    # Rows without a primary item cannot improve feasibility or a minimum
+    # witness: selecting one covers no required item and can only add
+    # secondary conflicts. Remove them before sizing the bitset search, while
+    # retaining the source instance for the result and its coverage ledger.
+    source_incidence_count = 0
+    active_rows_list = []
+    for row in source_rows:
+        source_incidence_count += len(row.items)
+        if primary_items.intersection(row.items):
+            active_rows_list.append(row)
+    active_rows = tuple(active_rows_list)
+    primary_row_degrees = dict.fromkeys(instance.primary_items, 0)
+    for row in active_rows:
+        for row_item in row.items:
+            if row_item in primary_items:
+                primary_row_degrees[row_item] += 1
+    # Row normalization traverses the complete source row axis twice: once to
+    # compute incidence totals and retain active rows, then again when the
+    # shortcut reconstructs coverage through _expected_coverage. Charge both
+    # traversals so empty rows cannot evade admission via incidence counts.
+    normalization_work = 2 * len(source_rows) + 4 * source_incidence_count
+    # The shortcut still constructs the complete retained coverage ledger, so
+    # charge both its item-axis scans and selected-row reconstruction before
+    # returning an exact result.
+    shortcut_work = normalization_work + 4 * item_count + 2 * source_incidence_count
+    if shortcut_work > _MINIMUM_EXACT_COVER_WORK_LIMIT:
         raise OperationResourceAdmissionError(
             location=("search_node_limit",),
             code="combinatorics.minimum_exact_cover_work",
-            message="node-by-item scan work exceeds the minimum exact-cover envelope",
+            message=(
+                "minimum exact-cover shortcut recognition exceeds the admitted "
+                "work envelope"
+            ),
+        )
+    request_checkpoint("after minimum exact-cover row normalization")
+    selected_row_ids: tuple[str, ...] | None = None
+    if not primary_items:
+        selected_row_ids = ()
+    else:
+        for row in active_rows:
+            if len(row.items) >= primary_count and primary_items.issubset(row.items):
+                # Rows are stored in canonical ID order, so the first one is the
+                # canonical witness among all one-row covers.
+                selected_row_ids = (row.row_id,)
+                break
+    if selected_row_ids is not None:
+        request_checkpoint("after minimum exact-cover shortcut admission")
+        upper_bound = len(selected_row_ids)
+        result = MinimumGeneralizedExactCoverResult._from_kernel(
+            instance=instance,
+            status="EXACT",
+            selected_row_ids=selected_row_ids,
+            item_multiplicities=_expected_coverage(instance, selected_row_ids),
+            lower_bound=upper_bound,
+            upper_bound=upper_bound,
+            searched_node_count=1,
+        )
+        request_checkpoint("after minimum exact-cover result construction")
+        return result
+    items = (*instance.primary_items, *instance.secondary_items)
+    remaining_primary = set(instance.primary_items)
+    remaining_rows = list(active_rows)
+    forced_selected: list[ExactCoverRow] = []
+    while remaining_primary:
+        request_checkpoint("during minimum exact-cover unit forcing")
+        coverage: dict[str, list[ExactCoverRow]] = {
+            item: [] for item in remaining_primary
+        }
+        for row_index, row in enumerate(remaining_rows):
+            if row_index % 256 == 0:
+                request_checkpoint("during minimum exact-cover unit forcing")
+            for row_item in row.items:
+                if row_item in coverage:
+                    coverage[row_item].append(row)
+        if any(not coverage[item] for item in remaining_primary):
+            remaining_rows = []
+            break
+        unit_items = [item for item, rows in coverage.items() if len(rows) == 1]
+        if not unit_items:
+            break
+        forced_row = coverage[unit_items[0]][0]
+        forced_selected.append(forced_row)
+        selected_items = set(forced_row.items)
+        remaining_primary -= remaining_primary.intersection(selected_items)
+        remaining_rows = [
+            row for row in remaining_rows if set(row.items).isdisjoint(selected_items)
+        ]
+        request_checkpoint("during minimum exact-cover unit forcing")
+    remaining_degrees = [0]
+    if remaining_primary:
+        remaining_degrees = [
+            sum(1 for row in remaining_rows if item in row.items)
+            for item in remaining_primary
+        ]
+    remaining_min_degree = min(remaining_degrees, default=0)
+    remaining_max_degree = max(remaining_degrees, default=0)
+    if remaining_primary and remaining_min_degree == 0:
+        result = MinimumGeneralizedExactCoverResult._from_kernel(
+            instance=instance,
+            status="INFEASIBLE",
+            lower_bound=len(forced_selected),
+            searched_node_count=1,
+        )
+        request_checkpoint("after minimum exact-cover result construction")
+        return result
+    if not remaining_primary:
+        selected_ids = tuple(sorted(row.row_id for row in forced_selected))
+        result = MinimumGeneralizedExactCoverResult._from_kernel(
+            instance=instance,
+            status="EXACT",
+            selected_row_ids=selected_ids,
+            item_multiplicities=_expected_coverage(instance, selected_ids),
+            lower_bound=len(selected_ids),
+            upper_bound=len(selected_ids),
+            searched_node_count=1,
+        )
+        request_checkpoint("after minimum exact-cover result construction")
+        return result
+    estimated_nodes_ceiling = None
+    remaining_primary_count = len(remaining_primary)
+    if remaining_rows:
+        remaining_row_count = len(remaining_rows)
+        covering_row_exists = any(
+            remaining_primary <= set(row.items) for row in remaining_rows
+        )
+        for secondary in instance.secondary_items:
+            without = sum(1 for row in remaining_rows if secondary not in row.items)
+            with_secondary = remaining_row_count - without
+            if with_secondary < 2:
+                continue
+            if without == 0:
+                if not covering_row_exists:
+                    result = MinimumGeneralizedExactCoverResult._from_kernel(
+                        instance=instance,
+                        status="INFEASIBLE",
+                        lower_bound=len(forced_selected),
+                        searched_node_count=1,
+                    )
+                    request_checkpoint("after minimum exact-cover result construction")
+                    return result
+                universal_ceiling = 1 + 2 * remaining_row_count
+                estimated_nodes_ceiling = (
+                    universal_ceiling
+                    if estimated_nodes_ceiling is None
+                    else min(estimated_nodes_ceiling, universal_ceiling)
+                )
+                continue
+            near_universal_ceiling = (
+                1 + remaining_primary_count + (without + 1) * remaining_max_degree
+            )
+            estimated_nodes_ceiling = (
+                near_universal_ceiling
+                if estimated_nodes_ceiling is None
+                else min(estimated_nodes_ceiling, near_universal_ceiling)
+            )
+    item_index = {item: index for index, item in enumerate(items)}
+    row_count = len(active_rows)
+    mask_words = max(1, (max(row_count, primary_count) + 63) // 64)
+    incidence_count = sum(len(row.items) for row in active_rows)
+    index_work = (len(items) + row_count + incidence_count) * mask_words
+    estimated_nodes = search_node_limit
+    listing_degree = remaining_min_degree
+    if remaining_primary_count <= 1:
+        estimated_nodes = min(search_node_limit, 1 + 2 * max(len(remaining_rows), 0))
+        listing_degree = remaining_max_degree
+    elif remaining_primary_count == 2:
+        estimated_nodes = min(
+            search_node_limit,
+            1 + remaining_min_degree * (1 + remaining_max_degree),
+        )
+        listing_degree = remaining_min_degree
+    if estimated_nodes_ceiling is not None:
+        estimated_nodes = min(estimated_nodes, estimated_nodes_ceiling)
+    elif remaining_rows and not any(
+        remaining_primary <= set(row.items) for row in remaining_rows
+    ):
+        for secondary in instance.secondary_items:
+            missing = sum(1 for row in remaining_rows if secondary not in row.items)
+            if 0 < missing <= remaining_min_degree:
+                estimated_nodes = min(
+                    estimated_nodes,
+                    1 + 2 * remaining_min_degree * (missing + 1),
+                )
+                break
+    scan_work = estimated_nodes * primary_count * mask_words
+    candidate_work = 2 * estimated_nodes * listing_degree * mask_words
+    if (
+        shortcut_work + index_work + scan_work + candidate_work
+        > _MINIMUM_EXACT_COVER_WORK_LIMIT
+    ):
+        raise OperationResourceAdmissionError(
+            location=("search_node_limit",),
+            code="combinatorics.minimum_exact_cover_work",
+            message=(
+                "minimum exact-cover indexing and search work exceeds the admitted "
+                "envelope"
+            ),
         )
     item_rows = [0] * len(items)
     row_primary_masks: list[int] = []
     row_item_indices: list[tuple[int, ...]] = []
     maximum_primary_coverage = 0
-    for row_index, row in enumerate(instance.rows):
+    for row_index, row in enumerate(active_rows):
         indices = tuple(item_index[item] for item in row.items)
         row_item_indices.append(indices)
         primary_mask = 0
@@ -740,6 +1014,7 @@ def minimum_generalized_exact_cover(  # noqa: C901
         for index in indices:
             conflicts |= item_rows[index]
         row_conflicts.append(conflicts)
+    request_checkpoint("after minimum exact-cover admission")
     all_primary = (1 << primary_count) - 1
     all_rows = (1 << row_count) - 1
     root_lower_bound = (
@@ -749,15 +1024,33 @@ def minimum_generalized_exact_cover(  # noqa: C901
     )
     stack: list[tuple[int, int, tuple[int, ...]]] = [(all_primary, all_rows, ())]
     incumbent: tuple[int, ...] | None = None
+    incumbent_ids: tuple[str, ...] | None = None
     visited = 0
     while stack and visited < search_node_limit:
-        uncovered, available, selected = stack.pop()
+        uncovered, available, selected_indices = stack.pop()
         visited += 1
+        request_checkpoint("during minimum exact-cover search")
         if uncovered == 0:
-            if incumbent is None or len(selected) < len(incumbent):
-                incumbent = selected
+            selected_ids = tuple(
+                sorted(active_rows[index].row_id for index in selected_indices)
+            )
+            if (
+                incumbent is None
+                or len(selected_indices) < len(incumbent)
+                or (
+                    len(selected_indices) == len(incumbent)
+                    and (incumbent_ids is None or selected_ids < incumbent_ids)
+                )
+            ):
+                incumbent = selected_indices
+                incumbent_ids = selected_ids
             continue
-        if incumbent is not None and len(selected) >= len(incumbent) - 1:
+        # A partial family with fewer than the incumbent's rows can still tie
+        # the incumbent. Prune only families that already have the incumbent's
+        # cardinality: they cannot reach a cover of equal or smaller size while
+        # primary items remain uncovered. Keeping the equal-size frontier is
+        # necessary for the canonical lexicographic tie witness.
+        if incumbent is not None and len(selected_indices) >= len(incumbent):
             continue
         chosen_rows = 0
         fewest = row_count + 1
@@ -780,7 +1073,7 @@ def minimum_generalized_exact_cover(  # noqa: C901
                 (
                     uncovered & ~row_primary_masks[row_index],
                     available & ~row_conflicts[row_index],
-                    (*selected, row_index),
+                    (*selected_indices, row_index),
                 )
             )
     exhausted = not stack
@@ -794,15 +1087,18 @@ def minimum_generalized_exact_cover(  # noqa: C901
                     "witness; increase search_node_limit"
                 ),
             )
-        return MinimumGeneralizedExactCoverResult(
+        result = MinimumGeneralizedExactCoverResult._from_kernel(
             instance=instance,
             status="INFEASIBLE",
             lower_bound=root_lower_bound,
             searched_node_count=visited,
         )
-    selected_ids = tuple(sorted(instance.rows[index].row_id for index in incumbent))
+        request_checkpoint("after minimum exact-cover result construction")
+        return result
+    assert incumbent_ids is not None
+    selected_ids = incumbent_ids
     upper_bound = len(selected_ids)
-    return MinimumGeneralizedExactCoverResult(
+    result = MinimumGeneralizedExactCoverResult._from_kernel(
         instance=instance,
         status="EXACT" if exhausted else "BOUNDED",
         selected_row_ids=selected_ids,
@@ -811,6 +1107,8 @@ def minimum_generalized_exact_cover(  # noqa: C901
         upper_bound=upper_bound,
         searched_node_count=visited,
     )
+    request_checkpoint("after minimum exact-cover result construction")
+    return result
 
 
 __all__ = [

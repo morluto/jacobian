@@ -145,7 +145,9 @@ def test_factorization_work_is_admitted_before_backend_factorint(
     def fail_factorint(index: int) -> dict[int, int]:
         raise AssertionError("factorint must not run before factorization admission")
 
-    monkeypatch.setattr(module.sympy, "factorint", fail_factorint)
+    import sympy
+
+    monkeypatch.setattr(sympy, "factorint", fail_factorint)
     with pytest.raises(OperationResourceAdmissionError, match="factorization"):
         cyclotomic(12)
 
@@ -158,6 +160,11 @@ def test_expired_request_is_rejected_before_factorization() -> None:
         pytest.raises(OperationExecutionTimeoutError),
     ):
         _run(CyclotomicRequest(index=12))
+
+
+def test_squarefree_construction_work_is_charged_from_the_radical() -> None:
+    with pytest.raises(OperationResourceAdmissionError, match="construction"):
+        cyclotomic(16_530)
 
 
 def test_large_degree_is_admitted_before_backend_expansion() -> None:

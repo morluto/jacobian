@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from math import prod
 from typing import NoReturn
 
-import sympy
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
@@ -28,7 +27,9 @@ MAX_CYCLOTOMIC_INDEX = 100_000
 MAX_CYCLOTOMIC_DEGREE = MAX_POLYNOMIAL_TERMS - 1
 MAX_CYCLOTOMIC_DIVISORS = 512
 MAX_CYCLOTOMIC_FACTOR_WORK = 2_000_000
-MAX_CYCLOTOMIC_INTERMEDIATE_WORK = 16_000_000
+MAX_CYCLOTOMIC_CONSTRUCTION_WORK = 16_000_000
+MAX_CYCLOTOMIC_INTERMEDIATE_BITS = 16_384
+MAX_CYCLOTOMIC_INTERMEDIATE_WORK = MAX_CYCLOTOMIC_CONSTRUCTION_WORK
 MAX_CYCLOTOMIC_COEFFICIENT_DIGITS = 4_096
 MAX_CYCLOTOMIC_OUTPUT_DIGITS = 8_000_000
 
@@ -148,12 +149,20 @@ def _admit(index: int, factorization: dict[int, int]) -> _CyclotomicAdmission:
             ),
         )
 
-    # The direct ZZ construction is charged against a coefficient-operation
-    # envelope proportional to the divisor product identity. The degree-based
-    # bit estimate is conservative, while still admitting prime and prime-power
-    # fixtures whose actual coefficients are tiny.
-    intermediate_work = (degree + 1) * divisor_count * max(1, index.bit_length())
-    if intermediate_work > MAX_CYCLOTOMIC_INTERMEDIATE_WORK:
+    # SymPy's dense cyclotomic construction is charged from the radical of
+    # the index, matching the existing exact kernel bound used by spectral
+    # character sums: 10 * bit_length(rad) * (rad + 1)^2, plus the
+    # intermediate bit envelope 2*rad + bit_length(rad+1) + 1.
+    radical = prod(factorization) if factorization else 1
+    construction_work = 10 * max(1, radical.bit_length()) * (radical + 1) ** 2
+    if construction_work > MAX_CYCLOTOMIC_CONSTRUCTION_WORK:
+        raise OperationResourceAdmissionError(
+            location=("index",),
+            code="polynomial.cyclotomic.construction_work_bound",
+            message="cyclotomic backend construction exceeds the admitted work bound",
+        )
+    intermediate_bits = 2 * radical + (radical + 1).bit_length() + 1
+    if intermediate_bits > MAX_CYCLOTOMIC_INTERMEDIATE_BITS:
         raise OperationResourceAdmissionError(
             location=("index",),
             code="polynomial.cyclotomic.intermediate_work_bound",
@@ -189,7 +198,7 @@ def _admit(index: int, factorization: dict[int, int]) -> _CyclotomicAdmission:
         degree=degree,
         factorization_work=factorization_work,
         divisor_count=divisor_count,
-        intermediate_work=intermediate_work,
+        intermediate_work=construction_work,
         coefficient_digits=coefficient_digits,
         output_digits=output_digits,
     )
@@ -197,7 +206,9 @@ def _admit(index: int, factorization: dict[int, int]) -> _CyclotomicAdmission:
 
 def _factor_index(index: int) -> dict[int, int]:
     try:
-        factors = sympy.factorint(index)
+        from sympy import factorint
+
+        factors = factorint(index)
     except Exception as exc:
         _backend_error(BackendFailureReason.INITIALIZATION, exc)
     if not isinstance(factors, dict) or any(
@@ -215,7 +226,11 @@ def _compute(index: int) -> tuple[int, IntegerPolynomial]:
     admission = _admit(index, factorization)
     request_checkpoint("after cyclotomic admission")
     try:
-        polynomial = sympy.cyclotomic_poly(index, sympy.Symbol("x"), polys=True)
+        from sympy import Symbol, cyclotomic_poly
+    except Exception as exc:
+        _backend_error(BackendFailureReason.INITIALIZATION, exc)
+    try:
+        polynomial = cyclotomic_poly(index, Symbol("x"), polys=True)
         raw_coefficients = tuple(polynomial.all_coeffs())
     except OperationBackendError:
         raise

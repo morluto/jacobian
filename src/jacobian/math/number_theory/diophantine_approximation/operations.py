@@ -12,8 +12,24 @@ from jacobian.math.number_theory.diophantine_approximation._models import (
     ConvergentValue,
     PellEquationResult,
 )
+from jacobian.math.number_theory.diophantine_approximation._surd_kernel import (
+    nearest_integer_distance,
+    range_profile,
+    record_minima,
+    scaled_floor,
+    simultaneous_product,
+)
 
-__all__ = ["continued_fraction", "convergents", "solve_pell"]
+__all__ = [
+    "continued_fraction",
+    "convergents",
+    "nearest_integer_distance",
+    "range_profile",
+    "record_minima",
+    "scaled_floor",
+    "simultaneous_product",
+    "solve_pell",
+]
 
 
 def _require_periodic_discriminant(discriminant: int) -> None:

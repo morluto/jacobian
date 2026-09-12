@@ -10,6 +10,8 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.polynomials._laurent import rational_laurent_multiply
 from jacobian.math.polynomials.values import (
+    MAX_POLYNOMIAL_EXPONENT,
+    MAX_POLYNOMIAL_TERMS,
     RationalLaurentPolynomial,
     RationalLaurentPolynomialTerm,
 )
@@ -60,22 +62,43 @@ def test_coefficient_growth_is_rejected_before_convolution() -> None:
 
 
 def test_exponent_growth_is_rejected_before_convolution() -> None:
-    limit = 32_768
-    left = RationalLaurentPolynomial(variables=("x",), terms=(term(1, limit),))
-    right = RationalLaurentPolynomial(variables=("x",), terms=(term(1, 1),))
-    with pytest.raises(OperationResourceAdmissionError, match="exponent"):
+    # Convolution work is 65 * 64 = 4160 > MAX_POLYNOMIAL_TERMS, so a guard
+    # that still lived inside the product loop would raise convolution_bound
+    # first. The extrema check must win with exponent_growth.
+    left_count = 65
+    right_count = 64
+    assert left_count * right_count > MAX_POLYNOMIAL_TERMS
+    left = RationalLaurentPolynomial(
+        variables=("x",),
+        terms=tuple(
+            term(1, MAX_POLYNOMIAL_EXPONENT - index) for index in range(left_count)
+        ),
+    )
+    right = RationalLaurentPolynomial(
+        variables=("x",),
+        terms=tuple(term(1, index) for index in range(right_count)),
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
         rational_laurent_multiply(left, right)
+    assert error.value.errors()[0]["type"] == "polynomial.laurent.exponent_growth"
 
 
 def test_catalog_admits_exponent_growth_before_convolution_bound() -> None:
     operation = Catalog.open().operation("polynomial.laurent.rational.multiply.compute")
     assert operation is not None
 
+    left_count = 65
+    right_count = 64
     left = RationalLaurentPolynomial(
         variables=("x",),
-        terms=tuple(term(1, exponent) for exponent in range(32_768, 30_719, -1)),
+        terms=tuple(
+            term(1, MAX_POLYNOMIAL_EXPONENT - index) for index in range(left_count)
+        ),
     )
-    right = RationalLaurentPolynomial(variables=("x",), terms=(term(1, 1), term(1, 0)))
+    right = RationalLaurentPolynomial(
+        variables=("x",),
+        terms=tuple(term(1, index) for index in range(right_count)),
+    )
     request = operation.request_type(left=left, right=right)
 
     with pytest.raises(OperationResourceAdmissionError) as error:

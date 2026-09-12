@@ -14,6 +14,7 @@ from jacobian.math.matrices.combinatorial import HadamardMatrix, SignMatrix
 from jacobian.math.matrices.combinatorial._models import (
     DeterminantProfileRequest,
     GramProfileRequest,
+    KroneckerProductResult,
     NormalizeRequest,
     SignProfileRequest,
     SylvesterRequest,
@@ -32,6 +33,7 @@ from jacobian.math.matrices.combinatorial.operations import (
     gram_profile,
     kronecker,
     recognize_hadamard,
+    sylvester,
 )
 from jacobian.math.matrices.combinatorial.values import (
     MAX_MATERIALIZED_SIGN_MATRIX_AXIS,
@@ -296,6 +298,113 @@ def test_kronecker_returns_a_canonical_hadamard_matrix() -> None:
     assert isinstance(result.product, HadamardMatrix)
     assert result.row_map == ((0, 0), (0, 1), (1, 0), (1, 1))
     assert result.column_map == result.row_map
+
+
+def test_kronecker_admits_previously_rejected_order_256_and_round_trips_to_consumer() -> (
+    None
+):
+    result = kronecker(sylvester(4).matrix, sylvester(4).matrix)
+
+    assert len(result.product.rows) == 256
+    restored = KroneckerProductResult.model_validate_json(result.model_dump_json())
+    profile = determinant_profile(restored.product)
+    assert profile.order == 256
+    assert profile.determinant_magnitude**2 == profile.gram_determinant
+
+
+def test_kronecker_admits_the_hadamard_carrier_order_boundary() -> None:
+    result = kronecker(sylvester(4).matrix, sylvester(5).matrix)
+
+    assert len(result.product.rows) == 512
+    assert len(result.product.rows[0]) == 512
+    assert result.row_map[0] == (0, 0)
+    assert result.row_map[-1] == (15, 31)
+    assert result.column_map == result.row_map
+
+
+def test_kronecker_preserves_factor_coordinates_and_hadamard_gram() -> None:
+    left_source = sylvester(1).matrix.rows
+    right_source = sylvester(2).matrix.rows
+    left_row_order, left_column_order = (1, 0), (1, 0)
+    left_row_signs, left_column_signs = (-1, 1), (1, -1)
+    right_row_order, right_column_order = (2, 0, 3, 1), (1, 3, 0, 2)
+    right_row_signs, right_column_signs = (1, -1, 1, -1), (-1, 1, 1, -1)
+    left_rows = tuple(
+        tuple(
+            left_row_signs[i]
+            * left_source[left_row_order[i]][left_column_order[j]]
+            * left_column_signs[j]
+            for j in range(len(left_source))
+        )
+        for i in range(len(left_source))
+    )
+    right_rows = tuple(
+        tuple(
+            right_row_signs[i]
+            * right_source[right_row_order[i]][right_column_order[j]]
+            * right_column_signs[j]
+            for j in range(len(right_source))
+        )
+        for i in range(len(right_source))
+    )
+    left = recognize_hadamard(SignMatrix(rows=left_rows))
+    right = recognize_hadamard(SignMatrix(rows=right_rows))
+
+    result = kronecker(left, right)
+    expected = tuple(
+        tuple(
+            left_rows[i][column_i] * right_rows[j][column_j]
+            for column_i in range(len(left_rows))
+            for column_j in range(len(right_rows))
+        )
+        for i in range(len(left_rows))
+        for j in range(len(right_rows))
+    )
+
+    assert result.row_map == tuple(
+        (i, j) for i in range(len(left_rows)) for j in range(len(right_rows))
+    )
+    assert result.column_map == result.row_map
+    assert result.product.rows == expected
+    assert all(
+        sum(
+            entry * other_entry
+            for entry, other_entry in zip(row, other_row, strict=True)
+        )
+        == (len(expected) if row_index == other_index else 0)
+        for row_index, row in enumerate(expected)
+        for other_index, other_row in enumerate(expected)
+    )
+
+
+def test_kronecker_rejects_a_forged_hadamard_factor() -> None:
+    forged = HadamardMatrix(rows=((1, 1), (1, 1)))
+
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        kronecker(forged, sylvester(1).matrix)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "combinatorial_matrix.orthogonality_violation"
+    )
+
+
+def test_kronecker_refuses_an_overbound_product_before_factor_recognition(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.matrices.combinatorial import operations
+
+    def recognition_must_not_run(*_args: object) -> None:
+        raise AssertionError("factor recognition must follow Kronecker admission")
+
+    monkeypatch.setattr(operations, "integer_gram", recognition_must_not_run)
+    overbound = HadamardMatrix(rows=((1,) * 512,) * 512)
+
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        kronecker(overbound, sylvester(1).matrix)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "combinatorial_matrix.kronecker_output_order"
+    )
 
 
 # ---------------------------------------------------------------------------

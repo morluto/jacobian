@@ -168,6 +168,15 @@ def test_consumers_reject_model_bypassed_nested_claims_as_domain_errors() -> Non
             width(malformed)
 
 
+def test_consumers_reject_mixed_carrier_elements_as_domain_errors() -> None:
+    poset = _materialize(["a"], [])
+    malformed = poset.model_copy(update={"elements": ("a", object())})
+
+    assert verify_finite_poset(malformed) is False
+    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+        width(malformed)
+
+
 def test_comparable_pairs_require_complete_transitive_relation() -> None:
     with pytest.raises(OperationDomainValidationError) as exc:
         _materialize_request(

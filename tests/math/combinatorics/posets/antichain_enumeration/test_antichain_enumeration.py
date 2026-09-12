@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import cast
+
 import pytest
 from pydantic import ValidationError
 
@@ -150,3 +152,13 @@ def test_rejects_forged_poset_relation_claims() -> None:
 
     with pytest.raises(OperationDomainValidationError):
         enumerate_antichains(forged, 1, 2)
+
+
+def test_enumeration_admits_before_inspecting_the_carrier() -> None:
+    poset = _make_chain(2)
+    malformed = poset.model_copy(update={"elements": object()})
+
+    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+        enumerate_antichains(malformed, 1, 1)
+    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+        enumerate_antichains(cast(FinitePoset, object()), 1, 1)

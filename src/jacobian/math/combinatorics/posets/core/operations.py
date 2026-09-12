@@ -123,7 +123,15 @@ def _admit_canonical_poset(poset: FinitePoset) -> None:
             code="poset.invalid_canonical_value",
             message="poset claims do not describe its canonical finite poset",
         ) from exc
-    if not _canonical_claims_match(poset, strict, reduction):
+    try:
+        claims_match = _canonical_claims_match(poset, strict, reduction)
+    except (AttributeError, TypeError, ValidationError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("poset",),
+            code="poset.invalid_canonical_value",
+            message="poset claims do not describe its canonical finite poset",
+        ) from exc
+    if not claims_match:
         raise OperationDomainValidationError(
             location=("poset",),
             code="poset.invalid_canonical_value",

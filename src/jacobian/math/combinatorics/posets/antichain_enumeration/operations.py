@@ -25,6 +25,7 @@ def enumerate_antichains(
     An antichain is a set of pairwise incomparable elements. Uses a bitset
     comparability lookup for efficient rejection.
     """
+    _admit_canonical_poset(poset)
     try:
         require_antichain_enumeration_envelope(poset, min_cardinality, max_cardinality)
     except ValueError as exc:
@@ -33,7 +34,6 @@ def enumerate_antichains(
             code="poset.antichain_enumeration_envelope_exceeded",
             message=str(exc),
         ) from exc
-    _admit_canonical_poset(poset)
     elements = poset.elements
     n = len(elements)
     element_index = {e: i for i, e in enumerate(elements)}

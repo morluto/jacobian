@@ -33,4 +33,7 @@ for replay.
 
 ## Focused contracts
 
+- [Rational discrete antiderivatives](rational-discrete-antiderivative.md)
+  compute the unique zero-based inverse of a selected-variable forward
+  difference over `QQ`.
 - [Monomial-ideal graded Betti profiles](monomial-ideal-graded-betti.md)

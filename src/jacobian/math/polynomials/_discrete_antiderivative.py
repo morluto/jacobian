@@ -1,7 +1,9 @@
 """Selected-variable rational discrete antiderivatives."""
 
 from fractions import Fraction
-from math import comb
+from math import comb, gcd, lgamma, log
+
+from pydantic import Field
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
@@ -20,14 +22,113 @@ from jacobian.math.polynomials.values import (
 
 
 class RationalDiscreteAntiderivativeRequest(StrictModel):
-    polynomial: RationalPolynomial
-    variable: PolynomialVariable
+    """Bind one polynomial axis for the zero-based finite-difference inverse."""
+
+    polynomial: RationalPolynomial = Field(
+        description=(
+            "Canonical sparse polynomial over QQ. Its declared variable axis is "
+            "retained unchanged in both returned polynomials."
+        )
+    )
+    variable: PolynomialVariable = Field(
+        description=(
+            "Declared polynomial axis along which Q(x+1)-Q(x)=P(x) is solved; "
+            "all other axes remain coefficient parameters."
+        )
+    )
 
 
 class RationalDiscreteAntiderivativeResult(StrictModel):
+    """A normalized antiderivative and its exact finite-difference reconstruction."""
+
     source: RationalDiscreteAntiderivativeRequest
     antiderivative: RationalPolynomial
     reconstructed_difference: RationalPolynomial
+
+
+# The current deterministic pure-Python triangular kernel performs one exact
+# rational update per charged unit. Keep the admitted envelope below the
+# sparse carrier's maximum so a valid but pathological high-degree source
+# cannot monopolize a native call while still retaining ordinary low-degree
+# polynomial sums.
+MAX_DISCRETE_ANTIDERIVATIVE_WORK = 1_000_000
+
+
+def _decimal_digits_upper(value: int) -> int:
+    """Return a cheap upper bound on the decimal digits of a nonnegative int."""
+
+    if value == 0:
+        return 1
+    # log10(2) < 30103 / 100000; the extra two digits make this bound safe
+    # without converting a caller-sized integer to a decimal string.
+    return (value.bit_length() * 30103) // 100000 + 2
+
+
+def _factorial_digits_upper(degree: int) -> int:
+    """Bound decimal digits of ``(degree + 1)!`` without materializing it."""
+
+    return max(1, int(lgamma(degree + 2) / log(10)) + 2)
+
+
+def _admit_group(
+    coefficients: dict[int, Fraction],
+    *,
+    maximum_degree: int,
+) -> None:
+    """Preflight one coefficient-parameter slice before exact expansion.
+
+    The triangular solve uses only additions, integer binomial factors, and
+    divisions by integers through ``maximum_degree + 1``.  Clearing all input
+    denominators and the factorial envelope gives a conservative bound for
+    every residual, antiderivative coefficient, and reconstructed coefficient.
+    """
+
+    if maximum_degree == 0:
+        return
+
+    common_denominator = 1
+    maximum_numerator_digits = 1
+    for coefficient in coefficients.values():
+        maximum_numerator_digits = max(
+            maximum_numerator_digits,
+            _decimal_digits_upper(abs(coefficient.numerator)),
+        )
+        denominator = coefficient.denominator
+        factor = denominator // gcd(common_denominator, denominator)
+        common_digits = _decimal_digits_upper(common_denominator)
+        factor_digits = _decimal_digits_upper(factor)
+        if common_digits + factor_digits > MAX_CANONICAL_RATIONAL_DIGITS:
+            raise OperationResourceAdmissionError(
+                location=("polynomial",),
+                code="polynomial.discrete_antiderivative.intermediate_growth",
+                message=(
+                    "common coefficient denominators exceed the "
+                    "exact-intermediate bound"
+                ),
+            )
+        common_denominator *= factor
+
+    common_denominator_digits = _decimal_digits_upper(common_denominator)
+    factorial_digits = _factorial_digits_upper(maximum_degree)
+    binomial_digits = (maximum_degree + 1) * 30103 // 100000 + 2
+    term_count_digits = _decimal_digits_upper(len(coefficients))
+    denominator_digits = common_denominator_digits + factorial_digits
+    coefficient_digits = (
+        maximum_numerator_digits
+        + common_denominator_digits
+        + factorial_digits
+        + (2 * binomial_digits)
+        + term_count_digits
+    )
+    if max(denominator_digits, coefficient_digits) > MAX_CANONICAL_RATIONAL_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("polynomial",),
+            code="polynomial.discrete_antiderivative.intermediate_growth",
+            message=(
+                "discrete-antiderivative intermediate coefficients exceed the "
+                "exact-output bound"
+            ),
+        )
 
 
 def _admit_coefficients(coefficients: dict[tuple[int, ...], Fraction]) -> None:
@@ -64,6 +165,12 @@ def _polynomial(
 def rational_discrete_antiderivative(
     request: RationalDiscreteAntiderivativeRequest,
 ) -> RationalDiscreteAntiderivativeResult:
+    if not isinstance(request, RationalDiscreteAntiderivativeRequest):
+        raise OperationDomainValidationError(
+            location=(),
+            code="polynomial.discrete_antiderivative.request_type",
+            message="request must be a RationalDiscreteAntiderivativeRequest",
+        )
     source = request.polynomial
     if request.variable not in source.variables:
         raise OperationDomainValidationError(
@@ -93,6 +200,22 @@ def rational_discrete_antiderivative(
         )
         groups.setdefault(other, {})[term.exponents[variable_index]] = (
             term.coefficient.as_fraction()
+        )
+    work = sum(
+        (degree + 1) * (degree + 2) // 2 + (degree + 1) ** 2
+        for coefficients in groups.values()
+        for degree in (max(coefficients, default=-1),)
+    )
+    if work > MAX_DISCRETE_ANTIDERIVATIVE_WORK:
+        raise OperationResourceAdmissionError(
+            location=("polynomial",),
+            code="polynomial.discrete_antiderivative.work_bound",
+            message="discrete-antiderivative work exceeds the admitted bound",
+        )
+    for coefficients in groups.values():
+        _admit_group(
+            coefficients,
+            maximum_degree=max(coefficients, default=0),
         )
     answer: dict[tuple[int, ...], Fraction] = {}
     for other, coefficients in groups.items():

@@ -18,7 +18,11 @@ RATIONAL_DISCRETE_ANTIDERIVATIVE_OPERATION = MathTool(
     examples=(
         OperationExample(
             name="square",
-            description="Antidifferentiate k squared with respect to k.",
+            description=(
+                "Compute the zero-based discrete antiderivative of k squared "
+                "with respect to k; the selected variable must be one of the "
+                "polynomial's declared axes."
+            ),
             input={
                 "polynomial": {
                     "variables": ["k"],

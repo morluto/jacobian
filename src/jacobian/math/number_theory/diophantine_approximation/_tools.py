@@ -12,6 +12,9 @@ from jacobian.math.number_theory.diophantine_approximation._models import (
     PellEquationRequest,
     PellEquationResult,
 )
+from jacobian.math.number_theory.diophantine_approximation._surd_tools import (
+    SURD_OPERATIONS,
+)
 
 
 def compute_continued_fraction(
@@ -29,6 +32,7 @@ def compute_pell_equation(request: PellEquationRequest) -> PellEquationResult:
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    *SURD_OPERATIONS,
     MathTool(
         operation_id="diophantine.continued_fraction.compute",
         title="Compute the continued fraction expansion of sqrt(D)",

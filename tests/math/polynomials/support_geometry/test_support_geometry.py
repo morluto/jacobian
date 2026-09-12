@@ -204,6 +204,41 @@ class TestSupport:
         forged_face = face.model_copy(update={"initial_form": malformed_face})
         assert not verify_polynomial_face_data(forged_face)
 
+    def test_verifiers_accept_zero_variable_constant_round_trip(self) -> None:
+        source = _polynomial((_term(1, []),), ())
+        profile = weight_profile(source, ())
+        face = initial_form(source, ())
+
+        assert verify_polynomial_weight_profile(profile)
+        assert verify_polynomial_face_data(face)
+        assert verify_polynomial_weight_profile(
+            PolynomialWeightProfile.model_validate_json(profile.model_dump_json())
+        )
+        assert verify_polynomial_face_data(
+            PolynomialFaceData.model_validate_json(face.model_dump_json())
+        )
+
+    def test_verifiers_accept_monic_polynomial_subtype(self) -> None:
+        from jacobian._exact import CanonicalRational
+        from jacobian.math.polynomials.values import monic_polynomial_from_coefficients
+
+        source = monic_polynomial_from_coefficients(
+            (
+                CanonicalRational(num=-1, den=1),
+                CanonicalRational(num=1, den=1),
+            ),
+            variable="t",
+        )
+        profile = compute_weight_profile(
+            WeightProfileRequest(polynomial=source, weight=(1,))
+        )
+        face = compute_initial_form(InitialFormRequest(polynomial=source, weight=(1,)))
+
+        assert profile.polynomial is source
+        assert face.polynomial is source
+        assert verify_polynomial_weight_profile(profile)
+        assert verify_polynomial_face_data(face)
+
     @pytest.mark.parametrize("kind", ("profile", "face"))
     @pytest.mark.parametrize(
         "failure", (RuntimeError, ValueError, TypeError, OperationDomainValidationError)

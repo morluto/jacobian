@@ -241,7 +241,7 @@ class PolynomialWeightProfile(StrictModel):
     """
 
     polynomial: RationalPolynomial
-    weight: tuple[int, ...] = Field(min_length=1)
+    weight: tuple[int, ...] = Field(min_length=0)
     minimum_weight: int
     minimizing_exponents: tuple[tuple[int, ...], ...] = Field(
         max_length=MAX_WEIGHT_PROFILE_TERMS
@@ -286,7 +286,7 @@ class PolynomialFaceData(StrictModel):
     """
 
     polynomial: RationalPolynomial
-    weight: tuple[int, ...] = Field(min_length=1)
+    weight: tuple[int, ...] = Field(min_length=0)
     initial_form: RationalPolynomial
 
     @model_validator(mode="after")

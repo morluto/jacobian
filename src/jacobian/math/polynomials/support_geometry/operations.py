@@ -586,12 +586,21 @@ def _bounded_weighted_source(
     canonical rational representation, and exponent bounds.
     """
     try:
-        if type(polynomial) is not RationalPolynomial:
+        if not isinstance(polynomial, RationalPolynomial):
             return None
         if type(polynomial.domain) is not str or polynomial.domain != "QQ":
             return None
-        variables = _canonical_variable_axis(polynomial.variables)
-        if variables is None or len(variables) > MAX_WEIGHT_COMPONENTS:
+        variables = polynomial.variables
+        if (
+            type(variables) is not tuple
+            or len(variables) > MAX_WEIGHT_COMPONENTS
+            or any(
+                type(variable) is not str
+                or _POLYNOMIAL_VARIABLE_PATTERN.fullmatch(variable) is None
+                for variable in variables
+            )
+            or len(set(variables)) != len(variables)
+        ):
             return None
         sparse = polynomial.polynomial
         if type(sparse) is not SparseRationalPolynomial:
@@ -647,7 +656,7 @@ def _bounded_weight(weight: object, variables: tuple[str, ...]) -> bool:
     return (
         type(weight) is tuple
         and len(weight) == len(variables)
-        and 1 <= len(weight) <= MAX_WEIGHT_COMPONENTS
+        and len(weight) <= MAX_WEIGHT_COMPONENTS
         and all(
             type(component) is int and abs(component) <= MAX_WEIGHT_COMPONENT_MAGNITUDE
             for component in weight

@@ -9,6 +9,7 @@ from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import CoreSchema, PydanticCustomError
 
 from jacobian._exact import (
+    MAX_CANONICAL_INTEGER_DIGITS,
     MAX_CANONICAL_RATIONAL_DIGITS,
     CanonicalRational,
     ExactInteger,
@@ -145,6 +146,12 @@ class FiniteRationalSequence(StrictModel):
             data.get("values"), (list, tuple)
         ):
             return data
+        if len(data["values"]) > MAX_SEQUENCE_LENGTH:
+            raise _validation_error(
+                "sequence_length_exceeded",
+                "rational sequence exceeds the "
+                f"{MAX_SEQUENCE_LENGTH}-entry length bound",
+            )
         converted: list[object] = []
         for value in data["values"]:
             if (
@@ -155,6 +162,13 @@ class FiniteRationalSequence(StrictModel):
                 converted.append({"num": value, "den": 1})
                 continue
             if info.mode == "json" and isinstance(value, str):
+                digits = value[1:] if value.startswith("-") else value
+                if digits.isdigit() and len(digits) > MAX_CANONICAL_INTEGER_DIGITS:
+                    raise _validation_error(
+                        "integer_digits_exceeded",
+                        "canonical integer entries exceed the "
+                        f"{MAX_CANONICAL_INTEGER_DIGITS}-digit bound",
+                    )
                 try:
                     parse_canonical_integer(value)
                 except ValueError:

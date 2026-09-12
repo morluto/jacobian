@@ -130,6 +130,21 @@ def _order_shape_rationals(
     raise TypeError("sequence_order_shape requires FiniteRationalSequence")
 
 
+def _product_component_digits(
+    left: CanonicalRational, right: CanonicalRational
+) -> int:
+    """Bound retained numerator/denominator digits of one exact product."""
+
+    if left.num == 0 or right.num == 0:
+        return 1
+    return max(
+        len(format_canonical_integer(abs(left.num)))
+        + len(format_canonical_integer(abs(right.num))),
+        len(format_canonical_integer(left.den))
+        + len(format_canonical_integer(right.den)),
+    )
+
+
 def _admit_order_shape(
     request: FiniteRationalSequence,
 ) -> tuple[CanonicalRational, ...]:
@@ -159,7 +174,15 @@ def _admit_order_shape(
             message="order-shape comparisons exceed the admitted exact-work bound",
         )
     row_count = max(0, size - 2)
-    product_digits = 2 * component_digits
+    product_digits = 1
+    for index in range(1, size - 1):
+        product_digits = max(
+            product_digits,
+            _product_component_digits(rational_values[index], rational_values[index]),
+            _product_component_digits(
+                rational_values[index - 1], rational_values[index + 1]
+            ),
+        )
     if row_count and product_digits > MAX_CANONICAL_RATIONAL_DIGITS:
         raise OperationDomainValidationError(
             location=("values",),

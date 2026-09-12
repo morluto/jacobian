@@ -6,7 +6,7 @@ from typing import cast
 import pytest
 from jsonschema import Draft202012Validator, ValidationError
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, MAX_CANONICAL_INTEGER_DIGITS
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
@@ -14,6 +14,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.dispatch import invoke_operation
+from jacobian.math.number_theory.sequences.core.values import MAX_SEQUENCE_LENGTH
 from jacobian.math.number_theory.sequences.core._models import (
     AutocorrelationResult,
     FiniteIntegerSequence,
@@ -163,6 +164,31 @@ def test_order_shape_skips_product_bounds_when_no_interior_rows() -> None:
     assert result.first_log_concavity_violation is None
     pair = sequence_order_shape(FiniteRationalSequence(values=(wide, wide)))
     assert pair.log_concavity_rows == ()
+
+
+def test_order_shape_accounts_for_absorbing_zeros_in_product_bounds() -> None:
+    wide = CanonicalRational(num=10**20_000, den=1)
+    zero = CanonicalRational(num=0, den=1)
+    result = sequence_order_shape(FiniteRationalSequence(values=(wide, zero, zero)))
+    assert result.log_concavity_rows[0].square == zero
+    assert result.log_concavity_rows[0].neighbor_product == zero
+
+
+def test_rational_sequence_rejects_oversized_length_before_expansion() -> None:
+    payload = {
+        "domain": "rational",
+        "values": [0] * (MAX_SEQUENCE_LENGTH + 1),
+    }
+    with pytest.raises(Exception, match="length"):
+        FiniteRationalSequence.model_validate(payload)
+
+
+def test_rational_sequence_rejects_oversized_integer_strings_before_parse() -> None:
+    digits = "1" * (MAX_CANONICAL_INTEGER_DIGITS + 1)
+    with pytest.raises(Exception, match="digit"):
+        FiniteRationalSequence.model_validate_json(
+            '{"domain":"rational","values":["' + digits + '"]}'
+        )
 
 
 def test_order_shape_rejects_contradictory_log_concavity_witness() -> None:

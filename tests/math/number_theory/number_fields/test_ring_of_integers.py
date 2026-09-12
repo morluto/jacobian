@@ -210,6 +210,29 @@ def test_semiprime_discriminant_is_rejected_before_worker_launch(
     )
 
 
+def test_discriminant_admission_does_not_factor_inside_perfect_power(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_if_factoring(candidate: object, factor: bool = True) -> bool:
+        assert factor is False
+        return False
+        assert factor is False
+        return False
+
+    monkeypatch.setattr(
+        "sympy.ntheory.perfect_power",
+        fail_if_factoring,
+    )
+    field = SimpleNumberFieldPresentation(
+        coefficients_descending=(1, 0, -100003 * 100019)
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        ring_of_integers(field)
+    assert error.value.errors()[0]["type"] == (
+        "number_field.ring_of_integers_discriminant_factorization_bound"
+    )
+
+
 def test_ring_of_integers_result_rejects_malformed_basis_on_deserialization() -> None:
     result = ring_of_integers(
         SimpleNumberFieldPresentation(coefficients_descending=(1, 0, -5))

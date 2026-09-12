@@ -96,7 +96,7 @@ def _cofactor_is_factorizable(cofactor: int) -> bool:
             return True
         if len(str(candidate)) > _ROUND_TWO_COFACTOR_DIGIT_BOUND:
             return False
-        power = perfect_power(candidate)
+        power = perfect_power(candidate, factor=False)
         if power is False:
             return isprime(candidate)
         candidate, _ = power

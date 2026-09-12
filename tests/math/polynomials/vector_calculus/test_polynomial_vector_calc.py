@@ -24,7 +24,7 @@ from jacobian.math.polynomials.vector_calculus._models import (
     VectorFieldRequest,
     VectorResult,
 )
-from jacobian.math.polynomials.vector_calculus._tools import TOOLS, _gradient
+from jacobian.math.polynomials.vector_calculus._tools import TOOLS
 from jacobian.math.polynomials.vector_calculus.operations import (
     curl,
     directional_derivative,
@@ -156,11 +156,7 @@ def test_gradient_admits_sparse_inactive_axes_beyond_dense_proxy() -> None:
     assert sum(len(component.polynomial.terms) for component in native.components) == 33
     assert all(not component.polynomial.terms for component in native.components[1:])
 
-    public = _gradient(
-        ScalarFieldRequest.model_validate_json(
-            json.dumps({"polynomial": source.model_dump(mode="json")})
-        )
-    )
+    public = TOOLS[0].run(ScalarFieldRequest(polynomial=source))
     assert (
         VectorResult.model_validate_json(json.dumps(public.model_dump(mode="json")))
         == native

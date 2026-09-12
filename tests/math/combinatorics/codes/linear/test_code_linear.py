@@ -145,7 +145,7 @@ def test_from_generator_admits_large_row_presentations_by_rref_rank(
     assert public.encoder.codeword_count == field_order ** len(expected_generator)
 
 
-def test_from_generator_scale_regression_composes_owner_result() -> None:
+def test_from_generator_scale_regression_composes() -> None:
     identity = [[int(row == column) for column in range(20)] for row in range(20)]
     payload = {
         "field_order": 2,

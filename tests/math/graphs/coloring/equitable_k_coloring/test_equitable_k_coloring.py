@@ -7,10 +7,8 @@ import pytest
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.coloring.equitable_k_coloring._models import (
-    EquitableColoringRequest,
     EquitableColoringResult,
 )
-from jacobian.math.graphs.coloring.equitable_k_coloring._tools import _decide
 from jacobian.math.graphs.coloring.equitable_k_coloring.operations import (
     decide_equitable_k_coloring,
     verify_equitable_coloring,
@@ -181,22 +179,26 @@ def test_bipartite_decision_matches_independent_bruteforce_on_all_graphs_through
                 assert verify_equitable_coloring(result)
 
 
-def test_owner_tool_serializes_and_verifies_newly_accepted_boundary() -> None:
+def test_public_tool_serializes_and_verifies_newly_accepted_boundary() -> None:
+    from jacobian.math.graphs.coloring.equitable_k_coloring._models import (
+        EquitableColoringRequest,
+    )
+    from jacobian.math.graphs.coloring.equitable_k_coloring._tools import TOOLS
+
     vertices = tuple(f"v{index:03d}" for index in range(20))
     graph = SimpleUndirectedGraph(
         vertices=vertices,
         edges=tuple((vertices[index], vertices[index + 1]) for index in range(19)),
     )
 
-    result = _decide(
-        EquitableColoringRequest.model_validate(
-            {"graph": graph.model_dump(mode="json"), "k": 2}
-        )
-    )
-
-    decoded = EquitableColoringResult.model_validate(result.model_dump(mode="json"))
+    request = EquitableColoringRequest(graph=graph, k=2)
+    decoded = TOOLS[0].run(request)
     assert decoded.colorable
     assert verify_equitable_coloring(decoded)
+    assert (
+        EquitableColoringResult.model_validate(decoded.model_dump(mode="json"))
+        == decoded
+    )
 
 
 def test_one_edge_k1_is_decided_without_recursion() -> None:

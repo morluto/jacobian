@@ -14,8 +14,6 @@ from jacobian.math.combinatorics import (
     integer_partitions,
     stirling_second,
 )
-from jacobian.math.combinatorics._models import NonnegativeIntegerRequest
-from jacobian.math.combinatorics._partition_tools import bell
 from jacobian.math.combinatorics.operations import MAX_COUNTING_INDEX
 
 
@@ -71,14 +69,20 @@ def test_large_bell_numbers_match_touchard_residues() -> None:
 
 
 def test_largest_bell_number_projects_as_a_canonical_public_json_integer() -> None:
-    result = bell(NonnegativeIntegerRequest(n=MAX_COUNTING_INDEX))
-    payload = result.model_dump(mode="json")
+    from jacobian.math.combinatorics._models import (
+        IntegerResult,
+        NonnegativeIntegerRequest,
+    )
+    from jacobian.math.combinatorics._partition_tools import bell
 
-    assert isinstance(payload["value"], str)
-    assert len(payload["value"]) == 27_665
+    result = bell(NonnegativeIntegerRequest(n=MAX_COUNTING_INDEX))
+    output = result.model_dump(mode="json")
+
+    assert isinstance(output["value"], str)
+    assert len(output["value"]) == 27_665
     assert (
-        result.model_validate_json(json.dumps(payload)).model_dump(mode="json")
-        == payload
+        IntegerResult.model_validate_json(json.dumps(output)).model_dump(mode="json")
+        == output
     )
 
 

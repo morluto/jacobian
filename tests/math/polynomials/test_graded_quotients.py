@@ -38,7 +38,7 @@ from jacobian.math.polynomials.values import (
 
 
 def _ideal(*exponents: tuple[int, ...]) -> RationalPolynomialIdeal:
-    variables = tuple("xy"[: len(exponents[0])])
+    variables = tuple("xyzwuvst"[: len(exponents[0])])
     return RationalPolynomialIdeal(
         variables=variables,
         generators=tuple(
@@ -213,6 +213,33 @@ def test_native_standard_monomial_degree_bounds_precede_ideal_inspection(
         OperationResourceAdmissionError, match="degrees from 0 through 32"
     ):
         standard_monomials(_ideal((2, 0)), degree)
+
+
+@pytest.mark.parametrize("degree", (1.5, True))
+def test_native_standard_monomial_degree_rejects_non_integers_before_arithmetic(
+    monkeypatch: pytest.MonkeyPatch, degree: object
+) -> None:
+    import jacobian.math.polynomials.graded.operations as graded_operations
+
+    def fail(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("non-integer degrees must not inspect the monomial ideal")
+
+    monkeypatch.setattr(graded_operations, "_require_monomial_ideal", fail)
+    with pytest.raises(OperationDomainValidationError, match="must be an integer"):
+        standard_monomials(_ideal((2, 0)), degree)  # type: ignore[arg-type]
+
+
+def test_hilbert_series_admits_reduced_degree_below_rational_function_envelope() -> (
+    None
+):
+    ideal = _ideal((20, 0, 0, 0), (0, 20, 0, 0), (0, 0, 20, 0), (0, 0, 0, 5))
+    series = hilbert_series(ideal)
+    reduced_degree = max(
+        (term.exponents[0] for term in series.series.numerator.terms),
+        default=0,
+    )
+    assert reduced_degree <= 61
+    assert series.denominator_exponent == 0
 
 
 def test_hilbert_series_result_binds_ambient_denominator_to_source_ring() -> None:

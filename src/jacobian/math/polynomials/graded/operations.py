@@ -205,6 +205,12 @@ def _compositions(degree: int, variables: int) -> tuple[tuple[int, ...], ...]:
 def standard_monomials(
     initial_ideal: RationalPolynomialIdeal, degree: int
 ) -> StandardMonomialsResult:
+    if type(degree) is not int:
+        raise OperationDomainValidationError(
+            location=("degree",),
+            code="graded_ideal.degree_type",
+            message="standard-monomial degree must be an integer",
+        )
     if degree < 0 or degree > MAX_GRADED_DEGREE:
         raise OperationResourceAdmissionError(
             location=("degree",),
@@ -298,6 +304,12 @@ def hilbert_function(
     *,
     resource_budget: IdealComputationBudget | None = None,
 ) -> HilbertFunctionResult:
+    if type(max_degree) is not int:
+        raise OperationDomainValidationError(
+            location=("max_degree",),
+            code="graded_ideal.degree_type",
+            message="Hilbert-function max_degree must be an integer",
+        )
     if max_degree < 0 or max_degree > MAX_GRADED_DEGREE:
         raise OperationResourceAdmissionError(
             location=("max_degree",),
@@ -337,16 +349,6 @@ def _admit_hilbert_series(
             location=("initial_ideal",),
             code="graded_ideal.axis",
             message="initial-ideal generators must use the complete ordered axis",
-        )
-    maximum_degree = sum(
-        max((generator[axis] for generator in generators), default=0)
-        for axis in range(len(initial_ideal.variables))
-    )
-    if maximum_degree > MAX_RATIONAL_FUNCTION_EXPONENT:
-        raise OperationResourceAdmissionError(
-            location=("initial_ideal",),
-            code="graded_ideal.series_degree_budget",
-            message="Hilbert-series numerator degree exceeds the rational-function envelope",
         )
     return generators
 
@@ -409,6 +411,20 @@ def _series_data(
         ("t",),
         maximum_terms=MAX_RATIONAL_FUNCTION_TERMS,
     )
+    reduced_degree = max(
+        (
+            max(term.exponents, default=0)
+            for polynomial in (series.numerator, series.denominator)
+            for term in polynomial.terms
+        ),
+        default=0,
+    )
+    if reduced_degree > MAX_RATIONAL_FUNCTION_EXPONENT:
+        raise OperationResourceAdmissionError(
+            location=("initial_ideal",),
+            code="graded_ideal.series_degree_budget",
+            message="Hilbert-series numerator degree exceeds the rational-function envelope",
+        )
     denominator_exponent = max(
         (term.exponents[0] for term in series.denominator.terms),
         default=0,
@@ -462,6 +478,12 @@ def hilbert_series(
     *,
     resource_budget: IdealComputationBudget | None = None,
 ) -> HilbertSeriesResult:
+    if type(prefix_degree) is not int:
+        raise OperationDomainValidationError(
+            location=("prefix_degree",),
+            code="graded_ideal.degree_type",
+            message="Hilbert-series prefix_degree must be an integer",
+        )
     if prefix_degree < 0 or prefix_degree > MAX_HILBERT_PREFIX:
         raise OperationResourceAdmissionError(
             location=("prefix_degree",),

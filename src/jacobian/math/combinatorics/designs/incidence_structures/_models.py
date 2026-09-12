@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from itertools import combinations
 from math import comb
 from typing import Literal, Self
 
@@ -39,6 +40,9 @@ MAX_TRADE_DIFFERENCES = MAX_POINTS + MAX_SUBSETS
 # bound covers both candidate generation and the recursive search state.
 MAX_STEINER_TRIPLE_ORDER = 15
 MAX_STEINER_SEARCH_STATES = 100_000
+MAX_STEINER_OUTPUT_BYTES = 64 * 1024
+_MAX_STEINER_WORK_UNITS = 600_000_000
+_MAX_STEINER_INTERMEDIATE_UNITS = 8_192
 
 _MAX_CONTAINMENT_TOTAL_WORK_UNITS = 4_000_000
 _MAX_TRADE_TOTAL_WORK_UNITS = 5_000_000
@@ -126,9 +130,33 @@ class IncidenceStructure(StrictModel):
 class SteinerTripleSystemRequest(StrictModel):
     """Construct an STS(v) through bounded exact pair-cover search."""
 
-    order: StrictInt = Field(ge=3, le=MAX_STEINER_TRIPLE_ORDER)
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Construct one canonical Steiner triple system of order v. "
+                "The order must be congruent to 1 or 3 modulo 6; a bounded "
+                "search may return UNKNOWN without a design when its state "
+                "budget is exhausted."
+            )
+        }
+    )
+
+    order: StrictInt = Field(
+        ge=3,
+        le=MAX_STEINER_TRIPLE_ORDER,
+        description=(
+            "Number of points; must be congruent to 1 or 3 modulo 6 and at "
+            f"most {MAX_STEINER_TRIPLE_ORDER}."
+        ),
+    )
     search_budget: StrictInt = Field(
-        default=MAX_STEINER_SEARCH_STATES, ge=1, le=MAX_STEINER_SEARCH_STATES
+        default=MAX_STEINER_SEARCH_STATES,
+        ge=1,
+        le=MAX_STEINER_SEARCH_STATES,
+        description=(
+            "Maximum exact-cover search states; exhaustion is reported as "
+            "UNKNOWN rather than as a failed construction."
+        ),
     )
 
     @model_validator(mode="after")
@@ -153,6 +181,11 @@ class SteinerTripleSystemResult(StrictModel):
 
     @model_validator(mode="after")
     def require_status_payload(self) -> Self:
+        if self.order % 6 not in (1, 3):
+            raise _validation_error(
+                "steiner_order_necessary_condition",
+                "a Steiner triple system requires order congruent to 1 or 3 modulo 6",
+            )
         if self.status == "COMPUTED":
             if self.design is None:
                 raise _validation_error(
@@ -169,12 +202,98 @@ class SteinerTripleSystemResult(StrictModel):
                     "steiner_design_block_count",
                     "design block count must equal v(v-1)/6",
                 )
+            expected_points = tuple(f"p{point}" for point in range(self.order))
+            expected_block_ids = tuple(f"b{index}" for index in range(expected_blocks))
+            if self.design.points != expected_points:
+                raise _validation_error(
+                    "steiner_design_point_axis",
+                    "computed designs must use the canonical point axis",
+                )
+            if self.design.block_ids != expected_block_ids:
+                raise _validation_error(
+                    "steiner_design_block_axis",
+                    "computed designs must use canonical block IDs",
+                )
+            if any(len(block) != 3 for block in self.design.blocks):
+                raise _validation_error(
+                    "steiner_block_size",
+                    "every Steiner block must contain exactly 3 points",
+                )
+            point_index = {point: index for index, point in enumerate(expected_points)}
+            block_indices = tuple(
+                tuple(point_index[point] for point in block)
+                for block in self.design.blocks
+            )
+            if block_indices != tuple(sorted(block_indices)):
+                raise _validation_error(
+                    "steiner_block_order",
+                    "computed blocks must be in canonical lexicographic order",
+                )
+            pair_multiplicity = dict.fromkeys(combinations(expected_points, 2), 0)
+            for block in self.design.blocks:
+                for pair in combinations(block, 2):
+                    pair_multiplicity[pair] += 1
+            if any(value != 1 for value in pair_multiplicity.values()):
+                raise _validation_error(
+                    "steiner_pair_multiplicity",
+                    "every point pair must occur in exactly one block",
+                )
         elif self.design is not None:
             raise _validation_error(
                 "steiner_noncomputed_design",
                 "non-COMPUTED outcomes cannot carry a design",
             )
         return self
+
+
+def _steiner_output_bytes_bound(order: int) -> int:
+    """Return a conservative JSON-size bound for the canonical result."""
+
+    block_count = order * (order - 1) // 6
+    # Canonical pN/bN labels are at most three bytes in the admitted range.
+    return 4_096 + 32 * order + 64 * block_count + 32 * 3 * block_count
+
+
+def _require_steiner_triple_system_admitted(order: int, search_budget: int) -> None:
+    """Admit all materialized construction work before the search starts."""
+
+    if not 3 <= order <= MAX_STEINER_TRIPLE_ORDER:
+        raise IncidenceStructureAdmissionError(
+            "steiner_order_out_of_range",
+            f"Steiner order must be between 3 and {MAX_STEINER_TRIPLE_ORDER}",
+        )
+    if order % 6 not in (1, 3):
+        raise IncidenceStructureAdmissionError(
+            "steiner_order_necessary_condition",
+            "a Steiner triple system requires order congruent to 1 or 3 modulo 6",
+        )
+    if not 1 <= search_budget <= MAX_STEINER_SEARCH_STATES:
+        raise IncidenceStructureAdmissionError(
+            "steiner_search_budget_out_of_range",
+            f"Steiner search budget must be between 1 and {MAX_STEINER_SEARCH_STATES}",
+        )
+    pair_count = comb(order, 2)
+    triple_count = comb(order, 3)
+    # Every state scans the uncovered-pair choices and candidate triples. The
+    # factor twelve covers the three pair incidences checked by each
+    # candidate, the candidate-count pass, and the branch feasibility check.
+    work_units = search_budget * (pair_count + 12 * triple_count)
+    if work_units > _MAX_STEINER_WORK_UNITS:
+        raise IncidenceStructureAdmissionError(
+            "steiner_work_budget_exceeded",
+            "Steiner construction exceeds the exact-cover work budget",
+        )
+    intermediate_units = triple_count + 3 * triple_count + pair_count
+    if intermediate_units > _MAX_STEINER_INTERMEDIATE_UNITS:
+        raise IncidenceStructureAdmissionError(
+            "steiner_intermediate_budget_exceeded",
+            "Steiner construction exceeds its candidate-family allocation budget",
+        )
+    if _steiner_output_bytes_bound(order) > MAX_STEINER_OUTPUT_BYTES:
+        raise IncidenceStructureAdmissionError(
+            "steiner_output_budget_exceeded",
+            "Steiner construction exceeds its exact output-size budget",
+        )
 
 
 def _subset_count(point_count: int, order: int) -> int:

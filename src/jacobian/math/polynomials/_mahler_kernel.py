@@ -28,6 +28,7 @@ from jacobian.math.number_theory.algebraic_numbers.real import (
     RealAlgebraicValue,
 )
 from jacobian.math.polynomials._mahler_models import (
+    MAX_MAHLER_COEFFICIENT_DIGITS,
     ContentPrimitiveProfileRequest,
     ContentPrimitiveProfileResult,
     MahlerAlgebraicValue,
@@ -241,11 +242,33 @@ def _admit_profile_result_digits(
         )
 
 
+def _admit_mahler_coefficient_digits(polynomial: IntegerPolynomial) -> None:
+    """Admit Mahler/quadratic coefficient height once after canonical parsing."""
+
+    if any(
+        len(format_canonical_integer(abs(coefficient))) > MAX_MAHLER_COEFFICIENT_DIGITS
+        for coefficient in polynomial.coefficients
+    ):
+        raise OperationResourceAdmissionError(
+            location=("polynomial",),
+            code="polynomial.mahler_coefficient_bound",
+            message="a profile polynomial coefficient exceeds the admitted digit bound",
+        )
+
+
 def content_primitive_profile(
     request: ContentPrimitiveProfileRequest,
 ) -> ContentPrimitiveProfileResult:
     coefficients = request.polynomial.coefficients
-    _require_nonzero_polynomial(coefficients, location=("polynomial",))
+    if not any(coefficients):
+        zero = IntegerPolynomial(coefficients=(0,))
+        return ContentPrimitiveProfileResult._from_kernel(
+            sign=1,
+            content=0,
+            primitive_part=zero,
+            degree=0,
+            reconstruction=zero,
+        )
     source_digits = _coefficient_digit_total(coefficients)
     # primitive_part and reconstruction each retain one coefficient tuple.
     _admit_profile_result_digits(
@@ -388,6 +411,7 @@ def _quadratic_root_data(
 def _quadratic_root_profile(
     request: RealQuadraticRootProfileRequest,
 ) -> RealQuadraticRootProfileResult:
+    _admit_mahler_coefficient_digits(request.polynomial)
     a, b, c = request.polynomial.coefficients
     if a == 0:
         raise OperationDomainValidationError(
@@ -421,6 +445,7 @@ def _abs_parts(value: _QuadraticParts) -> _QuadraticParts:
 
 
 def _mahler_measure(request: MahlerMeasureRequest) -> MahlerMeasureResult:
+    _admit_mahler_coefficient_digits(request.polynomial)
     coefficients = request.polynomial.coefficients
     leading = coefficients[0]
     roots: tuple[_QuadraticParts, ...]

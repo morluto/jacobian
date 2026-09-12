@@ -18,7 +18,6 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, ExactInteger
 from jacobian._models import StrictModel
-from jacobian.canonical import format_canonical_integer
 from jacobian.math.number_theory.algebraic_numbers.real import RealAlgebraicValue
 from jacobian.math.polynomials._models import IntegerPolynomial
 from jacobian.math.polynomials.values import MAX_POLYNOMIAL_TERMS
@@ -39,20 +38,12 @@ def _validation_error(code: str, message: str) -> PydanticCustomError:
 
 
 def _require_mahler_polynomial_envelope(polynomial: IntegerPolynomial) -> None:
-    """Enforce the profile execution limits on a canonical carrier value."""
+    """Enforce the structural Mahler/quadratic degree envelope."""
 
     if len(polynomial.coefficients) > MAX_MAHLER_DEGREE + 1:
         raise _validation_error(
             "polynomial.mahler_degree_bound",
             f"a profile polynomial has degree at most {MAX_MAHLER_DEGREE}",
-        )
-    if any(
-        len(format_canonical_integer(abs(coefficient))) > MAX_MAHLER_COEFFICIENT_DIGITS
-        for coefficient in polynomial.coefficients
-    ):
-        raise _validation_error(
-            "polynomial.mahler_coefficient_bound",
-            "a profile polynomial coefficient exceeds the admitted digit bound",
         )
 
 
@@ -69,6 +60,15 @@ class ContentPrimitiveProfileResult(StrictModel):
 
     @model_validator(mode="after")
     def require_structural_reconstruction(self) -> Self:
+        if self.primitive_part.coefficients == (0,) and self.reconstruction.coefficients == (
+            0,
+        ):
+            if self.content != 0 or self.degree != 0 or self.sign != 1:
+                raise _validation_error(
+                    "polynomial.mahler_zero_content_profile",
+                    "the zero polynomial has content 0, sign 1, and degree 0",
+                )
+            return self
         if self.content < 1:
             raise _validation_error(
                 "polynomial.mahler_content_positive",

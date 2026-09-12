@@ -12,6 +12,9 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.number_theory.algebraic_numbers.real import RealAlgebraicValue
+from jacobian.math.polynomials._elementary_kernel import (
+    integer_polynomial_primitive_part,
+)
 from jacobian.math.polynomials._mahler_kernel import (
     content_primitive_profile,
     mahler_measure,
@@ -19,6 +22,7 @@ from jacobian.math.polynomials._mahler_kernel import (
     reciprocal_profile,
 )
 from jacobian.math.polynomials._mahler_models import (
+    MAX_MAHLER_COEFFICIENT_DIGITS,
     MAX_MAHLER_DEGREE,
     ContentPrimitiveProfileRequest,
     ContentPrimitiveProfileResult,
@@ -95,6 +99,51 @@ def test_content_profile_retains_negative_source_sign() -> None:
     assert result.content == 6
     assert result.primitive_part.coefficients == (1, 0, -1)
     assert result.reconstruction.coefficients == (-6, 0, 6)
+
+
+def test_content_profile_matches_primitive_part_on_the_zero_polynomial() -> None:
+    zero = IntegerPolynomial(coefficients=(0,))
+    result = content_primitive_profile(ContentPrimitiveProfileRequest(polynomial=zero))
+    existing = integer_polynomial_primitive_part(zero)
+    assert result.content == 0
+    assert result.sign == 1
+    assert result.degree == 0
+    assert result.primitive_part.coefficients == (0,)
+    assert result.reconstruction.coefficients == (0,)
+    assert result.content == existing.content
+    assert result.primitive_part == existing.primitive_part
+    assert result.reconstruction == existing.reconstruction
+    restored = ContentPrimitiveProfileResult.model_validate_json(
+        encode_strict_json(result.model_dump(mode="json")), strict=True
+    )
+    assert restored == result
+
+
+def test_mahler_coefficient_digit_bound_is_an_admission_error() -> None:
+    oversized = 10**MAX_MAHLER_COEFFICIENT_DIGITS
+    request = MahlerMeasureRequest(
+        polynomial=IntegerPolynomial(coefficients=(oversized, -1, -1))
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="digit bound"):
+        mahler_measure(request)
+    quadratic = RealQuadraticRootProfileRequest(
+        polynomial=IntegerPolynomial(coefficients=(1, 0, oversized))
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="digit bound"):
+        quadratic_root_profile(quadratic)
+
+
+def test_mahler_result_does_not_replay_coefficient_digit_admission() -> None:
+    result = mahler_measure(
+        MahlerMeasureRequest(polynomial=IntegerPolynomial(coefficients=(1, -1, -1)))
+    )
+    forged = result.model_dump(mode="json")
+    forged["polynomial"]["coefficients"] = [str(10**MAX_MAHLER_COEFFICIENT_DIGITS), "-1", "-1"]
+    forged["leading_coefficient"] = str(10**MAX_MAHLER_COEFFICIENT_DIGITS)
+    restored = MahlerMeasureResult.model_validate_json(
+        encode_strict_json(forged), strict=True
+    )
+    assert restored.polynomial.coefficients[0] == 10**MAX_MAHLER_COEFFICIENT_DIGITS
 
 
 def test_reciprocal_profile_accepts_negative_leading_source() -> None:

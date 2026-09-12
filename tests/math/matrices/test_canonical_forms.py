@@ -205,6 +205,50 @@ def test_matrix_polynomial_remainder_accepts_bounded_high_degree_prefix() -> Non
     assert result.remainder.polynomial.terms[0].coefficient == R(num=1, den=1)
 
 
+def test_matrix_polynomial_remainder_rejects_cumulative_source_denominator_growth() -> (
+    None
+):
+    """Unrelated source denominators are admitted as one aggregate bound."""
+    from math import lcm
+
+    denominator_base = 10**164 * lcm(*range(1, 201))
+    denominators = tuple(denominator_base * index + 1 for index in range(1, 201))
+    polynomial = RationalPolynomial(
+        variables=("t",),
+        polynomial=SparseRationalPolynomial(
+            terms=tuple(
+                RationalPolynomialTerm(
+                    coefficient=R(num=1, den=denominator),
+                    exponents=(index,),
+                )
+                for index, denominator in reversed(tuple(enumerate(denominators)))
+            )
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="denominator"):
+        compute_matrix_polynomial_remainder(_diagonal(1), polynomial)
+
+
+def test_matrix_polynomial_remainder_accepts_sparse_zero_modulus_at_high_degree() -> (
+    None
+):
+    matrix = _diagonal(0)
+    polynomial = RationalPolynomial(
+        variables=("t",),
+        polynomial=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(coefficient=R(num=1, den=1), exponents=(2_311,)),
+            )
+        ),
+    )
+    result = compute_matrix_polynomial_remainder(matrix, polynomial)
+    assert _coeffs(result.minimal_polynomial) == [Fraction(0), Fraction(1)]
+    assert result.quotient.polynomial.terms == (
+        RationalPolynomialTerm(coefficient=R(num=1, den=1), exponents=(2_310,)),
+    )
+    assert result.remainder.polynomial.terms == ()
+
+
 def test_matrix_polynomial_remainder_accepts_maximum_size_constant() -> None:
     coefficient = R(num=10**32_767, den=1)
     polynomial = RationalPolynomial(

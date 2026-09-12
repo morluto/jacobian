@@ -19,6 +19,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.matrices.canonical_forms._models import (
+    _MAX_RESULT_COMPONENT,
     MATRIX_POLYNOMIAL_EVALUATION_PASSES,
     MAX_CANONICAL_FORM_DIMENSION,
     MAX_CANONICAL_FORM_SCALAR_DIGITS,
@@ -30,6 +31,9 @@ from jacobian.math.matrices.canonical_forms._models import (
     MonicPolynomial,
     PrimaryDecompositionResult,
     RationalCanonicalFormResult,
+    _capped_add,
+    _capped_lcm,
+    _capped_multiply,
     _polynomial_degree,
     _require_matrix_polynomial_output_budget,
     _validation_error,
@@ -562,6 +566,70 @@ def _divide_polynomials(
     )
 
 
+def _coefficient_growth_digits(
+    terms: Sequence[RationalPolynomialTerm],
+) -> int | None:
+    """Bound one coefficient family's common-denominator aggregate height.
+
+    A quotient coefficient can collect contributions from several source
+    coefficients. Charging only the largest source component therefore misses
+    the product of unrelated denominators (and the corresponding sum of
+    lifted numerators). Keep the common denominator and absolute lifted
+    numerator sum capped at one canonical rational component; callers reject a
+    saturated result before division starts.
+    """
+
+    common_denominator = _capped_lcm(term.coefficient.den for term in terms)
+    if common_denominator > _MAX_RESULT_COMPONENT:
+        return None
+    aggregate_numerator = 0
+    for term in terms:
+        coefficient = term.coefficient
+        lifted = _capped_multiply(
+            abs(coefficient.num), common_denominator // coefficient.den
+        )
+        aggregate_numerator = _capped_add(aggregate_numerator, lifted)
+        if aggregate_numerator > _MAX_RESULT_COMPONENT:
+            return None
+    return max(
+        _integer_decimal_digits(common_denominator),
+        _integer_decimal_digits(aggregate_numerator),
+        max(
+            (canonical_rational_component_digits(term.coefficient) for term in terms),
+            default=1,
+        ),
+    )
+
+
+def _division_support_bound(
+    polynomial: RationalPolynomial, divisor: MonicPolynomial
+) -> int:
+    """Return an upper bound on quotient support before rational division.
+
+    Long division can create a lower-degree term at every cancellation. A
+    support-only simulation follows those possible shifts while ignoring
+    coefficient cancellation, so its count safely bounds the canonical
+    quotient carrier without materializing any exact rational intermediate.
+    Monomial moduli take the particularly useful fast path: their support has
+    no lower shifts, so a high-degree monomial remains one quotient term.
+    """
+
+    remaining = {term.exponents[0] for term in polynomial.polynomial.terms}
+    divisor_terms = divisor.polynomial.terms
+    divisor_degree = divisor_terms[0].exponents[0]
+    lower_support = {term.exponents[0] for term in divisor_terms[1:]}
+    quotient_support: set[int] = set()
+    while remaining:
+        degree = max(remaining)
+        if degree < divisor_degree:
+            break
+        remaining.remove(degree)
+        shift = degree - divisor_degree
+        quotient_support.add(shift)
+        remaining.update(shift + exponent for exponent in lower_support)
+    return len(quotient_support)
+
+
 def reduce_matrix_polynomial(
     matrix: RationalMatrix, polynomial: RationalPolynomial
 ) -> tuple[MonicPolynomial, RationalPolynomial, RationalPolynomial]:
@@ -591,13 +659,6 @@ def reduce_matrix_polynomial(
     source_degree = max(
         (term.exponents[0] for term in polynomial.polynomial.terms), default=0
     )
-    source_digits = max(
-        (
-            canonical_rational_component_digits(term.coefficient)
-            for term in polynomial.polynomial.terms
-        ),
-        default=1,
-    )
     # A zero or constant source needs no Euclidean quotient-growth work.  Keep
     # the square-matrix admission above and still compute the minimal
     # polynomial, which is part of this operation's result, before returning
@@ -612,38 +673,70 @@ def reduce_matrix_polynomial(
             _polynomial_from_coefficients((), polynomial.variables[0]),
             polynomial,
         )
-    # Euclidean division can fill every degree from zero through the leading
-    # quotient degree. Reject a quotient whose canonical sparse carrier could
-    # not hold that complete support before computing the matrix modulus.
-    if source_degree > MAX_POLYNOMIAL_TERMS:
+    # The matrix admission above bounds the Krylov computation. Compute this
+    # operation's actual modulus before estimating quotient growth: its degree
+    # and nonzero support, rather than the dense characteristic envelope, are
+    # the quantities the Euclidean division will use.
+    minimal_coefficients = _minimal_polynomial_coefficients(_matrix_entries(matrix))
+    minimal = _to_monic_polynomial(
+        minimal_coefficients, variable=polynomial.variables[0]
+    )
+    minimal_terms = minimal.polynomial.terms
+    minimal_degree = minimal_terms[0].exponents[0]
+    if source_degree < minimal_degree:
+        return (
+            minimal,
+            _polynomial_from_coefficients((), polynomial.variables[0]),
+            polynomial,
+        )
+
+    # The support-only division ledger is tighter than charging every degree
+    # through the source exponent. In particular, t^D divided by t has one
+    # quotient term for any admitted exponent D.
+    quotient_support = _division_support_bound(polynomial, minimal)
+    if quotient_support > MAX_POLYNOMIAL_TERMS:
         raise OperationResourceAdmissionError(
             location=("polynomial",),
             code="matrix.polynomial.remainder.output",
             message="polynomial remainder quotient support exceeds the canonical term bound",
         )
-    # The characteristic polynomial bounds the minimal polynomial degree by n.
-    # Clearing all n-entry products gives a coefficient-height bound of
-    # n*(entry-height + 2) + ceil(log10(n+1)); the larger additive slack also
-    # covers rational Krylov elimination used by the private producer.
-    dimension = matrix.row_count
-    matrix_digits = max(
-        (
-            canonical_rational_component_digits(entry)
-            for row in matrix.entries
-            for entry in row
-        ),
-        default=1,
-    )
-    minimal_digits_bound = dimension * (matrix_digits + 2) + dimension.bit_length() + 2
-    # A recurrence step adds at most one minimal-polynomial coefficient times
-    # a previous quotient coefficient. This is intentionally an upper bound:
-    # it charges every source-degree step even when the source is sparse or
-    # cancellation later reduces the exact result.
-    estimated_digits = source_digits + (source_degree + 1) * (
-        minimal_digits_bound + dimension.bit_length() + 2
+
+    # A monomial modulus only shifts source terms. There are no coefficient
+    # products or accumulations to charge, so high exponents retain the source
+    # component bound and the support ledger above is sufficient.
+    if len(minimal_terms) == 1:
+        quotient, remainder = _divide_polynomials(polynomial, minimal)
+        return minimal, quotient, remainder
+
+    source_height = _coefficient_growth_digits(polynomial.polynomial.terms)
+    modulus_height = _coefficient_growth_digits(minimal_terms)
+    if source_height is None or modulus_height is None:
+        raise OperationResourceAdmissionError(
+            location=("polynomial",),
+            code="matrix.polynomial.remainder.output",
+            message=(
+                "matrix polynomial coefficient common-denominator or aggregate "
+                "growth exceeds the canonical "
+                f"{MAX_CANONICAL_RATIONAL_DIGITS:,}-digit exact-arithmetic bound"
+            ),
+        )
+
+    quotient_degree = source_degree - minimal_degree
+    division_steps = quotient_degree + 1
+    nonleading_support = len(minimal_terms) - 1
+    support_digits = _integer_decimal_digits(max(1, nonleading_support))
+    # Each recurrence step multiplies by at most one modulus coefficient and
+    # may collect the supported lower shifts. The common-denominator and
+    # aggregate numerator heights account for unrelated source/modulus
+    # denominators before this recurrence charge is applied.
+    estimated_digits = source_height + division_steps * (
+        modulus_height + support_digits + 1
     )
     digit_work = (
-        len(polynomial.polynomial.terms) * (source_degree + 1) * (estimated_digits**2)
+        len(polynomial.polynomial.terms)
+        * division_steps
+        * max(1, nonleading_support)
+        * (estimated_digits**2)
     )
     if estimated_digits > MAX_CANONICAL_RATIONAL_DIGITS or (
         digit_work > MAX_MATRIX_POLYNOMIAL_REMAINDER_DIGIT_WORK
@@ -653,10 +746,6 @@ def reduce_matrix_polynomial(
             code="matrix.polynomial.remainder.output",
             message="polynomial remainder quotient growth exceeds the admitted exact-arithmetic bound",
         )
-    minimal_coefficients = _minimal_polynomial_coefficients(_matrix_entries(matrix))
-    minimal = _to_monic_polynomial(
-        minimal_coefficients, variable=polynomial.variables[0]
-    )
     quotient, remainder = _divide_polynomials(polynomial, minimal)
     return minimal, quotient, remainder
 

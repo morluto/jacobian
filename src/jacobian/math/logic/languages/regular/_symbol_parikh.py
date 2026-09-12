@@ -129,7 +129,11 @@ def _letter_actions_commute(
         for first in alphabet:
             image_first = outgoing.get(first)
             first_reachable = image_first is not None and image_first in reachable
-            first_outgoing = by_source.get(image_first, {}) if first_reachable else {}
+            first_outgoing = (
+                by_source.get(image_first, {})
+                if first_reachable and image_first is not None
+                else {}
+            )
             for second in alphabet:
                 compared += 1
                 if not commute:
@@ -153,7 +157,7 @@ def _reachable_letter_graph(
     reachable: set[int],
     alphabet_size: int,
 ) -> dict[int, set[int]]:
-    graph = {state: set() for state in reachable}
+    graph: dict[int, set[int]] = {state: set() for state in reachable}
     for source in reachable:
         outgoing = by_source.get(source, {})
         for symbol in range(alphabet_size):

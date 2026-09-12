@@ -14,5 +14,6 @@ the matrices needed to inspect (D = UAV) in the returned value; it does not
 publish a record or require later retrieval.
 
 - [Exact rational matrix determinants](matrix-rational-determinant.md)
+- [Exact inertia cells for polynomial matrices](polynomial-inertia-cells.md)
 - [Exact subsystem-aware Hermitian matrices](subsystem-hermitian-matrices.md)
 - [Exact symbolic matrix products](matrix-symbolic-products.md)

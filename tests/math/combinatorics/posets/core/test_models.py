@@ -335,6 +335,26 @@ def test_consumers_reject_duck_typed_ordered_pair_carriers_as_domain_errors() ->
         width(forged)
 
 
+def test_consumers_reject_equality_forging_digest_subclasses_as_domain_errors() -> None:
+    class AlwaysEqualDigest(str):
+        def __eq__(self, other: object) -> bool:
+            return True
+
+        def __hash__(self) -> int:
+            return hash(str(self))
+
+    poset = _materialize(["a", "b"], [("a", "b")])
+    forged_digest = AlwaysEqualDigest("sha256:" + "0" * 64)
+    forged = poset.model_copy(update={"poset_digest": forged_digest})
+
+    assert type(forged.poset_digest) is not str
+    assert forged.poset_digest == poset.poset_digest
+    assert poset.poset_digest != "sha256:" + "0" * 64
+    assert verify_finite_poset(forged) is False
+    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+        width(forged)
+
+
 def test_consumers_reject_boolean_rank_claims_as_domain_errors() -> None:
     poset = _materialize(["a", "b"], [("a", "b")])
     forged_ranks = tuple(

@@ -5,9 +5,10 @@ from __future__ import annotations
 import importlib
 from typing import Any, Literal
 
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 from pydantic_core import PydanticCustomError
 
+from jacobian._digest import Sha256Digest
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.posets.core._closure_kernel import (
     dual_poset as _dual_poset_kernel,
@@ -154,6 +155,9 @@ def _revalidated_ranks(ranks: object) -> tuple[ElementRank, ...] | None:
     )
 
 
+_SHA256_DIGEST = TypeAdapter(Sha256Digest)
+
+
 def _canonical_ordered_pairs(pairs: object) -> tuple[OrderedPair, ...]:
     if type(pairs) is not tuple:
         raise TypeError("order pairs must be a tuple")
@@ -163,6 +167,12 @@ def _canonical_ordered_pairs(pairs: object) -> tuple[OrderedPair, ...]:
             raise TypeError("order pairs must use the canonical OrderedPair type")
         canonical.append(entry)
     return tuple(canonical)
+
+
+def _canonical_poset_digest(digest: object) -> str:
+    if type(digest) is not str:
+        raise TypeError("poset_digest must be a canonical sha256 string")
+    return _SHA256_DIGEST.validate_python(digest, strict=True)
 
 
 def _canonical_claims_match(
@@ -212,7 +222,14 @@ def _canonical_claims_match(
             expected_maximal,
             reduction,
         )
-    except (AttributeError, PydanticCustomError, TypeError, ValueError):
+        authored_digest = _canonical_poset_digest(poset.poset_digest)
+    except (
+        AttributeError,
+        PydanticCustomError,
+        TypeError,
+        ValidationError,
+        ValueError,
+    ):
         return False
     return (
         finite_poset_digest(
@@ -225,7 +242,7 @@ def _canonical_claims_match(
             graded=poset.graded,
             ranks=poset.ranks,
         )
-        == poset.poset_digest
+        == authored_digest
     )
 
 
@@ -301,19 +318,16 @@ def verify_finite_poset(poset: FinitePoset) -> bool:
             expected_maximal,
             reduction,
         )
-        return (
-            finite_poset_digest(
-                elements=poset.elements,
-                strict_order_pairs=poset.strict_order_pairs,
-                cover_relations=poset.cover_relations,
-                incomparable_pairs=poset.incomparable_pairs,
-                minimal_elements=poset.minimal_elements,
-                maximal_elements=poset.maximal_elements,
-                graded=poset.graded,
-                ranks=poset.ranks,
-            )
-            == poset.poset_digest
-        )
+        return finite_poset_digest(
+            elements=poset.elements,
+            strict_order_pairs=poset.strict_order_pairs,
+            cover_relations=poset.cover_relations,
+            incomparable_pairs=poset.incomparable_pairs,
+            minimal_elements=poset.minimal_elements,
+            maximal_elements=poset.maximal_elements,
+            graded=poset.graded,
+            ranks=poset.ranks,
+        ) == _canonical_poset_digest(poset.poset_digest)
     except (
         AttributeError,
         OperationDomainValidationError,

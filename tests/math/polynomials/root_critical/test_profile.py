@@ -105,6 +105,52 @@ def test_request_wire_model_is_not_a_native_export() -> None:
     assert profile.pairs
 
 
+def test_primitive_derivative_factor_height_is_admitted() -> None:
+    scale = 10**128 - 1
+    source = RationalPolynomial(
+        variables=("z",),
+        polynomial=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=scale, den=1),
+                    exponents=(2,),
+                ),
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=1, den=scale),
+                    exponents=(1,),
+                ),
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=1, den=1),
+                    exponents=(0,),
+                ),
+            )
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        root_critical_distance_profile(source)
+    assert (
+        error.value.errors()[0]["type"]
+        == "polynomial.root_critical.factor_coefficient_bound"
+    )
+
+
+def test_cube_root_cubic_profile_is_admitted() -> None:
+    result = root_critical_distance_profile(_polynomial((3, 1), (0, -2)))
+    assert len(result.roots) == 3
+    assert len(result.critical_points) == 1
+    assert len(result.pairs) == 3
+    assert all(row.kind == "POSITIVE" for row in result.pairs)
+
+
+def test_conjugate_distance_degree_is_admitted() -> None:
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        root_critical_distance_profile(_polynomial((4, 1), (1, 1), (0, 1)))
+    assert (
+        error.value.errors()[0]["type"]
+        == "polynomial.root_critical.distance_degree_bound"
+    )
+
+
 def test_factor_coefficients_are_canonical_decimal_integers() -> None:
     import json
 

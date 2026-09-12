@@ -28,6 +28,7 @@ from jacobian.math.polynomials.root_critical._models import (
     MAX_ROOT_CRITICAL_DEGREE,
     MAX_ROOT_CRITICAL_DISTANCE_DEGREE,
     MAX_ROOT_CRITICAL_PAIRS,
+    MAX_ROOT_CRITICAL_ROOT_COMPONENT_DIGITS,
     RootCriticalDistanceProfile,
     RootCriticalDistanceRow,
     RootCriticalRectangle,
@@ -165,6 +166,58 @@ def _family(
     return tuple(records), tuple(values)
 
 
+<<<<<<< Updated upstream
+=======
+def _integer_nth_root(value: int, n: int) -> int:
+    if value < 0:
+        raise ValueError("integer nth root requires a nonnegative radicand")
+    if value in (0, 1) or n == 1:
+        return value
+    high = 1 << ((value.bit_length() + n - 1) // n)
+    low = 0
+    while low < high:
+        mid = (low + high + 1) // 2
+        if mid**n <= value:
+            low = mid
+        else:
+            high = mid - 1
+    return low
+
+
+def _sqrt_bounds(value: Fraction) -> tuple[Fraction, Fraction]:
+    if value < 0:
+        raise ValueError("certified square root requires a nonnegative radicand")
+    if value == 0:
+        return Fraction(), Fraction()
+    scaled = value.numerator * value.denominator
+    root = isqrt(scaled)
+    lower = Fraction(root, value.denominator)
+    if root * root == scaled:
+        return lower, lower
+    return lower, Fraction(root + 1, value.denominator)
+
+
+def _nth_root_bounds(value: Fraction, n: int) -> tuple[Fraction, Fraction]:
+    if n < 1:
+        raise ValueError("certified nth root requires a positive integer index")
+    if n == 2:
+        return _sqrt_bounds(value)
+    if value < 0:
+        if n % 2 == 0:
+            raise ValueError("certified even root requires a nonnegative radicand")
+        lower, upper = _nth_root_bounds(-value, n)
+        return -upper, -lower
+    if value == 0:
+        return Fraction(), Fraction()
+    scaled = value.numerator * (value.denominator ** (n - 1))
+    root = _integer_nth_root(scaled, n)
+    lower = Fraction(root, value.denominator)
+    if root**n == scaled:
+        return lower, lower
+    return lower, Fraction(root + 1, value.denominator)
+
+
+>>>>>>> Stashed changes
 def _enclose_add(expr: Any) -> tuple[Fraction, Fraction, Fraction, Fraction]:
     real_lo = real_hi = imag_lo = imag_hi = Fraction()
     first = True
@@ -242,6 +295,7 @@ def _enclose_pow(expr: Any) -> tuple[Fraction, Fraction, Fraction, Fraction]:
     if exponent == 2:
         r0, r1, i0, i1 = _enclose_sympy(base)
         return _square_box(r0, r1, i0, i1)
+<<<<<<< Updated upstream
     if getattr(exponent, "is_Rational", False) or isinstance(exponent, Fraction):
         numerator = int(exponent.p if hasattr(exponent, "p") else exponent.numerator)
         denominator = int(exponent.q if hasattr(exponent, "q") else exponent.denominator)
@@ -270,6 +324,17 @@ def _enclose_pow(expr: Any) -> tuple[Fraction, Fraction, Fraction, Fraction]:
                 if remaining:
                     factor = _multiply_boxes(factor, factor)
             return power_result
+=======
+    if getattr(exponent, "is_Rational", False) and exponent.p == 1 and exponent.q > 1:
+        r0, r1, i0, i1 = _enclose_sympy(base)
+        index = int(exponent.q)
+        if i0 != 0 or i1 != 0:
+            raise ValueError("certified root requires a real box")
+        if index == 2 and r0 < 0:
+            raise ValueError("certified square root requires a nonnegative real box")
+        lower, upper = _nth_root_bounds(r0, index)[0], _nth_root_bounds(r1, index)[1]
+        return lower, upper, Fraction(), Fraction()
+>>>>>>> Stashed changes
     if getattr(exponent, "is_Integer", False):
         power = int(exponent)
         if power < 0:
@@ -512,6 +577,24 @@ def _admit(
     source_factors = source.factor_list()[1]
     derivative_backend = source.diff()
     derivative_factors = derivative_backend.factor_list()[1] if critical_degree else ()
+    for factor, _ in (*source_factors, *derivative_factors):
+        primitive = _primitive_integer_poly(factor)
+        digits = max(
+            (
+                len(format_canonical_integer(abs(int(coefficient))))
+                for coefficient in primitive.all_coeffs()
+            ),
+            default=1,
+        )
+        if digits > MAX_ROOT_CRITICAL_ROOT_COMPONENT_DIGITS:
+            raise OperationResourceAdmissionError(
+                location=("polynomial",),
+                code="polynomial.root_critical.factor_coefficient_bound",
+                message=(
+                    "a primitive source or derivative factor exceeds the "
+                    "admitted exact root-component digit envelope"
+                ),
+            )
     if any(factor.degree() > 4 for factor, _ in (*source_factors, *derivative_factors)):
         raise OperationResourceAdmissionError(
             location=("polynomial",),
@@ -526,10 +609,14 @@ def _admit(
     )
     max_distance_degree = max(
         (
+<<<<<<< Updated upstream
             _conjugate_field_multiplier(source_factor)
             * source_factor.degree()
             * _conjugate_field_multiplier(critical_factor)
             * critical_factor.degree()
+=======
+            4 * source_factor.degree() * critical_factor.degree()
+>>>>>>> Stashed changes
             for source_factor, _ in source_factors
             for critical_factor, _ in derivative_factors
         ),

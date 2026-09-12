@@ -11,6 +11,7 @@ from jacobian.catalog.models import (
 from jacobian.math.probability._berry_esseen import (
     BERRY_ESSEEN_CONSTANT,
     BERRY_ESSEEN_THEOREM_VARIANT,
+    MAX_BERRY_ESSEEN_ATOMS,
     MAX_BERRY_ESSEEN_SAMPLE_COUNT,
     BerryEsseenRequest,
     BerryEsseenResult,
@@ -19,11 +20,14 @@ from jacobian.math.probability._berry_esseen import (
 from jacobian.math.probability._berry_esseen_tools import BERRY_ESSEEN_OPERATION
 
 
-def _distribution(*atoms: tuple[int, Fraction]) -> dict[str, object]:
+def _distribution(*atoms: tuple[int | Fraction, Fraction]) -> dict[str, object]:
     return {
         "atoms": [
             {
-                "value": {"num": value, "den": 1},
+                "value": {
+                    "num": Fraction(value).numerator,
+                    "den": Fraction(value).denominator,
+                },
                 "probability": {
                     "num": probability.numerator,
                     "den": probability.denominator,
@@ -136,6 +140,43 @@ def test_sample_count_schema_exposes_admission_bounds() -> None:
     assert schema["maximum"] == MAX_BERRY_ESSEEN_SAMPLE_COUNT
 
 
+def test_atom_count_boundary_is_admitted_and_overflow_is_preflighted() -> None:
+    count = MAX_BERRY_ESSEEN_ATOMS
+    distribution = _distribution(
+        *((value, Fraction(1, count)) for value in range(count))
+    )
+    assert (
+        len(berry_esseen_bound(_request(distribution)).source.distribution.atoms)
+        == count
+    )
+
+    over_bound = _request(
+        _distribution(*((value, Fraction(1, count + 1)) for value in range(count + 1)))
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="atom"):
+        berry_esseen_bound(over_bound)
+
+
+def test_input_rational_height_boundary_is_enforced() -> None:
+    denominator = 10**127 + 19
+    first_value = Fraction(1, denominator)
+    second_value = Fraction(denominator + 1, denominator)
+    accepted = berry_esseen_bound(
+        _request(
+            _distribution(
+                (first_value, Fraction(1, 2)),
+                (second_value, Fraction(1, 2)),
+            )
+        )
+    )
+    assert accepted.source.distribution.atoms[-1].value.as_fraction() == second_value
+
+    with pytest.raises(OperationDomainValidationError, match="128-digit bound"):
+        berry_esseen_bound(
+            _request(_distribution((0, Fraction(1, 2)), (10**128, Fraction(1, 2))))
+        )
+
+
 def test_serialized_result_preserves_source_and_interval_invariants() -> None:
     result = berry_esseen_bound(_request(_five_atom_oracle_distribution(), 7))
     restored = BerryEsseenResult.model_validate_json(result.model_dump_json())
@@ -147,6 +188,40 @@ def test_serialized_result_preserves_source_and_interval_invariants() -> None:
     assert restored.source == result.source
     assert lower <= upper
     assert lower * lower <= squared <= upper * upper
+
+
+def test_result_requires_consecutive_dyadic_grid_endpoints() -> None:
+    genuine = berry_esseen_bound(_request(_five_atom_oracle_distribution(), 7))
+    payload = genuine.model_dump()
+    payload["bound_squared"] = {"num": 1, "den": 4}
+    payload["bound_lower"] = {"num": 0, "den": 1}
+    payload["bound_upper"] = {"num": 1, "den": 1}
+
+    with pytest.raises(ValueError, match="consecutive"):
+        BerryEsseenResult.model_validate(payload)
+
+
+def test_result_allows_exact_nondyadic_rational_singleton() -> None:
+    genuine = berry_esseen_bound(
+        _request(_distribution((0, Fraction(1, 2)), (1, Fraction(1, 2))))
+    )
+    payload = genuine.model_dump()
+    payload["bound_squared"] = {"num": 196, "den": 625}
+    payload["bound_lower"] = {"num": 14, "den": 25}
+    payload["bound_upper"] = {"num": 14, "den": 25}
+
+    restored = BerryEsseenResult.model_validate(payload)
+    assert restored.bound_lower == restored.bound_upper
+    assert restored.bound_lower.as_fraction() == Fraction(14, 25)
+
+
+def test_result_enforces_owner_rational_height_bound() -> None:
+    genuine = berry_esseen_bound(_request(_five_atom_oracle_distribution(), 7))
+    payload = genuine.model_dump()
+    payload["mean"] = {"num": 1, "den": 10**512}
+
+    with pytest.raises(ValueError, match="512-digit bound"):
+        BerryEsseenResult.model_validate(payload)
 
 
 @pytest.mark.parametrize(
@@ -187,5 +262,8 @@ def test_operation_declaration_pins_iid_constant_and_contract() -> None:
     )
     assert "general-independent constant" in BERRY_ESSEEN_OPERATION.description
     assert "0.5600" in BERRY_ESSEEN_OPERATION.description
+    assert "16,384 atoms" in BERRY_ESSEEN_OPERATION.description
+    assert "128 decimal digits" in BERRY_ESSEEN_OPERATION.description
+    assert "512 decimal digits" in BERRY_ESSEEN_OPERATION.description
     assert BERRY_ESSEEN_OPERATION.request_type is BerryEsseenRequest
     assert BERRY_ESSEEN_OPERATION.result_type is BerryEsseenResult

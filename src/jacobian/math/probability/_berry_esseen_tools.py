@@ -22,7 +22,9 @@ BERRY_ESSEEN_OPERATION = MathTool(
         "sample count n, return exact source mean, variance, and third absolute "
         "central moment and the outward-rounded bound C*rho/(sigma^3*sqrt(n)) "
         "using Shevtsova's published general-independent constant C=0.5600=14/25 "
-        "as a valid specialization to the i.i.d. request."
+        "as a valid specialization to the i.i.d. request. Admission envelope: "
+        "at most 16,384 atoms, 128 decimal digits per input rational component, "
+        "and 512 decimal digits per intermediate or result rational component."
     ),
     request_type=BerryEsseenRequest,
     result_type=BerryEsseenResult,

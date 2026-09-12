@@ -89,6 +89,24 @@ class BerryEsseenResult(StrictModel):
         if self.bound_precision_bits != BERRY_ESSEEN_BOUND_BITS:
             raise _validation_error("Berry--Esseen bound precision is not supported")
 
+        for label, value in (
+            ("Berry--Esseen universal constant", self.universal_constant),
+            ("Berry--Esseen mean", self.mean),
+            ("Berry--Esseen variance", self.variance),
+            (
+                "Berry--Esseen third absolute central moment",
+                self.third_absolute_central_moment,
+            ),
+            ("Berry--Esseen squared bound", self.bound_squared),
+            ("Berry--Esseen lower bound", self.bound_lower),
+            ("Berry--Esseen upper bound", self.bound_upper),
+        ):
+            _require_bounded_fraction(
+                value.as_fraction(),
+                max_digits=MAX_RESULT_RATIONAL_DIGITS,
+                label=label,
+            )
+
         variance = self.variance.as_fraction()
         third = self.third_absolute_central_moment.as_fraction()
         bound_squared = self.bound_squared.as_fraction()
@@ -109,6 +127,21 @@ class BerryEsseenResult(StrictModel):
         if not lower * lower <= bound_squared <= upper * upper:
             raise _validation_error(
                 "Berry--Esseen outward interval must enclose the squared bound"
+            )
+        # An exact rational square root is represented as a singleton, even
+        # when its reduced denominator is not a power of two. Otherwise the
+        # endpoints are consecutive points on the advertised dyadic grid.
+        if lower == upper:
+            return self
+        grid_scale = 1 << self.bound_precision_bits
+        if (
+            (lower * grid_scale).denominator != 1
+            or (upper * grid_scale).denominator != 1
+            or upper - lower != Fraction(1, grid_scale)
+        ):
+            raise _validation_error(
+                "Berry--Esseen non-singleton bound endpoints must be consecutive "
+                "points on the 2^-bound_precision_bits grid"
             )
         return self
 

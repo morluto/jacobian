@@ -7,7 +7,7 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
-from jacobian._exact import CanonicalRational, MAX_CANONICAL_INTEGER_DIGITS
+from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS, CanonicalRational
 from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
@@ -273,7 +273,10 @@ def test_mixed_denominator_widths_are_preflighted_without_scaled_copies() -> Non
 
 
 def test_oversized_integer_wire_entries_are_rejected_before_parsing() -> None:
-    payload = {"domain": "rational", "values": ["1" * (MAX_CANONICAL_INTEGER_DIGITS + 1)]}
+    payload = {
+        "domain": "rational",
+        "values": ["1" * (MAX_CANONICAL_INTEGER_DIGITS + 1)],
+    }
     with pytest.raises(ValidationError, match="digit"):
         FiniteRationalSequence.model_validate(payload)
 

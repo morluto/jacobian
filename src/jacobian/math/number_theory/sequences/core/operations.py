@@ -172,11 +172,7 @@ def _admit_autocorrelation(
         if current is None or numerator > current:
             widest_numerator[value.denominator] = numerator
     common_numerator_digits = max(
-        len(
-            format_canonical_integer(
-                numerator * (common_denominator // denominator)
-            )
-        )
+        len(format_canonical_integer(numerator * (common_denominator // denominator)))
         for denominator, numerator in widest_numerator.items()
     )
     denominator_digits = len(format_canonical_integer(common_denominator))

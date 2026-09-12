@@ -63,9 +63,7 @@ def test_schur_result_is_bound_and_verifiable() -> None:
 def test_native_schur_rejects_oversized_variable_axis_before_label_validation() -> None:
     labels = tuple(f"x{index}" for index in range(21))
 
-    with pytest.raises(
-        OperationDomainValidationError, match="same length"
-    ):
+    with pytest.raises(OperationDomainValidationError, match="same length"):
         schur_evaluation(IntegerPartition(parts=(1,)), (1,), labels)
 
 

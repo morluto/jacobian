@@ -3,6 +3,11 @@
 from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.math.geometry.algebraic_curves._arclength import enclose_arclength
+from jacobian.math.geometry.algebraic_curves._arclength_models import (
+    PlaneCurveArclengthRequest,
+    PlaneCurveArclengthResult,
+)
 from jacobian.math.geometry.algebraic_curves._gaussian_realification import (
     GaussianRealificationRequest,
     GaussianRealificationResult,
@@ -27,6 +32,14 @@ from jacobian.math.geometry.algebraic_curves.operations import (
     rational_conic_parametrization,
     singularity_profile,
 )
+
+
+def compute_plane_curve_arclength(
+    request: PlaneCurveArclengthRequest,
+) -> PlaneCurveArclengthResult:
+    """Run the native arclength operation through its typed public request."""
+
+    return enclose_arclength(request)
 
 
 def compute_affine_curve_check(request: AffineCurveRequest) -> AffineCurveResult:
@@ -116,6 +129,46 @@ def _polynomial(
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    MathTool(
+        operation_id="real_algebraic.plane_curve.arclength.enclose",
+        title="Enclose the arclength of a bounded regular plane curve",
+        description=(
+            "Return a source-bound rational enclosure of the one-dimensional "
+            "Hausdorff length of a regular quadratic plane curve inside a closed "
+            "rational box. The first validated envelope admits positive diagonal "
+            "quadratics (axis-aligned ellipses), exact empty constants, and "
+            "transverse rational parameter intersections. Singular, unresolved, "
+            "or incomplete work is typed and never serialized as ENCLOSED."
+        ),
+        request_type=PlaneCurveArclengthRequest,
+        result_type=PlaneCurveArclengthResult,
+        run=enclose_arclength,
+        tags=("real-algebraic", "plane-curve", "arclength", "validated", "arb", "enclosure"),
+        examples=(
+            OperationExample(
+                name="unit_circle",
+                description="Enclose the unit-circle length inside a containing box.",
+                input={
+                    "polynomial": _polynomial(
+                        ("x", "y"),
+                        (1, (2, 0)),
+                        (1, (0, 2)),
+                        (-1, (0, 0)),
+                    ),
+                    "box": {
+                        "domain": "QQ",
+                        "variables": ["x", "y"],
+                        "intervals": [
+                            {"lower": {"num": "-2", "den": "1"}, "upper": {"num": "2", "den": "1"}},
+                            {"lower": {"num": "-2", "den": "1"}, "upper": {"num": "2", "den": "1"}},
+                        ],
+                    },
+                    "target_width": {"num": "1", "den": "100"},
+                    "resource_budget": {"precision_bits": 192, "max_segments": 128, "wall_seconds": 60},
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="algebraic_geometry.projective_plane_curve.singularity_profile.compute",
         title="Compute a projective plane-curve singularity profile",

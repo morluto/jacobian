@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+from collections.abc import Callable
 
 import pytest
 from pydantic import ValidationError
@@ -218,7 +219,9 @@ def test_public_kernels_reject_perfect_square() -> None:
     ("operation", "argument"),
     [(continued_fraction, 5_001), (convergents, 5_001)],
 )
-def test_public_kernels_reject_unbounded_prefix_requests(operation, argument) -> None:
+def test_public_kernels_reject_unbounded_prefix_requests(
+    operation: Callable[[int, int], object], argument: int
+) -> None:
     """Native callers share the materialized-prefix bound of the public models."""
     with pytest.raises(OperationDomainValidationError, match="between 1 and 5000"):
         operation(2, argument)

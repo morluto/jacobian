@@ -136,3 +136,13 @@ def test_catalog_declaration_uses_requested_operation_id_and_round_trips() -> No
         result.model_dump_json()
     )
     assert decoded == result
+
+
+def test_result_rejects_forged_nonunit_e_zero_without_replaying_the_family() -> None:
+    result = elementary_symmetric_family(
+        ElementarySymmetricFamilyRequest(variables=("x", "y"), maximum_degree=1)
+    )
+    forged = result.model_dump()
+    forged["polynomials"][0]["polynomial"]["terms"][0]["coefficient"]["num"] = 2
+    with pytest.raises(ValidationError, match="canonical constant one"):
+        type(result).model_validate(forged)

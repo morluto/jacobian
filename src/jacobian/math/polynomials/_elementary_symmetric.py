@@ -118,6 +118,15 @@ class ElementarySymmetricFamilyResult(StrictModel):
                 "result_axis_mismatch",
                 "every family polynomial must preserve the declared variable axis",
             )
+        e_zero = self.polynomials[0].polynomial.terms
+        if len(e_zero) != 1 or (
+            e_zero[0].exponents != (0,) * len(self.variables)
+            or e_zero[0].coefficient.as_fraction() != 1
+        ):
+            raise _validation_error(
+                "result_e_zero",
+                "the first family polynomial must be the canonical constant one",
+            )
         return self
 
 

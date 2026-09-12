@@ -517,7 +517,7 @@ def _special_repeated_cliques(
             strict=True,
         )
     )
-    groups: dict[tuple[object, object], list[tuple[int, ...]]] = {}
+    groups: dict[tuple[object, ...], list[tuple[int, ...]]] = {}
     for component in components:
         aligned = tuple(
             sorted(

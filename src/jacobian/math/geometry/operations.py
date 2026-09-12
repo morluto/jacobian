@@ -901,13 +901,14 @@ def _minimum_height_origin(
 ) -> tuple[Fraction, Fraction]:
     """Choose an origin that minimises translated coordinate height.
 
-    Candidates are every source point and the axis-aligned bounding-box
-    centre, so a non-source midpoint can win when it strictly reduces digit
-    width. The selection is independent of source order: among equal heights
-    the lexicographically least coordinate pair is kept.
+    Candidates are every source point, the zero origin, and the axis-aligned
+    bounding-box centre, so a non-source midpoint or the ambient origin can
+    win when it strictly reduces digit width. The selection is independent of
+    source order: among equal heights the lexicographically least coordinate
+    pair is kept.
     """
 
-    candidates = (*points, _bounding_box_origin(points))
+    candidates = (*points, _bounding_box_origin(points), (Fraction(0), Fraction(0)))
     return min(
         candidates,
         key=lambda origin: (
@@ -928,13 +929,39 @@ def _checkpoint_circle_work(completed: int, stage: str) -> int:
     return completed
 
 
+def _wire_spanned_circle_entries(
+    grouped: dict[tuple[Fraction, Fraction, Fraction], None],
+    incidences: dict[tuple[Fraction, Fraction, Fraction], tuple[int, ...]],
+    origin: tuple[Fraction, Fraction],
+) -> tuple[SpannedCircleEntry, ...]:
+    entries: list[SpannedCircleEntry] = []
+    completed = 0
+    for key in sorted(grouped):
+        completed = _checkpoint_circle_work(
+            completed, "during spanned-circle result construction"
+        )
+        entries.append(
+            SpannedCircleEntry(
+                circle=GeometryCircleResult(
+                    center=RationalPoint2D(
+                        x=_wire_rational(key[0] + origin[0]),
+                        y=_wire_rational(key[1] + origin[1]),
+                    ),
+                    radius_squared=_wire_rational(key[2]),
+                ),
+                point_indices=incidences[key],
+            )
+        )
+    return tuple(entries)
+
+
 def spanned_circle_profile(
     configuration: PointConfiguration,
 ) -> SpannedCircleProfileResult:
     """Return every distinct circle spanned by a non-collinear source triple."""
 
     configuration, points = _admit_spanned_circle_source(configuration)
-    point_values = _points_to_fractions(points)
+    point_values = tuple(_points_to_fractions(points))
     origin = _minimum_height_origin(point_values)
     translated = tuple(
         (point[0] - origin[0], point[1] - origin[1]) for point in point_values
@@ -1094,20 +1121,7 @@ def spanned_circle_profile(
             ),
         )
 
-    entries = tuple(
-        SpannedCircleEntry(
-            circle=GeometryCircleResult(
-                center=RationalPoint2D(
-                    x=_wire_rational(key[0] + origin[0]),
-                    y=_wire_rational(key[1] + origin[1]),
-                ),
-                radius_squared=_wire_rational(key[2]),
-            ),
-            point_indices=incidences[key],
-        )
-        for key in sorted(grouped)
-    )
     return SpannedCircleProfileResult._from_kernel(
         configuration=configuration,
-        circles=entries,
+        circles=_wire_spanned_circle_entries(grouped, incidences, origin),
     )

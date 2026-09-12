@@ -358,6 +358,20 @@ class TestSpannedCircleProfile:
             )
             assert result.circles == ()
 
+    def test_zero_origin_admits_collinear_reciprocals(self) -> None:
+        denominators: list[int] = []
+        candidate = 10**10 + 19
+        while len(denominators) < 32:
+            limit = int(candidate**0.5)
+            if all(candidate % prime for prime in range(3, limit + 1, 2)):
+                denominators.append(candidate)
+            candidate += 2
+        points = tuple(_point(f"1/{denominator}", "0") for denominator in denominators)
+        result = spanned_circle_profile(
+            SpannedCircleProfileRequest(configuration=_configuration(*points))
+        )
+        assert result.circles == ()
+
     def test_bounding_box_origin_admits_two_clusters(self) -> None:
         points = tuple(
             _point(str(3 * index), str((7 * index * index + 11 * index) % 97))
@@ -443,6 +457,31 @@ class TestSpannedCircleProfile:
             SpannedCircleProfileResult(
                 configuration=_configuration(*points),
                 num_points=3,
+                circles=(
+                    SpannedCircleEntry(circle=first, point_indices=(0, 1, 2)),
+                    SpannedCircleEntry(circle=second, point_indices=(0, 1, 2)),
+                ),
+            )
+
+    def test_result_rejects_circles_sharing_a_source_triple(self) -> None:
+        points = (
+            _point("0", "0"),
+            _point("1", "0"),
+            _point("0", "1"),
+            _point("1", "1"),
+        )
+        first = GeometryCircleResult(
+            center=_point("1/2", "1/2"),
+            radius_squared=CanonicalRational(num=1, den=2),
+        )
+        second = GeometryCircleResult(
+            center=_point("2", "2"),
+            radius_squared=CanonicalRational(num=8, den=1),
+        )
+        with pytest.raises(ValidationError, match="at most one spanned circle"):
+            SpannedCircleProfileResult(
+                configuration=_configuration(*points),
+                num_points=4,
                 circles=(
                     SpannedCircleEntry(circle=first, point_indices=(0, 1, 2)),
                     SpannedCircleEntry(circle=second, point_indices=(0, 1, 2)),
@@ -551,6 +590,7 @@ class TestSpannedCircleProfile:
         ]["description"]
         assert str(MAX_CANONICAL_INTEGER_DIGITS) in request_text
         assert str(MAX_SPANNED_CIRCLE_WORK) in request_text
+        assert "zero origin" in request_text
         # Imported after `_tools` so `_configuration` is fully initialized.
         from jacobian.math.geometry._configuration import CONFIGURATION_OPERATIONS
 
@@ -561,6 +601,7 @@ class TestSpannedCircleProfile:
         )
         assert str(MAX_CANONICAL_INTEGER_DIGITS) in tool.description
         assert str(MAX_SPANNED_CIRCLE_WORK) in tool.description
+        assert "zero origin" in tool.description
 
     def test_native_result_keeps_validated_configuration(self) -> None:
         source = _configuration(_point("0", "0"), _point("1", "0"), _point("0", "1"))
@@ -590,6 +631,7 @@ class TestSpannedCircleProfile:
         assert any("collinearity" in stage for stage in observed)
         assert any("construction" in stage for stage in observed)
         assert any("incidence" in stage for stage in observed)
+        assert any("result construction" in stage for stage in observed)
 
 
 @pytest.mark.parametrize("coordinates", [((0, 0), (1, 0)), ((0, 0), (1, 0), (0, 0))])

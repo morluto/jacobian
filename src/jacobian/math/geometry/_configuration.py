@@ -54,8 +54,9 @@ CONFIGURATION_OPERATIONS: MathTools = (
         description=(
             "Given a bounded labelled PointConfiguration (3..32 planar points, "
             "each coordinate at most 256 digits after translating by a "
-            "minimum-height origin (source points or bounding-box centre), collinearity work C(n,3)*max_digits^2 plus circumcircle "
-            "construction per non-collinear triple plus incidence work "
+            "minimum-height origin (source points, the zero origin, or "
+            "bounding-box centre), collinearity work C(n,3)*max_digits^2 plus "
+            "circumcircle construction per non-collinear triple plus incidence work "
             "n*(distinct circles)*max_digits^2 at most 2000000, restored circle "
             f"components at most {MAX_CANONICAL_INTEGER_DIGITS} digits and "
             f"aggregate at most {MAX_SPANNED_CIRCLE_WORK} digits, at most C(n,3) "

@@ -1448,7 +1448,8 @@ class SpannedCircleProfileRequest(StrictModel):
             f"Canonical labelled point configuration. The operation admits "
             f"3..{MAX_CONFIGURATION_POINTS} distinct planar points. Each "
             f"coordinate numerator and denominator is at most {MAX_COORDINATE_DIGITS} "
-            "digits after translating by a minimum-height origin (source points or bounding-box centre). Collinearity work "
+            "digits after translating by a minimum-height origin (source points, "
+            "the zero origin, or bounding-box centre). Collinearity work "
             f"C(n,3)*max_digits^2, circumcircle construction for each "
             "non-collinear triple, and incidence work "
             f"n*(distinct circles)*max_digits^2 together stay at most "
@@ -1518,12 +1519,20 @@ class SpannedCircleProfileResult(StrictModel):
                 "spanned_circle_row_count",
                 "circle rows cannot exceed the number of source triples",
             )
+        seen_triples: set[tuple[int, ...]] = set()
         for circle in self.circles:
             if any(index < 0 or index >= n for index in circle.point_indices):
                 raise _validation_error(
                     "spanned_circle_index_out_of_range",
                     "circle point index must refer to the source configuration",
                 )
+            for triple in combinations(circle.point_indices, 3):
+                if triple in seen_triples:
+                    raise _validation_error(
+                        "spanned_circle_shared_triple",
+                        "each source triple can belong to at most one spanned circle",
+                    )
+                seen_triples.add(triple)
         circle_keys = tuple(
             (
                 circle.circle.center.x.as_fraction(),

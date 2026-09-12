@@ -311,10 +311,37 @@ class OutcomeProfileRequest(StrictModel):
 class OutcomeProfileResult(StrictModel):
     """The complete P/N position partition with Grundy values."""
 
+    game: ImpartialGame
     p_positions: tuple[str, ...]
     n_positions: tuple[str, ...]
     grundy_values: tuple[tuple[str, int], ...]
     terminal_positions: tuple[str, ...]
+
+    @model_validator(mode="after")
+    def require_source_bound_shape(self) -> Self:
+        positions = self.game.positions
+        values = dict(self.grundy_values)
+        expected_terminals = tuple(
+            p for p in positions if not any(m.source == p for m in self.game.moves)
+        )
+        if (
+            len(self.p_positions) != len(set(self.p_positions))
+            or len(self.n_positions) != len(set(self.n_positions))
+            or len(self.terminal_positions) != len(set(self.terminal_positions))
+            or len(self.grundy_values) != len(positions)
+            or set(self.p_positions) | set(self.n_positions) != set(positions)
+            or set(self.p_positions) & set(self.n_positions)
+            or set(values) != set(positions)
+            or self.terminal_positions != expected_terminals
+            or any(value < 0 or value >= len(positions) for value in values.values())
+            or tuple(p for p in positions if values[p] == 0) != self.p_positions
+            or tuple(p for p in positions if values[p] != 0) != self.n_positions
+        ):
+            raise PydanticCustomError(
+                "impartial_game.outcome_profile_shape",
+                "outcome profile must cover the retained game positions canonically",
+            )
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -355,6 +382,8 @@ class DisjunctiveSumRequest(StrictModel):
 class DisjunctiveSumResult(StrictModel):
     """The exact Grundy value of a disjunctive sum of impartial games."""
 
+    components: tuple[ImpartialGame, ...] = Field(min_length=1, max_length=MAX_HEAPS)
+    start_positions: tuple[str, ...] = Field(min_length=1, max_length=MAX_HEAPS)
     grundy_value: int = Field(ge=0, le=MAX_DISJUNCTIVE_GRUNDY)
     component_grundy_values: tuple[int, ...] = Field(
         min_length=1,
@@ -365,6 +394,24 @@ class DisjunctiveSumResult(StrictModel):
 
     @model_validator(mode="after")
     def require_exact_disjunctive_invariants(self) -> Self:
+        if len(self.components) != len(self.start_positions):
+            raise PydanticCustomError(
+                "impartial_game.component_count_mismatch",
+                "components and start_positions must have equal length",
+            )
+        if any(
+            start not in game.positions
+            for game, start in zip(self.components, self.start_positions, strict=True)
+        ):
+            raise PydanticCustomError(
+                "impartial_game.start_position_unknown",
+                "every start position must belong to its component game",
+            )
+        if self.component_count != len(self.components):
+            raise PydanticCustomError(
+                "impartial_game.component_count_mismatch",
+                "component_count must match components length",
+            )
         if self.component_count != len(self.component_grundy_values):
             raise PydanticCustomError(
                 "impartial_game.component_count_mismatch",

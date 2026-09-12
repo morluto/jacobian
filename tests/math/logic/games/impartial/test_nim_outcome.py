@@ -13,6 +13,7 @@ from jacobian.math.logic.games.impartial._tools import (
     compute_nim_sum,
     compute_outcome_profile,
 )
+from jacobian.math.logic.games.impartial.operations import verify_outcome_profile
 from jacobian.math.logic.games.impartial.values import NimPosition
 
 _GAME = {
@@ -98,3 +99,20 @@ class TestOutcomeProfile:
         assert grundy_map["1"] == 1
         assert grundy_map["2"] == 2
         assert grundy_map["3"] == 0
+
+    def test_serialization_retains_game_and_rejects_forged_profile(self) -> None:
+        request = OutcomeProfileRequest.model_validate({"game": _GAME})
+        result = compute_outcome_profile(request)
+        payload = result.model_dump(mode="json")
+        assert payload["game"] == _GAME
+        payload["p_positions"] = ["1", "3"]
+        with pytest.raises(ValidationError):
+            type(result).model_validate_json(json.dumps(payload))
+        coherent = result.model_dump(mode="json")
+        coherent["grundy_values"] = [
+            [position, 1 if position == "2" else value]
+            for position, value in coherent["grundy_values"]
+        ]
+        forged = type(result).model_validate_json(json.dumps(coherent))
+        assert verify_outcome_profile(forged) is False
+        assert verify_outcome_profile(result)

@@ -1,5 +1,7 @@
 """Known-answer and adversarial tests for the disjunctive sum operation."""
 
+import json
+
 import pytest
 from pydantic import ValidationError
 
@@ -10,6 +12,7 @@ from jacobian.math.logic.games.impartial._tools import (
     TOOLS,
     compute_disjunctive_sum,
 )
+from jacobian.math.logic.games.impartial.operations import verify_disjunctive_sum
 from jacobian.math.logic.games.impartial.values import ImpartialGame
 
 # -- helpers -----------------------------------------------------------------
@@ -112,6 +115,34 @@ class TestDisjunctiveSum:
         assert result.component_grundy_values == (0, 1)
         assert result.is_p_position is False
         assert result.component_count == 2
+
+    def test_serialization_retains_components_and_verifier_rejects_forgery(
+        self,
+    ) -> None:
+        request = DisjunctiveSumRequest(
+            components=(_TERMINAL, _SINGLE_MOVE),
+            start_positions=("start", "a"),
+        )
+        result = compute_disjunctive_sum(request)
+        payload = result.model_dump(mode="json")
+        assert payload["components"] == [
+            {"positions": ["start"], "moves": []},
+            {
+                "positions": ["a", "b"],
+                "moves": [{"source": "a", "target": "b"}],
+            },
+        ]
+        payload["components"][1] = {
+            "positions": ["a", "b", "c", "d"],
+            "moves": [
+                {"source": "a", "target": "b"},
+                {"source": "a", "target": "c"},
+                {"source": "c", "target": "d"},
+            ],
+        }
+        forged = type(result).model_validate_json(json.dumps(payload))
+        assert verify_disjunctive_sum(forged) is False
+        assert verify_disjunctive_sum(result) is True
 
 
 class TestDisjunctiveSumValidation:

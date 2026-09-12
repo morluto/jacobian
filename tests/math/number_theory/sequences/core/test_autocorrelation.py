@@ -101,7 +101,7 @@ def test_rational_profile_accepts_integer_wire_entries_as_canonical_values() -> 
         Draft202012Validator(FiniteRationalSequence.model_json_schema()).validate(
             {"values": [2]}
         )
-    assert FiniteRationalSequence(values=(2,)).values == (
+    assert FiniteRationalSequence.model_validate({"values": [2]}).values == (
         CanonicalRational(num=2, den=1),
     )
 

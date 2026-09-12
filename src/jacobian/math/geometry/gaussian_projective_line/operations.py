@@ -85,7 +85,11 @@ def _admit_request(request: GaussianCrossRatioSource) -> None:
     # terms cover a carry from adding two signed integers.
     determinant_digits = 8 * source_digits + 3
     product_digits = 4 * determinant_digits + 1
-    quotient_digits = 4 * product_digits + 1
+    # Complex division forms a norm (one more sum of products), then multiplies
+    # the numerator by that norm's denominator.  Both the norm and the complex
+    # numerator can reach 4*product_digits+1, so the final Fraction components
+    # need twice that height.
+    quotient_digits = 8 * product_digits + 3
     if quotient_digits > MAX_CROSS_RATIO_INTERMEDIATE_DIGITS:
         _reject_resource(
             "intermediate_height_bound",

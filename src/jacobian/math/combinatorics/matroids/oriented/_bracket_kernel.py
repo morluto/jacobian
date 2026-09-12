@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from math import gcd
 
 from pydantic_core import PydanticCustomError
 
@@ -279,189 +278,42 @@ def _exceeds_canonical_integer_bound(value: int) -> bool:
     return bool(value >= _CANONICAL_INTEGER_LIMIT)
 
 
-def _bounded_integer_sum(left: int, right: int) -> int | None:
-    """Add integers only when their exact sum fits the canonical envelope."""
-
-    if left == 0:
-        return right
-    if right == 0:
-        return left
-    if (left < 0) == (right < 0) and abs(left) >= _CANONICAL_INTEGER_LIMIT - abs(right):
-        return None
-    return left + right
-
-
-def _integer_product_digit_upper_bound(left: int, right: int) -> int:
-    """Bound a product's digits without charging multiplication by a unit."""
-
-    left_digits = _integer_digit_upper_bound(left)
-    right_digits = _integer_digit_upper_bound(right)
-    if abs(left) <= 1:
-        return right_digits
-    if abs(right) <= 1:
-        return left_digits
-    naive = left_digits + right_digits
-    if naive <= MAX_BRACKET_COEFFICIENT_DIGITS:
-        return naive
-    # Adding widths overcounts by one when the product stays below 10**MAX.
-    # Compare against the cached envelope instead of rejecting those products.
-    left_abs = abs(left)
-    right_abs = abs(right)
-    if left_abs <= (_CANONICAL_INTEGER_LIMIT - 1) // right_abs:
-        return MAX_BRACKET_COEFFICIENT_DIGITS
-    return naive
-
-
-def _bounded_fraction_pair_sum(left: Fraction, right: Fraction) -> Fraction | None:
-    """Return a bounded exact pair sum without oversized cross-products."""
-
-    if left == -right:
-        return Fraction(0)
-    common_factor = gcd(left.denominator, right.denominator)
-    left_scale = right.denominator // common_factor
-    right_scale = left.denominator // common_factor
-    lcm_digit_bound = _integer_product_digit_upper_bound(
-        left.denominator // common_factor, right.denominator
-    )
-    if lcm_digit_bound > MAX_BRACKET_COEFFICIENT_DIGITS:
-        return None
-    if (
-        _integer_product_digit_upper_bound(left.numerator, left_scale)
-        > MAX_BRACKET_COEFFICIENT_DIGITS
-        or _integer_product_digit_upper_bound(right.numerator, right_scale)
-        > MAX_BRACKET_COEFFICIENT_DIGITS
-    ):
-        return None
-    left_product = left.numerator * left_scale
-    right_product = right.numerator * right_scale
-    numerator = _bounded_integer_sum(left_product, right_product)
-    if numerator is None:
-        return None
-    denominator = (left.denominator // common_factor) * right.denominator
-    return Fraction(numerator, denominator)
-
-
-def _merge_coefficient_pair(left: Fraction, right: Fraction) -> Fraction | None:
-    """Return a representable pair sum, or None when the merge overflows."""
-
-    if left == -right:
-        return Fraction(0)
-    if left.denominator == right.denominator:
-        numerator = _bounded_integer_sum(left.numerator, right.numerator)
-        if numerator is None:
-            return None
-        return Fraction(numerator, left.denominator)
-    return _bounded_fraction_pair_sum(left, right)
-
-
-def _merged_component_width(merged: Fraction) -> int:
-    if merged == 0:
-        return 0
-    return max(
-        _integer_digit_upper_bound(merged.numerator),
-        _integer_digit_upper_bound(merged.denominator),
-    )
-
-
-def _representable_coefficient_merges(
-    pending: list[_CoefficientComponent],
-) -> list[tuple[tuple[int, int], int, int, Fraction, int]]:
-    """List representable pair merges, cheapest first."""
-
-    merges: list[tuple[tuple[int, int], int, int, Fraction, int]] = []
-    for left_index, (left, _) in enumerate(pending):
-        for right_index in range(left_index + 1, len(pending)):
-            right, _ = pending[right_index]
-            merged = _merge_coefficient_pair(left, right)
-            if merged is None:
-                continue
-            merged_width = _merged_component_width(merged)
-            score = (merged_width, abs(merged.numerator).bit_length())
-            merges.append((score, left_index, right_index, merged, merged_width))
-    merges.sort(key=lambda item: (item[0], item[1], item[2]))
-    return merges
-
-
-def _apply_coefficient_merge(
-    pending: list[_CoefficientComponent],
-    left_index: int,
-    right_index: int,
-    merged: Fraction,
-) -> list[_CoefficientComponent]:
-    remaining = [
-        component
-        for index, component in enumerate(pending)
-        if index not in (left_index, right_index)
-    ]
-    if merged:
-        remaining.append(
-            (
-                merged,
-                (
-                    _integer_digit_upper_bound(merged.numerator),
-                    _integer_digit_upper_bound(merged.denominator),
-                ),
-            )
-        )
-    return _cancel_opposite_components(remaining)
-
-
-def _search_component_sum(
-    pending: list[_CoefficientComponent],
-    work_digit_bound: int,
-    failed: set[tuple[tuple[int, int], ...]],
-) -> tuple[Fraction, int] | None:
-    """Backtrack over representable pair merges until one order completes."""
-
-    if not pending:
-        return Fraction(0), work_digit_bound
-    if len(pending) == 1:
-        value, _ = pending[0]
-        return value, max(
-            work_digit_bound,
-            _integer_digit_upper_bound(value.numerator),
-            _integer_digit_upper_bound(value.denominator),
-        )
-    key = tuple(sorted((value.numerator, value.denominator) for value, _ in pending))
-    if key in failed:
-        return None
-    merges = _representable_coefficient_merges(pending)
-    if not merges:
-        failed.add(key)
-        return None
-    for _, left_index, right_index, merged, merged_width in merges:
-        reduced = _search_component_sum(
-            _apply_coefficient_merge(pending, left_index, right_index, merged),
-            max(work_digit_bound, merged_width),
-            failed,
-        )
-        if reduced is not None:
-            return reduced
-    failed.add(key)
-    return None
-
-
 def _bounded_component_sum(
     components: list[_CoefficientComponent],
 ) -> tuple[Fraction, int]:
-    """Sum components using only representable exact intermediate values.
+    """Sum cancelled components and admit the exact canonical coefficient.
 
-    The reduction order is part of admission: an arbitrary left-to-right sum
-    can create a numerator or denominator wider than the canonical rational
-    envelope even when a cancellation-first order is cheap and exact. Greedy
-    cheapest-pair reduction can also reach a dead end, so every representable
-    merge is backtracked, including choices after the first pair.
+    Pairwise merge search is not an admission strategy: the mathematical
+    coefficient is the exact rational sum, checked once against the digit
+    envelope. That keeps representable cancelling combinations executable and
+    rejects an oversized total in linear arithmetic instead of exploring
+    integer partitions of the component list.
     """
 
     pending = _cancel_opposite_components(components)
-    reduced = _search_component_sum(pending, 0, set())
-    if reduced is not None:
-        return reduced
-    raise OperationResourceAdmissionError(
-        location=("terms",),
-        code="bracket.syzygy_coefficient_digit_bound",
-        message="exact residual coefficient growth exceeds the supported digit bound",
-    )
+    total = Fraction(0)
+    work_digit_bound = 0
+    for value, widths in pending:
+        total += value
+        work_digit_bound = max(work_digit_bound, widths[0], widths[1])
+    if total:
+        work_digit_bound = max(
+            work_digit_bound,
+            _integer_digit_upper_bound(total.numerator),
+            _integer_digit_upper_bound(total.denominator),
+        )
+        if _exceeds_canonical_integer_bound(
+            abs(total.numerator)
+        ) or _exceeds_canonical_integer_bound(total.denominator):
+            raise OperationResourceAdmissionError(
+                location=("terms",),
+                code="bracket.syzygy_coefficient_digit_bound",
+                message=(
+                    "exact residual coefficient growth exceeds the supported "
+                    "digit bound"
+                ),
+            )
+    return total, work_digit_bound
 
 
 def _admit_result_allocation(

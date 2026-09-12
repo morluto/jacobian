@@ -362,7 +362,47 @@ def test_wedge_groups_coefficient_growth_by_output_monomial() -> None:
     assert terms == {(2, 0): square, (1, 0): 2 * square, (0, 0): square}
 
 
-def test_high_coefficients_and_zero_degrees_compose() -> None:
+def test_wedge_rejects_unadmitted_accumulator_growth_before_sum() -> None:
+    first = 10**2500 + 7
+    second = 10**2500 + 19
+    left = _form(
+        0,
+        (
+            (),
+            _poly(
+                (Fraction(1, second), (1, 0)),
+                (Fraction(1, first), (0, 0)),
+            ),
+        ),
+    )
+    right = _form(0, ((), _poly((1, (1, 0)), (1, (0, 0)))))
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        wedge(left, right)
+    assert error.value.errors()[0]["type"] == (
+        "differential_form.wedge.coefficient_budget"
+    )
+
+
+def test_wedge_convolution_checkpoints_during_nested_products(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed: list[str] = []
+
+    def _observe(phase: str) -> None:
+        observed.append(phase)
+
+    monkeypatch.setattr(
+        "jacobian.math.polynomials.differential_forms.operations.request_checkpoint",
+        _observe,
+    )
+    monkeypatch.setattr(
+        "jacobian.math.polynomials.differential_forms.operations._CONVOLUTION_CHECKPOINT_INTERVAL",
+        4,
+    )
+    terms = tuple((1, (exponent, 0)) for exponent in range(8, -1, -1))
+    scalar = _form(0, ((), _poly(*terms)))
+    wedge(scalar, scalar)
+    assert any("convolution" in phase for phase in observed)
     scalar = _form(0, ((), _poly((10**100, (0, 0)))))
     product = wedge(scalar, scalar)
     assert (

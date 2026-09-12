@@ -31,7 +31,14 @@ from jacobian.math.polynomials.values import (
 
 _MergedPair = tuple[FormComponent, FormComponent, tuple[int, ...], int]
 _RemainingTerms = dict[tuple[int, ...], dict[tuple[int, ...], Fraction]]
-_CONVOLUTION_CHECKPOINT_INTERVAL = 4_096
+_CONVOLUTION_CHECKPOINT_INTERVAL = 256
+
+
+def _integer_decimal_digits(value: int) -> int:
+    magnitude = abs(value)
+    if magnitude < 10:
+        return 1
+    return (magnitude.bit_length() * 30103) // 100000 + 1
 
 
 def _fraction_component_digits(value: Fraction) -> int:
@@ -70,6 +77,42 @@ def _cancelled_product_digit_bound(
         len(format_canonical_integer(left_den // cross_right))
         + len(format_canonical_integer(right_den // cross_left)),
     )
+
+
+def _bounded_fraction_add(current: Fraction, value: Fraction) -> Fraction:
+    """Add exact rationals, refusing unadmitted common-denominator growth first."""
+
+    if not current:
+        return value
+    if not value:
+        return current
+    left_num, left_den = current.numerator, current.denominator
+    right_num, right_den = value.numerator, value.denominator
+    if left_den == right_den:
+        combined = Fraction(left_num + right_num, left_den)
+        if (
+            combined
+            and _fraction_component_digits(combined)
+            > MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS
+        ):
+            _coefficient_budget()
+        return combined
+    overlap = gcd(left_den, right_den)
+    den_digits = (
+        _integer_decimal_digits(left_den)
+        + _integer_decimal_digits(right_den)
+        - _integer_decimal_digits(overlap)
+    )
+    if den_digits > MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS:
+        _coefficient_budget()
+    combined = current + value
+    if (
+        combined
+        and _fraction_component_digits(combined)
+        > MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS
+    ):
+        _coefficient_budget()
+    return combined
 
 
 def _coefficient_budget() -> None:
@@ -138,13 +181,9 @@ def _convolve_pairs(pairs: tuple[_MergedPair, ...]) -> _RemainingTerms:
                     * left_term.coefficient.as_fraction()
                     * right_term.coefficient.as_fraction()
                 )
-                combined = terms.get(exponents, Fraction()) + value
-                if (
-                    combined
-                    and _fraction_component_digits(combined)
-                    > MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS
-                ):
-                    _coefficient_budget()
+                combined = _bounded_fraction_add(
+                    terms.get(exponents, Fraction()), value
+                )
                 terms[exponents] = combined
     return {
         indices: {

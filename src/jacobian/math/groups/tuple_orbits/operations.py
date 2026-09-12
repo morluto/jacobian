@@ -45,7 +45,7 @@ def _backend_action(action: FinitePermutationAction) -> Any:
 
 def _admit_source(
     request: TupleFamilyOrbitSource,
-) -> tuple[Any, int, int, TupleFamilyOrbitSource]:
+) -> tuple[Any | None, int, int, TupleFamilyOrbitSource]:
     request_checkpoint("before tuple-family orbit admission")
     if not isinstance(request, TupleFamilyOrbitSource):
         raise OperationDomainValidationError(
@@ -118,6 +118,13 @@ def _admit_source(
             code="finite_group_action.tuple_family_coordinate_out_of_range",
             message="tuple coordinates must lie on the action domain axis",
         )
+    admitted = TupleFamilyOrbitSource(
+        action=action,
+        arity=request.arity,
+        family=request.family,
+    )
+    if family_size == 0:
+        return None, 0, degree, admitted
     backend = _backend_action(action)
     group_order = int(backend.order())
     request_checkpoint("after tuple-family group-order admission")
@@ -168,11 +175,6 @@ def _admit_source(
             code="finite_group_action.tuple_family_result_bound",
             message="tuple orbit-profile result cells exceed the admitted bound",
         )
-    admitted = TupleFamilyOrbitSource(
-        action=action,
-        arity=request.arity,
-        family=request.family,
-    )
     return backend, group_order, degree, admitted
 
 
@@ -189,6 +191,12 @@ def tuple_family_orbit_profile(
     """
 
     backend, group_order, degree, request = _admit_source(request)
+    if backend is None:
+        return TupleFamilyOrbitResult(
+            source=request,
+            rows=(),
+            is_union_of_complete_ambient_orbits=True,
+        )
     request_checkpoint("before tuple-family group materialization")
     elements = tuple(
         sorted(_full_permutation_form(element, degree) for element in backend.elements)

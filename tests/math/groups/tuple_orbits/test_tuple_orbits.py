@@ -7,8 +7,11 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.math.groups.actions._models import FinitePermutationAction
-from jacobian.math.groups.tuple_orbits._models import TupleFamilyOrbitSource
+from jacobian.math.groups.actions._models import MAX_FAMILY_MEMBERS, FinitePermutationAction
+from jacobian.math.groups.tuple_orbits._models import (
+    MAX_TUPLE_ARITY,
+    TupleFamilyOrbitSource,
+)
 from jacobian.math.groups.tuple_orbits.operations import tuple_family_orbit_profile
 
 
@@ -51,6 +54,23 @@ def test_empty_family_has_empty_profile() -> None:
         family=(),
     )
     assert tuple_family_orbit_profile(request).rows == ()
+
+
+def test_empty_family_skips_generated_group_admission() -> None:
+    request = TupleFamilyOrbitSource(
+        action=FinitePermutationAction(
+            domain=tuple(str(index) for index in range(8)),
+            generators=(
+                (1, 2, 3, 4, 5, 6, 7, 0),
+                (1, 0, 2, 3, 4, 5, 6, 7),
+            ),
+        ),
+        arity=0,
+        family=(),
+    )
+    result = tuple_family_orbit_profile(request)
+    assert result.rows == ()
+    assert result.is_union_of_complete_ambient_orbits is True
 
 
 def test_action_bound_order_and_repeated_coordinates_are_exact() -> None:
@@ -167,6 +187,31 @@ def test_result_source_retains_the_revalidated_action() -> None:
     result = tuple_family_orbit_profile(request)
     assert result.source.action.generators == ((1, 0),)
     assert result.source.action.domain == ("a", "b")
+
+
+def test_raw_family_dimensions_are_rejected_before_container_copy() -> None:
+    action = {"domain": ["a"], "generators": [[0]]}
+    oversized = {
+        "action": action,
+        "arity": 0,
+        "family": [[] for _ in range(MAX_FAMILY_MEMBERS + 1)],
+    }
+    with pytest.raises(ValidationError) as family_bound:
+        TupleFamilyOrbitSource.model_validate(oversized)
+    assert "input_bound" in family_bound.value.errors()[0]["type"]
+
+    class _HugeRow(tuple):
+        def __len__(self) -> int:
+            return MAX_TUPLE_ARITY + 1
+
+    oversized_row = {
+        "action": action,
+        "arity": 2,
+        "family": [_HugeRow()],
+    }
+    with pytest.raises(ValidationError) as arity_mismatch:
+        TupleFamilyOrbitSource.model_validate(oversized_row)
+    assert "arity_mismatch" in arity_mismatch.value.errors()[0]["type"]
 
 
 def test_distinct_source_rows_are_indexed_once_before_orbit_partition() -> None:

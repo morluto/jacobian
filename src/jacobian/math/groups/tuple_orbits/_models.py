@@ -61,6 +61,28 @@ class TupleFamilyOrbitSource(StrictModel):
     def normalize_json_containers(cls, data: Any) -> Any:
         if not isinstance(data, Mapping):
             return data
+        family = data.get("family")
+        if isinstance(family, (list, tuple)):
+            if len(family) > MAX_FAMILY_MEMBERS:
+                raise _tuple_error(
+                    "input_bound",
+                    f"at most {MAX_FAMILY_MEMBERS} tuple rows are admitted",
+                )
+            raw_arity = data.get("arity")
+            arity_is_int = isinstance(raw_arity, int) and not isinstance(raw_arity, bool)
+            for member in family:
+                if not isinstance(member, (list, tuple)):
+                    continue
+                if arity_is_int and len(member) != raw_arity:
+                    raise _tuple_error(
+                        "arity_mismatch",
+                        "every family member must have the declared arity",
+                    )
+                if len(member) > MAX_TUPLE_ARITY:
+                    raise _tuple_error(
+                        "arity_out_of_range",
+                        "tuple arity must be a non-negative action-domain-sized integer",
+                    )
         return canonicalize_json_containers(dict(data))
 
     @model_validator(mode="after")

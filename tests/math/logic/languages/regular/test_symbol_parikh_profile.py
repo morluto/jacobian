@@ -6,9 +6,13 @@ import pytest
 
 from jacobian.math.logic.languages.regular._symbol_parikh import (
     SymbolParikhProfileRequest,
+    SymbolParikhProfileResult,
     symbol_parikh_profile,
 )
-from jacobian.math.logic.languages.regular.operations import dfa_run
+from jacobian.math.logic.languages.regular.operations import (
+    count_accepted_words,
+    dfa_run,
+)
 from jacobian.math.logic.languages.regular.values import DFA, DFATransition
 
 
@@ -37,6 +41,11 @@ def test_profile_matches_independent_word_enumeration() -> None:
     assert result.alphabet == (0, 1)
     assert {cell.symbol_counts: cell.multiplicity for cell in result.cells} == oracle
     assert result.total_accepted_words == 4
+    assert result.total_accepted_words == count_accepted_words(dfa, 3)
+    assert (
+        SymbolParikhProfileResult.model_validate_json(result.model_dump_json())
+        == result
+    )
 
 
 def test_length_zero_retains_empty_count_vector() -> None:
@@ -98,9 +107,25 @@ def test_wide_alphabet_uses_only_extension_layers_in_admission() -> None:
         accepting_states=(0,),
     )
 
-    result = symbol_parikh_profile(
-        SymbolParikhProfileRequest(dfa=dfa, word_length=3)
-    )
+    result = symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=3))
 
     assert len(result.cells) == 5_984
     assert result.total_accepted_words == 32**3
+
+
+def test_one_symbol_profile_retains_its_axis_at_the_length_limit() -> None:
+    dfa = DFA(
+        state_count=1,
+        alphabet_size=1,
+        transitions=(DFATransition(source=0, symbol=0, target=0),),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+
+    result = symbol_parikh_profile(
+        SymbolParikhProfileRequest(dfa=dfa, word_length=1_000)
+    )
+
+    assert result.alphabet == (0,)
+    assert result.cells[0].symbol_counts == (1_000,)
+    assert result.cells[0].multiplicity == 1

@@ -85,9 +85,7 @@ def symbol_parikh_profile(
     # t=0..length-1 are extended.  The final layer is materialized separately
     # into profile cells and must not be charged as another transition layer.
     extension_cells = len(reachable) * comb(length + alphabet_size - 1, alphabet_size)
-    extension_coordinate_work = (
-        extension_cells * alphabet_size * max(1, alphabet_size)
-    )
+    extension_coordinate_work = extension_cells * alphabet_size * max(1, alphabet_size)
     output_materialization_work = output_bound * max(1, alphabet_size)
     work_bound = extension_coordinate_work + output_materialization_work
     if output_bound > MAX_SYMBOL_PARIKH_CELLS or work_bound > MAX_SYMBOL_PARIKH_DP_WORK:

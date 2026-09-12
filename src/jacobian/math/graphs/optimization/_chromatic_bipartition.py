@@ -41,7 +41,7 @@ class ChromaticBipartitionRequest(StrictModel):
 
 
 class ChromaticBipartitionResult(StrictModel):
-    """Exact split, exact negative result, or operationally unresolved search."""
+    """Exact split, exact negative result, or an unresolved search."""
 
     graph: SimpleUndirectedGraph
     s: StrictInt = Field(ge=1, le=32)
@@ -296,6 +296,14 @@ def _unit_threshold_core_is_admitted(core: SimpleUndirectedGraph) -> bool:
     )
 
 
+def _unit_threshold_coloring_work(core: SimpleUndirectedGraph) -> int:
+    """Charge the exact branch used for one singleton remainder."""
+
+    if not core.edges or _is_bipartite(core):
+        return len(core.vertices) + len(core.edges) + 1
+    return _chromatic_search_work(len(core.vertices), len(core.edges))
+
+
 def _unit_threshold_bipartition(
     request: ChromaticBipartitionRequest,
 ) -> ChromaticBipartitionResult:
@@ -310,7 +318,7 @@ def _unit_threshold_bipartition(
             continue
         chromatic_b = _exact_induced_chromatic(request.graph, side_b, request, started)
         if chromatic_b is None:
-            return _unknown_chromatic_bipartition(request, 0)
+            return _unknown_chromatic_bipartition(request, index + 1)
         return ChromaticBipartitionResult(
             graph=request.graph,
             s=request.s,
@@ -320,7 +328,7 @@ def _unit_threshold_bipartition(
             side_b=side_b,
             chromatic_a=1,
             chromatic_b=chromatic_b,
-            checked_partitions=0,
+            checked_partitions=index + 1,
         )
     return _unknown_chromatic_bipartition(request, 0)
 
@@ -337,20 +345,25 @@ def _refuse_chromatic_bipartition_work() -> None:
 
 
 def _admit_unit_threshold_chromatic(request: ChromaticBipartitionRequest) -> None:
-    """Admit a singleton split whose remainder is cheaply colorable."""
+    """Admit the full singleton traversal and its first usable remainder."""
 
     vertices = request.graph.vertices
     extraction_work = 0
+    coloring_work = 0
+    has_admitted_candidate = False
     for index in range(len(vertices)):
         _, side_b = _unit_threshold_remainder(vertices, index)
         extraction_work += 2 * (len(vertices) + len(request.graph.edges))
         core = _induced_edge_core(request.graph, side_b)
-        if _unit_threshold_core_is_admitted(core) and (
-            extraction_work
-            + _chromatic_search_work(len(core.vertices), len(core.edges))
-            <= MAX_CHROMATIC_BIPARTITION_WORK
-        ):
-            return
+        if not _unit_threshold_core_is_admitted(core):
+            continue
+        has_admitted_candidate = True
+        coloring_work += _unit_threshold_coloring_work(core)
+    if (
+        has_admitted_candidate
+        and extraction_work + coloring_work <= MAX_CHROMATIC_BIPARTITION_WORK
+    ):
+        return
     _refuse_chromatic_bipartition_work()
 
 

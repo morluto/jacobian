@@ -11,8 +11,11 @@ sound shortcut such as `s + t > |V|`); it carries no witness.
 
 If the shared admitted wall-clock envelope or an inner exact coloring decision
 is exhausted, the result is `UNKNOWN`, never a negative conclusion. `UNKNOWN`
-retains the source graph, thresholds, and the number of partition candidates
-checked so far, but no partial witness or chromatic claim.
+retains the source graph, thresholds, and a conservative count of partition
+candidates reported as checked by the completed kernel. If the killable worker
+is terminated before its result frame arrives, that count is zero because the
+parent cannot recover child progress; no partial witness or chromatic claim is
+retained.
 
 The operation is bounded independently of the graph carrier: it admits at most
 256 source vertices, one million retained label characters (including the

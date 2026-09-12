@@ -263,6 +263,46 @@ def test_consumers_reject_foreign_incomparable_pair_models_as_domain_errors() ->
         width(forged)
 
 
+def test_consumers_reject_foreign_ordered_pair_models_as_domain_errors() -> None:
+    class ForeignOrder:
+        def __init__(self, lower: str, upper: str) -> None:
+            self.lower = lower
+            self.upper = upper
+
+        def model_dump(self, mode: str = "json") -> dict[str, str]:
+            return {"lower": self.lower, "upper": self.upper, "extra": "foreign"}
+
+        def __eq__(self, other: object) -> bool:
+            return (
+                getattr(other, "lower", None) == self.lower
+                and getattr(other, "upper", None) == self.upper
+            )
+
+    poset = _materialize(["a", "b"], [("a", "b")])
+    forged_pairs = tuple(
+        ForeignOrder(pair.lower, pair.upper) for pair in poset.strict_order_pairs
+    )
+    forged = poset.model_copy(
+        update={
+            "strict_order_pairs": forged_pairs,
+            "cover_relations": forged_pairs,
+            "poset_digest": finite_poset_digest(
+                elements=poset.elements,
+                strict_order_pairs=forged_pairs,  # type: ignore[arg-type]
+                cover_relations=forged_pairs,  # type: ignore[arg-type]
+                incomparable_pairs=poset.incomparable_pairs,
+                minimal_elements=poset.minimal_elements,
+                maximal_elements=poset.maximal_elements,
+                graded=poset.graded,
+                ranks=poset.ranks,
+            ),
+        }
+    )
+    assert verify_finite_poset(forged) is False
+    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+        width(forged)
+
+
 def test_consumers_reject_boolean_rank_claims_as_domain_errors() -> None:
     poset = _materialize(["a", "b"], [("a", "b")])
     forged_ranks = tuple(

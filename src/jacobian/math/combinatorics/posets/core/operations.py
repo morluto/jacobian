@@ -154,6 +154,17 @@ def _revalidated_ranks(ranks: object) -> tuple[ElementRank, ...] | None:
     )
 
 
+def _canonical_ordered_pairs(pairs: object) -> tuple[OrderedPair, ...]:
+    if type(pairs) is not tuple:
+        raise TypeError("order pairs must be a tuple")
+    canonical: list[OrderedPair] = []
+    for entry in pairs:
+        if type(entry) is not OrderedPair:
+            raise TypeError("order pairs must use the canonical OrderedPair type")
+        canonical.append(entry)
+    return tuple(canonical)
+
+
 def _canonical_claims_match(
     poset: FinitePoset,
     strict: set[tuple[str, str]],
@@ -163,14 +174,19 @@ def _canonical_claims_match(
         return False
     if type(poset.graded) is not bool:
         return False
+    try:
+        authored_strict = _canonical_ordered_pairs(poset.strict_order_pairs)
+        authored_covers = _canonical_ordered_pairs(poset.cover_relations)
+    except TypeError:
+        return False
     if (
         tuple(OrderedPair(lower=a, upper=b) for a, b in sorted(strict))
-        != poset.strict_order_pairs
+        != authored_strict
     ):
         return False
     if (
         tuple(OrderedPair(lower=a, upper=b) for a, b in sorted(reduction))
-        != poset.cover_relations
+        != authored_covers
     ):
         return False
     try:
@@ -242,23 +258,25 @@ def verify_finite_poset(poset: FinitePoset) -> bool:
             return False
         if type(poset.graded) is not bool:
             return False
+        authored_strict = _canonical_ordered_pairs(poset.strict_order_pairs)
+        authored_covers = _canonical_ordered_pairs(poset.cover_relations)
         strict, reduction = _validated_presentation(
             poset.elements,
             tuple(
                 PresentationPair(lower=pair.lower, upper=pair.upper)
-                for pair in poset.strict_order_pairs
+                for pair in authored_strict
             ),
             RelationInterpretation.COMPARABLE_PAIRS,
             ReflexivePairPolicy.FORBIDDEN,
         )
         if (
             tuple(OrderedPair(lower=a, upper=b) for a, b in sorted(strict))
-            != poset.strict_order_pairs
+            != authored_strict
         ):
             return False
         if (
             tuple(OrderedPair(lower=a, upper=b) for a, b in sorted(reduction))
-            != poset.cover_relations
+            != authored_covers
         ):
             return False
         _validate_poset_incomparable_pairs(

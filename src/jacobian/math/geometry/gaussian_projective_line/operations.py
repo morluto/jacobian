@@ -51,66 +51,6 @@ def _determinant(
     return _subtract(_multiply(a, d), _multiply(b, c))
 
 
-def _integer_digits(value: int) -> int:
-    magnitude = abs(value)
-    if magnitude < 10:
-        return 1
-    return (magnitude.bit_length() * 30103) // 100000 + 1
-
-
-def _cancelled_product_digits(left: Fraction, right: Fraction) -> tuple[int, int]:
-    left_num, left_den = abs(left.numerator), left.denominator
-    right_num, right_den = abs(right.numerator), right.denominator
-    cross_left = gcd(left_num, right_den)
-    cross_right = gcd(right_num, left_den)
-    return (
-        _integer_digits(left_num // cross_left)
-        + _integer_digits(right_num // cross_right),
-        _integer_digits(left_den // cross_right)
-        + _integer_digits(right_den // cross_left),
-    )
-
-
-def _cancelled_sum_digits(
-    left: tuple[int, int], right: tuple[int, int]
-) -> tuple[int, int]:
-    left_num, left_den = left
-    right_num, right_den = right
-    return (
-        max(left_num + right_den, right_num + left_den) + 1,
-        left_den + right_den,
-    )
-
-
-def _gaussian_quotient_digit_bound(
-    numerator: tuple[Fraction, Fraction],
-    denominator: tuple[Fraction, Fraction],
-) -> int:
-    """Bound real/imaginary component digits of a Gaussian quotient."""
-
-    real, imag = numerator
-    denom_real, denom_imag = denominator
-    real_num = _cancelled_sum_digits(
-        _cancelled_product_digits(real, denom_real),
-        _cancelled_product_digits(imag, denom_imag),
-    )
-    imag_num = _cancelled_sum_digits(
-        _cancelled_product_digits(imag, denom_real),
-        _cancelled_product_digits(real, denom_imag),
-    )
-    norm = _cancelled_sum_digits(
-        _cancelled_product_digits(denom_real, denom_real),
-        _cancelled_product_digits(denom_imag, denom_imag),
-    )
-
-    def _divide_digits(payload: tuple[int, int], modulus: tuple[int, int]) -> int:
-        payload_num, payload_den = payload
-        modulus_num, modulus_den = modulus
-        return max(payload_num + modulus_den, payload_den + modulus_num)
-
-    return max(_divide_digits(real_num, norm), _divide_digits(imag_num, norm))
-
-
 def _fraction_component_digits(value: Fraction) -> int:
     return max(
         len(format_canonical_integer(abs(value.numerator))),
@@ -128,6 +68,52 @@ def _reject_resource(code: str, message: str) -> NoReturn:
         code=f"geometry.gaussian_cross_ratio.{code}",
         message=message,
     )
+
+
+def _gaussian_multiply_digit_bound(
+    left: tuple[Fraction, Fraction], right: tuple[Fraction, Fraction]
+) -> int:
+    return (
+        2
+        * (
+            _gaussian_component_digits(left)
+            + _gaussian_component_digits(right)
+        )
+        + 1
+    )
+
+
+def _admitted_multiply(
+    left: tuple[Fraction, Fraction], right: tuple[Fraction, Fraction]
+) -> tuple[Fraction, Fraction]:
+    if _gaussian_multiply_digit_bound(left, right) > MAX_CROSS_RATIO_INTERMEDIATE_DIGITS:
+        _reject_resource(
+            "intermediate_height_bound",
+            "cross-ratio determinant products and quotient exceed the exact intermediate digit bound",
+        )
+    product = _multiply(left, right)
+    if _gaussian_component_digits(product) > MAX_CROSS_RATIO_INTERMEDIATE_DIGITS:
+        _reject_resource(
+            "intermediate_height_bound",
+            "cross-ratio determinant products and quotient exceed the exact intermediate digit bound",
+        )
+    return product
+
+
+def _admitted_determinant(
+    left: GaussianProjectiveLinePoint, right: GaussianProjectiveLinePoint
+) -> tuple[Fraction, Fraction]:
+    a, b = (coordinate.as_fractions() for coordinate in left.coordinates)
+    c, d = (coordinate.as_fractions() for coordinate in right.coordinates)
+    ad = _admitted_multiply(a, d)
+    bc = _admitted_multiply(b, c)
+    difference = _subtract(ad, bc)
+    if _gaussian_component_digits(difference) > MAX_CROSS_RATIO_INTERMEDIATE_DIGITS:
+        _reject_resource(
+            "intermediate_height_bound",
+            "cross-ratio determinant products and quotient exceed the exact intermediate digit bound",
+        )
+    return difference
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,13 +138,13 @@ def _admit_request(request: GaussianCrossRatioSource) -> _CrossRatioPlan:
                     message="cross-ratio inputs must be pairwise projectively distinct",
                 )
 
-    numerator = _multiply(
-        _determinant(request.first, request.third),
-        _determinant(request.second, request.fourth),
+    numerator = _admitted_multiply(
+        _admitted_determinant(request.first, request.third),
+        _admitted_determinant(request.second, request.fourth),
     )
-    denominator = _multiply(
-        _determinant(request.first, request.fourth),
-        _determinant(request.second, request.third),
+    denominator = _admitted_multiply(
+        _admitted_determinant(request.first, request.fourth),
+        _admitted_determinant(request.second, request.third),
     )
     product_digits = max(
         _gaussian_component_digits(numerator), _gaussian_component_digits(denominator)

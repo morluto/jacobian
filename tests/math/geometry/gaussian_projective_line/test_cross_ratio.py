@@ -274,3 +274,29 @@ def test_large_harmonic_quadruple_cancels_to_minus_one() -> None:
     )
     result = gaussian_rational_cross_ratio(request)
     assert result.as_fractions() == (Fraction(-1), Fraction())
+
+
+def test_mixed_full_height_products_are_rejected_before_construction() -> None:
+    height = 10**4095
+
+    def affine(real_shift: int, imag_shift: int) -> GaussianProjectiveLinePoint:
+        return _point(
+            _z(1),
+            GaussianRational.from_fractions(
+                Fraction(height, height + real_shift),
+                Fraction(height + imag_shift, height + imag_shift + 1),
+            ),
+        )
+
+    request = GaussianCrossRatioSource(
+        first=affine(1, 2),
+        second=affine(3, 4),
+        third=affine(5, 6),
+        fourth=affine(7, 8),
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        gaussian_rational_cross_ratio(request)
+    assert (
+        error.value.errors()[0]["type"]
+        == "geometry.gaussian_cross_ratio.intermediate_height_bound"
+    )

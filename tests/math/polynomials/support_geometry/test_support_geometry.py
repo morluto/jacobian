@@ -311,6 +311,18 @@ class TestSupport:
         with pytest.raises(ValidationError):
             PolynomialWeightProfile.model_validate_json(json.dumps(payload))
 
+    def test_term_exponents_reject_json_boolean_and_float_coercion(self) -> None:
+        from jacobian.math.polynomials.values import RationalPolynomialTerm
+
+        source = _polynomial((_term(1, [2, 0]), _term(1, [0, 2])), VARS)
+        payload = source.polynomial.terms[0].model_dump(mode="json")
+        payload["exponents"][0] = True
+        with pytest.raises(ValidationError):
+            RationalPolynomialTerm.model_validate_json(json.dumps(payload))
+        payload["exponents"][0] = 1.0
+        with pytest.raises(ValidationError):
+            RationalPolynomialTerm.model_validate_json(json.dumps(payload))
+
     def test_verifiers_reject_hostile_monic_subtype_without_raising(self) -> None:
         from jacobian._exact import CanonicalRational
         from jacobian.math.polynomials.values import (

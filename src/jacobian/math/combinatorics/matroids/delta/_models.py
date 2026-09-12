@@ -18,6 +18,23 @@ from jacobian.math.combinatorics.matroids.delta.values import (
 )
 
 
+def require_twist_subset(
+    delta_matroid: FiniteDeltaMatroid, subset: tuple[int, ...]
+) -> None:
+    """Validate the canonical twist axis for native and wire callers."""
+
+    if any(type(index) is not int for index in subset):
+        raise _validation_error("subset_index_type", "twist indices must be integers")
+    if subset != tuple(sorted(set(subset))):
+        raise _validation_error(
+            "subset_not_canonical", "twist subset must be sorted and distinct"
+        )
+    if any(index < 0 or index >= len(delta_matroid.ground) for index in subset):
+        raise _validation_error(
+            "subset_out_of_range", "twist subset index is outside the ground set"
+        )
+
+
 class DeltaMatroidTwistRequest(StrictModel):
     """Twist a delta-matroid by a canonical ground-index subset."""
 
@@ -26,17 +43,7 @@ class DeltaMatroidTwistRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_subset(self) -> Self:
-        if self.subset != tuple(sorted(set(self.subset))):
-            raise _validation_error(
-                "subset_not_canonical", "twist subset must be sorted and distinct"
-            )
-        if any(
-            index < 0 or index >= len(self.delta_matroid.ground)
-            for index in self.subset
-        ):
-            raise _validation_error(
-                "subset_out_of_range", "twist subset index is outside the ground set"
-            )
+        require_twist_subset(self.delta_matroid, self.subset)
         return self
 
 
@@ -47,11 +54,14 @@ class DeltaMatroidTwistResult(DeltaMatroidTwistRequest):
 
     @classmethod
     def _from_kernel(
-        cls, request: DeltaMatroidTwistRequest, twisted: FiniteDeltaMatroid
+        cls,
+        delta_matroid: FiniteDeltaMatroid,
+        subset: tuple[int, ...],
+        twisted: FiniteDeltaMatroid,
     ) -> Self:
         return cls.model_construct(
-            delta_matroid=request.delta_matroid,
-            subset=request.subset,
+            delta_matroid=delta_matroid,
+            subset=subset,
             twisted=twisted,
         )
 
@@ -66,8 +76,8 @@ class DeltaMatroidWidthResult(DeltaMatroidWidthRequest):
     width: int = Field(ge=0)
 
     @classmethod
-    def _from_kernel(cls, request: DeltaMatroidWidthRequest, width: int) -> Self:
-        return cls.model_construct(delta_matroid=request.delta_matroid, width=width)
+    def _from_kernel(cls, delta_matroid: FiniteDeltaMatroid, width: int) -> Self:
+        return cls.model_construct(delta_matroid=delta_matroid, width=width)
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:

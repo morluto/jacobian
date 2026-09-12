@@ -5,10 +5,9 @@ from __future__ import annotations
 from jacobian.math.combinatorics.greedoids.values import FiniteFeasibleSetSystem
 from jacobian.math.combinatorics.matroids.delta._models import (
     DeltaMatroidRecognitionResult,
-    DeltaMatroidTwistRequest,
     DeltaMatroidTwistResult,
-    DeltaMatroidWidthRequest,
     DeltaMatroidWidthResult,
+    require_twist_subset,
 )
 from jacobian.math.combinatorics.matroids.delta.values import (
     MAX_DELTA_MEMBERSHIPS,
@@ -84,12 +83,12 @@ def twist(
     caller-authored rather than trusted producer output.
     """
 
-    request = DeltaMatroidTwistRequest(delta_matroid=delta_matroid, subset=subset)
-    _require_delta_matroid(request.delta_matroid)
-    twist_subset = frozenset(request.subset)
+    require_twist_subset(delta_matroid, subset)
+    _require_delta_matroid(delta_matroid)
+    twist_subset = frozenset(subset)
     projected_memberships = sum(
         len(row) + len(twist_subset) - 2 * len(twist_subset.intersection(row))
-        for row in request.delta_matroid.feasible
+        for row in delta_matroid.feasible
     )
     if projected_memberships > MAX_DELTA_MEMBERSHIPS:
         raise DeltaMatroidAdmissionError(
@@ -99,17 +98,18 @@ def twist(
     rows = tuple(
         sorted(
             tuple(sorted(frozenset(row) ^ twist_subset))
-            for row in request.delta_matroid.feasible
+            for row in delta_matroid.feasible
         )
     )
     twisted_system = FiniteFeasibleSetSystem(
-        ground=request.delta_matroid.ground,
+        ground=delta_matroid.ground,
         feasible=rows,
     )
     # Twisting preserves symmetric differences, hence symmetric exchange and
     # its candidate-work bound. The output membership bound was admitted above.
     return DeltaMatroidTwistResult._from_kernel(
-        request,
+        delta_matroid,
+        subset,
         FiniteDeltaMatroid._from_kernel(twisted_system),
     )
 
@@ -117,10 +117,9 @@ def twist(
 def width(delta_matroid: FiniteDeltaMatroid) -> DeltaMatroidWidthResult:
     """Return the delta-matroid width ``max |F| - min |F|``."""
 
-    request = DeltaMatroidWidthRequest(delta_matroid=delta_matroid)
-    _require_delta_matroid(request.delta_matroid)
-    sizes = tuple(len(row) for row in request.delta_matroid.feasible)
+    _require_delta_matroid(delta_matroid)
+    sizes = tuple(len(row) for row in delta_matroid.feasible)
     return DeltaMatroidWidthResult._from_kernel(
-        request,
+        delta_matroid,
         max(sizes) - min(sizes),
     )

@@ -337,6 +337,22 @@ def test_hypergraph_enumeration_observes_an_expired_deadline() -> None:
         compute_hypergraph_bond_connection_probability(source)
 
 
+def test_twelve_hyperedge_enumeration_observes_an_expired_deadline() -> None:
+    vertices = tuple(f"v{index}" for index in range(13))
+    edges = tuple((f"e{index}", (f"v{index}", f"v{index + 1}")) for index in range(12))
+    source = _source(
+        vertices,
+        edges,
+        {edge_id: Fraction(1, 2) for edge_id, _ in edges},
+        ("v0", "v12"),
+    )
+    with (
+        request_execution(monotonic(), outer_deadline=monotonic() - 1),
+        pytest.raises(OperationExecutionTimeoutError),
+    ):
+        compute_hypergraph_bond_connection_probability(source)
+
+
 def test_empty_hyperedges_are_rejected_by_the_reliability_contract() -> None:
     with pytest.raises(ValidationError, match="nonempty"):
         _source(

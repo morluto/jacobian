@@ -11,7 +11,10 @@ from sympy import Matrix, Rational
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.geometry.polytopes import Halfspace, Vertex
 from jacobian.math.geometry.polytopes.lattice._models import (
     MAX_BOUND_SPAN,
@@ -23,7 +26,6 @@ from jacobian.math.geometry.polytopes.lattice._tools import (
     count_lattice_points,
     enumerate_lattice_points,
 )
-from jacobian.math.geometry.polytopes.lattice.operations import LatticePointBudgetError
 
 
 def _cr(num: int, den: int = 1) -> CanonicalRational:
@@ -276,7 +278,7 @@ class TestBudgets:
         # A 1D interval spanning more than MAX_BOUND_SPAN integer points.
         far = MAX_BOUND_SPAN + 5
         request = LatticePolytopeRequest(vertices=(_v((0, 1)), _v((far, 1))))
-        with pytest.raises(ValueError, match="per-axis span bound"):
+        with pytest.raises(OperationResourceAdmissionError, match="per-axis span bound"):
             count_lattice_points(request)
 
     @pytest.mark.scale
@@ -298,7 +300,7 @@ class TestBudgets:
         assert (side + 1) * (side + 1) > MAX_LATTICE_POINTS
         # Enumeration materializes the points, so it fails closed with a
         # typed budget outcome (the point cap or the output-size estimate).
-        with pytest.raises(LatticePointBudgetError):
+        with pytest.raises(OperationResourceAdmissionError, match="point budget"):
             enumerate_lattice_points(
                 EnumerateLatticePointsRequest.model_validate(request.model_dump())
             )

@@ -36,7 +36,7 @@ import math
 from fractions import Fraction
 from itertools import product
 from operator import mul
-from typing import Literal
+from typing import Literal, NoReturn
 
 from sympy import Matrix, Rational
 
@@ -87,6 +87,28 @@ class LatticePolytopeAdmissionError(ValueError):
 
 class LatticePointBudgetError(LatticePolytopeAdmissionError):
     """Raised when the enumeration would exceed a fail-closed budget bound."""
+
+
+def _raise_projected_lattice_error(
+    exc: LatticePolytopeAdmissionError,
+    *,
+    location: tuple[str, ...],
+    budget_code: str,
+    admission_code: str,
+) -> NoReturn:
+    """Project native lattice failures onto typed operation errors."""
+
+    if isinstance(exc, LatticePointBudgetError):
+        raise OperationResourceAdmissionError(
+            location=location,
+            code=budget_code,
+            message=str(exc),
+        ) from exc
+    raise OperationDomainValidationError(
+        location=location,
+        code=admission_code,
+        message=str(exc),
+    ) from exc
 
 
 def _is_bounded_h(halfspaces: list[tuple[list[Rational], Rational]], d: int) -> bool:
@@ -453,8 +475,16 @@ def enumerate_lattice_points(
     representation: Literal["vertices", "halfspaces"] = (
         "vertices" if vertices is not None else "halfspaces"
     )
-    facets, lo, hi, d = _facets_and_box(vertices, halfspaces, dimension_bound)
-    points, _count = _scan_box(facets, lo, hi, d, collect=True)
+    try:
+        facets, lo, hi, d = _facets_and_box(vertices, halfspaces, dimension_bound)
+        points, _count = _scan_box(facets, lo, hi, d, collect=True)
+    except LatticePolytopeAdmissionError as exc:
+        _raise_projected_lattice_error(
+            exc,
+            location=("vertices", "halfspaces"),
+            budget_code="polytope.lattice_points.scan_budget",
+            admission_code="polytope.lattice_points.admission",
+        )
     return EnumerateLatticePointsResult._from_kernel(
         dimension=d,
         points=tuple(LatticePoint._from_kernel(tuple(point)) for point in points),
@@ -474,11 +504,12 @@ def count_lattice_points(
     try:
         facets, lo, hi, d = _facets_and_box(vertices, halfspaces, dimension_bound)
     except LatticePolytopeAdmissionError as exc:
-        raise OperationDomainValidationError(
+        _raise_projected_lattice_error(
+            exc,
             location=("vertices", "halfspaces"),
-            code="polytope.lattice_points.admission",
-            message=str(exc),
-        ) from exc
+            budget_code="polytope.lattice_points.scan_budget",
+            admission_code="polytope.lattice_points.admission",
+        )
     _points, count = _scan_box(facets, lo, hi, d, collect=False)
     return CountLatticePointsResult._from_kernel(
         dimension=d,
@@ -598,18 +629,13 @@ def ehrhart_polynomial(
     try:
         require_ehrhart_source(vertices, degree_bound, max_dilation)
         plans = _ehrhart_scan_plans(vertices, max_dilation)
-    except LatticePointBudgetError as exc:
-        raise OperationResourceAdmissionError(
-            location=("vertices", "max_dilation"),
-            code="polytope.ehrhart.scan_budget",
-            message=str(exc),
-        ) from exc
     except LatticePolytopeAdmissionError as exc:
-        raise OperationDomainValidationError(
+        _raise_projected_lattice_error(
+            exc,
             location=("vertices", "max_dilation"),
-            code="polytope.ehrhart.admission",
-            message=str(exc),
-        ) from exc
+            budget_code="polytope.ehrhart.scan_budget",
+            admission_code="polytope.ehrhart.admission",
+        )
     except ValueError as exc:
         raise OperationDomainValidationError(
             location=("vertices", "degree_bound", "max_dilation"),

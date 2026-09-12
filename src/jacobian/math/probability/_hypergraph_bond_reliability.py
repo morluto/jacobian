@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import Any, Literal, Self
 
+from flint import fmpq
 from pydantic import Field, StrictInt, ValidationError, model_validator
 from pydantic_core import PydanticCustomError
 
@@ -348,8 +349,6 @@ def compute_hypergraph_bond_connection_probability(
     request: HypergraphBondReliabilitySource,
 ) -> HypergraphBondConnectionProbabilityResult:
     """Compute exact terminal connectivity over every open hyperedge subset."""
-
-    from flint import fmpq
 
     try:
         source = HypergraphBondReliabilitySource.model_validate(request.model_dump())

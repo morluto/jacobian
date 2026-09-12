@@ -2,24 +2,18 @@
 
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.polynomials.graded._models import (
-    HilbertDimensionResult,
     HilbertFunctionRequest,
     HilbertFunctionResult,
-    HilbertMultiplicityResult,
     HilbertPolynomialResult,
     HilbertSeriesRequest,
     HilbertSeriesResult,
-    HVectorResult,
     InitialMonomialIdealRequest,
     InitialMonomialIdealResult,
     StandardMonomialsRequest,
     StandardMonomialsResult,
 )
 from jacobian.math.polynomials.graded.operations import (
-    h_vector,
-    hilbert_dimension,
     hilbert_function,
-    hilbert_multiplicity,
     hilbert_polynomial,
     hilbert_series,
     initial_monomial_ideal,
@@ -82,66 +76,6 @@ TOOLS = (
             OperationExample(
                 name="line",
                 description="Compute the eventual Hilbert polynomial of QQ[x,y]/(x^2).",
-                input={"ideal": _EXAMPLE_IDEAL},
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="graded_quotient.dimension.compute",
-        title="Compute graded quotient dimension",
-        description="Return the Krull dimension as the reduced Hilbert-series denominator exponent.",
-        request_type=HilbertSeriesRequest,
-        result_type=HilbertDimensionResult,
-        run=lambda request: hilbert_dimension(
-            request.ideal,
-            request.monomial_order,
-            resource_budget=request.resource_budget,
-        ),
-        tags=("polynomial", "graded", "dimension", "exact"),
-        examples=(
-            OperationExample(
-                name="line",
-                description="Compute the dimension of QQ[x,y]/(x^2).",
-                input={"ideal": _EXAMPLE_IDEAL},
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="graded_quotient.multiplicity.compute",
-        title="Compute graded quotient multiplicity",
-        description="Return the exact multiplicity from the reduced Hilbert numerator, including zero-dimensional length.",
-        request_type=HilbertSeriesRequest,
-        result_type=HilbertMultiplicityResult,
-        run=lambda request: hilbert_multiplicity(
-            request.ideal,
-            request.monomial_order,
-            resource_budget=request.resource_budget,
-        ),
-        tags=("polynomial", "graded", "multiplicity", "exact"),
-        examples=(
-            OperationExample(
-                name="line",
-                description="Compute multiplicity of QQ[x,y]/(x^2).",
-                input={"ideal": _EXAMPLE_IDEAL},
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="graded_quotient.h_vector.compute",
-        title="Compute the reduced Hilbert h-vector",
-        description="Return the exact integer coefficients of the reduced numerator under the (1-t)^d convention.",
-        request_type=HilbertSeriesRequest,
-        result_type=HVectorResult,
-        run=lambda request: h_vector(
-            request.ideal,
-            request.monomial_order,
-            resource_budget=request.resource_budget,
-        ),
-        tags=("polynomial", "graded", "h-vector", "exact"),
-        examples=(
-            OperationExample(
-                name="line",
-                description="Compute the h-vector of QQ[x,y]/(x^2).",
                 input={"ideal": _EXAMPLE_IDEAL},
             ),
         ),

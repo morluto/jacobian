@@ -31,11 +31,8 @@ from jacobian.math.polynomials.graded._models import (
     InitialMonomialIdealResult,
     StandardMonomialsResult,
 )
-from jacobian.math.polynomials.ideals._models import (
-    IdealComputationBudget,
-    _require_ideal_budget,
-)
-from jacobian.math.polynomials.ideals.operations import groebner_basis
+from jacobian.math.polynomials.ideals._models import IdealComputationBudget
+from jacobian.math.polynomials.ideals.operations import _admit_source, groebner_basis
 from jacobian.math.polynomials.values import (
     MAX_RATIONAL_FUNCTION_EXPONENT,
     MAX_RATIONAL_FUNCTION_TERMS,
@@ -49,7 +46,7 @@ from jacobian.math.polynomials.values import (
 
 def _require_homogeneous(ideal: RationalPolynomialIdeal) -> None:
     try:
-        _require_ideal_budget(ideal, label="graded ideal")
+        _admit_source(ideal, label="graded ideal")
     except ValueError as error:
         raise OperationResourceAdmissionError(
             location=("ideal",), code="graded_ideal.input_budget", message=str(error)
@@ -100,6 +97,10 @@ def initial_monomial_ideal(
     for generator in basis_result.basis.generators:
         if not generator.polynomial.terms:
             zero_basis = True
+            continue
+        leading_terms = generator.polynomial.terms
+        if len(leading_terms) == 1 and not any(leading_terms[0].exponents):
+            exponents.add(leading_terms[0].exponents)
             continue
         leading = Poly(
             rational_polynomial_to_sympy(generator),
@@ -208,6 +209,53 @@ def standard_monomials(
     )
 
 
+def _require_hilbert_function_slices(variable_count: int, max_degree: int) -> None:
+    for degree in range(max_degree + 1):
+        domain_size = (
+            1
+            if variable_count == 0
+            else comb(degree + variable_count - 1, variable_count - 1)
+        )
+        if domain_size > MAX_STANDARD_MONOMIALS:
+            raise OperationResourceAdmissionError(
+                location=("max_degree",),
+                code="graded_ideal.monomial_domain_budget",
+                message="standard-monomial domain exceeds the bounded enumeration envelope",
+            )
+
+
+def _minimal_source_monomials(
+    ideal: RationalPolynomialIdeal,
+) -> tuple[tuple[int, ...], ...] | None:
+    exponents: list[tuple[int, ...]] = []
+    for generator in ideal.generators:
+        terms = generator.polynomial.terms
+        if not terms:
+            continue
+        if len(terms) != 1:
+            return None
+        exponents.append(terms[0].exponents)
+    return tuple(
+        exponent
+        for exponent in exponents
+        if not any(
+            other != exponent
+            and all(left <= right for left, right in zip(other, exponent, strict=True))
+            for other in exponents
+        )
+    )
+
+
+def _preflight_series_generator_bound(ideal: RationalPolynomialIdeal) -> None:
+    monomials = _minimal_source_monomials(ideal)
+    if monomials is not None and len(monomials) > MAX_HILBERT_SERIES_GENERATORS:
+        raise OperationResourceAdmissionError(
+            location=("ideal",),
+            code="graded_ideal.series_generator_budget",
+            message="Hilbert-series inclusion-exclusion supports at most 8 minimal generators",
+        )
+
+
 def hilbert_function(
     ideal: RationalPolynomialIdeal,
     monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex",
@@ -221,6 +269,7 @@ def hilbert_function(
             code="graded_ideal.function_degree_budget",
             message="Hilbert-function prefixes support degrees from 0 through 32",
         )
+    _require_hilbert_function_slices(len(ideal.variables), max_degree)
     initial = initial_monomial_ideal(
         ideal, monomial_order, resource_budget=resource_budget
     )
@@ -382,6 +431,7 @@ def hilbert_series(
             code="graded_ideal.series_prefix_budget",
             message="Hilbert-series prefixes support degrees from 0 through 16",
         )
+    _preflight_series_generator_bound(ideal)
     initial = initial_monomial_ideal(
         ideal, monomial_order, resource_budget=resource_budget
     )

@@ -244,3 +244,91 @@ def test_native_hilbert_prefix_bounds_precede_initial_ideal_expansion(
     monkeypatch.setattr(graded_operations, "initial_monomial_ideal", fail)
     with pytest.raises(OperationResourceAdmissionError, match="prefixes support"):
         operation(_ideal((2, 0)), **{keyword: value})
+
+
+def test_hilbert_series_rejects_nine_minimal_monomials_before_groebner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.polynomials.graded.operations as graded_operations
+
+    ideal = _ideal(*((8 - index, index) for index in range(9)))
+
+    def fail(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("series generator overflow must not expand Groebner")
+
+    monkeypatch.setattr(graded_operations, "initial_monomial_ideal", fail)
+    with pytest.raises(
+        OperationResourceAdmissionError, match="at most 8 minimal generators"
+    ):
+        hilbert_series(ideal, prefix_degree=1)
+
+
+def test_hilbert_function_rejects_eight_variable_degree_eleven_before_groebner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.polynomials.graded.operations as graded_operations
+
+    variables = tuple(f"x{index}" for index in range(8))
+    ideal = RationalPolynomialIdeal(
+        variables=variables,
+        generators=(
+            RationalPolynomial(
+                variables=variables,
+                polynomial=SparseRationalPolynomial(
+                    terms=(
+                        RationalPolynomialTerm(
+                            coefficient=CanonicalRational(num=1, den=1),
+                            exponents=(1,) + (0,) * 7,
+                        ),
+                    )
+                ),
+            ),
+        ),
+    )
+
+    def fail(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("function slice overflow must not expand Groebner")
+
+    monkeypatch.setattr(graded_operations, "initial_monomial_ideal", fail)
+    with pytest.raises(
+        OperationResourceAdmissionError, match="standard-monomial domain"
+    ):
+        hilbert_function(ideal, max_degree=11)
+
+
+def test_wide_unit_coefficient_remains_admitted_for_graded_series() -> None:
+    from jacobian.math.polynomials.ideals._models import MAX_COEFFICIENT_DIGITS
+
+    variables = ("x",)
+    wide = 10**MAX_COEFFICIENT_DIGITS
+    ideal = RationalPolynomialIdeal(
+        variables=variables,
+        generators=(
+            RationalPolynomial(
+                variables=variables,
+                polynomial=SparseRationalPolynomial(
+                    terms=(
+                        RationalPolynomialTerm(
+                            coefficient=CanonicalRational(num=wide, den=1),
+                            exponents=(0,),
+                        ),
+                    )
+                ),
+            ),
+        ),
+    )
+    series = hilbert_series(ideal, prefix_degree=2)
+    assert series.prefix == (0, 0, 0)
+    assert series.denominator_exponent == 0
+
+
+def test_projection_helpers_are_not_public_catalog_operations() -> None:
+    from jacobian.math.polynomials.graded._tools import TOOLS
+
+    published = {tool.operation_id for tool in TOOLS}
+    assert "graded_quotient.dimension.compute" not in published
+    assert "graded_quotient.multiplicity.compute" not in published
+    assert "graded_quotient.h_vector.compute" not in published
+    assert hilbert_dimension(_ideal((2, 0))).dimension == 1
+    assert hilbert_multiplicity(_ideal((2, 0))).multiplicity == 2
+    assert h_vector(_ideal((2, 0))).h_vector == (1, 1)

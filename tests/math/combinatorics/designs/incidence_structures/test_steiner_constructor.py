@@ -137,6 +137,14 @@ def test_native_continuation_rejects_mismatched_shard_order() -> None:
         )
 
 
+def test_native_continuation_revalidates_a_forged_shard() -> None:
+    forged = SteinerTripleSystemShard(order=7, fixed_triples=()).model_copy(
+        update={"fixed_triples": ((0, 99, 100),)}
+    )
+    with pytest.raises(OperationDomainValidationError, match="in range"):
+        construct_steiner_triple_system(7, 100, forged)
+
+
 def test_necessary_parameter_condition_rejects_order() -> None:
     with pytest.raises(ValidationError, match="congruent to 1 or 3"):
         SteinerTripleSystemRequest(order=5, search_budget=100)

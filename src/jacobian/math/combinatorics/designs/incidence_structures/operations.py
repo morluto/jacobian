@@ -7,6 +7,7 @@ from collections.abc import Callable
 from itertools import combinations
 from typing import Literal
 
+from pydantic import ValidationError
 from pydantic_core import PydanticCustomError
 
 from jacobian._execution import (
@@ -191,14 +192,24 @@ def construct_steiner_triple_system(
     """
     if type(order) is not int or type(search_budget) is not int:
         raise TypeError("order and search_budget must be integers")
-    if shard is not None and not isinstance(shard, SteinerTripleSystemShard):
-        raise TypeError("shard must be a SteinerTripleSystemShard or None")
-    if shard is not None and shard.order != order:
-        raise OperationDomainValidationError(
-            location=("order", "shard"),
-            code="incidence_structure.steiner_shard_order",
-            message="a continuation shard must have the same order as the request",
-        )
+    if shard is not None:
+        if not isinstance(shard, SteinerTripleSystemShard):
+            raise TypeError("shard must be a SteinerTripleSystemShard or None")
+        try:
+            shard = SteinerTripleSystemShard.model_validate(shard.model_dump())
+        except ValidationError as exc:
+            error = exc.errors()[0]
+            raise OperationDomainValidationError(
+                location=("shard", *error["loc"]),
+                code=str(error["type"]),
+                message=str(error["msg"]),
+            ) from exc
+        if shard.order != order:
+            raise OperationDomainValidationError(
+                location=("order", "shard"),
+                code="incidence_structure.steiner_shard_order",
+                message="a continuation shard must have the same order as the request",
+            )
 
     execution = current_request_execution()
     if execution is None:

@@ -154,4 +154,3 @@ def test_forged_action_fields_are_revalidated_before_backend_conversion() -> Non
     with pytest.raises(OperationDomainValidationError) as generators:
         tuple_family_orbit_profile(malformed_request)
     assert "generator" in generators.value.errors()[0]["type"]
-

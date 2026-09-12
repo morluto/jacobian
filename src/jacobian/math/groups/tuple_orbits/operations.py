@@ -5,9 +5,9 @@ from __future__ import annotations
 from collections import Counter
 from typing import Any
 
-from jacobian._execution import request_checkpoint
 from pydantic import ValidationError
 
+from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,

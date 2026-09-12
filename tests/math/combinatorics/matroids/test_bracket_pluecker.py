@@ -791,6 +791,16 @@ def test_oversized_repeated_coefficient_rejects_without_partition_search() -> No
         _bounded_component_sum([(Fraction(width), (0, 0))] * 128)
 
 
+def test_coprime_denominator_product_rejects_before_lcm_construction() -> None:
+    """32 near-bound coprime denominators must not form a million-digit LCM."""
+
+    digits = MAX_CANONICAL_INTEGER_DIGITS
+    base = 10 ** (digits - 1)
+    components = [(Fraction(1, base + index), (1, digits)) for index in range(32)]
+    with pytest.raises(OperationResourceAdmissionError, match="digit bound"):
+        _bounded_component_sum(components)
+
+
 def test_syzygy_admits_near_bound_denominator_products() -> None:
     """Products 3N and 2N that still have 32,768 digits remain representable."""
     modulus = 10 ** (MAX_CANONICAL_INTEGER_DIGITS - 1) + 1

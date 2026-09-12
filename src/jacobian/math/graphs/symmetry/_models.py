@@ -417,6 +417,14 @@ class FullGraphAutomorphismResult(StrictModel):
                 "graph.automorphism.generators_must_cover_source_axis",
                 "automorphism generators must be total permutations of source vertices",
             )
+        if any(
+            all(vertex == image for vertex, image in generator.mapping)
+            for generator in self.generators
+        ):
+            raise PydanticCustomError(
+                "graph.automorphism.source_generators_must_be_nonidentity",
+                "source generators must be nonidentity permutations",
+            )
         if len(self.group.generators) == 0:
             raise PydanticCustomError(
                 "graph.automorphism.group_requires_identity_generator",

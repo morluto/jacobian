@@ -81,6 +81,151 @@ def _complete_edge_colors_determined_by_vertex_classes(
     return True
 
 
+def _edge_color_lookup(graph: ColoredUndirectedGraph) -> dict[tuple[str, str], str]:
+    return dict(
+        zip(
+            graph.graph.edges,
+            graph.edge_colors or (_UNCOLORED,) * len(graph.graph.edges),
+            strict=True,
+        )
+    )
+
+
+def _clique_components_for_color(
+    vertex_labels: tuple[str, ...],
+    colored_edges: tuple[tuple[str, str], ...],
+) -> tuple[tuple[str, ...], ...] | None:
+    """Return components of one color if each component is a clique."""
+
+    adjacency: dict[str, set[str]] = {vertex: set() for vertex in vertex_labels}
+    for left, right in colored_edges:
+        adjacency[left].add(right)
+        adjacency[right].add(left)
+    unseen = set(vertex_labels)
+    parts: list[tuple[str, ...]] = []
+    while unseen:
+        start = next(iter(unseen))
+        component: list[str] = []
+        stack = [start]
+        unseen.remove(start)
+        while stack:
+            vertex = stack.pop()
+            component.append(vertex)
+            for neighbor in adjacency[vertex]:
+                if neighbor in unseen:
+                    unseen.remove(neighbor)
+                    stack.append(neighbor)
+        order = len(component)
+        edge_count = sum(len(adjacency[vertex]) for vertex in component) // 2
+        if edge_count != order * (order - 1) // 2:
+            return None
+        parts.append(tuple(sorted(component)))
+    if all(len(part) == 1 for part in parts):
+        return None
+    return tuple(sorted(parts))
+
+
+def _part_pair_edge_colors(
+    parts: tuple[tuple[str, ...], ...],
+    edge_colors: dict[tuple[str, str], str],
+) -> dict[tuple[int, int], str] | None:
+    part_of = {
+        vertex: index for index, part in enumerate(parts) for vertex in part
+    }
+    pair_color: dict[tuple[int, int], str] = {}
+    for (left, right), color in edge_colors.items():
+        key = (part_of[left], part_of[right])
+        if key[0] > key[1]:
+            key = (key[1], key[0])
+        previous = pair_color.get(key)
+        if previous is None:
+            pair_color[key] = color
+        elif previous != color:
+            return None
+    return pair_color
+
+
+def _infer_complete_edge_parts(
+    graph: ColoredUndirectedGraph,
+) -> tuple[tuple[str, ...], ...] | None:
+    """Recover the coarsest clique partition encoded by a complete edge coloring."""
+
+    if not graph.edge_colors:
+        return None
+    edge_colors = _edge_color_lookup(graph)
+    best: tuple[tuple[str, ...], ...] | None = None
+    for color in set(edge_colors.values()):
+        colored_edges = tuple(
+            edge for edge, edge_color in edge_colors.items() if edge_color == color
+        )
+        if not colored_edges:
+            continue
+        parts = _clique_components_for_color(graph.graph.vertices, colored_edges)
+        if parts is None or _part_pair_edge_colors(parts, edge_colors) is None:
+            continue
+        if best is None or len(parts) < len(best):
+            best = parts
+    return best
+
+
+def _wreath_generators_for_labeled_parts(
+    n: int,
+    vertices: tuple[str, ...],
+    parts: tuple[tuple[str, ...], ...],
+    pair_color: dict[tuple[int, int], str],
+) -> tuple[tuple[tuple[int, ...], ...], int]:
+    index = {vertex: position for position, vertex in enumerate(vertices)}
+    indexed_parts = tuple(tuple(index[vertex] for vertex in part) for part in parts)
+    generators: list[tuple[int, ...]] = []
+    order = 1
+    for part in indexed_parts:
+        size = len(part)
+        order *= factorial(size)
+        if size >= 2:
+            swap = list(range(n))
+            swap[part[0]], swap[part[1]] = part[1], part[0]
+            generators.append(tuple(swap))
+        if size >= 3:
+            cycle = list(range(n))
+            for source, target in zip(part, part[1:] + part[:1], strict=True):
+                cycle[source] = target
+            generators.append(tuple(cycle))
+    inside = tuple(pair_color.get((i, i), _UNCOLORED) for i in range(len(parts)))
+    fingerprints: dict[tuple[object, ...], list[int]] = {}
+    for i, part in enumerate(parts):
+        neighbor_profile = tuple(
+            sorted(
+                (
+                    pair_color[tuple(sorted((i, j)))],
+                    len(parts[j]),
+                    inside[j],
+                )
+                for j in range(len(parts))
+                if j != i
+            )
+        )
+        fingerprints.setdefault((len(part), inside[i], neighbor_profile), []).append(i)
+    for group in fingerprints.values():
+        order *= factorial(len(group))
+        if len(group) >= 2:
+            left = indexed_parts[group[0]]
+            right = indexed_parts[group[1]]
+            swap = list(range(n))
+            for source, target in zip(left, right, strict=True):
+                swap[source], swap[target] = target, source
+            generators.append(tuple(swap))
+        if len(group) >= 3:
+            cycle = list(range(n))
+            aligned = [indexed_parts[item] for item in group]
+            for source_part, target_part in zip(
+                aligned, aligned[1:] + aligned[:1], strict=True
+            ):
+                for source, target in zip(source_part, target_part, strict=True):
+                    cycle[source] = target
+            generators.append(tuple(cycle))
+    return tuple(generators), order
+
+
 @dataclass(frozen=True)
 class _FullGraphAdmission:
     vertices: tuple[str, ...]
@@ -266,7 +411,13 @@ def _special_complete_or_empty(
     if not empty and not complete:
         return None
     if complete and not _complete_edge_colors_determined_by_vertex_classes(graph):
-        return None
+        inferred = _infer_complete_edge_parts(graph)
+        if inferred is None:
+            return None
+        pair_color = _part_pair_edge_colors(inferred, _edge_color_lookup(graph))
+        if pair_color is None:
+            return None
+        return _wreath_generators_for_labeled_parts(n, vertices, inferred, pair_color)
     colors = dict(
         zip(
             graph.graph.vertices,

@@ -102,6 +102,24 @@ def test_empty_source_generators_must_report_order_one() -> None:
         FullGraphAutomorphismResult.model_validate(payload)
 
 
+def test_identity_source_generators_are_rejected() -> None:
+    result = full_graph_automorphism_group(
+        ColoredUndirectedGraph(
+            graph=SimpleUndirectedGraph(
+                vertices=("a", "b", "c"), edges=(("a", "b"), ("b", "c"))
+            ),
+            vertex_colors=("left", "middle", "right"),
+        )
+    )
+    payload = result.model_dump()
+    vertices = payload["graph"]["graph"]["vertices"]
+    identity = [(vertex, vertex) for vertex in vertices]
+    payload["generators"] = [{"generator_id": "g0", "mapping": identity}]
+    payload["group"]["generators"] = [list(range(len(vertices)))]
+    with pytest.raises(Exception, match="nonidentity"):
+        FullGraphAutomorphismResult.model_validate(payload)
+
+
 def test_full_group_orbits_require_sorted_representatives() -> None:
     result = full_graph_automorphism_group(
         ColoredUndirectedGraph(
@@ -421,6 +439,33 @@ def test_complete_graph_with_class_pair_edge_colors_stays_compact() -> None:
     assert result.automorphism_count == factorial(10) * factorial(10)
     assert result.generated_group_order == result.automorphism_count
     assert len(result.generators) == 4
+
+
+def test_complete_graph_infers_edge_induced_classes_without_vertex_colors() -> None:
+    left = tuple(f"a{index:02d}" for index in range(10))
+    right = tuple(f"b{index:02d}" for index in range(10))
+    vertices = (*left, *right)
+    block = {vertex: 0 for vertex in left}
+    block.update({vertex: 1 for vertex in right})
+    edges = tuple(
+        canonical_edge(first, second)
+        for index, first in enumerate(vertices)
+        for second in vertices[index + 1 :]
+    )
+    edge_colors = tuple(
+        "inside" if block[first] == block[second] else "across"
+        for first, second in edges
+    )
+    graph = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(vertices=vertices, edges=edges),
+        edge_colors=edge_colors,
+    )
+
+    result = full_graph_automorphism_group(graph)
+
+    assert result.automorphism_count == (factorial(10) ** 2) * 2
+    assert result.generated_group_order == result.automorphism_count
+    assert len(result.generators) == 5
 
 
 def test_uniform_vertex_colored_cliques_keep_compact_presentation() -> None:

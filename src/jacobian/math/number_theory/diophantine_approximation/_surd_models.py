@@ -28,10 +28,12 @@ MAX_SIMULTANEOUS_RADICANDS = 8
 MAX_SURD_MULTIPLIER_BITS = 4_096
 MAX_ENCLOSURE_COMPONENT_DIGITS = 16_384
 # Complete range operations expand a rectangular table.  Admit work and
-# output before any row or exact interval is materialized.
+# retained allocation before any row or exact interval is materialized.  One
+# allocation unit conservatively reserves an exact scalar bit or a fixed
+# structural slot; transports own their encoded-byte ceilings separately.
 MAX_SURD_RANGE_WORK = 32_000_000
 MAX_SURD_RANGE_INTERMEDIATE_BITS = 64_000_000
-MAX_SURD_RANGE_OUTPUT_BYTES = 16 * 1024 * 1024
+MAX_SURD_RANGE_ALLOCATION_UNITS = 16 * 1024 * 1024
 
 
 def _validation_error(code: str, message: str) -> PydanticCustomError:
@@ -547,8 +549,8 @@ __all__ = [
     "MAX_SIMULTANEOUS_RADICANDS",
     "MAX_SURD_MULTIPLIER_BITS",
     "MAX_SURD_RADICAND",
+    "MAX_SURD_RANGE_ALLOCATION_UNITS",
     "MAX_SURD_RANGE_INTERMEDIATE_BITS",
-    "MAX_SURD_RANGE_OUTPUT_BYTES",
     "MAX_SURD_RANGE_WORK",
     "MAX_SURD_SCALE_BITS",
     "NearestIntegerDistanceRequest",

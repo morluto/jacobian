@@ -21,8 +21,8 @@ from jacobian.math.analysis.intervals import ClosedRationalInterval
 from jacobian.math.number_theory.diophantine_approximation._surd_models import (
     MAX_SURD_MULTIPLIER_BITS,
     MAX_SURD_RADICAND,
+    MAX_SURD_RANGE_ALLOCATION_UNITS,
     MAX_SURD_RANGE_INTERMEDIATE_BITS,
-    MAX_SURD_RANGE_OUTPUT_BYTES,
     MAX_SURD_RANGE_WORK,
     MAX_SURD_SCALE_BITS,
     NearestIntegerDistanceRequest,
@@ -225,8 +225,8 @@ def _range_admission(request: RangeProfileRequest) -> None:
     product_bits = multiplier_bits + radicand_count * (request.scale_bits + 2)
     work = request.limit * radicand_count * (request.scale_bits + scalar_bits)
     intermediate_bits = request.limit * radicand_count * scalar_bits
-    row_bytes = radicand_count * (12 * scalar_bits + 512) + 4 * product_bits + 1_024
-    output_bytes = request.limit * row_bytes + radicand_count * 32 + 256
+    row_units = radicand_count * (12 * scalar_bits + 512) + 4 * product_bits + 1_024
+    allocation_units = request.limit * row_units + radicand_count * 32 + 256
     if work > MAX_SURD_RANGE_WORK:
         raise OperationResourceAdmissionError(
             location=("limit", "scale_bits"),
@@ -239,11 +239,13 @@ def _range_admission(request: RangeProfileRequest) -> None:
             code="diophantine.range_profile_intermediate_bound",
             message="range expansion exceeds the admitted intermediate-size bound",
         )
-    if output_bytes > MAX_SURD_RANGE_OUTPUT_BYTES:
+    if allocation_units > MAX_SURD_RANGE_ALLOCATION_UNITS:
         raise OperationResourceAdmissionError(
             location=("limit", "scale_bits"),
             code="diophantine.range_profile_output_bound",
-            message="the complete serialized range exceeds the admitted output bound",
+            message=(
+                "the complete range exceeds the admitted retained-allocation bound"
+            ),
         )
 
 

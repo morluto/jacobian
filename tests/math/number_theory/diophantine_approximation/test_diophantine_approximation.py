@@ -13,7 +13,13 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.canonical import encode_strict_json
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
+from jacobian.math.number_theory.diophantine_approximation import (
+    _surd_kernel as surd_kernel,
+)
 from jacobian.math.number_theory.diophantine_approximation import (
     continued_fraction,
     convergents,
@@ -645,6 +651,14 @@ def test_range_profile_rejects_aggregate_output_before_expansion() -> None:
         "diophantine.range_profile_intermediate_bound",
         "diophantine.range_profile_work_bound",
     }
+
+
+def test_range_profile_admits_retained_allocation_before_expansion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(surd_kernel, "MAX_SURD_RANGE_ALLOCATION_UNITS", 1)
+    with pytest.raises(OperationResourceAdmissionError, match="allocation bound"):
+        range_profile(RangeProfileRequest(radicands=(2, 3), limit=2, scale_bits=32))
 
 
 def test_serialized_range_rejects_forged_factor_axes() -> None:

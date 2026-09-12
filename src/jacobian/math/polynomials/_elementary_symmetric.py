@@ -164,7 +164,9 @@ def _bounds(request: ElementarySymmetricFamilyRequest) -> _ElementaryFamilyBound
         for index in range(variables)
         for degree in range(min(index, maximum_degree) + 1)
     )
-    work = recurrence_work + exponent_cells + monomials + maximum_degree + 1
+    # The recurrence reads each retained prefix term once and copies each
+    # retained prefix level once before adding the new-variable terms.
+    work = 2 * recurrence_work + exponent_cells + monomials + maximum_degree + 1
     bounds = _ElementaryFamilyBounds(
         monomials=monomials,
         exponent_cells=exponent_cells,
@@ -229,6 +231,7 @@ def _compute(
     for index in range(variable_count):
         request_checkpoint("during elementary symmetric recurrence")
         previous = levels
+        ledger.charge(sum(len(level) for level in previous))
         levels = [dict(level) for level in previous]
         if len(levels) <= request.maximum_degree:
             levels.append({})

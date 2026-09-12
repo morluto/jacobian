@@ -129,9 +129,7 @@ def test_ring_of_integers_round_trips_through_strict_json() -> None:
 
 
 def test_ring_of_integers_request_schema_and_parser_share_degree_boundary() -> None:
-    input_schema = NumberFieldRingOfIntegersRequest.model_json_schema(
-        mode="validation"
-    )
+    input_schema = NumberFieldRingOfIntegersRequest.model_json_schema(mode="validation")
     field_schema = input_schema["properties"]["field"]
     assert field_schema["properties"]["coefficients_descending"]["maxItems"] == 32
 

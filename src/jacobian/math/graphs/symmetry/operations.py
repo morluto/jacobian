@@ -130,9 +130,7 @@ def _part_pair_edge_colors(
     parts: tuple[tuple[str, ...], ...],
     edge_colors: dict[tuple[str, str], str],
 ) -> dict[tuple[int, int], str] | None:
-    part_of = {
-        vertex: index for index, part in enumerate(parts) for vertex in part
-    }
+    part_of = {vertex: index for index, part in enumerate(parts) for vertex in part}
     pair_color: dict[tuple[int, int], str] = {}
     for (left, right), color in edge_colors.items():
         key = (part_of[left], part_of[right])
@@ -212,7 +210,9 @@ def _is_quotient_automorphism(
     return True
 
 
-def _generated_quotient_size(generators: tuple[tuple[int, ...], ...], degree: int) -> int:
+def _generated_quotient_size(
+    generators: tuple[tuple[int, ...], ...], degree: int
+) -> int:
     identity = tuple(range(degree))
     seen = {identity}
     pending = [identity]
@@ -245,7 +245,9 @@ def _compact_quotient_generators(
     if reflection in aut_set:
         candidates.append(reflection)
     generators = tuple(dict.fromkeys(candidates))
-    if generators and _generated_quotient_size(generators, degree) == len(automorphisms):
+    if generators and _generated_quotient_size(generators, degree) == len(
+        automorphisms
+    ):
         return generators
     compact: list[tuple[int, ...]] = list(generators)
     for automorphism in sorted(automorphisms):

@@ -445,8 +445,8 @@ def test_complete_graph_infers_edge_induced_classes_without_vertex_colors() -> N
     left = tuple(f"a{index:02d}" for index in range(10))
     right = tuple(f"b{index:02d}" for index in range(10))
     vertices = (*left, *right)
-    block = {vertex: 0 for vertex in left}
-    block.update({vertex: 1 for vertex in right})
+    block = dict.fromkeys(left, 0)
+    block.update(dict.fromkeys(right, 1))
     edges = tuple(
         canonical_edge(first, second)
         for index, first in enumerate(vertices)
@@ -474,9 +474,7 @@ def test_complete_graph_respects_vertex_colors_inside_inferred_parts() -> None:
     vertex_color = {
         vertex: "red" if vertex.startswith("r") else "blue" for vertex in vertices
     }
-    pair_of = {
-        vertex: index for index, pair in enumerate(pairs) for vertex in pair
-    }
+    pair_of = {vertex: index for index, pair in enumerate(pairs) for vertex in pair}
     edges = tuple(
         canonical_edge(left, right)
         for index, left in enumerate(vertices)
@@ -500,13 +498,9 @@ def test_complete_graph_respects_vertex_colors_inside_inferred_parts() -> None:
 
 
 def test_complete_graph_uses_colored_quotient_automorphisms() -> None:
-    parts = tuple(
-        (f"{label}0", f"{label}1") for label in ("a", "b", "c", "d")
-    )
+    parts = tuple((f"{label}0", f"{label}1") for label in ("a", "b", "c", "d"))
     vertices = tuple(vertex for part in parts for vertex in part)
-    part_of = {
-        vertex: index for index, part in enumerate(parts) for vertex in part
-    }
+    part_of = {vertex: index for index, part in enumerate(parts) for vertex in part}
     edges = tuple(
         canonical_edge(left, right)
         for index, left in enumerate(vertices)

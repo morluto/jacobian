@@ -12,6 +12,7 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.polynomials.graded._models import (
     HilbertFunctionResult,
+    HilbertPolynomialResult,
     HilbertSeriesResult,
     HVectorResult,
     StandardMonomialsResult,
@@ -332,3 +333,62 @@ def test_projection_helpers_are_not_public_catalog_operations() -> None:
     assert hilbert_dimension(_ideal((2, 0))).dimension == 1
     assert hilbert_multiplicity(_ideal((2, 0))).multiplicity == 2
     assert h_vector(_ideal((2, 0))).h_vector == (1, 1)
+
+
+def test_unit_ideal_hilbert_function_skips_ambient_slice_cap() -> None:
+    variables = tuple(f"x{index}" for index in range(8))
+    ideal = RationalPolynomialIdeal(
+        variables=variables,
+        generators=(
+            RationalPolynomial(
+                variables=variables,
+                polynomial=SparseRationalPolynomial(
+                    terms=(
+                        RationalPolynomialTerm(
+                            coefficient=CanonicalRational(num=1, den=1),
+                            exponents=(0,) * 8,
+                        ),
+                    )
+                ),
+            ),
+        ),
+    )
+    profile = hilbert_function(ideal, max_degree=11)
+    assert profile.values == (0,) * 12
+
+
+def test_duplicate_source_monomials_do_not_inflate_series_cap() -> None:
+    ideal = _ideal(*((2, 0) for _ in range(9)))
+    series = hilbert_series(ideal, prefix_degree=3)
+    assert series.prefix == (1, 2, 2, 2)
+
+
+def test_hilbert_polynomial_binds_source_ring_and_m_axis() -> None:
+    result = hilbert_polynomial(_ideal((2, 0)))
+    other_variables = ("u", "v")
+    other = hilbert_polynomial(
+        RationalPolynomialIdeal(
+            variables=other_variables,
+            generators=(
+                RationalPolynomial(
+                    variables=other_variables,
+                    polynomial=SparseRationalPolynomial(
+                        terms=(
+                            RationalPolynomialTerm(
+                                coefficient=CanonicalRational(num=1, den=1),
+                                exponents=(2, 0),
+                            ),
+                        )
+                    ),
+                ),
+            ),
+        )
+    )
+    payload = result.model_dump()
+    payload["initial_ideal"] = other.initial_ideal.model_dump()
+    with pytest.raises(ValidationError, match="source ring"):
+        HilbertPolynomialResult.model_validate(payload)
+    forged = result.model_dump()
+    forged["polynomial"]["variables"] = ["t"]
+    with pytest.raises(ValidationError, match="m axis"):
+        HilbertPolynomialResult.model_validate(forged)

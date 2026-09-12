@@ -168,6 +168,14 @@ class HilbertPolynomialResult(StrictModel):
     polynomial: RationalPolynomial
     stabilization_degree: StrictInt = Field(ge=0)
 
+    @model_validator(mode="after")
+    def require_source_and_axis(self) -> Self:
+        if self.ideal.variables != self.initial_ideal.variables:
+            raise ValueError("Hilbert-polynomial values must share the source ring")
+        if self.polynomial.variables != ("m",):
+            raise ValueError("Hilbert polynomial uses the m axis")
+        return self
+
 
 class HilbertDimensionResult(StrictModel):
     ideal: RationalPolynomialIdeal

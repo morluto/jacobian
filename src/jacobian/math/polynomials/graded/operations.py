@@ -185,6 +185,13 @@ def standard_monomials(
             message="standard monomials support degrees from 0 through 32",
         )
     generators = _require_monomial_ideal(initial_ideal)
+    if any(not any(exponent) for exponent in generators):
+        return StandardMonomialsResult(
+            initial_ideal=initial_ideal,
+            degree=degree,
+            monomials=(),
+            count=0,
+        )
     variables = len(initial_ideal.variables)
     domain_size = comb(degree + variables - 1, variables - 1)
     if domain_size > MAX_STANDARD_MONOMIALS:
@@ -235,13 +242,14 @@ def _minimal_source_monomials(
         if len(terms) != 1:
             return None
         exponents.append(terms[0].exponents)
+    unique = tuple(dict.fromkeys(exponents))
     return tuple(
         exponent
-        for exponent in exponents
+        for exponent in unique
         if not any(
             other != exponent
             and all(left <= right for left, right in zip(other, exponent, strict=True))
-            for other in exponents
+            for other in unique
         )
     )
 
@@ -269,7 +277,9 @@ def hilbert_function(
             code="graded_ideal.function_degree_budget",
             message="Hilbert-function prefixes support degrees from 0 through 32",
         )
-    _require_hilbert_function_slices(len(ideal.variables), max_degree)
+    monomials = _minimal_source_monomials(ideal)
+    if monomials is None or not any(not any(exponent) for exponent in monomials):
+        _require_hilbert_function_slices(len(ideal.variables), max_degree)
     initial = initial_monomial_ideal(
         ideal, monomial_order, resource_budget=resource_budget
     )

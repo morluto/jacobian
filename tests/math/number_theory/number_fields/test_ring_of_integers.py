@@ -238,6 +238,17 @@ def test_discriminant_admission_does_not_factor_inside_perfect_power(
     )
 
 
+def test_reducible_semiprime_linear_factor_is_not_a_factorization_bound() -> None:
+    field = SimpleNumberFieldPresentation(
+        coefficients_descending=(1, -(100003 * 100019), 0)
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        ring_of_integers(field)
+    assert error.value.errors()[0]["type"] == (
+        "number_field.defining_polynomial_must_be_irreducible"
+    )
+
+
 def test_nonmonic_eisenstein_discriminant_is_rejected_before_worker_launch() -> None:
     field = SimpleNumberFieldPresentation(
         coefficients_descending=(2**849, *([0] * 30), -3)

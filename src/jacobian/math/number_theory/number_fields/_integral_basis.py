@@ -31,6 +31,7 @@ _ROUND_TWO_TRIAL_PRIME_BOUND = 100_000
 # be proven factorable here and are rejected.
 _ROUND_TWO_COFACTOR_DIGIT_BOUND = 4096
 _ROUND_TWO_COFACTOR_LIMIT = 10**_ROUND_TWO_COFACTOR_DIGIT_BOUND
+_ADMITTED_MONIC_DISCRIMINANTS: dict[tuple[int, ...], int] = {}
 
 
 def _monic_zz_coefficients(
@@ -161,12 +162,16 @@ def require_factorizable_discriminant(
     request_checkpoint("before number-field discriminant admission")
     import sympy
 
+    monic_coefficients = _monic_zz_coefficients(field)
     polynomial = sympy.Poly.from_list(
-        list(_monic_zz_coefficients(field)),
+        list(monic_coefficients),
         gens=sympy.Symbol("alpha"),
         domain=sympy.ZZ,
     )
+    if polynomial.is_irreducible is not True:
+        return
     discriminant = int(polynomial.discriminant())
+    _ADMITTED_MONIC_DISCRIMINANTS[monic_coefficients] = discriminant
     if discriminant == 0:
         return
     cofactor = _strip_small_factors(abs(discriminant))
@@ -201,6 +206,9 @@ def recognized_integral_basis(
     )
     if polynomial.is_irreducible is not True:
         return None
+    admitted = _ADMITTED_MONIC_DISCRIMINANTS.get(monic_coefficients)
+    if admitted is not None:
+        polynomial.discriminant = lambda *_args, **_kwargs: admitted
     ring, field_discriminant = cast(tuple[Any, Any], round_two(polynomial))
     return ring, field_discriminant, alpha, leading
 

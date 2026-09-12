@@ -17,6 +17,7 @@ from jacobian.math.geometry._convex_polygon_intersection import (
 )
 from jacobian.math.geometry._models import (
     INVERSION_ADMISSION_DIGITS,
+    MAX_CONFIGURATION_POINTS,
     MAX_COORDINATE_DIGITS,
     CircumradiusProfileResult,
     CircumradiusTripleEntry,
@@ -39,7 +40,6 @@ from jacobian.math.geometry._models import (
     SegmentIntersectionResult,
     SimplePolygonDecisionResult,
     SpannedCircleEntry,
-    SpannedCircleProfileRequest,
     SpannedCircleProfileResult,
     _inverted_components_within_bound,
     _is_simple_ring,
@@ -191,6 +191,25 @@ def _admit_circumcircle(
             location=("first", "second", "third"),
             code="geometry.circumcircle_requires_three_noncollinear_points",
             message="circumcircle requires three noncollinear points",
+        )
+
+
+def _admit_spanned_circle_source(points: tuple[RationalPoint2D, ...]) -> None:
+    if not 3 <= len(points) <= MAX_CONFIGURATION_POINTS:
+        _reject_geometry_domain(
+            location=("points",),
+            code="geometry.spanned_circle_point_count",
+            message=(
+                "spanned-circle profiles require between 3 and "
+                f"{MAX_CONFIGURATION_POINTS} source points"
+            ),
+        )
+    keys = tuple(_point_key(point) for point in points)
+    if len(keys) != len(set(keys)):
+        _reject_geometry_domain(
+            location=("points",),
+            code="geometry.spanned_circle_points_unique",
+            message="spanned-circle source point coordinates must be unique",
         )
 
 
@@ -804,14 +823,7 @@ def spanned_circle_profile(
     """Return every distinct circle spanned by a non-collinear source triple."""
     from itertools import combinations
 
-    try:
-        SpannedCircleProfileRequest(points=points)
-    except ValueError as exc:
-        raise OperationDomainValidationError(
-            location=("points",),
-            code="geometry.spanned_circle_source",
-            message=str(exc),
-        ) from exc
+    _admit_spanned_circle_source(points)
     _admit_configuration(points, output_bound=True)
     point_values = _points_to_fractions(points)
     n = len(point_values)

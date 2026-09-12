@@ -283,7 +283,9 @@ def _root_of_unity(quarter_turns: int) -> Gaussian:
     )[quarter_turns % 4]
 
 
-def _trig(angle: IntegerAffineAngleForm, axis: int, *, sine: bool) -> RationalFunction:
+def _trig(
+    angle: IntegerAffineAngleForm, axis: int, *, sine: bool
+) -> tuple[Polynomial, Polynomial, tuple[Polynomial, ...]]:
     if len(angle.coefficients) != axis:
         raise PydanticCustomError(
             "trigonometric.angle_axis", "angle coefficients must align with variables"

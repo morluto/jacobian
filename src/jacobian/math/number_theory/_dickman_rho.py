@@ -276,6 +276,16 @@ def _piece_width(
     return rounding + 2 * _dyadic_upper(remainder, precision_bits).as_fraction()
 
 
+def _require_precision_bits(precision_bits: object) -> int:
+    if type(precision_bits) is not int:
+        raise OperationDomainValidationError(
+            location=("precision_bits",),
+            code="number_theory.dickman_rho.precision_type",
+            message="precision_bits must be an int",
+        )
+    return precision_bits
+
+
 def _admit_request(request: DickmanRhoPiecewiseEnclosureParameters) -> int:
     """Compute the complete semantic envelope before recurrence expansion."""
 
@@ -286,7 +296,7 @@ def _admit_request(request: DickmanRhoPiecewiseEnclosureParameters) -> int:
             code="number_theory.dickman_rho.endpoint_range",
             message="Dickman endpoint must lie in [0, 8]",
         )
-    if request.target_width.as_fraction() <= 0:
+    if request.target_width.mantissa <= 0:
         raise OperationDomainValidationError(
             location=("target_width",),
             code="number_theory.dickman_rho.target_width",
@@ -304,8 +314,16 @@ def _admit_request(request: DickmanRhoPiecewiseEnclosureParameters) -> int:
             code="number_theory.dickman_rho.endpoint_representation",
             message="endpoint components exceed the admitted exact preflight bound",
         )
-    if interval_count > 1 and request.target_width.as_fraction() < Fraction(
-        1, 1 << request.precision_bits
+    if request.target_width.exponent < -1_000_000:
+        raise OperationResourceAdmissionError(
+            location=("target_width",),
+            code="number_theory.dickman_rho.target_width_representation",
+            message="target width exponent exceeds the admitted exact preflight bound",
+        )
+    precision_floor = ExactDyadic(mantissa=1, exponent=-request.precision_bits)
+    if (
+        interval_count > 1
+        and request.target_width.compare(precision_floor) < 0
     ):
         raise OperationResourceAdmissionError(
             location=("target_width", "precision_bits"),
@@ -341,9 +359,9 @@ def _admit_request(request: DickmanRhoPiecewiseEnclosureParameters) -> int:
 def _run_dickman_rho_piecewise_enclosure(
     request: DickmanRhoPiecewiseEnclosureParameters,
 ) -> DickmanRhoPiecewiseEnclosureResult:
+    _admit_request(request)
     endpoint = request.endpoint.as_fraction()
     target = request.target_width.as_fraction()
-    _admit_request(request)
     for degree in range(8, MAX_DICKMAN_DEGREE + 1, 8):
         central = _central_pieces(endpoint, degree)
         if all(
@@ -401,6 +419,7 @@ def dickman_rho_piecewise_enclosure(
             code="number_theory.dickman_rho.target_width_type",
             message="target_width must be an ExactDyadic",
         )
+    precision_bits = _require_precision_bits(precision_bits)
     if (
         precision_bits < MIN_DICKMAN_PRECISION_BITS
         or precision_bits > MAX_DICKMAN_PRECISION_BITS

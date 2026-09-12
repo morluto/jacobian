@@ -6,11 +6,13 @@ from math import log
 import pytest
 from pydantic import ValidationError
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math import number_theory
+from jacobian.math.analysis._models import MAX_DYADIC_EXPONENT, ExactDyadic
 from jacobian.math.number_theory._dickman_rho import (
     DickmanRhoAffinePiece,
     DickmanRhoPiecewiseEnclosureRequest,
@@ -227,7 +229,6 @@ def test_dickman_native_api_exports_canonical_value_family() -> None:
 
 def test_native_endpoint_outside_the_contract_is_a_typed_domain_error() -> None:
     from jacobian._exact import CanonicalRational
-    from jacobian.math.analysis._models import ExactDyadic
 
     with pytest.raises(OperationDomainValidationError, match=r"\[0, 8\]"):
         dickman_rho_piecewise_enclosure(
@@ -237,7 +238,6 @@ def test_native_endpoint_outside_the_contract_is_a_typed_domain_error() -> None:
 
 
 def test_native_noncanonical_argument_types_are_rejected() -> None:
-    from jacobian.math.analysis._models import ExactDyadic
 
     with pytest.raises(OperationDomainValidationError, match="CanonicalRational"):
         dickman_rho_piecewise_enclosure(
@@ -250,3 +250,28 @@ def test_endpoint_eight_work_estimate_is_admitted() -> None:
     from jacobian.math.number_theory._dickman_rho import _admit_request
 
     _admit_request(_request(8, -5, precision_bits=32))
+
+
+def test_extreme_dyadic_target_width_is_rejected_without_fraction_expansion() -> None:
+
+    with pytest.raises(OperationResourceAdmissionError, match="exponent"):
+        dickman_rho_piecewise_enclosure(
+            CanonicalRational(num=2, den=1),
+            ExactDyadic(mantissa=1, exponent=-(MAX_DYADIC_EXPONENT)),
+        )
+
+
+def test_precision_bits_must_be_a_strict_int() -> None:
+
+    with pytest.raises(OperationDomainValidationError, match="int"):
+        dickman_rho_piecewise_enclosure(
+            CanonicalRational(num=2, den=1),
+            ExactDyadic(mantissa=1, exponent=-5),
+            precision_bits="128",  # type: ignore[arg-type]
+        )
+    with pytest.raises(OperationDomainValidationError, match="int"):
+        dickman_rho_piecewise_enclosure(
+            CanonicalRational(num=2, den=1),
+            ExactDyadic(mantissa=1, exponent=-5),
+            precision_bits=128.0,  # type: ignore[arg-type]
+        )

@@ -360,13 +360,13 @@ class TestCanonicalComplexFeeding:
             )
 
     def test_tampered_canonical_dump_rejected(self) -> None:
-        """A canonical dump is structurally decoded into its authored facets."""
+        """A canonical dump cannot pair stale faces with changed facets."""
         tampered = {
             **_CANONICAL_CIRCLE,
             "maximal_simplices": [["a", "b"], ["a", "c"]],
         }
-        request = SkeletonRequest(complex=_complex(tampered), k=0)
-        assert request.complex.facets == (("a", "b"), ("a", "c"))
+        with pytest.raises(ValidationError, match="face closure"):
+            SkeletonRequest(complex=_complex(tampered), k=0)
 
     def test_incomplete_canonical_dump_rejected(self) -> None:
         """A canonical-shape dump missing derived fields cannot bypass

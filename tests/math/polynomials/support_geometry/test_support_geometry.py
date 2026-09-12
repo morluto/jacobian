@@ -120,9 +120,7 @@ class TestSupport:
         genuine = compute_weight_profile(
             WeightProfileRequest(polynomial=source, weight=(1, 2))
         )
-        decoded = PolynomialWeightProfile.model_validate_json(
-            genuine.model_dump_json()
-        )
+        decoded = PolynomialWeightProfile.model_validate_json(genuine.model_dump_json())
         assert verify_polynomial_weight_profile(decoded)
         forged = genuine.model_copy(
             update={"minimum_weight": genuine.minimum_weight + 1}

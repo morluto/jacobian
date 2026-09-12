@@ -380,9 +380,10 @@ def _facets_and_box(  # noqa: C901
     total_scan = 1
     for span in spans:
         total_scan *= span
-        if total_scan > 10_000_000:
+        if total_scan > MAX_TOTAL_SCAN:
             raise LatticePointBudgetError(
-                "integer bounding box total scan exceeds the 10M-point budget"
+                "integer bounding box total scan exceeds the "
+                f"{MAX_TOTAL_SCAN}-point budget"
             )
     if total_scan * len(facets) > MAX_FACET_TESTS:
         raise LatticePointBudgetError(
@@ -483,11 +484,41 @@ def count_lattice_points(
     )
 
 
+def _ehrhart_aggregate_scan_bound(
+    vertices: tuple[Vertex, ...], max_dilation: int
+) -> int:
+    """Bound all dilation boxes from the unscaled integral source."""
+
+    spans = [
+        max(vertex.coordinates[axis].num for vertex in vertices)
+        - min(vertex.coordinates[axis].num for vertex in vertices)
+        for axis in range(len(vertices[0].coordinates))
+    ]
+    total_scan = 0
+    for dilation in range(1, max_dilation + 1):
+        scan = 1
+        for span in spans:
+            scan *= dilation * span + 1
+            if scan > MAX_TOTAL_SCAN:
+                raise LatticePointBudgetError(
+                    "the Ehrhart dilation range exceeds the aggregate "
+                    f"{MAX_TOTAL_SCAN}-candidate scan budget"
+                )
+        total_scan += scan
+        if total_scan > MAX_TOTAL_SCAN:
+            raise LatticePointBudgetError(
+                "the Ehrhart dilation range exceeds the aggregate "
+                f"{MAX_TOTAL_SCAN}-candidate scan budget"
+            )
+    return total_scan
+
+
 def _ehrhart_scan_plans(
     vertices: tuple[Vertex, ...], max_dilation: int
 ) -> list[AdmittedGeometry]:
     """Admit every scaled geometry and the aggregate scan before enumeration."""
     dimension = len(vertices[0].coordinates)
+    _ehrhart_aggregate_scan_bound(vertices, max_dilation)
     if dimension > 1:
         facet_work = math.comb(len(vertices), dimension) * max_dilation
         if facet_work > MAX_FACET_COMBINATIONS:
@@ -606,7 +637,7 @@ def ehrhart_polynomial(
             )
         ),
     )
-    return EhrhartResult(
+    return EhrhartResult._from_kernel(
         vertices=vertices,
         dimension=len(vertices[0].coordinates),
         degree_bound=degree,

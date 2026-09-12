@@ -318,12 +318,12 @@ class EnumerateLatticePointsRequest(LatticePolytopeRequest):
     """Wire request for enumeration; execution admission happens in the operation."""
 
 
-def require_ehrhart_source(
+def _require_ehrhart_request_shape(
     vertices: tuple[RationalVertex, ...], degree_bound: int, max_dilation: int
-) -> None:
-    """Share exact source and enumeration bounds between native and wire calls."""
+) -> int:
+    """Check cheap request shape and scalar bounds before native admission."""
 
-    dimension = _require_ehrhart_vertex_shape(vertices)
+    dimension = _require_ehrhart_vertex_structure(vertices)
     if not 1 <= len(vertices) <= MAX_VERTICES:
         raise _validation_error(
             "ehrhart_vertex_count", "vertex count exceeds the admitted range"
@@ -345,14 +345,6 @@ def require_ehrhart_source(
             "ehrhart_dilation_range",
             "max_dilation must provide degree_bound + 1 evaluations",
         )
-    if any(
-        coordinate.den != 1 for vertex in vertices for coordinate in vertex.coordinates
-    ):
-        raise _validation_error(
-            "ehrhart_requires_integral_vertices",
-            "Ehrhart polynomial recovery currently requires integral vertices",
-        )
-
     from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS
     from jacobian.canonical import format_canonical_integer
 
@@ -368,10 +360,13 @@ def require_ehrhart_source(
             "ehrhart_scaled_coordinate",
             "a maximum-dilation coordinate exceeds the canonical integer bound",
         )
+    return dimension
 
 
-def _require_ehrhart_vertex_shape(vertices: tuple[RationalVertex, ...]) -> int:
-    """Require a nonempty, integral, full-dimensional V-representation."""
+def _require_ehrhart_vertex_structure(
+    vertices: tuple[RationalVertex, ...],
+) -> int:
+    """Check source vertex shape and scalar representation without rank work."""
 
     if not 1 <= len(vertices) <= MAX_VERTICES:
         raise _validation_error(
@@ -395,6 +390,15 @@ def _require_ehrhart_vertex_shape(vertices: tuple[RationalVertex, ...]) -> int:
             "ehrhart_requires_integral_vertices",
             "Ehrhart polynomial recovery currently requires integral vertices",
         )
+    return dimension
+
+
+def _require_ehrhart_full_dimensional(
+    vertices: tuple[RationalVertex, ...],
+) -> int:
+    """Require the source vertices to affinely span their ambient dimension."""
+
+    dimension = _require_ehrhart_vertex_structure(vertices)
     base = vertices[0].coordinates
     rows = [
         [
@@ -432,6 +436,15 @@ def _require_ehrhart_vertex_shape(vertices: tuple[RationalVertex, ...]) -> int:
     return dimension
 
 
+def require_ehrhart_source(
+    vertices: tuple[RationalVertex, ...], degree_bound: int, max_dilation: int
+) -> None:
+    """Admit one native Ehrhart source, including affine dimension."""
+
+    _require_ehrhart_request_shape(vertices, degree_bound, max_dilation)
+    _require_ehrhart_full_dimensional(vertices)
+
+
 class EhrhartRequest(StrictModel):
     """Recover an Ehrhart polynomial for a bounded integral V-polytope."""
 
@@ -449,7 +462,9 @@ class EhrhartRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_integral_vertices_and_range(self) -> Self:
-        require_ehrhart_source(self.vertices, self.degree_bound, self.max_dilation)
+        _require_ehrhart_request_shape(
+            self.vertices, self.degree_bound, self.max_dilation
+        )
         return self
 
 
@@ -471,7 +486,9 @@ class EhrhartResult(StrictModel):
 
     @model_validator(mode="after")
     def require_result_shapes(self) -> Self:
-        dimension = _require_ehrhart_vertex_shape(self.vertices)
+        dimension = _require_ehrhart_request_shape(
+            self.vertices, self.degree_bound, self.max_dilation
+        )
         if self.dimension != dimension:
             raise _validation_error(
                 "ehrhart_dimension_shape",
@@ -510,6 +527,28 @@ class EhrhartResult(StrictModel):
                 "polynomial degree must not exceed degree_bound",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        vertices: tuple[RationalVertex, ...],
+        dimension: int,
+        degree_bound: int,
+        max_dilation: int,
+        counts: tuple[tuple[int, ExactInteger], ...],
+        polynomial: RationalPolynomial,
+    ) -> Self:
+        """Construct trusted output after native admission and counting."""
+
+        return cls.model_construct(
+            vertices=vertices,
+            dimension=dimension,
+            degree_bound=degree_bound,
+            max_dilation=max_dilation,
+            counts=counts,
+            polynomial=polynomial,
+        )
 
 
 __all__ = [

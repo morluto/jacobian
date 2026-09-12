@@ -79,10 +79,12 @@ def test_degree_bound_must_cover_dimension() -> None:
         )
 
 
-def test_non_full_dimensional_one_point_source_is_rejected() -> None:
-    with pytest.raises(ValidationError, match="affinely span"):
-        EhrhartRequest.model_validate(
-            {"vertices": [_vertex(0)], "degree_bound": 1, "max_dilation": 1}
+def test_non_full_dimensional_one_point_source_is_rejected_at_native_admission() -> (
+    None
+):
+    with pytest.raises(OperationDomainValidationError, match="affinely span"):
+        native_ehrhart(
+            (Vertex.model_validate(_vertex(0)),), degree_bound=1, max_dilation=1
         )
 
 
@@ -104,6 +106,32 @@ def test_all_dilation_scans_are_admitted_before_any_scan(
             tuple(
                 Vertex.model_validate(_vertex(*point))
                 for point in ((0, 0), (50, 0), (0, 50), (50, 50))
+            ),
+            degree_bound=2,
+            max_dilation=32,
+        )
+    assert calls == 0
+
+
+def test_aggregate_scan_budget_rejects_before_scaled_geometry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.geometry.polytopes.lattice import operations
+
+    calls = 0
+    original = operations._facets_and_box
+
+    def count_geometry(*args: Any, **kwargs: Any) -> Any:
+        nonlocal calls
+        calls += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(operations, "_facets_and_box", count_geometry)
+    with pytest.raises(OperationDomainValidationError, match="aggregate"):
+        native_ehrhart(
+            tuple(
+                Vertex.model_validate(_vertex(*point))
+                for point in ((0, 0), (400, 0), (0, 400), (400, 400))
             ),
             degree_bound=2,
             max_dilation=32,

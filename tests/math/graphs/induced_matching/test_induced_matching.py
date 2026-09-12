@@ -75,6 +75,29 @@ def test_lexicographically_smallest_maximum_witness_is_returned() -> None:
     assert result.selected_edge_ids == ("e0", "e3")
 
 
+def test_lexicographic_tie_break_handles_double_digit_edge_ids() -> None:
+    graph = SimpleUndirectedGraph(
+        vertices=tuple(str(index) for index in range(7)),
+        edges=(
+            ("0", "2"),
+            ("0", "3"),
+            ("0", "4"),
+            ("1", "3"),
+            ("1", "4"),
+            ("1", "5"),
+            ("1", "6"),
+            ("2", "3"),
+            ("3", "4"),
+            ("3", "6"),
+            ("4", "5"),
+            ("5", "6"),
+        ),
+    )
+    result = maximum_induced_matching(graph)
+    assert result.cardinality == 2
+    assert result.selected_edge_ids == ("e0", "e11")
+
+
 def test_complete_bipartite_graph_has_one_edge_induced_matching() -> None:
     graph = SimpleUndirectedGraph(
         vertices=("a0", "a1", "b0", "b1"),

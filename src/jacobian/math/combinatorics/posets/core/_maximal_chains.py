@@ -368,17 +368,19 @@ def enumerate_maximal_chains(poset: FinitePoset) -> MaximalChainEnumerationResul
         )
     chains: list[tuple[str, ...]] = []
 
-    def visit(path: tuple[str, ...]) -> None:
+    def visit(path: list[str]) -> None:
         request_checkpoint("during maximal-chain materialization")
         targets = outgoing[path[-1]]
         if not targets:
-            chains.append(path)
+            chains.append(tuple(path))
             return
         for target in targets:
-            visit((*path, target))
+            path.append(target)
+            visit(path)
+            path.pop()
 
     for minimal in poset.minimal_elements:
-        visit((minimal,))
+        visit([minimal])
     rows = tuple(
         MaximalChainRow(
             elements=chain,

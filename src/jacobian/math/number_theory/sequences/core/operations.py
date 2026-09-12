@@ -9,7 +9,7 @@ from functools import reduce
 from itertools import pairwise
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import encode_strict_json, format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -34,6 +34,8 @@ from jacobian.math.number_theory.sequences.core.values import (
 )
 
 MAX_AUTOCORRELATION_MULTIPLICATIONS = 4_000_000
+MAX_SEQUENCE_ORDER_SHAPE_RESULT_BYTES = 10 * 1024 * 1024
+_ORDER_SHAPE_ROW_OVERHEAD_BYTES = 160
 
 
 def _admit(
@@ -116,6 +118,37 @@ def _admit_autocorrelation(request: FiniteIntegerSequence) -> tuple[int, ...]:
     return values
 
 
+def _admit_order_shape(request: FiniteIntegerSequence) -> tuple[int, ...]:
+    """Admit all exact cross-products and the complete profile envelope."""
+
+    values = _admit_autocorrelation(request)
+    size = len(values)
+    digits = max(
+        (len(format_canonical_integer(abs(value))) for value in values), default=1
+    )
+    cross_product_digits = 2 * digits
+    source_bytes = len(encode_strict_json(request.model_dump(mode="json")))
+    # Each interior row contains two exact products plus its index and boolean;
+    # the fixed allowance covers keys, punctuation, and integer encodings.
+    predicted_result_bytes = (
+        source_bytes
+        + max(0, size - 2)
+        * (_ORDER_SHAPE_ROW_OVERHEAD_BYTES + 2 * cross_product_digits)
+        + size * 8  # peak-position list and scalar metadata
+    )
+    if predicted_result_bytes > MAX_SEQUENCE_ORDER_SHAPE_RESULT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("values",),
+            code="sequences.order_shape.result_bytes_bound",
+            message=(
+                "the complete order-shape profile is predicted to occupy "
+                f"{predicted_result_bytes} bytes; maximum is "
+                f"{MAX_SEQUENCE_ORDER_SHAPE_RESULT_BYTES}"
+            ),
+        )
+    return values
+
+
 def aperiodic_autocorrelation(request: FiniteIntegerSequence) -> AutocorrelationResult:
     values = _admit_autocorrelation(request)
     size = len(values)
@@ -166,7 +199,7 @@ def cyclic_autocorrelation(request: FiniteIntegerSequence) -> AutocorrelationRes
 
 
 def sequence_order_shape(request: FiniteIntegerSequence) -> SequenceOrderShapeResult:
-    values = _admit_autocorrelation(request)
+    values = _admit_order_shape(request)
     nondecreasing_violation = next(
         (
             index

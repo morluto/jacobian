@@ -10,6 +10,7 @@ from jacobian.math.number_theory.sequences.core._models import (
     FiniteIntegerSequence,
 )
 from jacobian.math.number_theory.sequences.core.operations import (
+    MAX_SEQUENCE_ORDER_SHAPE_RESULT_BYTES,
     aperiodic_autocorrelation,
     cyclic_autocorrelation,
     sequence_order_shape,
@@ -75,3 +76,12 @@ def test_constant_sequence_peak_scan_is_linear() -> None:
     source = FiniteIntegerSequence(values=(1,) * 10_000)
     result = sequence_order_shape(source)
     assert result.weak_unimodal_peak_positions == tuple(range(10_000))
+
+
+def test_order_shape_rejects_complete_profile_output_explosion() -> None:
+    source = FiniteIntegerSequence(values=(1,) * 100_000)
+    with pytest.raises(
+        OperationResourceAdmissionError,
+        match=str(MAX_SEQUENCE_ORDER_SHAPE_RESULT_BYTES),
+    ):
+        sequence_order_shape(source)

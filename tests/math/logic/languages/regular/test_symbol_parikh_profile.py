@@ -372,9 +372,9 @@ def test_near_envelope_profile_execution_matches_admission_charge(
 ) -> None:
     import jacobian.math.logic.languages.regular._symbol_parikh as profile
 
-    reachable_count = 15
-    alphabet_size = 11
-    length = 4
+    reachable_count = 4
+    alphabet_size = 8
+    length = 6
     dfa = DFA(
         state_count=reachable_count,
         alphabet_size=alphabet_size,
@@ -434,6 +434,7 @@ def test_near_envelope_profile_execution_matches_admission_charge(
     original_extend = profile._extend_profile_layer
     original_collect = profile._collect_profile
     original_persistent = profile._persistent_reachable_states
+    original_walk = profile._longest_transient_walk
 
     def count_index(value: DFA) -> dict[tuple[int, int], int]:
         executed["transition_index"] += len(value.transitions)
@@ -465,10 +466,18 @@ def test_near_envelope_profile_execution_matches_admission_charge(
         reachable: set[int],
         size: int,
     ) -> set[int]:
-        executed["analysis"] += profile._noncommuting_analysis_work(
-            len(reachable), size
-        )
+        edge_probes = len(reachable) * size
+        executed["analysis"] += edge_probes + 2 * (len(reachable) + edge_probes)
         return original_persistent(by_source, reachable, size)
+
+    def count_walk(
+        by_source: dict[int, dict[int, int]],
+        transient: set[int],
+        size: int,
+        initial_state: int,
+    ) -> int:
+        executed["analysis"] += reachable_count * reachable_count * size
+        return original_walk(by_source, transient, size, initial_state)
 
     def count_extend(
         layer: dict[tuple[int, tuple[int, ...]], int],
@@ -492,6 +501,7 @@ def test_near_envelope_profile_execution_matches_admission_charge(
     monkeypatch.setattr(profile, "_letter_maps_on_reachable", count_maps)
     monkeypatch.setattr(profile, "_letter_actions_commute", count_commute)
     monkeypatch.setattr(profile, "_persistent_reachable_states", count_persistent)
+    monkeypatch.setattr(profile, "_longest_transient_walk", count_walk)
     monkeypatch.setattr(profile, "_extend_profile_layer", count_extend)
     monkeypatch.setattr(profile, "_collect_profile", count_collect)
 
@@ -515,6 +525,7 @@ def test_near_envelope_profile_execution_matches_admission_charge(
     assert executed["commute_preflight"] == commute_preflight
     assert all(executed.values())
     assert sum(charged.values()) <= MAX_SYMBOL_PARIKH_DP_WORK
+    assert sum(charged.values()) > MAX_SYMBOL_PARIKH_DP_WORK // 2
     assert_charged_work_parity(charged=charged, executed=executed)
 
 

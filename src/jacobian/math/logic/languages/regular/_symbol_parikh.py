@@ -373,14 +373,6 @@ def symbol_parikh_profile(
             by_source, transient, alphabet_size, dfa.initial_state
         )
     )
-    transient = set() if commute else reachable - persistent
-    max_transient_step = (
-        -1
-        if commute
-        else _longest_transient_walk(
-            by_source, transient, alphabet_size, dfa.initial_state
-        )
-    )
     layer_states = _states_per_layer(
         length=length,
         reachable=reachable,

@@ -34,3 +34,4 @@ for replay.
 ## Focused contracts
 
 - [Monomial-ideal graded Betti profiles](monomial-ideal-graded-betti.md)
+- [Exact rational Laurent-polynomial multiplication](rational-laurent-polynomials.md)

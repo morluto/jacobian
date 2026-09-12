@@ -3,8 +3,10 @@
 import pytest
 
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
+    OperationMatchRequest,
     OperationResourceAdmissionError,
 )
 from jacobian.math.polynomials._laurent import rational_laurent_multiply
@@ -42,6 +44,17 @@ def test_zero_preserves_parent_axis() -> None:
     assert rational_laurent_multiply(zero, monomial) == zero
 
 
+def test_monomial_operand_shifts_and_scales_sparse_support() -> None:
+    monomial = RationalLaurentPolynomial(variables=("x", "y"), terms=(term(2, -3, 4),))
+    source = RationalLaurentPolynomial(
+        variables=("x", "y"), terms=(term(3, 2, -1), term(-1, 0, -2))
+    )
+
+    result = rational_laurent_multiply(monomial, source)
+
+    assert result.terms == (term(6, -1, 3), term(-2, -3, 2))
+
+
 def test_axis_mismatch_rejects_before_convolution() -> None:
     left = RationalLaurentPolynomial(variables=("x",), terms=(term(1, 0),))
     right = RationalLaurentPolynomial(variables=("y",), terms=(term(1, 0),))
@@ -56,3 +69,13 @@ def test_coefficient_growth_is_rejected_before_convolution() -> None:
     right = RationalLaurentPolynomial(variables=("x",), terms=(term(coefficient, 0),))
     with pytest.raises(OperationResourceAdmissionError):
         rational_laurent_multiply(left, right)
+
+
+def test_catalog_discovers_laurent_multiplication_vocabulary() -> None:
+    result = Catalog.open().match(
+        OperationMatchRequest(need="rational Laurent polynomial multiplication")
+    )
+
+    assert (
+        result.matches[0].operation_id == "polynomial.laurent.rational.multiply.compute"
+    )

@@ -19,6 +19,10 @@ RATIONAL_LAURENT_MULTIPLY_OPERATION = MathTool(
     result_type=RationalLaurentPolynomial,
     run=_run,
     tags=("polynomial", "laurent", "rational", "multiply", "exact"),
+    discovery_terms=(
+        "rational Laurent polynomial multiplication",
+        "sparse Laurent convolution",
+    ),
     examples=(
         OperationExample(
             name="inverse_monomials_cancel",

@@ -313,9 +313,7 @@ def _admit_hypergraph_request(
         )
 
     hyperedge_count = len(request.hypergraph.edges)
-    state_memberships = (
-        hyperedge_count * (state_count // 2) if hyperedge_count else 0
-    )
+    state_memberships = hyperedge_count * (state_count // 2) if hyperedge_count else 0
     label_units = sum(len(vertex) for vertex in request.hypergraph.vertices) + sum(
         len(edge_id) for edge_id, _ in request.hypergraph.edges
     )

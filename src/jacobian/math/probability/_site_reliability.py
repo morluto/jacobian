@@ -333,8 +333,7 @@ def _admit_site_request(
             location=("states",),
             code="probability.site_reliability.output_bound",
             message=(
-                "complete site-reliability ledger exceeds its retained allocation "
-                "bound"
+                "complete site-reliability ledger exceeds its retained allocation bound"
             ),
         )
 

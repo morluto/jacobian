@@ -27,6 +27,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.probability._distribution import (
+    FiniteDistributionAtom,
     FiniteRationalDistribution,
     require_input_distribution,
 )
@@ -133,6 +134,64 @@ class BerryEsseenResult(StrictModel):
     bound_lower: CanonicalRational
     bound_upper: CanonicalRational
     bound_precision_bits: int = Field(ge=1, le=256, strict=True)
+
+    @classmethod
+    def model_json_schema(
+        cls,
+        by_alias: bool = True,
+        ref_template: str = "#/$defs/{model}",
+        schema_generator: type[GenerateJsonSchema] = GenerateJsonSchema,
+        mode: JsonSchemaMode = "validation",
+        *,
+        union_format: Literal["any_of", "primitive_type_array"] = "any_of",
+    ) -> dict[str, Any]:
+        schema = super().model_json_schema(
+            by_alias,
+            ref_template,
+            schema_generator,
+            mode,
+            union_format=union_format,
+        )
+        defs = schema.get("$defs")
+        if not isinstance(defs, dict):
+            return schema
+        shared = defs.get("FiniteRationalDistribution")
+        if not isinstance(shared, dict):
+            return schema
+        cloned = dict(shared)
+        cloned_properties = dict(cloned.get("properties", {}))
+        atoms = cloned_properties.get("atoms")
+        if isinstance(atoms, dict):
+            cloned_atoms = dict(atoms)
+            cloned_atoms["maxItems"] = MAX_BERRY_ESSEEN_ATOMS
+            cloned_properties["atoms"] = cloned_atoms
+            cloned["properties"] = cloned_properties
+        defs = dict(defs)
+        defs["BerryEsseenFiniteDistribution"] = cloned
+        request_schema = defs.get("BerryEsseenRequest")
+        if isinstance(request_schema, dict):
+            request_schema = dict(request_schema)
+            request_properties = dict(request_schema.get("properties", {}))
+            request_properties["distribution"] = {
+                "$ref": "#/$defs/BerryEsseenFiniteDistribution"
+            }
+            request_schema["properties"] = request_properties
+            defs["BerryEsseenRequest"] = request_schema
+        schema["$defs"] = defs
+        properties = schema.get("properties")
+        if isinstance(properties, dict):
+            properties = dict(properties)
+            source = properties.get("source")
+            if isinstance(source, dict) and "$ref" not in source:
+                source_properties = dict(source.get("properties", {}))
+                source_properties["distribution"] = {
+                    "$ref": "#/$defs/BerryEsseenFiniteDistribution"
+                }
+                source = dict(source)
+                source["properties"] = source_properties
+                properties["source"] = source
+            schema["properties"] = properties
+        return schema
 
     @classmethod
     def _from_kernel(
@@ -315,9 +374,7 @@ def _sqrt_interval(value: Fraction) -> tuple[Fraction, Fraction]:
     return Fraction(lower_numerator, scale), Fraction(lower_numerator + 1, scale)
 
 
-def berry_esseen_bound(request: BerryEsseenRequest) -> BerryEsseenResult:
-    """Compute the exact i.i.d. Berry--Esseen upper bound."""
-
+def _require_native_berry_request(request: BerryEsseenRequest) -> None:
     if type(request.sample_count) is not int:
         raise OperationDomainValidationError(
             location=("sample_count",),
@@ -330,7 +387,31 @@ def berry_esseen_bound(request: BerryEsseenRequest) -> BerryEsseenResult:
             code="probability.berry_esseen.nonpositive_sample_count",
             message="Berry--Esseen sample_count must be positive",
         )
-    if len(request.distribution.atoms) > MAX_BERRY_ESSEEN_ATOMS:
+    if request.sample_count > MAX_BERRY_ESSEEN_SAMPLE_COUNT:
+        raise OperationDomainValidationError(
+            location=("sample_count",),
+            code="probability.berry_esseen.sample_count_digits",
+            message=(
+                "Berry--Esseen sample_count must have at most "
+                f"{MAX_RESULT_RATIONAL_DIGITS} decimal digits"
+            ),
+        )
+    if not isinstance(request.distribution, FiniteRationalDistribution):
+        raise OperationDomainValidationError(
+            location=("distribution",),
+            code="probability.berry_esseen.distribution_type",
+            message="Berry--Esseen distribution must be a finite rational law",
+        )
+    atoms = getattr(request.distribution, "atoms", None)
+    if not isinstance(atoms, tuple) or any(
+        not isinstance(atom, FiniteDistributionAtom) for atom in atoms
+    ):
+        raise OperationDomainValidationError(
+            location=("distribution", "atoms"),
+            code="probability.berry_esseen.distribution_type",
+            message="Berry--Esseen distribution must be a finite rational law",
+        )
+    if len(atoms) > MAX_BERRY_ESSEEN_ATOMS:
         raise OperationResourceAdmissionError(
             location=("distribution", "atoms"),
             code="probability.berry_esseen.atom_work_bound",
@@ -339,6 +420,12 @@ def berry_esseen_bound(request: BerryEsseenRequest) -> BerryEsseenResult:
                 f"{MAX_BERRY_ESSEEN_ATOMS} input atoms"
             ),
         )
+
+
+def berry_esseen_bound(request: BerryEsseenRequest) -> BerryEsseenResult:
+    """Compute the exact i.i.d. Berry--Esseen upper bound."""
+
+    _require_native_berry_request(request)
 
     location = ("distribution",)
     try:

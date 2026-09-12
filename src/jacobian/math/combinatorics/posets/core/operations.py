@@ -147,7 +147,7 @@ def _revalidated_ranks(ranks: object) -> tuple[ElementRank, ...] | None:
         raise TypeError("ranks must be a tuple")
     return tuple(
         ElementRank.model_validate(
-            {"element": getattr(entry, "element"), "rank": getattr(entry, "rank")},
+            {"element": entry.element, "rank": entry.rank},
             strict=True,
         )
         for entry in ranks

@@ -174,7 +174,7 @@ def test_consumers_reject_mixed_carrier_elements_as_domain_errors() -> None:
 
     assert verify_finite_poset(malformed) is False
     with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
-            width(malformed)
+        width(malformed)
 
 
 def test_consumers_reject_boolean_rank_claims_as_domain_errors() -> None:

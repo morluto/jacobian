@@ -178,7 +178,5 @@ def test_enumeration_rejects_size_bound_before_strict_closure(
     monkeypatch.setattr(poset_models, "_validated_presentation", fail_presentation)
     monkeypatch.setattr(poset_operations, "_validated_presentation", fail_presentation)
     monkeypatch.setattr(poset_models, "_strict_closure", fail_presentation)
-    with pytest.raises(
-        OperationDomainValidationError, match="at most 24 elements"
-    ):
+    with pytest.raises(OperationDomainValidationError, match="at most 24 elements"):
         enumerate_antichains(poset, 1, 1)

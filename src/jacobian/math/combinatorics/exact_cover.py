@@ -858,6 +858,7 @@ def minimum_generalized_exact_cover(  # noqa: C901
     remaining_rows = list(active_rows)
     forced_selected: list[ExactCoverRow] = []
     while remaining_primary:
+        request_checkpoint("during minimum exact-cover unit forcing")
         coverage: dict[str, list[ExactCoverRow]] = {
             item: [] for item in remaining_primary
         }
@@ -908,28 +909,50 @@ def minimum_generalized_exact_cover(  # noqa: C901
         )
         request_checkpoint("after minimum exact-cover result construction")
         return result
-    if remaining_rows and any(
-        all(secondary in row.items for row in remaining_rows)
-        for secondary in instance.secondary_items
-    ):
-        if not any(remaining_primary <= set(row.items) for row in remaining_rows):
-            result = MinimumGeneralizedExactCoverResult._from_kernel(
-                instance=instance,
-                status="INFEASIBLE",
-                lower_bound=len(forced_selected),
-                searched_node_count=1,
+    estimated_nodes_ceiling = None
+    remaining_primary_count = len(remaining_primary)
+    if remaining_rows:
+        remaining_row_count = len(remaining_rows)
+        covering_row_exists = any(
+            remaining_primary <= set(row.items) for row in remaining_rows
+        )
+        for secondary in instance.secondary_items:
+            without = sum(
+                1 for row in remaining_rows if secondary not in row.items
             )
-            request_checkpoint("after minimum exact-cover result construction")
-            return result
-        estimated_nodes_ceiling = 1 + 2 * len(remaining_rows)
-    else:
-        estimated_nodes_ceiling = None
+            with_secondary = remaining_row_count - without
+            if with_secondary < 2:
+                continue
+            if without == 0:
+                if not covering_row_exists:
+                    result = MinimumGeneralizedExactCoverResult._from_kernel(
+                        instance=instance,
+                        status="INFEASIBLE",
+                        lower_bound=len(forced_selected),
+                        searched_node_count=1,
+                    )
+                    request_checkpoint("after minimum exact-cover result construction")
+                    return result
+                universal_ceiling = 1 + 2 * remaining_row_count
+                estimated_nodes_ceiling = (
+                    universal_ceiling
+                    if estimated_nodes_ceiling is None
+                    else min(estimated_nodes_ceiling, universal_ceiling)
+                )
+                continue
+            near_universal_ceiling = 1 + remaining_primary_count + (
+                without + 1
+            ) * remaining_max_degree
+            estimated_nodes_ceiling = (
+                near_universal_ceiling
+                if estimated_nodes_ceiling is None
+                else min(estimated_nodes_ceiling, near_universal_ceiling)
+            )
     item_index = {item: index for index, item in enumerate(items)}
     row_count = len(active_rows)
     mask_words = max(1, (max(row_count, primary_count) + 63) // 64)
     incidence_count = sum(len(row.items) for row in active_rows)
     index_work = (len(items) + row_count + incidence_count) * mask_words
-    remaining_primary_count = len(remaining_primary)
     estimated_nodes = search_node_limit
     listing_degree = remaining_min_degree
     if remaining_primary_count <= 1:

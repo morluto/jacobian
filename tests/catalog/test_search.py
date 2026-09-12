@@ -91,10 +91,7 @@ def test_precise_mode_finds_published_sunflower_construction() -> None:
     result = Catalog.open().match(
         OperationMatchRequest(need="sunflower triple hypergraph construction")
     )
-    assert (
-        result.matches[0].operation_id
-        == "set_system.sunflower_triple_hypergraph.construct"
-    )
+    assert result.matches[0].operation_id == "set_system.sunflower_family.construct"
 
 
 def test_discovery_cursor_is_bound_to_search_mode() -> None:

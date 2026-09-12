@@ -4,13 +4,21 @@ from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.combinatorics.extremal_sets._models import (
     BinaryUnionRelationRequest,
     BinaryUnionRelationResult,
-    SunflowerHypergraphRequest,
-    SunflowerHypergraphResult,
+)
+from jacobian.math.combinatorics.extremal_sets._sunflower_r import (
+    SunflowerFamilyRequest,
+    SunflowerFamilyResult,
+    construct_sunflower_family,
 )
 from jacobian.math.combinatorics.extremal_sets.operations import (
     construct_binary_union_relation,
-    construct_sunflower_hypergraph,
 )
+
+
+def compute_sunflower_family(
+    request: SunflowerFamilyRequest,
+) -> SunflowerFamilyResult:
+    return construct_sunflower_family(request.source, request.petal_count)
 
 
 def compute_binary_union_relation(
@@ -21,25 +29,32 @@ def compute_binary_union_relation(
 
 TOOLS: MathTools = (
     MathTool(
-        operation_id="set_system.sunflower_triple_hypergraph.construct",
-        title="Construct the complete sunflower-triple hypergraph",
+        operation_id="set_system.sunflower_family.construct",
+        title="Construct the complete sunflower triple hypergraph family",
         description=(
-            "Return every three-member subfamily whose three pairwise intersections "
-            "are equal. Each hyperedge retains its exact common core and source indices."
+            "Return every distinct-index subfamily of exactly r >= 2 members "
+            "whose pairwise intersections are all equal to one common core, "
+            "together with each row's exact core, the derived count, "
+            "sunflower-free status, and a canonical r-uniform hypergraph "
+            "edge projection. The "
+            "complete accepted construction returns every row or fails before "
+            "expansion."
         ),
-        request_type=SunflowerHypergraphRequest,
-        result_type=SunflowerHypergraphResult,
-        run=lambda request: construct_sunflower_hypergraph(request.source),
+        request_type=SunflowerFamilyRequest,
+        result_type=SunflowerFamilyResult,
+        run=compute_sunflower_family,
         tags=("combinatorics", "set-system", "sunflower", "hypergraph", "complete"),
+        discovery_terms=("sunflower triple hypergraph construction",),
         examples=(
             OperationExample(
-                name="three_petals",
-                description="Construct one sunflower with core {0} and three petals.",
+                name="four_petals",
+                description="Four petals sharing the core {0} form one sunflower.",
                 input={
                     "source": {
-                        "ground_set_size": 4,
-                        "members": [[0, 1], [0, 2], [0, 3]],
-                    }
+                        "ground_set_size": 5,
+                        "members": [[0, 1], [0, 2], [0, 3], [0, 4]],
+                    },
+                    "petal_count": 4,
                 },
             ),
         ),

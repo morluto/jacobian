@@ -75,6 +75,19 @@ class BerryEsseenRequest(StrictModel):
             raise _validation_error("Berry--Esseen sample_count must be positive")
         return self
 
+    @classmethod
+    def model_json_schema(cls, *args: object, **kwargs: object) -> dict[str, object]:
+        schema = super().model_json_schema(*args, **kwargs)
+        atoms = (
+            schema.get("$defs", {})
+            .get("FiniteRationalDistribution", {})
+            .get("properties", {})
+            .get("atoms")
+        )
+        if isinstance(atoms, dict):
+            atoms["maxItems"] = MAX_BERRY_ESSEEN_ATOMS
+        return schema
+
 
 class BerryEsseenResult(StrictModel):
     """Exact source moments and an outward rational enclosure of the bound."""

@@ -23,7 +23,6 @@ from jacobian.math.probability._berry_esseen import (
     berry_esseen_bound,
 )
 from jacobian.math.probability._berry_esseen_tools import BERRY_ESSEEN_OPERATION
-from jacobian.math.probability._distribution import MAX_FINITE_DISTRIBUTION_ATOMS
 
 
 def _distribution(*atoms: tuple[int | Fraction, Fraction]) -> dict[str, object]:
@@ -263,7 +262,7 @@ def test_atom_count_boundary_is_admitted_and_overflow_is_preflighted() -> None:
         berry_esseen_bound(overflow_request)
     schema = BerryEsseenRequest.model_json_schema()
     atoms_schema = schema["$defs"]["FiniteRationalDistribution"]["properties"]["atoms"]
-    assert atoms_schema["maxItems"] == MAX_FINITE_DISTRIBUTION_ATOMS
+    assert atoms_schema["maxItems"] == MAX_BERRY_ESSEEN_ATOMS
     assert "BerryEsseenDistribution" not in schema.get("$defs", {})
 
 

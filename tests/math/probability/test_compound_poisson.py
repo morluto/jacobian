@@ -4,7 +4,6 @@ from fractions import Fraction
 from math import gcd
 
 import pytest
-from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
@@ -424,16 +423,20 @@ def test_normalized_masses_with_large_partial_denominators_are_admitted() -> Non
 
 
 def test_unrelated_tall_denominators_still_hit_the_normalization_bound() -> None:
-    left = 10**300 + 7
-    right = 10**300 + 9
-    with pytest.raises(ValidationError, match="normalization exceeds"):
-        FiniteRationalDistribution(
-            atoms=(
-                FiniteDistributionAtom(
-                    value=_q(Fraction(0)), probability=_q(Fraction(1, left))
-                ),
-                FiniteDistributionAtom(
-                    value=_q(Fraction(1)), probability=_q(Fraction(1, right))
-                ),
+    primes: list[int] = []
+    candidate = 10**79
+    while len(primes) < 8:
+        candidate += 1
+        if all(gcd(candidate, prime) == 1 for prime in primes):
+            primes.append(candidate)
+    jumps = FiniteRationalDistribution(
+        atoms=tuple(
+            FiniteDistributionAtom(
+                value=_q(Fraction(index)),
+                probability=_q(Fraction(1, prime)),
             )
+            for index, prime in enumerate(primes)
         )
+    )
+    with pytest.raises(OperationDomainValidationError, match="normalization exceeds"):
+        compound_poisson_cumulant_prefix(_q(Fraction(1)), jumps, 0)

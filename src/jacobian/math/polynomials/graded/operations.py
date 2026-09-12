@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from itertools import combinations
 from math import comb
 from typing import Literal
@@ -208,16 +209,19 @@ def _require_monomial_ideal(
     return tuple(generators)
 
 
-def _compositions(degree: int, variables: int) -> tuple[tuple[int, ...], ...]:
+def _compositions(degree: int, variables: int) -> Iterator[tuple[int, ...]]:
     if variables == 1:
-        return ((degree,),)
-    return tuple(
-        tuple(
-            boundaries[index + 1] - boundaries[index] - 1 for index in range(variables)
+        yield (degree,)
+        return
+    for index, cuts in enumerate(
+        combinations(range(1, degree + variables), variables - 1)
+    ):
+        if index % 256 == 0:
+            request_checkpoint("during standard-monomial composition enumeration")
+        boundaries = (0, *cuts, degree + variables)
+        yield tuple(
+            boundaries[axis + 1] - boundaries[axis] - 1 for axis in range(variables)
         )
-        for cuts in combinations(range(1, degree + variables), variables - 1)
-        for boundaries in ((0, *cuts, degree + variables),)
-    )
 
 
 def standard_monomials(
@@ -380,10 +384,22 @@ def _leading_source_monomials(
     )
 
 
-def _preflight_series_generator_bound(
+def _all_source_generators_are_unit_monomials(ideal: RationalPolynomialIdeal) -> bool:
+    for generator in ideal.generators:
+        terms = generator.polynomial.terms
+        if not terms:
+            continue
+        if len(terms) != 1 or terms[0].coefficient != CanonicalRational(num=1, den=1):
+            return False
+    return True
+
+
+def _preflight_monomial_series_generator_bound(
     ideal: RationalPolynomialIdeal,
     monomial_order: Literal["lex", "grlex", "grevlex"],
 ) -> None:
+    if not _all_source_generators_are_unit_monomials(ideal):
+        return
     monomials = _leading_source_monomials(ideal, monomial_order)
     if len(monomials) > MAX_HILBERT_SERIES_GENERATORS:
         raise OperationResourceAdmissionError(
@@ -590,7 +606,7 @@ def hilbert_series(
             code="graded_ideal.series_prefix_budget",
             message="Hilbert-series prefixes support degrees from 0 through 16",
         )
-    _preflight_series_generator_bound(ideal, monomial_order)
+    _preflight_monomial_series_generator_bound(ideal, monomial_order)
     initial = initial_monomial_ideal(
         ideal, monomial_order, resource_budget=resource_budget
     )

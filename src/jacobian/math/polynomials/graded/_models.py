@@ -95,6 +95,32 @@ class StandardMonomialsResult(StrictModel):
             )
         if self.monomials != tuple(sorted(set(self.monomials), reverse=True)):
             raise ValueError("standard monomials must be unique and canonical")
+        generators: list[tuple[int, ...]] = []
+        for generator in self.initial_ideal.generators:
+            terms = generator.polynomial.terms
+            if not terms:
+                continue
+            if len(terms) != 1 or terms[0].coefficient != CanonicalRational(
+                num=1, den=1
+            ):
+                raise ValueError(
+                    "standard-monomial operations require unit monomial generators"
+                )
+            generators.append(terms[0].exponents)
+        if any(
+            any(
+                len(generator) == len(monomial)
+                and all(
+                    left <= right
+                    for left, right in zip(generator, monomial, strict=True)
+                )
+                for generator in generators
+            )
+            for monomial in self.monomials
+        ):
+            raise ValueError(
+                "standard monomials must not be divisible by an initial-ideal generator"
+            )
         return self
 
 

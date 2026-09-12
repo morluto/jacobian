@@ -627,45 +627,6 @@ def test_hilbert_projection_results_bind_the_source_ring(
         result_type.model_validate(payload)
 
 
-def test_hilbert_series_rejects_nine_leading_terms_of_multiterm_sources(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    variables = ("x", "y")
-    generators = []
-    for index in range(9):
-        leading = (8 - index, index)
-        lesser = (7 - index, index + 1) if index < 8 else (0, 7)
-        generators.append(
-            RationalPolynomial(
-                variables=variables,
-                polynomial=SparseRationalPolynomial(
-                    terms=(
-                        RationalPolynomialTerm(
-                            coefficient=CanonicalRational(num=1, den=1),
-                            exponents=leading,
-                        ),
-                        RationalPolynomialTerm(
-                            coefficient=CanonicalRational(num=1, den=1),
-                            exponents=lesser,
-                        ),
-                    )
-                ),
-            )
-        )
-    ideal = RationalPolynomialIdeal(variables=variables, generators=tuple(generators))
-
-    def fail(*_args: object, **_kwargs: object) -> object:
-        raise AssertionError(
-            "multi-term leading-term overflow must not expand Groebner"
-        )
-
-    monkeypatch.setattr(graded_operations, "initial_monomial_ideal", fail)
-    with pytest.raises(
-        OperationResourceAdmissionError, match="at most 8 minimal generators"
-    ):
-        hilbert_series(ideal, prefix_degree=1)
-
-
 def test_linear_generators_prune_standard_monomial_domain() -> None:
     variables = tuple(f"x{index}" for index in range(8))
     generators = tuple(
@@ -765,3 +726,52 @@ def test_catalog_examples_state_homogeneity_and_monomial_shape() -> None:
         in descriptions["monomial_ideal.standard_monomials.degree.compute"]
     )
     assert "homogeneous" in descriptions["graded_quotient.hilbert_function.compute"]
+
+
+def test_standard_monomial_result_rejects_divisible_exponents() -> None:
+    payload = standard_monomials(_ideal((2, 0)), 2).model_dump()
+    payload["monomials"] = [(2, 0)]
+    payload["count"] = 1
+    with pytest.raises(ValidationError, match="divisible by an initial-ideal generator"):
+        StandardMonomialsResult.model_validate(payload)
+
+
+def test_hilbert_series_admits_after_source_leadings_reduce() -> None:
+    variables = ("x", "y")
+    linear_pair = RationalPolynomialIdeal(
+        variables=variables,
+        generators=(
+            RationalPolynomial(
+                variables=variables,
+                polynomial=SparseRationalPolynomial(
+                    terms=(
+                        RationalPolynomialTerm(
+                            coefficient=CanonicalRational(num=1, den=1),
+                            exponents=(1, 0),
+                        ),
+                        RationalPolynomialTerm(
+                            coefficient=CanonicalRational(num=1, den=1),
+                            exponents=(0, 1),
+                        ),
+                    )
+                ),
+            ),
+            RationalPolynomial(
+                variables=variables,
+                polynomial=SparseRationalPolynomial(
+                    terms=(
+                        RationalPolynomialTerm(
+                            coefficient=CanonicalRational(num=1, den=1),
+                            exponents=(1, 0),
+                        ),
+                        RationalPolynomialTerm(
+                            coefficient=CanonicalRational(num=-1, den=1),
+                            exponents=(0, 1),
+                        ),
+                    )
+                ),
+            ),
+        ),
+    )
+    result = hilbert_series(linear_pair, "lex", prefix_degree=2)
+    assert result.prefix == (1, 0, 0)

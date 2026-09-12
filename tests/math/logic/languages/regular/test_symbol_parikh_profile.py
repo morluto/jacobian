@@ -4,6 +4,7 @@ from itertools import product
 
 import pytest
 
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.logic.languages.regular._symbol_parikh import (
     SymbolParikhProfileRequest,
     SymbolParikhProfileResult,
@@ -163,3 +164,27 @@ def test_symbol_profile_merges_many_distinct_transition_signatures() -> None:
 
     assert len(result.cells) == 11
     assert len(transition_signatures) == 617
+
+
+def test_final_layer_scan_charges_every_reachable_state() -> None:
+    dfa = DFA(
+        state_count=3,
+        alphabet_size=3,
+        transitions=tuple(
+            DFATransition(
+                source=source,
+                symbol=symbol,
+                target=(source + symbol + 1) % 3,
+            )
+            for source in range(3)
+            for symbol in range(3)
+        ),
+        initial_state=0,
+        accepting_states=(0, 1, 2),
+    )
+
+    with pytest.raises(
+        OperationResourceAdmissionError,
+        match="symbol-Parikh DP or output exceeds",
+    ):
+        symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=75))

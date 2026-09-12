@@ -86,7 +86,7 @@ def symbol_parikh_profile(
     # into profile cells and must not be charged as another transition layer.
     extension_cells = len(reachable) * comb(length + alphabet_size - 1, alphabet_size)
     extension_coordinate_work = extension_cells * alphabet_size * max(1, alphabet_size)
-    output_materialization_work = output_bound * max(1, alphabet_size)
+    output_materialization_work = len(reachable) * output_bound * max(1, alphabet_size)
     reachability_work = len(reachable) * alphabet_size
     work_bound = (
         reachability_work + extension_coordinate_work + output_materialization_work

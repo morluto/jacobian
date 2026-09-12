@@ -4,7 +4,7 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.logic.languages.regular._symbol_parikh import (
     SymbolParikhProfileRequest,
     SymbolParikhProfileResult,
-    symbol_parikh_profile,
+    _symbol_parikh_profile_request,
 )
 
 SYMBOL_PARIKH_PROFILE_OPERATION = MathTool(
@@ -17,7 +17,7 @@ SYMBOL_PARIKH_PROFILE_OPERATION = MathTool(
     ),
     request_type=SymbolParikhProfileRequest,
     result_type=SymbolParikhProfileResult,
-    run=symbol_parikh_profile,
+    run=_symbol_parikh_profile_request,
     tags=("regular-language", "dfa", "parikh", "symbols", "exact"),
     examples=(
         OperationExample(

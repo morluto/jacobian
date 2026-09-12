@@ -11,9 +11,8 @@ For inequivalent DFAs the result retains both source DFAs, the shortest
 distinguishing word, and one state trace per source automaton. Product
 successors are expanded in ascending alphabet order, so the witness is the
 lexicographically least word among all shortest witnesses. The empty word is
-considered first. A zero-symbol alphabet is valid and has only the empty word;
-DFAs with a positive alphabet must still provide exactly one transition for
-every state-symbol pair.
+considered first. DFAs must provide exactly one transition for every
+state-symbol pair over their positive-size alphabet.
 
 Product-state, transition, predecessor, witness, work, and result-allocation
 envelopes are admitted before traversal. Resource refusal is not an equivalence

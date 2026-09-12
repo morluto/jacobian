@@ -137,7 +137,7 @@ def _reachable_states_without_index(dfa: DFA) -> set[int]:
     return reachable
 
 
-def symbol_parikh_profile(
+def _symbol_parikh_profile_request(
     request: SymbolParikhProfileRequest,
 ) -> SymbolParikhProfileResult:
     dfa = request.dfa
@@ -213,4 +213,12 @@ def symbol_parikh_profile(
             for counts, multiplicity in sorted(profile.items())
         ),
         total_accepted_words=total,
+    )
+
+
+def symbol_parikh_profile(dfa: DFA, word_length: int) -> SymbolParikhProfileResult:
+    """Return the accepted-word symbol Parikh profile for one exact length."""
+
+    return _symbol_parikh_profile_request(
+        SymbolParikhProfileRequest(dfa=dfa, word_length=word_length)
     )

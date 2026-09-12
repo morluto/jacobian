@@ -11,21 +11,31 @@ interval.  No binary floating point enters the result.
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from fractions import Fraction
-from typing import Any, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import DecimalIntegerEncoding
+from jacobian._execution import (
+    bind_request_deadline,
+    current_request_execution,
+    request_execution,
+)
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.number_theory.algebraic_numbers._radix_prefix_process import (
+    run_scaled_integer_part_worker,
+)
 from jacobian.math.number_theory.algebraic_numbers.real import (
-    RealAlgebraicInteger,
+    MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS,
     RealAlgebraicValue,
     _admit_real_polynomial,
 )
@@ -43,6 +53,13 @@ MAX_RADIX_ISOLATION_BITS = 1_048_576
 # Sum of retained exact-integer digits, digit entries, and fixed scalar slots.
 # Concrete transports enforce their own independent encoded-byte ceilings.
 MAX_RADIX_RESULT_ALLOCATION_UNITS = 32_768
+# Cauchy's bound on a degree-d integer polynomial of 1,000-digit coefficients
+# can place the floor one digit past the coefficient envelope, e.g. floor of
+# the negative root of x^2 + (10**1000-1)x - (10**1000-1) is -10**1000.
+MAX_RADIX_INTEGER_PART_DIGITS = MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS + 1
+RadixIntegerPart = Annotated[
+    int, DecimalIntegerEncoding(max_digits=MAX_RADIX_INTEGER_PART_DIGITS)
+]
 
 
 def _unique_floor_of_open_interval(lower: Any, upper: Any) -> int | None:
@@ -78,7 +95,7 @@ class RadixPrefixResult(StrictModel):
     value: RealAlgebraicValue
     base: StrictInt = Field(ge=2, le=MAX_RADIX_BASE)
     fractional_places: StrictInt = Field(ge=0, le=MAX_RADIX_PLACES)
-    integer_part: RealAlgebraicInteger
+    integer_part: RadixIntegerPart
     fractional_digits: tuple[StrictInt, ...] = Field(
         max_length=MAX_RADIX_PLACES,
         description="Exactly one digit in [0, base) for each requested place.",
@@ -265,6 +282,26 @@ def _scaled_integer_part(
     positive scalar substitution of ``f``.
     """
 
+    execution = current_request_execution()
+    if execution is not None and execution.deadline is not None:
+        return run_scaled_integer_part_worker(
+            polynomial=value.polynomial,
+            real_root_index=value.real_root_index,
+            scale=scale,
+            isolation_bits=isolation_bits,
+            deadline=execution.deadline,
+        )
+    return _scaled_integer_part_in_process(
+        value, scale=scale, isolation_bits=isolation_bits
+    )
+
+
+def _scaled_integer_part_in_process(
+    value: RealAlgebraicValue,
+    *,
+    scale: int,
+    isolation_bits: int,
+) -> int:
     import sympy
 
     symbol = sympy.Symbol("x")
@@ -287,9 +324,6 @@ def _scaled_integer_part(
     lower, upper = intervals[value.real_root_index][0]
     max_refinements = max(4_096, (isolation_bits + 7) // 8)
     for _ in range(max_refinements):
-        # For an open interval, the greatest integer strictly below upper is
-        # ceil(upper)-1. floor(upper-1) is smaller by one whenever upper is
-        # nonintegral and can accept an interval crossing an integer boundary.
         if (candidate := _unique_floor_of_open_interval(lower, upper)) is not None:
             return candidate
         lower, upper = polynomial.refine_root(lower, upper, steps=8)
@@ -300,9 +334,30 @@ def _scaled_integer_part(
     )
 
 
-def radix_prefix(request: RadixPrefixRequest) -> RadixPrefixResult:
+def radix_prefix(
+    value: RealAlgebraicValue,
+    base: int,
+    fractional_places: int,
+) -> RadixPrefixResult:
     """Return the exact base-b prefix of one canonical real algebraic value."""
 
+    if not isinstance(value, RealAlgebraicValue):
+        raise TypeError("value must be a RealAlgebraicValue")
+    if type(base) is not int or type(fractional_places) is not int:
+        raise TypeError("base and fractional_places must be integers")
+    execution = current_request_execution()
+    if execution is None:
+        with request_execution(time.monotonic()):
+            return radix_prefix(value, base, fractional_places)
+    deadline = execution.started_at + 60
+    if execution.deadline is not None:
+        deadline = min(deadline, execution.deadline)
+    bind_request_deadline(deadline)
+
+    _require_request(base, fractional_places)
+    request = RadixPrefixRequest(
+        value=value, base=base, fractional_places=fractional_places
+    )
     admission = _admit_request(request)
     _admit_real_polynomial(request.value)
     rational = _rational_value(request.value)

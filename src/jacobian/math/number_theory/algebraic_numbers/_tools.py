@@ -33,7 +33,7 @@ def compute_algebraic_multiply(
 
 
 def compute_radix_prefix(request: RadixPrefixRequest) -> RadixPrefixResult:
-    return radix_prefix(request)
+    return radix_prefix(request.value, request.base, request.fractional_places)
 
 
 def _element(a_num: int, b_num: int, d: int) -> dict[str, object]:

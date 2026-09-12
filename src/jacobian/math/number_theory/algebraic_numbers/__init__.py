@@ -1,5 +1,6 @@
 """Algebraic number arithmetic operations."""
 
+from jacobian.math.number_theory.algebraic_numbers._radix_prefix import radix_prefix
 from jacobian.math.number_theory.algebraic_numbers.complex import (
     RationalComplexIsolatingRectangle,
 )
@@ -12,4 +13,5 @@ __all__ = [
     "RationalComplexIsolatingRectangle",
     "add_quadratic",
     "multiply_quadratic",
+    "radix_prefix",
 ]

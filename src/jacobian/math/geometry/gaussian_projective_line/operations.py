@@ -176,7 +176,10 @@ def _admit_request(request: GaussianCrossRatioSource) -> None:
                 return
         if numerator[0] == 0 and denominator[0] == 0 and denominator[1]:
             reduced = numerator[1] / denominator[1]
-            if _fraction_component_digits(reduced) <= MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS:
+            if (
+                _fraction_component_digits(reduced)
+                <= MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS
+            ):
                 return
         _reject_resource(
             "output_height_bound",

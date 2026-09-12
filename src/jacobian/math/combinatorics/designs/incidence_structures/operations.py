@@ -252,6 +252,7 @@ def verify_incidence_moment_comparison(
 __all__ = [
     "check_incidence_trade",
     "complement",
+    "construct_steiner_triple_system",
     "containment_profile",
     "degree_profile",
     "derived_residual",

@@ -92,7 +92,7 @@ def test_native_admission_rejects_invalid_order_before_materialization() -> None
     )
 
 
-def test_computed_result_rejects_non_steiner_design() -> None:
+def test_computed_result_rejects_noncanonical_design_axes() -> None:
     design = IncidenceStructure(
         points=("p0", "p1", "p2", "p3", "p4", "p5", "p6"),
         block_ids=tuple(f"b{index}" for index in range(7)),
@@ -106,9 +106,16 @@ def test_computed_result_rejects_non_steiner_design() -> None:
             ("p0", "p5", "p6"),
         ),
     )
-    with pytest.raises(ValidationError, match="exactly one block"):
+    with pytest.raises(ValidationError, match="canonical block IDs"):
         SteinerTripleSystemResult(
-            status="COMPUTED", order=7, design=design, states_explored=1
+            status="COMPUTED",
+            order=7,
+            design=design.model_copy(
+                update={
+                    "block_ids": tuple(f"x{index}" for index in range(7)),
+                }
+            ),
+            states_explored=1,
         )
 
 

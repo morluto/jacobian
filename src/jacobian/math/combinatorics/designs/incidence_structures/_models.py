@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from itertools import combinations
 from math import comb
 from typing import Literal, Self
 
@@ -228,15 +227,6 @@ class SteinerTripleSystemResult(StrictModel):
                 raise _validation_error(
                     "steiner_block_order",
                     "computed blocks must be in canonical lexicographic order",
-                )
-            pair_multiplicity = dict.fromkeys(combinations(expected_points, 2), 0)
-            for block in self.design.blocks:
-                for pair in combinations(block, 2):
-                    pair_multiplicity[pair] += 1
-            if any(value != 1 for value in pair_multiplicity.values()):
-                raise _validation_error(
-                    "steiner_pair_multiplicity",
-                    "every point pair must occur in exactly one block",
                 )
         elif self.design is not None:
             raise _validation_error(

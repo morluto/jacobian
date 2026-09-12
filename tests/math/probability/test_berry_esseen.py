@@ -1,6 +1,10 @@
 """Behavioral tests for the pinned finite i.i.d. Berry--Esseen operation."""
 
+import json
+from collections.abc import Callable
 from fractions import Fraction
+from importlib import import_module
+from typing import cast
 
 import pytest
 
@@ -120,6 +124,27 @@ def test_native_large_count_is_admitted_when_pinned_growth_fits() -> None:
     assert result.bound_squared.as_fraction() == Fraction(196, 625 * (10**12 + 1))
 
 
+def test_successful_compute_does_not_replay_distribution_admission(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Kernel result construction does not repeat source normalization."""
+
+    berry_module = import_module("jacobian.math.probability._berry_esseen")
+    call_count = 0
+    original = cast(Callable[..., object], berry_module.require_input_distribution)
+
+    def counted(*args: object, **kwargs: object) -> object:
+        nonlocal call_count
+        call_count += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(berry_module, "require_input_distribution", counted)
+    result = berry_esseen_bound(_request(_five_atom_oracle_distribution(), 7))
+
+    assert result.mean.as_fraction() == Fraction(33)
+    assert call_count == 1
+
+
 def test_sample_count_boundary_is_bounded_and_preflighted() -> None:
     distribution = _request(
         _distribution((0, Fraction(1, 2)), (1, Fraction(1, 2))),
@@ -206,14 +231,14 @@ def test_serialized_result_preserves_source_and_interval_invariants() -> None:
 
 def test_result_rejects_forged_source_normalization() -> None:
     genuine = berry_esseen_bound(_request(_five_atom_oracle_distribution(), 7))
-    payload = genuine.model_dump()
+    payload = json.loads(genuine.model_dump_json())
     payload["source"]["distribution"]["atoms"][0]["probability"] = {
-        "num": 1,
-        "den": 1,
+        "num": "1",
+        "den": "1",
     }
 
     with pytest.raises(ValueError, match="sum exactly to 1"):
-        BerryEsseenResult.model_validate(payload)
+        BerryEsseenResult.model_validate_json(json.dumps(payload))
 
 
 def test_result_rejects_forged_source_input_height() -> None:

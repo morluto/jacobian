@@ -75,6 +75,44 @@ class BerryEsseenResult(StrictModel):
     bound_upper: CanonicalRational
     bound_precision_bits: int = Field(ge=1, le=256, strict=True)
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        source: BerryEsseenRequest,
+        theorem_variant: Literal[
+            "IID_SPECIALIZATION_OF_GENERAL_INDEPENDENT_BERRY_ESSEEN_C_05600"
+        ],
+        universal_constant: CanonicalRational,
+        mean: CanonicalRational,
+        variance: CanonicalRational,
+        third_absolute_central_moment: CanonicalRational,
+        bound_squared: CanonicalRational,
+        bound_lower: CanonicalRational,
+        bound_upper: CanonicalRational,
+        bound_precision_bits: int,
+    ) -> Self:
+        """Build the result after the operation establishes its invariants.
+
+        The operation has already admitted the source distribution and all
+        intermediate and output rational heights.  Trusted construction keeps
+        that work from being replayed by the structural result validator;
+        caller-authored and deserialized results still use normal validation.
+        """
+
+        return cls.model_construct(
+            source=source,
+            theorem_variant=theorem_variant,
+            universal_constant=universal_constant,
+            mean=mean,
+            variance=variance,
+            third_absolute_central_moment=third_absolute_central_moment,
+            bound_squared=bound_squared,
+            bound_lower=bound_lower,
+            bound_upper=bound_upper,
+            bound_precision_bits=bound_precision_bits,
+        )
+
     @model_validator(mode="after")
     def require_structural_bound_invariants(self) -> Self:
         """Validate shape and source metadata without replaying moments."""
@@ -371,7 +409,7 @@ def berry_esseen_bound(request: BerryEsseenRequest) -> BerryEsseenResult:
         label="Berry--Esseen upper bound",
     )
 
-    return BerryEsseenResult(
+    return BerryEsseenResult._from_kernel(
         source=request,
         theorem_variant=BERRY_ESSEEN_THEOREM_VARIANT,
         universal_constant=CanonicalRational.from_fraction(BERRY_ESSEEN_CONSTANT),

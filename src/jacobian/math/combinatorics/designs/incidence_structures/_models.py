@@ -213,7 +213,7 @@ class SteinerTripleSystemShard(StrictModel):
         if not isinstance(data, dict):
             return data
         triples = data.get("fixed_triples")
-        if triples is None:
+        if triples is None or not isinstance(triples, (list, tuple)):
             return data
         payload = dict(data)
         payload["fixed_triples"] = tuple(

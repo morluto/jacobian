@@ -10,7 +10,7 @@ from pydantic import ValidationError
 
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.dispatch import invoke_operation
+from jacobian.dispatch import OperationRequestValidationError, invoke_operation
 from jacobian.math.combinatorics.designs.incidence_structures import _models as models
 from jacobian.math.combinatorics.designs.incidence_structures._models import (
     IncidenceStructure,
@@ -102,6 +102,23 @@ def test_shard_requires_canonical_in_range_triples() -> None:
         SteinerTripleSystemShard(order=7, fixed_triples=((0, 2, 1),))
     with pytest.raises(ValidationError, match="must be unique"):
         SteinerTripleSystemShard(order=7, fixed_triples=((0, 1, 2), (0, 1, 2)))
+
+
+def test_non_array_fixed_triples_are_request_validation_errors() -> None:
+    with pytest.raises(ValidationError):
+        SteinerTripleSystemShard.model_validate({"order": 7, "fixed_triples": {}})
+    with pytest.raises(ValidationError):
+        SteinerTripleSystemShard.model_validate({"order": 7, "fixed_triples": ""})
+    with pytest.raises(OperationRequestValidationError):
+        invoke_operation(
+            "combinatorics.design.steiner_triple_system.construct",
+            {
+                "order": 7,
+                "search_budget": 100,
+                "shard": {"order": 7, "fixed_triples": {}},
+            },
+            Catalog.open(),
+        )
 
 
 def test_fixed_triple_family_is_lexicographically_canonical() -> None:

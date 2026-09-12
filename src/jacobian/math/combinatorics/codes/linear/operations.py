@@ -31,7 +31,9 @@ from jacobian.math.combinatorics.codes.linear._models import (
     _validate_coordinate_axis,
 )
 from jacobian.math.combinatorics.codes.linear.values import (
+    MAX_LINEAR_CODE_DIMENSION,
     MAX_LINEAR_CODE_LENGTH,
+    MAX_LINEAR_FIELD_ORDER,
     PrimeFieldLinearEncoder,
 )
 from jacobian.math.matrices.finite_fields.linear_algebra import (
@@ -48,6 +50,20 @@ def _validate_prime_matrix(
 
     from sympy import isprime
 
+    if type(field_order) is not int or not 2 <= field_order <= MAX_LINEAR_FIELD_ORDER:
+        raise PydanticCustomError(
+            "code_linear.field_order_out_of_bounds",
+            "field_order must be between 2 and the supported prime-field bound",
+        )
+    if (
+        not isinstance(generator_matrix, tuple)
+        or not 1 <= len(generator_matrix) <= MAX_LINEAR_CODE_DIMENSION
+        or any(not isinstance(row, tuple) for row in generator_matrix)
+    ):
+        raise PydanticCustomError(
+            "code_linear.generator_matrix_row_count",
+            "generator matrix must contain a bounded nonempty tuple of rows",
+        )
     if not isprime(field_order):
         raise PydanticCustomError(
             "code_linear.field_order_must_be_prime", "field_order must be prime"
@@ -496,13 +512,9 @@ def from_generator(
         _validate_coordinate_axis(coordinate_axis, width=width)
     except PydanticCustomError as error:
         _domain_error(("generator_matrix", "coordinate_axis"), error)
-    if field_order ** len(generator_matrix) > MAX_CODEWORDS:
-        raise OperationDomainValidationError(
-            location=("generator_matrix",),
-            code="code_linear.generator_matrix_exceeds_exact_enumeration_bound",
-            message="generator matrix exceeds exact enumeration bound",
-        )
     matrix = [list(row) for row in generator_matrix]
+    # This operation reduces a bounded matrix; codeword enumeration is admitted
+    # separately by consumers that actually perform it.
     canonical = _canonical_generator(matrix, field_order)
     return FromGeneratorResult(
         encoder=_canonical_encoder(

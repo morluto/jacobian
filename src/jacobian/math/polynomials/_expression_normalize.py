@@ -311,137 +311,147 @@ def _admit_literal(value: CanonicalRational) -> None:
         ) from error
 
 
+def _literal_metrics(expression: PolynomialLiteral) -> _ExpressionMetrics:
+    _admit_literal(expression.value)
+    numerator_bits = max(1, abs(expression.value.num).bit_length())
+    denominator_bits = (
+        0 if expression.value.den == 1 else expression.value.den.bit_length()
+    )
+    return _ExpressionMetrics(
+        nodes=1,
+        terms=1,
+        support_terms=1,
+        degree=0,
+        numerator_bits=numerator_bits,
+        denominator_bits=denominator_bits,
+        work=1,
+        intermediate_digits=_representation_digits(1, numerator_bits, denominator_bits),
+        common_denominator=expression.value.den,
+    )
+
+
+def _variable_metrics() -> _ExpressionMetrics:
+    return _ExpressionMetrics(
+        nodes=1,
+        terms=1,
+        support_terms=1,
+        degree=1,
+        numerator_bits=1,
+        denominator_bits=0,
+        work=1,
+        intermediate_digits=_representation_digits(1, 1, 0),
+        common_denominator=1,
+    )
+
+
+def _power_metrics(
+    expression: PolynomialPower, variable_count: int
+) -> _ExpressionMetrics:
+    base = _metrics(expression.base, variable_count)
+    exponent = expression.exponent
+    if exponent < 0:
+        raise OperationDomainValidationError(
+            location=("expression",),
+            code="polynomial.expression.invalid_source",
+            message="expression nodes must satisfy the closed grammar before expansion",
+        )
+    if exponent == 0:
+        return _ExpressionMetrics(
+            nodes=min(_MAX_EXPRESSION_NODES + 1, base.nodes + 1),
+            terms=1,
+            support_terms=1,
+            degree=0,
+            numerator_bits=1,
+            denominator_bits=0,
+            work=base.work,
+            intermediate_digits=max(base.intermediate_digits, 2),
+            common_denominator=1,
+        )
+    terms = _bounded_power(base.terms, exponent, MAX_POLYNOMIAL_TERMS)
+    product_count = max(1, terms)
+    numerator_bits = min(
+        _MAX_EXPRESSION_COEFFICIENT_BITS + 1,
+        base.numerator_bits * exponent + ceil(log2(product_count)),
+    )
+    denominator_bits = min(
+        _MAX_EXPRESSION_COEFFICIENT_BITS + 1,
+        base.denominator_bits * exponent,
+    )
+    work = base.work
+    result_terms = 1
+    result_terms_support = 1
+    base_terms = base.terms
+    base_terms_support = base.support_terms
+    base_degree = base.degree
+    result_degree = 0
+    remaining = exponent
+    while remaining:
+        if remaining & 1:
+            work = min(
+                _MAX_EXPRESSION_WORK + 1,
+                work
+                + _bounded_product(
+                    result_terms_support,
+                    base_terms_support,
+                    _MAX_EXPRESSION_WORK,
+                ),
+            )
+            result_terms = _bounded_product(
+                result_terms, base_terms, MAX_POLYNOMIAL_TERMS
+            )
+            result_degree = min(
+                MAX_POLYNOMIAL_EXPONENT + 1, result_degree + base_degree
+            )
+            result_terms_support = _support_bound(
+                variable_count, result_degree, result_terms
+            )
+        remaining //= 2
+        if remaining:
+            work = min(
+                _MAX_EXPRESSION_WORK + 1,
+                work
+                + _bounded_product(
+                    base_terms_support,
+                    base_terms_support,
+                    _MAX_EXPRESSION_WORK,
+                ),
+            )
+            base_terms = _bounded_product(base_terms, base_terms, MAX_POLYNOMIAL_TERMS)
+            base_degree = min(MAX_POLYNOMIAL_EXPONENT + 1, base_degree * 2)
+            base_terms_support = _support_bound(
+                variable_count,
+                base_degree,
+                base_terms,
+            )
+    degree = min(MAX_POLYNOMIAL_EXPONENT + 1, base.degree * exponent)
+    support_terms = _support_bound(variable_count, degree, terms)
+    common_denominator = _bounded_common_power(base.common_denominator, exponent)
+    intermediate_digits = max(
+        base.intermediate_digits,
+        _representation_digits(support_terms, numerator_bits, denominator_bits),
+    )
+    return _ExpressionMetrics(
+        nodes=min(_MAX_EXPRESSION_NODES + 1, base.nodes + 1),
+        terms=terms,
+        support_terms=support_terms,
+        degree=degree,
+        numerator_bits=numerator_bits,
+        denominator_bits=denominator_bits,
+        work=work,
+        intermediate_digits=intermediate_digits,
+        common_denominator=common_denominator,
+    )
+
+
 def _metrics(
     expression: PolynomialExpression, variable_count: int
 ) -> _ExpressionMetrics:
     if isinstance(expression, PolynomialLiteral):
-        _admit_literal(expression.value)
-        numerator_bits = max(1, abs(expression.value.num).bit_length())
-        denominator_bits = (
-            0 if expression.value.den == 1 else expression.value.den.bit_length()
-        )
-        return _ExpressionMetrics(
-            nodes=1,
-            terms=1,
-            support_terms=1,
-            degree=0,
-            numerator_bits=numerator_bits,
-            denominator_bits=denominator_bits,
-            work=1,
-            intermediate_digits=_representation_digits(
-                1, numerator_bits, denominator_bits
-            ),
-            common_denominator=expression.value.den,
-        )
+        return _literal_metrics(expression)
     if isinstance(expression, PolynomialVariableExpression):
-        return _ExpressionMetrics(
-            nodes=1,
-            terms=1,
-            support_terms=1,
-            degree=1,
-            numerator_bits=1,
-            denominator_bits=0,
-            work=1,
-            intermediate_digits=_representation_digits(1, 1, 0),
-            common_denominator=1,
-        )
+        return _variable_metrics()
     if isinstance(expression, PolynomialPower):
-        base = _metrics(expression.base, variable_count)
-        exponent = expression.exponent
-        if exponent < 0:
-            raise OperationDomainValidationError(
-                location=("expression",),
-                code="polynomial.expression.invalid_source",
-                message="expression nodes must satisfy the closed grammar before expansion",
-            )
-        if exponent == 0:
-            return _ExpressionMetrics(
-                nodes=min(_MAX_EXPRESSION_NODES + 1, base.nodes + 1),
-                terms=1,
-                support_terms=1,
-                degree=0,
-                numerator_bits=1,
-                denominator_bits=0,
-                work=base.work,
-                intermediate_digits=max(base.intermediate_digits, 2),
-                common_denominator=1,
-            )
-        terms = _bounded_power(base.terms, exponent, MAX_POLYNOMIAL_TERMS)
-        product_count = max(1, terms)
-        numerator_bits = min(
-            _MAX_EXPRESSION_COEFFICIENT_BITS + 1,
-            base.numerator_bits * exponent + ceil(log2(product_count)),
-        )
-        denominator_bits = min(
-            _MAX_EXPRESSION_COEFFICIENT_BITS + 1,
-            base.denominator_bits * exponent,
-        )
-        work = base.work
-        result_terms = 1
-        result_terms_support = 1
-        base_terms = base.terms
-        base_terms_support = base.support_terms
-        base_degree = base.degree
-        result_degree = 0
-        remaining = exponent
-        while remaining:
-            if remaining & 1:
-                work = min(
-                    _MAX_EXPRESSION_WORK + 1,
-                    work
-                    + _bounded_product(
-                        result_terms_support,
-                        base_terms_support,
-                        _MAX_EXPRESSION_WORK,
-                    ),
-                )
-                result_terms = _bounded_product(
-                    result_terms, base_terms, MAX_POLYNOMIAL_TERMS
-                )
-                result_degree = min(
-                    MAX_POLYNOMIAL_EXPONENT + 1, result_degree + base_degree
-                )
-                result_terms_support = _support_bound(
-                    variable_count, result_degree, result_terms
-                )
-            remaining //= 2
-            if remaining:
-                work = min(
-                    _MAX_EXPRESSION_WORK + 1,
-                    work
-                    + _bounded_product(
-                        base_terms_support,
-                        base_terms_support,
-                        _MAX_EXPRESSION_WORK,
-                    ),
-                )
-                base_terms = _bounded_product(
-                    base_terms, base_terms, MAX_POLYNOMIAL_TERMS
-                )
-                base_degree = min(MAX_POLYNOMIAL_EXPONENT + 1, base_degree * 2)
-                base_terms_support = _support_bound(
-                    variable_count,
-                    base_degree,
-                    base_terms,
-                )
-        degree = min(MAX_POLYNOMIAL_EXPONENT + 1, base.degree * exponent)
-        support_terms = _support_bound(variable_count, degree, terms)
-        common_denominator = _bounded_common_power(base.common_denominator, exponent)
-        intermediate_digits = max(
-            base.intermediate_digits,
-            _representation_digits(support_terms, numerator_bits, denominator_bits),
-        )
-        return _ExpressionMetrics(
-            nodes=min(_MAX_EXPRESSION_NODES + 1, base.nodes + 1),
-            terms=terms,
-            support_terms=support_terms,
-            degree=degree,
-            numerator_bits=numerator_bits,
-            denominator_bits=denominator_bits,
-            work=work,
-            intermediate_digits=intermediate_digits,
-            common_denominator=common_denominator,
-        )
+        return _power_metrics(expression, variable_count)
     child_metrics = [
         _metrics(operand, variable_count) for operand in expression.operands
     ]

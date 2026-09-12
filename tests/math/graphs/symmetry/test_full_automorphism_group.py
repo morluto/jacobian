@@ -154,6 +154,70 @@ def test_uniform_explicit_path_and_cycle_colors_keep_compact_presentations(
     assert len(result.generators) == (1 if family == "path" else 2)
 
 
+def test_palindromic_colored_path_filters_bounded_reversal() -> None:
+    vertices = tuple(f"v{index:02}" for index in range(15))
+    graph = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(
+            vertices=vertices,
+            edges=tuple(pairwise(vertices)),
+        ),
+        vertex_colors=tuple("A" if index % 2 == 0 else "B" for index in range(15)),
+    )
+
+    result = full_graph_automorphism_group(graph)
+
+    # Only the identity and the endpoint reversal preserve the palindromic
+    # alternating colors; generic refinement would reject this request.
+    assert result.automorphism_count == 2
+    assert result.generated_group_order == 2
+    assert len(result.generators) == 1
+
+
+def test_periodic_colored_cycle_filters_dihedral_maps() -> None:
+    vertices = tuple(f"v{index}" for index in range(6))
+    graph = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(
+            vertices=vertices,
+            edges=tuple(
+                sorted((vertices[index], vertices[(index + 1) % 6]))
+                for index in range(6)
+            ),
+        ),
+        vertex_colors=("A", "B") * 3,
+    )
+
+    result = full_graph_automorphism_group(graph)
+
+    # Period-two colors keep the even rotations and one reflection coset.
+    assert result.automorphism_count == 6
+    assert result.generated_group_order == 6
+    assert len(result.generators) == 2
+
+
+def test_uniform_vertex_colored_cliques_keep_compact_presentation() -> None:
+    vertices = tuple(
+        f"v{component}{position}" for component in range(3) for position in range(3)
+    )
+    edges = tuple(
+        (left, right)
+        for component in range(3)
+        for left in vertices[component * 3 : component * 3 + 3]
+        for right in vertices[component * 3 : component * 3 + 3]
+        if left < right
+    )
+    graph = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(vertices=vertices, edges=edges),
+        vertex_colors=("same",) * len(vertices),
+    )
+
+    result = full_graph_automorphism_group(graph)
+
+    # A uniform vertex color removes no automorphisms: S_3 wr S_3 again.
+    assert result.automorphism_count == 1_296
+    assert result.generated_group_order == 1_296
+    assert len(result.generators) < result.automorphism_count
+
+
 def test_vf2_accepts_and_uses_refined_edge_signatures() -> None:
     vertices = tuple("v" + str(index) for index in range(10))
     edges = tuple(
@@ -175,12 +239,14 @@ def test_vf2_accepts_and_uses_refined_edge_signatures() -> None:
 def test_vf2_cancellation_is_checked_while_searching_between_matches(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # A chorded cycle is not a simple path or cycle, so generic VF2 search
+    # still owns it and its cancellation checkpoint fires mid-search.
     graph = ColoredUndirectedGraph(
         graph=SimpleUndirectedGraph(
             vertices=("a", "b", "c", "d"),
-            edges=(("a", "b"), ("a", "d"), ("b", "c"), ("c", "d")),
+            edges=(("a", "b"), ("a", "c"), ("a", "d"), ("b", "c"), ("c", "d")),
         ),
-        edge_colors=("ab", "ad", "bc", "cd"),
+        edge_colors=("ab", "ac", "ad", "bc", "cd"),
     )
     cancelled = Event()
 

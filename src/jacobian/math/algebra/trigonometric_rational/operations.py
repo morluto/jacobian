@@ -444,7 +444,7 @@ def _reduce_common_laurent_factor(
     if not numerator:
         return _canonicalize(numerator, denominator)
     axis = len(next(iter(denominator)))
-    if axis == 0 or len(denominator) == 1:
+    if axis == 0 or len(numerator) == 1 or len(denominator) == 1:
         return _canonicalize(numerator, denominator)
 
     # Shift both Laurent polynomials into an ordinary polynomial ring.  This
@@ -550,12 +550,12 @@ def normalize_trigonometric_rational(
         )
     axis = len(request.variables)
     raw_numerator, raw_denominator, loci = _evaluate(request.expression, axis, [0])
-    numerator, denominator = _reduce_common_laurent_factor(
-        raw_numerator, raw_denominator
-    )
     combined_loci = _combine_loci(loci, axis)
     source_locus = combined_loci if combined_loci != _one(axis) else raw_denominator
     denominator_nonzero = _canonicalize_nonzero_locus(source_locus)
+    numerator, denominator = _reduce_common_laurent_factor(
+        raw_numerator, raw_denominator
+    )
     denominator_wire = _wire(request.variables, denominator)
     return TrigonometricRationalNormalizeResult(
         numerator=_wire(request.variables, numerator),

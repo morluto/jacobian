@@ -27,6 +27,7 @@ _MAX_COEFFICIENT_DIGITS = 4_096
 _STDOUT_BYTES = 4 * _MAX_LAURENT_TERMS * (64 + 4 * (_MAX_COEFFICIENT_DIGITS + 8))
 _STDERR_BYTES = 64 * 1024
 _ADDRESS_SPACE_BYTES = 1024 * 1024 * 1024
+_PARENT_FINALIZATION_SECONDS = 1.0
 
 
 def cancel_common_factor(payload: dict[str, Any]) -> dict[str, Any]:
@@ -41,7 +42,7 @@ def cancel_common_factor(payload: dict[str, Any]) -> dict[str, Any]:
         deadline = execution.started_at + 120.0
     request_checkpoint("before trigonometric Laurent GCD encoding")
     encoded = encode_strict_json(payload)
-    remaining = deadline - monotonic()
+    remaining = deadline - monotonic() - _PARENT_FINALIZATION_SECONDS
     if remaining <= 0:
         raise OperationExecutionTimeoutError(
             "trigonometric Laurent GCD deadline expired before the worker started"

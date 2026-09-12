@@ -204,29 +204,9 @@ class RelationPathReplayResult(RelationPathReplayRequest):
         )
 
 
-class RelationInverseRequest(StrictModel):
-    """Request the converse of one finite rational relation."""
-
-    transducer: RationalTransducer
-
-
-class RelationInverseResult(RelationInverseRequest):
-    """The rational transducer with every edge label pair exchanged."""
-
-    inverse: RationalTransducer
-
-    @classmethod
-    def _from_kernel(
-        cls, request: RelationInverseRequest, inverse: RationalTransducer
-    ) -> Self:
-        return cls.model_construct(transducer=request.transducer, inverse=inverse)
-
-
 __all__ = [
     "ComposeRequest",
     "ComposeResult",
-    "RelationInverseRequest",
-    "RelationInverseResult",
     "RelationPathReplayRequest",
     "RelationPathReplayResult",
     "SubseqRunRequest",

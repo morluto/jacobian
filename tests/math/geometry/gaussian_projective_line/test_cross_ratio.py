@@ -128,33 +128,60 @@ def test_coincident_points_are_rejected_before_division() -> None:
     )
     with pytest.raises(OperationDomainValidationError) as error:
         gaussian_rational_cross_ratio(request)
-    assert error.value.errors()[0]["type"] == "geometry.gaussian_cross_ratio.points_not_distinct"
+    assert (
+        error.value.errors()[0]["type"]
+        == "geometry.gaussian_cross_ratio.points_not_distinct"
+    )
 
 
 def test_coincident_points_reach_operation_admission_on_dispatch() -> None:
     payload = {
         "first": {
             "coordinates": [
-                {"real": {"num": "0", "den": "1"}, "imaginary": {"num": "0", "den": "1"}},
-                {"real": {"num": "1", "den": "1"}, "imaginary": {"num": "0", "den": "1"}},
+                {
+                    "real": {"num": "0", "den": "1"},
+                    "imaginary": {"num": "0", "den": "1"},
+                },
+                {
+                    "real": {"num": "1", "den": "1"},
+                    "imaginary": {"num": "0", "den": "1"},
+                },
             ]
         },
         "second": {
             "coordinates": [
-                {"real": {"num": "0", "den": "1"}, "imaginary": {"num": "0", "den": "1"}},
-                {"real": {"num": "1", "den": "1"}, "imaginary": {"num": "0", "den": "1"}},
+                {
+                    "real": {"num": "0", "den": "1"},
+                    "imaginary": {"num": "0", "den": "1"},
+                },
+                {
+                    "real": {"num": "1", "den": "1"},
+                    "imaginary": {"num": "0", "den": "1"},
+                },
             ]
         },
         "third": {
             "coordinates": [
-                {"real": {"num": "1", "den": "1"}, "imaginary": {"num": "0", "den": "1"}},
-                {"real": {"num": "1", "den": "1"}, "imaginary": {"num": "0", "den": "1"}},
+                {
+                    "real": {"num": "1", "den": "1"},
+                    "imaginary": {"num": "0", "den": "1"},
+                },
+                {
+                    "real": {"num": "1", "den": "1"},
+                    "imaginary": {"num": "0", "den": "1"},
+                },
             ]
         },
         "fourth": {
             "coordinates": [
-                {"real": {"num": "1", "den": "1"}, "imaginary": {"num": "0", "den": "1"}},
-                {"real": {"num": "0", "den": "1"}, "imaginary": {"num": "0", "den": "1"}},
+                {
+                    "real": {"num": "1", "den": "1"},
+                    "imaginary": {"num": "0", "den": "1"},
+                },
+                {
+                    "real": {"num": "0", "den": "1"},
+                    "imaginary": {"num": "0", "den": "1"},
+                },
             ]
         },
     }
@@ -165,7 +192,10 @@ def test_coincident_points_reach_operation_admission_on_dispatch() -> None:
             Catalog.open(),
         )
     assert not isinstance(error.value, OperationRequestValidationError)
-    assert error.value.errors()[0]["type"] == "geometry.gaussian_cross_ratio.points_not_distinct"
+    assert (
+        error.value.errors()[0]["type"]
+        == "geometry.gaussian_cross_ratio.points_not_distinct"
+    )
 
 
 def test_sparse_large_coordinate_cross_ratio_is_admitted() -> None:

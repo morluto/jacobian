@@ -16,8 +16,7 @@ from jacobian.math.number_theory.number_fields.values import (
 PROJECTIVE_LINE_FIELD = "Q(i)"
 PROJECTIVE_LINE_AXES = ("X", "Y")
 CROSS_RATIO_ORDER = (
-    "det(p1,p3)det(p2,p4)/(det(p1,p4)det(p2,p3)) with "
-    "det(pi,pj)=Xi Yj - Yi Xj"
+    "det(p1,p3)det(p2,p4)/(det(p1,p4)det(p2,p3)) with det(pi,pj)=Xi Yj - Yi Xj"
 )
 
 

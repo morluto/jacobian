@@ -232,6 +232,7 @@ def test_retained_loci_are_admitted_before_the_gcd_worker(
         "jacobian.math.algebra.trigonometric_rational.operations.cancel_common_factor",
         _forbidden,
     )
+
     def _product(first_frequency: int) -> dict[str, object]:
         return {
             "kind": "MULTIPLY",
@@ -375,8 +376,7 @@ def test_proportional_large_scalars_cancel_without_admitted_cross_products(
         (2,),
     }
     assert all(
-        abs(term.coefficient.real.num) < 10
-        and abs(term.coefficient.imaginary.num) < 10
+        abs(term.coefficient.real.num) < 10 and abs(term.coefficient.imaginary.num) < 10
         for term in result.denominator_nonzero.terms
     )
 
@@ -414,8 +414,7 @@ def test_locus_scalar_units_are_normalized_before_combining(
         (2,),
     }
     assert all(
-        abs(term.coefficient.real.num) < 10
-        and abs(term.coefficient.imaginary.num) < 10
+        abs(term.coefficient.real.num) < 10 and abs(term.coefficient.imaginary.num) < 10
         for term in result.denominator_nonzero.terms
     )
 

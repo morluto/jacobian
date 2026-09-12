@@ -177,6 +177,31 @@ def test_consumers_reject_mixed_carrier_elements_as_domain_errors() -> None:
         width(malformed)
 
 
+def test_consumers_reject_integer_graded_flag_as_domain_errors() -> None:
+    poset = _materialize(["a", "b"], [("a", "b")])
+    forged = poset.model_copy(
+        update={
+            "graded": 1,
+            "poset_digest": finite_poset_digest(
+                elements=poset.elements,
+                strict_order_pairs=poset.strict_order_pairs,
+                cover_relations=poset.cover_relations,
+                incomparable_pairs=poset.incomparable_pairs,
+                minimal_elements=poset.minimal_elements,
+                maximal_elements=poset.maximal_elements,
+                graded=1,  # type: ignore[arg-type]
+                ranks=poset.ranks,
+            ),
+        }
+    )
+
+    assert type(forged.graded) is int
+    assert forged.graded == 1
+    assert verify_finite_poset(forged) is False
+    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+        width(forged)
+
+
 def test_consumers_reject_boolean_rank_claims_as_domain_errors() -> None:
     poset = _materialize(["a", "b"], [("a", "b")])
     forged_ranks = tuple(

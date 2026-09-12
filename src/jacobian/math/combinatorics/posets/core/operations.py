@@ -161,6 +161,8 @@ def _canonical_claims_match(
 ) -> bool:
     if tuple(sorted(set(poset.elements))) != poset.elements:
         return False
+    if type(poset.graded) is not bool:
+        return False
     if (
         tuple(OrderedPair(lower=a, upper=b) for a, b in sorted(strict))
         != poset.strict_order_pairs
@@ -237,6 +239,8 @@ def verify_finite_poset(poset: FinitePoset) -> bool:
     """Verify all retained canonical order/profile claims of a poset value."""
     try:
         if tuple(sorted(set(poset.elements))) != poset.elements:
+            return False
+        if type(poset.graded) is not bool:
             return False
         strict, reduction = _validated_presentation(
             poset.elements,

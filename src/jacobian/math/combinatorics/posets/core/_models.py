@@ -6,7 +6,7 @@ import hashlib
 from enum import StrEnum
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, StrictInt, StringConstraints, model_validator
+from pydantic import Field, StrictBool, StrictInt, StringConstraints, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._digest import Sha256Digest
@@ -412,7 +412,7 @@ class FinitePoset(StrictModel):
     )
     minimal_elements: tuple[ElementLabel, ...] = ()
     maximal_elements: tuple[ElementLabel, ...] = ()
-    graded: bool
+    graded: StrictBool
     ranks: tuple[ElementRank, ...] | None = None
     poset_digest: Sha256Digest
 

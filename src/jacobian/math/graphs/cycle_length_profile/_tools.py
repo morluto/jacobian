@@ -74,6 +74,10 @@ TOOLS: MathTools = (
         result_type=FixedLengthCycleEnumerationResult,
         run=_enumerate_cycles,
         tags=("graph", "cycle", "enumeration", "exact"),
+        discovery_terms=(
+            "enumerate fixed-length simple cycles",
+            "complete simple cycle family",
+        ),
         examples=(
             OperationExample(
                 name="square",
@@ -102,6 +106,10 @@ TOOLS: MathTools = (
         result_type=FixedLengthCycleEnumerationResult,
         run=_enumerate_chordless_cycles,
         tags=("graph", "cycle", "chordless", "enumeration", "exact"),
+        discovery_terms=(
+            "enumerate fixed-length chordless cycles",
+            "induced cycle family",
+        ),
         examples=(
             OperationExample(
                 name="square",

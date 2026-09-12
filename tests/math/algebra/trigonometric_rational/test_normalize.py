@@ -235,7 +235,10 @@ def test_retained_loci_are_admitted_before_the_gcd_worker(
     product = {
         "kind": "MULTIPLY",
         "children": [
-            {"kind": "COSINE", "angle": {"coefficients": [int(index == axis) for axis in range(7)]}}
+            {
+                "kind": "COSINE",
+                "angle": {"coefficients": [int(index == axis) for axis in range(7)]},
+            }
             for index in range(7)
         ],
     }

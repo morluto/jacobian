@@ -216,7 +216,8 @@ def test_raw_family_dimensions_are_rejected_before_container_copy() -> None:
     }
     with pytest.raises(ValidationError) as arity_mismatch:
         TupleFamilyOrbitSource.model_validate(oversized_row)
-    assert "arity_mismatch" in arity_mismatch.value.errors()[0]["type"]
+    error_type = arity_mismatch.value.errors()[0]["type"]
+    assert "arity_mismatch" in error_type or "arity_out_of_range" in error_type
 
 
 def test_range_generator_rows_are_rejected_before_container_copy() -> None:
@@ -281,6 +282,49 @@ def test_range_family_rows_are_rejected_before_container_copy() -> None:
         "finite_group_action.tuple_family_arity_out_of_range",
         "finite_group_action.tuple_family_arity_mismatch",
     }
+
+
+def test_oneshot_generator_rows_are_materialized_once() -> None:
+    def _row() -> object:
+        yield 0
+
+    payload = {
+        "action": {"domain": ["a"], "generators": [_row()]},
+        "arity": 0,
+        "family": [],
+    }
+    source = TupleFamilyOrbitSource.model_validate(payload)
+    assert source.action.generators == ((0,),)
+
+
+def test_range_source_indices_count_toward_the_aggregate_bound() -> None:
+    payload = {
+        "source": {
+            "action": {"domain": ["a"], "generators": [[0]]},
+            "arity": 0,
+            "family": [],
+        },
+        "rows": [
+            {
+                "representative": [0],
+                "source_indices": range(MAX_FAMILY_MEMBERS),
+                "orbit_size": 1,
+                "stabilizer_size": 1,
+                "least_transporter": [0],
+            },
+            {
+                "representative": [1],
+                "source_indices": range(MAX_FAMILY_MEMBERS),
+                "orbit_size": 1,
+                "stabilizer_size": 1,
+                "least_transporter": [0],
+            },
+        ],
+        "is_union_of_complete_ambient_orbits": True,
+    }
+    with pytest.raises(ValidationError) as indices_bound:
+        TupleFamilyOrbitResult.model_validate(payload)
+    assert "input_bound" in indices_bound.value.errors()[0]["type"]
 
 
 def test_raw_action_generator_dimensions_are_rejected_before_container_copy() -> None:

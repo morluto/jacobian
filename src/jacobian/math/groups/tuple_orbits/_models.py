@@ -195,18 +195,12 @@ def _source_mapping(data: object) -> dict[str, Any]:
     if action is not None:
         payload["action"] = action
     family = payload.get("family")
-    raw_arity = payload.get("arity")
     if isinstance(family, Iterable) and not isinstance(
         family, (str, bytes, bytearray, Mapping)
     ):
-        row_limit = (
-            raw_arity
-            if isinstance(raw_arity, int) and not isinstance(raw_arity, bool)
-            else MAX_TUPLE_ARITY
-        )
         bounded_family: list[Any] = []
         for member in family:
-            materialized = _materialize_bounded_sequence(member, row_limit)
+            materialized = _materialize_bounded_sequence(member, MAX_TUPLE_ARITY)
             if materialized is _SEQUENCE_OVERFLOW:
                 raise _tuple_error(
                     "arity_out_of_range",
@@ -338,8 +332,9 @@ class TupleFamilyOrbitSource(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def normalize_json_containers(cls, data: Any) -> Any:
-        _preflight_source_payload(data)
-        return canonicalize_json_containers(_source_mapping(data))
+        payload = _source_mapping(data)
+        _preflight_source_payload(payload)
+        return canonicalize_json_containers(payload)
 
     @model_validator(mode="after")
     def bind_family_axis(self) -> Self:
@@ -459,8 +454,19 @@ class TupleFamilyOrbitResult(StrictModel):
             total_source_indices = 0
             for row in rows:
                 mapped = _row_mapping(row)
-                _preflight_row_payload(mapped)
                 source_indices = mapped.get("source_indices")
+                materialized_indices = _materialize_bounded_sequence(
+                    source_indices, MAX_FAMILY_MEMBERS
+                )
+                if materialized_indices is _SEQUENCE_OVERFLOW:
+                    raise _tuple_error(
+                        "input_bound",
+                        f"at most {MAX_FAMILY_MEMBERS} tuple rows are admitted",
+                    )
+                if isinstance(materialized_indices, tuple):
+                    mapped["source_indices"] = materialized_indices
+                    source_indices = materialized_indices
+                _preflight_row_payload(mapped)
                 if isinstance(source_indices, (list, tuple)):
                     total_source_indices += len(source_indices)
                     if total_source_indices > MAX_FAMILY_MEMBERS:
@@ -472,8 +478,8 @@ class TupleFamilyOrbitResult(StrictModel):
             payload["rows"] = materialized_rows
         source = payload.get("source")
         if source is not None:
-            _preflight_source_payload(source)
             payload["source"] = _source_mapping(source)
+            _preflight_source_payload(payload["source"])
         return canonicalize_json_containers(payload)
 
     @model_validator(mode="after")

@@ -10,6 +10,7 @@ from jacobian.math.combinatorics.posets.antichain_enumeration._models import (
     require_antichain_enumeration_envelope,
 )
 from jacobian.math.combinatorics.posets.core._models import FinitePoset
+from jacobian.math.combinatorics.posets.core.operations import _admit_canonical_poset
 
 __all__ = ["enumerate_antichains"]
 
@@ -32,6 +33,7 @@ def enumerate_antichains(
             code="poset.antichain_enumeration_envelope_exceeded",
             message=str(exc),
         ) from exc
+    _admit_canonical_poset(poset)
     elements = poset.elements
     n = len(elements)
     element_index = {e: i for i, e in enumerate(elements)}

@@ -12,6 +12,7 @@ from jacobian.math.combinatorics.posets.antichain_enumeration.operations import 
 )
 from jacobian.math.combinatorics.posets.core._models import (
     FinitePoset,
+    IncomparablePair,
     PresentationPair,
     ReflexivePairPolicy,
     RelationInterpretation,
@@ -135,3 +136,17 @@ def test_request_retains_intrinsic_cardinality_range_shape() -> None:
         AntichainEnumerationRequest(
             poset=_make_chain(3), min_cardinality=2, max_cardinality=1
         )
+
+
+def test_rejects_forged_poset_relation_claims() -> None:
+    poset = _make_chain(2)
+    forged = poset.model_copy(
+        update={
+            "strict_order_pairs": (),
+            "cover_relations": (),
+            "incomparable_pairs": (IncomparablePair(left="0", right="1"),),
+        }
+    )
+
+    with pytest.raises(OperationDomainValidationError):
+        enumerate_antichains(forged, 1, 2)

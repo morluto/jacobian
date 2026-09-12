@@ -320,35 +320,26 @@ class _StubZ3:
     Optimize = _StubOptimizer
 
 
-class _StubCardinalityAndFirstTieClosedOptimizer(_StubOptimizer):
-    """Cardinality and one tie-break close before a later tie-break stays open."""
-
-    def __init__(self) -> None:
-        self._maximize_calls = 0
-
+class _StubClosedCardinalityOptimizer(_StubOptimizer):
     def maximize(self, expression: object) -> _StubObjective:
-        self._maximize_calls += 1
-        if self._maximize_calls <= 2:
-            return _StubClosedObjective()
-        return _StubObjective()
+        return _StubClosedObjective()
 
 
-class _StubCardinalityAndFirstTieClosedZ3(_StubZ3):
-    Optimize = _StubCardinalityAndFirstTieClosedOptimizer
+class _StubClosedCardinalityZ3(_StubZ3):
+    Optimize = _StubClosedCardinalityOptimizer
 
 
-def test_exact_requires_all_tie_break_objective_bounds(
+def test_closed_cardinality_is_exact_without_membership_objectives(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A closed cardinality objective cannot certify an unresolved tie-break."""
+    """Independence exactness depends only on the closed cardinality bound."""
 
-    monkeypatch.setitem(sys.modules, "z3", _StubCardinalityAndFirstTieClosedZ3())
+    monkeypatch.setitem(sys.modules, "z3", _StubClosedCardinalityZ3())
     result = z3_backend._solve_independence_number_values_kernel(
         _path_graph(), IndependenceNumberBudget()
     )
-    assert result.status == "UNKNOWN"
-    assert result.optimum_value is None
-    assert result.upper_bound == result.order == 3
+    assert result.status == "EXACT"
+    assert result.optimum_value == result.upper_bound == 1
     assert IndependenceNumberResult.model_validate(result.model_dump()) == result
 
 

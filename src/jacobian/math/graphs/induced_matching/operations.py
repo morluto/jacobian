@@ -9,9 +9,10 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.graphs import _independence_z3
 from jacobian.math.graphs.independence import (
     IndependenceNumberBudget,
-    independence_number,
+    _require_admitted_request,
 )
 from jacobian.math.graphs.induced_matching._models import (
     MAX_INDUCED_MATCHING_CONFLICT_GRAPH_CELLS,
@@ -113,12 +114,16 @@ def maximum_induced_matching(
     budget = resource_budget or IndependenceNumberBudget()
     plan = _admit_and_build_plan(graph, budget)
     conflict_graph = SimpleUndirectedGraph(
-        # The independence kernel's canonical tie-break follows this axis;
-        # sort IDs lexicographically to match the public selected-ID family.
+        # Canonical selected-edge IDs follow this sorted axis. Tie-breaking is
+        # confined to this operation so independence-number exactness does not
+        # depend on membership objectives.
         vertices=tuple(sorted(binding.edge_id for binding in plan.bindings)),
         edges=plan.conflict_edges,
     )
-    independence = independence_number(conflict_graph, resource_budget=budget)
+    _require_admitted_request(conflict_graph, budget)
+    independence = _independence_z3.solve_independence_number_values(
+        conflict_graph, budget, canonicalize_witness=True
+    )
     selected_ids = independence.witness_vertices
     selected = {
         endpoint

@@ -37,7 +37,7 @@ MAX_HYPERGRAPH_RELIABILITY_RATIONAL_DIGITS = (
     MAX_INPUT_RATIONAL_DIGITS * MAX_HYPERGRAPH_RELIABILITY_HYPEREDGES
     + MAX_HYPERGRAPH_RELIABILITY_HYPEREDGES
 )
-MAX_HYPERGRAPH_RELIABILITY_OUTPUT_BYTES = 64_000_000
+MAX_HYPERGRAPH_RELIABILITY_LEDGER_UNITS = 64_000_000
 
 
 def _validation_error(message: str) -> PydanticCustomError:
@@ -259,31 +259,29 @@ def _admit_hypergraph_request(
                 f"{MAX_HYPERGRAPH_RELIABILITY_RATIONAL_DIGITS}-digit result bound"
             ),
         )
-    label_bytes = sum(
-        len(vertex.encode("utf-8")) for vertex in request.hypergraph.vertices
-    ) + sum(
-        len(edge_id.encode("utf-8"))
-        + sum(len(vertex.encode("utf-8")) for vertex in members)
+    label_characters = sum(len(vertex) for vertex in request.hypergraph.vertices) + sum(
+        len(edge_id) + sum(len(vertex) for vertex in members)
         for edge_id, members in request.hypergraph.edges
     )
-    max_component_bytes = max(
-        (len(edge_id.encode("utf-8")) for edge_id, _ in request.hypergraph.edges),
+    max_component_characters = max(
+        (len(edge_id) for edge_id, _ in request.hypergraph.edges),
         default=1,
     )
-    # Reserve each state for its largest possible open-ID tuple and exact
-    # rational. This is a conservative source-bound output estimate.
-    estimated_output_bytes = (
+    # Bound mathematical storage by label characters, exact rational digits,
+    # and scalar slots. Reserve every state for the full open-hyperedge axis;
+    # fixed padding covers the bounded source and per-state scalar fields.
+    ledger_units = (
         1024
-        + label_bytes * 4
+        + label_characters * 4
         + len(request.hyperedge_probabilities) * (2 * MAX_INPUT_RATIONAL_DIGITS + 96)
         + state_count
         * (
             192
-            + len(request.hypergraph.edges) * max_component_bytes
+            + len(request.hypergraph.edges) * max_component_characters
             + 2 * rational_digits
         )
     )
-    if estimated_output_bytes > MAX_HYPERGRAPH_RELIABILITY_OUTPUT_BYTES:
+    if ledger_units > MAX_HYPERGRAPH_RELIABILITY_LEDGER_UNITS:
         raise OperationDomainValidationError(
             location=("states",),
             code="probability.hypergraph_reliability.output_bound",
@@ -399,7 +397,7 @@ HYPERGRAPH_BOND_CONNECTION_PROBABILITY_OPERATION = MathTool(
 __all__ = [
     "HYPERGRAPH_BOND_CONNECTION_PROBABILITY_OPERATION",
     "MAX_HYPERGRAPH_RELIABILITY_HYPEREDGES",
-    "MAX_HYPERGRAPH_RELIABILITY_OUTPUT_BYTES",
+    "MAX_HYPERGRAPH_RELIABILITY_LEDGER_UNITS",
     "MAX_HYPERGRAPH_RELIABILITY_STATES",
     "MAX_HYPERGRAPH_RELIABILITY_VERTICES",
     "HyperedgeOpenProbability",

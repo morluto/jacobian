@@ -36,7 +36,7 @@ MAX_SITE_RELIABILITY_RATIONAL_DIGITS = (
     MAX_INPUT_RATIONAL_DIGITS * MAX_SITE_RELIABILITY_VERTICES
     + MAX_SITE_RELIABILITY_VERTICES
 )
-MAX_SITE_RELIABILITY_OUTPUT_BYTES = 64_000_000
+MAX_SITE_RELIABILITY_LEDGER_UNITS = 64_000_000
 
 
 def _validation_error(message: str) -> PydanticCustomError:
@@ -263,25 +263,26 @@ def _admit_site_request(
                 f"{MAX_SITE_RELIABILITY_RATIONAL_DIGITS}-digit result bound"
             ),
         )
-    label_bytes = sum(len(vertex.encode("utf-8")) for vertex in request.graph.vertices)
-    max_component_bytes = max(
-        (len(vertex.encode("utf-8")) for vertex in request.graph.vertices),
+    label_characters = sum(len(vertex) for vertex in request.graph.vertices)
+    max_component_characters = max(
+        (len(vertex) for vertex in request.graph.vertices),
         default=1,
     )
-    # This over-allocates every state to its largest possible open-vertex
-    # list, which is intentionally conservative and independent of execution.
-    estimated_output_bytes = (
+    # Bound mathematical storage by label characters, exact rational digits,
+    # and scalar slots. Reserve every state for the full open-vertex axis;
+    # fixed padding covers the bounded source and per-state scalar fields.
+    ledger_units = (
         1024
-        + label_bytes * 8
+        + label_characters * 8
         + len(request.vertex_probabilities) * (2 * MAX_INPUT_RATIONAL_DIGITS + 96)
         + state_count
         * (
             192
-            + len(request.graph.vertices) * max_component_bytes
+            + len(request.graph.vertices) * max_component_characters
             + 2 * rational_digits
         )
     )
-    if estimated_output_bytes > MAX_SITE_RELIABILITY_OUTPUT_BYTES:
+    if ledger_units > MAX_SITE_RELIABILITY_LEDGER_UNITS:
         raise OperationDomainValidationError(
             location=("states",),
             code="probability.site_reliability.output_bound",
@@ -386,7 +387,7 @@ SITE_CONNECTION_PROBABILITY_OPERATION = MathTool(
 
 __all__ = [
     "MAX_SITE_RELIABILITY_EDGES",
-    "MAX_SITE_RELIABILITY_OUTPUT_BYTES",
+    "MAX_SITE_RELIABILITY_LEDGER_UNITS",
     "MAX_SITE_RELIABILITY_STATES",
     "MAX_SITE_RELIABILITY_VERTICES",
     "SITE_CONNECTION_PROBABILITY_OPERATION",

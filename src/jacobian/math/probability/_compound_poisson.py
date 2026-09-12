@@ -171,6 +171,45 @@ def _bounded_sum(
     return Fraction(numerator, denominator)
 
 
+def _require_canonical_rational(
+    value: object,
+    *,
+    location: tuple[str, ...],
+    label: str,
+) -> CanonicalRational:
+    """Reject forged rationals that skip CanonicalRational's reduced-form checks."""
+
+    if not isinstance(value, CanonicalRational):
+        raise _domain_error(
+            location=location,
+            code="probability.compound_poisson.canonical_rational_type",
+            message=f"{label} must be a canonical rational",
+        )
+    numerator = value.num
+    denominator = value.den
+    if type(numerator) is not int or type(denominator) is not int:
+        raise _domain_error(
+            location=location,
+            code="probability.compound_poisson.canonical_rational_components",
+            message=f"{label} components must be exact integers",
+        )
+    if denominator <= 0:
+        raise _domain_error(
+            location=location,
+            code="probability.compound_poisson.canonical_rational",
+            message=f"{label} must have a positive denominator",
+        )
+    if gcd(abs(numerator), denominator) != 1 or (
+        numerator == 0 and denominator != 1
+    ):
+        raise _domain_error(
+            location=location,
+            code="probability.compound_poisson.canonical_rational",
+            message=f"{label} must be reduced with canonical zero 0/1",
+        )
+    return value
+
+
 def _admit_and_plan(
     intensity: CanonicalRational,
     jump_distribution: FiniteRationalDistribution,
@@ -190,12 +229,9 @@ def _admit_and_plan(
                 f"{MAX_COMPOUND_POISSON_ORDER}"
             ),
         )
-    if not isinstance(intensity, CanonicalRational):
-        raise _domain_error(
-            location=("intensity",),
-            code="probability.compound_poisson.intensity_type",
-            message="compound-Poisson intensity must be a canonical rational",
-        )
+    intensity = _require_canonical_rational(
+        intensity, location=("intensity",), label="compound-Poisson intensity"
+    )
     try:
         require_bounded_rational(
             intensity,
@@ -238,16 +274,23 @@ def _admit_and_plan(
                 f"{MAX_COMPOUND_POISSON_ATOMS} support atoms"
             ),
         )
-    if any(
-        not isinstance(atom.probability, CanonicalRational)
-        or atom.probability.as_fraction() < 0
-        for atom in atoms
-    ):
-        raise _domain_error(
-            location=("jump_distribution", "atoms"),
-            code="probability.compound_poisson.nonnegative_probability",
-            message="jump probabilities must be nonnegative canonical rationals",
+    for index, atom in enumerate(atoms):
+        _require_canonical_rational(
+            atom.value,
+            location=("jump_distribution", "atoms", str(index), "value"),
+            label="jump value",
         )
+        probability = _require_canonical_rational(
+            atom.probability,
+            location=("jump_distribution", "atoms", str(index), "probability"),
+            label="jump probability",
+        )
+        if probability.num < 0:
+            raise _domain_error(
+                location=("jump_distribution", "atoms", str(index), "probability"),
+                code="probability.compound_poisson.nonnegative_probability",
+                message="jump probabilities must be nonnegative canonical rationals",
+            )
     try:
         require_input_distribution(
             atoms,

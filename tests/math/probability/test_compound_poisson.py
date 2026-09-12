@@ -110,7 +110,7 @@ def test_native_boundary_rejects_non_value_arguments_with_owner_error() -> None:
         compound_poisson_cumulant_prefix({}, jumps, 1)  # type: ignore[arg-type]
     assert (
         intensity_error.value.errors()[0]["type"]
-        == "probability.compound_poisson.intensity_type"
+        == "probability.compound_poisson.canonical_rational_type"
     )
 
     with pytest.raises(OperationDomainValidationError) as request_error:
@@ -123,7 +123,7 @@ def test_native_boundary_rejects_non_value_arguments_with_owner_error() -> None:
         )
     assert (
         request_error.value.errors()[0]["type"]
-        == "probability.compound_poisson.intensity_type"
+        == "probability.compound_poisson.canonical_rational_type"
     )
 
 
@@ -164,6 +164,54 @@ def test_forged_negative_jump_mass_is_rejected_at_admission() -> None:
         compound_poisson_cumulant_prefix(_q(Fraction(1)), forged, 1)
     assert exc_info.value.errors()[0]["type"] == (
         "probability.compound_poisson.nonnegative_probability"
+    )
+
+
+def test_forged_noncanonical_rationals_are_rejected_before_arithmetic() -> None:
+    jumps = FiniteRationalDistribution(
+        atoms=(
+            FiniteDistributionAtom(value=_q(Fraction(1)), probability=_q(Fraction(1))),
+        )
+    )
+    zero_den = CanonicalRational.model_construct(num=1, den=0)
+    with pytest.raises(OperationDomainValidationError) as intensity_den:
+        compound_poisson_cumulant_prefix(zero_den, jumps, 1)
+    assert intensity_den.value.errors()[0]["type"] == (
+        "probability.compound_poisson.canonical_rational"
+    )
+
+    unreduced = CanonicalRational.model_construct(num=2, den=2)
+    with pytest.raises(OperationDomainValidationError) as intensity_reduced:
+        compound_poisson_cumulant_prefix(unreduced, jumps, 1)
+    assert intensity_reduced.value.errors()[0]["type"] == (
+        "probability.compound_poisson.canonical_rational"
+    )
+
+    forged_value = FiniteDistributionAtom.model_construct(
+        value=CanonicalRational.model_construct(num=2, den=2),
+        probability=_q(Fraction(1)),
+    )
+    forged_prob = FiniteDistributionAtom.model_construct(
+        value=_q(Fraction(0)),
+        probability=CanonicalRational.model_construct(num=1, den=0),
+    )
+    with pytest.raises(OperationDomainValidationError) as value_error:
+        compound_poisson_cumulant_prefix(
+            _q(Fraction(1)),
+            FiniteRationalDistribution.model_construct(atoms=(forged_value,)),
+            1,
+        )
+    assert value_error.value.errors()[0]["type"] == (
+        "probability.compound_poisson.canonical_rational"
+    )
+    with pytest.raises(OperationDomainValidationError) as probability_error:
+        compound_poisson_cumulant_prefix(
+            _q(Fraction(1)),
+            FiniteRationalDistribution.model_construct(atoms=(forged_prob,)),
+            1,
+        )
+    assert probability_error.value.errors()[0]["type"] == (
+        "probability.compound_poisson.canonical_rational"
     )
 
 

@@ -3,5 +3,6 @@
 [Documentation home](../../../index.md) · [Tool surface](../../tools.md)
 
 - [Exact planar geometry](exact-planar-geometry.md)
+- [Rational metric curvature profiles](rational-metric-curvature.md)
 - [Projective plane-curve singularity profiles](projective-plane-curve-singularities.md)
 - [Rational coordinate covariant derivatives](rational-covariant-derivatives.md)

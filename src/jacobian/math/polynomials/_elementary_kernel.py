@@ -43,6 +43,7 @@ from jacobian.math.polynomials._models import (
     _validation_error,
 )
 from jacobian.math.polynomials.values import (
+    MAX_POLYNOMIAL_TERMS,
     RationalPolynomial,
     rational_evaluation_component_digit_bounds,
     require_polynomial_budget,
@@ -74,6 +75,30 @@ def _admit_integer(polynomial: IntegerPolynomial) -> None:
         for coefficient in polynomial.coefficients
     ):
         raise _validation_error("integer coefficient exceeds the decimal-digit budget")
+
+
+def _admit_primitive_part(polynomial: IntegerPolynomial) -> None:
+    """Admit content/primitive decomposition on the integer-polynomial carrier."""
+
+    coefficients = polynomial.coefficients
+    if not isinstance(coefficients, tuple) or not coefficients:
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="polynomial.primitive_part_empty",
+            message="a canonical integer polynomial has at least one coefficient",
+        )
+    if any(type(coefficient) is not int for coefficient in coefficients):
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="polynomial.primitive_part_coefficients",
+            message="primitive-part coefficients must be exact integers",
+        )
+    if len(coefficients) > MAX_POLYNOMIAL_TERMS:
+        raise OperationResourceAdmissionError(
+            location=("polynomial",),
+            code="polynomial.primitive_part_term_bound",
+            message="primitive decomposition exceeds the integer-polynomial carrier",
+        )
 
 
 def _admit_integer_pair(left: IntegerPolynomial, right: IntegerPolynomial) -> None:
@@ -229,7 +254,7 @@ def integer_polynomial_primitive_part(
 ) -> IntegerPolynomialPrimitivePartResult:
     """Return sign, content, positive-leading primitive part, and reconstruction."""
 
-    _run_admission(lambda: _admit_integer(polynomial))
+    _run_admission(lambda: _admit_primitive_part(polynomial))
     coefficients = polynomial.coefficients
     if not any(coefficients):
         zero = IntegerPolynomial(coefficients=(0,))

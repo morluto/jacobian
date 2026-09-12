@@ -360,6 +360,22 @@ def test_linear_profiles_admit_carrier_length_beyond_mahler_degree() -> None:
         mahler_measure(polynomial)
 
 
+def test_content_profile_admits_carrier_length_beyond_elementary_degree() -> None:
+    polynomial = IntegerPolynomial(coefficients=(1,) + (0,) * 128)
+    assert len(polynomial.coefficients) == 129
+    result = integer_polynomial_primitive_part(polynomial)
+    assert result.degree == 128
+    assert result.reconstruction == polynomial
+
+
+def test_mahler_measure_rejects_empty_native_coefficients() -> None:
+    forged = IntegerPolynomial.model_construct(coefficients=())
+    with pytest.raises(OperationDomainValidationError, match="at least one coefficient"):
+        mahler_measure(forged)
+    with pytest.raises(OperationDomainValidationError, match="at least one coefficient"):
+        reciprocal_profile(forged)
+
+
 def test_content_profile_preflights_duplicated_coefficient_output(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -258,6 +258,19 @@ def _require_integer_polynomial(polynomial: object) -> IntegerPolynomial:
             code="polynomial.mahler_polynomial_type",
             message="Mahler-family operations require a canonical integer polynomial",
         )
+    coefficients = polynomial.coefficients
+    if not isinstance(coefficients, tuple) or not coefficients:
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="polynomial.mahler_polynomial_shape",
+            message="a canonical integer polynomial has at least one coefficient",
+        )
+    if any(type(coefficient) is not int for coefficient in coefficients):
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="polynomial.mahler_polynomial_coefficients",
+            message="Mahler-family coefficients must be exact integers",
+        )
     return polynomial
 
 

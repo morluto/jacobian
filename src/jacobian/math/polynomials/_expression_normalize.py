@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Mapping
 from dataclasses import dataclass
 from fractions import Fraction
@@ -14,6 +15,11 @@ from jacobian._exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
     CanonicalRational,
     require_bounded_rational,
+)
+from jacobian._execution import (
+    bind_request_deadline,
+    current_request_execution,
+    request_checkpoint,
 )
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.catalog.models import (
@@ -129,6 +135,8 @@ class PolynomialExpressionNormalizeResult(StrictModel):
 _MAX_EXPRESSION_NODES = 256
 _MAX_EXPRESSION_DEPTH = 64
 _MAX_EXPRESSION_WORK = 8_000_000
+_OWNER_DEADLINE_SECONDS = 60.0
+_CHECKPOINT_STRIDE = 256
 # This is an intrinsic exact-representation budget, not a transport setting:
 # 5M decimal coefficient digits leaves headroom for bounded sparse-term and
 # source scaffolding while retaining useful dense results.
@@ -556,12 +564,24 @@ def _metrics(
     )
 
 
+def _bind_expansion_deadline() -> None:
+    execution = current_request_execution()
+    started = execution.started_at if execution is not None else time.monotonic()
+    deadline = started + _OWNER_DEADLINE_SECONDS
+    if execution is not None and execution.deadline is not None:
+        deadline = min(deadline, execution.deadline)
+    bind_request_deadline(deadline)
+    request_checkpoint("before polynomial expression expansion")
+
+
 def _add(
     left: dict[tuple[int, ...], Fraction],
     right: dict[tuple[int, ...], Fraction],
 ) -> dict[tuple[int, ...], Fraction]:
     result = dict(left)
-    for exponent, coefficient in right.items():
+    for index, (exponent, coefficient) in enumerate(right.items()):
+        if index % _CHECKPOINT_STRIDE == 0:
+            request_checkpoint("during polynomial expression addition")
         result[exponent] = result.get(exponent, Fraction()) + coefficient
         if not result[exponent]:
             del result[exponent]
@@ -573,8 +593,12 @@ def _multiply(
     right: dict[tuple[int, ...], Fraction],
 ) -> dict[tuple[int, ...], Fraction]:
     result: dict[tuple[int, ...], Fraction] = {}
+    products = 0
     for left_exp, left_coefficient in left.items():
         for right_exp, right_coefficient in right.items():
+            if products % _CHECKPOINT_STRIDE == 0:
+                request_checkpoint("during polynomial expression multiplication")
+            products += 1
             exponent = tuple(a + b for a, b in zip(left_exp, right_exp, strict=True))
             result[exponent] = (
                 result.get(exponent, Fraction()) + left_coefficient * right_coefficient
@@ -589,6 +613,12 @@ def _revalidate_expression_source(
 ) -> PolynomialExpressionSource:
     """Reject forged native AST nodes before expansion metrics."""
 
+    if not isinstance(source, PolynomialExpressionSource):
+        raise OperationDomainValidationError(
+            location=("source",),
+            code="polynomial.expression.invalid_source",
+            message="expression source must be a PolynomialExpressionSource",
+        )
     try:
         return PolynomialExpressionSource.model_validate(
             source.model_dump(mode="python")
@@ -647,12 +677,14 @@ def normalize_polynomial_expression(  # noqa: C901
                 "representation envelope"
             ),
         )
+    _bind_expansion_deadline()
     variable_index = {
         variable: index for index, variable in enumerate(source.variables)
     }
     zero_exp = (0,) * len(source.variables)
 
     def evaluate(expression: PolynomialExpression) -> dict[tuple[int, ...], Fraction]:
+        request_checkpoint("during polynomial expression expansion")
         if isinstance(expression, PolynomialLiteral):
             if source.coefficient_domain == "ZZ" and expression.value.den != 1:
                 raise OperationDomainValidationError(

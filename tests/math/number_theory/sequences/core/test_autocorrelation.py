@@ -8,7 +8,11 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.canonical import parse_canonical_integer
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.number_theory.sequences.core._models import (
     AutocorrelationCell,
     AutocorrelationResult,
@@ -79,6 +83,25 @@ def test_serialized_rational_integer_entries_retain_rational_domain() -> None:
 
     assert isinstance(restored.source, FiniteRationalSequence)
     assert all(isinstance(cell.value, CanonicalRational) for cell in restored.cells)
+
+
+def test_serialized_empty_rational_source_retains_rational_domain() -> None:
+    source = FiniteRationalSequence(values=())
+
+    restored = AutocorrelationResult.model_validate_json(
+        aperiodic_autocorrelation(source).model_dump_json()
+    )
+
+    assert isinstance(restored.source, FiniteRationalSequence)
+
+
+def test_rational_wire_entries_accept_full_width_integer_strings() -> None:
+    value = "1" * 4_301
+
+    source = FiniteRationalSequence.model_validate_json(json.dumps({"values": [value]}))
+
+    assert source.values[0].num == parse_canonical_integer(value)
+    assert source.values[0].den == 1
 
 
 def test_result_rejects_noncanonical_lag_axis_without_recomputing_coefficients() -> (
@@ -189,6 +212,21 @@ def test_large_quadratic_autocorrelation_is_rejected(
     source = FiniteIntegerSequence(values=(1,) * 3_000)
     with pytest.raises(OperationResourceAdmissionError):
         operation(source)
+
+
+def test_rational_autocorrelation_admission_counts_both_output_components() -> None:
+    width = 5_000
+    numerator = parse_canonical_integer("1" + "0" * (width - 1))
+    denominator = parse_canonical_integer("1" + "2" * (width - 1))
+    source = FiniteRationalSequence(
+        values=(CanonicalRational.from_integer_ratio(numerator, denominator),) * 126
+    )
+
+    with pytest.raises(
+        OperationDomainValidationError,
+        match="autocorrelation output exceeds the exact representation bound",
+    ):
+        aperiodic_autocorrelation(source)
 
 
 def test_constant_sequence_peak_scan_is_linear() -> None:

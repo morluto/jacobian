@@ -174,10 +174,9 @@ def _admit_autocorrelation(
     )
     denominator_digits = len(format_canonical_integer(common_denominator))
     term_count_digits = len(str(len(fractions)))
-    result_digits = max(
-        2 * common_numerator_digits + term_count_digits,
-        2 * denominator_digits,
-    )
+    result_numerator_digits = 2 * common_numerator_digits + term_count_digits
+    result_denominator_digits = 2 * denominator_digits
+    result_digits = max(result_numerator_digits, result_denominator_digits)
     if result_digits > MAX_CANONICAL_RATIONAL_DIGITS:
         raise OperationDomainValidationError(
             location=("values",),
@@ -185,7 +184,12 @@ def _admit_autocorrelation(
             message="autocorrelation values exceed the exact rational digit bound",
         )
 
-    if output_items * result_digits > MAX_SEQUENCE_TOTAL_DIGITS:
+    result_representation_digits = (
+        result_numerator_digits + result_denominator_digits
+        if isinstance(request, FiniteRationalSequence)
+        else result_numerator_digits
+    )
+    if output_items * result_representation_digits > MAX_SEQUENCE_TOTAL_DIGITS:
         raise OperationDomainValidationError(
             location=("values",),
             code="sequences.autocorrelation.result_representation_too_large",

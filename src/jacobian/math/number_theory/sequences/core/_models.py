@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, ValidationInfo, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
@@ -13,7 +13,7 @@ from jacobian._exact import (
     ExactInteger,
 )
 from jacobian._models import StrictModel
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.number_theory.sequences.core.values import (
     MAX_SEQUENCE_LENGTH,
     MAX_SEQUENCE_TOTAL_DIGITS,
@@ -105,6 +105,7 @@ class IntegerSequenceBooleanResult(StrictModel):
 class FiniteIntegerSequence(StrictModel):
     """A possibly empty finite integer sequence."""
 
+    domain: Literal["integer"] = "integer"
     values: tuple[ExactInteger, ...] = Field(
         min_length=0, max_length=MAX_SEQUENCE_LENGTH
     )
@@ -131,6 +132,7 @@ class FiniteRationalSequence(StrictModel):
     have to infer a coefficient domain from an empty or degenerate sequence.
     """
 
+    domain: Literal["rational"] = "rational"
     values: tuple[CanonicalRational, ...] = Field(
         min_length=0,
         max_length=MAX_SEQUENCE_LENGTH,
@@ -139,7 +141,7 @@ class FiniteRationalSequence(StrictModel):
 
     @model_validator(mode="before")
     @classmethod
-    def accept_integer_wire_entries(cls, data: object) -> object:
+    def accept_integer_wire_entries(cls, data: object, info: ValidationInfo) -> object:
         if not isinstance(data, dict) or not isinstance(
             data.get("values"), (list, tuple)
         ):
@@ -151,12 +153,15 @@ class FiniteRationalSequence(StrictModel):
                 continue
             if isinstance(value, str):
                 try:
-                    integer = int(value)
+                    integer = parse_canonical_integer(value)
                 except ValueError:
                     pass
                 else:
-                    if value == str(integer):
-                        converted.append({"num": value, "den": "1"})
+                    if value == format_canonical_integer(integer):
+                        if info.mode == "json":
+                            converted.append({"num": value, "den": "1"})
+                        else:
+                            converted.append({"num": integer, "den": 1})
                         continue
             converted.append(value)
         return {**data, "values": tuple(converted)}
@@ -184,9 +189,10 @@ class AutocorrelationCell(StrictModel):
 
 class AutocorrelationResult(StrictModel):
     convention: Literal["aperiodic", "cyclic"]
-    source: FiniteIntegerSequence | FiniteRationalSequence = Field(
-        union_mode="left_to_right"
-    )
+    source: Annotated[
+        FiniteIntegerSequence | FiniteRationalSequence,
+        Field(discriminator="domain"),
+    ]
     cells: tuple[AutocorrelationCell, ...] = Field(
         min_length=0, max_length=2 * MAX_SEQUENCE_LENGTH - 1
     )

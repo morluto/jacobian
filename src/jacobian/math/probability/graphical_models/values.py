@@ -41,6 +41,7 @@ class Factor(StrictModel):
 
     The empty scope represents a scalar and therefore has exactly one table entry.
     ``domain_sizes`` describes the complete shared model domain.
+    Every table entry must be a nonnegative canonical rational.
     """
 
     variables: tuple[Variable, ...] = Field(max_length=MAX_MODEL_VARS)
@@ -48,7 +49,12 @@ class Factor(StrictModel):
         min_length=1, max_length=MAX_MODEL_VARS
     )
     table: tuple[CanonicalRational, ...] = Field(
-        min_length=1, max_length=MAX_FACTOR_TABLE_SIZE
+        min_length=1,
+        max_length=MAX_FACTOR_TABLE_SIZE,
+        description=(
+            "Nonnegative CanonicalRational potentials in lexicographic scope "
+            "order; numerators must be nonnegative."
+        ),
     )
 
     @model_validator(mode="after")

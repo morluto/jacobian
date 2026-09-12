@@ -132,6 +132,11 @@ class TestFactorValuesAndOperations:
             error.value.errors()[0]["type"] == "graphical_model.factor_entry_negative"
         )
 
+    def test_factor_schema_publishes_nonnegative_table_entries(self) -> None:
+        table_schema = Factor.model_json_schema()["properties"]["table"]
+        description = table_schema.get("description", "").lower()
+        assert "nonnegative" in description
+
     def test_factor_validation_uses_canonical_sign_without_fraction_replay(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -177,6 +182,24 @@ class TestFactorValuesAndOperations:
         diagnostic = error.value.errors()[0]
         assert diagnostic["type"] == "graphical_model.factor_marginalize_rational_bound"
         assert diagnostic["loc"] == ("factor", "table")
+
+    def test_marginal_cancels_a_shared_denominator_before_the_numerator_cap(
+        self,
+    ) -> None:
+        shared = 10**252 + 1
+        right_numerator = (100000 * shared - 89 * 42) // 97
+        factor = Factor(
+            variables=(0,),
+            domain_sizes=(2,),
+            table=(
+                CanonicalRational(num=42, den=97 * shared),
+                CanonicalRational(num=right_numerator, den=89 * shared),
+            ),
+        )
+
+        result = factor_marginalize(factor, 0)
+
+        assert result.table == (CanonicalRational(num=100000, den=8633),)
 
     def test_product_at_source_digit_boundary_with_identity_is_admitted(self) -> None:
         value = CanonicalRational(num=int("9" * 256), den=1)

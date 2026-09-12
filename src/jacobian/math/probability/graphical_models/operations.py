@@ -168,23 +168,11 @@ def _admit_bounded_sum(values: Sequence[CanonicalRational], operation: str) -> N
         shared = gcd(denominator, value.den)
         left_scale = value.den // shared
         right_scale = denominator // shared
-        left_term = _bounded_integer_product(
-            numerator,
-            left_scale,
-            max_digits=MAX_RATIONAL_DIGITS + 1,
-            operation=operation,
-            phase="intermediate numerator",
-        )
-        right_term = _bounded_integer_product(
-            value.num,
-            right_scale,
-            max_digits=MAX_RATIONAL_DIGITS + 1,
-            operation=operation,
-            phase="intermediate numerator",
-        )
+        # Form the lifted numerator without a premature digit cap so a shared
+        # denominator gcd can cancel before the reduced height is enforced.
+        left_term = numerator * left_scale
+        right_term = value.num * right_scale
         lifted_numerator = left_term + right_term
-        if _integer_digits(lifted_numerator) > MAX_RATIONAL_DIGITS + 1:
-            _reject_rational_growth(operation, "intermediate numerator")
         cancelled = gcd(lifted_numerator, shared)
         numerator = lifted_numerator // cancelled
         denominator = _bounded_integer_product(

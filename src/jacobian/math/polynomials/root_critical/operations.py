@@ -143,6 +143,57 @@ def _sqrt_bounds(value: Fraction) -> tuple[Fraction, Fraction]:
     return lower, Fraction(root + 1, value.denominator)
 
 
+def _enclose_add(expr: Any) -> tuple[Fraction, Fraction, Fraction, Fraction]:
+    real_lo = real_hi = imag_lo = imag_hi = Fraction()
+    first = True
+    for argument in expr.args:
+        r0, r1, i0, i1 = _enclose_sympy(argument)
+        if first:
+            real_lo, real_hi, imag_lo, imag_hi = r0, r1, i0, i1
+            first = False
+        else:
+            real_lo += r0
+            real_hi += r1
+            imag_lo += i0
+            imag_hi += i1
+    return real_lo, real_hi, imag_lo, imag_hi
+
+
+def _enclose_mul(expr: Any) -> tuple[Fraction, Fraction, Fraction, Fraction]:
+    result = (Fraction(1), Fraction(1), Fraction(), Fraction())
+    for argument in expr.args:
+        result = _multiply_boxes(result, _enclose_sympy(argument))
+    return result
+
+
+def _enclose_pow(expr: Any) -> tuple[Fraction, Fraction, Fraction, Fraction]:
+    base, exponent = expr.args
+    if exponent == 2:
+        r0, r1, i0, i1 = _enclose_sympy(base)
+        return _square_box(r0, r1, i0, i1)
+    if exponent == sympy.Rational(1, 2) or exponent == Fraction(1, 2):
+        r0, r1, i0, i1 = _enclose_sympy(base)
+        if i0 != 0 or i1 != 0 or r0 < 0:
+            raise ValueError("certified square root requires a nonnegative real box")
+        lower, upper = _sqrt_bounds(r0)[0], _sqrt_bounds(r1)[1]
+        return lower, upper, Fraction(), Fraction()
+    if getattr(exponent, "is_Integer", False):
+        power = int(exponent)
+        if power < 0:
+            raise ValueError("certified enclosure does not invert")
+        result = (Fraction(1), Fraction(1), Fraction(), Fraction())
+        factor = _enclose_sympy(base)
+        remaining = power
+        while remaining:
+            if remaining & 1:
+                result = _multiply_boxes(result, factor)
+            remaining >>= 1
+            if remaining:
+                factor = _multiply_boxes(factor, factor)
+        return result
+    raise ValueError("expression is outside the certified enclosure grammar")
+
+
 def _enclose_sympy(expr: Any) -> tuple[Fraction, Fraction, Fraction, Fraction]:
     """Return a certified complex box (real_lo, real_hi, imag_lo, imag_hi)."""
 
@@ -157,62 +208,11 @@ def _enclose_sympy(expr: Any) -> tuple[Fraction, Fraction, Fraction, Fraction]:
     if expr == sympy.I:
         return Fraction(), Fraction(), Fraction(1), Fraction(1)
     if expr.is_Add:
-        real_lo = real_hi = imag_lo = imag_hi = Fraction()
-        first = True
-        for argument in expr.args:
-            r0, r1, i0, i1 = _enclose_sympy(argument)
-            if first:
-                real_lo, real_hi, imag_lo, imag_hi = r0, r1, i0, i1
-                first = False
-            else:
-                real_lo += r0
-                real_hi += r1
-                imag_lo += i0
-                imag_hi += i1
-        return real_lo, real_hi, imag_lo, imag_hi
+        return _enclose_add(expr)
     if expr.is_Mul:
-        real_lo = Fraction(1)
-        real_hi = Fraction(1)
-        imag_lo = Fraction()
-        imag_hi = Fraction()
-        for argument in expr.args:
-            r0, r1, i0, i1 = _enclose_sympy(argument)
-            corners_real = []
-            corners_imag = []
-            for left_r in (real_lo, real_hi):
-                for left_i in (imag_lo, imag_hi):
-                    for right_r in (r0, r1):
-                        for right_i in (i0, i1):
-                            corners_real.append(left_r * right_r - left_i * right_i)
-                            corners_imag.append(left_r * right_i + left_i * right_r)
-            real_lo, real_hi = min(corners_real), max(corners_real)
-            imag_lo, imag_hi = min(corners_imag), max(corners_imag)
-        return real_lo, real_hi, imag_lo, imag_hi
+        return _enclose_mul(expr)
     if expr.is_Pow:
-        base, exponent = expr.args
-        if exponent == 2:
-            r0, r1, i0, i1 = _enclose_sympy(base)
-            return _square_box(r0, r1, i0, i1)
-        if exponent == sympy.Rational(1, 2) or exponent == Fraction(1, 2):
-            r0, r1, i0, i1 = _enclose_sympy(base)
-            if i0 != 0 or i1 != 0 or r0 < 0:
-                raise ValueError("certified square root requires a nonnegative real box")
-            lower, upper = _sqrt_bounds(r0)[0], _sqrt_bounds(r1)[1]
-            return lower, upper, Fraction(), Fraction()
-        if getattr(exponent, "is_Integer", False):
-            power = int(exponent)
-            if power < 0:
-                raise ValueError("certified enclosure does not invert")
-            result = (Fraction(1), Fraction(1), Fraction(), Fraction())
-            factor = _enclose_sympy(base)
-            remaining = power
-            while remaining:
-                if remaining & 1:
-                    result = _multiply_boxes(result, factor)
-                remaining >>= 1
-                if remaining:
-                    factor = _multiply_boxes(factor, factor)
-            return result
+        return _enclose_pow(expr)
     if expr.func is sympy.conjugate:
         r0, r1, i0, i1 = _enclose_sympy(expr.args[0])
         return r0, r1, -i1, -i0

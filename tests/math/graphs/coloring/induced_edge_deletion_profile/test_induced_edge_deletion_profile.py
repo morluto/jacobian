@@ -1,11 +1,19 @@
 from __future__ import annotations
 
 import json
+import threading
+import time
 from collections.abc import Sequence
 from itertools import combinations, product
 
 import pytest
 
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+    request_cancellation,
+    request_execution,
+)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.coloring.induced_edge_deletion_profile._models import (
     InducedEdgeDeletionProfileRequest,
@@ -305,12 +313,34 @@ def test_aggregate_bound_rejection() -> None:
     g9 = _graph(verts9, edges9)
     with pytest.raises(OperationDomainValidationError, match="at most 8 vertices"):
         compute_induced_edge_deletion_profile(g9, 2)
-    # solver-call / ledger bound: dense 8-vertex graph with huge conflict budget exceeds ledger
+    # Solver-call / ledger bound: a Z3-backed dense request with a huge conflict
+    # budget exceeds the semantic aggregate ledger.  r=2 is deliberately not
+    # charged because its exact cut kernel is independent of Z3.
     verts8 = [f"v{i}" for i in range(8)]
     edges8 = [(verts8[i], verts8[j]) for i in range(8) for j in range(i + 1, 8)]
     g8 = _graph(verts8, edges8)
     with pytest.raises(OperationDomainValidationError, match="ledger"):
-        compute_induced_edge_deletion_profile(g8, 2, solver_conflicts=1_000_000)
+        compute_induced_edge_deletion_profile(g8, 3, solver_conflicts=1_000_000)
+
+
+def test_bipartite_profiles_do_not_charge_or_call_z3(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    verts = tuple(str(i) for i in range(8))
+    edges = tuple((verts[i], verts[j]) for i in range(8) for j in range(i + 1, 8))
+    g = SimpleUndirectedGraph(vertices=verts, edges=edges)
+
+    def z3_must_not_run(*args: object, **kwargs: object) -> bool:
+        raise AssertionError("r=2 induced deletion must not invoke Z3")
+
+    import jacobian.math.graphs.coloring.induced_edge_deletion_profile.operations as operations
+
+    monkeypatch.setattr(operations, "_z3_is_r_colorable", z3_must_not_run)
+    monkeypatch.setattr(operations, "_z3_exists_deletion_leq_k", z3_must_not_run)
+    result = compute_induced_edge_deletion_profile(g, 2, solver_conflicts=1_000_000)
+    assert len(result.rows) == 1 << len(verts)
+    whole = next(row for row in result.rows if len(row.vertex_subset) == len(verts))
+    assert whole.min_deletions == 12
     # retained label characters bound
     long_label = "x" * 200_000
     g_long = _graph([long_label, "y"], [(long_label, "y")])
@@ -423,3 +453,80 @@ def test_request_validation_and_large_trivial_colour_count() -> None:
         row.min_deletions == 0
         for row in compute_induced_edge_deletion_profile(g, 100).rows
     )
+
+
+def test_large_colour_count_above_generic_backend_cap_is_exactly_trivial() -> None:
+    vertices = tuple(str(index) for index in range(8))
+    graph = SimpleUndirectedGraph(
+        vertices=vertices,
+        edges=tuple(
+            (vertices[left], vertices[right])
+            for left, right in combinations(range(8), 2)
+        ),
+    )
+    result = compute_induced_edge_deletion_profile(graph, 9, solver_conflicts=1_000_000)
+    assert len(result.rows) == 1 << len(vertices)
+    assert all(row.min_deletions == 0 for row in result.rows)
+
+
+def test_result_rejects_a_profile_missing_one_vertex_subset() -> None:
+    graph = _graph(["b", "a"], [("a", "b")])
+    result = compute_induced_edge_deletion_profile(graph, 2)
+    payload = result.model_dump(mode="json")
+    payload["rows"] = payload["rows"][:-1]
+    from pydantic import ValidationError
+
+    with pytest.raises(
+        ValidationError, match=r"rows must cover all 2\^n vertex subsets"
+    ):
+        InducedEdgeDeletionProfileResult.model_validate(payload)
+
+
+def test_z3_watchdog_interrupts_a_cancelled_request() -> None:
+    import jacobian.math.graphs.coloring.induced_edge_deletion_profile.operations as operations
+
+    interrupted = threading.Event()
+
+    class SlowSolver:
+        def set(self, *_args: object, **_kwargs: object) -> None:
+            return None
+
+        def check(self) -> object:
+            assert interrupted.wait(2), "watchdog did not interrupt the fake solver"
+            return object()
+
+        def interrupt(self) -> None:
+            interrupted.set()
+
+    cancelled = threading.Event()
+    timer = threading.Timer(0.02, cancelled.set)
+    timer.start()
+    try:
+        with (
+            request_execution(time.monotonic()),
+            request_cancellation(cancelled),
+            pytest.raises(OperationExecutionCancelledError, match="cancelled"),
+        ):
+            operations._run_z3_check(SlowSolver(), "test solver check")
+    finally:
+        timer.cancel()
+
+
+def test_z3_watchdog_interrupts_at_the_request_deadline() -> None:
+    import jacobian.math.graphs.coloring.induced_edge_deletion_profile.operations as operations
+
+    interrupted = threading.Event()
+
+    class SlowSolver:
+        def check(self) -> object:
+            assert interrupted.wait(2), "watchdog did not interrupt the fake solver"
+            return object()
+
+        def interrupt(self) -> None:
+            interrupted.set()
+
+    with (
+        request_execution(time.monotonic(), outer_deadline=time.monotonic() + 0.02),
+        pytest.raises(OperationExecutionTimeoutError, match="deadline"),
+    ):
+        operations._run_z3_check(SlowSolver(), "test solver deadline")

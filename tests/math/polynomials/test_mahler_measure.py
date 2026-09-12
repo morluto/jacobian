@@ -138,7 +138,11 @@ def test_mahler_result_does_not_replay_coefficient_digit_admission() -> None:
         MahlerMeasureRequest(polynomial=IntegerPolynomial(coefficients=(1, -1, -1)))
     )
     forged = result.model_dump(mode="json")
-    forged["polynomial"]["coefficients"] = [str(10**MAX_MAHLER_COEFFICIENT_DIGITS), "-1", "-1"]
+    forged["polynomial"]["coefficients"] = [
+        str(10**MAX_MAHLER_COEFFICIENT_DIGITS),
+        "-1",
+        "-1",
+    ]
     forged["leading_coefficient"] = str(10**MAX_MAHLER_COEFFICIENT_DIGITS)
     restored = MahlerMeasureResult.model_validate_json(
         encode_strict_json(forged), strict=True

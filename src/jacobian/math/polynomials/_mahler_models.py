@@ -60,9 +60,9 @@ class ContentPrimitiveProfileResult(StrictModel):
 
     @model_validator(mode="after")
     def require_structural_reconstruction(self) -> Self:
-        if self.primitive_part.coefficients == (0,) and self.reconstruction.coefficients == (
+        if self.primitive_part.coefficients == (
             0,
-        ):
+        ) and self.reconstruction.coefficients == (0,):
             if self.content != 0 or self.degree != 0 or self.sign != 1:
                 raise _validation_error(
                     "polynomial.mahler_zero_content_profile",

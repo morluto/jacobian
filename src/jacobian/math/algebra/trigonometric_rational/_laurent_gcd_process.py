@@ -59,7 +59,9 @@ def cancel_common_factor(payload: dict[str, Any]) -> dict[str, Any]:
                 cwd=worker_dir,
             )
     except OSError as exc:
-        raise RuntimeError("bounded trigonometric Laurent GCD worker could not start") from exc
+        raise RuntimeError(
+            "bounded trigonometric Laurent GCD worker could not start"
+        ) from exc
     if completed.cancelled:
         raise OperationExecutionCancelledError(
             "trigonometric Laurent GCD cancelled during the worker"
@@ -73,7 +75,9 @@ def cancel_common_factor(payload: dict[str, Any]) -> dict[str, Any]:
         or completed.stderr_exceeded
         or completed.returncode != 0
     ):
-        raise RuntimeError("bounded trigonometric Laurent GCD worker did not establish a result")
+        raise RuntimeError(
+            "bounded trigonometric Laurent GCD worker did not establish a result"
+        )
     request_checkpoint("after trigonometric Laurent GCD")
     response = loads_strict_json(
         completed.stdout,
@@ -83,5 +87,7 @@ def cancel_common_factor(payload: dict[str, Any]) -> dict[str, Any]:
         ),
     )
     if not isinstance(response, dict):
-        raise RuntimeError("bounded trigonometric Laurent GCD worker returned malformed output")
+        raise RuntimeError(
+            "bounded trigonometric Laurent GCD worker returned malformed output"
+        )
     return response

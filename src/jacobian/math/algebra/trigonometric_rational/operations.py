@@ -398,11 +398,15 @@ def _polynomial_payload(polynomial: Polynomial) -> dict[str, list[object]]:
     supports = list(polynomial)
     return {
         "supports": [list(support) for support in supports],
-        "real_numerators": [str(polynomial[support][0].numerator) for support in supports],
+        "real_numerators": [
+            str(polynomial[support][0].numerator) for support in supports
+        ],
         "real_denominators": [
             str(polynomial[support][0].denominator) for support in supports
         ],
-        "imag_numerators": [str(polynomial[support][1].numerator) for support in supports],
+        "imag_numerators": [
+            str(polynomial[support][1].numerator) for support in supports
+        ],
         "imag_denominators": [
             str(polynomial[support][1].denominator) for support in supports
         ],
@@ -411,7 +415,9 @@ def _polynomial_payload(polynomial: Polynomial) -> dict[str, list[object]]:
 
 def _polynomial_from_payload(payload: object) -> Polynomial:
     if not isinstance(payload, dict):
-        raise RuntimeError("trigonometric Laurent GCD worker returned a malformed polynomial")
+        raise RuntimeError(
+            "trigonometric Laurent GCD worker returned a malformed polynomial"
+        )
     supports = payload["supports"]
     result: Polynomial = {}
     for support, real_num, real_den, imag_num, imag_den in zip(
@@ -547,11 +553,7 @@ def normalize_trigonometric_rational(
         raw_numerator, raw_denominator
     )
     combined_loci = _combine_loci(loci, axis)
-    source_locus = (
-        combined_loci
-        if combined_loci != _one(axis)
-        else raw_denominator
-    )
+    source_locus = combined_loci if combined_loci != _one(axis) else raw_denominator
     denominator_nonzero = _canonicalize_nonzero_locus(source_locus)
     denominator_wire = _wire(request.variables, denominator)
     return TrigonometricRationalNormalizeResult(

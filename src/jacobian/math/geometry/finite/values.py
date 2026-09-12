@@ -111,7 +111,7 @@ class ProjectivePointSequence(StrictModel):
     @model_validator(mode="after")
     def require_structural_coordinates(self) -> Self:
         for coordinates in self.coordinates:
-            _validate_vector(coordinates, self.space)
+            _require_projective_representative(coordinates, self.space)
         return self
 
     def __len__(self) -> int:

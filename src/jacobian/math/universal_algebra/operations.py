@@ -15,6 +15,8 @@ from ._models import (
     EvaluateResult,
     HomomorphismObstruction,
     HomomorphismProfileResult,
+    ImplicationCountermodelCheckResult,
+    MagmaEquation,
     SubalgebraResult,
     _congruence_work,
 )
@@ -38,6 +40,7 @@ __all__ = [
     "evaluate_term",
     "generated_subalgebra",
     "homomorphism_profile",
+    "implication_countermodel_check",
     "quotient",
     "verify_congruence",
     "verify_equation_profile",
@@ -91,12 +94,136 @@ def _admit_equation_profile(
             code="variable_coverage",
             message="variable_count must cover every referenced variable",
         )
-    if len(algebra.carrier) ** variable_count > MAX_ENUMERATION_WORK:
+    evaluation_work = len(algebra.carrier) ** variable_count * (
+        len(left.nodes) + len(right.nodes)
+    )
+    if evaluation_work > MAX_ENUMERATION_WORK:
         _reject(
             location=("variable_count",),
-            code="equation_work_bound",
-            message="equation profile exceeds the assignment work budget",
+            code="equation_evaluation_work_bound",
+            message=(
+                "equation profile exceeds the assignment work budget after "
+                "charging term-evaluation nodes"
+            ),
         )
+
+
+def _require_implication_input_types(
+    algebra: FiniteAlgebra,
+    premises: tuple[MagmaEquation, ...],
+    target: MagmaEquation,
+) -> None:
+    if not isinstance(algebra, FiniteAlgebra):
+        _reject(
+            location=("algebra",),
+            code="algebra_type",
+            message="algebra must be a FiniteAlgebra value",
+        )
+    if not isinstance(premises, tuple):
+        _reject(
+            location=("premises",),
+            code="premises_type",
+            message="premises must be a tuple of MagmaEquation values",
+        )
+    if len(premises) > 16:
+        _reject(
+            location=("premises",),
+            code="premise_count",
+            message="at most sixteen premises are admitted",
+        )
+    if not isinstance(target, MagmaEquation):
+        _reject(
+            location=("target",),
+            code="target_type",
+            message="target must be a MagmaEquation value",
+        )
+    for premise_index, premise in enumerate(premises):
+        if not isinstance(premise, MagmaEquation):
+            _reject(
+                location=("premises", premise_index),
+                code="premise_type",
+                message="each premise must be a MagmaEquation value",
+            )
+
+    for equation_name, equation in (
+        ("target", target),
+        *(("premises", premise) for premise in premises),
+    ):
+        left = getattr(equation, "left", None)
+        right = getattr(equation, "right", None)
+        if not isinstance(left, FlatTerm) or not isinstance(right, FlatTerm):
+            _reject(
+                location=(equation_name,),
+                code="equation_terms_type",
+                message="equation terms must be FlatTerm values",
+            )
+
+
+def _deduplicate_premises(
+    premises: tuple[MagmaEquation, ...],
+) -> tuple[MagmaEquation, ...]:
+    """Retain the first occurrence of each premise equation."""
+
+    unique: list[MagmaEquation] = []
+    for premise in premises:
+        if premise not in unique:
+            unique.append(premise)
+    return tuple(unique)
+
+
+def _admit_implication_countermodel(
+    algebra: FiniteAlgebra,
+    premises: tuple[MagmaEquation, ...],
+    target: MagmaEquation,
+) -> tuple[tuple[MagmaEquation, ...], tuple[int, ...]]:
+    """Admit one complete finite-magma implication check before evaluation."""
+
+    _require_implication_input_types(algebra, premises, target)
+    premises = _deduplicate_premises(premises)
+    if len(algebra.operations) != 1 or algebra.operations[0].arity != 2:
+        _reject(
+            location=("algebra",),
+            code="magma_signature",
+            message="the checked algebra must have exactly one binary operation",
+        )
+    equations = (*premises, target)
+    total_work = 0
+    variable_counts: list[int] = []
+    for equation_index, equation in enumerate(equations):
+        for term in (equation.left, equation.right):
+            try:
+                require_term_for_algebra(term, algebra)
+            except UniversalAlgebraAdmissionError as exc:
+                _reject(
+                    location=("equations", equation_index),
+                    code="term_signature",
+                    message=str(exc),
+                )
+        # FlatTerm.variable_count retains the declared positional axis even
+        # when an equation uses only a sparse position, such as variable 2.
+        variable_count = max(
+            equation.left.variable_count, equation.right.variable_count
+        )
+        if variable_count > 8:
+            _reject(
+                location=("equations", equation_index),
+                code="variable_count_bound",
+                message="an equation may use at most eight variables",
+            )
+        total_work += len(algebra.carrier) ** variable_count * (
+            len(equation.left.nodes) + len(equation.right.nodes)
+        )
+        variable_counts.append(variable_count)
+    if total_work > MAX_ENUMERATION_WORK:
+        _reject(
+            location=("equations",),
+            code="countermodel_work_bound",
+            message=(
+                "complete assignment work including term-evaluation nodes "
+                "exceeds the bound"
+            ),
+        )
+    return premises, tuple(variable_counts)
 
 
 def _admit_subalgebra(algebra: FiniteAlgebra, generators: tuple[int, ...]) -> None:
@@ -164,18 +291,27 @@ def _evaluate_node(
     assignment: dict[int, int],
     n: int,
     index: int,
+    memo: dict[int, int],
 ) -> int:
+    if index in memo:
+        return memo[index]
     node = term.nodes[index]
     if isinstance(node, VariableTerm):
         if node.variable_id not in assignment:
             raise ValueError("incomplete assignment")
-        return assignment[node.variable_id]
+        value = assignment[node.variable_id]
+        memo[index] = value
+        return value
     if isinstance(node, ApplicationTerm):
-        args = [_evaluate_node(algebra, term, assignment, n, c) for c in node.children]
+        args = [
+            _evaluate_node(algebra, term, assignment, n, c, memo) for c in node.children
+        ]
         cell_index = 0
         for arg in args:
             cell_index = cell_index * n + arg
-        return algebra.tables[node.operation][cell_index]
+        value = algebra.tables[node.operation][cell_index]
+        memo[index] = value
+        return value
     raise AssertionError("closed term union admitted an unknown node")
 
 
@@ -184,7 +320,14 @@ def _evaluate_term_unchecked(
 ) -> int:
     """Evaluate a term after the caller has completed source-bound admission."""
 
-    return _evaluate_node(algebra, term, assignment, len(algebra.carrier), term.root)
+    return _evaluate_node(
+        algebra,
+        term,
+        assignment,
+        len(algebra.carrier),
+        term.root,
+        {},
+    )
 
 
 def evaluate_term(
@@ -228,6 +371,43 @@ def equation_profile(
     """
     _admit_equation_profile(algebra, left, right, variable_count)
     return _equation_profile_unchecked(algebra, left, right, variable_count)
+
+
+def implication_countermodel_check(
+    algebra: FiniteAlgebra,
+    premises: tuple[MagmaEquation, ...],
+    target: MagmaEquation,
+) -> ImplicationCountermodelCheckResult:
+    """Check whether one explicit finite magma is a countermodel.
+
+    Every premise and the target is evaluated over its complete finite
+    assignment space.  ``is_countermodel`` is true exactly when all premises
+    hold universally and the target has a counterassignment.
+    """
+
+    premises, variable_counts = _admit_implication_countermodel(
+        algebra, premises, target
+    )
+    profiles = tuple(
+        _equation_profile_unchecked(
+            algebra,
+            equation.left,
+            equation.right,
+            variable_count,
+        )
+        for equation, variable_count in zip(
+            (*premises, target), variable_counts, strict=True
+        )
+    )
+    premise_profiles = profiles[:-1]
+    target_profile = profiles[-1]
+    return ImplicationCountermodelCheckResult(
+        algebra=algebra,
+        premises=premise_profiles,
+        target=target_profile,
+        is_countermodel=all(profile.status == "HOLDS" for profile in premise_profiles)
+        and target_profile.status == "FAILS",
+    )
 
 
 def verify_equation_profile(claim: EquationProfileResult) -> bool:

@@ -38,3 +38,4 @@ class TupleOrbitRow(StrictModel):
 class TupleFamilyOrbitResult(StrictModel):
     source: TupleFamilyOrbitSource
     rows: tuple[TupleOrbitRow, ...] = Field(max_length=4096)
+    is_union_of_complete_ambient_orbits: bool

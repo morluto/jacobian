@@ -16,6 +16,10 @@ from jacobian.math.polynomials._elementary_kernel import (
 from jacobian.math.polynomials._elementary_symmetric import (
     elementary_symmetric_family,
 )
+from jacobian.math.polynomials._expression_normalize import (
+    PolynomialExpressionSource,
+    normalize_polynomial_expression,
+)
 from jacobian.math.polynomials.operations import (
     derivative,
     discriminant,
@@ -63,6 +67,7 @@ def __getattr__(name: str) -> object:
 
 
 __all__ = [
+    "PolynomialExpressionSource",
     "derivative",
     "discriminant",
     "divide",
@@ -84,6 +89,7 @@ __all__ = [
     "integer_polynomial_shift",
     "integral",
     "multiply",
+    "normalize_polynomial_expression",
     "partial_fractions",
     "polynomial_discriminant",
     "polynomial_factorization",

@@ -34,6 +34,36 @@ def test_native_polynomial_api_uses_exact_sympy_values() -> None:
     assert polynomials.resultant(left, right, x) == 0
 
 
+def test_native_expression_normalizer_is_public_and_typed() -> None:
+    from jacobian.math.polynomials._expression_normalize import (
+        PolynomialExpressionSource,
+    )
+
+    source = PolynomialExpressionSource.model_validate(
+        {
+            "coefficient_domain": "ZZ",
+            "variables": ["x"],
+            "expression": {
+                "kind": "POWER",
+                "base": {
+                    "kind": "ADD",
+                    "operands": [
+                        {"kind": "VARIABLE", "name": "x"},
+                        {"kind": "LITERAL", "value": {"num": 1, "den": 1}},
+                    ],
+                },
+                "exponent": 2,
+            },
+        }
+    )
+    result = polynomials.normalize_polynomial_expression(source)
+    assert tuple(term.exponents for term in result.polynomial.polynomial.terms) == (
+        (2,),
+        (1,),
+        (0,),
+    )
+
+
 def test_native_resultant_preserves_source_orientation() -> None:
     x = symbols("x")
     linear = Poly(x + 2, x, domain="QQ")
@@ -71,6 +101,7 @@ def test_native_discriminant_preserves_the_polynomial_domain() -> None:
 
 def test_exact_public_api_symbols() -> None:
     expected = (
+        "PolynomialExpressionSource",
         "derivative",
         "discriminant",
         "divide",
@@ -92,6 +123,7 @@ def test_exact_public_api_symbols() -> None:
         "integer_polynomial_shift",
         "integral",
         "multiply",
+        "normalize_polynomial_expression",
         "partial_fractions",
         "polynomial_discriminant",
         "polynomial_factorization",

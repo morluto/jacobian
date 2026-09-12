@@ -67,6 +67,24 @@ wire request before invoking the domain function; native callers use the same
 function directly. A bounded result is returned inline; no polynomial is implicitly published or retained
 for replay.
 
+## Typed expression normalization
+
+`polynomial.expression.normalize` expands one bounded, exact AST into a
+canonical `RationalPolynomial`. Its closed grammar is deliberately small:
+
+- `LITERAL` carries one reduced `CanonicalRational`;
+- `VARIABLE` names one member of the ordered `variables` axis;
+- `ADD` and `MULTIPLY` carry finite operand tuples; and
+- `POWER` carries a nonnegative bounded integer exponent.
+
+The AST is a value, not a source-language string. Division, negative powers,
+function calls, assumptions, and textual parser syntax are outside the contract.
+The operation admits node/depth, support, degree, exact coefficient-height,
+intermediate work, and coefficient-representation bounds before expansion. The
+result retains the source value and its explicit coefficient domain/variable
+axis, so callers can compare normalized values or pass the polynomial directly
+to another polynomial operation.
+
 ## Focused contracts
 
 - [Elementary-symmetric polynomial families](elementary-symmetric.md)

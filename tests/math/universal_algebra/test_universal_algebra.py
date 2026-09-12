@@ -412,6 +412,38 @@ class TestMagmaImplicationCountermodel:
         with pytest.raises(ValidationError, match="dense variable axis"):
             ImplicationCountermodelCheckResult.model_validate(payload)
 
+    def test_result_rejects_impossible_profile_counts_without_replay(self) -> None:
+        magma = _cyclic_addition_algebra(2)
+        target = MagmaEquation(left=_variable_term(0), right=_variable_term(0))
+        result = compute_implication_countermodel_check(
+            ImplicationCountermodelCheckRequest(
+                algebra=magma,
+                premises=(),
+                target=target,
+            )
+        )
+        payload = result.model_dump(mode="json")
+        payload["target"]["satisfying_count"] = 1
+        with pytest.raises(ValidationError, match="HOLDS must cover"):
+            ImplicationCountermodelCheckResult.model_validate(payload)
+
+        failing = compute_implication_countermodel_check(
+            ImplicationCountermodelCheckRequest(
+                algebra=magma,
+                premises=(),
+                target=MagmaEquation(left=_variable_term(0), right=_variable_term(1)),
+            )
+        )
+        failing_payload = failing.model_dump(mode="json")
+        failing_payload["target"]["satisfying_count"] = 4
+        with pytest.raises(ValidationError, match="FAILS must leave"):
+            ImplicationCountermodelCheckResult.model_validate(failing_payload)
+
+        failing_payload = failing.model_dump(mode="json")
+        failing_payload["target"]["first_counterassignment"]["right_value"] = 0
+        with pytest.raises(ValidationError, match="values must differ"):
+            ImplicationCountermodelCheckResult.model_validate(failing_payload)
+
 
 # ---------------------------------------------------------------------------
 # Generated subalgebra

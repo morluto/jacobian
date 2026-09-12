@@ -109,6 +109,38 @@ class EquationProfileResult(StrictModel):
         return self
 
 
+def _require_countermodel_profile_intrinsics(
+    profile: EquationProfileResult,
+    carrier_size: int,
+    profile_index: int,
+) -> None:
+    assignment_count = carrier_size**profile.variable_count
+    if profile.satisfying_count > assignment_count:
+        raise _validation_error(
+            "countermodel_result_satisfying_count",
+            f"profile {profile_index} satisfying_count cannot exceed its assignment space",
+        )
+    if profile.status == "HOLDS" and profile.satisfying_count != assignment_count:
+        raise _validation_error(
+            "countermodel_result_holds_count",
+            f"profile {profile_index} HOLDS must cover its complete assignment space",
+        )
+    if profile.status == "FAILS" and profile.satisfying_count >= assignment_count:
+        raise _validation_error(
+            "countermodel_result_fails_count",
+            f"profile {profile_index} FAILS must leave an assignment unsatisfied",
+        )
+    counterexample = profile.first_counterassignment
+    if (
+        counterexample is not None
+        and counterexample.left_value == counterexample.right_value
+    ):
+        raise _validation_error(
+            "countermodel_result_equal_values",
+            f"profile {profile_index} counterexample values must differ",
+        )
+
+
 class MagmaEquation(StrictModel):
     """One equation over a source-bound binary magma term language."""
 
@@ -195,6 +227,9 @@ class ImplicationCountermodelCheckResult(StrictModel):
                     "countermodel_result_variable_count",
                     f"profile {profile_index} variable_count must match its dense variable axis",
                 )
+            _require_countermodel_profile_intrinsics(
+                profile, len(self.algebra.carrier), profile_index
+            )
             counterexample = profile.first_counterassignment
             if counterexample is not None:
                 if len(counterexample.assignment) != profile.variable_count:

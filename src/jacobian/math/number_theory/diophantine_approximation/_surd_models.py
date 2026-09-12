@@ -8,7 +8,6 @@ deterministic integer arithmetic rather than a floating-point round.
 
 from __future__ import annotations
 
-from fractions import Fraction
 from math import isqrt
 from typing import Literal, Self
 
@@ -34,6 +33,11 @@ MAX_ENCLOSURE_COMPONENT_DIGITS = 16_384
 MAX_SURD_RANGE_WORK = 32_000_000
 MAX_SURD_RANGE_INTERMEDIATE_BITS = 64_000_000
 MAX_SURD_RANGE_ALLOCATION_UNITS = 16 * 1024 * 1024
+
+_SURD_AXIS_DESCRIPTION = (
+    "Ordered tuple of distinct nonsquare integer radicands in the admitted "
+    f"range 2..{MAX_SURD_RADICAND}."
+)
 
 
 def _validation_error(code: str, message: str) -> PydanticCustomError:
@@ -123,6 +127,28 @@ class ScaledFloorValue(StrictModel):
             )
         return self
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        multiplier: int,
+        radicand: int,
+        floor: int,
+        ceiling: int,
+        square_lower: int,
+        square_upper: int,
+    ) -> Self:
+        """Construct an exact row after the owner kernel established it."""
+
+        return cls.model_construct(
+            multiplier=multiplier,
+            radicand=radicand,
+            floor=floor,
+            ceiling=ceiling,
+            square_lower=square_lower,
+            square_upper=square_upper,
+        )
+
 
 class NearestIntegerDistanceRequest(StrictModel):
     """Certify ``||n sqrt(d)||`` at a requested binary precision."""
@@ -169,20 +195,48 @@ class NearestIntegerDistanceValue(StrictModel):
                 "diophantine.nearest_integer_side_mismatch",
                 "nearest_integer must agree with the certified branch",
             )
-        if self.distance_enclosure.lower.as_fraction() < 0:
+        if self.distance_enclosure.lower.num < 0:
             raise _validation_error(
                 "diophantine.nearest_integer_negative_distance",
                 "a nearest-integer distance enclosure must be nonnegative",
             )
-        expected_upper = Fraction(self.distance_upper_scaled, 2**self.scale_bits)
+        upper = self.distance_enclosure.upper
         if self.distance_upper_scaled < 1 or (
-            self.distance_enclosure.upper.as_fraction() != expected_upper
+            upper.num * (2**self.scale_bits) != self.distance_upper_scaled * upper.den
         ):
             raise _validation_error(
                 "diophantine.nearest_integer_upper_mismatch",
                 "distance_upper_scaled must retain the enclosure upper endpoint",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        multiplier: int,
+        radicand: int,
+        floor: int,
+        ceiling: int,
+        nearest_integer: int,
+        side: Literal["FLOOR", "CEILING"],
+        scale_bits: int,
+        distance_enclosure: ClosedRationalInterval,
+        distance_upper_scaled: int,
+    ) -> Self:
+        """Construct a distance value after the exact kernel established it."""
+
+        return cls.model_construct(
+            multiplier=multiplier,
+            radicand=radicand,
+            floor=floor,
+            ceiling=ceiling,
+            nearest_integer=nearest_integer,
+            side=side,
+            scale_bits=scale_bits,
+            distance_enclosure=distance_enclosure,
+            distance_upper_scaled=distance_upper_scaled,
+        )
 
 
 class SimultaneousProductRequest(StrictModel):
@@ -193,7 +247,9 @@ class SimultaneousProductRequest(StrictModel):
         description="Positive exact multiplier; computation admits at most 4096 bits.",
     )
     radicands: tuple[StrictInt, ...] = Field(
-        min_length=1, max_length=MAX_SIMULTANEOUS_RADICANDS
+        min_length=1,
+        max_length=MAX_SIMULTANEOUS_RADICANDS,
+        description=_SURD_AXIS_DESCRIPTION,
     )
     scale_bits: StrictInt = Field(ge=1, le=MAX_SURD_SCALE_BITS)
 
@@ -250,19 +306,41 @@ class SimultaneousProductResult(StrictModel):
                 "diophantine.product_factor_scale_mismatch",
                 "every factor row must share the requested precision",
             )
-        if self.product_enclosure.lower.as_fraction() < 0:
+        if self.product_enclosure.lower.num < 0:
             raise _validation_error(
                 "diophantine.product_negative_enclosure",
                 "a simultaneous product enclosure must be nonnegative",
             )
         return self
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        multiplier: int,
+        radicands: tuple[int, ...],
+        scale_bits: int,
+        factors: tuple[NearestIntegerDistanceValue, ...],
+        product_enclosure: ClosedRationalInterval,
+    ) -> Self:
+        """Construct a product result after the owner kernel established it."""
+
+        return cls.model_construct(
+            multiplier=multiplier,
+            radicands=radicands,
+            scale_bits=scale_bits,
+            factors=factors,
+            product_enclosure=product_enclosure,
+        )
+
 
 class RangeProfileRequest(StrictModel):
     """A complete certified row for every ``1 <= n <= limit``."""
 
     radicands: tuple[StrictInt, ...] = Field(
-        min_length=1, max_length=MAX_SIMULTANEOUS_RADICANDS
+        min_length=1,
+        max_length=MAX_SIMULTANEOUS_RADICANDS,
+        description=_SURD_AXIS_DESCRIPTION,
     )
     limit: StrictInt = Field(ge=1, le=MAX_RANGE_LENGTH)
     scale_bits: StrictInt = Field(ge=1, le=MAX_SURD_SCALE_BITS)
@@ -297,6 +375,22 @@ class RangeProfileRow(StrictModel):
                 "every row factor must share its row multiplier",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        multiplier: int,
+        factors: tuple[NearestIntegerDistanceValue, ...],
+        product_enclosure: ClosedRationalInterval,
+    ) -> Self:
+        """Construct a row after the owner kernel established its bindings."""
+
+        return cls.model_construct(
+            multiplier=multiplier,
+            factors=factors,
+            product_enclosure=product_enclosure,
+        )
 
 
 class RangeProfileResult(StrictModel):
@@ -344,19 +438,39 @@ class RangeProfileResult(StrictModel):
                     "diophantine.range_profile_factor_scale_mismatch",
                     "every row factor must share the profile precision",
                 )
-            if row.product_enclosure.lower.as_fraction() < 0:
+            if row.product_enclosure.lower.num < 0:
                 raise _validation_error(
                     "diophantine.range_profile_negative_product",
                     "a range product enclosure must be nonnegative",
                 )
         return self
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        radicands: tuple[int, ...],
+        limit: int,
+        scale_bits: int,
+        rows: tuple[RangeProfileRow, ...],
+    ) -> Self:
+        """Construct a complete profile after the owner kernel established it."""
+
+        return cls.model_construct(
+            radicands=radicands,
+            limit=limit,
+            scale_bits=scale_bits,
+            rows=rows,
+        )
+
 
 class RecordMinimaRequest(StrictModel):
     """Extract strict record minima from a certified simultaneous range."""
 
     radicands: tuple[StrictInt, ...] = Field(
-        min_length=1, max_length=MAX_SIMULTANEOUS_RADICANDS
+        min_length=1,
+        max_length=MAX_SIMULTANEOUS_RADICANDS,
+        description=_SURD_AXIS_DESCRIPTION,
     )
     limit: StrictInt = Field(ge=1, le=MAX_RANGE_LENGTH)
     scale_bits: StrictInt = Field(ge=1, le=MAX_SURD_SCALE_BITS)
@@ -380,6 +494,22 @@ class RecordMinimumValue(StrictModel):
     )
     product_enclosure: ClosedRationalInterval
     incumbent_enclosure: ClosedRationalInterval
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        multiplier: int,
+        product_enclosure: ClosedRationalInterval,
+        incumbent_enclosure: ClosedRationalInterval,
+    ) -> Self:
+        """Construct one record after the owner kernel established it."""
+
+        return cls.model_construct(
+            multiplier=multiplier,
+            product_enclosure=product_enclosure,
+            incumbent_enclosure=incumbent_enclosure,
+        )
 
 
 class RecordMinimaResult(StrictModel):
@@ -419,8 +549,8 @@ class RecordMinimaResult(StrictModel):
                 "a finite record sequence must retain its first row at multiplier one",
             )
         if any(
-            record.product_enclosure.lower.as_fraction() < 0
-            or record.incumbent_enclosure.lower.as_fraction() < 0
+            record.product_enclosure.lower.num < 0
+            or record.incumbent_enclosure.lower.num < 0
             for record in self.records
         ):
             raise _validation_error(
@@ -459,30 +589,10 @@ class RecordMinimaResult(StrictModel):
                     "diophantine.complete_record_missing_first_row",
                     "a complete record sequence contains at least the first row",
                 )
-            if any(record.multiplier > self.limit for record in self.records):
-                raise _validation_error(
-                    "diophantine.complete_record_multiplier_out_of_range",
-                    "every record multiplier must lie in the declared range",
-                )
-            if any(
-                current.multiplier <= previous.multiplier
-                for previous, current in zip(
-                    self.records, self.records[1:], strict=False
-                )
-            ):
-                raise _validation_error(
-                    "diophantine.complete_record_order",
-                    "record multipliers must be strictly increasing",
-                )
             if self.finite_argmin != self.records[-1].multiplier:
                 raise _validation_error(
                     "diophantine.complete_record_argmin_mismatch",
                     "finite_argmin must be the last certified record multiplier",
-                )
-            if self.finite_argmin > self.limit:
-                raise _validation_error(
-                    "diophantine.complete_record_argmin_out_of_range",
-                    "finite_argmin must lie in the declared range",
                 )
         else:
             if self.finite_argmin is not None:
@@ -515,32 +625,78 @@ class RecordMinimaResult(StrictModel):
         return self
 
     @model_validator(mode="after")
-    def require_complete_record_separation(self) -> Self:
-        if self.outcome == "COMPLETE" and any(
-            current.product_enclosure.upper.as_fraction()
-            >= current.incumbent_enclosure.lower.as_fraction()
-            for current in self.records[1:]
+    def require_common_record_axis(self) -> Self:
+        """Validate record provenance shared by complete and unresolved results."""
+
+        if any(record.multiplier > self.limit for record in self.records):
+            raise _validation_error(
+                (
+                    "diophantine.complete_record_multiplier_out_of_range"
+                    if self.outcome == "COMPLETE"
+                    else "diophantine.record_multiplier_out_of_range"
+                ),
+                "every record multiplier must lie in the declared range",
+            )
+        if any(
+            current.multiplier <= previous.multiplier
+            for previous, current in zip(self.records, self.records[1:], strict=False)
         ):
             raise _validation_error(
-                "diophantine.record_not_strictly_separated",
-                "each retained record must be strictly below its incumbent",
+                (
+                    "diophantine.complete_record_order"
+                    if self.outcome == "COMPLETE"
+                    else "diophantine.record_order"
+                ),
+                "record multipliers must be strictly increasing",
             )
-        return self
-
-    @model_validator(mode="after")
-    def require_unresolved_overlap(self) -> Self:
+        if (
+            self.outcome == "COMPLETE"
+            and self.finite_argmin is not None
+            and self.finite_argmin > self.limit
+        ):
+            raise _validation_error(
+                "diophantine.complete_record_argmin_out_of_range",
+                "finite_argmin must lie in the declared range",
+            )
         if self.outcome == "UNRESOLVED":
-            assert self.unresolved_product_enclosure is not None
             assert self.unresolved_incumbent_enclosure is not None
             if (
-                self.unresolved_product_enclosure.lower.as_fraction()
-                >= self.unresolved_incumbent_enclosure.upper.as_fraction()
+                self.unresolved_incumbent_enclosure
+                != self.records[-1].product_enclosure
             ):
                 raise _validation_error(
-                    "diophantine.unresolved_record_not_overlapping",
-                    "an unresolved comparison must retain overlapping enclosures",
+                    "diophantine.unresolved_record_incumbent_mismatch",
+                    "the unresolved incumbent must equal the last retained product",
                 )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        radicands: tuple[int, ...],
+        limit: int,
+        scale_bits: int,
+        outcome: Literal["COMPLETE", "UNRESOLVED"],
+        records: tuple[RecordMinimumValue, ...],
+        finite_argmin: int | None = None,
+        unresolved_multiplier: int | None = None,
+        unresolved_product_enclosure: ClosedRationalInterval | None = None,
+        unresolved_incumbent_enclosure: ClosedRationalInterval | None = None,
+    ) -> Self:
+        """Construct a result after the owner kernel established its claims."""
+
+        return cls.model_construct(
+            radicands=radicands,
+            limit=limit,
+            scale_bits=scale_bits,
+            outcome=outcome,
+            records=records,
+            finite_argmin=finite_argmin,
+            unresolved_multiplier=unresolved_multiplier,
+            unresolved_product_enclosure=unresolved_product_enclosure,
+            unresolved_incumbent_enclosure=unresolved_incumbent_enclosure,
+        )
 
 
 __all__ = [

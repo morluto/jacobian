@@ -5,6 +5,7 @@ from __future__ import annotations
 import decimal
 import json
 import math
+import threading
 from collections.abc import Callable
 from decimal import Decimal
 from fractions import Fraction
@@ -12,7 +13,9 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
+from jacobian._execution import OperationExecutionCancelledError, request_cancellation
 from jacobian.canonical import encode_strict_json
+from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -36,7 +39,6 @@ from jacobian.math.number_theory.diophantine_approximation._models import (
     PellEquationRequest,
 )
 from jacobian.math.number_theory.diophantine_approximation._surd_models import (
-    NearestIntegerDistanceRequest,
     NearestIntegerDistanceValue,
     RangeProfileRequest,
     RangeProfileResult,
@@ -501,9 +503,7 @@ def _high_precision_sqrt(radicand: int, digits: int = 80) -> str:
 def test_scaled_floor_matches_integer_square_definition() -> None:
     """floor(n*sqrt(d)) is isqrt(d*n^2) for a nonsquare radicand."""
     for multiplier, radicand in ((3, 2), (1, 2), (7, 3), (10, 5), (12, 6)):
-        value = scaled_floor(
-            ScaledFloorRequest(multiplier=multiplier, radicand=radicand)
-        )
+        value = scaled_floor(multiplier, radicand)
         assert value.floor == math.isqrt(radicand * multiplier * multiplier)
         assert value.ceiling == value.floor + 1
         assert value.square_lower == value.floor * value.floor
@@ -513,17 +513,13 @@ def test_scaled_floor_matches_integer_square_definition() -> None:
 def test_scaled_floor_rejects_square_radicand() -> None:
     """A perfect-square radicand is outside the irrational contract."""
     with pytest.raises(OperationDomainValidationError):
-        scaled_floor(ScaledFloorRequest(multiplier=2, radicand=9))
+        scaled_floor(2, 9)
 
 
 def test_nearest_integer_distance_branches_on_both_sides() -> None:
     """The nearest integer can come from either endpoint of the bracket."""
-    floor_side = nearest_integer_distance(
-        NearestIntegerDistanceRequest(multiplier=1, radicand=2, scale_bits=48)
-    )
-    ceiling_side = nearest_integer_distance(
-        NearestIntegerDistanceRequest(multiplier=1, radicand=3, scale_bits=48)
-    )
+    floor_side = nearest_integer_distance(1, 2, 48)
+    ceiling_side = nearest_integer_distance(1, 3, 48)
     assert floor_side.side == "FLOOR"
     assert floor_side.nearest_integer == floor_side.floor
     assert ceiling_side.side == "CEILING"
@@ -533,11 +529,7 @@ def test_nearest_integer_distance_branches_on_both_sides() -> None:
 def test_nearest_integer_distance_encloses_the_true_distance() -> None:
     """Independent high-precision square roots must lie inside the enclosure."""
     for multiplier, radicand in ((1, 2), (2, 3), (5, 7), (9, 11), (31, 13)):
-        value = nearest_integer_distance(
-            NearestIntegerDistanceRequest(
-                multiplier=multiplier, radicand=radicand, scale_bits=64
-            )
-        )
+        value = nearest_integer_distance(multiplier, radicand, 64)
         true_distance = abs(
             Decimal(multiplier) * Decimal(_high_precision_sqrt(radicand))
             - Decimal(value.nearest_integer)
@@ -546,25 +538,19 @@ def test_nearest_integer_distance_encloses_the_true_distance() -> None:
         assert Fraction(true_distance) <= value.distance_enclosure.upper.as_fraction()
 
 
-def test_insufficient_precision_is_reported_not_guessed() -> None:
-    """Overlapping branches must be rejected, never tie-broken arbitrarily."""
-    with pytest.raises(OperationDomainValidationError) as error:
-        nearest_integer_distance(
-            NearestIntegerDistanceRequest(multiplier=1, radicand=2, scale_bits=1)
-        )
-    assert error.value.errors()[0]["type"] == (
-        "diophantine.nearest_integer_branch_unresolved"
-    )
+def test_midpoint_branch_is_decided_by_exact_integer_ordering() -> None:
+    """A coarse bracket still selects the exact nearest branch at a midpoint."""
+    value = nearest_integer_distance(1, 2, 1)
+    assert value.side == "FLOOR"
+    assert value.nearest_integer == value.floor == 1
+    assert value.distance_enclosure.lower.as_fraction() == 0
+    assert value.distance_enclosure.upper.as_fraction() == Fraction(1, 2)
 
 
 def test_refinement_tightens_without_reversing_a_separated_order() -> None:
     """A larger scale subdivides the same bracket and never reverses order."""
-    coarse = nearest_integer_distance(
-        NearestIntegerDistanceRequest(multiplier=1, radicand=2, scale_bits=8)
-    )
-    fine = nearest_integer_distance(
-        NearestIntegerDistanceRequest(multiplier=1, radicand=2, scale_bits=64)
-    )
+    coarse = nearest_integer_distance(1, 2, 8)
+    fine = nearest_integer_distance(1, 2, 64)
     assert coarse.side == fine.side == "FLOOR"
     coarse_width = (
         coarse.distance_enclosure.upper.as_fraction()
@@ -585,17 +571,11 @@ def test_refinement_tightens_without_reversing_a_separated_order() -> None:
 
 def test_product_enclosure_includes_the_outer_factor_and_contains_the_value() -> None:
     """n * prod_i ||n sqrt(d_i)|| is enclosed, not the bare product of distances."""
-    result = simultaneous_product(
-        SimultaneousProductRequest(multiplier=4, radicands=(2, 3), scale_bits=64)
-    )
+    result = simultaneous_product(4, (2, 3), 64)
     assert tuple(f.radicand for f in result.factors) == (2, 3)
     true_product = Decimal(4)
     for radicand in (2, 3):
-        per_factor = nearest_integer_distance(
-            NearestIntegerDistanceRequest(
-                multiplier=4, radicand=radicand, scale_bits=64
-            )
-        )
+        per_factor = nearest_integer_distance(4, radicand, 64)
         true_product *= abs(
             Decimal(4) * Decimal(_high_precision_sqrt(radicand))
             - Decimal(per_factor.nearest_integer)
@@ -606,46 +586,31 @@ def test_product_enclosure_includes_the_outer_factor_and_contains_the_value() ->
 
 def test_product_enclosure_is_radicand_permutation_invariant() -> None:
     """Reordering the radicand axis permutes rows but preserves the product."""
-    forward = simultaneous_product(
-        SimultaneousProductRequest(multiplier=3, radicands=(2, 3), scale_bits=48)
-    )
-    reversed_axis = simultaneous_product(
-        SimultaneousProductRequest(multiplier=3, radicands=(3, 2), scale_bits=48)
-    )
+    forward = simultaneous_product(3, (2, 3), 48)
+    reversed_axis = simultaneous_product(3, (3, 2), 48)
     assert forward.product_enclosure == reversed_axis.product_enclosure
     assert tuple(f.radicand for f in reversed_axis.factors) == (3, 2)
 
 
 def test_range_profile_accounts_for_every_integer() -> None:
     """The completed range covers each multiplier exactly once, in order."""
-    result = range_profile(
-        RangeProfileRequest(radicands=(2, 3), limit=25, scale_bits=40)
-    )
+    result = range_profile((2, 3), 25, 40)
     assert tuple(row.multiplier for row in result.rows) == tuple(range(1, 26))
     assert len(result.rows) == 25
     for row in result.rows:
         assert tuple(f.radicand for f in row.factors) == (2, 3)
 
 
-def test_range_profile_rejects_rather_than_omitting_an_unresolved_row() -> None:
-    """Completeness is all-or-nothing: a short profile is never returned."""
-    with pytest.raises(OperationDomainValidationError) as error:
-        range_profile(RangeProfileRequest(radicands=(2, 3), limit=5, scale_bits=2))
-    assert error.value.errors()[0]["type"] == (
-        "diophantine.range_profile_unresolved_row"
-    )
+def test_range_profile_keeps_coarse_rows_complete() -> None:
+    """Exact midpoint ordering keeps every coarse range row available."""
+    result = range_profile((2, 3), 5, 2)
+    assert tuple(row.multiplier for row in result.rows) == tuple(range(1, 6))
 
 
 def test_range_profile_rejects_aggregate_output_before_expansion() -> None:
     """A maximal table is refused before allocating its rows or intervals."""
     with pytest.raises(OperationDomainValidationError) as error:
-        range_profile(
-            RangeProfileRequest(
-                radicands=(2, 3, 5, 6, 7, 10, 11, 13),
-                limit=4096,
-                scale_bits=4096,
-            )
-        )
+        range_profile((2, 3, 5, 6, 7, 10, 11, 13), 4096, 4096)
     assert error.value.errors()[0]["type"] in {
         "diophantine.range_profile_output_bound",
         "diophantine.range_profile_intermediate_bound",
@@ -658,13 +623,11 @@ def test_range_profile_admits_retained_allocation_before_expansion(
 ) -> None:
     monkeypatch.setattr(surd_kernel, "MAX_SURD_RANGE_ALLOCATION_UNITS", 1)
     with pytest.raises(OperationResourceAdmissionError, match="allocation bound"):
-        range_profile(RangeProfileRequest(radicands=(2, 3), limit=2, scale_bits=32))
+        range_profile((2, 3), 2, 32)
 
 
 def test_serialized_range_rejects_forged_factor_axes() -> None:
-    result = range_profile(
-        RangeProfileRequest(radicands=(2, 3), limit=2, scale_bits=32)
-    )
+    result = range_profile((2, 3), 2, 32)
     payload = result.model_dump(mode="json")
     payload["rows"][0]["factors"][0]["multiplier"] = "99"
     with pytest.raises(ValidationError):
@@ -676,9 +639,7 @@ def test_serialized_range_rejects_forged_factor_axes() -> None:
 
 
 def test_serialized_records_reject_forged_multiplier_axis() -> None:
-    result = record_minima(
-        RecordMinimaRequest(radicands=(2, 3), limit=20, scale_bits=64)
-    )
+    result = record_minima((2, 3), 20, 64)
     assert result.outcome == "COMPLETE"
     payload = result.model_dump(mode="json")
     payload["records"][0]["multiplier"] = "21"
@@ -688,9 +649,7 @@ def test_serialized_records_reject_forged_multiplier_axis() -> None:
 
 def test_record_minima_match_an_independent_decimal_record_oracle() -> None:
     """The record sequence agrees with a Decimal oracle, not this kernel."""
-    result = record_minima(
-        RecordMinimaRequest(radicands=(2, 3), limit=2000, scale_bits=64)
-    )
+    result = record_minima((2, 3), 2000, 64)
     expected: list[int] = []
     incumbent: Decimal | None = None
     with decimal.localcontext() as context:
@@ -713,25 +672,16 @@ def test_record_minima_match_an_independent_decimal_record_oracle() -> None:
     assert result.finite_argmin == expected[-1]
 
 
-def test_record_minima_report_unresolved_without_an_argmin_claim() -> None:
-    """A precision too coarse to separate a comparison makes no record claim.
-
-    The exact distances are rational, so every branch eventually resolves; a
-    scale that cannot resolve one row of the declared range must therefore
-    reject rather than return a partial record sequence or a guessed argmin.
-    """
-    with pytest.raises(OperationDomainValidationError) as error:
-        record_minima(RecordMinimaRequest(radicands=(2, 3), limit=40, scale_bits=1))
-    assert error.value.errors()[0]["type"] == (
-        "diophantine.range_profile_unresolved_row"
-    )
+def test_record_minima_reports_unresolved_without_an_argmin_claim() -> None:
+    """A coarse product comparison makes no finite argmin claim."""
+    result = record_minima((2, 3), 40, 1)
+    assert result.outcome == "UNRESOLVED"
+    assert result.finite_argmin is None
 
 
 def test_record_minima_resolved_scale_makes_only_strict_claims() -> None:
     """Every reported record is strictly below the incumbent it replaced."""
-    result = record_minima(
-        RecordMinimaRequest(radicands=(2, 3), limit=200, scale_bits=16)
-    )
+    result = record_minima((2, 3), 200, 16)
     assert result.outcome == "COMPLETE"
     assert result.finite_argmin == result.records[-1].multiplier
     for previous, current in zip(result.records, result.records[1:], strict=False):
@@ -743,7 +693,7 @@ def test_record_minima_resolved_scale_makes_only_strict_claims() -> None:
 
 def test_record_minima_reports_an_overlapping_nonrecord_comparison() -> None:
     """An overlapping candidate cannot be silently classified as a non-record."""
-    result = record_minima(RecordMinimaRequest(radicands=(2, 3), limit=5, scale_bits=6))
+    result = record_minima((2, 3), 5, 6)
 
     assert result.outcome == "UNRESOLVED"
     assert result.unresolved_multiplier == 5
@@ -756,9 +706,71 @@ def test_record_minima_reports_an_overlapping_nonrecord_comparison() -> None:
     )
 
 
+def test_record_minima_accepts_touching_enclosures_as_a_strict_record() -> None:
+    """Outward endpoints touching still prove the irrational values differ."""
+    result = record_minima((2,), 2, 4)
+
+    assert result.outcome == "COMPLETE"
+    assert tuple(record.multiplier for record in result.records) == (1, 2)
+    assert result.finite_argmin == 2
+    assert result.records[1].product_enclosure.upper.as_fraction() == Fraction(3, 8)
+    assert result.records[0].product_enclosure.lower.as_fraction() == Fraction(3, 8)
+
+
+def test_range_profile_observes_request_cancellation_inside_row_loop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A cancellation raised between rows prevents the next exact expansion."""
+    cancellation = threading.Event()
+    original = surd_kernel._distance_value
+    calls = 0
+
+    def cancel_after_first(
+        multiplier: int, radicand: int, scale_bits: int
+    ) -> NearestIntegerDistanceValue:
+        nonlocal calls
+        value = original(multiplier, radicand, scale_bits)
+        calls += 1
+        if calls == 1:
+            cancellation.set()
+        return value
+
+    monkeypatch.setattr(surd_kernel, "_distance_value", cancel_after_first)
+    with (
+        request_cancellation(cancellation),
+        pytest.raises(OperationExecutionCancelledError, match="range profile"),
+    ):
+        range_profile((2,), 3, 4)
+    assert calls == 1
+
+
+def test_record_minima_remains_native_only() -> None:
+    """Record extraction composes the public range operation in native code."""
+    assert (
+        Catalog.open().operation(
+            "number_theory.simultaneous_approximation.record_minima.compute"
+        )
+        is None
+    )
+
+
+def test_surd_request_schemas_describe_radical_axis_constraints() -> None:
+    """Request schemas expose the constraints enforced by execution."""
+    for request_type in (
+        SimultaneousProductRequest,
+        RangeProfileRequest,
+        RecordMinimaRequest,
+    ):
+        description = request_type.model_json_schema()["properties"]["radicands"][
+            "description"
+        ]
+        assert "distinct" in description
+        assert "nonsquare" in description
+
+
 def test_scaled_floor_value_round_trips_through_strict_json() -> None:
     """The declared result survives strict JSON serialization unchanged."""
-    result = scaled_floor(ScaledFloorRequest(multiplier=6, radicand=3))
+    result = scaled_floor(6, 3)
     restored = ScaledFloorValue.model_validate_json(
         encode_strict_json(result.model_dump(mode="json")), strict=True
     )
@@ -767,9 +779,7 @@ def test_scaled_floor_value_round_trips_through_strict_json() -> None:
 
 def test_nearest_integer_distance_round_trips_through_strict_json() -> None:
     """The certified enclosure survives strict JSON serialization unchanged."""
-    result = nearest_integer_distance(
-        NearestIntegerDistanceRequest(multiplier=5, radicand=7, scale_bits=32)
-    )
+    result = nearest_integer_distance(5, 7, 32)
     restored = NearestIntegerDistanceValue.model_validate_json(
         encode_strict_json(result.model_dump(mode="json")), strict=True
     )
@@ -778,7 +788,7 @@ def test_nearest_integer_distance_round_trips_through_strict_json() -> None:
 
 def test_serialized_surd_values_reject_forged_structural_fields() -> None:
     """Canonical carriers retain their domain and branch bindings on decode."""
-    floor = scaled_floor(ScaledFloorRequest(multiplier=6, radicand=3))
+    floor = scaled_floor(6, 3)
     floor_payload = floor.model_dump(mode="json")
     floor_payload["radicand"] = 4
     with pytest.raises(ValidationError):
@@ -786,9 +796,7 @@ def test_serialized_surd_values_reject_forged_structural_fields() -> None:
             encode_strict_json(floor_payload), strict=True
         )
 
-    distance = nearest_integer_distance(
-        NearestIntegerDistanceRequest(multiplier=5, radicand=7, scale_bits=32)
-    )
+    distance = nearest_integer_distance(5, 7, 32)
     distance_payload = distance.model_dump(mode="json")
     distance_payload["nearest_integer"] = distance.ceiling
     with pytest.raises(ValidationError):
@@ -796,9 +804,7 @@ def test_serialized_surd_values_reject_forged_structural_fields() -> None:
             encode_strict_json(distance_payload), strict=True
         )
 
-    product = simultaneous_product(
-        SimultaneousProductRequest(multiplier=1, radicands=(2, 3), scale_bits=32)
-    )
+    product = simultaneous_product(1, (2, 3), 32)
     product_payload = product.model_dump(mode="json")
     product_payload["product_enclosure"]["lower"] = {"num": "-1", "den": "1"}
     with pytest.raises(ValidationError):
@@ -809,9 +815,7 @@ def test_serialized_surd_values_reject_forged_structural_fields() -> None:
 
 def test_serialized_record_result_rejects_missing_or_unbound_history() -> None:
     """A record result cannot lose its first row or incumbent source binding."""
-    result = record_minima(
-        RecordMinimaRequest(radicands=(2, 3), limit=20, scale_bits=64)
-    )
+    result = record_minima((2, 3), 20, 64)
     assert result.outcome == "COMPLETE"
 
     missing_first = result.model_dump(mode="json")
@@ -831,9 +835,35 @@ def test_serialized_record_result_rejects_missing_or_unbound_history() -> None:
         )
 
 
+def test_serialized_unresolved_record_result_rejects_impossible_history() -> None:
+    """Unresolved evidence retains the complete record axis and incumbent source."""
+    result = record_minima((2, 3), 5, 6)
+    assert result.outcome == "UNRESOLVED"
+
+    malformed_axis = result.model_dump(mode="json")
+    malformed_axis["records"].append(malformed_axis["records"][1].copy())
+    malformed_axis["records"][2]["multiplier"] = "2"
+    malformed_axis["records"][2]["incumbent_enclosure"] = malformed_axis["records"][1][
+        "product_enclosure"
+    ]
+    with pytest.raises(ValidationError):
+        RecordMinimaResult.model_validate_json(
+            encode_strict_json(malformed_axis), strict=True
+        )
+
+    malformed_incumbent = result.model_dump(mode="json")
+    malformed_incumbent["unresolved_incumbent_enclosure"] = malformed_incumbent[
+        "records"
+    ][0]["product_enclosure"]
+    with pytest.raises(ValidationError):
+        RecordMinimaResult.model_validate_json(
+            encode_strict_json(malformed_incumbent), strict=True
+        )
+
+
 def test_large_multiplier_uses_exact_json_integer_encoding() -> None:
     request = ScaledFloorRequest(multiplier=2**53, radicand=2)
-    result = scaled_floor(request)
+    result = scaled_floor(request.multiplier, request.radicand)
     restored = ScaledFloorValue.model_validate_json(
         encode_strict_json(result.model_dump(mode="json")), strict=True
     )
@@ -841,11 +871,7 @@ def test_large_multiplier_uses_exact_json_integer_encoding() -> None:
 
 
 def test_maximum_product_precision_fits_result_envelope() -> None:
-    result = simultaneous_product(
-        SimultaneousProductRequest(
-            multiplier=1, radicands=(2, 3, 5, 6), scale_bits=4096
-        )
-    )
+    result = simultaneous_product(1, (2, 3, 5, 6), 4096)
     restored = type(result).model_validate_json(
         encode_strict_json(result.model_dump(mode="json"))
     )

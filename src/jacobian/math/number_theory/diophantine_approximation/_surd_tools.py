@@ -9,13 +9,44 @@ from jacobian.math.number_theory.diophantine_approximation._surd_models import (
     NearestIntegerDistanceValue,
     RangeProfileRequest,
     RangeProfileResult,
-    RecordMinimaRequest,
-    RecordMinimaResult,
     ScaledFloorRequest,
     ScaledFloorValue,
     SimultaneousProductRequest,
     SimultaneousProductResult,
 )
+
+
+def _scaled_floor(request: ScaledFloorRequest) -> ScaledFloorValue:
+    return native.scaled_floor(request.multiplier, request.radicand)
+
+
+def _nearest_integer_distance(
+    request: NearestIntegerDistanceRequest,
+) -> NearestIntegerDistanceValue:
+    return native.nearest_integer_distance(
+        request.multiplier,
+        request.radicand,
+        request.scale_bits,
+    )
+
+
+def _simultaneous_product(
+    request: SimultaneousProductRequest,
+) -> SimultaneousProductResult:
+    return native.simultaneous_product(
+        request.multiplier,
+        request.radicands,
+        request.scale_bits,
+    )
+
+
+def _range_profile(request: RangeProfileRequest) -> RangeProfileResult:
+    return native.range_profile(
+        request.radicands,
+        request.limit,
+        request.scale_bits,
+    )
+
 
 SURD_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
@@ -28,7 +59,7 @@ SURD_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         ),
         request_type=ScaledFloorRequest,
         result_type=ScaledFloorValue,
-        run=native.scaled_floor,
+        run=_scaled_floor,
         tags=("number-theory", "quadratic-surd", "floor", "exact"),
         examples=(
             OperationExample(
@@ -46,13 +77,13 @@ SURD_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         description=(
             "Return the exact floor, ceiling, nearest integer, and branch of "
             "n*sqrt(d) together with a certified rational enclosure of the "
-            "distance ||n*sqrt(d)|| at the requested binary scale. A precision "
-            "that cannot separate the two branches is rejected rather than "
-            "guessed."
+            "distance ||n*sqrt(d)|| at the requested binary scale. The nearest "
+            "branch is selected by an exact midpoint comparison, even when the "
+            "requested dyadic enclosure touches the midpoint."
         ),
         request_type=NearestIntegerDistanceRequest,
         result_type=NearestIntegerDistanceValue,
-        run=native.nearest_integer_distance,
+        run=_nearest_integer_distance,
         tags=("number-theory", "quadratic-surd", "certified", "enclosure"),
         examples=(
             OperationExample(
@@ -75,7 +106,7 @@ SURD_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         ),
         request_type=SimultaneousProductRequest,
         result_type=SimultaneousProductResult,
-        run=native.simultaneous_product,
+        run=_simultaneous_product,
         tags=("number-theory", "simultaneous-approximation", "certified"),
         examples=(
             OperationExample(
@@ -98,7 +129,7 @@ SURD_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         ),
         request_type=RangeProfileRequest,
         result_type=RangeProfileResult,
-        run=native.range_profile,
+        run=_range_profile,
         tags=("number-theory", "simultaneous-approximation", "range", "certified"),
         examples=(
             OperationExample(
@@ -108,30 +139,6 @@ SURD_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                     "2 and 3 up to 10."
                 ),
                 input={"radicands": [2, 3], "limit": 10, "scale_bits": 32},
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="number_theory.simultaneous_approximation.record_minima.compute",
-        title="Extract strict certified record minima from a finite range",
-        description=(
-            "Return the strict record-minimum sequence and the finite argmin of "
-            "n*prod_i||n*sqrt(d_i)|| over a complete certified range, or an "
-            "explicit UNRESOLVED row with both enclosures when the declared "
-            "precision cannot strictly separate a comparison."
-        ),
-        request_type=RecordMinimaRequest,
-        result_type=RecordMinimaResult,
-        run=native.record_minima,
-        tags=("number-theory", "simultaneous-approximation", "records", "certified"),
-        examples=(
-            OperationExample(
-                name="records_sqrt_two_sqrt_three",
-                description=(
-                    "Strict records for distinct nonsquare radicands 2 and 3 "
-                    "with n <= 50."
-                ),
-                input={"radicands": [2, 3], "limit": 50, "scale_bits": 64},
             ),
         ),
     ),

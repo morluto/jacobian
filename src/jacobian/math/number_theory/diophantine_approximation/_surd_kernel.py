@@ -13,29 +13,27 @@ from math import isqrt
 from typing import Literal
 
 from jacobian._exact import CanonicalRational
+from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.analysis.intervals import ClosedRationalInterval
 from jacobian.math.number_theory.diophantine_approximation._surd_models import (
+    MAX_RANGE_LENGTH,
+    MAX_SIMULTANEOUS_RADICANDS,
     MAX_SURD_MULTIPLIER_BITS,
     MAX_SURD_RADICAND,
     MAX_SURD_RANGE_ALLOCATION_UNITS,
     MAX_SURD_RANGE_INTERMEDIATE_BITS,
     MAX_SURD_RANGE_WORK,
     MAX_SURD_SCALE_BITS,
-    NearestIntegerDistanceRequest,
     NearestIntegerDistanceValue,
-    RangeProfileRequest,
     RangeProfileResult,
     RangeProfileRow,
-    RecordMinimaRequest,
     RecordMinimaResult,
     RecordMinimumValue,
-    ScaledFloorRequest,
     ScaledFloorValue,
-    SimultaneousProductRequest,
     SimultaneousProductResult,
     bound_enclosure,
     is_surd_radicand,
@@ -50,7 +48,13 @@ __all__ = [
 ]
 
 
-def _require_request_multiplier(multiplier: int) -> None:
+def _require_multiplier(multiplier: int) -> None:
+    if type(multiplier) is not int:
+        raise OperationDomainValidationError(
+            location=("multiplier",),
+            code="diophantine.multiplier_type",
+            message="multiplier must be a strict integer",
+        )
     if multiplier.bit_length() > MAX_SURD_MULTIPLIER_BITS:
         raise OperationResourceAdmissionError(
             location=("multiplier",),
@@ -66,7 +70,11 @@ def _require_request_multiplier(multiplier: int) -> None:
 
 
 def _require_surd_radicand(radicand: int, *, location: tuple[str, ...]) -> None:
-    if not (2 <= radicand <= MAX_SURD_RADICAND) or not is_surd_radicand(radicand):
+    if (
+        type(radicand) is not int
+        or not (2 <= radicand <= MAX_SURD_RADICAND)
+        or not is_surd_radicand(radicand)
+    ):
         raise OperationDomainValidationError(
             location=location,
             code="diophantine.surd_radicand_must_not_be_square",
@@ -75,12 +83,31 @@ def _require_surd_radicand(radicand: int, *, location: tuple[str, ...]) -> None:
 
 
 def _require_surd_axis(radicands: tuple[int, ...]) -> None:
+    if (
+        type(radicands) is not tuple
+        or not 1 <= len(radicands) <= MAX_SIMULTANEOUS_RADICANDS
+    ):
+        raise OperationDomainValidationError(
+            location=("radicands",),
+            code="diophantine.surd_radicands_out_of_range",
+            message="radicands must be a tuple with one through eight entries",
+        )
     for index, radicand in enumerate(radicands):
         _require_surd_radicand(radicand, location=("radicands", str(index)))
+    if len(set(radicands)) != len(radicands):
+        raise OperationDomainValidationError(
+            location=("radicands",),
+            code="diophantine.surd_radicands_must_be_distinct",
+            message="an ordered radicand axis requires distinct radicands",
+        )
 
 
 def _require_scale_bits(scale_bits: int) -> None:
-    if scale_bits < 1 or scale_bits > MAX_SURD_SCALE_BITS:
+    if (
+        type(scale_bits) is not int
+        or scale_bits < 1
+        or scale_bits > MAX_SURD_SCALE_BITS
+    ):
         raise OperationDomainValidationError(
             location=("scale_bits",),
             code="diophantine.scale_bits_out_of_range",
@@ -108,7 +135,7 @@ def _scaled_floor_row(multiplier: int, radicand: int) -> ScaledFloorValue:
             code="diophantine.scaled_floor_must_be_irrational",
             message="a scaled quadratic-surd floor requires a nonsquare radicand",
         )
-    return ScaledFloorValue(
+    return ScaledFloorValue._from_kernel(
         multiplier=multiplier,
         radicand=radicand,
         floor=floor,
@@ -152,35 +179,29 @@ def _distance_value(
     ceiling_distance_lower = Fraction(row.ceiling) - radical_upper
     ceiling_distance_upper = Fraction(row.ceiling) - radical_lower
 
-    # Strict separation is required: touching enclosures leave the branch
-    # mathematically undecided, so they must not be read as a tie-break.
+    # The midpoint comparison is exact.  The radical cannot equal this
+    # rational midpoint because the radicand is nonsquare, so even a coarse
+    # dyadic bracket can choose the nearest branch without guessing.
     side: Literal["FLOOR", "CEILING"]
-    if floor_distance_upper < ceiling_distance_lower:
+    radical_square_twice = 4 * radicand * multiplier * multiplier
+    midpoint_square = (2 * row.floor + 1) * (2 * row.floor + 1)
+    if radical_square_twice < midpoint_square:
         side = "FLOOR"
         lower, upper = floor_distance_lower, floor_distance_upper
         upper_scaled = scaled_floor + 1 - row.floor * scale
-    elif ceiling_distance_upper < floor_distance_lower:
+    elif radical_square_twice > midpoint_square:
         side = "CEILING"
         lower, upper = ceiling_distance_lower, ceiling_distance_upper
         upper_scaled = row.ceiling * scale - scaled_floor
     else:
-        # Overlapping branches mean the requested precision cannot separate the
-        # nearest integer; that is a caller error, never a guessed branch.
-        raise OperationDomainValidationError(
-            location=("scale_bits",),
-            code="diophantine.nearest_integer_branch_unresolved",
-            message=(
-                "the requested scale_bits does not separate the nearest integer "
-                "branch for this multiplier and radicand"
-            ),
-        )
+        raise AssertionError("a nonsquare quadratic radical cannot equal a midpoint")
 
     # The distance enclosure is nonnegative and ordered; both endpoints are
     # exact rationals, and neither endpoint is negative by construction.
     interval = bound_enclosure(
         _interval(max(lower, Fraction(0)), upper), label="nearest-integer distance"
     )
-    return NearestIntegerDistanceValue(
+    return NearestIntegerDistanceValue._from_kernel(
         multiplier=multiplier,
         radicand=radicand,
         floor=row.floor,
@@ -211,22 +232,22 @@ def _product_enclosure(
     return bound_enclosure(_interval(lower, upper), label="simultaneous product")
 
 
-def _range_admission(request: RangeProfileRequest) -> None:
+def _range_admission(radicands: tuple[int, ...], limit: int, scale_bits: int) -> None:
     """Admit complete range expansion before allocating any result rows."""
 
-    _require_request_multiplier(request.limit)
-    radicand_count = len(request.radicands)
-    multiplier_bits = request.limit.bit_length()
+    _require_multiplier(limit)
+    radicand_count = len(radicands)
+    multiplier_bits = limit.bit_length()
     radicand_bits = MAX_SURD_RADICAND.bit_length()
     scalar_bits = max(
-        radicand_bits + 2 * multiplier_bits + request.scale_bits + 2,
-        request.scale_bits + 2,
+        radicand_bits + 2 * multiplier_bits + scale_bits + 2,
+        scale_bits + 2,
     )
-    product_bits = multiplier_bits + radicand_count * (request.scale_bits + 2)
-    work = request.limit * radicand_count * (request.scale_bits + scalar_bits)
-    intermediate_bits = request.limit * radicand_count * scalar_bits
+    product_bits = multiplier_bits + radicand_count * (scale_bits + 2)
+    work = limit * radicand_count * (scale_bits + scalar_bits)
+    intermediate_bits = limit * radicand_count * scalar_bits
     row_units = radicand_count * (12 * scalar_bits + 512) + 4 * product_bits + 1_024
-    allocation_units = request.limit * row_units + radicand_count * 32 + 256
+    allocation_units = limit * row_units + radicand_count * 32 + 256
     if work > MAX_SURD_RANGE_WORK:
         raise OperationResourceAdmissionError(
             location=("limit", "scale_bits"),
@@ -249,127 +270,115 @@ def _range_admission(request: RangeProfileRequest) -> None:
         )
 
 
-def scaled_floor(request: ScaledFloorRequest) -> ScaledFloorValue:
+def scaled_floor(multiplier: int, radicand: int) -> ScaledFloorValue:
     """Return one exact ``floor``/``ceiling`` value derived from integer squares."""
 
-    _require_request_multiplier(request.multiplier)
-    _require_surd_radicand(request.radicand, location=("radicand",))
-    return _scaled_floor_row(request.multiplier, request.radicand)
+    _require_multiplier(multiplier)
+    _require_surd_radicand(radicand, location=("radicand",))
+    return _scaled_floor_row(multiplier, radicand)
 
 
 def nearest_integer_distance(
-    request: NearestIntegerDistanceRequest,
+    multiplier: int,
+    radicand: int,
+    scale_bits: int,
 ) -> NearestIntegerDistanceValue:
     """Certify the distance from ``n sqrt(d)`` to its nearest integer."""
 
-    _require_request_multiplier(request.multiplier)
-    _require_scale_bits(request.scale_bits)
-    _require_surd_radicand(request.radicand, location=("radicand",))
-    return _distance_value(request.multiplier, request.radicand, request.scale_bits)
+    _require_multiplier(multiplier)
+    _require_scale_bits(scale_bits)
+    _require_surd_radicand(radicand, location=("radicand",))
+    return _distance_value(multiplier, radicand, scale_bits)
 
 
 def simultaneous_product(
-    request: SimultaneousProductRequest,
+    multiplier: int,
+    radicands: tuple[int, ...],
+    scale_bits: int,
 ) -> SimultaneousProductResult:
     """Certify ``n * prod_i ||n sqrt(d_i)||`` and every factor row."""
 
-    _require_request_multiplier(request.multiplier)
-    _require_scale_bits(request.scale_bits)
-    _require_surd_axis(request.radicands)
+    _require_multiplier(multiplier)
+    _require_scale_bits(scale_bits)
+    _require_surd_axis(radicands)
     factors = tuple(
-        _distance_value(request.multiplier, radicand, request.scale_bits)
-        for radicand in request.radicands
+        _distance_value(multiplier, radicand, scale_bits) for radicand in radicands
     )
-    return SimultaneousProductResult(
-        multiplier=request.multiplier,
-        radicands=request.radicands,
-        scale_bits=request.scale_bits,
+    return SimultaneousProductResult._from_kernel(
+        multiplier=multiplier,
+        radicands=radicands,
+        scale_bits=scale_bits,
         factors=factors,
-        product_enclosure=_product_enclosure(request.multiplier, factors),
+        product_enclosure=_product_enclosure(multiplier, factors),
     )
 
 
-def _compute_range_profile(request: RangeProfileRequest) -> RangeProfileResult:
+def _compute_range_profile(
+    radicands: tuple[int, ...], limit: int, scale_bits: int
+) -> RangeProfileResult:
     rows = []
-    for multiplier in range(1, request.limit + 1):
-        try:
-            factors = tuple(
-                _distance_value(multiplier, radicand, request.scale_bits)
-                for radicand in request.radicands
-            )
-        except OperationDomainValidationError as error:
-            if error.errors()[0]["type"] != (
-                "diophantine.nearest_integer_branch_unresolved"
-            ):
-                raise
-            # Completeness is a contract: reject the whole range with the
-            # first unresolvable row instead of returning a short profile.
-            raise OperationDomainValidationError(
-                location=("scale_bits",),
-                code="diophantine.range_profile_unresolved_row",
-                message=(
-                    "the declared scale_bits cannot resolve the nearest-integer "
-                    f"branch of row n={multiplier}; raise scale_bits or lower limit"
-                ),
-            ) from error
+    for multiplier in range(1, limit + 1):
+        request_checkpoint("during quadratic-surd range profile")
+        factors = tuple(
+            _distance_value(multiplier, radicand, scale_bits) for radicand in radicands
+        )
+        product_enclosure = _product_enclosure(multiplier, factors)
         rows.append(
-            RangeProfileRow(
+            RangeProfileRow._from_kernel(
                 multiplier=multiplier,
                 factors=factors,
-                product_enclosure=_product_enclosure(multiplier, factors),
+                product_enclosure=product_enclosure,
             )
         )
-    return RangeProfileResult(
-        radicands=request.radicands,
-        limit=request.limit,
-        scale_bits=request.scale_bits,
+    return RangeProfileResult._from_kernel(
+        radicands=radicands,
+        limit=limit,
+        scale_bits=scale_bits,
         rows=tuple(rows),
     )
 
 
-def range_profile(request: RangeProfileRequest) -> RangeProfileResult:
+def range_profile(
+    radicands: tuple[int, ...], limit: int, scale_bits: int
+) -> RangeProfileResult:
     """Return a complete certified row for every ``1 <= n <= limit``."""
 
-    _require_scale_bits(request.scale_bits)
-    _require_surd_axis(request.radicands)
-    _range_admission(request)
-    return _compute_range_profile(request)
+    _require_scale_bits(scale_bits)
+    _require_surd_axis(radicands)
+    if type(limit) is not int or not 1 <= limit <= MAX_RANGE_LENGTH:
+        raise OperationDomainValidationError(
+            location=("limit",),
+            code="diophantine.limit_out_of_range",
+            message=(f"limit must be an integer between 1 and {MAX_RANGE_LENGTH}"),
+        )
+    _range_admission(radicands, limit, scale_bits)
+    return _compute_range_profile(radicands, limit, scale_bits)
 
 
-def record_minima(request: RecordMinimaRequest) -> RecordMinimaResult:
+def record_minima(
+    radicands: tuple[int, ...], limit: int, scale_bits: int
+) -> RecordMinimaResult:
     """Extract strict record minima, or report the first unseparated comparison.
 
-    A new strict record requires its product enclosure to lie strictly below
-    every prior incumbent enclosure.  When an enclosure overlaps the incumbent
-    the comparison is mathematically undecided at this precision, so the result
-    reports ``UNRESOLVED`` with both enclosures instead of guessing an order.
+    A new strict record requires its product enclosure to lie at or below the
+    prior incumbent's lower endpoint.  Equality is sufficient because the
+    irrational products lie strictly inside their outward enclosures.  When
+    the enclosures overlap beyond that endpoint the comparison is undecided at
+    this precision, so the result reports ``UNRESOLVED`` instead of guessing.
     """
 
-    _require_scale_bits(request.scale_bits)
-    _require_surd_axis(request.radicands)
-    profile_request = RangeProfileRequest(
-        radicands=request.radicands,
-        limit=request.limit,
-        scale_bits=request.scale_bits,
-    )
-    _range_admission(profile_request)
-    profile = _compute_range_profile(
-        RangeProfileRequest(
-            radicands=request.radicands,
-            limit=request.limit,
-            scale_bits=request.scale_bits,
-        )
-    )
+    profile = range_profile(radicands, limit, scale_bits)
     records: list[RecordMinimumValue] = []
     incumbent: ClosedRationalInterval | None = None
     incumbent_lower = Fraction(0)
     for row in profile.rows:
+        request_checkpoint("during quadratic-surd record scan")
         candidate = row.product_enclosure
         candidate_lower = candidate.lower.as_fraction()
         candidate_upper = candidate.upper.as_fraction()
         if incumbent is None:
             records.append(
-                RecordMinimumValue(
+                RecordMinimumValue._from_kernel(
                     multiplier=row.multiplier,
                     product_enclosure=candidate,
                     incumbent_enclosure=candidate,
@@ -378,9 +387,9 @@ def record_minima(request: RecordMinimaRequest) -> RecordMinimaResult:
             incumbent = candidate
             incumbent_lower = candidate_lower
             continue
-        if candidate_upper < incumbent_lower:
+        if candidate_upper <= incumbent_lower:
             records.append(
-                RecordMinimumValue(
+                RecordMinimumValue._from_kernel(
                     multiplier=row.multiplier,
                     product_enclosure=candidate,
                     incumbent_enclosure=incumbent,
@@ -391,17 +400,16 @@ def record_minima(request: RecordMinimaRequest) -> RecordMinimaResult:
             continue
         incumbent_upper = incumbent.upper.as_fraction()
         if incumbent_upper <= candidate_lower:
-            # The candidate is provably no smaller than the incumbent.  This
-            # includes touching intervals: equality is not a strict record.
+            # The candidate is provably no smaller than the incumbent.
             continue
         # The intervals overlap (or the candidate reaches below the incumbent
         # while its lower endpoint does not establish a new record).  Either
         # ordering is possible at this precision, so make no record claim.
         if candidate_lower < incumbent_upper:
-            return RecordMinimaResult(
-                radicands=request.radicands,
-                limit=request.limit,
-                scale_bits=request.scale_bits,
+            return RecordMinimaResult._from_kernel(
+                radicands=radicands,
+                limit=limit,
+                scale_bits=scale_bits,
                 outcome="UNRESOLVED",
                 records=tuple(records),
                 unresolved_multiplier=row.multiplier,
@@ -409,10 +417,10 @@ def record_minima(request: RecordMinimaRequest) -> RecordMinimaResult:
                 unresolved_incumbent_enclosure=incumbent,
             )
         raise AssertionError("record interval comparison was not classified")
-    return RecordMinimaResult(
-        radicands=request.radicands,
-        limit=request.limit,
-        scale_bits=request.scale_bits,
+    return RecordMinimaResult._from_kernel(
+        radicands=radicands,
+        limit=limit,
+        scale_bits=scale_bits,
         outcome="COMPLETE",
         records=tuple(records),
         finite_argmin=records[-1].multiplier,

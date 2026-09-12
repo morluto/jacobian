@@ -868,6 +868,39 @@ def _fraction_digits(value: Fraction) -> int:
     )
 
 
+def _translated_max_digits(
+    origin: tuple[Fraction, Fraction],
+    points: tuple[tuple[Fraction, Fraction], ...],
+) -> int:
+    return max(
+        max(
+            _fraction_digits(point[0] - origin[0]),
+            _fraction_digits(point[1] - origin[1]),
+        )
+        for point in points
+    )
+
+
+def _minimum_height_origin(
+    points: tuple[tuple[Fraction, Fraction], ...],
+) -> tuple[Fraction, Fraction]:
+    """Choose a source origin that minimises translated coordinate height.
+
+    The selected origin is independent of source order: among origins that
+    attain the same translated digit height, the lexicographically least
+    coordinate pair is kept.
+    """
+
+    return min(
+        points,
+        key=lambda origin: (
+            _translated_max_digits(origin, points),
+            origin[0],
+            origin[1],
+        ),
+    )
+
+
 def spanned_circle_profile(
     configuration: PointConfiguration,
 ) -> SpannedCircleProfileResult:
@@ -875,7 +908,7 @@ def spanned_circle_profile(
 
     points = _admit_spanned_circle_source(configuration)
     point_values = _points_to_fractions(points)
-    origin = point_values[0]
+    origin = _minimum_height_origin(point_values)
     translated = tuple(
         (point[0] - origin[0], point[1] - origin[1]) for point in point_values
     )

@@ -51,8 +51,8 @@ CONFIGURATION_OPERATIONS: MathTools = (
         title="Compute the exact spanned-circle incidence profile",
         description=(
             "Given a bounded labelled PointConfiguration (3..32 planar points, "
-            "each coordinate at most 256 digits after translating by a source "
-            "point, collinearity work C(n,3)*max_digits^2 plus circumcircle "
+            "each coordinate at most 256 digits after translating by a "
+            "minimum-height source origin, collinearity work C(n,3)*max_digits^2 plus circumcircle "
             "construction per non-collinear triple plus incidence work "
             "n*(distinct circles)*max_digits^2 at most 2000000, at most C(n,3) "
             "circle rows and globally 4960), enumerate every distinct circle "

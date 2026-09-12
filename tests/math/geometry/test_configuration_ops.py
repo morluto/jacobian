@@ -332,6 +332,31 @@ class TestSpannedCircleProfile:
         )
         assert result.circles == ()
 
+    def test_collinear_reciprocals_are_admitted_independent_of_source_order(
+        self,
+    ) -> None:
+        denominators: list[int] = []
+        candidate = 10**10 + 19
+        while len(denominators) < 31:
+            limit = int(candidate**0.5)
+            if all(candidate % prime for prime in range(3, limit + 1, 2)):
+                denominators.append(candidate)
+            candidate += 2
+        origin_first = (
+            _point("0", "0"),
+            *(_point(f"1/{denominator}", "0") for denominator in denominators),
+        )
+        reciprocal_first = (
+            _point(f"1/{denominators[0]}", "0"),
+            _point("0", "0"),
+            *(_point(f"1/{denominator}", "0") for denominator in denominators[1:]),
+        )
+        for points in (origin_first, reciprocal_first):
+            result = spanned_circle_profile(
+                SpannedCircleProfileRequest(configuration=_configuration(*points))
+            )
+            assert result.circles == ()
+
     def test_translated_large_origin_is_admitted_after_shift(self) -> None:
         shift = 10**256
         points = (

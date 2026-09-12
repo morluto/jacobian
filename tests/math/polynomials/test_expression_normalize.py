@@ -1,5 +1,7 @@
 """Typed polynomial expression normalization tests."""
 
+from fractions import Fraction
+from math import comb
 from typing import Any
 
 import pytest
@@ -78,8 +80,8 @@ def test_constant_axis_and_exact_cancellation_are_preserved() -> None:
     assert result.polynomial.polynomial.terms == ()
 
 
-def test_many_rational_denominators_are_admitted_conservatively() -> None:
-    """Height admission accounts for denominator accumulation in additions."""
+def test_many_distinct_rational_denominators_are_rejected() -> None:
+    """Distinct denominators still charge their common-denominator growth."""
 
     def tree(start: int, count: int) -> dict[str, Any]:
         if count == 1:
@@ -96,6 +98,30 @@ def test_many_rational_denominators_are_admitted_conservatively() -> None:
     request = _request("QQ", tree(0, 128))
     with pytest.raises(OperationResourceAdmissionError):
         normalize_polynomial_expression(request)
+
+
+def test_many_shared_nonunit_denominators_are_admitted() -> None:
+    """A shared denominator is paid for once across a wide addition."""
+
+    denominator = 10**127 + 1
+    literal = {
+        "kind": "LITERAL",
+        "value": {"num": 1, "den": denominator},
+    }
+
+    def tree(count: int) -> dict[str, Any]:
+        if count == 1:
+            return literal
+        half = count // 2
+        return {
+            "kind": "ADD",
+            "operands": [tree(half), tree(half)],
+        }
+
+    result = normalize_polynomial_expression(_request("QQ", tree(128)))
+    assert [
+        term.coefficient.as_fraction() for term in result.polynomial.polynomial.terms
+    ] == [Fraction(128, denominator)]
 
 
 def test_many_integral_addends_use_per_coefficient_height() -> None:
@@ -117,6 +143,62 @@ def test_many_integral_addends_use_per_coefficient_height() -> None:
     assert (
         result.polynomial.polynomial.terms[0].coefficient.as_fraction() == 128 * 10**127
     )
+
+
+def test_low_dimensional_power_uses_attainable_support() -> None:
+    """A binomial power is represented by its 12 attainable monomials."""
+
+    expression = {
+        "kind": "MULTIPLY",
+        "operands": [
+            {
+                "kind": "POWER",
+                "base": {
+                    "kind": "LITERAL",
+                    "value": {"num": 10**127, "den": 1},
+                },
+                "exponent": 32,
+            },
+            {
+                "kind": "POWER",
+                "base": {
+                    "kind": "ADD",
+                    "operands": [
+                        {"kind": "VARIABLE", "name": "x"},
+                        {"kind": "LITERAL", "value": {"num": 1, "den": 1}},
+                    ],
+                },
+                "exponent": 11,
+            },
+        ],
+    }
+
+    result = normalize_polynomial_expression(_request("ZZ", expression))
+    scale = 10 ** (127 * 32)
+    assert [term.exponents for term in result.polynomial.polynomial.terms] == [
+        (exponent,) for exponent in range(11, -1, -1)
+    ]
+    assert [
+        term.coefficient.as_fraction() for term in result.polynomial.polynomial.terms
+    ] == [scale * comb(11, exponent) for exponent in range(11, -1, -1)]
+
+
+def test_expansion_work_is_charged_separately_from_support() -> None:
+    """A small one-variable result can still exceed convolution work."""
+
+    expression = {
+        "kind": "POWER",
+        "base": {
+            "kind": "ADD",
+            "operands": [
+                {"kind": "VARIABLE", "name": "x"},
+                {"kind": "LITERAL", "value": {"num": 1, "den": 1}},
+            ],
+        },
+        "exponent": 32,
+    }
+    with pytest.raises(OperationResourceAdmissionError):
+        normalize_polynomial_expression(_request("ZZ", expression))
 
 
 def test_large_exact_result_is_rejected_before_expansion() -> None:

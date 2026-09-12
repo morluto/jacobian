@@ -22,6 +22,7 @@ from jacobian.math.graphs.values import SimpleUndirectedGraph
 __all__ = [
     "construct_all_clique_candidate_hypergraph",
     "convert_candidate_cliques",
+    "verify_clique_candidate_hypergraph",
 ]
 
 
@@ -155,6 +156,39 @@ def convert_candidate_cliques(
         validated.append(members)
     resource_map, resource_of = _resource_plan(graph)
     return _candidate_hypergraph(graph, resource_map, resource_of, tuple(validated))
+
+
+def verify_clique_candidate_hypergraph(
+    claim: CliqueCandidateHypergraphResult,
+) -> bool:
+    """Check that every candidate support matches its source clique members.
+
+    Result deserialization checks the candidate and resource axes, but leaves
+    this defining relation to the consumer that relies on it.  The check is
+    bounded by the already parsed candidate and hypergraph envelopes.
+    """
+
+    try:
+        resources = {entry.resource: entry.endpoints for entry in claim.resource_map}
+        resource_for_edge = {
+            endpoints: resource for resource, endpoints in resources.items()
+        }
+        hyperedges = dict(claim.hypergraph.edges)
+        if set(hyperedges) != {entry.candidate for entry in claim.candidate_map}:
+            return False
+        for entry in claim.candidate_map:
+            expected_resources = tuple(
+                sorted(
+                    resource_for_edge[_ordered((left, right))]
+                    for index, left in enumerate(entry.members)
+                    for right in entry.members[index + 1 :]
+                )
+            )
+            if hyperedges[entry.candidate] != expected_resources:
+                return False
+        return True
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return False
 
 
 def construct_all_clique_candidate_hypergraph(

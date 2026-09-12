@@ -188,8 +188,13 @@ def _networkx_automorphisms(
 
     import networkx.algorithms.isomorphism as iso
 
+    class _CheckpointingGraphMatcher(iso.GraphMatcher):
+        def semantic_feasibility(self, g1_node: Any, g2_node: Any) -> bool:
+            request_checkpoint("during full graph automorphism candidate search")
+            return bool(super().semantic_feasibility(g1_node, g2_node))
+
     source = _networkx_graph(graph, vertices, refinement)
-    matcher = iso.GraphMatcher(
+    matcher = _CheckpointingGraphMatcher(
         source,
         source,
         node_match=iso.categorical_node_match("color", _UNCOLORED),
@@ -272,7 +277,7 @@ def _special_path_or_cycle(
     edges: set[tuple[int, int]],
 ) -> tuple[tuple[tuple[int, ...], ...], int] | None:
     n = len(vertices)
-    if graph.vertex_colors or graph.edge_colors or n < 3:
+    if not _uniform(graph.vertex_colors) or not _uniform(graph.edge_colors) or n < 3:
         return None
     adjacency = _indexed_adjacency(n, edges)
     if len(edges) == n - 1 and sorted(map(len, adjacency.values())) == [

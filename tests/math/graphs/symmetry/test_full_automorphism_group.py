@@ -1,8 +1,16 @@
 """Full color-preserving graph automorphism group tests."""
 
+from itertools import pairwise
+from threading import Event
+
 import pytest
 
-from jacobian._execution import OperationExecutionTimeoutError
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+    request_cancellation,
+    request_checkpoint,
+)
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -124,6 +132,28 @@ def test_edge_colors_can_break_an_uncolored_cycle_symmetry() -> None:
     assert result.generators == ()
 
 
+@pytest.mark.parametrize("family", ["path", "cycle"])
+@pytest.mark.parametrize("coloring", ["vertex", "edge"])
+def test_uniform_explicit_path_and_cycle_colors_keep_compact_presentations(
+    family: str,
+    coloring: str,
+) -> None:
+    vertices = tuple(f"v{index:02}" for index in range(12))
+    edges = tuple(pairwise(vertices))
+    if family == "cycle":
+        edges += ((vertices[0], vertices[-1]),)
+    graph = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(vertices=vertices, edges=edges),
+        vertex_colors=("same",) * len(vertices) if coloring == "vertex" else (),
+        edge_colors=("same",) * len(edges) if coloring == "edge" else (),
+    )
+
+    result = full_graph_automorphism_group(graph)
+
+    assert result.automorphism_count == (2 if family == "path" else 24)
+    assert len(result.generators) == (1 if family == "path" else 2)
+
+
 def test_vf2_accepts_and_uses_refined_edge_signatures() -> None:
     vertices = tuple("v" + str(index) for index in range(10))
     edges = tuple(
@@ -140,6 +170,31 @@ def test_vf2_accepts_and_uses_refined_edge_signatures() -> None:
 
     assert result.automorphism_count == 1
     assert result.generators == ()
+
+
+def test_vf2_cancellation_is_checked_while_searching_between_matches(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    graph = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(
+            vertices=("a", "b", "c", "d"),
+            edges=(("a", "b"), ("a", "d"), ("b", "c"), ("c", "d")),
+        ),
+        edge_colors=("ab", "ad", "bc", "cd"),
+    )
+    cancelled = Event()
+
+    def checkpoint(stage: str) -> None:
+        request_checkpoint(stage)
+        if stage == "during full graph automorphism search":
+            cancelled.set()
+
+    monkeypatch.setattr(operations, "request_checkpoint", checkpoint)
+    with (
+        request_cancellation(cancelled),
+        pytest.raises(OperationExecutionCancelledError),
+    ):
+        full_graph_automorphism_group(graph)
 
 
 def test_group_and_source_generators_compose_after_result_serialization() -> None:

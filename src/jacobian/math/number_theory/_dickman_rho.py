@@ -321,10 +321,7 @@ def _admit_request(request: DickmanRhoPiecewiseEnclosureParameters) -> int:
             message="target width exponent exceeds the admitted exact preflight bound",
         )
     precision_floor = ExactDyadic(mantissa=1, exponent=-request.precision_bits)
-    if (
-        interval_count > 1
-        and request.target_width.compare(precision_floor) < 0
-    ):
+    if interval_count > 1 and request.target_width.compare(precision_floor) < 0:
         raise OperationResourceAdmissionError(
             location=("target_width", "precision_bits"),
             code="number_theory.dickman_rho.precision_floor",

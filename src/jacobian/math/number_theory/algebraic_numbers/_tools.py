@@ -8,6 +8,11 @@ from jacobian.math.number_theory.algebraic_numbers._models import (
     AlgebraicAdditionRequest,
     AlgebraicMultiplicationRequest,
 )
+from jacobian.math.number_theory.algebraic_numbers._radix_prefix import (
+    RadixPrefixRequest,
+    RadixPrefixResult,
+    radix_prefix,
+)
 from jacobian.math.number_theory.algebraic_numbers.operations import (
     add_quadratic,
     multiply_quadratic,
@@ -27,6 +32,10 @@ def compute_algebraic_multiply(
     return multiply_quadratic(request.left, request.right)
 
 
+def compute_radix_prefix(request: RadixPrefixRequest) -> RadixPrefixResult:
+    return radix_prefix(request)
+
+
 def _element(a_num: int, b_num: int, d: int) -> dict[str, object]:
     return {
         "rational_part": {"num": str(a_num), "den": "1"},
@@ -36,6 +45,37 @@ def _element(a_num: int, b_num: int, d: int) -> dict[str, object]:
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    MathTool(
+        operation_id="algebraic_number.radix_prefix.compute",
+        title="Compute an exact radix prefix of a real algebraic number",
+        description=(
+            "Return the exact base-b prefix of one canonical real algebraic "
+            "value: its integer part and exactly the requested number of "
+            "base-b fractional digits. Rational values use the canonical "
+            "terminating-zero convention; irrational values are compared "
+            "exactly against a scaled defining polynomial, never by binary "
+            "floating point. The result asserts only the requested finite "
+            "prefix."
+        ),
+        request_type=RadixPrefixRequest,
+        result_type=RadixPrefixResult,
+        run=compute_radix_prefix,
+        tags=("algebraic-number", "radix", "exact"),
+        examples=(
+            OperationExample(
+                name="sqrt_two_decimal",
+                description="The first twenty decimal places of sqrt(2).",
+                input={
+                    "value": {
+                        "polynomial": ["1", "0", "-2"],
+                        "real_root_index": 1,
+                    },
+                    "base": 10,
+                    "fractional_places": 20,
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="algebraic_number.add.compute",
         title="Add two elements of Q(sqrt(d))",

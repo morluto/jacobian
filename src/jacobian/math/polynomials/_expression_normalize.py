@@ -618,12 +618,24 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
                 sum(child.total_coefficient_digits for child in child_metrics),
             )
         else:
+            lcm_bits = _denominator_bits(common_denominator)
+            scaled_digits = 0
+            for child in active_metrics:
+                if child.denominator is None or common_denominator is None:
+                    scaled_digits = _MAX_EXPRESSION_TOTAL_COEFFICIENT_DIGITS + 1
+                    break
+                scale = common_denominator // child.denominator
+                scaled_digits = min(
+                    _MAX_EXPRESSION_TOTAL_COEFFICIENT_DIGITS + 1,
+                    scaled_digits
+                    + _representation_digits(
+                        child.support,
+                        child.numerator_bits + _bit_growth(scale),
+                        lcm_bits,
+                    ),
+                )
             total_coefficient_digits = max(
-                _representation_digits(
-                    support,
-                    common_numerator_bits,
-                    _denominator_bits(common_denominator),
-                ),
+                scaled_digits,
                 min(
                     _MAX_EXPRESSION_TOTAL_COEFFICIENT_DIGITS + 1,
                     sum(child.total_coefficient_digits for child in child_metrics)
@@ -640,7 +652,7 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
         )
         if disjoint:
             maximum_denominator_bits = max(
-                *(child.maximum_denominator_bits for child in child_metrics),
+                (child.maximum_denominator_bits for child in child_metrics),
                 default=0,
             )
         else:

@@ -216,6 +216,9 @@ def _factor_index(index: int) -> dict[int, int]:
         for prime, exponent in factors.items()
     ):
         raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    reconstructed = prod(prime**exponent for prime, exponent in factors.items())
+    if reconstructed != index:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
     return factors
 
 

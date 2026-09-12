@@ -311,6 +311,37 @@ def test_disjoint_complete_bipartite_chordless_four_cycles_sum_component_bounds(
     assert len(result.cycles) == 6_050
 
 
+def test_bridged_complete_bipartite_chordless_four_cycles_sum_block_bounds() -> None:
+    def bipartite(
+        prefix: str,
+    ) -> tuple[tuple[str, ...], tuple[str, ...], tuple[tuple[str, str], ...]]:
+        left = tuple(f"{prefix}a{index:02}" for index in range(11))
+        right = tuple(f"{prefix}b{index:02}" for index in range(11))
+        return left, right, tuple((a, b) for a in left for b in right)
+
+    left_p, _right_p, first_edges = bipartite("p")
+    left_q, _right_q, second_edges = bipartite("q")
+    first_vertices = left_p + _right_p
+    second_vertices = left_q + _right_q
+    bridge = (left_p[0], left_q[0]) if left_p[0] < left_q[0] else (left_q[0], left_p[0])
+    graph = SimpleUndirectedGraph(
+        vertices=first_vertices + second_vertices,
+        edges=first_edges + second_edges + (bridge,),
+    )
+
+    result = enumerate_chordless_fixed_length_cycles(graph, 4)
+
+    assert result.cycle_count == 2 * 55 * 55
+    assert len(result.cycles) == 6_050
+
+
+def test_oversized_forged_graph_rejects_before_label_validation() -> None:
+    vertices = tuple(f"v{index}" for index in range(257))
+    graph = SimpleUndirectedGraph.model_construct(vertices=vertices, edges=())
+    with pytest.raises(OperationDomainValidationError, match="at most 256"):
+        enumerate_fixed_length_cycles(graph, 3)
+
+
 def test_empty_clique_family_honors_cancellation_during_assembly(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

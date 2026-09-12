@@ -553,38 +553,46 @@ def _chordless_four_cycle_count(part_sizes: tuple[int, ...]) -> int:
     return count
 
 
-def _core_connected_components(
+def _core_cyclic_blocks(
     core_vertices: tuple[str, ...],
     adjacency_sets: dict[str, set[str]],
 ) -> tuple[tuple[str, ...], ...]:
-    remaining = set(core_vertices)
-    components: list[tuple[str, ...]] = []
-    while remaining:
-        start = min(remaining)
-        remaining.remove(start)
-        stack = [start]
-        found = [start]
-        while stack:
-            vertex = stack.pop()
-            for neighbor in adjacency_sets[vertex]:
-                if neighbor in remaining:
-                    remaining.remove(neighbor)
-                    stack.append(neighbor)
-                    found.append(neighbor)
-        components.append(tuple(sorted(found)))
-    return tuple(components)
+    """Return 2-core biconnected blocks that can contain a simple cycle."""
+
+    backend: nx.Graph[str] = nx.Graph()
+    backend.add_nodes_from(core_vertices)
+    backend.add_edges_from(
+        (vertex, neighbor)
+        for vertex, neighbors in adjacency_sets.items()
+        for neighbor in neighbors
+        if vertex < neighbor
+    )
+    return tuple(
+        tuple(sorted(block))
+        for block in biconnected_components(backend)
+        if len(block) >= 3
+    )
+
+
+def _block_adjacency(
+    block: tuple[str, ...], adjacency_sets: dict[str, set[str]]
+) -> dict[str, set[str]]:
+    block_set = set(block)
+    return {vertex: adjacency_sets[vertex] & block_set for vertex in block}
 
 
 def _chordless_multipartite_cycle_bound(
-    components: tuple[tuple[str, ...], ...],
+    blocks: tuple[tuple[str, ...], ...],
     adjacency_sets: dict[str, set[str]],
     cycle_length: int,
 ) -> int | None:
-    """Exact chordless bound when every core component is complete multipartite."""
+    """Exact chordless bound when every cyclic block is complete multipartite."""
 
     total = 0
-    for component in components:
-        part_sizes = _complete_multipartite_part_sizes(component, adjacency_sets)
+    for block in blocks:
+        part_sizes = _complete_multipartite_part_sizes(
+            block, _block_adjacency(block, adjacency_sets)
+        )
         if part_sizes is None:
             return None
         if cycle_length >= 5:
@@ -616,6 +624,18 @@ def _admit_fixed_cycle_enumeration(
             "cycle_enumeration.graph_type",
             "graph must be a canonical simple undirected graph",
         )
+    vertices = graph.vertices
+    if type(vertices) is not tuple:
+        _reject(
+            "cycle_enumeration.graph_structure",
+            "graph vertices must be a tuple of string labels",
+        )
+    vertex_count = len(vertices)
+    if vertex_count > MAX_VERTICES:
+        _reject(
+            "cycle_enumeration.vertex_bound",
+            f"cycle enumeration supports at most {MAX_VERTICES} vertices",
+        )
     _validate_graph_carrier(graph)
     if type(cycle_length) is not int or not 3 <= cycle_length <= MAX_VERTICES:
         _reject(
@@ -623,11 +643,6 @@ def _admit_fixed_cycle_enumeration(
             f"cycle_length must be an integer in 3..{MAX_VERTICES}",
         )
     vertex_count = len(graph.vertices)
-    if vertex_count > MAX_VERTICES:
-        _reject(
-            "cycle_enumeration.vertex_bound",
-            f"cycle enumeration supports at most {MAX_VERTICES} vertices",
-        )
 
     core_vertices = tuple(sorted(_cycle_core_vertices(graph)))
     core_set = set(core_vertices)
@@ -662,14 +677,14 @@ def _admit_fixed_cycle_enumeration(
         (len(neighbors) for neighbors in adjacency_sets.values()), default=0
     )
     chordless_four_cycle_bound: int | None = None
-    # Induced cycles cannot leave a connected core component. Complete
-    # multipartite components have no induced cycle of length 5 or more,
-    # and their induced 4-cycles are the 2+2 selections from distinct parts.
-    # Summing those exact bounds keeps a disjoint union of cheap bipartite
-    # cores from inheriting a disconnected complete-graph output envelope.
+    # Induced cycles cannot leave a biconnected block. Complete multipartite
+    # blocks have no induced cycle of length 5 or more, and their induced
+    # 4-cycles are the 2+2 selections from distinct parts. Summing those exact
+    # bounds keeps a bridge joining cheap bipartite blocks from inheriting a
+    # disconnected complete-graph output envelope.
     if chordless and cycle_length >= 4:
         multipartite_bound = _chordless_multipartite_cycle_bound(
-            _core_connected_components(core_vertices, adjacency_sets),
+            _core_cyclic_blocks(core_vertices, adjacency_sets),
             adjacency_sets,
             cycle_length,
         )

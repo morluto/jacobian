@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from fractions import Fraction
 
-from jacobian._exact import CanonicalRational, canonical_rational_component_digits
+from jacobian._exact import (
+    MAX_CANONICAL_INTEGER_DIGITS,
+    CanonicalRational,
+    canonical_rational_component_digits,
+)
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -13,6 +17,7 @@ from jacobian.math.polynomials.differential_forms.values import (
     MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS,
     MAX_DIFFERENTIAL_FORM_COMPONENTS,
     MAX_DIFFERENTIAL_FORM_EXPONENT,
+    MAX_DIFFERENTIAL_FORM_TERMS,
     FormComponent,
     PolynomialDifferentialForm,
 )
@@ -50,36 +55,32 @@ def _merged_indices(
     return tuple(sorted((*left, *right))), -1 if inversions % 2 else 1
 
 
-def _admit_coefficient_growth(
-    left: PolynomialDifferentialForm, right: PolynomialDifferentialForm
-) -> None:
+_MergedPair = tuple[FormComponent, FormComponent, tuple[int, ...], int]
+
+
+def _admit_coefficient_growth(pairs: tuple[_MergedPair, ...]) -> None:
     # Bound rational accumulation independently for each differential basis
     # before multiplying coefficients. Summing N fractions of height h costs
     # at most N * (h + 1) decimal digits with an unreduced product denominator.
     projected_digits: dict[tuple[int, ...], int] = {}
-    for first in left.components:
-        for second in right.components:
-            merged = _merged_indices(first.indices, second.indices)
-            if merged is None:
-                continue
-            indices, _ = merged
-            first_terms = first.coefficient.polynomial.terms
-            second_terms = second.coefficient.polynomial.terms
-            products = len(first_terms) * len(second_terms)
-            height = (
-                max(
-                    canonical_rational_component_digits(term.coefficient)
-                    for term in first_terms
-                )
-                + max(
-                    canonical_rational_component_digits(term.coefficient)
-                    for term in second_terms
-                )
-                + 1
+    for first, second, indices, _ in pairs:
+        first_terms = first.coefficient.polynomial.terms
+        second_terms = second.coefficient.polynomial.terms
+        products = len(first_terms) * len(second_terms)
+        height = (
+            max(
+                canonical_rational_component_digits(term.coefficient)
+                for term in first_terms
             )
-            projected_digits[indices] = (
-                projected_digits.get(indices, 0) + products * height
+            + max(
+                canonical_rational_component_digits(term.coefficient)
+                for term in second_terms
             )
+            + 1
+        )
+        projected_digits[indices] = (
+            projected_digits.get(indices, 0) + products * height
+        )
     if (
         any(
             height > MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS
@@ -91,6 +92,39 @@ def _admit_coefficient_growth(
             location=("left", "right"),
             code="differential_form.wedge.coefficient_budget",
             message="wedge coefficient growth exceeds the admitted digit-work or output envelope",
+        )
+
+
+def _admit_output_support(pairs: tuple[_MergedPair, ...]) -> None:
+    """Reserve a conservative support bound before coefficient products exist."""
+
+    projected_support: dict[tuple[int, ...], int] = {}
+    for first, second, indices, _ in pairs:
+        projected_support[indices] = projected_support.get(indices, 0) + (
+            len(first.coefficient.polynomial.terms)
+            * len(second.coefficient.polynomial.terms)
+        )
+    if any(
+        support > MAX_DIFFERENTIAL_FORM_TERMS
+        for support in projected_support.values()
+    ):
+        raise OperationResourceAdmissionError(
+            location=("left", "right"),
+            code="differential_form.wedge.output_budget",
+            message="wedge coefficient support exceeds the bounded output envelope",
+        )
+
+
+def _admit_degree(degree: int) -> None:
+    """Keep an overflowing canonical zero degree a typed resource rejection."""
+
+    if degree.bit_length() <= 3 * MAX_CANONICAL_INTEGER_DIGITS:
+        return
+    if degree >= 10**MAX_CANONICAL_INTEGER_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("left", "degree"),
+            code="differential_form.wedge.degree_budget",
+            message="wedge degree exceeds the canonical integer representation envelope",
         )
 
 
@@ -106,11 +140,19 @@ def wedge(
             message="forms must use one identical ordered variable axis",
         )
     degree = left.degree + right.degree
+    _admit_degree(degree)
     if degree > len(left.variables):
         return PolynomialDifferentialForm(
             variables=left.variables, degree=degree, components=()
         )
-    pair_count = len(left.components) * len(right.components)
+    pairs = tuple(
+        (first, second, indices, sign)
+        for first in left.components
+        for second in right.components
+        if (merged := _merged_indices(first.indices, second.indices)) is not None
+        for indices, sign in (merged,)
+    )
+    pair_count = len(pairs)
     if pair_count > MAX_DIFFERENTIAL_FORM_COMPONENTS * MAX_DIFFERENTIAL_FORM_COMPONENTS:
         raise OperationResourceAdmissionError(
             location=("left", "right"),
@@ -120,8 +162,7 @@ def wedge(
     term_pair_count = sum(
         len(first.coefficient.polynomial.terms)
         * len(second.coefficient.polynomial.terms)
-        for first in left.components
-        for second in right.components
+        for first, second, _, _ in pairs
     )
     if term_pair_count > 1_000_000:
         raise OperationResourceAdmissionError(
@@ -129,12 +170,12 @@ def wedge(
             code="differential_form.wedge.term_budget",
             message="wedge polynomial convolution exceeds the bounded work envelope",
         )
-    _admit_coefficient_growth(left, right)
+    _admit_output_support(pairs)
+    _admit_coefficient_growth(pairs)
     maximum_exponent = max(
         (
             first_term.exponents[axis] + second_term.exponents[axis]
-            for first in left.components
-            for second in right.components
+            for first, second, _, _ in pairs
             for first_term in first.coefficient.polynomial.terms
             for second_term in second.coefficient.polynomial.terms
             for axis in range(len(left.variables))
@@ -148,17 +189,12 @@ def wedge(
             message="wedge coefficient exponents exceed the bounded output envelope",
         )
     aggregate: dict[tuple[int, ...], dict[tuple[int, ...], Fraction]] = {}
-    for first in left.components:
-        for second in right.components:
-            merged = _merged_indices(first.indices, second.indices)
-            if merged is None:
-                continue
-            indices, sign = merged
-            terms = aggregate.setdefault(indices, {})
-            for exponents, coefficient in _multiply_components(
-                first.coefficient, second.coefficient, sign
-            ).items():
-                terms[exponents] = terms.get(exponents, Fraction()) + coefficient
+    for first, second, indices, sign in pairs:
+        terms = aggregate.setdefault(indices, {})
+        for exponents, coefficient in _multiply_components(
+            first.coefficient, second.coefficient, sign
+        ).items():
+            terms[exponents] = terms.get(exponents, Fraction()) + coefficient
     components: list[FormComponent] = []
     for indices in sorted(aggregate):
         terms = {
@@ -168,12 +204,6 @@ def wedge(
         }
         if not terms:
             continue
-        if len(terms) > 256:
-            raise OperationResourceAdmissionError(
-                location=("left", "right"),
-                code="differential_form.wedge.output_budget",
-                message="wedge coefficient support exceeds the bounded output envelope",
-            )
         polynomial_coefficient = RationalPolynomial(
             variables=left.variables,
             polynomial=SparseRationalPolynomial(

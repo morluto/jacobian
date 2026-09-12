@@ -10,12 +10,12 @@ with universal constant
 
 The operation's admission envelope is at most 16,384 atoms, 128 decimal
 digits in each input rational numerator or denominator, and 512 decimal digits
-in every intermediate or result rational numerator or denominator. The
-sample count is admitted as a positive integer with at most 512 decimal digits.
-In this pinned variant, the count occurs once as the exact factor \(n\) in
-\(\sigma^6 n\); the resulting `variance^3*n` product and the final bound are
-also checked against the 512-digit rational envelope, so those derived checks
-can reject a particular count and source law earlier than the field ceiling.
+in every intermediate or result rational numerator or denominator. The sample
+count is a positive exact integer whose JSON field uses the same 512-digit
+representable envelope; admission of a particular \(n\) uses the reduced
+height of the scale-invariant ratio \(C^2\rho^2/(\sigma^6 n)\) rather than an
+independent cutoff on \(n\) itself. Affine rescaling that cancels in that
+ratio is not charged as unreduced \(\sigma^6\) height.
 
 For one finite rational law \(X\) with positive variance and a positive i.i.d.
 sample count \(n\), the operation returns exact rational values
@@ -28,11 +28,11 @@ sample count \(n\), the operation returns exact rational values
 
 and the theorem's explicit Kolmogorov-distance upper bound
 \(C\rho/(\sigma^3\sqrt n)\). The square of the bound is returned exactly;
-its square root is returned as a deterministic outward-rounded interval. A
-non-singleton interval has consecutive endpoints on the \(2^{-p}\) grid,
-where \(p=\texttt{bound\_precision\_bits}\); endpoints may use reduced dyadic
-denominators. When the square root is an exact rational, the interval is the
-allowed singleton \([q,q]\), even when \(q\) is not dyadic.
+its square root is returned as a deterministic outward-rounded interval with
+endpoints on the \(2^{-p}\) grid, where \(p=\texttt{bound\_precision\_bits}\).
+A non-singleton interval uses consecutive dyadic endpoints. When the square
+root is itself a dyadic of that scale, the interval may be the singleton
+\([q,q]\).
 
 The pinned source is I. G. Shevtsova, “An Improvement of Convergence Rate
 Estimates in the Lyapunov Theorem,” *Doklady Mathematics* 82(3) (2010),

@@ -10,11 +10,11 @@ from __future__ import annotations
 
 from fractions import Fraction
 from math import isqrt
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, model_validator
 
-from jacobian._exact import CanonicalRational, ExactInteger
+from jacobian._exact import CanonicalRational, DecimalIntegerEncoding
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -47,14 +47,20 @@ class BerryEsseenRequest(StrictModel):
     """One finite rational law and a positive i.i.d. sample count."""
 
     distribution: FiniteRationalDistribution
-    sample_count: ExactInteger = Field(
+    sample_count: Annotated[
+        int, DecimalIntegerEncoding(max_digits=MAX_RESULT_RATIONAL_DIGITS)
+    ] = Field(
         description=(
             "Positive i.i.d. sample count n with at most "
-            f"{MAX_RESULT_RATIONAL_DIGITS} decimal digits. The exact products "
-            "variance^3*n and the resulting bound remain subject to the same "
-            f"{MAX_RESULT_RATIONAL_DIGITS}-digit admission envelope."
+            f"{MAX_RESULT_RATIONAL_DIGITS} decimal digits. Admission uses the "
+            "reduced height of the standardized bound, not an independent "
+            "cutoff on n; the field digit envelope is the representable limit."
         ),
-        json_schema_extra={"pattern": "^[1-9][0-9]*(?![\\s\\S])"},
+        json_schema_extra={
+            "pattern": (
+                f"^[1-9][0-9]{{0,{MAX_RESULT_RATIONAL_DIGITS - 1}}}(?![\\s\\S])"
+            )
+        },
     )
 
     @model_validator(mode="after")
@@ -130,7 +136,7 @@ class BerryEsseenResult(StrictModel):
             raise _validation_error(
                 "Berry--Esseen universal constant does not match the theorem variant"
             )
-        if not 1 <= self.source.sample_count <= MAX_BERRY_ESSEEN_SAMPLE_COUNT:
+        if self.source.sample_count < 1:
             raise _validation_error(
                 "Berry--Esseen source sample_count is out of bounds"
             )
@@ -186,17 +192,17 @@ class BerryEsseenResult(StrictModel):
             raise _validation_error(
                 "Berry--Esseen outward interval must enclose the squared bound"
             )
-        # An exact rational square root is represented as a singleton, even
-        # when its reduced denominator is not a power of two. Otherwise the
-        # endpoints are consecutive points on the advertised dyadic grid.
+        grid_scale = 1 << self.bound_precision_bits
+        if (lower * grid_scale).denominator != 1 or (
+            upper * grid_scale
+        ).denominator != 1:
+            raise _validation_error(
+                "Berry--Esseen bound endpoints must lie on the "
+                "2^-bound_precision_bits dyadic grid"
+            )
         if lower == upper:
             return self
-        grid_scale = 1 << self.bound_precision_bits
-        if (
-            (lower * grid_scale).denominator != 1
-            or (upper * grid_scale).denominator != 1
-            or upper - lower != Fraction(1, grid_scale)
-        ):
+        if upper - lower != Fraction(1, grid_scale):
             raise _validation_error(
                 "Berry--Esseen non-singleton bound endpoints must be consecutive "
                 "points on the 2^-bound_precision_bits grid"
@@ -250,18 +256,17 @@ def _sqrt_interval(value: Fraction) -> tuple[Fraction, Fraction]:
 
     if value == 0:
         return Fraction(), Fraction()
-    numerator_root = isqrt(value.numerator)
-    denominator_root = isqrt(value.denominator)
-    if numerator_root * numerator_root == value.numerator and (
-        denominator_root * denominator_root == value.denominator
-    ):
-        exact = Fraction(numerator_root, denominator_root)
-        return exact, exact
     scale = 1 << BERRY_ESSEEN_BOUND_BITS
-    scaled_floor = (value.numerator * scale * scale) // value.denominator
+    scaled_numerator = value.numerator * scale * scale
+    if scaled_numerator % value.denominator == 0:
+        exact_scaled = scaled_numerator // value.denominator
+        root = isqrt(exact_scaled)
+        if root * root == exact_scaled:
+            exact = Fraction(root, scale)
+            return exact, exact
+    scaled_floor = scaled_numerator // value.denominator
     lower_numerator = isqrt(scaled_floor)
-    lower = Fraction(lower_numerator, scale)
-    return lower, Fraction(lower_numerator + 1, scale)
+    return Fraction(lower_numerator, scale), Fraction(lower_numerator + 1, scale)
 
 
 def berry_esseen_bound(request: BerryEsseenRequest) -> BerryEsseenResult:
@@ -272,15 +277,6 @@ def berry_esseen_bound(request: BerryEsseenRequest) -> BerryEsseenResult:
             location=("sample_count",),
             code="probability.berry_esseen.nonpositive_sample_count",
             message="Berry--Esseen sample_count must be positive",
-        )
-    if request.sample_count > MAX_BERRY_ESSEEN_SAMPLE_COUNT:
-        raise OperationResourceAdmissionError(
-            location=("sample_count",),
-            code="probability.berry_esseen.sample_count_bound",
-            message=(
-                "Berry--Esseen admission allows sample_count with at most "
-                f"{MAX_RESULT_RATIONAL_DIGITS} decimal digits"
-            ),
         )
     if len(request.distribution.atoms) > MAX_BERRY_ESSEEN_ATOMS:
         raise OperationResourceAdmissionError(
@@ -369,38 +365,12 @@ def berry_esseen_bound(request: BerryEsseenRequest) -> BerryEsseenResult:
             message="the Berry--Esseen theorem requires positive variance",
         )
 
-    variance_squared = _mul(
-        variance,
-        variance,
-        location=location,
-        label="Berry--Esseen variance square",
-    )
-    variance_cubed = _mul(
-        variance_squared,
-        variance,
-        location=location,
-        label="Berry--Esseen variance cube",
-    )
-    third_squared = _mul(
-        third,
-        third,
-        location=location,
-        label="Berry--Esseen third absolute moment square",
-    )
-    denominator = _mul(
-        variance_cubed,
-        Fraction(request.sample_count),
-        location=("sample_count",),
-        label="Berry--Esseen variance cube times sample count",
-    )
-    numerator = _mul(
-        BERRY_ESSEEN_CONSTANT * BERRY_ESSEEN_CONSTANT,
-        third_squared,
-        location=location,
-        label="Berry--Esseen bound numerator",
-    )
+    # Form the scale-invariant ratio with cancellation before height checks.
+    # Affine rescaling inflates variance^3 and rho^2 equally; admitting those
+    # unreduced intermediates would reject cheap standardized bounds.
     bound_squared = _admission_fraction(
-        numerator / denominator,
+        (BERRY_ESSEEN_CONSTANT * BERRY_ESSEEN_CONSTANT * third * third)
+        / (variance * variance * variance * Fraction(request.sample_count)),
         location=("sample_count",),
         label="Berry--Esseen squared bound",
     )

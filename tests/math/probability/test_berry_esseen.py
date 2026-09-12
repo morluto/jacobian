@@ -4,6 +4,7 @@ import json
 from collections.abc import Callable
 from fractions import Fraction
 from importlib import import_module
+from math import isqrt
 from typing import cast
 
 import pytest
@@ -75,10 +76,25 @@ def test_five_atom_oracle_returns_exact_source_moments() -> None:
     )
 
 
+def _dyadic_sqrt_interval(value: Fraction) -> tuple[Fraction, Fraction]:
+    scale = 1 << 64
+    scaled_numerator = value.numerator * scale * scale
+    if scaled_numerator % value.denominator == 0:
+        exact_scaled = scaled_numerator // value.denominator
+        root = isqrt(exact_scaled)
+        if root * root == exact_scaled:
+            exact = Fraction(root, scale)
+            return exact, exact
+    scaled_floor = scaled_numerator // value.denominator
+    lower_numerator = isqrt(scaled_floor)
+    return Fraction(lower_numerator, scale), Fraction(lower_numerator + 1, scale)
+
+
 def test_symmetric_bernoulli_has_exact_single_sample_bound() -> None:
     result = berry_esseen_bound(
         _request(_distribution((0, Fraction(1, 2)), (1, Fraction(1, 2))))
     )
+    lower, upper = _dyadic_sqrt_interval(Fraction(196, 625))
 
     assert result.theorem_variant == BERRY_ESSEEN_THEOREM_VARIANT
     assert result.universal_constant.as_fraction() == BERRY_ESSEEN_CONSTANT
@@ -86,8 +102,11 @@ def test_symmetric_bernoulli_has_exact_single_sample_bound() -> None:
     assert result.variance.as_fraction() == Fraction(1, 4)
     assert result.third_absolute_central_moment.as_fraction() == Fraction(1, 8)
     assert result.bound_squared.as_fraction() == Fraction(196, 625)
-    assert result.bound_lower.as_fraction() == Fraction(14, 25)
-    assert result.bound_upper.as_fraction() == Fraction(14, 25)
+    assert result.bound_lower.as_fraction() == lower
+    assert result.bound_upper.as_fraction() == upper
+    assert lower * lower <= Fraction(196, 625) <= upper * upper
+    assert (lower * (1 << 64)).denominator == 1
+    assert upper - lower == Fraction(1, 1 << 64)
 
 
 def test_asymmetric_bernoulli_and_n_monotonicity() -> None:
@@ -111,17 +130,29 @@ def test_large_positive_count_is_admitted_without_sample_expansion() -> None:
     assert result.bound_squared.as_fraction() == Fraction(196, 625 * 257)
 
 
-def test_native_large_count_is_admitted_when_pinned_growth_fits() -> None:
-    source = _request(_distribution((0, Fraction(1, 2)), (1, Fraction(1, 2))))
-    forged = BerryEsseenRequest.model_construct(
-        distribution=source.distribution,
-        sample_count=10**12 + 1,
+def test_native_trillion_plus_count_is_admitted_from_growth() -> None:
+    result = berry_esseen_bound(
+        _request(
+            _distribution((0, Fraction(1, 2)), (1, Fraction(1, 2))),
+            1_000_000_000_001,
+        )
     )
 
-    result = berry_esseen_bound(forged)
+    assert result.source.sample_count == 1_000_000_000_001
+    assert result.bound_squared.as_fraction() == Fraction(196, 625 * 1_000_000_000_001)
 
-    assert result.source.sample_count == 10**12 + 1
-    assert result.bound_squared.as_fraction() == Fraction(196, 625 * (10**12 + 1))
+
+def test_affine_rescaling_cancels_before_intermediate_height() -> None:
+    result = berry_esseen_bound(
+        _request(_distribution((0, Fraction(1, 2)), (10**100, Fraction(1, 2))))
+    )
+
+    assert result.mean.as_fraction() == Fraction(10**100, 2)
+    assert result.variance.as_fraction() == Fraction(10**200, 4)
+    assert result.bound_squared.as_fraction() == Fraction(196, 625)
+    lower, upper = _dyadic_sqrt_interval(Fraction(196, 625))
+    assert result.bound_lower.as_fraction() == lower
+    assert result.bound_upper.as_fraction() == upper
 
 
 def test_successful_compute_does_not_replay_distribution_admission(
@@ -155,12 +186,29 @@ def test_sample_count_boundary_is_bounded_and_preflighted() -> None:
     with pytest.raises(OperationResourceAdmissionError, match="squared bound"):
         berry_esseen_bound(distribution)
 
-    over_bound = BerryEsseenRequest.model_construct(
-        distribution=distribution.distribution,
-        sample_count=MAX_BERRY_ESSEEN_SAMPLE_COUNT + 1,
-    )
-    with pytest.raises(OperationResourceAdmissionError, match="sample_count"):
-        berry_esseen_bound(over_bound)
+    over_digits = "1" + "0" * 512
+    with pytest.raises(ValueError, match="digit bound"):
+        BerryEsseenRequest.model_validate(
+            {
+                "distribution": _distribution(
+                    (0, Fraction(1, 2)), (1, Fraction(1, 2))
+                ),
+                "sample_count": int(over_digits),
+            }
+        )
+    with pytest.raises(ValueError):
+        BerryEsseenRequest.model_validate_json(
+            json.dumps(
+                {
+                    "distribution": json.loads(
+                        _request(
+                            _distribution((0, Fraction(1, 2)), (1, Fraction(1, 2)))
+                        ).distribution.model_dump_json()
+                    ),
+                    "sample_count": over_digits,
+                }
+            )
+        )
     with pytest.raises(
         OperationDomainValidationError, match="sample_count must be positive"
     ):
@@ -176,8 +224,8 @@ def test_sample_count_uses_the_exact_integer_wire_contract() -> None:
     schema = BerryEsseenRequest.model_json_schema()["properties"]["sample_count"]
 
     assert schema["type"] == "string"
-    assert schema["pattern"].startswith("^[1-9]")
-    assert "maximum" not in schema
+    assert schema["pattern"].startswith("^[1-9]") or "0," in schema["pattern"]
+    assert "511" in schema["pattern"] or schema.get("maxLength") == 513
 
     distribution = json.loads(
         _request(
@@ -281,7 +329,7 @@ def test_result_requires_consecutive_dyadic_grid_endpoints() -> None:
         BerryEsseenResult.model_validate(payload)
 
 
-def test_result_allows_exact_nondyadic_rational_singleton() -> None:
+def test_result_requires_dyadic_singleton_or_consecutive_grid() -> None:
     genuine = berry_esseen_bound(
         _request(_distribution((0, Fraction(1, 2)), (1, Fraction(1, 2))))
     )
@@ -290,9 +338,8 @@ def test_result_allows_exact_nondyadic_rational_singleton() -> None:
     payload["bound_lower"] = {"num": 14, "den": 25}
     payload["bound_upper"] = {"num": 14, "den": 25}
 
-    restored = BerryEsseenResult.model_validate(payload)
-    assert restored.bound_lower == restored.bound_upper
-    assert restored.bound_lower.as_fraction() == Fraction(14, 25)
+    with pytest.raises(ValueError, match="dyadic"):
+        BerryEsseenResult.model_validate(payload)
 
 
 def test_result_enforces_owner_rational_height_bound() -> None:

@@ -87,12 +87,11 @@ def _rectangle(
     )
 
 
-def _root_value(poly: sympy.Poly, root_index: int) -> Any:
+def _root_value(root_index: int, roots: tuple[Any, ...]) -> Any:
     # ``all_roots`` gives SymPy's exact radicals for the low-degree slice.  A
     # RootOf object is intentionally not allowed to reach the distance kernel:
     # SymPy cannot reduce products of independently indexed RootOf values
     # reliably, while the radical expressions have a stable minpoly path.
-    roots = poly.all_roots()
     value = roots[root_index]
     if isinstance(value, sympy.RootOf):
         raise OperationDomainValidationError(
@@ -113,8 +112,9 @@ def _family(
     records: list[RootCriticalRoot] = []
     values: list[Any] = []
     for factor, multiplicity in primitive_factors:
+        exact_roots = tuple(factor.all_roots())
         for root_index in range(factor.degree()):
-            root = _root_value(factor, root_index)
+            root = _root_value(root_index, exact_roots)
             records.append(
                 RootCriticalRoot(
                     axis_index=len(records),
@@ -126,6 +126,39 @@ def _family(
             )
             values.append(root)
     return tuple(records), tuple(values)
+
+
+def _select_real_algebraic_root(minimal: sympy.Poly, distance: Any) -> int:
+    """Select the real minpoly root by certified isolation, not expression identity."""
+
+    if sympy.simplify(distance) == 0:
+        roots = minimal.real_roots()
+        for index, candidate in enumerate(roots):
+            if candidate == 0:
+                return index
+        raise OperationDomainValidationError(
+            location=("pairs",),
+            code="polynomial.root_critical.distance_root_selection",
+            message="exact real distance root could not be selected",
+        )
+    precision = 16
+    intervals = list(minimal.intervals())
+    while precision <= 1024:
+        approximation = sympy.re(distance.evalf(precision))
+        hits = [
+            index
+            for index, ((lower, upper), _multiplicity) in enumerate(intervals)
+            if lower <= approximation <= upper
+        ]
+        if len(hits) == 1:
+            return hits[0]
+        intervals = list(minimal.intervals(eps=sympy.Rational(1, 10**precision)))
+        precision *= 2
+    raise OperationDomainValidationError(
+        location=("pairs",),
+        code="polynomial.root_critical.distance_root_selection",
+        message="exact real distance root could not be selected",
+    )
 
 
 def _distance_value(
@@ -159,21 +192,7 @@ def _distance_value(
             message="exact distance degree exceeds the bounded real-algebraic carrier",
         )
     coefficients = tuple(int(value) for value in minimal.all_coeffs())
-    roots = minimal.real_roots()
-    selected_index = next(
-        (
-            index
-            for index, candidate in enumerate(roots)
-            if sympy.simplify(distance - candidate) == 0
-        ),
-        None,
-    )
-    if selected_index is None:
-        raise OperationDomainValidationError(
-            location=("pairs",),
-            code="polynomial.root_critical.distance_root_selection",
-            message="exact real distance root could not be selected",
-        )
+    selected_index = _select_real_algebraic_root(minimal, distance)
     intervals = minimal.intervals()
     lower, upper = intervals[selected_index][0]
     value = RealAlgebraicValue._from_admitted_polynomial(

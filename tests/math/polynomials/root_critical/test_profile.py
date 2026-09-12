@@ -95,3 +95,11 @@ def test_constant_polynomial_is_outside_profile_domain() -> None:
 
 def test_operation_is_published_with_stable_id() -> None:
     assert TOOLS[0].operation_id == "polynomial.root_critical_distance_profile.compute"
+
+
+def test_request_wire_model_is_not_a_native_export() -> None:
+    import jacobian.math.polynomials.root_critical as package
+
+    assert "RootCriticalDistanceProfileRequest" not in package.__all__
+    profile = root_critical_distance_profile(_polynomial((4, 1), (0, -2)))
+    assert profile.pairs

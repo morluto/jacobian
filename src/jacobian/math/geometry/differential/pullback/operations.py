@@ -124,7 +124,7 @@ def pullback_metric(
     plan = build_plan(metric, map_value)
     request_checkpoint("after complete rational metric pullback admission")
     _recognize_sources((*metric.tensor.components, *map_value.components), deadline)
-    if any(not guard.scalar for guard in plan.guards if guard != plan.determinant):
+    if any(not guard.scalar for guard in plan.guards[:-1]):
         raise OperationDomainValidationError(
             location=("metric",),
             code="differential_geometry.rational_metric.pullback.undefined_metric_locus",
@@ -161,19 +161,19 @@ def pullback_metric(
         noncanonical_message="metric and map components must be reduced canonical rational functions",
     )
     normalized = dict(zip(unique_values, components, strict=True))
-    for value in plan.guards:
+    for value in plan.guards[:-1]:
         if not normalized[value].numerator.terms:
-            if value == plan.determinant:
-                raise OperationDomainValidationError(
-                    location=("metric",),
-                    code="differential_geometry.rational_metric.pullback.singular_metric",
-                    message="metric determinant vanishes identically after substitution",
-                )
             raise OperationDomainValidationError(
                 location=("metric",),
                 code="differential_geometry.rational_metric.pullback.undefined_metric_locus",
                 message="a required metric denominator or chart guard vanishes identically after substitution",
             )
+    if not normalized[plan.determinant].numerator.terms:
+        raise OperationDomainValidationError(
+            location=("metric",),
+            code="differential_geometry.rational_metric.pullback.singular_metric",
+            message="metric determinant vanishes identically after substitution",
+        )
     guards = tuple(
         sparse_rational_polynomial_from_sympy(
             sparse_rational_polynomial_to_sympy(

@@ -370,7 +370,16 @@ def test_five_source_coordinates_pull_back_a_one_dimensional_metric() -> None:
 
 
 def test_unreduced_map_is_noncanonical_before_vanishing_locus() -> None:
-    source = metric((1 / (symbols("u") - 1),), ("u",))
+    u = symbols("u")
+    component = rf(1 / (u - 1), ("u",))
+    source = RationalCoordinateMetric(
+        tensor=RationalCoordinateTensor(
+            coordinate_axis=("u",),
+            variance=("COVARIANT", "COVARIANT"),
+            components=(component,),
+            retained_nonzero_denominators=(component.denominator,),
+        )
+    )
     monomial = SparseRationalPolynomial(
         terms=(
             RationalPolynomialTerm(

@@ -11,14 +11,18 @@ from __future__ import annotations
 
 from typing import Annotated, Literal, Self
 
-from pydantic import AfterValidator, Field, model_validator
+from pydantic import AfterValidator, Field, WithJsonSchema, model_validator
+from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.graphs.multigraph._models import MAX_EDGES, LooplessMultigraph
-from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
+from jacobian.math.graphs.values import (
+    MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
+    IndexedSimpleUndirectedGraph,
+)
 
-MAX_BLOCK_CUT_TREE_VERTICES = 256
+MAX_BLOCK_CUT_TREE_VERTICES = MAX_INDEXED_SIMPLE_GRAPH_VERTICES
 
 
 def _require_decomposition_graph(
@@ -51,9 +55,22 @@ def _require_block_cut_graph(
     return graph
 
 
+def _block_cut_graph_schema() -> JsonSchemaValue:
+    schema = IndexedSimpleUndirectedGraph.model_json_schema()
+    schema["description"] = (
+        "A finite simple indexed graph accepted by block-cut decomposition: "
+        f"at most {MAX_BLOCK_CUT_TREE_VERTICES} vertices."
+    )
+    schema["properties"]["vertex_count"].update(
+        maximum=MAX_BLOCK_CUT_TREE_VERTICES,
+    )
+    return schema
+
+
 _BlockCutGraph = Annotated[
     IndexedSimpleUndirectedGraph,
     AfterValidator(_require_block_cut_graph),
+    WithJsonSchema(_block_cut_graph_schema()),
 ]
 
 

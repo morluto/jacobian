@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from math import gcd
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, model_validator
@@ -256,19 +257,34 @@ def _admit_gcd_support(support: Support) -> Support:
     return support
 
 
-def _bounding_box_term_count(polynomial: Polynomial) -> int:
-    """Bound monomials that exact division of this Laurent polynomial can retain."""
+def _axis_stride(exponents: list[int]) -> int:
+    origin = min(exponents)
+    stride = 0
+    for value in exponents:
+        stride = gcd(stride, value - origin)
+    return stride or 1
 
-    if not polynomial:
+
+def _quotient_support_term_count(
+    numerator: Polynomial, denominator: Polynomial
+) -> int:
+    """Bound reduced quotient support, preserving per-axis exponent stride."""
+
+    if not numerator or not denominator:
         return 0
-    axis = len(next(iter(polynomial)))
+    axis = len(next(iter(numerator)))
     total = 1
     for index in range(axis):
-        exponents = [support[index] for support in polynomial]
-        width = max(exponents) - min(exponents) + 1
-        if width > MAX_TRIG_LAURENT_TERMS or total > MAX_TRIG_LAURENT_TERMS // width:
+        n_exps = [support[index] for support in numerator]
+        d_exps = [support[index] for support in denominator]
+        stride = gcd(_axis_stride(n_exps), _axis_stride(d_exps))
+        width = (max(n_exps) - min(n_exps)) - (max(d_exps) - min(d_exps))
+        if width < 0:
+            width = max(n_exps) - min(n_exps)
+        count = width // stride + 1
+        if count > MAX_TRIG_LAURENT_TERMS or total > MAX_TRIG_LAURENT_TERMS // count:
             return MAX_TRIG_LAURENT_TERMS + 1
-        total *= width
+        total *= count
     return total
 
 
@@ -508,9 +524,8 @@ def _reduce_common_laurent_factor(
         return _canonicalize(unit, unit)
     if len(shifted_numerator) * len(shifted_denominator) > MAX_TRIG_LAURENT_TERMS:
         _refuse_growth()
-    if (
-        _bounding_box_term_count(shifted_numerator) > MAX_TRIG_LAURENT_TERMS
-        or _bounding_box_term_count(shifted_denominator) > MAX_TRIG_LAURENT_TERMS
+    if _quotient_support_term_count(shifted_numerator, shifted_denominator) > (
+        MAX_TRIG_LAURENT_TERMS
     ):
         _refuse_growth()
 

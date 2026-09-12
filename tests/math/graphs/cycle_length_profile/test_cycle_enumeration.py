@@ -18,6 +18,7 @@ from jacobian.math.graphs.cycle_length_profile import operations as cycle_operat
 from jacobian.math.graphs.cycle_length_profile._models import (
     CycleFamilyKind,
     FixedLengthCycleEnumerationResult,
+    is_dihedral_canonical_cycle,
 )
 from jacobian.math.graphs.cycle_length_profile._tools import TOOLS
 from jacobian.math.graphs.cycle_length_profile.operations import (
@@ -271,6 +272,28 @@ def test_complete_graph_chordless_four_cycles_are_empty_without_simple_bound() -
     assert result.family_kind is CycleFamilyKind.CHORDLESS
     assert len(result.vertex_incidence) == 22
     assert len(result.edge_incidence) == 231
+
+
+def test_complete_bipartite_chordless_six_cycles_are_empty() -> None:
+    left = tuple(f"a{index}" for index in range(8))
+    right = tuple(f"b{index}" for index in range(8))
+    vertices = left + right
+    graph = SimpleUndirectedGraph(
+        vertices=vertices,
+        edges=tuple((a, b) for a in left for b in right),
+    )
+
+    result = enumerate_chordless_fixed_length_cycles(graph, 6)
+
+    assert result.cycles == ()
+    assert result.cycle_count == 0
+    assert result.family_kind is CycleFamilyKind.CHORDLESS
+
+
+def test_cycle_canonicality_uses_the_minimum_vertex_and_two_orientations() -> None:
+    assert not is_dihedral_canonical_cycle(("c", "a", "b"))
+    assert is_dihedral_canonical_cycle(("a", "b", "c"))
+    assert not is_dihedral_canonical_cycle(("a", "c", "b"))
 
 
 def test_incidence_assembly_honors_cancellation_after_search(

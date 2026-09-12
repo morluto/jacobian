@@ -21,6 +21,7 @@ from jacobian.math.graphs.cycle_length_profile._models import (
     CycleLengthProfileResult,
     CycleLengthRow,
     FixedLengthCycleEnumerationResult,
+    dihedral_canonical_cycle,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -405,11 +406,8 @@ def _find_cycle_of_length(
 
 def _canonicalize_cycle(cycle: tuple[str, ...]) -> tuple[str, ...]:
     """Return the lexicographically smallest rotation in either orientation."""
-    n = len(cycle)
-    rotations = [cycle[i:] + cycle[:i] for i in range(n)]
-    reversed_cycle = (cycle[0], *reversed(cycle[1:]))
-    rotations.extend(reversed_cycle[i:] + reversed_cycle[:i] for i in range(n))
-    return min(rotations)
+
+    return dihedral_canonical_cycle(cycle)
 
 
 def enumerate_fixed_length_cycles(
@@ -517,6 +515,28 @@ class _FixedCyclePlan:
     core_vertices: tuple[str, ...]
 
 
+def _core_is_complete_multipartite(
+    core_vertices: tuple[str, ...],
+    adjacency_sets: dict[str, set[str]],
+) -> bool:
+    """Return whether the 2-core is a complete multipartite graph."""
+
+    if not core_vertices:
+        return True
+    vertex_set = set(core_vertices)
+    parts: dict[frozenset[str], set[str]] = {}
+    for vertex in core_vertices:
+        neighbors = frozenset(adjacency_sets[vertex])
+        parts.setdefault(neighbors, set()).add(vertex)
+    for neighbors, part in parts.items():
+        expected_neighbors = vertex_set - part
+        if neighbors != expected_neighbors:
+            return False
+        if any(adjacency_sets[vertex] != expected_neighbors for vertex in part):
+            return False
+    return True
+
+
 def _reject_fixed_cycle_resource(code: str, message: str) -> None:
     raise OperationResourceAdmissionError(
         location=("cycle_length",), code=code, message=message
@@ -585,6 +605,24 @@ def _admit_fixed_cycle_enumeration(
     max_core_degree = max(
         (len(neighbors) for neighbors in adjacency_sets.values()), default=0
     )
+    # Complete-multipartite 2-cores (cliques, complete bipartite graphs, ...)
+    # have no induced cycle of length 5 or more: every longer simple cycle
+    # uses a nonconsecutive cross-part edge. Detecting that partition is
+    # linear in the core adjacency and returns the exact empty chordless
+    # family instead of inheriting a complete-graph traversal bound.
+    if (
+        chordless
+        and cycle_length >= 5
+        and _core_is_complete_multipartite(core_vertices, adjacency_sets)
+    ):
+        _admit_fixed_cycle_result(
+            graph,
+            cycle_length,
+            cycle_upper_bound=0,
+            source_characters=source_characters,
+            largest_label=largest_label,
+        )
+        return None
     # A complete 2-core is a clique: every simple k-cycle with k >= 4 has a
     # chord. Chordless enumeration therefore returns the empty family after a
     # linear core inspection instead of inheriting the all-simple-cycle bound.

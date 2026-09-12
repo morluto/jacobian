@@ -17,6 +17,23 @@ from jacobian.math.graphs.values import (
 MAX_VERTICES = MAX_SIMPLE_GRAPH_VERTICES
 
 
+def dihedral_canonical_cycle(cycle: tuple[str, ...]) -> tuple[str, ...]:
+    """Rotate to the unique minimum vertex and keep the lex-smaller orientation."""
+
+    min_index = min(range(len(cycle)), key=cycle.__getitem__)
+    rotated = cycle[min_index:] + cycle[:min_index]
+    reversed_orientation = (rotated[0], *reversed(rotated[1:]))
+    if reversed_orientation < rotated:
+        return reversed_orientation
+    return rotated
+
+
+def is_dihedral_canonical_cycle(cycle: tuple[str, ...]) -> bool:
+    """Return whether ``cycle`` is already in dihedral-canonical form."""
+
+    return cycle == dihedral_canonical_cycle(cycle)
+
+
 class CycleLengthProfileRequest(StrictModel):
     """Request for the simple-cycle length profile of a graph."""
 
@@ -47,16 +64,7 @@ class CycleLengthRow(StrictModel):
                 "cycle_profile.witness_vertices_must_be_distinct",
                 "cycle witnesses must have distinct vertices",
             )
-        rotations = [
-            self.witness[index:] + self.witness[:index]
-            for index in range(len(self.witness))
-        ]
-        reversed_witness = (self.witness[0], *reversed(self.witness[1:]))
-        rotations.extend(
-            reversed_witness[index:] + reversed_witness[:index]
-            for index in range(len(self.witness))
-        )
-        if self.witness != min(rotations):
+        if not is_dihedral_canonical_cycle(self.witness):
             raise PydanticCustomError(
                 "cycle_profile.witness_must_be_canonical",
                 "cycle witnesses must use canonical rotation and orientation",
@@ -204,13 +212,7 @@ class FixedLengthCycleEnumerationResult(StrictModel):
                     "cycle_enumeration.cycle_edges_invalid",
                     "every cycle must close through declared graph edges",
                 )
-            rotations = [cycle[index:] + cycle[:index] for index in range(len(cycle))]
-            reversed_cycle = (cycle[0], *reversed(cycle[1:]))
-            rotations.extend(
-                reversed_cycle[index:] + reversed_cycle[:index]
-                for index in range(len(cycle))
-            )
-            if cycle != min(rotations):
+            if not is_dihedral_canonical_cycle(cycle):
                 raise PydanticCustomError(
                     "cycle_enumeration.cycle_must_be_canonical",
                     "cycles must use canonical rotation and orientation",
@@ -307,4 +309,6 @@ __all__ = [
     "CycleLengthRow",
     "FixedLengthCycleEnumerationRequest",
     "FixedLengthCycleEnumerationResult",
+    "dihedral_canonical_cycle",
+    "is_dihedral_canonical_cycle",
 ]

@@ -10,7 +10,9 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.probability._compound_poisson import (
+    CompoundPoissonCumulantRequest,
     CompoundPoissonCumulantSource,
+    MAX_COMPOUND_POISSON_ATOMS,
     compound_poisson_cumulant_prefix,
 )
 from jacobian.math.probability._distribution import (
@@ -34,11 +36,7 @@ def test_compound_poisson_cumulants_are_intensity_times_jump_moments() -> None:
             ),
         )
     )
-    result = compound_poisson_cumulant_prefix(
-        CompoundPoissonCumulantSource(
-            intensity=_q(Fraction(3, 2)), jump_distribution=jumps, max_order=4
-        )
-    )
+    result = compound_poisson_cumulant_prefix(_q(Fraction(3, 2)), jumps, 4)
     assert [row.jump_raw_moment.as_fraction() for row in result.cumulants] == [
         1,
         2,
@@ -59,11 +57,7 @@ def test_order_zero_returns_empty_prefix_without_a_pmf() -> None:
             FiniteDistributionAtom(value=_q(Fraction(1)), probability=_q(Fraction(1))),
         )
     )
-    result = compound_poisson_cumulant_prefix(
-        CompoundPoissonCumulantSource(
-            intensity=_q(Fraction()), jump_distribution=jumps, max_order=0
-        )
-    )
+    result = compound_poisson_cumulant_prefix(_q(Fraction()), jumps, 0)
     assert result.cumulants == ()
 
 
@@ -77,13 +71,7 @@ def test_intensity_growth_is_admitted_before_cumulant_construction() -> None:
         )
     )
     with pytest.raises(OperationResourceAdmissionError):
-        compound_poisson_cumulant_prefix(
-            CompoundPoissonCumulantSource(
-                intensity=_q(Fraction(large)),
-                jump_distribution=jumps,
-                max_order=128,
-            )
-        )
+        compound_poisson_cumulant_prefix(_q(Fraction(large)), jumps, 128)
 
 
 def test_zero_intensity_and_signed_deterministic_jumps() -> None:
@@ -94,11 +82,7 @@ def test_zero_intensity_and_signed_deterministic_jumps() -> None:
             ),
         )
     )
-    result = compound_poisson_cumulant_prefix(
-        CompoundPoissonCumulantSource(
-            intensity=_q(Fraction(2)), jump_distribution=jumps, max_order=4
-        )
-    )
+    result = compound_poisson_cumulant_prefix(_q(Fraction(2)), jumps, 4)
     assert [row.jump_raw_moment.as_fraction() for row in result.cumulants] == [
         Fraction(-3, 2),
         Fraction(9, 4),
@@ -112,20 +96,34 @@ def test_zero_intensity_and_signed_deterministic_jumps() -> None:
         Fraction(81, 8),
     ]
 
-    zero = compound_poisson_cumulant_prefix(
-        CompoundPoissonCumulantSource(
-            intensity=_q(Fraction()), jump_distribution=jumps, max_order=4
-        )
-    )
+    zero = compound_poisson_cumulant_prefix(_q(Fraction()), jumps, 4)
     assert all(row.cumulant.as_fraction() == 0 for row in zero.cumulants)
 
 
-def test_native_boundary_rejects_non_request_values_with_owner_error() -> None:
-    with pytest.raises(OperationDomainValidationError) as exc_info:
-        compound_poisson_cumulant_prefix({})  # type: ignore[arg-type]
+def test_native_boundary_rejects_non_value_arguments_with_owner_error() -> None:
+    jumps = FiniteRationalDistribution(
+        atoms=(
+            FiniteDistributionAtom(value=_q(Fraction(1)), probability=_q(Fraction(1))),
+        )
+    )
+    with pytest.raises(OperationDomainValidationError) as intensity_error:
+        compound_poisson_cumulant_prefix({}, jumps, 1)  # type: ignore[arg-type]
     assert (
-        exc_info.value.errors()[0]["type"]
-        == "probability.compound_poisson.request_type"
+        intensity_error.value.errors()[0]["type"]
+        == "probability.compound_poisson.intensity_type"
+    )
+
+    with pytest.raises(OperationDomainValidationError) as request_error:
+        compound_poisson_cumulant_prefix(
+            CompoundPoissonCumulantRequest(
+                intensity=_q(Fraction(1)), jump_distribution=jumps, max_order=1
+            ),  # type: ignore[arg-type]
+            jumps,
+            1,
+        )
+    assert (
+        request_error.value.errors()[0]["type"]
+        == "probability.compound_poisson.intensity_type"
     )
 
 
@@ -138,24 +136,61 @@ def test_semantic_admission_rejects_negative_rate_and_unnormalized_jumps() -> No
         )
     )
     with pytest.raises(OperationDomainValidationError) as rate_error:
-        compound_poisson_cumulant_prefix(
-            CompoundPoissonCumulantSource(
-                intensity=_q(Fraction(-1)), jump_distribution=jumps, max_order=1
-            )
-        )
+        compound_poisson_cumulant_prefix(_q(Fraction(-1)), jumps, 1)
     assert rate_error.value.errors()[0]["type"] == (
         "probability.compound_poisson.nonnegative_intensity"
     )
 
     with pytest.raises(OperationDomainValidationError) as mass_error:
-        compound_poisson_cumulant_prefix(
-            CompoundPoissonCumulantSource(
-                intensity=_q(Fraction(1)), jump_distribution=jumps, max_order=1
-            )
-        )
+        compound_poisson_cumulant_prefix(_q(Fraction(1)), jumps, 1)
     assert mass_error.value.errors()[0]["type"] == (
         "probability.compound_poisson.distribution_admission"
     )
+
+
+def test_forged_negative_jump_mass_is_rejected_at_admission() -> None:
+    negative = CanonicalRational.model_construct(num=-1, den=1)
+    unit = CanonicalRational.model_construct(num=2, den=1)
+    atom_negative = FiniteDistributionAtom.model_construct(
+        value=_q(Fraction(0)), probability=negative
+    )
+    atom_overflow = FiniteDistributionAtom.model_construct(
+        value=_q(Fraction(1)), probability=unit
+    )
+    forged = FiniteRationalDistribution.model_construct(
+        atoms=(atom_negative, atom_overflow)
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        compound_poisson_cumulant_prefix(_q(Fraction(1)), forged, 1)
+    assert exc_info.value.errors()[0]["type"] == (
+        "probability.compound_poisson.nonnegative_probability"
+    )
+
+
+def test_jump_height_outside_execution_envelope_is_a_resource_error() -> None:
+    tall = 10**128
+    jumps = FiniteRationalDistribution(
+        atoms=(
+            FiniteDistributionAtom(
+                value=_q(Fraction(tall)), probability=_q(Fraction(1))
+            ),
+        )
+    )
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
+        compound_poisson_cumulant_prefix(_q(Fraction(1)), jumps, 1)
+    assert exc_info.value.errors()[0]["type"] == (
+        "probability.compound_poisson.input_height_bound"
+    )
+
+
+def test_jump_law_schema_publishes_the_execution_envelope() -> None:
+    schema = CompoundPoissonCumulantSource.model_json_schema()["properties"][
+        "jump_distribution"
+    ]
+    assert str(MAX_COMPOUND_POISSON_ATOMS) in schema["description"]
+    assert "128" in schema["description"]
+    assert schema["x-jacobian-max-atoms"] == MAX_COMPOUND_POISSON_ATOMS
+    assert schema["x-jacobian-max-component-digits"] == 128
 
 
 def test_prefix_round_trips_with_its_source_parent() -> None:
@@ -169,10 +204,6 @@ def test_prefix_round_trips_with_its_source_parent() -> None:
             ),
         )
     )
-    result = compound_poisson_cumulant_prefix(
-        CompoundPoissonCumulantSource(
-            intensity=_q(Fraction(5, 7)), jump_distribution=jumps, max_order=3
-        )
-    )
+    result = compound_poisson_cumulant_prefix(_q(Fraction(5, 7)), jumps, 3)
     assert result.model_validate_json(result.model_dump_json()) == result
     assert result.source.jump_distribution == jumps

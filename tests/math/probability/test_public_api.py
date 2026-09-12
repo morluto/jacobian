@@ -13,7 +13,6 @@ def test_exact_public_api_symbols() -> None:
         "AsymmetricLocalLemmaInequality",
         "AsymmetricLocalLemmaWitness",
         "AsymmetricLocalLemmaWitnessCheckResult",
-        "CompoundPoissonCumulantRequest",
         "CompoundPoissonCumulantResult",
         "CompoundPoissonCumulantSource",
         "FiniteJointTable",

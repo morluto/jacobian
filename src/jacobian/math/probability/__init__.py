@@ -1,7 +1,6 @@
 """Supported native exact finite-probability APIs."""
 
 from jacobian.math.probability._compound_poisson import (
-    CompoundPoissonCumulantRequest,
     CompoundPoissonCumulantResult,
     CompoundPoissonCumulantSource,
 )
@@ -47,7 +46,6 @@ __all__ = [
     "AsymmetricLocalLemmaInequality",
     "AsymmetricLocalLemmaWitness",
     "AsymmetricLocalLemmaWitnessCheckResult",
-    "CompoundPoissonCumulantRequest",
     "CompoundPoissonCumulantResult",
     "CompoundPoissonCumulantSource",
     "FiniteJointTable",

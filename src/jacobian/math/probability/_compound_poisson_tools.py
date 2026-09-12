@@ -15,7 +15,9 @@ def _compound_poisson_cumulant_request(
     """Project the transport request into the canonical native source."""
 
     source = CompoundPoissonCumulantSource.model_validate(request.model_dump())
-    return compound_poisson_cumulant_prefix(source)
+    return compound_poisson_cumulant_prefix(
+        source.intensity, source.jump_distribution, source.max_order
+    )
 
 
 COMPOUND_POISSON_CUMULANT_OPERATION = MathTool(

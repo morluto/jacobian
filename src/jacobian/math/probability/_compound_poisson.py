@@ -45,8 +45,14 @@ class CompoundPoissonCumulantSource(StrictModel):
     jump_distribution: FiniteRationalDistribution = Field(
         description=(
             "Normalized finite rational law for one independent jump, with "
-            "strictly increasing support values."
-        )
+            "strictly increasing support values. Execution admits at most "
+            f"{MAX_COMPOUND_POISSON_ATOMS} atoms and 128 decimal digits per "
+            "value or probability component."
+        ),
+        json_schema_extra={
+            "x-jacobian-max-atoms": MAX_COMPOUND_POISSON_ATOMS,
+            "x-jacobian-max-component-digits": 128,
+        },
     )
     max_order: StrictInt = Field(
         ge=0,
@@ -166,19 +172,15 @@ def _bounded_sum(
 
 
 def _admit_and_plan(
-    source: CompoundPoissonCumulantSource,
-) -> tuple[tuple[int, Fraction, Fraction], ...]:
+    intensity: CanonicalRational,
+    jump_distribution: FiniteRationalDistribution,
+    max_order: int,
+) -> tuple[CompoundPoissonCumulantSource, tuple[tuple[int, Fraction, Fraction], ...]]:
     """Admit all semantic work once and return its reusable arithmetic ledger."""
 
-    if type(source) is not CompoundPoissonCumulantSource:
-        raise _domain_error(
-            location=("request",),
-            code="probability.compound_poisson.request_type",
-            message="compound-Poisson input must be a CompoundPoissonCumulantSource",
-        )
     if (
-        type(source.max_order) is not int
-        or not 0 <= source.max_order <= MAX_COMPOUND_POISSON_ORDER
+        type(max_order) is not int
+        or not 0 <= max_order <= MAX_COMPOUND_POISSON_ORDER
     ):
         raise _domain_error(
             location=("max_order",),
@@ -188,7 +190,7 @@ def _admit_and_plan(
                 f"{MAX_COMPOUND_POISSON_ORDER}"
             ),
         )
-    if not isinstance(source.intensity, CanonicalRational):
+    if not isinstance(intensity, CanonicalRational):
         raise _domain_error(
             location=("intensity",),
             code="probability.compound_poisson.intensity_type",
@@ -196,7 +198,7 @@ def _admit_and_plan(
         )
     try:
         require_bounded_rational(
-            source.intensity,
+            intensity,
             max_digits=128,
             label="compound-Poisson intensity",
         )
@@ -206,19 +208,19 @@ def _admit_and_plan(
             code="probability.compound_poisson.input_height_bound",
             message=str(exc),
         ) from exc
-    if source.intensity.num < 0:
+    if intensity.num < 0:
         raise _domain_error(
             location=("intensity",),
             code="probability.compound_poisson.nonnegative_intensity",
             message="compound-Poisson intensity must be nonnegative",
         )
-    if not isinstance(source.jump_distribution, FiniteRationalDistribution):
+    if not isinstance(jump_distribution, FiniteRationalDistribution):
         raise _domain_error(
             location=("jump_distribution",),
             code="probability.compound_poisson.distribution_type",
             message="jump_distribution must be a FiniteRationalDistribution",
         )
-    atoms = source.jump_distribution.atoms
+    atoms = jump_distribution.atoms
     if type(atoms) is not tuple or not all(
         isinstance(atom, FiniteDistributionAtom) for atom in atoms
     ):
@@ -236,19 +238,42 @@ def _admit_and_plan(
                 f"{MAX_COMPOUND_POISSON_ATOMS} support atoms"
             ),
         )
+    if any(
+        not isinstance(atom.probability, CanonicalRational)
+        or atom.probability.as_fraction() < 0
+        for atom in atoms
+    ):
+        raise _domain_error(
+            location=("jump_distribution", "atoms"),
+            code="probability.compound_poisson.nonnegative_probability",
+            message="jump probabilities must be nonnegative canonical rationals",
+        )
     try:
         require_input_distribution(
             atoms,
             require_canonical=True,
             max_digits=128,
         )
-    except (AttributeError, TypeError, ValueError) as exc:
+    except (AttributeError, TypeError) as exc:
         raise _domain_error(
             location=("jump_distribution",),
             code="probability.compound_poisson.distribution_admission",
             message=str(exc),
         ) from exc
-    products = len(atoms) * source.max_order
+    except ValueError as exc:
+        detail = str(exc)
+        if "digit" in detail or "normalization exceeds" in detail:
+            raise _resource_error(
+                location=("jump_distribution",),
+                code="probability.compound_poisson.input_height_bound",
+                message=detail,
+            ) from exc
+        raise _domain_error(
+            location=("jump_distribution",),
+            code="probability.compound_poisson.distribution_admission",
+            message=detail,
+        ) from exc
+    products = len(atoms) * max_order
     if products > MAX_COMPOUND_POISSON_MOMENT_PRODUCTS:
         raise _resource_error(
             location=("jump_distribution", "max_order"),
@@ -258,10 +283,10 @@ def _admit_and_plan(
 
     values = tuple(atom.value.as_fraction() for atom in atoms)
     probabilities = tuple(atom.probability.as_fraction() for atom in atoms)
-    intensity = source.intensity.as_fraction()
+    intensity_value = intensity.as_fraction()
     powers = [Fraction(1) for _ in atoms]
     rows: list[tuple[int, Fraction, Fraction]] = []
-    for order in range(1, source.max_order + 1):
+    for order in range(1, max_order + 1):
         for index, value in enumerate(values):
             powers[index] = _bounded_product(
                 powers[index],
@@ -286,19 +311,26 @@ def _admit_and_plan(
                 label="jump raw moment",
             )
         cumulant = _bounded_product(
-            intensity,
+            intensity_value,
             moment,
             location=("intensity",),
             label="compound-Poisson cumulant",
         )
         rows.append((order, moment, cumulant))
-    return tuple(rows)
+    source = CompoundPoissonCumulantSource(
+        intensity=intensity,
+        jump_distribution=jump_distribution,
+        max_order=max_order,
+    )
+    return source, tuple(rows)
 
 
 def compound_poisson_cumulant_prefix(
-    source: CompoundPoissonCumulantSource,
+    intensity: CanonicalRational,
+    jump_distribution: FiniteRationalDistribution,
+    max_order: int,
 ) -> CompoundPoissonCumulantResult:
-    plan = _admit_and_plan(source)
+    source, plan = _admit_and_plan(intensity, jump_distribution, max_order)
     rows = tuple(
         CompoundPoissonCumulantRow(
             order=order,

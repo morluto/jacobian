@@ -12,7 +12,7 @@ step the audited partial formula dropped.
 from __future__ import annotations
 
 from fractions import Fraction
-from math import isqrt
+from math import gcd, isqrt
 from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
@@ -21,15 +21,15 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalRational, ExactInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
-from jacobian.catalog.models import OperationResourceAdmissionError
-from jacobian.math.number_theory._certification_models import (
-    MAX_CERTIFIED_FACTORIZATION_DIGITS,
-    CertifiedFactorizationRequest,
-)
-from jacobian.math.number_theory._factorization_kernels import factorize_certified
 
 MAX_MAHLER_DEGREE = 64
 MAX_MAHLER_COEFFICIENT_DIGITS = 256
+# Square-free extraction is delegated to the certified factorization kernel,
+# whose request carrier admits at most 30 decimal digits. Keep both the
+# decimal contract and a coarse bit envelope on the value itself so forged
+# surd JSON cannot reach ``isqrt`` outside the kernel's admitted domain.
+MAX_MAHLER_RADICAND_DIGITS = 30
+MAX_MAHLER_RADICAND_BITS = 100
 
 RootLocation = Literal[
     "INSIDE_UNIT_DISK", "ON_UNIT_CIRCLE", "OUTSIDE_UNIT_DISK", "UNRESOLVED"
@@ -50,6 +50,16 @@ class QuadraticSurd(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_surd(self) -> Self:
+        if self.radicand.bit_length() > MAX_MAHLER_RADICAND_BITS:
+            raise _validation_error(
+                "polynomial.mahler_surd_radicand_bound",
+                "quadratic-surd radicand exceeds the admitted factorization envelope",
+            )
+        if len(format_canonical_integer(self.radicand)) > MAX_MAHLER_RADICAND_DIGITS:
+            raise _validation_error(
+                "polynomial.mahler_surd_radicand_digits",
+                "quadratic-surd radicand exceeds the admitted factorization digits",
+            )
         if self.radicand == 0:
             if self.radical_coefficient.as_fraction() != 0:
                 raise _validation_error(
@@ -85,51 +95,30 @@ class QuadraticSurd(StrictModel):
         )
 
     @classmethod
-    def from_fractions(
-        cls, rational: Fraction, radical: Fraction, radicand: int
+    def from_squarefree_parts(
+        cls,
+        rational: Fraction,
+        radical: Fraction,
+        square_factor: int,
+        squarefree_radicand: int,
     ) -> QuadraticSurd:
-        """Canonicalize ``rational + radical*sqrt(radicand)``.
+        """Build a surd from a kernel-admitted squarefree decomposition."""
 
-        Square factors are pulled out of the radicand so the published value is
-        unique: ``sqrt(20)`` becomes ``2*sqrt(5)``.
-        """
-
-        if radicand == 0 or radical == 0:
+        if squarefree_radicand == 0 or radical == 0:
             return cls.rational(rational)
-        root = isqrt(radicand)
-        if root * root == radicand:
-            return cls.rational(rational + radical * root)
-        if radicand >= 10**MAX_CERTIFIED_FACTORIZATION_DIGITS:
-            raise OperationResourceAdmissionError(
-                location=("radicand",),
-                code="polynomial.mahler.squarefree_factorization_bound",
-                message="nonsquare radicand exceeds the maintained 30-digit factorization envelope",
-            )
-        square = 1
-        remaining = radicand
-        if radicand <= 1_000_000:
-            factor = 2
-            while factor * factor <= remaining:
-                while remaining % (factor * factor) == 0:
-                    remaining //= factor * factor
-                    square *= factor
-                factor += 1
-        else:
-            decomposition = factorize_certified(
-                CertifiedFactorizationRequest(value=radicand)
-            )
-            remaining = 1
-            for factor_row in decomposition.factors:
-                square *= factor_row.prime ** (factor_row.exponent // 2)
-                remaining *= factor_row.prime ** (factor_row.exponent % 2)
+        if square_factor < 1 or squarefree_radicand < 1:
+            raise ValueError("surd squarefree parts must be positive")
+        adjusted_radical = radical * square_factor
+        if squarefree_radicand == 1:
+            return cls.rational(rational + adjusted_radical)
         return cls(
             rational_part=CanonicalRational(
                 num=rational.numerator, den=rational.denominator
             ),
             radical_coefficient=CanonicalRational(
-                num=(radical * square).numerator, den=(radical * square).denominator
+                num=adjusted_radical.numerator, den=adjusted_radical.denominator
             ),
-            radicand=remaining,
+            radicand=squarefree_radicand,
         )
 
     def multiply(self, other: QuadraticSurd) -> QuadraticSurd:
@@ -139,8 +128,11 @@ class QuadraticSurd(StrictModel):
         right_a, right_b = other.as_fractions()
         if self.radicand == 0 or other.radicand == 0:
             radicand = self.radicand or other.radicand
-            return QuadraticSurd.from_fractions(
-                left_a * right_a, left_a * right_b + left_b * right_a, radicand
+            return QuadraticSurd.from_squarefree_parts(
+                left_a * right_a,
+                left_a * right_b + left_b * right_a,
+                1,
+                radicand,
             )
         if self.radicand != other.radicand:
             raise _validation_error(
@@ -148,9 +140,10 @@ class QuadraticSurd(StrictModel):
                 "combining surds with different radicands is outside this envelope",
             )
         radicand = self.radicand
-        return QuadraticSurd.from_fractions(
+        return QuadraticSurd.from_squarefree_parts(
             left_a * right_a + left_b * right_b * radicand,
             left_a * right_b + right_a * left_b,
+            1,
             radicand,
         )
 
@@ -272,6 +265,19 @@ class ContentPrimitiveProfileResult(StrictModel):
 
     @model_validator(mode="after")
     def require_exact_reconstruction(self) -> Self:
+        if self.content < 1:
+            raise _validation_error(
+                "polynomial.mahler_content_positive",
+                "content must be the positive coefficient gcd",
+            )
+        primitive_content = 0
+        for coefficient in self.primitive_part.coefficients_descending:
+            primitive_content = gcd(primitive_content, abs(coefficient))
+        if primitive_content != 1:
+            raise _validation_error(
+                "polynomial.mahler_primitive_content",
+                "the primitive part must have coefficient gcd one",
+            )
         scaled = tuple(
             self.sign * self.content * coefficient
             for coefficient in self.primitive_part.coefficients_descending
@@ -285,6 +291,11 @@ class ContentPrimitiveProfileResult(StrictModel):
             raise _validation_error(
                 "polynomial.mahler_content_degree",
                 "the reported degree is the primitive part's degree",
+            )
+        if (self.reconstruction.coefficients_descending[0] > 0) != (self.sign == 1):
+            raise _validation_error(
+                "polynomial.mahler_content_sign",
+                "the sign must match the reconstructed leading coefficient",
             )
         return self
 
@@ -391,6 +402,16 @@ class RealQuadraticRootProfileResult(StrictModel):
 
     @model_validator(mode="after")
     def require_ledger_length(self) -> Self:
+        if self.coefficients_descending[0] == 0:
+            raise _validation_error(
+                "polynomial.mahler_quadratic_leading",
+                "a root profile needs a nonzero leading coefficient",
+            )
+        if any(location == "UNRESOLVED" for location in self.root_locations):
+            raise _validation_error(
+                "polynomial.mahler_quadratic_unresolved_location",
+                "a root profile result must resolve every root location",
+            )
         expected = 2 if self.root_kind == "DISTINCT_REAL" else 1
         if self.root_kind == "COMPLEX_CONJUGATE":
             expected = 1
@@ -467,6 +488,26 @@ class MahlerMeasureResult(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_root_ledger(self) -> Self:
+        if len(self.coefficients_descending) != self.degree + 1:
+            raise _validation_error(
+                "polynomial.mahler_result_degree",
+                "the coefficient tuple length must equal degree+1",
+            )
+        if self.coefficients_descending[0] == 0:
+            raise _validation_error(
+                "polynomial.mahler_result_leading",
+                "the result polynomial must have a nonzero leading coefficient",
+            )
+        if self.leading_coefficient != self.coefficients_descending[0]:
+            raise _validation_error(
+                "polynomial.mahler_result_leading_binding",
+                "the retained leading coefficient must match the source polynomial",
+            )
+        if any(location == "UNRESOLVED" for location in self.root_locations):
+            raise _validation_error(
+                "polynomial.mahler_result_unresolved_location",
+                "a Mahler-measure result must resolve every root location",
+            )
         expected = 1 if self.degree == 1 else 2
         if (
             self.degree == 2
@@ -486,6 +527,8 @@ class MahlerMeasureResult(StrictModel):
 __all__ = [
     "MAX_MAHLER_COEFFICIENT_DIGITS",
     "MAX_MAHLER_DEGREE",
+    "MAX_MAHLER_RADICAND_BITS",
+    "MAX_MAHLER_RADICAND_DIGITS",
     "ContentPrimitiveProfileRequest",
     "ContentPrimitiveProfileResult",
     "IntegerPolynomialProfileValue",

@@ -19,7 +19,13 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.number_theory._certification_models import (
+    CertifiedFactorizationRequest,
+)
+from jacobian.math.number_theory._factorization_kernels import factorize_certified
 from jacobian.math.polynomials._mahler_models import (
+    MAX_MAHLER_RADICAND_BITS,
+    MAX_MAHLER_RADICAND_DIGITS,
     ContentPrimitiveProfileRequest,
     ContentPrimitiveProfileResult,
     IntegerPolynomialProfileValue,
@@ -40,6 +46,61 @@ __all__ = [
     "quadratic_root_profile",
     "reciprocal_profile",
 ]
+
+_SMALL_SQUAREFREE_FACTOR_LIMIT = 1_000_000
+
+
+def _squarefree_parts(radicand: int) -> tuple[int, int]:
+    """Return ``(square_factor, squarefree_radicand)`` under one kernel budget."""
+
+    if radicand < 1:
+        raise ValueError("surd radicand must be positive")
+    if radicand.bit_length() > MAX_MAHLER_RADICAND_BITS:
+        raise OperationResourceAdmissionError(
+            location=("radicand",),
+            code="polynomial.mahler_surd_radicand_bound",
+            message="quadratic-surd radicand exceeds the admitted factorization envelope",
+        )
+    if len(str(radicand)) > MAX_MAHLER_RADICAND_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("radicand",),
+            code="polynomial.mahler_surd_radicand_digits",
+            message="quadratic-surd radicand exceeds the admitted factorization digits",
+        )
+    if radicand <= _SMALL_SQUAREFREE_FACTOR_LIMIT:
+        square_factor = 1
+        remaining = radicand
+        factor = 2
+        while factor * factor <= remaining:
+            square = factor * factor
+            while remaining % square == 0:
+                remaining //= square
+                square_factor *= factor
+            factor += 1
+        return square_factor, remaining
+    decomposition = factorize_certified(CertifiedFactorizationRequest(value=radicand))
+    square_factor = 1
+    squarefree_radicand = 1
+    for factor_entry in decomposition.factors:
+        square_factor *= factor_entry.prime ** (factor_entry.exponent // 2)
+        squarefree_radicand *= factor_entry.prime ** (factor_entry.exponent % 2)
+    return square_factor, squarefree_radicand
+
+
+def quadratic_surd_from_fractions(
+    rational: Fraction, radical: Fraction, radicand: int
+) -> QuadraticSurd:
+    """Canonicalize one quadratic surd through the bounded kernel adapter."""
+
+    if radicand == 0 or radical == 0:
+        return QuadraticSurd.rational(rational)
+    square_factor, squarefree_radicand = _squarefree_parts(radicand)
+    return QuadraticSurd.from_squarefree_parts(
+        rational,
+        radical,
+        square_factor,
+        squarefree_radicand,
+    )
 
 
 def _require_nonzero_polynomial(
@@ -124,10 +185,10 @@ def _unit_disk_location_of_surd(value: QuadraticSurd) -> RootLocation:
             else "INSIDE_UNIT_DISK"
         )
     # |a + b*sqrt(d)|^2 = (a^2 + b^2 d) + 2 a b sqrt(d), which is nonnegative.
-    squared = QuadraticSurd.from_fractions(
+    squared = quadratic_surd_from_fractions(
         a * a + b * b * value.radicand, 2 * a * b, value.radicand
     )
-    difference = QuadraticSurd.from_fractions(
+    difference = quadratic_surd_from_fractions(
         squared.as_fractions()[0] - 1,
         squared.as_fractions()[1],
         value.radicand,
@@ -150,6 +211,18 @@ def _quadratic_root_profile(
             message="a real quadratic profile needs a nonzero leading coefficient",
         )
     discriminant = b * b - 4 * a * c
+    if discriminant > 0 and discriminant.bit_length() > MAX_MAHLER_RADICAND_BITS:
+        raise OperationResourceAdmissionError(
+            location=("coefficients_descending",),
+            code="polynomial.mahler_surd_radicand_bound",
+            message="quadratic discriminant exceeds the admitted surd-factorization envelope",
+        )
+    if discriminant > 0 and len(str(discriminant)) > MAX_MAHLER_RADICAND_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("coefficients_descending",),
+            code="polynomial.mahler_surd_radicand_digits",
+            message="quadratic discriminant exceeds the admitted factorization digits",
+        )
     root_kind: Literal["DISTINCT_REAL", "DOUBLE_REAL", "COMPLEX_CONJUGATE"]
     roots: tuple[QuadraticSurd, ...]
     if discriminant > 0:
@@ -162,10 +235,10 @@ def _quadratic_root_profile(
             )
         else:
             roots = (
-                QuadraticSurd.from_fractions(
+                quadratic_surd_from_fractions(
                     Fraction(-b, 2 * a), Fraction(-1, 2 * a), discriminant
                 ),
-                QuadraticSurd.from_fractions(
+                quadratic_surd_from_fractions(
                     Fraction(-b, 2 * a), Fraction(1, 2 * a), discriminant
                 ),
             )
@@ -224,7 +297,7 @@ def _abs_of_surd(value: QuadraticSurd) -> QuadraticSurd:
     return (
         value
         if value.is_nonnegative()
-        else QuadraticSurd.from_fractions(-a, -b, value.radicand)
+        else QuadraticSurd.from_squarefree_parts(-a, -b, 1, value.radicand)
     )
 
 

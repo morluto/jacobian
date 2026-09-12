@@ -9,14 +9,20 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.canonical import encode_strict_json
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.polynomials._mahler_kernel import (
     content_primitive_profile,
     mahler_measure,
     quadratic_root_profile,
+    quadratic_surd_from_fractions,
     reciprocal_profile,
 )
 from jacobian.math.polynomials._mahler_models import (
+    MAX_MAHLER_RADICAND_BITS,
+    MAX_MAHLER_RADICAND_DIGITS,
     ContentPrimitiveProfileRequest,
     ContentPrimitiveProfileResult,
     IntegerPolynomialProfileValue,
@@ -197,7 +203,7 @@ def test_mahler_measure_of_a_unit_root_linear_polynomial() -> None:
 
 def test_surd_canonicalization_pulls_square_factors() -> None:
     """sqrt(20) is represented as 2*sqrt(5) so equal values serialize equally."""
-    value = QuadraticSurd.from_fractions(Fraction(0), Fraction(1), 20)
+    value = quadratic_surd_from_fractions(Fraction(0), Fraction(1), 20)
     assert value.radicand == 5
     assert value.radical_coefficient.as_fraction() == Fraction(2)
 
@@ -258,6 +264,72 @@ def test_reciprocal_result_rejects_endpoint_only_forgery() -> None:
         )
 
 
+def test_content_result_rejects_negative_or_nonprimitive_claims() -> None:
+    source = IntegerPolynomialValue(coefficients_descending=(6, 0, -6))
+    result = content_primitive_profile(
+        ContentPrimitiveProfileRequest(polynomial=source)
+    )
+    forged = result.model_dump(mode="json")
+    forged["content"] = -6
+    with pytest.raises(ValidationError):
+        ContentPrimitiveProfileResult.model_validate_json(
+            encode_strict_json(forged), strict=True
+        )
+
+    forged = result.model_dump(mode="json")
+    forged["primitive_part"]["coefficients_descending"] = ["2", "0", "-2"]
+    with pytest.raises(ValidationError):
+        ContentPrimitiveProfileResult.model_validate_json(
+            encode_strict_json(forged), strict=True
+        )
+
+
+def test_mahler_result_binds_degree_leading_coefficient_and_locations() -> None:
+    result = mahler_measure(MahlerMeasureRequest(coefficients_descending=(1, -1)))
+
+    forged = result.model_dump(mode="json")
+    forged["degree"] = 2
+    with pytest.raises(ValidationError):
+        MahlerMeasureResult.model_validate_json(encode_strict_json(forged), strict=True)
+
+    forged = result.model_dump(mode="json")
+    forged["leading_coefficient"] = 99
+    with pytest.raises(ValidationError):
+        MahlerMeasureResult.model_validate_json(encode_strict_json(forged), strict=True)
+
+    forged = result.model_dump(mode="json")
+    forged["root_locations"] = ["UNRESOLVED"]
+    with pytest.raises(ValidationError):
+        MahlerMeasureResult.model_validate_json(encode_strict_json(forged), strict=True)
+
+
+def test_quadratic_surd_rejects_radical_beyond_operation_envelope() -> None:
+    with pytest.raises(ValidationError):
+        QuadraticSurd(
+            rational_part={"num": 0, "den": 1},
+            radical_coefficient={"num": 1, "den": 1},
+            radicand=(1 << MAX_MAHLER_RADICAND_BITS) + 3,
+        )
+
+
+def test_quadratic_surd_rejects_decimal_boundary_before_isqrt() -> None:
+    with pytest.raises(ValidationError):
+        QuadraticSurd(
+            rational_part={"num": 0, "den": 1},
+            radical_coefficient={"num": 1, "den": 1},
+            radicand=10**MAX_MAHLER_RADICAND_DIGITS,
+        )
+
+
+def test_quadratic_discriminant_is_admitted_before_isqrt() -> None:
+    with pytest.raises(OperationResourceAdmissionError):
+        quadratic_root_profile(
+            RealQuadraticRootProfileRequest(
+                coefficients_descending=(1, 0, -(1 << MAX_MAHLER_RADICAND_BITS))
+            )
+        )
+
+
 def test_complex_pair_has_modulus_instead_of_fake_real_root() -> None:
     result = quadratic_root_profile(
         RealQuadraticRootProfileRequest(coefficients_descending=(1, 0, 4))
@@ -278,6 +350,6 @@ def test_large_nonsquare_discriminant_uses_bounded_factorization() -> None:
 
 
 def test_perfect_square_radical_keeps_its_rational_contribution() -> None:
-    assert QuadraticSurd.from_fractions(
+    assert quadratic_surd_from_fractions(
         Fraction(1), Fraction(2), 9
     ) == QuadraticSurd.rational(Fraction(7))

@@ -251,8 +251,7 @@ class FixedLengthCycleEnumerationResult(StrictModel):
             )
 
         expected_edge_incidence_tuple = tuple(
-            tuple(expected_edge_incidence[frozenset(edge)])
-            for edge in self.graph.edges
+            tuple(expected_edge_incidence[frozenset(edge)]) for edge in self.graph.edges
         )
         if (
             tuple(row.cycle_indices for row in self.edge_incidence)

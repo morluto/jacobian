@@ -130,3 +130,28 @@ def test_large_generated_group_is_rejected_before_element_materialization() -> N
     assert exc_info.value.errors()[0]["type"] == (
         "finite_group_action.tuple_family_group_order_bound"
     )
+
+
+def test_forged_action_fields_are_revalidated_before_backend_conversion() -> None:
+    from jacobian.catalog.models import OperationDomainValidationError
+
+    forged_action = FinitePermutationAction.model_construct(
+        domain=("a", "a"), generators=((0, 1),)
+    )
+    request = TupleFamilyOrbitSource.model_construct(
+        action=forged_action, arity=1, family=((0,),)
+    )
+    with pytest.raises(OperationDomainValidationError) as labels:
+        tuple_family_orbit_profile(request)
+    assert "domain_labels_not_distinct" in labels.value.errors()[0]["type"]
+
+    malformed = FinitePermutationAction.model_construct(
+        domain=("a", "b"), generators=((0,),)
+    )
+    malformed_request = TupleFamilyOrbitSource.model_construct(
+        action=malformed, arity=1, family=((0,),)
+    )
+    with pytest.raises(OperationDomainValidationError) as generators:
+        tuple_family_orbit_profile(malformed_request)
+    assert "generator" in generators.value.errors()[0]["type"]
+

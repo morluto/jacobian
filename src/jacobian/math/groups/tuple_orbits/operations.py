@@ -6,6 +6,8 @@ from collections import Counter
 from typing import Any
 
 from jacobian._execution import request_checkpoint
+from pydantic import ValidationError
+
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -56,6 +58,15 @@ def _admit_source(request: TupleFamilyOrbitSource) -> tuple[Any, int, int]:
             code="finite_group_action.tuple_family_action_type",
             message="tuple-family source must retain a finite permutation action",
         )
+    try:
+        action = FinitePermutationAction.model_validate(action)
+    except ValidationError as error:
+        detail = error.errors()[0]
+        raise OperationDomainValidationError(
+            location=("action", *tuple(detail.get("loc", ()))),
+            code=str(detail["type"]),
+            message=str(detail["msg"]),
+        ) from error
     if (
         not isinstance(request.arity, int)
         or isinstance(request.arity, bool)

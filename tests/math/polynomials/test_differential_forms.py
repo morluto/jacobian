@@ -322,6 +322,15 @@ def test_wedge_with_scalar_unit_preserves_multicomponent_forms() -> None:
     assert wedge(unit, alpha) == alpha
 
 
+def test_wedge_applies_negative_scalar_unit_in_both_orders() -> None:
+    alpha = _form(1, ((0,), _poly((2, (1, 0)))), ((1,), _poly((3, (0, 1)))))
+    minus_one = _form(0, ((), _poly((-1, (0, 0)))))
+    negated = _form(1, ((0,), _poly((-2, (1, 0)))), ((1,), _poly((-3, (0, 1)))))
+    assert wedge(alpha, minus_one) == negated
+    assert wedge(minus_one, alpha) == negated
+    assert wedge(minus_one, minus_one) == _form(0, ((), _poly((1, (0, 0)))))
+
+
 def test_wedge_admits_coefficient_height_before_convolution() -> None:
     coefficient = 10**4_095
     left = _form(0, ((), _poly((coefficient, (0, 0)))))

@@ -197,18 +197,57 @@ def _admit_remaining_support(aggregate: _RemainingTerms) -> None:
         )
 
 
-def _is_scalar_unit(form: PolynomialDifferentialForm) -> bool:
+def _scalar_unit_sign(form: PolynomialDifferentialForm) -> int | None:
+    """Return ``+1`` or ``-1`` when ``form`` is the degree-0 scalar unit."""
+
     if int(form.degree) != 0 or len(form.components) != 1:
-        return False
+        return None
     component = form.components[0]
     if component.indices:
-        return False
+        return None
     terms = component.coefficient.polynomial.terms
     if len(terms) != 1:
-        return False
+        return None
     term = terms[0]
-    return _unit_coefficient(term.coefficient) and all(
-        exponent == 0 for exponent in term.exponents
+    coefficient = term.coefficient
+    if not _unit_coefficient(coefficient) or any(
+        exponent != 0 for exponent in term.exponents
+    ):
+        return None
+    return int(coefficient.num)
+
+
+def _scale_form_by_unit(
+    form: PolynomialDifferentialForm, sign: int
+) -> PolynomialDifferentialForm:
+    """Return ``form`` or ``-form`` according to a scalar unit's sign."""
+
+    if sign == 1:
+        return form
+    return PolynomialDifferentialForm(
+        variables=form.variables,
+        degree=form.degree,
+        components=tuple(
+            FormComponent(
+                indices=component.indices,
+                coefficient=RationalPolynomial(
+                    variables=component.coefficient.variables,
+                    polynomial=SparseRationalPolynomial(
+                        terms=tuple(
+                            RationalPolynomialTerm(
+                                coefficient=CanonicalRational(
+                                    num=-term.coefficient.num,
+                                    den=term.coefficient.den,
+                                ),
+                                exponents=term.exponents,
+                            )
+                            for term in component.coefficient.polynomial.terms
+                        )
+                    ),
+                ),
+            )
+            for component in form.components
+        ),
     )
 
 
@@ -294,10 +333,12 @@ def wedge(
         return PolynomialDifferentialForm(
             variables=left.variables, degree=degree, components=()
         )
-    if _is_scalar_unit(right):
-        return left
-    if _is_scalar_unit(left):
-        return right
+    right_unit = _scalar_unit_sign(right)
+    if right_unit is not None:
+        return _scale_form_by_unit(left, right_unit)
+    left_unit = _scalar_unit_sign(left)
+    if left_unit is not None:
+        return _scale_form_by_unit(right, left_unit)
     pairs = tuple(
         (first, second, indices, sign)
         for first in left.components

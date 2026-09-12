@@ -10,6 +10,11 @@ def test_exact_public_api_symbols() -> None:
     expected = (
         "continued_fraction",
         "convergents",
+        "nearest_integer_distance",
+        "range_profile",
+        "record_minima",
+        "scaled_floor",
+        "simultaneous_product",
         "solve_pell",
     )
     assert tuple(diophantine_approximation.__all__) == expected

@@ -343,3 +343,20 @@ def test_forced_secondary_conflict_is_infeasible_without_full_scan_charge() -> N
     result = minimum_generalized_exact_cover(instance)
     assert result.status == "INFEASIBLE"
     assert result.selected_row_ids is None
+
+
+def test_shared_secondary_on_every_row_is_infeasible_without_scan_charge() -> None:
+    primary = tuple(f"p{index:03d}" for index in range(256))
+    rows = tuple(
+        ExactCoverRow(row_id=f"r{item}-{copy:02d}", items=(item, "s"))
+        for item in primary
+        for copy in range(16)
+    )
+    instance = GeneralizedExactCoverInstance(
+        primary_items=primary,
+        secondary_items=("s",),
+        rows=rows,
+    )
+    result = minimum_generalized_exact_cover(instance)
+    assert result.status == "INFEASIBLE"
+    assert result.searched_node_count == 1

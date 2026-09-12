@@ -908,6 +908,22 @@ def minimum_generalized_exact_cover(  # noqa: C901
         )
         request_checkpoint("after minimum exact-cover result construction")
         return result
+    if remaining_rows and any(
+        all(secondary in row.items for row in remaining_rows)
+        for secondary in instance.secondary_items
+    ):
+        if not any(remaining_primary <= set(row.items) for row in remaining_rows):
+            result = MinimumGeneralizedExactCoverResult._from_kernel(
+                instance=instance,
+                status="INFEASIBLE",
+                lower_bound=len(forced_selected),
+                searched_node_count=1,
+            )
+            request_checkpoint("after minimum exact-cover result construction")
+            return result
+        estimated_nodes_ceiling = 1 + 2 * len(remaining_rows)
+    else:
+        estimated_nodes_ceiling = None
     item_index = {item: index for index, item in enumerate(items)}
     row_count = len(active_rows)
     mask_words = max(1, (max(row_count, primary_count) + 63) // 64)
@@ -925,6 +941,8 @@ def minimum_generalized_exact_cover(  # noqa: C901
             1 + remaining_min_degree * (1 + remaining_max_degree),
         )
         listing_degree = remaining_min_degree
+    if estimated_nodes_ceiling is not None:
+        estimated_nodes = min(estimated_nodes, estimated_nodes_ceiling)
     scan_work = estimated_nodes * primary_count * mask_words
     candidate_work = 2 * estimated_nodes * listing_degree * mask_words
     if (

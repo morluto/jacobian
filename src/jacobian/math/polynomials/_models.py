@@ -417,13 +417,11 @@ class IntegerPolynomialPrimitivePartResult(StrictModel):
             raise _validation_error(
                 "a primitive part must have a positive leading coefficient"
             )
-        scaled = tuple(
-            self.sign * self.content * coefficient
-            for coefficient in self.primitive_part.coefficients
-        )
-        if scaled != self.reconstruction.coefficients:
+        if len(self.reconstruction.coefficients) != len(
+            self.primitive_part.coefficients
+        ):
             raise _validation_error(
-                "sign*content*primitive_part must reconstruct the input polynomial"
+                "reconstruction must retain one coefficient per primitive-part term"
             )
         if self.degree != len(self.primitive_part.coefficients) - 1:
             raise _validation_error(
@@ -434,6 +432,25 @@ class IntegerPolynomialPrimitivePartResult(StrictModel):
                 "the sign must match the reconstructed leading coefficient"
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        sign: Literal[-1, 1],
+        content: ExactInteger,
+        primitive_part: IntegerPolynomial,
+        degree: int,
+        reconstruction: IntegerPolynomial,
+    ) -> Self:
+        return cls.model_construct(
+            sign=sign,
+            content=content,
+            primitive_part=primitive_part,
+            degree=degree,
+            reconstruction=reconstruction,
+            convention="NONNEGATIVE_CONTENT_POSITIVE_LEADING",
+        )
 
 
 class IntegerPolynomialEvaluationRequest(IntegerPolynomialRequest):

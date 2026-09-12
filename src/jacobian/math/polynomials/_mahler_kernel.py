@@ -13,7 +13,7 @@ from math import gcd, isqrt, lcm
 from time import monotonic
 from typing import Literal
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS, CanonicalRational
 from jacobian._execution import (
     current_request_execution,
     request_execution,
@@ -37,6 +37,7 @@ from jacobian.math.polynomials._mahler_models import (
     RootLocation,
 )
 from jacobian.math.polynomials._models import IntegerPolynomial
+from jacobian.math.polynomials.values import MAX_POLYNOMIAL_TERMS
 
 __all__ = [
     "mahler_measure",
@@ -214,6 +215,7 @@ def _require_nonzero_polynomial(
 # high-height polynomial cannot explode after the kernel finishes. 66-term
 # inexpensive cases remain well below this envelope.
 MAX_PROFILE_RESULT_DIGITS = 8_000_000
+_CANONICAL_INTEGER_LIMIT = 10**MAX_CANONICAL_INTEGER_DIGITS
 
 
 def _retained_integer_digits(value: int) -> int:
@@ -251,6 +253,13 @@ def _admit_mahler_coefficient_digits(polynomial: IntegerPolynomial) -> None:
         )
 
 
+def _exceeds_canonical_integer(value: int) -> bool:
+    magnitude = abs(value)
+    if magnitude.bit_length() <= MAX_CANONICAL_INTEGER_DIGITS:
+        return False
+    return bool(magnitude >= _CANONICAL_INTEGER_LIMIT)
+
+
 def _require_integer_polynomial(polynomial: object) -> IntegerPolynomial:
     if not isinstance(polynomial, IntegerPolynomial):
         raise OperationDomainValidationError(
@@ -277,6 +286,18 @@ def _require_integer_polynomial(polynomial: object) -> IntegerPolynomial:
             code="polynomial.mahler_polynomial_shape",
             message="a canonical integer polynomial omits leading zeros",
         )
+    if len(coefficients) > MAX_POLYNOMIAL_TERMS:
+        raise OperationResourceAdmissionError(
+            location=("polynomial",),
+            code="polynomial.mahler_carrier_term_bound",
+            message="the integer polynomial exceeds the shared coefficient-carrier envelope",
+        )
+    if any(_exceeds_canonical_integer(coefficient) for coefficient in coefficients):
+        raise OperationResourceAdmissionError(
+            location=("polynomial",),
+            code="polynomial.mahler_carrier_integer_digits",
+            message="a coefficient exceeds the canonical integer representation envelope",
+        )
     return polynomial
 
 
@@ -289,8 +310,10 @@ def reciprocal_profile(polynomial: IntegerPolynomial) -> ReciprocalProfileResult
     # retains each coefficient once more, and the middle term of odd length
     # appears twice in its pair.
     extra = max(_retained_integer_digits(coefficient) for coefficient in coefficients)
+    leading_digits = _retained_integer_digits(coefficients[0])
+    constant_digits = _retained_integer_digits(coefficients[-1])
     _admit_profile_result_digits(
-        2 * source_digits + extra,
+        2 * source_digits + extra + leading_digits + constant_digits,
         location=("polynomial",),
         code="polynomial.reciprocal_profile_result_digits",
     )

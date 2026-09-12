@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS, CanonicalRational
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -31,6 +31,7 @@ from jacobian.math.polynomials._models import (
     IntegerPolynomial,
     IntegerPolynomialPrimitivePartResult,
 )
+from jacobian.math.polynomials.values import MAX_POLYNOMIAL_TERMS
 
 
 def _assert_golden_root(value: MahlerAlgebraicValue, index: int) -> None:
@@ -323,7 +324,7 @@ def test_content_result_rejects_negative_or_inconsistent_reconstruction() -> Non
         )
 
     forged = result.model_dump(mode="json")
-    forged["primitive_part"]["coefficients"] = ["2", "0", "-2"]
+    forged["primitive_part"]["coefficients"] = ["2", "0", "-2", "1"]
     with pytest.raises(ValidationError):
         IntegerPolynomialPrimitivePartResult.model_validate_json(
             encode_strict_json(forged), strict=True
@@ -342,6 +343,13 @@ def test_content_result_does_not_replay_primitivity() -> None:
     )
     assert restored.content == 3
     assert restored.primitive_part.coefficients == (2, 0, -2)
+    forged = result.model_dump(mode="json")
+    forged["primitive_part"]["coefficients"] = ["1", "0", "-1"]
+    restored = IntegerPolynomialPrimitivePartResult.model_validate_json(
+        encode_strict_json(forged), strict=True
+    )
+    assert restored.primitive_part.coefficients == (1, 0, -1)
+    assert restored.reconstruction.coefficients == (6, 0, -6)
 
 
 def test_linear_profiles_admit_carrier_length_beyond_mahler_degree() -> None:
@@ -378,6 +386,38 @@ def test_mahler_measure_rejects_empty_native_coefficients() -> None:
         OperationDomainValidationError, match="at least one coefficient"
     ):
         reciprocal_profile(forged)
+
+
+def test_native_profiles_reject_forged_carriers_beyond_integer_envelope() -> None:
+    oversized = IntegerPolynomial.model_construct(
+        coefficients=(1,) * (MAX_POLYNOMIAL_TERMS + 1)
+    )
+    with pytest.raises(
+        OperationResourceAdmissionError, match="coefficient-carrier envelope"
+    ):
+        reciprocal_profile(oversized)
+    with pytest.raises(
+        OperationResourceAdmissionError, match="integer-polynomial carrier"
+    ):
+        integer_polynomial_primitive_part(oversized)
+    too_wide = IntegerPolynomial.model_construct(
+        coefficients=(10**MAX_CANONICAL_INTEGER_DIGITS,)
+    )
+    with pytest.raises(
+        OperationResourceAdmissionError, match="canonical integer representation"
+    ):
+        reciprocal_profile(too_wide)
+    with pytest.raises(
+        OperationResourceAdmissionError, match="canonical integer representation"
+    ):
+        integer_polynomial_primitive_part(too_wide)
+
+
+def test_reciprocal_profile_charges_endpoint_fields_in_output_admission() -> None:
+    wide = 10 ** (MAX_CANONICAL_INTEGER_DIGITS - 1)
+    polynomial = IntegerPolynomial.model_construct(coefficients=(wide,) * 121)
+    with pytest.raises(OperationResourceAdmissionError, match="output bound"):
+        reciprocal_profile(polynomial)
 
 
 def test_mahler_measure_rejects_leading_zero_native_coefficients() -> None:

@@ -9,6 +9,7 @@ from typing import Any, Literal
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
+    MAX_CANONICAL_INTEGER_DIGITS,
     MAX_CANONICAL_RATIONAL_DIGITS,
     CanonicalRational,
 )
@@ -48,6 +49,8 @@ from jacobian.math.polynomials.values import (
     rational_evaluation_component_digit_bounds,
     require_polynomial_budget,
 )
+
+_CANONICAL_INTEGER_LIMIT = 10**MAX_CANONICAL_INTEGER_DIGITS
 
 
 def _run_admission(admission: Any) -> None:
@@ -104,6 +107,16 @@ def _admit_primitive_part(polynomial: IntegerPolynomial) -> None:
             location=("polynomial",),
             code="polynomial.primitive_part_term_bound",
             message="primitive decomposition exceeds the integer-polynomial carrier",
+        )
+    if any(
+        abs(coefficient) >= _CANONICAL_INTEGER_LIMIT
+        for coefficient in coefficients
+        if abs(coefficient).bit_length() > MAX_CANONICAL_INTEGER_DIGITS
+    ):
+        raise OperationResourceAdmissionError(
+            location=("polynomial",),
+            code="polynomial.primitive_part_integer_digits",
+            message="a coefficient exceeds the canonical integer representation envelope",
         )
 
 
@@ -264,7 +277,7 @@ def integer_polynomial_primitive_part(
     coefficients = polynomial.coefficients
     if not any(coefficients):
         zero = IntegerPolynomial(coefficients=(0,))
-        return IntegerPolynomialPrimitivePartResult(
+        return IntegerPolynomialPrimitivePartResult._from_kernel(
             sign=1,
             content=0,
             primitive_part=zero,
@@ -286,7 +299,7 @@ def integer_polynomial_primitive_part(
         content = gcd(content, abs(coefficient))
     primitive = tuple((sign * coefficient) // content for coefficient in coefficients)
     reconstruction = tuple(sign * content * value for value in primitive)
-    return IntegerPolynomialPrimitivePartResult(
+    return IntegerPolynomialPrimitivePartResult._from_kernel(
         sign=sign,
         content=content,
         primitive_part=IntegerPolynomial(coefficients=primitive),

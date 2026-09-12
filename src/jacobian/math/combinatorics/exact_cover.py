@@ -787,25 +787,37 @@ def minimum_generalized_exact_cover(  # noqa: C901
     items = (*instance.primary_items, *instance.secondary_items)
     item_index = {item: index for index, item in enumerate(items)}
     primary_count = len(instance.primary_items)
-    row_count = len(instance.rows)
-    mask_words = max(1, (max(row_count, primary_count) + 63) // 64)
-    incidence_count = sum(len(row.items) for row in instance.rows)
-    shortcut_work = len(items) + row_count + 2 * incidence_count
-    if shortcut_work > _MINIMUM_EXACT_COVER_WORK_LIMIT:
+    primary_items = frozenset(instance.primary_items)
+    source_rows = instance.rows
+    source_incidence_count = sum(len(row.items) for row in source_rows)
+    # Rows without a primary item cannot improve feasibility or a minimum
+    # witness: selecting one covers no required item and can only add
+    # secondary conflicts. Remove them before sizing the bitset search, while
+    # retaining the source instance for the result and its coverage ledger.
+    active_rows = tuple(
+        row for row in source_rows if primary_items.intersection(row.items)
+    )
+    primary_row_degrees = dict.fromkeys(instance.primary_items, 0)
+    for row in active_rows:
+        for row_item in row.items:
+            if row_item in primary_items:
+                primary_row_degrees[row_item] += 1
+    normalization_work = len(source_rows) + 4 * source_incidence_count
+    if normalization_work > _MINIMUM_EXACT_COVER_WORK_LIMIT:
         raise OperationResourceAdmissionError(
             location=("search_node_limit",),
             code="combinatorics.minimum_exact_cover_work",
             message=(
-                "minimum exact-cover shortcut recognition exceeds the admitted "
+                "minimum exact-cover row normalization exceeds the admitted "
                 "work envelope"
             ),
         )
-    primary_items = frozenset(instance.primary_items)
+    request_checkpoint("after minimum exact-cover row normalization")
     selected_row_ids: tuple[str, ...] | None = None
     if not primary_items:
         selected_row_ids = ()
     else:
-        for row in instance.rows:
+        for row in active_rows:
             if len(row.items) >= primary_count and primary_items.issubset(row.items):
                 # Rows are stored in canonical ID order, so the first one is the
                 # canonical witness among all one-row covers.
@@ -825,10 +837,25 @@ def minimum_generalized_exact_cover(  # noqa: C901
         )
         request_checkpoint("after minimum exact-cover result construction")
         return result
+    row_count = len(active_rows)
+    mask_words = max(1, (max(row_count, primary_count) + 63) // 64)
+    incidence_count = sum(len(row.items) for row in active_rows)
     index_work = (len(items) + row_count + incidence_count) * mask_words
     scan_work = search_node_limit * primary_count * mask_words
-    candidate_work = search_node_limit * row_count
-    if index_work + scan_work + candidate_work > _MINIMUM_EXACT_COVER_WORK_LIMIT:
+    # At each node, branching enumerates only rows that cover the chosen
+    # primary item. Its degree bounds both materializing the candidate list and
+    # pushing its child states; empty and secondary-only source rows never enter
+    # that loop.
+    candidate_work = (
+        2
+        * search_node_limit
+        * max(primary_row_degrees.values(), default=0)
+        * mask_words
+    )
+    if (
+        normalization_work + index_work + scan_work + candidate_work
+        > _MINIMUM_EXACT_COVER_WORK_LIMIT
+    ):
         raise OperationResourceAdmissionError(
             location=("search_node_limit",),
             code="combinatorics.minimum_exact_cover_work",
@@ -841,7 +868,7 @@ def minimum_generalized_exact_cover(  # noqa: C901
     row_primary_masks: list[int] = []
     row_item_indices: list[tuple[int, ...]] = []
     maximum_primary_coverage = 0
-    for row_index, row in enumerate(instance.rows):
+    for row_index, row in enumerate(active_rows):
         indices = tuple(item_index[item] for item in row.items)
         row_item_indices.append(indices)
         primary_mask = 0
@@ -877,7 +904,7 @@ def minimum_generalized_exact_cover(  # noqa: C901
         request_checkpoint("during minimum exact-cover search")
         if uncovered == 0:
             selected_ids = tuple(
-                sorted(instance.rows[index].row_id for index in selected)
+                sorted(active_rows[index].row_id for index in selected)
             )
             if (
                 incumbent is None

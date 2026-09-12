@@ -132,6 +132,29 @@ def test_single_row_cover_avoids_generic_search_admission() -> None:
     assert result.lower_bound == result.upper_bound == 1
 
 
+def test_sparse_two_row_cover_avoids_empty_row_search_admission() -> None:
+    primary = tuple(f"p{index:03d}" for index in range(256))
+    instance = GeneralizedExactCoverInstance(
+        primary_items=primary,
+        secondary_items=(),
+        rows=(
+            ExactCoverRow(row_id="r0000", items=primary[:128]),
+            ExactCoverRow(row_id="r0001", items=primary[128:]),
+            *(
+                ExactCoverRow(row_id=f"r{index:04d}", items=())
+                for index in range(2, 4096)
+            ),
+        ),
+    )
+
+    result = minimum_generalized_exact_cover(instance)
+
+    assert result.status == "EXACT"
+    assert result.selected_row_ids == ("r0000", "r0001")
+    assert result.lower_bound == result.upper_bound == 2
+    assert result.searched_node_count == 3
+
+
 def test_secondary_conflict_is_infeasible() -> None:
     result = minimum_generalized_exact_cover(
         GeneralizedExactCoverInstance(

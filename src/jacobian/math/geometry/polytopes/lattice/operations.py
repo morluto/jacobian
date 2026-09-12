@@ -40,6 +40,7 @@ from typing import Literal
 
 from sympy import Matrix, Rational
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.polytopes import _rational_geometry
 from jacobian.math.geometry.polytopes._rational_geometry import (
@@ -48,15 +49,25 @@ from jacobian.math.geometry.polytopes._rational_geometry import (
 )
 from jacobian.math.geometry.polytopes.lattice._models import (
     MAX_BOUND_SPAN,
+    MAX_DIMENSION,
+    MAX_FACET_COMBINATIONS,
     MAX_FACET_TESTS,
     MAX_LATTICE_POINTS,
+    MAX_TOTAL_SCAN,
     CountLatticePointsResult,
+    EhrhartResult,
     EnumerateLatticePointsResult,
     LatticePoint,
+    require_ehrhart_source,
 )
 from jacobian.math.geometry.polytopes.values import Halfspace, Vertex
+from jacobian.math.polynomials.values import (
+    RationalPolynomial,
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
+)
 
-__all__ = ["count_lattice_points", "enumerate_lattice_points"]
+__all__ = ["count_lattice_points", "ehrhart_polynomial", "enumerate_lattice_points"]
 
 AdmittedGeometry = tuple[
     list[tuple[tuple[int, ...], int]],
@@ -317,9 +328,10 @@ def _facets_and_box(  # noqa: C901
                 facet_combinations = _comb(len(verts), d)
             except ValueError:
                 facet_combinations = 10**18
-            if facet_combinations > 700_000:
+            if facet_combinations > MAX_FACET_COMBINATIONS:
                 raise LatticePointBudgetError(
-                    "vertex facet enumeration exceeds the 700k-combination budget"
+                    "vertex facet enumeration exceeds the "
+                    f"{MAX_FACET_COMBINATIONS}-combination budget"
                 )
             # Lower-dimensional hulls: if vertices do not span full dimension,
             # the facet enumeration would be empty and the scan would be wrong.
@@ -368,9 +380,10 @@ def _facets_and_box(  # noqa: C901
     total_scan = 1
     for span in spans:
         total_scan *= span
-        if total_scan > 10_000_000:
+        if total_scan > MAX_TOTAL_SCAN:
             raise LatticePointBudgetError(
-                "integer bounding box total scan exceeds the 10M-point budget"
+                "integer bounding box total scan exceeds the "
+                f"{MAX_TOTAL_SCAN}-point budget"
             )
     if total_scan * len(facets) > MAX_FACET_TESTS:
         raise LatticePointBudgetError(
@@ -468,4 +481,173 @@ def count_lattice_points(
         dimension=d,
         point_count=count,
         representation=representation,
+    )
+
+
+def _ehrhart_aggregate_scan_bound(
+    vertices: tuple[Vertex, ...], max_dilation: int
+) -> int:
+    """Bound all dilation boxes from the unscaled integral source."""
+
+    spans = [
+        max(vertex.coordinates[axis].num for vertex in vertices)
+        - min(vertex.coordinates[axis].num for vertex in vertices)
+        for axis in range(len(vertices[0].coordinates))
+    ]
+    for span in spans:
+        if max_dilation * span + 1 > MAX_BOUND_SPAN:
+            raise LatticePointBudgetError(
+                "the Ehrhart dilation range exceeds the "
+                f"{MAX_BOUND_SPAN}-point per-axis span bound"
+            )
+    total_scan = 0
+    for dilation in range(1, max_dilation + 1):
+        scan = 1
+        for span in spans:
+            scan *= dilation * span + 1
+            if scan > MAX_TOTAL_SCAN:
+                raise LatticePointBudgetError(
+                    "the Ehrhart dilation range exceeds the aggregate "
+                    f"{MAX_TOTAL_SCAN}-candidate scan budget"
+                )
+        total_scan += scan
+        if total_scan > MAX_TOTAL_SCAN:
+            raise LatticePointBudgetError(
+                "the Ehrhart dilation range exceeds the aggregate "
+                f"{MAX_TOTAL_SCAN}-candidate scan budget"
+            )
+    return total_scan
+
+
+def _ehrhart_scan_plans(
+    vertices: tuple[Vertex, ...], max_dilation: int
+) -> list[AdmittedGeometry]:
+    """Admit every scaled geometry and the aggregate scan before enumeration."""
+    dimension = len(vertices[0].coordinates)
+    _ehrhart_aggregate_scan_bound(vertices, max_dilation)
+    if dimension > 1:
+        facet_work = math.comb(len(vertices), dimension) * max_dilation
+        if facet_work > MAX_FACET_COMBINATIONS:
+            raise LatticePointBudgetError(
+                "the Ehrhart dilation range exceeds the aggregate "
+                f"{MAX_FACET_COMBINATIONS}-combination facet budget"
+            )
+    plans: list[AdmittedGeometry] = []
+    total_scan = 0
+    total_facet_tests = 0
+    for dilation in range(1, max_dilation + 1):
+        scaled = tuple(
+            Vertex(
+                coordinates=tuple(
+                    CanonicalRational.from_integer_ratio(
+                        coordinate.num * dilation, coordinate.den
+                    )
+                    for coordinate in vertex.coordinates
+                )
+            )
+            for vertex in vertices
+        )
+        plan = _facets_and_box(scaled, None, MAX_DIMENSION)
+        plans.append(plan)
+        _facets, lo, hi, _dimension = plan
+        scan = 1
+        for lower, upper in zip(lo, hi, strict=True):
+            scan *= upper - lower + 1
+        total_scan += scan
+        total_facet_tests += scan * len(_facets)
+    if total_scan > MAX_TOTAL_SCAN:
+        raise LatticePointBudgetError(
+            "the Ehrhart dilation range exceeds the aggregate "
+            f"{MAX_TOTAL_SCAN}-candidate scan budget"
+        )
+    if total_facet_tests > MAX_FACET_TESTS:
+        raise LatticePointBudgetError(
+            "the Ehrhart dilation range exceeds the aggregate exact "
+            f"facet-membership budget of {MAX_FACET_TESTS} tests"
+        )
+    return plans
+
+
+def _interpolate_ehrhart(values: list[int], degree: int) -> list[Fraction]:
+    """Interpolate and return ascending-power exact coefficients."""
+    coefficients = [Fraction(0) for _ in range(degree + 1)]
+    for sample in range(degree + 1):
+        basis = [Fraction(1)]
+        denominator = 1
+        for other in range(degree + 1):
+            if other == sample:
+                continue
+            denominator *= sample - other
+            updated = [Fraction(0)] * (len(basis) + 1)
+            for power, coefficient in enumerate(basis):
+                updated[power] -= coefficient * other
+                updated[power + 1] += coefficient
+            basis = updated
+        for power, coefficient in enumerate(basis):
+            coefficients[power] += values[sample] * coefficient / denominator
+    return coefficients
+
+
+def ehrhart_polynomial(
+    vertices: tuple[Vertex, ...], degree_bound: int, max_dilation: int
+) -> EhrhartResult:
+    """Count integral dilates and recover their exact Ehrhart polynomial."""
+    try:
+        require_ehrhart_source(vertices, degree_bound, max_dilation)
+        plans = _ehrhart_scan_plans(vertices, max_dilation)
+    except LatticePolytopeAdmissionError as exc:
+        raise OperationDomainValidationError(
+            location=("vertices", "max_dilation"),
+            code="polytope.ehrhart.admission",
+            message=str(exc),
+        ) from exc
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("vertices", "degree_bound", "max_dilation"),
+            code="polytope.ehrhart.invalid_source",
+            message=str(exc),
+        ) from exc
+
+    values: list[int] = [1]
+    for facets, lo, hi, dimension in plans:
+        _points, count = _scan_box(facets, lo, hi, dimension, collect=False)
+        values.append(count)
+
+    degree = degree_bound
+    coefficients = _interpolate_ehrhart(values, degree)
+
+    def evaluate(dilation: int) -> int:
+        result = Fraction(0)
+        for coefficient in reversed(coefficients):
+            result = result * dilation + coefficient
+        if result.denominator != 1:
+            raise ValueError("interpolated Ehrhart value is not integral")
+        return result.numerator
+
+    if any(evaluate(dilation) != values[dilation] for dilation in range(len(values))):
+        raise OperationDomainValidationError(
+            location=("degree_bound",),
+            code="polytope.ehrhart.degree_insufficient",
+            message="degree_bound does not reproduce every requested dilation count",
+        )
+    polynomial = RationalPolynomial(
+        variables=("t",),
+        polynomial=SparseRationalPolynomial(
+            terms=tuple(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational.from_fraction(value),
+                    exponents=(power,),
+                )
+                for power, value in reversed(tuple(enumerate(coefficients)))
+                if value
+            )
+        ),
+    )
+    return EhrhartResult._from_kernel(
+        vertices=vertices,
+        dimension=len(vertices[0].coordinates),
+        degree_bound=degree,
+        max_dilation=max_dilation,
+        counts=tuple((dilation, values[dilation]) for dilation in range(len(values))),
+        polynomial=polynomial,
     )

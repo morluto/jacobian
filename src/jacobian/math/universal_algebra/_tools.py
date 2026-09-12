@@ -13,6 +13,8 @@ from jacobian.math.universal_algebra._models import (
     EvaluateResult,
     HomomorphismProfileRequest,
     HomomorphismProfileResult,
+    ImplicationCountermodelCheckRequest,
+    ImplicationCountermodelCheckResult,
     QuotientRequest,
     SubalgebraRequest,
     SubalgebraResult,
@@ -36,6 +38,14 @@ def compute_evaluate(request: EvaluateRequest) -> EvaluateResult:
 def compute_equation_profile(request: EquationProfileRequest) -> EquationProfileResult:
     return native.equation_profile(
         request.algebra, request.left, request.right, request.variable_count
+    )
+
+
+def compute_implication_countermodel_check(
+    request: ImplicationCountermodelCheckRequest,
+) -> ImplicationCountermodelCheckResult:
+    return native.implication_countermodel_check(
+        request.algebra, request.premises, request.target
     )
 
 

@@ -20,6 +20,7 @@ from jacobian._execution import (
     bind_request_deadline,
     current_request_execution,
     request_checkpoint,
+    request_execution,
 )
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.catalog.models import (
@@ -620,6 +621,14 @@ def _revalidate_expression_source(
             message="expression source must be a PolynomialExpressionSource",
         )
     try:
+        _bound_raw_expression(source.expression)
+    except ValueError as exc:
+        raise OperationResourceAdmissionError(
+            location=("expression",),
+            code="polynomial.expression.expansion_bound",
+            message=str(exc),
+        ) from exc
+    try:
         return PolynomialExpressionSource.model_validate(
             source.model_dump(mode="python")
         )
@@ -642,6 +651,9 @@ def _revalidate_expression_source(
 def normalize_polynomial_expression(  # noqa: C901
     source: PolynomialExpressionSource,
 ) -> PolynomialExpressionNormalizeResult:
+    if current_request_execution() is None:
+        with request_execution(time.monotonic()):
+            return normalize_polynomial_expression(source)
     source = _revalidate_expression_source(source)
     try:
         _bound_raw_expression(source.expression)
@@ -726,18 +738,23 @@ def normalize_polynomial_expression(  # noqa: C901
         return result
 
     coefficients = evaluate(source.expression)
+    terms: list[RationalPolynomialTerm] = []
+    for index, (exponent, coefficient) in enumerate(
+        sorted(coefficients.items(), reverse=True)
+    ):
+        if index % _CHECKPOINT_STRIDE == 0:
+            request_checkpoint("during polynomial expression result construction")
+        terms.append(
+            RationalPolynomialTerm(
+                coefficient=CanonicalRational.from_fraction(coefficient),
+                exponents=exponent,
+            )
+        )
     polynomial = RationalPolynomial(
         variables=source.variables,
-        polynomial=SparseRationalPolynomial(
-            terms=tuple(
-                RationalPolynomialTerm(
-                    coefficient=CanonicalRational.from_fraction(coefficient),
-                    exponents=exponent,
-                )
-                for exponent, coefficient in sorted(coefficients.items(), reverse=True)
-            )
-        ),
+        polynomial=SparseRationalPolynomial(terms=tuple(terms)),
     )
+    request_checkpoint("after polynomial expression result construction")
     return PolynomialExpressionNormalizeResult(source=source, polynomial=polynomial)
 
 

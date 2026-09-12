@@ -279,7 +279,7 @@ def _tail_plan(
         )
         if (
             _compare_nonnegative_fraction_to_dyadic(
-                8 * (left_tail + right_tail), request.target_width
+                left_tail + right_tail, _quarter_target(request.target_width)
             )
             <= 0
         ):

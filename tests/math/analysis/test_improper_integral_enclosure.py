@@ -209,6 +209,15 @@ def test_large_positive_target_width_does_not_require_a_large_fraction() -> None
     assert result.right_tail.truncation == 1
 
 
+def test_unit_interval_tail_budget_boundary_uses_truncation_64() -> None:
+    result = enclose_endpoint_log_improper_integral(
+        _request(target_width={"mantissa": 1, "exponent": -56})
+    )
+
+    assert result.left_tail.truncation == 64
+    assert result.right_tail.truncation == 64
+
+
 def test_direct_native_call_checks_deadline_after_combined_result(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

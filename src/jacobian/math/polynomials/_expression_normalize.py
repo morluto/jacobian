@@ -551,6 +551,14 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
                 ),
             ),
         )
+    if isinstance(expression, (PolynomialAdd, PolynomialMultiply)):
+        return _nary_expression_metrics(expression)
+    raise TypeError("expression kind is not a polynomial operator")
+
+
+def _nary_expression_metrics(  # noqa: C901
+    expression: PolynomialAdd | PolynomialMultiply,
+) -> _ExpressionMetrics:
     child_metrics = [_metrics(operand) for operand in expression.operands]
     nodes = min(_MAX_EXPRESSION_NODES + 1, 1 + sum(row.nodes for row in child_metrics))
     variables = frozenset().union(*(row.variables for row in child_metrics))
@@ -571,7 +579,11 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
         )
         if all_constant and projected_denominator is not None:
             constant = sum(
-                (child.constant for child in child_metrics),
+                (
+                    child.constant
+                    for child in child_metrics
+                    if child.constant is not None
+                ),
                 start=Fraction(),
             )
             zero = constant == 0
@@ -741,9 +753,12 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
         elif child_metrics and all(
             child.constant is not None for child in child_metrics
         ):
-            constant = Fraction(1)
+            product = Fraction(1)
             for child in child_metrics:
-                constant *= child.constant
+                factor = child.constant
+                assert factor is not None
+                product *= factor
+            constant = product
         else:
             constant = None
         zero = constant == 0 if constant is not None else any(

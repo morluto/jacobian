@@ -198,10 +198,15 @@ class TestNativeTransformations:
         assert state_map == {0: 0}
 
     def test_rational_inverse_swaps_labels_and_alphabets(self) -> None:
-        inverse = invert_rational(_relation())
+        relation = _relation().model_copy(update={"output_alphabet_size": 3})
+        inverse = invert_rational(relation)
 
+        assert inverse.input_alphabet_size == 3
+        assert inverse.output_alphabet_size == 2
         assert inverse.edges[0].input_label == (1,)
         assert inverse.edges[0].output_label == (0,)
+        assert inverse.edges[1].input_label == (0,)
+        assert inverse.edges[1].output_label == (1,)
 
     def test_only_audited_outcomes_are_public(self) -> None:
         assert {tool.operation_id for tool in TOOLS} == {

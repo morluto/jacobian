@@ -12,6 +12,10 @@ from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.catalog.models import OperationResourceAdmissionError
 
 MAX_WORD_LENGTH = 500
+# Prefix/suffix materialization retains one alphabet tuple and one letter tuple
+# for every family member.  Bound those aggregate cells independently of any
+# transport encoding; adapters own their serialized-envelope limits.
+MAX_WORD_FAMILY_CELLS = 200_000
 MAX_ALPHABET_SIZE = 50
 MAX_SYMBOL_LENGTH = 64
 MAX_MORPHISM_IMAGE_LENGTH = 10_000
@@ -336,6 +340,7 @@ __all__ = [
     "MAX_PROLONGABLE_SUBSTITUTION_SOURCE_OCCURRENCES",
     "MAX_SUBSTITUTION_DEPENDENCY_OCCURRENCES",
     "MAX_SYMBOL_LENGTH",
+    "MAX_WORD_FAMILY_CELLS",
     "MAX_WORD_LENGTH",
     "FiniteWord",
     "ProlongableSubstitution",

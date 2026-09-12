@@ -24,6 +24,8 @@ def test_exact_public_api_symbols() -> None:
         "position_grundy",
         "subtraction_game",
         "subtraction_grundy_prefix",
+        "verify_disjunctive_sum",
+        "verify_outcome_profile",
     )
     assert tuple(impartial_games.__all__) == expected
     assert len(impartial_games.__all__) == len(set(impartial_games.__all__))

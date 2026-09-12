@@ -10,8 +10,10 @@ from jacobian.math.finite_fields.values import (
     Axis,
     DirectionRankLedger,
     FiniteDimensionalSubspace,
+    FiniteFieldElement,
     FiniteFieldPresentation,
     FiniteMapTable,
+    FinitePolynomial,
     FinitePolynomialMap,
     PrimeFieldLinearAction,
     ProjectiveLine,
@@ -122,6 +124,13 @@ class FiniteMapTableRequest(_FiniteFieldRequest):
     polynomial_map: FinitePolynomialMap
 
 
+class FinitePolynomialEvaluationRequest(_FiniteFieldRequest):
+    """Evaluate one bounded polynomial at one element of its exact field."""
+
+    polynomial: FinitePolynomial
+    value: FiniteFieldElement
+
+
 class FiberPartitionRequest(_FiniteFieldRequest):
     table: FiniteMapTable
 
@@ -143,6 +152,7 @@ __all__ = [
     "DirectionRankLedgerRequest",
     "FiberPartitionRequest",
     "FiniteMapTableRequest",
+    "FinitePolynomialEvaluationRequest",
     "HomogeneousFixedSubspaceRequest",
     "LinearMapRankRequest",
     "OrbitDistributionRequest",

@@ -64,6 +64,25 @@ than constructing a wire Pydantic model. Native and wire parity tests should
 assert equal exact results and typed outcomes, and should document any
 difference as an explicit transport-only constraint.
 
+Every native callable that backs a public operation is itself an admission
+boundary. Python type annotations and Pydantic field declarations do not
+validate values supplied directly to that callable. The implementation must
+validate strict runtime types, shape, axes, and domain; enforce the same
+owner-defined work and intermediate limits; and enforce the same exact-output
+or materialization bounds before indexing, unpacking, backend work, or result
+allocation. Equivalent native and catalog invocations must use the same owner
+admission helper. Expected invalid native values, shapes, axes, and dimensions
+raise `OperationDomainValidationError` or the operation's declared subtype
+while preserving its stable owner code and domain/resource classification. Use
+`OperationResourceAdmissionError` when the operation contract distinguishes
+execution-envelope refusal from other domain rejections. Neither path may leak
+helper `ValueError`, `IndexError`, tuple-unpacking errors, or Pydantic
+validation exceptions.
+
+Legacy native-only helpers that have not yet been audited may violate this
+boundary; each such violation is migration debt. Audit and repair them before
+publishing them as public-operation implementations.
+
 Pydantic request models are transport contracts, not containers for hidden
 execution state. They may enforce typed shape, canonical representation, and
 cheap intrinsic cross-field consistency. They must not store admission plans in
@@ -201,10 +220,9 @@ needs a concrete mathematical witness or checking relation.
 The native surface also retains useful deterministic helpers intentionally
 excluded from `math.find`, including classical combinatorial numbers, basic
 formal-series transformations, Young-diagram projections, graph transforms and
-decomposition projections, DFA complement, continued-fraction convergents, and
-finite-metric balls. Their absence from the public operation catalog is
-deliberate: native availability does not create a distinct agent discovery
-intent.
+decomposition projections, DFA complement, and finite-metric balls. Their
+absence from the public operation catalog is deliberate: native availability
+does not create a distinct agent discovery intent.
 
 ## Optional native runtimes
 

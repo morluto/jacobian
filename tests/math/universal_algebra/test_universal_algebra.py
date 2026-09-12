@@ -2,23 +2,30 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.universal_algebra import (
     ApplicationTerm,
     FiniteAlgebra,
     FiniteAlgebraCarrierMap,
     FiniteAlgebraHomomorphism,
     FlatTerm,
+    MagmaEquation,
     OperationSymbol,
     VariableTerm,
+    implication_countermodel_check,
 )
 from jacobian.math.universal_algebra._models import (
     CongruenceRequest,
     EquationProfileRequest,
     EvaluateRequest,
     HomomorphismProfileRequest,
+    ImplicationCountermodelCheckRequest,
+    ImplicationCountermodelCheckResult,
     QuotientRequest,
     SubalgebraRequest,
 )
@@ -29,6 +36,7 @@ from jacobian.math.universal_algebra._tools import (
     compute_evaluate,
     compute_generated_subalgebra,
     compute_homomorphism_profile,
+    compute_implication_countermodel_check,
     compute_quotient,
 )
 from jacobian.math.universal_algebra.operations import (
@@ -69,6 +77,54 @@ def _and_term() -> FlatTerm:
         ),
         root=2,
     )
+
+
+def _shared_dag_term(depth: int) -> FlatTerm:
+    nodes: list[VariableTerm | ApplicationTerm] = [
+        VariableTerm(kind="variable", variable_id=0)
+    ]
+    for _ in range(depth):
+        previous = len(nodes) - 1
+        nodes.append(
+            ApplicationTerm(
+                kind="application", operation=0, children=(previous, previous)
+            )
+        )
+    return FlatTerm(nodes=tuple(nodes), root=len(nodes) - 1)
+
+
+def _large_dense_axis_term() -> FlatTerm:
+    nodes: list[VariableTerm | ApplicationTerm] = [
+        VariableTerm(kind="variable", variable_id=index) for index in range(8)
+    ]
+    roots: list[int] = []
+    for left, right in zip(range(4), range(4, 8), strict=True):
+        nodes.append(
+            ApplicationTerm(kind="application", operation=0, children=(left, right))
+        )
+        previous = len(nodes) - 1
+        for _ in range(28):
+            nodes.append(
+                ApplicationTerm(
+                    kind="application", operation=0, children=(previous, previous)
+                )
+            )
+            previous = len(nodes) - 1
+        roots.append(previous)
+    nodes.extend(
+        (
+            ApplicationTerm(
+                kind="application", operation=0, children=(roots[0], roots[1])
+            ),
+            ApplicationTerm(
+                kind="application", operation=0, children=(roots[2], roots[3])
+            ),
+            ApplicationTerm(
+                kind="application", operation=0, children=(len(nodes), len(nodes) + 1)
+            ),
+        )
+    )
+    return FlatTerm(nodes=tuple(nodes), root=len(nodes) - 1)
 
 
 def _cyclic_addition_algebra(order: int) -> FiniteAlgebra:
@@ -176,6 +232,238 @@ class TestEquationProfile:
         assert result.satisfying_count < 4
         assert result.first_counterassignment is not None
         assert verify_equation_profile(result)
+
+
+class TestMagmaImplicationCountermodel:
+    def test_associative_noncommutative_magma_is_countermodel(self) -> None:
+        # Left projection x*y=x is associative but not commutative.
+        magma = FiniteAlgebra(
+            carrier=("0", "1"),
+            operations=(OperationSymbol(operation_id="mul", arity=2),),
+            tables=((0, 0, 1, 1),),
+        )
+        x, y, z = (_variable_term(index) for index in range(3))
+        associative_left = FlatTerm(
+            nodes=(
+                *x.nodes,
+                *y.nodes,
+                *z.nodes,
+                ApplicationTerm(kind="application", operation=0, children=(0, 1)),
+                ApplicationTerm(kind="application", operation=0, children=(3, 2)),
+            ),
+            root=4,
+        )
+        associative_right = FlatTerm(
+            nodes=(
+                *x.nodes,
+                *y.nodes,
+                *z.nodes,
+                ApplicationTerm(kind="application", operation=0, children=(1, 2)),
+                ApplicationTerm(kind="application", operation=0, children=(0, 3)),
+            ),
+            root=4,
+        )
+        xy = _and_term()
+        # Build y*x using the same flat representation with swapped children.
+        yx = FlatTerm(
+            nodes=(
+                VariableTerm(kind="variable", variable_id=0),
+                VariableTerm(kind="variable", variable_id=1),
+                ApplicationTerm(kind="application", operation=0, children=(1, 0)),
+            ),
+            root=2,
+        )
+        result = compute_implication_countermodel_check(
+            ImplicationCountermodelCheckRequest(
+                algebra=magma,
+                premises=(
+                    MagmaEquation(left=associative_left, right=associative_right),
+                ),
+                target=MagmaEquation(left=xy, right=yx),
+            )
+        )
+        assert result.premises[0].status == "HOLDS"
+        assert result.target.status == "FAILS"
+        assert result.target.first_counterassignment is not None
+        assert result.target.first_counterassignment.assignment == (0, 1)
+        assert result.is_countermodel is True
+
+    def test_premise_failure_prevents_countermodel_claim(self) -> None:
+        magma = _cyclic_addition_algebra(2)
+        x, y = _variable_term(0), _variable_term(1)
+        xy = FlatTerm(
+            nodes=(
+                *x.nodes,
+                *y.nodes,
+                ApplicationTerm(kind="application", operation=0, children=(0, 1)),
+            ),
+            root=2,
+        )
+        result = compute_implication_countermodel_check(
+            ImplicationCountermodelCheckRequest(
+                algebra=magma,
+                premises=(MagmaEquation(left=xy, right=x),),
+                target=MagmaEquation(left=xy, right=y),
+            )
+        )
+        assert result.premises[0].status == "FAILS"
+        assert result.target.status == "FAILS"
+        assert result.is_countermodel is False
+
+    def test_shared_dag_evaluation_is_memoized_at_the_depth_boundary(self) -> None:
+        term = _shared_dag_term(60)
+        result = compute_implication_countermodel_check(
+            ImplicationCountermodelCheckRequest(
+                algebra=_cyclic_addition_algebra(2),
+                premises=(),
+                target=MagmaEquation(left=term, right=term),
+            )
+        )
+
+        assert result.target.status == "HOLDS"
+        assert result.target.satisfying_count == 2
+        assert result.is_countermodel is False
+
+    def test_term_nodes_are_charged_before_assignment_expansion(self) -> None:
+        term = _large_dense_axis_term()
+        with pytest.raises(OperationDomainValidationError, match="term-evaluation"):
+            compute_implication_countermodel_check(
+                ImplicationCountermodelCheckRequest(
+                    algebra=_cyclic_addition_algebra(4),
+                    premises=(),
+                    target=MagmaEquation(left=term, right=term),
+                )
+            )
+
+    def test_sparse_variable_axis_is_preserved(self) -> None:
+        term = _variable_term(7)
+        result = compute_implication_countermodel_check(
+            ImplicationCountermodelCheckRequest(
+                algebra=_cyclic_addition_algebra(2),
+                premises=(),
+                target=MagmaEquation(left=term, right=term),
+            )
+        )
+        assert result.target.variable_count == 8
+        assert result.target.satisfying_count == 2**8
+
+    def test_repeated_premises_match_unique_premises(self) -> None:
+        magma = _cyclic_addition_algebra(2)
+        equation = MagmaEquation(left=_variable_term(0), right=_variable_term(0))
+        unique = compute_implication_countermodel_check(
+            ImplicationCountermodelCheckRequest(
+                algebra=magma,
+                premises=(equation,),
+                target=equation,
+            )
+        )
+        repeated = compute_implication_countermodel_check(
+            ImplicationCountermodelCheckRequest(
+                algebra=magma,
+                premises=(equation, equation),
+                target=equation,
+            )
+        )
+        assert repeated == unique
+
+    def test_native_implication_check_rejects_malformed_arguments_typed(self) -> None:
+        magma = _cyclic_addition_algebra(2)
+        equation = MagmaEquation(left=_variable_term(0), right=_variable_term(0))
+        with pytest.raises(OperationDomainValidationError, match="FiniteAlgebra"):
+            implication_countermodel_check(cast(FiniteAlgebra, None), (), equation)
+        with pytest.raises(OperationDomainValidationError, match="tuple"):
+            implication_countermodel_check(
+                magma, cast(tuple[MagmaEquation, ...], [equation]), equation
+            )
+        with pytest.raises(OperationDomainValidationError, match="MagmaEquation"):
+            implication_countermodel_check(magma, (), cast(MagmaEquation, None))
+
+    def test_result_rejects_terms_outside_retained_signature(self) -> None:
+        magma = _cyclic_addition_algebra(2)
+        result = compute_implication_countermodel_check(
+            ImplicationCountermodelCheckRequest(
+                algebra=magma,
+                premises=(),
+                target=MagmaEquation(left=_variable_term(0), right=_variable_term(1)),
+            )
+        )
+        payload = result.model_dump(mode="json")
+        payload["target"]["left"] = {
+            "nodes": [
+                {"kind": "variable", "variable_id": 0},
+                {"kind": "variable", "variable_id": 1},
+                {
+                    "kind": "application",
+                    "operation": 1,
+                    "children": [0, 1],
+                },
+            ],
+            "root": 2,
+        }
+        with pytest.raises(ValidationError, match="retained magma"):
+            ImplicationCountermodelCheckResult.model_validate(payload)
+
+    def test_result_rejects_counterassignment_off_declared_axis(self) -> None:
+        magma = _cyclic_addition_algebra(2)
+        result = compute_implication_countermodel_check(
+            ImplicationCountermodelCheckRequest(
+                algebra=magma,
+                premises=(),
+                target=MagmaEquation(left=_variable_term(0), right=_variable_term(1)),
+            )
+        )
+        payload = result.model_dump(mode="json")
+        payload["target"]["first_counterassignment"]["assignment"] = [0]
+        with pytest.raises(ValidationError, match="declared variable axis"):
+            ImplicationCountermodelCheckResult.model_validate(payload)
+
+    def test_result_rejects_impossible_profile_counts_without_replay(self) -> None:
+        magma = _cyclic_addition_algebra(2)
+        target = MagmaEquation(left=_variable_term(0), right=_variable_term(0))
+        result = compute_implication_countermodel_check(
+            ImplicationCountermodelCheckRequest(
+                algebra=magma,
+                premises=(),
+                target=target,
+            )
+        )
+        payload = result.model_dump(mode="json")
+        payload["target"]["satisfying_count"] = 1
+        with pytest.raises(ValidationError, match="HOLDS must cover"):
+            ImplicationCountermodelCheckResult.model_validate(payload)
+
+        failing = compute_implication_countermodel_check(
+            ImplicationCountermodelCheckRequest(
+                algebra=magma,
+                premises=(),
+                target=MagmaEquation(left=_variable_term(0), right=_variable_term(1)),
+            )
+        )
+        failing_payload = failing.model_dump(mode="json")
+        failing_payload["target"]["satisfying_count"] = 4
+        with pytest.raises(ValidationError, match="FAILS must leave"):
+            ImplicationCountermodelCheckResult.model_validate(failing_payload)
+
+        failing_payload = failing.model_dump(mode="json")
+        failing_payload["target"]["first_counterassignment"]["right_value"] = 0
+        with pytest.raises(ValidationError, match="values must differ"):
+            ImplicationCountermodelCheckResult.model_validate(failing_payload)
+
+    def test_result_rejects_non_magma_retained_algebra(self) -> None:
+        magma = _cyclic_addition_algebra(2)
+        result = compute_implication_countermodel_check(
+            ImplicationCountermodelCheckRequest(
+                algebra=magma,
+                premises=(),
+                target=MagmaEquation(left=_variable_term(0), right=_variable_term(1)),
+            )
+        )
+        payload = result.model_dump(mode="json")
+        empty = {"carrier": ["0", "1"], "operations": [], "tables": []}
+        payload["algebra"] = empty
+        payload["target"]["algebra"] = empty
+        with pytest.raises(ValidationError, match="exactly one binary operation"):
+            ImplicationCountermodelCheckResult.model_validate(payload)
 
 
 # ---------------------------------------------------------------------------
@@ -682,3 +970,38 @@ def test_native_evaluation_binds_assignment_keys_to_the_term_variable_axis() -> 
     assert evaluate_term(algebra, term, {2: 1, 1: 0, 0: 0}) == 1
     with pytest.raises(OperationDomainValidationError, match="variable axis"):
         evaluate_term(algebra, term, {2: 1, 3: 0, 4: 0})
+
+
+def test_native_implication_check_uses_mathematical_arguments() -> None:
+    from jacobian.math.universal_algebra import implication_countermodel_check
+
+    magma = _cyclic_addition_algebra(2)
+    target = MagmaEquation(left=_variable_term(0), right=_variable_term(1))
+    result = implication_countermodel_check(magma, (), target)
+    assert result == compute_implication_countermodel_check(
+        ImplicationCountermodelCheckRequest(algebra=magma, premises=(), target=target)
+    )
+    assert result.is_countermodel
+
+
+def test_native_implication_check_bounds_raw_premise_tuple_before_deduplication() -> (
+    None
+):
+    from jacobian.math.universal_algebra import implication_countermodel_check
+
+    magma = _cyclic_addition_algebra(2)
+    premise = MagmaEquation(left=_variable_term(0), right=_variable_term(0))
+    oversized = (premise,) * 16 + (cast(MagmaEquation, None),)
+    with pytest.raises(OperationDomainValidationError, match="sixteen premises"):
+        implication_countermodel_check(magma, oversized, premise)
+
+
+def test_native_implication_check_preserves_sparse_variable_axis() -> None:
+    from jacobian.math.universal_algebra import implication_countermodel_check
+
+    magma = _cyclic_addition_algebra(2)
+    target = MagmaEquation(left=_variable_term(2), right=_variable_term(2))
+    result = implication_countermodel_check(magma, (), target)
+
+    assert result.target.variable_count == 3
+    assert result.target.satisfying_count == 2**3

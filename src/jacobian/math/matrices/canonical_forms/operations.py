@@ -9,22 +9,31 @@ from typing import Any
 
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
+from jacobian._exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    CanonicalRational,
+    canonical_rational_component_digits,
+)
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.matrices.canonical_forms._models import (
+    _MAX_RESULT_COMPONENT,
     MATRIX_POLYNOMIAL_EVALUATION_PASSES,
     MAX_CANONICAL_FORM_DIMENSION,
     MAX_CANONICAL_FORM_SCALAR_DIGITS,
     MAX_MATRIX_POLYNOMIAL_DIGIT_WORK,
+    MAX_MATRIX_POLYNOMIAL_REMAINDER_DIGIT_WORK,
     MAX_MATRIX_POLYNOMIAL_SCALAR_PRODUCTS,
     InvariantFactorEntry,
     MinimalPolynomialResult,
     MonicPolynomial,
     PrimaryDecompositionResult,
     RationalCanonicalFormResult,
+    _capped_add,
+    _capped_lcm,
+    _capped_multiply,
     _polynomial_degree,
     _require_matrix_polynomial_output_budget,
     _validation_error,
@@ -38,6 +47,8 @@ from jacobian.math.polynomials.values import (
     MAX_POLYNOMIAL_EXPONENT,
     MAX_POLYNOMIAL_TERMS,
     RationalPolynomial,
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
     require_polynomial_budget,
 )
 
@@ -47,6 +58,7 @@ __all__ = [
     "invariant_factors",
     "minimal_polynomial",
     "primary_decomposition",
+    "reduce_matrix_polynomial",
     "verify_minimal_polynomial",
     "verify_primary_decomposition",
     "verify_rational_canonical_form",
@@ -248,12 +260,8 @@ def _evaluate_polynomial(
     )
 
 
-def minimal_polynomial(entries: RationalEntries) -> CoefficientList:
-    """Compute the minimal polynomial via the Krylov/nullspace method.
-
-    Returns the monic minimal polynomial as coefficient list [a_0, ..., a_n].
-    """
-
+def _minimal_polynomial_coefficients(entries: RationalEntries) -> CoefficientList:
+    """Compute bounded raw minimal-polynomial coefficients for one matrix."""
     from sympy import Matrix, eye
 
     n = _square_dimension(entries)
@@ -279,6 +287,17 @@ def minimal_polynomial(entries: RationalEntries) -> CoefficientList:
         *(Fraction(-reduced[index, degree]) for index in range(degree)),
         Fraction(1),
     )
+
+
+def minimal_polynomial(entries: RationalEntries) -> CoefficientList:
+    """Return raw increasing-degree minimal-polynomial coefficients.
+
+    This compatibility-facing native helper delegates to the private
+    coefficient kernel. Typed matrix operations that construct canonical
+    polynomial carriers call the private kernel directly so they cannot
+    accidentally consume a future public result contract.
+    """
+    return _minimal_polynomial_coefficients(entries)
 
 
 def invariant_factors(entries: RationalEntries) -> tuple[CoefficientList, ...]:
@@ -318,7 +337,7 @@ def primary_decomposition(entries: RationalEntries) -> tuple[CoefficientList, ..
     from sympy import Poly, Symbol, factor_list
 
     x = Symbol("x")
-    minimal_coefficients = minimal_polynomial(entries)
+    minimal_coefficients = _minimal_polynomial_coefficients(entries)
     minimal_expression = sum(
         coefficient * x**index for index, coefficient in enumerate(minimal_coefficients)
     )
@@ -438,13 +457,16 @@ def _matrix_entries(
     return tuple(tuple(value.as_fraction() for value in row) for row in matrix.entries)
 
 
-def _to_monic_polynomial(coefficients: Sequence[Fraction]) -> MonicPolynomial:
+def _to_monic_polynomial(
+    coefficients: Sequence[Fraction], *, variable: str = "t"
+) -> MonicPolynomial:
     from jacobian.math.polynomials.values import monic_polynomial_from_coefficients
 
     return monic_polynomial_from_coefficients(
         tuple(
             CanonicalRational.from_fraction(coefficient) for coefficient in coefficients
-        )
+        ),
+        variable=variable,
     )
 
 
@@ -480,6 +502,379 @@ def _evaluate_matrix_polynomial_value(
     return rational_matrix_from_fractions(evaluated)
 
 
+def _polynomial_from_coefficients(
+    coefficients: Sequence[Fraction], variable: str
+) -> RationalPolynomial:
+    """Encode increasing-degree coefficients in the canonical sparse form."""
+
+    terms = tuple(
+        RationalPolynomialTerm(
+            coefficient=CanonicalRational.from_fraction(coefficient),
+            exponents=(degree,),
+        )
+        for degree, coefficient in reversed(tuple(enumerate(coefficients)))
+        if coefficient
+    )
+    return RationalPolynomial(
+        variables=(variable,), polynomial=SparseRationalPolynomial(terms=terms)
+    )
+
+
+def _divide_polynomials(
+    dividend: RationalPolynomial, divisor: MonicPolynomial
+) -> tuple[RationalPolynomial, RationalPolynomial]:
+    """Perform exact univariate Euclidean division over QQ."""
+
+    variable = dividend.variables[0]
+    remainder = {
+        term.exponents[0]: term.coefficient.as_fraction()
+        for term in dividend.polynomial.terms
+    }
+    divisor_coefficients = {
+        term.exponents[0]: term.coefficient.as_fraction()
+        for term in divisor.polynomial.terms
+    }
+    divisor_degree = divisor.polynomial.terms[0].exponents[0]
+    quotient: dict[int, Fraction] = {}
+    while remainder and max(remainder) >= divisor_degree:
+        degree = max(remainder)
+        shift = degree - divisor_degree
+        factor = remainder[degree]  # the divisor is monic
+        quotient[shift] = quotient.get(shift, Fraction(0)) + factor
+        for divisor_exponent, divisor_coefficient in divisor_coefficients.items():
+            exponent = divisor_exponent + shift
+            value = remainder.get(exponent, Fraction(0)) - factor * divisor_coefficient
+            if value:
+                remainder[exponent] = value
+            else:
+                remainder.pop(exponent, None)
+    return (
+        _polynomial_from_coefficients(
+            [
+                quotient.get(index, Fraction(0))
+                for index in range(max(quotient, default=-1) + 1)
+            ],
+            variable,
+        ),
+        _polynomial_from_coefficients(
+            [
+                remainder.get(index, Fraction(0))
+                for index in range(max(remainder, default=-1) + 1)
+            ],
+            variable,
+        ),
+    )
+
+
+def _coefficient_growth_digits(
+    terms: Sequence[RationalPolynomialTerm],
+) -> int | None:
+    """Bound one coefficient family's common-denominator aggregate height.
+
+    A quotient coefficient can collect contributions from several source
+    coefficients. Charging only the largest source component therefore misses
+    the product of unrelated denominators (and the corresponding sum of
+    lifted numerators). Keep the common denominator and absolute lifted
+    numerator sum capped at one canonical rational component; callers reject a
+    saturated result before division starts.
+    """
+
+    common_denominator = _capped_lcm(term.coefficient.den for term in terms)
+    if common_denominator > _MAX_RESULT_COMPONENT:
+        return None
+    aggregate_numerator = 0
+    for term in terms:
+        coefficient = term.coefficient
+        lifted = _capped_multiply(
+            abs(coefficient.num), common_denominator // coefficient.den
+        )
+        aggregate_numerator = _capped_add(aggregate_numerator, lifted)
+        if aggregate_numerator > _MAX_RESULT_COMPONENT:
+            return None
+    return max(
+        _integer_decimal_digits(common_denominator),
+        _integer_decimal_digits(aggregate_numerator),
+        max(
+            (canonical_rational_component_digits(term.coefficient) for term in terms),
+            default=1,
+        ),
+    )
+
+
+def _division_support_bound(
+    polynomial: RationalPolynomial, divisor: MonicPolynomial
+) -> int:
+    """Return an upper bound on quotient support before rational division.
+
+    Long division can create a lower-degree term at every cancellation. A
+    support-only simulation follows those possible shifts while ignoring
+    coefficient cancellation, so its count safely bounds the canonical
+    quotient carrier without materializing any exact rational intermediate.
+    Monomial moduli take the particularly useful fast path: their support has
+    no lower shifts, so a high-degree monomial remains one quotient term.
+    """
+
+    remaining = {term.exponents[0] for term in polynomial.polynomial.terms}
+    divisor_terms = divisor.polynomial.terms
+    divisor_degree = divisor_terms[0].exponents[0]
+    lower_support = {term.exponents[0] for term in divisor_terms[1:]}
+    quotient_support: set[int] = set()
+    while remaining:
+        degree = max(remaining)
+        if degree < divisor_degree:
+            break
+        remaining.remove(degree)
+        shift = degree - divisor_degree
+        quotient_support.add(shift)
+        remaining.update(shift + exponent for exponent in lower_support)
+    return len(quotient_support)
+
+
+def _bounded_exact_division_presolve(
+    dividend: RationalPolynomial, divisor: MonicPolynomial
+) -> tuple[RationalPolynomial, RationalPolynomial] | None:
+    """Try exact division while bounding every presolve intermediate.
+
+    The support ledger deliberately ignores coefficients, so it can reject a
+    sparse quotient whose high-degree cancellations are obvious from the
+    source. This presolve recovers those cases without admitting unrestricted
+    exact arithmetic: every product and sum must fit one canonical rational
+    component, and the accumulated digit-work charge must stay within the
+    remainder-operation budget. ``None`` leaves the conservative support and
+    growth admission in charge.
+    """
+
+    variable = dividend.variables[0]
+    remaining = {
+        term.exponents[0]: term.coefficient.as_fraction()
+        for term in dividend.polynomial.terms
+    }
+    divisor_coefficients = {
+        term.exponents[0]: term.coefficient.as_fraction()
+        for term in divisor.polynomial.terms
+    }
+    divisor_degree = divisor.polynomial.terms[0].exponents[0]
+    quotient: dict[int, Fraction] = {}
+    digit_work = 0
+
+    while remaining and max(remaining) >= divisor_degree:
+        degree = max(remaining)
+        shift = degree - divisor_degree
+        factor = remaining[degree]
+        quotient[shift] = factor
+        if len(quotient) > MAX_POLYNOMIAL_TERMS:
+            return None
+        factor_digits = max(
+            _integer_decimal_digits(abs(factor.numerator)),
+            _integer_decimal_digits(factor.denominator),
+        )
+        for divisor_exponent, divisor_coefficient in divisor_coefficients.items():
+            old = remaining.get(divisor_exponent + shift)
+            coefficient_digits = max(
+                _integer_decimal_digits(abs(divisor_coefficient.numerator)),
+                _integer_decimal_digits(divisor_coefficient.denominator),
+            )
+            old_digits = (
+                max(
+                    _integer_decimal_digits(abs(old.numerator)),
+                    _integer_decimal_digits(old.denominator),
+                )
+                if old is not None
+                else 1
+            )
+            operation_digits = factor_digits + coefficient_digits + old_digits
+            digit_work += operation_digits**2
+            if digit_work > MAX_MATRIX_POLYNOMIAL_REMAINDER_DIGIT_WORK:
+                return None
+            # The product's unreduced components are bounded by the operand
+            # component sums. Refuse before materializing a wider integer.
+            if factor_digits + coefficient_digits > MAX_CANONICAL_RATIONAL_DIGITS:
+                return None
+            product = factor * divisor_coefficient
+            if old is None:
+                value = -product
+            else:
+                # Clearing both denominators gives a component bound before
+                # Fraction performs the exact reduction or cancellation.
+                if (
+                    max(
+                        _integer_decimal_digits(abs(old.numerator))
+                        + _integer_decimal_digits(product.denominator)
+                        + 1,
+                        _integer_decimal_digits(abs(product.numerator))
+                        + _integer_decimal_digits(old.denominator)
+                        + 1,
+                        _integer_decimal_digits(old.denominator)
+                        + _integer_decimal_digits(product.denominator),
+                    )
+                    > MAX_CANONICAL_RATIONAL_DIGITS
+                ):
+                    return None
+                value = old - product
+            if value:
+                if (
+                    max(
+                        _integer_decimal_digits(abs(value.numerator)),
+                        _integer_decimal_digits(value.denominator),
+                    )
+                    > MAX_CANONICAL_RATIONAL_DIGITS
+                ):
+                    return None
+                remaining[divisor_exponent + shift] = value
+            else:
+                remaining.pop(divisor_exponent + shift, None)
+
+    return (
+        _polynomial_from_coefficients(
+            [
+                quotient.get(index, Fraction(0))
+                for index in range(max(quotient, default=-1) + 1)
+            ],
+            variable,
+        ),
+        _polynomial_from_coefficients(
+            [
+                remaining.get(index, Fraction(0))
+                for index in range(max(remaining, default=-1) + 1)
+            ],
+            variable,
+        ),
+    )
+
+
+def reduce_matrix_polynomial(
+    matrix: RationalMatrix, polynomial: RationalPolynomial
+) -> tuple[MonicPolynomial, RationalPolynomial, RationalPolynomial]:
+    """Return the minimal polynomial and exact quotient/remainder of ``polynomial``."""
+
+    _admit_square(matrix)
+    if len(polynomial.variables) != 1:
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="matrix.polynomial.remainder.variable",
+            message="polynomial reduction requires exactly one variable",
+        )
+    try:
+        require_polynomial_budget(
+            polynomial,
+            maximum_terms=MAX_POLYNOMIAL_TERMS,
+            maximum_exponent=MAX_POLYNOMIAL_EXPONENT,
+            maximum_coefficient_digits=MAX_CANONICAL_RATIONAL_DIGITS,
+            label="matrix polynomial remainder",
+        )
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="matrix.polynomial.remainder.budget",
+            message=str(exc),
+        ) from exc
+    source_degree = max(
+        (term.exponents[0] for term in polynomial.polynomial.terms), default=0
+    )
+    # A zero or constant source needs no Euclidean quotient-growth work.  Keep
+    # the square-matrix admission above and still compute the minimal
+    # polynomial, which is part of this operation's result, before returning
+    # the source polynomial unchanged as the remainder.
+    if source_degree == 0:
+        minimal_coefficients = _minimal_polynomial_coefficients(_matrix_entries(matrix))
+        minimal = _to_monic_polynomial(
+            minimal_coefficients, variable=polynomial.variables[0]
+        )
+        return (
+            minimal,
+            _polynomial_from_coefficients((), polynomial.variables[0]),
+            polynomial,
+        )
+    # The matrix admission above bounds the Krylov computation. Compute this
+    # operation's actual modulus before estimating quotient growth: its degree
+    # and nonzero support, rather than the dense characteristic envelope, are
+    # the quantities the Euclidean division will use.
+    minimal_coefficients = _minimal_polynomial_coefficients(_matrix_entries(matrix))
+    minimal = _to_monic_polynomial(
+        minimal_coefficients, variable=polynomial.variables[0]
+    )
+    minimal_terms = minimal.polynomial.terms
+    minimal_degree = minimal_terms[0].exponents[0]
+    if source_degree < minimal_degree:
+        return (
+            minimal,
+            _polynomial_from_coefficients((), polynomial.variables[0]),
+            polynomial,
+        )
+
+    # The support-only division ledger is tighter than charging every degree
+    # through the source exponent. In particular, t^D divided by t has one
+    # quotient term for any admitted exponent D.
+    quotient_support = _division_support_bound(polynomial, minimal)
+    support_rejected = quotient_support > MAX_POLYNOMIAL_TERMS
+
+    # A monomial modulus only shifts source terms. There are no coefficient
+    # products or accumulations to charge, so high exponents retain the source
+    # component bound and the support ledger above is sufficient.
+    if len(minimal_terms) == 1:
+        if support_rejected:
+            raise OperationResourceAdmissionError(
+                location=("polynomial",),
+                code="matrix.polynomial.remainder.output",
+                message="polynomial remainder quotient support exceeds the canonical term bound",
+            )
+        quotient, remainder = _divide_polynomials(polynomial, minimal)
+        return minimal, quotient, remainder
+
+    source_height = _coefficient_growth_digits(polynomial.polynomial.terms)
+    modulus_height = _coefficient_growth_digits(minimal_terms)
+    if source_height is None or modulus_height is None:
+        raise OperationResourceAdmissionError(
+            location=("polynomial",),
+            code="matrix.polynomial.remainder.output",
+            message=(
+                "matrix polynomial coefficient common-denominator or aggregate "
+                "growth exceeds the canonical "
+                f"{MAX_CANONICAL_RATIONAL_DIGITS:,}-digit exact-arithmetic bound"
+            ),
+        )
+
+    quotient_degree = source_degree - minimal_degree
+    division_steps = quotient_degree + 1
+    nonleading_support = len(minimal_terms) - 1
+    support_digits = _integer_decimal_digits(max(1, nonleading_support))
+    # Each recurrence step multiplies by at most one modulus coefficient and
+    # may collect the supported lower shifts. The common-denominator and
+    # aggregate numerator heights account for unrelated source/modulus
+    # denominators before this recurrence charge is applied.
+    estimated_digits = source_height + division_steps * (
+        modulus_height + support_digits + 1
+    )
+    digit_work = (
+        len(polynomial.polynomial.terms)
+        * division_steps
+        * max(1, nonleading_support)
+        * (estimated_digits**2)
+    )
+    growth_rejected = estimated_digits > MAX_CANONICAL_RATIONAL_DIGITS or (
+        digit_work > MAX_MATRIX_POLYNOMIAL_REMAINDER_DIGIT_WORK
+    )
+    if support_rejected or growth_rejected:
+        presolved = _bounded_exact_division_presolve(polynomial, minimal)
+        if presolved is not None:
+            quotient, remainder = presolved
+            return minimal, quotient, remainder
+    if support_rejected:
+        raise OperationResourceAdmissionError(
+            location=("polynomial",),
+            code="matrix.polynomial.remainder.output",
+            message="polynomial remainder quotient support exceeds the canonical term bound",
+        )
+    if growth_rejected:
+        raise OperationResourceAdmissionError(
+            location=("polynomial",),
+            code="matrix.polynomial.remainder.output",
+            message="polynomial remainder quotient growth exceeds the admitted exact-arithmetic bound",
+        )
+    quotient, remainder = _divide_polynomials(polynomial, minimal)
+    return minimal, quotient, remainder
+
+
 def _minimal_polynomial_components(
     matrix: RationalMatrix,
 ) -> tuple[MonicPolynomial, MonicPolynomial]:
@@ -488,7 +883,7 @@ def _minimal_polynomial_components(
     _admit_square(matrix)
     entries = _matrix_entries(matrix)
     return (
-        _to_monic_polynomial(minimal_polynomial(entries)),
+        _to_monic_polynomial(_minimal_polynomial_coefficients(entries)),
         _to_monic_polynomial(characteristic_polynomial(entries)),
     )
 
@@ -501,7 +896,7 @@ def _rational_canonical_components(
     _admit_square(matrix)
     entries = _matrix_entries(matrix)
     factors = invariant_factors(entries)
-    minimal = minimal_polynomial(entries)
+    minimal = _minimal_polynomial_coefficients(entries)
     characteristic = characteristic_polynomial(entries)
     invariant_entries = tuple(
         InvariantFactorEntry(

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
+from math import isqrt
 from typing import Any, Literal
 
 import sympy
@@ -128,10 +130,129 @@ def _family(
     return tuple(records), tuple(values)
 
 
-def _select_real_algebraic_root(minimal: sympy.Poly, distance: Any) -> int:
-    """Select the real minpoly root by certified isolation, not expression identity."""
+def _sqrt_bounds(value: Fraction) -> tuple[Fraction, Fraction]:
+    if value < 0:
+        raise ValueError("certified square root requires a nonnegative radicand")
+    if value == 0:
+        return Fraction(), Fraction()
+    scaled = value.numerator * value.denominator
+    root = isqrt(scaled)
+    lower = Fraction(root, value.denominator)
+    if root * root == scaled:
+        return lower, lower
+    return lower, Fraction(root + 1, value.denominator)
 
-    if sympy.simplify(distance) == 0:
+
+def _enclose_sympy(expr: Any) -> tuple[Fraction, Fraction, Fraction, Fraction]:
+    """Return a certified complex box (real_lo, real_hi, imag_lo, imag_hi)."""
+
+    if isinstance(expr, int):
+        value = Fraction(expr)
+        return value, value, Fraction(), Fraction()
+    if isinstance(expr, Fraction):
+        return expr, expr, Fraction(), Fraction()
+    if getattr(expr, "is_Rational", False) and expr.is_real:
+        value = Fraction(int(expr.p), int(expr.q))
+        return value, value, Fraction(), Fraction()
+    if expr == sympy.I:
+        return Fraction(), Fraction(), Fraction(1), Fraction(1)
+    if expr.is_Add:
+        real_lo = real_hi = imag_lo = imag_hi = Fraction()
+        first = True
+        for argument in expr.args:
+            r0, r1, i0, i1 = _enclose_sympy(argument)
+            if first:
+                real_lo, real_hi, imag_lo, imag_hi = r0, r1, i0, i1
+                first = False
+            else:
+                real_lo += r0
+                real_hi += r1
+                imag_lo += i0
+                imag_hi += i1
+        return real_lo, real_hi, imag_lo, imag_hi
+    if expr.is_Mul:
+        real_lo = Fraction(1)
+        real_hi = Fraction(1)
+        imag_lo = Fraction()
+        imag_hi = Fraction()
+        for argument in expr.args:
+            r0, r1, i0, i1 = _enclose_sympy(argument)
+            corners_real = []
+            corners_imag = []
+            for left_r in (real_lo, real_hi):
+                for left_i in (imag_lo, imag_hi):
+                    for right_r in (r0, r1):
+                        for right_i in (i0, i1):
+                            corners_real.append(left_r * right_r - left_i * right_i)
+                            corners_imag.append(left_r * right_i + left_i * right_r)
+            real_lo, real_hi = min(corners_real), max(corners_real)
+            imag_lo, imag_hi = min(corners_imag), max(corners_imag)
+        return real_lo, real_hi, imag_lo, imag_hi
+    if expr.is_Pow:
+        base, exponent = expr.args
+        if exponent == 2:
+            r0, r1, i0, i1 = _enclose_sympy(base)
+            return _square_box(r0, r1, i0, i1)
+        if exponent == sympy.Rational(1, 2) or exponent == Fraction(1, 2):
+            r0, r1, i0, i1 = _enclose_sympy(base)
+            if i0 != 0 or i1 != 0 or r0 < 0:
+                raise ValueError("certified square root requires a nonnegative real box")
+            lower, upper = _sqrt_bounds(r0)[0], _sqrt_bounds(r1)[1]
+            return lower, upper, Fraction(), Fraction()
+        if getattr(exponent, "is_Integer", False):
+            power = int(exponent)
+            if power < 0:
+                raise ValueError("certified enclosure does not invert")
+            result = (Fraction(1), Fraction(1), Fraction(), Fraction())
+            factor = _enclose_sympy(base)
+            remaining = power
+            while remaining:
+                if remaining & 1:
+                    result = _multiply_boxes(result, factor)
+                remaining >>= 1
+                if remaining:
+                    factor = _multiply_boxes(factor, factor)
+            return result
+    if expr.func is sympy.conjugate:
+        r0, r1, i0, i1 = _enclose_sympy(expr.args[0])
+        return r0, r1, -i1, -i0
+    if expr.func is sympy.re:
+        r0, r1, _i0, _i1 = _enclose_sympy(expr.args[0])
+        return r0, r1, Fraction(), Fraction()
+    if expr.func is sympy.im:
+        _r0, _r1, i0, i1 = _enclose_sympy(expr.args[0])
+        return i0, i1, Fraction(), Fraction()
+    raise ValueError("expression is outside the certified enclosure grammar")
+
+
+def _square_box(
+    r0: Fraction, r1: Fraction, i0: Fraction, i1: Fraction
+) -> tuple[Fraction, Fraction, Fraction, Fraction]:
+    return _multiply_boxes((r0, r1, i0, i1), (r0, r1, i0, i1))
+
+
+def _multiply_boxes(
+    left: tuple[Fraction, Fraction, Fraction, Fraction],
+    right: tuple[Fraction, Fraction, Fraction, Fraction],
+) -> tuple[Fraction, Fraction, Fraction, Fraction]:
+    real_lo, real_hi, imag_lo, imag_hi = left
+    r0, r1, i0, i1 = right
+    corners_real = []
+    corners_imag = []
+    for left_r in (real_lo, real_hi):
+        for left_i in (imag_lo, imag_hi):
+            for right_r in (r0, r1):
+                for right_i in (i0, i1):
+                    corners_real.append(left_r * right_r - left_i * right_i)
+                    corners_imag.append(left_r * right_i + left_i * right_r)
+    return min(corners_real), max(corners_real), min(corners_imag), max(corners_imag)
+
+
+def _select_real_algebraic_root(minimal: sympy.Poly, distance: Any) -> int:
+    """Select the real minpoly root by certified interval comparison."""
+
+    simplified = sympy.simplify(distance)
+    if simplified == 0:
         roots = minimal.real_roots()
         for index, candidate in enumerate(roots):
             if candidate == 0:
@@ -141,19 +262,28 @@ def _select_real_algebraic_root(minimal: sympy.Poly, distance: Any) -> int:
             code="polynomial.root_critical.distance_root_selection",
             message="exact real distance root could not be selected",
         )
-    precision = 16
+    try:
+        real_lo, real_hi, imag_lo, imag_hi = _enclose_sympy(simplified)
+    except (ValueError, AttributeError, TypeError) as exc:
+        raise OperationDomainValidationError(
+            location=("pairs",),
+            code="polynomial.root_critical.distance_root_selection",
+            message="exact real distance root could not be selected",
+        ) from exc
+    if imag_lo > 0 or imag_hi < 0:
+        raise OperationDomainValidationError(
+            location=("pairs",),
+            code="polynomial.root_critical.distance_root_selection",
+            message="exact real distance root could not be selected",
+        )
     intervals = list(minimal.intervals())
-    while precision <= 1024:
-        approximation = sympy.re(distance.evalf(precision))
-        hits = [
-            index
-            for index, ((lower, upper), _multiplicity) in enumerate(intervals)
-            if lower <= approximation <= upper
-        ]
-        if len(hits) == 1:
-            return hits[0]
-        intervals = list(minimal.intervals(eps=sympy.Rational(1, 10**precision)))
-        precision *= 2
+    hits = [
+        index
+        for index, ((lower, upper), _multiplicity) in enumerate(intervals)
+        if Fraction(lower) <= real_lo and real_hi <= Fraction(upper)
+    ]
+    if len(hits) == 1:
+        return hits[0]
     raise OperationDomainValidationError(
         location=("pairs",),
         code="polynomial.root_critical.distance_root_selection",

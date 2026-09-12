@@ -103,3 +103,13 @@ def test_request_wire_model_is_not_a_native_export() -> None:
     assert "RootCriticalDistanceProfileRequest" not in package.__all__
     profile = root_critical_distance_profile(_polynomial((4, 1), (0, -2)))
     assert profile.pairs
+
+
+def test_factor_coefficients_are_canonical_decimal_integers() -> None:
+    import json
+
+    profile = root_critical_distance_profile(_polynomial((3, 1), (0, -1)))
+    dumped = json.loads(profile.model_dump_json())
+    for root in (*dumped["roots"], *dumped["critical_points"]):
+        assert root["factor"]
+        assert all(isinstance(coefficient, str) for coefficient in root["factor"])

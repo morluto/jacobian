@@ -184,12 +184,12 @@ def test_scaled_coefficient_growth_is_admitted_before_root_isolation(
         )
 
 
-def test_result_bytes_are_admitted_before_root_isolation(
+def test_result_allocation_is_admitted_before_root_isolation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The retained source and digit list have an explicit transport envelope."""
-    monkeypatch.setattr(radix_module, "MAX_RADIX_RESULT_BYTES", 1)
-    with pytest.raises(OperationResourceAdmissionError, match="result envelope"):
+    """The retained source and digit list have an allocation envelope."""
+    monkeypatch.setattr(radix_module, "MAX_RADIX_RESULT_ALLOCATION_UNITS", 1)
+    with pytest.raises(OperationResourceAdmissionError, match="result allocation"):
         radix_prefix(
             RadixPrefixRequest(
                 value=_value((1, 0, -2), 1), base=10, fractional_places=1

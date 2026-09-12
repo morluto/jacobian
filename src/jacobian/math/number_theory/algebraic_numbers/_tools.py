@@ -55,7 +55,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "terminating-zero convention; irrational values are compared "
             "exactly against a scaled defining polynomial, never by binary "
             "floating point. Source growth, root-isolation precision, exact "
-            "arithmetic, and serialized result bytes are admitted before "
+            "arithmetic, and exact result allocation are admitted before "
             "backend expansion. The result asserts only the requested finite "
             "prefix."
         ),

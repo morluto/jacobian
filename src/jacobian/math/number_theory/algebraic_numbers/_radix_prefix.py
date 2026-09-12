@@ -19,11 +19,7 @@ from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.canonical import (
-    CanonicalLimits,
-    encode_strict_json,
-    format_canonical_integer,
-)
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -44,7 +40,9 @@ MAX_RADIX_PLACES = 256
 # the public fields from turning into an unbounded backend request.
 MAX_RADIX_SCALED_COEFFICIENT_DIGITS = 16_384
 MAX_RADIX_ISOLATION_BITS = 1_048_576
-MAX_RADIX_RESULT_BYTES = CanonicalLimits().max_output_bytes
+# Sum of retained exact-integer digits, digit entries, and fixed scalar slots.
+# Concrete transports enforce their own independent encoded-byte ceilings.
+MAX_RADIX_RESULT_ALLOCATION_UNITS = 32_768
 
 
 def _unique_floor_of_open_interval(lower: Any, upper: Any) -> int | None:
@@ -106,11 +104,10 @@ class RadixPrefixResult(StrictModel):
 
 @dataclass(frozen=True, slots=True)
 class _RadixAdmission:
-    """Request-scoped arithmetic and transport envelope for one prefix."""
+    """Request-scoped arithmetic envelope for one prefix."""
 
     scale: int
     isolation_bits: int
-    result_bytes: int
 
 
 def _require_request(base: int, fractional_places: int) -> None:
@@ -177,10 +174,13 @@ def _admit_request(request: RadixPrefixRequest) -> _RadixAdmission:
             ),
         )
 
-    # The source is retained in the result.  Count its canonical bytes and
-    # reserve an upper bound for the integer part, digit array, and fixed
-    # result fields without constructing or validating a mathematical result.
-    source_bytes = len(encode_strict_json(request.value.model_dump(mode="json")))
+    # The source is retained in the result.  Reserve its exact integer digits,
+    # the bounded integer part, every radix digit, and fixed scalar slots.  This
+    # is independent of JSON spelling or any other delivery format.
+    source_digit_units = sum(
+        len(format_canonical_integer(abs(coefficient)))
+        for coefficient in request.value.polynomial
+    )
     integer_part_digits = (
         max(
             len(format_canonical_integer(abs(coefficient)))
@@ -188,22 +188,25 @@ def _admit_request(request: RadixPrefixRequest) -> _RadixAdmission:
         )
         + 2
     )
-    result_bytes = (
-        source_bytes + 512 + integer_part_digits + 4 * request.fractional_places
+    allocation_units = (
+        source_digit_units
+        + len(request.value.polynomial)
+        + integer_part_digits
+        + request.fractional_places
+        + 8
     )
-    if result_bytes > MAX_RADIX_RESULT_BYTES:
+    if allocation_units > MAX_RADIX_RESULT_ALLOCATION_UNITS:
         raise OperationResourceAdmissionError(
             location=("fractional_places",),
-            code="algebraic_number.radix_result_bytes_bound",
+            code="algebraic_number.radix_result_allocation_bound",
             message=(
                 "the exact radix prefix exceeds the admitted "
-                f"{MAX_RADIX_RESULT_BYTES}-byte result envelope"
+                f"{MAX_RADIX_RESULT_ALLOCATION_UNITS}-unit result allocation"
             ),
         )
     return _RadixAdmission(
         scale=scale,
         isolation_bits=isolation_bits,
-        result_bytes=result_bytes,
     )
 
 

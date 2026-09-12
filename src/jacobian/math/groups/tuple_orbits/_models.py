@@ -266,8 +266,17 @@ class TupleFamilyOrbitResult(StrictModel):
                         "input_bound",
                         f"at most {MAX_FAMILY_MEMBERS} tuple rows are admitted",
                     )
+                total_source_indices = 0
                 for row in rows:
                     _preflight_row_payload(row)
+                    source_indices = _row_field(row, "source_indices")
+                    if isinstance(source_indices, (list, tuple)):
+                        total_source_indices += len(source_indices)
+                        if total_source_indices > MAX_FAMILY_MEMBERS:
+                            raise _tuple_error(
+                                "input_bound",
+                                f"at most {MAX_FAMILY_MEMBERS} tuple rows are admitted",
+                            )
             source = data.get("source")
             if source is not None:
                 _preflight_source_payload(source)

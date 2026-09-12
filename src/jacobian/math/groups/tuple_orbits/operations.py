@@ -59,20 +59,25 @@ def _revalidate_action(request: TupleFamilyOrbitSource) -> FinitePermutationActi
             code="finite_group_action.tuple_family_action_type",
             message="tuple-family source must retain a finite permutation action",
         )
+    domain = getattr(action, "domain", None)
+    generators = getattr(action, "generators", None)
     try:
-        _preflight_action_dimensions(
-            domain=getattr(action, "domain", None),
-            generators=getattr(action, "generators", None),
-        )
+        _preflight_action_dimensions(domain=domain, generators=generators)
     except PydanticCustomError as error:
         raise OperationDomainValidationError(
             location=("action",),
             code=error.type,
             message=str(error),
         ) from error
+    if domain is None or generators is None:
+        raise OperationDomainValidationError(
+            location=("action",),
+            code="finite_group_action.tuple_family_action_type",
+            message="tuple-family source must retain a finite permutation action",
+        )
     try:
         return FinitePermutationAction.model_validate(
-            {"domain": action.domain, "generators": action.generators}
+            {"domain": domain, "generators": generators}
         )
     except ValidationError as error:
         detail = error.errors()[0]
@@ -169,15 +174,9 @@ def _admit_source(
             code="finite_group_action.tuple_family_action_work_bound",
             message="diagonal tuple-action work exceeds the admitted bound",
         )
-    image_cells = group_order * unique_family_size
-    if image_cells > MAX_TUPLE_ORBIT_IMAGES:
-        raise OperationResourceAdmissionError(
-            location=("family",),
-            code="finite_group_action.tuple_family_image_bound",
-            message="ambient tuple-image intermediates exceed the admitted bound",
-        )
-    # Transporter work is group_order per represented orbit, not per unique
-    # source tuple; the checkpointed partition loop owns that bound.
+    # Image and transporter work are group_order per represented orbit, not
+    # per unique source tuple; the checkpointed partition loop owns those
+    # bounds.
     # Every output row retains a representative, source-index references, and
     # one full-axis transporter; this upper bound is independent of |X|^arity.
     output_upper = unique_family_size * (request.arity + degree + 4) + family_size

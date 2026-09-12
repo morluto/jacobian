@@ -276,6 +276,18 @@ def test_missing_action_on_forged_source_is_a_typed_domain_error() -> None:
     )
 
 
+def test_incomplete_forged_action_is_a_typed_domain_error() -> None:
+    forged_action = FinitePermutationAction.model_construct(generators=((0,),))
+    request = TupleFamilyOrbitSource.model_construct(
+        action=forged_action, arity=0, family=()
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        tuple_family_orbit_profile(request)
+    assert exc_info.value.errors()[0]["type"] == (
+        "finite_group_action.tuple_family_action_type"
+    )
+
+
 def test_orbit_row_payloads_are_preflighted_before_container_copy() -> None:
     class _HugeRepresentative(tuple):
         def __len__(self) -> int:
@@ -334,6 +346,36 @@ def test_constructed_result_rows_are_preflighted_before_container_copy() -> None
     assert "arity_out_of_range" in arity.value.errors()[0]["type"]
 
 
+def test_aggregate_source_indices_are_bounded_before_container_copy() -> None:
+    payload = {
+        "source": {
+            "action": {"domain": ["a"], "generators": [[0]]},
+            "arity": 0,
+            "family": [],
+        },
+        "rows": [
+            {
+                "representative": [0],
+                "source_indices": list(range(MAX_FAMILY_MEMBERS)),
+                "orbit_size": 1,
+                "stabilizer_size": 1,
+                "least_transporter": [0],
+            },
+            {
+                "representative": [1],
+                "source_indices": list(range(MAX_FAMILY_MEMBERS)),
+                "orbit_size": 1,
+                "stabilizer_size": 1,
+                "least_transporter": [0],
+            },
+        ],
+        "is_union_of_complete_ambient_orbits": True,
+    }
+    with pytest.raises(ValidationError) as indices_bound:
+        TupleFamilyOrbitResult.model_validate(payload)
+    assert "input_bound" in indices_bound.value.errors()[0]["type"]
+
+
 def test_complete_orbit_family_is_not_rejected_by_tuple_count_times_order() -> None:
     degree = 22
     generator = list(range(degree))
@@ -355,6 +397,30 @@ def test_complete_orbit_family_is_not_rejected_by_tuple_count_times_order() -> N
     )
     assert len(result.rows) == 1
     assert result.rows[0].orbit_size == 360
+    assert result.is_union_of_complete_ambient_orbits is True
+
+
+def test_complete_prime_cycle_orbit_is_not_rejected_by_images_times_order() -> None:
+    degree = 46
+    generator = list(range(degree))
+    for start, length in ((0, 17), (17, 29)):
+        for offset in range(length):
+            generator[start + offset] = start + ((offset + 1) % length)
+    action = FinitePermutationAction(
+        domain=tuple(str(index) for index in range(degree)),
+        generators=(tuple(generator),),
+    )
+    seed = (0, 17)
+    family = []
+    current = seed
+    for _ in range(493):
+        family.append(current)
+        current = tuple(generator[value] for value in current)
+    result = tuple_family_orbit_profile(
+        TupleFamilyOrbitSource(action=action, arity=2, family=tuple(family))
+    )
+    assert len(result.rows) == 1
+    assert result.rows[0].orbit_size == 493
     assert result.is_union_of_complete_ambient_orbits is True
 
 

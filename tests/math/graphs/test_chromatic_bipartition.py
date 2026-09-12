@@ -364,6 +364,27 @@ def test_worker_timeout_is_an_execution_failure(
         )
 
 
+def test_worker_timeout_retains_recovery_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = graph(("a", "b"), (("a", "b"),))
+    monkeypatch.setattr(
+        process_owner,
+        "run_bounded_process",
+        lambda *_args, **_kwargs: _completed(returncode=None, timed_out=True),
+    )
+    request = ChromaticBipartitionRequest(
+        graph=source,
+        s=1,
+        t=1,
+        resource_budget=ChromaticNumberBudget(wall_seconds=5),
+    )
+    with pytest.raises(OperationExecutionTimeoutError) as error:
+        find_chromatic_bipartition(request)
+    assert error.value.configured_seconds == 5
+    assert error.value.adjustable_field_path == ("resource_budget", "wall_seconds")
+
+
 @pytest.mark.parametrize(
     ("completed", "error_type", "reason"),
     [
@@ -570,3 +591,17 @@ def test_long_nfc_labels_on_k2_return_split_through_the_worker() -> None:
     ).encode("utf-8")
     assert len(dumped) <= limit
     assert result.model_validate_json(result.model_dump_json()) == result
+
+
+def test_unit_threshold_counts_only_computed_remainders() -> None:
+    cycle = tuple(f"c{index}" for index in range(33))
+    vertices = ("iso", *cycle)
+    edges = tuple(
+        (min(cycle[index], cycle[(index + 1) % 33]), max(cycle[index], cycle[(index + 1) % 33]))
+        for index in range(33)
+    )
+    result = operation._find_chromatic_bipartition_kernel(
+        ChromaticBipartitionRequest(graph=graph(vertices, edges), s=1, t=1)
+    )
+    assert result.status == "SPLIT"
+    assert result.checked_partitions == 1

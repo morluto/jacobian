@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import ConfigDict, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import ExactInteger
@@ -285,6 +285,12 @@ class TupleFamilyOrbitResult(StrictModel):
     admission rather than relying on result parsing.
     """
 
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        revalidate_instances="always",
+    )
+
     source: TupleFamilyOrbitSource
     rows: tuple[TupleOrbitRow, ...] = Field(max_length=MAX_FAMILY_MEMBERS)
     is_union_of_complete_ambient_orbits: bool
@@ -293,7 +299,16 @@ class TupleFamilyOrbitResult(StrictModel):
     @classmethod
     def normalize_json_containers(cls, data: Any) -> Any:
         if not isinstance(data, Mapping):
-            return data
+            rows = _declared_attr(data, "rows")
+            source = _declared_attr(data, "source")
+            complete = _declared_attr(data, "is_union_of_complete_ambient_orbits")
+            if rows is None and source is None:
+                return data
+            data = {
+                "source": source,
+                "rows": rows,
+                "is_union_of_complete_ambient_orbits": complete,
+            }
         payload = dict(data)
         rows = payload.get("rows")
         if isinstance(rows, (list, tuple)):

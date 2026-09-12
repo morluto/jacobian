@@ -46,6 +46,14 @@ def _backend_action(action: FinitePermutationAction) -> Any:
     )
 
 
+def _rebuild_permutation_action(
+    domain: object, generators: object
+) -> FinitePermutationAction:
+    return FinitePermutationAction.model_validate(
+        {"domain": domain, "generators": generators}
+    )
+
+
 def _revalidate_action(request: TupleFamilyOrbitSource) -> FinitePermutationAction:
     if not isinstance(request, TupleFamilyOrbitSource):
         raise OperationDomainValidationError(
@@ -77,9 +85,7 @@ def _revalidate_action(request: TupleFamilyOrbitSource) -> FinitePermutationActi
             message="tuple-family source must retain a finite permutation action",
         )
     try:
-        return FinitePermutationAction.model_validate(
-            {"domain": domain, "generators": generators}
-        )
+        return _rebuild_permutation_action(domain, generators)
     except ValidationError as error:
         detail = error.errors()[0]
         raise OperationDomainValidationError(

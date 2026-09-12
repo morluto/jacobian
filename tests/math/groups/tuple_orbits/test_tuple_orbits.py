@@ -376,6 +376,27 @@ def test_constructed_result_rows_reject_noncanonical_orbit_size() -> None:
         TupleFamilyOrbitResult.model_validate(payload)
 
 
+def test_constructed_result_instance_is_revalidated() -> None:
+    row = TupleOrbitRow.model_construct(
+        representative=(),
+        source_indices=(0,),
+        orbit_size="bogus",
+        stabilizer_size=1,
+        least_transporter=(0,),
+    )
+    result = TupleFamilyOrbitResult.model_construct(
+        source=TupleFamilyOrbitSource(
+            action=FinitePermutationAction(domain=("a",), generators=((0,),)),
+            arity=0,
+            family=((),),
+        ),
+        rows=(row,),
+        is_union_of_complete_ambient_orbits=True,
+    )
+    with pytest.raises(ValidationError):
+        TupleFamilyOrbitResult.model_validate(result)
+
+
 def test_aggregate_source_indices_are_bounded_before_container_copy() -> None:
     payload = {
         "source": {

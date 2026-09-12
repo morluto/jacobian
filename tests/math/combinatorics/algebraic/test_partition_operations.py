@@ -145,17 +145,16 @@ def test_hook_content_result_rejects_derivation_artifacts() -> None:
         HookContentCountResult.model_validate_json(json.dumps(payload), strict=True)
 
 
-def test_hook_content_charges_growing_product_work() -> None:
-    # 500 cells over a 64-digit alphabet fit the 32,768-digit output bound
-    # (32,000 digits) but exceed the admitted bigint work envelope.
+def test_hook_content_admits_growing_product_within_work_bound() -> None:
+    # 500 cells over a 64-digit alphabet fit the 32,768-digit output bound.
+    # A balanced product tree keeps this request inside the work envelope.
+    alphabet_size = 10**63
     request = HookContentCountRequest.model_validate(
-        {"partition": {"parts": [1] * 500}, "alphabet_size": 10**63}
+        {"partition": {"parts": [1] * 500}, "alphabet_size": alphabet_size}
     )
-    with pytest.raises(
-        OperationResourceAdmissionError,
-        match="hook-content arithmetic exceeds the admitted work bound",
-    ):
-        hook_content_count(request)
+    result = hook_content_count(request)
+    assert result.count == math.comb(alphabet_size, 500)
+    assert result.alphabet_size == alphabet_size
 
 
 def test_hook_content_admits_two_cell_large_alphabet() -> None:

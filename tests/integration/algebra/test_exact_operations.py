@@ -30,6 +30,9 @@ from jacobian.math.number_theory.number_fields._discriminant_process import (
     compute_nf_discriminant,
 )
 from jacobian.math.number_theory.number_fields._models import NumberFieldRequest
+from jacobian.math.number_theory.number_fields._ring_of_integers import (
+    NumberFieldRingOfIntegersResult,
+)
 from jacobian.math.number_theory.number_fields.values import (
     MAX_SIMPLE_NUMBER_FIELD_DEGREE,
 )
@@ -303,7 +306,12 @@ def test_embedding_field_composes_unchanged_with_field_invariant_consumers() -> 
     assert request.field == produced
     assert compute_nf_discriminant(request).discriminant == -4
     assert discriminant(request.field) == -4
-    assert ring_of_integers(request.field) == ["1", "alpha"]
+    basis_result = ring_of_integers(request.field)
+    assert basis_result.field_discriminant == -4
+    assert _basis_fractions(basis_result) == [
+        [Fraction(1), Fraction(0)],
+        [Fraction(0), Fraction(1)],
+    ]
 
 
 def test_field_discriminant_request_schema_uses_the_canonical_presentation() -> None:
@@ -329,6 +337,15 @@ def test_field_carrier_preserves_the_prior_discriminant_degree_envelope() -> Non
     assert NumberFieldRequest(field=field).field is field
 
 
+def _basis_fractions(
+    result: NumberFieldRingOfIntegersResult,
+) -> list[list[Fraction]]:
+    return [
+        [coefficient.as_fraction() for coefficient in element.coefficients_ascending]
+        for element in result.basis
+    ]
+
+
 @pytest.mark.parametrize("consumer", (discriminant, ring_of_integers))
 def test_native_integral_basis_consumers_preserve_degree_31_envelope(
     consumer: Callable[[SimpleNumberFieldPresentation], object],
@@ -340,10 +357,10 @@ def test_native_integral_basis_consumers_preserve_degree_31_envelope(
     if consumer is discriminant:
         assert result == -18327886165296381817380980351835033630345588173537542144
     else:
-        assert result == [
-            "1",
-            "alpha",
-            *[f"alpha**{power}" for power in range(2, field.degree)],
+        assert isinstance(result, NumberFieldRingOfIntegersResult)
+        assert _basis_fractions(result) == [
+            [Fraction(1 if row == column else 0) for column in range(field.degree)]
+            for row in range(field.degree)
         ]
 
 
@@ -358,10 +375,10 @@ def test_native_integral_basis_consumers_accept_degree_nine_field(
     if consumer is discriminant:
         assert result == 99179645184
     else:
-        assert result == [
-            "1",
-            "alpha",
-            *[f"alpha**{power}" for power in range(2, field.degree)],
+        assert isinstance(result, NumberFieldRingOfIntegersResult)
+        assert _basis_fractions(result) == [
+            [Fraction(1 if row == column else 0) for column in range(field.degree)]
+            for row in range(field.degree)
         ]
 
 
@@ -378,7 +395,10 @@ def test_native_integral_basis_consumers_bound_the_widened_field_carrier(
 def test_integral_basis_is_computed_in_the_defining_power_basis() -> None:
     field = SimpleNumberFieldPresentation(coefficients_descending=(1, 0, -5))
 
-    assert ring_of_integers(field) == ["1", "alpha/2 + 1/2"]
+    assert _basis_fractions(ring_of_integers(field)) == [
+        [Fraction(1), Fraction(0)],
+        [Fraction(1, 2), Fraction(1, 2)],
+    ]
     assert discriminant(field) == 5
 
 
@@ -387,7 +407,10 @@ def test_number_field_consumers_accept_a_nonmonic_canonical_presentation() -> No
 
     assert compute_nf_discriminant(NumberFieldRequest(field=field)).discriminant == -8
     assert discriminant(field) == -8
-    assert ring_of_integers(field) == ["1", "2*alpha"]
+    assert _basis_fractions(ring_of_integers(field)) == [
+        [Fraction(1), Fraction(0)],
+        [Fraction(0), Fraction(2)],
+    ]
 
 
 def test_number_field_reducibility_is_an_owner_declared_invalid_request() -> None:

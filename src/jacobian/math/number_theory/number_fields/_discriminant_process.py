@@ -2,145 +2,71 @@
 
 from __future__ import annotations
 
-import hashlib
-import math
-import sys
 import time
-from pathlib import Path
-from tempfile import TemporaryDirectory
 
 from jacobian._execution import (
-    OperationExecutionCancelledError,
-    OperationExecutionTimeoutError,
-    bind_request_deadline,
     current_request_execution,
     request_checkpoint,
     request_execution,
 )
-from jacobian.canonical import (
-    CanonicalizationError,
-    encode_strict_json,
-    format_canonical_integer,
-    loads_strict_json,
-    parse_canonical_integer,
-)
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.number_theory.number_fields._integral_basis_process import (
+    _WORKER as _WORKER,
+)
+from jacobian.math.number_theory.number_fields._integral_basis_process import (
+    _WORKER_ADDRESS_SPACE_BYTES as _WORKER_ADDRESS_SPACE_BYTES,
+)
+from jacobian.math.number_theory.number_fields._integral_basis_process import (
+    _WORKER_FILE_SIZE_BYTES as _WORKER_FILE_SIZE_BYTES,
+)
+from jacobian.math.number_theory.number_fields._integral_basis_process import (
+    _WORKER_STDERR_BYTES as _WORKER_STDERR_BYTES,
+)
+from jacobian.math.number_theory.number_fields._integral_basis_process import (
+    _WORKER_TIMEOUT_SECONDS as _WORKER_TIMEOUT_SECONDS,
+)
+from jacobian.math.number_theory.number_fields._integral_basis_process import (
+    IntegralBasisWorkerResult,
+    run_integral_basis_worker,
+)
 from jacobian.math.number_theory.number_fields._models import (
     NumberFieldDiscriminantResult,
     NumberFieldRequest,
 )
 
-_WORKER = Path(__file__).resolve().with_name("_worker.py")
-_WORKER_TIMEOUT_SECONDS = 60.0
-_WORKER_ADDRESS_SPACE_BYTES = 1024 * 1024 * 1024
-_WORKER_FILE_SIZE_BYTES = 1024 * 1024
-_WORKER_STDERR_BYTES = 64 * 1024
+# Keep the worker envelope visible to existing process tests and other
+# number-field owners while discriminant and basis consumers share one
+# process implementation.
 
 
 def compute_nf_discriminant(
     request: NumberFieldRequest,
 ) -> NumberFieldDiscriminantResult:
-    execution = current_request_execution()
-    if execution is None:
+    """Return a field discriminant established by the isolated basis worker."""
+
+    if current_request_execution() is None:
         with request_execution(time.monotonic()):
             return compute_nf_discriminant(request)
-    owner_deadline = execution.started_at + _WORKER_TIMEOUT_SECONDS
-    deadline = (
-        min(execution.deadline, owner_deadline)
-        if execution.deadline is not None
-        else owner_deadline
-    )
-    bind_request_deadline(deadline)
-    request_checkpoint("before number-field discriminant preparation")
-
-    from jacobian.process import (
-        ProcessResourceLimits,
-        run_bounded_process,
-        worker_environment,
-    )
-
-    input_bytes = encode_strict_json(request.model_dump(mode="json"))
-    degree = len(request.field.coefficients_descending) - 1
-    coefficient_digits = max(
-        len(format_canonical_integer(abs(value)))
-        for value in request.field.coefficients_descending
-    )
-    discriminant_digits = max(1, (2 * degree - 1) * coefficient_digits + 4 * degree)
-    stdout_limit = len(
-        encode_strict_json(
-            {
-                "kind": "complete",
-                "discriminant": "-" + "9" * discriminant_digits,
-                "request_digest": "0" * 64,
-            },
-        )
-    )
-    try:
-        # The worker needs no ambient files: its request is stdin and its
-        # response is bounded stdout.  A private cwd and regular-file ceiling
-        # keep a native backend from using the checkout as scratch space.
-        with TemporaryDirectory(prefix="jacobian-number-field-") as worker_directory:
-            completed = run_bounded_process(
-                [sys.executable, str(_WORKER)],
-                input_bytes=input_bytes,
-                timeout_seconds=_WORKER_TIMEOUT_SECONDS,
-                environment=worker_environment(locale="C.UTF-8"),
-                stdout_limit=stdout_limit,
-                stderr_limit=_WORKER_STDERR_BYTES,
-                resource_limits=ProcessResourceLimits(
-                    cpu_seconds=math.ceil(_WORKER_TIMEOUT_SECONDS),
-                    address_space_bytes=_WORKER_ADDRESS_SPACE_BYTES,
-                    file_size_bytes=_WORKER_FILE_SIZE_BYTES,
-                ),
-                cwd=worker_directory,
-            )
-    except OSError as exc:
-        request_checkpoint("during number-field worker startup")
-        raise RuntimeError("bounded number-field worker could not be started") from exc
-    request_checkpoint("after number-field discriminant worker")
-    if completed.cancelled:
-        raise OperationExecutionCancelledError(
-            "number-field discriminant computation cancelled"
-        )
-    if completed.timed_out:
-        raise OperationExecutionTimeoutError(
-            "number-field discriminant computation timed out"
-        )
-    if (
-        completed.stdout_exceeded
-        or completed.stderr_exceeded
-        or completed.returncode != 0
-    ):
-        raise RuntimeError(
-            "bounded number-field worker did not establish a discriminant"
-        )
-    try:
-        response = loads_strict_json(completed.stdout)
-        if (
-            not isinstance(response, dict)
-            or response.get("request_digest") != hashlib.sha256(input_bytes).hexdigest()
-        ):
-            raise ValueError("worker response is not bound to its request")
-        if response["kind"] == "complete":
-            if set(response) != {"kind", "discriminant", "request_digest"}:
-                raise ValueError("complete worker response has invalid fields")
-            discriminant = parse_canonical_integer(response["discriminant"])
-            result = NumberFieldDiscriminantResult(
-                field=request.field, discriminant=discriminant
-            )
-            request_checkpoint("after number-field discriminant result construction")
-            return result
-    except (KeyError, TypeError, ValueError, CanonicalizationError):
-        request_checkpoint("during number-field discriminant response validation")
-        response = None
-    if (
-        isinstance(response, dict)
-        and set(response) == {"kind", "request_digest"}
-        and response.get("kind") == "invalid"
-    ):
+    worker_result = run_integral_basis_worker(request, include_basis=False)
+    if worker_result is None:
         raise OperationDomainValidationError(
             location=("field",),
             code="number_field.not_irreducible",
             message="number-field polynomial must be irreducible over QQ",
         )
-    raise RuntimeError("bounded number-field worker returned malformed output")
+    result = _discriminant_result(request, worker_result)
+    request_checkpoint("after number-field discriminant result construction")
+    return result
+
+
+def _discriminant_result(
+    request: NumberFieldRequest,
+    worker_result: IntegralBasisWorkerResult,
+) -> NumberFieldDiscriminantResult:
+    return NumberFieldDiscriminantResult(
+        field=request.field,
+        discriminant=worker_result.field_discriminant,
+    )
+
+
+__all__ = ["compute_nf_discriminant"]

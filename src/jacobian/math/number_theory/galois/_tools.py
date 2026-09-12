@@ -48,13 +48,18 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         description="Factor a polynomial over a prime finite field GF(p), retaining "
         "the source polynomial, unit, monic irreducible factors and multiplicities. "
         "Determines finite-field polynomial irreducibility from the supplied "
-        "polynomial coefficients, in ascending order. Admits degree d<=128, "
+        "polynomial coefficients, including a degree-108 polynomial, using "
+        "Frobenius linear algebra over GF(p). Admits degree d<=128, "
         "prime p<=251 and 32*(p+1)*d^3<=1,000,000,000 scalar updates; "
         "deterministic Berlekamp factorization has a shared 60-second safety deadline.",
         request_type=GaloisFactorRequest,
         result_type=GaloisFactorResult,
         run=_galois_factor,
         tags=("galois-theory", "factorization", "exact"),
+        discovery_terms=(
+            "factor a polynomial over a finite field with Frobenius splitting",
+            "decide finite-field polynomial irreducibility from coefficients",
+        ),
         examples=(
             OperationExample(
                 name="factor_x2_plus_1_over_f5",

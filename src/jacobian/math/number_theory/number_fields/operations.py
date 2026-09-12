@@ -375,21 +375,11 @@ def verify_binary_power_sum_gap_profile(claim: BinaryPowerSumGapProfile) -> bool
     return expected == claim
 
 
-def ring_of_integers(field: SimpleNumberFieldPresentation) -> list[str]:
-    """Return the exact integral basis expressed in the defining power basis."""
-    ring, _field_discriminant, alpha, leading = _integral_basis(field)
-    return [
-        str(element.as_expr().subs(alpha, leading * alpha).expand())
-        for element in ring.basis_element_pullbacks()
-    ]
-
-
 __all__ = [
     "binary_power_sum_gap_profile",
     "compare_real_embedding_elements",
     "discriminant",
     "embeddings",
-    "ring_of_integers",
     "verify_binary_power_sum_gap_profile",
     "verify_discriminant",
 ]

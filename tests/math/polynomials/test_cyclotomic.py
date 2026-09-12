@@ -157,10 +157,19 @@ def test_factor_map_must_reconstruct_the_requested_index(
 ) -> None:
     import sympy
 
+    def fail_poly(*args: object, **kwargs: object) -> object:
+        raise AssertionError("cyclotomic_poly must not run on an unbound factorization")
+
     monkeypatch.setattr(sympy, "factorint", lambda index: {2: 1, 3: 1, 5: 1, 7: 1})
+    monkeypatch.setattr(sympy, "cyclotomic_poly", fail_poly)
     with pytest.raises(OperationBackendError) as exc_info:
         cyclotomic(16_530)
     assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT
+
+
+def test_factorization_work_is_admitted_before_backend_factorint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from jacobian.math.polynomials import _cyclotomic as module
 
     monkeypatch.setattr(module, "MAX_CYCLOTOMIC_FACTOR_WORK", 1)

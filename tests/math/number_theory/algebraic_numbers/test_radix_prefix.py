@@ -6,12 +6,19 @@ import time
 
 import pytest
 
+from jacobian._execution import (
+    BackendFailureReason,
+    OperationBackendError,
+)
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.number_theory.algebraic_numbers import _radix_prefix as radix_module
+from jacobian.math.number_theory.algebraic_numbers import (
+    _radix_prefix_process as process,
+)
 from jacobian.math.number_theory.algebraic_numbers._radix_prefix import (
     MAX_RADIX_PLACES,
     RadixPrefixResult,
@@ -19,6 +26,7 @@ from jacobian.math.number_theory.algebraic_numbers._radix_prefix import (
     radix_prefix,
 )
 from jacobian.math.number_theory.algebraic_numbers.real import RealAlgebraicValue
+from jacobian.process import BoundedProcessResult
 
 
 def _value(polynomial: tuple[int, ...], root_index: int) -> RealAlgebraicValue:
@@ -337,3 +345,46 @@ def test_later_enclosing_deadline_does_not_replace_the_owner_envelope(
     assert seen == envelopes
     assert seen[0] < enclosing_later
     assert abs(seen[0] - (started + RADIX_ISOLATION_OWNER_SECONDS)) < 1.0
+
+
+def test_in_process_refinement_exhaustion_is_a_backend_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(radix_module, "_ISOLATION_REFINEMENT_FLOOR", 0)
+    monkeypatch.setattr(
+        radix_module, "_unique_floor_of_open_interval", lambda *_args, **_kwargs: None
+    )
+    with pytest.raises(OperationBackendError) as exc_info:
+        radix_module._scaled_integer_part_in_process(
+            _value((1, 0, -2), 1), scale=10, isolation_bits=0
+        )
+    assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT
+
+
+def test_worker_refinement_code_is_a_backend_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_run_bounded_process(
+        *_args: object, **_kwargs: object
+    ) -> BoundedProcessResult:
+        return BoundedProcessResult(
+            returncode=0,
+            stdout=b'{"ok": false, "code": "refinement", "message": "stuck"}',
+            stderr=b"",
+            stdout_exceeded=False,
+            stderr_exceeded=False,
+            timed_out=False,
+        )
+
+    monkeypatch.setattr(
+        "jacobian.process.run_bounded_process", fake_run_bounded_process
+    )
+    with pytest.raises(OperationBackendError) as exc_info:
+        process.run_scaled_integer_part_worker(
+            polynomial=(1, 0, -2),
+            real_root_index=1,
+            scale=10,
+            isolation_bits=8,
+            deadline=time.monotonic() + 30,
+        )
+    assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT

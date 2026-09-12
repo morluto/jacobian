@@ -25,6 +25,8 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import DecimalIntegerEncoding
 from jacobian._execution import (
+    BackendFailureReason,
+    OperationBackendError,
     current_request_execution,
     execution_deadline,
     request_execution,
@@ -55,6 +57,7 @@ MAX_RADIX_PLACES = 256
 # the public fields from turning into an unbounded backend request.
 MAX_RADIX_SCALED_COEFFICIENT_DIGITS = 16_384
 MAX_RADIX_ISOLATION_BITS = 1_048_576
+_ISOLATION_REFINEMENT_FLOOR = 4_096
 # Sum of retained exact-integer digits, digit entries, and fixed scalar slots.
 # Concrete transports enforce their own independent encoded-byte ceilings.
 MAX_RADIX_RESULT_ALLOCATION_UNITS = 32_768
@@ -345,16 +348,12 @@ def _scaled_integer_part_in_process(
             message="real_root_index must select an existing real root",
         )
     lower, upper = intervals[value.real_root_index][0]
-    max_refinements = max(4_096, (isolation_bits + 7) // 8)
+    max_refinements = max(_ISOLATION_REFINEMENT_FLOOR, (isolation_bits + 7) // 8)
     for _ in range(max_refinements):
         if (candidate := _unique_floor_of_open_interval(lower, upper)) is not None:
             return candidate
         lower, upper = polynomial.refine_root(lower, upper, steps=8)
-    raise OperationResourceAdmissionError(
-        location=("value",),
-        code="algebraic_number.radix_refinement_bound",
-        message="root isolation did not separate the scaled value from an integer",
-    )
+    raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
 
 
 def radix_prefix(

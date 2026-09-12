@@ -10,14 +10,13 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from jacobian._execution import (
+    BackendFailureReason,
+    OperationBackendError,
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
 )
 from jacobian.canonical import parse_canonical_integer
-from jacobian.catalog.models import (
-    OperationDomainValidationError,
-    OperationResourceAdmissionError,
-)
+from jacobian.catalog.models import OperationDomainValidationError
 
 _WORKER = Path(__file__).resolve().with_name("_radix_prefix_worker.py")
 RADIX_ISOLATION_OWNER_SECONDS = 600.0
@@ -107,11 +106,7 @@ def run_scaled_integer_part_worker(
                 code="real_algebraic.not_irreducible",
                 message=message,
             )
-        raise OperationResourceAdmissionError(
-            location=("value",),
-            code="algebraic_number.radix_refinement_bound",
-            message=message,
-        )
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
     return int(parse_canonical_integer(response["scaled_floor"]))
 
 

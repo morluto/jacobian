@@ -9,25 +9,24 @@ basis so the returned value composes with the existing field-element carrier.
 
 from __future__ import annotations
 
-from fractions import Fraction
-from typing import Any
-
 from pydantic import model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.number_fields._integral_basis import (
+    integral_basis_coordinates,
     recognized_integral_basis,
 )
+from jacobian.math.number_theory.number_fields._models import (
+    MAX_INTEGRAL_BASIS_DEGREE,
+)
 from jacobian.math.number_theory.number_fields.values import (
-    MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS,
     NumberFieldDiscriminantInteger,
+    SimpleNumberFieldElement,
     SimpleNumberFieldPresentation,
 )
-
-MAX_INTEGRAL_BASIS_DEGREE = 31
 
 
 class NumberFieldRingOfIntegersResult(StrictModel):
@@ -39,7 +38,7 @@ class NumberFieldRingOfIntegersResult(StrictModel):
     """
 
     field: SimpleNumberFieldPresentation
-    basis: tuple[tuple[CanonicalRational, ...], ...]
+    basis: tuple[SimpleNumberFieldElement, ...]
     field_discriminant: NumberFieldDiscriminantInteger
 
     @model_validator(mode="after")
@@ -52,12 +51,17 @@ class NumberFieldRingOfIntegersResult(StrictModel):
                 "number_field.ring_of_integers_basis_length",
                 "an integral basis needs exactly one vector per field degree",
             )
-        if self.basis[0] != _one_coordinates(degree):
+        if self.basis[0].coefficients_ascending != _one_coordinates(degree):
             raise PydanticCustomError(
                 "number_field.ring_of_integers_unit_basis",
                 "every integral basis contains the unit as its first vector",
             )
-        if any(len(vector) != degree for vector in self.basis):
+        if any(element.presentation != self.field for element in self.basis):
+            raise PydanticCustomError(
+                "number_field.ring_of_integers_basis_field",
+                "every integral basis element must belong to the result field",
+            )
+        if any(len(element.coefficients_ascending) != degree for element in self.basis):
             raise PydanticCustomError(
                 "number_field.ring_of_integers_vector_length",
                 "every integral basis vector spans the complete power basis",
@@ -71,14 +75,20 @@ class NumberFieldRingOfIntegersResult(StrictModel):
                 code="number_field.ring_of_integers_basis_length",
                 message="an integral basis needs exactly one vector per field degree",
             )
-        if self.basis[0] != _one_coordinates(self.field.degree):
+        if self.basis[0].coefficients_ascending != _one_coordinates(self.field.degree):
             raise OperationDomainValidationError(
                 location=("basis",),
                 code="number_field.ring_of_integers_unit_basis",
                 message="every integral basis contains the unit as its first vector",
             )
-        for vector in self.basis:
-            if len(vector) != self.field.degree:
+        for element in self.basis:
+            if element.presentation != self.field:
+                raise OperationDomainValidationError(
+                    location=("basis",),
+                    code="number_field.ring_of_integers_basis_field",
+                    message="every integral basis element must belong to the result field",
+                )
+            if len(element.coefficients_ascending) != self.field.degree:
                 raise OperationDomainValidationError(
                     location=("basis",),
                     code="number_field.ring_of_integers_vector_length",
@@ -91,11 +101,6 @@ def _one_coordinates(degree: int) -> tuple[CanonicalRational, ...]:
         CanonicalRational(num=1, den=1),
         *(CanonicalRational(num=0, den=1) for _ in range(degree - 1)),
     )
-
-
-def _rational(value: Any) -> CanonicalRational:
-    fraction = Fraction(value)
-    return CanonicalRational(num=fraction.numerator, den=fraction.denominator)
 
 
 def ring_of_integers(
@@ -119,46 +124,22 @@ def ring_of_integers(
             code="number_field.defining_polynomial_must_be_irreducible",
             message="a number field requires an irreducible defining polynomial",
         )
-    ring, field_discriminant, alpha, leading = recognized
-    basis: list[tuple[CanonicalRational, ...]] = []
-    for index in range(field.degree):
-        element = ring.basis_element_pullbacks()[index]
-        expression = element.as_expr().subs(alpha, leading * alpha).expand()
-        polynomial = _as_poly_in_alpha(expression, alpha)
-        coefficients = polynomial.all_coeffs()[::-1]
-        padded = [
-            *(_rational(coefficient) for coefficient in coefficients),
-            *(
-                CanonicalRational(num=0, den=1)
-                for _ in range(field.degree - len(coefficients))
-            ),
-        ]
-        if len(padded) != field.degree:
-            raise OperationDomainValidationError(
-                location=("basis",),
-                code="number_field.ring_of_integers_vector_length",
-                message="an integral basis vector must span the complete power basis",
-            )
-        for coefficient in padded:
-            require_bounded_rational(
-                coefficient,
-                max_digits=MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS,
-                label="integral basis",
-            )
-        basis.append(tuple(padded))
+    coordinates = integral_basis_coordinates(field, recognized)
+    assert coordinates is not None
+    _ring, field_discriminant, _alpha, _leading = recognized
     result = NumberFieldRingOfIntegersResult(
         field=field,
-        basis=tuple(basis),
+        basis=tuple(
+            SimpleNumberFieldElement(
+                presentation=field,
+                coefficients_ascending=vector,
+            )
+            for vector in coordinates
+        ),
         field_discriminant=int(field_discriminant),
     )
     result.require_canonical_basis()
     return result
-
-
-def _as_poly_in_alpha(expression: Any, alpha: Any) -> Any:
-    import sympy
-
-    return sympy.Poly(expression, alpha)
 
 
 __all__ = [

@@ -20,13 +20,16 @@ from jacobian.math.number_theory.number_fields._models import (
     NumberFieldEmbeddingsRequest,
     NumberFieldRealEmbeddingOrderRequest,
     NumberFieldRequest,
+    NumberFieldRingOfIntegersRequest,
 )
 from jacobian.math.number_theory.number_fields._real_embedding_order import (
     NumberFieldRealEmbeddingOrderError,
 )
 from jacobian.math.number_theory.number_fields._ring_of_integers import (
     NumberFieldRingOfIntegersResult,
-    ring_of_integers,
+)
+from jacobian.math.number_theory.number_fields._ring_of_integers_process import (
+    compute_nf_ring_of_integers,
 )
 from jacobian.math.number_theory.number_fields.operations import (
     NumberFieldEmbeddingAdmissionError,
@@ -41,9 +44,9 @@ from jacobian.math.number_theory.number_fields.values import (
 
 
 def compute_ring_of_integers(
-    request: NumberFieldRequest,
+    request: NumberFieldRingOfIntegersRequest,
 ) -> NumberFieldRingOfIntegersResult:
-    return ring_of_integers(request.field)
+    return compute_nf_ring_of_integers(request)
 
 
 def _compute_embeddings(
@@ -98,11 +101,12 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         description=(
             "Return one deterministic integral-basis witness for the ring of "
             "integers of a presented simple number field QQ(alpha), with every "
-            "basis vector expressed as exact rational coordinates on the "
+            "basis member represented as a canonical field element on the "
             "presentation's own ascending power basis, together with the field "
-            "discriminant. The defining polynomial must be irreducible over QQ."
+            "discriminant. The defining polynomial must be irreducible over QQ "
+            "and have degree at most 31."
         ),
-        request_type=NumberFieldRequest,
+        request_type=NumberFieldRingOfIntegersRequest,
         result_type=NumberFieldRingOfIntegersResult,
         run=compute_ring_of_integers,
         tags=("number-field", "ring-of-integers", "exact"),

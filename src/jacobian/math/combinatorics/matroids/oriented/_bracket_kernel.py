@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from math import gcd
+from typing import Literal
 
+from pydantic import ValidationError
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS, CanonicalRational
@@ -291,8 +294,52 @@ def _bounded_component_sum(
     """
 
     pending = _cancel_opposite_components(components)
-    total = Fraction(0)
+    running_denominator = 1
     work_digit_bound = 0
+    for value, widths in pending:
+        work_digit_bound = max(work_digit_bound, widths[0], widths[1])
+        denominator = value.denominator
+        if running_denominator == 1:
+            running_denominator = denominator
+            if _exceeds_canonical_integer_bound(running_denominator):
+                raise OperationResourceAdmissionError(
+                    location=("terms",),
+                    code="bracket.syzygy_coefficient_digit_bound",
+                    message=(
+                        "exact residual coefficient growth exceeds the supported "
+                        "digit bound"
+                    ),
+                )
+            continue
+        shared = gcd(running_denominator, denominator)
+        extra = denominator // shared
+        if extra == 1:
+            continue
+        next_digits = _integer_digit_upper_bound(
+            running_denominator
+        ) + _integer_digit_upper_bound(extra)
+        if next_digits > MAX_BRACKET_COEFFICIENT_DIGITS or _exceeds_canonical_integer_bound(
+            extra
+        ):
+            raise OperationResourceAdmissionError(
+                location=("terms",),
+                code="bracket.syzygy_coefficient_digit_bound",
+                message=(
+                    "exact residual coefficient growth exceeds the supported "
+                    "digit bound"
+                ),
+            )
+        running_denominator *= extra
+        if _exceeds_canonical_integer_bound(running_denominator):
+            raise OperationResourceAdmissionError(
+                location=("terms",),
+                code="bracket.syzygy_coefficient_digit_bound",
+                message=(
+                    "exact residual coefficient growth exceeds the supported "
+                    "digit bound"
+                ),
+            )
+    total = Fraction(0)
     for value, widths in pending:
         total += value
         work_digit_bound = max(work_digit_bound, widths[0], widths[1])
@@ -484,11 +531,31 @@ def _admit_residual_envelope(
     return coefficients
 
 
+def _domain_from_validation(error: ValidationError) -> OperationDomainValidationError:
+    first = error.errors()[0]
+    location = tuple(first.get("loc", ()))
+    return OperationDomainValidationError(
+        location=location if location else ("request",),
+        code=str(first.get("type", "bracket.request")),
+        message=str(first.get("msg", error)),
+    )
+
+
 def grassmann_pluecker_relation(
-    request: GrassmannPlueckerRelationRequest,
+    ground_size: int,
+    indices: tuple[int, ...] | list[int],
+    family: Literal["FOUR_TERM", "SHARED_INDEX_THREE_TERM"],
 ) -> GrassmannPlueckerRelationResult:
     """Return the canonical formal expression of one GP relation."""
 
+    try:
+        request = GrassmannPlueckerRelationRequest(
+            ground_size=ground_size,
+            indices=tuple(indices),
+            family=family,
+        )
+    except ValidationError as error:
+        raise _domain_from_validation(error) from error
     polynomial = _relation_polynomial(request)
     return GrassmannPlueckerRelationResult(
         ground_size=request.ground_size,
@@ -498,7 +565,13 @@ def grassmann_pluecker_relation(
     )
 
 
-def bracket_syzygy_residual(request: BracketSyzygyResidualRequest) -> BracketPolynomial:
+def bracket_syzygy_residual(
+    target: BracketPolynomial,
+    terms: tuple[
+        tuple[CanonicalRational, BracketMonomial, GrassmannPlueckerRelation], ...
+    ]
+    | list[tuple[CanonicalRational, BracketMonomial, GrassmannPlueckerRelation]] = (),
+) -> BracketPolynomial:
     """Return ``target - sum(scalar * multiplier * relation)`` exactly.
 
     The arithmetic is in the free commutative polynomial algebra on canonical
@@ -507,5 +580,9 @@ def bracket_syzygy_residual(request: BracketSyzygyResidualRequest) -> BracketPol
     vanishes on minors.
     """
 
+    try:
+        request = BracketSyzygyResidualRequest(target=target, terms=tuple(terms))
+    except ValidationError as error:
+        raise _domain_from_validation(error) from error
     coefficients = _admit_residual_envelope(request)
     return _polynomial_from_coefficients(coefficients, request.target.ground_size)

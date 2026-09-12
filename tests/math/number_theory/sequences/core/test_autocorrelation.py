@@ -186,7 +186,7 @@ def test_order_shape_accounts_for_absorbing_zeros_in_product_bounds() -> None:
 def test_order_shape_sums_per_row_product_widths_instead_of_a_global_maximum() -> None:
     wide = CanonicalRational(num=10**16_000, den=1)
     zero = CanonicalRational(num=0, den=1)
-    source = FiniteRationalSequence(values=(wide,) + (zero,) * 199)
+    source = FiniteRationalSequence(values=(zero, wide) + (zero,) * 198)
     result = sequence_order_shape(source)
     assert result.log_concavity_rows[0].square.num == 10**32_000
     assert all(row.neighbor_product.num == 0 for row in result.log_concavity_rows)

@@ -237,7 +237,9 @@ def test_final_layer_scan_charges_every_reachable_state() -> None:
         symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=75))
 
 
-def test_transition_index_work_is_admitted_before_execution() -> None:
+def test_transition_index_work_is_admitted_before_indexing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     state_count = 64
     alphabet_size = 15
     reachable_state_count = 49
@@ -263,8 +265,16 @@ def test_transition_index_work_is_admitted_before_execution() -> None:
         accepting_states=(0,),
     )
 
+    import jacobian.math.logic.languages.regular._symbol_parikh as profile
+
+    def fail(*_args: object, **_kwargs: object) -> dict[tuple[int, int], int]:
+        raise AssertionError("transition index built before admission")
+
+    monkeypatch.setattr(profile, "_build_transition_index", fail)
     with pytest.raises(
         OperationResourceAdmissionError,
         match="symbol-Parikh DP or output exceeds",
     ):
-        symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=3))
+        profile.symbol_parikh_profile(
+            SymbolParikhProfileRequest(dfa=dfa, word_length=3)
+        )

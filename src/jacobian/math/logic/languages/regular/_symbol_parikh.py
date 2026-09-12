@@ -79,36 +79,39 @@ class SymbolParikhProfileResult(StrictModel):
         return self
 
 
+def _build_transition_index(
+    dfa: DFA,
+) -> dict[tuple[int, int], int]:
+    return {
+        (transition.source, transition.symbol): transition.target
+        for transition in dfa.transitions
+    }
+
+
 def symbol_parikh_profile(
     request: SymbolParikhProfileRequest,
 ) -> SymbolParikhProfileResult:
     dfa = request.dfa
     length = request.word_length
     alphabet_size = dfa.alphabet_size
-    transitions = {
-        (transition.source, transition.symbol): transition.target
-        for transition in dfa.transitions
-    }
-    reachable = {dfa.initial_state}
-    frontier = [dfa.initial_state]
-    while frontier:
-        source = frontier.pop()
-        for symbol in range(alphabet_size):
-            target = transitions[(source, symbol)]
-            if target not in reachable:
-                reachable.add(target)
-                frontier.append(target)
     output_bound = comb(length + alphabet_size - 1, alphabet_size - 1)
     # The layer at step t contains weak compositions of t, so only layers
     # t=0..length-1 are extended.  The final layer is materialized separately
     # into profile cells and must not be charged as another transition layer.
-    extension_cells = len(reachable) * comb(length + alphabet_size - 1, alphabet_size)
+    # Before indexing, use the declared state axis for a safe upper bound on
+    # every reachable-state phase of the execution.
+    max_reachable_states = dfa.state_count
+    extension_cells = max_reachable_states * comb(
+        length + alphabet_size - 1, alphabet_size
+    )
     extension_coordinate_work = extension_cells * alphabet_size * max(1, alphabet_size)
-    output_materialization_work = len(reachable) * output_bound * max(1, alphabet_size)
-    reachability_work = len(reachable) * alphabet_size
+    output_materialization_work = (
+        max_reachable_states * output_bound * max(1, alphabet_size)
+    )
+    reachability_work = max_reachable_states * alphabet_size
     # The transition index is built from every DFA edge, including edges from
     # states that are unreachable from the initial state.
-    transition_index_work = len(dfa.transitions)
+    transition_index_work = dfa.state_count * alphabet_size
     work_bound = (
         transition_index_work
         + reachability_work
@@ -127,6 +130,16 @@ def symbol_parikh_profile(
             code="regular_language.symbol_parikh.count_bound",
             message="symbol-Parikh multiplicities exceed the exact integer digit bound",
         )
+    transitions = _build_transition_index(dfa)
+    reachable = {dfa.initial_state}
+    frontier = [dfa.initial_state]
+    while frontier:
+        source = frontier.pop()
+        for symbol in range(alphabet_size):
+            target = transitions[(source, symbol)]
+            if target not in reachable:
+                reachable.add(target)
+                frontier.append(target)
     zero = (0,) * alphabet_size
     layer: dict[tuple[int, tuple[int, ...]], int] = {(dfa.initial_state, zero): 1}
     for _step in range(length):

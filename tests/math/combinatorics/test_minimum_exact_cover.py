@@ -190,7 +190,7 @@ def test_sparse_two_row_cover_avoids_empty_row_search_admission() -> None:
     assert result.status == "EXACT"
     assert result.selected_row_ids == ("r0000", "r0001")
     assert result.lower_bound == result.upper_bound == 2
-    assert result.searched_node_count == 3
+    assert result.searched_node_count == 1
 
 
 def test_secondary_conflict_is_infeasible() -> None:
@@ -231,11 +231,19 @@ def test_minimum_search_honors_request_deadline() -> None:
 
 
 def test_node_limit_without_incumbent_is_an_operational_failure() -> None:
+    rows = tuple(
+        ExactCoverRow(row_id=f"p0-{index:04d}", items=("p0",)) for index in range(8)
+    ) + (
+        ExactCoverRow(row_id="p1-a", items=("p1",)),
+        ExactCoverRow(row_id="p1-b", items=("p1",)),
+    )
+    instance = GeneralizedExactCoverInstance(
+        primary_items=("p0", "p1"),
+        secondary_items=(),
+        rows=rows,
+    )
     with pytest.raises(OperationResourceAdmissionError):
-        minimum_generalized_exact_cover(
-            _instance((("a-p", ("p",)), ("b-q", ("q",)))),
-            search_node_limit=1,
-        )
+        minimum_generalized_exact_cover(instance, search_node_limit=1)
 
 
 def test_node_limit_with_incumbent_returns_witness_backed_bounds() -> None:
@@ -314,3 +322,20 @@ def test_two_primary_min_degree_branching_is_admitted() -> None:
     assert result.status == "EXACT"
     assert result.selected_row_ids == ("p0-0000", "p1-a")
     assert result.lower_bound == result.upper_bound == 2
+
+
+def test_forced_secondary_conflict_is_infeasible_without_full_scan_charge() -> None:
+    primary = tuple(f"p{index:03d}" for index in range(256))
+    forced = ExactCoverRow(row_id="forced", items=(*primary[:-1], "s"))
+    conflicting = tuple(
+        ExactCoverRow(row_id=f"last-{index:04d}", items=(primary[-1], "s"))
+        for index in range(4_095)
+    )
+    instance = GeneralizedExactCoverInstance(
+        primary_items=primary,
+        secondary_items=("s",),
+        rows=(forced, *conflicting),
+    )
+    result = minimum_generalized_exact_cover(instance)
+    assert result.status == "INFEASIBLE"
+    assert result.selected_row_ids is None

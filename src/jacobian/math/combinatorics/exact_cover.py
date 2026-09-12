@@ -854,18 +854,9 @@ def minimum_generalized_exact_cover(  # noqa: C901
         request_checkpoint("after minimum exact-cover result construction")
         return result
     items = (*instance.primary_items, *instance.secondary_items)
-    item_index = {item: index for index, item in enumerate(items)}
-    row_count = len(active_rows)
-    mask_words = max(1, (max(row_count, primary_count) + 63) // 64)
-    incidence_count = sum(len(row.items) for row in active_rows)
-    index_work = (len(items) + row_count + incidence_count) * mask_words
-    scan_work = search_node_limit * primary_count * mask_words
-    # At each node, branching enumerates only rows that cover the chosen
-    # min-degree remaining primary. After forcing degree-1 items, a one-item
-    # remainder has a linear node ceiling; do not charge the global node limit
-    # at the global maximum degree.
     remaining_primary = set(instance.primary_items)
     remaining_rows = list(active_rows)
+    forced_selected: list[ExactCoverRow] = []
     while remaining_primary:
         coverage: dict[str, list[ExactCoverRow]] = {
             item: [] for item in remaining_primary
@@ -881,6 +872,7 @@ def minimum_generalized_exact_cover(  # noqa: C901
         if not unit_items:
             break
         selected = coverage[unit_items[0]][0]
+        forced_selected.append(selected)
         selected_items = set(selected.items)
         remaining_primary -= remaining_primary.intersection(selected_items)
         remaining_rows = [
@@ -896,9 +888,36 @@ def minimum_generalized_exact_cover(  # noqa: C901
         ]
     remaining_min_degree = min(remaining_degrees, default=0)
     remaining_max_degree = max(remaining_degrees, default=0)
+    if remaining_primary and remaining_min_degree == 0:
+        result = MinimumGeneralizedExactCoverResult._from_kernel(
+            instance=instance,
+            status="INFEASIBLE",
+            lower_bound=len(forced_selected),
+            searched_node_count=1,
+        )
+        request_checkpoint("after minimum exact-cover result construction")
+        return result
+    if not remaining_primary:
+        selected_ids = tuple(sorted(row.row_id for row in forced_selected))
+        result = MinimumGeneralizedExactCoverResult._from_kernel(
+            instance=instance,
+            status="EXACT",
+            selected_row_ids=selected_ids,
+            item_multiplicities=_expected_coverage(instance, selected_ids),
+            lower_bound=len(selected_ids),
+            upper_bound=len(selected_ids),
+            searched_node_count=1,
+        )
+        request_checkpoint("after minimum exact-cover result construction")
+        return result
+    item_index = {item: index for index, item in enumerate(items)}
+    row_count = len(active_rows)
+    mask_words = max(1, (max(row_count, primary_count) + 63) // 64)
+    incidence_count = sum(len(row.items) for row in active_rows)
+    index_work = (len(items) + row_count + incidence_count) * mask_words
+    remaining_primary_count = len(remaining_primary)
     estimated_nodes = search_node_limit
     listing_degree = remaining_min_degree
-    remaining_primary_count = len(remaining_primary)
     if remaining_primary_count <= 1:
         estimated_nodes = min(
             search_node_limit, 1 + 2 * max(len(remaining_rows), 0)
@@ -910,6 +929,7 @@ def minimum_generalized_exact_cover(  # noqa: C901
             1 + remaining_min_degree * (1 + remaining_max_degree),
         )
         listing_degree = remaining_min_degree
+    scan_work = estimated_nodes * primary_count * mask_words
     candidate_work = 2 * estimated_nodes * listing_degree * mask_words
     if (
         shortcut_work + index_work + scan_work + candidate_work

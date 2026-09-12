@@ -345,21 +345,21 @@ def test_transition_index_charge_rejects_before_indexing(
         )
 
 
-def test_profile_execution_matches_admission_charge(
+def test_near_envelope_profile_execution_matches_admission_charge(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import jacobian.math.logic.languages.regular._symbol_parikh as profile
 
     dfa = _source_sensitive_dfa(
-        reachable_state_count=4,
-        state_count=5,
-        alphabet_size=3,
+        reachable_state_count=62,
+        state_count=62,
+        alphabet_size=31,
     )
-    length = 4
+    length = 3
     alphabet_size = dfa.alphabet_size
     transition_count = dfa.state_count * alphabet_size
     output_bound = comb(length + alphabet_size - 1, alphabet_size - 1)
-    reachable_count = 4
+    reachable_count = 62
 
     extension_cells = 0
     possible_word_count = 1
@@ -418,21 +418,17 @@ def test_profile_execution_matches_admission_charge(
         profile.SymbolParikhProfileRequest(dfa=dfa, word_length=length)
     )
 
+    charged = {
+        "transition_index": transition_count,
+        "reachability_scan": reachable_count * transition_count,
+        "extension_coordinate": extension_cells * alphabet_size * max(1, alphabet_size),
+        "output_materialization": output_materialization_cells * max(1, alphabet_size),
+    }
     assert result.total_accepted_words == alphabet_size**length
     assert executed["transition_index"] == transition_count
     assert all(executed.values())
-    assert_charged_work_parity(
-        charged={
-            "transition_index": transition_count,
-            "reachability_scan": reachable_count * transition_count,
-            "extension_coordinate": extension_cells
-            * alphabet_size
-            * max(1, alphabet_size),
-            "output_materialization": output_materialization_cells
-            * max(1, alphabet_size),
-        },
-        executed=executed,
-    )
+    assert sum(charged.values()) == MAX_SYMBOL_PARIKH_DP_WORK - 1_120
+    assert_charged_work_parity(charged=charged, executed=executed)
 
 
 def test_empty_alphabet_has_only_the_empty_word() -> None:

@@ -123,19 +123,19 @@ def pullback_metric(
         )
     plan = build_plan(metric, map_value)
     request_checkpoint("after complete rational metric pullback admission")
-    if not plan.determinant.scalar:
-        raise OperationDomainValidationError(
-            location=("metric",),
-            code="differential_geometry.rational_metric.pullback.singular_metric",
-            message="metric determinant vanishes identically after substitution",
-        )
+    _recognize_sources((*metric.tensor.components, *map_value.components), deadline)
     if any(not guard.scalar for guard in plan.guards if guard != plan.determinant):
         raise OperationDomainValidationError(
             location=("metric",),
             code="differential_geometry.rational_metric.pullback.undefined_metric_locus",
             message="a required metric denominator or chart guard vanishes identically after substitution",
         )
-    _recognize_sources((*metric.tensor.components, *map_value.components), deadline)
+    if not plan.determinant.scalar:
+        raise OperationDomainValidationError(
+            location=("metric",),
+            code="differential_geometry.rational_metric.pullback.singular_metric",
+            message="metric determinant vanishes identically after substitution",
+        )
     axis = map_value.source_variables
     unique_values = tuple(dict.fromkeys((*plan.output, *plan.guards)))
     components, _determinant_guards = evaluate_admitted_dag(

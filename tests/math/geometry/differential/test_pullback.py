@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 from sympy import Matrix, simplify, symbols
 
+from jacobian._exact import CanonicalRational
 from jacobian._execution import (
     OperationExecutionTimeoutError,
     bind_request_deadline,
@@ -23,7 +24,11 @@ from jacobian.math.polynomials._conversions import (
     rational_function_to_sympy,
 )
 from jacobian.math.polynomials.rational_functions.values import RationalFunctionMap
-from jacobian.math.polynomials.values import RationalFunction
+from jacobian.math.polynomials.values import (
+    RationalFunction,
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
+)
 
 
 def rf(value: Any, axis: tuple[Any, ...]) -> RationalFunction:
@@ -362,3 +367,50 @@ def test_five_source_coordinates_pull_back_a_one_dimensional_metric() -> None:
     )
     assert result.pullback.coordinate_axis == tuple(str(item) for item in sources)
     assert len(result.pullback.components) == 25
+
+
+def test_unreduced_map_is_noncanonical_before_vanishing_locus() -> None:
+    source = metric((1 / (symbols("u") - 1),), ("u",))
+    monomial = SparseRationalPolynomial(
+        terms=(
+            RationalPolynomialTerm(
+                coefficient=CanonicalRational(num=1, den=1),
+                exponents=(1,),
+            ),
+        )
+    )
+    unreduced = RationalFunction.model_construct(
+        domain="QQ",
+        variables=("x",),
+        numerator=monomial,
+        denominator=monomial,
+    )
+    mapping = RationalFunctionMap.model_construct(
+        source_variables=("x",),
+        target_coordinates=("u",),
+        components=(unreduced,),
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        pullback_metric(source, mapping)
+    assert error.value.errors()[0]["type"].endswith("noncanonical_source")
+
+
+def test_vanishing_inherited_guard_precedes_singular_determinant() -> None:
+    u, _v, x = symbols("u v x")
+    axis = ("u", "v")
+    source = RationalCoordinateMetric(
+        tensor=RationalCoordinateTensor(
+            coordinate_axis=axis,
+            variance=("COVARIANT", "COVARIANT"),
+            components=(
+                rf(u, axis),
+                rf(0, axis),
+                rf(0, axis),
+                rf(1, axis),
+            ),
+            retained_nonzero_denominators=(rf(u, axis).numerator,),
+        )
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        pullback_metric(source, map_value((0, x), ("x",), axis))
+    assert error.value.errors()[0]["type"].endswith("undefined_metric_locus")

@@ -6,7 +6,6 @@ from itertools import permutations
 from typing import NoReturn
 
 from jacobian.catalog.models import (
-    OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.geometry.differential.metrics._dag import ONE, ZERO, Dag, Expression
@@ -136,19 +135,14 @@ def build_plan(
     component_guards = tuple(
         _substitute(dag, value.denominator, maps) for value in metric.tensor.components
     )
-    if any(not value.scalar for value in component_guards):
-        raise OperationDomainValidationError(
-            location=("metric", "map"),
-            code="differential_geometry.rational_metric.pullback.undefined_metric_locus",
-            message="a required metric denominator vanishes identically after substitution",
-        )
     substitutions = tuple(
         _substitute(dag, value.numerator, maps) for value in metric.tensor.components
     )
     substitutions = tuple(
-        dag.multiply(
-            value,
-            dag.inverse(component_guards[i]),
+        (
+            value
+            if not component_guards[i].scalar
+            else dag.multiply(value, dag.inverse(component_guards[i]))
         )
         for i, value in enumerate(substitutions)
     )

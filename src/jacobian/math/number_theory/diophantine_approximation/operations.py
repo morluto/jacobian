@@ -7,6 +7,8 @@ from math import isqrt
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.arithmetic._integer_predicates import is_square_free
 from jacobian.math.number_theory.diophantine_approximation._models import (
+    _MAX_DISCRIMINANT,
+    _MAX_TERMS,
     ContinuedFractionResult,
     ConvergentResult,
     ConvergentValue,
@@ -34,11 +36,13 @@ __all__ = [
 
 def _require_periodic_discriminant(discriminant: int) -> None:
     """Reject discriminants whose sqrt is not a periodic quadratic surd."""
-    if discriminant < 2:
+    if type(discriminant) is not int or not 2 <= discriminant <= _MAX_DISCRIMINANT:
         raise OperationDomainValidationError(
             location=("discriminant",),
             code="diophantine.discriminant_out_of_range",
-            message="discriminant must be at least 2",
+            message=(
+                f"discriminant must be an integer between 2 and {_MAX_DISCRIMINANT}"
+            ),
         )
     root = isqrt(discriminant)
     if root * root == discriminant:
@@ -94,11 +98,11 @@ def continued_fraction(
     term_count: int,
 ) -> ContinuedFractionResult:
     """Return the continued fraction expansion of sqrt(D)."""
-    if term_count < 1:
+    if type(term_count) is not int or not 1 <= term_count <= _MAX_TERMS:
         raise OperationDomainValidationError(
             location=("term_count",),
             code="diophantine.term_count_out_of_range",
-            message="term_count must be at least 1",
+            message=f"term_count must be between 1 and {_MAX_TERMS}",
         )
     preperiod, period = _cf_coefficients(discriminant)
     return ContinuedFractionResult._from_kernel(
@@ -112,11 +116,11 @@ def continued_fraction(
 
 def convergents(discriminant: int, count: int) -> ConvergentResult:
     """Return the first count convergents (index, p_n, q_n) of sqrt(D)."""
-    if count < 1:
+    if type(count) is not int or not 1 <= count <= _MAX_TERMS:
         raise OperationDomainValidationError(
             location=("count",),
             code="diophantine.convergent_count_out_of_range",
-            message="count must be at least 1",
+            message=f"count must be between 1 and {_MAX_TERMS}",
         )
     preperiod, period = _cf_coefficients(discriminant)
     coefficients = _coefficients(preperiod, period, count)

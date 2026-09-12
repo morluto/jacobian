@@ -5,6 +5,7 @@ from __future__ import annotations
 import decimal
 import json
 import math
+from collections.abc import Callable
 from decimal import Decimal
 from fractions import Fraction
 
@@ -230,6 +231,25 @@ def test_public_kernels_reject_perfect_square() -> None:
         convergents(9, 3)
     with pytest.raises(OperationDomainValidationError, match="perfect square"):
         solve_pell(16)
+
+
+@pytest.mark.parametrize(
+    ("operation", "argument"),
+    [(continued_fraction, 5_001), (convergents, 5_001)],
+)
+def test_public_kernels_reject_unbounded_prefix_requests(
+    operation: Callable[[int, int], object], argument: int
+) -> None:
+    """Native callers share the materialized-prefix bound of the public models."""
+    with pytest.raises(OperationDomainValidationError, match="between 1 and 5000"):
+        operation(2, argument)
+
+
+def test_public_kernels_reject_unbounded_discriminants() -> None:
+    with pytest.raises(OperationDomainValidationError, match="between 2 and 1000000"):
+        continued_fraction(1_000_001, 1)
+    with pytest.raises(OperationDomainValidationError, match="between 2 and 1000000"):
+        solve_pell(1_000_001)
 
 
 def test_public_kernels_return_typed_values() -> None:

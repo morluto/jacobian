@@ -11,6 +11,7 @@ from pydantic import ConfigDict, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
+    MAX_CANONICAL_INTEGER_DIGITS,
     MAX_CANONICAL_RATIONAL_DIGITS,
     CanonicalRational,
     require_bounded_rational,
@@ -18,6 +19,7 @@ from jacobian._exact import (
 from jacobian._flint import flint_workprec
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
+from jacobian.math.geometry.exact._models import PointConfiguration
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -28,6 +30,13 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 
 MAX_CONFIGURATION_POINTS = 32
 MAX_COORDINATE_DIGITS = 256
+MAX_SPANNED_CIRCLE_WORK = 2_000_000
+MAX_SPANNED_CIRCLES = (
+    MAX_CONFIGURATION_POINTS
+    * (MAX_CONFIGURATION_POINTS - 1)
+    * (MAX_CONFIGURATION_POINTS - 2)
+    // 6
+)
 # Joint work bound for the exhaustive general-position search.  The sweep
 # performs one exact 4x4 determinant per point quadruple, so the determinant
 # count grows as C(n,4) while every Fraction multiplication grows
@@ -1428,4 +1437,130 @@ class CircumradiusProfileResult(StrictModel):
     ) -> Self:
         return cls.model_construct(
             points=points, num_points=len(points), entries=entries
+        )
+
+
+class SpannedCircleProfileRequest(StrictModel):
+    """Compute the distinct circles determined by triples of rational points."""
+
+    configuration: PointConfiguration = Field(
+        description=(
+            f"Canonical labelled point configuration. The operation admits "
+            f"3..{MAX_CONFIGURATION_POINTS} distinct planar points. Each "
+            f"coordinate numerator and denominator is at most {MAX_COORDINATE_DIGITS} "
+            "digits after translating by a minimum-height origin (source points, "
+            "the zero origin, or bounding-box centre). Collinearity work "
+            f"C(n,3)*max_digits^2, circumcircle construction for each "
+            "non-collinear triple, and incidence work "
+            f"n*(distinct circles)*max_digits^2 together stay at most "
+            f"{MAX_SPANNED_CIRCLE_WORK}. Restored circle centers and radii have "
+            f"at most {MAX_CANONICAL_INTEGER_DIGITS} digits each, and their "
+            f"aggregate digit count stays at most {MAX_SPANNED_CIRCLE_WORK}. "
+            f"The result has at most C(n,3) circle "
+            f"rows, globally at most {MAX_SPANNED_CIRCLES}."
+        ),
+    )
+
+
+class SpannedCircleEntry(StrictModel):
+    """One distinct triple-spanned circle and all source points on it."""
+
+    circle: GeometryCircleResult
+    point_indices: tuple[StrictInt, ...] = Field(
+        min_length=3, max_length=MAX_CONFIGURATION_POINTS
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_indices(self) -> Self:
+        if self.point_indices != tuple(sorted(set(self.point_indices))):
+            raise _validation_error(
+                "spanned_circle_point_indices_sorted_unique",
+                "circle point indices must be sorted and distinct",
+            )
+        if self.circle.radius_squared.as_fraction() <= 0:
+            raise _validation_error(
+                "spanned_circle_radius_squared_positive",
+                "a spanned circle must have positive radius squared",
+            )
+        return self
+
+
+class SpannedCircleProfileResult(StrictModel):
+    """Complete source-bound partition of all non-collinear triples by circle."""
+
+    configuration: PointConfiguration
+    num_points: int = Field(ge=3, le=MAX_CONFIGURATION_POINTS)
+    circles: tuple[SpannedCircleEntry, ...] = Field(max_length=MAX_SPANNED_CIRCLES)
+
+    @model_validator(mode="after")
+    def require_canonical(self) -> Self:
+        points = self.configuration.points
+        keys = tuple(
+            tuple((coord.num, coord.den) for coord in point.coordinates)
+            for point in points
+        )
+        if len(keys) != len(set(keys)):
+            raise _validation_error(
+                "point_set_coordinates_unique", "point-set coordinates must be unique"
+            )
+        if any(len(point.coordinates) != 2 for point in points):
+            raise _validation_error(
+                "spanned_circle_requires_planar_points",
+                "spanned-circle profiles require planar source points",
+            )
+        if self.num_points != len(points):
+            raise _validation_error(
+                "num_points_len_points", "num_points must equal len(points)"
+            )
+        n = len(points)
+        triple_count = n * (n - 1) * (n - 2) // 6
+        if len(self.circles) > triple_count:
+            raise _validation_error(
+                "spanned_circle_row_count",
+                "circle rows cannot exceed the number of source triples",
+            )
+        seen_triples: set[tuple[int, ...]] = set()
+        for circle in self.circles:
+            if any(index < 0 or index >= n for index in circle.point_indices):
+                raise _validation_error(
+                    "spanned_circle_index_out_of_range",
+                    "circle point index must refer to the source configuration",
+                )
+            for triple in combinations(circle.point_indices, 3):
+                if triple in seen_triples:
+                    raise _validation_error(
+                        "spanned_circle_shared_triple",
+                        "each source triple can belong to at most one spanned circle",
+                    )
+                seen_triples.add(triple)
+        circle_keys = tuple(
+            (
+                circle.circle.center.x.as_fraction(),
+                circle.circle.center.y.as_fraction(),
+                circle.circle.radius_squared.as_fraction(),
+            )
+            for circle in self.circles
+        )
+        if len(circle_keys) != len(set(circle_keys)):
+            raise _validation_error(
+                "spanned_circle_duplicate", "spanned circles must be distinct"
+            )
+        if circle_keys != tuple(sorted(circle_keys)):
+            raise _validation_error(
+                "spanned_circle_order",
+                "spanned circles must use canonical geometric order",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        configuration: PointConfiguration,
+        circles: tuple[SpannedCircleEntry, ...],
+    ) -> Self:
+        return cls.model_construct(
+            configuration=configuration,
+            num_points=len(configuration.points),
+            circles=circles,
         )

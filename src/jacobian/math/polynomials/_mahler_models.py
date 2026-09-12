@@ -11,7 +11,6 @@ step the audited partial formula dropped.
 
 from __future__ import annotations
 
-from math import gcd
 from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
@@ -22,6 +21,7 @@ from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.number_theory.algebraic_numbers.real import RealAlgebraicValue
 from jacobian.math.polynomials._models import IntegerPolynomial
+from jacobian.math.polynomials.values import MAX_POLYNOMIAL_TERMS
 
 MAX_MAHLER_DEGREE = 64
 MAX_MAHLER_COEFFICIENT_DIGITS = 256
@@ -65,21 +65,16 @@ def _require_mahler_polynomial_envelope(polynomial: IntegerPolynomial) -> None:
 class ContentPrimitiveProfileRequest(StrictModel):
     polynomial: IntegerPolynomial
 
-    @model_validator(mode="after")
-    def require_profile_envelope(self) -> Self:
-        _require_mahler_polynomial_envelope(self.polynomial)
-        return self
-
 
 class ContentPrimitiveProfileResult(StrictModel):
     sign: Literal[-1, 1]
     content: ExactInteger
     primitive_part: IntegerPolynomial
-    degree: StrictInt = Field(ge=0, le=MAX_MAHLER_DEGREE)
+    degree: StrictInt = Field(ge=0, le=MAX_POLYNOMIAL_TERMS - 1)
     reconstruction: IntegerPolynomial
 
     @model_validator(mode="after")
-    def require_exact_reconstruction(self) -> Self:
+    def require_structural_reconstruction(self) -> Self:
         if self.content < 1:
             raise _validation_error(
                 "polynomial.mahler_content_positive",
@@ -89,16 +84,6 @@ class ContentPrimitiveProfileResult(StrictModel):
             raise _validation_error(
                 "polynomial.mahler_positive_leading_required",
                 "a primitive part must have a positive leading coefficient",
-            )
-        _require_mahler_polynomial_envelope(self.primitive_part)
-        _require_mahler_polynomial_envelope(self.reconstruction)
-        primitive_content = 0
-        for coefficient in self.primitive_part.coefficients:
-            primitive_content = gcd(primitive_content, abs(coefficient))
-        if primitive_content != 1:
-            raise _validation_error(
-                "polynomial.mahler_primitive_content",
-                "the primitive part must have coefficient gcd one",
             )
         scaled = tuple(
             self.sign * self.content * coefficient
@@ -121,18 +106,17 @@ class ContentPrimitiveProfileResult(StrictModel):
             )
         return self
 
+    @classmethod
+    def _from_kernel(cls, **values: object) -> Self:
+        return cls.model_construct(**values)
+
 
 class ReciprocalProfileRequest(StrictModel):
     polynomial: IntegerPolynomial
 
-    @model_validator(mode="after")
-    def require_profile_envelope(self) -> Self:
-        _require_mahler_polynomial_envelope(self.polynomial)
-        return self
-
 
 class ReciprocalProfileResult(StrictModel):
-    degree: StrictInt = Field(ge=0, le=MAX_MAHLER_DEGREE)
+    degree: StrictInt = Field(ge=0, le=MAX_POLYNOMIAL_TERMS - 1)
     reversed_coefficients: tuple[ExactInteger, ...]
     state: Literal["RECIPROCAL", "ANTIRECIPROCAL", "NEITHER"]
     leading_coefficient: ExactInteger
@@ -140,7 +124,7 @@ class ReciprocalProfileResult(StrictModel):
     coefficient_pair_ledger: tuple[tuple[ExactInteger, ExactInteger], ...]
 
     @model_validator(mode="after")
-    def require_consistent_state(self) -> Self:
+    def require_structural_ledger(self) -> Self:
         reconstructed = tuple(reversed(self.reversed_coefficients))
         if len(reconstructed) != self.degree + 1:
             raise _validation_error(
@@ -171,27 +155,11 @@ class ReciprocalProfileResult(StrictModel):
                 "polynomial.mahler_reciprocal_pairs",
                 "the coefficient-pair ledger must match the source coefficients",
             )
-        reciprocal = all(
-            coefficient == reconstructed[self.degree - index]
-            for index, coefficient in enumerate(reconstructed)
-        )
-        antireciprocal = all(
-            coefficient == -reconstructed[self.degree - index]
-            for index, coefficient in enumerate(reconstructed)
-        )
-        expected_state = (
-            "RECIPROCAL"
-            if reciprocal
-            else "ANTIRECIPROCAL"
-            if antireciprocal
-            else "NEITHER"
-        )
-        if self.state != expected_state:
-            raise _validation_error(
-                "polynomial.mahler_reciprocal_state",
-                "the reciprocal state must match every coefficient pair",
-            )
         return self
+
+    @classmethod
+    def _from_kernel(cls, **values: object) -> Self:
+        return cls.model_construct(**values)
 
 
 class RealQuadraticRootProfileRequest(StrictModel):

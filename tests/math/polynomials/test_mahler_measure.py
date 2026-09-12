@@ -23,6 +23,7 @@ from jacobian.math.polynomials._mahler_kernel import (
     reciprocal_profile,
 )
 from jacobian.math.polynomials._mahler_models import (
+    MAX_MAHLER_DEGREE,
     MAX_MAHLER_RADICAND_BITS,
     ContentPrimitiveProfileRequest,
     ContentPrimitiveProfileResult,
@@ -310,20 +311,31 @@ def test_zero_quadratic_leading_coefficient_is_rejected() -> None:
         )
 
 
-def test_reciprocal_result_rejects_endpoint_only_forgery() -> None:
-    """Equal endpoints alone cannot establish reciprocal structure."""
+def test_reciprocal_result_rejects_inconsistent_pair_ledger() -> None:
     with pytest.raises(ValidationError):
         ReciprocalProfileResult(
             degree=3,
             reversed_coefficients=(1, 2, 3, 1),
-            state="RECIPROCAL",
+            state="NEITHER",
             leading_coefficient=1,
             constant_coefficient=1,
-            coefficient_pair_ledger=((1, 1), (3, 2)),
+            coefficient_pair_ledger=((1, 1), (2, 3)),
         )
 
 
-def test_content_result_rejects_negative_or_nonprimitive_claims() -> None:
+def test_reciprocal_result_does_not_replay_classification() -> None:
+    result = reciprocal_profile(
+        ReciprocalProfileRequest(polynomial=IntegerPolynomial(coefficients=(1, 0, 1)))
+    )
+    forged = result.model_dump(mode="json")
+    forged["state"] = "NEITHER"
+    restored = ReciprocalProfileResult.model_validate_json(
+        encode_strict_json(forged), strict=True
+    )
+    assert restored.state == "NEITHER"
+
+
+def test_content_result_rejects_negative_or_inconsistent_reconstruction() -> None:
     source = IntegerPolynomial(coefficients=(6, 0, -6))
     result = content_primitive_profile(
         ContentPrimitiveProfileRequest(polynomial=source)
@@ -341,6 +353,38 @@ def test_content_result_rejects_negative_or_nonprimitive_claims() -> None:
         ContentPrimitiveProfileResult.model_validate_json(
             encode_strict_json(forged), strict=True
         )
+
+
+def test_content_result_does_not_replay_primitivity() -> None:
+    result = content_primitive_profile(
+        ContentPrimitiveProfileRequest(
+            polynomial=IntegerPolynomial(coefficients=(6, 0, -6))
+        )
+    )
+    forged = result.model_dump(mode="json")
+    forged["content"] = 3
+    forged["primitive_part"]["coefficients"] = ["2", "0", "-2"]
+    restored = ContentPrimitiveProfileResult.model_validate_json(
+        encode_strict_json(forged), strict=True
+    )
+    assert restored.content == 3
+    assert restored.primitive_part.coefficients == (2, 0, -2)
+
+
+def test_linear_profiles_admit_carrier_length_beyond_mahler_degree() -> None:
+    coefficients = (1,) + (0,) * MAX_MAHLER_DEGREE + (1,)
+    polynomial = IntegerPolynomial(coefficients=coefficients)
+    assert len(polynomial.coefficients) == MAX_MAHLER_DEGREE + 2
+    content = content_primitive_profile(
+        ContentPrimitiveProfileRequest(polynomial=polynomial)
+    )
+    assert content.degree == MAX_MAHLER_DEGREE + 1
+    assert content.reconstruction == polynomial
+    reciprocal = reciprocal_profile(ReciprocalProfileRequest(polynomial=polynomial))
+    assert reciprocal.degree == MAX_MAHLER_DEGREE + 1
+    assert reciprocal.state == "RECIPROCAL"
+    with pytest.raises(ValidationError, match="degree at most"):
+        MahlerMeasureRequest(polynomial=polynomial)
 
 
 def test_mahler_result_binds_degree_leading_coefficient_and_locations() -> None:

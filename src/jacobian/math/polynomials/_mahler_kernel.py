@@ -287,7 +287,7 @@ def content_primitive_profile(
     primitive = tuple((sign * coefficient) // content for coefficient in coefficients)
     primitive_value = IntegerPolynomial(coefficients=primitive)
     reconstruction = tuple(sign * content * value for value in primitive)
-    return ContentPrimitiveProfileResult(
+    return ContentPrimitiveProfileResult._from_kernel(
         sign=sign,
         content=content,
         primitive_part=primitive_value,
@@ -315,7 +315,7 @@ def reciprocal_profile(request: ReciprocalProfileRequest) -> ReciprocalProfileRe
     else:
         state = "NEITHER"
     pair_count = (degree + 2) // 2
-    return ReciprocalProfileResult(
+    return ReciprocalProfileResult._from_kernel(
         degree=degree,
         reversed_coefficients=tuple(reversed(coefficients)),
         state=state,

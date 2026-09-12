@@ -334,3 +334,21 @@ def test_independent_pairwise_intersection_oracle() -> None:
         ):
             expected.append((indices, tuple(sorted(intersections[0]))))
     assert [(row.source_indices, row.core) for row in result.sunflowers] == expected
+
+
+def test_wide_single_candidate_checkpoints_inside_pairwise_scans(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    labels: list[str] = []
+    monkeypatch.setattr(
+        sunflower_module,
+        "request_checkpoint",
+        lambda label: labels.append(label),
+    )
+    members = tuple((index,) for index in range(24))
+    result = construct_sunflower_family(
+        SunflowerFamilyRequest(source=_family(members, ground=24), petal_count=24)
+    )
+    assert result.sunflower_count == 1
+    assert "during sunflower pairwise intersection" in labels
+

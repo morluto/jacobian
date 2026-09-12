@@ -345,15 +345,22 @@ def construct_sunflower_family(
         )
     sets = tuple(frozenset(member) for member in source.members)
     rows: list[SunflowerFamily] = []
+    pairwise_scans = 0
     for candidate_index, indices in enumerate(
         combinations(range(member_count), petal_count), start=1
     ):
         if candidate_index % 256 == 0:
             request_checkpoint("during sunflower candidate enumeration")
         core = sets[indices[0]] & sets[indices[1]]
-        if all(
-            sets[left] & sets[right] == core for left, right in combinations(indices, 2)
-        ):
+        is_sunflower = True
+        for left, right in combinations(indices, 2):
+            pairwise_scans += 1
+            if pairwise_scans % 64 == 0:
+                request_checkpoint("during sunflower pairwise intersection")
+            if sets[left] & sets[right] != core:
+                is_sunflower = False
+                break
+        if is_sunflower:
             rows.append(
                 SunflowerFamily(
                     edge_id=f"sunflower_{len(rows) + 1}",

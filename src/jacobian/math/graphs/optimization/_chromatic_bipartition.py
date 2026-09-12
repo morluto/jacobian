@@ -229,9 +229,7 @@ def _chromatic_bipartition_can_return_split(
         return False
     if _threshold_sum_exceeds_order(request):
         return False
-    if not request.graph.edges and (request.s > 1 or request.t > 1):
-        return False
-    return True
+    return not (not request.graph.edges and (request.s > 1 or request.t > 1))
 
 
 def _retained_label_characters(

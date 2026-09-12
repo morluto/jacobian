@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from itertools import product
 
 import pytest
 from pydantic import ValidationError
@@ -139,6 +140,21 @@ class TestIsGraphical:
 
 
 class TestGraphRealization:
+    def test_realization_preserves_unsorted_degree_axis_with_isolate(self) -> None:
+        result = _realize([0, 1, 1])
+
+        assert result.is_graphical is True
+        assert result.graph is not None
+        assert result.graph.edges == ((1, 2),)
+        assert verify_graph_realization(
+            GraphRealizationResult.model_validate_json(result.model_dump_json())
+        )
+        checked = _check([0, 1, 1], 3, list(result.graph.edges))
+        assert checked.is_realization is True
+        assert verify_realization_check(
+            RealizationCheckResult.model_validate_json(checked.model_dump_json())
+        )
+
     def test_realizes_simple_path(self) -> None:
         result = _realize([1, 2, 2, 1])
         assert result.is_graphical is True
@@ -348,6 +364,54 @@ class TestRealizationCheck:
 
 
 class TestCrossConsistency:
+    def test_all_small_degree_axes_are_realized_on_their_original_indices(self) -> None:
+        """Compare construction to independently enumerated simple graphs."""
+
+        for vertex_count in range(1, 6):
+            edges = [
+                (left, right)
+                for left in range(vertex_count)
+                for right in range(left + 1, vertex_count)
+            ]
+            graphical_profiles = {
+                tuple(
+                    sum(vertex in edge for edge in selected_edges)
+                    for vertex in range(vertex_count)
+                )
+                for mask in range(1 << len(edges))
+                for selected_edges in (
+                    tuple(
+                        edge for index, edge in enumerate(edges) if mask & (1 << index)
+                    ),
+                )
+            }
+            for degrees in product(range(vertex_count), repeat=vertex_count):
+                realized = _realize(list(degrees))
+                assert realized.is_graphical == (degrees in graphical_profiles)
+                if realized.graph is None:
+                    continue
+                actual = tuple(
+                    sum(vertex in edge for edge in realized.graph.edges)
+                    for vertex in range(vertex_count)
+                )
+                assert actual == degrees
+                assert verify_graph_realization(realized)
+
+    def test_maximum_length_degree_axis_preserves_isolates_and_equal_degrees(
+        self,
+    ) -> None:
+        degrees = [0, *([2] * 62), 0]
+        realized = _realize(degrees)
+
+        assert realized.is_graphical is True
+        assert realized.graph is not None
+        actual = [0] * len(degrees)
+        for left, right in realized.graph.edges:
+            actual[left] += 1
+            actual[right] += 1
+        assert actual == degrees
+        assert verify_graph_realization(realized)
+
     def test_serialized_claim_verifiers_replay_retained_context(self) -> None:
         profile = _is_graphical([1, 2, 2, 1])
         assert verify_degree_sequence_profile(

@@ -13,6 +13,8 @@ from jacobian.math.logic.games.impartial.operations import (
     position_grundy,
     subtraction_game,
     subtraction_grundy_prefix,
+    verify_disjunctive_sum,
+    verify_outcome_profile,
 )
 from jacobian.math.logic.games.impartial.values import (
     GameMove,
@@ -36,4 +38,6 @@ __all__ = [
     "position_grundy",
     "subtraction_game",
     "subtraction_grundy_prefix",
+    "verify_disjunctive_sum",
+    "verify_outcome_profile",
 ]

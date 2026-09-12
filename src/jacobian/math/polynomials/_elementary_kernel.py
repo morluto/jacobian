@@ -93,6 +93,12 @@ def _admit_primitive_part(polynomial: IntegerPolynomial) -> None:
             code="polynomial.primitive_part_coefficients",
             message="primitive-part coefficients must be exact integers",
         )
+    if len(coefficients) > 1 and coefficients[0] == 0:
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="polynomial.primitive_part_shape",
+            message="a canonical integer polynomial omits leading zeros",
+        )
     if len(coefficients) > MAX_POLYNOMIAL_TERMS:
         raise OperationResourceAdmissionError(
             location=("polynomial",),

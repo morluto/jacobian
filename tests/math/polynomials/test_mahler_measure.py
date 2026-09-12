@@ -380,6 +380,14 @@ def test_mahler_measure_rejects_empty_native_coefficients() -> None:
         reciprocal_profile(forged)
 
 
+def test_mahler_measure_rejects_leading_zero_native_coefficients() -> None:
+    forged = IntegerPolynomial.model_construct(coefficients=(0, 1))
+    with pytest.raises(OperationDomainValidationError, match="leading zeros"):
+        mahler_measure(forged)
+    with pytest.raises(OperationDomainValidationError, match="leading zeros"):
+        integer_polynomial_primitive_part(forged)
+
+
 def test_content_profile_preflights_duplicated_coefficient_output(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

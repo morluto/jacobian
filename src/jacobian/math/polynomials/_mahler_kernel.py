@@ -271,6 +271,12 @@ def _require_integer_polynomial(polynomial: object) -> IntegerPolynomial:
             code="polynomial.mahler_polynomial_coefficients",
             message="Mahler-family coefficients must be exact integers",
         )
+    if len(coefficients) > 1 and coefficients[0] == 0:
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="polynomial.mahler_polynomial_shape",
+            message="a canonical integer polynomial omits leading zeros",
+        )
     return polynomial
 
 

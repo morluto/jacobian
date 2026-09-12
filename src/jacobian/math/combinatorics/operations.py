@@ -473,8 +473,20 @@ def progression_hypergraph(
     coordinates = tuple(product(*(range(modulus) for modulus in group.moduli)))
     labels = {element: f"v{index}" for index, element in enumerate(coordinates)}
     edge_sets: set[frozenset[tuple[int, ...]]] = set()
+    # A step killed by two produces ``a, a + d, a`` and can never contribute
+    # an edge.  Filtering it first also makes elementary 2-groups linear in
+    # their retained vertex output instead of needlessly traversing |G|**2
+    # degenerate pairs.
+    nondegenerate_steps = tuple(
+        step
+        for step in coordinates
+        if any(
+            (2 * coordinate) % modulus
+            for coordinate, modulus in zip(step, group.moduli, strict=True)
+        )
+    )
     for start in coordinates:
-        for step in coordinates:
+        for step in nondegenerate_steps:
             progression = frozenset(
                 tuple(
                     (start[index] + multiple * step[index]) % group.moduli[index]

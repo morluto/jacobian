@@ -25,6 +25,7 @@ _ROUND_TWO_TRIAL_PRIME_BOUND = 100_000
 # so this cap keeps admission itself soundly bounded; larger cofactors cannot
 # be proven factorable here and are rejected.
 _ROUND_TWO_COFACTOR_DIGIT_BOUND = 4096
+_ROUND_TWO_COFACTOR_LIMIT = 10**_ROUND_TWO_COFACTOR_DIGIT_BOUND
 
 
 def _monic_zz_coefficients(
@@ -94,7 +95,7 @@ def _cofactor_is_factorizable(cofactor: int) -> bool:
     while isinstance(candidate, int):
         if candidate == 1:
             return True
-        if len(str(candidate)) > _ROUND_TWO_COFACTOR_DIGIT_BOUND:
+        if candidate >= _ROUND_TWO_COFACTOR_LIMIT:
             return False
         power = perfect_power(candidate, factor=False)
         if power is False:

@@ -233,6 +233,24 @@ def test_discriminant_admission_does_not_factor_inside_perfect_power(
     )
 
 
+def test_mersenne_power_discriminant_rejects_without_converting_the_cofactor() -> None:
+    """A Mersenne power discriminant is larger than CPython's str() digit cap.
+
+    ``x^31 - (2^607 - 1)`` has a cofactor of about 5,500 decimal digits, so
+    ``len(str(cofactor))`` raises ``ValueError``. Admission must still return
+    the typed 4,096-digit bound.
+    """
+
+    field = SimpleNumberFieldPresentation(
+        coefficients_descending=(1, *([0] * 30), -(2**607 - 1))
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        ring_of_integers(field)
+    assert error.value.errors()[0]["type"] == (
+        "number_field.ring_of_integers_discriminant_factorization_bound"
+    )
+
+
 def test_ring_of_integers_result_rejects_malformed_basis_on_deserialization() -> None:
     result = ring_of_integers(
         SimpleNumberFieldPresentation(coefficients_descending=(1, 0, -5))

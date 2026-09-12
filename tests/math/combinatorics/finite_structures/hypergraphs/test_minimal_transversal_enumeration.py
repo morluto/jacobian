@@ -453,9 +453,38 @@ def test_forced_vertex_covering_all_edges_skips_mixed_rank_domination() -> None:
     assert result.transversals == (("forced",),)
 
 
+def test_size_ordered_domination_admits_a_reducible_superset_family() -> None:
+    extras = tuple(f"v{index:02d}" for index in range(36))
+    fives = tuple(("a", "b", *triple) for triple in combinations(extras, 3))[:7_071]
+    source = FiniteHypergraph(
+        vertices=("a", "b", *extras),
+        edges=(
+            ("small", ("a", "b")),
+            *tuple((f"big{index:05d}", five) for index, five in enumerate(fives)),
+        ),
+    )
+    result = enumerate_minimal_transversals(
+        MinimalTransversalEnumerationRequest(hypergraph=source, maximum_cardinality=2)
+    )
+    assert result.transversals == (("a",), ("b",))
+
+
+def test_domination_scan_skips_same_size_and_self_comparisons() -> None:
+    edges = (
+        frozenset({"a", "b"}),
+        frozenset({"c", "d"}),
+        frozenset({"a", "b", "e"}),
+    )
+    assert enumeration._domination_comparison_count(edges) == 2
+    assert enumeration._minimal_edges(edges) == (
+        frozenset({"a", "b"}),
+        frozenset({"c", "d"}),
+    )
+
+
 def test_domination_presolve_shares_the_enumeration_work_bound() -> None:
     distinguished = "v00"
-    others = tuple(f"v{index:02d}" for index in range(1, 45))
+    others = tuple(f"v{index:02d}" for index in range(1, 60))
     fours = tuple((distinguished, *triple) for triple in combinations(others, 3))[
         :3_500
     ]
@@ -468,7 +497,8 @@ def test_domination_presolve_shares_the_enumeration_work_bound() -> None:
     edge_count = len(edges)
     vertex_count = 1 + len(others)
     maximum_cardinality = 2
-    domination_work = edge_count * (edge_count - 1)
+    smaller_count = len(fours)
+    domination_work = len(fives) * smaller_count
     candidate_count = sum(
         comb(vertex_count, size) for size in range(1, maximum_cardinality + 1)
     )

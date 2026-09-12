@@ -203,13 +203,27 @@ def _forced_vertices(edges: tuple[frozenset[str], ...]) -> frozenset[str]:
     return frozenset(forced)
 
 
+def _domination_comparison_count(edges: tuple[frozenset[str], ...]) -> int:
+    """Count strict-subset tests against strictly smaller edges only."""
+
+    counts: dict[int, int] = {}
+    for edge in edges:
+        size = len(edge)
+        counts[size] = counts.get(size, 0) + 1
+    smaller = 0
+    total = 0
+    for size in sorted(counts):
+        total += counts[size] * smaller
+        smaller += counts[size]
+    return total
+
+
 def _minimal_edges(
     edges: tuple[frozenset[str], ...],
 ) -> tuple[frozenset[str], ...]:
-    """Drop dominated edges after admitting the pairwise subset scan."""
+    """Drop dominated edges after a size-ordered subset scan."""
 
-    edge_count = len(edges)
-    comparison_count = edge_count * max(edge_count - 1, 0)
+    comparison_count = _domination_comparison_count(edges)
     if comparison_count > MAX_TRANSVERSAL_ENUMERATION_WORK:
         raise OperationResourceAdmissionError(
             location=("hypergraph", "edges"),
@@ -220,19 +234,27 @@ def _minimal_edges(
                 f"{MAX_TRANSVERSAL_ENUMERATION_WORK}"
             ),
         )
+    buckets: dict[int, list[frozenset[str]]] = {}
+    for edge in edges:
+        buckets.setdefault(len(edge), []).append(edge)
+    smaller: tuple[frozenset[str], ...] = ()
     kept: list[frozenset[str]] = []
     comparisons = 0
-    for edge in edges:
-        dominated = False
-        for other in edges:
-            comparisons += 1
-            if comparisons % 256 == 0:
-                request_checkpoint("during minimal transversal domination")
-            if other < edge:
-                dominated = True
-                break
-        if not dominated:
-            kept.append(edge)
+    for size in sorted(buckets):
+        size_kept: list[frozenset[str]] = []
+        for edge in buckets[size]:
+            dominated = False
+            for other in smaller:
+                comparisons += 1
+                if comparisons % 256 == 0:
+                    request_checkpoint("during minimal transversal domination")
+                if other < edge:
+                    dominated = True
+                    break
+            if not dominated:
+                size_kept.append(edge)
+        kept.extend(size_kept)
+        smaller = tuple(kept)
     return tuple(kept)
 
 
@@ -259,9 +281,7 @@ def _admit_enumeration(
     edge_sizes = {len(edge) for edge in remaining_unique}
     need_domination = maximum > 1 and len(edge_sizes) > 1
     domination_work = (
-        len(remaining_unique) * max(len(remaining_unique) - 1, 0)
-        if need_domination
-        else 0
+        _domination_comparison_count(remaining_unique) if need_domination else 0
     )
     edges = _minimal_edges(remaining_unique) if need_domination else remaining_unique
     remaining_edges = edges

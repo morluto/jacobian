@@ -431,14 +431,21 @@ def test_zero_variance_and_bad_normalization_are_rejected_at_operation_boundary(
 
 
 def test_normalization_intermediate_height_is_a_resource_refusal() -> None:
-    left = 10**260 + 57
-    right = 10**260 + 99
+    denominators = (
+        10**127 + 19,
+        10**127 + 79,
+        10**127 + 97,
+        10**127 + 111,
+        10**127 + 139,
+    )
     with pytest.raises(OperationResourceAdmissionError, match="intermediate bound"):
         berry_esseen_bound(
             _request(
                 _distribution(
-                    (0, Fraction(1, left)),
-                    (1, Fraction(1, right)),
+                    *tuple(
+                        (index, Fraction(1, denominator))
+                        for index, denominator in enumerate(denominators)
+                    )
                 )
             )
         )

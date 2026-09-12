@@ -9,7 +9,11 @@ import pytest
 from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 
-from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS, CanonicalRational
+from jacobian._exact import (
+    MAX_CANONICAL_INTEGER_DIGITS,
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    CanonicalRational,
+)
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
@@ -177,6 +181,26 @@ def test_order_shape_accounts_for_absorbing_zeros_in_product_bounds() -> None:
     result = sequence_order_shape(FiniteRationalSequence(values=(wide, zero, zero)))
     assert result.log_concavity_rows[0].square == zero
     assert result.log_concavity_rows[0].neighbor_product == zero
+
+
+def test_order_shape_sums_per_row_product_widths_instead_of_a_global_maximum() -> None:
+    wide = CanonicalRational(num=10**16_000, den=1)
+    zero = CanonicalRational(num=0, den=1)
+    source = FiniteRationalSequence(values=(wide,) + (zero,) * 199)
+    result = sequence_order_shape(source)
+    assert result.log_concavity_rows[0].square.num == 10**32_000
+    assert all(row.neighbor_product.num == 0 for row in result.log_concavity_rows)
+
+
+def test_order_shape_admits_cross_cancelled_neighbor_products() -> None:
+    tall = CanonicalRational(num=10 ** (MAX_CANONICAL_RATIONAL_DIGITS - 1), den=1)
+    unit = CanonicalRational(num=1, den=tall.num)
+    zero = CanonicalRational(num=0, den=1)
+    result = sequence_order_shape(FiniteRationalSequence(values=(unit, zero, tall)))
+    assert result.log_concavity_rows[0].neighbor_product == CanonicalRational(
+        num=1, den=1
+    )
+    assert result.log_concavity_rows[0].square == zero
 
 
 def test_rational_sequence_rejects_oversized_length_before_expansion() -> None:

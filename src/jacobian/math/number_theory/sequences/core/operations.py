@@ -10,6 +10,7 @@ from itertools import pairwise
 from math import gcd
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
+from jacobian._execution import request_checkpoint
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -217,12 +218,17 @@ def _product_component_digits(left: CanonicalRational, right: CanonicalRational)
 
     if left.num == 0 or right.num == 0:
         return 1
-    return max(
-        len(format_canonical_integer(abs(left.num)))
-        + len(format_canonical_integer(abs(right.num))),
-        len(format_canonical_integer(left.den))
-        + len(format_canonical_integer(right.den)),
-    )
+    left_num = abs(left.num)
+    right_num = abs(right.num)
+    cancel_left = gcd(left_num, right.den)
+    cancel_right = gcd(right_num, left.den)
+    numerator_digits = len(
+        format_canonical_integer(left_num // cancel_left)
+    ) + len(format_canonical_integer(right_num // cancel_right))
+    denominator_digits = len(
+        format_canonical_integer(left.den // cancel_right)
+    ) + len(format_canonical_integer(right.den // cancel_left))
+    return max(1, numerator_digits, denominator_digits)
 
 
 def _admit_order_shape(
@@ -255,14 +261,18 @@ def _admit_order_shape(
         )
     row_count = max(0, size - 2)
     product_digits = 1
+    result_digits = source_digits
     for index in range(1, size - 1):
-        product_digits = max(
-            product_digits,
-            _product_component_digits(rational_values[index], rational_values[index]),
-            _product_component_digits(
-                rational_values[index - 1], rational_values[index + 1]
-            ),
+        if index % 128 == 0:
+            request_checkpoint("during sequence order-shape product admission")
+        square_digits = _product_component_digits(
+            rational_values[index], rational_values[index]
         )
+        neighbor_digits = _product_component_digits(
+            rational_values[index - 1], rational_values[index + 1]
+        )
+        product_digits = max(product_digits, square_digits, neighbor_digits)
+        result_digits += 2 * square_digits + 2 * neighbor_digits
     if row_count and product_digits > MAX_CANONICAL_RATIONAL_DIGITS:
         raise OperationDomainValidationError(
             location=("values",),
@@ -282,11 +292,6 @@ def _admit_order_shape(
                 f"{MAX_ORDER_SHAPE_RESULT_ALLOCATIONS}"
             ),
         )
-    # Interior rows retain two rationals. Each product can have up to
-    # ``product_digits`` digits in both its numerator and denominator, and the
-    # result also retains the complete rational source. Empty, singleton, and
-    # adjacent pairs construct no product rows.
-    result_digits = source_digits + row_count * 4 * product_digits
     if result_digits > MAX_SEQUENCE_TOTAL_DIGITS:
         raise OperationDomainValidationError(
             location=("values",),

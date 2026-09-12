@@ -453,6 +453,47 @@ def test_forced_vertex_covering_all_edges_skips_mixed_rank_domination() -> None:
     assert result.transversals == (("forced",),)
 
 
+def test_domination_presolve_shares_the_enumeration_work_bound() -> None:
+    distinguished = "v00"
+    others = tuple(f"v{index:02d}" for index in range(1, 45))
+    fours = tuple((distinguished, *triple) for triple in combinations(others, 3))[
+        :3_500
+    ]
+    fives = tuple(combinations(others, 5))[:3_500]
+    edges = (*fours, *fives)
+    source = FiniteHypergraph(
+        vertices=(distinguished, *others),
+        edges=tuple((f"e{index:05d}", edge) for index, edge in enumerate(edges)),
+    )
+    edge_count = len(edges)
+    vertex_count = 1 + len(others)
+    maximum_cardinality = 2
+    domination_work = edge_count * (edge_count - 1)
+    candidate_count = sum(
+        comb(vertex_count, size) for size in range(1, maximum_cardinality + 1)
+    )
+    candidate_edge_work = candidate_count * edge_count
+    constraint_count = edge_count
+    minimality_work = sum(
+        size * constraint_count * comb(vertex_count, size)
+        for size in range(1, maximum_cardinality + 1)
+    )
+    total_work = candidate_edge_work + minimality_work + domination_work
+    assert domination_work < MAX_TRANSVERSAL_ENUMERATION_WORK
+    assert candidate_edge_work + minimality_work < MAX_TRANSVERSAL_ENUMERATION_WORK
+    assert total_work > MAX_TRANSVERSAL_ENUMERATION_WORK
+
+    with pytest.raises(
+        OperationResourceAdmissionError,
+        match=f"{total_work} checks; maximum is {MAX_TRANSVERSAL_ENUMERATION_WORK}",
+    ):
+        enumerate_minimal_transversals(
+            MinimalTransversalEnumerationRequest(
+                hypergraph=source, maximum_cardinality=maximum_cardinality
+            )
+        )
+
+
 def test_forced_rank_exhaustion_with_residual_edge_is_empty() -> None:
     source = FiniteHypergraph(
         vertices=("a", "b", "c"),

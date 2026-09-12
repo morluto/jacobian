@@ -164,7 +164,7 @@ def _canonical_claims_match(
             expected_maximal,
             reduction,
         )
-    except (PydanticCustomError, TypeError, ValueError):
+    except (AttributeError, PydanticCustomError, TypeError, ValueError):
         return False
     return (
         finite_poset_digest(
@@ -262,7 +262,13 @@ def verify_finite_poset(poset: FinitePoset) -> bool:
             )
             == poset.poset_digest
         )
-    except (OperationDomainValidationError, PydanticCustomError, TypeError, ValueError):
+    except (
+        AttributeError,
+        OperationDomainValidationError,
+        PydanticCustomError,
+        TypeError,
+        ValueError,
+    ):
         return False
 
 

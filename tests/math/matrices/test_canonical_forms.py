@@ -146,6 +146,35 @@ def test_matrix_polynomial_remainder_retains_variable_and_reconstructs_source() 
     )
 
 
+def test_matrix_polynomial_remainder_handles_nonconstant_minimal_polynomial() -> None:
+    """A diagonal matrix supplies a nonconstant modulus to exact division."""
+    polynomial = RationalPolynomial(
+        variables=("u",),
+        polynomial=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(coefficient=R(num=1, den=1), exponents=(3,)),
+                RationalPolynomialTerm(coefficient=R(num=2, den=1), exponents=(1,)),
+                RationalPolynomialTerm(coefficient=R(num=1, den=1), exponents=(0,)),
+            )
+        ),
+    )
+    result = compute_matrix_polynomial_remainder(_diagonal(2, 3), polynomial)
+
+    assert _coeffs(result.minimal_polynomial) == [
+        Fraction(6),
+        Fraction(-5),
+        Fraction(1),
+    ]
+    assert {
+        term.exponents[0]: term.coefficient.as_fraction()
+        for term in result.quotient.polynomial.terms
+    } == {1: Fraction(1), 0: Fraction(5)}
+    assert {
+        term.exponents[0]: term.coefficient.as_fraction()
+        for term in result.remainder.polynomial.terms
+    } == {1: Fraction(21), 0: Fraction(-29)}
+
+
 def test_matrix_polynomial_remainder_rejects_unbounded_quotient_growth() -> None:
     matrix = _diagonal(1)
     polynomial = RationalPolynomial(
@@ -218,7 +247,7 @@ def test_trusted_canonical_form_producers_run_each_kernel_once(
     request = _diagonal(2, 3)
     names = (
         "invariant_factors",
-        "minimal_polynomial",
+        "_minimal_polynomial_coefficients",
         "characteristic_polynomial",
         "primary_decomposition",
     )
@@ -241,7 +270,7 @@ def test_trusted_canonical_form_producers_run_each_kernel_once(
     compute_minimal_polynomial(request)
     assert calls == {
         "invariant_factors": 0,
-        "minimal_polynomial": 1,
+        "_minimal_polynomial_coefficients": 1,
         "characteristic_polynomial": 1,
         "primary_decomposition": 0,
     }
@@ -251,7 +280,7 @@ def test_trusted_canonical_form_producers_run_each_kernel_once(
     compute_rational_canonical_form(request)
     assert calls == {
         "invariant_factors": 1,
-        "minimal_polynomial": 1,
+        "_minimal_polynomial_coefficients": 1,
         "characteristic_polynomial": 1,
         "primary_decomposition": 0,
     }
@@ -261,7 +290,7 @@ def test_trusted_canonical_form_producers_run_each_kernel_once(
     compute_primary_decomposition(request)
     assert calls == {
         "invariant_factors": 0,
-        "minimal_polynomial": 1,
+        "_minimal_polynomial_coefficients": 1,
         "characteristic_polynomial": 0,
         "primary_decomposition": 1,
     }

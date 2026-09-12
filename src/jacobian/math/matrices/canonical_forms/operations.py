@@ -256,12 +256,8 @@ def _evaluate_polynomial(
     )
 
 
-def minimal_polynomial(entries: RationalEntries) -> CoefficientList:
-    """Compute the minimal polynomial via the Krylov/nullspace method.
-
-    Returns the monic minimal polynomial as coefficient list [a_0, ..., a_n].
-    """
-
+def _minimal_polynomial_coefficients(entries: RationalEntries) -> CoefficientList:
+    """Compute bounded raw minimal-polynomial coefficients for one matrix."""
     from sympy import Matrix, eye
 
     n = _square_dimension(entries)
@@ -287,6 +283,17 @@ def minimal_polynomial(entries: RationalEntries) -> CoefficientList:
         *(Fraction(-reduced[index, degree]) for index in range(degree)),
         Fraction(1),
     )
+
+
+def minimal_polynomial(entries: RationalEntries) -> CoefficientList:
+    """Return raw increasing-degree minimal-polynomial coefficients.
+
+    This compatibility-facing native helper delegates to the private
+    coefficient kernel. Typed matrix operations that construct canonical
+    polynomial carriers call the private kernel directly so they cannot
+    accidentally consume a future public result contract.
+    """
+    return _minimal_polynomial_coefficients(entries)
 
 
 def invariant_factors(entries: RationalEntries) -> tuple[CoefficientList, ...]:
@@ -326,7 +333,7 @@ def primary_decomposition(entries: RationalEntries) -> tuple[CoefficientList, ..
     from sympy import Poly, Symbol, factor_list
 
     x = Symbol("x")
-    minimal_coefficients = minimal_polynomial(entries)
+    minimal_coefficients = _minimal_polynomial_coefficients(entries)
     minimal_expression = sum(
         coefficient * x**index for index, coefficient in enumerate(minimal_coefficients)
     )
@@ -596,7 +603,7 @@ def reduce_matrix_polynomial(
     # polynomial, which is part of this operation's result, before returning
     # the source polynomial unchanged as the remainder.
     if source_degree == 0:
-        minimal_coefficients = minimal_polynomial(_matrix_entries(matrix))
+        minimal_coefficients = _minimal_polynomial_coefficients(_matrix_entries(matrix))
         minimal = _to_monic_polynomial(
             minimal_coefficients, variable=polynomial.variables[0]
         )
@@ -646,7 +653,7 @@ def reduce_matrix_polynomial(
             code="matrix.polynomial.remainder.output",
             message="polynomial remainder quotient growth exceeds the admitted exact-arithmetic bound",
         )
-    minimal_coefficients = minimal_polynomial(_matrix_entries(matrix))
+    minimal_coefficients = _minimal_polynomial_coefficients(_matrix_entries(matrix))
     minimal = _to_monic_polynomial(
         minimal_coefficients, variable=polynomial.variables[0]
     )
@@ -662,7 +669,7 @@ def _minimal_polynomial_components(
     _admit_square(matrix)
     entries = _matrix_entries(matrix)
     return (
-        _to_monic_polynomial(minimal_polynomial(entries)),
+        _to_monic_polynomial(_minimal_polynomial_coefficients(entries)),
         _to_monic_polynomial(characteristic_polynomial(entries)),
     )
 
@@ -675,7 +682,7 @@ def _rational_canonical_components(
     _admit_square(matrix)
     entries = _matrix_entries(matrix)
     factors = invariant_factors(entries)
-    minimal = minimal_polynomial(entries)
+    minimal = _minimal_polynomial_coefficients(entries)
     characteristic = characteristic_polynomial(entries)
     invariant_entries = tuple(
         InvariantFactorEntry(

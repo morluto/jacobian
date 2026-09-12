@@ -7,6 +7,7 @@ from typing import Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 
 MAX_VECTOR_CELLS = 524_288
@@ -57,8 +58,38 @@ class VectorFamily(StrictModel):
         return self
 
 
+class ExactComplex(StrictModel):
+    """A JSON-safe exact complex scalar with rational real and imaginary parts."""
+
+    real: CanonicalRational
+    imaginary: CanonicalRational
+
+
+class ComplexFrame(StrictModel):
+    """A bounded finite family of exact complex vectors."""
+
+    dimension: int = Field(ge=1, le=MAX_DIM)
+    vectors: tuple[tuple[ExactComplex, ...], ...] = Field(max_length=MAX_VECTOR_CELLS)
+
+    @model_validator(mode="after")
+    def require_rectangular_family(self) -> Self:
+        if any(len(vector) != self.dimension for vector in self.vectors):
+            raise _validation_error(
+                "complex_vector_dimension_mismatch",
+                "all complex vectors must have equal dimension",
+            )
+        if len(self.vectors) * self.dimension > MAX_VECTOR_CELLS:
+            raise _validation_error(
+                "complex_vector_cell_budget",
+                "complex vector family exceeds the materialized-cell budget",
+            )
+        return self
+
+
 __all__ = [
     "MAX_DIM",
     "MAX_VECTOR_CELLS",
+    "ComplexFrame",
+    "ExactComplex",
     "VectorFamily",
 ]

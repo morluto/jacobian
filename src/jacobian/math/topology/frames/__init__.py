@@ -2,11 +2,30 @@
 
 from jacobian.math.topology.frames.operations import (
     coherence,
+    complex_design_profile,
     frame_potential,
     gram,
+    mutually_unbiased_bases,
+    sic_profile,
     tight_equiangular_profile,
     verify_gram,
 )
-from jacobian.math.topology.frames.values import VectorFamily
+from jacobian.math.topology.frames.values import (
+    ComplexFrame,
+    ExactComplex,
+    VectorFamily,
+)
 
-__all__ = ["VectorFamily", "coherence", "frame_potential", "gram", "tight_equiangular_profile", "verify_gram"]
+__all__ = [
+    "ComplexFrame",
+    "ExactComplex",
+    "VectorFamily",
+    "coherence",
+    "complex_design_profile",
+    "frame_potential",
+    "gram",
+    "mutually_unbiased_bases",
+    "sic_profile",
+    "tight_equiangular_profile",
+    "verify_gram",
+]

@@ -1,26 +1,43 @@
 """Exact frame and vector-family contract tests."""
 
+import json
 from fractions import Fraction
 
 import pytest
 
+from jacobian._exact import CanonicalRational
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.values import IntegerMatrix
 from jacobian.math.topology.frames._models import (
+    ComplexFrameDesignProfileRequest,
     GramResult,
+    MutuallyUnbiasedBasesRequest,
+    SicProfileRequest,
 )
 from jacobian.math.topology.frames._tools import (
     _coherence,
+    _complex_design_profile,
     _frame_potential,
     _gram,
+    _mutually_unbiased_bases,
+    _sic_profile,
     _tight_equiangular_profile,
 )
 from jacobian.math.topology.frames.operations import gram, verify_gram
 from jacobian.math.topology.frames.values import (
     MAX_VECTOR_CELLS,
+    ComplexFrame,
+    ExactComplex,
     VectorFamily,
 )
+
+
+def _z(real: int, imaginary: int = 0) -> ExactComplex:
+    return ExactComplex(
+        real=CanonicalRational(num=real, den=1),
+        imaginary=CanonicalRational(num=imaginary, den=1),
+    )
 
 
 def _repeated_standard_basis(
@@ -121,6 +138,37 @@ def test_tight_equiangular_profile_is_exact_and_serializable() -> None:
     assert result.common_squared_inner_product is not None
     assert result.common_squared_inner_product.as_integer_ratio() == (0, 1)
     assert type(result).model_validate_json(result.model_dump_json()) == result
+
+
+def test_exact_complex_mub_profile_and_forged_shape_rejection() -> None:
+    standard = ComplexFrame(dimension=2, vectors=((_z(1), _z(0)), (_z(0), _z(1))))
+    hadamard = ComplexFrame(dimension=2, vectors=((_z(1), _z(1)), (_z(1), _z(-1))))
+    request = MutuallyUnbiasedBasesRequest(dimension=2, bases=(standard, hadamard))
+    result = _mutually_unbiased_bases(request)
+    assert result.is_mutually_unbiased is True
+    assert result.basis_pair_count == 1
+    assert type(result).model_validate_json(result.model_dump_json()) == result
+    forged = json.loads(result.model_dump_json())
+    forged["basis_pair_count"] = 0
+    with pytest.raises(ValueError, match="pair count"):
+        type(result).model_validate_json(json.dumps(forged))
+
+
+def test_exact_complex_sic_and_design_profiles_are_decisions() -> None:
+    basis = ComplexFrame(dimension=2, vectors=((_z(1), _z(0)), (_z(0), _z(1))))
+    design = _complex_design_profile(ComplexFrameDesignProfileRequest(frame=basis))
+    assert design.tight is True
+    assert design.equiangular is True
+    assert design.common_squared_overlap is not None
+    assert design.common_squared_overlap.as_integer_ratio() == (0, 1)
+
+    sic = _sic_profile(
+        SicProfileRequest(frame=ComplexFrame(dimension=1, vectors=((_z(1),),)))
+    )
+    assert sic.is_sic is True
+    assert sic.common_squared_overlap is not None
+    assert sic.common_squared_overlap.as_integer_ratio() == (1, 2)
+    assert type(sic).model_validate_json(sic.model_dump_json()) == sic
 
 
 def test_coherence_is_exact_and_carries_canonical_maximizer() -> None:

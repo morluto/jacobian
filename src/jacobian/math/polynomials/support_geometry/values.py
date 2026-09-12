@@ -246,9 +246,9 @@ class PolynomialWeightProfile(StrictModel):
     minimizing_exponents: tuple[tuple[StrictInt, ...], ...] = Field(
         max_length=MAX_WEIGHT_PROFILE_TERMS
     )
-    weight_layers: tuple[
-        tuple[StrictInt, tuple[tuple[StrictInt, ...], ...]], ...
-    ] = Field(max_length=MAX_WEIGHT_PROFILE_TERMS)
+    weight_layers: tuple[tuple[StrictInt, tuple[tuple[StrictInt, ...], ...]], ...] = (
+        Field(max_length=MAX_WEIGHT_PROFILE_TERMS)
+    )
 
     @model_validator(mode="after")
     def bind_profile_to_source(self) -> Self:

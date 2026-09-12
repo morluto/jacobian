@@ -761,7 +761,9 @@ class TestNativeSurface:
             variables=VARS,
             polynomial=SparseRationalPolynomial.model_construct(terms=oversized_terms),
         )
-        with raises_domain_code("polynomial_support_geometry.weighted_term_count_exceeded"):
+        with raises_domain_code(
+            "polynomial_support_geometry.weighted_term_count_exceeded"
+        ):
             weight_profile(oversized, (1, 0))
 
         tall = RationalPolynomial.model_construct(
@@ -778,7 +780,9 @@ class TestNativeSurface:
                 )
             ),
         )
-        with raises_domain_code("polynomial_support_geometry.weighted_coefficient_bound"):
+        with raises_domain_code(
+            "polynomial_support_geometry.weighted_coefficient_bound"
+        ):
             initial_form(tall, (1, 0))
 
 

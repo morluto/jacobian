@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from typing import Annotated, Any, Literal, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -11,6 +11,9 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.math.algebra.trigonometric_rational._laurent_gcd_process import (
+    cancel_common_factor,
+)
 from jacobian.math.number_theory.number_fields import GaussianRational
 from jacobian.math.number_theory.number_fields.values import (
     MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS,
@@ -252,16 +255,24 @@ def _scale(polynomial: Polynomial, scalar: Gaussian) -> Polynomial:
     }
 
 
-def _power(value: RationalFunction, exponent: int, axis: int) -> RationalFunction:
-    result = (_one(axis), _one(axis))
-    base = value
-    while exponent:
-        if exponent & 1:
-            result = (_poly_mul(result[0], base[0]), _poly_mul(result[1], base[1]))
-        exponent >>= 1
-        if exponent:
-            base = (_poly_mul(base[0], base[0]), _poly_mul(base[1], base[1]))
-    return result
+def _power(
+    value: tuple[Polynomial, Polynomial, tuple[Polynomial, ...]],
+    exponent: int,
+    axis: int,
+) -> tuple[Polynomial, Polynomial, tuple[Polynomial, ...]]:
+    result_num, result_den = _one(axis), _one(axis)
+    base_num, base_den = value[0], value[1]
+    remaining = exponent
+    while remaining:
+        if remaining & 1:
+            result_num = _poly_mul(result_num, base_num)
+            result_den = _poly_mul(result_den, base_den)
+        remaining >>= 1
+        if remaining:
+            base_num = _poly_mul(base_num, base_num)
+            base_den = _poly_mul(base_den, base_den)
+    loci = value[2] if exponent else ()
+    return result_num, result_den, loci
 
 
 def _root_of_unity(quarter_turns: int) -> Gaussian:
@@ -292,18 +303,20 @@ def _trig(angle: IntegerAffineAngleForm, axis: int, *, sine: bool) -> RationalFu
     else:
         numerator = _poly_add({forward: phase}, {backward: inverse_phase})
         denominator = _scale(_one(axis), (Fraction(2), Fraction()))
-    return numerator, denominator
+    return numerator, denominator, ()
 
 
 def _evaluate(
     expression: TrigonometricRationalExpression, axis: int, nodes: list[int]
-) -> RationalFunction:
+) -> tuple[Polynomial, Polynomial, tuple[Polynomial, ...]]:
     nodes[0] += 1
     if nodes[0] > MAX_TRIG_AST_NODES:
         _refuse_growth()
     if isinstance(expression, TrigLiteral):
-        return _scale(_one(axis), (expression.value.as_fraction(), Fraction())), _one(
-            axis
+        return (
+            _scale(_one(axis), (expression.value.as_fraction(), Fraction())),
+            _one(axis),
+            (),
         )
     if isinstance(expression, TrigSine):
         return _trig(expression.angle, axis, sine=True)
@@ -321,24 +334,29 @@ def _evaluate(
                 "trigonometric.zero_denominator",
                 "division by the identically zero expression is undefined",
             )
-        return _poly_mul(left[0], right[1]), _poly_mul(left[1], right[0])
+        return (
+            _poly_mul(left[0], right[1]),
+            _poly_mul(left[1], right[0]),
+            (*left[2], *right[2], right[0]),
+        )
     values = [_evaluate(child, axis, nodes) for child in expression.children]
-    result = (
+    result_num, result_den = (
         (_one(axis), _one(axis))
         if isinstance(expression, TrigMultiply)
         else ({}, _one(axis))
     )
-    for numerator, denominator in values:
+    loci: tuple[Polynomial, ...] = ()
+    for numerator, denominator, child_loci in values:
+        loci = (*loci, *child_loci)
         if isinstance(expression, TrigMultiply):
-            result = _poly_mul(result[0], numerator), _poly_mul(result[1], denominator)
+            result_num = _poly_mul(result_num, numerator)
+            result_den = _poly_mul(result_den, denominator)
         else:
-            result = (
-                _poly_add(
-                    _poly_mul(result[0], denominator), _poly_mul(numerator, result[1])
-                ),
-                _poly_mul(result[1], denominator),
+            result_num = _poly_add(
+                _poly_mul(result_num, denominator), _poly_mul(numerator, result_den)
             )
-    return result
+            result_den = _poly_mul(result_den, denominator)
+    return result_num, result_den, loci
 
 
 def _canonicalize(numerator: Polynomial, denominator: Polynomial) -> RationalFunction:
@@ -376,43 +394,39 @@ def _canonicalize(numerator: Polynomial, denominator: Polynomial) -> RationalFun
     return numerator, denominator
 
 
-def _sympy_coefficient(value: Gaussian) -> Any:
-    """Convert one exact Gaussian rational to the pinned backend domain."""
-
-    from sympy import I, Rational
-
-    return Rational(value[0].numerator, value[0].denominator) + I * Rational(
-        value[1].numerator, value[1].denominator
-    )
-
-
-def _gaussian_from_sympy(value: Any) -> Gaussian:
-    """Convert a backend Gaussian-rational coefficient without string parsing."""
-
-    if hasattr(value, "x") and hasattr(value, "y"):
-        real, imaginary = value.x, value.y
-    else:
-        real, imaginary = value.as_real_imag()
-    if not all(
-        hasattr(component, "p") and hasattr(component, "q")
-        for component in (real, imaginary)
-    ):
-        raise TypeError("trigonometric backend returned a non-rational coefficient")
-    return _admit_gaussian(
-        (
-            Fraction(int(real.p), int(real.q)),
-            Fraction(int(imaginary.p), int(imaginary.q)),
-        )
-    )
-
-
-def _polynomial_from_sympy(value: Any) -> Polynomial:
+def _polynomial_payload(polynomial: Polynomial) -> dict[str, list[object]]:
+    supports = list(polynomial)
     return {
-        tuple(int(exponent) for exponent in exponents): _gaussian_from_sympy(
-            coefficient
-        )
-        for exponents, coefficient in value.terms()
+        "supports": [list(support) for support in supports],
+        "real_numerators": [str(polynomial[support][0].numerator) for support in supports],
+        "real_denominators": [
+            str(polynomial[support][0].denominator) for support in supports
+        ],
+        "imag_numerators": [str(polynomial[support][1].numerator) for support in supports],
+        "imag_denominators": [
+            str(polynomial[support][1].denominator) for support in supports
+        ],
     }
+
+
+def _polynomial_from_payload(payload: object) -> Polynomial:
+    if not isinstance(payload, dict):
+        raise RuntimeError("trigonometric Laurent GCD worker returned a malformed polynomial")
+    supports = payload["supports"]
+    result: Polynomial = {}
+    for support, real_num, real_den, imag_num, imag_den in zip(
+        supports,
+        payload["real_numerators"],
+        payload["real_denominators"],
+        payload["imag_numerators"],
+        payload["imag_denominators"],
+        strict=True,
+    ):
+        result[tuple(int(value) for value in support)] = (
+            Fraction(int(real_num), int(real_den)),
+            Fraction(int(imag_num), int(imag_den)),
+        )
+    return result
 
 
 def _reduce_common_laurent_factor(
@@ -452,28 +466,16 @@ def _reduce_common_laurent_factor(
     if len(shifted_numerator) * len(shifted_denominator) > MAX_TRIG_LAURENT_TERMS:
         _refuse_growth()
 
-    from sympy import Symbol
-    from sympy.polys.domains import QQ_I
-    from sympy.polys.rings import ring
-
-    symbols = tuple(Symbol(f"x{index}") for index in range(axis))
-    polynomial_ring, *_ = ring(symbols, QQ_I)
-    left = polynomial_ring.from_dict(
+    response = cancel_common_factor(
         {
-            support: _sympy_coefficient(coefficient)
-            for support, coefficient in shifted_numerator.items()
+            "axis": axis,
+            "left": _polynomial_payload(shifted_numerator),
+            "right": _polynomial_payload(shifted_denominator),
         }
     )
-    right = polynomial_ring.from_dict(
-        {
-            support: _sympy_coefficient(coefficient)
-            for support, coefficient in shifted_denominator.items()
-        }
-    )
-    common = left.gcd(right)
     return _canonicalize(
-        _polynomial_from_sympy(left.exquo(common)),
-        _polynomial_from_sympy(right.exquo(common)),
+        _polynomial_from_payload(response["left"]),
+        _polynomial_from_payload(response["right"]),
     )
 
 
@@ -520,6 +522,18 @@ def _wire(
     )
 
 
+def _combine_loci(loci: tuple[Polynomial, ...], axis: int) -> Polynomial:
+    result = _one(axis)
+    for polynomial in loci:
+        if not polynomial:
+            continue
+        support = next(iter(polynomial))
+        if len(polynomial) == 1 and not any(support):
+            continue
+        result = _poly_mul(result, polynomial)
+    return result
+
+
 def normalize_trigonometric_rational(
     request: TrigonometricRationalSource,
 ) -> TrigonometricRationalNormalizeResult:
@@ -528,11 +542,17 @@ def normalize_trigonometric_rational(
             "trigonometric.variable_axis", "variables must be unique"
         )
     axis = len(request.variables)
-    raw_numerator, raw_denominator = _evaluate(request.expression, axis, [0])
+    raw_numerator, raw_denominator, loci = _evaluate(request.expression, axis, [0])
     numerator, denominator = _reduce_common_laurent_factor(
         raw_numerator, raw_denominator
     )
-    denominator_nonzero = _canonicalize_nonzero_locus(raw_denominator)
+    combined_loci = _combine_loci(loci, axis)
+    source_locus = (
+        combined_loci
+        if combined_loci != _one(axis)
+        else raw_denominator
+    )
+    denominator_nonzero = _canonicalize_nonzero_locus(source_locus)
     denominator_wire = _wire(request.variables, denominator)
     return TrigonometricRationalNormalizeResult(
         numerator=_wire(request.variables, numerator),

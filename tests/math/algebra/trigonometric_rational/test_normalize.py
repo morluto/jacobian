@@ -160,3 +160,24 @@ def test_boundary_frequency_cancellation_keeps_the_source_locus() -> None:
         (4_096,),
         (-4_096,),
     }
+
+
+def test_nested_reciprocal_retains_inner_sine_locus() -> None:
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x"],
+            "expression": {
+                "kind": "DIVIDE",
+                "numerator": {"kind": "LITERAL", "value": {"num": 1, "den": 1}},
+                "denominator": {
+                    "kind": "DIVIDE",
+                    "numerator": {"kind": "LITERAL", "value": {"num": 1, "den": 1}},
+                    "denominator": {"kind": "SINE", "angle": {"coefficients": [1]}},
+                },
+            },
+        }
+    )
+    result = normalize_trigonometric_rational(request)
+    assert result.denominator.terms[0].exponents == (0,)
+    assert len(result.denominator_nonzero.terms) == 2
+    assert result.denominator != result.denominator_nonzero

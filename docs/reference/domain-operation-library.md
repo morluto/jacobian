@@ -30,6 +30,19 @@ enumerate candidates, select a kernel, reserve result work, or retain an
 execution plan in a Pydantic private attribute. The owner admission function
 runs after parsing and is shared by native and MCP execution.
 
+Every native callable that backs a public operation is also an admission
+boundary. Python type annotations and Pydantic field declarations do not
+validate values supplied directly to that callable. Validate strict runtime
+types, shape, axes, domain, work, intermediate growth, and materialized output
+before indexing, unpacking, backend work, or result allocation. Equivalent
+native and catalog invocations must use the same owner admission helper.
+Expected invalid native values raise `OperationDomainValidationError` or the
+operation's declared subtype while preserving its stable owner code and
+domain/resource classification. Use `OperationResourceAdmissionError` when the
+operation contract distinguishes execution-envelope refusal from other domain
+rejections. Neither path may leak helper `ValueError`, `IndexError`,
+tuple-unpacking errors, or Pydantic validation exceptions.
+
 Every built-in `MathTool` declaration must publish at least one small valid
 invocation example. An example is part of the public contract: it must validate
 against the declaration's request model, use canonical values where required,
@@ -299,6 +312,10 @@ source and witness. They should not generally rerun the producer. For example,
 a Pratt certificate retains the prime-power factorization of `p - 1`, recursive
 subcertificates, and a modular witness; its verifier reconstructs that supplied
 factorization and checks the witness equations without factoring `p - 1`.
+Treat values reconstructed with native bypasses such as `model_construct()` or
+`model_copy()` as caller-authored too. A claim checker must reject malformed
+runtime field types before arithmetic or recomputation, then establish only the
+source-bound relation its consumer uses.
 
 No ordinary boundary may factor, isolate roots, enumerate candidates, invoke a
 solver or backend, recompute a defining relation, or trigger a nested public

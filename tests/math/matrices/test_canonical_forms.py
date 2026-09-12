@@ -176,6 +176,44 @@ def test_matrix_polynomial_remainder_accepts_bounded_high_degree_prefix() -> Non
     assert result.remainder.polynomial.terms[0].coefficient == R(num=1, den=1)
 
 
+def test_matrix_polynomial_remainder_accepts_maximum_size_constant() -> None:
+    coefficient = R(num=10**32_767, den=1)
+    polynomial = RationalPolynomial(
+        variables=("t",),
+        polynomial=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(coefficient=coefficient, exponents=(0,)),
+            )
+        ),
+    )
+    result = compute_matrix_polynomial_remainder(_diagonal(0), polynomial)
+    assert result.quotient.polynomial.terms == ()
+    assert result.remainder == polynomial
+
+
+def test_matrix_polynomial_remainder_accepts_zero_polynomial() -> None:
+    polynomial = RationalPolynomial(
+        variables=("t",), polynomial=SparseRationalPolynomial(terms=())
+    )
+    result = compute_matrix_polynomial_remainder(_diagonal(0), polynomial)
+    assert result.quotient == polynomial
+    assert result.remainder == polynomial
+
+
+def test_matrix_polynomial_remainder_result_rejects_empty_source() -> None:
+    zero = RationalPolynomial(
+        variables=("t",), polynomial=SparseRationalPolynomial(terms=())
+    )
+    with pytest.raises(ValidationError, match="source matrix must be nonempty"):
+        MatrixPolynomialRemainderResult(
+            source_matrix=RationalMatrix(entries=()),
+            polynomial=zero,
+            minimal_polynomial=_mono(0, 1),
+            quotient=zero,
+            remainder=zero,
+        )
+
+
 def test_trusted_canonical_form_producers_run_each_kernel_once(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

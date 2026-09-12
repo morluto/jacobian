@@ -1414,6 +1414,10 @@ class MatrixPolynomialRemainderResult(StrictModel):
 
     @model_validator(mode="after")
     def require_division_shape(self) -> Self:
+        if self.source_matrix.row_count == 0:
+            raise _validation_error(
+                "shape_mismatch", "source matrix must be nonempty"
+            )
         if self.source_matrix.row_count != self.source_matrix.column_count:
             raise _validation_error("shape_mismatch", "source matrix must be square")
         variable = self.polynomial.variables

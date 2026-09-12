@@ -591,6 +591,20 @@ def reduce_matrix_polynomial(
         ),
         default=1,
     )
+    # A zero or constant source needs no Euclidean quotient-growth work.  Keep
+    # the square-matrix admission above and still compute the minimal
+    # polynomial, which is part of this operation's result, before returning
+    # the source polynomial unchanged as the remainder.
+    if source_degree == 0:
+        minimal_coefficients = minimal_polynomial(_matrix_entries(matrix))
+        minimal = _to_monic_polynomial(
+            minimal_coefficients, variable=polynomial.variables[0]
+        )
+        return (
+            minimal,
+            _polynomial_from_coefficients((), polynomial.variables[0]),
+            polynomial,
+        )
     # Euclidean division can fill every degree from zero through the leading
     # quotient degree. Reject a quotient whose canonical sparse carrier could
     # not hold that complete support before computing the matrix modulus.

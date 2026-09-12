@@ -362,7 +362,7 @@ def test_content_result_does_not_replay_primitivity() -> None:
         )
     )
     forged = result.model_dump(mode="json")
-    forged["content"] = 3
+    forged["content"] = "3"
     forged["primitive_part"]["coefficients"] = ["2", "0", "-2"]
     restored = ContentPrimitiveProfileResult.model_validate_json(
         encode_strict_json(forged), strict=True

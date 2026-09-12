@@ -222,12 +222,12 @@ def _product_component_digits(left: CanonicalRational, right: CanonicalRational)
     right_num = abs(right.num)
     cancel_left = gcd(left_num, right.den)
     cancel_right = gcd(right_num, left.den)
-    numerator_digits = len(
-        format_canonical_integer(left_num // cancel_left)
-    ) + len(format_canonical_integer(right_num // cancel_right))
-    denominator_digits = len(
-        format_canonical_integer(left.den // cancel_right)
-    ) + len(format_canonical_integer(right.den // cancel_left))
+    numerator_digits = len(format_canonical_integer(left_num // cancel_left)) + len(
+        format_canonical_integer(right_num // cancel_right)
+    )
+    denominator_digits = len(format_canonical_integer(left.den // cancel_right)) + len(
+        format_canonical_integer(right.den // cancel_left)
+    )
     return max(1, numerator_digits, denominator_digits)
 
 

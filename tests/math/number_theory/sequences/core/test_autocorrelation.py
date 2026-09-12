@@ -373,6 +373,7 @@ def test_order_shape_native_and_catalog_paths_share_rational_carrier() -> None:
         for row in native.log_concavity_rows
     )
 
+
 def test_rational_coefficients_retain_exact_domain_and_source() -> None:
     source = FiniteRationalSequence(
         values=(
@@ -393,7 +394,6 @@ def test_rational_coefficients_retain_exact_domain_and_source() -> None:
     ]
 
 
-
 def test_serialized_integer_result_retains_integer_source_domain() -> None:
     result = aperiodic_autocorrelation(FiniteIntegerSequence(values=(1, 2, 3)))
 
@@ -401,7 +401,6 @@ def test_serialized_integer_result_retains_integer_source_domain() -> None:
 
     assert isinstance(restored.source, FiniteIntegerSequence)
     assert all(isinstance(cell.value, int) for cell in restored.cells)
-
 
 
 def test_serialized_rational_integer_entries_retain_rational_domain() -> None:
@@ -417,7 +416,6 @@ def test_serialized_rational_integer_entries_retain_rational_domain() -> None:
     assert all(isinstance(cell.value, CanonicalRational) for cell in restored.cells)
 
 
-
 def test_serialized_empty_rational_source_retains_rational_domain() -> None:
     source = FiniteRationalSequence(values=())
 
@@ -428,7 +426,6 @@ def test_serialized_empty_rational_source_retains_rational_domain() -> None:
     assert isinstance(restored.source, FiniteRationalSequence)
 
 
-
 def test_rational_wire_entries_accept_full_width_integer_strings() -> None:
     value = "1" * 4_301
 
@@ -436,7 +433,6 @@ def test_rational_wire_entries_accept_full_width_integer_strings() -> None:
 
     assert source.values[0].num == parse_canonical_integer(value)
     assert source.values[0].den == 1
-
 
 
 def test_result_rejects_noncanonical_lag_axis_without_recomputing_coefficients() -> (
@@ -453,7 +449,6 @@ def test_result_rejects_noncanonical_lag_axis_without_recomputing_coefficients()
         )
 
 
-
 def test_rational_wire_entries_normalize_integer_strings() -> None:
     source = FiniteRationalSequence.model_validate_json(
         '{"values":["1",{"num":"1","den":"2"}]}'
@@ -465,11 +460,9 @@ def test_rational_wire_entries_normalize_integer_strings() -> None:
     )
 
 
-
 def test_complex_entries_are_rejected_by_real_rational_contract() -> None:
     with pytest.raises(ValidationError):
         FiniteRationalSequence.model_validate({"values": [{"real": 1, "imaginary": 2}]})
-
 
 
 def test_aperiodic_matches_defining_sum_for_signed_rational_lags() -> None:
@@ -501,7 +494,6 @@ def test_aperiodic_matches_defining_sum_for_signed_rational_lags() -> None:
     assert actual == [expected[lag] for lag in range(-3, 4)]
 
 
-
 def test_reversing_source_preserves_aperiodic_profile() -> None:
     source = FiniteIntegerSequence(values=(2, -1, 3, 0))
 
@@ -511,7 +503,6 @@ def test_reversing_source_preserves_aperiodic_profile() -> None:
     )
 
     assert values(reversed_result) == values(result)
-
 
 
 def test_rational_autocorrelation_admission_counts_both_output_components() -> None:
@@ -529,7 +520,6 @@ def test_rational_autocorrelation_admission_counts_both_output_components() -> N
         aperiodic_autocorrelation(source)
 
 
-
 def test_catalog_accepts_serialized_integer_sequence_source() -> None:
     source = FiniteIntegerSequence(values=(1, 2, 3))
     payload = json.loads(source.model_dump_json())
@@ -545,7 +535,6 @@ def test_catalog_accepts_serialized_integer_sequence_source() -> None:
     assert restored.source.values == (1, 2, 3)
 
 
-
 def test_wide_rational_cyclic_work_is_rejected_before_kernel() -> None:
     denominator = 10**15_999
     source = FiniteRationalSequence(
@@ -553,7 +542,6 @@ def test_wide_rational_cyclic_work_is_rejected_before_kernel() -> None:
     )
     with pytest.raises(OperationResourceAdmissionError, match="work"):
         cyclic_autocorrelation(source)
-
 
 
 def test_mixed_denominator_widths_are_preflighted_without_scaled_copies() -> None:
@@ -566,7 +554,6 @@ def test_mixed_denominator_widths_are_preflighted_without_scaled_copies() -> Non
         cyclic_autocorrelation(source)
 
 
-
 def test_oversized_integer_wire_entries_are_rejected_before_parsing() -> None:
     payload = {
         "domain": "rational",
@@ -574,7 +561,6 @@ def test_oversized_integer_wire_entries_are_rejected_before_parsing() -> None:
     }
     with pytest.raises(ValidationError, match="digit"):
         FiniteRationalSequence.model_validate(payload)
-
 
 
 def test_autocorrelation_catalog_schema_registers_canonical_rational_defs() -> None:

@@ -181,7 +181,9 @@ def test_three_near_universal_edges_use_source_sensitive_row_bound() -> None:
     result = enumerate_minimal_transversals(
         MinimalTransversalEnumerationRequest(hypergraph=source, maximum_cardinality=8)
     )
-    expected_singletons = tuple((vertex,) for vertex in vertices if vertex not in omitted)
+    expected_singletons = tuple(
+        (vertex,) for vertex in vertices if vertex not in omitted
+    )
     expected_pairs = (
         ("v00", "v01"),
         ("v00", "v02"),

@@ -509,9 +509,17 @@ def from_generator(
 ) -> FromGeneratorResult:
     try:
         width = _validate_prime_matrix(field_order, generator_matrix)
+    except PydanticCustomError as error:
+        location = (
+            ("field_order",)
+            if error.type.startswith("code_linear.field_order_")
+            else ("generator_matrix",)
+        )
+        _domain_error(location, error)
+    try:
         _validate_coordinate_axis(coordinate_axis, width=width)
     except PydanticCustomError as error:
-        _domain_error(("generator_matrix", "coordinate_axis"), error)
+        _domain_error(("coordinate_axis",), error)
     matrix = [list(row) for row in generator_matrix]
     # This operation reduces a bounded matrix; codeword enumeration is admitted
     # separately by consumers that actually perform it.

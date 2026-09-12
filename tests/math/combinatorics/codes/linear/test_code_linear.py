@@ -184,11 +184,18 @@ def test_from_generator_scale_regression_dispatches_and_composes() -> None:
 
 
 @pytest.mark.parametrize(
-    ("field_order", "generator_matrix", "coordinate_axis", "error"),
+    ("field_order", "generator_matrix", "coordinate_axis", "error", "location"),
     (
-        (2, (), (), "row_count"),
-        (2, tuple((1,) for _ in range(65)), ("x",), "row_count"),
-        (257, ((1,),), ("x",), "field_order_out_of_bounds"),
+        (2, (), (), "row_count", ("generator_matrix",)),
+        (2, tuple((1,) for _ in range(65)), ("x",), "row_count", ("generator_matrix",)),
+        (257, ((1,),), ("x",), "field_order_out_of_bounds", ("field_order",)),
+        (
+            2,
+            ((1,),),
+            (),
+            "coordinate_axis",
+            ("coordinate_axis",),
+        ),
     ),
 )
 def test_from_generator_native_admits_shape_before_rref(
@@ -196,9 +203,12 @@ def test_from_generator_native_admits_shape_before_rref(
     generator_matrix: tuple[tuple[int, ...], ...],
     coordinate_axis: tuple[str, ...],
     error: str,
+    location: tuple[str, ...],
 ) -> None:
-    with _operation_error(error):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         from_generator(field_order, generator_matrix, coordinate_axis)
+    assert error in exc_info.value.errors()[0]["type"]
+    assert exc_info.value.errors()[0]["loc"] == location
 
 
 def test_from_generator_native_accepts_row_and_field_boundary() -> None:

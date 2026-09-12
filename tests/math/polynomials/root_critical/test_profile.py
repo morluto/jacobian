@@ -185,7 +185,7 @@ def test_shifted_quadratic_square_root_pair_selects_the_distance() -> None:
     # has squared distance 6 - 4√2 whose coarse box is wider than one isolating
     # interval, but unique intersection still selects the smaller root.
     result = root_critical_distance_profile(
-        _polynomial((3, 2), (2, -5), (1, -4), (0, 5))
+        _polynomial((3, 2), (2, -5), (1, -4), (0, 10))
     )
     assert len(result.pairs) >= 1
     values = {tuple(row.distance_squared.polynomial) for row in result.pairs}

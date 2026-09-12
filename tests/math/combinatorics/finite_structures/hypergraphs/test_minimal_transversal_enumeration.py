@@ -471,16 +471,39 @@ def test_cardinality_one_skips_quadratic_domination_on_edge_cap() -> None:
             )
 
 
-def test_domination_presolve_is_admitted_before_subset_comparisons() -> None:
+def test_empty_edge_short_circuits_domination_on_large_antichains() -> None:
     vertices = tuple(f"v{index:02d}" for index in range(45))
-    triples = tuple(combinations(vertices, 3))[:12_000]
+    triples = tuple(combinations(vertices, 3))[:7_072]
     source = FiniteHypergraph(
         vertices=vertices,
-        edges=tuple((f"e{index:05d}", triple) for index, triple in enumerate(triples)),
+        edges=(
+            ("empty", ()),
+            *((f"e{index:05d}", triple) for index, triple in enumerate(triples)),
+        ),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="subset comparisons"):
-        enumerate_minimal_transversals(
-            MinimalTransversalEnumerationRequest(
-                hypergraph=source, maximum_cardinality=2
-            )
-        )
+    result = enumerate_minimal_transversals(
+        MinimalTransversalEnumerationRequest(hypergraph=source, maximum_cardinality=2)
+    )
+    assert result.transversals == ()
+
+
+def test_uniform_triples_skip_pairwise_domination_inside_search_envelope() -> None:
+    vertices = tuple(f"v{index:02d}" for index in range(45))
+    triples = tuple(combinations(vertices, 3))[:12_000]
+    request = MinimalTransversalEnumerationRequest(
+        hypergraph=FiniteHypergraph(
+            vertices=vertices,
+            edges=tuple(
+                (f"e{index:05d}", triple) for index, triple in enumerate(triples)
+            ),
+        ),
+        maximum_cardinality=2,
+    )
+    maximum, remaining, forced, source_empty, has_empty_edge = (
+        enumeration._admit_enumeration(request)
+    )
+    assert source_empty is False
+    assert has_empty_edge is False
+    assert forced == frozenset()
+    assert maximum == 2
+    assert len(remaining) == 12_000

@@ -244,13 +244,18 @@ def _admit_enumeration(
     vertices = request.hypergraph.vertices
     maximum = min(request.maximum_cardinality, len(vertices))
     unique_edges = _unique_edges(request)
-    # Cardinality-1 search never needs domination: every hitting singleton is
-    # already minimal, and the residual scan is linear in incidences.
-    edges = unique_edges if maximum <= 1 else _minimal_edges(unique_edges)
-    if not edges:
-        return maximum, edges, frozenset(), True, False
-    if any(not edge for edge in edges):
-        return maximum, edges, frozenset(), False, True
+    if not unique_edges:
+        return maximum, unique_edges, frozenset(), True, False
+    if any(not edge for edge in unique_edges):
+        return maximum, unique_edges, frozenset(), False, True
+    # Cardinality-1 search never needs domination. Equal-cardinality distinct
+    # edges are already an antichain, so skip the pairwise subset scan.
+    edge_sizes = {len(edge) for edge in unique_edges}
+    edges = (
+        unique_edges
+        if maximum <= 1 or len(edge_sizes) == 1
+        else _minimal_edges(unique_edges)
+    )
 
     forced = _forced_vertices(edges)
     if len(forced) > maximum:

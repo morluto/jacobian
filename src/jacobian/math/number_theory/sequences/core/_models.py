@@ -264,7 +264,9 @@ class SequenceOrderShapeResult(StrictModel):
 
 
 def _finite_sequence_core_schema(
-    cls: type[FiniteSequence], source_type: Any, handler: GetCoreSchemaHandler
+    cls: type[FiniteSequence],
+    source_type: Any,
+    handler: GetCoreSchemaHandler,
 ) -> core_schema.CoreSchema:
     if cls is not FiniteSequence:
         return handler(source_type)
@@ -278,13 +280,11 @@ def _finite_sequence_core_schema(
 
 def _finite_sequence_json_schema(
     cls: type[FiniteSequence],
-    core_schema_obj: Any,
+    core_schema_obj: core_schema.CoreSchema,
     handler: GetJsonSchemaHandler,
 ) -> dict[str, Any]:
-    if cls is not FiniteSequence:
-        return handler(core_schema_obj)
     schema = dict(handler(core_schema_obj))
-    if "type" not in schema:
+    if cls is FiniteSequence and "type" not in schema:
         schema["type"] = "object"
     return schema
 

@@ -455,12 +455,12 @@ def enclose_arclength(  # noqa: C901
     bind_request_deadline(deadline)
     try:
         source = rational_polynomial_to_sympy(request.polynomial)
+        if source.is_zero:
+            return PlaneCurveArclengthResult._from_kernel(
+                request,
+                outcome=ArclengthSingularUnsupported(reason="DEGENERATE_SOURCE"),
+            )
         if int(source.total_degree()) == 0:
-            if source.as_expr() == 0:
-                return PlaneCurveArclengthResult._from_kernel(
-                    request,
-                    outcome=ArclengthSingularUnsupported(reason="DEGENERATE_SOURCE"),
-                )
             return PlaneCurveArclengthResult._from_kernel(
                 request, outcome=ArclengthEmpty()
             )

@@ -181,3 +181,25 @@ def test_nested_reciprocal_retains_inner_sine_locus() -> None:
     assert result.denominator.terms[0].exponents == (0,)
     assert len(result.denominator_nonzero.terms) == 2
     assert result.denominator != result.denominator_nonzero
+
+
+def test_zero_power_of_reciprocal_keeps_denominator_locus() -> None:
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x"],
+            "expression": {
+                "kind": "POWER",
+                "base": {
+                    "kind": "DIVIDE",
+                    "numerator": {"kind": "LITERAL", "value": {"num": 1, "den": 1}},
+                    "denominator": {"kind": "SINE", "angle": {"coefficients": [1]}},
+                },
+                "exponent": 0,
+            },
+        }
+    )
+    result = normalize_trigonometric_rational(request)
+    assert result.numerator.terms[0].exponents == (0,)
+    assert result.denominator.terms[0].exponents == (0,)
+    assert len(result.denominator_nonzero.terms) == 2
+    assert result.denominator != result.denominator_nonzero

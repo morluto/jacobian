@@ -271,8 +271,7 @@ def _power(
         if remaining:
             base_num = _poly_mul(base_num, base_num)
             base_den = _poly_mul(base_den, base_den)
-    loci = value[2] if exponent else ()
-    return result_num, result_den, loci
+    return result_num, result_den, value[2]
 
 
 def _root_of_unity(quarter_turns: int) -> Gaussian:

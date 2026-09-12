@@ -156,10 +156,9 @@ class TestFactorValuesAndOperations:
         with pytest.raises(OperationResourceAdmissionError) as error:
             factor_multiply(factor, factor)
 
-        assert (
-            error.value.errors()[0]["type"]
-            == "graphical_model.factor_multiply_rational_bound"
-        )
+        diagnostic = error.value.errors()[0]
+        assert diagnostic["type"] == "graphical_model.factor_multiply_rational_bound"
+        assert diagnostic["loc"] == ("left", "right")
 
     def test_marginal_rational_growth_is_a_typed_admission_failure(
         self, monkeypatch: pytest.MonkeyPatch
@@ -175,10 +174,9 @@ class TestFactorValuesAndOperations:
         with pytest.raises(OperationResourceAdmissionError) as error:
             factor_marginalize(factor, 0)
 
-        assert (
-            error.value.errors()[0]["type"]
-            == "graphical_model.factor_marginalize_rational_bound"
-        )
+        diagnostic = error.value.errors()[0]
+        assert diagnostic["type"] == "graphical_model.factor_marginalize_rational_bound"
+        assert diagnostic["loc"] == ("factor", "table")
 
     def test_product_at_source_digit_boundary_with_identity_is_admitted(self) -> None:
         value = CanonicalRational(num=int("9" * 256), den=1)

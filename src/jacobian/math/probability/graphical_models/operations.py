@@ -39,9 +39,15 @@ def _reject(code: str, message: str, *location: str) -> None:
     )
 
 
+def _growth_location(operation: str) -> tuple[str, ...]:
+    if operation == "multiply":
+        return ("left", "right")
+    return ("factor", "table")
+
+
 def _reject_rational_growth(operation: str, phase: str) -> None:
     raise OperationResourceAdmissionError(
-        location=("factor", "table"),
+        location=_growth_location(operation),
         code=f"graphical_model.factor_{operation}_rational_bound",
         message=(
             f"{phase} rational growth exceeds the "
@@ -382,7 +388,7 @@ def _factor_from_kernel_table(
             )
         except ValueError as error:
             raise OperationResourceAdmissionError(
-                location=("factor", "table"),
+                location=_growth_location(operation),
                 code=f"graphical_model.factor_{operation}_rational_bound",
                 message="exact factor result exceeds the rational digit bound",
             ) from error

@@ -162,8 +162,27 @@ class _ExpressionMetrics:
     common_denominator: int | None
 
 
+def _expression_children(node: object) -> tuple[object, ...]:
+    if isinstance(node, Mapping):
+        kind = node.get("kind")
+        if kind in ("ADD", "MULTIPLY"):
+            operands = node.get("operands")
+            if isinstance(operands, (list, tuple)):
+                return tuple(operands)
+        elif kind == "POWER" and "base" in node:
+            return (node["base"],)
+        return ()
+    kind = getattr(node, "kind", None)
+    if kind in ("ADD", "MULTIPLY"):
+        return tuple(getattr(node, "operands", ()))
+    if kind == "POWER":
+        base = getattr(node, "base", None)
+        return (base,) if base is not None else ()
+    return ()
+
+
 def _bound_raw_expression(expression: object) -> None:
-    """Bound raw AST depth and cardinality before recursive model construction."""
+    """Bound AST depth and cardinality for mappings and validated models."""
 
     stack = [(expression, 1)]
     count = 0
@@ -176,19 +195,10 @@ def _bound_raw_expression(expression: object) -> None:
             )
         if count > _MAX_EXPRESSION_NODES:
             raise ValueError(f"expression node count exceeds {_MAX_EXPRESSION_NODES}")
-        if isinstance(node, Mapping):
-            kind = node.get("kind")
-            if kind in ("ADD", "MULTIPLY"):
-                operands = node.get("operands")
-                if isinstance(operands, (list, tuple)):
-                    if len(operands) > 64:
-                        raise ValueError(
-                            "expression nodes may have at most 64 operands"
-                        )
-                    stack.extend((child, depth + 1) for child in operands)
-            elif kind == "POWER":
-                if "base" in node:
-                    stack.append((node["base"], depth + 1))
+        children = _expression_children(node)
+        if len(children) > 64:
+            raise ValueError("expression nodes may have at most 64 operands")
+        stack.extend((child, depth + 1) for child in children)
 
 
 def _bounded_sum(values: list[int] | tuple[int, ...], limit: int) -> int:
@@ -566,9 +576,17 @@ def _multiply(
     }
 
 
-def normalize_polynomial_expression(
+def normalize_polynomial_expression(  # noqa: C901
     source: PolynomialExpressionSource,
 ) -> PolynomialExpressionNormalizeResult:
+    try:
+        _bound_raw_expression(source.expression)
+    except ValueError as exc:
+        raise OperationResourceAdmissionError(
+            location=("expression",),
+            code="polynomial.expression.expansion_bound",
+            message=str(exc),
+        ) from exc
     metrics = _metrics(source.expression, len(source.variables))
     if (
         metrics.nodes > _MAX_EXPRESSION_NODES

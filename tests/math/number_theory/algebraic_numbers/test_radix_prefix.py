@@ -1,0 +1,446 @@
+"""Exact bounded radix prefixes of real algebraic values (#2789)."""
+
+from __future__ import annotations
+
+import time
+
+import pytest
+
+from jacobian._execution import (
+    BackendFailureReason,
+    ExecutionResource,
+    OperationBackendError,
+    OperationResourceExhaustedError,
+)
+from jacobian.canonical import encode_strict_json
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
+from jacobian.math.number_theory.algebraic_numbers import _radix_prefix as radix_module
+from jacobian.math.number_theory.algebraic_numbers import (
+    _radix_prefix_process as process,
+)
+from jacobian.math.number_theory.algebraic_numbers._radix_prefix import (
+    MAX_RADIX_PLACES,
+    RadixPrefixResult,
+    _unique_floor_of_open_interval,
+    radix_prefix,
+)
+from jacobian.math.number_theory.algebraic_numbers.real import RealAlgebraicValue
+from jacobian.process import BoundedProcessResult
+
+
+def _value(polynomial: tuple[int, ...], root_index: int) -> RealAlgebraicValue:
+    return RealAlgebraicValue(polynomial=polynomial, real_root_index=root_index)
+
+
+def test_sqrt_two_decimal_prefix_matches_known_digits() -> None:
+    """sqrt(2) = 1.41421356237309504880...; the selected positive root is index 1."""
+    result = radix_prefix(_value((1, 0, -2), 1), 10, 20)
+    assert result.integer_part == 1
+    assert result.fractional_digits == (
+        4,
+        1,
+        4,
+        2,
+        1,
+        3,
+        5,
+        6,
+        2,
+        3,
+        7,
+        3,
+        0,
+        9,
+        5,
+        0,
+        4,
+        8,
+        8,
+        0,
+    )
+
+
+def test_sqrt_two_binary_prefix_matches_known_bits() -> None:
+    """sqrt(2) = 1.0110101000001001111..._2."""
+    result = radix_prefix(_value((1, 0, -2), 1), 2, 16)
+    assert result.integer_part == 1
+    assert result.fractional_digits == (
+        0,
+        1,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        1,
+    )
+
+
+def test_negative_root_uses_a_signed_integer_part() -> None:
+    """The negative root of x^2-2 is -sqrt(2) = -1.41421..."""
+    result = radix_prefix(_value((1, 0, -2), 0), 10, 5)
+    assert result.integer_part == -2
+    # Truncation toward -infinity keeps the nonnegative fractional part.
+    assert result.fractional_digits == (5, 8, 5, 7, 8)
+    reconstructed = result.integer_part + sum(
+        digit * 10 ** -(index + 1)
+        for index, digit in enumerate(result.fractional_digits)
+    )
+    assert reconstructed == -2 + 0.58578
+
+
+def test_integer_part_schema_states_the_additive_floor_convention() -> None:
+    """Discovery text must distinguish floor-plus-digits from sign-magnitude."""
+    schema = RadixPrefixResult.model_json_schema()["properties"]["integer_part"]
+    assert "added to this floor" in schema["description"]
+    assert "-2 + 0.58578" in schema["description"]
+
+
+def test_rational_root_uses_the_terminating_zero_convention() -> None:
+    """1/2 has the prefix 0.50000, not the trailing-(b-1) expansion 0.49999."""
+    result = radix_prefix(_value((2, -1), 0), 10, 5)
+    assert result.integer_part == 0
+    assert result.fractional_digits == (5, 0, 0, 0, 0)
+    assert result.convention == "TERMINATING_ZEROS_FOR_RATIONALS"
+
+
+def test_negative_rational_uses_floor_integer_part() -> None:
+    """The returned radix interval must contain a negative rational exactly."""
+    result = radix_prefix(_value((2, 1), 0), 10, 3)
+    assert result.integer_part == -1
+    assert result.fractional_digits == (5, 0, 0)
+
+
+def test_straddling_isolating_interval_cannot_claim_a_floor() -> None:
+    """A nonintegral upper endpoint must not hide a crossed integer."""
+    from fractions import Fraction
+
+    assert _unique_floor_of_open_interval(Fraction(7, 5), Fraction(13, 5)) is None
+    assert _unique_floor_of_open_interval(Fraction(7, 5), Fraction(9, 5)) == 1
+
+
+def test_repeating_rational_prefix_is_exact() -> None:
+    """1/3 has prefix 0.3333333333 in base ten."""
+    result = radix_prefix(_value((3, -1), 0), 10, 10)
+    assert result.integer_part == 0
+    assert result.fractional_digits == (3,) * 10
+
+
+def test_zero_fractional_places_returns_the_integer_part_only() -> None:
+    """A prefix of length zero still returns the exact integer part."""
+    result = radix_prefix(_value((1, 0, -2), 1), 10, 0)
+    assert result.integer_part == 1
+    assert result.fractional_digits == ()
+
+
+def test_hexadecimal_prefix_uses_the_declared_base() -> None:
+    """Golden ratio (1 + sqrt(5))/2 has base-16 prefix 1.9e3779b9..."""
+    result = radix_prefix(_value((1, -1, -1), 1), 16, 8)
+    assert result.integer_part == 1
+    assert result.fractional_digits == (9, 14, 3, 7, 7, 9, 11, 9)
+
+
+def test_non_golden_quadratic_uses_its_own_root_axis() -> None:
+    """4x^2-4x-1 = 0 selects (1+sqrt(2))/2, whose base-16 prefix is 1.3504f3..."""
+    result = radix_prefix(_value((4, -4, -1), 1), 16, 8)
+    assert result.integer_part == 1
+    assert result.fractional_digits == (3, 5, 0, 4, 15, 3, 3, 3)
+
+
+def test_out_of_range_base_is_rejected() -> None:
+    """Bases outside [2, 36] are outside the admitted alphabet."""
+    with pytest.raises(OperationDomainValidationError):
+        radix_prefix(_value((2, -1), 0), 1, 4)
+
+
+def test_over_bound_places_is_a_resource_rejection() -> None:
+    """A prefix longer than the coefficient envelope is refused, not truncated."""
+    with pytest.raises(OperationResourceAdmissionError):
+        radix_prefix(_value((1, 0, -2), 1), 10, MAX_RADIX_PLACES + 1)
+
+
+def test_scaled_coefficient_growth_is_admitted_before_root_isolation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The transformed polynomial envelope is checked before SymPy isolation."""
+    monkeypatch.setattr(radix_module, "MAX_RADIX_SCALED_COEFFICIENT_DIGITS", 2)
+    with pytest.raises(OperationResourceAdmissionError, match="scaled defining"):
+        radix_prefix(_value((1, 0, -2), 1), 10, 1)
+
+
+def test_result_allocation_is_admitted_before_root_isolation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The retained source and digit list have an allocation envelope."""
+    monkeypatch.setattr(radix_module, "MAX_RADIX_RESULT_ALLOCATION_UNITS", 1)
+    with pytest.raises(OperationResourceAdmissionError, match="result allocation"):
+        radix_prefix(_value((1, 0, -2), 1), 10, 1)
+
+
+def test_prefix_round_trips_through_strict_json() -> None:
+    """The declared prefix survives strict JSON serialization unchanged."""
+    result = radix_prefix(_value((1, 0, -2), 1), 10, 12)
+    restored = RadixPrefixResult.model_validate_json(
+        encode_strict_json(result.model_dump(mode="json")), strict=True
+    )
+    assert restored == result
+
+
+@pytest.mark.parametrize("polynomial", [(2, 0, -4), (1, 0, -1), (1, 0, 0, -2, 0)])
+def test_noncanonical_algebraic_sources_are_rejected(
+    polynomial: tuple[int, ...],
+) -> None:
+    with pytest.raises(OperationDomainValidationError):
+        radix_prefix(
+            RealAlgebraicValue(polynomial=polynomial, real_root_index=0), 10, 10
+        )
+
+
+def test_negative_boundary_root_uses_a_wider_integer_part_carrier() -> None:
+    """floor of the negative root of x^2 + A x - A is -10**1000."""
+    magnitude = 10**1000 - 1
+    result = radix_prefix(_value((1, magnitude, -magnitude), 0), 10, 0)
+    assert result.integer_part == -(10**1000)
+
+
+def test_package_exports_the_native_radix_entrypoint() -> None:
+    from jacobian.math.number_theory import algebraic_numbers
+
+    assert algebraic_numbers.radix_prefix is radix_prefix
+    assert "radix_prefix" in algebraic_numbers.__all__
+
+
+def test_reducible_polynomial_is_rejected_inside_isolation_admission() -> None:
+    with pytest.raises(OperationDomainValidationError, match="irreducible"):
+        radix_prefix(_value((1, 0, -1), 0), 10, 2)
+
+
+def test_owner_envelope_is_the_calibrated_isolation_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.number_theory.algebraic_numbers._radix_prefix_process import (
+        RADIX_ISOLATION_OWNER_SECONDS,
+    )
+
+    bound: list[float] = []
+    seen: list[float] = []
+    original = radix_module.execution_deadline
+
+    def capture(seconds: float) -> float:
+        bound.append(seconds)
+        return original(seconds)
+
+    def fake(
+        *,
+        polynomial: tuple[int, ...],
+        real_root_index: int,
+        scale: int,
+        isolation_bits: int,
+        deadline: float,
+    ) -> int:
+        seen.append(deadline)
+        return radix_module._scaled_integer_part_in_process(
+            _value(polynomial, real_root_index),
+            scale=scale,
+            isolation_bits=isolation_bits,
+        )
+
+    monkeypatch.setattr(radix_module, "execution_deadline", capture)
+    monkeypatch.setattr(radix_module, "run_scaled_integer_part_worker", fake)
+    started = time.monotonic()
+    radix_prefix(_value((1, 0, -2), 1), 10, 1)
+    assert bound == [RADIX_ISOLATION_OWNER_SECONDS]
+    assert seen
+    assert abs(seen[0] - (started + RADIX_ISOLATION_OWNER_SECONDS)) < 1.0
+
+
+def test_shorter_caller_deadline_is_passed_to_the_killable_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian._execution import request_execution
+
+    seen: list[float] = []
+    envelopes: list[float] = []
+    original = radix_module.execution_deadline
+
+    def capture(seconds: float) -> float:
+        deadline = original(seconds)
+        envelopes.append(deadline)
+        return deadline
+
+    def fake(
+        *,
+        polynomial: tuple[int, ...],
+        real_root_index: int,
+        scale: int,
+        isolation_bits: int,
+        deadline: float,
+    ) -> int:
+        seen.append(deadline)
+        return radix_module._scaled_integer_part_in_process(
+            _value(polynomial, real_root_index),
+            scale=scale,
+            isolation_bits=isolation_bits,
+        )
+
+    monkeypatch.setattr(radix_module, "execution_deadline", capture)
+    monkeypatch.setattr(radix_module, "run_scaled_integer_part_worker", fake)
+    started = time.monotonic()
+    caller_deadline = started + 12
+    with request_execution(started, outer_deadline=caller_deadline):
+        radix_prefix(_value((1, 0, -2), 1), 10, 1)
+    assert envelopes
+    assert seen == envelopes
+    assert seen[0] <= caller_deadline + 1e-3
+
+
+def test_later_enclosing_deadline_does_not_replace_the_owner_envelope(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian._execution import request_execution
+    from jacobian.math.number_theory.algebraic_numbers._radix_prefix_process import (
+        RADIX_ISOLATION_OWNER_SECONDS,
+    )
+
+    seen: list[float] = []
+    envelopes: list[float] = []
+    original = radix_module.execution_deadline
+
+    def capture(seconds: float) -> float:
+        deadline = original(seconds)
+        envelopes.append(deadline)
+        return deadline
+
+    def fake(
+        *,
+        polynomial: tuple[int, ...],
+        real_root_index: int,
+        scale: int,
+        isolation_bits: int,
+        deadline: float,
+    ) -> int:
+        seen.append(deadline)
+        return radix_module._scaled_integer_part_in_process(
+            _value(polynomial, real_root_index),
+            scale=scale,
+            isolation_bits=isolation_bits,
+        )
+
+    monkeypatch.setattr(radix_module, "execution_deadline", capture)
+    monkeypatch.setattr(radix_module, "run_scaled_integer_part_worker", fake)
+    started = time.monotonic()
+    enclosing_later = started + RADIX_ISOLATION_OWNER_SECONDS + 30
+    with request_execution(started, outer_deadline=enclosing_later):
+        radix_prefix(_value((1, 0, -2), 1), 10, 1)
+    assert envelopes
+    assert seen == envelopes
+    assert seen[0] < enclosing_later
+    assert abs(seen[0] - (started + RADIX_ISOLATION_OWNER_SECONDS)) < 1.0
+
+
+def test_in_process_refinement_exhaustion_is_a_backend_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(radix_module, "_ISOLATION_REFINEMENT_FLOOR", 0)
+    monkeypatch.setattr(
+        radix_module, "_unique_floor_of_open_interval", lambda *_args, **_kwargs: None
+    )
+    with pytest.raises(OperationBackendError) as exc_info:
+        radix_module._scaled_integer_part_in_process(
+            _value((1, 0, -2), 1), scale=10, isolation_bits=0
+        )
+    assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT
+
+
+def test_worker_refinement_code_is_a_backend_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_run_bounded_process(
+        *_args: object, **_kwargs: object
+    ) -> BoundedProcessResult:
+        return BoundedProcessResult(
+            returncode=0,
+            stdout=b'{"ok": false, "code": "refinement", "message": "stuck"}',
+            stderr=b"",
+            stdout_exceeded=False,
+            stderr_exceeded=False,
+            timed_out=False,
+        )
+
+    monkeypatch.setattr(process, "run_bounded_process", fake_run_bounded_process)
+    with pytest.raises(OperationBackendError) as exc_info:
+        process.run_scaled_integer_part_worker(
+            polynomial=(1, 0, -2),
+            real_root_index=1,
+            scale=10,
+            isolation_bits=8,
+            deadline=time.monotonic() + 30,
+        )
+    assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT
+
+
+def _worker_process_result(
+    *,
+    returncode: int = 0,
+    stdout: bytes = b'{"ok": true, "scaled_floor": "1"}',
+    stdout_exceeded: bool = False,
+    stderr_exceeded: bool = False,
+    timed_out: bool = False,
+) -> BoundedProcessResult:
+    return BoundedProcessResult(
+        returncode=returncode,
+        stdout=stdout,
+        stderr=b"",
+        stdout_exceeded=stdout_exceeded,
+        stderr_exceeded=stderr_exceeded,
+        timed_out=timed_out,
+    )
+
+
+def test_worker_stdout_overflow_is_resource_exhausted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        process,
+        "run_bounded_process",
+        lambda *_args, **_kwargs: _worker_process_result(stdout_exceeded=True),
+    )
+    with pytest.raises(OperationResourceExhaustedError) as exc_info:
+        process.run_scaled_integer_part_worker(
+            polynomial=(1, 0, -2),
+            real_root_index=1,
+            scale=10,
+            isolation_bits=8,
+            deadline=time.monotonic() + 30,
+        )
+    assert exc_info.value.resource is ExecutionResource.OUTPUT
+
+
+def test_worker_abnormal_exit_is_a_backend_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        process,
+        "run_bounded_process",
+        lambda *_args, **_kwargs: _worker_process_result(returncode=1, stdout=b""),
+    )
+    with pytest.raises(OperationBackendError) as exc_info:
+        process.run_scaled_integer_part_worker(
+            polynomial=(1, 0, -2),
+            real_root_index=1,
+            scale=10,
+            isolation_bits=8,
+            deadline=time.monotonic() + 30,
+        )
+    assert exc_info.value.reason is BackendFailureReason.ABNORMAL_EXIT

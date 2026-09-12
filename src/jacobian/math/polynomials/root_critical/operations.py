@@ -57,10 +57,8 @@ def _factor_key(poly: sympy.Poly) -> tuple[tuple[int, ...], ...]:
     return tuple((int(value),) for value in primitive.all_coeffs())
 
 
-def _rectangle(
-    poly: sympy.Poly, root_index: int, root: object
-) -> RootCriticalRectangle:
-    """Project SymPy's exact root-isolation object to rational bounds."""
+def _rectangle(root: object) -> RootCriticalRectangle:
+    """Build a request-local isolating rectangle from the exact root expression."""
 
     if not isinstance(root, sympy.RootOf) and getattr(root, "is_rational", False):
         value = _rational(root)
@@ -72,23 +70,61 @@ def _rectangle(
             imaginary_upper=zero,
         )
 
-    root_of = sympy.CRootOf(poly.as_expr(), root_index)
-    interval = root_of._get_interval()
-    if getattr(root_of, "is_real", False):
-        lower, upper = interval.a, interval.b
-        zero = CanonicalRational(num=0, den=1)
-        return RootCriticalRectangle(
-            real_lower=_rational(lower),
-            real_upper=_rational(upper),
-            imaginary_lower=zero,
-            imaginary_upper=zero,
-        )
-    (real_lower, imaginary_lower), (real_upper, imaginary_upper) = interval.as_tuple()
+    try:
+        real_lo, real_hi, imag_lo, imag_hi = _enclose_sympy(root)
+    except (ValueError, AttributeError, TypeError):
+        real_lo, real_hi, imag_lo, imag_hi = _evalf_containing_box(root)
     return RootCriticalRectangle(
-        real_lower=_rational(real_lower),
-        real_upper=_rational(real_upper),
-        imaginary_lower=_rational(imaginary_lower),
-        imaginary_upper=_rational(imaginary_upper),
+        real_lower=_fit_rectangle_component(real_lo, round_up=False),
+        real_upper=_fit_rectangle_component(real_hi, round_up=True),
+        imaginary_lower=_fit_rectangle_component(imag_lo, round_up=False),
+        imaginary_upper=_fit_rectangle_component(imag_hi, round_up=True),
+    )
+
+
+def _component_digit_count(value: int) -> int:
+    magnitude = abs(value)
+    if magnitude < 10:
+        return 1
+    return len(str(magnitude))
+
+
+def _fit_rectangle_component(value: Fraction, *, round_up: bool) -> CanonicalRational:
+    """Keep isolating endpoints inside the published rectangle digit envelope."""
+
+    if (
+        _component_digit_count(value.numerator)
+        <= MAX_ROOT_CRITICAL_ROOT_COMPONENT_DIGITS
+        and _component_digit_count(value.denominator)
+        <= MAX_ROOT_CRITICAL_ROOT_COMPONENT_DIGITS
+    ):
+        return CanonicalRational.from_fraction(value)
+    scale = 10 ** (MAX_ROOT_CRITICAL_ROOT_COMPONENT_DIGITS - 1)
+    scaled = value * scale
+    quotient, remainder = divmod(scaled.numerator, scaled.denominator)
+    if remainder:
+        if round_up and scaled.numerator > 0:
+            quotient += 1
+        elif not round_up and scaled.numerator < 0:
+            quotient -= 1
+    return CanonicalRational.from_fraction(Fraction(quotient, scale))
+
+
+def _evalf_containing_box(
+    root: object,
+) -> tuple[Fraction, Fraction, Fraction, Fraction]:
+    """Contain a radical in a request-local box without reading CRootOf's cache."""
+
+    value = root.evalf(20)
+    real, imag = value.as_real_imag()
+    pad = Fraction(1, 10**8)
+    real_center = Fraction(int(sympy.Rational(real).p), int(sympy.Rational(real).q))
+    imag_center = Fraction(int(sympy.Rational(imag).p), int(sympy.Rational(imag).q))
+    return (
+        real_center - pad,
+        real_center + pad,
+        imag_center - pad,
+        imag_center + pad,
     )
 
 
@@ -153,7 +189,7 @@ def _family(
         exact_roots = tuple(factor.all_roots())
         for root_index in range(factor.degree()):
             root = _root_value(root_index, exact_roots)
-            rectangle = _rectangle(factor, root_index, root)
+            rectangle = _rectangle(root)
             records.append(
                 RootCriticalRoot(
                     axis_index=len(records),

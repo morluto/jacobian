@@ -247,3 +247,32 @@ def test_native_pair_budget_matches_catalog_range() -> None:
         root_critical_distance_profile(polynomial, max_pair_rows=65)
     with pytest.raises(OperationDomainValidationError, match="non-boolean"):
         root_critical_distance_profile(polynomial, max_pair_rows="64")  # type: ignore[arg-type]
+
+
+def test_root_rectangles_ignore_crootof_cache_refinement() -> None:
+    import sympy
+    from sympy.polys.rootoftools import CRootOf
+
+    CRootOf.clear_cache()
+    try:
+        variable = sympy.Symbol("z")
+        cached = sympy.CRootOf(variable**2 - 2, 0)
+        cached.refine()
+        cached.eval_rational(n=80)
+        result = root_critical_distance_profile(_polynomial((2, 1), (0, -2)))
+        digits = [
+            max(len(str(abs(component.num))), len(str(component.den)))
+            for root in (*result.roots, *result.critical_points)
+            for component in (
+                root.rectangle.real_lower,
+                root.rectangle.real_upper,
+                root.rectangle.imaginary_lower,
+                root.rectangle.imaginary_upper,
+            )
+        ]
+        assert digits
+        assert max(digits) <= 256
+        again = root_critical_distance_profile(_polynomial((2, 1), (0, -2)))
+        assert again.model_dump() == result.model_dump()
+    finally:
+        CRootOf.clear_cache()

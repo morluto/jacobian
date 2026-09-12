@@ -164,23 +164,21 @@ def construct_sunflower_family(
             code="set_system.sunflower.incidence_bound",
             message="the sunflower edge projections exceed the incidence carrier limit",
         )
+    hypergraph = FiniteHypergraph(
+        vertices=tuple(str(index) for index in range(member_count)),
+        edges=tuple(
+            (row.edge_id, tuple(str(index) for index in row.source_indices))
+            for row in rows
+        ),
+    )
     return SunflowerFamilyResult(
         source=source,
         petal_count=petal_count,
         sunflowers=tuple(rows),
         sunflower_count=len(rows),
         sunflower_free=not rows,
-        hypergraph_edges=tuple(
-            (row.edge_id, tuple(str(index) for index in row.source_indices))
-            for row in rows
-        ),
-        hypergraph=FiniteHypergraph(
-            vertices=tuple(str(index) for index in range(member_count)),
-            edges=tuple(
-                (row.edge_id, tuple(str(index) for index in row.source_indices))
-                for row in rows
-            ),
-        ),
+        hypergraph_edges=hypergraph.edges,
+        hypergraph=hypergraph,
     )
 
 

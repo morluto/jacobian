@@ -175,3 +175,13 @@ def test_over_bound_petal_count_is_rejected() -> None:
                 petal_count=MAX_SUNFLOWER_PETALS + 1,
             )
         )
+
+
+def test_projection_uses_canonical_multi_digit_member_order() -> None:
+    result = construct_sunflower_family(
+        SunflowerFamilyRequest(
+            source=_family(tuple((i,) for i in range(11)), ground=11), petal_count=2
+        )
+    )
+    assert result.hypergraph_edges == result.hypergraph.edges
+    assert type(result).model_validate_json(result.model_dump_json()) == result

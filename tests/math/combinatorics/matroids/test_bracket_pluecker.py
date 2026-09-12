@@ -17,6 +17,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.combinatorics.matroids.oriented._bracket_kernel import (
+    _bounded_component_sum,
     _bounded_integer_sum,
     bracket_polynomial_from_terms,
     bracket_syzygy_residual,
@@ -997,3 +998,57 @@ def test_syzygy_admits_near_bound_denominator_products() -> None:
     masses = {term.coefficient.as_fraction() for term in residual.terms}
     assert masses <= {Fraction(modulus, 6), Fraction(-modulus, 6)}
     assert masses
+
+
+def test_syzygy_retries_a_bounded_reduction_order() -> None:
+    """A locally cheapest pair must not reject an otherwise representable sum."""
+
+    bound = 10 ** (MAX_CANONICAL_INTEGER_DIGITS - 1)
+    width = Fraction(bound + 1)
+    total, _ = _bounded_component_sum(
+        [
+            (Fraction(7) * width / 3, (0, 0)),
+            (-width / 2, (0, 0)),
+            (Fraction(-3) * width / 2, (0, 0)),
+            (width / 3, (0, 0)),
+        ]
+    )
+    assert total == Fraction(2) * width / 3
+
+    relation = grassmann_pluecker_relation(
+        GrassmannPlueckerRelationRequest(
+            ground_size=6,
+            indices=(0, 1, 2, 3, 4, 5),
+            family="FOUR_TERM",
+        )
+    )
+    residual = bracket_syzygy_residual(
+        BracketSyzygyResidualRequest(
+            target=BracketPolynomial(ground_size=6, terms=()),
+            terms=(
+                (
+                    CanonicalRational(num=-7 * (bound + 1), den=3),
+                    BracketMonomial(factors=()),
+                    relation,
+                ),
+                (
+                    CanonicalRational(num=bound + 1, den=2),
+                    BracketMonomial(factors=()),
+                    relation,
+                ),
+                (
+                    CanonicalRational(num=3 * (bound + 1), den=2),
+                    BracketMonomial(factors=()),
+                    relation,
+                ),
+                (
+                    CanonicalRational(num=-(bound + 1), den=3),
+                    BracketMonomial(factors=()),
+                    relation,
+                ),
+            ),
+        )
+    )
+    expected = Fraction(2 * (bound + 1), 3)
+    masses = {abs(term.coefficient.as_fraction()) for term in residual.terms}
+    assert masses == {expected}

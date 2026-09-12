@@ -342,18 +342,77 @@ def _bounded_fraction_pair_sum(left: Fraction, right: Fraction) -> Fraction | No
     return Fraction(numerator, denominator)
 
 
-def _bounded_component_sum(
-    components: list[_CoefficientComponent],
-) -> tuple[Fraction, int]:
-    """Sum components using only representable exact intermediate values.
+def _merge_coefficient_pair(left: Fraction, right: Fraction) -> Fraction | None:
+    """Return a representable pair sum, or None when the merge overflows."""
 
-    The reduction order is part of admission: an arbitrary left-to-right sum
-    can create a numerator or denominator wider than the canonical rational
-    envelope even when a cancellation-first order is cheap and exact.
-    """
+    if left == -right:
+        return Fraction(0)
+    if left.denominator == right.denominator:
+        numerator = _bounded_integer_sum(left.numerator, right.numerator)
+        if numerator is None:
+            return None
+        return Fraction(numerator, left.denominator)
+    return _bounded_fraction_pair_sum(left, right)
 
-    pending = _cancel_opposite_components(components)
-    work_digit_bound = 0
+
+def _merged_component_width(merged: Fraction) -> int:
+    if merged == 0:
+        return 0
+    return max(
+        _integer_digit_upper_bound(merged.numerator),
+        _integer_digit_upper_bound(merged.denominator),
+    )
+
+
+def _representable_coefficient_merges(
+    pending: list[_CoefficientComponent],
+) -> list[tuple[tuple[int, int], int, int, Fraction, int]]:
+    """List representable pair merges, cheapest first."""
+
+    merges: list[tuple[tuple[int, int], int, int, Fraction, int]] = []
+    for left_index, (left, _) in enumerate(pending):
+        for right_index in range(left_index + 1, len(pending)):
+            right, _ = pending[right_index]
+            merged = _merge_coefficient_pair(left, right)
+            if merged is None:
+                continue
+            merged_width = _merged_component_width(merged)
+            score = (merged_width, abs(merged.numerator).bit_length())
+            merges.append((score, left_index, right_index, merged, merged_width))
+    merges.sort(key=lambda item: (item[0], item[1], item[2]))
+    return merges
+
+
+def _apply_coefficient_merge(
+    pending: list[_CoefficientComponent],
+    left_index: int,
+    right_index: int,
+    merged: Fraction,
+) -> list[_CoefficientComponent]:
+    remaining = [
+        component
+        for index, component in enumerate(pending)
+        if index not in (left_index, right_index)
+    ]
+    if merged:
+        remaining.append(
+            (
+                merged,
+                (
+                    _integer_digit_upper_bound(merged.numerator),
+                    _integer_digit_upper_bound(merged.denominator),
+                ),
+            )
+        )
+    return _cancel_opposite_components(remaining)
+
+
+def _greedy_component_sum(
+    pending: list[_CoefficientComponent],
+    work_digit_bound: int,
+) -> tuple[Fraction, int] | None:
+    """Reduce by always taking the locally cheapest representable pair."""
+
     while pending:
         if len(pending) == 1:
             value, _ = pending[0]
@@ -362,69 +421,44 @@ def _bounded_component_sum(
                 _integer_digit_upper_bound(value.numerator),
                 _integer_digit_upper_bound(value.denominator),
             )
-
-        candidate: tuple[int, int, Fraction, int] | None = None
-        for left_index, (left, _) in enumerate(pending):
-            for right_index in range(left_index + 1, len(pending)):
-                right, _ = pending[right_index]
-                # An exact opposite was removed above and after every merge,
-                # so this fast path mostly documents the cancellation-first
-                # invariant for newly created values.
-                if left == -right:
-                    candidate = (left_index, right_index, Fraction(0), 0)
-                    break
-                merged: Fraction | None
-                if left.denominator == right.denominator:
-                    numerator = _bounded_integer_sum(left.numerator, right.numerator)
-                    if numerator is None:
-                        continue
-                    merged = Fraction(numerator, left.denominator)
-                else:
-                    merged = _bounded_fraction_pair_sum(left, right)
-                    if merged is None:
-                        continue
-                merged_width = (
-                    0
-                    if merged == 0
-                    else max(
-                        _integer_digit_upper_bound(merged.numerator),
-                        _integer_digit_upper_bound(merged.denominator),
-                    )
-                )
-                score = (merged_width, abs(merged.numerator).bit_length())
-                if candidate is None or score < (
-                    candidate[3],
-                    abs(candidate[2].numerator).bit_length(),
-                ):
-                    candidate = (left_index, right_index, merged, merged_width)
-            if candidate is not None and candidate[3] == 0:
-                break
-
-        if candidate is None:
-            raise OperationResourceAdmissionError(
-                location=("terms",),
-                code="bracket.syzygy_coefficient_digit_bound",
-                message="exact residual coefficient growth exceeds the supported digit bound",
-            )
-        left_index, right_index, merged, merged_width = candidate
-        pending = [
-            component
-            for index, component in enumerate(pending)
-            if index not in (left_index, right_index)
-        ]
-        if merged:
-            pending.append(
-                (
-                    merged,
-                    (
-                        _integer_digit_upper_bound(merged.numerator),
-                        _integer_digit_upper_bound(merged.denominator),
-                    ),
-                )
-            )
-            work_digit_bound = max(work_digit_bound, merged_width)
-        pending = _cancel_opposite_components(pending)
+        merges = _representable_coefficient_merges(pending)
+        if not merges:
+            return None
+        _, left_index, right_index, merged, merged_width = merges[0]
+        pending = _apply_coefficient_merge(pending, left_index, right_index, merged)
+        work_digit_bound = max(work_digit_bound, merged_width)
     return Fraction(0), work_digit_bound
+
+
+def _bounded_component_sum(
+    components: list[_CoefficientComponent],
+) -> tuple[Fraction, int]:
+    """Sum components using only representable exact intermediate values.
+
+    The reduction order is part of admission: an arbitrary left-to-right sum
+    can create a numerator or denominator wider than the canonical rational
+    envelope even when a cancellation-first order is cheap and exact. A purely
+    greedy cheapest-pair order can also reach a dead end, so a failed greedy
+    path retries every other first representable merge.
+    """
+
+    pending = _cancel_opposite_components(components)
+    reduced = _greedy_component_sum(pending, 0)
+    if reduced is not None:
+        return reduced
+    merges = _representable_coefficient_merges(pending)
+    for _, left_index, right_index, merged, merged_width in merges[1:]:
+        reduced = _greedy_component_sum(
+            _apply_coefficient_merge(pending, left_index, right_index, merged),
+            merged_width,
+        )
+        if reduced is not None:
+            return reduced
+    raise OperationResourceAdmissionError(
+        location=("terms",),
+        code="bracket.syzygy_coefficient_digit_bound",
+        message="exact residual coefficient growth exceeds the supported digit bound",
+    )
 
 
 def _admit_result_allocation(

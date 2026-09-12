@@ -172,11 +172,28 @@ def test_sample_count_boundary_is_bounded_and_preflighted() -> None:
         )
 
 
-def test_sample_count_schema_exposes_admission_bounds() -> None:
+def test_sample_count_uses_the_exact_integer_wire_contract() -> None:
     schema = BerryEsseenRequest.model_json_schema()["properties"]["sample_count"]
 
-    assert schema["minimum"] == 1
-    assert schema["maximum"] == MAX_BERRY_ESSEEN_SAMPLE_COUNT
+    assert schema["type"] == "string"
+    assert schema["pattern"].startswith("^[1-9]")
+    assert "maximum" not in schema
+
+    distribution = json.loads(
+        _request(
+            _distribution((0, Fraction(1, 2)), (1, Fraction(1, 2)))
+        ).distribution.model_dump_json()
+    )
+    request = BerryEsseenRequest.model_validate_json(
+        json.dumps({"distribution": distribution, "sample_count": "4"})
+    )
+    assert request.sample_count == 4
+
+    for sample_count in ("0", "-1"):
+        with pytest.raises(ValueError, match="must be positive"):
+            BerryEsseenRequest.model_validate_json(
+                json.dumps({"distribution": distribution, "sample_count": sample_count})
+            )
 
 
 def test_atom_count_boundary_is_admitted_and_overflow_is_preflighted() -> None:

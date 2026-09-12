@@ -38,7 +38,7 @@ BERRY_ESSEEN_OPERATION = MathTool(
         OperationExample(
             name="four_fair_bits",
             description="Bound the normalized sum of four i.i.d. fair Bernoulli variables.",
-            input={"distribution": _FAIR_BIT, "sample_count": 4},
+            input={"distribution": _FAIR_BIT, "sample_count": "4"},
         ),
     ),
 )

@@ -12,9 +12,9 @@ from fractions import Fraction
 from math import isqrt
 from typing import Literal, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, model_validator
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, ExactInteger
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -47,16 +47,23 @@ class BerryEsseenRequest(StrictModel):
     """One finite rational law and a positive i.i.d. sample count."""
 
     distribution: FiniteRationalDistribution
-    sample_count: StrictInt = Field(
-        ge=1,
-        le=MAX_BERRY_ESSEEN_SAMPLE_COUNT,
+    sample_count: ExactInteger = Field(
         description=(
             "Positive i.i.d. sample count n with at most "
             f"{MAX_RESULT_RATIONAL_DIGITS} decimal digits. The exact products "
             "variance^3*n and the resulting bound remain subject to the same "
             f"{MAX_RESULT_RATIONAL_DIGITS}-digit admission envelope."
         ),
+        json_schema_extra={"pattern": "^[1-9][0-9]*(?![\\s\\S])"},
     )
+
+    @model_validator(mode="after")
+    def require_positive_sample_count(self) -> Self:
+        """Keep positivity in the value contract, independent of wire encoding."""
+
+        if self.sample_count < 1:
+            raise _validation_error("Berry--Esseen sample_count must be positive")
+        return self
 
 
 class BerryEsseenResult(StrictModel):

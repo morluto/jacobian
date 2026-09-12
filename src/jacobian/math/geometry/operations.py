@@ -6,7 +6,7 @@ from fractions import Fraction
 from itertools import combinations
 from typing import Any, cast
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS, CanonicalRational
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -949,6 +949,39 @@ def spanned_circle_profile(
             message=(
                 "spanned-circle result exceeds the "
                 f"{MAX_SPANNED_CIRCLES}-circle envelope"
+            ),
+        )
+
+    restored_digit_total = 0
+    for key in grouped:
+        restored_x = key[0] + origin[0]
+        restored_y = key[1] + origin[1]
+        restored_digits = (
+            _fraction_digits(restored_x)
+            + _fraction_digits(restored_y)
+            + _fraction_digits(key[2])
+        )
+        if (
+            _fraction_digits(restored_x) > MAX_CANONICAL_INTEGER_DIGITS
+            or _fraction_digits(restored_y) > MAX_CANONICAL_INTEGER_DIGITS
+            or _fraction_digits(key[2]) > MAX_CANONICAL_INTEGER_DIGITS
+        ):
+            raise OperationResourceAdmissionError(
+                location=("configuration",),
+                code="geometry.spanned_circle_result_digit_bound",
+                message=(
+                    "translated-back spanned-circle coordinates exceed the "
+                    f"{MAX_CANONICAL_INTEGER_DIGITS}-digit canonical envelope"
+                ),
+            )
+        restored_digit_total += restored_digits
+    if restored_digit_total > MAX_SPANNED_CIRCLE_WORK:
+        raise OperationResourceAdmissionError(
+            location=("configuration",),
+            code="geometry.spanned_circle_result_digit_bound",
+            message=(
+                "translated-back spanned-circle output exceeds the "
+                f"{MAX_SPANNED_CIRCLE_WORK}-digit aggregate envelope"
             ),
         )
 

@@ -401,6 +401,35 @@ class TestSpannedCircleProfile:
                 ),
             )
 
+    def test_result_rejects_nonplanar_source_points(self) -> None:
+        zero = CanonicalRational(num=0, den=1)
+        one = CanonicalRational(num=1, den=1)
+        configuration = PointConfiguration(
+            points=(
+                LabelledRationalPoint(label="a", coordinates=(zero, zero, zero)),
+                LabelledRationalPoint(label="b", coordinates=(one, zero, zero)),
+                LabelledRationalPoint(label="c", coordinates=(zero, one, zero)),
+            )
+        )
+        with pytest.raises(ValidationError, match="planar"):
+            SpannedCircleProfileResult(
+                configuration=configuration,
+                num_points=3,
+                circles=(),
+            )
+
+    def test_translated_back_centers_are_admitted_before_wiring(self) -> None:
+        shift = CanonicalRational(num=6 * 10**32767, den=1)
+        points = (
+            RationalPoint2D(x=shift, y=shift),
+            RationalPoint2D(x=CanonicalRational(num=6 * 10**32767 + 1, den=1), y=shift),
+            RationalPoint2D(x=shift, y=CanonicalRational(num=6 * 10**32767 + 1, den=1)),
+        )
+        with pytest.raises(OperationResourceAdmissionError, match="translated-back"):
+            spanned_circle_profile(
+                SpannedCircleProfileRequest(configuration=_configuration(*points))
+            )
+
     def test_request_publishes_circle_row_envelope(self) -> None:
         schema = SpannedCircleProfileResult.model_json_schema()
         assert schema["properties"]["circles"]["maxItems"] == MAX_SPANNED_CIRCLES

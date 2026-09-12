@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from math import comb
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
-from jacobian._exact import ExactInteger
+from jacobian._exact import CanonicalRational, ExactInteger
 from jacobian._models import StrictModel
 from jacobian.math.polynomials.ideals._models import (
     IdealComputationBudget,
@@ -17,6 +18,8 @@ from jacobian.math.polynomials.values import (
     RationalFunction,
     RationalPolynomial,
     RationalPolynomialIdeal,
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
 )
 
 MAX_GRADED_DEGREE = 32
@@ -24,6 +27,7 @@ MAX_STANDARD_MONOMIALS = 20_000
 MAX_HILBERT_SERIES_GENERATORS = 8
 MAX_HILBERT_PREFIX = 16
 
+NonnegativeHilbertCount = Annotated[StrictInt, Field(ge=0)]
 GradedMonomial = Annotated[
     tuple[StrictInt, ...],
     Field(max_length=MAX_POLYNOMIAL_VARIABLES),
@@ -97,7 +101,9 @@ class HilbertFunctionResult(StrictModel):
     ideal: RationalPolynomialIdeal
     initial_ideal: RationalPolynomialIdeal
     monomial_order: Literal["lex", "grlex", "grevlex"]
-    values: tuple[StrictInt, ...] = Field(max_length=MAX_GRADED_DEGREE + 1)
+    values: tuple[NonnegativeHilbertCount, ...] = Field(
+        min_length=1, max_length=MAX_GRADED_DEGREE + 1
+    )
 
     @model_validator(mode="after")
     def require_source_ring(self) -> Self:
@@ -113,6 +119,28 @@ class HilbertSeriesRequest(StrictModel):
     resource_budget: IdealComputationBudget = Field(
         default_factory=IdealComputationBudget
     )
+
+
+class HilbertPolynomialRequest(StrictModel):
+    ideal: RationalPolynomialIdeal
+    monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex"
+    resource_budget: IdealComputationBudget = Field(
+        default_factory=IdealComputationBudget
+    )
+
+
+def _monic_t_minus_one_power(degree: int) -> SparseRationalPolynomial:
+    terms = tuple(
+        RationalPolynomialTerm(
+            coefficient=CanonicalRational(
+                num=comb(degree, index) * ((-1) ** (degree - index)), den=1
+            ),
+            exponents=(index,),
+        )
+        for index in range(degree, -1, -1)
+        if comb(degree, index) != 0
+    )
+    return SparseRationalPolynomial(terms=terms)
 
 
 class HilbertSeriesResult(StrictModel):
@@ -133,7 +161,9 @@ class HilbertSeriesResult(StrictModel):
     reduced_numerator: RationalPolynomial
     h_numerator: RationalPolynomial
     denominator_exponent: StrictInt = Field(ge=0)
-    prefix: tuple[StrictInt, ...] = Field(max_length=MAX_HILBERT_PREFIX + 1)
+    prefix: tuple[NonnegativeHilbertCount, ...] = Field(
+        min_length=1, max_length=MAX_HILBERT_PREFIX + 1
+    )
 
     @model_validator(mode="after")
     def require_source_and_axes(self) -> Self:
@@ -153,10 +183,23 @@ class HilbertSeriesResult(StrictModel):
             raise ValueError("Hilbert-series values use the t axis")
         if self.series.numerator != self.reduced_numerator.polynomial:
             raise ValueError("reduced numerator must match the rational-series carrier")
-        if self.series.denominator.terms:
-            denominator_degree = max(self.series.denominator.terms[0].exponents)
-            if denominator_degree != self.denominator_exponent:
-                raise ValueError("Hilbert-series denominator exponent is inconsistent")
+        expected_denominator = _monic_t_minus_one_power(self.denominator_exponent)
+        if self.series.denominator != expected_denominator:
+            raise ValueError(
+                "Hilbert-series denominator must be the monic (t-1)^d form"
+            )
+        sign = -1 if self.denominator_exponent % 2 else 1
+        expected_h = tuple(
+            RationalPolynomialTerm(
+                coefficient=CanonicalRational(
+                    num=sign * term.coefficient.num, den=term.coefficient.den
+                ),
+                exponents=term.exponents,
+            )
+            for term in self.reduced_numerator.polynomial.terms
+        )
+        if self.h_numerator.polynomial.terms != expected_h:
+            raise ValueError("h-numerator must match the (1-t)^d sign convention")
         return self
 
 
@@ -212,6 +255,7 @@ __all__ = [
     "HilbertFunctionRequest",
     "HilbertFunctionResult",
     "HilbertMultiplicityResult",
+    "HilbertPolynomialRequest",
     "HilbertPolynomialResult",
     "HilbertSeriesRequest",
     "HilbertSeriesResult",

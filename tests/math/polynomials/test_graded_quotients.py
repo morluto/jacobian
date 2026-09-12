@@ -12,7 +12,9 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.polynomials.graded._models import (
     HilbertFunctionResult,
+    HilbertPolynomialRequest,
     HilbertPolynomialResult,
+    HilbertSeriesRequest,
     HilbertSeriesResult,
     HVectorResult,
     StandardMonomialsResult,
@@ -392,6 +394,45 @@ def test_hilbert_polynomial_binds_source_ring_and_m_axis() -> None:
     forged["polynomial"]["variables"] = ["t"]
     with pytest.raises(ValidationError, match="m axis"):
         HilbertPolynomialResult.model_validate(forged)
+
+
+def test_hilbert_polynomial_request_omits_series_prefix() -> None:
+    schema = HilbertPolynomialRequest.model_json_schema()
+    assert "prefix_degree" not in schema["properties"]
+    with pytest.raises(ValidationError, match="extra"):
+        HilbertPolynomialRequest.model_validate(
+            {"ideal": _ideal((2, 0)).model_dump(), "prefix_degree": 17}
+        )
+    HilbertSeriesRequest.model_validate(
+        {"ideal": _ideal((2, 0)).model_dump(), "prefix_degree": 16}
+    )
+
+
+def test_hilbert_function_and_series_prefixes_are_nonempty_and_nonnegative() -> None:
+    function = hilbert_function(_ideal((2, 0)), max_degree=2)
+    payload = function.model_dump()
+    payload["values"] = []
+    with pytest.raises(ValidationError):
+        HilbertFunctionResult.model_validate(payload)
+    payload["values"] = [-1, 2, 2]
+    with pytest.raises(ValidationError):
+        HilbertFunctionResult.model_validate(payload)
+    series = hilbert_series(_ideal((2, 0)), prefix_degree=2)
+    series_payload = series.model_dump()
+    series_payload["prefix"] = []
+    with pytest.raises(ValidationError):
+        HilbertSeriesResult.model_validate(series_payload)
+
+
+def test_hilbert_series_rejects_noncanonical_denominator_shape() -> None:
+    series = hilbert_series(_ideal((2, 0)), prefix_degree=2)
+    payload = series.model_dump()
+    degree = payload["denominator_exponent"]
+    payload["series"]["denominator"]["terms"] = [
+        {"coefficient": {"num": 1, "den": 1}, "exponents": [degree]}
+    ]
+    with pytest.raises(ValidationError, match="denominator"):
+        HilbertSeriesResult.model_validate(payload)
 
 
 def test_explicit_unit_generator_short_circuits_before_homogeneity() -> None:

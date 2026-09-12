@@ -4,6 +4,7 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.polynomials.graded._models import (
     HilbertFunctionRequest,
     HilbertFunctionResult,
+    HilbertPolynomialRequest,
     HilbertPolynomialResult,
     HilbertSeriesRequest,
     HilbertSeriesResult,
@@ -64,7 +65,7 @@ TOOLS = (
         operation_id="graded_quotient.hilbert_polynomial.compute",
         title="Compute a bounded Hilbert polynomial",
         description="Return the exact eventual Hilbert polynomial and derived stabilization degree from a standard-graded quotient series.",
-        request_type=HilbertSeriesRequest,
+        request_type=HilbertPolynomialRequest,
         result_type=HilbertPolynomialResult,
         run=lambda request: hilbert_polynomial(
             request.ideal,

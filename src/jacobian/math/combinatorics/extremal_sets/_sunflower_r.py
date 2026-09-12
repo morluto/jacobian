@@ -377,9 +377,7 @@ def construct_sunflower_family(
     _admit_candidates(source, petal_count, member_count, source_work)
     vertices = tuple(str(index) for index in range(member_count))
     if member_count < petal_count:
-        _admit_qualifying_result(
-            source, petal_count, member_count, source_units, 0, 0
-        )
+        _admit_qualifying_result(source, petal_count, member_count, source_units, 0, 0)
         return SunflowerFamilyResult._from_kernel(
             source=source,
             petal_count=petal_count,

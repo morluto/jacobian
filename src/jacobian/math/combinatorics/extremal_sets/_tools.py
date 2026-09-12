@@ -30,7 +30,7 @@ def compute_binary_union_relation(
 TOOLS: MathTools = (
     MathTool(
         operation_id="set_system.sunflower_family.construct",
-        title="Construct the complete sunflower family for a petal count",
+        title="Construct the complete sunflower triple hypergraph family",
         description=(
             "Return every distinct-index subfamily of exactly r >= 2 members "
             "whose pairwise intersections are all equal to one common core, "

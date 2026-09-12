@@ -4,7 +4,9 @@ from jacobian.math.combinatorics.extremal_sets import (
     construct_binary_union_relation,
     construct_sunflower_family,
 )
-from jacobian.math.combinatorics.extremal_sets.operations import __all__ as operations_all
+from jacobian.math.combinatorics.extremal_sets.operations import (
+    __all__ as operations_all,
+)
 from jacobian.math.combinatorics.extremal_sets.values import IndexedFiniteSetFamily
 
 

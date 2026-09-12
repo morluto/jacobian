@@ -46,9 +46,7 @@ def _brute_force(
 def test_issue_fixture_three_petal_sunflowers() -> None:
     """The issue's fixture {01,02,04,05,12,45} with r=3 has four rows, core {0}."""
     source = _family(((0, 1), (0, 2), (0, 4), (0, 5), (1, 2), (4, 5)), ground=6)
-    result = construct_sunflower_family(
-        source, 3
-    )
+    result = construct_sunflower_family(source, 3)
     assert [(row.source_indices, row.core) for row in result.sunflowers] == [
         ((0, 1, 2), (0,)),
         ((0, 1, 3), (0,)),
@@ -67,9 +65,7 @@ def test_issue_fixture_three_petal_sunflowers() -> None:
 
 def test_four_petals_share_one_core() -> None:
     """Four petals through a common core form exactly one r=4 sunflower."""
-    result = construct_sunflower_family(
-        _family(((0, 1), (0, 2), (0, 3), (0, 4))), 4
-    )
+    result = construct_sunflower_family(_family(((0, 1), (0, 2), (0, 3), (0, 4))), 4)
     assert [(row.source_indices, row.core) for row in result.sunflowers] == [
         ((0, 1, 2, 3), (0,)),
     ]
@@ -78,9 +74,7 @@ def test_four_petals_share_one_core() -> None:
 
 def test_empty_core_is_a_valid_sunflower() -> None:
     """Disjoint members form a sunflower with the empty core."""
-    result = construct_sunflower_family(
-        _family(((0, 1), (2, 3), (4, 5))), 3
-    )
+    result = construct_sunflower_family(_family(((0, 1), (2, 3), (4, 5))), 3)
     assert [(row.source_indices, row.core) for row in result.sunflowers] == [
         ((0, 1, 2), ()),
     ]
@@ -91,9 +85,7 @@ def test_equal_intersection_cardinalities_with_different_sets_are_not_sunflowers
 ):
     """Pairwise sizes agreeing is not the relation; the intersection sets must agree."""
     source = _family(((0, 1), (0, 2), (1, 2)))
-    result = construct_sunflower_family(
-        source, 3
-    )
+    result = construct_sunflower_family(source, 3)
     assert result.sunflowers == ()
     assert result.sunflower_free is True
 
@@ -101,9 +93,7 @@ def test_equal_intersection_cardinalities_with_different_sets_are_not_sunflowers
 def test_sunflower_free_family_is_reported_as_such() -> None:
     """A family with no admitted sunflower returns an empty complete family."""
     source = _family(((0, 1), (0, 2), (1, 2), (0, 1, 2)))
-    result = construct_sunflower_family(
-        source, 3
-    )
+    result = construct_sunflower_family(source, 3)
     assert result.sunflowers == ()
     assert result.sunflower_count == 0
     assert result.sunflower_free is True
@@ -143,9 +133,7 @@ def test_duplicate_source_members_are_rejected_by_the_carrier() -> None:
 def test_petals_sharing_one_point_with_a_larger_member_are_not_a_sunflower() -> None:
     """A petal reaching outside the core breaks the equal-intersection relation."""
     source = _family(((0, 1), (0, 2), (0, 1, 2)))
-    result = construct_sunflower_family(
-        source, 3
-    )
+    result = construct_sunflower_family(source, 3)
     assert result.sunflowers == ()
     assert result.sunflower_free is True
 
@@ -193,7 +181,8 @@ def test_nested_chain_is_sunflower_free_without_candidate_output_rejection() -> 
 
 def test_sparse_large_member_does_not_price_every_pair_at_global_max() -> None:
     """A 10_000-set with 29 nested prefixes remains a cheap empty 4-sunflower search."""
-    members = tuple(tuple(range(index + 1)) for index in range(29)) + (
+    members = (
+        *(tuple(range(index + 1)) for index in range(29)),
         tuple(range(10_000)),
     )
     result = construct_sunflower_family(_family(members, ground=10_000), 4)
@@ -293,7 +282,7 @@ def test_reconstructed_rows_must_stay_strictly_ordered() -> None:
 def test_core_equality_work_is_included_in_admission() -> None:
     """Pairwise equality against the core is charged, not only intersection size."""
     core = tuple(range(2_499))
-    members = tuple(core + (2_499 + index,) for index in range(20))
+    members = tuple((*core, 2_499 + index) for index in range(20))
     with pytest.raises(OperationResourceAdmissionError, match="intersection work"):
         construct_sunflower_family(_family(members, ground=2_520), 3)
 
@@ -312,4 +301,3 @@ def test_cancellation_is_checkpointed_by_intersection_work(
         2,
     )
     assert "before sunflower member expansion" in messages
-

@@ -84,9 +84,9 @@ def test_hilbert_series_polynomial_dimension_multiplicity_and_h_vector() -> None
     assert series.prefix == (1, 2, 2, 2, 2)
     assert series.denominator_exponent == 1
     assert series.ambient_denominator_exponent == 2
-    assert series.reduced_numerator.polynomial.terms[0].coefficient == CanonicalRational(
-        num=-1, den=1
-    )
+    assert series.reduced_numerator.polynomial.terms[
+        0
+    ].coefficient == CanonicalRational(num=-1, den=1)
     assert series.h_numerator.polynomial.terms[0].coefficient == CanonicalRational(
         num=1, den=1
     )
@@ -116,16 +116,18 @@ def test_odd_dimension_keeps_canonical_series_sign_separate_from_h_numerator() -
     series = hilbert_series(_ideal((2, 0)), prefix_degree=2)
     assert series.denominator_exponent == 1
     assert series.series.numerator == series.reduced_numerator.polynomial
-    assert series.reduced_numerator.polynomial.terms[0].coefficient == CanonicalRational(
-        num=-1, den=1
-    )
+    assert series.reduced_numerator.polynomial.terms[
+        0
+    ].coefficient == CanonicalRational(num=-1, den=1)
     assert series.h_numerator.polynomial.terms[0].coefficient == CanonicalRational(
         num=1, den=1
     )
     assert h_vector(_ideal((2, 0))).h_vector == (1, 1)
 
 
-def test_hilbert_invariants_are_order_invariant_even_when_initial_generators_differ() -> None:
+def test_hilbert_invariants_are_order_invariant_even_when_initial_generators_differ() -> (
+    None
+):
     variables = ("x", "y")
     ideal = RationalPolynomialIdeal(
         variables=variables,
@@ -158,6 +160,7 @@ def test_hilbert_invariants_are_order_invariant_even_when_initial_generators_dif
             ),
         ),
     )
-    assert hilbert_series(ideal, "lex", prefix_degree=5).prefix == hilbert_series(
-        ideal, "grevlex", prefix_degree=5
-    ).prefix
+    assert (
+        hilbert_series(ideal, "lex", prefix_degree=5).prefix
+        == hilbert_series(ideal, "grevlex", prefix_degree=5).prefix
+    )

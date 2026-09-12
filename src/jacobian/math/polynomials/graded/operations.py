@@ -62,7 +62,9 @@ def _require_homogeneous(ideal: RationalPolynomialIdeal) -> None:
             )
 
 
-def _unit_monomial(variables: tuple[str, ...], exponents: tuple[int, ...]) -> RationalPolynomial:
+def _unit_monomial(
+    variables: tuple[str, ...], exponents: tuple[int, ...]
+) -> RationalPolynomial:
     return RationalPolynomial(
         variables=variables,
         polynomial=SparseRationalPolynomial(
@@ -84,7 +86,9 @@ def initial_monomial_ideal(
     """Project the existing exact Gröbner result to its initial monomial ideal."""
 
     _require_homogeneous(ideal)
-    basis_result = groebner_basis(ideal, monomial_order, resource_budget=resource_budget)
+    basis_result = groebner_basis(
+        ideal, monomial_order, resource_budget=resource_budget
+    )
     variables = ideal.variables
     order = {"lex": "lex", "grlex": "grlex", "grevlex": "grevlex"}[monomial_order]
     from sympy import Poly
@@ -96,21 +100,28 @@ def initial_monomial_ideal(
             zero_basis = True
             continue
         leading = Poly(
-            rational_polynomial_to_sympy(generator), *symbols_for_variables(variables), domain="QQ"
+            rational_polynomial_to_sympy(generator),
+            *symbols_for_variables(variables),
+            domain="QQ",
         ).LM(order=order)
         exponents.add(tuple(leading.exponents))
-    minimal = tuple(sorted(
-        (
-            exponent
-            for exponent in exponents
-            if not any(
-                other != exponent
-                and all(left <= right for left, right in zip(other, exponent, strict=True))
-                for other in exponents
-            )
-        ),
-        reverse=True,
-    ))
+    minimal = tuple(
+        sorted(
+            (
+                exponent
+                for exponent in exponents
+                if not any(
+                    other != exponent
+                    and all(
+                        left <= right
+                        for left, right in zip(other, exponent, strict=True)
+                    )
+                    for other in exponents
+                )
+            ),
+            reverse=True,
+        )
+    )
     if zero_basis and not minimal:
         generators = (
             RationalPolynomial(
@@ -123,12 +134,16 @@ def initial_monomial_ideal(
     return InitialMonomialIdealResult(
         ideal=ideal,
         groebner_basis=basis_result.basis,
-        initial_ideal=RationalPolynomialIdeal(variables=variables, generators=generators),
+        initial_ideal=RationalPolynomialIdeal(
+            variables=variables, generators=generators
+        ),
         monomial_order=monomial_order,
     )
 
 
-def _require_monomial_ideal(ideal: RationalPolynomialIdeal) -> tuple[tuple[int, ...], ...]:
+def _require_monomial_ideal(
+    ideal: RationalPolynomialIdeal,
+) -> tuple[tuple[int, ...], ...]:
     generators: list[tuple[int, ...]] = []
     for generator in ideal.generators:
         terms = generator.polynomial.terms
@@ -149,29 +164,38 @@ def _compositions(degree: int, variables: int) -> tuple[tuple[int, ...], ...]:
         return ((degree,),)
     return tuple(
         tuple(
-            boundaries[index + 1] - boundaries[index] - 1
-            for index in range(variables)
+            boundaries[index + 1] - boundaries[index] - 1 for index in range(variables)
         )
         for cuts in combinations(range(1, degree + variables), variables - 1)
         for boundaries in ((0, *cuts, degree + variables),)
     )
 
 
-def standard_monomials(initial_ideal: RationalPolynomialIdeal, degree: int) -> StandardMonomialsResult:
+def standard_monomials(
+    initial_ideal: RationalPolynomialIdeal, degree: int
+) -> StandardMonomialsResult:
     generators = _require_monomial_ideal(initial_ideal)
     variables = len(initial_ideal.variables)
     domain_size = comb(degree + variables - 1, variables - 1)
     if domain_size > MAX_STANDARD_MONOMIALS:
         raise OperationResourceAdmissionError(
-            location=("degree",), code="graded_ideal.monomial_domain_budget", message="standard-monomial domain exceeds the bounded enumeration envelope"
+            location=("degree",),
+            code="graded_ideal.monomial_domain_budget",
+            message="standard-monomial domain exceeds the bounded enumeration envelope",
         )
     monomials = tuple(
         monomial
         for monomial in _compositions(degree, variables)
-        if not any(all(left <= right for left, right in zip(generator, monomial, strict=True)) for generator in generators)
+        if not any(
+            all(left <= right for left, right in zip(generator, monomial, strict=True))
+            for generator in generators
+        )
     )
     return StandardMonomialsResult(
-        initial_ideal=initial_ideal, degree=degree, monomials=tuple(sorted(monomials, reverse=True)), count=len(monomials)
+        initial_ideal=initial_ideal,
+        degree=degree,
+        monomials=tuple(sorted(monomials, reverse=True)),
+        count=len(monomials),
     )
 
 
@@ -182,7 +206,9 @@ def hilbert_function(
     *,
     resource_budget: IdealComputationBudget | None = None,
 ) -> HilbertFunctionResult:
-    initial = initial_monomial_ideal(ideal, monomial_order, resource_budget=resource_budget)
+    initial = initial_monomial_ideal(
+        ideal, monomial_order, resource_budget=resource_budget
+    )
     values = tuple(
         standard_monomials(initial.initial_ideal, degree).count
         for degree in range(max_degree + 1)
@@ -195,7 +221,9 @@ def hilbert_function(
     )
 
 
-def _admit_hilbert_series(initial_ideal: RationalPolynomialIdeal) -> tuple[tuple[int, ...], ...]:
+def _admit_hilbert_series(
+    initial_ideal: RationalPolynomialIdeal,
+) -> tuple[tuple[int, ...], ...]:
     generators = _require_monomial_ideal(initial_ideal)
     if len(generators) > MAX_HILBERT_SERIES_GENERATORS:
         raise OperationResourceAdmissionError(
@@ -291,8 +319,7 @@ def _series_data(
     }
     reduced_numerator = _polynomial_from_integer_coefficients(raw_coefficients)
     h_coefficients = {
-        degree: sign * coefficient
-        for degree, coefficient in raw_coefficients.items()
+        degree: sign * coefficient for degree, coefficient in raw_coefficients.items()
     }
     h_vector = tuple(
         h_coefficients.get(index, 0)
@@ -307,7 +334,8 @@ def _series_data(
             value = h_coefficients.get(degree, 0)
         else:
             value = sum(
-                coefficient * comb(
+                coefficient
+                * comb(
                     degree - shift + denominator_exponent - 1,
                     denominator_exponent - 1,
                 )
@@ -339,7 +367,9 @@ def hilbert_series(
             code="graded_ideal.series_prefix_budget",
             message="Hilbert-series prefixes support degree at most 16",
         )
-    initial = initial_monomial_ideal(ideal, monomial_order, resource_budget=resource_budget)
+    initial = initial_monomial_ideal(
+        ideal, monomial_order, resource_budget=resource_budget
+    )
     data = _series_data(initial.initial_ideal, prefix_degree)
     return HilbertSeriesResult(
         ideal=ideal,
@@ -361,9 +391,7 @@ def _series_projection(
     *,
     resource_budget: IdealComputationBudget | None = None,
 ) -> HilbertSeriesResult:
-    return hilbert_series(
-        ideal, monomial_order, resource_budget=resource_budget
-    )
+    return hilbert_series(ideal, monomial_order, resource_budget=resource_budget)
 
 
 def hilbert_polynomial(
@@ -391,9 +419,7 @@ def hilbert_polynomial(
         expression = sum(
             int(term.coefficient.as_fraction())
             * expand_func(
-                binomial(
-                    m - term.exponents[0] + dimension - 1, dimension - 1
-                )
+                binomial(m - term.exponents[0] + dimension - 1, dimension - 1)
             )
             for term in data.h_numerator.polynomial.terms
         )
@@ -418,8 +444,10 @@ def hilbert_dimension(
 ) -> HilbertDimensionResult:
     data = _series_projection(ideal, monomial_order, resource_budget=resource_budget)
     return HilbertDimensionResult(
-        ideal=ideal, initial_ideal=data.initial_ideal,
-        monomial_order=monomial_order, dimension=data.denominator_exponent
+        ideal=ideal,
+        initial_ideal=data.initial_ideal,
+        monomial_order=monomial_order,
+        dimension=data.denominator_exponent,
     )
 
 
@@ -431,16 +459,19 @@ def hilbert_multiplicity(
 ) -> HilbertMultiplicityResult:
     data = _series_projection(ideal, monomial_order, resource_budget=resource_budget)
     multiplicity = sum(
-        term.coefficient.as_fraction()
-        for term in data.h_numerator.polynomial.terms
+        term.coefficient.as_fraction() for term in data.h_numerator.polynomial.terms
     )
     if multiplicity.denominator != 1 or multiplicity < 0:
         raise OperationDomainValidationError(
-            location=("series",), code="graded_ideal.multiplicity", message="Hilbert multiplicity did not reduce to a nonnegative integer"
+            location=("series",),
+            code="graded_ideal.multiplicity",
+            message="Hilbert multiplicity did not reduce to a nonnegative integer",
         )
     return HilbertMultiplicityResult(
-        ideal=ideal, initial_ideal=data.initial_ideal,
-        monomial_order=monomial_order, dimension=data.denominator_exponent,
+        ideal=ideal,
+        initial_ideal=data.initial_ideal,
+        monomial_order=monomial_order,
+        dimension=data.denominator_exponent,
         multiplicity=multiplicity.numerator,
     )
 
@@ -461,8 +492,10 @@ def h_vector(
         for index in range(max(h_coefficients, default=0) + 1)
     )
     return HVectorResult(
-        ideal=ideal, initial_ideal=data.initial_ideal,
-        monomial_order=monomial_order, dimension=data.denominator_exponent,
+        ideal=ideal,
+        initial_ideal=data.initial_ideal,
+        monomial_order=monomial_order,
+        dimension=data.denominator_exponent,
         h_vector=values,
     )
 

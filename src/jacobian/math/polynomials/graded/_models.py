@@ -26,7 +26,9 @@ MAX_HILBERT_PREFIX = 16
 class InitialMonomialIdealRequest(StrictModel):
     ideal: RationalPolynomialIdeal
     monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex"
-    resource_budget: IdealComputationBudget = Field(default_factory=IdealComputationBudget)
+    resource_budget: IdealComputationBudget = Field(
+        default_factory=IdealComputationBudget
+    )
 
 
 class InitialMonomialIdealResult(StrictModel):
@@ -67,7 +69,9 @@ class StandardMonomialsResult(StrictModel):
             or any(exponent < 0 for exponent in monomial)
             for monomial in self.monomials
         ):
-            raise ValueError("standard monomials must match the ordered ring and degree")
+            raise ValueError(
+                "standard monomials must match the ordered ring and degree"
+            )
         if self.monomials != tuple(sorted(set(self.monomials), reverse=True)):
             raise ValueError("standard monomials must be unique and canonical")
         return self
@@ -77,7 +81,9 @@ class HilbertFunctionRequest(StrictModel):
     ideal: RationalPolynomialIdeal
     monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex"
     max_degree: StrictInt = Field(ge=0, le=MAX_GRADED_DEGREE)
-    resource_budget: IdealComputationBudget = Field(default_factory=IdealComputationBudget)
+    resource_budget: IdealComputationBudget = Field(
+        default_factory=IdealComputationBudget
+    )
 
 
 class HilbertFunctionResult(StrictModel):
@@ -97,7 +103,9 @@ class HilbertSeriesRequest(StrictModel):
     ideal: RationalPolynomialIdeal
     monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex"
     prefix_degree: StrictInt = Field(default=0, ge=0, le=MAX_HILBERT_PREFIX)
-    resource_budget: IdealComputationBudget = Field(default_factory=IdealComputationBudget)
+    resource_budget: IdealComputationBudget = Field(
+        default_factory=IdealComputationBudget
+    )
 
 
 class HilbertSeriesResult(StrictModel):

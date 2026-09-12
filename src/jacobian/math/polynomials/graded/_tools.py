@@ -58,7 +58,13 @@ TOOLS = (
             resource_budget=request.resource_budget,
         ),
         tags=("polynomial", "graded", "hilbert-series", "exact"),
-        examples=(OperationExample(name="hypersurface", description="Compute the series of QQ[x,y]/(x^2).", input={"ideal": _EXAMPLE_IDEAL, "prefix_degree": 3}),),
+        examples=(
+            OperationExample(
+                name="hypersurface",
+                description="Compute the series of QQ[x,y]/(x^2).",
+                input={"ideal": _EXAMPLE_IDEAL, "prefix_degree": 3},
+            ),
+        ),
     ),
     MathTool(
         operation_id="graded_quotient.hilbert_polynomial.compute",
@@ -72,7 +78,13 @@ TOOLS = (
             resource_budget=request.resource_budget,
         ),
         tags=("polynomial", "graded", "hilbert-polynomial", "exact"),
-        examples=(OperationExample(name="line", description="Compute the eventual Hilbert polynomial of QQ[x,y]/(x^2).", input={"ideal": _EXAMPLE_IDEAL}),),
+        examples=(
+            OperationExample(
+                name="line",
+                description="Compute the eventual Hilbert polynomial of QQ[x,y]/(x^2).",
+                input={"ideal": _EXAMPLE_IDEAL},
+            ),
+        ),
     ),
     MathTool(
         operation_id="graded_quotient.dimension.compute",
@@ -86,7 +98,13 @@ TOOLS = (
             resource_budget=request.resource_budget,
         ),
         tags=("polynomial", "graded", "dimension", "exact"),
-        examples=(OperationExample(name="line", description="Compute the dimension of QQ[x,y]/(x^2).", input={"ideal": _EXAMPLE_IDEAL}),),
+        examples=(
+            OperationExample(
+                name="line",
+                description="Compute the dimension of QQ[x,y]/(x^2).",
+                input={"ideal": _EXAMPLE_IDEAL},
+            ),
+        ),
     ),
     MathTool(
         operation_id="graded_quotient.multiplicity.compute",
@@ -100,7 +118,13 @@ TOOLS = (
             resource_budget=request.resource_budget,
         ),
         tags=("polynomial", "graded", "multiplicity", "exact"),
-        examples=(OperationExample(name="line", description="Compute multiplicity of QQ[x,y]/(x^2).", input={"ideal": _EXAMPLE_IDEAL}),),
+        examples=(
+            OperationExample(
+                name="line",
+                description="Compute multiplicity of QQ[x,y]/(x^2).",
+                input={"ideal": _EXAMPLE_IDEAL},
+            ),
+        ),
     ),
     MathTool(
         operation_id="graded_quotient.h_vector.compute",
@@ -114,7 +138,13 @@ TOOLS = (
             resource_budget=request.resource_budget,
         ),
         tags=("polynomial", "graded", "h-vector", "exact"),
-        examples=(OperationExample(name="line", description="Compute the h-vector of QQ[x,y]/(x^2).", input={"ideal": _EXAMPLE_IDEAL}),),
+        examples=(
+            OperationExample(
+                name="line",
+                description="Compute the h-vector of QQ[x,y]/(x^2).",
+                input={"ideal": _EXAMPLE_IDEAL},
+            ),
+        ),
     ),
     MathTool(
         operation_id="polynomial.ideal.initial_monomial_ideal.compute",
@@ -123,10 +153,18 @@ TOOLS = (
         request_type=InitialMonomialIdealRequest,
         result_type=InitialMonomialIdealResult,
         run=lambda request: initial_monomial_ideal(
-            request.ideal, request.monomial_order, resource_budget=request.resource_budget
+            request.ideal,
+            request.monomial_order,
+            resource_budget=request.resource_budget,
         ),
         tags=("polynomial", "ideal", "initial-ideal", "groebner", "exact"),
-        examples=(OperationExample(name="principal_square", description="Compute the initial ideal of (x^2).", input={"ideal": _EXAMPLE_IDEAL}),),
+        examples=(
+            OperationExample(
+                name="principal_square",
+                description="Compute the initial ideal of (x^2).",
+                input={"ideal": _EXAMPLE_IDEAL},
+            ),
+        ),
     ),
     MathTool(
         operation_id="monomial_ideal.standard_monomials.degree.compute",
@@ -136,7 +174,13 @@ TOOLS = (
         result_type=StandardMonomialsResult,
         run=lambda request: standard_monomials(request.initial_ideal, request.degree),
         tags=("polynomial", "monomial-ideal", "standard-monomial", "exact"),
-        examples=(OperationExample(name="degree_two", description="Enumerate degree-two standard monomials modulo (x^2).", input={"initial_ideal": _EXAMPLE_IDEAL, "degree": 2}),),
+        examples=(
+            OperationExample(
+                name="degree_two",
+                description="Enumerate degree-two standard monomials modulo (x^2).",
+                input={"initial_ideal": _EXAMPLE_IDEAL, "degree": 2},
+            ),
+        ),
     ),
     MathTool(
         operation_id="graded_quotient.hilbert_function.compute",
@@ -151,7 +195,13 @@ TOOLS = (
             resource_budget=request.resource_budget,
         ),
         tags=("polynomial", "graded", "hilbert-function", "exact"),
-        examples=(OperationExample(name="prefix", description="Compute the Hilbert-function prefix through degree two for (x^2).", input={"ideal": _EXAMPLE_IDEAL, "max_degree": 2}),),
+        examples=(
+            OperationExample(
+                name="prefix",
+                description="Compute the Hilbert-function prefix through degree two for (x^2).",
+                input={"ideal": _EXAMPLE_IDEAL, "max_degree": 2},
+            ),
+        ),
     ),
 )
 

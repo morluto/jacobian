@@ -8,9 +8,16 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.number_theory.number_fields import GaussianRational
 
 MAX_VECTOR_CELLS = 524_288
 MAX_DIM = MAX_VECTOR_CELLS
+MAX_COMPLEX_FRAME_CELLS = 4_096
+MAX_COMPLEX_BASIS_COUNT = 16
+MAX_COMPLEX_BASIS_PAIRS = 120
+MAX_COMPLEX_PROFILE_CELLS = 16_384
+MAX_COMPLEX_INNER_PRODUCT_WORK = 2_000_000
+MAX_COMPLEX_COMPONENT_DIGITS = 128
 _MAX_VECTOR_ENTRY = (1 << 53) - 1
 
 
@@ -57,8 +64,43 @@ class VectorFamily(StrictModel):
         return self
 
 
+class ComplexFrame(StrictModel):
+    """A bounded finite family of exact complex representatives.
+
+    Complex-frame operations that describe bases or projective configurations
+    use nonzero representatives and normalize their Hermitian overlaps
+    conceptually; unit coordinate norms are not a construction requirement.
+    """
+
+    dimension: int = Field(ge=1, le=MAX_DIM)
+    vectors: tuple[tuple[GaussianRational, ...], ...] = Field(
+        max_length=MAX_VECTOR_CELLS
+    )
+
+    @model_validator(mode="after")
+    def require_rectangular_family(self) -> Self:
+        if any(len(vector) != self.dimension for vector in self.vectors):
+            raise _validation_error(
+                "complex_vector_dimension_mismatch",
+                "all complex vectors must have equal dimension",
+            )
+        if len(self.vectors) * self.dimension > MAX_COMPLEX_FRAME_CELLS:
+            raise _validation_error(
+                "complex_vector_cell_budget",
+                "complex vector family exceeds the materialized-cell budget",
+            )
+        return self
+
+
 __all__ = [
+    "MAX_COMPLEX_BASIS_COUNT",
+    "MAX_COMPLEX_BASIS_PAIRS",
+    "MAX_COMPLEX_COMPONENT_DIGITS",
+    "MAX_COMPLEX_FRAME_CELLS",
+    "MAX_COMPLEX_INNER_PRODUCT_WORK",
+    "MAX_COMPLEX_PROFILE_CELLS",
     "MAX_DIM",
     "MAX_VECTOR_CELLS",
+    "ComplexFrame",
     "VectorFamily",
 ]

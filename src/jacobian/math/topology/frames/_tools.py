@@ -1,15 +1,31 @@
 """Immutable declarations for finite-frame operations."""
 
-from jacobian.catalog.models import MathTool, MathTools, OperationExample
+from jacobian.catalog.models import (
+    MathTool,
+    MathTools,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.topology.frames._models import (
     CoherenceResult,
+    ComplexFrameProfileRequest,
+    ComplexFrameProfileResult,
     FramePotentialResult,
     GramResult,
+    MutuallyUnbiasedBasesRequest,
+    MutuallyUnbiasedBasesResult,
+    SicProfileRequest,
+    SicProfileResult,
+    TightEquiangularProfileResult,
 )
 from jacobian.math.topology.frames.operations import (
     coherence,
+    complex_frame_profile,
     frame_potential,
     gram,
+    mutually_unbiased_bases,
+    sic_profile,
+    tight_equiangular_profile,
 )
 from jacobian.math.topology.frames.values import VectorFamily
 
@@ -26,9 +42,116 @@ def _frame_potential(request: VectorFamily) -> FramePotentialResult:
     return frame_potential(request)
 
 
+def _require_request(request: object, expected: type[object]) -> None:
+    if type(request) is not expected:
+        raise OperationDomainValidationError(
+            location=(),
+            code="frames.request_type",
+            message=f"operation requires a {expected.__name__} request",
+        )
+
+
+def _tight_equiangular_profile(request: VectorFamily) -> TightEquiangularProfileResult:
+    return tight_equiangular_profile(request)
+
+
+def _complex_frame_profile(
+    request: ComplexFrameProfileRequest,
+) -> ComplexFrameProfileResult:
+    _require_request(request, ComplexFrameProfileRequest)
+    return complex_frame_profile(request.frame)
+
+
+def _mutually_unbiased_bases(
+    request: MutuallyUnbiasedBasesRequest,
+) -> MutuallyUnbiasedBasesResult:
+    _require_request(request, MutuallyUnbiasedBasesRequest)
+    return mutually_unbiased_bases(request.dimension, request.bases)
+
+
+def _sic_profile(request: SicProfileRequest) -> SicProfileResult:
+    _require_request(request, SicProfileRequest)
+    return sic_profile(request.frame)
+
+
 _ORTHONORMAL = {"dimension": 2, "vectors": [[1, 0], [0, 1]]}
+_C0 = {"real": {"num": "0", "den": "1"}, "imaginary": {"num": "0", "den": "1"}}
+_C1 = {"real": {"num": "1", "den": "1"}, "imaginary": {"num": "0", "den": "1"}}
+_CM1 = {"real": {"num": "-1", "den": "1"}, "imaginary": {"num": "0", "den": "1"}}
+_COMPLEX_STANDARD = {
+    "dimension": 2,
+    "vectors": [[_C1, _C0], [_C0, _C1]],
+}
+_COMPLEX_HADAMARD = {
+    "dimension": 2,
+    "vectors": [[_C1, _C1], [_C1, _CM1]],
+}
 
 TOOLS: MathTools = (
+    MathTool(
+        operation_id="frame.complex_profile.compute",
+        title="Profile an exact complex frame",
+        description="Return the exact frame operator, tight residual, and equal-norm equiangular profile for a Gaussian-rational complex frame.",
+        request_type=ComplexFrameProfileRequest,
+        result_type=ComplexFrameProfileResult,
+        run=_complex_frame_profile,
+        tags=("topology", "frame", "complex", "exact"),
+        examples=(
+            OperationExample(
+                name="complex_standard",
+                description="Profile the standard complex basis.",
+                input={"frame": _COMPLEX_STANDARD},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="frame.mutually_unbiased_bases.compute",
+        title="Decide mutual unbiasedness of exact complex bases",
+        description="Check nonzero orthogonality within each basis and the exact normalized cross-overlap equation between every basis pair; unit coordinate norms are not required.",
+        request_type=MutuallyUnbiasedBasesRequest,
+        result_type=MutuallyUnbiasedBasesResult,
+        run=_mutually_unbiased_bases,
+        tags=("topology", "frame", "MUB", "complex", "exact"),
+        examples=(
+            OperationExample(
+                name="standard_and_hadamard",
+                description="Two mutually unbiased real bases in dimension two.",
+                input={"dimension": 2, "bases": [_COMPLEX_STANDARD, _COMPLEX_HADAMARD]},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="frame.sic_profile.compute",
+        title="Decide the exact SIC overlap equations",
+        description="Check the d-squared cardinality and 1/(d+1) pairwise normalized overlap equation for nonzero complex projective representatives, using normalized rank-one projectors.",
+        request_type=SicProfileRequest,
+        result_type=SicProfileResult,
+        run=_sic_profile,
+        tags=("topology", "frame", "SIC", "complex", "exact"),
+        examples=(
+            OperationExample(
+                name="dimension_one_sic",
+                description="The canonical one-dimensional SIC profile.",
+                input={"frame": {"dimension": 1, "vectors": [[_C1]]}},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="frame.tight_equiangular_profile.compute",
+        title="Classify tightness and equiangularity of a frame",
+        description="Return exact tight-frame and equiangular-frame predicates for an integer vector family.",
+        request_type=VectorFamily,
+        result_type=TightEquiangularProfileResult,
+        run=_tight_equiangular_profile,
+        tags=("topology", "frame", "tight", "equiangular", "exact"),
+        examples=(
+            OperationExample(
+                name="orthonormal_frame",
+                description="Classify an orthonormal frame.",
+                input=_ORTHONORMAL,
+            ),
+        ),
+    ),
     MathTool(
         operation_id="frame.gram.compute",
         title="Compute the Gram matrix of a vector family",

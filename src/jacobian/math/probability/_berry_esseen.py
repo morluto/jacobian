@@ -1,12 +1,4 @@
-"""Exact bounded Berry--Esseen bounds for finite rational summands.
-
-The operation uses the published general independent-summand constant
-``C = 0.5600 = 14/25`` from Shevtsova, *On the asymptotically exact constants
-in the Berry--Esseen--Katz inequality*, Theory of Probability and its
-Applications 55 (2011), DOI: 10.4213/tvp4201.  The result is the theorem's
-explicit upper bound; it is not a claim that the Kolmogorov distance was
-computed.
-"""
+"""Exact bounded i.i.d. Berry--Esseen bounds for finite rational laws."""
 
 from __future__ import annotations
 
@@ -14,7 +6,7 @@ from fractions import Fraction
 from math import isqrt
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, StrictInt
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
@@ -32,39 +24,29 @@ from jacobian.math.probability._models import (
     _require_bounded_fraction,
 )
 
-MAX_BERRY_ESSEEN_SUMMANDS = 256
 MAX_BERRY_ESSEEN_ATOMS = 16_384
+MAX_BERRY_ESSEEN_SAMPLE_COUNT = 10**12
 BERRY_ESSEEN_CONSTANT = Fraction(14, 25)
 BERRY_ESSEEN_BOUND_BITS = 64
-BERRY_ESSEEN_THEOREM_VARIANT = (
-    "INDEPENDENT_NON_IDENTICALLY_DISTRIBUTED_BERRY_ESSEEN_C_05600"
-)
+BERRY_ESSEEN_THEOREM_VARIANT = "IID_BERRY_ESSEEN_C_05600"
 
 
 class BerryEsseenRequest(StrictModel):
-    """Independent finite rational laws, one law for each summand."""
+    """One finite rational law and a positive i.i.d. sample count."""
 
-    summands: tuple[FiniteRationalDistribution, ...] = Field(
-        min_length=1,
-        max_length=MAX_BERRY_ESSEEN_SUMMANDS,
-        description=(
-            "Independent summands. Repeating one law gives the i.i.d. case; "
-            "different laws are allowed by the published independent-summand theorem."
-        ),
-    )
+    distribution: FiniteRationalDistribution
+    sample_count: StrictInt = Field(description="Positive i.i.d. sample count n.")
 
 
 class BerryEsseenResult(StrictModel):
-    """Exact moments and an outward rational enclosure of the theorem bound."""
+    """Exact source moments and an outward rational enclosure of the bound."""
 
     source: BerryEsseenRequest
-    theorem_variant: Literal[
-        "INDEPENDENT_NON_IDENTICALLY_DISTRIBUTED_BERRY_ESSEEN_C_05600"
-    ]
+    theorem_variant: Literal["IID_BERRY_ESSEEN_C_05600"]
     universal_constant: CanonicalRational
-    total_mean: CanonicalRational
-    total_variance: CanonicalRational
-    total_third_absolute_central_moment: CanonicalRational
+    mean: CanonicalRational
+    variance: CanonicalRational
+    third_absolute_central_moment: CanonicalRational
     bound_squared: CanonicalRational
     bound_lower: CanonicalRational
     bound_upper: CanonicalRational
@@ -128,173 +110,158 @@ def _sqrt_interval(value: Fraction) -> tuple[Fraction, Fraction]:
     scaled_floor = (value.numerator * scale * scale) // value.denominator
     lower_numerator = isqrt(scaled_floor)
     lower = Fraction(lower_numerator, scale)
-    if lower * lower == value:
-        return lower, lower
     return lower, Fraction(lower_numerator + 1, scale)
 
 
 def berry_esseen_bound(request: BerryEsseenRequest) -> BerryEsseenResult:
-    """Compute the exact independent-summand Berry--Esseen upper bound."""
+    """Compute the exact i.i.d. Berry--Esseen upper bound."""
 
-    total_atoms = sum(len(summand.atoms) for summand in request.summands)
-    if total_atoms > MAX_BERRY_ESSEEN_ATOMS:
+    if request.sample_count < 1:
+        raise OperationDomainValidationError(
+            location=("sample_count",),
+            code="probability.berry_esseen.nonpositive_sample_count",
+            message="Berry--Esseen sample_count must be positive",
+        )
+    if request.sample_count > MAX_BERRY_ESSEEN_SAMPLE_COUNT:
         raise OperationResourceAdmissionError(
-            location=("summands",),
+            location=("sample_count",),
+            code="probability.berry_esseen.sample_count_bound",
+            message=(
+                "Berry--Esseen admission allows sample_count in [1, "
+                f"{MAX_BERRY_ESSEEN_SAMPLE_COUNT}]"
+            ),
+        )
+    if len(request.distribution.atoms) > MAX_BERRY_ESSEEN_ATOMS:
+        raise OperationResourceAdmissionError(
+            location=("distribution", "atoms"),
             code="probability.berry_esseen.atom_work_bound",
             message=(
                 "Berry--Esseen admission allows at most "
-                f"{MAX_BERRY_ESSEEN_ATOMS} input atoms across all summands"
+                f"{MAX_BERRY_ESSEEN_ATOMS} input atoms"
             ),
         )
 
-    means: list[Fraction] = []
-    variances: list[Fraction] = []
-    third_moments: list[Fraction] = []
-    for index, summand in enumerate(request.summands):
-        location = ("summands", index)
-        try:
-            require_input_distribution(
-                summand.atoms,
-                require_canonical=True,
-                max_digits=MAX_INPUT_RATIONAL_DIGITS,
-            )
-        except ValueError as exc:
-            raise OperationDomainValidationError(
-                location=location,
-                code="probability.berry_esseen.input_distribution",
-                message=str(exc),
-            ) from exc
+    location = ("distribution",)
+    try:
+        require_input_distribution(
+            request.distribution.atoms,
+            require_canonical=True,
+            max_digits=MAX_INPUT_RATIONAL_DIGITS,
+        )
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=location,
+            code="probability.berry_esseen.input_distribution",
+            message=str(exc),
+        ) from exc
 
-        mean = Fraction()
-        for atom in summand.atoms:
-            mean = _add(
-                mean,
-                _mul(
-                    atom.value.as_fraction(),
-                    atom.probability.as_fraction(),
-                    location=location,
-                    label="Berry--Esseen mean contribution",
-                ),
-                location=location,
-                label="Berry--Esseen mean",
-            )
-
-        variance = Fraction()
-        third = Fraction()
-        for atom in summand.atoms:
-            centered = _admission_fraction(
-                atom.value.as_fraction() - mean,
-                location=location,
-                label="Berry--Esseen centered value",
-            )
-            squared = _mul(
-                centered,
-                centered,
-                location=location,
-                label="Berry--Esseen centered square",
-            )
-            cubed_absolute = _mul(
-                squared,
-                abs(centered),
-                location=location,
-                label="Berry--Esseen centered third absolute power",
-            )
-            variance = _add(
-                variance,
-                _mul(
-                    atom.probability.as_fraction(),
-                    squared,
-                    location=location,
-                    label="Berry--Esseen variance contribution",
-                ),
-                location=location,
-                label="Berry--Esseen variance",
-            )
-            third = _add(
-                third,
-                _mul(
-                    atom.probability.as_fraction(),
-                    cubed_absolute,
-                    location=location,
-                    label="Berry--Esseen third absolute contribution",
-                ),
-                location=location,
-                label="Berry--Esseen third absolute moment",
-            )
-        if variance <= 0:
-            raise OperationDomainValidationError(
-                location=location,
-                code="probability.berry_esseen.zero_variance_summand",
-                message=(
-                    "the pinned independent-summand theorem requires every "
-                    "summand to have positive variance"
-                ),
-            )
-        means.append(mean)
-        variances.append(variance)
-        third_moments.append(third)
-
-    total_mean = Fraction()
-    total_variance = Fraction()
-    total_third = Fraction()
-    for mean, variance, third in zip(means, variances, third_moments, strict=True):
-        total_mean = _add(
-            total_mean,
+    mean = Fraction()
+    for atom in request.distribution.atoms:
+        mean = _add(
             mean,
-            location=("summands",),
-            label="Berry--Esseen total mean",
+            _mul(
+                atom.value.as_fraction(),
+                atom.probability.as_fraction(),
+                location=location,
+                label="Berry--Esseen mean contribution",
+            ),
+            location=location,
+            label="Berry--Esseen mean",
         )
-        total_variance = _add(
-            total_variance,
+
+    variance = Fraction()
+    third = Fraction()
+    for atom in request.distribution.atoms:
+        centered = _admission_fraction(
+            atom.value.as_fraction() - mean,
+            location=location,
+            label="Berry--Esseen centered value",
+        )
+        squared = _mul(
+            centered,
+            centered,
+            location=location,
+            label="Berry--Esseen centered square",
+        )
+        cubed_absolute = _mul(
+            squared,
+            abs(centered),
+            location=location,
+            label="Berry--Esseen centered third absolute power",
+        )
+        variance = _add(
             variance,
-            location=("summands",),
-            label="Berry--Esseen total variance",
+            _mul(
+                atom.probability.as_fraction(),
+                squared,
+                location=location,
+                label="Berry--Esseen variance contribution",
+            ),
+            location=location,
+            label="Berry--Esseen variance",
         )
-        total_third = _add(
-            total_third,
+        third = _add(
             third,
-            location=("summands",),
-            label="Berry--Esseen total third absolute moment",
+            _mul(
+                atom.probability.as_fraction(),
+                cubed_absolute,
+                location=location,
+                label="Berry--Esseen third absolute contribution",
+            ),
+            location=location,
+            label="Berry--Esseen third absolute moment",
+        )
+    if variance <= 0:
+        raise OperationDomainValidationError(
+            location=location,
+            code="probability.berry_esseen.zero_variance_distribution",
+            message="the Berry--Esseen theorem requires positive variance",
         )
 
     variance_squared = _mul(
-        total_variance,
-        total_variance,
-        location=("summands",),
+        variance,
+        variance,
+        location=location,
         label="Berry--Esseen variance square",
     )
     variance_cubed = _mul(
         variance_squared,
-        total_variance,
-        location=("summands",),
+        variance,
+        location=location,
         label="Berry--Esseen variance cube",
     )
     third_squared = _mul(
-        total_third,
-        total_third,
-        location=("summands",),
+        third,
+        third,
+        location=location,
         label="Berry--Esseen third absolute moment square",
+    )
+    denominator = _mul(
+        variance_cubed,
+        Fraction(request.sample_count),
+        location=("sample_count",),
+        label="Berry--Esseen variance cube times sample count",
     )
     numerator = _mul(
         BERRY_ESSEEN_CONSTANT * BERRY_ESSEEN_CONSTANT,
         third_squared,
-        location=("summands",),
+        location=location,
         label="Berry--Esseen bound numerator",
     )
     bound_squared = _admission_fraction(
-        numerator / variance_cubed,
-        location=("summands",),
+        numerator / denominator,
+        location=("sample_count",),
         label="Berry--Esseen squared bound",
     )
     bound_lower, bound_upper = _sqrt_interval(bound_squared)
     _admission_fraction(
         bound_lower,
-        location=("summands",),
+        location=("sample_count",),
         label="Berry--Esseen lower bound",
     )
     _admission_fraction(
         bound_upper,
-        location=("summands",),
+        location=("sample_count",),
         label="Berry--Esseen upper bound",
     )
 
@@ -302,11 +269,9 @@ def berry_esseen_bound(request: BerryEsseenRequest) -> BerryEsseenResult:
         source=request,
         theorem_variant=BERRY_ESSEEN_THEOREM_VARIANT,
         universal_constant=CanonicalRational.from_fraction(BERRY_ESSEEN_CONSTANT),
-        total_mean=CanonicalRational.from_fraction(total_mean),
-        total_variance=CanonicalRational.from_fraction(total_variance),
-        total_third_absolute_central_moment=CanonicalRational.from_fraction(
-            total_third
-        ),
+        mean=CanonicalRational.from_fraction(mean),
+        variance=CanonicalRational.from_fraction(variance),
+        third_absolute_central_moment=CanonicalRational.from_fraction(third),
         bound_squared=CanonicalRational.from_fraction(bound_squared),
         bound_lower=CanonicalRational.from_fraction(bound_lower),
         bound_upper=CanonicalRational.from_fraction(bound_upper),
@@ -318,6 +283,8 @@ __all__ = [
     "BERRY_ESSEEN_BOUND_BITS",
     "BERRY_ESSEEN_CONSTANT",
     "BERRY_ESSEEN_THEOREM_VARIANT",
+    "MAX_BERRY_ESSEEN_ATOMS",
+    "MAX_BERRY_ESSEEN_SAMPLE_COUNT",
     "BerryEsseenRequest",
     "BerryEsseenResult",
     "berry_esseen_bound",

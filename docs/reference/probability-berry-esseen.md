@@ -1,30 +1,28 @@
 # Berry--Esseen operation
 
-`probability.finite_distribution.berry_esseen_05600.compute` implements the
-published independent, not-necessarily-identically-distributed finite-sum
-form with universal constant
+`probability.finite_distribution.berry_esseen_iid_05600.compute` implements the
+published i.i.d. finite-sum form with universal constant
 
 \[
  C = 0.5600 = 14/25.
 \]
 
-For independent summands \(X_i\), each with positive variance, the operation
-returns exact rational values
+For one finite rational law \(X\) with positive variance and a positive i.i.d.
+sample count \(n\), the operation returns exact rational values
 
 \[
- \mu = \sum_i E[X_i],\qquad
- V = \sum_i \operatorname{Var}(X_i),\qquad
- \rho = \sum_i E[|X_i-E[X_i]|^3],
+ \mu = E[X],\qquad
+ \sigma^2 = \operatorname{Var}(X),\qquad
+ \rho = E[|X-E[X]|^3],
 \]
 
 and the theorem's explicit Kolmogorov-distance upper bound
-\(C\rho/V^{3/2}\). The square of the bound is returned exactly; its square
-root is returned as a deterministic outward-rounded dyadic interval. Repeating
-one distribution gives the i.i.d. specialization.
+\(C\rho/(\sigma^3\sqrt n)\). The square of the bound is returned exactly;
+its square root is returned as a deterministic outward-rounded dyadic interval.
 
-The pinned source is I. G. Shevtsova, “On the asymptotically exact constants
-in the Berry–Esseen–Katz inequality,” *Theory of Probability and its
-Applications* 55 (2011), 225–252, DOI
-[`10.4213/tvp4201`](https://doi.org/10.4213/tvp4201). The operation does not
-claim to compute the realized distributional distance or to prove a sharper
-constant for a narrower hypothesis class.
+The pinned source is I. G. Shevtsova, “An Improvement of Convergence Rate
+Estimates in the Lyapunov Theorem,” *Doklady Mathematics* 82(3) (2010),
+862–864, DOI
+[`10.1134/S1064562410060062`](https://doi.org/10.1134/S1064562410060062).
+The operation does not claim to compute the realized distributional distance
+or to prove a sharper constant for a narrower hypothesis class.

@@ -1,4 +1,4 @@
-"""Behavioral tests for the pinned finite Berry--Esseen operation."""
+"""Behavioral tests for the pinned finite i.i.d. Berry--Esseen operation."""
 
 from fractions import Fraction
 
@@ -11,13 +11,12 @@ from jacobian.catalog.models import (
 from jacobian.math.probability._berry_esseen import (
     BERRY_ESSEEN_CONSTANT,
     BERRY_ESSEEN_THEOREM_VARIANT,
+    MAX_BERRY_ESSEEN_SAMPLE_COUNT,
     BerryEsseenRequest,
     BerryEsseenResult,
     berry_esseen_bound,
 )
-from jacobian.math.probability._berry_esseen_tools import (
-    BERRY_ESSEEN_OPERATION,
-)
+from jacobian.math.probability._berry_esseen_tools import BERRY_ESSEEN_OPERATION
 
 
 def _distribution(*atoms: tuple[int, Fraction]) -> dict[str, object]:
@@ -35,94 +34,130 @@ def _distribution(*atoms: tuple[int, Fraction]) -> dict[str, object]:
     }
 
 
-def _request(*summands: dict[str, object]) -> BerryEsseenRequest:
-    return BerryEsseenRequest.model_validate({"summands": summands})
+def _request(
+    distribution: dict[str, object], sample_count: int = 1
+) -> BerryEsseenRequest:
+    return BerryEsseenRequest.model_validate(
+        {"distribution": distribution, "sample_count": sample_count}
+    )
 
 
-def test_fair_bernoulli_returns_exact_moments_and_exact_bound() -> None:
+def _five_atom_oracle_distribution() -> dict[str, object]:
+    # Independent exact oracle: mean=33, variance=4224/5,
+    # rho=161792/5 and rho^2/sigma^6=62410/35937.
+    return _distribution(
+        (-67, Fraction(2318683, 327008220)),
+        (-34, Fraction(55471, 90590115)),
+        (7, Fraction(1279776117, 2640839110)),
+        (46, Fraction(44859, 174083)),
+        (73, Fraction(1, 4)),
+    )
+
+
+def test_five_atom_oracle_returns_exact_source_moments() -> None:
+    result = berry_esseen_bound(_request(_five_atom_oracle_distribution(), 5))
+
+    assert result.mean.as_fraction() == Fraction(33)
+    assert result.variance.as_fraction() == Fraction(4224, 5)
+    assert result.third_absolute_central_moment.as_fraction() == Fraction(161792, 5)
+    assert (
+        result.third_absolute_central_moment.as_fraction() ** 2
+        / result.variance.as_fraction() ** 3
+        == Fraction(62410, 35937)
+    )
+
+
+def test_symmetric_bernoulli_has_exact_single_sample_bound() -> None:
     result = berry_esseen_bound(
         _request(_distribution((0, Fraction(1, 2)), (1, Fraction(1, 2))))
     )
 
     assert result.theorem_variant == BERRY_ESSEEN_THEOREM_VARIANT
     assert result.universal_constant.as_fraction() == BERRY_ESSEEN_CONSTANT
-    assert result.total_mean.as_fraction() == Fraction(1, 2)
-    assert result.total_variance.as_fraction() == Fraction(1, 4)
-    assert result.total_third_absolute_central_moment.as_fraction() == Fraction(1, 8)
+    assert result.mean.as_fraction() == Fraction(1, 2)
+    assert result.variance.as_fraction() == Fraction(1, 4)
+    assert result.third_absolute_central_moment.as_fraction() == Fraction(1, 8)
     assert result.bound_squared.as_fraction() == Fraction(196, 625)
     assert result.bound_lower.as_fraction() == Fraction(14, 25)
     assert result.bound_upper.as_fraction() == Fraction(14, 25)
 
 
-def test_asymmetric_independent_summands_use_exact_non_iid_aggregate() -> None:
-    result = berry_esseen_bound(
-        _request(
-            _distribution((0, Fraction(1, 3)), (2, Fraction(2, 3))),
-            _distribution((-1, Fraction(1, 4)), (3, Fraction(3, 4))),
-        )
-    )
+def test_asymmetric_bernoulli_and_n_monotonicity() -> None:
+    distribution = _distribution((0, Fraction(1, 3)), (2, Fraction(2, 3)))
+    one = berry_esseen_bound(_request(distribution, 1))
+    four = berry_esseen_bound(_request(distribution, 4))
 
-    assert result.total_mean.as_fraction() == Fraction(10, 3)
-    assert result.total_variance.as_fraction() == Fraction(35, 9)
-    assert result.total_third_absolute_central_moment.as_fraction() == Fraction(
-        80, 81
-    ) + Fraction(15, 2)
-    assert result.bound_lower.as_fraction() <= result.bound_upper.as_fraction()
-    assert (
-        result.bound_lower.as_fraction() ** 2
-        <= result.bound_squared.as_fraction()
-        <= result.bound_upper.as_fraction() ** 2
-    )
-
-
-def test_iid_repetition_has_the_expected_inverse_square_root_scaling() -> None:
-    fair_bit = _distribution((0, Fraction(1, 2)), (1, Fraction(1, 2)))
-    one = berry_esseen_bound(_request(fair_bit))
-    four = berry_esseen_bound(_request(fair_bit, fair_bit, fair_bit, fair_bit))
-
-    assert four.total_mean.as_fraction() == 4 * one.total_mean.as_fraction()
-    assert four.total_variance.as_fraction() == 4 * one.total_variance.as_fraction()
+    assert one.mean.as_fraction() == Fraction(4, 3)
+    assert one.variance.as_fraction() == Fraction(8, 9)
+    assert one.third_absolute_central_moment.as_fraction() == Fraction(80, 81)
     assert four.bound_squared.as_fraction() == one.bound_squared.as_fraction() / 4
+    assert four.bound_upper.as_fraction() <= one.bound_upper.as_fraction()
 
 
-def test_serialized_result_preserves_source_and_bound() -> None:
+def test_large_positive_count_is_admitted_without_sample_expansion() -> None:
     result = berry_esseen_bound(
-        _request(_distribution((0, Fraction(1, 3)), (2, Fraction(2, 3))))
+        _request(_distribution((0, Fraction(1, 2)), (1, Fraction(1, 2))), 257)
     )
+
+    assert result.source.sample_count == 257
+    assert result.bound_squared.as_fraction() == Fraction(196, 625 * 257)
+
+
+def test_sample_count_boundary_is_bounded_and_preflighted() -> None:
+    distribution = _request(
+        _distribution((0, Fraction(1, 2)), (1, Fraction(1, 2))),
+        MAX_BERRY_ESSEEN_SAMPLE_COUNT,
+    )
+    assert berry_esseen_bound(distribution).source.sample_count == (
+        MAX_BERRY_ESSEEN_SAMPLE_COUNT
+    )
+
+    over_bound = BerryEsseenRequest.model_construct(
+        distribution=distribution.distribution,
+        sample_count=MAX_BERRY_ESSEEN_SAMPLE_COUNT + 1,
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="sample_count"):
+        berry_esseen_bound(over_bound)
+    with pytest.raises(
+        OperationDomainValidationError, match="sample_count must be positive"
+    ):
+        berry_esseen_bound(
+            BerryEsseenRequest.model_construct(
+                distribution=distribution.distribution,
+                sample_count=0,
+            )
+        )
+
+
+def test_serialized_result_preserves_source_and_interval_invariants() -> None:
+    result = berry_esseen_bound(_request(_five_atom_oracle_distribution(), 7))
     restored = BerryEsseenResult.model_validate_json(result.model_dump_json())
+    lower = restored.bound_lower.as_fraction()
+    upper = restored.bound_upper.as_fraction()
+    squared = restored.bound_squared.as_fraction()
 
     assert restored == result
     assert restored.source == result.source
+    assert lower <= upper
+    assert lower * lower <= squared <= upper * upper
 
 
-def test_zero_variance_summand_is_rejected_at_operation_boundary() -> None:
-    request = _request(_distribution((7, Fraction(1, 1))))
-
+def test_zero_variance_and_bad_normalization_are_rejected_at_operation_boundary() -> (
+    None
+):
     with pytest.raises(OperationDomainValidationError, match="positive variance"):
-        berry_esseen_bound(request)
-
-
-def test_probability_normalization_is_rejected_at_operation_boundary() -> None:
-    request = _request(_distribution((0, Fraction(1, 1)), (1, Fraction(1, 1))))
-
+        berry_esseen_bound(_request(_distribution((7, Fraction(1, 1)))))
     with pytest.raises(OperationDomainValidationError, match="sum exactly to 1"):
-        berry_esseen_bound(request)
-
-
-def test_total_atom_admission_precedes_moment_expansion() -> None:
-    atom_count = 16_385
-    request = _request(
-        _distribution(
-            *((index, Fraction(1, atom_count)) for index in range(atom_count))
+        berry_esseen_bound(
+            _request(_distribution((0, Fraction(1, 1)), (1, Fraction(1, 1))))
         )
+
+
+def test_operation_declaration_pins_iid_constant_and_contract() -> None:
+    assert BERRY_ESSEEN_OPERATION.operation_id.endswith(
+        "berry_esseen_iid_05600.compute"
     )
-
-    with pytest.raises(OperationResourceAdmissionError, match="input atoms"):
-        berry_esseen_bound(request)
-
-
-def test_operation_declaration_pins_constant_and_variant() -> None:
-    assert BERRY_ESSEEN_OPERATION.operation_id.endswith("berry_esseen_05600.compute")
+    assert "i.i.d." in BERRY_ESSEEN_OPERATION.description
     assert "0.5600" in BERRY_ESSEEN_OPERATION.description
     assert BERRY_ESSEEN_OPERATION.request_type is BerryEsseenRequest
     assert BERRY_ESSEEN_OPERATION.result_type is BerryEsseenResult

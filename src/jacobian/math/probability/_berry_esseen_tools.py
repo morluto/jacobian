@@ -15,24 +15,24 @@ _FAIR_BIT = {
 }
 
 BERRY_ESSEEN_OPERATION = MathTool(
-    operation_id="probability.finite_distribution.berry_esseen_05600.compute",
-    title="Exact independent Berry--Esseen bound (C=0.5600)",
+    operation_id="probability.finite_distribution.berry_esseen_iid_05600.compute",
+    title="Exact i.i.d. Berry--Esseen bound (C=0.5600)",
     description=(
-        "For independent, finite rational summands with positive variances, "
-        "return exact total mean, variance, and third absolute central moment "
-        "and the outward-rounded bound C*rho/V^(3/2) using the published "
-        "general independent non-identical constant C=0.5600=14/25."
+        "For a finite rational law with positive variance and a positive i.i.d. "
+        "sample count n, return exact source mean, variance, and third absolute "
+        "central moment and the outward-rounded bound C*rho/(sigma^3*sqrt(n)) "
+        "using the published i.i.d. constant C=0.5600=14/25."
     ),
     request_type=BerryEsseenRequest,
     result_type=BerryEsseenResult,
     run=berry_esseen_bound,
     tags=("probability", "berry-esseen", "normal-approximation", "exact", "bounded"),
-    discovery_terms=("Berry Esseen", "independent summands", "normal approximation"),
+    discovery_terms=("Berry Esseen", "iid summands", "normal approximation"),
     examples=(
         OperationExample(
-            name="two_fair_bits",
-            description="Bound the normalized sum of two independent fair Bernoulli summands.",
-            input={"summands": [_FAIR_BIT, _FAIR_BIT]},
+            name="four_fair_bits",
+            description="Bound the normalized sum of four i.i.d. fair Bernoulli variables.",
+            input={"distribution": _FAIR_BIT, "sample_count": 4},
         ),
     ),
 )

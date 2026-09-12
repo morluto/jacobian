@@ -26,7 +26,7 @@ def test_subject_operation_groups_preserve_wire_contracts() -> None:
         ),
         (
             "probability.joint.mutual_information.compute",
-            "probability.finite_distribution.berry_esseen_05600.compute",
+            "probability.finite_distribution.berry_esseen_iid_05600.compute",
             "probability.compound_poisson.cumulant_prefix.compute",
             "probability.finite_distribution.event_probability.compute",
             "probability.finite_distribution.raw_moment.compute",

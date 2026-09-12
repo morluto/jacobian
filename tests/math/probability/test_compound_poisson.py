@@ -442,6 +442,25 @@ def test_power_of_two_denominators_are_stripped_without_linear_division() -> Non
     assert len(values) == 2
 
 
+def test_complementary_power_of_two_pairs_do_not_scan_exponents() -> None:
+    pair_count = 256
+    power = 2**1680
+    density = pair_count * power
+    atoms = tuple(
+        FiniteDistributionAtom(
+            value=_q(Fraction(2 * index + offset)),
+            probability=_q(Fraction(mass, density)),
+        )
+        for index in range(pair_count)
+        for offset, mass in ((0, 1), (1, power - 1))
+    )
+    jumps = FiniteRationalDistribution(atoms=atoms)
+    values = require_input_distribution(
+        jumps.atoms, require_canonical=True, max_digits=None
+    )
+    assert len(values) == 2 * pair_count
+
+
 def test_nested_power_denominators_are_admitted_by_lcm_budget() -> None:
     atoms = (
         *(

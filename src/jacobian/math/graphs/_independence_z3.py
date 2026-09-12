@@ -157,55 +157,65 @@ def _solve_independence_number_values_kernel(
         if lower_bound == upper_bound == len(incumbent) and (
             _closed_objective_value(objective) == len(incumbent)
         ):
-            if canonicalize_witness:
-                remaining_ms = int(
-                    (resource_budget.wall_seconds - (time.monotonic() - started)) * 1000
+            if not canonicalize_witness:
+                return IndependenceNumberResult._from_kernel(
+                    graph=graph,
+                    status="EXACT",
+                    optimum_value=len(incumbent),
+                    upper_bound=len(incumbent),
+                    incumbent_vertices=incumbent,
+                    termination_reason="OPTIMUM_ESTABLISHED",
+                    detail="bounded Z3 optimization seeded by a NetworkX feasible witness",
                 )
-                if remaining_ms > 0:
-                    lex_optimizer = z3.Optimize()
-                    lex_optimizer.set(priority="lex")
-                    lex_optimizer.set(
-                        timeout=remaining_timeout_ms(max(1, remaining_ms))
-                    )
-                    lex_selected = {
-                        vertex: z3.Bool(f"lex_{index}")
-                        for index, vertex in enumerate(vertices)
-                    }
-                    for left, right in graph.edges:
-                        lex_optimizer.add(
-                            z3.Or(
-                                z3.Not(lex_selected[left]),
-                                z3.Not(lex_selected[right]),
-                            )
-                        )
-                    lex_optimizer.add(
-                        z3.Sum(
-                            [z3.If(lex_selected[vertex], 1, 0) for vertex in vertices]
-                        )
-                        == len(incumbent)
-                    )
-                    for vertex in vertices:
-                        lex_optimizer.maximize(z3.If(lex_selected[vertex], 1, 0))
-                    if lex_optimizer.check() == z3.sat:
-                        lex_model = lex_optimizer.model()
-                        incumbent = tuple(
-                            sorted(
-                                vertex
-                                for vertex, variable in lex_selected.items()
-                                if z3.is_true(
-                                    lex_model.eval(variable, model_completion=True)
-                                )
-                            )
-                        )
-            return IndependenceNumberResult._from_kernel(
-                graph=graph,
-                status="EXACT",
-                optimum_value=len(incumbent),
-                upper_bound=len(incumbent),
-                incumbent_vertices=incumbent,
-                termination_reason="OPTIMUM_ESTABLISHED",
-                detail="bounded Z3 optimization seeded by a NetworkX feasible witness",
+            remaining_ms = int(
+                (resource_budget.wall_seconds - (time.monotonic() - started)) * 1000
             )
+            if remaining_ms > 0:
+                lex_optimizer = z3.Optimize()
+                lex_optimizer.set(priority="lex")
+                lex_optimizer.set(timeout=remaining_timeout_ms(max(1, remaining_ms)))
+                lex_selected = {
+                    vertex: z3.Bool(f"lex_{index}")
+                    for index, vertex in enumerate(vertices)
+                }
+                for left, right in graph.edges:
+                    lex_optimizer.add(
+                        z3.Or(
+                            z3.Not(lex_selected[left]),
+                            z3.Not(lex_selected[right]),
+                        )
+                    )
+                lex_optimizer.add(
+                    z3.Sum([z3.If(lex_selected[vertex], 1, 0) for vertex in vertices])
+                    == len(incumbent)
+                )
+                lex_objectives = [
+                    lex_optimizer.maximize(z3.If(lex_selected[vertex], 1, 0))
+                    for vertex in vertices
+                ]
+                if lex_optimizer.check() == z3.sat and all(
+                    _closed_objective_value(objective) is not None
+                    for objective in lex_objectives
+                ):
+                    lex_model = lex_optimizer.model()
+                    incumbent = tuple(
+                        sorted(
+                            vertex
+                            for vertex, variable in lex_selected.items()
+                            if z3.is_true(
+                                lex_model.eval(variable, model_completion=True)
+                            )
+                        )
+                    )
+                    return IndependenceNumberResult._from_kernel(
+                        graph=graph,
+                        status="EXACT",
+                        optimum_value=len(incumbent),
+                        upper_bound=len(incumbent),
+                        incumbent_vertices=incumbent,
+                        termination_reason="OPTIMUM_ESTABLISHED",
+                        detail="bounded Z3 optimization seeded by a NetworkX feasible witness",
+                    )
     elif status == z3.unsat:
         raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
     termination: Literal["WALL_TIME", "SOLVER_UNKNOWN"] = (

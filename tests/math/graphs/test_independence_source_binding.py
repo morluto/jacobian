@@ -343,6 +343,43 @@ def test_closed_cardinality_is_exact_without_membership_objectives(
     assert IndependenceNumberResult.model_validate(result.model_dump()) == result
 
 
+class _StubLexIncompleteOptimizer(_StubOptimizer):
+    """First Optimize closes cardinality; later instances leave lex open."""
+
+    _created = 0
+
+    def __init__(self) -> None:
+        type(self)._created += 1
+        self._phase = type(self)._created
+
+    def maximize(self, expression: object) -> _StubObjective:
+        if self._phase == 1:
+            return _StubClosedObjective()
+        return _StubObjective()
+
+    def check(self) -> int:
+        return _StubZ3.sat
+
+
+class _StubLexIncompleteZ3(_StubZ3):
+    Optimize = _StubLexIncompleteOptimizer
+
+
+def test_canonical_witness_requires_closed_lex_objectives(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setitem(sys.modules, "z3", _StubLexIncompleteZ3())
+    _StubLexIncompleteOptimizer._created = 0
+    result = z3_backend._solve_independence_number_values_kernel(
+        _path_graph(),
+        IndependenceNumberBudget(),
+        canonicalize_witness=True,
+    )
+    assert result.status == "UNKNOWN"
+    assert result.optimum_value is None
+    assert result.upper_bound == result.order == 3
+
+
 def test_sat_with_open_objective_bounds_reports_order_as_upper_bound(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

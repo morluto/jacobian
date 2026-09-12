@@ -16,6 +16,7 @@ from jacobian.math.polynomials._elementary_kernel import (
 from jacobian.math.polynomials._elementary_symmetric import (
     elementary_symmetric_family,
 )
+from jacobian.math.polynomials._laurent import rational_laurent_multiply
 from jacobian.math.polynomials.operations import (
     derivative,
     discriminant,
@@ -45,6 +46,10 @@ from jacobian.math.polynomials.operations import (
 from jacobian.math.polynomials.rational_functions.operations import (
     verify_hermite_reduction,
 )
+from jacobian.math.polynomials.values import (
+    RationalLaurentPolynomial,
+    RationalLaurentPolynomialTerm,
+)
 
 
 def __getattr__(name: str) -> object:
@@ -63,6 +68,8 @@ def __getattr__(name: str) -> object:
 
 
 __all__ = [
+    "RationalLaurentPolynomial",
+    "RationalLaurentPolynomialTerm",
     "derivative",
     "discriminant",
     "divide",
@@ -91,6 +98,7 @@ __all__ = [
     "polynomial_groebner_basis",
     "polynomial_resultant",
     "polynomial_square_free_decomposition",
+    "rational_laurent_multiply",
     "rational_partial_fraction_decomposition",
     "rational_polynomial_derivative",
     "rational_polynomial_division",

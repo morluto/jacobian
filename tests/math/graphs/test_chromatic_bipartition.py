@@ -349,7 +349,7 @@ def _completed(
     )
 
 
-def test_worker_timeout_is_a_source_bound_unknown_result(
+def test_worker_timeout_is_an_execution_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     source = graph(("a", "b"), (("a", "b"),))
@@ -447,26 +447,45 @@ def test_split_below_submitted_thresholds_cannot_bind() -> None:
         )
 
 
-def test_unknown_result_is_source_bound_and_cannot_claim_a_witness() -> None:
+def test_unknown_status_cannot_bind_as_an_exact_result() -> None:
     source = graph(("a", "b"), (("a", "b"),))
-    result = ChromaticBipartitionResult(
-        graph=source,
-        s=2,
-        t=2,
-        status="UNKNOWN",
-        checked_partitions=0,
-    )
-    assert result.model_validate_json(result.model_dump_json()) == result
     with pytest.raises(ValidationError):
         ChromaticBipartitionResult(
             graph=source,
-            s=1,
-            t=1,
+            s=2,
+            t=2,
             status="UNKNOWN",
-            side_a=("a",),
-            side_b=("b",),
             checked_partitions=0,
         )
+
+
+def test_unknown_worker_frame_is_an_execution_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = graph(("a", "b"), (("a", "b"),))
+    frame = {
+        "graph": source.model_dump(mode="json"),
+        "s": 1,
+        "t": 1,
+        "status": "UNKNOWN",
+        "side_a": None,
+        "side_b": None,
+        "chromatic_a": None,
+        "chromatic_b": None,
+        "checked_partitions": 0,
+    }
+    monkeypatch.setattr(
+        process_owner,
+        "run_bounded_process",
+        lambda *_args, **_kwargs: _completed(
+            stdout=encode_worker_result_frame(frame)
+        ),
+    )
+    with pytest.raises(OperationBackendError) as caught:
+        operation.find_chromatic_bipartition(
+            ChromaticBipartitionRequest(graph=source, s=1, t=1)
+        )
+    assert caught.value.reason == BackendFailureReason.MALFORMED_RESPONSE
 
 
 def test_split_sides_must_follow_the_source_vertex_axis() -> None:
@@ -497,11 +516,26 @@ def test_operation_rejects_a_result_axis_above_its_admitted_envelope() -> None:
 
 def test_edgeless_graph_above_the_witness_cap_is_exact_no_split() -> None:
     vertices = tuple(f"v{i}" for i in range(257))
-    result = find_chromatic_bipartition(
-        ChromaticBipartitionRequest(graph=graph(vertices, ()), s=2, t=1)
-    )
+    request = ChromaticBipartitionRequest(graph=graph(vertices, ()), s=2, t=1)
+    limit = process_owner._chromatic_bipartition_worker_stdout_limit(request)
+    result = find_chromatic_bipartition(request)
     assert result.status == "NO_SPLIT"
     assert result.side_a is None
+    assert result.checked_partitions == 0
+    dumped = json.dumps(
+        result.model_dump(mode="json"),
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    assert len(dumped) <= limit
+
+
+def test_one_vertex_long_label_is_exact_no_split() -> None:
+    source = graph(("x" * 400_000,), ())
+    result = find_chromatic_bipartition(
+        ChromaticBipartitionRequest(graph=source, s=1, t=1)
+    )
+    assert result.status == "NO_SPLIT"
     assert result.checked_partitions == 0
 
 

@@ -6,6 +6,7 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.number_theory.sequences.core._models import (
     AutocorrelationResult,
     FiniteIntegerSequence,
+    FiniteRationalSequence,
     IntegerSequenceBooleanResult,
     IntegerSequenceFrequenciesResult,
     IntegerSequenceIndexListResult,
@@ -59,9 +60,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         description=(
             "Return first monotonicity violations, every valid weak-unimodal peak "
             "position, explicit signed log-concavity comparisons, nonnegativity, "
-            "and internal-zero status for a finite integer sequence."
+            "and internal-zero status for a finite exact rational sequence."
         ),
-        request_type=FiniteIntegerSequence,
+        request_type=FiniteRationalSequence,
         result_type=SequenceOrderShapeResult,
         run=sequence_order_shape,
         tags=("sequence", "order", "unimodal", "log-concavity", "exact"),
@@ -69,7 +70,14 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="flat_peak",
                 description="Profile the weak-unimodal sequence 1, 3, 3, 2.",
-                input={"values": ["1", "3", "3", "2"]},
+                input={
+                    "values": [
+                        {"num": "1", "den": "1"},
+                        {"num": "3", "den": "1"},
+                        {"num": "3", "den": "1"},
+                        {"num": "2", "den": "1"},
+                    ]
+                },
             ),
         ),
     ),

@@ -2,9 +2,9 @@
 
 All operations in this module act on an undirected simple graph supplied as
 a vertex count and a tuple of ``(source, target)`` integer edges.  Vertices
-are labelled ``0..vertex_count-1``; the vertex axis holds at most 64
-vertices, so a simple graph admits up to ``C(64, 2) = 2016`` edges, matching
-the shared multigraph carrier bounds.
+are labelled ``0..vertex_count-1``. Most decomposition operations use a
+64-vertex execution envelope; block-cut construction uses the full indexed
+graph carrier envelope because its incidence construction is output-linear.
 """
 
 from __future__ import annotations

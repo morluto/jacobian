@@ -28,7 +28,10 @@ For mathematical changes, establish these four pieces of evidence before merging
    kernel → result construction → JSON → consumer. Identify the owner of each
    invariant and limit. Canonical values retain the ring, dimensions, and axes;
    operation budgets separately bound computation. Check both native and public
-   invocation paths when they differ.
+   invocation paths when they differ. Treat every native function that backs a
+   public operation as an admitted boundary: Python annotations do not validate
+   direct runtime arguments, so equivalent native and catalog calls must share
+   owner admission and structured domain or resource errors.
 3. **Check the mathematics independently.** Use a defining identity, a bounded
    reference computation, or inputs with independently known answers. Include a
    case that distinguishes plausible wrong algorithms, such as negative or
@@ -38,13 +41,22 @@ For mathematical changes, establish these four pieces of evidence before merging
    accepted result, decode it, and pass it unchanged to its real consumer when
    one exists. Include the relevant empty or degenerate case. Check schema and
    decoder agreement for changed wire fields, and preserve typed resource
-   refusal through every wrapper and claim checker.
+   refusal through every wrapper and claim checker. For source-bound or
+   canonical claims, mutate the retained source and derived fields independently
+   while preserving valid shape; parsing may succeed, but the consumer or
+   explicit verifier must reject the false relation.
 
 For an admission or scale defect, scale first: improve the estimate,
 representation, reduction, algorithm, or backend so the motivating valid
 request succeeds. Raising a cap is appropriate when the existing implementation
 already supports the larger workload and its work, intermediate growth, and
 output remain bounded. Otherwise improve the implementation before raising it.
+Bound canonicalization, kernel or backend work, owner-side postprocessing,
+result construction, and serialization separately; a fast backend does not
+bound a slower assembly phase. Compare an operation-specific cap with the full
+canonical carrier, and check that generated schema bounds equal runtime
+admission before widening or retaining the cap.
+
 Do not turn a cheaply executable request into a permanent rejection regression.
 Follow the
 [execution-envelope review](docs/reference/public-operation-admission.md#execution-envelope-review)

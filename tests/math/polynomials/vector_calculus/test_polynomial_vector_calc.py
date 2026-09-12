@@ -78,6 +78,28 @@ def _polynomial(
     )
 
 
+def _termwise_gradient(
+    polynomial: RationalPolynomial,
+) -> tuple[RationalPolynomial, ...]:
+    """Compute the defining sparse partials without invoking the kernel."""
+
+    components: list[RationalPolynomial] = []
+    for axis in range(len(polynomial.variables)):
+        terms: dict[tuple[int, ...], Fraction] = {}
+        for term in polynomial.polynomial.terms:
+            exponent = term.exponents[axis]
+            if exponent == 0:
+                continue
+            derived_exponents = list(term.exponents)
+            derived_exponents[axis] -= 1
+            key = tuple(derived_exponents)
+            terms[key] = terms.get(key, Fraction()) + (
+                term.coefficient.as_fraction() * exponent
+            )
+        components.append(_polynomial(polynomial.variables, terms))
+    return tuple(components)
+
+
 def test_catalog_contains_only_audited_operations() -> None:
     assert {tool.operation_id for tool in TOOLS} == {
         "polynomial_field.scalar.gradient.compute",
@@ -114,6 +136,61 @@ def test_gradient_returns_composable_polynomials() -> None:
         _polynomial(("x", "y"), {(1, 0): 2}),
         _polynomial(("x", "y"), {(0, 1): 2}),
     )
+
+
+def test_gradient_admits_sparse_inactive_axes_beyond_dense_proxy() -> None:
+    """A vector result retains only the axes on which each monomial survives."""
+
+    variables = ("x", "a", "b", "c", "d", "e", "f", "g")
+    source = _polynomial(
+        variables,
+        {
+            (degree, 0, 0, 0, 0, 0, 0, 0): 10**127 if degree == 34 else 1
+            for degree in range(34, 1, -1)
+        },
+    )
+    expected_components = _termwise_gradient(source)
+
+    native = gradient(source)
+    assert native.components == expected_components
+    assert sum(len(component.polynomial.terms) for component in native.components) == 33
+    assert all(not component.polynomial.terms for component in native.components[1:])
+
+    public = TOOLS[0].run(ScalarFieldRequest(polynomial=source))
+    assert (
+        VectorResult.model_validate_json(json.dumps(public.model_dump(mode="json")))
+        == native
+    )
+    assert verify_gradient(VectorResult.model_validate_json(native.model_dump_json()))
+
+
+def test_gradient_termwise_oracle_covers_mixed_axis_support() -> None:
+    source = _polynomial(
+        ("x", "y", "z"),
+        {
+            (2, 0, 1): 3,
+            (1, 1, 0): Fraction(5, 7),
+            (0, 4, 0): -2,
+        },
+    )
+
+    assert gradient(source).components == _termwise_gradient(source)
+
+
+def test_scalar_derivative_operations_keep_their_single_polynomial_budget() -> None:
+    """The gradient's sparse-vector estimate must not relax scalar assembly."""
+
+    variables = ("x", "a", "b", "c", "d", "e", "f", "g")
+    source = _polynomial(
+        variables,
+        {(degree, 0, 0, 0, 0, 0, 0, 0): 1 for degree in range(34, 1, -1)},
+    )
+    direction = tuple(CanonicalRational(num=1, den=1) for _ in variables)
+
+    with pytest.raises(OperationDomainValidationError, match="result-term budget"):
+        laplacian(source)
+    with pytest.raises(OperationDomainValidationError, match="result-term budget"):
+        directional_derivative(source, direction)
 
 
 def test_serialized_vector_calculus_claims_verify_retained_sources() -> None:

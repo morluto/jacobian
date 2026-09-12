@@ -8,8 +8,10 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.logic.languages.words.values import (
     MAX_MORPHISM_OUTPUT_LENGTH,
+    MAX_WORD_FAMILY_CELLS,
     FiniteWord,
     ProlongableSubstitution,
     Substitution,
@@ -21,6 +23,27 @@ from jacobian.math.matrices.values import IntegerMatrix
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"word.{reason}", message)
+
+
+def require_word_family_allocation(
+    word: FiniteWord, family_name: Literal["prefixes", "suffixes"]
+) -> None:
+    """Admit the complete source-bound family before materializing its cells."""
+
+    word_length = len(word.letters)
+    family_count = word_length + 1
+    family_cells = (
+        family_count * len(word.alphabet) + word_length * (word_length + 1) // 2
+    )
+    if family_cells > MAX_WORD_FAMILY_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("word", family_name),
+            code="word.family_cells",
+            message=(
+                f"{family_name} materialization requires {family_cells} cells, "
+                f"exceeding the {MAX_WORD_FAMILY_CELLS}-cell allocation bound"
+            ),
+        )
 
 
 class FactorsLengthRequest(StrictModel):

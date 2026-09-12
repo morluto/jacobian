@@ -36,6 +36,22 @@ def rational_laurent_multiply(
         )
     if not left.terms or not right.terms:
         return RationalLaurentPolynomial(variables=left.variables, terms=())
+    # Signed extrema bound every convolution exponent without excluding
+    # products whose opposite-sign source exponents cancel.
+    if any(
+        min(term.exponents[index] for term in left.terms)
+        + min(term.exponents[index] for term in right.terms)
+        < -MAX_POLYNOMIAL_EXPONENT
+        or max(term.exponents[index] for term in left.terms)
+        + max(term.exponents[index] for term in right.terms)
+        > MAX_POLYNOMIAL_EXPONENT
+        for index in range(len(left.variables))
+    ):
+        raise OperationResourceAdmissionError(
+            location=("right", "terms"),
+            code="polynomial.laurent.exponent_growth",
+            message="product exponent may exceed the Laurent representation bound",
+        )
     work = len(left.terms) * len(right.terms)
     if work > MAX_POLYNOMIAL_TERMS:
         raise OperationResourceAdmissionError(
@@ -65,12 +81,6 @@ def rational_laurent_multiply(
                 a + b
                 for a, b in zip(left_term.exponents, right_term.exponents, strict=True)
             )
-            if any(abs(exponent) > MAX_POLYNOMIAL_EXPONENT for exponent in exponents):
-                raise OperationResourceAdmissionError(
-                    location=("right", "terms"),
-                    code="polynomial.laurent.exponent_growth",
-                    message="product exponent exceeds the Laurent representation bound",
-                )
             coefficients[exponents] = coefficients.get(exponents, Fraction()) + (
                 left_term.coefficient.as_fraction()
                 * right_term.coefficient.as_fraction()

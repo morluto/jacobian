@@ -19,7 +19,7 @@ from jacobian._exact import (
     CanonicalRational,
     ExactInteger,
 )
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.number_theory.sequences.core.values import (
     MAX_SEQUENCE_LENGTH,
@@ -153,6 +153,7 @@ class FiniteRationalSequence(FiniteSequence):
     @model_validator(mode="before")
     @classmethod
     def accept_integer_wire_entries(cls, data: object, info: ValidationInfo) -> object:
+        data = canonicalize_json_containers(data)
         if not isinstance(data, dict) or not isinstance(
             data.get("values"), (list, tuple)
         ):
@@ -283,7 +284,7 @@ def _finite_sequence_json_schema(
     core_schema_obj: core_schema.CoreSchema,
     handler: GetJsonSchemaHandler,
 ) -> dict[str, Any]:
-    schema = dict(handler(core_schema_obj))
+    schema: dict[str, Any] = dict(handler(core_schema_obj))
     if cls is FiniteSequence and "type" not in schema:
         schema["type"] = "object"
     return schema

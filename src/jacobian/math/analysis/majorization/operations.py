@@ -149,6 +149,12 @@ def weak_majorization_check(
     (using ascending sort)
     """
     _require_same_dimension(x, y)
+    if direction not in ("sub", "super"):
+        raise OperationDomainValidationError(
+            location=("direction",),
+            code="majorization.direction",
+            message="direction must be 'sub' or 'super'",
+        )
     x_vals = x.as_fractions()
     y_vals = y.as_fractions()
     n = len(x_vals)

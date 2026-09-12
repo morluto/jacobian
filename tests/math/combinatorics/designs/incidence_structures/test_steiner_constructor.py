@@ -187,7 +187,30 @@ def test_package_exports_the_native_constructor() -> None:
 
 def test_infeasible_continuation_retains_the_source_shard() -> None:
     """NO_COVER on a continuation is shard-local, not global nonexistence."""
-    shard = SteinerTripleSystemShard(order=13, fixed_triples=((0, 1, 2),))
+    shard = SteinerTripleSystemShard(
+        order=13,
+        fixed_triples=(
+            (0, 1, 2),
+            (0, 3, 4),
+            (0, 5, 6),
+            (0, 7, 8),
+            (0, 9, 10),
+            (0, 11, 12),
+            (1, 3, 5),
+            (1, 4, 7),
+            (1, 6, 9),
+            (1, 8, 11),
+            (1, 10, 12),
+            (2, 3, 8),
+            (3, 7, 9),
+            (3, 6, 12),
+            (3, 10, 11),
+            (6, 8, 10),
+            (4, 6, 11),
+            (2, 6, 7),
+            (5, 7, 10),
+        ),
+    )
     result = construct_steiner_triple_system(13, 100_000, shard)
     assert result.status == "NOT_FOUND"
     assert result.design is None

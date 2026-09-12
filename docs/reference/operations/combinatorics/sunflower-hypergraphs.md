@@ -19,6 +19,9 @@ one edge with the deterministic ID `sunflower_i_j_...`. The result also carries
 the row count, the exact `sunflower_free` status, and the canonical
 `FiniteHypergraph` projection. Source order is identity, so permuting source
 members permutes vertex labels and rows rather than changing set membership.
+For `r=2`, every distinct source pair qualifies with its pairwise intersection;
+when `r` exceeds the family size, the complete result is empty and
+`sunflower_free` is true.
 
 The operation is complete for every request admitted by its semantic envelope:
 the candidate count \(\binom m r\), pairwise-intersection work, source

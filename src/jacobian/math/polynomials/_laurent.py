@@ -100,6 +100,25 @@ def _operand_coefficient_digits(
     return height, shared_denominator
 
 
+def _scaled_operand_digits(
+    terms: tuple[RationalLaurentPolynomialTerm, ...], shared_lcm: int
+) -> int:
+    height = 1
+    lcm_digits = _integer_digits(shared_lcm)
+    for index, term in enumerate(terms):
+        if index % 128 == 0:
+            request_checkpoint("during Laurent coefficient-height admission")
+        numerator = abs(term.coefficient.num) or 1
+        digits = (
+            _integer_digits(numerator)
+            + lcm_digits
+            - _integer_digits(term.coefficient.den)
+        )
+        if digits > height:
+            height = digits
+    return height
+
+
 def _maximum_coefficient_digits(
     left: RationalLaurentPolynomial, right: RationalLaurentPolynomial
 ) -> int:
@@ -110,10 +129,15 @@ def _maximum_coefficient_digits(
     right_digits, right_lcm = _operand_coefficient_digits(right.terms)
     addition_digits = len(str(collisions)) if collisions > 1 else 0
     product_digits = left_digits + right_digits
-    if left_lcm is not None and right_lcm is not None:
-        denominator_digits = _integer_digits(left_lcm) + _integer_digits(right_lcm)
-        return max(product_digits, denominator_digits) + addition_digits
-    return collisions * product_digits + addition_digits
+    if left_lcm is None or right_lcm is None:
+        return collisions * product_digits + addition_digits
+    collected_numerator = (
+        _scaled_operand_digits(left.terms, left_lcm)
+        + _scaled_operand_digits(right.terms, right_lcm)
+        + addition_digits
+    )
+    denominator_digits = _integer_digits(left_lcm) + _integer_digits(right_lcm)
+    return max(collected_numerator, denominator_digits)
 
 
 def _result_from_coefficients(

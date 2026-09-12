@@ -163,6 +163,34 @@ def test_related_denominator_two_term_product_stays_inside_the_output_envelope()
     )
 
 
+def test_rescaled_collision_numerator_is_rejected_before_convolution() -> None:
+    scale = 10**9999
+    denominator = scale + 1
+    left = RationalLaurentPolynomial(
+        variables=("x",),
+        terms=(
+            term(scale, 1),
+            RationalLaurentPolynomialTerm(
+                coefficient=CanonicalRational(num=1, den=denominator),
+                exponents=(0,),
+            ),
+        ),
+    )
+    right = RationalLaurentPolynomial(
+        variables=("x",),
+        terms=(
+            RationalLaurentPolynomialTerm(
+                coefficient=CanonicalRational(num=1, den=denominator),
+                exponents=(1,),
+            ),
+            term(scale, 0),
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
+        rational_laurent_multiply(left, right)
+    assert exc_info.value.errors()[0]["type"] == "polynomial.laurent.coefficient_growth"
+
+
 def test_forged_operands_are_rejected_with_typed_domain_errors() -> None:
     forged = RationalLaurentPolynomial.model_construct(
         domain="QQ",

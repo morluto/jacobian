@@ -153,31 +153,33 @@ def _require_implication_input_types(
             )
 
 
-def _reject_duplicate_premises(premises: tuple[MagmaEquation, ...]) -> None:
-    for premise_index, premise in enumerate(premises):
-        if premise in premises[:premise_index]:
-            _reject(
-                location=("premises", premise_index),
-                code="duplicate_premise",
-                message="premises must be unique in canonical order",
-            )
+def _deduplicate_premises(
+    premises: tuple[MagmaEquation, ...],
+) -> tuple[MagmaEquation, ...]:
+    """Retain the first occurrence of each premise equation."""
+
+    unique: list[MagmaEquation] = []
+    for premise in premises:
+        if premise not in unique:
+            unique.append(premise)
+    return tuple(unique)
 
 
 def _admit_implication_countermodel(
     algebra: FiniteAlgebra,
     premises: tuple[MagmaEquation, ...],
     target: MagmaEquation,
-) -> tuple[int, ...]:
+) -> tuple[tuple[MagmaEquation, ...], tuple[int, ...]]:
     """Admit one complete finite-magma implication check before evaluation."""
 
     _require_implication_input_types(algebra, premises, target)
+    premises = _deduplicate_premises(premises)
     if len(premises) > 16:
         _reject(
             location=("premises",),
             code="premise_count",
             message="at most sixteen premises are admitted",
         )
-    _reject_duplicate_premises(premises)
     if len(algebra.operations) != 1 or algebra.operations[0].arity != 2:
         _reject(
             location=("algebra",),
@@ -197,26 +199,11 @@ def _admit_implication_countermodel(
                     code="term_signature",
                     message=str(exc),
                 )
-        variable_ids = tuple(
-            sorted(
-                {
-                    node.variable_id
-                    for term in (equation.left, equation.right)
-                    for node in term.nodes
-                    if isinstance(node, VariableTerm)
-                }
-            )
+        # FlatTerm.variable_count retains the declared positional axis even
+        # when an equation uses only a sparse position, such as variable 2.
+        variable_count = max(
+            equation.left.variable_count, equation.right.variable_count
         )
-        if variable_ids != tuple(range(len(variable_ids))):
-            _reject(
-                location=("equations", equation_index),
-                code="sparse_variable_axis",
-                message=(
-                    "equation variable IDs must form the dense canonical axis "
-                    "0..variable_count-1"
-                ),
-            )
-        variable_count = len(variable_ids)
         if variable_count > 8:
             _reject(
                 location=("equations", equation_index),
@@ -236,7 +223,7 @@ def _admit_implication_countermodel(
                 "exceeds the bound"
             ),
         )
-    return tuple(variable_counts)
+    return premises, tuple(variable_counts)
 
 
 def _admit_subalgebra(algebra: FiniteAlgebra, generators: tuple[int, ...]) -> None:
@@ -398,7 +385,9 @@ def implication_countermodel_check(
     hold universally and the target has a counterassignment.
     """
 
-    variable_counts = _admit_implication_countermodel(algebra, premises, target)
+    premises, variable_counts = _admit_implication_countermodel(
+        algebra, premises, target
+    )
     profiles = tuple(
         _equation_profile_unchecked(
             algebra,

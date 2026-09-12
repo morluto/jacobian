@@ -335,30 +335,36 @@ class TestMagmaImplicationCountermodel:
                 )
             )
 
-    def test_sparse_variable_axis_is_rejected(self) -> None:
+    def test_sparse_variable_axis_is_preserved(self) -> None:
         term = _variable_term(7)
-        with pytest.raises(
-            OperationDomainValidationError, match="dense canonical axis"
-        ):
-            compute_implication_countermodel_check(
-                ImplicationCountermodelCheckRequest(
-                    algebra=_cyclic_addition_algebra(2),
-                    premises=(),
-                    target=MagmaEquation(left=term, right=term),
-                )
+        result = compute_implication_countermodel_check(
+            ImplicationCountermodelCheckRequest(
+                algebra=_cyclic_addition_algebra(2),
+                premises=(),
+                target=MagmaEquation(left=term, right=term),
             )
+        )
+        assert result.target.variable_count == 8
+        assert result.target.satisfying_count == 2**8
 
-    def test_duplicate_premises_are_rejected_before_evaluation(self) -> None:
+    def test_repeated_premises_match_unique_premises(self) -> None:
         magma = _cyclic_addition_algebra(2)
         equation = MagmaEquation(left=_variable_term(0), right=_variable_term(0))
-        with pytest.raises(OperationDomainValidationError, match="unique"):
-            compute_implication_countermodel_check(
-                ImplicationCountermodelCheckRequest(
-                    algebra=magma,
-                    premises=(equation, equation),
-                    target=equation,
-                )
+        unique = compute_implication_countermodel_check(
+            ImplicationCountermodelCheckRequest(
+                algebra=magma,
+                premises=(equation,),
+                target=equation,
             )
+        )
+        repeated = compute_implication_countermodel_check(
+            ImplicationCountermodelCheckRequest(
+                algebra=magma,
+                premises=(equation, equation),
+                target=equation,
+            )
+        )
+        assert repeated == unique
 
     def test_native_implication_check_rejects_malformed_arguments_typed(self) -> None:
         magma = _cyclic_addition_algebra(2)
@@ -397,7 +403,7 @@ class TestMagmaImplicationCountermodel:
         with pytest.raises(ValidationError, match="retained magma"):
             ImplicationCountermodelCheckResult.model_validate(payload)
 
-    def test_result_rejects_counterassignment_off_dense_axis(self) -> None:
+    def test_result_rejects_counterassignment_off_declared_axis(self) -> None:
         magma = _cyclic_addition_algebra(2)
         result = compute_implication_countermodel_check(
             ImplicationCountermodelCheckRequest(
@@ -408,7 +414,7 @@ class TestMagmaImplicationCountermodel:
         )
         payload = result.model_dump(mode="json")
         payload["target"]["first_counterassignment"]["assignment"] = [0]
-        with pytest.raises(ValidationError, match="dense variable axis"):
+        with pytest.raises(ValidationError, match="declared variable axis"):
             ImplicationCountermodelCheckResult.model_validate(payload)
 
     def test_result_rejects_impossible_profile_counts_without_replay(self) -> None:
@@ -951,7 +957,6 @@ def test_native_evaluation_binds_assignment_keys_to_the_term_variable_axis() -> 
 
 
 def test_native_implication_check_uses_mathematical_arguments() -> None:
-    from jacobian.catalog.models import OperationDomainValidationError
     from jacobian.math.universal_algebra import implication_countermodel_check
 
     magma = _cyclic_addition_algebra(2)
@@ -961,5 +966,17 @@ def test_native_implication_check_uses_mathematical_arguments() -> None:
         ImplicationCountermodelCheckRequest(algebra=magma, premises=(), target=target)
     )
     assert result.is_countermodel
-    with pytest.raises(OperationDomainValidationError, match="sixteen premises"):
-        implication_countermodel_check(magma, (target,) * 17, target)
+    repeated = implication_countermodel_check(magma, (target,) * 17, target)
+    unique = implication_countermodel_check(magma, (target,), target)
+    assert repeated == unique
+
+
+def test_native_implication_check_preserves_sparse_variable_axis() -> None:
+    from jacobian.math.universal_algebra import implication_countermodel_check
+
+    magma = _cyclic_addition_algebra(2)
+    target = MagmaEquation(left=_variable_term(2), right=_variable_term(2))
+    result = implication_countermodel_check(magma, (), target)
+
+    assert result.target.variable_count == 3
+    assert result.target.satisfying_count == 2**3

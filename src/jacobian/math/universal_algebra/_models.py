@@ -17,7 +17,6 @@ from jacobian.math.universal_algebra.values import (
     FiniteAlgebraHomomorphism,
     FlatTerm,
     UniversalAlgebraAdmissionError,
-    VariableTerm,
     require_term_for_algebra,
 )
 
@@ -207,25 +206,13 @@ class ImplicationCountermodelCheckResult(StrictModel):
                         "countermodel_result_term_signature",
                         f"profile {profile_index} {term_name} term is not bound to the retained magma: {exc}",
                     ) from exc
-            variable_ids = tuple(
-                sorted(
-                    {
-                        node.variable_id
-                        for term in (profile.left, profile.right)
-                        for node in term.nodes
-                        if isinstance(node, VariableTerm)
-                    }
-                )
+            declared_variable_count = max(
+                profile.left.variable_count, profile.right.variable_count
             )
-            if variable_ids != tuple(range(len(variable_ids))):
-                raise _validation_error(
-                    "countermodel_result_sparse_variable_axis",
-                    f"profile {profile_index} terms must use the dense variable axis 0..variable_count-1",
-                )
-            if profile.variable_count != len(variable_ids):
+            if profile.variable_count != declared_variable_count:
                 raise _validation_error(
                     "countermodel_result_variable_count",
-                    f"profile {profile_index} variable_count must match its dense variable axis",
+                    f"profile {profile_index} variable_count must match the declared variable axis",
                 )
             _require_countermodel_profile_intrinsics(
                 profile, len(self.algebra.carrier), profile_index
@@ -235,7 +222,7 @@ class ImplicationCountermodelCheckResult(StrictModel):
                 if len(counterexample.assignment) != profile.variable_count:
                     raise _validation_error(
                         "countermodel_result_assignment_axis",
-                        f"profile {profile_index} counterassignment must cover its dense variable axis",
+                        f"profile {profile_index} counterassignment must cover its declared variable axis",
                     )
                 if any(
                     value < 0 or value >= len(self.algebra.carrier)

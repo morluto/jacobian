@@ -192,6 +192,8 @@ def _admit_enumeration(
     # enumeration, regardless of the caller's cardinality slice.
     if not edges or any(not edge for edge in edges):
         return maximum, edges
+    if len(edges) == 1:
+        return maximum, edges
 
     candidate_count = sum(comb(len(vertices), size) for size in range(1, maximum + 1))
     weighted_candidate_count = sum(
@@ -275,6 +277,8 @@ def enumerate_minimal_transversals(
         results: tuple[tuple[str, ...], ...] = ((),)
     elif any(not edge for edge in edges) or maximum == 0:
         results = ()
+    elif len(edges) == 1:
+        results = tuple((vertex,) for vertex in vertices if vertex in edges[0])
     else:
         materialized: list[tuple[str, ...]] = []
         for size in range(1, maximum + 1):
@@ -300,9 +304,11 @@ def enumerate_minimal_transversals(
         MinimalTransversalCardinalityCount(cardinality=cardinality, count=count)
         for cardinality, count in enumerate(counts)
     )
-    return MinimalTransversalEnumerationResult(
+    result = MinimalTransversalEnumerationResult(
         hypergraph=request.hypergraph,
         maximum_cardinality=request.maximum_cardinality,
         transversals=results,
         cardinality_profile=profile,
     )
+    request_checkpoint("after minimal transversal result validation")
+    return result

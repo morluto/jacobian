@@ -139,6 +139,27 @@ def test_antichain_row_bound_allows_candidate_slice_beyond_row_bound() -> None:
     assert result.transversals == tuple((vertex,) for vertex in source.vertices)
 
 
+def test_single_edge_slice_uses_closed_form_above_global_row_bound() -> None:
+    vertices = tuple(f"v{index:02d}" for index in range(20))
+    source = FiniteHypergraph(vertices=vertices, edges=(("edge", vertices),))
+    request = MinimalTransversalEnumerationRequest(
+        hypergraph=source, maximum_cardinality=8
+    )
+    with patch.object(
+        enumeration,
+        "combinations",
+        side_effect=AssertionError("single-edge slice must use its closed form"),
+    ):
+        result = enumerate_minimal_transversals(request)
+
+    assert result.transversals == tuple((vertex,) for vertex in vertices)
+    assert [(row.cardinality, row.count) for row in result.cardinality_profile] == [
+        (0, 0),
+        (1, 20),
+        *[(cardinality, 0) for cardinality in range(2, 9)],
+    ]
+
+
 def test_direct_native_guard_rejects_model_constructed_request() -> None:
     source = FiniteHypergraph(vertices=("a",), edges=())
     malformed = MinimalTransversalEnumerationRequest.model_construct(
@@ -159,13 +180,45 @@ def test_native_operation_honors_request_deadline_before_search() -> None:
             enumerate_minimal_transversals(request)
 
 
+def test_native_operation_checks_deadline_after_result_validation() -> None:
+    source = FiniteHypergraph(vertices=("a",), edges=(("edge", ("a",)),))
+    request = MinimalTransversalEnumerationRequest(
+        hypergraph=source, maximum_cardinality=1
+    )
+    original_result = enumeration.MinimalTransversalEnumerationResult
+    clock = [0.0]
+
+    def expire_after_validation(*args: Any, **kwargs: Any) -> Any:
+        result = original_result(*args, **kwargs)
+        clock[0] = 1.0
+        return result
+
+    with (
+        patch.object(time, "monotonic", side_effect=lambda: clock[0]),
+        request_execution(started_at=0.0, outer_deadline=0.5),
+        patch.object(
+            enumeration,
+            "MinimalTransversalEnumerationResult",
+            side_effect=expire_after_validation,
+        ),
+        pytest.raises(
+            OperationExecutionTimeoutError,
+            match="after minimal transversal result validation",
+        ),
+    ):
+        enumerate_minimal_transversals(request)
+
+
 def test_candidate_slice_is_admitted_before_materialization() -> None:
     # A dense candidate slice can exceed the result carrier even when the
     # source hypergraph itself is small.  This is rejected before combinations
     # are generated.
     source = FiniteHypergraph(
         vertices=tuple(f"v{index:02d}" for index in range(20)),
-        edges=(("edge", tuple(f"v{index:02d}" for index in range(20))),),
+        edges=(
+            ("edge0", tuple(f"v{index:02d}" for index in range(20))),
+            ("edge1", tuple(f"v{index:02d}" for index in range(20))),
+        ),
     )
     with pytest.raises(OperationResourceAdmissionError, match="result rows"):
         enumerate_minimal_transversals(
@@ -187,6 +240,37 @@ def test_candidate_edge_and_minimality_work_is_admitted_before_search() -> None:
         enumerate_minimal_transversals(
             MinimalTransversalEnumerationRequest(
                 hypergraph=source, maximum_cardinality=3
+            )
+        )
+
+
+def test_minimality_work_bound_is_enforced_after_candidate_work_fits() -> None:
+    vertex_count = 20
+    maximum_cardinality = 6
+    edge_count = 500
+    vertices = tuple(f"v{index:02d}" for index in range(vertex_count))
+    source = FiniteHypergraph(
+        vertices=vertices,
+        edges=tuple((f"edge{index:03d}", vertices) for index in range(edge_count)),
+    )
+    candidate_count = sum(
+        comb(vertex_count, size) for size in range(1, maximum_cardinality + 1)
+    )
+    weighted_candidate_count = sum(
+        size * comb(vertex_count, size) for size in range(1, maximum_cardinality + 1)
+    )
+    candidate_edge_work = candidate_count * edge_count
+    total_work = (candidate_count + weighted_candidate_count) * edge_count
+    assert candidate_edge_work < MAX_TRANSVERSAL_ENUMERATION_WORK
+    assert total_work > MAX_TRANSVERSAL_ENUMERATION_WORK
+
+    with pytest.raises(
+        OperationResourceAdmissionError,
+        match=f"{total_work} checks; maximum is {MAX_TRANSVERSAL_ENUMERATION_WORK}",
+    ):
+        enumerate_minimal_transversals(
+            MinimalTransversalEnumerationRequest(
+                hypergraph=source, maximum_cardinality=maximum_cardinality
             )
         )
 

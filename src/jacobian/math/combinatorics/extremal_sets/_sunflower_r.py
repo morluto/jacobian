@@ -118,6 +118,26 @@ def _admit_source(
     return source, petal_count, member_count, source_work, source_units
 
 
+def _intersection_search_work(sizes: tuple[int, ...], petal_count: int) -> int:
+    """Charge pairwise work from participating member sizes, not a global max."""
+
+    member_count = len(sizes)
+    if member_count < petal_count:
+        return 0
+    pair_occurrences = comb(member_count - 2, petal_count - 2)
+    pair_min_sum = 0
+    max_pair_min = 0
+    for left, right in combinations(range(member_count), 2):
+        pair_min = min(sizes[left], sizes[right])
+        pair_min_sum += pair_min
+        if pair_min > max_pair_min:
+            max_pair_min = pair_min
+    candidate_bound = comb(member_count, petal_count)
+    # Intersection and equality for every pair in every r-tuple, plus one
+    # core materialization bounded by the largest participating pair min.
+    return 2 * pair_occurrences * pair_min_sum + 2 * candidate_bound * max_pair_min
+
+
 def _admit_candidates(
     source: IndexedFiniteSetFamily,
     petal_count: int,
@@ -138,11 +158,8 @@ def _admit_candidates(
                 f"the {MAX_SUNFLOWER_CANDIDATES}-candidate exact-work bound"
             ),
         )
-    maximum_size = max((len(member) for member in source.members), default=0)
-    intersection_pairs = comb(petal_count, 2)
-    # Pairwise intersections, equality against the common core, and one
-    # materialization of each candidate core if every subfamily qualifies.
-    search_work = (2 * intersection_pairs + 2) * maximum_size * candidate_bound
+    sizes = tuple(len(member) for member in source.members)
+    search_work = _intersection_search_work(sizes, petal_count)
     total_work = source_work + search_work
     if total_work > MAX_SUNFLOWER_INTERSECTION_WORK:
         raise OperationResourceAdmissionError(
@@ -371,14 +388,17 @@ def construct_sunflower_family(
         )
     request_checkpoint("before sunflower member expansion")
     sets = tuple(frozenset(member) for member in source.members)
+    sizes = tuple(len(member) for member in source.members)
     plan: list[tuple[tuple[int, ...], tuple[int, ...]]] = []
-    intersection_pairs = comb(petal_count, 2)
-    maximum_size = max((len(member) for member in source.members), default=0)
-    candidate_work = (2 * intersection_pairs + 2) * maximum_size
+    maximum_size = max(sizes, default=0)
     work_since_checkpoint = 0
     checkpoint_units = 65_536
     for indices in combinations(range(member_count), petal_count):
-        work_since_checkpoint += candidate_work
+        pair_min_sum = sum(
+            min(sizes[left], sizes[right]) for left, right in combinations(indices, 2)
+        )
+        core_bound = min(sizes[index] for index in indices)
+        work_since_checkpoint += 2 * pair_min_sum + 2 * core_bound
         if work_since_checkpoint >= checkpoint_units:
             request_checkpoint("during sunflower intersection work")
             work_since_checkpoint = 0

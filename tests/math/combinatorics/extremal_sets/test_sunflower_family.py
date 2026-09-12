@@ -191,6 +191,16 @@ def test_nested_chain_is_sunflower_free_without_candidate_output_rejection() -> 
     assert result.sunflower_free is True
 
 
+def test_sparse_large_member_does_not_price_every_pair_at_global_max() -> None:
+    """A 10_000-set with 29 nested prefixes remains a cheap empty 4-sunflower search."""
+    members = tuple(tuple(range(index + 1)) for index in range(29)) + (
+        tuple(range(10_000)),
+    )
+    result = construct_sunflower_family(_family(members, ground=10_000), 4)
+    assert result.sunflowers == ()
+    assert result.sunflower_free is True
+
+
 def test_result_allocation_is_admitted_before_row_construction(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

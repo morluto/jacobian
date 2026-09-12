@@ -79,6 +79,45 @@ class KempnerArithmeticProgressionRequest(StrictModel):
     )
 
 
+class KempnerProgressionFree(StrictModel):
+    """No nontrivial arithmetic progression exists in the digit family."""
+
+    status: Literal["PROGRESSION_FREE"] = "PROGRESSION_FREE"
+
+
+class KempnerContainsProgression(StrictModel):
+    """One canonical shortest-padded witness of a fixed-arity progression."""
+
+    status: Literal["CONTAINS_PROGRESSION"] = "CONTAINS_PROGRESSION"
+    indices: tuple[KempnerSmallInteger, ...]
+    values: tuple[KempnerInteger, ...]
+    first_term: KempnerInteger
+    common_difference: KempnerInteger
+
+    @model_validator(mode="after")
+    def require_witness_shape(self) -> Self:
+        if self.first_term < 1 or self.common_difference < 1:
+            raise _validation_error(
+                "witness_positive",
+                "a progression witness must have positive first term and difference",
+            )
+        if len(self.values) < 3:
+            raise _validation_error(
+                "witness_shape",
+                "a positive result must retain one ordered value for each source index",
+            )
+        expected = tuple(
+            self.first_term + index * self.common_difference
+            for index in range(len(self.values))
+        )
+        if self.values != expected or self.indices != tuple(range(len(self.values))):
+            raise _validation_error(
+                "witness_shape",
+                "a positive result must retain one ordered value for each source index",
+            )
+        return self
+
+
 class KempnerArithmeticProgressionResult(StrictModel):
     """An exact source-bound decision and, when present, one canonical witness."""
 
@@ -87,43 +126,48 @@ class KempnerArithmeticProgressionResult(StrictModel):
         ge=3,
         description="Number of terms in the nontrivial progression, at least three.",
     )
-    status: ProgressionStatus
-    indices: tuple[KempnerSmallInteger, ...]
-    values: tuple[KempnerInteger, ...]
-    first_term: KempnerInteger | None = None
-    common_difference: KempnerInteger | None = None
+    conclusion: Annotated[
+        KempnerProgressionFree | KempnerContainsProgression,
+        Field(discriminator="status"),
+    ]
 
     @model_validator(mode="after")
-    def require_witness_shape(self) -> Self:
-        expected_indices = tuple(range(self.arity))
-        if self.status == "PROGRESSION_FREE":
-            if (
-                self.indices
-                or self.values
-                or self.first_term is not None
-                or self.common_difference is not None
-            ):
+    def require_arity_matches_witness(self) -> Self:
+        if isinstance(self.conclusion, KempnerContainsProgression):
+            if len(self.conclusion.values) != self.arity:
                 raise _validation_error(
-                    "free_result_witness",
-                    "a progression-free result cannot contain a witness",
+                    "witness_shape",
+                    "a positive result must retain one ordered value for each source index",
                 )
-            return self
-        if self.indices != expected_indices or len(self.values) != self.arity:
-            raise _validation_error(
-                "witness_shape",
-                "a positive result must retain one ordered value for each source index",
-            )
-        if self.first_term is None or self.common_difference is None:
-            raise _validation_error(
-                "witness_parameters",
-                "a positive result must retain its first term and common difference",
-            )
-        if self.first_term < 1 or self.common_difference < 1:
-            raise _validation_error(
-                "witness_positive",
-                "a progression witness must have positive first term and difference",
-            )
         return self
+
+    @property
+    def status(self) -> ProgressionStatus:
+        return self.conclusion.status
+
+    @property
+    def indices(self) -> tuple[int, ...]:
+        if isinstance(self.conclusion, KempnerContainsProgression):
+            return self.conclusion.indices
+        return ()
+
+    @property
+    def values(self) -> tuple[int, ...]:
+        if isinstance(self.conclusion, KempnerContainsProgression):
+            return self.conclusion.values
+        return ()
+
+    @property
+    def first_term(self) -> int | None:
+        if isinstance(self.conclusion, KempnerContainsProgression):
+            return self.conclusion.first_term
+        return None
+
+    @property
+    def common_difference(self) -> int | None:
+        if isinstance(self.conclusion, KempnerContainsProgression):
+            return self.conclusion.common_difference
+        return None
 
 
 __all__ = [
@@ -132,5 +176,7 @@ __all__ = [
     "MAX_KEMPNER_INTEGER_DIGITS",
     "KempnerArithmeticProgressionRequest",
     "KempnerArithmeticProgressionResult",
+    "KempnerContainsProgression",
     "KempnerDigitSet",
+    "KempnerProgressionFree",
 ]

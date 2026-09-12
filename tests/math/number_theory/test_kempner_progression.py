@@ -144,8 +144,23 @@ def test_progression_free_result_rejects_undefined_arity() -> None:
             {
                 "digit_set": {"base": "3", "allowed_digits": ["1"]},
                 "arity": "0",
-                "status": "PROGRESSION_FREE",
-                "indices": [],
-                "values": [],
+                "conclusion": {"status": "PROGRESSION_FREE"},
+            }
+        )
+
+
+def test_result_schema_discriminates_status_branches() -> None:
+    schema = KempnerArithmeticProgressionResult.model_json_schema()
+    conclusion = schema["properties"]["conclusion"]
+    assert "discriminator" in conclusion or "oneOf" in conclusion or "anyOf" in conclusion
+    with pytest.raises(ValidationError):
+        KempnerArithmeticProgressionResult.model_validate(
+            {
+                "digit_set": {"base": "10", "allowed_digits": ["0"]},
+                "arity": "3",
+                "conclusion": {
+                    "status": "PROGRESSION_FREE",
+                    "values": ["1", "2", "3"],
+                },
             }
         )

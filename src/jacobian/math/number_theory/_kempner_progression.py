@@ -18,7 +18,9 @@ from jacobian.math.number_theory._kempner_models import (
     MAX_KEMPNER_INTEGER_DIGITS,
     KempnerArithmeticProgressionRequest,
     KempnerArithmeticProgressionResult,
+    KempnerContainsProgression,
     KempnerDigitSet,
+    KempnerProgressionFree,
 )
 
 MAX_CARRY_GRAPH_STATES = 1_000_000
@@ -229,27 +231,24 @@ def decide_kempner_arithmetic_progression(
                     raise RuntimeError("Kempner BFS exceeded its admitted state bound")
                 queue.append(candidate)
     if terminal is None:
-        return KempnerArithmeticProgressionResult.model_construct(
+        return KempnerArithmeticProgressionResult(
             digit_set=digit_set,
             arity=arity,
-            status="PROGRESSION_FREE",
-            indices=(),
-            values=(),
-            first_term=None,
-            common_difference=None,
+            conclusion=KempnerProgressionFree(),
         )
     first, difference = _reconstruct(terminal, predecessors, base=base)
     values = tuple(first + index * difference for index in range(arity))
     if first < 1 or difference < 1 or values[-1] != first + (arity - 1) * difference:
         raise RuntimeError("Kempner BFS produced an invalid progression witness")
-    return KempnerArithmeticProgressionResult.model_construct(
+    return KempnerArithmeticProgressionResult(
         digit_set=digit_set,
         arity=arity,
-        status="CONTAINS_PROGRESSION",
-        indices=tuple(range(arity)),
-        values=values,
-        first_term=first,
-        common_difference=difference,
+        conclusion=KempnerContainsProgression(
+            indices=tuple(range(arity)),
+            values=values,
+            first_term=first,
+            common_difference=difference,
+        ),
     )
 
 

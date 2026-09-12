@@ -20,21 +20,57 @@ MAX_SYMBOL_PARIKH_CELLS = 43_000
 
 
 class SymbolParikhProfileRequest(StrictModel):
-    dfa: DFA
-    word_length: StrictInt = Field(ge=0, le=MAX_SYMBOL_PARIKH_LENGTH)
+    """Request for the complete accepted-word symbol-count profile."""
+
+    dfa: DFA = Field(
+        description=(
+            "Complete deterministic finite automaton; symbol coordinates use its "
+            "ordered zero-based alphabet axis."
+        )
+    )
+    word_length: StrictInt = Field(
+        ge=0,
+        le=MAX_SYMBOL_PARIKH_LENGTH,
+        description="Exact nonnegative length of every counted accepted word.",
+    )
 
 
 class SymbolParikhCell(StrictModel):
-    symbol_counts: tuple[StrictInt, ...] = Field(max_length=MAX_DFA_ALPHABET)
-    multiplicity: ExactInteger = Field(ge=1)
+    """One canonical symbol-count vector and its positive exact multiplicity."""
+
+    symbol_counts: tuple[StrictInt, ...] = Field(
+        max_length=MAX_DFA_ALPHABET,
+        description=(
+            "Dense nonnegative counts on the DFA alphabet axis; coordinates sum "
+            "to the requested word length."
+        ),
+    )
+    multiplicity: ExactInteger = Field(
+        ge=1,
+        description="Positive exact number of accepted words with this vector.",
+    )
 
 
 class SymbolParikhProfileResult(StrictModel):
-    dfa: DFA
-    alphabet: tuple[StrictInt, ...] = Field(max_length=MAX_DFA_ALPHABET)
-    word_length: StrictInt = Field(ge=0, le=MAX_SYMBOL_PARIKH_LENGTH)
-    cells: tuple[SymbolParikhCell, ...] = Field(max_length=MAX_SYMBOL_PARIKH_CELLS)
-    total_accepted_words: ExactInteger
+    """Complete canonical map from symbol-count vectors to accepted words."""
+
+    dfa: DFA = Field(description="The source DFA retained for composition.")
+    alphabet: tuple[StrictInt, ...] = Field(
+        max_length=MAX_DFA_ALPHABET,
+        description="Ordered zero-based alphabet axis retained by every vector.",
+    )
+    word_length: StrictInt = Field(
+        ge=0,
+        le=MAX_SYMBOL_PARIKH_LENGTH,
+        description="Exact length shared by every profile vector.",
+    )
+    cells: tuple[SymbolParikhCell, ...] = Field(
+        max_length=MAX_SYMBOL_PARIKH_CELLS,
+        description="Lexicographically sorted, unique nonzero profile cells.",
+    )
+    total_accepted_words: ExactInteger = Field(
+        description="Exact sum of all cell multiplicities.",
+    )
 
     @classmethod
     def _from_kernel(

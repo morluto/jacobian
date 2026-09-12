@@ -12,7 +12,8 @@ SYMBOL_PARIKH_PROFILE_OPERATION = MathTool(
     title="Compute an accepted-word symbol Parikh profile",
     description=(
         "Return the exact histogram of alphabet-symbol count vectors among accepted "
-        "words of one length, retaining the DFA and ordered alphabet axis."
+        "words of one length, retaining the DFA and ordered alphabet axis; the DFA "
+        "must be complete and deterministic over its declared alphabet."
     ),
     request_type=SymbolParikhProfileRequest,
     result_type=SymbolParikhProfileResult,
@@ -21,7 +22,10 @@ SYMBOL_PARIKH_PROFILE_OPERATION = MathTool(
     examples=(
         OperationExample(
             name="binary_words_ending_in_one",
-            description="Profile binary words of length three that end in one.",
+            description=(
+                "Profile binary words of length three that end in one; the DFA must "
+                "be complete and deterministic over the ordered alphabet (0, 1)."
+            ),
             input={
                 "dfa": {
                     "state_count": 2,

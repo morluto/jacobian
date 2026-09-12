@@ -95,8 +95,12 @@ class KempnerContainsProgression(StrictModel):
     """One canonical shortest-padded witness of a fixed-arity progression."""
 
     status: Literal["CONTAINS_PROGRESSION"] = "CONTAINS_PROGRESSION"
-    indices: tuple[KempnerSmallInteger, ...]
-    values: tuple[KempnerInteger, ...]
+    indices: tuple[KempnerSmallInteger, ...] = Field(
+        min_length=MIN_KEMPNER_ARITY, max_length=MAX_KEMPNER_ARITY
+    )
+    values: tuple[KempnerInteger, ...] = Field(
+        min_length=MIN_KEMPNER_ARITY, max_length=MAX_KEMPNER_ARITY
+    )
     first_term: KempnerInteger
     common_difference: KempnerInteger
 

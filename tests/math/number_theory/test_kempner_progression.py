@@ -10,10 +10,13 @@ from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.number_theory._kempner_models import (
+    MAX_KEMPNER_ARITY,
+    MIN_KEMPNER_ARITY,
     _KEMPNER_ARITY_PATTERN,
     _KEMPNER_BASE_PATTERN,
     KempnerArithmeticProgressionRequest,
     KempnerArithmeticProgressionResult,
+    KempnerContainsProgression,
     KempnerDigitSet,
 )
 from jacobian.math.number_theory._kempner_progression import (
@@ -189,3 +192,21 @@ def test_result_schema_discriminates_status_branches() -> None:
                 },
             }
         )
+
+
+def test_witness_arrays_are_capped_before_relation_validation() -> None:
+    too_long = MAX_KEMPNER_ARITY + 1
+    with pytest.raises(ValidationError) as error:
+        KempnerContainsProgression.model_validate(
+            {
+                "status": "CONTAINS_PROGRESSION",
+                "indices": list(range(too_long)),
+                "values": list(range(1, too_long + 1)),
+                "first_term": 1,
+                "common_difference": 1,
+            }
+        )
+    assert {item["type"] for item in error.value.errors()} & {
+        "too_long",
+        "tuple_too_long",
+    }

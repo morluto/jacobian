@@ -199,9 +199,7 @@ def _require_canonical_rational(
             code="probability.compound_poisson.canonical_rational",
             message=f"{label} must have a positive denominator",
         )
-    if gcd(abs(numerator), denominator) != 1 or (
-        numerator == 0 and denominator != 1
-    ):
+    if gcd(abs(numerator), denominator) != 1 or (numerator == 0 and denominator != 1):
         raise _domain_error(
             location=location,
             code="probability.compound_poisson.canonical_rational",
@@ -210,46 +208,9 @@ def _require_canonical_rational(
     return value
 
 
-def _admit_and_plan(
-    intensity: CanonicalRational,
-    jump_distribution: FiniteRationalDistribution,
-    max_order: int,
-) -> tuple[CompoundPoissonCumulantSource, tuple[tuple[int, Fraction, Fraction], ...]]:
-    """Admit all semantic work once and return its reusable arithmetic ledger."""
-
-    if (
-        type(max_order) is not int
-        or not 0 <= max_order <= MAX_COMPOUND_POISSON_ORDER
-    ):
-        raise _domain_error(
-            location=("max_order",),
-            code="probability.compound_poisson.order_bound",
-            message=(
-                "compound-Poisson order must be between 0 and "
-                f"{MAX_COMPOUND_POISSON_ORDER}"
-            ),
-        )
-    intensity = _require_canonical_rational(
-        intensity, location=("intensity",), label="compound-Poisson intensity"
-    )
-    try:
-        require_bounded_rational(
-            intensity,
-            max_digits=128,
-            label="compound-Poisson intensity",
-        )
-    except ValueError as exc:
-        raise _resource_error(
-            location=("intensity",),
-            code="probability.compound_poisson.input_height_bound",
-            message=str(exc),
-        ) from exc
-    if intensity.num < 0:
-        raise _domain_error(
-            location=("intensity",),
-            code="probability.compound_poisson.nonnegative_intensity",
-            message="compound-Poisson intensity must be nonnegative",
-        )
+def _require_jump_atoms(
+    jump_distribution: object,
+) -> tuple[FiniteDistributionAtom, ...]:
     if not isinstance(jump_distribution, FiniteRationalDistribution):
         raise _domain_error(
             location=("jump_distribution",),
@@ -299,10 +260,49 @@ def _admit_and_plan(
                 code="probability.compound_poisson.nonnegative_probability",
                 message="jump probabilities must be nonnegative canonical rationals",
             )
+    return atoms
+
+
+def _admit_and_plan(
+    intensity: CanonicalRational,
+    jump_distribution: FiniteRationalDistribution,
+    max_order: int,
+) -> tuple[CompoundPoissonCumulantSource, tuple[tuple[int, Fraction, Fraction], ...]]:
+    """Admit all semantic work once and return its reusable arithmetic ledger."""
+
+    if type(max_order) is not int or not 0 <= max_order <= MAX_COMPOUND_POISSON_ORDER:
+        raise _domain_error(
+            location=("max_order",),
+            code="probability.compound_poisson.order_bound",
+            message=(
+                "compound-Poisson order must be between 0 and "
+                f"{MAX_COMPOUND_POISSON_ORDER}"
+            ),
+        )
+    intensity = _require_canonical_rational(
+        intensity, location=("intensity",), label="compound-Poisson intensity"
+    )
+    try:
+        require_bounded_rational(
+            intensity,
+            max_digits=128,
+            label="compound-Poisson intensity",
+        )
+    except ValueError as exc:
+        raise _resource_error(
+            location=("intensity",),
+            code="probability.compound_poisson.input_height_bound",
+            message=str(exc),
+        ) from exc
+    if intensity.num < 0:
+        raise _domain_error(
+            location=("intensity",),
+            code="probability.compound_poisson.nonnegative_intensity",
+            message="compound-Poisson intensity must be nonnegative",
+        )
+    atoms = _require_jump_atoms(jump_distribution)
     active_atoms = tuple(
-        (index, atom)
-        for index, atom in enumerate(atoms)
-        if atom.probability.num != 0
+        (index, atom) for index, atom in enumerate(atoms) if atom.probability.num != 0
     )
     try:
         require_input_distribution(

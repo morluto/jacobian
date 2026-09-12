@@ -10,9 +10,9 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.probability._compound_poisson import (
+    MAX_COMPOUND_POISSON_ATOMS,
     CompoundPoissonCumulantRequest,
     CompoundPoissonCumulantSource,
-    MAX_COMPOUND_POISSON_ATOMS,
     compound_poisson_cumulant_prefix,
 )
 from jacobian.math.probability._distribution import (
@@ -194,9 +194,7 @@ def test_forged_noncanonical_rationals_are_rejected_before_arithmetic() -> None:
         "probability.compound_poisson.canonical_rational_components"
     )
 
-    missing_value = FiniteDistributionAtom.model_construct(
-        probability=_q(Fraction(1))
-    )
+    missing_value = FiniteDistributionAtom.model_construct(probability=_q(Fraction(1)))
     with pytest.raises(OperationDomainValidationError) as atom_value:
         compound_poisson_cumulant_prefix(
             _q(Fraction(1)),
@@ -254,9 +252,7 @@ def test_jump_height_outside_execution_envelope_is_a_resource_error() -> None:
 def test_zero_mass_atoms_are_excluded_from_the_power_plan() -> None:
     jumps = FiniteRationalDistribution(
         atoms=(
-            FiniteDistributionAtom(
-                value=_q(Fraction(0)), probability=_q(Fraction(1))
-            ),
+            FiniteDistributionAtom(value=_q(Fraction(0)), probability=_q(Fraction(1))),
             FiniteDistributionAtom(
                 value=_q(Fraction(10**127)), probability=_q(Fraction(0))
             ),
@@ -313,9 +309,7 @@ def test_height_errors_keep_source_atom_indices_after_zero_mass_filter() -> None
     tall = 10**127
     jumps = FiniteRationalDistribution(
         atoms=(
-            FiniteDistributionAtom(
-                value=_q(Fraction(0)), probability=_q(Fraction(0))
-            ),
+            FiniteDistributionAtom(value=_q(Fraction(0)), probability=_q(Fraction(0))),
             FiniteDistributionAtom(
                 value=_q(Fraction(tall)), probability=_q(Fraction(1))
             ),

@@ -468,6 +468,73 @@ def test_complete_graph_infers_edge_induced_classes_without_vertex_colors() -> N
     assert len(result.generators) == 5
 
 
+def test_complete_graph_respects_vertex_colors_inside_inferred_parts() -> None:
+    pairs = tuple((f"r{index}", f"b{index}") for index in range(4))
+    vertices = tuple(vertex for pair in pairs for vertex in pair)
+    vertex_color = {
+        vertex: "red" if vertex.startswith("r") else "blue" for vertex in vertices
+    }
+    pair_of = {
+        vertex: index for index, pair in enumerate(pairs) for vertex in pair
+    }
+    edges = tuple(
+        canonical_edge(left, right)
+        for index, left in enumerate(vertices)
+        for right in vertices[index + 1 :]
+    )
+    edge_colors = tuple(
+        "within" if pair_of[left] == pair_of[right] else "between"
+        for left, right in edges
+    )
+    graph = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(vertices=vertices, edges=edges),
+        vertex_colors=tuple(vertex_color[vertex] for vertex in vertices),
+        edge_colors=edge_colors,
+    )
+
+    result = full_graph_automorphism_group(graph)
+
+    assert result.automorphism_count == factorial(4)
+    assert result.generated_group_order == 24
+    assert group_order(result.group) == result.automorphism_count
+
+
+def test_complete_graph_uses_colored_quotient_automorphisms() -> None:
+    parts = tuple(
+        (f"{label}0", f"{label}1") for label in ("a", "b", "c", "d")
+    )
+    vertices = tuple(vertex for part in parts for vertex in part)
+    part_of = {
+        vertex: index for index, part in enumerate(parts) for vertex in part
+    }
+    edges = tuple(
+        canonical_edge(left, right)
+        for index, left in enumerate(vertices)
+        for right in vertices[index + 1 :]
+    )
+
+    def between_color(left: str, right: str) -> str:
+        distance = abs(part_of[left] - part_of[right]) % 4
+        if distance in {1, 3}:
+            return "adjacent"
+        return "opposite"
+
+    edge_colors = tuple(
+        "within" if part_of[left] == part_of[right] else between_color(left, right)
+        for left, right in edges
+    )
+    graph = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(vertices=vertices, edges=edges),
+        edge_colors=edge_colors,
+    )
+
+    result = full_graph_automorphism_group(graph)
+
+    assert result.automorphism_count == 128
+    assert result.generated_group_order == 128
+    assert group_order(result.group) == 128
+
+
 def test_uniform_vertex_colored_cliques_keep_compact_presentation() -> None:
     vertices = tuple(
         f"v{component}{position}" for component in range(3) for position in range(3)

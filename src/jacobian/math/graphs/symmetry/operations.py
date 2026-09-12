@@ -5,6 +5,7 @@ from __future__ import annotations
 import unicodedata
 from collections import Counter
 from dataclasses import dataclass
+from itertools import permutations
 from math import factorial, prod
 from typing import Any
 
@@ -168,61 +169,156 @@ def _infer_complete_edge_parts(
     return best
 
 
+def _refine_parts_by_vertex_colors(
+    parts: tuple[tuple[str, ...], ...],
+    vertex_colors: dict[str, str],
+) -> tuple[tuple[str, ...], ...]:
+    """Split each edge-induced part into declared vertex-color classes."""
+
+    refined: list[tuple[str, ...]] = []
+    for part in parts:
+        classes: dict[str, list[str]] = {}
+        for vertex in part:
+            classes.setdefault(vertex_colors[vertex], []).append(vertex)
+        refined.extend(tuple(sorted(members)) for members in classes.values())
+    return tuple(sorted(refined))
+
+
+def _part_signature(
+    part: tuple[str, ...],
+    vertex_colors: dict[str, str],
+    inside_color: str,
+) -> tuple[object, ...]:
+    return (
+        len(part),
+        inside_color,
+        tuple(sorted(Counter(vertex_colors[vertex] for vertex in part).items())),
+    )
+
+
+def _is_quotient_automorphism(
+    sigma: tuple[int, ...],
+    signatures: tuple[tuple[object, ...], ...],
+    pair_color: dict[tuple[int, int], str],
+) -> bool:
+    if any(signatures[index] != signatures[image] for index, image in enumerate(sigma)):
+        return False
+    for left in range(len(sigma)):
+        for right in range(left + 1, len(sigma)):
+            source = (left, right)
+            image = tuple(sorted((sigma[left], sigma[right])))
+            if pair_color[source] != pair_color[image]:
+                return False
+    return True
+
+
+def _generated_quotient_size(generators: tuple[tuple[int, ...], ...], degree: int) -> int:
+    identity = tuple(range(degree))
+    seen = {identity}
+    pending = [identity]
+    while pending:
+        current = pending.pop()
+        for generator in generators:
+            image = tuple(generator[current[index]] for index in range(degree))
+            if image not in seen:
+                seen.add(image)
+                pending.append(image)
+    return len(seen)
+
+
+def _compact_quotient_generators(
+    automorphisms: tuple[tuple[int, ...], ...], degree: int
+) -> tuple[tuple[int, ...], ...]:
+    identity = tuple(range(degree))
+    aut_set = set(automorphisms)
+    candidates: list[tuple[int, ...]] = []
+    for index in range(degree - 1):
+        swap = list(range(degree))
+        swap[index], swap[index + 1] = index + 1, index
+        permutation = tuple(swap)
+        if permutation in aut_set:
+            candidates.append(permutation)
+    cycle = tuple((index + 1) % degree for index in range(degree))
+    if cycle in aut_set:
+        candidates.append(cycle)
+    reflection = tuple(reversed(range(degree)))
+    if reflection in aut_set:
+        candidates.append(reflection)
+    generators = tuple(dict.fromkeys(candidates))
+    if generators and _generated_quotient_size(generators, degree) == len(automorphisms):
+        return generators
+    compact: list[tuple[int, ...]] = list(generators)
+    for automorphism in sorted(automorphisms):
+        if automorphism == identity or automorphism in compact:
+            continue
+        compact.append(automorphism)
+        if _generated_quotient_size(tuple(compact), degree) == len(automorphisms):
+            break
+    return tuple(compact)
+
+
 def _wreath_generators_for_labeled_parts(
     n: int,
     vertices: tuple[str, ...],
     parts: tuple[tuple[str, ...], ...],
     pair_color: dict[tuple[int, int], str],
-) -> tuple[tuple[tuple[int, ...], ...], int]:
+    vertex_colors: dict[str, str],
+) -> tuple[tuple[tuple[int, ...], ...], int] | None:
+    part_count = len(parts)
+    permutation_count = 1
+    for step in range(2, part_count + 1):
+        permutation_count *= step
+        if permutation_count > MAX_FULL_AUTOMORPHISM_PERMUTATIONS:
+            return None
     index = {vertex: position for position, vertex in enumerate(vertices)}
-    indexed_parts = tuple(tuple(index[vertex] for vertex in part) for part in parts)
+    indexed_parts = tuple(
+        tuple(
+            index[vertex]
+            for vertex in sorted(part, key=lambda label: (vertex_colors[label], label))
+        )
+        for part in parts
+    )
     generators: list[tuple[int, ...]] = []
     order = 1
-    for part in indexed_parts:
-        size = len(part)
-        order *= factorial(size)
-        if size >= 2:
-            swap = list(range(n))
-            swap[part[0]], swap[part[1]] = part[1], part[0]
-            generators.append(tuple(swap))
-        if size >= 3:
-            cycle = list(range(n))
-            for source, target in zip(part, part[1:] + part[:1], strict=True):
-                cycle[source] = target
-            generators.append(tuple(cycle))
-    inside = tuple(pair_color.get((i, i), _UNCOLORED) for i in range(len(parts)))
-    fingerprints: dict[tuple[object, ...], list[int]] = {}
-    for i, part in enumerate(parts):
-        neighbor_profile = tuple(
-            sorted(
-                (
-                    pair_color[tuple(sorted((i, j)))],
-                    len(parts[j]),
-                    inside[j],
-                )
-                for j in range(len(parts))
-                if j != i
-            )
-        )
-        fingerprints.setdefault((len(part), inside[i], neighbor_profile), []).append(i)
-    for group in fingerprints.values():
-        order *= factorial(len(group))
-        if len(group) >= 2:
-            left = indexed_parts[group[0]]
-            right = indexed_parts[group[1]]
-            swap = list(range(n))
-            for source, target in zip(left, right, strict=True):
-                swap[source], swap[target] = target, source
-            generators.append(tuple(swap))
-        if len(group) >= 3:
-            cycle = list(range(n))
-            aligned = [indexed_parts[item] for item in group]
-            for source_part, target_part in zip(
-                aligned, aligned[1:] + aligned[:1], strict=True
-            ):
-                for source, target in zip(source_part, target_part, strict=True):
+    for labels in parts:
+        classes: dict[str, list[int]] = {}
+        for vertex in labels:
+            classes.setdefault(vertex_colors[vertex], []).append(index[vertex])
+        for members in classes.values():
+            members.sort()
+            size = len(members)
+            order *= factorial(size)
+            if size >= 2:
+                swap = list(range(n))
+                swap[members[0]], swap[members[1]] = members[1], members[0]
+                generators.append(tuple(swap))
+            if size >= 3:
+                cycle = list(range(n))
+                for source, target in zip(
+                    members, members[1:] + members[:1], strict=True
+                ):
                     cycle[source] = target
-            generators.append(tuple(cycle))
+                generators.append(tuple(cycle))
+    inside = tuple(pair_color.get((i, i), _UNCOLORED) for i in range(part_count))
+    signatures = tuple(
+        _part_signature(part, vertex_colors, inside[i]) for i, part in enumerate(parts)
+    )
+    automorphisms = tuple(
+        sigma
+        for sigma in permutations(range(part_count))
+        if _is_quotient_automorphism(sigma, signatures, pair_color)
+    )
+    order *= len(automorphisms)
+    for sigma in _compact_quotient_generators(automorphisms, part_count):
+        if sigma == tuple(range(part_count)):
+            continue
+        permutation = list(range(n))
+        for source, image in enumerate(sigma):
+            for left, right in zip(
+                indexed_parts[source], indexed_parts[image], strict=True
+            ):
+                permutation[left] = right
+        generators.append(tuple(permutation))
     return tuple(generators), order
 
 
@@ -414,10 +510,20 @@ def _special_complete_or_empty(
         inferred = _infer_complete_edge_parts(graph)
         if inferred is None:
             return None
+        vertex_colors = dict(
+            zip(
+                graph.graph.vertices,
+                graph.vertex_colors or (_UNCOLORED,) * n,
+                strict=True,
+            )
+        )
+        inferred = _refine_parts_by_vertex_colors(inferred, vertex_colors)
         pair_color = _part_pair_edge_colors(inferred, _edge_color_lookup(graph))
         if pair_color is None:
             return None
-        return _wreath_generators_for_labeled_parts(n, vertices, inferred, pair_color)
+        return _wreath_generators_for_labeled_parts(
+            n, vertices, inferred, pair_color, vertex_colors
+        )
     colors = dict(
         zip(
             graph.graph.vertices,

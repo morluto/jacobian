@@ -295,6 +295,35 @@ def test_vanishing_substituted_denominator_is_undefined_not_singular() -> None:
     assert error.value.errors()[0]["type"].endswith("undefined_metric_locus")
 
 
+def test_undefined_denominator_is_classified_before_a_singular_determinant() -> None:
+    u, v, w, x = symbols("u v w x")
+    g00 = rf((w - u**3) / (v - u**2), ("u", "v", "w"))
+    source = RationalCoordinateMetric(
+        tensor=RationalCoordinateTensor(
+            coordinate_axis=("u", "v", "w"),
+            variance=("COVARIANT", "COVARIANT"),
+            components=(
+                g00,
+                rf(0, ("u", "v", "w")),
+                rf(0, ("u", "v", "w")),
+                rf(0, ("u", "v", "w")),
+                rf(1, ("u", "v", "w")),
+                rf(0, ("u", "v", "w")),
+                rf(0, ("u", "v", "w")),
+                rf(0, ("u", "v", "w")),
+                rf(1, ("u", "v", "w")),
+            ),
+            retained_nonzero_denominators=(g00.denominator,),
+        )
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        pullback_metric(
+            source,
+            map_value((x, x**2, x**3), ("x",), ("u", "v", "w")),
+        )
+    assert error.value.errors()[0]["type"].endswith("undefined_metric_locus")
+
+
 def test_forged_short_tensor_is_rejected_before_planning() -> None:
     x = symbols("x")
     tensor = RationalCoordinateTensor.model_construct(

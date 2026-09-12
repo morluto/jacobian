@@ -286,9 +286,7 @@ class TestSpannedCircleProfile:
         assert second.circles[0].point_indices == (0, 1, 2, 3)
 
     def test_work_ceiling_is_a_resource_admission(self) -> None:
-        points = tuple(
-            _point(str(index), str(1000 + index)) for index in range(32)
-        )
+        points = tuple(_point(str(index), str(1000 + index)) for index in range(32))
         with pytest.raises(OperationResourceAdmissionError, match="2000000"):
             spanned_circle_profile(SpannedCircleProfileRequest(points=points))
 

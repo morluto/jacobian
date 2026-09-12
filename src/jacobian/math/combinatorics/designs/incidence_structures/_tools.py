@@ -338,13 +338,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="combinatorics.design.steiner_triple_system.construct",
         title="Construct a bounded Steiner triple system",
-        description=(
-            "Return one Steiner triple system STS(v) on v points when v is "
-            "congruent to 1 or 3 modulo 6: every pair of points lies in "
-            "exactly one 3-point block. A COMPUTED result retains that design. "
-            "If the admitted budget is exhausted, the result is UNKNOWN and "
-            "may carry resumable frontier shards."
-        ),
+        description="Construct one Steiner triple system STS(v): a 3-uniform design "
+        "on v points in which every unordered pair of points lies in exactly "
+        "one block. COMPUTED returns such a design; budget exhaustion is "
+        "UNKNOWN with a resumable frontier.",
         request_type=SteinerTripleSystemRequest,
         result_type=SteinerTripleSystemResult,
         run=_steiner_triple_system,

@@ -265,6 +265,20 @@ def test_continuation_treats_fixed_triples_as_block_constraints() -> None:
     assert ("p0", "p2", "p3") in result.design.blocks
 
 
+def test_discovery_description_states_sts_pair_coverage() -> None:
+    tool = Catalog.open().operation(
+        "combinatorics.design.steiner_triple_system.construct"
+    )
+    assert tool is not None
+    description = tool.description.lower()
+    assert "every unordered pair" in description
+    assert "exactly one block" in description
+    assert "unknown" in description
+    assert "exact cover" not in description
+    assert "replay" not in description
+    assert "search" not in description
+
+
 def test_constructor_executes_through_public_catalog_boundary() -> None:
     result = invoke_operation(
         "combinatorics.design.steiner_triple_system.construct",

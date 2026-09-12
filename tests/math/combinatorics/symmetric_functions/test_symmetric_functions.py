@@ -17,6 +17,7 @@ from jacobian.math.combinatorics.symmetric_functions._tools import TOOLS
 from jacobian.math.combinatorics.symmetric_functions.operations import (
     partition_conjugate,
     schur_evaluation,
+    verify_schur_evaluation,
 )
 from jacobian.math.combinatorics.symmetric_functions.values import (
     MAX_PARTITION_SIZE,
@@ -44,6 +45,18 @@ def test_native_surface_accepts_canonical_partition_values() -> None:
 
     assert partition_conjugate(partition).parts == (2, 1)
     assert schur_evaluation(partition, (1, 1)).value == 2
+
+
+def test_schur_result_is_bound_and_verifiable() -> None:
+    result = schur_evaluation(
+        IntegerPartition(parts=(1,)), (1, 1), ("x1", "x2")
+    )
+    assert result.partition.parts == (1,)
+    assert result.variables == ("x1", "x2")
+    assert result.point == (1, 1)
+    assert verify_schur_evaluation(result)
+    forged = result.model_copy(update={"value": 3})
+    assert not verify_schur_evaluation(forged)
 
 
 def test_conjugate_self_conjugate_partition() -> None:

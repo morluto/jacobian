@@ -46,6 +46,7 @@ def _complete_homogeneous(variables: Sequence[int], k: int) -> int:
 def schur_evaluation(
     partition: IntegerPartition,
     point: tuple[int, ...],
+    variables: tuple[str, ...] | None = None,
 ) -> SchurExpansionResult:
     """Evaluate a Schur function s_lambda at a point using the Jacobi-Trudi formula.
 
@@ -72,10 +73,28 @@ def schur_evaluation(
             message="point must contain 1..20 bounded integer coordinates",
         )
 
+    variables = variables if variables is not None else tuple(
+        f"x{i}" for i in range(len(point))
+    )
+    if len(variables) != len(point):
+        raise OperationDomainValidationError(
+            location=("variables",),
+            code="symmetric_function.schur_dimensions_mismatch",
+            message="variables and point must have the same length",
+        )
+    if len(set(variables)) != len(variables):
+        raise OperationDomainValidationError(
+            location=("variables",),
+            code="symmetric_function.schur_variables_not_distinct",
+            message="variables must be distinct (duplicate axis)",
+        )
+
     parts = list(partition.parts)
     n = len(parts)
     if not parts:
-        return SchurExpansionResult(value=1)
+        return SchurExpansionResult(
+            partition=partition, variables=variables, point=point, value=1
+        )
 
     def h(k: int) -> int:
         if k < 0:
@@ -89,7 +108,9 @@ def schur_evaluation(
             matrix[i][j] = h(parts[i] - (i + 1) + (j + 1))
 
     result = _determinant(matrix)
-    return SchurExpansionResult(value=result)
+    return SchurExpansionResult(
+        partition=partition, variables=variables, point=point, value=result
+    )
 
 
 def _determinant(matrix: list[list[int]]) -> int:
@@ -108,7 +129,13 @@ def _determinant(matrix: list[list[int]]) -> int:
 
 
 def verify_schur_evaluation(claim: SchurExpansionResult) -> bool:
-    return type(claim.value) is int
+    if not isinstance(claim, SchurExpansionResult):
+        return False
+    try:
+        expected = schur_evaluation(claim.partition, claim.point, claim.variables)
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False
+    return expected == claim
 
 
 __all__ = [

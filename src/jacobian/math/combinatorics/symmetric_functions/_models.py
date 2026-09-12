@@ -125,10 +125,27 @@ class SchurExpansionRequest(StrictModel):
 
 
 class SchurExpansionResult(StrictModel):
+    partition: IntegerPartition
+    variables: tuple[str, ...] = Field(
+        min_length=1,
+        max_length=20,
+        json_schema_extra={"uniqueItems": True},
+    )
+    point: tuple[PointCoordinate, ...] = Field(min_length=1, max_length=20)
     value: ExactInteger
 
     @model_validator(mode="after")
-    def require_bounded_value(self) -> Self:
+    def require_bounded_result(self) -> Self:
+        if len(self.variables) != len(self.point):
+            raise _validation_error(
+                "schur_dimensions_mismatch",
+                "variables and point must have the same length",
+            )
+        if len(set(self.variables)) != len(self.variables):
+            raise _validation_error(
+                "schur_variables_not_distinct",
+                "variables must be distinct (duplicate axis)",
+            )
         if len(format_canonical_integer(abs(self.value))) > _MAX_SCHUR_RESULT_DIGITS:
             raise _validation_error(
                 "schur_value_digits_exceeded",

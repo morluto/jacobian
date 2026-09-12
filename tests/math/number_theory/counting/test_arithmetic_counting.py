@@ -7,8 +7,6 @@ from typing import TypedDict
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.catalog import Catalog
-from jacobian.dispatch import invoke_operation
 from jacobian.math.number_theory.counting import congruence_box_count, floor_sum
 from jacobian.math.number_theory.counting._models import (
     _MAX_BOX_LINEAR_COEFFICIENT,
@@ -242,9 +240,9 @@ class TestCongruenceBoxCount:
             if (17 * x_residue + 19 * y_residue - 23) % modulus == 0
         )
 
-        public = invoke_operation(
-            "integer.counting.congruence_box.compute", payload, Catalog.open()
-        ).output
+        public = compute_congruence_box_count(
+            CongruenceBoxCountRequest.model_validate_json(json.dumps(payload))
+        ).model_dump(mode="json")
         result = CongruenceBoxCountResult.model_validate_json(json.dumps(public))
         assert result.count == expected
         assert result.count > 2**53

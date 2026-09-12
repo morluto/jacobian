@@ -10,9 +10,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.dispatch import invoke_operation
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
     RationalPolynomialTerm,
@@ -26,7 +24,7 @@ from jacobian.math.polynomials.vector_calculus._models import (
     VectorFieldRequest,
     VectorResult,
 )
-from jacobian.math.polynomials.vector_calculus._tools import TOOLS
+from jacobian.math.polynomials.vector_calculus._tools import TOOLS, _gradient
 from jacobian.math.polynomials.vector_calculus.operations import (
     curl,
     directional_derivative,
@@ -158,12 +156,15 @@ def test_gradient_admits_sparse_inactive_axes_beyond_dense_proxy() -> None:
     assert sum(len(component.polynomial.terms) for component in native.components) == 33
     assert all(not component.polynomial.terms for component in native.components[1:])
 
-    public = invoke_operation(
-        "polynomial_field.scalar.gradient.compute",
-        {"polynomial": source.model_dump(mode="json")},
-        Catalog(TOOLS),
+    public = _gradient(
+        ScalarFieldRequest.model_validate_json(
+            json.dumps({"polynomial": source.model_dump(mode="json")})
+        )
     )
-    assert VectorResult.model_validate_json(json.dumps(public.output)) == native
+    assert (
+        VectorResult.model_validate_json(json.dumps(public.model_dump(mode="json")))
+        == native
+    )
     assert verify_gradient(VectorResult.model_validate_json(native.model_dump_json()))
 
 

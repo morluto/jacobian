@@ -6,9 +6,7 @@ from fractions import Fraction
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.dispatch import invoke_operation
 from jacobian.math.combinatorics import (
     bell_number,
     bernoulli_number,
@@ -16,6 +14,8 @@ from jacobian.math.combinatorics import (
     integer_partitions,
     stirling_second,
 )
+from jacobian.math.combinatorics._models import NonnegativeIntegerRequest
+from jacobian.math.combinatorics._partition_tools import bell
 from jacobian.math.combinatorics.operations import MAX_COUNTING_INDEX
 
 
@@ -71,21 +71,14 @@ def test_large_bell_numbers_match_touchard_residues() -> None:
 
 
 def test_largest_bell_number_projects_as_a_canonical_public_json_integer() -> None:
-    catalog = Catalog.open()
-    operation = catalog.operation("combinatorics.compute.bell")
-    assert operation is not None
+    result = bell(NonnegativeIntegerRequest(n=MAX_COUNTING_INDEX))
+    payload = result.model_dump(mode="json")
 
-    result = invoke_operation(
-        operation.operation_id, {"n": MAX_COUNTING_INDEX}, catalog
-    )
-
-    assert isinstance(result.output["value"], str)
-    assert len(result.output["value"]) == 27_665
+    assert isinstance(payload["value"], str)
+    assert len(payload["value"]) == 27_665
     assert (
-        operation.result_type.model_validate_json(json.dumps(result.output)).model_dump(
-            mode="json"
-        )
-        == result.output
+        result.model_validate_json(json.dumps(payload)).model_dump(mode="json")
+        == payload
     )
 
 

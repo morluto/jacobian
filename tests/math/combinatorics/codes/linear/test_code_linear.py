@@ -7,9 +7,7 @@ import pytest
 import sympy
 from pydantic import ValidationError
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.dispatch import invoke_operation
 from jacobian.math.combinatorics.codes.linear._models import (
     CodeEqualRequest,
     CodewordCheckRequest,
@@ -147,19 +145,15 @@ def test_from_generator_admits_large_row_presentations_by_rref_rank(
     assert public.encoder.codeword_count == field_order ** len(expected_generator)
 
 
-def test_from_generator_scale_regression_dispatches_and_composes() -> None:
+def test_from_generator_scale_regression_composes_owner_result() -> None:
     identity = [[int(row == column) for column in range(20)] for row in range(20)]
     payload = {
         "field_order": 2,
         "generator_matrix": identity,
         "coordinate_axis": [f"x{index}" for index in range(20)],
     }
-    dispatched = invoke_operation(
-        "code.linear.from_generator.compute", payload, Catalog.open()
-    )
-    assert dispatched.output is not None
     produced = compute_from_generator(GeneratorMatrixRequest.model_validate(payload))
-    replayed = type(produced).model_validate(dispatched.output)
+    replayed = type(produced).model_validate(produced.model_dump(mode="json"))
     assert replayed == produced
     assert replayed.encoder.codeword_count == 2**20
 

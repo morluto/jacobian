@@ -171,6 +171,23 @@ def test_output_edge_bound_uses_qualifying_rows() -> None:
         construct_sunflower_family(source, 2)
 
 
+def test_qualifying_plan_stops_once_the_output_cannot_fit() -> None:
+    """182 disjoint singletons form C(182, 3) empty-core triples, over MAX_EDGES."""
+    source = _family(tuple((index,) for index in range(182)), ground=182)
+    with pytest.raises(OperationResourceAdmissionError, match="output bound"):
+        construct_sunflower_family(source, 3)
+
+
+def test_empty_cores_are_not_charged_at_an_unrelated_member_size() -> None:
+    huge = tuple(range(100_000))
+    isolates = tuple((100_000 + index,) for index in range(154))
+    result = construct_sunflower_family(
+        _family((huge, *isolates), ground=100_154), 2
+    )
+    assert result.sunflower_count == 155 * 154 // 2
+    assert all(row.core == () for row in result.sunflowers)
+
+
 def test_nested_chain_is_sunflower_free_without_candidate_output_rejection() -> None:
     """A nested chain has no 4-sunflowers; C(30, 4) candidates must not be an output bound."""
     members = tuple(tuple(range(index + 1)) for index in range(30))

@@ -522,9 +522,9 @@ def test_scaled_floor_deserialization_does_not_replay_endpoint_squares() -> None
     value = scaled_floor(3, 2)
     restored = ScaledFloorValue.model_validate_json(value.model_dump_json())
     assert restored == value
-    payload = value.model_dump(mode="json")
+    payload = json.loads(value.model_dump_json())
     payload["square_lower"] = str(int(payload["square_lower"]) + 1)
-    authored = ScaledFloorValue.model_validate(payload)
+    authored = ScaledFloorValue.model_validate_json(json.dumps(payload))
     assert authored.square_lower != authored.floor * authored.floor
     assert authored.square_upper == value.square_upper
 

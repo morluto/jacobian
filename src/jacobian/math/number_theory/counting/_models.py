@@ -22,6 +22,8 @@ _MAX_FLOOR_SUM_PARAM = 1_000_000
 # compact, explicit bound for both the endpoint arithmetic and the exact
 # count: a box has fewer than 4 * 10**64 points.
 _MAX_BOX_COORD_DIGITS = 32
+# A box with 32-digit endpoints has fewer than 4 * 10**64 lattice points.
+_MAX_BOX_COUNT_DIGITS = 65
 _MAX_BOX_LINEAR_COEFFICIENT = 10**15
 _MAX_BOX_MODULUS = 10_000
 
@@ -30,6 +32,21 @@ _BOX_COORDINATE_DESCRIPTION = (
     "Exact signed coordinate with at most 32 decimal digits; use a canonical "
     "decimal string in JSON."
 )
+
+BoxCount = Annotated[
+    int,
+    DecimalIntegerEncoding(max_digits=_MAX_BOX_COUNT_DIGITS),
+    Field(
+        ge=0,
+        description=(
+            "Canonical nonnegative decimal count of lattice points in the box."
+        ),
+        json_schema_extra={
+            "pattern": rf"^(?:0|[1-9][0-9]{{0,{_MAX_BOX_COUNT_DIGITS - 1}}})(?![\s\S])",
+            "maxLength": _MAX_BOX_COUNT_DIGITS,
+        },
+    ),
+]
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -107,7 +124,7 @@ class CongruenceBoxCountResult(StrictModel):
     u: int = Field(ge=-_MAX_BOX_LINEAR_COEFFICIENT, le=_MAX_BOX_LINEAR_COEFFICIENT)
     v: int = Field(ge=-_MAX_BOX_LINEAR_COEFFICIENT, le=_MAX_BOX_LINEAR_COEFFICIENT)
     c: int = Field(ge=-_MAX_BOX_LINEAR_COEFFICIENT, le=_MAX_BOX_LINEAR_COEFFICIENT)
-    count: ExactInteger = Field(ge=0)
+    count: BoxCount
     modulus: int = Field(ge=1, le=_MAX_BOX_MODULUS)
 
 

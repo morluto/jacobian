@@ -4,6 +4,9 @@ import json
 from itertools import product
 from typing import TypedDict
 
+import pytest
+from pydantic import ValidationError
+
 from jacobian.catalog.catalog import Catalog
 from jacobian.dispatch import invoke_operation
 from jacobian.math.number_theory.counting import congruence_box_count, floor_sum
@@ -169,6 +172,31 @@ class TestCongruenceBoxCount:
         assert not verify_congruence_box_count(
             CongruenceBoxCountResult.model_validate_json(json.dumps(forged))
         )
+
+    @pytest.mark.parametrize("count", ["-1", "01", "1\n"])
+    def test_count_schema_and_decoder_reject_invalid_decimal_counts(
+        self, count: str
+    ) -> None:
+        request = CongruenceBoxCountRequest(
+            x_lo=0,
+            x_hi=5,
+            y_lo=0,
+            y_hi=5,
+            u=1,
+            v=1,
+            c=0,
+            modulus=3,
+        )
+        result = compute_congruence_box_count(request)
+        payload = result.model_dump(mode="json")
+        from jsonschema import Draft202012Validator
+
+        validator = Draft202012Validator(CongruenceBoxCountResult.model_json_schema())
+        assert not list(validator.iter_errors(payload))
+        payload["count"] = count
+        assert list(validator.iter_errors(payload))
+        with pytest.raises(ValidationError):
+            CongruenceBoxCountResult.model_validate_json(json.dumps(payload))
 
     def test_admits_full_coordinate_box(self) -> None:
         request = CongruenceBoxCountRequest.model_validate(

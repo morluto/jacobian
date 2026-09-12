@@ -5,14 +5,24 @@ from __future__ import annotations
 from jacobian.math.combinatorics.greedoids.values import FiniteFeasibleSetSystem
 from jacobian.math.combinatorics.matroids.delta._models import (
     DeltaMatroidRecognitionResult,
+    require_twist_subset,
 )
 from jacobian.math.combinatorics.matroids.delta.values import (
+    MAX_DELTA_MEMBERSHIPS,
+    DeltaMatroidAdmissionError,
     FiniteDeltaMatroid,
     first_symmetric_exchange_obstruction,
     require_delta_matroid_admission,
+    require_delta_matroid_envelope,
+    require_delta_matroid_exchange_work,
 )
 
-__all__ = ["from_feasible_sets", "verify_from_feasible_sets"]
+__all__ = [
+    "from_feasible_sets",
+    "twist",
+    "verify_from_feasible_sets",
+    "width",
+]
 
 
 def from_feasible_sets(
@@ -51,3 +61,60 @@ def verify_from_feasible_sets(claim: DeltaMatroidRecognitionResult) -> bool:
         and claim.obstruction is None
         and claim.delta_matroid == FiniteDeltaMatroid._from_kernel(claim.source)
     )
+
+
+def _require_delta_matroid_axiom(system: FiniteFeasibleSetSystem) -> None:
+    """Replay candidate-work and exchange after the source envelope is known."""
+
+    require_delta_matroid_exchange_work(system)
+    obstruction = first_symmetric_exchange_obstruction(system)
+    if obstruction is not None:
+        raise ValueError("source feasible family is not a delta-matroid")
+
+
+def twist(
+    delta_matroid: FiniteDeltaMatroid, subset: tuple[int, ...]
+) -> FiniteDeltaMatroid:
+    """Return the delta-matroid twist by ``subset``.
+
+    Feasible sets are transformed as ``F △ X``.  The source axiom is replayed
+    at this consumer boundary because a deserialized ``FiniteDeltaMatroid`` is
+    caller-authored rather than trusted producer output.
+    """
+
+    require_twist_subset(delta_matroid, subset)
+    system = FiniteFeasibleSetSystem(
+        ground=delta_matroid.ground, feasible=delta_matroid.feasible
+    )
+    require_delta_matroid_envelope(system)
+    twist_subset = frozenset(subset)
+    projected_memberships = sum(
+        len(row) + len(twist_subset) - 2 * len(twist_subset.intersection(row))
+        for row in delta_matroid.feasible
+    )
+    if projected_memberships > MAX_DELTA_MEMBERSHIPS:
+        raise DeltaMatroidAdmissionError(
+            "memberships_exceeded",
+            "twisted feasible-family memberships exceed the output envelope",
+        )
+    _require_delta_matroid_axiom(system)
+    rows = tuple(
+        sorted(
+            tuple(sorted(frozenset(row) ^ twist_subset))
+            for row in delta_matroid.feasible
+        )
+    )
+    twisted_system = FiniteFeasibleSetSystem(
+        ground=delta_matroid.ground,
+        feasible=rows,
+    )
+    # Twisting preserves symmetric differences, hence symmetric exchange and
+    # its candidate-work bound. The output membership bound was admitted above.
+    return FiniteDeltaMatroid._from_kernel(twisted_system)
+
+
+def width(delta_matroid: FiniteDeltaMatroid) -> int:
+    """Return the delta-matroid width ``max |F| - min |F|``."""
+
+    sizes = tuple(len(row) for row in delta_matroid.feasible)
+    return max(sizes) - min(sizes)

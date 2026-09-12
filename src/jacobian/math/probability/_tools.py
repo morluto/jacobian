@@ -39,7 +39,13 @@ from jacobian.math.probability._gaussian_inputs import (
 from jacobian.math.probability._graph_connection_probability import (
     GRAPH_CONNECTION_PROBABILITY_OPERATION,
 )
+from jacobian.math.probability._hypergraph_bond_reliability import (
+    HYPERGRAPH_BOND_CONNECTION_PROBABILITY_OPERATION,
+)
 from jacobian.math.probability._local_lemma import ASYMMETRIC_LOCAL_LEMMA_OPERATION
+from jacobian.math.probability._site_reliability import (
+    SITE_CONNECTION_PROBABILITY_OPERATION,
+)
 
 
 def _event_probability(
@@ -382,6 +388,8 @@ FINITE_PROBABILITY_OPERATIONS = (
     ),
     GRAPH_CONNECTION_PROBABILITY_OPERATION,
     DIRECTED_BOND_CONNECTION_PROBABILITY_OPERATION,
+    SITE_CONNECTION_PROBABILITY_OPERATION,
+    HYPERGRAPH_BOND_CONNECTION_PROBABILITY_OPERATION,
 )
 
 

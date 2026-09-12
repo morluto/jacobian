@@ -11,7 +11,6 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.graphs.coloring._models import (
-    MAX_COLORING_COLORS,
     MAX_SOLVER_CONFLICT_BUDGET,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
@@ -19,10 +18,9 @@ from jacobian.math.graphs.values import SimpleUndirectedGraph
 MAX_INDUCED_DELETION_VERTICES = 8
 """Conservative vertex envelope for the complete 2^n profile (8 => 256 rows)."""
 
-# Values above the backend's colour-variable envelope are still exact trivial
-# cases whenever r covers an induced subset, so they are not an input bound.
-MAX_INDUCED_DELETION_R = MAX_COLORING_COLORS
 MAX_INDUCED_DELETION_R_BITS = 53
+MAX_INDUCED_DELETION_R = (1 << MAX_INDUCED_DELETION_R_BITS) - 1
+"""Largest JSON-safe target count; values above the solver palette are admitted."""
 DEFAULT_INDUCED_SOLVER_CONFLICTS = 100_000
 MAX_INDUCED_RETAINED_LABEL_CHARACTERS = 1_000_000
 MAX_INDUCED_EDGE_MATERIALIZATION = 200_000
@@ -52,7 +50,7 @@ class InducedEdgeDeletionProfileRequest(StrictModel):
     graph: InducedDeletionGraph
     r: StrictInt = Field(
         ge=1,
-        le=(1 << MAX_INDUCED_DELETION_R_BITS) - 1,
+        le=MAX_INDUCED_DELETION_R,
         description="Target colour count r >=1; D(S) is min deletions to make G[S] r-colourable.",
     )
     solver_conflicts: StrictInt = Field(
@@ -127,7 +125,7 @@ class InducedEdgeDeletionProfileResult(StrictModel):
     """Complete profile D_{G,r}(S) over all 2^n vertex subsets with per-size maxima."""
 
     graph: SimpleUndirectedGraph
-    r: StrictInt = Field(ge=1, le=(1 << MAX_INDUCED_DELETION_R_BITS) - 1)
+    r: StrictInt = Field(ge=1, le=MAX_INDUCED_DELETION_R)
     rows: tuple[InducedDeletionRow, ...]
     max_deletions_by_size: tuple[PerSizeMaximum, ...]
 

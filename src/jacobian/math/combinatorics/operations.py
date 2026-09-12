@@ -341,9 +341,20 @@ def compositions(n: int, k: int) -> int:
 def bell_number(n: int) -> int:
     """Return the nth Bell number."""
 
-    import sympy
+    # The exponential generating function is exp(exp(x) - 1), whose
+    # nonnegative coefficients give, at r = 7,
+    #
+    # B_n <= n! exp(exp(7) - 1) / 7**n.
+    #
+    # The n = 0 result is 1. For 1 <= n <= 10_000, n! <= n**n, exp(7) <
+    # 1100, exp(1099) < 10**478, and (n / 7)**n < 1500**10_000 <
+    # 10**32_000. Thus every admitted result is below 10**32_478, inside the
+    # 32_768-digit canonical scalar envelope. This is an output bound, not a
+    # runtime estimate.
+    index = _bounded_counting_index(n, name="n")
+    from flint import fmpz
 
-    return int(sympy.bell(_nonnegative(n, name="n")))
+    return int(fmpz.bell_number(index))
 
 
 def bernoulli_number(n: int) -> Fraction:
@@ -473,8 +484,20 @@ def progression_hypergraph(
     coordinates = tuple(product(*(range(modulus) for modulus in group.moduli)))
     labels = {element: f"v{index}" for index, element in enumerate(coordinates)}
     edge_sets: set[frozenset[tuple[int, ...]]] = set()
+    # A step killed by two produces ``a, a + d, a`` and can never contribute
+    # an edge.  Filtering it first also makes elementary 2-groups linear in
+    # their retained vertex output instead of needlessly traversing |G|**2
+    # degenerate pairs.
+    nondegenerate_steps = tuple(
+        step
+        for step in coordinates
+        if any(
+            (2 * coordinate) % modulus
+            for coordinate, modulus in zip(step, group.moduli, strict=True)
+        )
+    )
     for start in coordinates:
-        for step in coordinates:
+        for step in nondegenerate_steps:
             progression = frozenset(
                 tuple(
                     (start[index] + multiple * step[index]) % group.moduli[index]

@@ -10,8 +10,15 @@ from jacobian.math.combinatorics.matroids.delta import FiniteDeltaMatroid
 from jacobian.math.combinatorics.matroids.delta._models import (
     DeltaMatroidFromFeasibleSetsRequest,
     DeltaMatroidRecognitionResult,
+    DeltaMatroidTwistRequest,
+    DeltaMatroidWidthRequest,
 )
-from jacobian.math.combinatorics.matroids.delta._tools import TOOLS, _from_feasible_sets
+from jacobian.math.combinatorics.matroids.delta._tools import (
+    TOOLS,
+    _from_feasible_sets,
+    _twist,
+    _width,
+)
 
 
 def _two_element_delta_matroid(*, scrambled: bool = False) -> FiniteFeasibleSetSystem:
@@ -22,7 +29,43 @@ def _two_element_delta_matroid(*, scrambled: bool = False) -> FiniteFeasibleSetS
 def test_catalog_contains_only_audited_agent_outcome() -> None:
     assert {tool.operation_id for tool in TOOLS} == {
         "delta_matroid.from_feasible_sets.compute",
+        "delta_matroid.twist.compute",
     }
+
+
+def test_twist_request_publishes_admission_limits() -> None:
+    schema = DeltaMatroidTwistRequest.model_json_schema()
+    limits = schema["admission_limits"]
+    assert limits["max_feasible_set_memberships"] == 16_384
+    assert limits["max_ground_label_utf8_bytes"] == 2_048
+    assert limits["max_symmetric_exchange_candidate_checks_per_replay"] == 250_000
+    description = schema["properties"]["delta_matroid"]["description"]
+    assert "16384" in description.replace(",", "")
+    assert "2048" in description.replace(",", "")
+    assert "250000" in description.replace(",", "")
+    source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((), (0,), (1,)))
+    request = DeltaMatroidTwistRequest(delta_matroid=source, subset=(0,))
+    result = _twist(request)
+
+    assert result == FiniteDeltaMatroid(ground=("a", "b"), feasible=((), (0,), (0, 1)))
+    assert (
+        DeltaMatroidTwistRequest.model_validate_json(request.model_dump_json())
+        == request
+    )
+
+
+def test_twist_rejects_forged_non_delta_source() -> None:
+    source = FiniteDeltaMatroid(ground=("a", "b", "c"), feasible=((), (0, 1), (2,)))
+    with pytest.raises(ValueError, match="source feasible family"):
+        _twist(DeltaMatroidTwistRequest(delta_matroid=source, subset=(1,)))
+
+
+def test_width_is_exact_and_preserves_source_binding() -> None:
+    source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((), (0,), (0, 1), (1,)))
+    result = _width(DeltaMatroidWidthRequest(delta_matroid=source))
+    assert result.width == 2
+    assert result.delta_matroid == source
+    assert type(result.model_dump()["width"]) is int
 
 
 def test_complete_feasible_family_constructs_canonical_delta_matroid() -> None:
@@ -203,7 +246,7 @@ def test_request_schema_exposes_every_delta_specific_admission_limit() -> None:
     schema = DeltaMatroidFromFeasibleSetsRequest.model_json_schema()
 
     assert schema["admission_limits"] == {
-        "max_feasible_set_memberships": 1_024,
+        "max_feasible_set_memberships": 16_384,
         "max_ground_label_utf8_bytes": 2_048,
         "max_symmetric_exchange_candidate_checks_per_replay": 250_000,
     }
@@ -235,9 +278,9 @@ def test_short_row_family_beyond_any_row_cap_is_recognized() -> None:
     )
 
 
-def test_membership_envelope_rejects_wide_families_without_a_row_cap() -> None:
-    # Six hundred distinct pairs carry 1,200 memberships, past the membership
-    # envelope; rejection names the controlling quantity rather than a row cap.
+def test_exchange_envelope_rejects_wide_families_without_a_row_cap() -> None:
+    # Six hundred distinct pairs fit the membership envelope but exceed
+    # the symmetric-exchange candidate-work bound.
     feasible = []
     for index in range(25):
         for offset in range(1, 25):
@@ -248,7 +291,7 @@ def test_membership_envelope_rejects_wide_families_without_a_row_cap() -> None:
             feasible=tuple(feasible),
         )
     )
-    with pytest.raises(ValueError, match="memberships exceed"):
+    with pytest.raises(ValueError, match="candidate checks exceed"):
         _from_feasible_sets(request)
 
 
@@ -271,3 +314,72 @@ def test_native_admission_rejects_exchange_candidate_space_before_axiom_pass() -
     )
     with pytest.raises(ValueError, match="candidate checks exceed"):
         _from_feasible_sets(request)
+
+
+def test_dense_twist_composes_with_width_and_inverse_twist() -> None:
+    source = FiniteDeltaMatroid(
+        ground=tuple(f"e{i}" for i in range(33)),
+        feasible=((), *tuple((i,) for i in range(33))),
+    )
+    subset = tuple(range(33))
+    result = _twist(DeltaMatroidTwistRequest(delta_matroid=source, subset=subset))
+    restored = FiniteDeltaMatroid.model_validate_json(result.model_dump_json())
+    assert sum(map(len, restored.feasible)) == 1089
+    assert _width(DeltaMatroidWidthRequest(delta_matroid=restored)).width == 1
+    assert (
+        _twist(DeltaMatroidTwistRequest(delta_matroid=restored, subset=subset))
+        == source
+    )
+
+
+def test_twist_output_limit_remains_a_resource_refusal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.catalog.models import OperationResourceAdmissionError
+    from jacobian.math.combinatorics.matroids.delta import operations
+
+    def fail_if_replayed(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("exchange replayed before output preflight")
+
+    monkeypatch.setattr(
+        operations, "first_symmetric_exchange_obstruction", fail_if_replayed
+    )
+    source = FiniteDeltaMatroid(
+        ground=tuple(f"e{i}" for i in range(129)),
+        feasible=((), *tuple((i,) for i in range(129))),
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="memberships exceed"):
+        _twist(DeltaMatroidTwistRequest(delta_matroid=source, subset=tuple(range(129))))
+
+
+def test_native_transforms_accept_canonical_mathematical_values() -> None:
+    from jacobian.math.combinatorics.matroids.delta import twist, width
+
+    source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((), (0,), (1,)))
+    result = twist(source, (0,))
+    assert result == _twist(DeltaMatroidTwistRequest(delta_matroid=source, subset=(0,)))
+    assert width(result) == _width(DeltaMatroidWidthRequest(delta_matroid=result)).width
+    assert twist(result, (0,)) == source
+
+
+def test_even_subset_width_uses_linear_admission() -> None:
+    from jacobian.math.combinatorics.matroids.delta import width
+
+    source = FiniteDeltaMatroid(
+        ground=tuple(f"e{index}" for index in range(8)),
+        feasible=tuple(
+            sorted(
+                tuple(bit for bit in range(8) if (index >> bit) & 1)
+                for index in range(256)
+                if index.bit_count() % 2 == 0
+            )
+        ),
+    )
+    assert width(source) == 8
+
+
+def test_width_ignores_recognition_label_envelope() -> None:
+    from jacobian.math.combinatorics.matroids.delta import width
+
+    source = FiniteDeltaMatroid(ground=("a" * 2049,), feasible=((),))
+    assert width(source) == 0

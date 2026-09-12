@@ -21,7 +21,9 @@ from jacobian.math.combinatorics.algebraic._tools import (
 
 def test_hook_content_count_and_factors() -> None:
     result = hook_content_count(
-        HookContentCountRequest(partition={"parts": [2, 1]}, alphabet_size=2)
+        HookContentCountRequest.model_validate(
+            {"partition": {"parts": [2, 1]}, "alphabet_size": 2}
+        )
     )
     assert result.count == 2
     assert result.numerators == (2, 3, 1)
@@ -30,14 +32,18 @@ def test_hook_content_count_and_factors() -> None:
 
 def test_hook_content_zero_when_alphabet_is_too_small() -> None:
     result = hook_content_count(
-        HookContentCountRequest(partition={"parts": [1, 1]}, alphabet_size=1)
+        HookContentCountRequest.model_validate(
+            {"partition": {"parts": [1, 1]}, "alphabet_size": 1}
+        )
     )
     assert result.count == 0
 
 
 def test_hook_content_empty_shape() -> None:
     result = hook_content_count(
-        HookContentCountRequest(partition={"parts": []}, alphabet_size=3)
+        HookContentCountRequest.model_validate(
+            {"partition": {"parts": []}, "alphabet_size": 3}
+        )
     )
     assert result.count == 1
     assert result.numerators == ()
@@ -57,7 +63,9 @@ def test_partition_dominance_ledger(
     left: tuple[int, ...], right: tuple[int, ...], relation: str
 ) -> None:
     result = partition_dominance(
-        PartitionDominanceRequest(left={"parts": left}, right={"parts": right})
+        PartitionDominanceRequest.model_validate(
+            {"left": {"parts": left}, "right": {"parts": right}}
+        )
     )
     assert result.relation == relation
     assert len(result.left_prefix_sums) == max(len(left), len(right))
@@ -66,7 +74,9 @@ def test_partition_dominance_ledger(
 
 def test_partition_dominance_different_sizes_is_distinct() -> None:
     result = partition_dominance(
-        PartitionDominanceRequest(left={"parts": [2]}, right={"parts": [1]})
+        PartitionDominanceRequest.model_validate(
+            {"left": {"parts": [2]}, "right": {"parts": [1]}}
+        )
     )
     assert result.relation == "NOT_COMPARABLE_DIFFERENT_SIZE"
     assert result.left_prefix_sums == ()
@@ -74,10 +84,12 @@ def test_partition_dominance_different_sizes_is_distinct() -> None:
 
 def test_tableau_checkers_replay_membership() -> None:
     standard = check_standard_tableau(
-        StandardTableauCheckRequest(tableau={"rows": [[1, 2], [3]]})
+        StandardTableauCheckRequest.model_validate({"tableau": {"rows": [[1, 2], [3]]}})
     )
     semistandard = check_semistandard_tableau(
-        SemistandardTableauCheckRequest(tableau={"rows": [[1, 1], [2]]})
+        SemistandardTableauCheckRequest.model_validate(
+            {"tableau": {"rows": [[1, 1], [2]]}}
+        )
     )
     assert standard.rows == ((1, 2), (3,))
     assert semistandard.rows == ((1, 1), (2,))
@@ -86,21 +98,31 @@ def test_tableau_checkers_replay_membership() -> None:
 @pytest.mark.parametrize(
     "candidate",
     [
-        StandardTableauCheckRequest(tableau={"rows": [[1, 1], [2]]}),
-        StandardTableauCheckRequest(tableau={"rows": [[1, 2], [2]]}),
+        StandardTableauCheckRequest.model_validate(
+            {"tableau": {"rows": [[1, 1], [2]]}}
+        ),
+        StandardTableauCheckRequest.model_validate(
+            {"tableau": {"rows": [[1, 2], [2]]}}
+        ),
     ],
 )
-def test_standard_tableau_checker_rejects_row_or_column_failure(candidate) -> None:
+def test_standard_tableau_checker_rejects_row_or_column_failure(
+    candidate: StandardTableauCheckRequest,
+) -> None:
     with pytest.raises(ValueError):
         check_standard_tableau(candidate)
 
 
 def test_semistandard_tableau_checker_rejects_column_failure() -> None:
-    request = SemistandardTableauCheckRequest(tableau={"rows": [[1, 2], [1]]})
+    request = SemistandardTableauCheckRequest.model_validate(
+        {"tableau": {"rows": [[1, 2], [1]]}}
+    )
     with pytest.raises(ValueError):
         check_semistandard_tableau(request)
 
 
 def test_hook_content_alphabet_bound_is_published() -> None:
     with pytest.raises(ValidationError):
-        HookContentCountRequest(partition={"parts": [1]}, alphabet_size=0)
+        HookContentCountRequest.model_validate(
+            {"partition": {"parts": [1]}, "alphabet_size": 0}
+        )

@@ -59,10 +59,10 @@ _MergedPair = tuple[FormComponent, FormComponent, tuple[int, ...], int]
 
 
 def _admit_coefficient_growth(pairs: tuple[_MergedPair, ...]) -> None:
-    # Bound rational accumulation independently for each output monomial
-    # before multiplying coefficients. Summing N fractions of height h costs
-    # at most N * (h + 1) decimal digits with an unreduced product denominator.
-    projected_digits: dict[tuple[tuple[int, ...], tuple[int, ...]], int] = {}
+    # Bound each output monomial from its exact products. A single rational
+    # product of heights h and k has at most h+k digits; extra slack is only
+    # needed when several products are summed into one coefficient.
+    projected_digits: dict[tuple[tuple[int, ...], tuple[int, ...]], list[int]] = {}
     for first, second, indices, _ in pairs:
         for first_term in first.coefficient.polynomial.terms:
             for second_term in second.coefficient.polynomial.terms:
@@ -72,19 +72,18 @@ def _admit_coefficient_growth(pairs: tuple[_MergedPair, ...]) -> None:
                         first_term.exponents, second_term.exponents, strict=True
                     )
                 )
-                height = (
-                    canonical_rational_component_digits(first_term.coefficient)
-                    + canonical_rational_component_digits(second_term.coefficient)
-                    + 1
-                )
+                height = canonical_rational_component_digits(
+                    first_term.coefficient
+                ) + canonical_rational_component_digits(second_term.coefficient)
                 key = (indices, exponents)
-                projected_digits[key] = projected_digits.get(key, 0) + height
+                projected_digits.setdefault(key, []).append(height)
+    bounds = tuple(
+        heights[0] if len(heights) == 1 else sum(height + 1 for height in heights)
+        for heights in projected_digits.values()
+    )
     if (
-        any(
-            height > MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS
-            for height in projected_digits.values()
-        )
-        or sum(height * height for height in projected_digits.values()) > 100_000_000
+        any(height > MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS for height in bounds)
+        or sum(height * height for height in bounds) > 100_000_000
     ):
         raise OperationResourceAdmissionError(
             location=("left", "right"),
@@ -147,6 +146,12 @@ def wedge(
     degree = left.degree + right.degree
     _admit_degree(degree)
     if degree > len(left.variables):
+        return PolynomialDifferentialForm(
+            variables=left.variables, degree=degree, components=()
+        )
+    if int(left.degree) % 2 == 1 and left == right:
+        # Graded commutativity forces an odd form's self-wedge to vanish
+        # before exponent or coefficient expansion.
         return PolynomialDifferentialForm(
             variables=left.variables, degree=degree, components=()
         )

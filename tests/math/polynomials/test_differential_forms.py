@@ -156,6 +156,14 @@ def test_structural_zero_skips_irrelevant_exponent_admission() -> None:
     assert wedge(high, high).components == ()
 
 
+def test_odd_self_wedge_cancels_before_exponent_admission() -> None:
+    coefficient = _poly((1, (MAX_DIFFERENTIAL_FORM_EXPONENT, 0)))
+    alpha = _form(1, ((0,), coefficient), ((1,), coefficient))
+    product = wedge(alpha, alpha)
+    assert product.degree == 2
+    assert product.components == ()
+
+
 def test_wedge_reserves_output_support_before_convolution() -> None:
     left_terms = tuple((1, (exponent, 0)) for exponent in range(16, -1, -1))
     right_terms = tuple((1, (0, exponent)) for exponent in range(16, -1, -1))
@@ -174,6 +182,16 @@ def test_wedge_admits_collapsed_one_variable_support() -> None:
         term.exponents[0] for term in product.components[0].coefficient.polynomial.terms
     )
     assert exponents == tuple(range(32, -1, -1))
+
+
+def test_wedge_admits_one_term_product_at_coefficient_bound() -> None:
+    coefficient = 10**2048 - 1
+    scalar = _form(0, ((), _poly((coefficient, (0, 0)))))
+    product = wedge(scalar, scalar)
+    assert (
+        product.components[0].coefficient.polynomial.terms[0].coefficient.num
+        == coefficient * coefficient
+    )
 
 
 def test_wedge_admits_coefficient_height_before_convolution() -> None:

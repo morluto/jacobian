@@ -73,8 +73,19 @@ class TestBlockCutTreeRequest:
     def test_vertex_count_too_large(self) -> None:
         with pytest.raises(ValidationError):
             BlockCutTreeRequest(
-                graph=IndexedSimpleUndirectedGraph(vertex_count=65, edges=())
+                graph=IndexedSimpleUndirectedGraph(vertex_count=257, edges=())
             )
+
+    def test_linear_path_above_legacy_cap_is_admitted_and_round_trips(self) -> None:
+        graph = IndexedSimpleUndirectedGraph(
+            vertex_count=65, edges=tuple((index, index + 1) for index in range(64))
+        )
+        request = BlockCutTreeRequest(graph=graph)
+        result = block_cut_tree(request.graph)
+        assert len(result.blocks) == 64
+        assert len(result.articulation_points) == 63
+        assert len(result.tree) == 126
+        assert type(result).model_validate(result.model_dump()) == result
 
     def test_vertex_count_too_small(self) -> None:
         with pytest.raises(ValidationError):

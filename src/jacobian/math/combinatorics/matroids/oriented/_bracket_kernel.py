@@ -286,9 +286,10 @@ def _bounded_integer_sum(left: int, right: int) -> int | None:
         return right
     if right == 0:
         return left
-    if (left < 0) == (right < 0):
-        if abs(left) >= _CANONICAL_INTEGER_LIMIT - abs(right):
-            return None
+    if (left < 0) == (right < 0) and abs(left) >= _CANONICAL_INTEGER_LIMIT - abs(
+        right
+    ):
+        return None
     return left + right
 
 

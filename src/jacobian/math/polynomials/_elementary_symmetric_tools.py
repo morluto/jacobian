@@ -4,8 +4,15 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.polynomials._elementary_symmetric import (
     ElementarySymmetricFamilyRequest,
     ElementarySymmetricFamilyResult,
-    elementary_symmetric_family,
+    _elementary_symmetric_family_from_request,
 )
+
+
+def _run_elementary_symmetric_family(
+    request: ElementarySymmetricFamilyRequest,
+) -> ElementarySymmetricFamilyResult:
+    return _elementary_symmetric_family_from_request(request)
+
 
 ELEMENTARY_SYMMETRIC_FAMILY_OPERATION = MathTool(
     operation_id="polynomial.symmetric.elementary_family.compute",
@@ -17,7 +24,7 @@ ELEMENTARY_SYMMETRIC_FAMILY_OPERATION = MathTool(
     ),
     request_type=ElementarySymmetricFamilyRequest,
     result_type=ElementarySymmetricFamilyResult,
-    run=elementary_symmetric_family,
+    run=_run_elementary_symmetric_family,
     tags=("polynomial", "symmetric", "elementary", "family", "exact"),
     examples=(
         OperationExample(

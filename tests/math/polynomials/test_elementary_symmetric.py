@@ -30,7 +30,8 @@ def coefficients(polynomial: RationalPolynomial) -> dict[tuple[int, ...], Fracti
 
 def test_family_through_degree_two() -> None:
     result = elementary_symmetric_family(
-        ElementarySymmetricFamilyRequest(variables=("x", "y", "z"), maximum_degree=2)
+        ("x", "y", "z"),
+        2,
     )
     assert support(result.polynomials[0]) == ((0, 0, 0),)
     assert support(result.polynomials[1]) == ((1, 0, 0), (0, 1, 0), (0, 0, 1))
@@ -39,7 +40,8 @@ def test_family_through_degree_two() -> None:
 
 def test_empty_axis_e_zero_is_a_canonical_constant() -> None:
     result = elementary_symmetric_family(
-        ElementarySymmetricFamilyRequest(variables=(), maximum_degree=0)
+        (),
+        0,
     )
     assert result.polynomials[0].variables == ()
     assert support(result.polynomials[0]) == ((),)
@@ -54,10 +56,12 @@ def test_request_rejects_duplicate_variables_and_degree_above_axis() -> None:
 
 def test_dynamic_recurrence_matches_prefix_recurrence() -> None:
     full = elementary_symmetric_family(
-        ElementarySymmetricFamilyRequest(variables=("x", "y", "z"), maximum_degree=3)
+        ("x", "y", "z"),
+        3,
     )
     prefix = elementary_symmetric_family(
-        ElementarySymmetricFamilyRequest(variables=("x", "y"), maximum_degree=2)
+        ("x", "y"),
+        2,
     )
     for degree in range(1, 4):
         expected = (
@@ -79,10 +83,12 @@ def test_dynamic_recurrence_matches_prefix_recurrence() -> None:
 
 def test_family_is_invariant_under_coherent_variable_permutation() -> None:
     ordered = elementary_symmetric_family(
-        ElementarySymmetricFamilyRequest(variables=("x", "y", "z"), maximum_degree=3)
+        ("x", "y", "z"),
+        3,
     )
     permuted = elementary_symmetric_family(
-        ElementarySymmetricFamilyRequest(variables=("z", "x", "y"), maximum_degree=3)
+        ("z", "x", "y"),
+        3,
     )
     for left, right in zip(ordered.polynomials, permuted.polynomials, strict=True):
         left_by_name = {
@@ -99,7 +105,8 @@ def test_family_is_invariant_under_coherent_variable_permutation() -> None:
 def test_vieta_reconstruction_matches_product_of_linear_factors() -> None:
     variables = ("x", "y", "z")
     result = elementary_symmetric_family(
-        ElementarySymmetricFamilyRequest(variables=variables, maximum_degree=3)
+        variables,
+        3,
     )
     t = symbols("t")
     x, y, z = symbols("x y z")
@@ -112,9 +119,8 @@ def test_vieta_reconstruction_matches_product_of_linear_factors() -> None:
 
 def test_complete_eighth_axis_family_stays_within_exact_carrier() -> None:
     result = elementary_symmetric_family(
-        ElementarySymmetricFamilyRequest(
-            variables=tuple(f"x{index}" for index in range(8)), maximum_degree=8
-        )
+        tuple(f"x{index}" for index in range(8)),
+        8,
     )
     assert len(result.polynomials) == 9
     assert (
@@ -140,7 +146,8 @@ def test_catalog_declaration_uses_requested_operation_id_and_round_trips() -> No
 
 def test_result_rejects_forged_nonunit_e_zero_without_replaying_the_family() -> None:
     result = elementary_symmetric_family(
-        ElementarySymmetricFamilyRequest(variables=("x", "y"), maximum_degree=1)
+        ("x", "y"),
+        1,
     )
     forged = result.model_dump()
     forged["polynomials"][0]["polynomial"]["terms"][0]["coefficient"]["num"] = 2

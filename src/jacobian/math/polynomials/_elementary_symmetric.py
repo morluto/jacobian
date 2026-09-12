@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from math import comb
+from re import fullmatch
 
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
@@ -142,14 +143,15 @@ class _ElementaryFamilyBounds:
     work: int
 
 
-def _bounds(request: ElementarySymmetricFamilyRequest) -> _ElementaryFamilyBounds:
-    variables = len(request.variables)
-    maximum_degree = request.maximum_degree
+def _bounds(
+    variables_axis: tuple[PolynomialVariable, ...], maximum_degree: int
+) -> _ElementaryFamilyBounds:
+    variables = len(variables_axis)
     monomials = sum(comb(variables, degree) for degree in range(maximum_degree + 1))
     exponent_cells = monomials * variables
     # Every returned polynomial retains the full authoritative axis.
     label_bytes = (maximum_degree + 1) * sum(
-        len(variable.encode("utf-8")) for variable in request.variables
+        len(variable.encode("utf-8")) for variable in variables_axis
     )
     # A term has n exponent cells, one coefficient, and one sparse-term record;
     # each polynomial has its axis and family slot.  This is a structural
@@ -209,7 +211,8 @@ def _bounds(request: ElementarySymmetricFamilyRequest) -> _ElementaryFamilyBound
 
 
 def _compute(
-    request: ElementarySymmetricFamilyRequest,
+    variables: tuple[PolynomialVariable, ...],
+    maximum_degree: int,
     bounds: _ElementaryFamilyBounds,
 ) -> ElementarySymmetricFamilyResult:
     """Run the admitted dynamic-product recurrence.
@@ -221,7 +224,6 @@ def _compute(
     in the shared canonical sparse representation.
     """
 
-    variables = request.variables
     variable_count = len(variables)
     zero = (0,) * variable_count
     one = CanonicalRational(num=1, den=1)
@@ -233,9 +235,9 @@ def _compute(
         previous = levels
         ledger.charge(sum(len(level) for level in previous))
         levels = [dict(level) for level in previous]
-        if len(levels) <= request.maximum_degree:
+        if len(levels) <= maximum_degree:
             levels.append({})
-        for degree in range(1, min(index + 1, request.maximum_degree) + 1):
+        for degree in range(1, min(index + 1, maximum_degree) + 1):
             source = previous[degree - 1]
             target = levels[degree]
             for exponents in source:
@@ -244,7 +246,7 @@ def _compute(
                 target[shifted] = one
 
     polynomials: list[RationalPolynomial] = []
-    for degree in range(request.maximum_degree + 1):
+    for degree in range(maximum_degree + 1):
         entries = levels[degree]
         terms: list[RationalPolynomialTerm] = []
         for exponents in sorted(entries, reverse=True):
@@ -266,18 +268,54 @@ def _compute(
 
     return ElementarySymmetricFamilyResult(
         variables=variables,
-        maximum_degree=request.maximum_degree,
+        maximum_degree=maximum_degree,
         polynomials=tuple(polynomials),
     )
 
 
-def elementary_symmetric_family(
+def _elementary_symmetric_family_from_request(
     request: ElementarySymmetricFamilyRequest,
 ) -> ElementarySymmetricFamilyResult:
-    """Return ``e_0, ..., e_k`` for one ordered QQ variable axis."""
+    bounds = _bounds(request.variables, request.maximum_degree)
+    return _compute(request.variables, request.maximum_degree, bounds)
 
-    bounds = _bounds(request)
-    return _compute(request, bounds)
+
+def _validate_native_arguments(
+    variables: tuple[PolynomialVariable, ...], maximum_degree: int
+) -> None:
+    if type(variables) is not tuple:
+        raise TypeError("variables must be a tuple of distinct variable labels")
+    if type(maximum_degree) is not int:
+        raise TypeError("maximum_degree must be an integer")
+    if len(variables) > MAX_POLYNOMIAL_VARIABLES:
+        raise ValueError(
+            f"variables cannot contain more than {MAX_POLYNOMIAL_VARIABLES} labels"
+        )
+    for variable in variables:
+        if (
+            type(variable) is not str
+            or fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,31}", variable) is None
+        ):
+            raise ValueError("variables must use the canonical polynomial label syntax")
+    if len(set(variables)) != len(variables):
+        raise ValueError("elementary symmetric variables must be unique")
+    if not 0 <= maximum_degree <= len(variables):
+        raise ValueError("maximum_degree must be between 0 and the variable count")
+
+
+def elementary_symmetric_family(
+    variables: tuple[PolynomialVariable, ...], maximum_degree: int
+) -> ElementarySymmetricFamilyResult:
+    """Return ``e_0, ..., e_k`` for one ordered QQ variable axis.
+
+    This direct native API accepts mathematical arguments rather than the
+    catalog's wire request model.  The private request adapter below is used
+    only by catalog dispatch, so both paths share one admission and kernel.
+    """
+
+    _validate_native_arguments(variables, maximum_degree)
+    bounds = _bounds(variables, maximum_degree)
+    return _compute(variables, maximum_degree, bounds)
 
 
 __all__ = [

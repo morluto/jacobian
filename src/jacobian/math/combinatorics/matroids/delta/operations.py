@@ -11,6 +11,8 @@ from jacobian.math.combinatorics.matroids.delta._models import (
     DeltaMatroidWidthResult,
 )
 from jacobian.math.combinatorics.matroids.delta.values import (
+    MAX_DELTA_MEMBERSHIPS,
+    DeltaMatroidAdmissionError,
     FiniteDeltaMatroid,
     first_symmetric_exchange_obstruction,
     require_delta_matroid_admission,
@@ -82,6 +84,15 @@ def twist(request: DeltaMatroidTwistRequest) -> DeltaMatroidTwistResult:
 
     _require_delta_matroid(request.delta_matroid)
     subset = frozenset(request.subset)
+    projected_memberships = sum(
+        len(row) + len(subset) - 2 * len(subset.intersection(row))
+        for row in request.delta_matroid.feasible
+    )
+    if projected_memberships > MAX_DELTA_MEMBERSHIPS:
+        raise DeltaMatroidAdmissionError(
+            "memberships_exceeded",
+            "twisted feasible-family memberships exceed the output envelope",
+        )
     rows = tuple(
         sorted(
             tuple(sorted(frozenset(row) ^ subset))
@@ -92,11 +103,8 @@ def twist(request: DeltaMatroidTwistRequest) -> DeltaMatroidTwistResult:
         ground=request.delta_matroid.ground,
         feasible=rows,
     )
-    # Twisting preserves symmetric exchange; replay the finite defining axiom
-    # before constructing the theorem-bearing canonical value.
-    twisted_obstruction = first_symmetric_exchange_obstruction(twisted_system)
-    if twisted_obstruction is not None:
-        raise ValueError("twist did not preserve symmetric exchange")
+    # Twisting preserves symmetric differences, hence symmetric exchange and
+    # its candidate-work bound. The output membership bound was admitted above.
     return DeltaMatroidTwistResult._from_kernel(
         request,
         FiniteDeltaMatroid._from_kernel(twisted_system),

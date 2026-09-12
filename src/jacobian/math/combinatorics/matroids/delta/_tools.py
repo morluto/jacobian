@@ -5,6 +5,7 @@ from jacobian.catalog.models import (
     MathTools,
     OperationDomainValidationError,
     OperationExample,
+    OperationResourceAdmissionError,
 )
 from jacobian.math.combinatorics.matroids.delta._models import (
     DeltaMatroidFromFeasibleSetsRequest,
@@ -40,6 +41,12 @@ def _from_feasible_sets(
 def _twist(request: DeltaMatroidTwistRequest) -> DeltaMatroidTwistResult:
     try:
         return twist(request)
+    except DeltaMatroidAdmissionError as exc:
+        raise OperationResourceAdmissionError(
+            location=("delta_matroid",),
+            code=f"delta_matroid.{exc.reason}",
+            message=str(exc),
+        ) from exc
     except ValueError as exc:
         raise OperationDomainValidationError(
             location=("delta_matroid",),
@@ -51,6 +58,12 @@ def _twist(request: DeltaMatroidTwistRequest) -> DeltaMatroidTwistResult:
 def _width(request: DeltaMatroidWidthRequest) -> DeltaMatroidWidthResult:
     try:
         return width(request)
+    except DeltaMatroidAdmissionError as exc:
+        raise OperationResourceAdmissionError(
+            location=("delta_matroid",),
+            code=f"delta_matroid.{exc.reason}",
+            message=str(exc),
+        ) from exc
     except ValueError as exc:
         raise OperationDomainValidationError(
             location=("delta_matroid",),

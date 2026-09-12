@@ -10,7 +10,7 @@ from pydantic_core import PydanticCustomError
 from jacobian._models import StrictModel
 from jacobian.math.combinatorics.greedoids.values import FiniteFeasibleSetSystem
 
-MAX_DELTA_MEMBERSHIPS = 1_024
+MAX_DELTA_MEMBERSHIPS = 16_384
 MAX_DELTA_LABEL_BYTES = 2_048
 MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS = 250_000
 
@@ -80,6 +80,8 @@ def _exchange_work(
             difference_size = len(left ^ right)
             instances += difference_size
             candidate_space += difference_size * difference_size
+            if candidate_space > MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS:
+                return instances, candidate_space
     return instances, candidate_space
 
 

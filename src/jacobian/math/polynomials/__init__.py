@@ -1,5 +1,6 @@
 """Supported exact polynomial API."""
 
+from jacobian.math.polynomials._cyclotomic import cyclotomic
 from jacobian.math.polynomials._elementary_kernel import (
     integer_polynomial_compose,
     integer_polynomial_content,
@@ -63,6 +64,7 @@ def __getattr__(name: str) -> object:
 
 
 __all__ = [
+    "cyclotomic",
     "derivative",
     "discriminant",
     "divide",

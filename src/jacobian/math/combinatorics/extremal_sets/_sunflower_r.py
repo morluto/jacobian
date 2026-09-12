@@ -269,6 +269,7 @@ class SunflowerFamilyResult(StrictModel):
         expected_edges: list[tuple[str, tuple[str, ...]]] = []
         seen_indices: set[tuple[int, ...]] = set()
         seen_edge_ids: set[str] = set()
+        previous_indices: tuple[int, ...] | None = None
         # Row IDs are one-based ordinals over the found rows in enumeration
         # order.  Index-list IDs would exceed the hypergraph label limit for
         # large petal counts, while ordinals stay bounded by the candidate
@@ -280,6 +281,12 @@ class SunflowerFamilyResult(StrictModel):
                     "row_shape",
                     "sunflower rows must have sorted source indices of the declared petal count",
                 )
+            if previous_indices is not None and indices <= previous_indices:
+                raise _result_error(
+                    "row_order",
+                    "sunflower rows must appear in lexicographic source-index order",
+                )
+            previous_indices = indices
             if len(set(indices)) != len(indices) or any(
                 index < 0 or index >= member_count for index in indices
             ):
@@ -406,7 +413,6 @@ __all__ = [
     "MAX_SUNFLOWER_PETALS",
     "MAX_SUNFLOWER_RESULT_ALLOCATION_UNITS",
     "SunflowerFamily",
-    "SunflowerFamilyRequest",
     "SunflowerFamilyResult",
     "construct_sunflower_family",
 ]

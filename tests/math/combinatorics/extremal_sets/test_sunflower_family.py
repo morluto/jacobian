@@ -21,6 +21,7 @@ from jacobian.math.combinatorics.extremal_sets._sunflower_r import (
 )
 from jacobian.math.combinatorics.extremal_sets._tools import compute_sunflower_family
 from jacobian.math.combinatorics.extremal_sets.values import IndexedFiniteSetFamily
+from jacobian.math.combinatorics import extremal_sets
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     MAX_VERTICES,
 )
@@ -261,6 +262,25 @@ def test_forged_core_shape_is_rejected_without_replaying_the_relation() -> None:
         SunflowerFamilyResult.model_validate(forged)
 
 
+def test_reversed_rows_with_renumbered_ids_are_rejected() -> None:
+    result = construct_sunflower_family(
+        _family(((0, 1), (0, 2), (0, 4), (0, 5), (1, 2), (4, 5)), ground=6), 3
+    )
+    assert len(result.sunflowers) >= 2
+    forged = result.model_dump(mode="json")
+    reversed_rows = list(reversed(forged["sunflowers"]))
+    for position, row in enumerate(reversed_rows, start=1):
+        row["edge_id"] = f"sunflower_{position}"
+    forged["sunflowers"] = reversed_rows
+    forged["hypergraph_edges"] = [
+        (row["edge_id"], [str(index) for index in row["source_indices"]])
+        for row in reversed_rows
+    ]
+    forged["hypergraph"]["edges"] = forged["hypergraph_edges"]
+    with pytest.raises(ValidationError, match="lexicographic source-index order"):
+        SunflowerFamilyResult.model_validate(forged)
+
+
 def test_independent_pairwise_intersection_oracle() -> None:
     """The public rows agree with an independently enumerated exact oracle."""
     members = ((0, 1), (0, 2), (0, 4), (0, 5), (1, 2), (4, 5))
@@ -306,4 +326,9 @@ def test_native_signature_is_source_and_petal_count() -> None:
             3,
         )
     assert source_error.value.errors()[0]["type"] == "set_system.sunflower.source_type"
+
+
+def test_native_package_does_not_export_the_wire_request() -> None:
+    assert "SunflowerFamilyRequest" not in extremal_sets.__all__
+    assert not hasattr(extremal_sets, "SunflowerFamilyRequest")
 

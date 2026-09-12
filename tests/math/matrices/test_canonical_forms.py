@@ -202,7 +202,7 @@ def test_matrix_polynomial_remainder_stops_support_simulation_at_the_term_cap() 
                     coefficient=R(num=1, den=1),
                     exponents=(8 * index,),
                 )
-                for index in range(1, MAX_POLYNOMIAL_TERMS + 1)
+                for index in range(MAX_POLYNOMIAL_TERMS, 0, -1)
             )
         ),
     )

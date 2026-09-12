@@ -15,6 +15,7 @@ from jacobian.math.graphs.clique_candidate_hypergraph._models import (
 from jacobian.math.graphs.clique_candidate_hypergraph.operations import (
     construct_all_clique_candidate_hypergraph,
     convert_candidate_cliques,
+    verify_clique_candidate_hypergraph,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -76,20 +77,19 @@ class TestCompleteConstructor:
 
     def test_result_reparses(self) -> None:
         result = construct_all_clique_candidate_hypergraph(_graph(BOWTIE))
-        assert (
-            CliqueCandidateHypergraphResult.model_validate(
-                result.model_dump(mode="json")
-            )
-            == result
+        reparsed = CliqueCandidateHypergraphResult.model_validate(
+            result.model_dump(mode="json")
         )
+        assert reparsed == result
+        assert verify_clique_candidate_hypergraph(reparsed)
 
-    def test_serialized_result_rejects_inconsistent_support_maps(self) -> None:
+    def test_serialized_result_is_structural_and_verifiable(self) -> None:
         result = construct_all_clique_candidate_hypergraph(_graph(BOWTIE))
         payload = result.model_dump(mode="json")
 
         payload["hypergraph"]["edges"][0][1] = []
-        with pytest.raises(ValueError, match="hypergraph edge resources"):
-            CliqueCandidateHypergraphResult.model_validate(payload)
+        forged = CliqueCandidateHypergraphResult.model_validate(payload)
+        assert not verify_clique_candidate_hypergraph(forged)
 
         payload = result.model_dump(mode="json")
         payload["hypergraph"]["vertices"] = payload["hypergraph"]["vertices"][1:]

@@ -15,12 +15,17 @@ from jacobian.math.combinatorics.extremal_sets import _sunflower_r as sunflower_
 from jacobian.math.combinatorics.extremal_sets._sunflower_r import (
     MAX_SUNFLOWER_GROUND_SET_SIZE,
     MAX_SUNFLOWER_MEMBERSHIPS,
-    MAX_SUNFLOWER_PETALS,
     SunflowerFamilyRequest,
     SunflowerFamilyResult,
     construct_sunflower_family,
 )
 from jacobian.math.combinatorics.extremal_sets.values import IndexedFiniteSetFamily
+from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
+    MAX_VERTICES,
+)
+from jacobian.math.combinatorics.finite_structures.hypergraphs.operations import (
+    parameters,
+)
 
 
 def _family(
@@ -174,14 +179,45 @@ def test_hypergraph_projection_is_empty_but_source_bound_when_no_rows() -> None:
 
 
 def test_over_bound_petal_count_is_rejected() -> None:
-    """Petal counts beyond the admitted envelope are refused before expansion."""
+    """Petal counts beyond the shared vertex carrier are refused before expansion."""
     with pytest.raises(OperationResourceAdmissionError):
         construct_sunflower_family(
             SunflowerFamilyRequest(
                 source=_family(((0,), (1,))),
-                petal_count=MAX_SUNFLOWER_PETALS + 1,
+                petal_count=MAX_VERTICES + 1,
             )
         )
+
+
+def test_declared_petals_beyond_the_old_small_slice_remain_exact() -> None:
+    """The operation admits any feasible r; r=9 is not a special-case ceiling."""
+    source = _family(tuple((0, index) for index in range(1, 10)), ground=10)
+    result = construct_sunflower_family(
+        SunflowerFamilyRequest(source=source, petal_count=9)
+    )
+    assert result.petal_count == 9
+    assert [(row.source_indices, row.core) for row in result.sunflowers] == [
+        (tuple(range(9)), (0,)),
+    ]
+
+
+def test_canonical_hypergraph_composes_without_reencoding() -> None:
+    result = construct_sunflower_family(
+        SunflowerFamilyRequest(
+            source=_family(((0, 1), (0, 2), (0, 3)), ground=4), petal_count=3
+        )
+    )
+    profile = parameters(result.hypergraph)
+    assert profile.vertex_count == 3
+    assert profile.edge_count == 1
+    assert profile.uniform_size == 3
+
+
+def test_schema_advertises_the_complete_declared_petals_envelope() -> None:
+    schema = SunflowerFamilyRequest.model_json_schema()
+    petal_schema = schema["properties"]["petal_count"]
+    assert petal_schema["minimum"] == 2
+    assert petal_schema["maximum"] == MAX_VERTICES
 
 
 def test_projection_uses_canonical_multi_digit_member_order() -> None:

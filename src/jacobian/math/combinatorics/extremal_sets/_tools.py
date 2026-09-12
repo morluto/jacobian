@@ -39,9 +39,9 @@ TOOLS: MathTools = (
             "whose pairwise intersections are all equal to one common core, "
             "together with each row's exact core, the derived count, "
             "sunflower-free status, and a canonical r-uniform hypergraph "
-            "edge projection. The "
-            "complete accepted construction returns every row or fails before "
-            "expansion."
+            "edge projection. The complete accepted construction returns every "
+            "row or fails before expansion; r may be any value supported by "
+            "the finite-hypergraph vertex carrier when admission succeeds."
         ),
         request_type=SunflowerFamilyRequest,
         result_type=SunflowerFamilyResult,
@@ -50,7 +50,11 @@ TOOLS: MathTools = (
         examples=(
             OperationExample(
                 name="four_petals",
-                description="Four petals sharing the core {0} form one sunflower.",
+                description=(
+                    "Construct the exact four-petal sunflower through core {0}; "
+                    "the source members must be canonical distinct subsets of "
+                    "the declared five-element ground set."
+                ),
                 input={
                     "source": {
                         "ground_set_size": 5,
@@ -75,7 +79,11 @@ TOOLS: MathTools = (
         examples=(
             OperationExample(
                 name="three_petals",
-                description="Construct one sunflower with core {0} and three petals.",
+                description=(
+                    "Construct the exact three-petal sunflower through core {0}; "
+                    "the source members must be canonical distinct subsets of "
+                    "the declared four-element ground set."
+                ),
                 input={
                     "source": {
                         "ground_set_size": 4,

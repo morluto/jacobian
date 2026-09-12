@@ -97,6 +97,14 @@ def test_precise_mode_finds_published_sunflower_construction() -> None:
     )
 
 
+def test_declared_petal_query_finds_complete_sunflower_family() -> None:
+    result = Catalog.open().match(
+        OperationMatchRequest(need="complete sunflower hypergraph for r petals")
+    )
+    assert result.matches
+    assert result.matches[0].operation_id == "set_system.sunflower_family.construct"
+
+
 def test_discovery_cursor_is_bound_to_search_mode() -> None:
     catalog = Catalog.open()
     first = catalog.match(

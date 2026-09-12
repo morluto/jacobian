@@ -32,7 +32,11 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
 )
 
-MAX_SUNFLOWER_PETALS = 8
+# Petal count is bounded by the shared finite-hypergraph vertex carrier, not
+# by an arbitrary small slice.  Candidate, intersection, output, and
+# allocation admission below still reject requests whose complete exact work
+# cannot fit the operation envelope before enumeration begins.
+MAX_SUNFLOWER_PETALS = MAX_VERTICES
 MAX_SUNFLOWER_INTERSECTION_WORK = 20_000_000
 MAX_SUNFLOWER_CANDIDATES = 1_000_000
 # The source value is retained unchanged in every result, including the

@@ -11,6 +11,7 @@ Additional references document mathematical contracts or external boundaries
 that need more context than an operation card:
 
 - [Combinatorics on words](words/index.md)
+- [Set systems and sunflower hypergraphs](combinatorics/index.md)
 - [SAT and SMT](sat-smt/index.md)
 - [Exact quadratic forms](quadratic-forms.md)
 - [Homogeneous monomial systems on algebraic tori](algebraic-torus-monomial-systems.md)

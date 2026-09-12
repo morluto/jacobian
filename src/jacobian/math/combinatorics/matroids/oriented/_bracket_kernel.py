@@ -343,7 +343,7 @@ def _integer_product_exceeds_canonical(left: int, right: int) -> bool:
         return _exceeds_canonical_integer_bound(right_abs)
     if right_abs == 1:
         return _exceeds_canonical_integer_bound(left_abs)
-    return left_abs > (_CANONICAL_INTEGER_LIMIT - 1) // right_abs
+    return bool(left_abs > (_CANONICAL_INTEGER_LIMIT - 1) // right_abs)
 
 
 def _bounded_component_sum(

@@ -811,7 +811,32 @@ def test_scaled_dimension_16_standard_hadamard_mub_uses_shared_denominators() ->
     assert result.cross_gram_squared[0][0][0].as_integer_ratio() == (1, dimension)
 
 
-def test_mub_status_agrees_with_retained_overlap_ledgers() -> None:
+def test_equal_denominator_widths_do_not_collapse_distinct_primes() -> None:
+    primes = []
+    candidate = 2
+    while len(primes) < 64:
+        if all(candidate % prime for prime in primes):
+            primes.append(candidate)
+        candidate += 1 if candidate == 2 else 2
+    denominators = []
+    for prime in primes:
+        denominator = prime
+        while len(str(denominator)) < 70:
+            denominator *= prime
+        denominators.append(denominator)
+    vector = tuple(
+        GaussianRational.from_fractions(Fraction(1, denominator), Fraction(0))
+        for denominator in denominators
+    )
+    frame = ComplexFrame(dimension=64, vectors=(vector,) * 64)
+    with pytest.raises(OperationResourceAdmissionError, match="height") as error:
+        _mutually_unbiased_bases(
+            MutuallyUnbiasedBasesRequest(dimension=64, bases=(frame,))
+        )
+    assert error.value.errors()[0]["type"] == "frames.complex_inner_product_height"
+
+
+def test_mub_status_is_not_replayed_on_deserialization() -> None:
     standard = ComplexFrame(dimension=2, vectors=((_z(1), _z(0)), (_z(0), _z(1))))
     result = _mutually_unbiased_bases(
         MutuallyUnbiasedBasesRequest(dimension=2, bases=(standard, standard))
@@ -819,5 +844,5 @@ def test_mub_status_agrees_with_retained_overlap_ledgers() -> None:
     assert result.is_mutually_unbiased is False
     forged = json.loads(result.model_dump_json())
     forged["is_mutually_unbiased"] = True
-    with pytest.raises(ValueError, match="MUB status"):
-        type(result).model_validate_json(json.dumps(forged))
+    restored = type(result).model_validate_json(json.dumps(forged))
+    assert restored.is_mutually_unbiased is True

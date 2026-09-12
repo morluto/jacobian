@@ -323,17 +323,34 @@ def _complex_sum_height(term: RationalHeight, count: int) -> RationalHeight:
     return sum_heights((term,) * count)
 
 
+def _product_denominator(
+    left: CanonicalRational, right: CanonicalRational
+) -> int:
+    return (left.as_fraction() * right.as_fraction()).denominator
+
+
+def _hermitian_parts(
+    left: GaussianRational, right: GaussianRational
+) -> tuple[Fraction, Fraction]:
+    left_real, left_imaginary = left.real.as_fraction(), left.imaginary.as_fraction()
+    right_real, right_imaginary = right.real.as_fraction(), right.imaginary.as_fraction()
+    return (
+        left_real * right_real + left_imaginary * right_imaginary,
+        left_imaginary * right_real - left_real * right_imaginary,
+    )
+
+
 def _sum_shared_denominator_heights(
     values: tuple[RationalHeight, ...],
+    denominators: tuple[int, ...],
 ) -> RationalHeight:
-    """Bound a sum, collapsing equal denominator widths to one common denominator."""
+    """Bound a sum, collapsing only when every term shares one reduced denominator."""
 
     if not values:
         return RationalHeight(1, 1)
-    widths = {item.denominator_digits for item in values}
-    if len(widths) != 1:
+    if len(set(denominators)) != 1:
         return sum_heights(values)
-    denominator_digits = next(iter(widths))
+    denominator_digits = len(str(denominators[0]))
     numerator_digits = max(item.numerator_digits for item in values) + len(
         str(len(values))
     )
@@ -352,10 +369,18 @@ def _hermitian_term_heights(
     right_real = RationalHeight.from_canonical(right.real)
     right_imaginary = RationalHeight.from_canonical(right.imaginary)
     real = _sum_shared_denominator_heights(
-        (left_real.product(right_real), left_imaginary.product(right_imaginary))
+        (left_real.product(right_real), left_imaginary.product(right_imaginary)),
+        (
+            _product_denominator(left.real, right.real),
+            _product_denominator(left.imaginary, right.imaginary),
+        ),
     )
     imaginary = _sum_shared_denominator_heights(
-        (left_imaginary.product(right_real), left_real.product(right_imaginary))
+        (left_imaginary.product(right_real), left_real.product(right_imaginary)),
+        (
+            _product_denominator(left.imaginary, right.real),
+            _product_denominator(left.real, right.imaginary),
+        ),
     )
     return real, imaginary
 
@@ -365,14 +390,21 @@ def _sparse_inner_product_height(
 ) -> RationalHeight:
     real_terms: list[RationalHeight] = []
     imaginary_terms: list[RationalHeight] = []
+    real_denominators: list[int] = []
+    imaginary_denominators: list[int] = []
     for first, second in zip(left, right, strict=True):
         if _scalar_is_zero(first) or _scalar_is_zero(second):
             continue
         real_height, imaginary_height = _hermitian_term_heights(first, second)
+        real_part, imaginary_part = _hermitian_parts(first, second)
         real_terms.append(real_height)
         imaginary_terms.append(imaginary_height)
-    real = _sum_shared_denominator_heights(tuple(real_terms))
-    imaginary = _sum_shared_denominator_heights(tuple(imaginary_terms))
+        real_denominators.append(real_part.denominator)
+        imaginary_denominators.append(imaginary_part.denominator)
+    real = _sum_shared_denominator_heights(tuple(real_terms), tuple(real_denominators))
+    imaginary = _sum_shared_denominator_heights(
+        tuple(imaginary_terms), tuple(imaginary_denominators)
+    )
     return RationalHeight(
         max(real.numerator_digits, imaginary.numerator_digits),
         max(real.denominator_digits, imaginary.denominator_digits),

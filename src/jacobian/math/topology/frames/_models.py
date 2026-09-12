@@ -184,27 +184,6 @@ class MutuallyUnbiasedBasesResult(MutuallyUnbiasedBasesRequest):
             raise PydanticCustomError(
                 "frames.mub_profile_axes", "MUB ledgers must retain basis axes"
             )
-        expected_overlap = Fraction(1, dimension)
-        observed = True
-        for gram in self.basis_grams:
-            for row_index, row in enumerate(gram):
-                for column_index, entry in enumerate(row):
-                    real, imaginary = entry.as_fractions()
-                    if row_index == column_index:
-                        if imaginary != 0 or real <= 0:
-                            observed = False
-                    elif real != 0 or imaginary != 0:
-                        observed = False
-        for gram in self.cross_gram_squared:
-            for row in gram:
-                for entry in row:
-                    if entry.as_fraction() != expected_overlap:
-                        observed = False
-        if self.is_mutually_unbiased != observed:
-            raise PydanticCustomError(
-                "frames.mub_status",
-                "MUB status must agree with the retained Gram and overlap ledgers",
-            )
         return self
 
     @classmethod

@@ -235,3 +235,36 @@ def test_final_layer_scan_charges_every_reachable_state() -> None:
         match="symbol-Parikh DP or output exceeds",
     ):
         symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=75))
+
+
+def test_transition_index_work_is_admitted_before_execution() -> None:
+    state_count = 64
+    alphabet_size = 15
+    reachable_state_count = 49
+    dfa = DFA(
+        state_count=state_count,
+        alphabet_size=alphabet_size,
+        transitions=tuple(
+            DFATransition(
+                source=source,
+                symbol=symbol,
+                target=(
+                    source + 1
+                    if symbol == 0 and source < reachable_state_count - 1
+                    else 0
+                    if symbol == 0
+                    else source
+                ),
+            )
+            for source in range(state_count)
+            for symbol in range(alphabet_size)
+        ),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+
+    with pytest.raises(
+        OperationResourceAdmissionError,
+        match="symbol-Parikh DP or output exceeds",
+    ):
+        symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=3))

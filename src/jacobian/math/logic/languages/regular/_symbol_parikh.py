@@ -106,8 +106,14 @@ def symbol_parikh_profile(
     extension_coordinate_work = extension_cells * alphabet_size * max(1, alphabet_size)
     output_materialization_work = len(reachable) * output_bound * max(1, alphabet_size)
     reachability_work = len(reachable) * alphabet_size
+    # The transition index is built from every DFA edge, including edges from
+    # states that are unreachable from the initial state.
+    transition_index_work = len(dfa.transitions)
     work_bound = (
-        reachability_work + extension_coordinate_work + output_materialization_work
+        transition_index_work
+        + reachability_work
+        + extension_coordinate_work
+        + output_materialization_work
     )
     if output_bound > MAX_SYMBOL_PARIKH_CELLS or work_bound > MAX_SYMBOL_PARIKH_DP_WORK:
         raise OperationResourceAdmissionError(

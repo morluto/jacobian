@@ -551,9 +551,9 @@ def _special_repeated_cliques(
         for component in group:
             component_classes: dict[str, list[int]] = {}
             for index in component:
-                component_classes.setdefault(
-                    vertex_colors[vertices[index]], []
-                ).append(index)
+                component_classes.setdefault(vertex_colors[vertices[index]], []).append(
+                    index
+                )
             for members in component_classes.values():
                 if len(members) >= 2:
                     swap = list(range(len(vertices)))

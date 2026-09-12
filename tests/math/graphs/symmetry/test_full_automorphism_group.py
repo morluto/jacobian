@@ -259,7 +259,9 @@ def test_patterned_clique_colors_keep_compact_presentation() -> None:
 
     result = full_graph_automorphism_group(graph)
 
-    assert result.automorphism_count == (factorial(3) * factorial(2)) ** 3 * factorial(3)
+    assert result.automorphism_count == (factorial(3) * factorial(2)) ** 3 * factorial(
+        3
+    )
     assert result.generated_group_order == 10_368
     assert len(result.generators) < result.automorphism_count
 

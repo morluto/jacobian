@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.math.number_theory.algebraic_numbers import _radix_prefix as radix_module
 from jacobian.math.number_theory.algebraic_numbers._radix_prefix import (
     MAX_RADIX_PLACES,
     RadixPrefixRequest,
@@ -166,6 +167,32 @@ def test_over_bound_places_is_a_resource_rejection() -> None:
                 value=_value((1, 0, -2), 1),
                 base=10,
                 fractional_places=MAX_RADIX_PLACES + 1,
+            )
+        )
+
+
+def test_scaled_coefficient_growth_is_admitted_before_root_isolation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The transformed polynomial envelope is checked before SymPy isolation."""
+    monkeypatch.setattr(radix_module, "MAX_RADIX_SCALED_COEFFICIENT_DIGITS", 2)
+    with pytest.raises(OperationResourceAdmissionError, match="scaled defining"):
+        radix_prefix(
+            RadixPrefixRequest(
+                value=_value((1, 0, -2), 1), base=10, fractional_places=1
+            )
+        )
+
+
+def test_result_bytes_are_admitted_before_root_isolation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The retained source and digit list have an explicit transport envelope."""
+    monkeypatch.setattr(radix_module, "MAX_RADIX_RESULT_BYTES", 1)
+    with pytest.raises(OperationResourceAdmissionError, match="result envelope"):
+        radix_prefix(
+            RadixPrefixRequest(
+                value=_value((1, 0, -2), 1), base=10, fractional_places=1
             )
         )
 

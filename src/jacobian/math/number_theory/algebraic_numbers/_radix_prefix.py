@@ -3,13 +3,15 @@
 The prefix is derived by exact comparison only.  Rational values use exact
 integer division under the canonical terminating-zero convention; irrational
 values are handled by isolating the root of the scaled polynomial
-``b**q * f(x / b**q)``, whose selected real root is exactly ``b**q * alpha``,
+``b**(q*d) * f(x / b**q)`` for degree ``d``, whose selected real root is
+exactly ``b**q * alpha``,
 so the integer part of the scaled value is obtained from one exact isolating
 interval.  No binary floating point enters the result.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from fractions import Fraction
 from typing import Any, Literal, Self
 
@@ -17,6 +19,11 @@ from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.canonical import (
+    CanonicalLimits,
+    encode_strict_json,
+    format_canonical_integer,
+)
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -29,6 +36,15 @@ from jacobian.math.number_theory.algebraic_numbers.real import (
 
 MAX_RADIX_BASE = 36
 MAX_RADIX_PLACES = 256
+# The transformed polynomial is private execution state, but its coefficient
+# height and the root-isolation precision still need an explicit envelope
+# before SymPy sees it.  These limits are deliberately larger than the worst
+# case induced by the public source (degree 16, 1,000 coefficient digits,
+# base 36 and 256 places), while preventing an accidental future widening of
+# the public fields from turning into an unbounded backend request.
+MAX_RADIX_SCALED_COEFFICIENT_DIGITS = 16_384
+MAX_RADIX_ISOLATION_BITS = 1_048_576
+MAX_RADIX_RESULT_BYTES = CanonicalLimits().max_output_bytes
 
 
 def _unique_floor_of_open_interval(lower: Any, upper: Any) -> int | None:
@@ -88,6 +104,15 @@ class RadixPrefixResult(StrictModel):
         return self
 
 
+@dataclass(frozen=True, slots=True)
+class _RadixAdmission:
+    """Request-scoped arithmetic and transport envelope for one prefix."""
+
+    scale: int
+    isolation_bits: int
+    result_bytes: int
+
+
 def _require_request(base: int, fractional_places: int) -> None:
     if base < 2 or base > MAX_RADIX_BASE:
         raise OperationDomainValidationError(
@@ -110,6 +135,76 @@ def _require_request(base: int, fractional_places: int) -> None:
                 "the scaled defining polynomial would exceed the coefficient envelope"
             ),
         )
+
+
+def _admit_request(request: RadixPrefixRequest) -> _RadixAdmission:
+    """Reserve transformed-polynomial, isolation, and result resources.
+
+    This is intentionally structural: it does not call SymPy or establish a
+    root identity.  The domain admission below performs that one semantic
+    check, and the kernel then reuses the admitted source unchanged.
+    """
+
+    _require_request(request.base, request.fractional_places)
+    degree = len(request.value.polynomial) - 1
+    scale = request.base**request.fractional_places
+    scale_digits = len(format_canonical_integer(scale))
+    scaled_coefficient_digits = max(
+        len(format_canonical_integer(abs(coefficient))) + position * scale_digits
+        for position, coefficient in enumerate(request.value.polynomial)
+    )
+    if scaled_coefficient_digits > MAX_RADIX_SCALED_COEFFICIENT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("value", "polynomial"),
+            code="algebraic_number.radix_scaled_coefficient_bound",
+            message=(
+                "the scaled defining polynomial exceeds the admitted "
+                f"{MAX_RADIX_SCALED_COEFFICIENT_DIGITS}-digit coefficient envelope"
+            ),
+        )
+    # A root of an integer polynomial is separated from an integer by a
+    # bound exponential in coefficient bit height and degree.  Reserve a
+    # conservative bit envelope before constructing the scaled polynomial.
+    coefficient_bits = (scaled_coefficient_digits * 100_000 + 30_102) // 30_103
+    isolation_bits = degree * (coefficient_bits + degree.bit_length() + 8) + 8
+    if isolation_bits > MAX_RADIX_ISOLATION_BITS:
+        raise OperationResourceAdmissionError(
+            location=("value",),
+            code="algebraic_number.radix_isolation_bound",
+            message=(
+                "root isolation for the scaled value exceeds the admitted "
+                f"{MAX_RADIX_ISOLATION_BITS}-bit precision envelope"
+            ),
+        )
+
+    # The source is retained in the result.  Count its canonical bytes and
+    # reserve an upper bound for the integer part, digit array, and fixed
+    # result fields without constructing or validating a mathematical result.
+    source_bytes = len(encode_strict_json(request.value.model_dump(mode="json")))
+    integer_part_digits = (
+        max(
+            len(format_canonical_integer(abs(coefficient)))
+            for coefficient in request.value.polynomial
+        )
+        + 2
+    )
+    result_bytes = (
+        source_bytes + 512 + integer_part_digits + 4 * request.fractional_places
+    )
+    if result_bytes > MAX_RADIX_RESULT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("fractional_places",),
+            code="algebraic_number.radix_result_bytes_bound",
+            message=(
+                "the exact radix prefix exceeds the admitted "
+                f"{MAX_RADIX_RESULT_BYTES}-byte result envelope"
+            ),
+        )
+    return _RadixAdmission(
+        scale=scale,
+        isolation_bits=isolation_bits,
+        result_bytes=result_bytes,
+    )
 
 
 def _rational_value(value: RealAlgebraicValue) -> Fraction | None:
@@ -153,7 +248,12 @@ def _selected_root_value(value: RealAlgebraicValue) -> Fraction | None:
     return None
 
 
-def _scaled_integer_part(value: RealAlgebraicValue, base: int, places: int) -> int:
+def _scaled_integer_part(
+    value: RealAlgebraicValue,
+    *,
+    scale: int,
+    isolation_bits: int,
+) -> int:
     """Exact floor of ``base**places * alpha`` for the selected root.
 
     If ``alpha`` is a root of ``f`` of degree ``d``, then ``beta = b**q*alpha``
@@ -166,7 +266,7 @@ def _scaled_integer_part(value: RealAlgebraicValue, base: int, places: int) -> i
 
     symbol = sympy.Symbol("x")
     scaled_coefficients = [
-        coefficient * base ** (places * position)
+        coefficient * scale**position
         for position, coefficient in enumerate(value.polynomial)
     ]
     polynomial = sympy.Poly.from_list(
@@ -182,7 +282,8 @@ def _scaled_integer_part(value: RealAlgebraicValue, base: int, places: int) -> i
             message="real_root_index must select an existing real root",
         )
     lower, upper = intervals[value.real_root_index][0]
-    for _ in range(MAX_RADIX_PLACES * 16):
+    max_refinements = max(4_096, (isolation_bits + 7) // 8)
+    for _ in range(max_refinements):
         # For an open interval, the greatest integer strictly below upper is
         # ceil(upper)-1. floor(upper-1) is smaller by one whenever upper is
         # nonintegral and can accept an interval crossing an integer boundary.
@@ -199,7 +300,7 @@ def _scaled_integer_part(value: RealAlgebraicValue, base: int, places: int) -> i
 def radix_prefix(request: RadixPrefixRequest) -> RadixPrefixResult:
     """Return the exact base-b prefix of one canonical real algebraic value."""
 
-    _require_request(request.base, request.fractional_places)
+    admission = _admit_request(request)
     _admit_real_polynomial(request.value)
     rational = _rational_value(request.value)
     if rational is not None:
@@ -220,9 +321,11 @@ def radix_prefix(request: RadixPrefixRequest) -> RadixPrefixResult:
             fractional_digits=digits,
         )
     scaled = _scaled_integer_part(
-        request.value, request.base, request.fractional_places
+        request.value,
+        scale=admission.scale,
+        isolation_bits=admission.isolation_bits,
     )
-    scale = request.base**request.fractional_places
+    scale = admission.scale
     integer_part, remainder = divmod(scaled, scale)
     fractional_digits: list[int] = []
     for _ in range(request.fractional_places):

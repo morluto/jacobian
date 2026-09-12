@@ -9,9 +9,9 @@ deterministic integer arithmetic rather than a floating-point round.
 from __future__ import annotations
 
 from math import isqrt
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import AfterValidator, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import ExactInteger, require_bounded_rational
@@ -45,6 +45,25 @@ _POSITIVE_MULTIPLIER_PATTERN = r"^[1-9][0-9]*$"
 _POSITIVE_MULTIPLIER_DESCRIPTION = (
     "Positive exact multiplier; computation admits at most 4096 bits."
 )
+
+
+def _require_positive_multiplier(value: int) -> int:
+    if value < 1:
+        raise PydanticCustomError(
+            "diophantine.multiplier_must_be_positive",
+            "multiplier must be a positive exact integer",
+        )
+    return value
+
+
+PositiveExactMultiplier = Annotated[
+    ExactInteger,
+    AfterValidator(_require_positive_multiplier),
+    Field(
+        description=_POSITIVE_MULTIPLIER_DESCRIPTION,
+        json_schema_extra={"pattern": _POSITIVE_MULTIPLIER_PATTERN},
+    ),
+]
 
 
 def _validation_error(code: str, message: str) -> PydanticCustomError:
@@ -92,11 +111,7 @@ def bound_enclosure(
 class ScaledFloorRequest(StrictModel):
     """Exact floor/ceiling of ``n * sqrt(d)`` for positive ``n`` and nonsquare ``d``."""
 
-    multiplier: ExactInteger = Field(
-        ge=1,
-        description=_POSITIVE_MULTIPLIER_DESCRIPTION,
-        json_schema_extra={"pattern": _POSITIVE_MULTIPLIER_PATTERN},
-    )
+    multiplier: PositiveExactMultiplier
     radicand: StrictInt = Field(
         ge=2,
         le=MAX_SURD_RADICAND,
@@ -157,11 +172,7 @@ class ScaledFloorValue(StrictModel):
 class NearestIntegerDistanceRequest(StrictModel):
     """Certify ``||n sqrt(d)||`` at a requested binary precision."""
 
-    multiplier: ExactInteger = Field(
-        ge=1,
-        description=_POSITIVE_MULTIPLIER_DESCRIPTION,
-        json_schema_extra={"pattern": _POSITIVE_MULTIPLIER_PATTERN},
-    )
+    multiplier: PositiveExactMultiplier
     radicand: StrictInt = Field(
         ge=2,
         le=MAX_SURD_RADICAND,
@@ -251,11 +262,7 @@ class NearestIntegerDistanceValue(StrictModel):
 class SimultaneousProductRequest(StrictModel):
     """Certify ``n * prod_i ||n sqrt(d_i)||`` over an ordered radicand axis."""
 
-    multiplier: ExactInteger = Field(
-        ge=1,
-        description=_POSITIVE_MULTIPLIER_DESCRIPTION,
-        json_schema_extra={"pattern": _POSITIVE_MULTIPLIER_PATTERN},
-    )
+    multiplier: PositiveExactMultiplier
     radicands: tuple[StrictInt, ...] = Field(
         min_length=1,
         max_length=MAX_SIMULTANEOUS_RADICANDS,

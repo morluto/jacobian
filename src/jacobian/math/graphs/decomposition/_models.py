@@ -18,6 +18,8 @@ from jacobian._models import StrictModel
 from jacobian.math.graphs.multigraph._models import MAX_EDGES, LooplessMultigraph
 from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 
+MAX_BLOCK_CUT_TREE_VERTICES = 256
+
 
 def _require_decomposition_graph(
     graph: IndexedSimpleUndirectedGraph,
@@ -36,8 +38,27 @@ _DecompositionGraph = Annotated[
 ]
 
 
+def _require_block_cut_graph(
+    graph: IndexedSimpleUndirectedGraph,
+) -> IndexedSimpleUndirectedGraph:
+    """Admit the linear block-cut construction up to the shared graph axis."""
+    if not 1 <= graph.vertex_count <= MAX_BLOCK_CUT_TREE_VERTICES:
+        raise PydanticCustomError(
+            "graph.block_cut_tree_vertex_count",
+            "block-cut tree requires between 1 and "
+            f"{MAX_BLOCK_CUT_TREE_VERTICES} vertices",
+        )
+    return graph
+
+
+_BlockCutGraph = Annotated[
+    IndexedSimpleUndirectedGraph,
+    AfterValidator(_require_block_cut_graph),
+]
+
+
 class BlockCutTreeRequest(StrictModel):
-    graph: _DecompositionGraph
+    graph: _BlockCutGraph
 
 
 class BlockCutTreeResult(StrictModel):

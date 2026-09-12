@@ -16,3 +16,4 @@ there is no graph artifact carrier or invariant-batch registry.
 - [Exact finite directed bond reliability](directed-bond-reliability.md)
 - [Declared graph-symmetry orbits](graph-symmetry-orbits.md)
 - [Chromatic bipartition feasibility](graph-chromatic-bipartition.md)
+- [Induced edge-deletion profiles](induced-edge-deletion-profile.md)

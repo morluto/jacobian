@@ -11,6 +11,7 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.combinatorics.extremal_sets import _sunflower_r as sunflower_module
 from jacobian.math.combinatorics.extremal_sets._sunflower_r import (
     MAX_SUNFLOWER_GROUND_SET_SIZE,
     MAX_SUNFLOWER_MEMBERSHIPS,
@@ -197,6 +198,19 @@ def test_output_edge_bound_is_admitted_before_row_construction() -> None:
     """The complete candidate envelope rejects 156 disjoint singleton pairs."""
     source = _family(tuple((index,) for index in range(156)), ground=156)
     with pytest.raises(OperationResourceAdmissionError, match="output bound"):
+        construct_sunflower_family(SunflowerFamilyRequest(source=source, petal_count=2))
+
+
+def test_result_allocation_is_admitted_before_row_construction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        sunflower_module,
+        "MAX_SUNFLOWER_RESULT_ALLOCATION_UNITS",
+        1,
+    )
+    source = _family(((0,), (1,)), ground=2)
+    with pytest.raises(OperationResourceAdmissionError, match="allocation units"):
         construct_sunflower_family(SunflowerFamilyRequest(source=source, petal_count=2))
 
 

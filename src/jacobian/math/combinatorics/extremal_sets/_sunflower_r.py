@@ -18,7 +18,6 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._execution import request_checkpoint
 from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -38,10 +37,12 @@ MAX_SUNFLOWER_INTERSECTION_WORK = 20_000_000
 MAX_SUNFLOWER_CANDIDATES = 1_000_000
 # The source value is retained unchanged in every result, including the
 # vacuous case. These operation-owned limits cover the ambient axis, aggregate
-# membership inspection, and retained canonical source delivery.
+# membership inspection, and retained result allocation. One allocation unit
+# conservatively reserves a scalar digit, label code point, container slot, or
+# fixed record field; transports own encoded-byte limits separately.
 MAX_SUNFLOWER_GROUND_SET_SIZE = 1_000_000
 MAX_SUNFLOWER_MEMBERSHIPS = 1_000_000
-MAX_SUNFLOWER_OUTPUT_BYTES = CanonicalLimits().max_output_bytes
+MAX_SUNFLOWER_RESULT_ALLOCATION_UNITS = 16 * 1024 * 1024
 
 
 def _result_error(reason: str, message: str) -> PydanticCustomError:
@@ -106,24 +107,18 @@ def _admit_source(
                 f"{MAX_SUNFLOWER_INTERSECTION_WORK}-unit bound"
             ),
         )
-    try:
-        source_bytes = len(encode_strict_json(source.model_dump(mode="json")))
-    except ValueError as error:
-        raise OperationResourceAdmissionError(
-            location=("source",),
-            code="set_system.sunflower.source_output_bound",
-            message="the retained source cannot be represented in the bounded output envelope",
-        ) from error
-    if source_bytes > MAX_SUNFLOWER_OUTPUT_BYTES:
+    ground_digits = len(str(max(source.ground_set_size - 1, 0)))
+    source_units = 16 + member_count + memberships * (ground_digits + 1)
+    if source_units > MAX_SUNFLOWER_RESULT_ALLOCATION_UNITS:
         raise OperationResourceAdmissionError(
             location=("source",),
             code="set_system.sunflower.source_output_bound",
             message=(
-                f"the retained source requires {source_bytes} bytes, exceeding the "
-                f"{MAX_SUNFLOWER_OUTPUT_BYTES}-byte output bound"
+                f"the retained source requires {source_units} allocation units, "
+                "exceeding the sunflower result bound"
             ),
         )
-    return source, petal_count, member_count, source_work, source_bytes
+    return source, petal_count, member_count, source_work, source_units
 
 
 def _admit_candidates(
@@ -131,7 +126,7 @@ def _admit_candidates(
     petal_count: int,
     member_count: int,
     source_work: int,
-    source_bytes: int,
+    source_units: int,
 ) -> int:
     """Admit candidate, intersection-work, and complete-output envelopes."""
 
@@ -175,25 +170,26 @@ def _admit_candidates(
         )
     member_digits = len(str(max(member_count - 1, 0)))
     ground_digits = len(str(max(source.ground_set_size - 1, 0)))
-    edge_id_bytes = 10 + petal_count * (member_digits + 1)
-    row_bytes = (
+    edge_id_units = 10 + petal_count * (member_digits + 1)
+    row_units = (
         128
-        + edge_id_bytes
+        + edge_id_units
         + petal_count * (member_digits + 2)
         + maximum_size * (ground_digits + 1)
     )
-    edge_projection_bytes = 64 + edge_id_bytes + petal_count * (member_digits + 2)
-    base_result_bytes = source_bytes + 1024 + member_count * (member_digits + 3)
-    output_upper_bound = base_result_bytes + candidate_bound * (
-        row_bytes + 2 * edge_projection_bytes
+    edge_projection_units = 64 + edge_id_units + petal_count * (member_digits + 2)
+    base_result_units = source_units + 1024 + member_count * (member_digits + 3)
+    allocation_upper_bound = base_result_units + candidate_bound * (
+        row_units + 2 * edge_projection_units
     )
-    if output_upper_bound > MAX_SUNFLOWER_OUTPUT_BYTES:
+    if allocation_upper_bound > MAX_SUNFLOWER_RESULT_ALLOCATION_UNITS:
         raise OperationResourceAdmissionError(
             location=("source", "members"),
-            code="set_system.sunflower.output_bytes_bound",
+            code="set_system.sunflower.result_allocation_bound",
             message=(
-                f"the complete sunflower result may require {output_upper_bound} bytes, "
-                f"exceeding the {MAX_SUNFLOWER_OUTPUT_BYTES}-byte output bound"
+                "the complete sunflower result may require "
+                f"{allocation_upper_bound} allocation units, exceeding the "
+                f"{MAX_SUNFLOWER_RESULT_ALLOCATION_UNITS}-unit result bound"
             ),
         )
     return candidate_bound
@@ -318,10 +314,10 @@ def construct_sunflower_family(
 ) -> SunflowerFamilyResult:
     """Return every ``petal_count``-member sunflower with its exact common core."""
 
-    source, petal_count, member_count, source_work, source_bytes = _admit_source(
+    source, petal_count, member_count, source_work, source_units = _admit_source(
         request
     )
-    _admit_candidates(source, petal_count, member_count, source_work, source_bytes)
+    _admit_candidates(source, petal_count, member_count, source_work, source_units)
     if member_count < petal_count:
         # No subfamily of the requested size exists; the complete family is
         # empty and the source is vacuously sunflower-free at this petal count.
@@ -377,8 +373,8 @@ __all__ = [
     "MAX_SUNFLOWER_CANDIDATES",
     "MAX_SUNFLOWER_GROUND_SET_SIZE",
     "MAX_SUNFLOWER_MEMBERSHIPS",
-    "MAX_SUNFLOWER_OUTPUT_BYTES",
     "MAX_SUNFLOWER_PETALS",
+    "MAX_SUNFLOWER_RESULT_ALLOCATION_UNITS",
     "SunflowerFamily",
     "SunflowerFamilyRequest",
     "SunflowerFamilyResult",

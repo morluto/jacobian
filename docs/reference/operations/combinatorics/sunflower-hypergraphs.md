@@ -15,7 +15,10 @@ distinct source indices for which
 
 The returned `core` is that exact set `C`; an empty core is valid. The source
 member IDs are the canonical hypergraph vertices, and each qualifying tuple is
-one edge with the deterministic ID `sunflower_i_j_...`. The result also carries
+one edge with the deterministic ordinal ID `sunflower_k` (one-based over the
+found rows in enumeration order; ordinals stay within the hypergraph label
+limit for every admitted petal count, while `source_indices` retains the
+member tuple). The result also carries
 the row count, the exact `sunflower_free` status, and the canonical
 `FiniteHypergraph` projection. Source order is identity, so permuting source
 members permutes vertex labels and rows rather than changing set membership.

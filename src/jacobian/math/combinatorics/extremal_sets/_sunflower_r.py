@@ -174,7 +174,9 @@ def _admit_candidates(
         )
     member_digits = len(str(max(member_count - 1, 0)))
     ground_digits = len(str(max(source.ground_set_size - 1, 0)))
-    edge_id_units = 10 + petal_count * (member_digits + 1)
+    # Row IDs are bounded ordinals (``sunflower_<position>``) over the found
+    # rows, so the longest ID fits the candidate count, not the petal width.
+    edge_id_units = 10 + len(str(max(candidate_bound, 1)))
     row_units = (
         128
         + edge_id_units
@@ -255,7 +257,11 @@ class SunflowerFamilyResult(StrictModel):
         expected_edges: list[tuple[str, tuple[str, ...]]] = []
         seen_indices: set[tuple[int, ...]] = set()
         seen_edge_ids: set[str] = set()
-        for row in self.sunflowers:
+        # Row IDs are one-based ordinals over the found rows in enumeration
+        # order.  Index-list IDs would exceed the hypergraph label limit for
+        # large petal counts, while ordinals stay bounded by the candidate
+        # count and remain canonical because enumeration order is fixed.
+        for position, row in enumerate(self.sunflowers, start=1):
             indices = tuple(row.source_indices)
             if len(indices) != self.petal_count or indices != tuple(sorted(indices)):
                 raise _result_error(
@@ -277,10 +283,10 @@ class SunflowerFamilyResult(StrictModel):
                 raise _result_error(
                     "core_source", "sunflower cores must lie on the source ground set"
                 )
-            expected_edge_id = "sunflower_" + "_".join(str(index) for index in indices)
+            expected_edge_id = f"sunflower_{position}"
             if row.edge_id != expected_edge_id:
                 raise _result_error(
-                    "row_identity", "sunflower row IDs must be canonical"
+                    "row_identity", "sunflower row IDs must be canonical ordinals"
                 )
             if indices in seen_indices or row.edge_id in seen_edge_ids:
                 raise _result_error(
@@ -350,7 +356,7 @@ def construct_sunflower_family(
         ):
             rows.append(
                 SunflowerFamily(
-                    edge_id="sunflower_" + "_".join(str(i) for i in indices),
+                    edge_id=f"sunflower_{len(rows) + 1}",
                     source_indices=indices,
                     core=tuple(sorted(core)),
                 )

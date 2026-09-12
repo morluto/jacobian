@@ -81,7 +81,22 @@ def test_four_petals_share_one_core() -> None:
     assert [(row.source_indices, row.core) for row in result.sunflowers] == [
         ((0, 1, 2, 3), (0,)),
     ]
-    assert result.hypergraph_edges == (("sunflower_0_1_2_3", ("0", "1", "2", "3")),)
+    assert result.hypergraph_edges == (("sunflower_1", ("0", "1", "2", "3")),)
+
+
+def test_large_petal_count_keeps_bounded_row_ids() -> None:
+    """A 22-petal sunflower keeps its row ID within the hypergraph label limit."""
+    members = tuple((0, index + 1) for index in range(22))
+    result = construct_sunflower_family(
+        SunflowerFamilyRequest(source=_family(members, ground=23), petal_count=22)
+    )
+    assert [(row.source_indices, row.core) for row in result.sunflowers] == [
+        (tuple(range(22)), (0,)),
+    ]
+    assert [row.edge_id for row in result.sunflowers] == ["sunflower_1"]
+    assert result.hypergraph_edges == (
+        ("sunflower_1", tuple(sorted(str(i) for i in range(22)))),
+    )
 
 
 def test_empty_core_is_a_valid_sunflower() -> None:

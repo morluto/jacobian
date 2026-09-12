@@ -427,9 +427,19 @@ class IntegerPolynomialPrimitivePartResult(StrictModel):
             raise _validation_error(
                 "the reported degree is the primitive part's degree"
             )
-        if (self.reconstruction.coefficients[0] > 0) != (self.sign == 1):
+        reconstruction = self.reconstruction.coefficients
+        primitive = self.primitive_part.coefficients
+        if (reconstruction[0] > 0) != (self.sign == 1):
             raise _validation_error(
                 "the sign must match the reconstructed leading coefficient"
+            )
+        if reconstruction[0] != self.sign * self.content * primitive[0]:
+            raise _validation_error(
+                "sign*content*primitive_part must reconstruct the input polynomial"
+            )
+        if reconstruction[-1] != self.sign * self.content * primitive[-1]:
+            raise _validation_error(
+                "sign*content*primitive_part must reconstruct the input polynomial"
             )
         return self
 

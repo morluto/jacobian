@@ -452,6 +452,17 @@ def test_reciprocal_profile_preflights_duplicated_coefficient_output(
         reciprocal_profile(IntegerPolynomial(coefficients=(10**12, 10**12 + 1)))
 
 
+def test_reciprocal_profile_charges_serialized_endpoint_fields(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "jacobian.math.polynomials._mahler_kernel.MAX_PROFILE_RESULT_DIGITS",
+        70,
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="output bound"):
+        reciprocal_profile(IntegerPolynomial(coefficients=(10**12, 10**12 + 1)))
+
+
 def test_reciprocal_profile_is_not_a_public_catalog_operation() -> None:
     from jacobian.math.polynomials._tools import TOOLS
 

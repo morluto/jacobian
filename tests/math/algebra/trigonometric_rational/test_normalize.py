@@ -335,3 +335,19 @@ def test_reduced_quotient_support_is_bounded_before_gcd() -> None:
     )
     with pytest.raises(OperationResourceAdmissionError, match="support"):
         normalize_trigonometric_rational(request)
+
+
+def test_univariate_lattice_stride_admits_sin_4096_over_sin() -> None:
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x"],
+            "expression": {
+                "kind": "DIVIDE",
+                "numerator": {"kind": "SINE", "angle": {"coefficients": [4096]}},
+                "denominator": {"kind": "SINE", "angle": {"coefficients": [1]}},
+            },
+        }
+    )
+    result = normalize_trigonometric_rational(request)
+    assert len(result.numerator.terms) == 4096
+    assert len(result.denominator.terms) == 1

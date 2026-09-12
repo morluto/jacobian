@@ -47,8 +47,6 @@ def _require_mahler_polynomial_envelope(polynomial: IntegerPolynomial) -> None:
         )
 
 
-
-
 class ReciprocalProfileRequest(StrictModel):
     polynomial: IntegerPolynomial
 

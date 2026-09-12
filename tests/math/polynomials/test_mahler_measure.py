@@ -41,8 +41,8 @@ def _assert_golden_root(value: MahlerAlgebraicValue, index: int) -> None:
 
 def test_integer_polynomial_primitive_part_reconstructs_the_source() -> None:
     """sign * content * primitive_part equals the input polynomial exactly."""
-    result = integer_polynomial_primitive_part(IntegerPolynomial(coefficients=(6, 0, -6, 12)
-        )
+    result = integer_polynomial_primitive_part(
+        IntegerPolynomial(coefficients=(6, 0, -6, 12))
     )
     assert result.sign == 1
     assert result.content == 6
@@ -55,8 +55,8 @@ def test_returned_primitive_part_composes_with_polynomial_operations() -> None:
     """Profile outputs reuse the canonical integer-polynomial carrier."""
     from jacobian.math.polynomials import integer_polynomial_content
 
-    result = integer_polynomial_primitive_part(IntegerPolynomial(coefficients=(6, 0, -6)
-        )
+    result = integer_polynomial_primitive_part(
+        IntegerPolynomial(coefficients=(6, 0, -6))
     )
     assert integer_polynomial_content(result.primitive_part).content == 1
     assert integer_polynomial_content(result.reconstruction).content == 6
@@ -72,8 +72,8 @@ def test_integer_polynomial_primitive_part_is_positive_leading() -> None:
             degree=2,
             reconstruction=IntegerPolynomial(coefficients=(-6, 0, 6)),
         )
-    result = integer_polynomial_primitive_part(IntegerPolynomial(coefficients=(6, 0, -6)
-        )
+    result = integer_polynomial_primitive_part(
+        IntegerPolynomial(coefficients=(6, 0, -6))
     )
     assert result.sign == 1
     assert result.primitive_part.coefficients[0] > 0
@@ -81,8 +81,8 @@ def test_integer_polynomial_primitive_part_is_positive_leading() -> None:
 
 def test_content_profile_retains_negative_source_sign() -> None:
     """Content extraction must accept and reconstruct a negative-leading source."""
-    result = integer_polynomial_primitive_part(IntegerPolynomial(coefficients=(-6, 0, 6)
-        )
+    result = integer_polynomial_primitive_part(
+        IntegerPolynomial(coefficients=(-6, 0, 6))
     )
     assert result.sign == -1
     assert result.content == 6
@@ -117,8 +117,7 @@ def test_mahler_coefficient_digit_bound_is_an_admission_error() -> None:
 
 
 def test_mahler_result_does_not_replay_coefficient_digit_admission() -> None:
-    result = mahler_measure(IntegerPolynomial(coefficients=(1, -1, -1))
-    )
+    result = mahler_measure(IntegerPolynomial(coefficients=(1, -1, -1)))
     forged = result.model_dump(mode="json")
     forged["polynomial"]["coefficients"] = [
         str(10**MAX_MAHLER_COEFFICIENT_DIGITS),
@@ -133,29 +132,25 @@ def test_mahler_result_does_not_replay_coefficient_digit_admission() -> None:
 
 
 def test_reciprocal_profile_accepts_negative_leading_source() -> None:
-    result = reciprocal_profile(IntegerPolynomial(coefficients=(-1, 0, -1))
-    )
+    result = reciprocal_profile(IntegerPolynomial(coefficients=(-1, 0, -1)))
     assert result.state == "RECIPROCAL"
 
 
 def test_reciprocal_profile_identifies_palindromic_and_antipalindromic() -> None:
     """Reciprocal and antireciprocal states are distinguished exactly."""
-    palindromic = reciprocal_profile(IntegerPolynomial(coefficients=(1, 2, 1))
-    )
+    palindromic = reciprocal_profile(IntegerPolynomial(coefficients=(1, 2, 1)))
     assert palindromic.state == "RECIPROCAL"
     assert palindromic.reversed_coefficients == (1, 2, 1)
     assert palindromic.coefficient_pair_ledger == ((1, 1), (2, 2))
 
-    antipalindromic = reciprocal_profile(IntegerPolynomial(coefficients=(1, 0, -1))
-    )
+    antipalindromic = reciprocal_profile(IntegerPolynomial(coefficients=(1, 0, -1)))
     assert antipalindromic.state == "ANTIRECIPROCAL"
     assert antipalindromic.reversed_coefficients == (-1, 0, 1)
 
 
 def test_reciprocal_profile_reports_neither_when_no_structure_holds() -> None:
     """A generic polynomial has neither reciprocal state."""
-    result = reciprocal_profile(IntegerPolynomial(coefficients=(1, 3, 2))
-    )
+    result = reciprocal_profile(IntegerPolynomial(coefficients=(1, 3, 2)))
     assert result.state == "NEITHER"
     assert result.leading_coefficient == 1
     assert result.constant_coefficient == 2
@@ -163,9 +158,7 @@ def test_reciprocal_profile_reports_neither_when_no_structure_holds() -> None:
 
 def test_quadratic_root_profile_classifies_each_real_root() -> None:
     """x^2-x-1 has one root inside and one outside the closed unit disk."""
-    result = quadratic_root_profile(IntegerPolynomial(coefficients=(1, -1, -1)
-        )
-    )
+    result = quadratic_root_profile(IntegerPolynomial(coefficients=(1, -1, -1)))
     assert result.discriminant == 5
     assert result.root_kind == "DISTINCT_REAL"
     assert result.sum_of_roots == CanonicalRational(num=1, den=1)
@@ -177,25 +170,21 @@ def test_quadratic_root_profile_classifies_each_real_root() -> None:
 
 def test_quadratic_root_profile_reports_on_circle_roots() -> None:
     """x^2+1 has a conjugate pair with squared modulus exactly one."""
-    result = quadratic_root_profile(IntegerPolynomial(coefficients=(1, 0, 1)
-        )
-    )
+    result = quadratic_root_profile(IntegerPolynomial(coefficients=(1, 0, 1)))
     assert result.root_kind == "COMPLEX_CONJUGATE"
     assert result.root_locations == ("ON_UNIT_CIRCLE",)
 
 
 def test_mahler_measure_of_golden_quadratic_is_the_golden_ratio() -> None:
     """M(x^2-x-1) = (1+sqrt(5))/2."""
-    result = mahler_measure(IntegerPolynomial(coefficients=(1, -1, -1))
-    )
+    result = mahler_measure(IntegerPolynomial(coefficients=(1, -1, -1)))
     _assert_golden_root(result.mahler_measure, 1)
     assert result.leading_coefficient == 1
 
 
 def test_mahler_measure_keeps_the_leading_coefficient() -> None:
     """M(2x^2-2x-2) = 2*phi = 1+sqrt(5), not the monic value."""
-    result = mahler_measure(IntegerPolynomial(coefficients=(2, -2, -2))
-    )
+    result = mahler_measure(IntegerPolynomial(coefficients=(2, -2, -2)))
     assert isinstance(result.mahler_measure, RealAlgebraicValue)
     assert result.mahler_measure.polynomial == (1, -2, -4)
     assert result.mahler_measure.real_root_index == 1
@@ -203,44 +192,38 @@ def test_mahler_measure_keeps_the_leading_coefficient() -> None:
     # The audited mistake (dropping |a_d|) would return the monic measure.
     assert (
         result.mahler_measure
-        != mahler_measure(IntegerPolynomial(coefficients=(1, -1, -1))
-        ).mahler_measure
+        != mahler_measure(IntegerPolynomial(coefficients=(1, -1, -1))).mahler_measure
     )
 
 
 def test_mahler_measure_of_on_circle_polynomial_is_one() -> None:
     """M(x^2+x+1) = 1 because every root lies on the unit circle."""
-    result = mahler_measure(IntegerPolynomial(coefficients=(1, 1, 1))
-    )
+    result = mahler_measure(IntegerPolynomial(coefficients=(1, 1, 1)))
     assert result.mahler_measure == CanonicalRational(num=1, den=1)
 
 
 def test_mahler_measure_accepts_a_pure_quadratic_monomial() -> None:
     """Trailing zero coefficients do not make a nonzero polynomial zero."""
-    result = mahler_measure(IntegerPolynomial(coefficients=(3, 0, 0))
-    )
+    result = mahler_measure(IntegerPolynomial(coefficients=(3, 0, 0)))
     assert result.mahler_measure == CanonicalRational(num=3, den=1)
     assert result.root_locations == ("INSIDE_UNIT_DISK", "INSIDE_UNIT_DISK")
 
 
 def test_mahler_measure_uses_the_absolute_leading_coefficient() -> None:
     """M(3x^2-3) = 3 * max(1,1)^2 = 3."""
-    result = mahler_measure(IntegerPolynomial(coefficients=(3, 0, -3))
-    )
+    result = mahler_measure(IntegerPolynomial(coefficients=(3, 0, -3)))
     assert result.mahler_measure == CanonicalRational(num=3, den=1)
 
 
 def test_mahler_measure_of_a_linear_polynomial() -> None:
     """M(2x-4) = 2 * |2| = 4 for the single outside root two."""
-    result = mahler_measure(IntegerPolynomial(coefficients=(2, -4))
-    )
+    result = mahler_measure(IntegerPolynomial(coefficients=(2, -4)))
     assert result.mahler_measure == CanonicalRational(num=4, den=1)
     assert result.root_locations == ("OUTSIDE_UNIT_DISK",)
 
 
 def test_mahler_measure_of_a_nonzero_constant_is_its_absolute_value() -> None:
-    result = mahler_measure(IntegerPolynomial(coefficients=(-5,))
-    )
+    result = mahler_measure(IntegerPolynomial(coefficients=(-5,)))
     assert result.degree == 0
     assert result.root_locations == ()
     assert result.mahler_measure == CanonicalRational(num=5, den=1)
@@ -248,16 +231,13 @@ def test_mahler_measure_of_a_nonzero_constant_is_its_absolute_value() -> None:
 
 def test_mahler_measure_of_a_unit_root_linear_polynomial() -> None:
     """M(x-1) = 1 because the only root lies on the unit circle."""
-    result = mahler_measure(IntegerPolynomial(coefficients=(1, -1))
-    )
+    result = mahler_measure(IntegerPolynomial(coefficients=(1, -1)))
     assert result.mahler_measure == CanonicalRational(num=1, den=1)
     assert result.root_locations == ("ON_UNIT_CIRCLE",)
 
 
 def test_quadratic_roots_use_the_canonical_algebraic_carrier() -> None:
-    result = quadratic_root_profile(IntegerPolynomial(coefficients=(1, 0, -20)
-        )
-    )
+    result = quadratic_root_profile(IntegerPolynomial(coefficients=(1, 0, -20)))
     first, second = result.roots
     assert isinstance(first, RealAlgebraicValue)
     assert isinstance(second, RealAlgebraicValue)
@@ -267,9 +247,7 @@ def test_quadratic_roots_use_the_canonical_algebraic_carrier() -> None:
 
 
 def test_negative_leading_quadratic_roots_are_increasing() -> None:
-    result = quadratic_root_profile(IntegerPolynomial(coefficients=(-1, 1, 1)
-        )
-    )
+    result = quadratic_root_profile(IntegerPolynomial(coefficients=(-1, 1, 1)))
     assert result.root_locations == ("INSIDE_UNIT_DISK", "OUTSIDE_UNIT_DISK")
     _assert_golden_root(result.roots[0], 0)
     _assert_golden_root(result.roots[1], 1)
@@ -277,14 +255,13 @@ def test_negative_leading_quadratic_roots_are_increasing() -> None:
 
 def test_result_round_trips_through_strict_json() -> None:
     """The exact measure survives strict JSON serialization unchanged."""
-    result = mahler_measure(IntegerPolynomial(coefficients=(1, -1, -1))
-    )
+    result = mahler_measure(IntegerPolynomial(coefficients=(1, -1, -1)))
     restored = MahlerMeasureResult.model_validate_json(
         encode_strict_json(result.model_dump(mode="json")), strict=True
     )
     assert restored == result
-    content = integer_polynomial_primitive_part(IntegerPolynomial(coefficients=(6, 0, -6)
-        )
+    content = integer_polynomial_primitive_part(
+        IntegerPolynomial(coefficients=(6, 0, -6))
     )
     assert (
         IntegerPolynomialPrimitivePartResult.model_validate_json(
@@ -292,8 +269,7 @@ def test_result_round_trips_through_strict_json() -> None:
         )
         == content
     )
-    reciprocal = reciprocal_profile(IntegerPolynomial(coefficients=(1, 0, 1))
-    )
+    reciprocal = reciprocal_profile(IntegerPolynomial(coefficients=(1, 0, 1)))
     assert (
         ReciprocalProfileResult.model_validate_json(
             encode_strict_json(reciprocal.model_dump(mode="json")), strict=True
@@ -327,8 +303,7 @@ def test_reciprocal_result_rejects_inconsistent_pair_ledger() -> None:
 
 
 def test_reciprocal_result_does_not_replay_classification() -> None:
-    result = reciprocal_profile(IntegerPolynomial(coefficients=(1, 0, 1))
-    )
+    result = reciprocal_profile(IntegerPolynomial(coefficients=(1, 0, 1)))
     forged = result.model_dump(mode="json")
     forged["state"] = "NEITHER"
     restored = ReciprocalProfileResult.model_validate_json(
@@ -356,8 +331,8 @@ def test_content_result_rejects_negative_or_inconsistent_reconstruction() -> Non
 
 
 def test_content_result_does_not_replay_primitivity() -> None:
-    result = integer_polynomial_primitive_part(IntegerPolynomial(coefficients=(6, 0, -6)
-        )
+    result = integer_polynomial_primitive_part(
+        IntegerPolynomial(coefficients=(6, 0, -6))
     )
     forged = result.model_dump(mode="json")
     forged["content"] = "3"
@@ -393,8 +368,8 @@ def test_content_profile_preflights_duplicated_coefficient_output(
         20,
     )
     with pytest.raises(OperationResourceAdmissionError, match="output bound"):
-        integer_polynomial_primitive_part(IntegerPolynomial(coefficients=(10**12, 10**12 + 1)
-            )
+        integer_polynomial_primitive_part(
+            IntegerPolynomial(coefficients=(10**12, 10**12 + 1))
         )
 
 
@@ -406,9 +381,7 @@ def test_reciprocal_profile_preflights_duplicated_coefficient_output(
         20,
     )
     with pytest.raises(OperationResourceAdmissionError, match="output bound"):
-        reciprocal_profile(IntegerPolynomial(coefficients=(10**12, 10**12 + 1)
-            )
-        )
+        reciprocal_profile(IntegerPolynomial(coefficients=(10**12, 10**12 + 1)))
 
 
 def test_reciprocal_profile_is_not_a_public_catalog_operation() -> None:
@@ -421,8 +394,7 @@ def test_reciprocal_profile_is_not_a_public_catalog_operation() -> None:
 
 
 def test_mahler_result_binds_degree_leading_coefficient_and_locations() -> None:
-    result = mahler_measure(IntegerPolynomial(coefficients=(1, -1))
-    )
+    result = mahler_measure(IntegerPolynomial(coefficients=(1, -1)))
 
     forged = result.model_dump(mode="json")
     forged["degree"] = 2
@@ -432,8 +404,7 @@ def test_mahler_result_binds_degree_leading_coefficient_and_locations() -> None:
 
 def test_mahler_result_validator_does_not_replay_measure_mathematics() -> None:
     """The trusted kernel owns the value; the model checks only source shape."""
-    result = mahler_measure(IntegerPolynomial(coefficients=(1, -1))
-    )
+    result = mahler_measure(IntegerPolynomial(coefficients=(1, -1)))
     forged = result.model_dump(mode="json")
     forged["mahler_measure"] = {"num": "99", "den": "1"}
     restored = MahlerMeasureResult.model_validate_json(
@@ -468,27 +439,24 @@ def test_large_nonsquare_discriminant_retains_normalized_radicand() -> None:
 
 
 def test_large_nonsquare_product_is_exact() -> None:
-    result = mahler_measure(IntegerPolynomial(coefficients=(1, 1, -(10**24))
-        )
-    )
+    result = mahler_measure(IntegerPolynomial(coefficients=(1, 1, -(10**24))))
     assert result.mahler_measure == CanonicalRational(num=10**24, den=1)
 
 
 def test_complex_pair_has_modulus_instead_of_fake_real_root() -> None:
-    result = quadratic_root_profile(IntegerPolynomial(coefficients=(1, 0, 4)
-        )
-    )
+    result = quadratic_root_profile(IntegerPolynomial(coefficients=(1, 0, 4)))
     assert result.roots == ()
     assert result.complex_pair_squared_modulus is not None
     assert result.complex_pair_squared_modulus.as_fraction() == 4
-    assert mahler_measure(IntegerPolynomial(coefficients=(1, 0, 4))
+    assert mahler_measure(
+        IntegerPolynomial(coefficients=(1, 0, 4))
     ).mahler_measure == CanonicalRational(num=4, den=1)
 
 
 def test_scaled_quadratic_normalizes_content_before_surd_admission() -> None:
     scale = 10**20
-    result = quadratic_root_profile(IntegerPolynomial(coefficients=(scale, -scale, -scale)
-        )
+    result = quadratic_root_profile(
+        IntegerPolynomial(coefficients=(scale, -scale, -scale))
     )
     assert result.discriminant == 5 * scale * scale
     assert result.root_locations == ("INSIDE_UNIT_DISK", "OUTSIDE_UNIT_DISK")
@@ -499,9 +467,7 @@ def test_scaled_quadratic_normalizes_content_before_surd_admission() -> None:
 
 
 def test_perfect_square_discriminant_keeps_its_rational_roots() -> None:
-    result = quadratic_root_profile(IntegerPolynomial(coefficients=(1, 0, -9)
-        )
-    )
+    result = quadratic_root_profile(IntegerPolynomial(coefficients=(1, 0, -9)))
     assert result.roots == (
         CanonicalRational(num=-3, den=1),
         CanonicalRational(num=3, den=1),
@@ -510,8 +476,8 @@ def test_perfect_square_discriminant_keeps_its_rational_roots() -> None:
 
 def test_large_perfect_square_discriminant_avoids_surd_admission() -> None:
     root = 10**20
-    result = quadratic_root_profile(IntegerPolynomial(coefficients=(1, 0, -(root * root))
-        )
+    result = quadratic_root_profile(
+        IntegerPolynomial(coefficients=(1, 0, -(root * root)))
     )
     assert result.roots == (
         CanonicalRational(num=-root, den=1),

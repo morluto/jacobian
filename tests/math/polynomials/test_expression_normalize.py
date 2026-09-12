@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
+from jacobian._exact import CanonicalRational
 from jacobian._execution import (
     OperationExecutionCancelledError,
     request_cancellation,
@@ -20,6 +21,7 @@ from jacobian.math.polynomials._expression_normalize import (
     PolynomialExpressionNormalizeRequest,
     PolynomialExpressionNormalizeResult,
     PolynomialExpressionSource,
+    PolynomialLiteral,
     PolynomialPower,
     PolynomialVariableExpression,
     _MAX_EXPRESSION_DEPTH,
@@ -303,6 +305,55 @@ def test_native_invalid_source_is_a_domain_error() -> None:
         normalize_polynomial_expression(None)  # type: ignore[arg-type]
     with pytest.raises(OperationDomainValidationError):
         normalize_polynomial_expression({"coefficient_domain": "ZZ"})  # type: ignore[arg-type]
+
+
+def test_forged_null_operands_are_a_typed_domain_error() -> None:
+    source = PolynomialExpressionSource.model_construct(
+        coefficient_domain="QQ",
+        variables=("x",),
+        expression=PolynomialAdd.model_construct(operands=None),
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        normalize_polynomial_expression(source)
+    assert error.value.errors()[0]["type"] == "polynomial.expression.invalid_source"
+
+
+def test_zz_fractional_literal_is_rejected_before_expansion() -> None:
+    source = PolynomialExpressionSource.model_construct(
+        coefficient_domain="ZZ",
+        variables=("x",),
+        expression=PolynomialAdd.model_construct(
+            operands=(
+                PolynomialPower(
+                    base=PolynomialVariableExpression(name="x"), exponent=8
+                ),
+                PolynomialLiteral(value=CanonicalRational(num=1, den=2)),
+            )
+        ),
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        normalize_polynomial_expression(source)
+    assert error.value.errors()[0]["type"] == (
+        "polynomial.expression.nonintegral_literal"
+    )
+
+
+def test_undeclared_variable_is_rejected_before_expansion() -> None:
+    source = PolynomialExpressionSource.model_construct(
+        coefficient_domain="ZZ",
+        variables=("x",),
+        expression=PolynomialAdd.model_construct(
+            operands=(
+                PolynomialVariableExpression(name="x"),
+                PolynomialVariableExpression(name="y"),
+            )
+        ),
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        normalize_polynomial_expression(source)
+    assert error.value.errors()[0]["type"] == (
+        "polynomial.expression.undeclared_variable"
+    )
 
 
 def test_cancelled_request_interrupts_expansion() -> None:

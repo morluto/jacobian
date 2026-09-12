@@ -183,7 +183,10 @@ def _expression_children(node: object) -> tuple[object, ...]:
         return ()
     kind = getattr(node, "kind", None)
     if kind in ("ADD", "MULTIPLY"):
-        return tuple(getattr(node, "operands", ()))
+        operands = getattr(node, "operands", ())
+        if isinstance(operands, (list, tuple)):
+            return tuple(operands)
+        return ()
     if kind == "POWER":
         base = getattr(node, "base", None)
         return (base,) if base is not None else ()
@@ -658,6 +661,30 @@ def _revalidate_expression_source(
         ) from exc
 
 
+def _admit_source_domain_claims(source: PolynomialExpressionSource) -> None:
+    """Reject ZZ fractional literals and undeclared variables before expansion."""
+
+    declared = set(source.variables)
+    stack = [source.expression]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, PolynomialLiteral):
+            if source.coefficient_domain == "ZZ" and node.value.den != 1:
+                raise OperationDomainValidationError(
+                    location=("expression",),
+                    code="polynomial.expression.nonintegral_literal",
+                    message="ZZ expressions require integral literals",
+                )
+        elif isinstance(node, PolynomialVariableExpression):
+            if node.name not in declared:
+                raise OperationDomainValidationError(
+                    location=("expression",),
+                    code="polynomial.expression.undeclared_variable",
+                    message="every expression variable must belong to the declared axis",
+                )
+        stack.extend(_expression_children(node))
+
+
 def normalize_polynomial_expression(  # noqa: C901
     source: PolynomialExpressionSource,
 ) -> PolynomialExpressionNormalizeResult:
@@ -665,6 +692,7 @@ def normalize_polynomial_expression(  # noqa: C901
         with request_execution(time.monotonic()):
             return normalize_polynomial_expression(source)
     source = _revalidate_expression_source(source)
+    _admit_source_domain_claims(source)
     try:
         _bound_raw_expression(source.expression)
     except ValueError as exc:

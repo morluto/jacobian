@@ -241,6 +241,11 @@ class FixedLengthCycleEnumerationResult(StrictModel):
 
         valid_indices = range(self.cycle_count)
         for row in (*self.vertex_incidence, *self.edge_incidence):
+            if len(row.cycle_indices) > 20_000:
+                raise PydanticCustomError(
+                    "cycle_enumeration.incidence_indices_exceed_bound",
+                    "incidence indices must not exceed the admitted cycle-family bound",
+                )
             if tuple(row.cycle_indices) != tuple(sorted(set(row.cycle_indices))):
                 raise PydanticCustomError(
                     "cycle_enumeration.incidence_indices_must_be_sorted_unique",

@@ -371,9 +371,31 @@ class GeneralizedExactCoverResult(StrictModel):
 class MinimumGeneralizedExactCoverRequest(StrictModel):
     """Minimize the number of selected rows in a generalized exact cover."""
 
-    instance: GeneralizedExactCoverInstance
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Compute the minimum cardinality of a row family covering every "
+                "primary item exactly once and every secondary item at most once. "
+                "The search-node limit bounds one deterministic pass; exhaustive "
+                "search is required for EXACT or INFEASIBLE."
+            )
+        }
+    )
+
+    instance: GeneralizedExactCoverInstance = Field(
+        description=(
+            "Canonical generalized exact-cover instance whose rows are the only "
+            "candidates; row IDs and item labels retain their source binding."
+        )
+    )
     search_node_limit: StrictInt = Field(
-        default=100_000, ge=1, le=MAX_EXACT_COVER_SEARCH_NODES_PER_PASS
+        default=100_000,
+        ge=1,
+        le=MAX_EXACT_COVER_SEARCH_NODES_PER_PASS,
+        description=(
+            "Maximum partial row families visited in this pass. A non-exhausted "
+            "pass returns BOUNDED only after finding an attaining witness."
+        ),
     )
 
 
@@ -795,7 +817,12 @@ def minimum_generalized_exact_cover(  # noqa: C901
                 incumbent = selected
                 incumbent_ids = selected_ids
             continue
-        if incumbent is not None and len(selected) >= len(incumbent) - 1:
+        # A partial family with fewer than the incumbent's rows can still tie
+        # the incumbent. Prune only families that already have the incumbent's
+        # cardinality: they cannot reach a cover of equal or smaller size while
+        # primary items remain uncovered. Keeping the equal-size frontier is
+        # necessary for the canonical lexicographic tie witness.
+        if incumbent is not None and len(selected) >= len(incumbent):
             continue
         chosen_rows = 0
         fewest = row_count + 1

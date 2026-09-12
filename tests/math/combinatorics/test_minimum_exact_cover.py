@@ -50,6 +50,38 @@ def test_tied_minima_use_lexicographically_canonical_row_ids() -> None:
     assert result.selected_row_ids == ("a-p", "b-q")
 
 
+def test_tied_minima_remain_canonical_after_branching_heuristic() -> None:
+    result = minimum_generalized_exact_cover(
+        GeneralizedExactCoverInstance(
+            primary_items=("p0", "p1", "p2"),
+            secondary_items=(),
+            rows=tuple(
+                ExactCoverRow(row_id=row_id, items=items)
+                for row_id, items in (
+                    ("a", ("p2",)),
+                    ("b", ("p0",)),
+                    ("c", ("p2",)),
+                    ("d", ("p0", "p2")),
+                    ("e", ("p0", "p2")),
+                    ("f", ("p1", "p2")),
+                    ("g", ("p0", "p1")),
+                )
+            ),
+        )
+    )
+    assert result.status == "EXACT"
+    assert result.selected_row_ids == ("a", "g")
+
+
+def test_minimum_cover_is_available_from_native_combinatorics_api() -> None:
+    from jacobian.math import combinatorics
+
+    result = combinatorics.minimum_generalized_exact_cover(
+        _instance((("p", ("p",)), ("q", ("q",))))
+    )
+    assert result.status == "EXACT"
+
+
 def test_infeasibility_requires_exhaustion() -> None:
     instance = GeneralizedExactCoverInstance(
         primary_items=("p",), secondary_items=(), rows=()

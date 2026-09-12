@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from math import gcd
+from typing import Literal
 
 from pydantic_core import PydanticCustomError
 
@@ -15,16 +17,15 @@ from jacobian.math.combinatorics.matroids.oriented._bracket_models import (
     MAX_BRACKET_COEFFICIENT_DIGITS,
     MAX_BRACKET_CONTRIBUTIONS,
     MAX_BRACKET_FACTORS,
+    MAX_BRACKET_GROUND_SIZE,
     MAX_BRACKET_OUTPUT_CELLS,
     MAX_BRACKET_RESULT_ALLOCATION_UNITS,
     MAX_BRACKET_TERMS,
     BracketMonomial,
     BracketPolynomial,
     BracketPolynomialTerm,
-    BracketSyzygyResidualRequest,
     CanonicalBracket,
     GrassmannPlueckerRelation,
-    GrassmannPlueckerRelationRequest,
     GrassmannPlueckerRelationResult,
     ordered_bracket,
 )
@@ -160,15 +161,70 @@ def _shared_index_three_term_relation(indices: tuple[int, ...]) -> list[_Relatio
     ]
 
 
+def _require_grassmann_pluecker_relation(
+    ground_size: int,
+    indices: tuple[int, ...],
+    family: Literal["FOUR_TERM", "SHARED_INDEX_THREE_TERM"],
+) -> None:
+    """Admit one rank-3 Grassmann-Pluecker pattern without a wire request."""
+
+    if family == "FOUR_TERM":
+        expected = 6
+    elif family == "SHARED_INDEX_THREE_TERM":
+        expected = 5
+    else:
+        raise OperationDomainValidationError(
+            location=("family",),
+            code="bracket.relation_family",
+            message="a rank-3 Grassmann-Pluecker relation is four-term or shared-index",
+        )
+    if type(ground_size) is not int or not (
+        3 <= ground_size <= MAX_BRACKET_GROUND_SIZE
+    ):
+        raise OperationDomainValidationError(
+            location=("ground_size",),
+            code="bracket.relation_ground_size",
+            message="the declared ground range must lie inside the admitted envelope",
+        )
+    if not isinstance(indices, tuple) or len(indices) != expected:
+        raise OperationDomainValidationError(
+            location=("indices",),
+            code="bracket.relation_index_count",
+            message=f"{family} requires exactly {expected} indices",
+        )
+    if ground_size < expected:
+        raise OperationDomainValidationError(
+            location=("ground_size",),
+            code="bracket.relation_ground_too_small",
+            message="the declared ground range must contain every relation index",
+        )
+    if any(
+        type(index) is not int or index < 0 or index >= ground_size for index in indices
+    ):
+        raise OperationDomainValidationError(
+            location=("indices",),
+            code="bracket.relation_index_outside_ground",
+            message="every relation index must lie inside the declared ground range",
+        )
+    if len(set(indices)) != len(indices):
+        raise OperationDomainValidationError(
+            location=("indices",),
+            code="bracket.relation_indices_not_distinct",
+            message="a Grassmann-Pluecker relation requires distinct indices",
+        )
+
+
 def _relation_polynomial(
-    request: GrassmannPlueckerRelationRequest,
+    ground_size: int,
+    indices: tuple[int, ...],
+    family: Literal["FOUR_TERM", "SHARED_INDEX_THREE_TERM"],
 ) -> BracketPolynomial:
-    """Build the one canonical polynomial for a validated relation request."""
+    """Build the one canonical polynomial for a validated relation pattern."""
 
     ordered_terms = (
-        _four_term_relation(request.indices)
-        if request.family == "FOUR_TERM"
-        else _shared_index_three_term_relation(request.indices)
+        _four_term_relation(indices)
+        if family == "FOUR_TERM"
+        else _shared_index_three_term_relation(indices)
     )
     contributions: list[tuple[Fraction, tuple[tuple[CanonicalBracket, int], ...]]] = []
     for coefficient, ordered_triples in ordered_terms:
@@ -191,18 +247,16 @@ def _relation_polynomial(
         contributions.append(
             (Fraction(sign), tuple((bracket, 1) for bracket in brackets))
         )
-    return _combine(contributions, request.ground_size)
+    return _combine(contributions, ground_size)
 
 
 def _admit_source_relation(relation: GrassmannPlueckerRelation) -> None:
     """Admit the caller's source-bound relation claim once per request."""
 
     expected = _relation_polynomial(
-        GrassmannPlueckerRelationRequest(
-            ground_size=relation.ground_size,
-            indices=relation.indices,
-            family=relation.family,
-        )
+        relation.ground_size,
+        relation.indices,
+        relation.family,
     )
     if relation.polynomial != expected:
         raise OperationDomainValidationError(
@@ -278,22 +332,50 @@ def _exceeds_canonical_integer_bound(value: int) -> bool:
     return bool(value >= _CANONICAL_INTEGER_LIMIT)
 
 
+def _integer_product_exceeds_canonical(left: int, right: int) -> bool:
+    """Return whether ``|left| * |right|`` exceeds the canonical integer envelope."""
+
+    left_abs = abs(left)
+    right_abs = abs(right)
+    if left_abs == 0 or right_abs == 0:
+        return False
+    if left_abs == 1:
+        return _exceeds_canonical_integer_bound(right_abs)
+    if right_abs == 1:
+        return _exceeds_canonical_integer_bound(left_abs)
+    return left_abs > (_CANONICAL_INTEGER_LIMIT - 1) // right_abs
+
+
 def _bounded_component_sum(
     components: list[_CoefficientComponent],
 ) -> tuple[Fraction, int]:
     """Sum cancelled components and admit the exact canonical coefficient.
 
     Pairwise merge search is not an admission strategy: the mathematical
-    coefficient is the exact rational sum, checked once against the digit
-    envelope. That keeps representable cancelling combinations executable and
-    rejects an oversized total in linear arithmetic instead of exploring
-    integer partitions of the component list.
+    coefficient is the exact rational sum. Denominator LCMs are bounded
+    through successive gcd cofactors before any ``Fraction`` addition, so
+    pairwise-coprime 32,768-digit denominators reject without constructing
+    a million-digit common denominator.
     """
 
     pending = _cancel_opposite_components(components)
     total = Fraction(0)
     work_digit_bound = 0
+    denominator_lcm = 1
     for value, widths in pending:
+        denominator = value.denominator
+        shared = gcd(denominator_lcm, denominator)
+        cofactor = denominator // shared
+        if _integer_product_exceeds_canonical(denominator_lcm, cofactor):
+            raise OperationResourceAdmissionError(
+                location=("terms",),
+                code="bracket.syzygy_coefficient_digit_bound",
+                message=(
+                    "exact residual coefficient growth exceeds the supported "
+                    "digit bound"
+                ),
+            )
+        denominator_lcm *= cofactor
         total += value
         work_digit_bound = max(work_digit_bound, widths[0], widths[1])
     if total:
@@ -393,17 +475,85 @@ def _admit_surviving_components(
     return coefficients, coefficient_digit_bound
 
 
+def _require_syzygy_terms(
+    target: BracketPolynomial,
+    terms: object,
+) -> tuple[tuple[CanonicalRational, BracketMonomial, GrassmannPlueckerRelation], ...]:
+    """Admit native syzygy term shape without a wire request model."""
+
+    if not isinstance(terms, tuple):
+        raise OperationDomainValidationError(
+            location=("terms",),
+            code="bracket.syzygy_terms_type",
+            message="syzygy terms must be a tuple of scalar, multiplier, and relation",
+        )
+    if len(terms) > 128:
+        raise OperationResourceAdmissionError(
+            location=("terms",),
+            code="bracket.syzygy_term_count",
+            message="a syzygy residual admits at most 128 combination terms",
+        )
+    admitted: list[
+        tuple[CanonicalRational, BracketMonomial, GrassmannPlueckerRelation]
+    ] = []
+    for term in terms:
+        if not isinstance(term, tuple) or len(term) != 3:
+            raise OperationDomainValidationError(
+                location=("terms",),
+                code="bracket.syzygy_term_shape",
+                message=(
+                    "each syzygy term is a scalar, a multiplier monomial, and a "
+                    "source-bound Grassmann-Pluecker relation"
+                ),
+            )
+        scalar, multiplier, relation = term
+        if (
+            not isinstance(scalar, CanonicalRational)
+            or not isinstance(multiplier, BracketMonomial)
+            or not isinstance(relation, GrassmannPlueckerRelation)
+        ):
+            raise OperationDomainValidationError(
+                location=("terms",),
+                code="bracket.syzygy_term_shape",
+                message=(
+                    "each syzygy term is a scalar, a multiplier monomial, and a "
+                    "source-bound Grassmann-Pluecker relation"
+                ),
+            )
+        if relation.ground_size != target.ground_size:
+            raise OperationDomainValidationError(
+                location=("terms",),
+                code="bracket.syzygy_ground_mismatch",
+                message="target and every supplied relation must share one ground range",
+            )
+        if any(
+            factor.indices[2] >= target.ground_size for factor, _ in multiplier.factors
+        ):
+            raise OperationDomainValidationError(
+                location=("terms",),
+                code="bracket.syzygy_multiplier_index_outside_ground",
+                message="every multiplier bracket index must lie in the target ground range",
+            )
+        admitted.append((scalar, multiplier, relation))
+    return tuple(admitted)
+
+
 def _admit_residual_envelope(
-    request: BracketSyzygyResidualRequest,
+    target: BracketPolynomial,
+    terms: tuple[
+        tuple[CanonicalRational, BracketMonomial, GrassmannPlueckerRelation], ...
+    ],
 ) -> dict[_MonomialKey, Fraction]:
     """Admit source claims, sparse output, and exact coefficient growth up front."""
 
+    terms = _require_syzygy_terms(target, terms)
+
     active_terms = tuple(
         (scalar, multiplier, relation)
-        for scalar, multiplier, relation in request.terms
+        for scalar, multiplier, relation in terms
         if scalar.num != 0
     )
-    contribution_count = len(request.target.terms) + sum(
+    contribution_count = len(target.terms) + sum(
         len(relation.polynomial.terms) for _, _, relation in active_terms
     )
     if contribution_count > MAX_BRACKET_CONTRIBUTIONS:
@@ -444,7 +594,7 @@ def _admit_residual_envelope(
         return tuple(sorted(multiplicities.items()))
 
     coefficient_components: dict[_MonomialKey, list[_CoefficientComponent]] = {}
-    for term in request.target.terms:
+    for term in target.terms:
         key = admit_monomial(term.monomial.factors)
         coefficient_components.setdefault(key, []).append(
             (
@@ -480,25 +630,33 @@ def _admit_residual_envelope(
             code="bracket.syzygy_coefficient_digit_bound",
             message="exact residual coefficient growth exceeds the supported digit bound",
         )
-    _admit_result_allocation(coefficients, request.target.ground_size)
+    _admit_result_allocation(coefficients, target.ground_size)
     return coefficients
 
 
 def grassmann_pluecker_relation(
-    request: GrassmannPlueckerRelationRequest,
+    ground_size: int,
+    indices: tuple[int, ...],
+    family: Literal["FOUR_TERM", "SHARED_INDEX_THREE_TERM"],
 ) -> GrassmannPlueckerRelationResult:
     """Return the canonical formal expression of one GP relation."""
 
-    polynomial = _relation_polynomial(request)
+    _require_grassmann_pluecker_relation(ground_size, indices, family)
+    polynomial = _relation_polynomial(ground_size, indices, family)
     return GrassmannPlueckerRelationResult(
-        ground_size=request.ground_size,
-        indices=request.indices,
-        family=request.family,
+        ground_size=ground_size,
+        indices=indices,
+        family=family,
         polynomial=polynomial,
     )
 
 
-def bracket_syzygy_residual(request: BracketSyzygyResidualRequest) -> BracketPolynomial:
+def bracket_syzygy_residual(
+    target: BracketPolynomial,
+    terms: tuple[
+        tuple[CanonicalRational, BracketMonomial, GrassmannPlueckerRelation], ...
+    ] = (),
+) -> BracketPolynomial:
     """Return ``target - sum(scalar * multiplier * relation)`` exactly.
 
     The arithmetic is in the free commutative polynomial algebra on canonical
@@ -507,5 +665,5 @@ def bracket_syzygy_residual(request: BracketSyzygyResidualRequest) -> BracketPol
     vanishes on minors.
     """
 
-    coefficients = _admit_residual_envelope(request)
-    return _polynomial_from_coefficients(coefficients, request.target.ground_size)
+    coefficients = _admit_residual_envelope(target, terms)
+    return _polynomial_from_coefficients(coefficients, target.ground_size)

@@ -12,8 +12,18 @@ from jacobian.math.combinatorics.matroids.oriented._bracket_models import (
 )
 
 
+def _run_grassmann_pluecker(
+    request: GrassmannPlueckerRelationRequest,
+) -> GrassmannPlueckerRelationResult:
+    return native.grassmann_pluecker_relation(
+        request.ground_size,
+        request.indices,
+        request.family,
+    )
+
+
 def _run_syzygy_residual(request: BracketSyzygyResidualRequest) -> BracketPolynomial:
-    return native.bracket_syzygy_residual(request)
+    return native.bracket_syzygy_residual(request.target, request.terms)
 
 
 BRACKET_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
@@ -30,7 +40,7 @@ BRACKET_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         ),
         request_type=GrassmannPlueckerRelationRequest,
         result_type=GrassmannPlueckerRelationResult,
-        run=native.grassmann_pluecker_relation,
+        run=_run_grassmann_pluecker,
         tags=("bracket", "pluecker", "formal", "exact"),
         examples=(
             OperationExample(

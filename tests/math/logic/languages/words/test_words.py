@@ -125,6 +125,10 @@ def test_prefix_and_suffix_families_are_complete_and_serializable() -> None:
         ("b",),
         (),
     )
+    assert prefix_result.prefix_lengths == (0, 1, 2, 3, 4, 5)
+    assert prefix_result.prefix_indices == (0, 1, 2, 3, 4, 5)
+    assert suffix_result.suffix_lengths == (5, 4, 3, 2, 1, 0)
+    assert suffix_result.suffix_indices == (0, 1, 2, 3, 4, 5)
     assert (
         WordPrefixesResult.model_validate_json(prefix_result.model_dump_json())
         == prefix_result
@@ -133,6 +137,27 @@ def test_prefix_and_suffix_families_are_complete_and_serializable() -> None:
         WordSuffixesResult.model_validate_json(suffix_result.model_dump_json())
         == suffix_result
     )
+
+
+@pytest.mark.parametrize(
+    ("result_type", "field_name"),
+    ((WordPrefixesResult, "prefix_lengths"), (WordSuffixesResult, "suffix_indices")),
+)
+def test_word_family_result_rejects_forged_length_or_index_axis(
+    result_type: type[WordPrefixesResult] | type[WordSuffixesResult],
+    field_name: str,
+) -> None:
+    source = _word("abaab")
+    result = (
+        compute_prefixes(WordFamilyRequest(word=source))
+        if result_type is WordPrefixesResult
+        else compute_suffixes(WordFamilyRequest(word=source))
+    )
+    payload = result.model_dump(mode="json")
+    payload[field_name][2] = 99
+
+    with pytest.raises(ValidationError, match="length/index axes"):
+        result_type.model_validate(payload)
 
 
 @pytest.mark.parametrize(

@@ -57,17 +57,25 @@ class WordPrefixesResult(WordFamilyRequest):
     """Complete prefix family, including the empty prefix."""
 
     prefixes: tuple[FiniteWord, ...] = Field(max_length=MAX_WORD_LENGTH + 1)
+    prefix_lengths: tuple[int, ...] = Field(max_length=MAX_WORD_LENGTH + 1)
+    prefix_indices: tuple[int, ...] = Field(max_length=MAX_WORD_LENGTH + 1)
 
     @model_validator(mode="after")
     def require_prefix_axis(self) -> Self:
         letters = self.word.letters
-        if len(self.prefixes) != len(letters) + 1 or any(
-            prefix.alphabet != self.word.alphabet or len(prefix.letters) != index
-            for index, prefix in enumerate(self.prefixes)
+        expected_axis = tuple(range(len(letters) + 1))
+        if (
+            len(self.prefixes) != len(letters) + 1
+            or self.prefix_lengths != expected_axis
+            or self.prefix_indices != expected_axis
+            or any(
+                prefix.alphabet != self.word.alphabet or len(prefix.letters) != index
+                for index, prefix in enumerate(self.prefixes)
+            )
         ):
             raise _validation_error(
                 "prefix_family_shape",
-                "prefixes must be the complete ordered prefix family",
+                "prefixes and their length/index axes must be complete and ordered",
             )
         return self
 
@@ -75,25 +83,41 @@ class WordPrefixesResult(WordFamilyRequest):
     def _from_kernel(
         cls, request: WordFamilyRequest, prefixes: tuple[FiniteWord, ...]
     ) -> Self:
-        return cls.model_construct(word=request.word, prefixes=prefixes)
+        axis = tuple(range(len(request.word.letters) + 1))
+        return cls.model_construct(
+            word=request.word,
+            prefixes=prefixes,
+            prefix_lengths=axis,
+            prefix_indices=axis,
+        )
 
 
 class WordSuffixesResult(WordFamilyRequest):
     """Complete suffix family, including the empty suffix."""
 
     suffixes: tuple[FiniteWord, ...] = Field(max_length=MAX_WORD_LENGTH + 1)
+    suffix_lengths: tuple[int, ...] = Field(max_length=MAX_WORD_LENGTH + 1)
+    suffix_indices: tuple[int, ...] = Field(max_length=MAX_WORD_LENGTH + 1)
 
     @model_validator(mode="after")
     def require_suffix_axis(self) -> Self:
         letters = self.word.letters
-        if len(self.suffixes) != len(letters) + 1 or any(
-            suffix.alphabet != self.word.alphabet
-            or len(suffix.letters) != len(letters) - index
-            for index, suffix in enumerate(self.suffixes)
+        expected_indices = tuple(range(len(letters) + 1))
+        expected_lengths = tuple(len(letters) - index for index in expected_indices)
+        if (
+            len(self.suffixes) != len(letters) + 1
+            or self.suffix_lengths != expected_lengths
+            or self.suffix_indices != expected_indices
+            or any(
+                suffix.alphabet != self.word.alphabet or len(suffix.letters) != length
+                for suffix, length in zip(
+                    self.suffixes, self.suffix_lengths, strict=True
+                )
+            )
         ):
             raise _validation_error(
                 "suffix_family_shape",
-                "suffixes must be the complete ordered suffix family",
+                "suffixes and their length/index axes must be complete and ordered",
             )
         return self
 
@@ -101,7 +125,15 @@ class WordSuffixesResult(WordFamilyRequest):
     def _from_kernel(
         cls, request: WordFamilyRequest, suffixes: tuple[FiniteWord, ...]
     ) -> Self:
-        return cls.model_construct(word=request.word, suffixes=suffixes)
+        indices = tuple(range(len(request.word.letters) + 1))
+        return cls.model_construct(
+            word=request.word,
+            suffixes=suffixes,
+            suffix_lengths=tuple(
+                len(request.word.letters) - index for index in indices
+            ),
+            suffix_indices=indices,
+        )
 
 
 class FactorsLengthRequest(StrictModel):

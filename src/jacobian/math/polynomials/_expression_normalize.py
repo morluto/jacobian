@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from fractions import Fraction
 from math import ceil, log2
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
-from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    CanonicalRational,
+    require_bounded_rational,
+)
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -80,39 +85,251 @@ class PolynomialExpressionNormalizeResult(StrictModel):
     polynomial: RationalPolynomial
 
 
-def _metrics(expression: PolynomialExpression) -> tuple[int, int, int, int]:
+_MAX_EXPRESSION_NODES = 256
+_MAX_EXPRESSION_WORK = 8_000_000
+# This is an intrinsic exact-representation budget, not a transport setting:
+# 5M decimal coefficient digits leaves headroom for bounded sparse-term and
+# source scaffolding while retaining useful dense results.
+_MAX_EXPRESSION_TOTAL_COEFFICIENT_DIGITS = 5_000_000
+_MAX_EXPRESSION_COEFFICIENT_BITS = MAX_CANONICAL_RATIONAL_DIGITS
+
+
+@dataclass(frozen=True, slots=True)
+class _ExpressionMetrics:
+    """Conservative bounds for one expression and all of its intermediates.
+
+    Numerator and denominator heights are tracked independently.  In
+    particular, adding integral coefficients grows one numerator by a carry
+    bit per addition; it does not multiply the height by the number of
+    operands.  The representation and work bounds are saturated so deeply
+    nested powers cannot make admission itself expensive.
+    """
+
+    nodes: int
+    terms: int
+    degree: int
+    numerator_bits: int
+    denominator_bits: int
+    work: int
+    intermediate_digits: int
+
+
+def _bounded_sum(values: list[int] | tuple[int, ...], limit: int) -> int:
+    total = 0
+    for value in values:
+        total += value
+        if total > limit:
+            return limit + 1
+    return total
+
+
+def _bounded_product(left: int, right: int, limit: int) -> int:
+    if left > limit or right > limit or left > limit // max(1, right):
+        return limit + 1
+    return left * right
+
+
+def _bounded_power(value: int, exponent: int, limit: int) -> int:
+    result = 1
+    while exponent:
+        if exponent & 1:
+            result = _bounded_product(result, value, limit)
+        exponent //= 2
+        if exponent:
+            value = _bounded_product(value, value, limit)
+    return result
+
+
+def _decimal_digits_from_bits(bits: int) -> int:
+    """Upper-bound decimal digits without converting a large integer."""
+
+    if bits > _MAX_EXPRESSION_COEFFICIENT_BITS:
+        return MAX_CANONICAL_RATIONAL_DIGITS + 1
+    # 30103 / 100000 is just above log10(2), so this rounds conservatively.
+    return (bits * 30_103 + 99_999) // 100_000 + 1
+
+
+def _representation_digits(
+    terms: int, numerator_bits: int, denominator_bits: int
+) -> int:
+    component_digits = _decimal_digits_from_bits(
+        numerator_bits
+    ) + _decimal_digits_from_bits(denominator_bits)
+    return _bounded_product(
+        terms,
+        component_digits,
+        _MAX_EXPRESSION_TOTAL_COEFFICIENT_DIGITS,
+    )
+
+
+def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
     if isinstance(expression, PolynomialLiteral):
         require_bounded_rational(expression.value, max_digits=128, label="literal")
-        bits = max(
-            abs(expression.value.num).bit_length(), expression.value.den.bit_length()
+        numerator_bits = max(1, abs(expression.value.num).bit_length())
+        denominator_bits = (
+            0 if expression.value.den == 1 else expression.value.den.bit_length()
         )
-        return 1, 1, 0, bits
+        return _ExpressionMetrics(
+            nodes=1,
+            terms=1,
+            degree=0,
+            numerator_bits=numerator_bits,
+            denominator_bits=denominator_bits,
+            work=1,
+            intermediate_digits=_representation_digits(
+                1, numerator_bits, denominator_bits
+            ),
+        )
     if isinstance(expression, PolynomialVariableExpression):
-        return 1, 1, 1, 1
+        return _ExpressionMetrics(
+            nodes=1,
+            terms=1,
+            degree=1,
+            numerator_bits=1,
+            denominator_bits=0,
+            work=1,
+            intermediate_digits=_representation_digits(1, 1, 0),
+        )
     if isinstance(expression, PolynomialPower):
-        nodes, terms, degree, bits = _metrics(expression.base)
-        return (
-            nodes + 1,
-            min(MAX_POLYNOMIAL_TERMS + 1, terms**expression.exponent),
-            degree * expression.exponent,
-            bits * expression.exponent,
+        base = _metrics(expression.base)
+        exponent = expression.exponent
+        if exponent == 0:
+            return _ExpressionMetrics(
+                nodes=min(_MAX_EXPRESSION_NODES + 1, base.nodes + 1),
+                terms=1,
+                degree=0,
+                numerator_bits=1,
+                denominator_bits=0,
+                work=base.work,
+                intermediate_digits=max(base.intermediate_digits, 2),
+            )
+        terms = _bounded_power(base.terms, exponent, MAX_POLYNOMIAL_TERMS)
+        product_count = max(1, terms)
+        numerator_bits = min(
+            _MAX_EXPRESSION_COEFFICIENT_BITS + 1,
+            base.numerator_bits * exponent + ceil(log2(product_count)),
+        )
+        denominator_bits = min(
+            _MAX_EXPRESSION_COEFFICIENT_BITS + 1,
+            base.denominator_bits * exponent,
+        )
+        work = base.work
+        result_terms = 1
+        base_terms = base.terms
+        remaining = exponent
+        while remaining:
+            if remaining & 1:
+                work = min(
+                    _MAX_EXPRESSION_WORK + 1,
+                    work
+                    + _bounded_product(result_terms, base_terms, _MAX_EXPRESSION_WORK),
+                )
+                result_terms = _bounded_product(
+                    result_terms, base_terms, MAX_POLYNOMIAL_TERMS
+                )
+            remaining //= 2
+            if remaining:
+                work = min(
+                    _MAX_EXPRESSION_WORK + 1,
+                    work
+                    + _bounded_product(base_terms, base_terms, _MAX_EXPRESSION_WORK),
+                )
+                base_terms = _bounded_product(
+                    base_terms, base_terms, MAX_POLYNOMIAL_TERMS
+                )
+        intermediate_digits = max(
+            base.intermediate_digits,
+            _representation_digits(terms, numerator_bits, denominator_bits),
+        )
+        return _ExpressionMetrics(
+            nodes=min(_MAX_EXPRESSION_NODES + 1, base.nodes + 1),
+            terms=terms,
+            degree=min(MAX_POLYNOMIAL_EXPONENT + 1, base.degree * exponent),
+            numerator_bits=numerator_bits,
+            denominator_bits=denominator_bits,
+            work=work,
+            intermediate_digits=intermediate_digits,
         )
     child_metrics = [_metrics(operand) for operand in expression.operands]
-    nodes = 1 + sum(row[0] for row in child_metrics)
+    nodes = min(_MAX_EXPRESSION_NODES + 1, 1 + sum(row.nodes for row in child_metrics))
     if isinstance(expression, PolynomialAdd):
-        terms = sum(row[1] for row in child_metrics)
-        degree = max(row[2] for row in child_metrics)
-        # A common denominator can contain every child denominator as a
-        # factor, so summing rational terms is bounded by the sum of their
-        # component heights (plus carry bits), not merely the largest child.
-        bits = sum(row[3] for row in child_metrics) + ceil(log2(len(child_metrics)))
+        terms = _bounded_sum(
+            tuple(row.terms for row in child_metrics), MAX_POLYNOMIAL_TERMS
+        )
+        degree = max(row.degree for row in child_metrics)
+        denominator_bits = _bounded_sum(
+            tuple(row.denominator_bits for row in child_metrics),
+            _MAX_EXPRESSION_COEFFICIENT_BITS,
+        )
+        numerator_bits = 0
+        for child in child_metrics:
+            if denominator_bits > _MAX_EXPRESSION_COEFFICIENT_BITS:
+                numerator_bits = _MAX_EXPRESSION_COEFFICIENT_BITS + 1
+                break
+            other_denominator_bits = denominator_bits - child.denominator_bits
+            numerator_bits = max(
+                numerator_bits,
+                child.numerator_bits + other_denominator_bits,
+            )
+        numerator_bits = min(
+            _MAX_EXPRESSION_COEFFICIENT_BITS + 1,
+            numerator_bits + ceil(log2(len(child_metrics))),
+        )
+        work = _bounded_sum(
+            tuple(row.work + row.terms for row in child_metrics),
+            _MAX_EXPRESSION_WORK,
+        )
     else:
         terms = 1
-        for row in child_metrics:
-            terms = min(MAX_POLYNOMIAL_TERMS + 1, terms * row[1])
-        degree = sum(row[2] for row in child_metrics)
-        bits = sum(row[3] for row in child_metrics) + ceil(log2(max(1, terms)))
-    return nodes, terms, degree, bits
+        work = 0
+        current_terms = 1
+        for child in child_metrics:
+            terms = _bounded_product(terms, child.terms, MAX_POLYNOMIAL_TERMS)
+            work = min(
+                _MAX_EXPRESSION_WORK + 1,
+                work + child.work,
+            )
+            work = min(
+                _MAX_EXPRESSION_WORK + 1,
+                work
+                + _bounded_product(current_terms, child.terms, _MAX_EXPRESSION_WORK),
+            )
+            current_terms = _bounded_product(
+                current_terms, child.terms, MAX_POLYNOMIAL_TERMS
+            )
+        degree = min(
+            MAX_POLYNOMIAL_EXPONENT + 1,
+            sum(row.degree for row in child_metrics),
+        )
+        numerator_bits = min(
+            _MAX_EXPRESSION_COEFFICIENT_BITS + 1,
+            _bounded_sum(
+                tuple(row.numerator_bits for row in child_metrics),
+                _MAX_EXPRESSION_COEFFICIENT_BITS,
+            )
+            + ceil(log2(max(1, terms))),
+        )
+        denominator_bits = _bounded_sum(
+            tuple(row.denominator_bits for row in child_metrics),
+            _MAX_EXPRESSION_COEFFICIENT_BITS,
+        )
+    intermediate_digits = max(
+        (row.intermediate_digits for row in child_metrics),
+        default=0,
+    )
+    intermediate_digits = max(
+        intermediate_digits,
+        _representation_digits(terms, numerator_bits, denominator_bits),
+    )
+    return _ExpressionMetrics(
+        nodes=nodes,
+        terms=terms,
+        degree=degree,
+        numerator_bits=numerator_bits,
+        denominator_bits=denominator_bits,
+        work=work,
+        intermediate_digits=intermediate_digits,
+    )
 
 
 def _add(
@@ -146,17 +363,31 @@ def _multiply(
 def normalize_polynomial_expression(
     request: PolynomialExpressionNormalizeRequest,
 ) -> PolynomialExpressionNormalizeResult:
-    nodes, terms, degree, bits = _metrics(request.expression)
+    metrics = _metrics(request.expression)
     if (
-        nodes > 256
-        or terms > MAX_POLYNOMIAL_TERMS
-        or degree > MAX_POLYNOMIAL_EXPONENT
-        or bits > 32_768
+        metrics.nodes > _MAX_EXPRESSION_NODES
+        or metrics.terms > MAX_POLYNOMIAL_TERMS
+        or metrics.degree > MAX_POLYNOMIAL_EXPONENT
+        or metrics.numerator_bits > _MAX_EXPRESSION_COEFFICIENT_BITS
+        or metrics.denominator_bits > _MAX_EXPRESSION_COEFFICIENT_BITS
+        or metrics.work > _MAX_EXPRESSION_WORK
     ):
         raise OperationResourceAdmissionError(
             location=("expression",),
             code="polynomial.expression.expansion_bound",
-            message="expression expansion exceeds the admitted node, support, degree, or coefficient-height bound",
+            message=(
+                "expression expansion exceeds the admitted node, support, degree, "
+                "coefficient-height, work, or intermediate-representation bound"
+            ),
+        )
+    if metrics.intermediate_digits > _MAX_EXPRESSION_TOTAL_COEFFICIENT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("expression",),
+            code="polynomial.expression.result_representation_bound",
+            message=(
+                "normalized coefficients exceed the admitted exact "
+                "representation envelope"
+            ),
         )
     variable_index = {
         variable: index for index, variable in enumerate(request.variables)

@@ -190,6 +190,30 @@ def test_serialized_result_preserves_source_and_interval_invariants() -> None:
     assert lower * lower <= squared <= upper * upper
 
 
+def test_result_rejects_forged_source_normalization() -> None:
+    genuine = berry_esseen_bound(_request(_five_atom_oracle_distribution(), 7))
+    payload = genuine.model_dump()
+    payload["source"]["distribution"]["atoms"][0]["probability"] = {
+        "num": 1,
+        "den": 1,
+    }
+
+    with pytest.raises(ValueError, match="sum exactly to 1"):
+        BerryEsseenResult.model_validate(payload)
+
+
+def test_result_rejects_forged_source_input_height() -> None:
+    genuine = berry_esseen_bound(_request(_five_atom_oracle_distribution(), 7))
+    payload = genuine.model_dump()
+    payload["source"]["distribution"]["atoms"][-1]["value"] = {
+        "num": 10**128,
+        "den": 1,
+    }
+
+    with pytest.raises(ValueError, match="128-digit bound"):
+        BerryEsseenResult.model_validate(payload)
+
+
 def test_result_requires_consecutive_dyadic_grid_endpoints() -> None:
     genuine = berry_esseen_bound(_request(_five_atom_oracle_distribution(), 7))
     payload = genuine.model_dump()

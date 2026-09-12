@@ -86,6 +86,14 @@ class BerryEsseenResult(StrictModel):
             )
         if len(self.source.distribution.atoms) > MAX_BERRY_ESSEEN_ATOMS:
             raise _validation_error("Berry--Esseen source atom count is out of bounds")
+        # Re-admit the serialized source law, but do not replay the reported
+        # moments or bound. The source must retain the operation's normalized
+        # finite-law and input rational-height contract after transport.
+        require_input_distribution(
+            self.source.distribution.atoms,
+            require_canonical=True,
+            max_digits=MAX_INPUT_RATIONAL_DIGITS,
+        )
         if self.bound_precision_bits != BERRY_ESSEEN_BOUND_BITS:
             raise _validation_error("Berry--Esseen bound precision is not supported")
 

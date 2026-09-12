@@ -324,11 +324,7 @@ def test_complex_accumulation_height_is_admitted_before_arithmetic() -> None:
     frame = ComplexFrame(
         dimension=1,
         vectors=tuple(
-            (
-                GaussianRational.from_fractions(
-                    Fraction(1, 10**70 + index), Fraction(0)
-                ),
-            )
+            (GaussianRational.from_fractions(Fraction(1, 10**70 + index), Fraction(0)),)
             for index in range(64)
         ),
     )

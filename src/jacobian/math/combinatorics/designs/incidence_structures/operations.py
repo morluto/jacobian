@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
+from itertools import combinations
 from typing import Literal
 
 from jacobian._execution import (
@@ -32,6 +33,7 @@ from jacobian.math.combinatorics.designs.incidence_structures._models import (
     IntersectionsResult,
     LeviGraphResult,
     RestrictionResult,
+    SteinerTripleSystemResult,
     _require_containment_profile_admitted,
     _require_incidence_trade_admitted,
 )
@@ -70,6 +72,88 @@ def containment_profile(
     request_checkpoint("after containment profile admission")
     return ContainmentProfileResult._from_kernel(
         incidence, order, containment_profile_data(incidence, order)
+    )
+
+
+def construct_steiner_triple_system(
+    order: int, search_budget: int
+) -> SteinerTripleSystemResult:
+    """Construct one STS(order) using bounded exact cover over point pairs.
+
+    Each candidate triple covers exactly three pair constraints.  The search
+    branches on the uncovered pair with the fewest currently available
+    triples, so a returned design is independently checked by replaying all
+    pair multiplicities before it crosses the operation boundary.
+    """
+    if type(order) is not int or type(search_budget) is not int:
+        raise TypeError("order and search_budget must be integers")
+    points = tuple(range(order))
+    pairs = tuple(combinations(points, 2))
+    triples = tuple(combinations(points, 3))
+    by_pair: dict[tuple[int, int], list[tuple[int, int, int]]] = {
+        pair: [] for pair in pairs
+    }
+    for triple in triples:
+        for pair in combinations(triple, 2):
+            by_pair[pair].append(triple)
+
+    chosen: list[tuple[int, int, int]] = []
+    covered: set[tuple[int, int]] = set()
+    states = 0
+    exhausted = False
+
+    def search() -> bool:
+        nonlocal states, exhausted
+        states += 1
+        if states > search_budget:
+            exhausted = True
+            return False
+        if len(covered) == len(pairs):
+            return True
+        uncovered = [pair for pair in pairs if pair not in covered]
+        pair = min(
+            uncovered,
+            key=lambda candidate: sum(
+                all(edge not in covered for edge in combinations(triple, 2))
+                for triple in by_pair[candidate]
+            ),
+        )
+        for triple in by_pair[pair]:
+            triple_pairs = tuple(combinations(triple, 2))
+            if any(edge in covered for edge in triple_pairs):
+                continue
+            covered.update(triple_pairs)
+            chosen.append(triple)
+            if search():
+                return True
+            chosen.pop()
+            covered.difference_update(triple_pairs)
+            if exhausted:
+                return False
+        return False
+
+    found = search()
+    if not found:
+        return SteinerTripleSystemResult(
+            status="UNKNOWN" if exhausted else "NOT_FOUND",
+            order=order,
+            states_explored=min(states, search_budget),
+        )
+
+    # Replay the defining incidence axiom independently of the cover search.
+    pair_multiplicity = dict.fromkeys(pairs, 0)
+    for triple in chosen:
+        for pair in combinations(triple, 2):
+            pair_multiplicity[pair] += 1
+    if any(value != 1 for value in pair_multiplicity.values()):
+        raise RuntimeError("exact-cover search produced an invalid Steiner system")
+    design = IncidenceStructure(
+        points=tuple(f"p{point}" for point in points),
+        block_ids=tuple(f"b{index}" for index in range(len(chosen))),
+        blocks=tuple(tuple(f"p{point}" for point in triple) for triple in chosen),
+    )
+    return SteinerTripleSystemResult(
+        status="COMPUTED", order=order, design=design, states_explored=states
     )
 
 

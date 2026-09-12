@@ -34,6 +34,12 @@ MAX_LABEL_BYTES = 1_024
 MAX_TRADE_ORDER = MAX_T
 MAX_TRADE_DIFFERENCES = MAX_POINTS + MAX_SUBSETS
 
+# A small exact-cover envelope for the first public design constructor.  The
+# complete candidate triple family is materialized before search, so this
+# bound covers both candidate generation and the recursive search state.
+MAX_STEINER_TRIPLE_ORDER = 15
+MAX_STEINER_SEARCH_STATES = 100_000
+
 _MAX_CONTAINMENT_TOTAL_WORK_UNITS = 4_000_000
 _MAX_TRADE_TOTAL_WORK_UNITS = 5_000_000
 
@@ -114,6 +120,60 @@ class IncidenceStructure(StrictModel):
                 tuple(point for point in self.points if point in block_members)
             )
         object.__setattr__(self, "blocks", tuple(canonical_blocks))
+        return self
+
+
+class SteinerTripleSystemRequest(StrictModel):
+    """Construct an STS(v) through bounded exact pair-cover search."""
+
+    order: StrictInt = Field(ge=3, le=MAX_STEINER_TRIPLE_ORDER)
+    search_budget: StrictInt = Field(
+        default=MAX_STEINER_SEARCH_STATES, ge=1, le=MAX_STEINER_SEARCH_STATES
+    )
+
+    @model_validator(mode="after")
+    def require_necessary_parameters(self) -> Self:
+        # Every pair must occur in one triple, hence b=v(v-1)/6 must be an
+        # integer; this is the elementary necessary condition v=1 or 3 mod 6.
+        if self.order % 6 not in (1, 3):
+            raise _validation_error(
+                "steiner_order_necessary_condition",
+                "a Steiner triple system requires order congruent to 1 or 3 modulo 6",
+            )
+        return self
+
+
+class SteinerTripleSystemResult(StrictModel):
+    """One exact construction outcome, including bounded non-completion."""
+
+    status: Literal["COMPUTED", "NOT_FOUND", "UNKNOWN"]
+    order: StrictInt = Field(ge=3, le=MAX_STEINER_TRIPLE_ORDER)
+    design: IncidenceStructure | None = None
+    states_explored: StrictInt = Field(ge=0, le=MAX_STEINER_SEARCH_STATES)
+
+    @model_validator(mode="after")
+    def require_status_payload(self) -> Self:
+        if self.status == "COMPUTED":
+            if self.design is None:
+                raise _validation_error(
+                    "steiner_computed_without_design",
+                    "COMPUTED requires an incidence design",
+                )
+            if len(self.design.points) != self.order:
+                raise _validation_error(
+                    "steiner_design_order", "design point count must equal order"
+                )
+            expected_blocks = self.order * (self.order - 1) // 6
+            if len(self.design.blocks) != expected_blocks:
+                raise _validation_error(
+                    "steiner_design_block_count",
+                    "design block count must equal v(v-1)/6",
+                )
+        elif self.design is not None:
+            raise _validation_error(
+                "steiner_noncomputed_design",
+                "non-COMPUTED outcomes cannot carry a design",
+            )
         return self
 
 

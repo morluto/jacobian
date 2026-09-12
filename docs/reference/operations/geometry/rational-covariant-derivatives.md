@@ -60,9 +60,12 @@ The operation retains the metric and tensor denominator guards, generated
 determinant guards, and every nonconstant denominator in the normalized output.
 It admits the complete dense source and result tensor, sparse polynomial
 support, coefficient height, intermediate DAG work, and canonical exact
-output before symbolic expansion. A request that exceeds the rank, component,
-term, coefficient, or retained-locus envelope is rejected before backend work;
-accepted requests return every component. The semantic limits are mathematical
+output before symbolic DAG expansion. Rank-shape admission currently follows
+canonical rational-function recognition, so a valid source whose derivative
+would exceed rank can still perform bounded GCD recognition work first. A
+request that exceeds the rank, component, term, coefficient, or
+retained-locus envelope is rejected before symbolic/DAG expansion; accepted
+requests return every component. The semantic limits are mathematical
 work and exact representation limits, not a transport-byte truncation.
 
 The exact symbolic arithmetic runs behind a bounded worker. Timeout,

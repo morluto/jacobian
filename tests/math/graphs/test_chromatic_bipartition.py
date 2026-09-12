@@ -501,9 +501,7 @@ def test_unknown_worker_frame_is_an_execution_failure(
     monkeypatch.setattr(
         process_owner,
         "run_bounded_process",
-        lambda *_args, **_kwargs: _completed(
-            stdout=encode_worker_result_frame(frame)
-        ),
+        lambda *_args, **_kwargs: _completed(stdout=encode_worker_result_frame(frame)),
     )
     with pytest.raises(OperationBackendError) as caught:
         operation.find_chromatic_bipartition(
@@ -600,7 +598,10 @@ def test_unit_threshold_counts_only_computed_remainders() -> None:
     cycle = tuple(f"c{index}" for index in range(33))
     vertices = ("iso", *cycle)
     edges = tuple(
-        (min(cycle[index], cycle[(index + 1) % 33]), max(cycle[index], cycle[(index + 1) % 33]))
+        (
+            min(cycle[index], cycle[(index + 1) % 33]),
+            max(cycle[index], cycle[(index + 1) % 33]),
+        )
         for index in range(33)
     )
     result = operation._find_chromatic_bipartition_kernel(

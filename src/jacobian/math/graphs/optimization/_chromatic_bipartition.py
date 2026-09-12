@@ -410,9 +410,7 @@ def _admit_chromatic_bipartition(request: ChromaticBipartitionRequest) -> None:
     if _retained_label_characters(
         request.graph,
         charge_witness_axes=_chromatic_bipartition_can_return_split(request),
-    ) > (
-        MAX_CHROMATIC_BIPARTITION_LABEL_CHARACTERS
-    ):
+    ) > (MAX_CHROMATIC_BIPARTITION_LABEL_CHARACTERS):
         raise OperationResourceAdmissionError(
             location=("graph",),
             code="graph.chromatic_bipartition.retained_labels_exceed_bound",

@@ -11,7 +11,6 @@ from jsonschema.exceptions import ValidationError as JSONSchemaValidationError
 from pydantic import ValidationError
 
 from jacobian.canonical import encode_strict_json
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.number_fields._models import (
     NumberFieldRingOfIntegersRequest,
@@ -130,12 +129,13 @@ def test_ring_of_integers_round_trips_through_strict_json() -> None:
 
 
 def test_ring_of_integers_request_schema_and_parser_share_degree_boundary() -> None:
-    operation = Catalog.open().inspect("number_field.ring_of_integers.compute")
-    assert operation is not None
-    field_schema = operation.input_schema["properties"]["field"]
+    input_schema = NumberFieldRingOfIntegersRequest.model_json_schema(
+        mode="validation"
+    )
+    field_schema = input_schema["properties"]["field"]
     assert field_schema["properties"]["coefficients_descending"]["maxItems"] == 32
 
-    schema_validator = Draft202012Validator(operation.input_schema)
+    schema_validator = Draft202012Validator(input_schema)
     schema_validator.validate(
         {"field": {"coefficients_descending": ["1", *(["0"] * 30), "-2"]}}
     )

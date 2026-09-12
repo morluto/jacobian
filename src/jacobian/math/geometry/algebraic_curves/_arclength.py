@@ -17,7 +17,11 @@ from time import monotonic
 import sympy
 
 from jacobian._exact import CanonicalRational
-from jacobian._execution import OperationExecutionTimeoutError, bind_request_deadline
+from jacobian._execution import (
+    OperationExecutionTimeoutError,
+    bind_request_deadline,
+    current_request_execution,
+)
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -154,7 +158,7 @@ def _quadratic_roots(
     if root is None:
         return None
     if root == 0:
-        raise ValueError("BOUNDARY_NONTRANSVERSE")
+        return ( -linear / (2 * quadratic), )
     return tuple(
         sorted({(-linear - root) / (2 * quadratic), (-linear + root) / (2 * quadratic)})
     )
@@ -221,6 +225,12 @@ def _cells_for_box(  # noqa: C901
         or box_y.lower.as_fraction() > ellipse.k + b
     ):
         return ()
+    x0 = box_x.lower.as_fraction()
+    x1 = box_x.upper.as_fraction()
+    y0 = box_y.lower.as_fraction()
+    y1 = box_y.upper.as_fraction()
+    if x0 == x1 or y0 == y1:
+        return ()
 
     boundaries: dict[Fraction, set[str]] = {}
     for axis, interval in (("x", box_x), ("y", box_y)):
@@ -234,6 +244,25 @@ def _cells_for_box(  # noqa: C901
             if boundary_roots is None:
                 return "IRRATIONAL_BOUNDARY"
             for root in boundary_roots:
+                x, y = _parameter_coordinates(ellipse, root)
+                if axis == "x":
+                    if abs(x - boundary) > 0:
+                        continue
+                    if not (y0 <= y <= y1):
+                        continue
+                else:
+                    if abs(y - boundary) > 0:
+                        continue
+                    if not (x0 <= x <= x1):
+                        continue
+                if len(boundary_roots) == 1:
+                    coefficients = _coordinate_numerator(
+                        ellipse, axis=axis, boundary=boundary
+                    )
+                    constant, linear, quadratic = coefficients
+                    discriminant = linear * linear - 4 * quadratic * constant
+                    if quadratic != 0 and discriminant == 0:
+                        raise ValueError("BOUNDARY_NONTRANSVERSE")
                 boundaries.setdefault(root, set()).add(label)
     if any(len(labels) > 1 for labels in boundaries.values()):
         return "BOUNDARY_CORNER"
@@ -378,6 +407,13 @@ def _integrate_cell(
                     "arclength deadline expired before Arb integration"
                 )
             remaining = max(1, int(deadline - monotonic()))
+            execution = current_request_execution()
+            if execution is not None:
+                nested_wall = max(
+                    1, min(120, int(deadline - execution.started_at + 0.999))
+                )
+            else:
+                nested_wall = remaining
             integral_request = DefiniteIntegralEnclosureRequest(
                 expression=_integrand("t", first, second),
                 box=RationalIntervalBox(
@@ -399,7 +435,7 @@ def _integrate_cell(
                 max_leaves=1024,
                 # The request execution context owns the single absolute deadline;
                 # this per-phase value only keeps standalone native calls bounded.
-                wall_seconds=remaining,
+                wall_seconds=nested_wall,
             )
             result: DefiniteIntegralEnclosureResult = (
                 _compute_definite_integral_enclosure(integral_request)

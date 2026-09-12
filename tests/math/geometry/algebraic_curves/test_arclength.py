@@ -35,7 +35,12 @@ def _polynomial(*terms: tuple[int, tuple[int, int]]) -> RationalPolynomial:
     )
 
 
-def _box(x_lower: int, x_upper: int, y_lower: int, y_upper: int) -> RationalBox:
+def _box(
+    x_lower: int | Fraction,
+    x_upper: int | Fraction,
+    y_lower: int | Fraction,
+    y_upper: int | Fraction,
+) -> RationalBox:
     return RationalBox(
         variables=("x", "y"),
         intervals=(
@@ -184,3 +189,23 @@ def test_projective_left_tangency_is_singular_unsupported() -> None:
     )
     assert result.outcome.status == "SINGULAR_CASE_UNSUPPORTED"
     assert result.outcome.reason == "BOUNDARY_NONTRANSVERSE"
+
+
+def test_degenerate_intersecting_box_has_exact_zero_length() -> None:
+    result = enclose_arclength(
+        _request(
+            _polynomial((1, (2, 0)), (1, (0, 2)), (-1, (0, 0))),
+            _box(0, 0, -2, 2),
+        )
+    )
+    assert result.outcome.status == "EMPTY"
+
+
+def test_tangency_outside_the_box_face_is_empty() -> None:
+    result = enclose_arclength(
+        _request(
+            _polynomial((1, (2, 0)), (1, (0, 2)), (-1, (0, 0))),
+            _box(Fraction(-4, 5), Fraction(-3, 5), 1, 2),
+        )
+    )
+    assert result.outcome.status == "EMPTY"

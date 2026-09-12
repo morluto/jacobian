@@ -7,7 +7,13 @@ import pytest
 from jsonschema import Draft202012Validator, ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.canonical import format_canonical_integer
+from jacobian.catalog.catalog import Catalog
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
+from jacobian.dispatch import invoke_operation
 from jacobian.math.number_theory.sequences.core._models import (
     AutocorrelationResult,
     FiniteIntegerSequence,
@@ -20,11 +26,16 @@ from jacobian.math.number_theory.sequences.core.operations import (
     cyclic_autocorrelation,
     sequence_order_shape,
 )
-from jacobian.math.number_theory.sequences.core.values import IntegerSequence
 
 
 def values(result: AutocorrelationResult) -> list[tuple[int, int]]:
     return [(cell.lag, cell.value) for cell in result.cells]
+
+
+def rational_sequence(values: tuple[int, ...]) -> FiniteRationalSequence:
+    return FiniteRationalSequence(
+        values=tuple(CanonicalRational(num=value, den=1) for value in values)
+    )
 
 
 def test_aperiodic_uses_signed_nonwrapping_lags() -> None:
@@ -45,7 +56,7 @@ def test_empty_sequence_has_empty_profiles() -> None:
 
 
 def test_order_shape_retains_all_flat_peak_positions_and_signed_rows() -> None:
-    source = FiniteIntegerSequence(values=(1, 3, 3, 2))
+    source = rational_sequence((1, 3, 3, 2))
     result = sequence_order_shape(source)
     assert result.first_nondecreasing_violation == 2
     assert result.first_nonincreasing_violation == 0
@@ -54,16 +65,18 @@ def test_order_shape_retains_all_flat_peak_positions_and_signed_rows() -> None:
         (row.index, row.square, row.neighbor_product, row.holds)
         for row in result.log_concavity_rows
     ] == [
-        (1, 9, 3, True),
-        (2, 9, 6, True),
+        (1, CanonicalRational(num=9, den=1), CanonicalRational(num=3, den=1), True),
+        (2, CanonicalRational(num=9, den=1), CanonicalRational(num=6, den=1), True),
     ]
 
 
 def test_order_shape_reports_internal_zero_and_signed_log_concavity() -> None:
-    result = sequence_order_shape(FiniteIntegerSequence(values=(-2, 0, -3)))
+    result = sequence_order_shape(rational_sequence((-2, 0, -3)))
     assert not result.is_nonnegative
     assert result.has_internal_zero
-    assert result.log_concavity_rows[0].neighbor_product == 6
+    assert result.log_concavity_rows[0].neighbor_product == CanonicalRational(
+        num=6, den=1
+    )
     assert not result.log_concavity_rows[0].holds
 
 
@@ -106,14 +119,19 @@ def test_rational_profile_accepts_integer_wire_entries_as_canonical_values() -> 
     )
 
 
-def test_rational_profile_reports_first_witnesses_and_vacuous_edges() -> None:
-    result = sequence_order_shape(
-        FiniteRationalSequence(
-            values=tuple(
-                CanonicalRational(num=value, den=1) for value in (3, 1, 2, 0, -1)
-            )
-        )
+def test_rational_profile_parses_integer_wire_entries_beyond_python_digit_guard() -> (
+    None
+):
+    integer = "7" + "1" * 4_999
+    source = FiniteRationalSequence.model_validate_json(
+        '{"values":["' + integer + '"]}'
     )
+    assert source.values[0].den == 1
+    assert format_canonical_integer(source.values[0].num) == integer
+
+
+def test_rational_profile_reports_first_witnesses_and_vacuous_edges() -> None:
+    result = sequence_order_shape(rational_sequence((3, 1, 2, 0, -1)))
     assert result.first_nondecreasing_violation == 0
     assert result.first_nonincreasing_violation == 1
     assert result.first_log_concavity_violation == 1
@@ -134,7 +152,7 @@ def test_rational_profile_reports_first_witnesses_and_vacuous_edges() -> None:
 def test_order_shape_native_guard_rejects_unrelated_integer_sequence_value() -> None:
     with pytest.raises(TypeError, match="FiniteRationalSequence"):
         sequence_order_shape(
-            cast(FiniteRationalSequence, IntegerSequence(values=(1, 2)))
+            cast(FiniteRationalSequence, FiniteIntegerSequence(values=(1, 2)))
         )
 
 
@@ -164,12 +182,8 @@ def test_order_shape_result_rejects_out_of_range_monotonicity_witness() -> None:
 
 def test_order_shape_reversal_and_positive_scaling_preserve_decisions() -> None:
     source_values = (1, 3, 3, 2, 1)
-    source = FiniteRationalSequence(
-        values=tuple(CanonicalRational(num=value, den=1) for value in source_values)
-    )
-    scaled = FiniteRationalSequence(
-        values=tuple(CanonicalRational(num=5 * value, den=1) for value in source_values)
-    )
+    source = rational_sequence(source_values)
+    scaled = rational_sequence(tuple(5 * value for value in source_values))
     result = sequence_order_shape(source)
     scaled_result = sequence_order_shape(scaled)
     assert (
@@ -189,11 +203,7 @@ def test_order_shape_reversal_and_positive_scaling_preserve_decisions() -> None:
     )
 
     reversed_result = sequence_order_shape(
-        FiniteRationalSequence(
-            values=tuple(
-                CanonicalRational(num=value, den=1) for value in reversed(source_values)
-            )
-        )
+        rational_sequence(tuple(reversed(source_values)))
     )
     assert reversed_result.weak_unimodal_peak_positions == (2, 3)
     assert tuple(row.holds for row in reversed_result.log_concavity_rows) == tuple(
@@ -202,11 +212,7 @@ def test_order_shape_reversal_and_positive_scaling_preserve_decisions() -> None:
 
 
 def test_order_shape_profiles_binomial_coefficients() -> None:
-    source = FiniteRationalSequence(
-        values=tuple(
-            CanonicalRational(num=value, den=1) for value in (1, 5, 10, 10, 5, 1)
-        )
-    )
+    source = rational_sequence((1, 5, 10, 10, 5, 1))
     result = sequence_order_shape(source)
     assert result.weak_unimodal_peak_positions == (2, 3)
     assert result.first_nondecreasing_violation == 3
@@ -226,15 +232,42 @@ def test_large_quadratic_autocorrelation_is_rejected(
 
 
 def test_constant_sequence_peak_scan_is_linear() -> None:
-    source = FiniteIntegerSequence(values=(1,) * 10_000)
+    source = rational_sequence((1,) * 10_000)
     result = sequence_order_shape(source)
     assert result.weak_unimodal_peak_positions == tuple(range(10_000))
 
 
 def test_order_shape_rejects_complete_profile_output_explosion() -> None:
-    source = FiniteIntegerSequence(values=(1,) * 100_000)
+    source = rational_sequence((1,) * 100_000)
     with pytest.raises(
         OperationResourceAdmissionError,
         match=str(MAX_ORDER_SHAPE_RESULT_ALLOCATIONS),
     ):
         sequence_order_shape(source)
+
+
+def test_order_shape_admits_complete_rational_result_representation() -> None:
+    source_value = CanonicalRational(num=1_234_567, den=7_654_321)
+    source = FiniteRationalSequence(values=(source_value,) * 80_000)
+    with pytest.raises(
+        OperationDomainValidationError,
+        match="result representation",
+    ):
+        sequence_order_shape(source)
+
+
+def test_order_shape_native_and_catalog_paths_share_rational_carrier() -> None:
+    source = rational_sequence((1, 3, 3, 2))
+    native = sequence_order_shape(source)
+    dispatched = invoke_operation(
+        "sequence.order_shape.profile.compute",
+        {"values": ["1", "3", "3", "2"]},
+        Catalog.open(),
+    )
+    assert dispatched.output == native.model_dump(mode="json")
+    assert isinstance(native.source, FiniteRationalSequence)
+    assert all(
+        isinstance(row.square, CanonicalRational)
+        and isinstance(row.neighbor_product, CanonicalRational)
+        for row in native.log_concavity_rows
+    )

@@ -8,7 +8,10 @@ from fractions import Fraction
 from functools import reduce
 from itertools import pairwise
 
-from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
+from jacobian._exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    CanonicalRational,
+)
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -120,22 +123,15 @@ def _admit_autocorrelation(request: FiniteIntegerSequence) -> tuple[int, ...]:
 
 
 def _order_shape_rationals(
-    request: FiniteIntegerSequence | FiniteRationalSequence,
+    request: FiniteRationalSequence,
 ) -> tuple[CanonicalRational, ...]:
     if isinstance(request, FiniteRationalSequence):
         return request.values
-    if isinstance(request, FiniteIntegerSequence):
-        return tuple(
-            CanonicalRational.from_integer_ratio(value, 1) for value in request.values
-        )
-    raise TypeError(
-        "sequence_order_shape requires FiniteRationalSequence "
-        "(or a FiniteIntegerSequence for native compatibility)"
-    )
+    raise TypeError("sequence_order_shape requires FiniteRationalSequence")
 
 
 def _admit_order_shape(
-    request: FiniteIntegerSequence | FiniteRationalSequence,
+    request: FiniteRationalSequence,
 ) -> tuple[CanonicalRational, ...]:
     """Admit linear comparisons, exact products, and the complete profile."""
 
@@ -150,6 +146,11 @@ def _admit_order_shape(
             for value in rational_values
         ),
         default=1,
+    )
+    source_digits = sum(
+        len(format_canonical_integer(abs(value.num)))
+        + len(format_canonical_integer(value.den))
+        for value in rational_values
     )
     if size * component_digits > MAX_ORDER_SHAPE_WORK:
         raise OperationResourceAdmissionError(
@@ -178,7 +179,10 @@ def _admit_order_shape(
                 f"{MAX_ORDER_SHAPE_RESULT_ALLOCATIONS}"
             ),
         )
-    result_digits = row_count * 2 * product_digits
+    # Every row retains two rationals. Each product can have up to
+    # ``product_digits`` digits in both its numerator and denominator, and the
+    # result also retains the complete rational source.
+    result_digits = source_digits + row_count * 4 * product_digits
     if result_digits > MAX_SEQUENCE_TOTAL_DIGITS:
         raise OperationDomainValidationError(
             location=("values",),
@@ -241,19 +245,16 @@ def cyclic_autocorrelation(request: FiniteIntegerSequence) -> AutocorrelationRes
 
 
 def _order_shape_scalar(
-    value: Fraction, *, compact_integer: bool
-) -> int | CanonicalRational:
-    """Encode a product in the result's source-compatible scalar domain."""
+    value: Fraction,
+) -> CanonicalRational:
+    """Encode a product in the canonical rational result domain."""
 
-    if compact_integer and value.denominator == 1:
-        return value.numerator
     return CanonicalRational.from_fraction(value)
 
 
 def sequence_order_shape(
-    request: FiniteIntegerSequence | FiniteRationalSequence,
+    request: FiniteRationalSequence,
 ) -> SequenceOrderShapeResult:
-    compact_integer = isinstance(request, FiniteIntegerSequence)
     fractions = tuple(value.as_fraction() for value in _admit_order_shape(request))
     nondecreasing_violation = next(
         (
@@ -289,12 +290,9 @@ def sequence_order_shape(
     log_rows = tuple(
         SequenceLogConcavityRow(
             index=index,
-            square=_order_shape_scalar(
-                fractions[index] ** 2, compact_integer=compact_integer
-            ),
+            square=_order_shape_scalar(fractions[index] ** 2),
             neighbor_product=_order_shape_scalar(
-                fractions[index - 1] * fractions[index + 1],
-                compact_integer=compact_integer,
+                fractions[index - 1] * fractions[index + 1]
             ),
             holds=fractions[index] ** 2 >= fractions[index - 1] * fractions[index + 1],
         )

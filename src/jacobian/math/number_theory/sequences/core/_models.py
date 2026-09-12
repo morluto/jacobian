@@ -13,7 +13,7 @@ from jacobian._exact import (
     ExactInteger,
 )
 from jacobian._models import StrictModel
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.number_theory.sequences.core.values import (
     MAX_SEQUENCE_LENGTH,
     MAX_SEQUENCE_TOTAL_DIGITS,
@@ -146,13 +146,12 @@ class FiniteRationalSequence(StrictModel):
                 continue
             if info.mode == "json" and isinstance(value, str):
                 try:
-                    integer = int(value)
+                    parse_canonical_integer(value)
                 except ValueError:
                     pass
                 else:
-                    if value == str(integer):
-                        converted.append({"num": value, "den": "1"})
-                        continue
+                    converted.append({"num": value, "den": "1"})
+                    continue
             converted.append(value)
         return {**data, "values": tuple(converted)}
 
@@ -186,13 +185,13 @@ class AutocorrelationResult(StrictModel):
 
 class SequenceLogConcavityRow(StrictModel):
     index: int = Field(ge=1, le=MAX_SEQUENCE_LENGTH - 2)
-    square: ExactInteger | CanonicalRational
-    neighbor_product: ExactInteger | CanonicalRational
+    square: CanonicalRational
+    neighbor_product: CanonicalRational
     holds: bool
 
 
 class SequenceOrderShapeResult(StrictModel):
-    source: FiniteIntegerSequence | FiniteRationalSequence
+    source: FiniteRationalSequence
     first_nondecreasing_violation: int | None = Field(
         default=None, ge=0, le=MAX_SEQUENCE_LENGTH - 2
     )

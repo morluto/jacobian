@@ -118,8 +118,10 @@ def ring_of_integers(
                 f"{MAX_INTEGRAL_BASIS_DEGREE}"
             ),
         )
-    require_factorizable_discriminant(field)
-    recognized = recognized_integral_basis(field)
+    admitted_discriminant = require_factorizable_discriminant(field)
+    recognized = recognized_integral_basis(
+        field, admitted_polynomial_discriminant=admitted_discriminant
+    )
     if recognized is None:
         raise OperationDomainValidationError(
             location=("field",),

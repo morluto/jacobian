@@ -5,7 +5,12 @@ from __future__ import annotations
 import hashlib
 import sys
 
-from jacobian.canonical import encode_strict_json, format_canonical_integer
+from jacobian.canonical import (
+    encode_strict_json,
+    format_canonical_integer,
+    loads_strict_json,
+    parse_canonical_integer,
+)
 from jacobian.math.number_theory.number_fields._integral_basis import (
     integral_basis_coordinates,
     recognized_integral_basis,
@@ -18,11 +23,21 @@ def main() -> int:
     if sys.argv[1:] and not include_basis:
         raise RuntimeError("unknown number-field worker mode")
     input_bytes = sys.stdin.buffer.read()
+    payload = loads_strict_json(input_bytes)
+    if not isinstance(payload, dict):
+        raise RuntimeError("number-field worker request must be an object")
+    admitted_raw = payload.pop("admitted_polynomial_discriminant", None)
+    admitted_discriminant = (
+        parse_canonical_integer(admitted_raw) if admitted_raw is not None else None
+    )
     request = NumberFieldRequest.model_validate_json(
-        input_bytes,
+        encode_strict_json(payload),
         strict=True,
     )
-    integral_basis = recognized_integral_basis(request.field)
+    integral_basis = recognized_integral_basis(
+        request.field,
+        admitted_polynomial_discriminant=admitted_discriminant,
+    )
     if integral_basis is None:
         response: dict[str, object] = {"kind": "invalid"}
     else:

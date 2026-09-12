@@ -55,13 +55,18 @@ def run_integral_basis_worker(
     request: NumberFieldRequest,
     *,
     include_basis: bool,
+    admitted_polynomial_discriminant: int | None = None,
 ) -> IntegralBasisWorkerResult | None:
     """Compute one integral basis in a request-owned killable worker."""
 
     execution = current_request_execution()
     if execution is None:
         with request_execution(time.monotonic()):
-            return run_integral_basis_worker(request, include_basis=include_basis)
+            return run_integral_basis_worker(
+                request,
+                include_basis=include_basis,
+                admitted_polynomial_discriminant=admitted_polynomial_discriminant,
+            )
 
     owner_deadline = execution.started_at + _WORKER_TIMEOUT_SECONDS
     deadline = (
@@ -72,7 +77,12 @@ def run_integral_basis_worker(
     bind_request_deadline(deadline)
     request_checkpoint("before number-field integral-basis preparation")
 
-    input_bytes = encode_strict_json(request.model_dump(mode="json"))
+    payload = dict(request.model_dump(mode="json"))
+    if admitted_polynomial_discriminant is not None:
+        payload["admitted_polynomial_discriminant"] = format_canonical_integer(
+            admitted_polynomial_discriminant
+        )
+    input_bytes = encode_strict_json(payload)
     stdout_limit = _worker_stdout_limit(request.field, include_basis=include_basis)
     command = [sys.executable, str(_WORKER)]
     if include_basis:

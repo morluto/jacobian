@@ -10,6 +10,7 @@ from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError as JSONSchemaValidationError
 from pydantic import ValidationError
 
+import jacobian.math.number_theory.number_fields._integral_basis as integral_basis_kernel
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -17,6 +18,8 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.number_theory.number_fields._integral_basis import (
     monicized_discriminant_digit_bound,
+    recognized_integral_basis,
+    require_factorizable_discriminant,
 )
 from jacobian.math.number_theory.number_fields._models import (
     NumberFieldRingOfIntegersRequest,
@@ -236,6 +239,30 @@ def test_discriminant_admission_does_not_factor_inside_perfect_power(
     assert error.value.errors()[0]["type"] == (
         "number_field.ring_of_integers_discriminant_factorization_bound"
     )
+
+
+def test_admitted_monic_discriminant_is_request_scoped_and_reused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    field = SimpleNumberFieldPresentation(coefficients_descending=(1, 0, -5))
+    admitted = require_factorizable_discriminant(field)
+    assert admitted == 20
+    assert not hasattr(integral_basis_kernel, "_ADMITTED_MONIC_DISCRIMINANTS")
+
+    def fail_if_poly_discriminant_rerun(
+        self: object, *args: object, **kwargs: object
+    ) -> object:
+        raise AssertionError(
+            "admitted discriminant must not recompute Poly.discriminant"
+        )
+
+    monkeypatch.setattr(sympy.Poly, "discriminant", fail_if_poly_discriminant_rerun)
+    recognized = recognized_integral_basis(
+        field, admitted_polynomial_discriminant=admitted
+    )
+    assert recognized is not None
+    _ring, field_discriminant, _alpha, _leading = recognized
+    assert int(field_discriminant) == 5
 
 
 def test_reducible_semiprime_linear_factor_is_not_a_factorization_bound() -> None:

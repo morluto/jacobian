@@ -132,7 +132,7 @@ def _cofactor_is_factorizable(cofactor: int) -> bool:
 
 def require_factorizable_discriminant(
     field: SimpleNumberFieldPresentation,
-) -> None:
+) -> int | None:
     """Admit the round_two discriminant work before any backend expansion.
 
     SymPy's round_two completely factors the discriminant of the monicized
@@ -144,10 +144,13 @@ def require_factorizable_discriminant(
     prime/perfect-power short-circuits, or rejects the field with a typed
     domain error. Reducible presentations have a zero discriminant and flow
     to the existing irreducibility error downstream.
+
+    The computed monic polynomial discriminant is returned for this request
+    so the backend can reuse it; it is not retained in module-global state.
     """
 
     if field.degree < 1:
-        return
+        return None
     estimated_digits = monicized_discriminant_digit_bound(field)
     if estimated_digits > MAX_NUMBER_FIELD_DISCRIMINANT_DIGITS:
         raise OperationResourceAdmissionError(
@@ -168,13 +171,13 @@ def require_factorizable_discriminant(
         domain=sympy.ZZ,
     )
     if polynomial.is_irreducible is not True:
-        return
+        return None
     discriminant = int(polynomial.discriminant())
     if discriminant == 0:
-        return
+        return None
     cofactor = _strip_small_factors(abs(discriminant))
     if _cofactor_is_factorizable(cofactor):
-        return
+        return discriminant
     raise OperationDomainValidationError(
         location=("field",),
         code="number_field.ring_of_integers_discriminant_factorization_bound",
@@ -186,8 +189,27 @@ def require_factorizable_discriminant(
     )
 
 
+def _poly_with_admitted_discriminant(polynomial: Any, admitted: int) -> Any:
+    """Supply the request-scoped discriminant without mutating Poly methods."""
+
+    import sympy
+
+    admitted_value = sympy.Integer(admitted)
+
+    class _AdmittedDiscriminantPoly(type(polynomial)):
+        def discriminant(self, *args: object, **kwargs: object) -> Any:
+            return admitted_value
+
+    return _AdmittedDiscriminantPoly(
+        polynomial.as_expr(),
+        *polynomial.gens,
+        domain=polynomial.domain,
+    )
+
+
 def recognized_integral_basis(
     field: SimpleNumberFieldPresentation,
+    admitted_polynomial_discriminant: int | None = None,
 ) -> tuple[Any, Any, Any, int] | None:
     """Recognize the presentation and compute its integral basis once."""
 
@@ -204,6 +226,10 @@ def recognized_integral_basis(
     )
     if polynomial.is_irreducible is not True:
         return None
+    if admitted_polynomial_discriminant is not None:
+        polynomial = _poly_with_admitted_discriminant(
+            polynomial, admitted_polynomial_discriminant
+        )
     ring, field_discriminant = cast(tuple[Any, Any], round_two(polynomial))
     return ring, field_discriminant, alpha, leading
 

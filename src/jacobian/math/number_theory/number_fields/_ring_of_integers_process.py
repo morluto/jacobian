@@ -44,10 +44,11 @@ def compute_nf_ring_of_integers(
                 f"{MAX_INTEGRAL_BASIS_DEGREE}"
             ),
         )
-    require_factorizable_discriminant(request.field)
+    admitted_discriminant = require_factorizable_discriminant(request.field)
     worker_result = run_integral_basis_worker(
         NumberFieldRequest(field=request.field),
         include_basis=True,
+        admitted_polynomial_discriminant=admitted_discriminant,
     )
     if worker_result is None:
         raise OperationDomainValidationError(

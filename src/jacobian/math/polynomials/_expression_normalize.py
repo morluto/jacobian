@@ -102,13 +102,16 @@ def _metrics(expression: PolynomialExpression) -> tuple[int, int, int, int]:
     if isinstance(expression, PolynomialAdd):
         terms = sum(row[1] for row in child_metrics)
         degree = max(row[2] for row in child_metrics)
-        bits = max(row[3] for row in child_metrics) + ceil(log2(len(child_metrics)))
+        # A common denominator can contain every child denominator as a
+        # factor, so summing rational terms is bounded by the sum of their
+        # component heights (plus carry bits), not merely the largest child.
+        bits = sum(row[3] for row in child_metrics) + ceil(log2(len(child_metrics)))
     else:
         terms = 1
         for row in child_metrics:
             terms = min(MAX_POLYNOMIAL_TERMS + 1, terms * row[1])
         degree = sum(row[2] for row in child_metrics)
-        bits = sum(row[3] for row in child_metrics)
+        bits = sum(row[3] for row in child_metrics) + ceil(log2(max(1, terms)))
     return nodes, terms, degree, bits
 
 

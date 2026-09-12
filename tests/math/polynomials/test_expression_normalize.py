@@ -4,7 +4,10 @@ from typing import Any
 
 import pytest
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.polynomials._expression_normalize import (
     PolynomialExpressionNormalizeRequest,
     normalize_polynomial_expression,
@@ -69,3 +72,23 @@ def test_constant_axis_and_exact_cancellation_are_preserved() -> None:
     result = normalize_polynomial_expression(request)
     assert result.polynomial.variables == ()
     assert result.polynomial.polynomial.terms == ()
+
+
+def test_many_rational_denominators_are_admitted_conservatively() -> None:
+    """Height admission accounts for denominator accumulation in additions."""
+
+    def tree(start: int, count: int) -> dict[str, Any]:
+        if count == 1:
+            return {
+                "kind": "LITERAL",
+                "value": {"num": 1, "den": 10**127 + 2 * start + 1},
+            }
+        half = count // 2
+        return {
+            "kind": "ADD",
+            "operands": [tree(start, half), tree(start + half, half)],
+        }
+
+    request = _request("QQ", tree(0, 128))
+    with pytest.raises(OperationResourceAdmissionError):
+        normalize_polynomial_expression(request)

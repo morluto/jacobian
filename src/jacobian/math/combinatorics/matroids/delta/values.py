@@ -13,7 +13,6 @@ from jacobian.math.combinatorics.greedoids.values import FiniteFeasibleSetSystem
 MAX_DELTA_MEMBERSHIPS = 16_384
 MAX_DELTA_LABEL_BYTES = 2_048
 MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS = 250_000
-MAX_DELTA_WIDTH_ROWS = 16_384
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -111,12 +110,9 @@ def require_delta_matroid_envelope(system: FiniteFeasibleSetSystem) -> None:
         )
 
 
-def require_delta_matroid_admission(system: FiniteFeasibleSetSystem) -> None:
-    """Bound all work and the canonical recognition result before replay."""
+def require_delta_matroid_exchange_work(system: FiniteFeasibleSetSystem) -> None:
+    """Bound symmetric-exchange candidate work after the source envelope."""
 
-    require_delta_matroid_envelope(system)
-    # Every nonempty row carries at least one membership, so the membership
-    # envelope bounds the row count and keeps this ordered-pair scan bounded.
     _, candidate_space = _exchange_work(canonical_feasible_rows(system))
     if candidate_space > MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS:
         raise DeltaMatroidAdmissionError(
@@ -124,6 +120,13 @@ def require_delta_matroid_admission(system: FiniteFeasibleSetSystem) -> None:
             "delta-matroid symmetric-exchange candidate checks exceed the "
             f"{MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS}-check envelope",
         )
+
+
+def require_delta_matroid_admission(system: FiniteFeasibleSetSystem) -> None:
+    """Bound all work and the canonical recognition result before replay."""
+
+    require_delta_matroid_envelope(system)
+    require_delta_matroid_exchange_work(system)
 
 
 def first_symmetric_exchange_obstruction(
@@ -192,11 +195,11 @@ __all__ = [
     "MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS",
     "MAX_DELTA_LABEL_BYTES",
     "MAX_DELTA_MEMBERSHIPS",
-    "MAX_DELTA_WIDTH_ROWS",
     "DeltaMatroidObstruction",
     "FiniteDeltaMatroid",
     "canonical_feasible_rows",
     "first_symmetric_exchange_obstruction",
     "require_delta_matroid_admission",
     "require_delta_matroid_envelope",
+    "require_delta_matroid_exchange_work",
 ]

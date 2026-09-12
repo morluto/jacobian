@@ -9,12 +9,12 @@ from jacobian.math.combinatorics.matroids.delta._models import (
 )
 from jacobian.math.combinatorics.matroids.delta.values import (
     MAX_DELTA_MEMBERSHIPS,
-    MAX_DELTA_WIDTH_ROWS,
     DeltaMatroidAdmissionError,
     FiniteDeltaMatroid,
     first_symmetric_exchange_obstruction,
     require_delta_matroid_admission,
     require_delta_matroid_envelope,
+    require_delta_matroid_exchange_work,
 )
 
 __all__ = [
@@ -63,11 +63,10 @@ def verify_from_feasible_sets(claim: DeltaMatroidRecognitionResult) -> bool:
     )
 
 
-def _require_delta_matroid(value: FiniteDeltaMatroid) -> None:
-    """Re-establish the source axiom before consuming a serialized claim."""
+def _require_delta_matroid_axiom(system: FiniteFeasibleSetSystem) -> None:
+    """Replay candidate-work and exchange after the source envelope is known."""
 
-    system = FiniteFeasibleSetSystem(ground=value.ground, feasible=value.feasible)
-    require_delta_matroid_admission(system)
+    require_delta_matroid_exchange_work(system)
     obstruction = first_symmetric_exchange_obstruction(system)
     if obstruction is not None:
         raise ValueError("source feasible family is not a delta-matroid")
@@ -98,7 +97,7 @@ def twist(
             "memberships_exceeded",
             "twisted feasible-family memberships exceed the output envelope",
         )
-    _require_delta_matroid(delta_matroid)
+    _require_delta_matroid_axiom(system)
     rows = tuple(
         sorted(
             tuple(sorted(frozenset(row) ^ twist_subset))
@@ -117,12 +116,5 @@ def twist(
 def width(delta_matroid: FiniteDeltaMatroid) -> int:
     """Return the delta-matroid width ``max |F| - min |F|``."""
 
-    row_count = len(delta_matroid.feasible)
-    if row_count > MAX_DELTA_WIDTH_ROWS:
-        raise DeltaMatroidAdmissionError(
-            "width_rows_exceeded",
-            "delta-matroid width row scan exceeds the "
-            f"{MAX_DELTA_WIDTH_ROWS}-row envelope",
-        )
     sizes = tuple(len(row) for row in delta_matroid.feasible)
     return max(sizes) - min(sizes)

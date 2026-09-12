@@ -38,4 +38,5 @@ result.
 
 `delta_matroid.twist.compute` returns the canonical twisted `FiniteDeltaMatroid`.
 Width `max(|F|)-min(|F|)` is a native projection of the feasible family and is
-not a catalog operation.
+not a catalog operation. It scans every retained feasible-row length of the
+canonical value and has no extra row ceiling.

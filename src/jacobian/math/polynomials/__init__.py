@@ -1,5 +1,9 @@
 """Supported exact polynomial API."""
 
+from jacobian.math.polynomials._discrete_antiderivative import (
+    RationalDiscreteAntiderivativeResult,
+    rational_discrete_antiderivative,
+)
 from jacobian.math.polynomials._elementary_kernel import (
     integer_polynomial_compose,
     integer_polynomial_content,
@@ -63,6 +67,7 @@ def __getattr__(name: str) -> object:
 
 
 __all__ = [
+    "RationalDiscreteAntiderivativeResult",
     "derivative",
     "discriminant",
     "divide",
@@ -91,6 +96,7 @@ __all__ = [
     "polynomial_groebner_basis",
     "polynomial_resultant",
     "polynomial_square_free_decomposition",
+    "rational_discrete_antiderivative",
     "rational_partial_fraction_decomposition",
     "rational_polynomial_derivative",
     "rational_polynomial_division",

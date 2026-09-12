@@ -4,7 +4,7 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.polynomials._cyclotomic import (
     CyclotomicRequest,
     CyclotomicResult,
-    cyclotomic,
+    _run,
 )
 
 CYCLOTOMIC_OPERATION = MathTool(
@@ -16,7 +16,7 @@ CYCLOTOMIC_OPERATION = MathTool(
     ),
     request_type=CyclotomicRequest,
     result_type=CyclotomicResult,
-    run=cyclotomic,
+    run=_run,
     tags=("polynomial", "cyclotomic", "integer", "totient", "exact"),
     discovery_terms=(
         "cyclotomic polynomial",

@@ -189,10 +189,8 @@ def _factor_index(index: int) -> dict[int, int]:
     return factors
 
 
-def cyclotomic(request: CyclotomicRequest) -> CyclotomicResult:
-    typed_request = _require_typed_request(request)
+def _compute(index: int) -> tuple[int, IntegerPolynomial]:
     request_checkpoint("before cyclotomic admission")
-    index = typed_request.index
     factorization = _factor_index(index)
     admission = _admit(index, factorization)
     request_checkpoint("after cyclotomic admission")
@@ -237,12 +235,47 @@ def cyclotomic(request: CyclotomicRequest) -> CyclotomicResult:
         raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
     request_checkpoint("before cyclotomic result construction")
     try:
-        return CyclotomicResult(
-            source_index=index,
-            totient=admission.degree,
-            polynomial=IntegerPolynomial(
-                coefficients=coefficients,
+        polynomial_value = IntegerPolynomial(
+            coefficients=coefficients,
+        )
+    except Exception as exc:
+        _backend_error(BackendFailureReason.INVALID_OUTPUT, exc)
+    return admission.degree, polynomial_value
+
+
+def _require_native_index(index: int) -> int:
+    if type(index) is not int:
+        raise OperationDomainValidationError(
+            location=("index",),
+            code="polynomial.cyclotomic.index_type",
+            message="cyclotomic native computation requires an integer index",
+        )
+    if not 1 <= index <= MAX_CYCLOTOMIC_INDEX:
+        raise OperationDomainValidationError(
+            location=("index",),
+            code="polynomial.cyclotomic.index_bound",
+            message=(
+                f"cyclotomic native index must be between 1 and {MAX_CYCLOTOMIC_INDEX}"
             ),
+        )
+    return index
+
+
+def cyclotomic(index: int) -> IntegerPolynomial:
+    """Return the admitted exact cyclotomic polynomial in ``ZZ[x]``."""
+
+    _, polynomial = _compute(_require_native_index(index))
+    return polynomial
+
+
+def _run(request: CyclotomicRequest) -> CyclotomicResult:
+    typed_request = _require_typed_request(request)
+    degree, polynomial = _compute(typed_request.index)
+    try:
+        return CyclotomicResult(
+            source_index=typed_request.index,
+            totient=degree,
+            polynomial=polynomial,
         )
     except Exception as exc:
         _backend_error(BackendFailureReason.INVALID_OUTPUT, exc)

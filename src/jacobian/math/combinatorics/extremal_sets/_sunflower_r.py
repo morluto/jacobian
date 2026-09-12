@@ -179,7 +179,7 @@ def _admit_qualifying_result(
     member_count: int,
     source_units: int,
     row_count: int,
-    maximum_size: int,
+    core_elements: int,
 ) -> None:
     """Admit retained rows after the exact qualifying plan is known."""
 
@@ -196,16 +196,13 @@ def _admit_qualifying_result(
     member_digits = len(str(max(member_count - 1, 0)))
     ground_digits = len(str(max(source.ground_set_size - 1, 0)))
     edge_id_units = 10 + petal_count * (member_digits + 1)
-    row_units = (
-        128
-        + edge_id_units
-        + petal_count * (member_digits + 2)
-        + maximum_size * (ground_digits + 1)
-    )
+    fixed_row_units = 128 + edge_id_units + petal_count * (member_digits + 2)
     edge_projection_units = 64 + edge_id_units + petal_count * (member_digits + 2)
     base_result_units = source_units + 1024 + member_count * (member_digits + 3)
-    allocation_units = base_result_units + row_count * (
-        row_units + 2 * edge_projection_units
+    allocation_units = (
+        base_result_units
+        + row_count * (fixed_row_units + 2 * edge_projection_units)
+        + core_elements * (ground_digits + 1)
     )
     if allocation_units > MAX_SUNFLOWER_RESULT_ALLOCATION_UNITS:
         raise OperationResourceAdmissionError(
@@ -388,7 +385,7 @@ def construct_sunflower_family(
     sets = tuple(frozenset(member) for member in source.members)
     sizes = tuple(len(member) for member in source.members)
     plan: list[tuple[tuple[int, ...], tuple[int, ...]]] = []
-    maximum_size = max(sizes, default=0)
+    core_elements = 0
     work_since_checkpoint = 0
     checkpoint_units = 65_536
     for indices in combinations(range(member_count), petal_count):
@@ -404,14 +401,27 @@ def construct_sunflower_family(
         if all(
             sets[left] & sets[right] == core for left, right in combinations(indices, 2)
         ):
-            plan.append((indices, tuple(sorted(core))))
+            next_rows = len(plan) + 1
+            if next_rows > MAX_EDGES or next_rows * petal_count > MAX_TOTAL_INCIDENCES:
+                raise OperationResourceAdmissionError(
+                    location=("source", "members"),
+                    code="set_system.sunflower.output_bound",
+                    message=(
+                        f"the complete family requires at least {next_rows} edges "
+                        f"and {next_rows * petal_count} incidences, exceeding the "
+                        f"{MAX_EDGES}-edge/{MAX_TOTAL_INCIDENCES}-incidence output bound"
+                    ),
+                )
+            ordered_core = tuple(sorted(core))
+            plan.append((indices, ordered_core))
+            core_elements += len(ordered_core)
     _admit_qualifying_result(
         source,
         petal_count,
         member_count,
         source_units,
         len(plan),
-        maximum_size,
+        core_elements,
     )
     rows = tuple(
         SunflowerFamily.model_construct(

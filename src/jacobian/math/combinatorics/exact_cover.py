@@ -876,9 +876,7 @@ def minimum_generalized_exact_cover(  # noqa: C901
         selected_items = set(selected.items)
         remaining_primary -= remaining_primary.intersection(selected_items)
         remaining_rows = [
-            row
-            for row in remaining_rows
-            if set(row.items).isdisjoint(selected_items)
+            row for row in remaining_rows if set(row.items).isdisjoint(selected_items)
         ]
     remaining_degrees = [0]
     if remaining_primary:
@@ -919,9 +917,7 @@ def minimum_generalized_exact_cover(  # noqa: C901
     estimated_nodes = search_node_limit
     listing_degree = remaining_min_degree
     if remaining_primary_count <= 1:
-        estimated_nodes = min(
-            search_node_limit, 1 + 2 * max(len(remaining_rows), 0)
-        )
+        estimated_nodes = min(search_node_limit, 1 + 2 * max(len(remaining_rows), 0))
         listing_degree = remaining_max_degree
     elif remaining_primary_count == 2:
         estimated_nodes = min(

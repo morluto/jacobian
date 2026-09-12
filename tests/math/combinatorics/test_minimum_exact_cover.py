@@ -232,10 +232,7 @@ def test_minimum_search_honors_request_deadline() -> None:
 
 def test_node_limit_without_incumbent_is_an_operational_failure() -> None:
     rows = (
-        *(
-            ExactCoverRow(row_id=f"p0-{index:04d}", items=("p0",))
-            for index in range(8)
-        ),
+        *(ExactCoverRow(row_id=f"p0-{index:04d}", items=("p0",)) for index in range(8)),
         ExactCoverRow(row_id="p1-a", items=("p1",)),
         ExactCoverRow(row_id="p1-b", items=("p1",)),
     )

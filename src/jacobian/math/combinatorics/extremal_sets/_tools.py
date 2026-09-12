@@ -21,7 +21,7 @@ from jacobian.math.combinatorics.extremal_sets.operations import (
 def compute_sunflower_family(
     request: SunflowerFamilyRequest,
 ) -> SunflowerFamilyResult:
-    return construct_sunflower_family(request)
+    return construct_sunflower_family(request.source, request.petal_count)
 
 
 def compute_binary_union_relation(

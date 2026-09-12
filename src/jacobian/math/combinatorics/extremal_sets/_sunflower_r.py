@@ -54,11 +54,23 @@ def _result_error(reason: str, message: str) -> PydanticCustomError:
 
 
 def _admit_source(
-    request: SunflowerFamilyRequest,
+    source: IndexedFiniteSetFamily,
+    petal_count: int,
 ) -> tuple[IndexedFiniteSetFamily, int, int, int, int]:
     """Admit the retained source before any candidate or result expansion."""
 
-    petal_count = request.petal_count
+    if not isinstance(source, IndexedFiniteSetFamily):
+        raise OperationDomainValidationError(
+            location=("source",),
+            code="set_system.sunflower.source_type",
+            message="sunflower construction requires an IndexedFiniteSetFamily",
+        )
+    if type(petal_count) is not int:
+        raise OperationDomainValidationError(
+            location=("petal_count",),
+            code="set_system.sunflower.petal_count_type",
+            message="petal_count must be an integer",
+        )
     if petal_count < 2:
         raise OperationDomainValidationError(
             location=("petal_count",),
@@ -74,7 +86,7 @@ def _admit_source(
                 "complete construction"
             ),
         )
-    source = request.source
+    source = source
     member_count = len(source.members)
     if member_count > MAX_VERTICES:
         raise OperationResourceAdmissionError(
@@ -320,12 +332,13 @@ class SunflowerFamilyResult(StrictModel):
 
 
 def construct_sunflower_family(
-    request: SunflowerFamilyRequest,
+    source: IndexedFiniteSetFamily,
+    petal_count: int,
 ) -> SunflowerFamilyResult:
     """Return every ``petal_count``-member sunflower with its exact common core."""
 
     source, petal_count, member_count, source_work, source_units = _admit_source(
-        request
+        source, petal_count
     )
     _admit_candidates(source, petal_count, member_count, source_work, source_units)
     if member_count < petal_count:

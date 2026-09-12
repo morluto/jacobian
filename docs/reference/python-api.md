@@ -70,9 +70,11 @@ work and intermediate limits, and the same exact-output or materialization
 bounds before calling a backend or allocating expanded results. Put reusable
 admission in one owner helper used by native and catalog paths. Expected invalid
 values, shapes, axes, and dimensions produce `OperationDomainValidationError`
-with a stable owner code; raw `IndexError`, tuple-unpacking errors, helper
-`ValueError`, and Pydantic validation exceptions are not native operation
-outcomes.
+or the operation's declared subtype while preserving its stable owner code and
+domain/resource classification. Use `OperationResourceAdmissionError` when the
+operation distinguishes execution-envelope refusal from other domain
+rejections. Neither path may leak raw `IndexError`, tuple-unpacking errors,
+helper `ValueError`, or Pydantic validation exceptions.
 
 Pydantic request models are transport contracts, not containers for hidden
 execution state. They may enforce typed shape, canonical representation, and

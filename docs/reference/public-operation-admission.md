@@ -121,8 +121,12 @@ and storage estimates as well as fixed input caps. Complete this review:
    every selected regime has the same public semantics. For a widened envelope,
    cover the smallest formerly rejected valid request, a simple request at the
    full carrier boundary, and a near-output or near-storage-bound request. Check
-   that the generated schema advertises the same limit that runtime admission
-   enforces.
+   that every limit representable in JSON Schema advertises the same bound that
+   runtime admission enforces. For a derived cross-field envelope that JSON
+   Schema cannot express, publish descriptive model or field guidance and a
+   valid example while keeping the exact relation solely in owner admission; do
+   not replace it with coarse independent field caps or replay it in a model
+   validator.
 
 Review the whole execution path, including presolve, certificate construction,
 and result conversion. A correct mathematical characterization need not be an

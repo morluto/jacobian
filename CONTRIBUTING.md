@@ -54,8 +54,10 @@ output remain bounded. Otherwise improve the implementation before raising it.
 Bound canonicalization, kernel or backend work, owner-side postprocessing,
 result construction, and serialization separately; a fast backend does not
 bound a slower assembly phase. Compare an operation-specific cap with the full
-canonical carrier, and check that generated schema bounds equal runtime
-admission before widening or retaining the cap.
+canonical carrier, and check that every schema-representable bound equals
+runtime admission before widening or retaining the cap. Describe derived
+cross-field envelopes and valid examples in the schema while leaving their
+exact computation in owner admission.
 
 Do not turn a cheaply executable request into a permanent rejection regression.
 Follow the

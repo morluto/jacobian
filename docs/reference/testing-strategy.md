@@ -204,11 +204,14 @@ interface; do not assert private helper names or copied source text.
 For a widened execution envelope, cover three distinct cases: the smallest
 formerly rejected valid request, a structurally simple request at the full
 carrier boundary, and a request near the derived output or storage bound. Assert
-generated-schema limits, runtime acceptance and rejection, result shape, and
-serialization separately. When measurements support an algorithmic repair,
-freeze the workload, environment, completion condition, and measured phase;
-report repeated before/after results from that harness. Timings are diagnostic
-evidence and must not become machine-sensitive correctness thresholds.
+every schema-representable limit, runtime acceptance and rejection, result
+shape, and serialization separately. For derived cross-field admission, inspect
+the schema-visible description and valid example, then exercise the exact
+accepted and rejected relation through owner admission. When measurements
+support an algorithmic repair, freeze the workload, environment, completion
+condition, and measured phase; report repeated before/after results from that
+harness. Timings are diagnostic evidence and must not become machine-sensitive
+correctness thresholds.
 
 ## What to test
 

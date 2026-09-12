@@ -36,10 +36,12 @@ validate values supplied directly to that callable. Validate strict runtime
 types, shape, axes, domain, work, intermediate growth, and materialized output
 before indexing, unpacking, backend work, or result allocation. Equivalent
 native and catalog invocations must use the same owner admission helper.
-Expected invalid native values raise `OperationDomainValidationError`, and
-requests outside a bounded execution envelope raise
-`OperationResourceAdmissionError`; they must not leak helper `ValueError`,
-`IndexError`, tuple-unpacking errors, or Pydantic validation exceptions.
+Expected invalid native values raise `OperationDomainValidationError` or the
+operation's declared subtype while preserving its stable owner code and
+domain/resource classification. Use `OperationResourceAdmissionError` when the
+operation contract distinguishes execution-envelope refusal from other domain
+rejections. Neither path may leak helper `ValueError`, `IndexError`,
+tuple-unpacking errors, or Pydantic validation exceptions.
 
 Every built-in `MathTool` declaration must publish at least one small valid
 invocation example. An example is part of the public contract: it must validate

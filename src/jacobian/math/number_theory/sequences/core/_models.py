@@ -264,7 +264,6 @@ class SequenceOrderShapeResult(StrictModel):
     has_internal_zero: bool
 
 
-
 def _finite_sequence_core_schema(
     cls: type[FiniteSequence],
     source_type: Any,
@@ -291,14 +290,6 @@ def _finite_sequence_json_schema(
     return schema
 
 
-setattr(
-    FiniteSequence,
-    "__get_pydantic_core_schema__",
-    classmethod(_finite_sequence_core_schema),
-)
-setattr(
-    FiniteSequence,
-    "__get_pydantic_json_schema__",
-    classmethod(_finite_sequence_json_schema),
-)
+FiniteSequence.__get_pydantic_core_schema__ = classmethod(_finite_sequence_core_schema)
+FiniteSequence.__get_pydantic_json_schema__ = classmethod(_finite_sequence_json_schema)
 FiniteSequence.model_rebuild(force=True)

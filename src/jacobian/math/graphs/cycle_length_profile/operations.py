@@ -468,9 +468,7 @@ def enumerate_fixed_length_cycles(
         for start in block.core_vertices:
             search_from(start, adjacency)
     ordered = tuple(sorted(cycles))
-    return _cycle_enumeration_result(
-        graph, cycle_length, ordered, chordless=chordless
-    )
+    return _cycle_enumeration_result(graph, cycle_length, ordered, chordless=chordless)
 
 
 def _cycle_enumeration_result(

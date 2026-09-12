@@ -82,8 +82,6 @@ def test_empty_source_generators_require_the_nested_identity() -> None:
     )
     payload = result.model_dump()
     payload["group"]["generators"] = [(1, 0, 2)]
-    payload["automorphism_count"] = 2
-    payload["generated_group_order"] = 2
     with pytest.raises(Exception, match="identity"):
         FullGraphAutomorphismResult.model_validate(payload)
 

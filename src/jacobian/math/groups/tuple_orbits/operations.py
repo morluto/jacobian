@@ -59,7 +59,9 @@ def _admit_source(request: TupleFamilyOrbitSource) -> tuple[Any, int, int]:
             message="tuple-family source must retain a finite permutation action",
         )
     try:
-        action = FinitePermutationAction.model_validate(action)
+        action = FinitePermutationAction.model_validate(
+            {"domain": action.domain, "generators": action.generators}
+        )
     except ValidationError as error:
         detail = error.errors()[0]
         raise OperationDomainValidationError(
@@ -186,6 +188,9 @@ def tuple_family_orbit_profile(
     )
     request_checkpoint("after tuple-family group materialization")
     source_positions = tuple(tuple(member) for member in request.family)
+    source_indices_by_tuple: dict[tuple[int, ...], list[int]] = {}
+    for index, member in enumerate(source_positions):
+        source_indices_by_tuple.setdefault(member, []).append(index)
     unclassified = set(source_positions)
     rows: list[TupleOrbitRow] = []
     ambient_orbits: list[set[tuple[int, ...]]] = []
@@ -213,9 +218,11 @@ def tuple_family_orbit_profile(
         ambient_orbits.append(ambient_images)
         representative = min(ambient_images)
         source_indices = tuple(
-            index
-            for index, member in enumerate(source_positions)
-            if member in ambient_images
+            sorted(
+                index
+                for image in ambient_images
+                for index in source_indices_by_tuple.get(image, ())
+            )
         )
         if not source_indices:
             raise RuntimeError("orbit generation lost every source tuple")

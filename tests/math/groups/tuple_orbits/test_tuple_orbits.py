@@ -3,7 +3,10 @@
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.groups.actions._models import FinitePermutationAction
 from jacobian.math.groups.tuple_orbits._models import TupleFamilyOrbitSource
 from jacobian.math.groups.tuple_orbits.operations import tuple_family_orbit_profile
@@ -133,8 +136,6 @@ def test_large_generated_group_is_rejected_before_element_materialization() -> N
 
 
 def test_forged_action_fields_are_revalidated_before_backend_conversion() -> None:
-    from jacobian.catalog.models import OperationDomainValidationError
-
     forged_action = FinitePermutationAction.model_construct(
         domain=("a", "a"), generators=((0, 1),)
     )
@@ -154,3 +155,19 @@ def test_forged_action_fields_are_revalidated_before_backend_conversion() -> Non
     with pytest.raises(OperationDomainValidationError) as generators:
         tuple_family_orbit_profile(malformed_request)
     assert "generator" in generators.value.errors()[0]["type"]
+
+
+def test_distinct_source_rows_are_indexed_once_before_orbit_partition() -> None:
+    action = FinitePermutationAction(
+        domain=tuple(str(index) for index in range(40)),
+        generators=(tuple(range(40)),),
+    )
+    family = tuple((index,) for index in range(40))
+    result = tuple_family_orbit_profile(
+        TupleFamilyOrbitSource(action=action, arity=1, family=family)
+    )
+    assert [row.representative for row in result.rows] == list(family)
+    assert [row.source_indices for row in result.rows] == [
+        (index,) for index in range(40)
+    ]
+    assert all(row.orbit_size == 1 for row in result.rows)

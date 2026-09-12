@@ -775,9 +775,7 @@ def test_dimension_32_standard_hadamard_mub_skips_operator_height() -> None:
 
 def test_sic_profile_rejects_asymmetric_squared_overlaps() -> None:
     result = _sic_profile(
-        SicProfileRequest(
-            frame=ComplexFrame(dimension=1, vectors=((_z(1),), (_z(1),)))
-        )
+        SicProfileRequest(frame=ComplexFrame(dimension=1, vectors=((_z(1),), (_z(1),))))
     )
     forged = json.loads(result.model_dump_json())
     forged["squared_overlaps"][1][0] = {"num": "0", "den": "1"}

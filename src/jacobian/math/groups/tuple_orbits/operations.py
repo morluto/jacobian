@@ -49,9 +49,7 @@ def _backend_action(action: FinitePermutationAction) -> Any:
             code="finite_group_action.tuple_family_action_type",
             message="tuple-family source must retain a finite permutation action",
         )
-    return _backend_group(
-        PermutationGroup(degree=len(domain), generators=generators)
-    )
+    return _backend_group(PermutationGroup(degree=len(domain), generators=generators))
 
 
 def _rebuild_permutation_action(

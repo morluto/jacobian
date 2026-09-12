@@ -315,6 +315,52 @@ class EnumerateLatticePointsRequest(LatticePolytopeRequest):
     """Wire request for enumeration; execution admission happens in the operation."""
 
 
+def require_ehrhart_source(
+    vertices: tuple[RationalVertex, ...], degree_bound: int, max_dilation: int
+) -> None:
+    """Share exact source and enumeration bounds between native and wire calls."""
+
+    if not 1 <= len(vertices) <= MAX_VERTICES:
+        raise _validation_error(
+            "ehrhart_vertex_count", "vertex count exceeds the admitted range"
+        )
+    if type(degree_bound) is not int or not 1 <= degree_bound <= MAX_DIMENSION:
+        raise _validation_error(
+            "ehrhart_degree_range", "degree_bound exceeds the admitted range"
+        )
+    if type(max_dilation) is not int or not 1 <= max_dilation <= MAX_EHRHART_DILATIONS:
+        raise _validation_error(
+            "ehrhart_dilation_range", "max_dilation exceeds the admitted range"
+        )
+    dimensions = {len(vertex.coordinates) for vertex in vertices}
+    if len(dimensions) != 1:
+        raise _validation_error(
+            "ehrhart_vertex_dimension", "all vertices must share one dimension"
+        )
+    dimension = next(iter(dimensions))
+    if dimension > MAX_DIMENSION:
+        raise _validation_error(
+            "ehrhart_dimension_exceeded",
+            "Ehrhart dimension exceeds the supported bound",
+        )
+    if degree_bound < dimension:
+        raise _validation_error(
+            "ehrhart_degree_bound", "degree_bound must cover the polytope dimension"
+        )
+    if max_dilation < degree_bound:
+        raise _validation_error(
+            "ehrhart_dilation_range",
+            "max_dilation must provide degree_bound + 1 evaluations",
+        )
+    if any(
+        coordinate.den != 1 for vertex in vertices for coordinate in vertex.coordinates
+    ):
+        raise _validation_error(
+            "ehrhart_requires_integral_vertices",
+            "Ehrhart polynomial recovery currently requires integral vertices",
+        )
+
+
 class EhrhartRequest(StrictModel):
     """Recover an Ehrhart polynomial for a bounded integral V-polytope."""
 
@@ -332,35 +378,7 @@ class EhrhartRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_integral_vertices_and_range(self) -> Self:
-        dimensions = {len(vertex.coordinates) for vertex in self.vertices}
-        if len(dimensions) != 1:
-            raise _validation_error(
-                "ehrhart_vertex_dimension", "all vertices must share one dimension"
-            )
-        dimension = next(iter(dimensions))
-        if dimension > MAX_DIMENSION:
-            raise _validation_error(
-                "ehrhart_dimension_exceeded",
-                "Ehrhart dimension exceeds the supported bound",
-            )
-        if self.degree_bound < dimension:
-            raise _validation_error(
-                "ehrhart_degree_bound", "degree_bound must cover the polytope dimension"
-            )
-        if self.max_dilation < self.degree_bound:
-            raise _validation_error(
-                "ehrhart_dilation_range",
-                "max_dilation must provide degree_bound + 1 evaluations",
-            )
-        if any(
-            coordinate.den != 1
-            for vertex in self.vertices
-            for coordinate in vertex.coordinates
-        ):
-            raise _validation_error(
-                "ehrhart_requires_integral_vertices",
-                "Ehrhart polynomial recovery currently requires integral vertices",
-            )
+        require_ehrhart_source(self.vertices, self.degree_bound, self.max_dilation)
         return self
 
 

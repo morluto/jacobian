@@ -53,10 +53,10 @@ from jacobian.math.geometry.polytopes.lattice._models import (
     MAX_FACET_TESTS,
     MAX_LATTICE_POINTS,
     CountLatticePointsResult,
-    EhrhartRequest,
     EhrhartResult,
     EnumerateLatticePointsResult,
     LatticePoint,
+    require_ehrhart_source,
 )
 from jacobian.math.geometry.polytopes.values import Halfspace, Vertex
 
@@ -486,9 +486,7 @@ def ehrhart_polynomial(
     polynomial before a result is returned.
     """
     try:
-        EhrhartRequest(
-            vertices=vertices, degree_bound=degree_bound, max_dilation=max_dilation
-        )
+        require_ehrhart_source(vertices, degree_bound, max_dilation)
     except ValueError as exc:
         raise OperationDomainValidationError(
             location=("vertices", "degree_bound", "max_dilation"),

@@ -6,6 +6,7 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.number_theory.sequences.core._models import (
     AutocorrelationResult,
     FiniteIntegerSequence,
+    FiniteRationalSequence,
     IntegerSequenceBooleanResult,
     IntegerSequenceFrequenciesResult,
     IntegerSequenceIndexListResult,
@@ -77,13 +78,16 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         operation_id="sequence.autocorrelation.aperiodic.compute",
         title="Compute exact aperiodic autocorrelation",
         description=(
-            "Compute the exact integer autocorrelation at lags -(n-1) through "
-            "n-1 without wraparound. An empty sequence returns an empty profile."
+            "Compute the exact real-rational autocorrelation at lags -(n-1) "
+            "through n-1 without wraparound. Integer wire entries are accepted "
+            "as denominator-one rationals, and an empty sequence returns an "
+            "empty profile."
         ),
-        request_type=FiniteIntegerSequence,
+        request_type=FiniteRationalSequence,
         result_type=AutocorrelationResult,
         run=aperiodic_autocorrelation,
         tags=("sequence", "autocorrelation", "aperiodic", "exact"),
+        discovery_terms=("aperiodic autocorrelation", "non-cyclic correlation"),
         examples=(
             OperationExample(
                 name="three_terms",
@@ -96,13 +100,16 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         operation_id="sequence.autocorrelation.cyclic.compute",
         title="Compute exact cyclic autocorrelation",
         description=(
-            "Compute the exact integer autocorrelation with indices modulo n at "
-            "lags 0 through n-1. An empty sequence returns an empty profile."
+            "Compute the exact real-rational autocorrelation with indices modulo "
+            "n at lags 0 through n-1. Integer wire entries are accepted as "
+            "denominator-one rationals, and an empty sequence returns an empty "
+            "profile."
         ),
-        request_type=FiniteIntegerSequence,
+        request_type=FiniteRationalSequence,
         result_type=AutocorrelationResult,
         run=cyclic_autocorrelation,
         tags=("sequence", "autocorrelation", "cyclic", "exact"),
+        discovery_terms=("cyclic autocorrelation", "periodic correlation"),
         examples=(
             OperationExample(
                 name="three_terms",

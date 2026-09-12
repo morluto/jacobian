@@ -1,17 +1,50 @@
-"""Typed wire contracts for finite integer-sequence operations."""
+"""Typed wire contracts for finite exact-sequence operations."""
 
 from __future__ import annotations
 
-from pydantic import Field
+from typing import Any, Literal, Self
+
+from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
     CanonicalRational,
     ExactInteger,
 )
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.number_theory.sequences.core.values import (
     MAX_SEQUENCE_LENGTH,
+    MAX_SEQUENCE_TOTAL_DIGITS,
 )
+
+
+def _validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"sequences.{reason}", message)
+
+
+def _rational_sequence_schema(schema: dict[str, Any]) -> None:
+    """Publish denominator-one integer wire entries beside rational objects."""
+
+    rational_schema = schema["items"]
+    schema["items"] = {
+        "oneOf": [
+            rational_schema,
+            {
+                "type": "string",
+                "pattern": (
+                    rf"^(?:0|-?[1-9][0-9]{{0,{MAX_CANONICAL_RATIONAL_DIGITS - 1}}})"
+                    r"(?![\s\S])"
+                ),
+                "maxLength": MAX_CANONICAL_RATIONAL_DIGITS + 1,
+                "description": (
+                    "Canonical integer wire entry, interpreted as a "
+                    "denominator-one rational."
+                ),
+            },
+        ]
+    }
 
 
 class IntegerSequenceValueResult(StrictModel):
@@ -76,17 +109,109 @@ class FiniteIntegerSequence(StrictModel):
         min_length=0, max_length=MAX_SEQUENCE_LENGTH
     )
 
+    @model_validator(mode="after")
+    def require_bounded_representation(self) -> Self:
+        total_digits = sum(
+            len(format_canonical_integer(abs(value))) for value in self.values
+        )
+        if total_digits > MAX_SEQUENCE_TOTAL_DIGITS:
+            raise _validation_error(
+                "representation_too_large",
+                "integer sequence exceeds the "
+                f"{MAX_SEQUENCE_TOTAL_DIGITS}-digit representation bound",
+            )
+        return self
+
+
+class FiniteRationalSequence(StrictModel):
+    """A possibly empty finite sequence of canonical real rationals.
+
+    Integer wire entries are accepted as denominator-one rationals.  The
+    parsed value is always a canonical rational, so rational consumers do not
+    have to infer a coefficient domain from an empty or degenerate sequence.
+    """
+
+    values: tuple[CanonicalRational, ...] = Field(
+        min_length=0,
+        max_length=MAX_SEQUENCE_LENGTH,
+        json_schema_extra=_rational_sequence_schema,
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def accept_integer_wire_entries(cls, data: object) -> object:
+        if not isinstance(data, dict) or not isinstance(
+            data.get("values"), (list, tuple)
+        ):
+            return data
+        converted: list[object] = []
+        for value in data["values"]:
+            if isinstance(value, int) and not isinstance(value, bool):
+                converted.append({"num": value, "den": 1})
+                continue
+            if isinstance(value, str):
+                try:
+                    integer = int(value)
+                except ValueError:
+                    pass
+                else:
+                    if value == str(integer):
+                        converted.append({"num": value, "den": "1"})
+                        continue
+            converted.append(value)
+        return {**data, "values": tuple(converted)}
+
+    @model_validator(mode="after")
+    def require_bounded_representation(self) -> Self:
+        total_digits = sum(
+            len(format_canonical_integer(abs(value.num)))
+            + len(format_canonical_integer(value.den))
+            for value in self.values
+        )
+        if total_digits > MAX_SEQUENCE_TOTAL_DIGITS:
+            raise _validation_error(
+                "representation_too_large",
+                "rational sequence exceeds the "
+                f"{MAX_SEQUENCE_TOTAL_DIGITS}-digit representation bound",
+            )
+        return self
+
 
 class AutocorrelationCell(StrictModel):
     lag: int
-    value: ExactInteger
+    value: ExactInteger | CanonicalRational = Field(union_mode="left_to_right")
 
 
 class AutocorrelationResult(StrictModel):
-    source: FiniteIntegerSequence
+    convention: Literal["aperiodic", "cyclic"]
+    source: FiniteIntegerSequence | FiniteRationalSequence = Field(
+        union_mode="left_to_right"
+    )
     cells: tuple[AutocorrelationCell, ...] = Field(
         min_length=0, max_length=2 * MAX_SEQUENCE_LENGTH - 1
     )
+
+    @model_validator(mode="after")
+    def require_canonical_axis_and_domain(self) -> Self:
+        size = len(self.source.values)
+        expected_lags = (
+            range(-(size - 1), size) if self.convention == "aperiodic" else range(size)
+        )
+        if tuple(cell.lag for cell in self.cells) != tuple(expected_lags):
+            raise _validation_error(
+                "invalid_lag_axis",
+                f"{self.convention} autocorrelation must retain its canonical lag axis",
+            )
+        integer_source = isinstance(self.source, FiniteIntegerSequence)
+        if any(
+            isinstance(cell.value, CanonicalRational) is integer_source
+            for cell in self.cells
+        ):
+            raise _validation_error(
+                "mixed_coefficient_domain",
+                "autocorrelation cells must retain the source coefficient domain",
+            )
+        return self
 
 
 class SequenceLogConcavityRow(StrictModel):

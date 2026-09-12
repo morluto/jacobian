@@ -33,4 +33,5 @@ for replay.
 
 ## Focused contracts
 
+- [Exact cyclotomic polynomials](cyclotomic.md)
 - [Monomial-ideal graded Betti profiles](monomial-ideal-graded-betti.md)

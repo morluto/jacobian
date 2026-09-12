@@ -181,9 +181,7 @@ def test_matrix_polynomial_remainder_accepts_maximum_size_constant() -> None:
     polynomial = RationalPolynomial(
         variables=("t",),
         polynomial=SparseRationalPolynomial(
-            terms=(
-                RationalPolynomialTerm(coefficient=coefficient, exponents=(0,)),
-            )
+            terms=(RationalPolynomialTerm(coefficient=coefficient, exponents=(0,)),)
         ),
     )
     result = compute_matrix_polynomial_remainder(_diagonal(0), polynomial)

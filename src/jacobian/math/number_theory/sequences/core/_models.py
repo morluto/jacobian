@@ -264,7 +264,6 @@ class SequenceOrderShapeResult(StrictModel):
     has_internal_zero: bool
 
 
-
 def _finite_sequence_core_schema(
     cls: type[FiniteSequence],
     source_type: Any,

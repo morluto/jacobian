@@ -15,6 +15,7 @@ from pydantic import ValidationError
 
 from jacobian._execution import OperationExecutionCancelledError, request_cancellation
 from jacobian.canonical import encode_strict_json
+from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -802,6 +803,17 @@ def test_range_profile_observes_request_cancellation_inside_row_loop(
     ):
         range_profile((2,), 3, 4)
     assert calls == 1
+
+
+def test_record_minima_remains_native_only() -> None:
+    """Record extraction composes the public range operation in native code."""
+    assert (
+        Catalog.open().operation(
+            "number_theory.simultaneous_approximation.record_minima.compute"
+        )
+        is None
+    )
+
 
 
 def test_surd_request_schemas_describe_radical_axis_constraints() -> None:

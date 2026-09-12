@@ -378,9 +378,7 @@ def test_worker_refinement_code_is_a_backend_failure(
             timed_out=False,
         )
 
-    monkeypatch.setattr(
-        "jacobian.process.run_bounded_process", fake_run_bounded_process
-    )
+    monkeypatch.setattr(process, "run_bounded_process", fake_run_bounded_process)
     with pytest.raises(OperationBackendError) as exc_info:
         process.run_scaled_integer_part_worker(
             polynomial=(1, 0, -2),
@@ -414,7 +412,8 @@ def test_worker_stdout_overflow_is_resource_exhausted(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "jacobian.process.run_bounded_process",
+        process,
+        "run_bounded_process",
         lambda *_args, **_kwargs: _worker_process_result(stdout_exceeded=True),
     )
     with pytest.raises(OperationResourceExhaustedError) as exc_info:
@@ -432,7 +431,8 @@ def test_worker_abnormal_exit_is_a_backend_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "jacobian.process.run_bounded_process",
+        process,
+        "run_bounded_process",
         lambda *_args, **_kwargs: _worker_process_result(returncode=1, stdout=b""),
     )
     with pytest.raises(OperationBackendError) as exc_info:

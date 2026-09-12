@@ -125,8 +125,10 @@ def _validated_request(
     """Re-establish the typed request boundary for direct native callers."""
 
     if not isinstance(request, MinimalTransversalEnumerationRequest):
-        raise TypeError(
-            "minimal transversal enumeration requires its typed request model"
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="hypergraph.minimal_transversal.malformed_request",
+            message="minimal transversal enumeration received a malformed typed request",
         )
     try:
         if not isinstance(request.hypergraph, FiniteHypergraph):
@@ -258,6 +260,48 @@ def _minimal_edges(
     return tuple(kept)
 
 
+def _source_sensitive_row_bound(
+    remaining_edges: tuple[frozenset[str], ...],
+    free_vertices: tuple[str, ...],
+    free_maximum: int,
+    start_size: int,
+) -> int:
+    """Bound antichain rows from residual edge geometry, not the Sperner envelope."""
+
+    if not remaining_edges:
+        return 0
+    occupied = frozenset().union(*remaining_edges)
+    omitted = tuple(occupied - edge for edge in remaining_edges)
+    if occupied and all(len(edge) == len(occupied) - 1 for edge in remaining_edges):
+        omitted_vertices = [next(iter(part)) for part in omitted if len(part) == 1]
+        if len(omitted_vertices) == len(remaining_edges) and len(
+            set(omitted_vertices)
+        ) == len(remaining_edges):
+            shared = occupied.intersection(*remaining_edges)
+            possible_rows = 0
+            if free_maximum >= 1:
+                possible_rows += len(shared)
+            if free_maximum >= 2:
+                possible_rows += comb(len(remaining_edges), 2)
+            return possible_rows
+    if len(remaining_edges) == 2:
+        left, right = remaining_edges
+        shared = left & right
+        possible_rows = 0
+        if free_maximum >= 1:
+            possible_rows += len(shared)
+        if free_maximum >= 2:
+            possible_rows += len(left - shared) * len(right - shared)
+        return possible_rows
+    return max(
+        (
+            comb(len(free_vertices), size)
+            for size in range(start_size, free_maximum + 1)
+        ),
+        default=0,
+    )
+
+
 def _admit_enumeration(
     request: MinimalTransversalEnumerationRequest,
 ) -> tuple[int, tuple[frozenset[str], ...], frozenset[str], bool, bool]:
@@ -307,22 +351,12 @@ def _admit_enumeration(
     )
     total_work = candidate_edge_work + minimality_work + domination_work
 
-    if len(remaining_edges) == 2:
-        left, right = remaining_edges
-        shared = left & right
-        possible_rows = 0
-        if free_maximum >= 1:
-            possible_rows += len(shared)
-        if free_maximum >= 2:
-            possible_rows += len(left - shared) * len(right - shared)
-    else:
-        possible_rows = max(
-            (
-                comb(len(free_vertices), size)
-                for size in range(0 if forced else 1, free_maximum + 1)
-            ),
-            default=0,
-        )
+    possible_rows = _source_sensitive_row_bound(
+        remaining_edges,
+        free_vertices,
+        free_maximum,
+        0 if forced else 1,
+    )
     if possible_rows > MAX_ENUMERATED_TRANSVERSALS:
         raise OperationResourceAdmissionError(
             location=("maximum_cardinality",),

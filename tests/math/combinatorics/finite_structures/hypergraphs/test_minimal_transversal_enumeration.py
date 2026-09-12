@@ -160,6 +160,36 @@ def test_single_edge_slice_uses_closed_form_above_global_row_bound() -> None:
     ]
 
 
+def test_direct_native_guard_rejects_untyped_request() -> None:
+    with pytest.raises(OperationDomainValidationError, match="malformed typed request"):
+        enumerate_minimal_transversals({"hypergraph": None, "maximum_cardinality": 1})
+
+
+def test_three_near_universal_edges_use_source_sensitive_row_bound() -> None:
+    vertices = tuple(f"v{index:02d}" for index in range(20))
+    omitted = ("v00", "v01", "v02")
+    source = FiniteHypergraph(
+        vertices=vertices,
+        edges=tuple(
+            (
+                f"e{index}",
+                tuple(vertex for vertex in vertices if vertex != omitted[index]),
+            )
+            for index in range(3)
+        ),
+    )
+    result = enumerate_minimal_transversals(
+        MinimalTransversalEnumerationRequest(hypergraph=source, maximum_cardinality=8)
+    )
+    expected_singletons = tuple((vertex,) for vertex in vertices if vertex not in omitted)
+    expected_pairs = (
+        ("v00", "v01"),
+        ("v00", "v02"),
+        ("v01", "v02"),
+    )
+    assert result.transversals == expected_singletons + expected_pairs
+
+
 def test_direct_native_guard_rejects_model_constructed_request() -> None:
     source = FiniteHypergraph(vertices=("a",), edges=())
     malformed = MinimalTransversalEnumerationRequest.model_construct(

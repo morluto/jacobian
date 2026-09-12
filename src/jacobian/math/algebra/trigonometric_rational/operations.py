@@ -389,8 +389,14 @@ def _sympy_coefficient(value: Gaussian) -> Any:
 def _gaussian_from_sympy(value: Any) -> Gaussian:
     """Convert a backend Gaussian-rational coefficient without string parsing."""
 
-    real, imaginary = value.as_real_imag()
-    if not real.is_Rational or not imaginary.is_Rational:
+    if hasattr(value, "x") and hasattr(value, "y"):
+        real, imaginary = value.x, value.y
+    else:
+        real, imaginary = value.as_real_imag()
+    if not all(
+        hasattr(component, "p") and hasattr(component, "q")
+        for component in (real, imaginary)
+    ):
         raise TypeError("trigonometric backend returned a non-rational coefficient")
     return _admit_gaussian(
         (
@@ -446,25 +452,23 @@ def _reduce_common_laurent_factor(
     if len(shifted_numerator) * len(shifted_denominator) > MAX_TRIG_LAURENT_TERMS:
         _refuse_growth()
 
-    from sympy import Poly, Symbol
+    from sympy import Symbol
     from sympy.polys.domains import QQ_I
+    from sympy.polys.rings import ring
 
     symbols = tuple(Symbol(f"x{index}") for index in range(axis))
-    left = Poly.from_dict(
+    polynomial_ring, *_ = ring(symbols, QQ_I)
+    left = polynomial_ring.from_dict(
         {
             support: _sympy_coefficient(coefficient)
             for support, coefficient in shifted_numerator.items()
-        },
-        *symbols,
-        domain=QQ_I,
+        }
     )
-    right = Poly.from_dict(
+    right = polynomial_ring.from_dict(
         {
             support: _sympy_coefficient(coefficient)
             for support, coefficient in shifted_denominator.items()
-        },
-        *symbols,
-        domain=QQ_I,
+        }
     )
     common = left.gcd(right)
     return _canonicalize(

@@ -48,7 +48,7 @@ TOOLS = (
     MathTool(
         operation_id="graded_quotient.hilbert_series.compute",
         title="Compute a bounded exact Hilbert series",
-        description="Return the ambient and reduced exact Hilbert-series numerators, denominator dimension, and a finite coefficient prefix.",
+        description="Return the ambient, canonical reduced, and (1-t)^d h-numerator forms, denominator dimension, and a finite coefficient prefix.",
         request_type=HilbertSeriesRequest,
         result_type=HilbertSeriesResult,
         run=lambda request: hilbert_series(

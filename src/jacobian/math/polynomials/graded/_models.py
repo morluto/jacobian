@@ -101,6 +101,14 @@ class HilbertSeriesRequest(StrictModel):
 
 
 class HilbertSeriesResult(StrictModel):
+    """A bounded Hilbert series with both canonical and graded numerator axes.
+
+    ``reduced_numerator`` is the numerator owned by the canonical rational
+    function carrier, whose denominator is monic.  ``h_numerator`` is the
+    sign-corrected numerator in the mathematical convention
+    ``H(t) = h(t)/(1-t)^d``; the two differ when ``d`` is odd.
+    """
+
     ideal: RationalPolynomialIdeal
     initial_ideal: RationalPolynomialIdeal
     monomial_order: Literal["lex", "grlex", "grevlex"]
@@ -108,6 +116,7 @@ class HilbertSeriesResult(StrictModel):
     ambient_denominator_exponent: StrictInt = Field(ge=0)
     series: RationalFunction
     reduced_numerator: RationalPolynomial
+    h_numerator: RationalPolynomial
     denominator_exponent: StrictInt = Field(ge=0)
     prefix: tuple[StrictInt, ...]
 
@@ -117,7 +126,11 @@ class HilbertSeriesResult(StrictModel):
             raise ValueError("Hilbert-series values must share the source ring")
         if self.ambient_numerator.variables != ("t",):
             raise ValueError("Hilbert-series numerators use the t axis")
-        if self.series.variables != ("t",) or self.reduced_numerator.variables != ("t",):
+        if (
+            self.series.variables != ("t",)
+            or self.reduced_numerator.variables != ("t",)
+            or self.h_numerator.variables != ("t",)
+        ):
             raise ValueError("Hilbert-series values use the t axis")
         if self.series.numerator != self.reduced_numerator.polynomial:
             raise ValueError("reduced numerator must match the rational-series carrier")

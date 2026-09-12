@@ -84,6 +84,12 @@ def test_hilbert_series_polynomial_dimension_multiplicity_and_h_vector() -> None
     assert series.prefix == (1, 2, 2, 2, 2)
     assert series.denominator_exponent == 1
     assert series.ambient_denominator_exponent == 2
+    assert series.reduced_numerator.polynomial.terms[0].coefficient == CanonicalRational(
+        num=-1, den=1
+    )
+    assert series.h_numerator.polynomial.terms[0].coefficient == CanonicalRational(
+        num=1, den=1
+    )
     assert h_vector(ideal).h_vector == (1, 1)
     assert hilbert_dimension(ideal).dimension == 1
     assert hilbert_multiplicity(ideal).multiplicity == 2
@@ -101,7 +107,22 @@ def test_zero_dimensional_macaulay_fixture_has_length_one_series() -> None:
     assert series.denominator_exponent == 0
     assert hilbert_dimension(ideal).dimension == 0
     assert hilbert_multiplicity(ideal).multiplicity == 1
-    assert hilbert_polynomial(ideal).polynomial.polynomial.terms[0].exponents == (0,)
+    polynomial = hilbert_polynomial(ideal).polynomial
+    assert polynomial.variables == ("m",)
+    assert polynomial.polynomial.terms == ()
+
+
+def test_odd_dimension_keeps_canonical_series_sign_separate_from_h_numerator() -> None:
+    series = hilbert_series(_ideal((2, 0)), prefix_degree=2)
+    assert series.denominator_exponent == 1
+    assert series.series.numerator == series.reduced_numerator.polynomial
+    assert series.reduced_numerator.polynomial.terms[0].coefficient == CanonicalRational(
+        num=-1, den=1
+    )
+    assert series.h_numerator.polynomial.terms[0].coefficient == CanonicalRational(
+        num=1, den=1
+    )
+    assert h_vector(_ideal((2, 0))).h_vector == (1, 1)
 
 
 def test_hilbert_invariants_are_order_invariant_even_when_initial_generators_differ() -> None:

@@ -243,7 +243,15 @@ def _polynomial_from_integer_coefficients(
 def _series_data(
     initial_ideal: RationalPolynomialIdeal,
     prefix_degree: int,
-) -> tuple[RationalPolynomial, object, RationalPolynomial, int, tuple[int, ...], tuple[int, ...]]:
+) -> tuple[
+    RationalPolynomial,
+    object,
+    RationalPolynomial,
+    RationalPolynomial,
+    int,
+    tuple[int, ...],
+    tuple[int, ...],
+]:
     generators = _admit_hilbert_series(initial_ideal)
     variable_count = len(initial_ideal.variables)
     subset_coefficients: dict[int, int] = {0: 1}
@@ -290,6 +298,7 @@ def _series_data(
         h_coefficients.get(index, 0)
         for index in range(max(h_coefficients, default=0) + 1)
     )
+    h_numerator = _polynomial_from_integer_coefficients(h_coefficients)
     prefix = []
     from math import comb
 
@@ -310,6 +319,7 @@ def _series_data(
         ambient_numerator,
         series,
         reduced_numerator,
+        h_numerator,
         denominator_exponent,
         tuple(prefix),
         h_vector,
@@ -339,8 +349,9 @@ def hilbert_series(
         ambient_denominator_exponent=len(ideal.variables),
         series=data[1],
         reduced_numerator=data[2],
-        denominator_exponent=data[3],
-        prefix=data[4],
+        h_numerator=data[3],
+        denominator_exponent=data[4],
+        prefix=data[5],
     )
 
 
@@ -364,25 +375,27 @@ def hilbert_polynomial(
     data = _series_projection(ideal, monomial_order, resource_budget=resource_budget)
     dimension = data.denominator_exponent
     stabilization = max(
-        (term.exponents[0] for term in data.reduced_numerator.polynomial.terms),
-        default=0,
-    )
+        (term.exponents[0] for term in data.h_numerator.polynomial.terms),
+        default=-1,
+    ) + (1 if data.denominator_exponent == 0 else 0)
 
     from sympy import QQ, Poly, Symbol, binomial, expand_func
 
     m = Symbol("m")
-    sign = -1 if dimension % 2 else 1
     if dimension == 0:
-        polynomial = data.reduced_numerator
+        polynomial = RationalPolynomial(
+            variables=("m",),
+            polynomial=SparseRationalPolynomial(terms=()),
+        )
     else:
         expression = sum(
-            sign * int(term.coefficient.as_fraction())
+            int(term.coefficient.as_fraction())
             * expand_func(
                 binomial(
                     m - term.exponents[0] + dimension - 1, dimension - 1
                 )
             )
-            for term in data.reduced_numerator.polynomial.terms
+            for term in data.h_numerator.polynomial.terms
         )
         polynomial = rational_polynomial_from_sympy(
             Poly(expression.expand(), m, domain=QQ), ("m",), maximum_terms=64
@@ -419,8 +432,7 @@ def hilbert_multiplicity(
     data = _series_projection(ideal, monomial_order, resource_budget=resource_budget)
     multiplicity = sum(
         term.coefficient.as_fraction()
-        * ((-1) ** data.denominator_exponent)
-        for term in data.reduced_numerator.polynomial.terms
+        for term in data.h_numerator.polynomial.terms
     )
     if multiplicity.denominator != 1 or multiplicity < 0:
         raise OperationDomainValidationError(
@@ -440,14 +452,13 @@ def h_vector(
     resource_budget: IdealComputationBudget | None = None,
 ) -> HVectorResult:
     data = _series_projection(ideal, monomial_order, resource_budget=resource_budget)
-    sign = -1 if data.denominator_exponent % 2 else 1
-    raw = {
+    h_coefficients = {
         term.exponents[0]: int(term.coefficient.as_fraction())
-        for term in data.series.numerator.terms
+        for term in data.h_numerator.polynomial.terms
     }
     values = tuple(
-        sign * raw.get(index, 0)
-        for index in range(max(raw, default=0) + 1)
+        h_coefficients.get(index, 0)
+        for index in range(max(h_coefficients, default=0) + 1)
     )
     return HVectorResult(
         ideal=ideal, initial_ideal=data.initial_ideal,

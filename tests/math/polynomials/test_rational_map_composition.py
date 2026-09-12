@@ -64,11 +64,11 @@ def test_example_states_the_intermediate_axis_precondition() -> None:
 
 
 def test_native_composition_is_exported_without_exposing_wire_request() -> None:
-    import jacobian.math.polynomials.rational_functions as rational_functions
+    import jacobian.math.polynomials.rational_functions.composition as composition
 
-    assert rational_functions.compose_maps is compose_maps
-    assert "compose_maps" in rational_functions.__all__
-    assert "RationalMapCompositionRequest" not in rational_functions.__all__
+    assert composition.compose_maps is compose_maps
+    assert "compose_maps" in composition.__all__
+    assert "RationalMapCompositionRequest" not in composition.__all__
 
 
 def test_native_composition_rejects_non_map_outer() -> None:

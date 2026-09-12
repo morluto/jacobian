@@ -41,7 +41,7 @@ Jacobians, projective atlas gluing, or analytic domains.
 The native equivalent is:
 
 ```python
-from jacobian.math.polynomials.rational_functions import compose_maps
+from jacobian.math.polynomials.rational_functions.composition import compose_maps
 
 result = compose_maps(outer, inner)
 ```

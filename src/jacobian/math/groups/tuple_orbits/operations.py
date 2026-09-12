@@ -43,7 +43,9 @@ def _backend_action(action: FinitePermutationAction) -> Any:
     )
 
 
-def _admit_source(request: TupleFamilyOrbitSource) -> tuple[Any, int, int]:
+def _admit_source(
+    request: TupleFamilyOrbitSource,
+) -> tuple[Any, int, int, TupleFamilyOrbitSource]:
     request_checkpoint("before tuple-family orbit admission")
     if not isinstance(request, TupleFamilyOrbitSource):
         raise OperationDomainValidationError(
@@ -166,7 +168,12 @@ def _admit_source(request: TupleFamilyOrbitSource) -> tuple[Any, int, int]:
             code="finite_group_action.tuple_family_result_bound",
             message="tuple orbit-profile result cells exceed the admitted bound",
         )
-    return backend, group_order, degree
+    admitted = TupleFamilyOrbitSource(
+        action=action,
+        arity=request.arity,
+        family=request.family,
+    )
+    return backend, group_order, degree, admitted
 
 
 def tuple_family_orbit_profile(
@@ -181,7 +188,7 @@ def tuple_family_orbit_profile(
     preserved exactly.
     """
 
-    backend, group_order, degree = _admit_source(request)
+    backend, group_order, degree, request = _admit_source(request)
     request_checkpoint("before tuple-family group materialization")
     elements = tuple(
         sorted(_full_permutation_form(element, degree) for element in backend.elements)

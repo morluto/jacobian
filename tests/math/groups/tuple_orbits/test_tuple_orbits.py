@@ -157,6 +157,18 @@ def test_forged_action_fields_are_revalidated_before_backend_conversion() -> Non
     assert "generator" in generators.value.errors()[0]["type"]
 
 
+def test_result_source_retains_the_revalidated_action() -> None:
+    coerced_action = FinitePermutationAction.model_construct(
+        domain=("a", "b"), generators=(("1", "0"),)
+    )
+    request = TupleFamilyOrbitSource.model_construct(
+        action=coerced_action, arity=1, family=((0,), (1,))
+    )
+    result = tuple_family_orbit_profile(request)
+    assert result.source.action.generators == ((1, 0),)
+    assert result.source.action.domain == ("a", "b")
+
+
 def test_distinct_source_rows_are_indexed_once_before_orbit_partition() -> None:
     action = FinitePermutationAction(
         domain=tuple(str(index) for index in range(40)),

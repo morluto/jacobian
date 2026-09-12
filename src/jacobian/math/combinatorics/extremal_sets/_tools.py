@@ -7,10 +7,21 @@ from jacobian.math.combinatorics.extremal_sets._models import (
     SunflowerHypergraphRequest,
     SunflowerHypergraphResult,
 )
+from jacobian.math.combinatorics.extremal_sets._sunflower_r import (
+    SunflowerFamilyRequest,
+    SunflowerFamilyResult,
+    construct_sunflower_family,
+)
 from jacobian.math.combinatorics.extremal_sets.operations import (
     construct_binary_union_relation,
     construct_sunflower_hypergraph,
 )
+
+
+def compute_sunflower_family(
+    request: SunflowerFamilyRequest,
+) -> SunflowerFamilyResult:
+    return construct_sunflower_family(request)
 
 
 def compute_binary_union_relation(
@@ -20,6 +31,36 @@ def compute_binary_union_relation(
 
 
 TOOLS: MathTools = (
+    MathTool(
+        operation_id="set_system.sunflower_family.construct",
+        title="Construct the complete sunflower family for a petal count",
+        description=(
+            "Return every distinct-index subfamily of exactly r >= 2 members "
+            "whose pairwise intersections are all equal to one common core, "
+            "together with each row's exact core, the derived count, "
+            "sunflower-free status, and a canonical r-uniform hypergraph "
+            "edge projection. The "
+            "complete accepted construction returns every row or fails before "
+            "expansion."
+        ),
+        request_type=SunflowerFamilyRequest,
+        result_type=SunflowerFamilyResult,
+        run=compute_sunflower_family,
+        tags=("combinatorics", "set-system", "sunflower", "hypergraph", "complete"),
+        examples=(
+            OperationExample(
+                name="four_petals",
+                description="Four petals sharing the core {0} form one sunflower.",
+                input={
+                    "source": {
+                        "ground_set_size": 5,
+                        "members": [[0, 1], [0, 2], [0, 3], [0, 4]],
+                    },
+                    "petal_count": 4,
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="set_system.sunflower_triple_hypergraph.construct",
         title="Construct the complete sunflower-triple hypergraph",

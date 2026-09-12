@@ -7,7 +7,6 @@ from jacobian.math.combinatorics.extremal_sets._sunflower_r import (
 )
 from jacobian.math.combinatorics.extremal_sets.operations import (
     construct_binary_union_relation,
-    construct_sunflower_hypergraph,
 )
 from jacobian.math.combinatorics.extremal_sets.values import IndexedFiniteSetFamily
 
@@ -17,5 +16,4 @@ __all__ = [
     "SunflowerFamilyResult",
     "construct_binary_union_relation",
     "construct_sunflower_family",
-    "construct_sunflower_hypergraph",
 ]

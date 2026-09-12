@@ -176,11 +176,19 @@ def test_projection_uses_canonical_multi_digit_member_order() -> None:
     assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
-def test_output_edge_bound_is_admitted_before_row_construction() -> None:
-    """The complete candidate envelope rejects 156 disjoint singleton pairs."""
+def test_output_edge_bound_uses_qualifying_rows() -> None:
+    """156 disjoint singletons form C(156, 2) empty-core pairs, over MAX_EDGES."""
     source = _family(tuple((index,) for index in range(156)), ground=156)
     with pytest.raises(OperationResourceAdmissionError, match="output bound"):
         construct_sunflower_family(source, 2)
+
+
+def test_nested_chain_is_sunflower_free_without_candidate_output_rejection() -> None:
+    """A nested chain has no 4-sunflowers; C(30, 4) candidates must not be an output bound."""
+    members = tuple(tuple(range(index + 1)) for index in range(30))
+    result = construct_sunflower_family(_family(members, ground=30), 4)
+    assert result.sunflowers == ()
+    assert result.sunflower_free is True
 
 
 def test_result_allocation_is_admitted_before_row_construction(
@@ -257,6 +265,7 @@ def test_native_package_exports_the_domain_entrypoint() -> None:
 
     assert extremal_sets.construct_sunflower_family is construct_sunflower_family
     assert "construct_sunflower_family" in extremal_sets.__all__
+    assert not hasattr(extremal_sets, "construct_sunflower_hypergraph")
 
 
 def test_reconstructed_rows_must_stay_strictly_ordered() -> None:

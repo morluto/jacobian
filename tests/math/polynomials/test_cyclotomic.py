@@ -204,6 +204,39 @@ def test_prime_index_uses_the_geometric_sum_fast_path() -> None:
     assert product == expected
 
 
+def test_twice_odd_prime_index_uses_phi_m_of_minus_x() -> None:
+    odd_prime = 4093
+    index = 2 * odd_prime
+    result = _run(CyclotomicRequest(index=index))
+    assert result.totient == odd_prime - 1
+    assert result.polynomial.coefficients == tuple(
+        (-1) ** k for k in range(odd_prime)
+    )
+    product = (
+        fmpz_poly([-1, 1])
+        * fmpz_poly([1, 1])
+        * fmpz_poly([1] * odd_prime)
+        * fmpz_poly(ascending(result))
+    )
+    expected = fmpz_poly([-1] + [0] * (index - 1) + [1])
+    assert product == expected
+
+
+def test_composite_reported_as_a_prime_base_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import sympy
+
+    def fail_poly(*args: object, **kwargs: object) -> object:
+        raise AssertionError("cyclotomic_poly must not run on a composite factor base")
+
+    monkeypatch.setattr(sympy, "factorint", lambda index: {12: 1})
+    monkeypatch.setattr(sympy, "cyclotomic_poly", fail_poly)
+    with pytest.raises(OperationBackendError) as exc_info:
+        cyclotomic(12)
+    assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT
+
+
 def test_squarefree_construction_work_is_charged_from_the_radical() -> None:
     with pytest.raises(OperationResourceAdmissionError, match="construction"):
         cyclotomic(16_530)

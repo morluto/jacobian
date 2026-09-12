@@ -149,10 +149,11 @@ def _admit(index: int, factorization: dict[int, int]) -> _CyclotomicAdmission:
             ),
         )
 
-    if _is_prime_index(index, factorization):
-        # Phi_p is the geometric sum 1+x+...+x^{p-1}; charge writing those
-        # unit coefficients instead of the general radical-square envelope.
-        construction_work = max(1, index.bit_length()) * index
+    if _is_unit_coefficient_fast_path(index, factorization):
+        coefficient_count = (
+            index if _is_prime_index(index, factorization) else index // 2
+        )
+        construction_work = max(1, coefficient_count.bit_length()) * coefficient_count
         intermediate_bits = 2
     else:
         # SymPy's dense cyclotomic construction is charged from the radical of
@@ -225,16 +226,52 @@ def _factor_index(index: int) -> dict[int, int]:
     reconstructed = prod(prime**exponent for prime, exponent in factors.items())
     if reconstructed != index:
         raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    if any(not _is_prime(prime) for prime in factors):
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
     return factors
+
+
+def _is_prime(value: int) -> bool:
+    if value < 2:
+        return False
+    if value < 4:
+        return True
+    if value % 2 == 0 or value % 3 == 0:
+        return False
+    factor = 5
+    while factor * factor <= value:
+        if value % factor == 0 or value % (factor + 2) == 0:
+            return False
+        factor += 6
+    return True
 
 
 def _is_prime_index(index: int, factorization: dict[int, int]) -> bool:
     return factorization == {index: 1}
 
 
+def _is_twice_odd_prime_index(index: int, factorization: dict[int, int]) -> bool:
+    if index % 2 != 0 or index < 6:
+        return False
+    odd = index // 2
+    return odd % 2 == 1 and factorization == {2: 1, odd: 1}
+
+
+def _is_unit_coefficient_fast_path(index: int, factorization: dict[int, int]) -> bool:
+    return _is_prime_index(index, factorization) or _is_twice_odd_prime_index(
+        index, factorization
+    )
+
+
 def _prime_cyclotomic(prime: int) -> IntegerPolynomial:
     request_checkpoint("during prime cyclotomic geometric sum")
     return IntegerPolynomial(coefficients=(1,) * prime)
+
+
+def _twice_odd_prime_cyclotomic(index: int) -> IntegerPolynomial:
+    request_checkpoint("during twice-prime cyclotomic geometric sum")
+    odd = index // 2
+    return IntegerPolynomial(coefficients=tuple((-1) ** k for k in range(odd)))
 
 
 def _compute(index: int) -> tuple[int, IntegerPolynomial]:
@@ -245,6 +282,10 @@ def _compute(index: int) -> tuple[int, IntegerPolynomial]:
     request_checkpoint("after cyclotomic admission")
     if _is_prime_index(index, factorization):
         polynomial_value = _prime_cyclotomic(index)
+        request_checkpoint("before cyclotomic result construction")
+        return admission.degree, polynomial_value
+    if _is_twice_odd_prime_index(index, factorization):
+        polynomial_value = _twice_odd_prime_cyclotomic(index)
         request_checkpoint("before cyclotomic result construction")
         return admission.degree, polynomial_value
     try:

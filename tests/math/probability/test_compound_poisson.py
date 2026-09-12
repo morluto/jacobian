@@ -10,7 +10,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.probability._compound_poisson import (
-    CompoundPoissonCumulantRequest,
+    CompoundPoissonCumulantSource,
     compound_poisson_cumulant_prefix,
 )
 from jacobian.math.probability._distribution import (
@@ -35,7 +35,7 @@ def test_compound_poisson_cumulants_are_intensity_times_jump_moments() -> None:
         )
     )
     result = compound_poisson_cumulant_prefix(
-        CompoundPoissonCumulantRequest(
+        CompoundPoissonCumulantSource(
             intensity=_q(Fraction(3, 2)), jump_distribution=jumps, max_order=4
         )
     )
@@ -60,7 +60,7 @@ def test_order_zero_returns_empty_prefix_without_a_pmf() -> None:
         )
     )
     result = compound_poisson_cumulant_prefix(
-        CompoundPoissonCumulantRequest(
+        CompoundPoissonCumulantSource(
             intensity=_q(Fraction()), jump_distribution=jumps, max_order=0
         )
     )
@@ -78,7 +78,7 @@ def test_intensity_growth_is_admitted_before_cumulant_construction() -> None:
     )
     with pytest.raises(OperationResourceAdmissionError):
         compound_poisson_cumulant_prefix(
-            CompoundPoissonCumulantRequest(
+            CompoundPoissonCumulantSource(
                 intensity=_q(Fraction(large)),
                 jump_distribution=jumps,
                 max_order=128,
@@ -95,7 +95,7 @@ def test_zero_intensity_and_signed_deterministic_jumps() -> None:
         )
     )
     result = compound_poisson_cumulant_prefix(
-        CompoundPoissonCumulantRequest(
+        CompoundPoissonCumulantSource(
             intensity=_q(Fraction(2)), jump_distribution=jumps, max_order=4
         )
     )
@@ -113,7 +113,7 @@ def test_zero_intensity_and_signed_deterministic_jumps() -> None:
     ]
 
     zero = compound_poisson_cumulant_prefix(
-        CompoundPoissonCumulantRequest(
+        CompoundPoissonCumulantSource(
             intensity=_q(Fraction()), jump_distribution=jumps, max_order=4
         )
     )
@@ -139,7 +139,7 @@ def test_semantic_admission_rejects_negative_rate_and_unnormalized_jumps() -> No
     )
     with pytest.raises(OperationDomainValidationError) as rate_error:
         compound_poisson_cumulant_prefix(
-            CompoundPoissonCumulantRequest(
+            CompoundPoissonCumulantSource(
                 intensity=_q(Fraction(-1)), jump_distribution=jumps, max_order=1
             )
         )
@@ -149,7 +149,7 @@ def test_semantic_admission_rejects_negative_rate_and_unnormalized_jumps() -> No
 
     with pytest.raises(OperationDomainValidationError) as mass_error:
         compound_poisson_cumulant_prefix(
-            CompoundPoissonCumulantRequest(
+            CompoundPoissonCumulantSource(
                 intensity=_q(Fraction(1)), jump_distribution=jumps, max_order=1
             )
         )
@@ -170,7 +170,7 @@ def test_prefix_round_trips_with_its_source_parent() -> None:
         )
     )
     result = compound_poisson_cumulant_prefix(
-        CompoundPoissonCumulantRequest(
+        CompoundPoissonCumulantSource(
             intensity=_q(Fraction(5, 7)), jump_distribution=jumps, max_order=3
         )
     )

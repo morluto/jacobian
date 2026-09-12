@@ -4,8 +4,19 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.probability._compound_poisson import (
     CompoundPoissonCumulantRequest,
     CompoundPoissonCumulantResult,
+    CompoundPoissonCumulantSource,
     compound_poisson_cumulant_prefix,
 )
+
+
+def _compound_poisson_cumulant_request(
+    request: CompoundPoissonCumulantRequest,
+) -> CompoundPoissonCumulantResult:
+    """Project the transport request into the canonical native source."""
+
+    source = CompoundPoissonCumulantSource.model_validate(request.model_dump())
+    return compound_poisson_cumulant_prefix(source)
+
 
 COMPOUND_POISSON_CUMULANT_OPERATION = MathTool(
     operation_id="probability.compound_poisson.cumulant_prefix.compute",
@@ -17,7 +28,7 @@ COMPOUND_POISSON_CUMULANT_OPERATION = MathTool(
     ),
     request_type=CompoundPoissonCumulantRequest,
     result_type=CompoundPoissonCumulantResult,
-    run=compound_poisson_cumulant_prefix,
+    run=_compound_poisson_cumulant_request,
     tags=("probability", "compound-poisson", "cumulant", "moment", "exact"),
     examples=(
         OperationExample(

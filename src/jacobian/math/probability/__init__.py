@@ -3,6 +3,7 @@
 from jacobian.math.probability._compound_poisson import (
     CompoundPoissonCumulantRequest,
     CompoundPoissonCumulantResult,
+    CompoundPoissonCumulantSource,
 )
 from jacobian.math.probability._graph_connection_probability import (
     GraphConnectionProbabilityResult,
@@ -48,6 +49,7 @@ __all__ = [
     "AsymmetricLocalLemmaWitnessCheckResult",
     "CompoundPoissonCumulantRequest",
     "CompoundPoissonCumulantResult",
+    "CompoundPoissonCumulantSource",
     "FiniteJointTable",
     "GraphConnectionProbabilityResult",
     "GraphReliabilityEdgeProbability",

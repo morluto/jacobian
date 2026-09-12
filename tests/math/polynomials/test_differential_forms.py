@@ -266,6 +266,28 @@ def test_wedge_with_scalar_unit_preserves_full_coefficient_envelope() -> None:
     )
 
 
+def test_wedge_with_scalar_unit_preserves_multicomponent_forms() -> None:
+    variables = tuple(f"x{index}" for index in range(8))
+    terms = tuple((10**255, (exponent,) + (0,) * 7) for exponent in range(255, -1, -1))
+    coefficient = _poly_on_axis(variables, *terms)
+    unit_poly = _poly_on_axis(variables, (1, (0,) * 8))
+    alpha = PolynomialDifferentialForm(
+        variables=variables,
+        degree=1,
+        components=tuple(
+            FormComponent(indices=(index,), coefficient=coefficient)
+            for index in range(7)
+        ),
+    )
+    unit = PolynomialDifferentialForm(
+        variables=variables,
+        degree=0,
+        components=(FormComponent(indices=(), coefficient=unit_poly),),
+    )
+    assert wedge(alpha, unit) == alpha
+    assert wedge(unit, alpha) == alpha
+
+
 def test_wedge_admits_coefficient_height_before_convolution() -> None:
     coefficient = 10**4_095
     left = _form(0, ((), _poly((coefficient, (0, 0)))))

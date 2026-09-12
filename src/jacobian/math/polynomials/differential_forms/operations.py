@@ -209,6 +209,21 @@ def _admit_remaining_support(aggregate: _RemainingTerms) -> None:
         )
 
 
+def _is_scalar_unit(form: PolynomialDifferentialForm) -> bool:
+    if int(form.degree) != 0 or len(form.components) != 1:
+        return False
+    component = form.components[0]
+    if component.indices:
+        return False
+    terms = component.coefficient.polynomial.terms
+    if len(terms) != 1:
+        return False
+    term = terms[0]
+    return _unit_coefficient(term.coefficient) and all(
+        exponent == 0 for exponent in term.exponents
+    )
+
+
 def _admit_remaining_coefficients(aggregate: _RemainingTerms) -> None:
     """Cap surviving cancelled rationals after signed convolution."""
 
@@ -294,6 +309,10 @@ def wedge(
         return PolynomialDifferentialForm(
             variables=left.variables, degree=degree, components=()
         )
+    if _is_scalar_unit(right):
+        return left
+    if _is_scalar_unit(left):
+        return right
     pairs = tuple(
         (first, second, indices, sign)
         for first in left.components

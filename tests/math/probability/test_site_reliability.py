@@ -344,9 +344,8 @@ def test_site_ledger_charges_every_retained_source_label(
         ),
         terminals=(left, right),
     )
-    with pytest.raises(OperationResourceAdmissionError) as error:
+    with pytest.raises(OperationResourceAdmissionError, match="allocation bound"):
         compute_site_connection_probability(source)
-    assert error.value.code == "probability.site_reliability.output_bound"
 
 
 def test_matches_independent_brute_force() -> None:

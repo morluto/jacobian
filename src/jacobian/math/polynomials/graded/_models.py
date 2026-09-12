@@ -91,7 +91,7 @@ class StandardMonomialsResult(StrictModel):
 class HilbertFunctionRequest(StrictModel):
     ideal: RationalPolynomialIdeal
     monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex"
-    max_degree: StrictInt = Field(ge=0, le=MAX_GRADED_DEGREE)
+    max_degree: StrictInt = Field(default=0, ge=0, le=MAX_GRADED_DEGREE)
     resource_budget: IdealComputationBudget = Field(
         default_factory=IdealComputationBudget
     )

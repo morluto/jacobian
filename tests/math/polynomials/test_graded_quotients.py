@@ -13,6 +13,7 @@ from jacobian.catalog.models import (
 from jacobian.math.polynomials.graded import operations as graded_operations
 from jacobian.math.polynomials.graded._models import (
     HilbertDimensionResult,
+    HilbertFunctionRequest,
     HilbertFunctionResult,
     HilbertMultiplicityResult,
     HilbertPolynomialRequest,
@@ -230,6 +231,55 @@ def test_native_standard_monomial_degree_rejects_non_integers_before_arithmetic(
     monkeypatch.setattr(graded_operations, "_require_monomial_ideal", fail)
     with pytest.raises(OperationDomainValidationError, match="must be an integer"):
         standard_monomials(_ideal((2, 0)), degree)  # type: ignore[arg-type]
+
+
+def test_hilbert_function_request_defaults_max_degree_to_zero() -> None:
+    request = HilbertFunctionRequest(ideal=_ideal((1, 0)))
+    assert request.max_degree == 0
+    assert hilbert_function(_ideal((1, 0))).values == (1,)
+
+
+def test_mixed_unit_ideal_skips_hilbert_function_slice_budget() -> None:
+    variables = tuple(f"x{index}" for index in range(8))
+    unit = RationalPolynomial(
+        variables=variables,
+        polynomial=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=1, den=1),
+                    exponents=(0,) * 8,
+                ),
+            )
+        ),
+    )
+    redundant = RationalPolynomial(
+        variables=variables,
+        polynomial=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=1, den=1),
+                    exponents=(2,) + (0,) * 7,
+                ),
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=1, den=1),
+                    exponents=(1,) + (0,) * 7,
+                ),
+            )
+        ),
+    )
+    result = hilbert_function(
+        RationalPolynomialIdeal(variables=variables, generators=(unit, redundant)),
+        max_degree=11,
+    )
+    assert result.values == (0,) * 12
+
+
+def test_hilbert_series_rejects_reduced_numerator_beyond_exponent_bound() -> None:
+    generators = tuple(
+        tuple(20 if axis == index else 0 for axis in range(8)) for index in range(8)
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="series_degree_budget"):
+        hilbert_series(_ideal(*generators))
 
 
 def test_hilbert_series_admits_reduced_degree_below_rational_function_envelope() -> (

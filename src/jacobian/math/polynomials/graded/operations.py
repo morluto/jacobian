@@ -7,6 +7,7 @@ from math import comb
 from typing import Literal
 
 from jacobian._exact import CanonicalRational
+from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -42,18 +43,6 @@ from jacobian.math.polynomials.values import (
     RationalPolynomialTerm,
     SparseRationalPolynomial,
 )
-
-_MONOMIAL_ORDERS = frozenset({"lex", "grlex", "grevlex"})
-
-
-def _require_monomial_order(monomial_order: object) -> None:
-    if monomial_order not in _MONOMIAL_ORDERS:
-        raise OperationDomainValidationError(
-            location=("monomial_order",),
-            code="graded_ideal.monomial_order",
-            message="monomial_order must be lex, grlex, or grevlex",
-        )
-
 
 def _require_monomial_order(
     monomial_order: object,
@@ -345,21 +334,22 @@ def hilbert_function(
             code="graded_ideal.function_degree_budget",
             message="Hilbert-function prefixes support degrees from 0 through 32",
         )
-    monomials = _minimal_source_monomials(ideal)
-    if monomials is None or not any(not any(exponent) for exponent in monomials):
-        _require_hilbert_function_slices(len(ideal.variables), max_degree)
+    if not _is_explicit_unit_ideal(ideal):
+        monomials = _minimal_source_monomials(ideal)
+        if monomials is None or not any(not any(exponent) for exponent in monomials):
+            _require_hilbert_function_slices(len(ideal.variables), max_degree)
     initial = initial_monomial_ideal(
         ideal, monomial_order, resource_budget=resource_budget
     )
-    values = tuple(
-        standard_monomials(initial.initial_ideal, degree).count
-        for degree in range(max_degree + 1)
-    )
+    values = []
+    for degree in range(max_degree + 1):
+        request_checkpoint("during Hilbert-function enumeration")
+        values.append(standard_monomials(initial.initial_ideal, degree).count)
     return HilbertFunctionResult(
         ideal=ideal,
         initial_ideal=initial.initial_ideal,
         monomial_order=monomial_order,
-        values=values,
+        values=tuple(values),
     )
 
 
@@ -431,22 +421,16 @@ def _series_data(
         degree: value for degree, value in subset_coefficients.items() if value
     }
     ambient_numerator = _polynomial_from_integer_coefficients(subset_coefficients)
-    from sympy import Symbol
+    from sympy import QQ, Poly, Symbol, cancel, fraction
 
     t = Symbol("t")
     ambient_expression = rational_polynomial_to_sympy(ambient_numerator).as_expr()
-    series = rational_function_from_sympy(
-        ambient_expression / (1 - t) ** variable_count,
-        ("t",),
-        maximum_terms=MAX_RATIONAL_FUNCTION_TERMS,
-    )
+    unreduced = ambient_expression / (1 - t) ** variable_count
+    numerator_expression, denominator_expression = fraction(cancel(unreduced))
     reduced_degree = max(
-        (
-            max(term.exponents, default=0)
-            for polynomial in (series.numerator, series.denominator)
-            for term in polynomial.terms
-        ),
-        default=0,
+        int(Poly(numerator_expression, t, domain=QQ).degree()),
+        int(Poly(denominator_expression, t, domain=QQ).degree()),
+        0,
     )
     if reduced_degree > MAX_RATIONAL_FUNCTION_EXPONENT:
         raise OperationResourceAdmissionError(
@@ -454,6 +438,14 @@ def _series_data(
             code="graded_ideal.series_degree_budget",
             message="Hilbert-series numerator degree exceeds the rational-function envelope",
         )
+    series = rational_function_from_sympy(
+        unreduced,
+        ("t",),
+        maximum_terms=MAX_RATIONAL_FUNCTION_TERMS,
+        deadline_check=lambda: request_checkpoint(
+            "during Hilbert-series normalization"
+        ),
+    )
     denominator_exponent = max(
         (term.exponents[0] for term in series.denominator.terms),
         default=0,

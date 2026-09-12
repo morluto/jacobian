@@ -9,9 +9,17 @@ from jacobian.math.groups.tuple_orbits.operations import tuple_family_orbit_prof
 
 TOOLS: MathTools = (
     MathTool(
-        operation_id="group.action.tuple_family.diagonal_orbit_profile.compute",
+        operation_id="group_action.tuple_family.orbit_profile.compute",
         title="Compute diagonal-action tuple-family orbit profiles",
-        description="Partition an indexed tuple family by a finite permutation group's diagonal action and return canonical representatives, source indices, orbit-stabilizer sizes, and least transporters.",
+        description=(
+            "Partition an indexed family of fixed-arity ordered tuples by the "
+            "diagonal action of one finite permutation action. Return the "
+            "lexicographically least ambient representative, all source "
+            "indices, full orbit and stabilizer sizes, a least transporter, "
+            "and whether the supplied family is a union of complete ambient "
+            "orbits; tuple order and repeated coordinates are preserved and "
+            "the action domain is retained in the source value."
+        ),
         request_type=TupleFamilyOrbitSource,
         result_type=TupleFamilyOrbitResult,
         run=tuple_family_orbit_profile,
@@ -19,9 +27,16 @@ TOOLS: MathTools = (
         examples=(
             OperationExample(
                 name="pairs_under_swap",
-                description="Profile repeated and distinct binary pairs under coordinate-value swapping.",
+                description=(
+                    "Profile repeated and distinct binary pairs under the "
+                    "diagonal swap; tuple rows must have one common arity and "
+                    "coordinates must use the declared action domain."
+                ),
                 input={
-                    "group": {"degree": 2, "generators": [[1, 0]]},
+                    "action": {
+                        "domain": ["a", "b"],
+                        "generators": [[1, 0]],
+                    },
                     "arity": 2,
                     "family": [[0, 0], [1, 1], [0, 1]],
                 },

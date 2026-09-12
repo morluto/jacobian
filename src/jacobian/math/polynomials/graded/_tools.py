@@ -2,15 +2,26 @@
 
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.polynomials.graded._models import (
+    HilbertDimensionResult,
     HilbertFunctionRequest,
     HilbertFunctionResult,
+    HilbertMultiplicityResult,
+    HilbertPolynomialResult,
+    HilbertSeriesRequest,
+    HilbertSeriesResult,
+    HVectorResult,
     InitialMonomialIdealRequest,
     InitialMonomialIdealResult,
     StandardMonomialsRequest,
     StandardMonomialsResult,
 )
 from jacobian.math.polynomials.graded.operations import (
+    h_vector,
+    hilbert_dimension,
     hilbert_function,
+    hilbert_multiplicity,
+    hilbert_polynomial,
+    hilbert_series,
     initial_monomial_ideal,
     standard_monomials,
 )
@@ -34,6 +45,77 @@ _EXAMPLE_IDEAL = {
 
 
 TOOLS = (
+    MathTool(
+        operation_id="graded_quotient.hilbert_series.compute",
+        title="Compute a bounded exact Hilbert series",
+        description="Return the ambient and reduced exact Hilbert-series numerators, denominator dimension, and a finite coefficient prefix.",
+        request_type=HilbertSeriesRequest,
+        result_type=HilbertSeriesResult,
+        run=lambda request: hilbert_series(
+            request.ideal,
+            request.monomial_order,
+            request.prefix_degree,
+            resource_budget=request.resource_budget,
+        ),
+        tags=("polynomial", "graded", "hilbert-series", "exact"),
+        examples=(OperationExample(name="hypersurface", description="Compute the series of QQ[x,y]/(x^2).", input={"ideal": _EXAMPLE_IDEAL, "prefix_degree": 3}),),
+    ),
+    MathTool(
+        operation_id="graded_quotient.hilbert_polynomial.compute",
+        title="Compute a bounded Hilbert polynomial",
+        description="Return the exact eventual Hilbert polynomial and derived stabilization degree from a standard-graded quotient series.",
+        request_type=HilbertSeriesRequest,
+        result_type=HilbertPolynomialResult,
+        run=lambda request: hilbert_polynomial(
+            request.ideal,
+            request.monomial_order,
+            resource_budget=request.resource_budget,
+        ),
+        tags=("polynomial", "graded", "hilbert-polynomial", "exact"),
+        examples=(OperationExample(name="line", description="Compute the eventual Hilbert polynomial of QQ[x,y]/(x^2).", input={"ideal": _EXAMPLE_IDEAL}),),
+    ),
+    MathTool(
+        operation_id="graded_quotient.dimension.compute",
+        title="Compute graded quotient dimension",
+        description="Return the Krull dimension as the reduced Hilbert-series denominator exponent.",
+        request_type=HilbertSeriesRequest,
+        result_type=HilbertDimensionResult,
+        run=lambda request: hilbert_dimension(
+            request.ideal,
+            request.monomial_order,
+            resource_budget=request.resource_budget,
+        ),
+        tags=("polynomial", "graded", "dimension", "exact"),
+        examples=(OperationExample(name="line", description="Compute the dimension of QQ[x,y]/(x^2).", input={"ideal": _EXAMPLE_IDEAL}),),
+    ),
+    MathTool(
+        operation_id="graded_quotient.multiplicity.compute",
+        title="Compute graded quotient multiplicity",
+        description="Return the exact multiplicity from the reduced Hilbert numerator, including zero-dimensional length.",
+        request_type=HilbertSeriesRequest,
+        result_type=HilbertMultiplicityResult,
+        run=lambda request: hilbert_multiplicity(
+            request.ideal,
+            request.monomial_order,
+            resource_budget=request.resource_budget,
+        ),
+        tags=("polynomial", "graded", "multiplicity", "exact"),
+        examples=(OperationExample(name="line", description="Compute multiplicity of QQ[x,y]/(x^2).", input={"ideal": _EXAMPLE_IDEAL}),),
+    ),
+    MathTool(
+        operation_id="graded_quotient.h_vector.compute",
+        title="Compute the reduced Hilbert h-vector",
+        description="Return the exact integer coefficients of the reduced numerator under the (1-t)^d convention.",
+        request_type=HilbertSeriesRequest,
+        result_type=HVectorResult,
+        run=lambda request: h_vector(
+            request.ideal,
+            request.monomial_order,
+            resource_budget=request.resource_budget,
+        ),
+        tags=("polynomial", "graded", "h-vector", "exact"),
+        examples=(OperationExample(name="line", description="Compute the h-vector of QQ[x,y]/(x^2).", input={"ideal": _EXAMPLE_IDEAL}),),
+    ),
     MathTool(
         operation_id="polynomial.ideal.initial_monomial_ideal.compute",
         title="Compute a bounded initial monomial ideal",

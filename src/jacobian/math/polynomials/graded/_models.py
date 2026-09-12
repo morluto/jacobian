@@ -6,14 +6,21 @@ from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
+from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
 from jacobian.math.polynomials.ideals._models import (
     IdealComputationBudget,
 )
-from jacobian.math.polynomials.values import RationalPolynomialIdeal
+from jacobian.math.polynomials.values import (
+    RationalFunction,
+    RationalPolynomial,
+    RationalPolynomialIdeal,
+)
 
 MAX_GRADED_DEGREE = 32
 MAX_STANDARD_MONOMIALS = 20_000
+MAX_HILBERT_SERIES_GENERATORS = 8
+MAX_HILBERT_PREFIX = 16
 
 
 class InitialMonomialIdealRequest(StrictModel):
@@ -86,11 +93,86 @@ class HilbertFunctionResult(StrictModel):
         return self
 
 
+class HilbertSeriesRequest(StrictModel):
+    ideal: RationalPolynomialIdeal
+    monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex"
+    prefix_degree: StrictInt = Field(default=0, ge=0, le=MAX_HILBERT_PREFIX)
+    resource_budget: IdealComputationBudget = Field(default_factory=IdealComputationBudget)
+
+
+class HilbertSeriesResult(StrictModel):
+    ideal: RationalPolynomialIdeal
+    initial_ideal: RationalPolynomialIdeal
+    monomial_order: Literal["lex", "grlex", "grevlex"]
+    ambient_numerator: RationalPolynomial
+    ambient_denominator_exponent: StrictInt = Field(ge=0)
+    series: RationalFunction
+    reduced_numerator: RationalPolynomial
+    denominator_exponent: StrictInt = Field(ge=0)
+    prefix: tuple[StrictInt, ...]
+
+    @model_validator(mode="after")
+    def require_source_and_axes(self) -> Self:
+        if self.ideal.variables != self.initial_ideal.variables:
+            raise ValueError("Hilbert-series values must share the source ring")
+        if self.ambient_numerator.variables != ("t",):
+            raise ValueError("Hilbert-series numerators use the t axis")
+        if self.series.variables != ("t",) or self.reduced_numerator.variables != ("t",):
+            raise ValueError("Hilbert-series values use the t axis")
+        if self.series.numerator != self.reduced_numerator.polynomial:
+            raise ValueError("reduced numerator must match the rational-series carrier")
+        if self.series.denominator.terms:
+            denominator_degree = max(self.series.denominator.terms[0].exponents)
+            if denominator_degree != self.denominator_exponent:
+                raise ValueError("Hilbert-series denominator exponent is inconsistent")
+        return self
+
+
+class HilbertPolynomialResult(StrictModel):
+    ideal: RationalPolynomialIdeal
+    initial_ideal: RationalPolynomialIdeal
+    monomial_order: Literal["lex", "grlex", "grevlex"]
+    dimension: StrictInt = Field(ge=0)
+    polynomial: RationalPolynomial
+    stabilization_degree: StrictInt = Field(ge=0)
+
+
+class HilbertDimensionResult(StrictModel):
+    ideal: RationalPolynomialIdeal
+    initial_ideal: RationalPolynomialIdeal
+    monomial_order: Literal["lex", "grlex", "grevlex"]
+    dimension: StrictInt = Field(ge=0)
+
+
+class HilbertMultiplicityResult(StrictModel):
+    ideal: RationalPolynomialIdeal
+    initial_ideal: RationalPolynomialIdeal
+    monomial_order: Literal["lex", "grlex", "grevlex"]
+    dimension: StrictInt = Field(ge=0)
+    multiplicity: ExactInteger = Field(ge=0)
+
+
+class HVectorResult(StrictModel):
+    ideal: RationalPolynomialIdeal
+    initial_ideal: RationalPolynomialIdeal
+    monomial_order: Literal["lex", "grlex", "grevlex"]
+    dimension: StrictInt = Field(ge=0)
+    h_vector: tuple[ExactInteger, ...]
+
+
 __all__ = [
     "MAX_GRADED_DEGREE",
+    "MAX_HILBERT_PREFIX",
+    "MAX_HILBERT_SERIES_GENERATORS",
     "MAX_STANDARD_MONOMIALS",
+    "HVectorResult",
+    "HilbertDimensionResult",
     "HilbertFunctionRequest",
     "HilbertFunctionResult",
+    "HilbertMultiplicityResult",
+    "HilbertPolynomialResult",
+    "HilbertSeriesRequest",
+    "HilbertSeriesResult",
     "InitialMonomialIdealRequest",
     "InitialMonomialIdealResult",
     "StandardMonomialsRequest",

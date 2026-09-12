@@ -12,12 +12,21 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.polynomials._conversions import (
+    rational_function_from_sympy,
+    rational_polynomial_from_sympy,
     rational_polynomial_to_sympy,
     symbols_for_variables,
 )
 from jacobian.math.polynomials.graded._models import (
+    MAX_HILBERT_PREFIX,
+    MAX_HILBERT_SERIES_GENERATORS,
     MAX_STANDARD_MONOMIALS,
+    HilbertDimensionResult,
     HilbertFunctionResult,
+    HilbertMultiplicityResult,
+    HilbertPolynomialResult,
+    HilbertSeriesResult,
+    HVectorResult,
     InitialMonomialIdealResult,
     StandardMonomialsResult,
 )
@@ -27,6 +36,8 @@ from jacobian.math.polynomials.ideals._models import (
 )
 from jacobian.math.polynomials.ideals.operations import groebner_basis
 from jacobian.math.polynomials.values import (
+    MAX_RATIONAL_FUNCTION_EXPONENT,
+    MAX_RATIONAL_FUNCTION_TERMS,
     RationalPolynomial,
     RationalPolynomialIdeal,
     RationalPolynomialTerm,
@@ -184,4 +195,274 @@ def hilbert_function(
     )
 
 
-__all__ = ["hilbert_function", "initial_monomial_ideal", "standard_monomials"]
+def _admit_hilbert_series(initial_ideal: RationalPolynomialIdeal) -> tuple[tuple[int, ...], ...]:
+    generators = _require_monomial_ideal(initial_ideal)
+    if len(generators) > MAX_HILBERT_SERIES_GENERATORS:
+        raise OperationResourceAdmissionError(
+            location=("initial_ideal",),
+            code="graded_ideal.series_generator_budget",
+            message="Hilbert-series inclusion-exclusion supports at most 8 minimal generators",
+        )
+    if any(len(generator) != len(initial_ideal.variables) for generator in generators):
+        raise OperationDomainValidationError(
+            location=("initial_ideal",),
+            code="graded_ideal.axis",
+            message="initial-ideal generators must use the complete ordered axis",
+        )
+    maximum_degree = sum(
+        max((generator[axis] for generator in generators), default=0)
+        for axis in range(len(initial_ideal.variables))
+    )
+    if maximum_degree > MAX_RATIONAL_FUNCTION_EXPONENT:
+        raise OperationResourceAdmissionError(
+            location=("initial_ideal",),
+            code="graded_ideal.series_degree_budget",
+            message="Hilbert-series numerator degree exceeds the rational-function envelope",
+        )
+    return generators
+
+
+def _polynomial_from_integer_coefficients(
+    coefficients: dict[int, int],
+) -> RationalPolynomial:
+    variables = ("t",)
+    terms = tuple(
+        RationalPolynomialTerm(
+            coefficient=CanonicalRational(num=value, den=1),
+            exponents=(degree,),
+        )
+        for degree, value in sorted(coefficients.items(), reverse=True)
+        if value
+    )
+    return RationalPolynomial(
+        variables=variables,
+        polynomial=SparseRationalPolynomial(terms=terms),
+    )
+
+
+def _series_data(
+    initial_ideal: RationalPolynomialIdeal,
+    prefix_degree: int,
+) -> tuple[RationalPolynomial, object, RationalPolynomial, int, tuple[int, ...], tuple[int, ...]]:
+    generators = _admit_hilbert_series(initial_ideal)
+    variable_count = len(initial_ideal.variables)
+    subset_coefficients: dict[int, int] = {0: 1}
+    for mask in range(1, 1 << len(generators)):
+        lcm_exponents = [0] * variable_count
+        cardinality = 0
+        for index, generator in enumerate(generators):
+            if mask & (1 << index):
+                cardinality += 1
+                for axis, exponent in enumerate(generator):
+                    lcm_exponents[axis] = max(lcm_exponents[axis], exponent)
+        degree = sum(lcm_exponents)
+        subset_coefficients[degree] = subset_coefficients.get(degree, 0) + (
+            -1 if cardinality % 2 else 1
+        )
+    subset_coefficients = {
+        degree: value for degree, value in subset_coefficients.items() if value
+    }
+    ambient_numerator = _polynomial_from_integer_coefficients(subset_coefficients)
+    from sympy import Symbol
+
+    t = Symbol("t")
+    ambient_expression = rational_polynomial_to_sympy(ambient_numerator).as_expr()
+    series = rational_function_from_sympy(
+        ambient_expression / (1 - t) ** variable_count,
+        ("t",),
+        maximum_terms=MAX_RATIONAL_FUNCTION_TERMS,
+    )
+    denominator_exponent = max(
+        (term.exponents[0] for term in series.denominator.terms),
+        default=0,
+    )
+    sign = -1 if denominator_exponent % 2 else 1
+    raw_coefficients = {
+        term.exponents[0]: int(term.coefficient.as_fraction())
+        for term in series.numerator.terms
+    }
+    reduced_numerator = _polynomial_from_integer_coefficients(raw_coefficients)
+    h_coefficients = {
+        degree: sign * coefficient
+        for degree, coefficient in raw_coefficients.items()
+    }
+    h_vector = tuple(
+        h_coefficients.get(index, 0)
+        for index in range(max(h_coefficients, default=0) + 1)
+    )
+    prefix = []
+    from math import comb
+
+    for degree in range(prefix_degree + 1):
+        if denominator_exponent == 0:
+            value = h_coefficients.get(degree, 0)
+        else:
+            value = sum(
+                coefficient * comb(
+                    degree - shift + denominator_exponent - 1,
+                    denominator_exponent - 1,
+                )
+                for shift, coefficient in h_coefficients.items()
+                if shift <= degree
+            )
+        prefix.append(value)
+    return (
+        ambient_numerator,
+        series,
+        reduced_numerator,
+        denominator_exponent,
+        tuple(prefix),
+        h_vector,
+    )
+
+
+def hilbert_series(
+    ideal: RationalPolynomialIdeal,
+    monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex",
+    prefix_degree: int = 0,
+    *,
+    resource_budget: IdealComputationBudget | None = None,
+) -> HilbertSeriesResult:
+    if prefix_degree > MAX_HILBERT_PREFIX:
+        raise OperationResourceAdmissionError(
+            location=("prefix_degree",),
+            code="graded_ideal.series_prefix_budget",
+            message="Hilbert-series prefixes support degree at most 16",
+        )
+    initial = initial_monomial_ideal(ideal, monomial_order, resource_budget=resource_budget)
+    data = _series_data(initial.initial_ideal, prefix_degree)
+    return HilbertSeriesResult(
+        ideal=ideal,
+        initial_ideal=initial.initial_ideal,
+        monomial_order=monomial_order,
+        ambient_numerator=data[0],
+        ambient_denominator_exponent=len(ideal.variables),
+        series=data[1],
+        reduced_numerator=data[2],
+        denominator_exponent=data[3],
+        prefix=data[4],
+    )
+
+
+def _series_projection(
+    ideal: RationalPolynomialIdeal,
+    monomial_order: Literal["lex", "grlex", "grevlex"],
+    *,
+    resource_budget: IdealComputationBudget | None = None,
+) -> HilbertSeriesResult:
+    return hilbert_series(
+        ideal, monomial_order, resource_budget=resource_budget
+    )
+
+
+def hilbert_polynomial(
+    ideal: RationalPolynomialIdeal,
+    monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex",
+    *,
+    resource_budget: IdealComputationBudget | None = None,
+) -> HilbertPolynomialResult:
+    data = _series_projection(ideal, monomial_order, resource_budget=resource_budget)
+    dimension = data.denominator_exponent
+    stabilization = max(
+        (term.exponents[0] for term in data.reduced_numerator.polynomial.terms),
+        default=0,
+    )
+
+    from sympy import QQ, Poly, Symbol, binomial, expand_func
+
+    m = Symbol("m")
+    sign = -1 if dimension % 2 else 1
+    if dimension == 0:
+        polynomial = data.reduced_numerator
+    else:
+        expression = sum(
+            sign * int(term.coefficient.as_fraction())
+            * expand_func(
+                binomial(
+                    m - term.exponents[0] + dimension - 1, dimension - 1
+                )
+            )
+            for term in data.reduced_numerator.polynomial.terms
+        )
+        polynomial = rational_polynomial_from_sympy(
+            Poly(expression.expand(), m, domain=QQ), ("m",), maximum_terms=64
+        )
+    return HilbertPolynomialResult(
+        ideal=ideal,
+        initial_ideal=data.initial_ideal,
+        monomial_order=monomial_order,
+        dimension=dimension,
+        polynomial=polynomial,
+        stabilization_degree=stabilization,
+    )
+
+
+def hilbert_dimension(
+    ideal: RationalPolynomialIdeal,
+    monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex",
+    *,
+    resource_budget: IdealComputationBudget | None = None,
+) -> HilbertDimensionResult:
+    data = _series_projection(ideal, monomial_order, resource_budget=resource_budget)
+    return HilbertDimensionResult(
+        ideal=ideal, initial_ideal=data.initial_ideal,
+        monomial_order=monomial_order, dimension=data.denominator_exponent
+    )
+
+
+def hilbert_multiplicity(
+    ideal: RationalPolynomialIdeal,
+    monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex",
+    *,
+    resource_budget: IdealComputationBudget | None = None,
+) -> HilbertMultiplicityResult:
+    data = _series_projection(ideal, monomial_order, resource_budget=resource_budget)
+    multiplicity = sum(
+        term.coefficient.as_fraction()
+        * ((-1) ** data.denominator_exponent)
+        for term in data.reduced_numerator.polynomial.terms
+    )
+    if multiplicity.denominator != 1 or multiplicity < 0:
+        raise OperationDomainValidationError(
+            location=("series",), code="graded_ideal.multiplicity", message="Hilbert multiplicity did not reduce to a nonnegative integer"
+        )
+    return HilbertMultiplicityResult(
+        ideal=ideal, initial_ideal=data.initial_ideal,
+        monomial_order=monomial_order, dimension=data.denominator_exponent,
+        multiplicity=multiplicity.numerator,
+    )
+
+
+def h_vector(
+    ideal: RationalPolynomialIdeal,
+    monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex",
+    *,
+    resource_budget: IdealComputationBudget | None = None,
+) -> HVectorResult:
+    data = _series_projection(ideal, monomial_order, resource_budget=resource_budget)
+    sign = -1 if data.denominator_exponent % 2 else 1
+    raw = {
+        term.exponents[0]: int(term.coefficient.as_fraction())
+        for term in data.series.numerator.terms
+    }
+    values = tuple(
+        sign * raw.get(index, 0)
+        for index in range(max(raw, default=0) + 1)
+    )
+    return HVectorResult(
+        ideal=ideal, initial_ideal=data.initial_ideal,
+        monomial_order=monomial_order, dimension=data.denominator_exponent,
+        h_vector=values,
+    )
+
+
+__all__ = [
+    "h_vector",
+    "hilbert_dimension",
+    "hilbert_function",
+    "hilbert_multiplicity",
+    "hilbert_polynomial",
+    "hilbert_series",
+    "initial_monomial_ideal",
+    "standard_monomials",
+]

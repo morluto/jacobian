@@ -202,6 +202,12 @@ class SequenceOrderShapeResult(StrictModel):
             raise ValueError(
                 "log-concavity rows must cover each interior index exactly once"
             )
+        for field_name, index in (
+            ("first_nondecreasing_violation", self.first_nondecreasing_violation),
+            ("first_nonincreasing_violation", self.first_nonincreasing_violation),
+        ):
+            if index is not None and index >= max(size - 1, 0):
+                raise ValueError(f"{field_name} must identify an adjacent source pair")
         if self.first_log_concavity_violation is not None and (
             self.first_log_concavity_violation not in row_indices
         ):

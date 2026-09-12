@@ -1,4 +1,4 @@
-"""Immutable catalog declarations for finite integer-sequence operations."""
+"""Immutable catalog declarations for finite sequence operations."""
 
 from typing import Any
 
@@ -69,7 +69,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             OperationExample(
                 name="flat_peak",
-                description="Profile the weak-unimodal sequence 1, 3, 3, 2.",
+                description=(
+                    "Profile the weak-unimodal sequence 1, 3, 3, 2; entries must "
+                    "use reduced rationals with positive denominators."
+                ),
                 input={
                     "values": [
                         {"num": "1", "den": "1"},

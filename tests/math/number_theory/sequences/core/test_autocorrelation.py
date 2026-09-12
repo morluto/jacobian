@@ -139,6 +139,70 @@ def test_order_shape_result_checks_structure_without_replaying_values() -> None:
         SequenceOrderShapeResult.model_validate(forged)
 
 
+def test_order_shape_result_rejects_out_of_range_monotonicity_witness() -> None:
+    result = sequence_order_shape(
+        FiniteRationalSequence(
+            values=tuple(CanonicalRational(num=value, den=1) for value in (1, 2))
+        )
+    )
+    forged = result.model_dump()
+    forged["first_nondecreasing_violation"] = 1
+    with pytest.raises(ValueError, match="adjacent source pair"):
+        SequenceOrderShapeResult.model_validate(forged)
+
+
+def test_order_shape_reversal_and_positive_scaling_preserve_decisions() -> None:
+    source_values = (1, 3, 3, 2, 1)
+    source = FiniteRationalSequence(
+        values=tuple(CanonicalRational(num=value, den=1) for value in source_values)
+    )
+    scaled = FiniteRationalSequence(
+        values=tuple(CanonicalRational(num=5 * value, den=1) for value in source_values)
+    )
+    result = sequence_order_shape(source)
+    scaled_result = sequence_order_shape(scaled)
+    assert (
+        result.first_nondecreasing_violation,
+        result.first_nonincreasing_violation,
+        result.weak_unimodal_peak_positions,
+        tuple(row.holds for row in result.log_concavity_rows),
+        result.is_nonnegative,
+        result.has_internal_zero,
+    ) == (
+        scaled_result.first_nondecreasing_violation,
+        scaled_result.first_nonincreasing_violation,
+        scaled_result.weak_unimodal_peak_positions,
+        tuple(row.holds for row in scaled_result.log_concavity_rows),
+        scaled_result.is_nonnegative,
+        scaled_result.has_internal_zero,
+    )
+
+    reversed_result = sequence_order_shape(
+        FiniteRationalSequence(
+            values=tuple(
+                CanonicalRational(num=value, den=1) for value in reversed(source_values)
+            )
+        )
+    )
+    assert reversed_result.weak_unimodal_peak_positions == (2, 3)
+    assert tuple(row.holds for row in reversed_result.log_concavity_rows) == tuple(
+        row.holds for row in reversed(result.log_concavity_rows)
+    )
+
+
+def test_order_shape_profiles_binomial_coefficients() -> None:
+    source = FiniteRationalSequence(
+        values=tuple(
+            CanonicalRational(num=value, den=1) for value in (1, 5, 10, 10, 5, 1)
+        )
+    )
+    result = sequence_order_shape(source)
+    assert result.weak_unimodal_peak_positions == (2, 3)
+    assert result.first_nondecreasing_violation == 3
+    assert result.first_nonincreasing_violation == 0
+    assert all(row.holds for row in result.log_concavity_rows)
+
+
 @pytest.mark.parametrize(
     "operation", [aperiodic_autocorrelation, cyclic_autocorrelation]
 )

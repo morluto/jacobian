@@ -369,7 +369,8 @@ def _factor_from_kernel_table(
     product or marginal that exceeds the owner envelope becomes a typed
     admission failure instead of leaking a Pydantic ``ValidationError``.
     The table is produced once by the kernel and then trusted by the result
-    model; no validator recomputes the mathematical operation.
+    model; no validator recomputes the mathematical operation or re-scans
+    the already-admitted height.
     """
 
     for value in table:
@@ -385,7 +386,11 @@ def _factor_from_kernel_table(
                 code=f"graphical_model.factor_{operation}_rational_bound",
                 message="exact factor result exceeds the rational digit bound",
             ) from error
-    return Factor(variables=variables, domain_sizes=domain_sizes, table=tuple(table))
+    return Factor.model_construct(
+        variables=variables,
+        domain_sizes=domain_sizes,
+        table=tuple(table),
+    )
 
 
 def d_separation(

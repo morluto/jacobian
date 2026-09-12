@@ -252,6 +252,28 @@ class TestFactorValuesAndOperations:
         assert len(result.table) == 4_096
         assert all(value.num == 1 and value.den == 1 for value in result.table)
 
+    def test_kernel_result_does_not_rescan_the_admitted_table(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        domain_sizes = (2,) * 12
+        left = Factor(
+            variables=tuple(range(6)),
+            domain_sizes=domain_sizes,
+            table=_table(*(("1",) * 64)),
+        )
+        right = Factor(
+            variables=tuple(range(6, 12)),
+            domain_sizes=domain_sizes,
+            table=_table(*(("1",) * 64)),
+        )
+
+        def fail(self: Factor) -> Factor:
+            raise AssertionError("trusted kernel factor was revalidated")
+
+        monkeypatch.setattr(Factor, "require_valid_factor", fail)
+        result = factor_multiply(left, right)
+        assert len(result.table) == 4_096
+
     def test_marginal_at_thirty_two_way_boundary_is_admitted(self) -> None:
         factor = Factor(
             variables=(0, 1, 2),

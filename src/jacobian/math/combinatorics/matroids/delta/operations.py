@@ -74,7 +74,9 @@ def _require_delta_matroid(value: FiniteDeltaMatroid) -> None:
         raise ValueError("source feasible family is not a delta-matroid")
 
 
-def twist(request: DeltaMatroidTwistRequest) -> DeltaMatroidTwistResult:
+def twist(
+    delta_matroid: FiniteDeltaMatroid, subset: tuple[int, ...]
+) -> DeltaMatroidTwistResult:
     """Return the delta-matroid twist by ``subset``.
 
     Feasible sets are transformed as ``F △ X``.  The source axiom is replayed
@@ -82,10 +84,11 @@ def twist(request: DeltaMatroidTwistRequest) -> DeltaMatroidTwistResult:
     caller-authored rather than trusted producer output.
     """
 
+    request = DeltaMatroidTwistRequest(delta_matroid=delta_matroid, subset=subset)
     _require_delta_matroid(request.delta_matroid)
-    subset = frozenset(request.subset)
+    twist_subset = frozenset(request.subset)
     projected_memberships = sum(
-        len(row) + len(subset) - 2 * len(subset.intersection(row))
+        len(row) + len(twist_subset) - 2 * len(twist_subset.intersection(row))
         for row in request.delta_matroid.feasible
     )
     if projected_memberships > MAX_DELTA_MEMBERSHIPS:
@@ -95,7 +98,7 @@ def twist(request: DeltaMatroidTwistRequest) -> DeltaMatroidTwistResult:
         )
     rows = tuple(
         sorted(
-            tuple(sorted(frozenset(row) ^ subset))
+            tuple(sorted(frozenset(row) ^ twist_subset))
             for row in request.delta_matroid.feasible
         )
     )
@@ -111,9 +114,10 @@ def twist(request: DeltaMatroidTwistRequest) -> DeltaMatroidTwistResult:
     )
 
 
-def width(request: DeltaMatroidWidthRequest) -> DeltaMatroidWidthResult:
+def width(delta_matroid: FiniteDeltaMatroid) -> DeltaMatroidWidthResult:
     """Return the delta-matroid width ``max |F| - min |F|``."""
 
+    request = DeltaMatroidWidthRequest(delta_matroid=delta_matroid)
     _require_delta_matroid(request.delta_matroid)
     sizes = tuple(len(row) for row in request.delta_matroid.feasible)
     return DeltaMatroidWidthResult._from_kernel(

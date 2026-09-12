@@ -335,3 +335,15 @@ def test_twist_output_limit_remains_a_resource_refusal() -> None:
     )
     with pytest.raises(OperationResourceAdmissionError, match="memberships exceed"):
         _twist(DeltaMatroidTwistRequest(delta_matroid=source, subset=tuple(range(129))))
+
+
+def test_native_transforms_accept_canonical_mathematical_values() -> None:
+    from jacobian.math.combinatorics.matroids.delta import twist, width
+
+    source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((), (0,), (1,)))
+    result = twist(source, (0,))
+    assert result == _twist(DeltaMatroidTwistRequest(delta_matroid=source, subset=(0,)))
+    assert width(result.twisted) == _width(
+        DeltaMatroidWidthRequest(delta_matroid=result.twisted)
+    )
+    assert twist(result.twisted, (0,)).twisted == source

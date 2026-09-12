@@ -40,7 +40,7 @@ def _from_feasible_sets(
 
 def _twist(request: DeltaMatroidTwistRequest) -> DeltaMatroidTwistResult:
     try:
-        return twist(request)
+        return twist(request.delta_matroid, request.subset)
     except DeltaMatroidAdmissionError as exc:
         raise OperationResourceAdmissionError(
             location=("delta_matroid",),
@@ -57,7 +57,7 @@ def _twist(request: DeltaMatroidTwistRequest) -> DeltaMatroidTwistResult:
 
 def _width(request: DeltaMatroidWidthRequest) -> DeltaMatroidWidthResult:
     try:
-        return width(request)
+        return width(request.delta_matroid)
     except DeltaMatroidAdmissionError as exc:
         raise OperationResourceAdmissionError(
             location=("delta_matroid",),

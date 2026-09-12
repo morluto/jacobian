@@ -254,6 +254,35 @@ def test_unknown_action_fields_are_preserved_for_strict_rejection() -> None:
     assert extra.value.errors()[0]["type"] == "extra_forbidden"
 
 
+def test_unknown_action_fields_on_result_source_are_rejected() -> None:
+    payload = {
+        "source": {
+            "action": {"domain": ["a"], "generators": [[0]], "generator": [[0]]},
+            "arity": 0,
+            "family": [],
+        },
+        "rows": [],
+        "is_union_of_complete_ambient_orbits": True,
+    }
+    with pytest.raises(ValidationError) as extra:
+        TupleFamilyOrbitResult.model_validate(payload)
+    assert extra.value.errors()[0]["type"] == "extra_forbidden"
+
+
+def test_range_family_rows_are_rejected_before_container_copy() -> None:
+    payload = {
+        "action": {"domain": ["a"], "generators": [[0]]},
+        "arity": 0,
+        "family": [range(2_000_000)],
+    }
+    with pytest.raises(ValidationError) as arity:
+        TupleFamilyOrbitSource.model_validate(payload)
+    assert arity.value.errors()[0]["type"] in {
+        "finite_group_action.tuple_family_arity_out_of_range",
+        "finite_group_action.tuple_family_arity_mismatch",
+    }
+
+
 def test_raw_action_generator_dimensions_are_rejected_before_container_copy() -> None:
     class _HugeGenerator(tuple):
         def __len__(self) -> int:

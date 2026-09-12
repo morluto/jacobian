@@ -194,6 +194,31 @@ def _source_mapping(data: object) -> dict[str, Any]:
     action = _action_mapping(payload.get("action"))
     if action is not None:
         payload["action"] = action
+    family = payload.get("family")
+    raw_arity = payload.get("arity")
+    if isinstance(family, Iterable) and not isinstance(
+        family, (str, bytes, bytearray, Mapping)
+    ):
+        row_limit = (
+            raw_arity
+            if isinstance(raw_arity, int) and not isinstance(raw_arity, bool)
+            else MAX_TUPLE_ARITY
+        )
+        bounded_family: list[Any] = []
+        for member in family:
+            materialized = _materialize_bounded_sequence(member, row_limit)
+            if materialized is _SEQUENCE_OVERFLOW:
+                raise _tuple_error(
+                    "arity_out_of_range",
+                    "tuple arity must be a non-negative action-domain-sized integer",
+                )
+            bounded_family.append(materialized)
+            if len(bounded_family) > MAX_FAMILY_MEMBERS:
+                raise _tuple_error(
+                    "input_bound",
+                    f"at most {MAX_FAMILY_MEMBERS} tuple rows are admitted",
+                )
+        payload["family"] = tuple(bounded_family)
     return payload
 
 
@@ -201,23 +226,50 @@ def _preflight_source_payload(data: object) -> None:
     _preflight_action_payload(_declared_attr(data, "action"))
     family = _declared_attr(data, "family")
     raw_arity = _declared_attr(data, "arity")
-    if not isinstance(family, (list, tuple)):
+    family_length = _collection_length(family)
+    if family_length is None:
+        if not isinstance(family, Iterable) or isinstance(
+            family, (str, bytes, bytearray, Mapping)
+        ):
+            return
+        family_length = 0
+        for _member in family:
+            family_length += 1
+            if family_length > MAX_FAMILY_MEMBERS:
+                raise _tuple_error(
+                    "input_bound",
+                    f"at most {MAX_FAMILY_MEMBERS} tuple rows are admitted",
+                )
         return
-    if len(family) > MAX_FAMILY_MEMBERS:
+    if family_length > MAX_FAMILY_MEMBERS:
         raise _tuple_error(
             "input_bound",
             f"at most {MAX_FAMILY_MEMBERS} tuple rows are admitted",
         )
     arity_is_int = isinstance(raw_arity, int) and not isinstance(raw_arity, bool)
+    row_limit = raw_arity if arity_is_int else MAX_TUPLE_ARITY
     for member in family:
-        if not isinstance(member, (list, tuple)):
-            continue
-        if arity_is_int and len(member) != raw_arity:
+        length = _collection_length(member)
+        if length is None:
+            if not isinstance(member, Iterable) or isinstance(
+                member, (str, bytes, bytearray, Mapping)
+            ):
+                continue
+            counted = 0
+            for _item in member:
+                counted += 1
+                if counted > row_limit:
+                    raise _tuple_error(
+                        "arity_out_of_range",
+                        "tuple arity must be a non-negative action-domain-sized integer",
+                    )
+            length = counted
+        if arity_is_int and length != raw_arity:
             raise _tuple_error(
                 "arity_mismatch",
                 "every family member must have the declared arity",
             )
-        if len(member) > MAX_TUPLE_ARITY:
+        if length > MAX_TUPLE_ARITY:
             raise _tuple_error(
                 "arity_out_of_range",
                 "tuple arity must be a non-negative action-domain-sized integer",

@@ -1,10 +1,16 @@
 """Typed polynomial expression normalization tests."""
 
+import time
 from typing import Any
 
 import pytest
 from pydantic import ValidationError
 
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    request_cancellation,
+    request_execution,
+)
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -273,3 +279,24 @@ def test_large_exact_result_is_rejected_before_expansion() -> None:
     assert error.value.errors()[0]["type"] == (
         "polynomial.expression.result_representation_bound"
     )
+
+
+def test_native_invalid_source_is_a_domain_error() -> None:
+    with pytest.raises(OperationDomainValidationError):
+        normalize_polynomial_expression(None)  # type: ignore[arg-type]
+    with pytest.raises(OperationDomainValidationError):
+        normalize_polynomial_expression({"coefficient_domain": "ZZ"})  # type: ignore[arg-type]
+
+
+def test_cancelled_request_interrupts_expansion() -> None:
+    class _Cancelled:
+        def is_set(self) -> bool:
+            return True
+
+    request = _request("ZZ", {"kind": "VARIABLE", "name": "x"})
+    with (
+        request_execution(time.monotonic()),
+        request_cancellation(_Cancelled()),
+        pytest.raises(OperationExecutionCancelledError),
+    ):
+        _normalize(request)

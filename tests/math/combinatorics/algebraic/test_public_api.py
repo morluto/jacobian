@@ -10,8 +10,10 @@ def test_exact_public_api_symbols() -> None:
     expected = (
         "EndpointProfileEntry",
         "EndpointProfileResult",
+        "PartitionDominanceResult",
         "RSKTableauPair",
         "SemistandardTableauCheckResult",
+        "SemistandardYoungTableauCountResult",
         "StandardTableauCheckResult",
         "WeightedOrderedWord",
         "check_semistandard_tableau",

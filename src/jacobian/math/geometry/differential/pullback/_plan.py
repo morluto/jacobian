@@ -19,7 +19,10 @@ from jacobian.math.polynomials.rational_functions._bounds import (
     _recognition_work_units,
 )
 from jacobian.math.polynomials.rational_functions.values import RationalFunctionMap
-from jacobian.math.polynomials.values import MAX_POLYNOMIAL_VARIABLES, SparseRationalPolynomial
+from jacobian.math.polynomials.values import (
+    MAX_POLYNOMIAL_VARIABLES,
+    SparseRationalPolynomial,
+)
 
 
 def reject(reason: str, message: str) -> NoReturn:

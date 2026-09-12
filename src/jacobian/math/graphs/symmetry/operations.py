@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 import unicodedata
-from itertools import permutations, product
 from math import factorial
+from typing import Any
 
 from pydantic_core import PydanticCustomError
 
-from jacobian._execution import request_checkpoint
+from jacobian._execution import (
+    BackendFailureReason,
+    OperationBackendError,
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+    request_checkpoint,
+)
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -28,9 +34,354 @@ from jacobian.math.graphs.symmetry._models import (
 )
 from jacobian.math.graphs.symmetry._orbits import declared_orbit_partitions
 from jacobian.math.graphs.values import ColoredUndirectedGraph
+from jacobian.math.groups._models import MAX_GROUP_DEGREE, PermutationGroup
 
 MAX_FULL_AUTOMORPHISM_PERMUTATIONS = 100_000
 MAX_FULL_AUTOMORPHISM_WORK = 25_600_000
+
+
+def _full_graph_vertex_axis(graph: ColoredUndirectedGraph) -> tuple[str, ...]:
+    return tuple(sorted(graph.graph.vertices))
+
+
+def _uniform(values: tuple[str, ...]) -> bool:
+    return not values or len(set(values)) == 1
+
+
+def _admit_full_graph_automorphism(graph: ColoredUndirectedGraph) -> None:
+    """Admit every expansion used by the full-group kernel before searching."""
+
+    if not isinstance(graph, ColoredUndirectedGraph):
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="graph.automorphism.graph_type",
+            message="graph must be a ColoredUndirectedGraph value",
+        )
+    vertex_count = len(graph.graph.vertices)
+    edge_count = len(graph.graph.edges)
+    if vertex_count > MAX_GROUP_DEGREE:
+        raise OperationResourceAdmissionError(
+            location=("graph", "vertices"),
+            code="graph.automorphism.vertex_bound",
+            message=(
+                "full graph automorphisms expose a composable permutation group "
+                f"of degree at most {MAX_GROUP_DEGREE}"
+            ),
+        )
+    if edge_count > MAX_GRAPH_SYMMETRY_EDGES:
+        raise OperationResourceAdmissionError(
+            location=("graph", "edges"),
+            code="graph.automorphism.edge_bound",
+            message="full graph automorphism edge scans exceed the admitted carrier",
+        )
+    # The graph-specific special families below have compact presentations and
+    # do not enumerate their groups.  Other requests are admitted against the
+    # candidate-permutation envelope implied by vertex colors and local VF2
+    # invariants; this bound is charged before GraphMatcher starts.
+    adjacency: dict[str, set[str]] = {vertex: set() for vertex in graph.graph.vertices}
+    edge_colors = dict(
+        zip(
+            graph.graph.edges,
+            graph.edge_colors or (_UNCOLORED,) * edge_count,
+            strict=True,
+        )
+    )
+    vertex_colors = dict(
+        zip(
+            graph.graph.vertices,
+            graph.vertex_colors or (_UNCOLORED,) * vertex_count,
+            strict=True,
+        )
+    )
+    for left, right in graph.graph.edges:
+        adjacency[left].add(right)
+        adjacency[right].add(left)
+    if (
+        _special_graph_generators(graph, tuple(sorted(graph.graph.vertices)))
+        is not None
+    ):
+        return
+    classes: dict[tuple[Any, ...], list[str]] = {}
+    for vertex in graph.graph.vertices:
+        signature = (
+            vertex_colors[vertex],
+            len(adjacency[vertex]),
+            tuple(
+                sorted(
+                    (
+                        vertex_colors[neighbor],
+                        edge_colors[canonical_edge(vertex, neighbor)],
+                    )
+                    for neighbor in adjacency[vertex]
+                )
+            ),
+        )
+        classes.setdefault(signature, []).append(vertex)
+    permutation_bound = 1
+    for vertex_class in classes.values():
+        permutation_bound *= factorial(len(vertex_class))
+    work = permutation_bound * max(1, vertex_count + edge_count)
+    if (
+        permutation_bound > MAX_FULL_AUTOMORPHISM_PERMUTATIONS
+        or work > MAX_FULL_AUTOMORPHISM_WORK
+    ):
+        raise OperationResourceAdmissionError(
+            location=("graph",),
+            code="graph.automorphism.search_bound",
+            message=(
+                "color/refinement candidate permutations and VF2 edge-scan work "
+                "exceed the admitted full-automorphism envelope"
+            ),
+        )
+
+
+def _networkx_graph(graph: ColoredUndirectedGraph, vertices: tuple[str, ...]) -> Any:
+    import networkx as nx
+
+    indexed = {vertex: index for index, vertex in enumerate(vertices)}
+    candidate: Any = nx.Graph()
+    colors = dict(
+        zip(
+            graph.graph.vertices,
+            graph.vertex_colors or (_UNCOLORED,) * len(graph.graph.vertices),
+            strict=True,
+        )
+    )
+    candidate.add_nodes_from(
+        (index, {"color": colors[vertex]}) for vertex, index in indexed.items()
+    )
+    edge_colors = dict(
+        zip(
+            graph.graph.edges,
+            graph.edge_colors or (_UNCOLORED,) * len(graph.graph.edges),
+            strict=True,
+        )
+    )
+    candidate.add_edges_from(
+        (
+            indexed[left],
+            indexed[right],
+            {"color": edge_colors[(left, right)]},
+        )
+        for left, right in graph.graph.edges
+    )
+    return candidate
+
+
+def _networkx_automorphisms(
+    graph: ColoredUndirectedGraph, vertices: tuple[str, ...]
+) -> tuple[tuple[int, ...], ...]:
+    """Enumerate only the admitted generic automorphisms through VF2."""
+
+    import networkx.algorithms.isomorphism as iso
+
+    source = _networkx_graph(graph, vertices)
+    matcher = iso.GraphMatcher(
+        source,
+        source,
+        node_match=iso.categorical_node_match("color", _UNCOLORED),
+        edge_match=iso.categorical_edge_match("color", _UNCOLORED),
+    )
+    mappings: list[tuple[int, ...]] = []
+    try:
+        for mapping in matcher.isomorphisms_iter():
+            request_checkpoint("during full graph automorphism search")
+            images = tuple(mapping[index] for index in range(len(vertices)))
+            mappings.append(images)
+            if len(mappings) > MAX_FULL_AUTOMORPHISM_PERMUTATIONS:
+                raise OperationResourceAdmissionError(
+                    location=("graph",),
+                    code="graph.automorphism.enumeration_bound",
+                    message="generic full-automorphism enumeration exceeds its admitted bound",
+                )
+    except (
+        OperationResourceAdmissionError,
+        OperationExecutionCancelledError,
+        OperationExecutionTimeoutError,
+    ):
+        raise
+    except Exception as error:
+        raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE) from error
+    return tuple(sorted(mappings))
+
+
+def _special_complete_or_empty(
+    graph: ColoredUndirectedGraph,
+    vertices: tuple[str, ...],
+    edges: set[tuple[int, int]],
+) -> tuple[tuple[tuple[int, ...], ...], int] | None:
+    n = len(vertices)
+    if len(edges) not in (0, n * (n - 1) // 2) or not _uniform(graph.edge_colors):
+        return None
+    colors = graph.vertex_colors or (_UNCOLORED,) * n
+    classes: dict[str, list[int]] = {}
+    for position, color in sorted(
+        zip(range(n), colors, strict=True), key=lambda item: item[1]
+    ):
+        classes.setdefault(color, []).append(position)
+    generators: list[tuple[int, ...]] = []
+    order = 1
+    for positions in classes.values():
+        size = len(positions)
+        order *= factorial(size)
+        if size >= 2:
+            swap = list(range(n))
+            swap[positions[0]], swap[positions[1]] = positions[1], positions[0]
+            generators.append(tuple(swap))
+        if size >= 3:
+            cycle = list(range(n))
+            for source, target in zip(
+                positions, positions[1:] + positions[:1], strict=True
+            ):
+                cycle[source] = target
+            generators.append(tuple(cycle))
+    return tuple(generators), order
+
+
+def _indexed_adjacency(n: int, edges: set[tuple[int, int]]) -> dict[int, set[int]]:
+    adjacency: dict[int, set[int]] = {position: set() for position in range(n)}
+    for left, right in edges:
+        adjacency[left].add(right)
+        adjacency[right].add(left)
+    return adjacency
+
+
+def _special_path_or_cycle(
+    graph: ColoredUndirectedGraph,
+    vertices: tuple[str, ...],
+    edges: set[tuple[int, int]],
+) -> tuple[tuple[tuple[int, ...], ...], int] | None:
+    n = len(vertices)
+    if graph.vertex_colors or graph.edge_colors or n < 3:
+        return None
+    adjacency = _indexed_adjacency(n, edges)
+    if len(edges) == n - 1 and sorted(map(len, adjacency.values())) == [
+        1,
+        1,
+        *([2] * (n - 2)),
+    ]:
+        endpoints = sorted(
+            position for position, neighbors in adjacency.items() if len(neighbors) == 1
+        )
+        path: list[int] = [endpoints[0]]
+        previous = -1
+        while len(path) < n:
+            next_vertices = sorted(adjacency[path[-1]] - {previous})
+            previous, current = path[-1], next_vertices[0]
+            path.append(current)
+        reflection = list(range(n))
+        for source, target in zip(path, reversed(path), strict=True):
+            reflection[source] = target
+        return (tuple(reflection),), 2
+    connected = {0}
+    frontier = [0]
+    while frontier:
+        current = frontier.pop()
+        for neighbor in adjacency[current] - connected:
+            connected.add(neighbor)
+            frontier.append(neighbor)
+    if len(connected) != n or not all(
+        len(neighbors) == 2 for neighbors in adjacency.values()
+    ):
+        return None
+    cycle_order = [0]
+    previous = -1
+    while len(cycle_order) < n:
+        choices = sorted(adjacency[cycle_order[-1]] - {previous})
+        previous, current = cycle_order[-1], choices[0]
+        cycle_order.append(current)
+    rotation = list(range(n))
+    reflection = list(range(n))
+    for position, source in enumerate(cycle_order):
+        rotation[source] = cycle_order[(position + 1) % n]
+        reflection[source] = cycle_order[-position % n]
+    return (tuple(rotation), tuple(reflection)), 2 * n
+
+
+def _connected_components(
+    n: int, adjacency: dict[int, set[int]]
+) -> tuple[tuple[int, ...], ...]:
+    components: list[tuple[int, ...]] = []
+    unseen = set(range(n))
+    while unseen:
+        start = min(unseen)
+        component = {start}
+        frontier = [start]
+        unseen.remove(start)
+        while frontier:
+            current = frontier.pop()
+            for neighbor in adjacency[current] & unseen:
+                component.add(neighbor)
+                unseen.remove(neighbor)
+                frontier.append(neighbor)
+        components.append(tuple(sorted(component)))
+    return tuple(components)
+
+
+def _special_repeated_cliques(
+    graph: ColoredUndirectedGraph,
+    vertices: tuple[str, ...],
+    edges: set[tuple[int, int]],
+) -> tuple[tuple[tuple[int, ...], ...], int] | None:
+    if graph.vertex_colors or not _uniform(graph.edge_colors):
+        return None
+    components = _connected_components(
+        len(vertices), _indexed_adjacency(len(vertices), edges)
+    )
+    if len(components) <= 1 or len({len(component) for component in components}) != 1:
+        return None
+    size = len(components[0])
+    clique_edges = size * (size - 1) // 2
+    if any(
+        sum(left in component and right in component for left, right in edges)
+        != clique_edges
+        for component in components
+    ):
+        return None
+    generators: list[tuple[int, ...]] = []
+    for component in components:
+        if size >= 2:
+            swap = list(range(len(vertices)))
+            swap[component[0]], swap[component[1]] = component[1], component[0]
+            generators.append(tuple(swap))
+        if size >= 3:
+            cycle = list(range(len(vertices)))
+            for source, target in zip(
+                component, component[1:] + component[:1], strict=True
+            ):
+                cycle[source] = target
+            generators.append(tuple(cycle))
+    first = components[0]
+    for component in components[1:]:
+        swap = list(range(len(vertices)))
+        for left, right in zip(first, component, strict=True):
+            swap[left], swap[right] = right, left
+        generators.append(tuple(swap))
+    return tuple(generators), factorial(size) ** len(components) * factorial(
+        len(components)
+    )
+
+
+def _special_graph_generators(
+    graph: ColoredUndirectedGraph, vertices: tuple[str, ...]
+) -> tuple[tuple[tuple[int, ...], ...], int] | None:
+    """Return compact presentations for common high-symmetry graph families."""
+
+    if not vertices:
+        return ((), 1)
+    index = {vertex: position for position, vertex in enumerate(vertices)}
+    edges: set[tuple[int, int]] = {
+        (
+            min(index[left], index[right]),
+            max(index[left], index[right]),
+        )
+        for left, right in graph.graph.edges
+    }
+    return (
+        _special_complete_or_empty(graph, vertices, edges)
+        or _special_path_or_cycle(graph, vertices, edges)
+        or _special_repeated_cliques(graph, vertices, edges)
+    )
 
 
 def _admit_graph_symmetry_orbit(
@@ -200,75 +551,96 @@ def verify_graph_symmetry_orbits(claim: GraphSymmetryOrbitResult) -> bool:
 def full_graph_automorphism_group(
     graph: ColoredUndirectedGraph,
 ) -> FullGraphAutomorphismResult:
-    """Exhaust the admitted color classes and reduce the full group to generators."""
+    """Return a compact, source-bound presentation of every graph automorphism."""
 
-    from sympy.combinatorics import Permutation, PermutationGroup
+    from sympy.combinatorics import Permutation as SympyPermutation
 
-    vertices = graph.graph.vertices
-    colors = graph.vertex_colors or (_UNCOLORED,) * len(vertices)
-    classes = tuple(
-        tuple(index for index, value in enumerate(colors) if value == color)
-        for color in sorted(set(colors))
-    )
-    permutation_bound = 1
-    for color_class in classes:
-        permutation_bound *= factorial(len(color_class))
-    work = permutation_bound * max(1, len(vertices) + len(graph.graph.edges))
-    if (
-        permutation_bound > MAX_FULL_AUTOMORPHISM_PERMUTATIONS
-        or work > MAX_FULL_AUTOMORPHISM_WORK
-    ):
-        raise OperationResourceAdmissionError(
-            location=("graph", "vertex_colors"),
-            code="graph.automorphism.permutation_bound",
-            message="color-class permutation and edge-scan work exceeds its admitted bound",
+    _admit_full_graph_automorphism(graph)
+    vertices = _full_graph_vertex_axis(graph)
+    special = _special_graph_generators(graph, vertices)
+    if special is None:
+        candidates = _networkx_automorphisms(graph, vertices)
+        identity = tuple(range(len(vertices)))
+        candidate_generators = tuple(
+            candidate for candidate in candidates if candidate != identity
         )
-    edge_colors = dict(
-        zip(
-            graph.graph.edges,
-            graph.edge_colors or (_UNCOLORED,) * len(graph.graph.edges),
-            strict=True,
-        )
-    )
-    generators: list[Permutation] = []
-    generator_rows: list[GraphAutomorphismGenerator] = []
-    automorphism_count = 0
-    group: PermutationGroup | None = None
-    class_permutations = [tuple(permutations(color_class)) for color_class in classes]
-    for images_by_class in product(*class_permutations):
-        images = list(range(len(vertices)))
-        for color_class, class_images in zip(classes, images_by_class, strict=True):
-            for source, image in zip(color_class, class_images, strict=True):
-                images[source] = image
-        mapping = dict(
-            zip(vertices, (vertices[index] for index in images), strict=True)
-        )
-        mapped_edges = {
-            canonical_edge(mapping[left], mapping[right]): color
-            for (left, right), color in edge_colors.items()
-        }
-        if mapped_edges != edge_colors:
+        expected_order = len(candidates)
+    else:
+        candidate_generators, expected_order = special
+
+    selected: list[tuple[int, ...]] = []
+    backend_group: Any | None = None
+    for candidate in candidate_generators:
+        request_checkpoint("during full graph automorphism generator reduction")
+        permutation = SympyPermutation(list(candidate), size=len(vertices))
+        if permutation.is_Identity:
             continue
-        automorphism_count += 1
-        candidate = Permutation(images, size=len(vertices))
-        if candidate.is_Identity or (group is not None and group.contains(candidate)):
+        if backend_group is not None and backend_group.contains(permutation):
             continue
-        generators.append(candidate)
-        group = PermutationGroup(generators)
-        generator_rows.append(
-            GraphAutomorphismGenerator(
-                generator_id=f"g{len(generator_rows)}",
-                mapping=tuple((vertex, mapping[vertex]) for vertex in vertices),
+        selected.append(candidate)
+        if len(selected) > MAX_GROUP_DEGREE:
+            raise OperationResourceAdmissionError(
+                location=("graph",),
+                code="graph.automorphism.generator_bound",
+                message=(
+                    "the compact automorphism presentation exceeds the admitted "
+                    f"{MAX_GROUP_DEGREE}-generator result envelope"
+                ),
             )
+        backend_group = __import__(
+            "sympy.combinatorics", fromlist=["PermutationGroup"]
+        ).PermutationGroup(
+            [
+                SympyPermutation(list(generator), size=len(vertices))
+                for generator in selected
+            ]
         )
-    generated_order = int(group.order()) if group is not None else 1
-    if generated_order != automorphism_count:
-        raise RuntimeError("reduced generators do not generate every automorphism")
-    return FullGraphAutomorphismResult(
+
+    group_generators: tuple[tuple[int, ...], ...]
+    if backend_group is None:
+        generated_order = 1
+        group_generators = (tuple(range(len(vertices))),)
+    else:
+        generated_order = int(backend_group.order())
+        group_generators = tuple(selected)
+    if generated_order != expected_order:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+
+    source_vertices = graph.graph.vertices
+    generator_rows = tuple(
+        GraphAutomorphismGenerator(
+            generator_id=f"g{index}",
+            mapping=tuple(
+                (vertex, vertices[candidate[vertices.index(vertex)]])
+                for vertex in source_vertices
+            ),
+        )
+        for index, candidate in enumerate(selected)
+    )
+    source_actions = tuple(dict(generator.mapping) for generator in generator_rows)
+    vertex_members, edge_members = declared_orbit_partitions(
+        vertices,
+        tuple(sorted(graph.graph.edges)),
+        source_actions,
+    )
+    vertex_orbits = tuple(
+        GraphVertexOrbit(orbit_index=index, representative=members[0], members=members)
+        for index, members in enumerate(vertex_members)
+    )
+    edge_orbits = tuple(
+        GraphEdgeOrbit(orbit_index=index, representative=members[0], members=members)
+        for index, members in enumerate(edge_members)
+    )
+    group = PermutationGroup(degree=len(vertices), generators=group_generators)
+    return FullGraphAutomorphismResult._from_kernel(
         graph=graph,
-        generators=tuple(generator_rows),
-        automorphism_count=automorphism_count,
-        generated_group_order=generated_order,
+        vertices=vertices,
+        edges=tuple(sorted(graph.graph.edges)),
+        group=group,
+        generators=generator_rows,
+        order=generated_order,
+        vertex_orbits=vertex_orbits,
+        edge_orbits=edge_orbits,
     )
 
 

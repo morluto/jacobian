@@ -7,9 +7,11 @@ from typing import Annotated, Literal, Self
 from pydantic import ConfigDict, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
 from jacobian.math.graphs.symmetry._edges import canonical_edge
 from jacobian.math.graphs.values import ColoredUndirectedGraph
+from jacobian.math.groups._models import MAX_GROUP_DEGREE, PermutationGroup
 
 MAX_GRAPH_SYMMETRY_VERTICES = 256
 MAX_GRAPH_SYMMETRY_EDGES = (
@@ -317,18 +319,179 @@ class GraphSymmetryOrbitResult(StrictModel):
 
 
 class FullGraphAutomorphismRequest(StrictModel):
-    """Compute the full color-preserving automorphism group."""
+    """Compute the full color-preserving automorphism group.
 
-    graph: ColoredUndirectedGraph
+    The operation uses the graph's labels as a source-bound action, while its
+    returned permutation group acts on the lexicographically sorted vertex
+    axis.  Keeping both axes makes the result directly reusable by the group
+    operations without losing the graph labels needed by symmetry replay.
+    """
+
+    graph: ColoredUndirectedGraph = Field(
+        description=(
+            "One finite simple vertex/edge-colored graph. The automorphism "
+            f"action admits at most {MAX_GROUP_DEGREE} vertices; larger shared "
+            "graph values are valid for other consumers but outside this "
+            "operation's execution envelope."
+        )
+    )
 
 
 class FullGraphAutomorphismResult(StrictModel):
-    """Deterministic generators and order of the full automorphism group."""
+    """The exact full color-preserving graph automorphism group.
+
+    ``group`` is the canonical permutation-group value consumed unchanged by
+    ``group.order.compute`` and ``group.orbit.compute``.  ``generators`` is the
+    same action expressed on the graph's source labels so it can be replayed by
+    ``graph.symmetry.generator_orbits.compute``.  The two orbit families are
+    derived from that source-bound action and are complete for the full group.
+    """
 
     graph: ColoredUndirectedGraph
-    generators: tuple[GraphAutomorphismGenerator, ...]
-    automorphism_count: StrictInt = Field(ge=1)
-    generated_group_order: StrictInt = Field(ge=1)
+    vertices: tuple[GraphSymmetryLabel, ...] = Field(
+        max_length=MAX_GRAPH_SYMMETRY_VERTICES
+    )
+    edges: tuple[GraphSymmetryEdge, ...] = Field(max_length=MAX_GRAPH_SYMMETRY_EDGES)
+    group: PermutationGroup
+    generators: tuple[GraphAutomorphismGenerator, ...] = Field(
+        max_length=MAX_GROUP_DEGREE,
+        description=(
+            "Canonical nonidentity source-label generators, at most one per "
+            f"permutation-group degree slot ({MAX_GROUP_DEGREE}). A trivial "
+            "group has no source generators and uses an identity generator only "
+            "in the nested permutation-group value."
+        ),
+    )
+    automorphism_count: ExactInteger = Field(ge=1)
+    generated_group_order: ExactInteger = Field(ge=1)
+    vertex_orbits: tuple[GraphVertexOrbit, ...] = Field(
+        max_length=MAX_GRAPH_SYMMETRY_VERTICES
+    )
+    edge_orbits: tuple[GraphEdgeOrbit, ...] = Field(max_length=MAX_GRAPH_SYMMETRY_EDGES)
+    action: Literal["FULL_COLOR_PRESERVING_AUTOMORPHISM_GROUP"] = (
+        "FULL_COLOR_PRESERVING_AUTOMORPHISM_GROUP"
+    )
+    completeness: Literal["FULL_COLOR_PRESERVING_AUTOMORPHISM_GROUP"] = (
+        "FULL_COLOR_PRESERVING_AUTOMORPHISM_GROUP"
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_source_bound_group(self) -> Self:
+        source_vertices = self.graph.graph.vertices
+        source_edges = self.graph.graph.edges
+        if self.vertices != tuple(sorted(source_vertices)):
+            raise PydanticCustomError(
+                "graph.automorphism.result_vertices_must_be_sorted_source_axis",
+                "automorphism result vertices must be the sorted source axis",
+            )
+        if self.edges != tuple(sorted(source_edges)):
+            raise PydanticCustomError(
+                "graph.automorphism.result_edges_must_be_sorted_source_axis",
+                "automorphism result edges must be the sorted source edge axis",
+            )
+        if self.group.degree != len(self.vertices):
+            raise PydanticCustomError(
+                "graph.automorphism.group_degree_matches_vertex_axis",
+                "permutation-group degree must match the result vertex axis",
+            )
+        if self.generated_group_order != self.automorphism_count:
+            raise PydanticCustomError(
+                "graph.automorphism.order_fields_must_agree",
+                "automorphism count and generated group order must agree",
+            )
+        if tuple(generator.generator_id for generator in self.generators) != tuple(
+            f"g{index}" for index in range(len(self.generators))
+        ):
+            raise PydanticCustomError(
+                "graph.automorphism.generator_ids_must_be_canonical",
+                "automorphism generator identifiers must be g0, g1, ...",
+            )
+        if any(
+            tuple(vertex for vertex, _ in generator.mapping) != source_vertices
+            or {image for _, image in generator.mapping} != set(source_vertices)
+            for generator in self.generators
+        ):
+            raise PydanticCustomError(
+                "graph.automorphism.generators_must_cover_source_axis",
+                "automorphism generators must be total permutations of source vertices",
+            )
+        if len(self.group.generators) == 0:
+            raise PydanticCustomError(
+                "graph.automorphism.group_requires_identity_generator",
+                "permutation groups use an explicit identity generator when trivial",
+            )
+        for generator, permutation in zip(
+            self.generators, self.group.generators, strict=False
+        ):
+            mapping = dict(generator.mapping)
+            expected = tuple(
+                self.vertices.index(mapping[vertex]) for vertex in self.vertices
+            )
+            if tuple(permutation) != expected:
+                raise PydanticCustomError(
+                    "graph.automorphism.group_and_source_generators_disagree",
+                    "group generators must be the sorted-axis form of source generators",
+                )
+        if len(self.generators) + (1 if not self.generators else 0) != len(
+            self.group.generators
+        ):
+            raise PydanticCustomError(
+                "graph.automorphism.group_generator_count_mismatch",
+                "group generators must include exactly the source generators and a "
+                "trivial identity only when the source group has no nonidentity generator",
+            )
+        vertex_members = tuple(
+            member for orbit in self.vertex_orbits for member in orbit.members
+        )
+        if (
+            len(vertex_members) != len(self.vertices)
+            or set(vertex_members) != set(self.vertices)
+            or tuple(orbit.orbit_index for orbit in self.vertex_orbits)
+            != tuple(range(len(self.vertex_orbits)))
+        ):
+            raise PydanticCustomError(
+                "graph.automorphism.vertex_orbits_must_partition_axis",
+                "vertex orbits must be a complete canonical partition",
+            )
+        edge_members = tuple(
+            member for orbit in self.edge_orbits for member in orbit.members
+        )
+        if (
+            len(edge_members) != len(self.edges)
+            or set(edge_members) != set(self.edges)
+            or tuple(orbit.orbit_index for orbit in self.edge_orbits)
+            != tuple(range(len(self.edge_orbits)))
+        ):
+            raise PydanticCustomError(
+                "graph.automorphism.edge_orbits_must_partition_axis",
+                "edge orbits must be a complete canonical partition",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        graph: ColoredUndirectedGraph,
+        vertices: tuple[GraphSymmetryLabel, ...],
+        edges: tuple[GraphSymmetryEdge, ...],
+        group: PermutationGroup,
+        generators: tuple[GraphAutomorphismGenerator, ...],
+        order: int,
+        vertex_orbits: tuple[GraphVertexOrbit, ...],
+        edge_orbits: tuple[GraphEdgeOrbit, ...],
+    ) -> Self:
+        return cls.model_construct(
+            graph=graph,
+            vertices=vertices,
+            edges=edges,
+            group=group,
+            generators=generators,
+            automorphism_count=order,
+            generated_group_order=order,
+            vertex_orbits=vertex_orbits,
+            edge_orbits=edge_orbits,
+        )
 
 
 __all__ = [

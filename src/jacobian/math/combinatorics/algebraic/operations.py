@@ -68,6 +68,7 @@ __all__ = [
 # at their actual shrunken size.  All quantities derive from canonical source
 # dimensions and the supplied alphabet before expansion.
 MAX_HOOK_CONTENT_WORK = 8_000_000
+_MAX_SSYT_COUNT_DIGITS = MAX_CANONICAL_INTEGER_DIGITS
 
 _KARATSUBA_LIMB_THRESHOLD = 70
 
@@ -168,10 +169,23 @@ def _log10_lower_units(value: int) -> int:
     return max(value.bit_length() - 1, 0) * 30102
 
 
-def _cancelled_hook_content_digit_bound(
+def _digits_upper_from_log10_units(units: int) -> int:
+    """Return a digit upper bound from a strict log10 upper bound in 1e-5 units.
+
+    ``floor(log10 n)`` is not a digit count. Decimal width is
+    ``floor(log10 n) + 1``, and a floor of an approximate log can undershoot
+    that width, so this uses ``ceil(U) + 1`` for U = units/100000 > log10 n.
+    """
+
+    if units <= 0:
+        return 1
+    return (units + 99_999) // 100_000 + 1
+
+
+def _ssyt_count_digit_bound(
     partition: IntegerPartition, alphabet_size: int, alphabet_digits: int
 ) -> int:
-    """Upper-bound the exact SSYT count digits after hook cancellation."""
+    """Upper-bound the exact SSYT count's decimal width after hook cancellation."""
 
     cell_count = sum(partition.parts)
     if cell_count == 0:
@@ -191,7 +205,7 @@ def _cancelled_hook_content_digit_bound(
     cancelled_units = numerator_log_units - _log10_lower_units(hook_product)
     if cancelled_units < 0:
         return max(1, alphabet_digits)
-    return max(1, alphabet_digits, cancelled_units // 100000 + 1)
+    return max(1, alphabet_digits, _digits_upper_from_log10_units(cancelled_units))
 
 
 def _admit_hook_content(partition: IntegerPartition, alphabet_size: int) -> None:
@@ -217,9 +231,9 @@ def _admit_hook_content(partition: IntegerPartition, alphabet_size: int) -> None
     hook_digits = _upper_decimal_digits(max(1, cell_count))
     output_digits = max(
         alphabet_digits,
-        _cancelled_hook_content_digit_bound(partition, alphabet_size, alphabet_digits),
+        _ssyt_count_digit_bound(partition, alphabet_size, alphabet_digits),
     )
-    if output_digits > MAX_CANONICAL_INTEGER_DIGITS:
+    if output_digits > _MAX_SSYT_COUNT_DIGITS:
         raise OperationResourceAdmissionError(
             location=("alphabet_size",),
             code="algebraic_combinatorics.hook_content_result_digits",

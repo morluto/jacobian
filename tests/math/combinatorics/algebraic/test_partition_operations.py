@@ -22,6 +22,11 @@ from jacobian.math.combinatorics.algebraic import (
     hook_content_count as public_hook_content_count,
 )
 from jacobian.math.combinatorics.algebraic import operations as native
+from jacobian.math.combinatorics.algebraic.operations import (
+    _MAX_SSYT_COUNT_DIGITS,
+    _ssyt_count_digit_bound,
+    _upper_decimal_digits,
+)
 from jacobian.math.combinatorics.algebraic import (
     partition_dominance as public_partition_dominance,
 )
@@ -216,13 +221,23 @@ def test_hook_content_admits_column_count_after_hook_cancellation() -> None:
 
 
 def test_hook_content_rejects_column_count_beyond_digit_limit() -> None:
-    # C(10**68, 500) has 32,866 digits. A true log upper bound must refuse
-    # before constructing HookContentCountResult.
+    # C(10**68, 500) has 32,866 digits. ceil(log10)+1 must exceed the
+    # 32,768-digit ExactInteger envelope so admission rejects first.
+    alphabet_size = 10**68
     request = HookContentCountRequest.model_validate(
-        {"partition": {"parts": [1] * 500}, "alphabet_size": 10**68}
+        {"partition": {"parts": [1] * 500}, "alphabet_size": alphabet_size}
     )
     with pytest.raises(OperationResourceAdmissionError, match="digit bound"):
         hook_content_count(request)
+    exact_digits = _upper_decimal_digits(math.comb(alphabet_size, 500))
+    bound = _ssyt_count_digit_bound(
+        IntegerPartition(parts=(1,) * 500),
+        alphabet_size,
+        _upper_decimal_digits(alphabet_size),
+    )
+    assert exact_digits == 32866
+    assert bound >= exact_digits
+    assert bound > _MAX_SSYT_COUNT_DIGITS
 
 
 @pytest.mark.parametrize(

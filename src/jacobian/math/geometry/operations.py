@@ -39,6 +39,7 @@ from jacobian.math.geometry._models import (
     SegmentIntersectionResult,
     SimplePolygonDecisionResult,
     SpannedCircleEntry,
+    SpannedCircleProfileRequest,
     SpannedCircleProfileResult,
     _inverted_components_within_bound,
     _is_simple_ring,
@@ -803,6 +804,14 @@ def spanned_circle_profile(
     """Return every distinct circle spanned by a non-collinear source triple."""
     from itertools import combinations
 
+    try:
+        SpannedCircleProfileRequest(points=points)
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("points",),
+            code="geometry.spanned_circle_source",
+            message=str(exc),
+        ) from exc
     _admit_configuration(points, output_bound=True)
     point_values = _points_to_fractions(points)
     n = len(point_values)

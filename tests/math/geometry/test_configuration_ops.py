@@ -279,3 +279,14 @@ class TestSpannedCircleProfile:
             (c.center, c.radius_squared) for c in second.circles
         ]
         assert second.circles[0].point_indices == (0, 1, 2, 3)
+
+
+@pytest.mark.parametrize("coordinates", [((0, 0), (1, 0)), ((0, 0), (1, 0), (0, 0))])
+def test_native_spanned_circles_reject_invalid_source(
+    coordinates: tuple[tuple[int, int], ...],
+) -> None:
+    from jacobian.math.geometry.operations import spanned_circle_profile as native
+
+    points = tuple(_point(str(x), str(y)) for x, y in coordinates)
+    with pytest.raises(OperationDomainValidationError):
+        native(points)

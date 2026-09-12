@@ -44,6 +44,15 @@ from jacobian.math.polynomials.values import (
 )
 
 
+def _is_explicit_unit_ideal(ideal: RationalPolynomialIdeal) -> bool:
+    return any(
+        len(generator.polynomial.terms) == 1
+        and not any(generator.polynomial.terms[0].exponents)
+        and generator.polynomial.terms[0].coefficient.num != 0
+        for generator in ideal.generators
+    )
+
+
 def _require_homogeneous(ideal: RationalPolynomialIdeal) -> None:
     try:
         _admit_source(ideal, label="graded ideal")
@@ -51,6 +60,8 @@ def _require_homogeneous(ideal: RationalPolynomialIdeal) -> None:
         raise OperationResourceAdmissionError(
             location=("ideal",), code="graded_ideal.input_budget", message=str(error)
         ) from error
+    if _is_explicit_unit_ideal(ideal):
+        return
     for generator in ideal.generators:
         degrees = {sum(term.exponents) for term in generator.polynomial.terms}
         if len(degrees) > 1:
@@ -76,6 +87,20 @@ def _unit_monomial(
     )
 
 
+def _unit_initial_ideal(
+    ideal: RationalPolynomialIdeal,
+    monomial_order: Literal["lex", "grlex", "grevlex"],
+) -> InitialMonomialIdealResult:
+    unit = _unit_monomial(ideal.variables, (0,) * len(ideal.variables))
+    unit_ideal = RationalPolynomialIdeal(variables=ideal.variables, generators=(unit,))
+    return InitialMonomialIdealResult(
+        ideal=ideal,
+        groebner_basis=unit_ideal,
+        initial_ideal=unit_ideal,
+        monomial_order=monomial_order,
+    )
+
+
 def initial_monomial_ideal(
     ideal: RationalPolynomialIdeal,
     monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex",
@@ -85,6 +110,8 @@ def initial_monomial_ideal(
     """Project the existing exact Gröbner result to its initial monomial ideal."""
 
     _require_homogeneous(ideal)
+    if _is_explicit_unit_ideal(ideal):
+        return _unit_initial_ideal(ideal, monomial_order)
     basis_result = groebner_basis(
         ideal, monomial_order, resource_budget=resource_budget
     )
@@ -477,10 +504,14 @@ def hilbert_polynomial(
 ) -> HilbertPolynomialResult:
     data = _series_projection(ideal, monomial_order, resource_budget=resource_budget)
     dimension = data.denominator_exponent
-    stabilization = max(
+    h_degree = max(
         (term.exponents[0] for term in data.h_numerator.polynomial.terms),
         default=-1,
-    ) + (1 if data.denominator_exponent == 0 else 0)
+    )
+    if dimension == 0:
+        stabilization = max(0, h_degree + 1)
+    else:
+        stabilization = max(0, h_degree - dimension + 1)
 
     from sympy import QQ, Poly, Symbol, binomial, expand_func
 

@@ -392,3 +392,70 @@ def test_hilbert_polynomial_binds_source_ring_and_m_axis() -> None:
     forged["polynomial"]["variables"] = ["t"]
     with pytest.raises(ValidationError, match="m axis"):
         HilbertPolynomialResult.model_validate(forged)
+
+
+def test_explicit_unit_generator_short_circuits_before_homogeneity() -> None:
+    variables = ("x",)
+    unit = RationalPolynomial(
+        variables=variables,
+        polynomial=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=1, den=1),
+                    exponents=(0,),
+                ),
+            )
+        ),
+    )
+    redundant = RationalPolynomial(
+        variables=variables,
+        polynomial=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=1, den=1),
+                    exponents=(1,),
+                ),
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=1, den=1),
+                    exponents=(2,),
+                ),
+            )
+        ),
+    )
+    ideal = RationalPolynomialIdeal(variables=variables, generators=(unit, redundant))
+    initial = initial_monomial_ideal(ideal)
+    assert initial.initial_ideal.generators[0].polynomial.terms[0].exponents == (0,)
+    assert initial.groebner_basis.generators[0].polynomial.terms[0].exponents == (0,)
+
+
+def test_quadratic_hypersurface_stabilizes_from_degree_zero() -> None:
+    variables = ("x", "y", "z")
+    hypersurface = RationalPolynomialIdeal(
+        variables=variables,
+        generators=(
+            RationalPolynomial(
+                variables=variables,
+                polynomial=SparseRationalPolynomial(
+                    terms=(
+                        RationalPolynomialTerm(
+                            coefficient=CanonicalRational(num=1, den=1),
+                            exponents=(2, 0, 0),
+                        ),
+                    )
+                ),
+            ),
+        ),
+    )
+    polynomial = hilbert_polynomial(hypersurface)
+    assert polynomial.dimension == 2
+    assert polynomial.polynomial.polynomial.terms == (
+        RationalPolynomialTerm(
+            coefficient=CanonicalRational(num=2, den=1), exponents=(1,)
+        ),
+        RationalPolynomialTerm(
+            coefficient=CanonicalRational(num=1, den=1), exponents=(0,)
+        ),
+    )
+    assert polynomial.stabilization_degree == 0
+    prefix = hilbert_function(hypersurface, max_degree=3)
+    assert prefix.values == (1, 3, 5, 7)

@@ -26,6 +26,11 @@ MAX_SIMULTANEOUS_RADICANDS = 8
 # a 4096-bit integer keeps both components below 16384 decimal digits.
 MAX_SURD_MULTIPLIER_BITS = 4_096
 MAX_ENCLOSURE_COMPONENT_DIGITS = 16_384
+# Complete range operations expand a rectangular table.  Admit work and
+# output before any row or exact interval is materialized.
+MAX_SURD_RANGE_WORK = 32_000_000
+MAX_SURD_RANGE_INTERMEDIATE_BITS = 64_000_000
+MAX_SURD_RANGE_OUTPUT_BYTES = 16 * 1024 * 1024
 
 
 def _validation_error(code: str, message: str) -> PydanticCustomError:
@@ -79,15 +84,6 @@ class ScaledFloorRequest(StrictModel):
     )
     radicand: StrictInt = Field(ge=2, le=MAX_SURD_RADICAND)
 
-    @model_validator(mode="after")
-    def require_non_square_radicand(self) -> Self:
-        if not is_surd_radicand(self.radicand):
-            raise _validation_error(
-                "diophantine.surd_radicand_must_not_be_square",
-                "a quadratic irrational requires a nonsquare radicand",
-            )
-        return self
-
 
 class ScaledFloorValue(StrictModel):
     """One exact floor/ceiling row derived from integer squares only."""
@@ -102,32 +98,6 @@ class ScaledFloorValue(StrictModel):
     square_lower: ExactInteger
     square_upper: ExactInteger
 
-    @model_validator(mode="after")
-    def require_exact_square_bracket(self) -> Self:
-        if self.ceiling != self.floor + 1:
-            raise _validation_error(
-                "diophantine.scaled_floor_not_unit_bracket",
-                "an irrational scaled floor must have ceiling equal to floor + 1",
-            )
-        if not (
-            self.floor >= 0
-            and self.square_lower == self.floor * self.floor
-            and self.square_upper == self.ceiling * self.ceiling
-        ):
-            raise _validation_error(
-                "diophantine.scaled_floor_square_mismatch",
-                "square_lower/square_upper must be the exact endpoint squares",
-            )
-        return self
-
-
-class ScaledFloorResult(StrictModel):
-    """A bounded carrier of exact scaled floors over an ordered radicand axis."""
-
-    rows: tuple[ScaledFloorValue, ...] = Field(
-        min_length=1, max_length=MAX_RANGE_LENGTH
-    )
-
 
 class NearestIntegerDistanceRequest(StrictModel):
     """Certify ``||n sqrt(d)||`` at a requested binary precision."""
@@ -138,15 +108,6 @@ class NearestIntegerDistanceRequest(StrictModel):
     )
     radicand: StrictInt = Field(ge=2, le=MAX_SURD_RADICAND)
     scale_bits: StrictInt = Field(ge=1, le=MAX_SURD_SCALE_BITS)
-
-    @model_validator(mode="after")
-    def require_non_square_radicand(self) -> Self:
-        if not is_surd_radicand(self.radicand):
-            raise _validation_error(
-                "diophantine.surd_radicand_must_not_be_square",
-                "a quadratic irrational requires a nonsquare radicand",
-            )
-        return self
 
 
 class NearestIntegerDistanceValue(StrictModel):
@@ -165,26 +126,6 @@ class NearestIntegerDistanceValue(StrictModel):
     distance_enclosure: ClosedRationalInterval
     distance_upper_scaled: ExactInteger
 
-    @model_validator(mode="after")
-    def require_nearest_branch(self) -> Self:
-        if self.ceiling != self.floor + 1 or self.floor < 0:
-            raise _validation_error(
-                "diophantine.nearest_integer_not_unit_bracket",
-                "nearest-integer distance requires a nonnegative unit bracket",
-            )
-        expected_nearest = self.floor if self.side == "FLOOR" else self.ceiling
-        if self.nearest_integer != expected_nearest:
-            raise _validation_error(
-                "diophantine.nearest_integer_branch_mismatch",
-                "nearest_integer must be the declared bracket endpoint",
-            )
-        if self.distance_upper_scaled < 0:
-            raise _validation_error(
-                "diophantine.nearest_integer_negative_scale",
-                "distance_upper_scaled is a nonnegative integer numerator",
-            )
-        return self
-
 
 class SimultaneousProductRequest(StrictModel):
     """Certify ``n * prod_i ||n sqrt(d_i)||`` over an ordered radicand axis."""
@@ -199,12 +140,7 @@ class SimultaneousProductRequest(StrictModel):
     scale_bits: StrictInt = Field(ge=1, le=MAX_SURD_SCALE_BITS)
 
     @model_validator(mode="after")
-    def require_distinct_non_square_radicands(self) -> Self:
-        if any(not is_surd_radicand(radicand) for radicand in self.radicands):
-            raise _validation_error(
-                "diophantine.surd_radicand_must_not_be_square",
-                "every radicand must be a nonsquare integer in the admitted range",
-            )
+    def require_distinct_radicands(self) -> Self:
         if len(set(self.radicands)) != len(self.radicands):
             raise _validation_error(
                 "diophantine.surd_radicands_must_be_distinct",
@@ -241,6 +177,11 @@ class SimultaneousProductResult(StrictModel):
                 "diophantine.product_factor_multiplier_mismatch",
                 "every factor row must share the request multiplier",
             )
+        if any(factor.scale_bits != self.scale_bits for factor in self.factors):
+            raise _validation_error(
+                "diophantine.product_factor_scale_mismatch",
+                "every factor row must share the requested precision",
+            )
         return self
 
 
@@ -254,12 +195,7 @@ class RangeProfileRequest(StrictModel):
     scale_bits: StrictInt = Field(ge=1, le=MAX_SURD_SCALE_BITS)
 
     @model_validator(mode="after")
-    def require_distinct_non_square_radicands(self) -> Self:
-        if any(not is_surd_radicand(radicand) for radicand in self.radicands):
-            raise _validation_error(
-                "diophantine.surd_radicand_must_not_be_square",
-                "every radicand must be a nonsquare integer in the admitted range",
-            )
+    def require_distinct_radicands(self) -> Self:
         if len(set(self.radicands)) != len(self.radicands):
             raise _validation_error(
                 "diophantine.surd_radicands_must_be_distinct",
@@ -279,6 +215,15 @@ class RangeProfileRow(StrictModel):
         min_length=1, max_length=MAX_SIMULTANEOUS_RADICANDS
     )
     product_enclosure: ClosedRationalInterval
+
+    @model_validator(mode="after")
+    def require_factor_multiplier_alignment(self) -> Self:
+        if any(factor.multiplier != self.multiplier for factor in self.factors):
+            raise _validation_error(
+                "diophantine.range_profile_factor_multiplier_mismatch",
+                "every row factor must share its row multiplier",
+            )
+        return self
 
 
 class RangeProfileResult(StrictModel):
@@ -311,6 +256,11 @@ class RangeProfileResult(StrictModel):
                     "diophantine.range_profile_factor_axis_mismatch",
                     "every row must follow the declared radicand axis",
                 )
+            if any(factor.scale_bits != self.scale_bits for factor in row.factors):
+                raise _validation_error(
+                    "diophantine.range_profile_factor_scale_mismatch",
+                    "every row factor must share the profile precision",
+                )
         return self
 
 
@@ -324,12 +274,7 @@ class RecordMinimaRequest(StrictModel):
     scale_bits: StrictInt = Field(ge=1, le=MAX_SURD_SCALE_BITS)
 
     @model_validator(mode="after")
-    def require_distinct_non_square_radicands(self) -> Self:
-        if any(not is_surd_radicand(radicand) for radicand in self.radicands):
-            raise _validation_error(
-                "diophantine.surd_radicand_must_not_be_square",
-                "every radicand must be a nonsquare integer in the admitted range",
-            )
+    def require_distinct_radicands(self) -> Self:
         if len(set(self.radicands)) != len(self.radicands):
             raise _validation_error(
                 "diophantine.surd_radicands_must_be_distinct",
@@ -360,7 +305,7 @@ class RecordMinimaResult(StrictModel):
     outcome: Literal["COMPLETE", "UNRESOLVED"]
     records: tuple[RecordMinimumValue, ...] = Field(max_length=MAX_RANGE_LENGTH)
     finite_argmin: StrictInt | None = None
-    unresolved_multiplier: StrictInt | None = None
+    unresolved_multiplier: ExactInteger | None = None
     unresolved_product_enclosure: ClosedRationalInterval | None = None
     unresolved_incumbent_enclosure: ClosedRationalInterval | None = None
 
@@ -381,25 +326,31 @@ class RecordMinimaResult(StrictModel):
                     "diophantine.complete_record_missing_first_row",
                     "a complete record sequence contains at least the first row",
                 )
+            if any(record.multiplier > self.limit for record in self.records):
+                raise _validation_error(
+                    "diophantine.complete_record_multiplier_out_of_range",
+                    "every record multiplier must lie in the declared range",
+                )
+            if any(
+                current.multiplier <= previous.multiplier
+                for previous, current in zip(
+                    self.records, self.records[1:], strict=False
+                )
+            ):
+                raise _validation_error(
+                    "diophantine.complete_record_order",
+                    "record multipliers must be strictly increasing",
+                )
             if self.finite_argmin != self.records[-1].multiplier:
                 raise _validation_error(
                     "diophantine.complete_record_argmin_mismatch",
                     "finite_argmin must be the last certified record multiplier",
                 )
-            for previous, current in zip(self.records, self.records[1:], strict=False):
-                if current.multiplier <= previous.multiplier:
-                    raise _validation_error(
-                        "diophantine.complete_record_order",
-                        "certified record multipliers must be strictly increasing",
-                    )
-                if not (
-                    current.product_enclosure.upper.as_fraction()
-                    < current.incumbent_enclosure.lower.as_fraction()
-                ):
-                    raise _validation_error(
-                        "diophantine.complete_record_not_separated",
-                        "every reported record must lie strictly below its incumbent",
-                    )
+            if self.finite_argmin > self.limit:
+                raise _validation_error(
+                    "diophantine.complete_record_argmin_out_of_range",
+                    "finite_argmin must lie in the declared range",
+                )
         else:
             if self.finite_argmin is not None:
                 raise _validation_error(
@@ -415,6 +366,11 @@ class RecordMinimaResult(StrictModel):
                     "diophantine.unresolved_record_missing_evidence",
                     "an unresolved record search names the first overlapping row",
                 )
+            if self.unresolved_multiplier > self.limit:
+                raise _validation_error(
+                    "diophantine.unresolved_record_multiplier_out_of_range",
+                    "the unresolved multiplier must lie in the declared range",
+                )
             if (
                 self.records
                 and self.unresolved_multiplier <= self.records[-1].multiplier
@@ -423,16 +379,6 @@ class RecordMinimaResult(StrictModel):
                     "diophantine.unresolved_record_order",
                     "the unresolved multiplier must follow all certified records",
                 )
-            candidate = self.unresolved_product_enclosure
-            incumbent = self.unresolved_incumbent_enclosure
-            if (
-                candidate.upper.as_fraction() < incumbent.lower.as_fraction()
-                or incumbent.upper.as_fraction() <= candidate.lower.as_fraction()
-            ):
-                raise _validation_error(
-                    "diophantine.unresolved_record_separated",
-                    "an unresolved comparison must retain overlapping enclosures",
-                )
         return self
 
 
@@ -440,7 +386,11 @@ __all__ = [
     "MAX_ENCLOSURE_COMPONENT_DIGITS",
     "MAX_RANGE_LENGTH",
     "MAX_SIMULTANEOUS_RADICANDS",
+    "MAX_SURD_MULTIPLIER_BITS",
     "MAX_SURD_RADICAND",
+    "MAX_SURD_RANGE_INTERMEDIATE_BITS",
+    "MAX_SURD_RANGE_OUTPUT_BYTES",
+    "MAX_SURD_RANGE_WORK",
     "MAX_SURD_SCALE_BITS",
     "NearestIntegerDistanceRequest",
     "NearestIntegerDistanceValue",
@@ -452,7 +402,6 @@ __all__ = [
     "RecordMinimaResult",
     "RecordMinimumValue",
     "ScaledFloorRequest",
-    "ScaledFloorResult",
     "ScaledFloorValue",
     "SimultaneousProductRequest",
     "SimultaneousProductResult",

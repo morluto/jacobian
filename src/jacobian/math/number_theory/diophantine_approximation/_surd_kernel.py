@@ -20,6 +20,10 @@ from jacobian.catalog.models import (
 from jacobian.math.analysis.intervals import ClosedRationalInterval
 from jacobian.math.number_theory.diophantine_approximation._surd_models import (
     MAX_SURD_MULTIPLIER_BITS,
+    MAX_SURD_RADICAND,
+    MAX_SURD_RANGE_INTERMEDIATE_BITS,
+    MAX_SURD_RANGE_OUTPUT_BYTES,
+    MAX_SURD_RANGE_WORK,
     MAX_SURD_SCALE_BITS,
     NearestIntegerDistanceRequest,
     NearestIntegerDistanceValue,
@@ -30,11 +34,11 @@ from jacobian.math.number_theory.diophantine_approximation._surd_models import (
     RecordMinimaResult,
     RecordMinimumValue,
     ScaledFloorRequest,
-    ScaledFloorResult,
     ScaledFloorValue,
     SimultaneousProductRequest,
     SimultaneousProductResult,
     bound_enclosure,
+    is_surd_radicand,
 )
 
 __all__ = [
@@ -59,6 +63,20 @@ def _require_request_multiplier(multiplier: int) -> None:
             code="diophantine.multiplier_out_of_range",
             message="multiplier must be at least 1",
         )
+
+
+def _require_surd_radicand(radicand: int, *, location: tuple[str, ...]) -> None:
+    if not (2 <= radicand <= MAX_SURD_RADICAND) or not is_surd_radicand(radicand):
+        raise OperationDomainValidationError(
+            location=location,
+            code="diophantine.surd_radicand_must_not_be_square",
+            message="a quadratic irrational requires a nonsquare radicand",
+        )
+
+
+def _require_surd_axis(radicands: tuple[int, ...]) -> None:
+    for index, radicand in enumerate(radicands):
+        _require_surd_radicand(radicand, location=("radicands", str(index)))
 
 
 def _require_scale_bits(scale_bits: int) -> None:
@@ -193,13 +211,48 @@ def _product_enclosure(
     return bound_enclosure(_interval(lower, upper), label="simultaneous product")
 
 
-def scaled_floor(request: ScaledFloorRequest) -> ScaledFloorResult:
-    """Return exact ``floor``/``ceiling`` rows derived from integer squares."""
+def _range_admission(request: RangeProfileRequest) -> None:
+    """Admit complete range expansion before allocating any result rows."""
+
+    _require_request_multiplier(request.limit)
+    radicand_count = len(request.radicands)
+    multiplier_bits = request.limit.bit_length()
+    radicand_bits = MAX_SURD_RADICAND.bit_length()
+    scalar_bits = max(
+        radicand_bits + 2 * multiplier_bits + request.scale_bits + 2,
+        request.scale_bits + 2,
+    )
+    product_bits = multiplier_bits + radicand_count * (request.scale_bits + 2)
+    work = request.limit * radicand_count * (request.scale_bits + scalar_bits)
+    intermediate_bits = request.limit * radicand_count * scalar_bits
+    row_bytes = radicand_count * (12 * scalar_bits + 512) + 4 * product_bits + 1_024
+    output_bytes = request.limit * row_bytes + radicand_count * 32 + 256
+    if work > MAX_SURD_RANGE_WORK:
+        raise OperationResourceAdmissionError(
+            location=("limit", "scale_bits"),
+            code="diophantine.range_profile_work_bound",
+            message="range expansion exceeds the admitted exact-work bound",
+        )
+    if intermediate_bits > MAX_SURD_RANGE_INTERMEDIATE_BITS:
+        raise OperationResourceAdmissionError(
+            location=("limit", "scale_bits"),
+            code="diophantine.range_profile_intermediate_bound",
+            message="range expansion exceeds the admitted intermediate-size bound",
+        )
+    if output_bytes > MAX_SURD_RANGE_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("limit", "scale_bits"),
+            code="diophantine.range_profile_output_bound",
+            message="the complete serialized range exceeds the admitted output bound",
+        )
+
+
+def scaled_floor(request: ScaledFloorRequest) -> ScaledFloorValue:
+    """Return one exact ``floor``/``ceiling`` value derived from integer squares."""
 
     _require_request_multiplier(request.multiplier)
-    return ScaledFloorResult(
-        rows=(_scaled_floor_row(request.multiplier, request.radicand),)
-    )
+    _require_surd_radicand(request.radicand, location=("radicand",))
+    return _scaled_floor_row(request.multiplier, request.radicand)
 
 
 def nearest_integer_distance(
@@ -209,6 +262,7 @@ def nearest_integer_distance(
 
     _require_request_multiplier(request.multiplier)
     _require_scale_bits(request.scale_bits)
+    _require_surd_radicand(request.radicand, location=("radicand",))
     return _distance_value(request.multiplier, request.radicand, request.scale_bits)
 
 
@@ -219,6 +273,7 @@ def simultaneous_product(
 
     _require_request_multiplier(request.multiplier)
     _require_scale_bits(request.scale_bits)
+    _require_surd_axis(request.radicands)
     factors = tuple(
         _distance_value(request.multiplier, radicand, request.scale_bits)
         for radicand in request.radicands
@@ -232,10 +287,7 @@ def simultaneous_product(
     )
 
 
-def range_profile(request: RangeProfileRequest) -> RangeProfileResult:
-    """Return a complete certified row for every ``1 <= n <= limit``."""
-
-    _require_scale_bits(request.scale_bits)
+def _compute_range_profile(request: RangeProfileRequest) -> RangeProfileResult:
     rows = []
     for multiplier in range(1, request.limit + 1):
         try:
@@ -273,6 +325,15 @@ def range_profile(request: RangeProfileRequest) -> RangeProfileResult:
     )
 
 
+def range_profile(request: RangeProfileRequest) -> RangeProfileResult:
+    """Return a complete certified row for every ``1 <= n <= limit``."""
+
+    _require_scale_bits(request.scale_bits)
+    _require_surd_axis(request.radicands)
+    _range_admission(request)
+    return _compute_range_profile(request)
+
+
 def record_minima(request: RecordMinimaRequest) -> RecordMinimaResult:
     """Extract strict record minima, or report the first unseparated comparison.
 
@@ -282,7 +343,15 @@ def record_minima(request: RecordMinimaRequest) -> RecordMinimaResult:
     reports ``UNRESOLVED`` with both enclosures instead of guessing an order.
     """
 
-    profile = range_profile(
+    _require_scale_bits(request.scale_bits)
+    _require_surd_axis(request.radicands)
+    profile_request = RangeProfileRequest(
+        radicands=request.radicands,
+        limit=request.limit,
+        scale_bits=request.scale_bits,
+    )
+    _range_admission(profile_request)
+    profile = _compute_range_profile(
         RangeProfileRequest(
             radicands=request.radicands,
             limit=request.limit,

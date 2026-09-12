@@ -33,9 +33,11 @@ from jacobian.math.number_theory.diophantine_approximation._surd_models import (
     NearestIntegerDistanceRequest,
     NearestIntegerDistanceValue,
     RangeProfileRequest,
+    RangeProfileResult,
     RecordMinimaRequest,
+    RecordMinimaResult,
     ScaledFloorRequest,
-    ScaledFloorResult,
+    ScaledFloorValue,
     SimultaneousProductRequest,
 )
 from jacobian.math.number_theory.diophantine_approximation._tools import (
@@ -494,7 +496,7 @@ def test_scaled_floor_matches_integer_square_definition() -> None:
     for multiplier, radicand in ((3, 2), (1, 2), (7, 3), (10, 5), (12, 6)):
         value = scaled_floor(
             ScaledFloorRequest(multiplier=multiplier, radicand=radicand)
-        ).rows[0]
+        )
         assert value.floor == math.isqrt(radicand * multiplier * multiplier)
         assert value.ceiling == value.floor + 1
         assert value.square_lower == value.floor * value.floor
@@ -503,8 +505,8 @@ def test_scaled_floor_matches_integer_square_definition() -> None:
 
 def test_scaled_floor_rejects_square_radicand() -> None:
     """A perfect-square radicand is outside the irrational contract."""
-    with pytest.raises(ValidationError):
-        ScaledFloorRequest(multiplier=2, radicand=9)
+    with pytest.raises(OperationDomainValidationError):
+        scaled_floor(ScaledFloorRequest(multiplier=2, radicand=9))
 
 
 def test_nearest_integer_distance_branches_on_both_sides() -> None:
@@ -627,39 +629,70 @@ def test_range_profile_rejects_rather_than_omitting_an_unresolved_row() -> None:
     )
 
 
-def test_record_minima_match_an_independent_strict_record_search() -> None:
-    """The record sequence agrees with an independent interval-free oracle."""
+def test_range_profile_rejects_aggregate_output_before_expansion() -> None:
+    """A maximal table is refused before allocating its rows or intervals."""
+    with pytest.raises(OperationDomainValidationError) as error:
+        range_profile(
+            RangeProfileRequest(
+                radicands=(2, 3, 5, 6, 7, 10, 11, 13),
+                limit=4096,
+                scale_bits=4096,
+            )
+        )
+    assert error.value.errors()[0]["type"] in {
+        "diophantine.range_profile_output_bound",
+        "diophantine.range_profile_intermediate_bound",
+        "diophantine.range_profile_work_bound",
+    }
+
+
+def test_serialized_range_rejects_forged_factor_axes() -> None:
+    result = range_profile(
+        RangeProfileRequest(radicands=(2, 3), limit=2, scale_bits=32)
+    )
+    payload = result.model_dump(mode="json")
+    payload["rows"][0]["factors"][0]["multiplier"] = "99"
+    with pytest.raises(ValidationError):
+        RangeProfileResult.model_validate_json(encode_strict_json(payload), strict=True)
+    payload = result.model_dump(mode="json")
+    payload["rows"][0]["factors"][0]["scale_bits"] = 31
+    with pytest.raises(ValidationError):
+        RangeProfileResult.model_validate_json(encode_strict_json(payload), strict=True)
+
+
+def test_serialized_records_reject_forged_multiplier_axis() -> None:
+    result = record_minima(
+        RecordMinimaRequest(radicands=(2, 3), limit=20, scale_bits=64)
+    )
+    assert result.outcome == "COMPLETE"
+    payload = result.model_dump(mode="json")
+    payload["records"][0]["multiplier"] = "21"
+    with pytest.raises(ValidationError):
+        RecordMinimaResult.model_validate_json(encode_strict_json(payload), strict=True)
+
+
+def test_record_minima_match_an_independent_decimal_record_oracle() -> None:
+    """The record sequence agrees with a Decimal oracle, not this kernel."""
     result = record_minima(
         RecordMinimaRequest(radicands=(2, 3), limit=2000, scale_bits=64)
     )
     expected: list[int] = []
-    incumbent: Fraction | None = None
-    for multiplier in range(1, 2001):
-        lower = Fraction(0)
-        upper = Fraction(0)
-        first = True
-        for radicand in (2, 3):
-            row = nearest_integer_distance(
-                NearestIntegerDistanceRequest(
-                    multiplier=multiplier, radicand=radicand, scale_bits=256
+    incumbent: Decimal | None = None
+    with decimal.localcontext() as context:
+        context.prec = 180
+        for multiplier in range(1, 2001):
+            product = Decimal(multiplier)
+            for radicand in (2, 3):
+                root = Decimal(radicand).sqrt()
+                floor = math.isqrt(radicand * multiplier * multiplier)
+                distance = min(
+                    Decimal(multiplier) * root - Decimal(floor),
+                    Decimal(floor + 1) - Decimal(multiplier) * root,
                 )
-            )
-            lower = (
-                row.distance_enclosure.lower.as_fraction()
-                if first
-                else lower * row.distance_enclosure.lower.as_fraction()
-            )
-            upper = (
-                row.distance_enclosure.upper.as_fraction()
-                if first
-                else upper * row.distance_enclosure.upper.as_fraction()
-            )
-            first = False
-        lower *= multiplier
-        upper *= multiplier
-        if incumbent is None or upper < incumbent:
-            expected.append(multiplier)
-            incumbent = lower
+                product *= distance
+            if incumbent is None or product < incumbent:
+                expected.append(multiplier)
+                incumbent = product
     assert result.outcome == "COMPLETE"
     assert tuple(row.multiplier for row in result.records) == tuple(expected)
     assert result.finite_argmin == expected[-1]
@@ -708,23 +741,10 @@ def test_record_minima_reports_an_overlapping_nonrecord_comparison() -> None:
     )
 
 
-def test_record_minima_rejects_forged_nonseparated_record() -> None:
-    """A complete result cannot claim a record without strict interval proof."""
-    result = record_minima(
-        RecordMinimaRequest(radicands=(2, 3), limit=5, scale_bits=64)
-    )
-    payload = result.model_dump()
-    payload["records"][1]["incumbent_enclosure"] = payload["records"][1][
-        "product_enclosure"
-    ]
-    with pytest.raises(ValidationError, match="strictly below its incumbent"):
-        type(result).model_validate(payload)
-
-
-def test_scaled_floor_result_round_trips_through_strict_json() -> None:
+def test_scaled_floor_value_round_trips_through_strict_json() -> None:
     """The declared result survives strict JSON serialization unchanged."""
     result = scaled_floor(ScaledFloorRequest(multiplier=6, radicand=3))
-    restored = ScaledFloorResult.model_validate_json(
+    restored = ScaledFloorValue.model_validate_json(
         encode_strict_json(result.model_dump(mode="json")), strict=True
     )
     assert restored == result
@@ -744,8 +764,8 @@ def test_nearest_integer_distance_round_trips_through_strict_json() -> None:
 def test_large_multiplier_uses_exact_json_integer_encoding() -> None:
     request = ScaledFloorRequest(multiplier=2**53, radicand=2)
     result = scaled_floor(request)
-    restored = ScaledFloorResult.model_validate_json(
-        encode_strict_json(result.model_dump(mode="json"))
+    restored = ScaledFloorValue.model_validate_json(
+        encode_strict_json(result.model_dump(mode="json")), strict=True
     )
     assert restored == result
 

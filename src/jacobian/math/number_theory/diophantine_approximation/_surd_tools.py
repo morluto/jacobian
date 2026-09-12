@@ -12,7 +12,7 @@ from jacobian.math.number_theory.diophantine_approximation._surd_models import (
     RecordMinimaRequest,
     RecordMinimaResult,
     ScaledFloorRequest,
-    ScaledFloorResult,
+    ScaledFloorValue,
     SimultaneousProductRequest,
     SimultaneousProductResult,
 )
@@ -27,13 +27,15 @@ SURD_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
             "with the exact endpoint squares that replay the bracket."
         ),
         request_type=ScaledFloorRequest,
-        result_type=ScaledFloorResult,
+        result_type=ScaledFloorValue,
         run=native.scaled_floor,
         tags=("number-theory", "quadratic-surd", "floor", "exact"),
         examples=(
             OperationExample(
                 name="three_sqrt_two",
-                description="floor(3*sqrt(2)) = 4 and ceiling 5.",
+                description=(
+                    "For the nonsquare radicand 2, floor(3*sqrt(2)) = 4 and ceiling 5."
+                ),
                 input={"multiplier": "3", "radicand": 2},
             ),
         ),
@@ -55,7 +57,10 @@ SURD_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             OperationExample(
                 name="sqrt_two_distance",
-                description="||sqrt(2)|| is enclosed near 0.414 at 32-bit precision.",
+                description=(
+                    "For nonsquare radicand 2, ||sqrt(2)|| is enclosed near "
+                    "0.414 at 32-bit precision."
+                ),
                 input={"multiplier": "1", "radicand": 2, "scale_bits": 32},
             ),
         ),
@@ -75,7 +80,9 @@ SURD_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             OperationExample(
                 name="sqrt_two_sqrt_three",
-                description="Product factor for sqrt(2) and sqrt(3) at n = 1.",
+                description=(
+                    "Product factor for distinct nonsquare radicands 2 and 3 at n = 1."
+                ),
                 input={"multiplier": "1", "radicands": [2, 3], "scale_bits": 32},
             ),
         ),
@@ -96,7 +103,10 @@ SURD_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             OperationExample(
                 name="sqrt_two_sqrt_three_to_ten",
-                description="Complete certified range for sqrt(2), sqrt(3) up to 10.",
+                description=(
+                    "Complete certified range for distinct nonsquare radicands "
+                    "2 and 3 up to 10."
+                ),
                 input={"radicands": [2, 3], "limit": 10, "scale_bits": 32},
             ),
         ),
@@ -117,7 +127,10 @@ SURD_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             OperationExample(
                 name="records_sqrt_two_sqrt_three",
-                description="Strict records of n*||n*sqrt(2)||*||n*sqrt(3)|| for n <= 50.",
+                description=(
+                    "Strict records for distinct nonsquare radicands 2 and 3 "
+                    "with n <= 50."
+                ),
                 input={"radicands": [2, 3], "limit": 50, "scale_bits": 64},
             ),
         ),

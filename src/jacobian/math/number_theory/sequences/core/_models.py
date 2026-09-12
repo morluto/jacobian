@@ -290,6 +290,10 @@ def _finite_sequence_json_schema(
     return schema
 
 
-FiniteSequence.__get_pydantic_core_schema__ = classmethod(_finite_sequence_core_schema)
-FiniteSequence.__get_pydantic_json_schema__ = classmethod(_finite_sequence_json_schema)
+FiniteSequence.__get_pydantic_core_schema__ = classmethod(  # type: ignore[method-assign,assignment]
+    _finite_sequence_core_schema
+)
+FiniteSequence.__get_pydantic_json_schema__ = classmethod(  # type: ignore[method-assign,assignment]
+    _finite_sequence_json_schema
+)
 FiniteSequence.model_rebuild(force=True)

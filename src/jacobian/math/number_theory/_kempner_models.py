@@ -96,10 +96,12 @@ class KempnerContainsProgression(StrictModel):
 
     status: Literal["CONTAINS_PROGRESSION"] = "CONTAINS_PROGRESSION"
     indices: tuple[KempnerSmallInteger, ...] = Field(
-        min_length=MIN_KEMPNER_ARITY, max_length=MAX_KEMPNER_ARITY
+        min_length=MIN_KEMPNER_ARITY,
+        max_length=MAX_KEMPNER_ARITY,
     )
     values: tuple[KempnerInteger, ...] = Field(
-        min_length=MIN_KEMPNER_ARITY, max_length=MAX_KEMPNER_ARITY
+        min_length=MIN_KEMPNER_ARITY,
+        max_length=MAX_KEMPNER_ARITY,
     )
     first_term: KempnerInteger
     common_difference: KempnerInteger

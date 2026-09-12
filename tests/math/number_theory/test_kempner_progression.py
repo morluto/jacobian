@@ -194,7 +194,12 @@ def test_result_schema_discriminates_status_branches() -> None:
         )
 
 
-def test_witness_arrays_are_capped_before_relation_validation() -> None:
+def test_witness_arrays_are_capped_at_max_arity() -> None:
+    schema = KempnerContainsProgression.model_json_schema()
+    assert schema["properties"]["indices"]["maxItems"] == MAX_KEMPNER_ARITY
+    assert schema["properties"]["values"]["maxItems"] == MAX_KEMPNER_ARITY
+    assert schema["properties"]["indices"]["minItems"] == MIN_KEMPNER_ARITY
+    assert schema["properties"]["values"]["minItems"] == MIN_KEMPNER_ARITY
     too_long = MAX_KEMPNER_ARITY + 1
     with pytest.raises(ValidationError) as error:
         KempnerContainsProgression.model_validate(

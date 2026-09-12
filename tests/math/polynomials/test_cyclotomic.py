@@ -62,6 +62,11 @@ def test_native_api_exports_typed_cyclotomic_operation() -> None:
     assert polynomial.coefficients == (1, 1, 1)
 
 
+def test_package_export_accepts_the_index_without_a_wire_request() -> None:
+    polynomial = polynomials.cyclotomic(12)
+    assert polynomial.coefficients == (1, 0, -1, 0, 1)
+
+
 def test_direct_native_boundary_rejects_untyped_payload() -> None:
     with pytest.raises(OperationDomainValidationError, match="integer index"):
         cyclotomic({"index": 3})  # type: ignore[arg-type]
@@ -128,6 +133,21 @@ def test_serialized_result_preserves_the_canonical_integer_polynomial() -> None:
     decoded = CyclotomicResult.model_validate_json(result.model_dump_json())
     assert decoded == result
     assert decoded.polynomial.coefficients == (1, 0, -1, 0, 1)
+
+
+def test_factorization_work_is_admitted_before_backend_factorint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.polynomials import _cyclotomic as module
+
+    monkeypatch.setattr(module, "MAX_CYCLOTOMIC_FACTOR_WORK", 1)
+
+    def fail_factorint(index: int) -> dict[int, int]:
+        raise AssertionError("factorint must not run before factorization admission")
+
+    monkeypatch.setattr(module.sympy, "factorint", fail_factorint)
+    with pytest.raises(OperationResourceAdmissionError, match="factorization"):
+        cyclotomic(12)
 
 
 def test_expired_request_is_rejected_before_factorization() -> None:

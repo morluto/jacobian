@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from math import prod
 from typing import NoReturn
 
+import sympy
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
@@ -90,18 +91,38 @@ def _require_typed_request(request: object) -> CyclotomicRequest:
     return request
 
 
-def _admit(index: int, factorization: dict[int, int]) -> _CyclotomicAdmission:
-    """Preflight factorization, divisor, intermediate, and output envelopes."""
+def _factorization_work_bound(index: int, factorization: dict[int, int] | None) -> int:
+    """Charge a source-side factorization envelope before any backend expansion.
 
-    factorization_work = max(1, index.bit_length()) * max(
+    A prime index realizes the worst-case metric ``bit_length(n) * n``. Using
+    that bound on the caller integer refuses over-budget work without running
+    ``factorint``. After factorization the same metric is recomputed on the
+    exact prime-power support.
+    """
+
+    if factorization is None:
+        return max(1, index.bit_length()) * index
+    return max(1, index.bit_length()) * max(
         1, sum(prime * exponent for prime, exponent in factorization.items())
     )
-    if factorization_work > MAX_CYCLOTOMIC_FACTOR_WORK:
+
+
+def _require_factorization_work(
+    index: int, factorization: dict[int, int] | None = None
+) -> None:
+    if _factorization_work_bound(index, factorization) > MAX_CYCLOTOMIC_FACTOR_WORK:
         raise OperationResourceAdmissionError(
             location=("index",),
             code="polynomial.cyclotomic.factorization_work_bound",
             message="cyclotomic index factorization exceeds the admitted work bound",
         )
+
+
+def _admit(index: int, factorization: dict[int, int]) -> _CyclotomicAdmission:
+    """Preflight factorization, divisor, intermediate, and output envelopes."""
+
+    _require_factorization_work(index, factorization)
+    factorization_work = _factorization_work_bound(index, factorization)
 
     divisor_count = prod(exponent + 1 for exponent in factorization.values())
     if divisor_count > MAX_CYCLOTOMIC_DIVISORS:
@@ -176,9 +197,7 @@ def _admit(index: int, factorization: dict[int, int]) -> _CyclotomicAdmission:
 
 def _factor_index(index: int) -> dict[int, int]:
     try:
-        from sympy import factorint
-
-        factors = factorint(index)
+        factors = sympy.factorint(index)
     except Exception as exc:
         _backend_error(BackendFailureReason.INITIALIZATION, exc)
     if not isinstance(factors, dict) or any(
@@ -191,15 +210,12 @@ def _factor_index(index: int) -> dict[int, int]:
 
 def _compute(index: int) -> tuple[int, IntegerPolynomial]:
     request_checkpoint("before cyclotomic admission")
+    _require_factorization_work(index)
     factorization = _factor_index(index)
     admission = _admit(index, factorization)
     request_checkpoint("after cyclotomic admission")
     try:
-        from sympy import Symbol, cyclotomic_poly
-    except Exception as exc:
-        _backend_error(BackendFailureReason.INITIALIZATION, exc)
-    try:
-        polynomial = cyclotomic_poly(index, Symbol("x"), polys=True)
+        polynomial = sympy.cyclotomic_poly(index, sympy.Symbol("x"), polys=True)
         raw_coefficients = tuple(polynomial.all_coeffs())
     except OperationBackendError:
         raise

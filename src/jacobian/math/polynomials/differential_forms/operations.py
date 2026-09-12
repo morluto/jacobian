@@ -11,7 +11,7 @@ from jacobian._exact import (
     MAX_CANONICAL_INTEGER_DIGITS,
     CanonicalRational,
 )
-from jacobian._execution import request_checkpoint
+from jacobian._execution import execution_deadline, request_checkpoint
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -34,6 +34,7 @@ from jacobian.math.polynomials.values import (
 _MergedPair = tuple[FormComponent, FormComponent, tuple[int, ...], int]
 _RemainingTerms = dict[tuple[int, ...], dict[tuple[int, ...], Fraction]]
 _CONVOLUTION_CHECKPOINT_INTERVAL = 256
+WEDGE_WALL_SECONDS = 60.0
 
 
 def _integer_decimal_digits(value: int) -> int:
@@ -272,6 +273,7 @@ def wedge(
 ) -> PolynomialDifferentialForm:
     """Return the exact graded-commutative wedge product."""
 
+    execution_deadline(WEDGE_WALL_SECONDS)
     left = _admit_form(left, location=("left",))
     right = _admit_form(right, location=("right",))
     if left.variables != right.variables:

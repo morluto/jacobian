@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import time
 from fractions import Fraction
 
 import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS, CanonicalRational
+from jacobian._execution import current_request_execution, request_execution
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -437,3 +439,18 @@ def test_native_wedge_revalidates_forged_operands() -> None:
         wedge(forged, forged)
     with pytest.raises(OperationDomainValidationError):
         wedge(object(), _form(0))
+
+
+def test_wedge_binds_owner_deadline_before_expansion() -> None:
+    started = time.monotonic()
+    unit = _form(0, ((), _poly((1, (0, 0)))))
+    with request_execution(started):
+        assert current_request_execution() is not None
+        assert current_request_execution().deadline is None
+        product = wedge(unit, unit)
+        bound = current_request_execution().deadline
+        assert product.components[0].coefficient.polynomial.terms[0].coefficient == R(
+            num=1, den=1
+        )
+        assert bound is not None
+        assert bound == started + 60.0

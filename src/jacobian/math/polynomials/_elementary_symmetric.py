@@ -18,7 +18,10 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalRational
 from jacobian._execution import OperationWorkLedger, request_checkpoint
 from jacobian._models import StrictModel
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.polynomials.values import (
     MAX_POLYNOMIAL_TERMS,
     MAX_POLYNOMIAL_VARIABLES,
@@ -276,6 +279,7 @@ def _compute(
 def _elementary_symmetric_family_from_request(
     request: ElementarySymmetricFamilyRequest,
 ) -> ElementarySymmetricFamilyResult:
+    _validate_native_arguments(request.variables, request.maximum_degree)
     bounds = _bounds(request.variables, request.maximum_degree)
     return _compute(request.variables, request.maximum_degree, bounds)
 
@@ -284,23 +288,47 @@ def _validate_native_arguments(
     variables: tuple[PolynomialVariable, ...], maximum_degree: int
 ) -> None:
     if type(variables) is not tuple:
-        raise TypeError("variables must be a tuple of distinct variable labels")
-    if type(maximum_degree) is not int:
-        raise TypeError("maximum_degree must be an integer")
-    if len(variables) > MAX_POLYNOMIAL_VARIABLES:
-        raise ValueError(
-            f"variables cannot contain more than {MAX_POLYNOMIAL_VARIABLES} labels"
+        raise OperationDomainValidationError(
+            location=("variables",),
+            code="polynomial.symmetric.elementary.variables_type",
+            message="variables must be a tuple of distinct variable labels",
         )
-    for variable in variables:
+    if type(maximum_degree) is not int:
+        raise OperationDomainValidationError(
+            location=("maximum_degree",),
+            code="polynomial.symmetric.elementary.degree_type",
+            message="maximum_degree must be an integer",
+        )
+    if len(variables) > MAX_POLYNOMIAL_VARIABLES:
+        raise OperationDomainValidationError(
+            location=("variables",),
+            code="polynomial.symmetric.elementary.variable_count",
+            message=(
+                f"variables cannot contain more than {MAX_POLYNOMIAL_VARIABLES} labels"
+            ),
+        )
+    for index, variable in enumerate(variables):
         if (
             type(variable) is not str
             or fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,31}", variable) is None
         ):
-            raise ValueError("variables must use the canonical polynomial label syntax")
+            raise OperationDomainValidationError(
+                location=("variables", str(index)),
+                code="polynomial.symmetric.elementary.variable_syntax",
+                message="variables must use the canonical polynomial label syntax",
+            )
     if len(set(variables)) != len(variables):
-        raise ValueError("elementary symmetric variables must be unique")
+        raise OperationDomainValidationError(
+            location=("variables",),
+            code="polynomial.symmetric.elementary.duplicate_variables",
+            message="elementary symmetric variables must be unique",
+        )
     if not 0 <= maximum_degree <= len(variables):
-        raise ValueError("maximum_degree must be between 0 and the variable count")
+        raise OperationDomainValidationError(
+            location=("maximum_degree",),
+            code="polynomial.symmetric.elementary.degree_exceeds_axis",
+            message="maximum_degree must be between 0 and the variable count",
+        )
 
 
 def elementary_symmetric_family(

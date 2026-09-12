@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 from sympy import Poly, expand, prod, symbols
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
 from jacobian.math.polynomials._elementary_symmetric import (
     ElementarySymmetricFamilyRequest,
@@ -153,3 +154,23 @@ def test_result_rejects_forged_nonunit_e_zero_without_replaying_the_family() -> 
     forged["polynomials"][0]["polynomial"]["terms"][0]["coefficient"]["num"] = 2
     with pytest.raises(ValidationError, match="canonical constant one"):
         type(result).model_validate(forged)
+
+
+def test_native_entry_rejects_invalid_domain_values_with_typed_errors() -> None:
+    with pytest.raises(OperationDomainValidationError) as list_error:
+        elementary_symmetric_family(["x", "y"], 1)  # type: ignore[arg-type]
+    assert list_error.value.errors()[0]["type"] == (
+        "polynomial.symmetric.elementary.variables_type"
+    )
+    with pytest.raises(OperationDomainValidationError) as degree_error:
+        elementary_symmetric_family(("x", "y"), 1.0)  # type: ignore[arg-type]
+    assert degree_error.value.errors()[0]["type"] == (
+        "polynomial.symmetric.elementary.degree_type"
+    )
+    with pytest.raises(OperationDomainValidationError) as duplicate_error:
+        elementary_symmetric_family(("x", "x"), 1)
+    assert duplicate_error.value.errors()[0]["type"] == (
+        "polynomial.symmetric.elementary.duplicate_variables"
+    )
+    result = elementary_symmetric_family(("x", "y"), 1)
+    assert support(result.polynomials[1]) == ((1, 0), (0, 1))

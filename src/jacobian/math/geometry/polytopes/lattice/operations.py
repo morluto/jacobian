@@ -40,6 +40,7 @@ from typing import Literal
 
 from sympy import Matrix, Rational
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.polytopes import _rational_geometry
 from jacobian.math.geometry.polytopes._rational_geometry import (
@@ -48,15 +49,17 @@ from jacobian.math.geometry.polytopes._rational_geometry import (
 )
 from jacobian.math.geometry.polytopes.lattice._models import (
     MAX_BOUND_SPAN,
+    MAX_DIMENSION,
     MAX_FACET_TESTS,
     MAX_LATTICE_POINTS,
     CountLatticePointsResult,
+    EhrhartResult,
     EnumerateLatticePointsResult,
     LatticePoint,
 )
 from jacobian.math.geometry.polytopes.values import Halfspace, Vertex
 
-__all__ = ["count_lattice_points", "enumerate_lattice_points"]
+__all__ = ["count_lattice_points", "ehrhart_polynomial", "enumerate_lattice_points"]
 
 AdmittedGeometry = tuple[
     list[tuple[tuple[int, ...], int]],
@@ -468,4 +471,72 @@ def count_lattice_points(
         dimension=d,
         point_count=count,
         representation=representation,
+    )
+
+
+def ehrhart_polynomial(
+    vertices: tuple[Vertex, ...], degree_bound: int, max_dilation: int
+) -> EhrhartResult:
+    """Count integral dilates and recover their exact Ehrhart polynomial.
+
+    The zero dilate is handled directly as ``{0}``; positive dilates reuse the
+    bounded lattice-point scan.  Interpolation uses the first ``d+1`` values
+    and every requested extra value is replayed against the resulting
+    polynomial before a result is returned.
+    """
+    if type(degree_bound) is not int or type(max_dilation) is not int:
+        raise TypeError("Ehrhart degree and dilation bounds must be integers")
+    values: list[int] = [1]
+    for dilation in range(1, max_dilation + 1):
+        scaled = tuple(
+            Vertex(
+                coordinates=tuple(
+                    CanonicalRational.from_integer_ratio(
+                        coordinate.num * dilation, coordinate.den
+                    )
+                    for coordinate in vertex.coordinates
+                )
+            )
+            for vertex in vertices
+        )
+        values.append(count_lattice_points(scaled, None, MAX_DIMENSION).point_count)
+
+    degree = degree_bound
+    coefficients = [Fraction(0) for _ in range(degree + 1)]
+    for sample in range(degree + 1):
+        basis = [Fraction(1)]
+        denominator = 1
+        for other in range(degree + 1):
+            if other == sample:
+                continue
+            denominator *= sample - other
+            updated = [Fraction(0)] * (len(basis) + 1)
+            for power, coefficient in enumerate(basis):
+                updated[power] -= coefficient * other
+                updated[power + 1] += coefficient
+            basis = updated
+        for power, coefficient in enumerate(basis):
+            coefficients[power] += values[sample] * coefficient / denominator
+
+    def evaluate(dilation: int) -> int:
+        result = Fraction(0)
+        for coefficient in reversed(coefficients):
+            result = result * dilation + coefficient
+        if result.denominator != 1:
+            raise ValueError("interpolated Ehrhart value is not integral")
+        return result.numerator
+
+    if any(evaluate(dilation) != values[dilation] for dilation in range(len(values))):
+        raise OperationDomainValidationError(
+            location=("degree_bound",),
+            code="polytope.ehrhart.degree_insufficient",
+            message="degree_bound does not reproduce every requested dilation count",
+        )
+    return EhrhartResult(
+        dimension=len(vertices[0].coordinates),
+        degree_bound=degree,
+        counts=tuple((dilation, values[dilation]) for dilation in range(len(values))),
+        coefficients=tuple(
+            CanonicalRational.from_fraction(value) for value in coefficients
+        ),
     )

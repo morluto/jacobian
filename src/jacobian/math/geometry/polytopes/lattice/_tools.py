@@ -5,12 +5,17 @@ from typing import Any
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.geometry.polytopes.lattice._models import (
     CountLatticePointsResult,
+    EhrhartRequest,
+    EhrhartResult,
     EnumerateLatticePointsRequest,
     EnumerateLatticePointsResult,
     LatticePolytopeRequest,
 )
 from jacobian.math.geometry.polytopes.lattice.operations import (
     count_lattice_points as native_count_lattice_points,
+)
+from jacobian.math.geometry.polytopes.lattice.operations import (
+    ehrhart_polynomial as native_ehrhart_polynomial,
 )
 from jacobian.math.geometry.polytopes.lattice.operations import (
     enumerate_lattice_points as native_enumerate_lattice_points,
@@ -34,6 +39,13 @@ def count_lattice_points(request: LatticePolytopeRequest) -> CountLatticePointsR
         request.vertices,
         request.halfspaces,
         request.dimension_bound,
+    )
+
+
+def ehrhart_polynomial(request: EhrhartRequest) -> EhrhartResult:
+    """Recover exact Ehrhart coefficients from complete dilation counts."""
+    return native_ehrhart_polynomial(
+        request.vertices, request.degree_bound, request.max_dilation
     )
 
 
@@ -141,6 +153,33 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                             "offset": {"num": "0", "den": "1"},
                         },
                     ],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="polytope.ehrhart.compute",
+        title="Recover an Ehrhart polynomial from exact dilation counts",
+        description="Count lattice points in every integral V-polytope dilation from "
+        "0 through max_dilation and interpolate the exact rational Ehrhart "
+        "polynomial. Integral vertices are required because rational polytopes "
+        "have quasi-polynomial counts; every extra requested count is replayed "
+        "against the recovered polynomial.",
+        request_type=EhrhartRequest,
+        result_type=EhrhartResult,
+        run=ehrhart_polynomial,
+        tags=("polytope", "lattice", "ehrhart", "exact"),
+        examples=(
+            OperationExample(
+                name="unit_interval_ehrhart",
+                description="The integral interval [0,1] has Ehrhart polynomial 1+t.",
+                input={
+                    "vertices": [
+                        {"coordinates": [{"num": "0", "den": "1"}]},
+                        {"coordinates": [{"num": "1", "den": "1"}]},
+                    ],
+                    "degree_bound": 1,
+                    "max_dilation": 2,
                 },
             ),
         ),

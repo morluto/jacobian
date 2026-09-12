@@ -8,6 +8,7 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
+    CanonicalRational,
     ExactInteger,
     require_bounded_rational,
 )
@@ -67,6 +68,9 @@ Every accepted request's integer bounding box stays within this many
 integer candidates, so neither operation can ever observe more lattice
 points than this; the count result is constrained to the same maximum.
 """
+
+MAX_EHRHART_DILATIONS = 32
+"""Maximum number of dilation values retained by Ehrhart interpolation."""
 
 COORDINATE_DIGITS = 32_768
 """Per-component digit bound forwarded to the canonical rational validator."""
@@ -311,15 +315,92 @@ class EnumerateLatticePointsRequest(LatticePolytopeRequest):
     """Wire request for enumeration; execution admission happens in the operation."""
 
 
+class EhrhartRequest(StrictModel):
+    """Recover an Ehrhart polynomial for a bounded integral V-polytope."""
+
+    vertices: tuple[RationalVertex, ...] = Field(
+        min_length=1,
+        max_length=MAX_VERTICES,
+        description=(
+            "Integral vertices of a full-dimensional bounded V-polytope. "
+            "Integral vertices are required because rational polytopes have "
+            "quasi-polynomial Ehrhart counts."
+        ),
+    )
+    degree_bound: int = Field(ge=1, le=MAX_DIMENSION)
+    max_dilation: int = Field(default=MAX_DIMENSION, ge=1, le=MAX_EHRHART_DILATIONS)
+
+    @model_validator(mode="after")
+    def require_integral_vertices_and_range(self) -> Self:
+        dimensions = {len(vertex.coordinates) for vertex in self.vertices}
+        if len(dimensions) != 1:
+            raise _validation_error(
+                "ehrhart_vertex_dimension", "all vertices must share one dimension"
+            )
+        dimension = next(iter(dimensions))
+        if dimension > MAX_DIMENSION:
+            raise _validation_error(
+                "ehrhart_dimension_exceeded",
+                "Ehrhart dimension exceeds the supported bound",
+            )
+        if self.degree_bound < dimension:
+            raise _validation_error(
+                "ehrhart_degree_bound", "degree_bound must cover the polytope dimension"
+            )
+        if self.max_dilation < self.degree_bound:
+            raise _validation_error(
+                "ehrhart_dilation_range",
+                "max_dilation must provide degree_bound + 1 evaluations",
+            )
+        if any(
+            coordinate.den != 1
+            for vertex in self.vertices
+            for coordinate in vertex.coordinates
+        ):
+            raise _validation_error(
+                "ehrhart_requires_integral_vertices",
+                "Ehrhart polynomial recovery currently requires integral vertices",
+            )
+        return self
+
+
+class EhrhartResult(StrictModel):
+    """Counts and exact ascending-power coefficients of an Ehrhart polynomial."""
+
+    dimension: int = Field(ge=1, le=MAX_DIMENSION)
+    degree_bound: int = Field(ge=1, le=MAX_DIMENSION)
+    counts: tuple[tuple[int, ExactInteger], ...] = Field(
+        min_length=2, max_length=MAX_EHRHART_DILATIONS + 1
+    )
+    coefficients: tuple[CanonicalRational, ...] = Field(
+        min_length=2, max_length=MAX_DIMENSION + 1
+    )
+
+    @model_validator(mode="after")
+    def require_result_shapes(self) -> Self:
+        if len(self.coefficients) != self.degree_bound + 1:
+            raise _validation_error(
+                "ehrhart_coefficient_shape", "one coefficient is required per degree"
+            )
+        if any(t < 0 for t, _count in self.counts):
+            raise _validation_error(
+                "ehrhart_count_dilation", "dilation values must be nonnegative"
+            )
+        return self
+
+
 __all__ = [
     "MAX_BOUND_SPAN",
     "MAX_DIMENSION",
+    "MAX_EHRHART_DILATIONS",
     "MAX_FACET_TESTS",
     "MAX_HALFSPACES",
     "MAX_LATTICE_POINTS",
     "MAX_TOTAL_SCAN",
     "MAX_VERTICES",
     "CountLatticePointsResult",
+    "EhrhartRequest",
+    "EhrhartResult",
     "EnumerateLatticePointsRequest",
     "EnumerateLatticePointsResult",
     "LatticePoint",

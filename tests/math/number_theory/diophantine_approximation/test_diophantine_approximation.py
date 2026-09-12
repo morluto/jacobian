@@ -39,6 +39,7 @@ from jacobian.math.number_theory.diophantine_approximation._models import (
     PellEquationRequest,
 )
 from jacobian.math.number_theory.diophantine_approximation._surd_models import (
+    NearestIntegerDistanceRequest,
     NearestIntegerDistanceValue,
     RangeProfileRequest,
     RangeProfileResult,
@@ -514,6 +515,26 @@ def test_scaled_floor_rejects_square_radicand() -> None:
     """A perfect-square radicand is outside the irrational contract."""
     with pytest.raises(OperationDomainValidationError):
         scaled_floor(2, 9)
+
+
+def test_scaled_floor_deserialization_does_not_replay_endpoint_squares() -> None:
+    """Endpoint squares are authored claims; decoding must not recompute them."""
+    value = scaled_floor(3, 2)
+    restored = ScaledFloorValue.model_validate_json(value.model_dump_json())
+    assert restored == value
+    payload = value.model_dump(mode="json")
+    payload["square_lower"] = str(int(payload["square_lower"]) + 1)
+    authored = ScaledFloorValue.model_validate(payload)
+    assert authored.square_lower != authored.floor * authored.floor
+    assert authored.square_upper == value.square_upper
+
+
+def test_scalar_surd_requests_advertise_the_nonsquare_radicand_constraint() -> None:
+    """Schema-driven callers see the nonsquare constraint before execution."""
+    for model in (ScaledFloorRequest, NearestIntegerDistanceRequest):
+        description = model.model_fields["radicand"].description
+        assert description is not None
+        assert "nonsquare" in description.lower()
 
 
 def test_native_multiplier_domain_precedes_bit_admission() -> None:

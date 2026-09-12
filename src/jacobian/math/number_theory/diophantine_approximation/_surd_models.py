@@ -38,6 +38,10 @@ _SURD_AXIS_DESCRIPTION = (
     "Ordered tuple of distinct nonsquare integer radicands in the admitted "
     f"range 2..{MAX_SURD_RADICAND}."
 )
+_SURD_SCALAR_RADICAND_DESCRIPTION = (
+    "Nonsquare integer radicand in the admitted range "
+    f"2..{MAX_SURD_RADICAND}."
+)
 
 
 def _validation_error(code: str, message: str) -> PydanticCustomError:
@@ -89,7 +93,11 @@ class ScaledFloorRequest(StrictModel):
         ge=1,
         description="Positive exact multiplier; computation admits at most 4096 bits.",
     )
-    radicand: StrictInt = Field(ge=2, le=MAX_SURD_RADICAND)
+    radicand: StrictInt = Field(
+        ge=2,
+        le=MAX_SURD_RADICAND,
+        description=_SURD_SCALAR_RADICAND_DESCRIPTION,
+    )
 
 
 class ScaledFloorValue(StrictModel):
@@ -116,14 +124,6 @@ class ScaledFloorValue(StrictModel):
             raise _validation_error(
                 "diophantine.scaled_floor_bracket_shape",
                 "floor and ceiling must be consecutive nonnegative integers",
-            )
-        if (
-            self.square_lower != self.floor * self.floor
-            or self.square_upper != self.ceiling * self.ceiling
-        ):
-            raise _validation_error(
-                "diophantine.scaled_floor_square_shape",
-                "endpoint squares must match the retained floor and ceiling",
             )
         return self
 
@@ -157,7 +157,11 @@ class NearestIntegerDistanceRequest(StrictModel):
         ge=1,
         description="Positive exact multiplier; computation admits at most 4096 bits.",
     )
-    radicand: StrictInt = Field(ge=2, le=MAX_SURD_RADICAND)
+    radicand: StrictInt = Field(
+        ge=2,
+        le=MAX_SURD_RADICAND,
+        description=_SURD_SCALAR_RADICAND_DESCRIPTION,
+    )
     scale_bits: StrictInt = Field(ge=1, le=MAX_SURD_SCALE_BITS)
 
 

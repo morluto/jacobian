@@ -449,6 +449,22 @@ class TestMagmaImplicationCountermodel:
         with pytest.raises(ValidationError, match="values must differ"):
             ImplicationCountermodelCheckResult.model_validate(failing_payload)
 
+    def test_result_rejects_non_magma_retained_algebra(self) -> None:
+        magma = _cyclic_addition_algebra(2)
+        result = compute_implication_countermodel_check(
+            ImplicationCountermodelCheckRequest(
+                algebra=magma,
+                premises=(),
+                target=MagmaEquation(left=_variable_term(0), right=_variable_term(1)),
+            )
+        )
+        payload = result.model_dump(mode="json")
+        empty = {"carrier": ["0", "1"], "operations": [], "tables": []}
+        payload["algebra"] = empty
+        payload["target"]["algebra"] = empty
+        with pytest.raises(ValidationError, match="exactly one binary operation"):
+            ImplicationCountermodelCheckResult.model_validate(payload)
+
 
 # ---------------------------------------------------------------------------
 # Generated subalgebra

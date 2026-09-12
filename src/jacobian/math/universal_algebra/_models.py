@@ -197,6 +197,11 @@ class ImplicationCountermodelCheckResult(StrictModel):
                 "countermodel_source_mismatch",
                 "all equation profiles must retain the checked magma",
             )
+        if len(self.algebra.operations) != 1 or self.algebra.operations[0].arity != 2:
+            raise _validation_error(
+                "countermodel_magma_signature",
+                "a finite-magma countermodel result must retain exactly one binary operation",
+            )
         for profile_index, profile in enumerate((*self.premises, self.target)):
             for term_name, term in (("left", profile.left), ("right", profile.right)):
                 try:

@@ -303,3 +303,21 @@ def test_independent_coordinate_products_are_refused_before_multiplication() -> 
         error.value.errors()[0]["type"]
         == "geometry.gaussian_cross_ratio.intermediate_height_bound"
     )
+
+
+def test_nonreal_cancelled_quotient_is_one_plus_i() -> None:
+    scale = 10**4094
+    request = GaussianCrossRatioSource(
+        first=_point(_z(0), _z(1)),
+        second=_point(_z(1), _z(0)),
+        third=_point(
+            GaussianRational.from_fractions(Fraction(scale), Fraction(scale)),
+            _z(1),
+        ),
+        fourth=_point(
+            GaussianRational.from_fractions(Fraction(scale), Fraction()),
+            _z(1),
+        ),
+    )
+    result = gaussian_rational_cross_ratio(request)
+    assert result.as_fractions() == (Fraction(1), Fraction(1))

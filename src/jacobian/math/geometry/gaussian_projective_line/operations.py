@@ -109,7 +109,11 @@ def _gaussian_quotient_digit_bound(
         modulus_num, modulus_den = modulus
         return max(payload_num + modulus_den, payload_den + modulus_num)
 
-    return max(_divide_digits(real_num, norm), _divide_digits(imag_num, norm))
+    coarse = max(_divide_digits(real_num, norm), _divide_digits(imag_num, norm))
+    if coarse <= MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS:
+        return coarse
+    exact = _divide(numerator, denominator)
+    return _gaussian_component_digits(exact)
 
 
 def _fraction_component_digits(value: Fraction) -> int:
@@ -214,6 +218,14 @@ def _admit_request(request: GaussianCrossRatioSource) -> _CrossRatioPlan:
             location=("first", "second", "third", "fourth"),
             code="geometry.gaussian_cross_ratio.undefined",
             message="cross-ratio denominator determinants must be nonzero",
+        )
+    if (
+        _gaussian_quotient_digit_bound(numerator, denominator)
+        > MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS
+    ):
+        _reject_resource(
+            "output_height_bound",
+            "cross-ratio output exceeds the Gaussian-rational component bound",
         )
     quotient = _divide(numerator, denominator)
     if _gaussian_component_digits(quotient) > MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS:

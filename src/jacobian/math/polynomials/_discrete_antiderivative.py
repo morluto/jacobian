@@ -6,6 +6,7 @@ from math import comb, gcd, lgamma, log
 from pydantic import Field
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
+from jacobian._execution import request_checkpoint
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -20,6 +21,13 @@ from jacobian.math.polynomials.values import (
     SparseRationalPolynomial,
 )
 
+# The current deterministic pure-Python triangular kernel performs one exact
+# rational update per charged unit. Keep the admitted envelope below the
+# sparse carrier's maximum so a valid but pathological high-degree source
+# cannot monopolize a native call while still retaining ordinary low-degree
+# polynomial sums.
+MAX_DISCRETE_ANTIDERIVATIVE_WORK = 1_000_000
+
 
 class RationalDiscreteAntiderivativeRequest(StrictModel):
     """Bind one polynomial axis for the zero-based finite-difference inverse."""
@@ -27,7 +35,9 @@ class RationalDiscreteAntiderivativeRequest(StrictModel):
     polynomial: RationalPolynomial = Field(
         description=(
             "Canonical sparse polynomial over QQ. Its declared variable axis is "
-            "retained unchanged in both returned polynomials."
+            "retained unchanged in both returned polynomials. The current kernel "
+            f"admits at most {MAX_DISCRETE_ANTIDERIVATIVE_WORK} exact rational "
+            "updates for the triangular solve and reconstruction."
         )
     )
     variable: PolynomialVariable = Field(
@@ -59,14 +69,6 @@ def _parse_native_polynomial(source: RationalPolynomial) -> RationalPolynomial:
             code="polynomial.discrete_antiderivative.polynomial_structure",
             message="polynomial contains malformed canonical nested values",
         ) from exc
-
-
-# The current deterministic pure-Python triangular kernel performs one exact
-# rational update per charged unit. Keep the admitted envelope below the
-# sparse carrier's maximum so a valid but pathological high-degree source
-# cannot monopolize a native call while still retaining ordinary low-degree
-# polynomial sums.
-MAX_DISCRETE_ANTIDERIVATIVE_WORK = 1_000_000
 
 
 def _decimal_digits_upper(value: int) -> int:
@@ -177,6 +179,65 @@ def _polynomial(
     )
 
 
+def _checkpoint_work(charged: int, stage: str) -> int:
+    charged += 1
+    if charged % 64 == 0:
+        request_checkpoint(stage)
+    return charged
+
+
+def _solve_slices(
+    groups: dict[tuple[int, ...], dict[int, Fraction]],
+    variable_index: int,
+) -> tuple[dict[tuple[int, ...], Fraction], int]:
+    answer: dict[tuple[int, ...], Fraction] = {}
+    charged = 0
+    request_checkpoint("during discrete antiderivative solve")
+    for other, coefficients in groups.items():
+        residual = dict(coefficients)
+        for degree in range(max(residual, default=-1), -1, -1):
+            charged = _checkpoint_work(charged, "during discrete antiderivative solve")
+            leading = residual.get(degree, Fraction())
+            if not leading:
+                continue
+            antiderivative_coefficient = leading / (degree + 1)
+            exponent = (
+                *other[:variable_index],
+                degree + 1,
+                *other[variable_index:],
+            )
+            answer[exponent] = antiderivative_coefficient
+            for lower_degree in range(degree + 1):
+                charged = _checkpoint_work(
+                    charged, "during discrete antiderivative solve"
+                )
+                residual[lower_degree] = residual.get(
+                    lower_degree, Fraction()
+                ) - antiderivative_coefficient * comb(degree + 1, lower_degree)
+    return answer, charged
+
+
+def _reconstruct_difference(
+    answer: dict[tuple[int, ...], Fraction],
+    variable_index: int,
+    charged: int,
+) -> dict[tuple[int, ...], Fraction]:
+    reconstructed: dict[tuple[int, ...], Fraction] = {}
+    for exponents, coefficient in answer.items():
+        degree = exponents[variable_index]
+        for lower_degree in range(degree):
+            charged = _checkpoint_work(
+                charged, "during discrete antiderivative reconstruction"
+            )
+            target = list(exponents)
+            target[variable_index] = lower_degree
+            key = tuple(target)
+            reconstructed[key] = reconstructed.get(
+                key, Fraction()
+            ) + coefficient * comb(degree, lower_degree)
+    return reconstructed
+
+
 def _compute_discrete_antiderivative(
     source: RationalPolynomial,
     variable: PolynomialVariable,
@@ -239,34 +300,9 @@ def _compute_discrete_antiderivative(
             coefficients,
             maximum_degree=max(coefficients, default=0),
         )
-    answer: dict[tuple[int, ...], Fraction] = {}
-    for other, coefficients in groups.items():
-        residual = dict(coefficients)
-        for degree in range(max(residual, default=-1), -1, -1):
-            leading = residual.get(degree, Fraction())
-            if not leading:
-                continue
-            antiderivative_coefficient = leading / (degree + 1)
-            exponent = (
-                *other[:variable_index],
-                degree + 1,
-                *other[variable_index:],
-            )
-            answer[exponent] = antiderivative_coefficient
-            for lower_degree in range(degree + 1):
-                residual[lower_degree] = residual.get(
-                    lower_degree, Fraction()
-                ) - antiderivative_coefficient * comb(degree + 1, lower_degree)
-    reconstructed: dict[tuple[int, ...], Fraction] = {}
-    for exponents, coefficient in answer.items():
-        degree = exponents[variable_index]
-        for lower_degree in range(degree):
-            target = list(exponents)
-            target[variable_index] = lower_degree
-            key = tuple(target)
-            reconstructed[key] = reconstructed.get(
-                key, Fraction()
-            ) + coefficient * comb(degree, lower_degree)
+    answer, charged = _solve_slices(groups, variable_index)
+    reconstructed = _reconstruct_difference(answer, variable_index, charged)
+    request_checkpoint("after discrete antiderivative computation")
     _admit_coefficients(answer)
     _admit_coefficients(reconstructed)
     antiderivative = _polynomial(source.variables, answer)

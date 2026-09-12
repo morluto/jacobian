@@ -17,7 +17,13 @@ def _run(
 RATIONAL_DISCRETE_ANTIDERIVATIVE_OPERATION = MathTool(
     operation_id="polynomial.rational.discrete_antiderivative.compute",
     title="Compute a selected-variable rational discrete antiderivative",
-    description="Return the unique normalized Q with Q at the selected variable zero equal to zero and Q(x+1)-Q(x)=P, retaining other variables as coefficient parameters.",
+    description=(
+        "Return the unique normalized Q with Q at the selected variable zero "
+        "equal to zero and Q(x+1)-Q(x)=P, retaining other variables as "
+        "coefficient parameters. The current kernel admits at most 1000000 "
+        "exact rational updates; larger triangular work is a resource-admission "
+        "failure."
+    ),
     request_type=RationalDiscreteAntiderivativeRequest,
     result_type=RationalDiscreteAntiderivativeResult,
     run=_run,

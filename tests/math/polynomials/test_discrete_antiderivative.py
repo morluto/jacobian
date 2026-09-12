@@ -198,10 +198,40 @@ def test_native_boundary_rejects_malformed_nested_polynomial_values(
 def test_schema_and_example_explain_selected_axis_contract() -> None:
     schema = RationalDiscreteAntiderivativeRequest.model_json_schema()
     assert "variable" in schema["properties"]
+    assert "1000000" in schema["properties"]["polynomial"]["description"]
+    assert "1000000" in RATIONAL_DISCRETE_ANTIDERIVATIVE_OPERATION.description
     assert RATIONAL_DISCRETE_ANTIDERIVATIVE_OPERATION.examples
     assert "selected variable" in (
         RATIONAL_DISCRETE_ANTIDERIVATIVE_OPERATION.examples[0].description
     )
+
+
+def test_admitted_solve_honors_cancellation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from threading import Event
+
+    from jacobian._execution import (
+        OperationExecutionCancelledError,
+        request_cancellation,
+        request_checkpoint,
+    )
+    from jacobian.math.polynomials import _discrete_antiderivative as module
+
+    source = _polynomial(((1, (40, 0)),))
+    cancelled = Event()
+
+    def checkpoint(stage: str) -> None:
+        request_checkpoint(stage)
+        if stage == "during discrete antiderivative solve":
+            cancelled.set()
+
+    monkeypatch.setattr(module, "request_checkpoint", checkpoint)
+    with (
+        request_cancellation(cancelled),
+        pytest.raises(OperationExecutionCancelledError),
+    ):
+        rational_discrete_antiderivative(source, "k")
 
 
 def test_catalog_invocation_returns_the_declared_typed_result() -> None:

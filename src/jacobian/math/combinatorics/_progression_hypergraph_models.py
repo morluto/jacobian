@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from math import gcd, prod
+
 from jacobian._models import StrictModel
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     MAX_VERTICES,
@@ -13,27 +15,37 @@ from jacobian.math.groups.finite_abelian import (
 )
 
 
-def _cyclic_progression_edge_count(group_order: int) -> int:
-    """Return the exact number of distinct 3-AP edges in ``Z/group_order Z``.
+def _torsion_cardinality(group: FiniteAbelianProductGroup, order: int) -> int:
+    """Return the cardinality of the subgroup killed by ``order``.
 
-    The ordered construction has two encodings for an ordinary edge.  When
-    three divides the group order, each coset of the order-three subgroup has
-    six encodings, so those exceptional edges require a correction.
+    In one cyclic factor ``Z/mZ``, precisely ``gcd(order, m)`` elements solve
+    ``order * x = 0``.  The product formula keeps this pre-enumeration count
+    exact without materializing any group elements.
     """
-    valid_differences = group_order - 2 if group_order % 2 == 0 else group_order - 1
-    ordered_progressions = group_order * valid_differences
-    edge_count = ordered_progressions // 2
-    if group_order % 3 == 0:
-        edge_count -= 2 * (group_order // 3)
-    return edge_count
+
+    return prod(gcd(order, modulus) for modulus in group.moduli)
 
 
 def progression_edge_bound(group: FiniteAbelianProductGroup) -> int:
-    """Return a sound pre-enumeration edge bound for the supplied group."""
+    """Return the exact number of nondegenerate unordered 3-AP edges.
 
-    if len(group.moduli) == 1:
-        return _cyclic_progression_edge_count(group.order)
-    return group.order * (group.order - 1) // 2
+    An ordered pair ``(a, d)`` yields a nondegenerate progression exactly when
+    ``2d != 0``, giving ``|G| (|G| - |G[2]|)`` encodings.  Such an edge has two
+    encodings from reversal, except when ``3d = 0``: its nonzero order-three
+    difference gives all three vertices as possible centers and therefore six
+    encodings.  There are ``|G| (|G[3]| - 1)`` encodings in that exceptional
+    class, so subtracting its two-encoding contribution and restoring its
+    six-encoding contribution gives the formula below.
+    """
+
+    group_order = group.order
+    two_torsion = _torsion_cardinality(group, 2)
+    three_torsion = _torsion_cardinality(group, 3)
+    ordinary_encodings = group_order * (group_order - two_torsion)
+    order_three_encodings = group_order * (three_torsion - 1)
+    return (
+        ordinary_encodings - order_three_encodings
+    ) // 2 + order_three_encodings // 6
 
 
 MAX_GROUP_ORDER = MAX_VERTICES

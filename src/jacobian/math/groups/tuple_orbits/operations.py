@@ -43,10 +43,7 @@ def _backend_action(action: FinitePermutationAction) -> Any:
     )
 
 
-def _admit_source(
-    request: TupleFamilyOrbitSource,
-) -> tuple[Any | None, int, int, TupleFamilyOrbitSource]:
-    request_checkpoint("before tuple-family orbit admission")
+def _revalidate_action(request: TupleFamilyOrbitSource) -> FinitePermutationAction:
     if not isinstance(request, TupleFamilyOrbitSource):
         raise OperationDomainValidationError(
             location=("request",),
@@ -61,7 +58,7 @@ def _admit_source(
             message="tuple-family source must retain a finite permutation action",
         )
     try:
-        action = FinitePermutationAction.model_validate(
+        return FinitePermutationAction.model_validate(
             {"domain": action.domain, "generators": action.generators}
         )
     except ValidationError as error:
@@ -71,6 +68,13 @@ def _admit_source(
             code=str(detail["type"]),
             message=str(detail["msg"]),
         ) from error
+
+
+def _admit_source(
+    request: TupleFamilyOrbitSource,
+) -> tuple[Any | None, int, int, TupleFamilyOrbitSource]:
+    request_checkpoint("before tuple-family orbit admission")
+    action = _revalidate_action(request)
     if (
         not isinstance(request.arity, int)
         or isinstance(request.arity, bool)

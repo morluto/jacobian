@@ -73,9 +73,7 @@ class TupleFamilyOrbitSource(StrictModel):
                     f"action domain admits at most {MAX_DOMAIN_SIZE} labels",
                 )
             degree = (
-                len(domain)
-                if isinstance(domain, (list, tuple))
-                else MAX_DOMAIN_SIZE
+                len(domain) if isinstance(domain, (list, tuple)) else MAX_DOMAIN_SIZE
             )
             if isinstance(generators, (list, tuple)):
                 if len(generators) > MAX_GENERATORS:
@@ -97,7 +95,9 @@ class TupleFamilyOrbitSource(StrictModel):
                     f"at most {MAX_FAMILY_MEMBERS} tuple rows are admitted",
                 )
             raw_arity = data.get("arity")
-            arity_is_int = isinstance(raw_arity, int) and not isinstance(raw_arity, bool)
+            arity_is_int = isinstance(raw_arity, int) and not isinstance(
+                raw_arity, bool
+            )
             for member in family:
                 if not isinstance(member, (list, tuple)):
                     continue
@@ -220,9 +220,7 @@ class TupleFamilyOrbitResult(StrictModel):
                     "representative_axis",
                     "representatives must use the source arity and action axis",
                 )
-            if any(
-                index < 0 or index >= len(family) for index in row.source_indices
-            ):
+            if any(index < 0 or index >= len(family) for index in row.source_indices):
                 raise _tuple_error(
                     "source_index_out_of_range",
                     "source indices must index the retained family",

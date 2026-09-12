@@ -7,7 +7,10 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.math.groups.actions._models import MAX_FAMILY_MEMBERS, FinitePermutationAction
+from jacobian.math.groups.actions._models import (
+    MAX_FAMILY_MEMBERS,
+    FinitePermutationAction,
+)
 from jacobian.math.groups.tuple_orbits._models import (
     MAX_TUPLE_ARITY,
     TupleFamilyOrbitResult,

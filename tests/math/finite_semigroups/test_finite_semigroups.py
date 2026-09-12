@@ -18,18 +18,24 @@ from jacobian.math.finite_semigroups._models import (
     GreenRelationsResult,
     IdempotentsRequest,
     IdempotentsResult,
+    NilpotentElementsRequest,
+    NilpotentElementsResult,
     PowerProfileRequest,
     PowerProfileResult,
     PrincipalIdealsRequest,
     PrincipalIdealsResult,
+    RegularElementsRequest,
+    RegularElementsResult,
 )
 from jacobian.math.finite_semigroups.operations import (
     element_power,
     generated_subsemigroup,
     green_relations,
     idempotents,
+    nilpotent_elements,
     power_profile,
     principal_ideals,
+    regular_elements,
     verify_generated_subsemigroup,
 )
 
@@ -60,6 +66,18 @@ def compute_green_relations(request: GreenRelationsRequest) -> GreenRelationsRes
     return green_relations(request.semigroup)
 
 
+def compute_regular_elements(
+    request: RegularElementsRequest,
+) -> RegularElementsResult:
+    return regular_elements(request.semigroup)
+
+
+def compute_nilpotent_elements(
+    request: NilpotentElementsRequest,
+) -> NilpotentElementsResult:
+    return nilpotent_elements(request.semigroup, request.zero)
+
+
 class SemigroupWire(TypedDict):
     """Raw fixture shape passed through Pydantic at validation boundaries."""
 
@@ -82,6 +100,24 @@ def test_native_surface_accepts_semigroup_value() -> None:
     assert idempotents(semigroup).idempotents == ("0",)
     assert principal_ideals(semigroup, ("1",)).ideals == (("0", "1", "2"),)
     assert len(green_relations(semigroup).L) == 1
+    assert regular_elements(semigroup).regular_elements == semigroup.elements
+
+
+def test_regular_elements_use_the_ax_a_definition() -> None:
+    semigroup = _finite_semigroup(MATRIX_UNITS)
+    result = regular_elements(semigroup)
+    assert result.regular_elements == semigroup.elements
+
+
+def test_nilpotent_elements_require_and_reach_an_absorbing_zero() -> None:
+    semigroup = _finite_semigroup(NULL_SG)
+    result = compute_nilpotent_elements(
+        NilpotentElementsRequest(semigroup=semigroup, zero="0")
+    )
+    assert result.nilpotent_elements == semigroup.elements
+    with pytest.raises(OperationDomainValidationError) as error:
+        nilpotent_elements(_finite_semigroup(Z3), "0")
+    assert error.value.errors()[0]["type"] == "finite_semigroup.not_absorbing_zero"
 
 
 # Z/3Z as a semigroup under addition mod 3

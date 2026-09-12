@@ -214,6 +214,55 @@ class IdempotentsResult(StrictModel):
         return cls.model_construct(semigroup=semigroup, idempotents=idempotents)
 
 
+class RegularElementsRequest(StrictModel):
+    """Request all regular elements ``a`` satisfying ``a = a x a``."""
+
+    semigroup: FiniteSemigroup
+
+
+class RegularElementsResult(StrictModel):
+    """All regular elements of a finite semigroup, in source order."""
+
+    semigroup: FiniteSemigroup
+    regular_elements: tuple[OpaqueLabel, ...]
+
+    @classmethod
+    def _from_kernel(
+        cls, semigroup: FiniteSemigroup, regular_elements: tuple[OpaqueLabel, ...]
+    ) -> Self:
+        return cls.model_construct(
+            semigroup=semigroup, regular_elements=regular_elements
+        )
+
+
+class NilpotentElementsRequest(StrictModel):
+    """Request elements with a positive power equal to a supplied zero."""
+
+    semigroup: FiniteSemigroup
+    zero: OpaqueLabel
+
+
+class NilpotentElementsResult(StrictModel):
+    """All nilpotent elements relative to a validated absorbing zero."""
+
+    semigroup: FiniteSemigroup
+    zero: OpaqueLabel
+    nilpotent_elements: tuple[OpaqueLabel, ...]
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        semigroup: FiniteSemigroup,
+        zero: OpaqueLabel,
+        nilpotent_elements: tuple[OpaqueLabel, ...],
+    ) -> Self:
+        return cls.model_construct(
+            semigroup=semigroup,
+            zero=zero,
+            nilpotent_elements=nilpotent_elements,
+        )
+
+
 class PrincipalIdealsRequest(StrictModel):
     """Request the principal ideal of each listed element."""
 

@@ -10,8 +10,10 @@ from jacobian.math.finite_semigroups._models import (
     GeneratedSubsemigroupResult,
     GreenRelationsResult,
     IdempotentsResult,
+    NilpotentElementsResult,
     PowerProfileResult,
     PrincipalIdealsResult,
+    RegularElementsResult,
 )
 
 
@@ -245,6 +247,57 @@ def idempotents(semigroup: "FiniteSemigroup") -> IdempotentsResult:
     _require_associative(semigroup)
     values = _idempotents(semigroup.elements, semigroup.multiplication)
     return IdempotentsResult._from_kernel(semigroup, values)
+
+
+def regular_elements(semigroup: "FiniteSemigroup") -> RegularElementsResult:
+    """Return all ``a`` for which some ``x`` satisfies ``a*x*a = a``."""
+
+    _require_associative(semigroup)
+    index = {label: position for position, label in enumerate(semigroup.elements)}
+    regular = []
+    for a in semigroup.elements:
+        ai = index[a]
+        if any(
+            semigroup.multiplication[index[semigroup.multiplication[ai][index[x]]]][ai]
+            == a
+            for x in semigroup.elements
+        ):
+            regular.append(a)
+    return RegularElementsResult._from_kernel(semigroup, tuple(regular))
+
+
+def nilpotent_elements(
+    semigroup: "FiniteSemigroup", zero: str
+) -> NilpotentElementsResult:
+    """Return all elements with a positive power equal to an absorbing zero."""
+
+    _require_associative(semigroup)
+    _require_declared(
+        semigroup.elements,
+        (zero,),
+        field="zero",
+        code="finite_semigroup.zero_not_in_semigroup",
+        message="zero must be an element of the semigroup",
+    )
+    index = {label: position for position, label in enumerate(semigroup.elements)}
+    if any(
+        semigroup.multiplication[index[zero]][position] != zero
+        or semigroup.multiplication[position][index[zero]] != zero
+        for position in range(len(semigroup.elements))
+    ):
+        raise OperationDomainValidationError(
+            location=("zero",),
+            code="finite_semigroup.not_absorbing_zero",
+            message="zero must absorb multiplication on both sides",
+        )
+    values = []
+    for element in semigroup.elements:
+        powers, _, _, _, _ = _power_profile_data(
+            semigroup.elements, semigroup.multiplication, element
+        )
+        if zero in powers:
+            values.append(element)
+    return NilpotentElementsResult._from_kernel(semigroup, zero, tuple(values))
 
 
 def principal_ideals(

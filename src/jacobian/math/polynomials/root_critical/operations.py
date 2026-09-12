@@ -425,9 +425,7 @@ def _select_real_algebraic_root(minimal: sympy.Poly, distance: Any) -> int:
         return hits
     eps = Fraction(1, 1 << 20)
     for _ in range(8):
-        hits = _unique_interval_hit(
-            list(minimal.intervals(eps=eps)), real_lo, real_hi
-        )
+        hits = _unique_interval_hit(list(minimal.intervals(eps=eps)), real_lo, real_hi)
         if hits is not None:
             return hits
         eps /= 4

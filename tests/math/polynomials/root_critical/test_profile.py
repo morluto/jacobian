@@ -187,8 +187,7 @@ def test_pair_budget_is_rejected_before_exact_root_expansion() -> None:
     with pytest.raises(OperationResourceAdmissionError) as error:
         root_critical_distance_profile(_polynomial((4, 1), (0, -2)), max_pair_rows=0)
     assert (
-        error.value.errors()[0]["type"]
-        == "polynomial.root_critical.pair_output_bound"
+        error.value.errors()[0]["type"] == "polynomial.root_critical.pair_output_bound"
     )
 
 
@@ -239,9 +238,7 @@ def test_shifted_quadratic_square_root_pair_selects_the_distance() -> None:
 
 def test_zero_pair_budget_rejects_before_root_expansion() -> None:
     with pytest.raises(OperationResourceAdmissionError, match="row budget"):
-        root_critical_distance_profile(
-            _polynomial((4, 1), (0, -5)), max_pair_rows=0
-        )
+        root_critical_distance_profile(_polynomial((4, 1), (0, -5)), max_pair_rows=0)
 
 
 def test_native_pair_budget_matches_catalog_range() -> None:

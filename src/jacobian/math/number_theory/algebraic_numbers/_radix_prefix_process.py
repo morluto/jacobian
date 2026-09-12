@@ -73,7 +73,9 @@ def run_scaled_integer_part_worker(
                 cwd=worker_directory,
             )
     except OSError as exc:
-        raise RuntimeError("bounded radix isolation worker could not be started") from exc
+        raise RuntimeError(
+            "bounded radix isolation worker could not be started"
+        ) from exc
     if completed.cancelled:
         raise OperationExecutionCancelledError(
             "request cancelled during radix root isolation"

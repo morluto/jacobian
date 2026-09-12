@@ -195,4 +195,3 @@ def test_package_exports_the_native_radix_entrypoint() -> None:
 
     assert algebraic_numbers.radix_prefix is radix_prefix
     assert "radix_prefix" in algebraic_numbers.__all__
-

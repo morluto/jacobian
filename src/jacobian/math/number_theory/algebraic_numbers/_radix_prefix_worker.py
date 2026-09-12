@@ -41,7 +41,9 @@ def _scaled_integer_part(
         if (candidate := _unique_floor_of_open_interval(lower, upper)) is not None:
             return candidate
         lower, upper = polynomial.refine_root(lower, upper, steps=8)
-    raise TimeoutError("root isolation did not separate the scaled value from an integer")
+    raise TimeoutError(
+        "root isolation did not separate the scaled value from an integer"
+    )
 
 
 def main() -> int:

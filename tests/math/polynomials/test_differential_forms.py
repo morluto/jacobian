@@ -209,6 +209,40 @@ def test_reciprocal_scalars_cancel_to_the_unit() -> None:
     )
 
 
+def test_wedge_defers_height_cap_until_signed_monomials_cancel() -> None:
+    coefficient = 10**2048 - 1
+    left = _form(
+        0,
+        (
+            (),
+            _poly(
+                (coefficient, (2, 4)),
+                (coefficient, (1, 1)),
+                (coefficient, (0, 0)),
+            ),
+        ),
+    )
+    right = _form(
+        0,
+        (
+            (),
+            _poly(
+                (-coefficient, (2, 4)),
+                (coefficient, (1, 3)),
+                (coefficient, (0, 0)),
+            ),
+        ),
+    )
+    product = wedge(left, right)
+    terms = {
+        term.exponents: term.coefficient.num
+        for term in product.components[0].coefficient.polynomial.terms
+    }
+    square = coefficient * coefficient
+    assert terms[(2, 4)] == square
+    assert max(len(str(abs(value))) for value in terms.values()) <= 4096
+
+
 def test_proportional_odd_forms_cancel_before_exponent_admission() -> None:
     alpha = _form(
         1,

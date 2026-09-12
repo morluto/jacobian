@@ -83,39 +83,27 @@ def _cancelled_product_digit_bound(
 
 
 def _bounded_fraction_add(current: Fraction, value: Fraction) -> Fraction:
-    """Add exact rationals, refusing unadmitted common-denominator growth first."""
+    """Add exact rationals, refusing unadmitted common-denominator growth first.
+
+    Partial sums may briefly exceed the output digit cap; the surviving
+    monomial height is enforced after all signed contributions are included.
+    """
 
     if not current:
         return value
     if not value:
         return current
-    left_num, left_den = current.numerator, current.denominator
-    right_num, right_den = value.numerator, value.denominator
-    if left_den == right_den:
-        combined = Fraction(left_num + right_num, left_den)
-        if (
-            combined
-            and _fraction_component_digits(combined)
-            > MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS
-        ):
+    left_den, right_den = current.denominator, value.denominator
+    if left_den != right_den:
+        overlap = gcd(left_den, right_den)
+        den_digits = (
+            _integer_decimal_digits(left_den)
+            + _integer_decimal_digits(right_den)
+            - _integer_decimal_digits(overlap)
+        )
+        if den_digits > MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS:
             _coefficient_budget()
-        return combined
-    overlap = gcd(left_den, right_den)
-    den_digits = (
-        _integer_decimal_digits(left_den)
-        + _integer_decimal_digits(right_den)
-        - _integer_decimal_digits(overlap)
-    )
-    if den_digits > MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS:
-        _coefficient_budget()
-    combined = current + value
-    if (
-        combined
-        and _fraction_component_digits(combined)
-        > MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS
-    ):
-        _coefficient_budget()
-    return combined
+    return current + value
 
 
 def _coefficient_budget() -> None:
@@ -232,10 +220,7 @@ def _admit_remaining_coefficients(aggregate: _RemainingTerms) -> None:
         for terms in aggregate.values()
         for coefficient in terms.values()
     )
-    if (
-        any(height > MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS for height in bounds)
-        or sum(height * height for height in bounds) > 100_000_000
-    ):
+    if any(height > MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS for height in bounds):
         _coefficient_budget()
 
 

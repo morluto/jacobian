@@ -82,7 +82,7 @@ class Factor(StrictModel):
                     "graphical_model.factor_entry_invalid",
                     str(error),
                 ) from error
-            if value.as_fraction() < 0:
+            if value.num < 0:
                 raise PydanticCustomError(
                     "graphical_model.factor_entry_negative",
                     "factor entries must be nonnegative",

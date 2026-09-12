@@ -132,9 +132,26 @@ class TestFactorValuesAndOperations:
             error.value.errors()[0]["type"] == "graphical_model.factor_entry_negative"
         )
 
-    def test_product_rational_growth_is_a_typed_admission_failure(self) -> None:
+    def test_factor_validation_uses_canonical_sign_without_fraction_replay(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def fail(_value: CanonicalRational) -> Fraction:
+            raise AssertionError("factor validation rebuilt a Fraction")
+
+        monkeypatch.setattr(CanonicalRational, "as_fraction", fail)
+
+        Factor(variables=(0,), domain_sizes=(2,), table=_table("1", "2"))
+
+    def test_product_rational_growth_is_a_typed_admission_failure(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         value = CanonicalRational(num=int("9" * 256), den=1)
         factor = Factor(variables=(0,), domain_sizes=(2,), table=(value, value))
+
+        def fail(_value: Fraction) -> CanonicalRational:
+            raise AssertionError("product output was expanded before admission")
+
+        monkeypatch.setattr(CanonicalRational, "from_fraction", fail)
 
         with pytest.raises(OperationResourceAdmissionError) as error:
             factor_multiply(factor, factor)
@@ -144,9 +161,16 @@ class TestFactorValuesAndOperations:
             == "graphical_model.factor_multiply_rational_bound"
         )
 
-    def test_marginal_rational_growth_is_a_typed_admission_failure(self) -> None:
+    def test_marginal_rational_growth_is_a_typed_admission_failure(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         value = CanonicalRational(num=int("5" + "0" * 255), den=1)
         factor = Factor(variables=(0,), domain_sizes=(2,), table=(value, value))
+
+        def fail(_value: Fraction) -> CanonicalRational:
+            raise AssertionError("marginal output was expanded before admission")
+
+        monkeypatch.setattr(CanonicalRational, "from_fraction", fail)
 
         with pytest.raises(OperationResourceAdmissionError) as error:
             factor_marginalize(factor, 0)
@@ -155,6 +179,65 @@ class TestFactorValuesAndOperations:
             error.value.errors()[0]["type"]
             == "graphical_model.factor_marginalize_rational_bound"
         )
+
+    def test_product_at_source_digit_boundary_with_identity_is_admitted(self) -> None:
+        value = CanonicalRational(num=int("9" * 256), den=1)
+        identity = CanonicalRational(num=1, den=1)
+        factor = Factor(variables=(0,), domain_sizes=(2,), table=(value, value))
+        identity_factor = Factor(
+            variables=(0,), domain_sizes=(2,), table=(identity, identity)
+        )
+
+        result = factor_multiply(factor, identity_factor)
+
+        assert result.table == (value, value)
+
+    def test_thirty_two_way_shared_denominator_sum_at_source_boundary_is_admitted(
+        self,
+    ) -> None:
+        denominator = 10**255
+        value = CanonicalRational(num=1, den=denominator)
+        factor = Factor(
+            variables=(0,),
+            domain_sizes=(32,),
+            table=(value,) * 32,
+        )
+
+        result = factor_marginalize(factor, 0)
+
+        assert result.table == (CanonicalRational.from_integer_ratio(32, denominator),)
+
+    def test_product_at_four_thousand_ninety_six_cell_boundary_is_admitted(
+        self,
+    ) -> None:
+        domain_sizes = (2,) * 12
+        left = Factor(
+            variables=tuple(range(6)),
+            domain_sizes=domain_sizes,
+            table=_table(*(("1",) * 64)),
+        )
+        right = Factor(
+            variables=tuple(range(6, 12)),
+            domain_sizes=domain_sizes,
+            table=_table(*(("1",) * 64)),
+        )
+
+        result = factor_multiply(left, right)
+
+        assert len(result.table) == 4_096
+        assert all(value.num == 1 and value.den == 1 for value in result.table)
+
+    def test_marginal_at_thirty_two_way_boundary_is_admitted(self) -> None:
+        factor = Factor(
+            variables=(0, 1, 2),
+            domain_sizes=(32, 8, 16),
+            table=_table(*(("1",) * 4_096)),
+        )
+
+        result = factor_marginalize(factor, 0)
+
+        assert len(result.table) == 128
+        assert all(value.num == 32 and value.den == 1 for value in result.table)
 
     def test_wrong_table_size_is_rejected(self) -> None:
         with pytest.raises(ValidationError) as error:

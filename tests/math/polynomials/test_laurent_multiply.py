@@ -64,3 +64,12 @@ def test_exponent_growth_is_rejected_before_convolution() -> None:
     right = RationalLaurentPolynomial(variables=("x",), terms=(term(1, 1),))
     with pytest.raises(OperationResourceAdmissionError, match="exponent"):
         rational_laurent_multiply(left, right)
+
+
+def test_opposite_boundary_exponents_multiply_to_one() -> None:
+    left = RationalLaurentPolynomial(variables=("x",), terms=(term(1, 32_768),))
+    right = RationalLaurentPolynomial(variables=("x",), terms=(term(1, -32_768),))
+    result = rational_laurent_multiply(left, right)
+    assert result == RationalLaurentPolynomial(variables=("x",), terms=(term(1, 0),))
+    restored = RationalLaurentPolynomial.model_validate_json(result.model_dump_json())
+    assert rational_laurent_multiply(restored, left) == left

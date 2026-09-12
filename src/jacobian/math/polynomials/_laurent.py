@@ -43,20 +43,16 @@ def rational_laurent_multiply(
             code="polynomial.laurent.convolution_bound",
             message=f"sparse convolution requires {work} term products; maximum is {MAX_POLYNOMIAL_TERMS}",
         )
-    # Check the full exponent envelope before entering the convolution.  This
-    # keeps a mathematically invalid product from doing partial exact work and
-    # makes the admission decision independent of cancellation in the result.
-    max_left = tuple(
-        max(abs(term.exponents[index]) for term in left.terms)
-        for index in range(len(left.variables))
-    )
-    max_right = tuple(
-        max(abs(term.exponents[index]) for term in right.terms)
-        for index in range(len(right.variables))
-    )
+    # Signed extrema bound every convolution exponent without excluding
+    # products whose opposite-sign source exponents cancel.
     if any(
-        left_bound + right_bound > MAX_POLYNOMIAL_EXPONENT
-        for left_bound, right_bound in zip(max_left, max_right, strict=True)
+        min(term.exponents[index] for term in left.terms)
+        + min(term.exponents[index] for term in right.terms)
+        < -MAX_POLYNOMIAL_EXPONENT
+        or max(term.exponents[index] for term in left.terms)
+        + max(term.exponents[index] for term in right.terms)
+        > MAX_POLYNOMIAL_EXPONENT
+        for index in range(len(left.variables))
     ):
         raise OperationResourceAdmissionError(
             location=("right", "terms"),

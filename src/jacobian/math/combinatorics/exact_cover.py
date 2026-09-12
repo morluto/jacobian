@@ -10,7 +10,7 @@ from pydantic import ConfigDict, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.canonical import canonicalize_json
+from jacobian.canonical import canonicalize_json, encode_strict_json
 from jacobian.math._labels import OpaqueLabel
 
 
@@ -32,6 +32,8 @@ MAX_EXACT_COVER_INCIDENCES = 65_536
 # 100,000 nodes per pass is a measured conservative execution fallback,
 # independent of the broader 4096-item representation bound.
 MAX_EXACT_COVER_SEARCH_NODES_PER_PASS = 100_000
+MAX_MINIMUM_EXACT_COVER_RESULT_BYTES = 10 * 1024 * 1024
+_MINIMUM_EXACT_COVER_RESULT_OVERHEAD_BYTES = 192
 
 ExactCoverSearchStatus = Literal["FOUND", "NO_COVER", "UNKNOWN"]
 MinimumExactCoverStatus = Literal["EXACT", "INFEASIBLE", "BOUNDED"]
@@ -707,6 +709,30 @@ def minimum_generalized_exact_cover(  # noqa: C901
     item_index = {item: index for index, item in enumerate(items)}
     primary_count = len(instance.primary_items)
     row_count = len(instance.rows)
+    source_bytes = len(encode_strict_json(instance.model_dump(mode="json")))
+    maximum_label_bytes = max(
+        (
+            len(encode_strict_json(label))
+            for label in (*items, *(row.row_id for row in instance.rows))
+        ),
+        default=2,
+    )
+    predicted_result_bytes = (
+        source_bytes
+        + primary_count * (maximum_label_bytes + 24)
+        + len(items) * (maximum_label_bytes + 48)
+        + _MINIMUM_EXACT_COVER_RESULT_OVERHEAD_BYTES
+    )
+    if predicted_result_bytes > MAX_MINIMUM_EXACT_COVER_RESULT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("instance",),
+            code="combinatorics.minimum_exact_cover.result_bytes_bound",
+            message=(
+                "the minimum exact-cover result is predicted to occupy "
+                f"{predicted_result_bytes} bytes; maximum is "
+                f"{MAX_MINIMUM_EXACT_COVER_RESULT_BYTES}"
+            ),
+        )
     scan_work = (
         search_node_limit
         * primary_count

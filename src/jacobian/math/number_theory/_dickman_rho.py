@@ -314,7 +314,10 @@ def _admit_request(request: DickmanRhoPiecewiseEnclosureParameters) -> int:
             code="number_theory.dickman_rho.endpoint_representation",
             message="endpoint components exceed the admitted exact preflight bound",
         )
-    if request.target_width.exponent < -1_000_000:
+    if (
+        request.target_width.exponent < -1_000_000
+        or request.target_width.exponent > 1_000_000
+    ):
         raise OperationResourceAdmissionError(
             location=("target_width",),
             code="number_theory.dickman_rho.target_width_representation",

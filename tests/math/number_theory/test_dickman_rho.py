@@ -263,6 +263,11 @@ def test_extreme_dyadic_target_width_is_rejected_without_fraction_expansion() ->
             CanonicalRational(num=2, den=1),
             ExactDyadic(mantissa=1, exponent=-(MAX_DYADIC_EXPONENT)),
         )
+    with pytest.raises(OperationResourceAdmissionError, match="exponent"):
+        dickman_rho_piecewise_enclosure(
+            CanonicalRational(num=2, den=1),
+            ExactDyadic(mantissa=1, exponent=MAX_DYADIC_EXPONENT),
+        )
 
 
 def test_precision_bits_must_be_a_strict_int() -> None:

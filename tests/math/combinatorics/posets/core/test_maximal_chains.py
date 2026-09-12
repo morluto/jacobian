@@ -253,3 +253,31 @@ def test_complete_profile_rejects_predicted_result_explosion() -> None:
         match=str(MAX_MAXIMAL_CHAIN_ELEMENT_SLOTS),
     ):
         enumerate_maximal_chains(poset)
+
+
+def test_complete_profile_accepts_fifteen_layer_binary_boundary() -> None:
+    # Fifteen binary layers retain 32,768 chains and 491,520 element slots.
+    # This accepted boundary exercises linear histogram validation at the
+    # scale that previously caused quadratic repeated-count work.
+    elements = tuple(f"x{layer}_{branch}" for layer in range(15) for branch in (0, 1))
+    relations = tuple(
+        PresentationPair(
+            lower=f"x{layer}_{branch}", upper=f"x{layer + 1}_{next_branch}"
+        )
+        for layer in range(14)
+        for branch in (0, 1)
+        for next_branch in (0, 1)
+    )
+    poset = materialize_finite_poset(
+        elements,
+        relations,
+        RelationInterpretation.COVER_EDGES,
+        ReflexivePairPolicy.FORBIDDEN,
+    )
+
+    result = enumerate_maximal_chains(poset)
+
+    assert len(result.chains) == 2**15
+    assert [(cell.length, cell.count) for cell in result.length_histogram] == [
+        (15, 2**15)
+    ]

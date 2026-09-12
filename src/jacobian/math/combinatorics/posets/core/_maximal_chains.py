@@ -353,13 +353,18 @@ def enumerate_maximal_chains(poset: FinitePoset) -> MaximalChainEnumerationResul
         outgoing[relation.lower].append(relation.upper)
     for targets in outgoing.values():
         targets.sort()
-    _profile_and_admit_output(poset, outgoing, source_validation_work)
+    _, _, admitted_histogram = _profile_and_admit_output(
+        poset, outgoing, source_validation_work
+    )
     if not poset.elements:
         request_checkpoint("before maximal-chain result construction")
         return MaximalChainEnumerationResult(
             poset=poset,
             chains=(MaximalChainRow(elements=(), cover_relations=(), length=0),),
-            length_histogram=(ChainLengthCount(length=0, count=1),),
+            length_histogram=tuple(
+                ChainLengthCount(length=length, count=count)
+                for length, count in admitted_histogram
+            ),
         )
     chains: list[tuple[str, ...]] = []
 
@@ -387,16 +392,13 @@ def enumerate_maximal_chains(poset: FinitePoset) -> MaximalChainEnumerationResul
         )
         for chain in chains
     )
-    histogram_counts: dict[int, int] = {}
-    for row in rows:
-        histogram_counts[row.length] = histogram_counts.get(row.length, 0) + 1
     request_checkpoint("before maximal-chain result construction")
     return MaximalChainEnumerationResult(
         poset=poset,
         chains=rows,
         length_histogram=tuple(
             ChainLengthCount(length=length, count=count)
-            for length, count in sorted(histogram_counts.items())
+            for length, count in admitted_histogram
         ),
     )
 

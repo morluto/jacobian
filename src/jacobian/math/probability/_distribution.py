@@ -10,6 +10,7 @@ from typing import Literal, Self
 from pydantic import Field, StrictInt, model_validator
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._execution import request_checkpoint
 from jacobian._models import StrictModel
 from jacobian.math.probability._models import (
     MAX_INPUT_RATIONAL_DIGITS,
@@ -34,7 +35,9 @@ def _bounded_fraction_sum(
     """Sum nonnegative rationals without materializing an over-height fraction."""
 
     total = Fraction()
-    for value in values:
+    for index, value in enumerate(values):
+        if index % 256 == 0:
+            request_checkpoint("during finite-distribution probability normalization")
         common = gcd(total.denominator, value.denominator)
         left_denominator = total.denominator // common
         right_denominator = value.denominator // common

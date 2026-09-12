@@ -329,6 +329,7 @@ def _require_complex_accumulation_height(
     normalized_operator: bool,
     normalized_overlaps: bool,
     inner_product_output: bool,
+    estimate_operator: bool = True,
 ) -> None:
     """Admit rational growth before constructing any exact arithmetic values."""
 
@@ -337,27 +338,28 @@ def _require_complex_accumulation_height(
     inner_product = _complex_sum_height(product, frame.dimension)
     norm = inner_product
 
-    operator_term = product
-    if normalized_operator:
-        operator_term = product.quotient(norm)
-    operator = _complex_sum_height(operator_term, len(frame.vectors))
-    trace = _complex_sum_height(operator, frame.dimension)
-    scalar = trace.quotient(RationalHeight(len(str(frame.dimension)), 1))
-    residual = sum_heights((operator, scalar))
-    if (
-        max(
-            operator.numerator_digits,
-            operator.denominator_digits,
-            residual.numerator_digits,
-            residual.denominator_digits,
-        )
-        > MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS
-    ):
-        raise OperationResourceAdmissionError(
-            location=("frame", "vectors"),
-            code="frames.complex_scalar_height",
-            message="Gaussian-rational frame accumulation exceeds its admitted height",
-        )
+    if estimate_operator:
+        operator_term = product
+        if normalized_operator:
+            operator_term = product.quotient(norm)
+        operator = _complex_sum_height(operator_term, len(frame.vectors))
+        trace = _complex_sum_height(operator, frame.dimension)
+        scalar = trace.quotient(RationalHeight(len(str(frame.dimension)), 1))
+        residual = sum_heights((operator, scalar))
+        if (
+            max(
+                operator.numerator_digits,
+                operator.denominator_digits,
+                residual.numerator_digits,
+                residual.denominator_digits,
+            )
+            > MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS
+        ):
+            raise OperationResourceAdmissionError(
+                location=("frame", "vectors"),
+                code="frames.complex_scalar_height",
+                message="Gaussian-rational frame accumulation exceeds its admitted height",
+            )
 
     if inner_product_output and inner_product.exceeds(
         MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS
@@ -386,6 +388,7 @@ def _complex_frame_admitted(
     normalized_operator: bool = False,
     normalized_overlaps: bool = False,
     inner_product_output: bool = False,
+    estimate_operator: bool = True,
 ) -> tuple[Fraction, ...]:
     if len(frame.vectors) * frame.dimension > MAX_COMPLEX_PROFILE_CELLS:
         raise OperationResourceAdmissionError(
@@ -409,6 +412,7 @@ def _complex_frame_admitted(
         normalized_operator=normalized_operator,
         normalized_overlaps=normalized_overlaps,
         inner_product_output=inner_product_output,
+        estimate_operator=estimate_operator,
     )
     norms = tuple(_norm_squared(vector) for vector in frame.vectors)
     if any(norm <= 0 for norm in norms):
@@ -750,7 +754,10 @@ def mutually_unbiased_bases(
         )
     basis_norms = tuple(
         _complex_frame_admitted(
-            basis, normalized_overlaps=True, inner_product_output=True
+            basis,
+            normalized_overlaps=True,
+            inner_product_output=True,
+            estimate_operator=False,
         )
         for basis in bases
     )

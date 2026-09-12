@@ -379,7 +379,7 @@ def test_complex_derived_denominator_growth_is_admitted_before_basis_grams() -> 
         _mutually_unbiased_bases(
             MutuallyUnbiasedBasesRequest(dimension=33, bases=(frame,))
         )
-    assert error.value.errors()[0]["type"] == "frames.complex_scalar_height"
+    assert error.value.errors()[0]["type"] == "frames.complex_inner_product_height"
 
 
 @pytest.mark.parametrize("operation", (_complex_frame_profile, _sic_profile))
@@ -738,3 +738,49 @@ def test_gram_verifier_propagates_unexpected_kernel_errors(
     monkeypatch.setattr(operations, "integer_gram", unavailable)
     with pytest.raises(ValueError, match="backend arithmetic unavailable"):
         verify_gram(claim)
+
+
+def _sylvester_hadamard(order: int) -> tuple[tuple[int, ...], ...]:
+    rows: tuple[tuple[int, ...], ...] = ((1,),)
+    while len(rows) < order:
+        rows = tuple(row + row for row in rows) + tuple(
+            row + tuple(-entry for entry in row) for row in rows
+        )
+    return rows
+
+
+def test_dimension_32_standard_hadamard_mub_skips_operator_height() -> None:
+    dimension = 32
+    standard = ComplexFrame(
+        dimension=dimension,
+        vectors=tuple(
+            tuple(_z(int(row == column)) for column in range(dimension))
+            for row in range(dimension)
+        ),
+    )
+    hadamard = ComplexFrame(
+        dimension=dimension,
+        vectors=tuple(
+            tuple(_z(entry) for entry in row) for row in _sylvester_hadamard(dimension)
+        ),
+    )
+
+    result = _mutually_unbiased_bases(
+        MutuallyUnbiasedBasesRequest(dimension=dimension, bases=(standard, hadamard))
+    )
+
+    assert result.is_mutually_unbiased is True
+    assert result.basis_pair_count == 1
+
+
+def test_sic_profile_rejects_asymmetric_squared_overlaps() -> None:
+    result = _sic_profile(
+        SicProfileRequest(
+            frame=ComplexFrame(dimension=1, vectors=((_z(1),), (_z(1),)))
+        )
+    )
+    forged = json.loads(result.model_dump_json())
+    forged["squared_overlaps"][1][0] = {"num": "0", "den": "1"}
+
+    with pytest.raises(ValueError, match="symmetric"):
+        type(result).model_validate_json(json.dumps(forged))

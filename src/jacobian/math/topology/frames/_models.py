@@ -327,6 +327,16 @@ class SicProfileResult(SicProfileRequest):
                 "frames.sic_profile_diagonal",
                 "SIC overlap diagonals must equal one",
             )
+        if any(
+            self.squared_overlaps[left][right].as_fraction()
+            != self.squared_overlaps[right][left].as_fraction()
+            for left in range(n)
+            for right in range(left + 1, n)
+        ):
+            raise PydanticCustomError(
+                "frames.sic_profile_overlap_symmetry",
+                "squared overlaps must be symmetric",
+            )
         off_diagonal = tuple(
             self.squared_overlaps[left][right].as_fraction()
             for left in range(n)

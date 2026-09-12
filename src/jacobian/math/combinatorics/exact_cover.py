@@ -861,7 +861,9 @@ def minimum_generalized_exact_cover(  # noqa: C901
         coverage: dict[str, list[ExactCoverRow]] = {
             item: [] for item in remaining_primary
         }
-        for row in remaining_rows:
+        for row_index, row in enumerate(remaining_rows):
+            if row_index % 256 == 0:
+                request_checkpoint("during minimum exact-cover unit forcing")
             for row_item in row.items:
                 if row_item in coverage:
                     coverage[row_item].append(row)
@@ -878,6 +880,7 @@ def minimum_generalized_exact_cover(  # noqa: C901
         remaining_rows = [
             row for row in remaining_rows if set(row.items).isdisjoint(selected_items)
         ]
+        request_checkpoint("during minimum exact-cover unit forcing")
     remaining_degrees = [0]
     if remaining_primary:
         remaining_degrees = [
@@ -943,6 +946,17 @@ def minimum_generalized_exact_cover(  # noqa: C901
         listing_degree = remaining_min_degree
     if estimated_nodes_ceiling is not None:
         estimated_nodes = min(estimated_nodes, estimated_nodes_ceiling)
+    elif remaining_rows and not any(
+        remaining_primary <= set(row.items) for row in remaining_rows
+    ):
+        for secondary in instance.secondary_items:
+            missing = sum(1 for row in remaining_rows if secondary not in row.items)
+            if 0 < missing <= remaining_min_degree:
+                estimated_nodes = min(
+                    estimated_nodes,
+                    1 + 2 * remaining_min_degree * (missing + 1),
+                )
+                break
     scan_work = estimated_nodes * primary_count * mask_words
     candidate_work = 2 * estimated_nodes * listing_degree * mask_words
     if (

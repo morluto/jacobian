@@ -6,7 +6,11 @@ from typing import Any, NoReturn
 import pytest
 
 import jacobian.math.combinatorics.exact_cover as exact_cover_module
-from jacobian._execution import OperationExecutionTimeoutError, request_execution
+from jacobian._execution import (
+    OperationExecutionTimeoutError,
+    bind_request_deadline,
+    request_execution,
+)
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.combinatorics.exact_cover import (
     ExactCoverRow,
@@ -360,3 +364,38 @@ def test_shared_secondary_on_every_row_is_infeasible_without_scan_charge() -> No
     result = minimum_generalized_exact_cover(instance)
     assert result.status == "INFEASIBLE"
     assert result.searched_node_count == 1
+
+
+def test_near_universal_secondary_conflict_is_admitted() -> None:
+    primary = tuple(f"p{index:03d}" for index in range(256))
+    exceptional = ExactCoverRow(row_id="p000-ex", items=(primary[0],))
+    rows = (
+        exceptional,
+        *tuple(
+            ExactCoverRow(row_id=f"r{item}-{copy:02d}", items=(item, "s"))
+            for item in primary
+            for copy in range(16 if item != primary[0] else 15)
+        ),
+    )
+    instance = GeneralizedExactCoverInstance(
+        primary_items=primary,
+        secondary_items=("s",),
+        rows=rows,
+    )
+    result = minimum_generalized_exact_cover(instance)
+    assert result.status == "INFEASIBLE"
+    assert result.searched_node_count <= 65
+
+
+def test_unit_forcing_honors_an_expired_deadline() -> None:
+    primary = tuple(f"p{index:04d}" for index in range(4_096))
+    rows = tuple(ExactCoverRow(row_id=f"r{item}", items=(item,)) for item in primary)
+    instance = GeneralizedExactCoverInstance(
+        primary_items=primary,
+        secondary_items=(),
+        rows=rows,
+    )
+    with request_execution(time.monotonic()):
+        bind_request_deadline(time.monotonic() - 1)
+        with pytest.raises(OperationExecutionTimeoutError, match="deadline expired"):
+            minimum_generalized_exact_cover(instance)

@@ -1,10 +1,8 @@
 """Complete bounded sunflower construction for any admitted petal count.
 
 A sunflower of petal count ``r >= 2`` over the source family is an ``r``-member
-subfamily whose pairwise intersections are all equal to one common core.  The
-``r = 3`` slice already exists as ``set_system.sunflower_triple_hypergraph``;
-this module generalizes the same postcondition to a declared ``r`` while
-keeping the source, core, and hypergraph conventions identical.
+subfamily whose pairwise intersections are all equal to one common core.  This
+module is the atomic complete-construction owner for every admitted ``r``.
 """
 
 from __future__ import annotations
@@ -50,11 +48,11 @@ def _result_error(reason: str, message: str) -> PydanticCustomError:
 
 
 def _admit_source(
-    request: SunflowerFamilyRequest,
+    source: IndexedFiniteSetFamily,
+    petal_count: int,
 ) -> tuple[IndexedFiniteSetFamily, int, int, int, int]:
     """Admit the retained source before any candidate or result expansion."""
 
-    petal_count = request.petal_count
     if petal_count < 2:
         raise OperationDomainValidationError(
             location=("petal_count",),
@@ -70,7 +68,6 @@ def _admit_source(
                 "complete construction"
             ),
         )
-    source = request.source
     member_count = len(source.members)
     if member_count > MAX_VERTICES:
         raise OperationResourceAdmissionError(
@@ -144,7 +141,9 @@ def _admit_candidates(
         )
     maximum_size = max((len(member) for member in source.members), default=0)
     intersection_pairs = comb(petal_count, 2)
-    intersection_work = (intersection_pairs + 1) * maximum_size * candidate_bound
+    # Pairwise intersections plus an equality against the common core for
+    # every pair; the initial core construction is one extra intersection.
+    intersection_work = (2 * intersection_pairs + 1) * maximum_size * candidate_bound
     total_work = source_work + intersection_work
     if total_work > MAX_SUNFLOWER_INTERSECTION_WORK:
         raise OperationResourceAdmissionError(
@@ -284,10 +283,17 @@ class SunflowerFamilyResult(StrictModel):
                 )
             seen_indices.add(indices)
             seen_edge_ids.add(row.edge_id)
-            # FiniteHypergraph canonicalizes string labels lexicographically;
-            # retain that exact projection for multi-digit source IDs.
             expected_edges.append(
                 (row.edge_id, tuple(sorted(str(index) for index in indices)))
+            )
+        if any(
+            self.sunflowers[index].source_indices
+            >= self.sunflowers[index + 1].source_indices
+            for index in range(len(self.sunflowers) - 1)
+        ):
+            raise _result_error(
+                "row_order",
+                "sunflower rows must be strictly ordered by source_indices",
             )
         canonical_edges = tuple(expected_edges)
         if self.sunflower_count != len(self.sunflowers):
@@ -310,12 +316,17 @@ class SunflowerFamilyResult(StrictModel):
 
 
 def construct_sunflower_family(
-    request: SunflowerFamilyRequest,
+    source: IndexedFiniteSetFamily,
+    petal_count: int,
 ) -> SunflowerFamilyResult:
     """Return every ``petal_count``-member sunflower with its exact common core."""
 
+    if not isinstance(source, IndexedFiniteSetFamily):
+        raise TypeError("source must be an IndexedFiniteSetFamily")
+    if type(petal_count) is not int:
+        raise TypeError("petal_count must be an integer")
     source, petal_count, member_count, source_work, source_units = _admit_source(
-        request
+        source, petal_count
     )
     _admit_candidates(source, petal_count, member_count, source_work, source_units)
     if member_count < petal_count:
@@ -333,13 +344,19 @@ def construct_sunflower_family(
                 edges=(),
             ),
         )
+    request_checkpoint("before sunflower member expansion")
     sets = tuple(frozenset(member) for member in source.members)
     rows: list[SunflowerFamily] = []
-    for candidate_index, indices in enumerate(
-        combinations(range(member_count), petal_count), start=1
-    ):
-        if candidate_index % 256 == 0:
-            request_checkpoint("during sunflower candidate enumeration")
+    intersection_pairs = comb(petal_count, 2)
+    maximum_size = max((len(member) for member in source.members), default=0)
+    candidate_work = (2 * intersection_pairs + 1) * maximum_size
+    work_since_checkpoint = 0
+    checkpoint_units = 65_536
+    for indices in combinations(range(member_count), petal_count):
+        work_since_checkpoint += candidate_work
+        if work_since_checkpoint >= checkpoint_units:
+            request_checkpoint("during sunflower intersection work")
+            work_since_checkpoint = 0
         core = sets[indices[0]] & sets[indices[1]]
         if all(
             sets[left] & sets[right] == core for left, right in combinations(indices, 2)

@@ -14,6 +14,9 @@ from jacobian.math.combinatorics.extremal_sets._models import (
     SunflowerTriple,
     UnionRelationRow,
 )
+from jacobian.math.combinatorics.extremal_sets._sunflower_r import (
+    construct_sunflower_family,
+)
 from jacobian.math.combinatorics.extremal_sets.values import (
     IndexedFiniteSetFamily,
 )
@@ -24,7 +27,11 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
 )
 
-__all__ = ["construct_binary_union_relation", "construct_sunflower_hypergraph"]
+__all__ = [
+    "construct_binary_union_relation",
+    "construct_sunflower_family",
+    "construct_sunflower_hypergraph",
+]
 
 MAX_BINARY_UNION_MEMBERSHIP_WORK = 20_000_000
 MAX_SUNFLOWER_INTERSECTION_WORK = 20_000_000

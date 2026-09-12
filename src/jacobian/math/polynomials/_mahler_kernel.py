@@ -15,8 +15,6 @@ from typing import Literal
 
 from jacobian._exact import CanonicalRational
 from jacobian._execution import (
-    OperationExecutionCancelledError,
-    OperationExecutionTimeoutError,
     current_request_execution,
     request_execution,
 )
@@ -25,17 +23,11 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.math.number_theory._certification_models import (
-    CertifiedFactorizationRequest,
-)
-from jacobian.math.number_theory._factorization_kernels import factorize_certified
 from jacobian.math.number_theory.algebraic_numbers.real import (
     MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS,
     RealAlgebraicValue,
 )
 from jacobian.math.polynomials._mahler_models import (
-    MAX_MAHLER_RADICAND_BITS,
-    MAX_MAHLER_RADICAND_DIGITS,
     ContentPrimitiveProfileRequest,
     ContentPrimitiveProfileResult,
     MahlerAlgebraicValue,
@@ -56,13 +48,14 @@ __all__ = [
     "reciprocal_profile",
 ]
 
-_SMALL_SQUAREFREE_FACTOR_LIMIT = 1_000_000
-_MAX_FACTORIZATION_WORK = 1_000_000
-
 
 @dataclass(frozen=True, slots=True)
 class _QuadraticParts:
-    """Private exact ``a + b*sqrt(d)`` arithmetic with squarefree ``d``."""
+    """Private exact ``a + b*sqrt(d)`` arithmetic.
+
+    The radicand is the content-normalized discriminant. It need not be
+    square-free: ``_parts_to_value`` emits a primitive ``RealAlgebraicValue``.
+    """
 
     rational: Fraction
     radical: Fraction
@@ -100,7 +93,7 @@ class _QuadraticParts:
             raise OperationDomainValidationError(
                 location=("value",),
                 code="polynomial.mahler_mixed_quadratic_fields",
-                message="quadratic products require one shared squarefree field",
+                message="quadratic products require one shared discriminant field",
             )
         return _quadratic_parts_from_squarefree(
             self.rational * other.rational
@@ -109,61 +102,6 @@ class _QuadraticParts:
             1,
             self.radicand,
         )
-
-
-def _squarefree_parts(radicand: int) -> tuple[int, int]:
-    """Return ``(square_factor, squarefree_radicand)`` under one budget."""
-
-    if radicand < 1:
-        raise ValueError("surd radicand must be positive")
-    if radicand.bit_length() > MAX_MAHLER_RADICAND_BITS:
-        raise OperationResourceAdmissionError(
-            location=("radicand",),
-            code="polynomial.mahler_surd_radicand_bound",
-            message="quadratic discriminant exceeds the admitted factorization envelope",
-        )
-    if len(str(radicand)) > MAX_MAHLER_RADICAND_DIGITS:
-        raise OperationResourceAdmissionError(
-            location=("radicand",),
-            code="polynomial.mahler_surd_radicand_digits",
-            message="quadratic discriminant exceeds the admitted factorization digits",
-        )
-    estimated_work = radicand.bit_length() ** 3
-    if estimated_work > _MAX_FACTORIZATION_WORK:
-        raise OperationResourceAdmissionError(
-            location=("radicand",),
-            code="polynomial.mahler_factorization_work_bound",
-            message="quadratic discriminant factorization exceeds the admitted work bound",
-        )
-    if radicand <= _SMALL_SQUAREFREE_FACTOR_LIMIT:
-        square_factor = 1
-        remaining = radicand
-        factor = 2
-        while factor * factor <= remaining:
-            square = factor * factor
-            while remaining % square == 0:
-                remaining //= square
-                square_factor *= factor
-            factor += 1
-        return square_factor, remaining
-    try:
-        decomposition = factorize_certified(
-            CertifiedFactorizationRequest(value=radicand)
-        )
-    except (OperationExecutionCancelledError, OperationExecutionTimeoutError):
-        raise
-    except RuntimeError as exc:
-        raise OperationResourceAdmissionError(
-            location=("radicand",),
-            code="polynomial.mahler_factorization_backend",
-            message="the admitted factorization backend could not complete",
-        ) from exc
-    square_factor = 1
-    squarefree_radicand = 1
-    for factor_entry in decomposition.factors:
-        square_factor *= factor_entry.prime ** (factor_entry.exponent // 2)
-        squarefree_radicand *= factor_entry.prime ** (factor_entry.exponent % 2)
-    return square_factor, squarefree_radicand
 
 
 def _quadratic_parts_from_squarefree(
@@ -198,7 +136,7 @@ def _parts_difference(left: _QuadraticParts, right: _QuadraticParts) -> _Quadrat
         raise OperationDomainValidationError(
             location=("roots",),
             code="polynomial.mahler_mixed_quadratic_fields",
-            message="quadratic ordering requires one shared squarefree field",
+            message="quadratic ordering requires one shared discriminant field",
         )
     return _QuadraticParts(
         left.rational - right.rational,
@@ -387,13 +325,12 @@ def _quadratic_root_data(
             _QuadraticParts(Fraction(-b + square, 2 * a), Fraction(0), 0),
         )
     else:
-        square_factor, squarefree = _squarefree_parts(discriminant)
         candidates = (
-            _quadratic_parts_from_squarefree(
-                Fraction(-b, 2 * a), Fraction(-1, 2 * a), square_factor, squarefree
+            _QuadraticParts(
+                Fraction(-b, 2 * a), Fraction(-1, 2 * a), discriminant
             ),
-            _quadratic_parts_from_squarefree(
-                Fraction(-b, 2 * a), Fraction(1, 2 * a), square_factor, squarefree
+            _QuadraticParts(
+                Fraction(-b, 2 * a), Fraction(1, 2 * a), discriminant
             ),
         )
     # The two roots are in one field.  Compare the exact algebraic values,

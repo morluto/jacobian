@@ -25,12 +25,6 @@ from jacobian.math.polynomials.values import MAX_POLYNOMIAL_TERMS
 
 MAX_MAHLER_DEGREE = 64
 MAX_MAHLER_COEFFICIENT_DIGITS = 256
-# Square-free extraction is delegated to the certified factorization kernel,
-# whose request carrier admits at most 30 decimal digits. Keep both the
-# decimal contract and a coarse bit envelope on the value itself so forged
-# surd JSON cannot reach ``isqrt`` outside the kernel's admitted domain.
-MAX_MAHLER_RADICAND_DIGITS = 30
-MAX_MAHLER_RADICAND_BITS = 100
 
 RootLocation = Literal[
     "INSIDE_UNIT_DISK", "ON_UNIT_CIRCLE", "OUTSIDE_UNIT_DISK", "UNRESOLVED"
@@ -306,8 +300,6 @@ class MahlerMeasureResult(StrictModel):
 __all__ = [
     "MAX_MAHLER_COEFFICIENT_DIGITS",
     "MAX_MAHLER_DEGREE",
-    "MAX_MAHLER_RADICAND_BITS",
-    "MAX_MAHLER_RADICAND_DIGITS",
     "ContentPrimitiveProfileRequest",
     "ContentPrimitiveProfileResult",
     "MahlerAlgebraicValue",

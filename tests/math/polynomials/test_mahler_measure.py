@@ -9,12 +9,7 @@ from jacobian._exact import CanonicalRational
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import (
     OperationDomainValidationError,
-    OperationResourceAdmissionError,
 )
-from jacobian.math.number_theory._certification_models import (
-    CertifiedFactorizationRequest,
-)
-from jacobian.math.number_theory._factorization_kernels import factorize_certified
 from jacobian.math.number_theory.algebraic_numbers.real import RealAlgebraicValue
 from jacobian.math.polynomials._mahler_kernel import (
     content_primitive_profile,
@@ -24,7 +19,6 @@ from jacobian.math.polynomials._mahler_kernel import (
 )
 from jacobian.math.polynomials._mahler_models import (
     MAX_MAHLER_DEGREE,
-    MAX_MAHLER_RADICAND_BITS,
     ContentPrimitiveProfileRequest,
     ContentPrimitiveProfileResult,
     MahlerAlgebraicValue,
@@ -421,19 +415,31 @@ def test_mahler_result_validator_does_not_replay_measure_mathematics() -> None:
         MahlerMeasureResult.model_validate_json(encode_strict_json(forged), strict=True)
 
 
-def test_quadratic_discriminant_is_admitted_before_isqrt() -> None:
-    with pytest.raises(OperationResourceAdmissionError):
-        quadratic_root_profile(
-            RealQuadraticRootProfileRequest(
-                polynomial=IntegerPolynomial(
-                    coefficients=(
-                        1,
-                        0,
-                        -((1 << MAX_MAHLER_RADICAND_BITS) + 1),
-                    )
-                )
-            )
+def test_large_nonsquare_discriminant_retains_normalized_radicand() -> None:
+    polynomial = IntegerPolynomial(coefficients=(1, -(10**100), -1))
+    profile = quadratic_root_profile(
+        RealQuadraticRootProfileRequest(polynomial=polynomial)
+    )
+    assert profile.discriminant == 10**200 + 4
+    assert profile.root_kind == "DISTINCT_REAL"
+    assert profile.root_locations == ("INSIDE_UNIT_DISK", "OUTSIDE_UNIT_DISK")
+    assert all(
+        isinstance(root, RealAlgebraicValue)
+        and root.polynomial == (1, -(10**100), -1)
+        for root in profile.roots
+    )
+    measure = mahler_measure(MahlerMeasureRequest(polynomial=polynomial))
+    assert isinstance(measure.mahler_measure, RealAlgebraicValue)
+    assert measure.mahler_measure == profile.roots[1]
+
+
+def test_large_nonsquare_product_is_exact() -> None:
+    result = mahler_measure(
+        MahlerMeasureRequest(
+            polynomial=IntegerPolynomial(coefficients=(1, 1, -(10**24)))
         )
+    )
+    assert result.mahler_measure == CanonicalRational(num=10**24, den=1)
 
 
 def test_complex_pair_has_modulus_instead_of_fake_real_root() -> None:
@@ -450,15 +456,6 @@ def test_complex_pair_has_modulus_instead_of_fake_real_root() -> None:
     ).mahler_measure == CanonicalRational(num=4, den=1)
 
 
-def test_large_nonsquare_discriminant_uses_bounded_factorization() -> None:
-    result = mahler_measure(
-        MahlerMeasureRequest(
-            polynomial=IntegerPolynomial(coefficients=(1, 1, -(10**24)))
-        )
-    )
-    assert result.mahler_measure == CanonicalRational(num=10**24, den=1)
-
-
 def test_scaled_quadratic_normalizes_content_before_surd_admission() -> None:
     scale = 10**20
     result = quadratic_root_profile(
@@ -472,45 +469,6 @@ def test_scaled_quadratic_normalizes_content_before_surd_admission() -> None:
         isinstance(root, RealAlgebraicValue) and root.polynomial == (1, -1, -1)
         for root in result.roots
     )
-
-
-def test_quadratic_surd_normalization_is_not_replayed(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    calls: list[int] = []
-    original = factorize_certified
-
-    def count_calls(request: CertifiedFactorizationRequest) -> object:
-        calls.append(request.value)
-        return original(request)
-
-    monkeypatch.setattr(
-        "jacobian.math.polynomials._mahler_kernel.factorize_certified", count_calls
-    )
-    quadratic_root_profile(
-        RealQuadraticRootProfileRequest(
-            polynomial=IntegerPolynomial(coefficients=(1, 0, -1000003))
-        )
-    )
-    assert calls == [4 * 1000003]
-
-
-def test_factorization_backend_failure_is_a_typed_resource_outcome(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def fail(_request: object) -> None:
-        raise RuntimeError("backend unavailable")
-
-    monkeypatch.setattr(
-        "jacobian.math.polynomials._mahler_kernel.factorize_certified", fail
-    )
-    with pytest.raises(OperationResourceAdmissionError) as error:
-        quadratic_root_profile(
-            RealQuadraticRootProfileRequest(
-                polynomial=IntegerPolynomial(coefficients=(1, 0, -1000003))
-            )
-        )
-    assert error.value.errors()[0]["type"] == "polynomial.mahler_factorization_backend"
 
 
 def test_perfect_square_discriminant_keeps_its_rational_roots() -> None:

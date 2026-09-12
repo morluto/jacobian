@@ -17,6 +17,9 @@ from jacobian.math.polynomials._expression_normalize import (
     PolynomialExpressionSource,
     normalize_polynomial_expression,
 )
+from jacobian.math.polynomials._elementary_symmetric import (
+    elementary_symmetric_family,
+)
 from jacobian.math.polynomials.operations import (
     derivative,
     discriminant,
@@ -68,6 +71,7 @@ __all__ = [
     "derivative",
     "discriminant",
     "divide",
+    "elementary_symmetric_family",
     "evaluate",
     "factorization",
     "gcdex",

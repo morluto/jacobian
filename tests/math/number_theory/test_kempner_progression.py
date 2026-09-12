@@ -18,6 +18,7 @@ from jacobian.math.number_theory._kempner_models import (
     KempnerArithmeticProgressionResult,
     KempnerContainsProgression,
     KempnerDigitSet,
+    KempnerProgressionFree,
 )
 from jacobian.math.number_theory._kempner_progression import (
     compute_kempner_arithmetic_progression,
@@ -215,3 +216,16 @@ def test_witness_arrays_are_capped_at_max_arity() -> None:
         "too_long",
         "tuple_too_long",
     }
+
+
+def test_serialized_branches_require_status_discriminators() -> None:
+    assert "status" in KempnerProgressionFree.model_json_schema()["required"]
+    assert "status" in KempnerContainsProgression.model_json_schema()["required"]
+    with pytest.raises(ValidationError):
+        KempnerArithmeticProgressionResult.model_validate(
+            {
+                "digit_set": {"base": "10", "allowed_digits": ["0"]},
+                "arity": "3",
+                "conclusion": {},
+            }
+        )

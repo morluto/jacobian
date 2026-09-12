@@ -88,13 +88,13 @@ class KempnerArithmeticProgressionRequest(StrictModel):
 class KempnerProgressionFree(StrictModel):
     """No nontrivial arithmetic progression exists in the digit family."""
 
-    status: Literal["PROGRESSION_FREE"] = "PROGRESSION_FREE"
+    status: Literal["PROGRESSION_FREE"]
 
 
 class KempnerContainsProgression(StrictModel):
     """One canonical shortest-padded witness of a fixed-arity progression."""
 
-    status: Literal["CONTAINS_PROGRESSION"] = "CONTAINS_PROGRESSION"
+    status: Literal["CONTAINS_PROGRESSION"]
     indices: tuple[KempnerSmallInteger, ...] = Field(
         min_length=MIN_KEMPNER_ARITY,
         max_length=MAX_KEMPNER_ARITY,

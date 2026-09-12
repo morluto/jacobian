@@ -273,6 +273,93 @@ def _exceeds_canonical_integer_bound(value: int) -> bool:
     return bool(value >= 10**MAX_CANONICAL_INTEGER_DIGITS)
 
 
+def _bounded_component_sum(
+    components: list[_CoefficientComponent],
+) -> tuple[Fraction, int]:
+    """Sum components using only representable exact intermediate values.
+
+    The reduction order is part of admission: an arbitrary left-to-right sum
+    can create a numerator or denominator wider than the canonical rational
+    envelope even when a cancellation-first order is cheap and exact.
+    """
+
+    pending = _cancel_opposite_components(components)
+    work_digit_bound = 0
+    while pending:
+        if len(pending) == 1:
+            value, _ = pending[0]
+            return value, max(
+                work_digit_bound,
+                _integer_digit_upper_bound(value.numerator),
+                _integer_digit_upper_bound(value.denominator),
+            )
+
+        candidate: tuple[int, int, Fraction, int] | None = None
+        for left_index, (left, _) in enumerate(pending):
+            for right_index in range(left_index + 1, len(pending)):
+                right, _ = pending[right_index]
+                # An exact opposite was removed above and after every merge,
+                # so this fast path mostly documents the cancellation-first
+                # invariant for newly created values.
+                if left == -right:
+                    candidate = (left_index, right_index, Fraction(0), 0)
+                    break
+                if left.denominator == right.denominator:
+                    numerator = left.numerator + right.numerator
+                    if _exceeds_canonical_integer_bound(abs(numerator)):
+                        continue
+                    merged = Fraction(numerator, left.denominator)
+                else:
+                    denominator_bound = _integer_digit_upper_bound(
+                        left.denominator
+                    ) + _integer_digit_upper_bound(right.denominator)
+                    if denominator_bound > MAX_BRACKET_COEFFICIENT_DIGITS:
+                        continue
+                    merged = left + right
+                    if _exceeds_canonical_integer_bound(
+                        abs(merged.numerator)
+                    ) or _exceeds_canonical_integer_bound(merged.denominator):
+                        continue
+                merged_width = max(
+                    _integer_digit_upper_bound(merged.numerator),
+                    _integer_digit_upper_bound(merged.denominator),
+                )
+                score = (merged_width, abs(merged.numerator).bit_length())
+                if candidate is None or score < (
+                    candidate[3],
+                    abs(candidate[2].numerator).bit_length(),
+                ):
+                    candidate = (left_index, right_index, merged, merged_width)
+            if candidate is not None and candidate[3] == 0:
+                break
+
+        if candidate is None:
+            raise OperationResourceAdmissionError(
+                location=("terms",),
+                code="bracket.syzygy_coefficient_digit_bound",
+                message="exact residual coefficient growth exceeds the supported digit bound",
+            )
+        left_index, right_index, merged, merged_width = candidate
+        pending = [
+            component
+            for index, component in enumerate(pending)
+            if index not in (left_index, right_index)
+        ]
+        if merged:
+            pending.append(
+                (
+                    merged,
+                    (
+                        _integer_digit_upper_bound(merged.numerator),
+                        _integer_digit_upper_bound(merged.denominator),
+                    ),
+                )
+            )
+            work_digit_bound = max(work_digit_bound, merged_width)
+        pending = _cancel_opposite_components(pending)
+    return Fraction(0), work_digit_bound
+
+
 def _admit_result_allocation(
     output_keys: set[tuple[tuple[tuple[int, int, int], int], ...]],
     coefficient_digit_bound: int,
@@ -314,67 +401,11 @@ def _admit_surviving_components(
     coefficients: dict[_MonomialKey, Fraction] = {}
     coefficient_digit_bound = 0
     for key, components in coefficient_components.items():
-        # Equal denominators can be summed without introducing a larger
-        # denominator. Keep this grouped form as the construction plan so the
-        # admitted bound describes the arithmetic that builds the result.
-        numerators_by_denominator: dict[int, int] = {}
-        for value, _ in components:
-            numerators_by_denominator[value.denominator] = (
-                numerators_by_denominator.get(value.denominator, 0) + value.numerator
-            )
-        grouped: list[_CoefficientComponent] = []
-        for denominator, numerator in numerators_by_denominator.items():
-            if numerator == 0:
-                continue
-            if _exceeds_canonical_integer_bound(abs(numerator)):
-                raise OperationResourceAdmissionError(
-                    location=("terms",),
-                    code="bracket.syzygy_coefficient_digit_bound",
-                    message="exact residual coefficient growth exceeds the supported digit bound",
-                )
-            value = Fraction(numerator, denominator)
-            grouped.append(
-                (
-                    value,
-                    (
-                        _integer_digit_upper_bound(value.numerator),
-                        _integer_digit_upper_bound(value.denominator),
-                    ),
-                )
-            )
-        components = _cancel_opposite_components(grouped)
-        if not components:
-            continue
-        denominator_digit_bound = sum(widths[1] for _, widths in components)
-        if denominator_digit_bound > MAX_BRACKET_COEFFICIENT_DIGITS:
-            raise OperationResourceAdmissionError(
-                location=("terms",),
-                code="bracket.syzygy_coefficient_digit_bound",
-                message="exact residual coefficient growth exceeds the supported digit bound",
-            )
-        numerator_digit_bound = max(
-            widths[0] + denominator_digit_bound - widths[1] for _, widths in components
-        )
-        sum_digit_overhead = (
-            0 if len(components) <= 1 else _integer_digit_upper_bound(len(components))
-        )
-        local_digit_bound = max(
-            denominator_digit_bound,
-            numerator_digit_bound + sum_digit_overhead,
-        )
-        if local_digit_bound > MAX_BRACKET_COEFFICIENT_DIGITS:
-            raise OperationResourceAdmissionError(
-                location=("terms",),
-                code="bracket.syzygy_coefficient_digit_bound",
-                message="exact residual coefficient growth exceeds the supported digit bound",
-            )
-        coefficient_digit_bound = max(
-            coefficient_digit_bound,
-            local_digit_bound,
-        )
-        total = sum((value for value, _ in components), Fraction(0))
+        total, local_digit_bound = _bounded_component_sum(components)
         if total == 0:
+            coefficient_digit_bound = max(coefficient_digit_bound, local_digit_bound)
             continue
+
         if _exceeds_canonical_integer_bound(
             abs(total.numerator)
         ) or _exceeds_canonical_integer_bound(total.denominator):
@@ -383,6 +414,12 @@ def _admit_surviving_components(
                 code="bracket.syzygy_coefficient_digit_bound",
                 message="exact residual coefficient growth exceeds the supported digit bound",
             )
+        coefficient_digit_bound = max(
+            coefficient_digit_bound,
+            local_digit_bound,
+            _integer_digit_upper_bound(total.numerator),
+            _integer_digit_upper_bound(total.denominator),
+        )
         coefficients[key] = total
     if len(coefficients) > MAX_BRACKET_TERMS:
         raise OperationResourceAdmissionError(

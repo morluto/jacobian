@@ -687,6 +687,69 @@ def test_syzygy_cancels_equal_denominator_non_pair_components_before_bound() -> 
     assert residual.terms == ()
 
 
+def test_syzygy_bounds_same_denominator_reduction_before_accumulation() -> None:
+    relation = grassmann_pluecker_relation(
+        GrassmannPlueckerRelationRequest(
+            ground_size=5,
+            indices=(0, 1, 2, 3, 4),
+            family="SHARED_INDEX_THREE_TERM",
+        )
+    )
+    maximum = 10**MAX_CANONICAL_INTEGER_DIGITS - 1
+    residual = bracket_syzygy_residual(
+        BracketSyzygyResidualRequest(
+            target=BracketPolynomial(ground_size=5, terms=()),
+            terms=tuple(
+                (
+                    CanonicalRational(num=scalar, den=1),
+                    BracketMonomial(factors=()),
+                    relation,
+                )
+                for scalar in (maximum, maximum, -maximum, -maximum)
+            ),
+        )
+    )
+    assert residual.terms == ()
+
+
+def test_syzygy_cancels_distinct_denominators_before_bound() -> None:
+    relation = grassmann_pluecker_relation(
+        GrassmannPlueckerRelationRequest(
+            ground_size=5,
+            indices=(0, 1, 2, 3, 4),
+            family="SHARED_INDEX_THREE_TERM",
+        )
+    )
+    first_denominator = 10**12_000 + 1
+    second_denominator = 10**12_000 + 3
+    residual = bracket_syzygy_residual(
+        BracketSyzygyResidualRequest(
+            target=BracketPolynomial(ground_size=5, terms=()),
+            terms=(
+                (
+                    CanonicalRational(num=1, den=first_denominator),
+                    BracketMonomial(factors=()),
+                    relation,
+                ),
+                (
+                    CanonicalRational(num=1, den=second_denominator),
+                    BracketMonomial(factors=()),
+                    relation,
+                ),
+                (
+                    CanonicalRational(
+                        num=-(first_denominator + second_denominator),
+                        den=first_denominator * second_denominator,
+                    ),
+                    BracketMonomial(factors=()),
+                    relation,
+                ),
+            ),
+        )
+    )
+    assert residual.terms == ()
+
+
 def test_syzygy_constructs_from_cancellation_admission_plan() -> None:
     relation = grassmann_pluecker_relation(
         GrassmannPlueckerRelationRequest(

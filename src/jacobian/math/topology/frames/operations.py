@@ -323,9 +323,7 @@ def _complex_sum_height(term: RationalHeight, count: int) -> RationalHeight:
     return sum_heights((term,) * count)
 
 
-def _product_denominator(
-    left: CanonicalRational, right: CanonicalRational
-) -> int:
+def _product_denominator(left: CanonicalRational, right: CanonicalRational) -> int:
     return (left.as_fraction() * right.as_fraction()).denominator
 
 
@@ -333,7 +331,10 @@ def _hermitian_parts(
     left: GaussianRational, right: GaussianRational
 ) -> tuple[Fraction, Fraction]:
     left_real, left_imaginary = left.real.as_fraction(), left.imaginary.as_fraction()
-    right_real, right_imaginary = right.real.as_fraction(), right.imaginary.as_fraction()
+    right_real, right_imaginary = (
+        right.real.as_fraction(),
+        right.imaginary.as_fraction(),
+    )
     return (
         left_real * right_real + left_imaginary * right_imaginary,
         left_imaginary * right_real - left_real * right_imaginary,

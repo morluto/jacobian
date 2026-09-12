@@ -307,13 +307,22 @@ def _admit_enumeration(
     )
     total_work = candidate_edge_work + minimality_work + domination_work
 
-    possible_rows = max(
-        (
-            comb(len(free_vertices), size)
-            for size in range(0 if forced else 1, free_maximum + 1)
-        ),
-        default=0,
-    )
+    if len(remaining_edges) == 2:
+        left, right = remaining_edges
+        shared = left & right
+        possible_rows = 0
+        if free_maximum >= 1:
+            possible_rows += len(shared)
+        if free_maximum >= 2:
+            possible_rows += len(left - shared) * len(right - shared)
+    else:
+        possible_rows = max(
+            (
+                comb(len(free_vertices), size)
+                for size in range(0 if forced else 1, free_maximum + 1)
+            ),
+            default=0,
+        )
     if possible_rows > MAX_ENUMERATED_TRANSVERSALS:
         raise OperationResourceAdmissionError(
             location=("maximum_cardinality",),

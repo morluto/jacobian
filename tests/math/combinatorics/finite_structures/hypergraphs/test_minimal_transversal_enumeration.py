@@ -210,7 +210,6 @@ def test_native_operation_checks_deadline_after_result_validation() -> None:
 
 
 def test_candidate_slice_is_admitted_before_materialization() -> None:
-    # Distinct edges keep the Sperner row bound; duplicate member-sets do not.
     vertices = tuple(f"v{index:02d}" for index in range(20))
     source = FiniteHypergraph(
         vertices=vertices,
@@ -219,12 +218,14 @@ def test_candidate_slice_is_admitted_before_materialization() -> None:
             ("edge1", vertices[1:]),
         ),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="result rows"):
-        enumerate_minimal_transversals(
-            MinimalTransversalEnumerationRequest(
-                hypergraph=source, maximum_cardinality=8
-            )
-        )
+    result = enumerate_minimal_transversals(
+        MinimalTransversalEnumerationRequest(hypergraph=source, maximum_cardinality=8)
+    )
+    expected = (
+        *tuple((vertex,) for vertex in vertices[1:19]),
+        (vertices[0], vertices[19]),
+    )
+    assert result.transversals == expected
 
 
 def test_candidate_edge_and_minimality_work_is_admitted_before_search() -> None:

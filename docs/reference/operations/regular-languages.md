@@ -11,8 +11,9 @@ For inequivalent DFAs the result retains both source DFAs, the shortest
 distinguishing word, and one state trace per source automaton. Product
 successors are expanded in ascending alphabet order, so the witness is the
 lexicographically least word among all shortest witnesses. The empty word is
-considered first. DFAs must provide exactly one transition for every
-state-symbol pair over their positive-size alphabet.
+considered first. A zero-symbol alphabet is valid and has only the empty word;
+DFAs with a positive alphabet must still provide exactly one transition for
+every state-symbol pair.
 
 Product-state, transition, predecessor, witness, work, and result-allocation
 envelopes are admitted before traversal. Resource refusal is not an equivalence
@@ -31,4 +32,5 @@ and aggregate accepted-word count remain attached for composition.
 The operation admits transition-index construction, reachable-state discovery,
 all extended weak-composition DP layers, vector-coordinate updates, final-layer
 scans, exact count digits, and complete output materialization before running.
-The DFA carrier currently requires a positive alphabet size.
+A zero-symbol alphabet is valid; a positive alphabet is still required to be
+total.

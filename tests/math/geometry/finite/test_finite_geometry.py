@@ -393,7 +393,7 @@ def test_enumerate_admission_bounds_axis_label_characters() -> None:
 
 
 def test_sequence_normalization_is_an_explicit_claim() -> None:
-    """Sequence coordinate normalization is checked by its verifier."""
+    """Sequence coordinates are canonical at the typed value boundary."""
     result = projective_space_enumerate(_space(3, ("x", "y")))
     assert result.sequence.coordinates == ((0, 1), (1, 0), (1, 1), (1, 2))
 
@@ -402,8 +402,8 @@ def test_sequence_normalization_is_an_explicit_claim() -> None:
         (2, 1),
         *payload["sequence"]["coordinates"][1:],
     )
-    forged = ProjectiveSpaceEnumerateResult.model_validate(payload)
-    assert verify_projective_point_sequence(forged.sequence) is False
+    with pytest.raises(ValidationError):
+        ProjectiveSpaceEnumerateResult.model_validate(payload)
 
 
 def test_enumeration_sequence_claim_verifier_rejects_duplicates_and_wrong_counts() -> (

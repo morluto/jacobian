@@ -328,3 +328,17 @@ def test_transition_index_charge_rejects_before_indexing(
         match="symbol-Parikh DP or output exceeds",
     ):
         profile.symbol_parikh_profile(dfa, length)
+
+
+def test_empty_alphabet_has_only_the_empty_word() -> None:
+    dfa = DFA(
+        state_count=1,
+        alphabet_size=0,
+        transitions=(),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+    result = symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=0))
+    assert result.alphabet == ()
+    assert result.cells[0].symbol_counts == ()
+    assert result.total_accepted_words == 1

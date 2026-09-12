@@ -146,6 +146,16 @@ def _symbol_parikh_profile_request(
     dfa = request.dfa
     length = request.word_length
     alphabet_size = dfa.alphabet_size
+    if alphabet_size == 0:
+        total = count_accepted_words(dfa, length)
+        cells = (SymbolParikhCell(symbol_counts=(), multiplicity=1),) if total else ()
+        return SymbolParikhProfileResult(
+            dfa=dfa,
+            alphabet=(),
+            word_length=length,
+            cells=cells,
+            total_accepted_words=total,
+        )
     output_bound = comb(length + alphabet_size - 1, alphabet_size - 1)
     transition_count = dfa.state_count * alphabet_size
     # The layer at step t contains weak compositions of t, so only layers

@@ -142,21 +142,231 @@ def _reachable_states_without_index(dfa: DFA) -> set[int]:
     return reachable
 
 
+def _letter_maps_on_reachable(
+    dfa: DFA, reachable: set[int]
+) -> tuple[dict[int, dict[int, int]], int]:
+    by_source: dict[int, dict[int, int]] = {}
+    scanned = 0
+    for transition in dfa.transitions:
+        scanned += 1
+        if transition.source not in reachable:
+            continue
+        by_source.setdefault(transition.source, {})[transition.symbol] = (
+            transition.target
+        )
+    return by_source, scanned
+
+
+def _letter_actions_commute(
+    by_source: dict[int, dict[int, int]],
+    reachable: set[int],
+    alphabet_size: int,
+) -> tuple[bool, int]:
+    compared = 0
+    commute = True
+    alphabet = range(alphabet_size)
+    for source in reachable:
+        outgoing = by_source.get(source, {})
+        for first in alphabet:
+            image_first = outgoing.get(first)
+            first_reachable = image_first is not None and image_first in reachable
+            first_outgoing = (
+                by_source.get(image_first, {})
+                if first_reachable and image_first is not None
+                else {}
+            )
+            for second in alphabet:
+                compared += 1
+                if not commute:
+                    continue
+                if not first_reachable:
+                    commute = False
+                    continue
+                image_second = outgoing.get(second)
+                if image_second is None or image_second not in reachable:
+                    commute = False
+                    continue
+                if first_outgoing.get(second) != by_source.get(image_second, {}).get(
+                    first
+                ):
+                    commute = False
+    return commute, compared
+
+
+def _reachable_letter_graph(
+    by_source: dict[int, dict[int, int]],
+    reachable: set[int],
+    alphabet_size: int,
+) -> dict[int, set[int]]:
+    graph: dict[int, set[int]] = {state: set() for state in reachable}
+    for source in reachable:
+        outgoing = by_source.get(source, {})
+        for symbol in range(alphabet_size):
+            target = outgoing.get(symbol)
+            if target in reachable:
+                graph[source].add(target)
+    return graph
+
+
+def _cyclic_components(graph: dict[int, set[int]]) -> set[int]:
+    index = 0
+    stack: list[int] = []
+    on_stack: set[int] = set()
+    indices: dict[int, int] = {}
+    lowlink: dict[int, int] = {}
+    cyclic: set[int] = set()
+
+    def strongconnect(vertex: int) -> None:
+        nonlocal index
+        indices[vertex] = index
+        lowlink[vertex] = index
+        index += 1
+        stack.append(vertex)
+        on_stack.add(vertex)
+        for target in graph[vertex]:
+            if target not in indices:
+                strongconnect(target)
+                lowlink[vertex] = min(lowlink[vertex], lowlink[target])
+            elif target in on_stack:
+                lowlink[vertex] = min(lowlink[vertex], indices[target])
+        if lowlink[vertex] == indices[vertex]:
+            component: list[int] = []
+            while True:
+                member = stack.pop()
+                on_stack.remove(member)
+                component.append(member)
+                if member == vertex:
+                    break
+            looping = len(component) > 1 or vertex in graph[vertex]
+            if looping:
+                cyclic.update(component)
+
+    for state in graph:
+        if state not in indices:
+            strongconnect(state)
+    return cyclic
+
+
+def _persistent_reachable_states(
+    by_source: dict[int, dict[int, int]],
+    reachable: set[int],
+    alphabet_size: int,
+) -> set[int]:
+    graph = _reachable_letter_graph(by_source, reachable, alphabet_size)
+    cyclic = _cyclic_components(graph)
+    persistent = set(cyclic)
+    frontier = list(cyclic)
+    while frontier:
+        source = frontier.pop()
+        for target in graph[source]:
+            if target in persistent:
+                continue
+            persistent.add(target)
+            frontier.append(target)
+    return persistent
+
+
+def _longest_transient_walk(
+    by_source: dict[int, dict[int, int]],
+    transient: set[int],
+    alphabet_size: int,
+    initial_state: int,
+) -> int:
+    if initial_state not in transient:
+        return -1
+    longest = dict.fromkeys(transient, -1)
+    longest[initial_state] = 0
+    for _ in range(len(transient)):
+        changed = False
+        for source in transient:
+            if longest[source] < 0:
+                continue
+            outgoing = by_source.get(source, {})
+            for symbol in range(alphabet_size):
+                target = outgoing.get(symbol)
+                if target not in transient:
+                    continue
+                candidate = longest[source] + 1
+                if candidate > longest[target]:
+                    longest[target] = candidate
+                    changed = True
+        if not changed:
+            break
+    return max(longest.values(), default=-1)
+
+
+def _noncommuting_analysis_work(reachable_count: int, alphabet_size: int) -> int:
+    """Charge persistent-graph, SCC/closure, and transient-walk phases."""
+
+    edge_probes = reachable_count * alphabet_size
+    scc_and_closure = 2 * (reachable_count + edge_probes)
+    transient_relaxations = reachable_count * reachable_count * alphabet_size
+    return edge_probes + scc_and_closure + transient_relaxations
+
+
+def _states_per_layer(
+    *,
+    length: int,
+    reachable: set[int],
+    commute: bool,
+    persistent: set[int],
+    max_transient_step: int,
+) -> list[int]:
+    reachable_count = len(reachable)
+    persistent_count = len(persistent)
+    bounds: list[int] = []
+    for step in range(length + 1):
+        if commute:
+            bounds.append(1)
+        elif step > max_transient_step:
+            bounds.append(persistent_count)
+        else:
+            bounds.append(reachable_count)
+    return bounds
+
+
+def _extend_profile_layer(
+    layer: dict[tuple[int, tuple[int, ...]], int],
+    transitions: dict[tuple[int, int], int],
+    reachable: set[int],
+    alphabet_size: int,
+) -> dict[tuple[int, tuple[int, ...]], int]:
+    next_layer: dict[tuple[int, tuple[int, ...]], int] = {}
+    for (state, counts), multiplicity in layer.items():
+        for symbol in range(alphabet_size):
+            target = transitions[(state, symbol)]
+            if target not in reachable:
+                continue
+            updated = (*counts[:symbol], counts[symbol] + 1, *counts[symbol + 1 :])
+            key = (target, updated)
+            next_layer[key] = next_layer.get(key, 0) + multiplicity
+    return next_layer
+
+
+def _collect_profile(
+    layer: dict[tuple[int, tuple[int, ...]], int],
+    accepting: set[int],
+) -> dict[tuple[int, ...], int]:
+    profile: dict[tuple[int, ...], int] = {}
+    for (state, counts), multiplicity in layer.items():
+        if state in accepting:
+            profile[counts] = profile.get(counts, 0) + multiplicity
+    return profile
+
+
 def _compute_symbol_parikh_profile(
     dfa: DFA,
     length: int,
 ) -> SymbolParikhProfileResult:
     alphabet_size = dfa.alphabet_size
     if alphabet_size == 0:
-        accepted = length == 0 and dfa.initial_state in dfa.accepting_states
-        cells = (
-            (SymbolParikhCell(symbol_counts=(), multiplicity=1),) if accepted else ()
-        )
+        total = int(length == 0 and dfa.initial_state in dfa.accepting_states)
+        cells = (SymbolParikhCell(symbol_counts=(), multiplicity=1),) if total else ()
         return SymbolParikhProfileResult._from_kernel(
             dfa,
             length,
             cells=cells,
-            total_accepted_words=int(accepted),
+            total_accepted_words=total,
         )
     output_bound = comb(length + alphabet_size - 1, alphabet_size - 1)
     transition_count = dfa.state_count * alphabet_size
@@ -182,9 +392,57 @@ def _compute_symbol_parikh_profile(
             message="symbol-Parikh multiplicities exceed the exact integer digit bound",
         )
     reachable = _reachable_states_without_index(dfa)
-    extension_cells = len(reachable) * comb(length + alphabet_size - 1, alphabet_size)
+    by_source, commute_scan_work = _letter_maps_on_reachable(dfa, reachable)
+    commute, commute_compare_work = _letter_actions_commute(
+        by_source, reachable, alphabet_size
+    )
+    commute_preflight_work = commute_scan_work + commute_compare_work
+    reachable_count = len(reachable)
+    analysis_work = (
+        0 if commute else _noncommuting_analysis_work(reachable_count, alphabet_size)
+    )
+    persistent = (
+        reachable
+        if commute
+        else _persistent_reachable_states(by_source, reachable, alphabet_size)
+    )
+    transient = set() if commute else reachable - persistent
+    max_transient_step = (
+        -1
+        if commute
+        else _longest_transient_walk(
+            by_source, transient, alphabet_size, dfa.initial_state
+        )
+    )
+    layer_states = _states_per_layer(
+        length=length,
+        reachable=reachable,
+        commute=commute,
+        persistent=persistent,
+        max_transient_step=max_transient_step,
+    )
+    # A DP layer has at most one entry per word of that length.  Capping the
+    # composition bound by the possible word count keeps unreachable states
+    # from charging combinations that the layer cannot contain. Transient
+    # tree prefixes occupy only early layers, so later layers charge the
+    # persistent (cyclic) fragment instead of every reachable state.
+    extension_cells = 0
+    possible_word_count = 1
+    for step in range(length):
+        layer_composition_bound = comb(step + alphabet_size - 1, alphabet_size - 1)
+        extension_cells += min(
+            layer_states[step] * layer_composition_bound,
+            possible_word_count,
+        )
+        possible_word_count *= alphabet_size
     extension_coordinate_work = extension_cells * alphabet_size * max(1, alphabet_size)
-    output_materialization_work = len(reachable) * output_bound * max(1, alphabet_size)
+    output_materialization_cells = min(
+        layer_states[length] * output_bound,
+        possible_word_count,
+    )
+    output_materialization_work = output_materialization_cells
+    cell_construction_work = output_materialization_cells * max(1, alphabet_size)
+    result_reduce_work = 2 * output_materialization_cells
     # The transition index is built from every DFA edge, including edges from
     # states that are unreachable from the initial state.
     transition_index_work = transition_count
@@ -192,8 +450,12 @@ def _compute_symbol_parikh_profile(
     work_bound = (
         transition_index_work
         + reachability_scan_work
+        + commute_preflight_work
+        + analysis_work
         + extension_coordinate_work
         + output_materialization_work
+        + cell_construction_work
+        + result_reduce_work
     )
     if work_bound > MAX_SYMBOL_PARIKH_DP_WORK:
         raise OperationResourceAdmissionError(
@@ -205,21 +467,9 @@ def _compute_symbol_parikh_profile(
     zero = (0,) * alphabet_size
     layer: dict[tuple[int, tuple[int, ...]], int] = {(dfa.initial_state, zero): 1}
     for _step in range(length):
-        next_layer: dict[tuple[int, tuple[int, ...]], int] = {}
-        for (state, counts), multiplicity in layer.items():
-            for symbol in range(alphabet_size):
-                target = transitions[(state, symbol)]
-                if target not in reachable:
-                    continue
-                updated = (*counts[:symbol], counts[symbol] + 1, *counts[symbol + 1 :])
-                key = (target, updated)
-                next_layer[key] = next_layer.get(key, 0) + multiplicity
-        layer = next_layer
-    profile: dict[tuple[int, ...], int] = {}
+        layer = _extend_profile_layer(layer, transitions, reachable, alphabet_size)
     accepting = set(dfa.accepting_states)
-    for (state, counts), multiplicity in layer.items():
-        if state in accepting:
-            profile[counts] = profile.get(counts, 0) + multiplicity
+    profile = _collect_profile(layer, accepting)
     total = sum(profile.values())
     return SymbolParikhProfileResult._from_kernel(
         dfa,

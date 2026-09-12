@@ -135,6 +135,41 @@ def test_complete_family_output_bound_is_admitted_before_search() -> None:
         enumerate_fixed_length_cycles(graph, 3)
 
 
+def test_sparse_ring_long_cycle_is_admitted_by_topology_bounds() -> None:
+    vertices = tuple(str(index) for index in range(9))
+    graph = SimpleUndirectedGraph(
+        vertices=vertices,
+        edges=tuple(
+            (vertices[index], vertices[(index + 1) % 9]) if index < 8 else ("0", "8")
+            for index in range(9)
+        ),
+    )
+    expected = (tuple(str(index) for index in range(9)),)
+
+    simple = enumerate_fixed_length_cycles(graph, 9)
+    assert simple.cycles == expected
+    assert simple.cycle_count == 1
+
+    chordless = enumerate_chordless_fixed_length_cycles(graph, 9)
+    assert chordless.cycles == expected
+
+
+def test_direct_native_noncanonical_labels_use_typed_domain_errors() -> None:
+    decomposed = SimpleUndirectedGraph.model_construct(
+        vertices=("é", "a"),
+        edges=(("a", "é"),),
+    )
+    with pytest.raises(OperationDomainValidationError, match="Unicode NFC"):
+        enumerate_fixed_length_cycles(decomposed, 3)
+
+    surrogate = SimpleUndirectedGraph.model_construct(
+        vertices=("\ud800", "a"),
+        edges=(("a", "\ud800"),),
+    )
+    with pytest.raises(OperationDomainValidationError, match="scalar values"):
+        enumerate_fixed_length_cycles(surrogate, 3)
+
+
 def test_direct_native_invalid_inputs_use_typed_domain_errors() -> None:
     with pytest.raises(OperationDomainValidationError, match="canonical simple"):
         enumerate_fixed_length_cycles(object(), 3)  # type: ignore[arg-type]

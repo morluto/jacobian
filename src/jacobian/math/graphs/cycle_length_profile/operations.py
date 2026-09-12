@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import unicodedata
 from dataclasses import dataclass
 from itertools import pairwise
 
@@ -578,6 +579,12 @@ def _admit_fixed_cycle_enumeration(
         return None
 
     core_order = len(core_vertices)
+    max_core_degree = max(
+        (len(neighbors) for neighbors in adjacency_sets.values()), default=0
+    )
+    # Complete-graph bounds over the core order. They stay sound for dense
+    # graphs but reject cheaply executable sparse instances (for example a
+    # bare ring, whose only cycles are found by a linear DFS).
     prefix_bound = core_order
     for depth in range(1, cycle_length):
         prefix_bound += core_order * _falling_factorial(core_order - 1, depth)
@@ -586,14 +593,35 @@ def _admit_fixed_cycle_enumeration(
     # operation, every unordered vertex pair.
     scan_bound = prefix_bound * max(1, core_order)
     terminal_bound = _falling_factorial(core_order, cycle_length)
-    cycle_upper_bound = terminal_bound // (2 * cycle_length)
+    complete_cycle_upper_bound = terminal_bound // (2 * cycle_length)
     terminal_checks = 1 + 2 * cycle_length
     if chordless:
         terminal_checks += cycle_length * (cycle_length - 1) // 2
-    assembly_bound = terminal_bound * terminal_checks
-    source_scan_bound = 3 * (vertex_count + len(graph.edges))
-    complete_work = scan_bound + assembly_bound + source_scan_bound
-    if complete_work > MAX_FIXED_CYCLE_WORK:
+    complete_work = (
+        scan_bound
+        + terminal_bound * terminal_checks
+        + 3 * (vertex_count + len(graph.edges))
+    )
+    # Topology-sensitive bounds from the built core adjacency. From each
+    # start, length-d simple paths number at most Δ·(Δ-1)^(d-1): the first
+    # step has at most Δ choices and every later step revisits the
+    # predecessor, leaving at most Δ-1 unvisited neighbors. Each found cycle
+    # needs at least one length-(k-1) terminal visit, so those visits also
+    # bound the output. Taking the minimum with the complete-graph bounds
+    # keeps dense-graph behavior unchanged while admitting sparse graphs.
+    branching = max(max_core_degree - 1, 0)
+    directed_paths = core_order * max_core_degree
+    topology_prefix_total = core_order + directed_paths
+    for _depth in range(2, cycle_length):
+        directed_paths *= branching
+        topology_prefix_total += directed_paths
+    topology_work = (
+        topology_prefix_total * max(max_core_degree, 1)
+        + directed_paths * terminal_checks
+        + 3 * (vertex_count + len(graph.edges))
+    )
+    cycle_upper_bound = min(complete_cycle_upper_bound, directed_paths)
+    if min(complete_work, topology_work) > MAX_FIXED_CYCLE_WORK:
         _reject_fixed_cycle_resource(
             "cycle_enumeration.work_bound",
             "complete fixed-length traversal and incidence assembly exceed the admitted work envelope",
@@ -619,6 +647,19 @@ def _validate_graph_carrier(graph: SimpleUndirectedGraph) -> None:
             "cycle_enumeration.graph_structure",
             "graph vertices must be a tuple of string labels",
         )
+    for vertex in vertices:
+        try:
+            vertex.encode("utf-8")
+        except UnicodeEncodeError:
+            _reject(
+                "cycle_enumeration.graph_structure",
+                "graph vertices must contain only valid Unicode scalar values",
+            )
+        if not unicodedata.is_normalized("NFC", vertex):
+            _reject(
+                "cycle_enumeration.graph_structure",
+                "graph vertices must use Unicode NFC so results round-trip",
+            )
     vertex_set = set(vertices)
     if len(vertex_set) != len(vertices):
         _reject(

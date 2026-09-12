@@ -47,3 +47,17 @@ def test_length_zero_retains_empty_count_vector() -> None:
     )
     assert accepted.cells[0].symbol_counts == (0, 0)
     assert accepted.cells[0].multiplicity == 1
+
+
+def test_empty_alphabet_has_only_the_empty_word() -> None:
+    dfa = DFA(
+        state_count=1,
+        alphabet_size=0,
+        transitions=(),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+    result = symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=0))
+    assert result.alphabet == ()
+    assert result.cells[0].symbol_counts == ()
+    assert result.total_accepted_words == 1

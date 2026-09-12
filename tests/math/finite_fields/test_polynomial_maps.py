@@ -114,6 +114,25 @@ def test_native_point_evaluation_rejects_maximum_degree_work() -> None:
     )
 
 
+def test_native_point_evaluation_rejects_mismatched_parent_with_typed_error() -> None:
+    field = finite_field(2, (1, 1, 1))
+    other = finite_field(3, (0, 1))
+    polynomial = finite_polynomial(
+        field, (element(field, (1, 0)), element(field, (1, 0)))
+    )
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        evaluate_finite_polynomial(polynomial, element(other, (0,)))
+
+    assert error.value.errors() == (
+        {
+            "loc": ("value", "presentation"),
+            "type": "finite_field.finite_polynomial_evaluation_parent_mismatch",
+            "msg": "polynomial and value must share their exact presentation",
+        },
+    )
+
+
 def test_frobenius_map_is_a_permutation() -> None:
     table = finite_map_table(_map(2))
 

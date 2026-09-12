@@ -987,7 +987,11 @@ def evaluate_finite_polynomial(
     """Evaluate with Python-FLINT while preserving the exact parent."""
 
     if value.presentation != polynomial.presentation:
-        raise ValueError("polynomial and value must share their exact presentation")
+        raise OperationDomainValidationError(
+            location=("value", "presentation"),
+            code="finite_field.finite_polynomial_evaluation_parent_mismatch",
+            message="polynomial and value must share their exact presentation",
+        )
     _admit_polynomial_point_evaluation(polynomial, location=("polynomial",))
     from jacobian.math.finite_fields import _flint
 

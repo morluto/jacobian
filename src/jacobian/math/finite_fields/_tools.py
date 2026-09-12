@@ -3,7 +3,6 @@
 from jacobian.catalog.models import (
     MathTool,
     MathTools,
-    OperationDomainValidationError,
     OperationExample,
 )
 from jacobian.math.finite_fields import (
@@ -202,12 +201,6 @@ def _finite_map_table(request: FiniteMapTableRequest) -> FiniteMapTable:
 def _finite_polynomial_evaluation(
     request: FinitePolynomialEvaluationRequest,
 ) -> FiniteFieldElement:
-    if request.value.presentation != request.polynomial.presentation:
-        raise OperationDomainValidationError(
-            location=("value", "presentation"),
-            code="finite_field.finite_polynomial_evaluation_parent_mismatch",
-            message="polynomial and value must share their exact presentation",
-        )
     return evaluate_finite_polynomial(request.polynomial, request.value)
 
 

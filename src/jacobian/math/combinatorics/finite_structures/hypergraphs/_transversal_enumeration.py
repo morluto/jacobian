@@ -201,6 +201,16 @@ def _forced_vertices(edges: tuple[frozenset[str], ...]) -> frozenset[str]:
     return frozenset(forced)
 
 
+def _minimal_edges(
+    edges: tuple[frozenset[str], ...],
+) -> tuple[frozenset[str], ...]:
+    return tuple(
+        edge
+        for edge in edges
+        if not any(other < edge for other in edges)
+    )
+
+
 def _admit_enumeration(
     request: MinimalTransversalEnumerationRequest,
 ) -> tuple[int, tuple[frozenset[str], ...], frozenset[str], bool, bool]:
@@ -208,7 +218,7 @@ def _admit_enumeration(
 
     vertices = request.hypergraph.vertices
     maximum = min(request.maximum_cardinality, len(vertices))
-    edges = _unique_edges(request)
+    edges = _minimal_edges(_unique_edges(request))
     if not edges:
         return maximum, edges, frozenset(), True, False
     if any(not edge for edge in edges):
@@ -223,21 +233,28 @@ def _admit_enumeration(
     if len(remaining_edges) == 1:
         return maximum, remaining_edges, forced, False, False
 
-    free_vertices = tuple(vertex for vertex in vertices if vertex not in forced)
+    occupied = frozenset().union(*remaining_edges)
+    free_vertices = tuple(
+        vertex for vertex in vertices if vertex not in forced and vertex in occupied
+    )
     free_maximum = maximum - len(forced)
     candidate_count = sum(
-        comb(len(free_vertices), size) for size in range(1, free_maximum + 1)
+        comb(len(free_vertices), size)
+        for size in range(0 if forced else 1, free_maximum + 1)
     )
-    weighted_candidate_count = sum(
-        size * comb(len(free_vertices), size) for size in range(1, free_maximum + 1)
+    constraint_count = len(remaining_edges) + len(forced)
+    candidate_edge_work = candidate_count * len(remaining_edges)
+    minimality_work = sum(
+        (len(forced) + size) * constraint_count * comb(len(free_vertices), size)
+        for size in range(0 if forced else 1, free_maximum + 1)
     )
-    edge_count = len(remaining_edges)
-    candidate_edge_work = candidate_count * edge_count
-    minimality_work = weighted_candidate_count * edge_count
     total_work = candidate_edge_work + minimality_work
 
     possible_rows = max(
-        (comb(len(free_vertices), size) for size in range(1, free_maximum + 1)),
+        (
+            comb(len(free_vertices), size)
+            for size in range(0 if forced else 1, free_maximum + 1)
+        ),
         default=0,
     )
     if possible_rows > MAX_ENUMERATED_TRANSVERSALS:
@@ -318,7 +335,12 @@ def enumerate_minimal_transversals(
         )
     else:
         materialized: list[tuple[str, ...]] = []
-        free_vertices = tuple(vertex for vertex in vertices if vertex not in forced)
+        free_vertices = tuple(
+            vertex
+            for vertex in vertices
+            if vertex not in forced
+            and any(vertex in edge for edge in remaining_edges)
+        )
         free_maximum = maximum - len(forced)
         for size in range(0 if forced else 1, free_maximum + 1):
             for extra in combinations(free_vertices, size):

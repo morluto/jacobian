@@ -393,3 +393,43 @@ def test_owner_deadline_binds_inside_a_later_outer_deadline() -> None:
     assert result.transversals == (("a",),)
     assert bound
     assert bound[0] == pytest.approx(3_700.0)
+
+
+def test_isolated_vertices_are_excluded_from_the_admission_universe() -> None:
+    vertices = tuple(f"v{index:02d}" for index in range(20))
+    source = FiniteHypergraph(
+        vertices=vertices,
+        edges=(("e0", (vertices[0], vertices[1])), ("e1", (vertices[1], vertices[2]))),
+    )
+    result = enumerate_minimal_transversals(
+        MinimalTransversalEnumerationRequest(hypergraph=source, maximum_cardinality=8)
+    )
+    assert result.transversals == ((vertices[1],), (vertices[0], vertices[2]))
+
+
+def test_dominated_edges_reduce_to_the_single_edge_shortcut() -> None:
+    vertices = tuple(f"v{index:02d}" for index in range(20))
+    source = FiniteHypergraph(
+        vertices=vertices,
+        edges=(("small", vertices[:19]), ("large", vertices)),
+    )
+    result = enumerate_minimal_transversals(
+        MinimalTransversalEnumerationRequest(hypergraph=source, maximum_cardinality=8)
+    )
+    assert result.transversals == tuple((vertex,) for vertex in vertices[:19])
+
+
+def test_forced_vertices_are_included_in_minimality_search() -> None:
+    source = FiniteHypergraph(
+        vertices=("a", "b", "c", "d", "e"),
+        edges=(
+            ("ab", ("a", "b")),
+            ("bc", ("b", "c")),
+            ("d", ("d",)),
+            ("e", ("e",)),
+        ),
+    )
+    result = enumerate_minimal_transversals(
+        MinimalTransversalEnumerationRequest(hypergraph=source, maximum_cardinality=4)
+    )
+    assert result.transversals == (("b", "d", "e"), ("a", "c", "d", "e"))

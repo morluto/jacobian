@@ -1,6 +1,7 @@
 """Exact sparse rational Laurent-polynomial multiplication."""
 
 from fractions import Fraction
+from math import lcm
 
 from pydantic import ValidationError
 
@@ -69,23 +70,34 @@ def _monomial_coefficient_digits(
     return None
 
 
+def _integer_digits(value: int) -> int:
+    return 1 if value == 0 else len(format_canonical_integer(abs(value)))
+
+
+def _capped_denominator_lcm(left: int, right: int) -> int | None:
+    merged = lcm(left, right)
+    if _integer_digits(merged) > MAX_CANONICAL_RATIONAL_DIGITS:
+        return None
+    return merged
+
+
 def _operand_coefficient_digits(
     terms: tuple[RationalLaurentPolynomialTerm, ...],
-) -> tuple[int, bool]:
+) -> tuple[int, int | None]:
     height = 1
-    shared_denominator: int | None = None
+    shared_denominator: int | None = 1
     for index, term in enumerate(terms):
         if index % 128 == 0:
             request_checkpoint("during Laurent coefficient-height admission")
         digits = canonical_rational_component_digits(term.coefficient)
         if digits > height:
             height = digits
-        denominator = term.coefficient.den
         if shared_denominator is None:
-            shared_denominator = denominator
-        elif denominator != shared_denominator:
-            shared_denominator = 0
-    return height, shared_denominator is not None and shared_denominator != 0
+            continue
+        shared_denominator = _capped_denominator_lcm(
+            shared_denominator, term.coefficient.den
+        )
+    return height, shared_denominator
 
 
 def _maximum_coefficient_digits(
@@ -94,12 +106,13 @@ def _maximum_coefficient_digits(
     """Bound one collected coefficient before exact convolution begins."""
 
     collisions = min(len(left.terms), len(right.terms))
-    left_digits, left_shared = _operand_coefficient_digits(left.terms)
-    right_digits, right_shared = _operand_coefficient_digits(right.terms)
+    left_digits, left_lcm = _operand_coefficient_digits(left.terms)
+    right_digits, right_lcm = _operand_coefficient_digits(right.terms)
     addition_digits = len(str(collisions)) if collisions > 1 else 0
     product_digits = left_digits + right_digits
-    if left_shared and right_shared:
-        return product_digits + addition_digits
+    if left_lcm is not None and right_lcm is not None:
+        denominator_digits = _integer_digits(left_lcm) + _integer_digits(right_lcm)
+        return max(product_digits, denominator_digits) + addition_digits
     return collisions * product_digits + addition_digits
 
 

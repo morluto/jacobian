@@ -204,6 +204,131 @@ class TestSupport:
         forged_face = face.model_copy(update={"initial_form": malformed_face})
         assert not verify_polynomial_face_data(forged_face)
 
+    @pytest.mark.parametrize("kind", ("profile", "face"))
+    @pytest.mark.parametrize("malformation", ("negative", "duplicate", "zero", "list"))
+    def test_native_weighted_admission_rejects_malformed_constructed_source(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        kind: str,
+        malformation: str,
+    ) -> None:
+        from jacobian._exact import CanonicalRational
+        from jacobian.math.polynomials.support_geometry import operations
+        from jacobian.math.polynomials.values import (
+            RationalPolynomialTerm,
+            SparseRationalPolynomial,
+        )
+
+        source = _polynomial((_term(1, [2, 0]), _term(1, [0, 2])), VARS)
+        terms: object
+        if malformation == "negative":
+            terms = (
+                source.polynomial.terms[0].model_copy(update={"exponents": (-1, 0)}),
+                source.polynomial.terms[1],
+            )
+        elif malformation == "duplicate":
+            terms = (source.polynomial.terms[0], source.polynomial.terms[0])
+        elif malformation == "zero":
+            terms = (
+                RationalPolynomialTerm.model_construct(
+                    coefficient=CanonicalRational(num=0, den=1),
+                    exponents=(2, 0),
+                ),
+                source.polynomial.terms[1],
+            )
+        else:
+            terms = list(source.polynomial.terms)
+        malformed_source = RationalPolynomial.model_construct(
+            domain="QQ",
+            variables=VARS,
+            polynomial=SparseRationalPolynomial.model_construct(terms=terms),
+        )
+
+        def fail(*args: object, **kwargs: object) -> object:
+            raise AssertionError("malformed source reached computation")
+
+        if kind == "profile":
+            monkeypatch.setattr(operations, "_compute_weight_layers", fail)
+            with raises_domain_code("polynomial_support_geometry.malformed_polynomial"):
+                weight_profile(malformed_source, (1, 2))
+        else:
+            monkeypatch.setattr(operations, "_initial_form_terms", fail)
+            with raises_domain_code("polynomial_support_geometry.malformed_polynomial"):
+                initial_form(malformed_source, (1, 2))
+
+    @pytest.mark.parametrize("component", (True, 1.0))
+    def test_weight_components_reject_json_coercion(self, component: object) -> None:
+        source = _polynomial((_term(1, [2, 0]), _term(1, [0, 2])), VARS)
+        profile = compute_weight_profile(
+            WeightProfileRequest(polynomial=source, weight=(1, 2))
+        )
+        face = compute_initial_form(
+            InitialFormRequest(polynomial=source, weight=(1, 2))
+        )
+        payloads = (
+            (
+                WeightProfileRequest,
+                {
+                    "polynomial": source.model_dump(mode="json"),
+                    "weight": [component, 2],
+                },
+            ),
+            (
+                InitialFormRequest,
+                {
+                    "polynomial": source.model_dump(mode="json"),
+                    "weight": [1, component],
+                },
+            ),
+            (
+                PolynomialWeightProfile,
+                profile.model_dump(mode="json") | {"weight": [component, 2]},
+            ),
+            (
+                PolynomialFaceData,
+                face.model_dump(mode="json") | {"weight": [1, component]},
+            ),
+        )
+        for model, payload in payloads:
+            with pytest.raises(ValidationError):
+                model.model_validate_json(json.dumps(payload))
+
+    def test_verifiers_reject_hostile_monic_subtype_without_raising(self) -> None:
+        from jacobian._exact import CanonicalRational
+        from jacobian.math.polynomials.values import (
+            MonicPolynomial,
+            monic_polynomial_from_coefficients,
+        )
+
+        source = monic_polynomial_from_coefficients(
+            (
+                CanonicalRational(num=-1, den=1),
+                CanonicalRational(num=1, den=1),
+            ),
+            variable="t",
+        )
+
+        class HostileMonicPolynomial(MonicPolynomial):
+            def __getattribute__(self, name: str) -> object:
+                if name in {"domain", "variables", "polynomial"}:
+                    raise RuntimeError("hostile polynomial access")
+                return super().__getattribute__(name)
+
+        hostile = HostileMonicPolynomial.model_construct(
+            domain="QQ", variables=("t",), polynomial=source.polynomial
+        )
+        profile = compute_weight_profile(
+            WeightProfileRequest(polynomial=source, weight=(1,))
+        )
+        face = compute_initial_form(InitialFormRequest(polynomial=source, weight=(1,)))
+
+        assert not verify_polynomial_weight_profile(
+            profile.model_copy(update={"polynomial": hostile})
+        )
+        assert not verify_polynomial_face_data(
+            face.model_copy(update={"polynomial": hostile})
+        )
+
     def test_verifiers_accept_zero_variable_constant_round_trip(self) -> None:
         source = _polynomial((_term(1, []),), ())
         profile = weight_profile(source, ())

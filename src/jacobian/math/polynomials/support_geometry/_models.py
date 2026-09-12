@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import Field
+from pydantic import Field, StrictInt
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -54,6 +54,11 @@ MAX_WEIGHTED_COEFFICIENT_DIGITS = 512
 def _require_transportable_weight(
     weight: tuple[int, ...], variables: tuple[PolynomialVariable, ...]
 ) -> None:
+    if type(weight) is not tuple:
+        raise _validation_error(
+            "weight_not_tuple",
+            "weight must be an exact tuple of integer components",
+        )
     if len(weight) != len(variables):
         raise _validation_error(
             "weight_dimension_mismatch",
@@ -84,7 +89,7 @@ class WeightProfileRequest(StrictModel):
             "digits."
         )
     )
-    weight: tuple[int, ...] = Field(
+    weight: tuple[StrictInt, ...] = Field(
         min_length=1,
         max_length=MAX_WEIGHT_COMPONENTS,
         description=(
@@ -106,7 +111,7 @@ class InitialFormRequest(StrictModel):
             "digits."
         )
     )
-    weight: tuple[int, ...] = Field(
+    weight: tuple[StrictInt, ...] = Field(
         min_length=1,
         max_length=MAX_WEIGHT_COMPONENTS,
         description=(

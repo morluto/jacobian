@@ -121,6 +121,13 @@ class TestFactorValuesAndOperations:
         with pytest.raises(ValidationError):
             Factor(variables=(0,), domain_sizes=(0,), table=_table("1"))
 
+    def test_negative_factor_entry_is_rejected(self) -> None:
+        with pytest.raises(ValidationError) as error:
+            _factor((0,), ("-1", "2"))
+        assert (
+            error.value.errors()[0]["type"] == "graphical_model.factor_entry_negative"
+        )
+
     def test_wrong_table_size_is_rejected(self) -> None:
         with pytest.raises(ValidationError) as error:
             _factor((0,), ("1",))
@@ -132,6 +139,44 @@ class TestFactorValuesAndOperations:
 
         with pytest.raises(ValueError, match="exact model"):
             factor_multiply(left, right)
+
+    def test_local_product_preserves_seventeen_axis_ambient_domain(self) -> None:
+        domain_sizes = (2,) * 17
+        left = Factor(
+            variables=(0,),
+            domain_sizes=domain_sizes,
+            table=_table("1", "2"),
+        )
+        right = Factor(
+            variables=(1,),
+            domain_sizes=domain_sizes,
+            table=_table("3", "4"),
+        )
+
+        result = factor_multiply(left, right)
+
+        assert result.domain_sizes == domain_sizes
+        assert result.variables == (0, 1)
+        assert _strings(result.table) == ("3", "4", "6", "8")
+
+    def test_local_marginal_preserves_seventeen_axis_ambient_domain(self) -> None:
+        domain_sizes = (2,) * 17
+        source = Factor(
+            variables=(0, 1),
+            domain_sizes=domain_sizes,
+            table=_table("1", "2", "3", "4"),
+        )
+
+        result = factor_marginalize(source, 1)
+
+        assert result.domain_sizes == domain_sizes
+        assert result.variables == (0,)
+        assert _strings(result.table) == ("3", "7")
+
+    def test_ambient_domain_ceiling_is_distinct_from_active_table_bound(self) -> None:
+        domain_sizes = (2,) * 65
+        with pytest.raises(ValidationError):
+            Factor(variables=(0,), domain_sizes=domain_sizes, table=_table("1", "2"))
 
 
 class TestBoundResultContracts:

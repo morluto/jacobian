@@ -10,7 +10,10 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
 
-MAX_MODEL_VARS = 16
+# Ambient model metadata is intentionally bounded separately from active factor
+# work.  Local products/marginals may touch only a few axes of a larger model;
+# ``scope_size`` continues to admit the materialized table before expansion.
+MAX_MODEL_VARS = 64
 MAX_VAR_DOMAIN = 32
 MAX_FACTOR_TABLE_SIZE = 4_096
 MAX_FACTOR_COUNT = 64
@@ -79,6 +82,11 @@ class Factor(StrictModel):
                     "graphical_model.factor_entry_invalid",
                     str(error),
                 ) from error
+            if value.as_fraction() < 0:
+                raise PydanticCustomError(
+                    "graphical_model.factor_entry_negative",
+                    "factor entries must be nonnegative",
+                )
         return self
 
 

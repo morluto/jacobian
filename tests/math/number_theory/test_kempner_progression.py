@@ -152,14 +152,15 @@ def test_wire_schema_encodes_arity_lower_bound() -> None:
     result_schema = KempnerArithmeticProgressionResult.model_json_schema()
     assert request_schema["properties"]["arity"]["pattern"] == _KEMPNER_ARITY_PATTERN
     assert result_schema["properties"]["arity"]["pattern"] == _KEMPNER_ARITY_PATTERN
+    validator = Draft202012Validator(request_schema)
     for arity in ("0", "1", "2"):
+        payload = {
+            "digit_set": {"base": "3", "allowed_digits": ["1"]},
+            "arity": arity,
+        }
         with pytest.raises(ValidationError):
-            KempnerArithmeticProgressionRequest.model_validate(
-                {
-                    "digit_set": {"base": "3", "allowed_digits": ["1"]},
-                    "arity": arity,
-                }
-            )
+            KempnerArithmeticProgressionRequest.model_validate(payload)
+        assert list(validator.iter_errors(payload))
 
 
 def test_progression_free_result_rejects_undefined_arity() -> None:

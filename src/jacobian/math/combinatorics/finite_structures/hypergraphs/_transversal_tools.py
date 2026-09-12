@@ -13,8 +13,8 @@ MINIMAL_TRANSVERSAL_ENUMERATION_OPERATION = MathTool(
     description=(
         "Enumerate every inclusion-minimal transversal of cardinality at most k "
         "with a complete cardinality profile. The owner admits exhaustive "
-        "candidate-edge and minimality work plus row, incidence, and transport "
-        "bounds before search. An edge-free hypergraph returns its unique empty "
+        "candidate-edge and minimality work plus row and incidence bounds before "
+        "search. An edge-free hypergraph returns its unique empty "
         "minimal transversal; a family containing an empty edge returns no "
         "transversals."
     ),
@@ -28,7 +28,7 @@ MINIMAL_TRANSVERSAL_ENUMERATION_OPERATION = MathTool(
             description=(
                 "Enumerate minimal transversals of {a,b} and {b,c} through size "
                 "two; the complete bounded slice must fit the admitted work and "
-                "transport envelope."
+                "incidence envelope."
             ),
             input={
                 "hypergraph": {

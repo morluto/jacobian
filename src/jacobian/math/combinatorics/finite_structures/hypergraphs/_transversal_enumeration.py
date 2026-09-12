@@ -1,13 +1,19 @@
 """Bounded-cardinality minimal transversal enumeration."""
 
+import time
 from itertools import combinations
 from math import comb
-from typing import Annotated
+from typing import Annotated, Self
 
 from pydantic import Field, StrictInt, ValidationError, model_validator
 
+from jacobian._execution import (
+    bind_request_deadline,
+    current_request_execution,
+    request_checkpoint,
+    request_execution,
+)
 from jacobian._models import StrictModel
-from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -21,9 +27,7 @@ MAX_TRANSVERSAL_ENUMERATION_CANDIDATES = 1_000_000
 MAX_TRANSVERSAL_ENUMERATION_WORK = 50_000_000
 MAX_ENUMERATED_TRANSVERSALS = 100_000
 MAX_TRANSVERSAL_OUTPUT_INCIDENCES = 1_000_000
-MAX_TRANSVERSAL_ENUMERATION_RESULT_BYTES = 10 * 1024 * 1024
-_TRANSVERSAL_ROW_OVERHEAD_BYTES = 256
-_TRANSVERSAL_PROFILE_ENTRY_BYTES = 128
+_OWNER_DEADLINE_SECONDS = 3600.0
 _MinimalTransversalRow = Annotated[tuple[str, ...], Field(max_length=MAX_VERTICES)]
 
 
@@ -66,7 +70,7 @@ class MinimalTransversalEnumerationResult(StrictModel):
     )
 
     @model_validator(mode="after")
-    def bind_structural_profile(self) -> "MinimalTransversalEnumerationResult":
+    def bind_structural_profile(self) -> Self:
         """Enforce source-axis, uniqueness, ordering, and profile invariants."""
 
         vertices = self.hypergraph.vertices
@@ -74,7 +78,7 @@ class MinimalTransversalEnumerationResult(StrictModel):
         vertex_position = {vertex: index for index, vertex in enumerate(vertices)}
         effective_maximum = min(self.maximum_cardinality, len(vertices))
         previous: tuple[str, ...] | None = None
-        counts = [0] * (effective_maximum + 1)
+        counts = [0] * (self.maximum_cardinality + 1)
         for transversal in self.transversals:
             if len(transversal) > effective_maximum:
                 raise ValueError(
@@ -217,27 +221,6 @@ def _admit_enumeration(
             ),
         )
 
-    source_bytes = len(encode_strict_json(request.hypergraph.model_dump(mode="json")))
-    max_vertex_bytes = max(
-        (len(encode_strict_json(vertex)) for vertex in vertices), default=2
-    )
-    row_bytes = 2 + maximum * max_vertex_bytes + max(0, maximum - 1)
-    predicted_result_bytes = (
-        source_bytes
-        + _TRANSVERSAL_ROW_OVERHEAD_BYTES
-        + possible_rows * (row_bytes + 1)
-        + (maximum + 1) * _TRANSVERSAL_PROFILE_ENTRY_BYTES
-    )
-    if predicted_result_bytes > MAX_TRANSVERSAL_ENUMERATION_RESULT_BYTES:
-        raise OperationResourceAdmissionError(
-            location=("maximum_cardinality",),
-            code="hypergraph.minimal_transversal.result_bytes_bound",
-            message=(
-                "the bounded minimal-transversal result is predicted to occupy "
-                f"{predicted_result_bytes} bytes; maximum is "
-                f"{MAX_TRANSVERSAL_ENUMERATION_RESULT_BYTES}"
-            ),
-        )
     return maximum, edges
 
 
@@ -246,9 +229,18 @@ def enumerate_minimal_transversals(
 ) -> MinimalTransversalEnumerationResult:
     """Enumerate every inclusion-minimal transversal through the requested rank."""
 
+    execution = current_request_execution()
+    if execution is None:
+        with request_execution(time.monotonic()):
+            return enumerate_minimal_transversals(request)
+    if execution.deadline is None:
+        bind_request_deadline(execution.started_at + _OWNER_DEADLINE_SECONDS)
+    request_checkpoint("before minimal transversal admission")
     request = _validated_request(request)
+    request_checkpoint("after minimal transversal request validation")
     vertices = request.hypergraph.vertices
     maximum, edges = _admit_enumeration(request)
+    request_checkpoint("after minimal transversal admission")
     if not edges:
         results: tuple[tuple[str, ...], ...] = ((),)
     elif any(not edge for edge in edges) or maximum == 0:
@@ -257,6 +249,7 @@ def enumerate_minimal_transversals(
         materialized: list[tuple[str, ...]] = []
         for size in range(1, maximum + 1):
             for candidate in combinations(vertices, size):
+                request_checkpoint("during minimal transversal enumeration")
                 selected = frozenset(candidate)
                 if not all(selected & edge for edge in edges):
                     continue
@@ -268,7 +261,8 @@ def enumerate_minimal_transversals(
                 materialized.append(candidate)
         results = tuple(materialized)
 
-    counts = [0] * (maximum + 1)
+    request_checkpoint("before minimal transversal result construction")
+    counts = [0] * (request.maximum_cardinality + 1)
     for transversal in results:
         counts[len(transversal)] += 1
     profile = tuple(

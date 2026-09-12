@@ -1,8 +1,15 @@
 """Complete bounded-cardinality minimal transversal enumeration."""
 
+import time
+
 import pytest
 from pydantic import ValidationError
 
+from jacobian._execution import (
+    OperationExecutionTimeoutError,
+    bind_request_deadline,
+    request_execution,
+)
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -41,6 +48,20 @@ def test_edge_free_hypergraph_has_one_empty_minimal_transversal() -> None:
     assert result.transversals == ((),)
     assert [(row.cardinality, row.count) for row in result.cardinality_profile] == [
         (0, 1)
+    ]
+
+
+def test_profile_retains_zero_ranks_above_source_cardinality() -> None:
+    source = FiniteHypergraph(vertices=("a",), edges=(("edge", ("a",)),))
+    result = enumerate_minimal_transversals(
+        MinimalTransversalEnumerationRequest(hypergraph=source, maximum_cardinality=3)
+    )
+    assert result.transversals == (("a",),)
+    assert [(row.cardinality, row.count) for row in result.cardinality_profile] == [
+        (0, 0),
+        (1, 1),
+        (2, 0),
+        (3, 0),
     ]
 
 
@@ -117,6 +138,17 @@ def test_direct_native_guard_rejects_model_constructed_request() -> None:
         enumerate_minimal_transversals(malformed)
 
 
+def test_native_operation_honors_request_deadline_before_search() -> None:
+    source = FiniteHypergraph(vertices=("a",), edges=(("edge", ("a",)),))
+    request = MinimalTransversalEnumerationRequest(
+        hypergraph=source, maximum_cardinality=1
+    )
+    with request_execution(time.monotonic()):
+        bind_request_deadline(time.monotonic() - 1)
+        with pytest.raises(OperationExecutionTimeoutError, match="deadline expired"):
+            enumerate_minimal_transversals(request)
+
+
 def test_candidate_slice_is_admitted_before_materialization() -> None:
     # A dense candidate slice can exceed the result carrier even when the
     # source hypergraph itself is small.  This is rejected before combinations
@@ -129,5 +161,22 @@ def test_candidate_slice_is_admitted_before_materialization() -> None:
         enumerate_minimal_transversals(
             MinimalTransversalEnumerationRequest(
                 hypergraph=source, maximum_cardinality=8
+            )
+        )
+
+
+def test_candidate_edge_and_minimality_work_is_admitted_before_search() -> None:
+    vertices = tuple(f"v{index:02d}" for index in range(50))
+    source = FiniteHypergraph(
+        vertices=vertices,
+        edges=tuple(
+            (f"edge{index:05d}", ("v00", "v01", "v02"))
+            for index in range(8_000)
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="work"):
+        enumerate_minimal_transversals(
+            MinimalTransversalEnumerationRequest(
+                hypergraph=source, maximum_cardinality=3
             )
         )

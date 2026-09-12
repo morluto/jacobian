@@ -239,9 +239,12 @@ def test_final_layer_scan_charges_every_reachable_state() -> None:
         symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=75))
 
 
-def _source_sensitive_dfa(reachable_state_count: int) -> DFA:
-    state_count = 13
-    alphabet_size = 5
+def _source_sensitive_dfa(
+    reachable_state_count: int,
+    *,
+    state_count: int = 13,
+    alphabet_size: int = 5,
+) -> DFA:
     return DFA(
         state_count=state_count,
         alphabet_size=alphabet_size,
@@ -277,22 +280,50 @@ def test_profile_preserves_cheap_unreachable_state_case() -> None:
     assert result.total_accepted_words == 5**13
 
 
+def test_profile_preserves_49_reachable_state_case() -> None:
+    result = symbol_parikh_profile(
+        SymbolParikhProfileRequest(
+            dfa=_source_sensitive_dfa(
+                reachable_state_count=49,
+                state_count=64,
+                alphabet_size=15,
+            ),
+            word_length=3,
+        )
+    )
+
+    assert len(result.cells) == comb(17, 14)
+    assert result.total_accepted_words == 15**3
+
+
 def test_transition_index_charge_rejects_before_indexing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    reachable_state_count = 12
-    dfa = _source_sensitive_dfa(reachable_state_count=reachable_state_count)
-    length = 13
-    alphabet_size = dfa.alphabet_size
+    reachable_state_count = 14
+    state_count = 56
+    alphabet_size = 16
+    dfa = _source_sensitive_dfa(
+        reachable_state_count=reachable_state_count,
+        state_count=state_count,
+        alphabet_size=alphabet_size,
+    )
+    length = 4
     transition_count = dfa.state_count * dfa.alphabet_size
+    extension_cells = 0
+    possible_word_count = 1
+    for step in range(length):
+        extension_cells += min(
+            reachable_state_count * comb(step + alphabet_size - 1, alphabet_size - 1),
+            possible_word_count,
+        )
+        possible_word_count *= alphabet_size
+    output_materialization_cells = min(
+        reachable_state_count * comb(length + alphabet_size - 1, alphabet_size - 1),
+        possible_word_count,
+    )
     without_index_work = (
-        reachable_state_count
-        * comb(length + alphabet_size - 1, alphabet_size)
-        * alphabet_size
-        * max(1, alphabet_size)
-        + reachable_state_count
-        * comb(length + alphabet_size - 1, alphabet_size - 1)
-        * max(1, alphabet_size)
+        extension_cells * alphabet_size * max(1, alphabet_size)
+        + output_materialization_cells * max(1, alphabet_size)
         + reachable_state_count * transition_count
     )
     assert without_index_work <= MAX_SYMBOL_PARIKH_DP_WORK

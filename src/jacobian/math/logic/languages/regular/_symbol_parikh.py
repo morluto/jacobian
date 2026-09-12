@@ -131,9 +131,24 @@ def symbol_parikh_profile(
             message="symbol-Parikh multiplicities exceed the exact integer digit bound",
         )
     reachable = _reachable_states_without_index(dfa)
-    extension_cells = len(reachable) * comb(length + alphabet_size - 1, alphabet_size)
+    # A DP layer has at most one entry per word of that length.  Capping the
+    # composition bound by the possible word count keeps unreachable states
+    # from charging combinations that the layer cannot contain.
+    extension_cells = 0
+    possible_word_count = 1
+    for step in range(length):
+        layer_composition_bound = comb(step + alphabet_size - 1, alphabet_size - 1)
+        extension_cells += min(
+            len(reachable) * layer_composition_bound,
+            possible_word_count,
+        )
+        possible_word_count *= alphabet_size
     extension_coordinate_work = extension_cells * alphabet_size * max(1, alphabet_size)
-    output_materialization_work = len(reachable) * output_bound * max(1, alphabet_size)
+    output_materialization_cells = min(
+        len(reachable) * output_bound,
+        possible_word_count,
+    )
+    output_materialization_work = output_materialization_cells * max(1, alphabet_size)
     # The transition index is built from every DFA edge, including edges from
     # states that are unreachable from the initial state.
     transition_index_work = transition_count

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from math import gcd
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, model_validator
@@ -11,6 +12,9 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.math.algebra.trigonometric_rational._laurent_gcd_process import (
+    cancel_common_factor,
+)
 from jacobian.math.number_theory.number_fields import GaussianRational
 from jacobian.math.number_theory.number_fields.values import (
     MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS,
@@ -20,13 +24,17 @@ MAX_TRIG_VARIABLES = 8
 MAX_TRIG_AST_NODES = 128
 MAX_TRIG_LAURENT_TERMS = 4_096
 MAX_TRIG_EXPONENT = 4_096
+MAX_TRIG_GCD_EXPONENT = 2 * MAX_TRIG_EXPONENT
 _GAUSSIAN_COMPONENT_LIMIT = 10**MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS
 
 
 class IntegerAffineAngleForm(StrictModel):
     """``quarter_turns*pi/2 + sum(coefficients[j]*angles[j])``."""
 
-    coefficients: tuple[int, ...] = Field(max_length=MAX_TRIG_VARIABLES)
+    coefficients: tuple[int, ...] = Field(
+        min_length=0,
+        max_length=MAX_TRIG_VARIABLES,
+    )
     quarter_turns: int = Field(default=0, ge=-4_096, le=4_096)
 
 
@@ -86,6 +94,15 @@ type TrigonometricRationalExpression = Annotated[
 class GaussianLaurentTerm(StrictModel):
     coefficient: GaussianRational
     exponents: tuple[int, ...] = Field(max_length=MAX_TRIG_VARIABLES)
+
+    @model_validator(mode="after")
+    def require_bounded_exponents(self) -> Self:
+        if any(abs(value) > MAX_TRIG_EXPONENT for value in self.exponents):
+            raise PydanticCustomError(
+                "trigonometric.exponent_bound",
+                "Laurent exponents exceed the admitted representation limit",
+            )
+        return self
 
 
 class GaussianLaurentPolynomial(StrictModel):
@@ -153,11 +170,13 @@ def _gadd(left: Gaussian, right: Gaussian) -> Gaussian:
 
 
 def _gmul(left: Gaussian, right: Gaussian) -> Gaussian:
-    return _admit_gaussian(
-        (
-            left[0] * right[0] - left[1] * right[1],
-            left[0] * right[1] + left[1] * right[0],
-        )
+    return _admit_gaussian(_gmul_raw(left, right))
+
+
+def _gmul_raw(left: Gaussian, right: Gaussian) -> Gaussian:
+    return (
+        left[0] * right[0] - left[1] * right[1],
+        left[0] * right[1] + left[1] * right[0],
     )
 
 
@@ -175,6 +194,21 @@ def _gdiv(left: Gaussian, right: Gaussian) -> Gaussian:
 
 def _gzero(value: Gaussian) -> bool:
     return not value[0] and not value[1]
+
+
+def _gaussian_proportional(left: Polynomial, right: Polynomial) -> bool:
+    if left.keys() != right.keys() or not left:
+        return False
+    if left == right:
+        return True
+    first = next(iter(left))
+    scale_left, scale_right = left[first], right[first]
+    if _gzero(scale_right):
+        return False
+    return all(
+        _gmul_raw(left[support], scale_right) == _gmul_raw(right[support], scale_left)
+        for support in left
+    )
 
 
 def _poly_add(left: Polynomial, right: Polynomial) -> Polynomial:
@@ -195,8 +229,7 @@ def _poly_mul(left: Polynomial, right: Polynomial) -> Polynomial:
     for a_support, a_coefficient in left.items():
         for b_support, b_coefficient in right.items():
             support = tuple(a + b for a, b in zip(a_support, b_support, strict=True))
-            if any(abs(value) > MAX_TRIG_EXPONENT for value in support):
-                _refuse_growth()
+            _admit_support(support)
             result[support] = _gadd(
                 result.get(support, (Fraction(), Fraction())),
                 _gmul(a_coefficient, b_coefficient),
@@ -216,6 +249,60 @@ def _refuse_growth() -> None:
     )
 
 
+def _admit_support(support: Support) -> Support:
+    if any(abs(value) > MAX_TRIG_EXPONENT for value in support):
+        _refuse_growth()
+    return support
+
+
+def _admit_gcd_support(support: Support) -> Support:
+    if any(abs(value) > MAX_TRIG_GCD_EXPONENT for value in support):
+        _refuse_growth()
+    return support
+
+
+def _axis_stride(exponents: list[int]) -> int:
+    origin = min(exponents)
+    stride = 0
+    for value in exponents:
+        stride = gcd(stride, value - origin)
+    return stride or 1
+
+
+def _quotient_support_term_count(numerator: Polynomial, denominator: Polynomial) -> int:
+    """Bound reduced numerator and denominator support, preserving lattice stride."""
+
+    if not numerator or not denominator:
+        return 0
+    axis = len(next(iter(numerator)))
+    numerator_total = 1
+    denominator_total = 1
+    for index in range(axis):
+        n_exps = [support[index] for support in numerator]
+        d_exps = [support[index] for support in denominator]
+        stride = gcd(_axis_stride(n_exps), _axis_stride(d_exps))
+        n_span = max(n_exps) - min(n_exps)
+        d_span = max(d_exps) - min(d_exps)
+        n_width = n_span - d_span
+        if n_width < 0:
+            n_width = n_span
+        d_width = d_span - n_span
+        if d_width < 0:
+            d_width = d_span
+        n_count = n_width // stride + 1
+        d_count = d_width // stride + 1
+        if (
+            n_count > MAX_TRIG_LAURENT_TERMS
+            or d_count > MAX_TRIG_LAURENT_TERMS
+            or numerator_total > MAX_TRIG_LAURENT_TERMS // n_count
+            or denominator_total > MAX_TRIG_LAURENT_TERMS // d_count
+        ):
+            return MAX_TRIG_LAURENT_TERMS + 1
+        numerator_total *= n_count
+        denominator_total *= d_count
+    return max(numerator_total, denominator_total)
+
+
 def _one(axis: int) -> Polynomial:
     return {(0,) * axis: (Fraction(1), Fraction())}
 
@@ -228,16 +315,23 @@ def _scale(polynomial: Polynomial, scalar: Gaussian) -> Polynomial:
     }
 
 
-def _power(value: RationalFunction, exponent: int, axis: int) -> RationalFunction:
-    result = (_one(axis), _one(axis))
-    base = value
-    while exponent:
-        if exponent & 1:
-            result = (_poly_mul(result[0], base[0]), _poly_mul(result[1], base[1]))
-        exponent >>= 1
-        if exponent:
-            base = (_poly_mul(base[0], base[0]), _poly_mul(base[1], base[1]))
-    return result
+def _power(
+    value: tuple[Polynomial, Polynomial, tuple[Polynomial, ...]],
+    exponent: int,
+    axis: int,
+) -> tuple[Polynomial, Polynomial, tuple[Polynomial, ...]]:
+    result_num, result_den = _one(axis), _one(axis)
+    base_num, base_den = value[0], value[1]
+    remaining = exponent
+    while remaining:
+        if remaining & 1:
+            result_num = _poly_mul(result_num, base_num)
+            result_den = _poly_mul(result_den, base_den)
+        remaining >>= 1
+        if remaining:
+            base_num = _poly_mul(base_num, base_num)
+            base_den = _poly_mul(base_den, base_den)
+    return result_num, result_den, value[2]
 
 
 def _root_of_unity(quarter_turns: int) -> Gaussian:
@@ -249,13 +343,17 @@ def _root_of_unity(quarter_turns: int) -> Gaussian:
     )[quarter_turns % 4]
 
 
-def _trig(angle: IntegerAffineAngleForm, axis: int, *, sine: bool) -> RationalFunction:
+def _trig(
+    angle: IntegerAffineAngleForm, axis: int, *, sine: bool
+) -> tuple[Polynomial, Polynomial, tuple[Polynomial, ...]]:
     if len(angle.coefficients) != axis:
         raise PydanticCustomError(
             "trigonometric.angle_axis", "angle coefficients must align with variables"
         )
     forward = tuple(angle.coefficients)
     backward = tuple(-value for value in forward)
+    _admit_support(forward)
+    _admit_support(backward)
     phase = _root_of_unity(angle.quarter_turns)
     inverse_phase = (phase[0], -phase[1])
     if sine:
@@ -266,18 +364,20 @@ def _trig(angle: IntegerAffineAngleForm, axis: int, *, sine: bool) -> RationalFu
     else:
         numerator = _poly_add({forward: phase}, {backward: inverse_phase})
         denominator = _scale(_one(axis), (Fraction(2), Fraction()))
-    return numerator, denominator
+    return numerator, denominator, ()
 
 
 def _evaluate(
     expression: TrigonometricRationalExpression, axis: int, nodes: list[int]
-) -> RationalFunction:
+) -> tuple[Polynomial, Polynomial, tuple[Polynomial, ...]]:
     nodes[0] += 1
     if nodes[0] > MAX_TRIG_AST_NODES:
         _refuse_growth()
     if isinstance(expression, TrigLiteral):
-        return _scale(_one(axis), (expression.value.as_fraction(), Fraction())), _one(
-            axis
+        return (
+            _scale(_one(axis), (expression.value.as_fraction(), Fraction())),
+            _one(axis),
+            (),
         )
     if isinstance(expression, TrigSine):
         return _trig(expression.angle, axis, sine=True)
@@ -295,24 +395,29 @@ def _evaluate(
                 "trigonometric.zero_denominator",
                 "division by the identically zero expression is undefined",
             )
-        return _poly_mul(left[0], right[1]), _poly_mul(left[1], right[0])
+        return (
+            _poly_mul(left[0], right[1]),
+            _poly_mul(left[1], right[0]),
+            (*left[2], *right[2], right[0]),
+        )
     values = [_evaluate(child, axis, nodes) for child in expression.children]
-    result = (
+    result_num, result_den = (
         (_one(axis), _one(axis))
         if isinstance(expression, TrigMultiply)
         else ({}, _one(axis))
     )
-    for numerator, denominator in values:
+    loci: tuple[Polynomial, ...] = ()
+    for numerator, denominator, child_loci in values:
+        loci = (*loci, *child_loci)
         if isinstance(expression, TrigMultiply):
-            result = _poly_mul(result[0], numerator), _poly_mul(result[1], denominator)
+            result_num = _poly_mul(result_num, numerator)
+            result_den = _poly_mul(result_den, denominator)
         else:
-            result = (
-                _poly_add(
-                    _poly_mul(result[0], denominator), _poly_mul(numerator, result[1])
-                ),
-                _poly_mul(result[1], denominator),
+            result_num = _poly_add(
+                _poly_mul(result_num, denominator), _poly_mul(numerator, result_den)
             )
-    return result
+            result_den = _poly_mul(result_den, denominator)
+    return result_num, result_den, loci
 
 
 def _canonicalize(numerator: Polynomial, denominator: Polynomial) -> RationalFunction:
@@ -327,11 +432,15 @@ def _canonicalize(numerator: Polynomial, denominator: Polynomial) -> RationalFun
         for index in range(len(next(iter(denominator))))
     )
     numerator = {
-        tuple(value - shift[index] for index, value in enumerate(support)): coefficient
+        _admit_support(
+            tuple(value - shift[index] for index, value in enumerate(support))
+        ): coefficient
         for support, coefficient in numerator.items()
     }
     denominator = {
-        tuple(value - shift[index] for index, value in enumerate(support)): coefficient
+        _admit_support(
+            tuple(value - shift[index] for index, value in enumerate(support))
+        ): coefficient
         for support, coefficient in denominator.items()
     }
     leading = denominator[max(denominator)]
@@ -344,6 +453,136 @@ def _canonicalize(numerator: Polynomial, denominator: Polynomial) -> RationalFun
         for support, coefficient in denominator.items()
     }
     return numerator, denominator
+
+
+def _polynomial_payload(polynomial: Polynomial) -> dict[str, list[object]]:
+    supports = list(polynomial)
+    return {
+        "supports": [list(support) for support in supports],
+        "real_numerators": [
+            str(polynomial[support][0].numerator) for support in supports
+        ],
+        "real_denominators": [
+            str(polynomial[support][0].denominator) for support in supports
+        ],
+        "imag_numerators": [
+            str(polynomial[support][1].numerator) for support in supports
+        ],
+        "imag_denominators": [
+            str(polynomial[support][1].denominator) for support in supports
+        ],
+    }
+
+
+def _polynomial_from_payload(payload: object) -> Polynomial:
+    if not isinstance(payload, dict):
+        raise RuntimeError(
+            "trigonometric Laurent GCD worker returned a malformed polynomial"
+        )
+    supports = payload["supports"]
+    result: Polynomial = {}
+    for support, real_num, real_den, imag_num, imag_den in zip(
+        supports,
+        payload["real_numerators"],
+        payload["real_denominators"],
+        payload["imag_numerators"],
+        payload["imag_denominators"],
+        strict=True,
+    ):
+        result[tuple(int(value) for value in support)] = (
+            Fraction(int(real_num), int(real_den)),
+            Fraction(int(imag_num), int(imag_den)),
+        )
+    return result
+
+
+def _reduce_common_laurent_factor(
+    numerator: Polynomial, denominator: Polynomial
+) -> RationalFunction:
+    """Cancel the exact common Laurent factor before canonical normalization."""
+
+    if not numerator:
+        return _canonicalize(numerator, denominator)
+    axis = len(next(iter(denominator)))
+    if axis == 0 or len(numerator) == 1 or len(denominator) == 1:
+        return _canonicalize(numerator, denominator)
+    if _gaussian_proportional(numerator, denominator):
+        first = next(iter(numerator))
+        constant = _gdiv(numerator[first], denominator[first])
+        return _canonicalize(_scale(_one(axis), constant), _one(axis))
+
+    # Shift both Laurent polynomials into an ordinary polynomial ring.  This
+    # is multiplication by one common torus monomial and does not change the
+    # rational function or its nonzero locus.
+    minimum = tuple(
+        min(
+            support[index]
+            for polynomial in (numerator, denominator)
+            for support in polynomial
+        )
+        for index in range(axis)
+    )
+    shifted_numerator = {
+        _admit_gcd_support(
+            tuple(value - minimum[index] for index, value in enumerate(support))
+        ): coefficient
+        for support, coefficient in numerator.items()
+    }
+    shifted_denominator = {
+        _admit_gcd_support(
+            tuple(value - minimum[index] for index, value in enumerate(support))
+        ): coefficient
+        for support, coefficient in denominator.items()
+    }
+    if shifted_numerator == shifted_denominator:
+        unit = {(0,) * axis: (Fraction(1), Fraction())}
+        return _canonicalize(unit, unit)
+    if len(shifted_numerator) * len(shifted_denominator) > MAX_TRIG_LAURENT_TERMS:
+        _refuse_growth()
+    if _quotient_support_term_count(shifted_numerator, shifted_denominator) > (
+        MAX_TRIG_LAURENT_TERMS
+    ):
+        _refuse_growth()
+
+    response = cancel_common_factor(
+        {
+            "axis": axis,
+            "left": _polynomial_payload(shifted_numerator),
+            "right": _polynomial_payload(shifted_denominator),
+        }
+    )
+    return _canonicalize(
+        _polynomial_from_payload(response["left"]),
+        _polynomial_from_payload(response["right"]),
+    )
+
+
+def _canonicalize_nonzero_locus(denominator: Polynomial) -> Polynomial:
+    """Normalize a source denominator while keeping its bounded Laurent support."""
+
+    shift = tuple(
+        min(support[index] for support in denominator)
+        for index in range(len(next(iter(denominator))))
+    )
+    shifted_supports = tuple(
+        tuple(value - shift[index] for index, value in enumerate(support))
+        for support in denominator
+    )
+    if all(
+        abs(value) <= MAX_TRIG_EXPONENT
+        for support in shifted_supports
+        for value in support
+    ):
+        return _canonicalize(_one(len(shift)), denominator)[1]
+
+    # A monomial is nonzero everywhere on the algebraic torus. If the
+    # canonical min-shift would exceed the output envelope, retain the source
+    # signed supports and normalize only the scalar unit.
+    leading = denominator[max(denominator)]
+    return {
+        support: _gdiv(coefficient, leading)
+        for support, coefficient in denominator.items()
+    }
 
 
 def _wire(
@@ -361,6 +600,36 @@ def _wire(
     )
 
 
+def _scalar_unit(polynomial: Polynomial) -> Polynomial:
+    """Divide out the leading coefficient, leaving the Laurent support unchanged."""
+
+    leading = polynomial[max(polynomial)]
+    if leading == (Fraction(1), Fraction()):
+        return polynomial
+    return {
+        support: _gdiv(coefficient, leading)
+        for support, coefficient in polynomial.items()
+    }
+
+
+def _combine_loci(loci: tuple[Polynomial, ...], axis: int) -> Polynomial:
+    unique: list[Polynomial] = []
+    for polynomial in loci:
+        if not polynomial:
+            continue
+        support = next(iter(polynomial))
+        if len(polynomial) == 1 and not any(support):
+            continue
+        normalized = _scalar_unit(polynomial)
+        if any(_gaussian_proportional(normalized, existing) for existing in unique):
+            continue
+        unique.append(normalized)
+    result = _one(axis)
+    for polynomial in unique:
+        result = _poly_mul(result, polynomial)
+    return result
+
+
 def normalize_trigonometric_rational(
     request: TrigonometricRationalSource,
 ) -> TrigonometricRationalNormalizeResult:
@@ -369,9 +638,13 @@ def normalize_trigonometric_rational(
             "trigonometric.variable_axis", "variables must be unique"
         )
     axis = len(request.variables)
-    raw_numerator, raw_denominator = _evaluate(request.expression, axis, [0])
-    numerator, denominator = _canonicalize(raw_numerator, raw_denominator)
-    _, denominator_nonzero = _canonicalize(_one(axis), raw_denominator)
+    raw_numerator, raw_denominator, loci = _evaluate(request.expression, axis, [0])
+    combined_loci = _combine_loci(loci, axis)
+    source_locus = combined_loci if combined_loci != _one(axis) else raw_denominator
+    denominator_nonzero = _canonicalize_nonzero_locus(source_locus)
+    numerator, denominator = _reduce_common_laurent_factor(
+        raw_numerator, raw_denominator
+    )
     denominator_wire = _wire(request.variables, denominator)
     return TrigonometricRationalNormalizeResult(
         numerator=_wire(request.variables, numerator),

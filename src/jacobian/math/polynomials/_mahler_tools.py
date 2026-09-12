@@ -9,8 +9,6 @@ from jacobian.math.polynomials._mahler_models import (
     MahlerMeasureResult,
     RealQuadraticRootProfileRequest,
     RealQuadraticRootProfileResult,
-    ReciprocalProfileRequest,
-    ReciprocalProfileResult,
 )
 
 INTEGER_POLYNOMIAL_PROFILE_OPERATIONS = (
@@ -33,26 +31,6 @@ INTEGER_POLYNOMIAL_PROFILE_OPERATIONS = (
                 name="scaled_quadratic",
                 description="6x^2-6 has content 6 and primitive part x^2-1.",
                 input={"polynomial": {"coefficients": ["6", "0", "-6"]}},
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="polynomial.reciprocal_profile.compute",
-        title="Compute the reciprocal structure of an integer polynomial",
-        description=(
-            "Return the degree, reversed coefficient tuple, exact reciprocal or "
-            "antireciprocal state, leading/constant coefficient relation, and "
-            "the coefficient-pair ledger of one canonical integer polynomial."
-        ),
-        request_type=ReciprocalProfileRequest,
-        result_type=ReciprocalProfileResult,
-        run=native.reciprocal_profile,
-        tags=("polynomial", "integer", "reciprocal", "exact"),
-        examples=(
-            OperationExample(
-                name="palindromic_quadratic",
-                description="x^2+1 is reciprocal with coefficient pairs (1,1) and (0,0).",
-                input={"polynomial": {"coefficients": ["1", "0", "1"]}},
             ),
         ),
     ),

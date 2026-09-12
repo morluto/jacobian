@@ -9,6 +9,7 @@ from jacobian._exact import CanonicalRational
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import (
     OperationDomainValidationError,
+    OperationResourceAdmissionError,
 )
 from jacobian.math.number_theory.algebraic_numbers.real import RealAlgebraicValue
 from jacobian.math.polynomials._mahler_kernel import (
@@ -379,6 +380,45 @@ def test_linear_profiles_admit_carrier_length_beyond_mahler_degree() -> None:
     assert reciprocal.state == "RECIPROCAL"
     with pytest.raises(ValidationError, match="degree at most"):
         MahlerMeasureRequest(polynomial=polynomial)
+
+
+def test_content_profile_preflights_duplicated_coefficient_output(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "jacobian.math.polynomials._mahler_kernel.MAX_PROFILE_RESULT_DIGITS",
+        20,
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="output bound"):
+        content_primitive_profile(
+            ContentPrimitiveProfileRequest(
+                polynomial=IntegerPolynomial(coefficients=(10**12, 10**12 + 1))
+            )
+        )
+
+
+def test_reciprocal_profile_preflights_duplicated_coefficient_output(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "jacobian.math.polynomials._mahler_kernel.MAX_PROFILE_RESULT_DIGITS",
+        20,
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="output bound"):
+        reciprocal_profile(
+            ReciprocalProfileRequest(
+                polynomial=IntegerPolynomial(coefficients=(10**12, 10**12 + 1))
+            )
+        )
+
+
+def test_reciprocal_profile_is_not_a_public_catalog_operation() -> None:
+    from jacobian.math.polynomials._tools import TOOLS
+
+    assert all(
+        operation.operation_id != "polynomial.reciprocal_profile.compute"
+        for operation in TOOLS
+    )
 
 
 def test_mahler_result_binds_degree_leading_coefficient_and_locations() -> None:

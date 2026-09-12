@@ -213,11 +213,46 @@ def _require_nonzero_polynomial(
         )
 
 
+# Content and reciprocal profiles copy source coefficients into multiple result
+# fields. Charge those retained copies before construction so a carrier-valid
+# high-height polynomial cannot explode after the kernel finishes. 66-term
+# inexpensive cases remain well below this envelope.
+MAX_PROFILE_RESULT_DIGITS = 8_000_000
+
+
+def _retained_integer_digits(value: int) -> int:
+    if value == 0:
+        return 1
+    return (abs(value).bit_length() * 30103) // 100000 + 1
+
+
+def _coefficient_digit_total(coefficients: tuple[int, ...]) -> int:
+    return sum(_retained_integer_digits(coefficient) for coefficient in coefficients)
+
+
+def _admit_profile_result_digits(
+    units: int, *, location: tuple[str | int, ...], code: str
+) -> None:
+    if units > MAX_PROFILE_RESULT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=location,
+            code=code,
+            message="the retained profile coefficients exceed the exact output bound",
+        )
+
+
 def content_primitive_profile(
     request: ContentPrimitiveProfileRequest,
 ) -> ContentPrimitiveProfileResult:
     coefficients = request.polynomial.coefficients
     _require_nonzero_polynomial(coefficients, location=("polynomial",))
+    source_digits = _coefficient_digit_total(coefficients)
+    # primitive_part and reconstruction each retain one coefficient tuple.
+    _admit_profile_result_digits(
+        2 * source_digits + 1,
+        location=("polynomial",),
+        code="polynomial.content_profile_result_digits",
+    )
     sign: Literal[-1, 1] = 1 if coefficients[0] > 0 else -1
     content = 0
     for coefficient in coefficients:
@@ -237,6 +272,16 @@ def content_primitive_profile(
 def reciprocal_profile(request: ReciprocalProfileRequest) -> ReciprocalProfileResult:
     coefficients = request.polynomial.coefficients
     _require_nonzero_polynomial(coefficients, location=("polynomial",))
+    source_digits = _coefficient_digit_total(coefficients)
+    # reversed_coefficients copies every source coefficient; the pair ledger
+    # retains each coefficient once more, and the middle term of odd length
+    # appears twice in its pair.
+    extra = max(_retained_integer_digits(coefficient) for coefficient in coefficients)
+    _admit_profile_result_digits(
+        2 * source_digits + extra,
+        location=("polynomial",),
+        code="polynomial.reciprocal_profile_result_digits",
+    )
     degree = len(coefficients) - 1
     leading, constant = coefficients[0], coefficients[-1]
     state: Literal["RECIPROCAL", "ANTIRECIPROCAL", "NEITHER"]

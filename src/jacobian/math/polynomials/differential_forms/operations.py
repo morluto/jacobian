@@ -59,26 +59,26 @@ _MergedPair = tuple[FormComponent, FormComponent, tuple[int, ...], int]
 
 
 def _admit_coefficient_growth(pairs: tuple[_MergedPair, ...]) -> None:
-    # Bound rational accumulation independently for each differential basis
+    # Bound rational accumulation independently for each output monomial
     # before multiplying coefficients. Summing N fractions of height h costs
     # at most N * (h + 1) decimal digits with an unreduced product denominator.
-    projected_digits: dict[tuple[int, ...], int] = {}
+    projected_digits: dict[tuple[tuple[int, ...], tuple[int, ...]], int] = {}
     for first, second, indices, _ in pairs:
-        first_terms = first.coefficient.polynomial.terms
-        second_terms = second.coefficient.polynomial.terms
-        products = len(first_terms) * len(second_terms)
-        height = (
-            max(
-                canonical_rational_component_digits(term.coefficient)
-                for term in first_terms
-            )
-            + max(
-                canonical_rational_component_digits(term.coefficient)
-                for term in second_terms
-            )
-            + 1
-        )
-        projected_digits[indices] = projected_digits.get(indices, 0) + products * height
+        for first_term in first.coefficient.polynomial.terms:
+            for second_term in second.coefficient.polynomial.terms:
+                exponents = tuple(
+                    left + right
+                    for left, right in zip(
+                        first_term.exponents, second_term.exponents, strict=True
+                    )
+                )
+                height = (
+                    canonical_rational_component_digits(first_term.coefficient)
+                    + canonical_rational_component_digits(second_term.coefficient)
+                    + 1
+                )
+                key = (indices, exponents)
+                projected_digits[key] = projected_digits.get(key, 0) + height
     if (
         any(
             height > MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS
@@ -94,16 +94,24 @@ def _admit_coefficient_growth(pairs: tuple[_MergedPair, ...]) -> None:
 
 
 def _admit_output_support(pairs: tuple[_MergedPair, ...]) -> None:
-    """Reserve a conservative support bound before coefficient products exist."""
+    """Reserve distinct merged-exponent support before coefficient products exist."""
 
-    projected_support: dict[tuple[int, ...], int] = {}
+    projected_support: dict[tuple[int, ...], set[tuple[int, ...]]] = {}
     for first, second, indices, _ in pairs:
-        projected_support[indices] = projected_support.get(indices, 0) + (
-            len(first.coefficient.polynomial.terms)
-            * len(second.coefficient.polynomial.terms)
-        )
+        exponents = projected_support.setdefault(indices, set())
+        for first_term in first.coefficient.polynomial.terms:
+            for second_term in second.coefficient.polynomial.terms:
+                exponents.add(
+                    tuple(
+                        left + right
+                        for left, right in zip(
+                            first_term.exponents, second_term.exponents, strict=True
+                        )
+                    )
+                )
     if any(
-        support > MAX_DIFFERENTIAL_FORM_TERMS for support in projected_support.values()
+        len(support) > MAX_DIFFERENTIAL_FORM_TERMS
+        for support in projected_support.values()
     ):
         raise OperationResourceAdmissionError(
             location=("left", "right"),

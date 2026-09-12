@@ -166,6 +166,16 @@ def test_wedge_reserves_output_support_before_convolution() -> None:
     assert error.value.errors()[0]["type"] == "differential_form.wedge.output_budget"
 
 
+def test_wedge_admits_collapsed_one_variable_support() -> None:
+    terms = tuple((1, (exponent, 0)) for exponent in range(16, -1, -1))
+    scalar = _form(0, ((), _poly(*terms)))
+    product = wedge(scalar, scalar)
+    exponents = tuple(
+        term.exponents[0] for term in product.components[0].coefficient.polynomial.terms
+    )
+    assert exponents == tuple(range(32, -1, -1))
+
+
 def test_wedge_admits_coefficient_height_before_convolution() -> None:
     coefficient = 10**4_095
     left = _form(0, ((), _poly((coefficient, (0, 0)))))
@@ -250,6 +260,21 @@ def test_serialized_differential_indices_have_a_schema_bound() -> None:
     }
     with pytest.raises(ValidationError, match="at most 8 items"):
         PolynomialDifferentialForm.model_validate_json(json.dumps(payload))
+
+
+def test_wedge_groups_coefficient_growth_by_output_monomial() -> None:
+    coefficient = 10**1000
+    scalar = _form(
+        0,
+        ((), _poly((coefficient, (1, 0)), (coefficient, (0, 0)))),
+    )
+    product = wedge(scalar, scalar)
+    terms = {
+        term.exponents: term.coefficient.num
+        for term in product.components[0].coefficient.polynomial.terms
+    }
+    square = coefficient * coefficient
+    assert terms == {(2, 0): square, (1, 0): 2 * square, (0, 0): square}
 
 
 def test_high_coefficients_and_zero_degrees_compose() -> None:

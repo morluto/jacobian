@@ -289,6 +289,18 @@ class TestSpannedCircleProfile:
         ]
         assert second.circles[0].point_indices == (0, 1, 2, 3)
 
+    def test_cocircular_configuration_charges_incidence_once(self) -> None:
+        points = tuple(
+            RationalPoint2D(
+                x=CanonicalRational.from_fraction(Fraction(1 - t * t, 1 + t * t)),
+                y=CanonicalRational.from_fraction(Fraction(2 * t, 1 + t * t)),
+            )
+            for t in range(1, 33)
+        )
+        result = spanned_circle_profile(SpannedCircleProfileRequest(points=points))
+        assert len(result.circles) == 1
+        assert len(result.circles[0].point_indices) == 32
+
     def test_collinear_configuration_is_admitted_without_incidence_work(self) -> None:
         points = tuple(_point(str(index), str(1000 + index)) for index in range(32))
         result = spanned_circle_profile(SpannedCircleProfileRequest(points=points))

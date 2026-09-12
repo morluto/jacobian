@@ -1449,8 +1449,9 @@ class SpannedCircleProfileRequest(StrictModel):
             "rational planar points. Every non-collinear triple determines one "
             "circle; collinear triples are omitted. Each coordinate numerator "
             f"and denominator is at most {MAX_COORDINATE_DIGITS} digits. "
-            f"Collinearity work C(n,3)*max_digits^2 and incidence work "
-            f"n*(non-collinear triples)*max_digits^2 together stay at most "
+            f"Collinearity work C(n,3)*max_digits^2, circumcircle construction "
+            f"for each non-collinear triple, and incidence work "
+            f"n*(distinct circles)*max_digits^2 together stay at most "
             f"{MAX_SPANNED_CIRCLE_WORK}. The result has at most C(n,3) circle "
             f"rows, globally at most {MAX_SPANNED_CIRCLES}."
         ),

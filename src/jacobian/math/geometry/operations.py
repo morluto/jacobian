@@ -851,21 +851,18 @@ def spanned_circle_profile(
         ) * (third[0] - first[0])
         if cross != 0:
             generated.append((i, j, k))
-    incidence_work = n * len(generated) * digit_work
-    if collinearity_work + incidence_work > MAX_SPANNED_CIRCLE_WORK:
+    construction_work = len(generated) * digit_work
+    if collinearity_work + construction_work > MAX_SPANNED_CIRCLE_WORK:
         raise OperationResourceAdmissionError(
             location=("points",),
             code="geometry.spanned_circle_profile_work_bound",
             message=(
-                f"spanned-circle incidence work exceeds the {MAX_SPANNED_CIRCLE_WORK}"
+                f"spanned-circle construction work exceeds the {MAX_SPANNED_CIRCLE_WORK}"
                 "-unit bound; reduce point count or coordinate size"
             ),
         )
 
-    grouped: dict[
-        tuple[Fraction, Fraction, Fraction],
-        tuple[tuple[Fraction, Fraction], tuple[int, ...]],
-    ] = {}
+    grouped: dict[tuple[Fraction, Fraction, Fraction], None] = {}
     for i, j, k in generated:
         first, second, third = point_values[i], point_values[j], point_values[k]
         cross = (second[0] - first[0]) * (third[1] - first[1]) - (
@@ -885,15 +882,27 @@ def spanned_circle_profile(
             + third_norm * (second[0] - first[0])
         ) / (2 * cross)
         radius_squared = (center_x - first[0]) ** 2 + (center_y - first[1]) ** 2
-        key = (center_x, center_y, radius_squared)
-        if key not in grouped:
-            incidence = tuple(
-                source_index
-                for source_index, point in enumerate(point_values)
-                if (point[0] - center_x) ** 2 + (point[1] - center_y) ** 2
-                == radius_squared
-            )
-            grouped[key] = ((center_x, center_y), incidence)
+        grouped[(center_x, center_y, radius_squared)] = None
+
+    incidence_work = n * len(grouped) * digit_work
+    if collinearity_work + construction_work + incidence_work > MAX_SPANNED_CIRCLE_WORK:
+        raise OperationResourceAdmissionError(
+            location=("points",),
+            code="geometry.spanned_circle_profile_work_bound",
+            message=(
+                f"spanned-circle incidence work exceeds the {MAX_SPANNED_CIRCLE_WORK}"
+                "-unit bound; reduce point count or coordinate size"
+            ),
+        )
+
+    incidences: dict[tuple[Fraction, Fraction, Fraction], tuple[int, ...]] = {}
+    for key in grouped:
+        center_x, center_y, radius_squared = key
+        incidences[key] = tuple(
+            source_index
+            for source_index, point in enumerate(point_values)
+            if (point[0] - center_x) ** 2 + (point[1] - center_y) ** 2 == radius_squared
+        )
 
     if len(grouped) > MAX_SPANNED_CIRCLES:
         raise OperationResourceAdmissionError(
@@ -913,7 +922,7 @@ def spanned_circle_profile(
                 ),
                 radius_squared=_wire_rational(key[2]),
             ),
-            point_indices=grouped[key][1],
+            point_indices=incidences[key],
         )
         for key in sorted(grouped)
     )

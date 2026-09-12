@@ -3,6 +3,7 @@
 import pytest
 
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -64,6 +65,25 @@ def test_exponent_growth_is_rejected_before_convolution() -> None:
     right = RationalLaurentPolynomial(variables=("x",), terms=(term(1, 1),))
     with pytest.raises(OperationResourceAdmissionError, match="exponent"):
         rational_laurent_multiply(left, right)
+
+
+def test_catalog_admits_exponent_growth_before_convolution_bound() -> None:
+    operation = Catalog.open().operation("polynomial.laurent.rational.multiply.compute")
+    assert operation is not None
+
+    left = RationalLaurentPolynomial(
+        variables=("x",),
+        terms=tuple(term(1, exponent) for exponent in range(32_768, 30_719, -1)),
+    )
+    right = RationalLaurentPolynomial(
+        variables=("x",), terms=(term(1, 1), term(1, 0))
+    )
+    request = operation.request_type(left=left, right=right)
+
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        operation.run(request)
+
+    assert error.value.errors()[0]["type"] == "polynomial.laurent.exponent_growth"
 
 
 def test_opposite_boundary_exponents_multiply_to_one() -> None:

@@ -36,13 +36,6 @@ def rational_laurent_multiply(
         )
     if not left.terms or not right.terms:
         return RationalLaurentPolynomial(variables=left.variables, terms=())
-    work = len(left.terms) * len(right.terms)
-    if work > MAX_POLYNOMIAL_TERMS:
-        raise OperationResourceAdmissionError(
-            location=("right", "terms"),
-            code="polynomial.laurent.convolution_bound",
-            message=f"sparse convolution requires {work} term products; maximum is {MAX_POLYNOMIAL_TERMS}",
-        )
     # Signed extrema bound every convolution exponent without excluding
     # products whose opposite-sign source exponents cancel.
     if any(
@@ -58,6 +51,13 @@ def rational_laurent_multiply(
             location=("right", "terms"),
             code="polynomial.laurent.exponent_growth",
             message="product exponent may exceed the Laurent representation bound",
+        )
+    work = len(left.terms) * len(right.terms)
+    if work > MAX_POLYNOMIAL_TERMS:
+        raise OperationResourceAdmissionError(
+            location=("right", "terms"),
+            code="polynomial.laurent.convolution_bound",
+            message=f"sparse convolution requires {work} term products; maximum is {MAX_POLYNOMIAL_TERMS}",
         )
     coefficient_digits = work * (
         max(

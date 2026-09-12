@@ -996,6 +996,22 @@ def evaluate_finite_polynomial(
     )
 
 
+def _admit_polynomial_point_evaluation(
+    polynomial: FinitePolynomial,
+    *,
+    location: tuple[str, ...],
+) -> None:
+    """Admit one-point evaluation without charging complete-field enumeration."""
+
+    work = len(polynomial.coefficients) * polynomial.presentation.degree
+    if work > _MAX_FINITE_MAP_WORK:
+        raise OperationResourceAdmissionError(
+            location=location,
+            code="finite_field.finite_polynomial_evaluation_exceeds_operation_work_budget",
+            message="finite polynomial evaluation exceeds the operation work budget",
+        )
+
+
 def _admit_map_evaluation(
     polynomial_map: FinitePolynomialMap, *, location: tuple[str, ...]
 ) -> None:

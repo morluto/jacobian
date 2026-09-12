@@ -1,6 +1,11 @@
 """Finite-field catalog projections and immutable tool declarations."""
 
-from jacobian.catalog.models import MathTool, MathTools, OperationExample
+from jacobian.catalog.models import (
+    MathTool,
+    MathTools,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.finite_fields import (
     Axis,
     AxisBoundMatrix,
@@ -20,6 +25,7 @@ from jacobian.math.finite_fields import (
     analyze_collisions,
     analyze_permutation,
     direction_rank_ledger,
+    evaluate_finite_polynomial,
     fiber_partition,
     finite_map_table,
     homogeneous_fixed_subspace,
@@ -38,6 +44,7 @@ from jacobian.math.finite_fields._models import (
     DirectionRankLedgerRequest,
     FiberPartitionRequest,
     FiniteMapTableRequest,
+    FinitePolynomialEvaluationRequest,
     HomogeneousFixedSubspaceRequest,
     LinearMapRankRequest,
     OrbitDistributionRequest,
@@ -192,6 +199,25 @@ def _finite_map_table(request: FiniteMapTableRequest) -> FiniteMapTable:
     return finite_map_table(request.polynomial_map)
 
 
+def _finite_polynomial_evaluation(
+    request: FinitePolynomialEvaluationRequest,
+) -> FiniteFieldElement:
+    if request.value.presentation != request.polynomial.presentation:
+        raise OperationDomainValidationError(
+            location=("value", "presentation"),
+            code="finite_field.finite_polynomial_evaluation_parent_mismatch",
+            message="polynomial and value must share their exact presentation",
+        )
+    from jacobian.math.finite_fields._admission import require_field
+    from jacobian.math.finite_fields.operations import (
+        _admit_polynomial_point_evaluation,
+    )
+
+    require_field(request.polynomial.presentation)
+    _admit_polynomial_point_evaluation(request.polynomial, location=("polynomial",))
+    return evaluate_finite_polynomial(request.polynomial, request.value)
+
+
 def _fiber_partition(request: FiberPartitionRequest) -> FiberPartition:
     return fiber_partition(request.table)
 
@@ -282,6 +308,28 @@ def _build_tools() -> MathTools:
                 name="cubic_map_over_gf_four",
                 description="Evaluate x³ on every element of GF(4).",
                 input={"polynomial_map": _POLYNOMIAL_MAP},
+            ),
+        ),
+    )
+    point_evaluation_operation = MathTool(
+        operation_id="finite_field.polynomial.evaluate.compute",
+        request_type=FinitePolynomialEvaluationRequest,
+        result_type=FiniteFieldElement,
+        run=_finite_polynomial_evaluation,
+        title="Evaluate a finite-field polynomial at one exact element",
+        description=(
+            "Return one exact value without enumerating the field. The polynomial "
+            "and evaluation point must share one admitted finite-field presentation."
+        ),
+        tags=("finite-field", "polynomial", "evaluation", "exact"),
+        examples=(
+            OperationExample(
+                name="cubic_map_at_zero",
+                description="Evaluate x³ at the zero element of GF(4).",
+                input={
+                    "polynomial": _POLYNOMIAL_MAP["polynomial"],
+                    "value": _ZERO,
+                },
             ),
         ),
     )
@@ -437,6 +485,7 @@ def _build_tools() -> MathTools:
         rank_operation,
         ledger_operation,
         orbit_operation,
+        point_evaluation_operation,
         table_operation,
         fiber_operation,
         collision_operation,

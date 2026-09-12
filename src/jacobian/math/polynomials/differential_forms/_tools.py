@@ -38,7 +38,7 @@ TOOLS = (
                 input={
                     "left": {
                         "variables": ["x", "y"],
-                        "degree": 1,
+                        "degree": "1",
                         "components": [
                             {
                                 "indices": [0],
@@ -58,7 +58,7 @@ TOOLS = (
                     },
                     "right": {
                         "variables": ["x", "y"],
-                        "degree": 1,
+                        "degree": "1",
                         "components": [
                             {
                                 "indices": [1],

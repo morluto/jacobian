@@ -143,6 +143,106 @@ class TestSupport:
         assert not verify_polynomial_weight_profile(forged_profile)
         assert not verify_polynomial_face_data(forged_face)
 
+    def test_verifiers_reject_model_construct_scalar_and_layer_forgery(self) -> None:
+        source = _polynomial((_term(1, [2, 0]), _term(1, [0, 2])), VARS)
+        profile = compute_weight_profile(
+            WeightProfileRequest(polynomial=source, weight=(1, 2))
+        )
+        forged_minimum = PolynomialWeightProfile.model_construct(
+            polynomial=profile.polynomial,
+            weight=profile.weight,
+            minimum_weight=float(profile.minimum_weight),
+            minimizing_exponents=profile.minimizing_exponents,
+            weight_layers=profile.weight_layers,
+        )
+        forged_layers = profile.model_copy(
+            update={
+                "weight_layers": (
+                    (profile.minimum_weight, profile.minimizing_exponents),
+                )
+            }
+        )
+        assert not verify_polynomial_weight_profile(forged_minimum)
+        assert not verify_polynomial_weight_profile(forged_layers)
+
+    @pytest.mark.parametrize("exponent", [-1, 32_769])
+    def test_verifiers_reject_constructed_source_exponent_forgery(
+        self, exponent: int
+    ) -> None:
+        from jacobian.math.polynomials.values import SparseRationalPolynomial
+
+        source = _polynomial((_term(1, [2, 0]), _term(1, [0, 2])), VARS)
+        profile = compute_weight_profile(
+            WeightProfileRequest(polynomial=source, weight=(1, 2))
+        )
+        malformed_term = source.polynomial.terms[0].model_copy(
+            update={"exponents": (exponent, 0)}
+        )
+        malformed_sparse = SparseRationalPolynomial.model_construct(
+            terms=(malformed_term, source.polynomial.terms[1])
+        )
+        malformed_source = source.model_copy(update={"polynomial": malformed_sparse})
+        forged_profile = profile.model_copy(update={"polynomial": malformed_source})
+        assert not verify_polynomial_weight_profile(forged_profile)
+
+    def test_face_verifier_rejects_malformed_constructed_face(self) -> None:
+        from jacobian.math.polynomials.values import SparseRationalPolynomial
+
+        source = _polynomial((_term(1, [2, 0]), _term(1, [0, 2])), VARS)
+        face = compute_initial_form(
+            InitialFormRequest(polynomial=source, weight=(1, 2))
+        )
+        malformed_term = face.initial_form.polynomial.terms[0].model_copy(
+            update={"exponents": (32_769, 0)}
+        )
+        malformed_sparse = SparseRationalPolynomial.model_construct(
+            terms=(malformed_term,)
+        )
+        malformed_face = face.initial_form.model_copy(
+            update={"polynomial": malformed_sparse}
+        )
+        forged_face = face.model_copy(update={"initial_form": malformed_face})
+        assert not verify_polynomial_face_data(forged_face)
+
+    @pytest.mark.parametrize("kind", ("profile", "face"))
+    @pytest.mark.parametrize(
+        "failure", (RuntimeError, ValueError, TypeError, OperationDomainValidationError)
+    )
+    def test_weighted_verifiers_propagate_computation_failures(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        kind: str,
+        failure: type[Exception],
+    ) -> None:
+        from jacobian.math.polynomials.support_geometry import operations
+
+        source = _polynomial((_term(1, [2, 0]), _term(1, [0, 2])), VARS)
+        error: Exception
+        if failure is OperationDomainValidationError:
+            error = failure(
+                location=(), code="test.computation", message="injected failure"
+            )
+        else:
+            error = failure("injected failure")
+
+        def fail(*args: object, **kwargs: object) -> object:
+            raise error
+
+        if kind == "profile":
+            profile_claim = compute_weight_profile(
+                WeightProfileRequest(polynomial=source, weight=(1, 2))
+            )
+            monkeypatch.setattr(operations, "weight_profile", fail)
+            with pytest.raises(failure, match="injected failure"):
+                verify_polynomial_weight_profile(profile_claim)
+        else:
+            face_claim = compute_initial_form(
+                InitialFormRequest(polynomial=source, weight=(1, 2))
+            )
+            monkeypatch.setattr(operations, "initial_form", fail)
+            with pytest.raises(failure, match="injected failure"):
+                verify_polynomial_face_data(face_claim)
+
     def test_nonzero_support(self) -> None:
         result = compute_support(
             SupportRequest(polynomial=_polynomial(_XY_TERMS, VARS))

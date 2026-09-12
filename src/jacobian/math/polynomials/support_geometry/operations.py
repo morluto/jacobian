@@ -12,6 +12,7 @@ from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials.support_geometry._models import (
+    MAX_WEIGHT_COMPONENT_MAGNITUDE,
     MAX_WEIGHTED_COEFFICIENT_DIGITS,
     MAX_WEIGHTED_POLYNOMIAL_TERMS,
     _require_transportable_weight,
@@ -20,6 +21,7 @@ from jacobian.math.polynomials.support_geometry.values import (
     MAX_NEWTON_DIMENSION,
     MAX_NEWTON_TERMS,
     MAX_SUPPORT_TERMS,
+    MAX_WEIGHT_COMPONENTS,
     NewtonPolytope,
     PolynomialFaceData,
     PolynomialSupport,
@@ -560,6 +562,207 @@ def _bounded_support_terms(
         return None
 
 
+_MAX_WEIGHTED_VALUE = (
+    MAX_WEIGHT_COMPONENTS * MAX_WEIGHT_COMPONENT_MAGNITUDE * MAX_POLYNOMIAL_EXPONENT
+)
+
+
+def _within_digit_bound(value: int, maximum_digits: int) -> bool:
+    """Check a decimal digit bound without formatting an oversized integer."""
+    magnitude = abs(value)
+    if magnitude.bit_length() <= 3 * maximum_digits:
+        return True
+    return bool(magnitude < 10**maximum_digits)
+
+
+def _bounded_weighted_source(
+    polynomial: object,
+) -> tuple[tuple[str, ...], tuple[tuple[int, ...], ...]] | None:
+    """Validate one retained polynomial within the weighted-operation envelope.
+
+    Weighted verifiers receive values that may have bypassed Pydantic through
+    ``model_copy`` or ``model_construct``.  This preflight checks every source
+    carrier before the operation is replayed, including the term budget,
+    canonical rational representation, and exponent bounds.
+    """
+    try:
+        if type(polynomial) is not RationalPolynomial:
+            return None
+        if type(polynomial.domain) is not str or polynomial.domain != "QQ":
+            return None
+        variables = _canonical_variable_axis(polynomial.variables)
+        if variables is None or len(variables) > MAX_WEIGHT_COMPONENTS:
+            return None
+        sparse = polynomial.polynomial
+        if type(sparse) is not SparseRationalPolynomial:
+            return None
+        raw_terms = sparse.terms
+        if (
+            type(raw_terms) is not tuple
+            or not 1 <= len(raw_terms) <= MAX_WEIGHTED_POLYNOMIAL_TERMS
+        ):
+            return None
+
+        exponents: list[tuple[int, ...]] = []
+        for term in raw_terms:
+            if type(term) is not RationalPolynomialTerm:
+                return None
+            term_exponents = term.exponents
+            if _canonical_term_exponents(term_exponents, width=len(variables)) is None:
+                return None
+            coefficient = term.coefficient
+            if type(coefficient) is not CanonicalRational:
+                return None
+            numerator = coefficient.num
+            denominator = coefficient.den
+            if (
+                type(numerator) is not int
+                or type(denominator) is not int
+                or denominator <= 0
+                or numerator == 0
+                or not _within_digit_bound(numerator, MAX_WEIGHTED_COEFFICIENT_DIGITS)
+                or not _within_digit_bound(denominator, MAX_WEIGHTED_COEFFICIENT_DIGITS)
+            ):
+                return None
+            fraction = Fraction(numerator, denominator)
+            if (numerator, denominator) != (
+                fraction.numerator,
+                fraction.denominator,
+            ):
+                return None
+            exponents.append(term_exponents)
+
+        exponent_tuple = tuple(exponents)
+        if len(set(exponent_tuple)) != len(exponent_tuple):
+            return None
+        if exponent_tuple != tuple(sorted(exponent_tuple, reverse=True)):
+            return None
+        return variables, exponent_tuple
+    except (AttributeError, IndexError, TypeError, ValueError, ZeroDivisionError):
+        return None
+
+
+def _bounded_weight(weight: object, variables: tuple[str, ...]) -> bool:
+    """Check a retained weight's exact shape and transportable components."""
+    return (
+        type(weight) is tuple
+        and len(weight) == len(variables)
+        and 1 <= len(weight) <= MAX_WEIGHT_COMPONENTS
+        and all(
+            type(component) is int and abs(component) <= MAX_WEIGHT_COMPONENT_MAGNITUDE
+            for component in weight
+        )
+    )
+
+
+def _bounded_exponent_rows(
+    rows: object,
+    *,
+    width: int,
+    maximum_rows: int,
+    sorted_rows: bool,
+) -> tuple[tuple[int, ...], ...] | None:
+    """Check bounded exponent rows retained by a weighted result."""
+    if type(rows) is not tuple or not 1 <= len(rows) <= maximum_rows:
+        return None
+    if any(_canonical_term_exponents(row, width=width) is None for row in rows):
+        return None
+    if len(set(rows)) != len(rows):
+        return None
+    if sorted_rows and rows != tuple(sorted(rows)):
+        return None
+    return rows
+
+
+def _verify_weighted_profile_carrier(claim: PolynomialWeightProfile) -> bool:
+    """Validate a profile claim before entering its source-relation replay."""
+    if type(claim) is not PolynomialWeightProfile:
+        return False
+    try:
+        source = _bounded_weighted_source(claim.polynomial)
+        if source is None:
+            return False
+        variables, source_exponents = source
+        if not _bounded_weight(claim.weight, variables):
+            return False
+        if (
+            type(claim.minimum_weight) is not int
+            or abs(claim.minimum_weight) > _MAX_WEIGHTED_VALUE
+        ):
+            return False
+
+        minimizing = _bounded_exponent_rows(
+            claim.minimizing_exponents,
+            width=len(variables),
+            maximum_rows=len(source_exponents),
+            sorted_rows=True,
+        )
+        if minimizing is None:
+            return False
+        layers = claim.weight_layers
+        if type(layers) is not tuple or not 1 <= len(layers) <= len(source_exponents):
+            return False
+
+        seen: set[tuple[int, ...]] = set()
+        previous_weight: int | None = None
+        total_rows = 0
+        normalized_layers: list[tuple[int, tuple[tuple[int, ...], ...]]] = []
+        for layer in layers:
+            if type(layer) is not tuple or len(layer) != 2:
+                return False
+            layer_weight, layer_rows = layer
+            if (
+                type(layer_weight) is not int
+                or abs(layer_weight) > _MAX_WEIGHTED_VALUE
+                or (previous_weight is not None and layer_weight <= previous_weight)
+            ):
+                return False
+            bounded_rows = _bounded_exponent_rows(
+                layer_rows,
+                width=len(variables),
+                maximum_rows=len(source_exponents) - total_rows,
+                sorted_rows=True,
+            )
+            if bounded_rows is None:
+                return False
+            if seen.intersection(bounded_rows):
+                return False
+            seen.update(bounded_rows)
+            total_rows += len(bounded_rows)
+            previous_weight = layer_weight
+            normalized_layers.append((layer_weight, bounded_rows))
+
+        return not (
+            total_rows != len(source_exponents)
+            or seen != set(source_exponents)
+            or normalized_layers[0][0] != claim.minimum_weight
+            or normalized_layers[0][1] != minimizing
+        )
+    except (AttributeError, IndexError, TypeError, ValueError):
+        return False
+
+
+def _verify_face_carrier(claim: PolynomialFaceData) -> bool:
+    """Validate a face claim before entering its source-relation replay."""
+    if type(claim) is not PolynomialFaceData:
+        return False
+    try:
+        source = _bounded_weighted_source(claim.polynomial)
+        face = _bounded_weighted_source(claim.initial_form)
+        if source is None or face is None:
+            return False
+        variables, source_exponents = source
+        face_variables, face_exponents = face
+        return not (
+            variables != face_variables
+            or not _bounded_weight(claim.weight, variables)
+            or len(face_exponents) > len(source_exponents)
+            or not set(face_exponents).issubset(source_exponents)
+        )
+    except (AttributeError, IndexError, TypeError, ValueError):
+        return False
+
+
 def verify_polynomial_support(claim: PolynomialSupport) -> bool:
     """Verify support and extrema claims against the retained source.
 
@@ -671,31 +874,13 @@ def initial_form(
 
 def verify_polynomial_weight_profile(claim: PolynomialWeightProfile) -> bool:
     """Verify a serialized weight profile against its retained source."""
-    if not isinstance(claim, PolynomialWeightProfile):
+    if not _verify_weighted_profile_carrier(claim):
         return False
-    try:
-        return weight_profile(claim.polynomial, claim.weight) == claim
-    except (
-        AttributeError,
-        IndexError,
-        TypeError,
-        ValueError,
-        OperationDomainValidationError,
-    ):
-        return False
+    return weight_profile(claim.polynomial, claim.weight) == claim
 
 
 def verify_polynomial_face_data(claim: PolynomialFaceData) -> bool:
     """Verify a serialized initial form against its retained source and weight."""
-    if not isinstance(claim, PolynomialFaceData):
+    if not _verify_face_carrier(claim):
         return False
-    try:
-        return initial_form(claim.polynomial, claim.weight) == claim
-    except (
-        AttributeError,
-        IndexError,
-        TypeError,
-        ValueError,
-        OperationDomainValidationError,
-    ):
-        return False
+    return initial_form(claim.polynomial, claim.weight) == claim

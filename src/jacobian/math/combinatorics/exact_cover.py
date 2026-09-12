@@ -801,7 +801,11 @@ def minimum_generalized_exact_cover(  # noqa: C901
         for row_item in row.items:
             if row_item in primary_items:
                 primary_row_degrees[row_item] += 1
-    normalization_work = len(source_rows) + 4 * source_incidence_count
+    # Row normalization traverses the complete source row axis twice: once to
+    # compute incidence totals and retain active rows, then again when the
+    # shortcut reconstructs coverage through _expected_coverage. Charge both
+    # traversals so empty rows cannot evade admission via incidence counts.
+    normalization_work = 2 * len(source_rows) + 4 * source_incidence_count
     # The shortcut still constructs the complete retained coverage ledger, so
     # charge both its item-axis scans and selected-row reconstruction before
     # returning an exact result.

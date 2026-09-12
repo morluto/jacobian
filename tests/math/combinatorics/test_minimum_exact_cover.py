@@ -132,6 +132,26 @@ def test_single_row_cover_avoids_generic_search_admission() -> None:
     assert result.lower_bound == result.upper_bound == 1
 
 
+def test_single_row_shortcut_charges_source_row_traversals(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(exact_cover_module, "_MINIMUM_EXACT_COVER_WORK_LIMIT", 6_000)
+    instance = GeneralizedExactCoverInstance(
+        primary_items=("p",),
+        secondary_items=(),
+        rows=(
+            ExactCoverRow(row_id="r0000", items=("p",)),
+            *(
+                ExactCoverRow(row_id=f"r{index:04d}", items=())
+                for index in range(1, 4096)
+            ),
+        ),
+    )
+
+    with pytest.raises(OperationResourceAdmissionError):
+        minimum_generalized_exact_cover(instance)
+
+
 def test_single_row_cover_retains_the_full_secondary_axis() -> None:
     secondary = tuple(f"s{index:04d}" for index in range(4_095))
     result = minimum_generalized_exact_cover(

@@ -71,13 +71,36 @@ def test_profile_does_not_replay_count_operation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import jacobian.math.logic.languages.regular._symbol_parikh as profile
-    import jacobian.math.logic.languages.regular.operations as regular_operations
 
     def fail(*_args: object, **_kwargs: object) -> int:
         raise AssertionError("profile kernel must not replay accepted-word counting")
 
-    monkeypatch.setattr(regular_operations, "count_accepted_words", fail)
+    # The pre-fix implementation imported this binding into the profile
+    # module. Patching that binding makes the regression fail on the base if
+    # the profile still delegates to the separate count operation.
+    monkeypatch.setattr(profile, "count_accepted_words", fail, raising=False)
     result = profile.symbol_parikh_profile(
         profile.SymbolParikhProfileRequest(dfa=ending_in_one(), word_length=3)
     )
     assert result.total_accepted_words == 4
+
+
+def test_wide_alphabet_uses_only_extension_layers_in_admission() -> None:
+    alphabet_size = 32
+    dfa = DFA(
+        state_count=1,
+        alphabet_size=alphabet_size,
+        transitions=tuple(
+            DFATransition(source=0, symbol=symbol, target=0)
+            for symbol in range(alphabet_size)
+        ),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+
+    result = symbol_parikh_profile(
+        SymbolParikhProfileRequest(dfa=dfa, word_length=3)
+    )
+
+    assert len(result.cells) == 5_984
+    assert result.total_accepted_words == 32**3

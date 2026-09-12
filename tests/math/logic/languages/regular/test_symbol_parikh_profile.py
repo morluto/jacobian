@@ -6,6 +6,7 @@ from math import comb
 from typing import Any, cast
 
 import pytest
+from tests.fixtures.accounting import assert_charged_work_parity
 
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.logic.languages.regular._symbol_parikh import (
@@ -19,7 +20,6 @@ from jacobian.math.logic.languages.regular.operations import (
     dfa_run,
 )
 from jacobian.math.logic.languages.regular.values import DFA, DFATransition
-from tests.fixtures.accounting import assert_charged_work_parity
 
 
 def ending_in_one() -> DFA:

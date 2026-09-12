@@ -28,6 +28,7 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 
 MAX_CONFIGURATION_POINTS = 32
 MAX_COORDINATE_DIGITS = 256
+MAX_SPANNED_CIRCLE_WORK = 2_000_000
 # Joint work bound for the exhaustive general-position search.  The sweep
 # performs one exact 4x4 determinant per point quadruple, so the determinant
 # count grows as C(n,4) while every Fraction multiplication grows
@@ -1440,7 +1441,10 @@ class SpannedCircleProfileRequest(StrictModel):
         description=(
             f"Bounded configuration of 3..{MAX_CONFIGURATION_POINTS} distinct "
             "rational planar points. Every non-collinear triple determines one "
-            "circle; collinear triples are omitted."
+            "circle; collinear triples are omitted. Each coordinate numerator "
+            f"and denominator is at most {MAX_COORDINATE_DIGITS} digits, and "
+            f"n*C(n,3)*max_digits^2 <= {MAX_SPANNED_CIRCLE_WORK} bounds the "
+            "complete circumcircle and incidence work."
         ),
     )
 
@@ -1457,8 +1461,7 @@ class SpannedCircleProfileRequest(StrictModel):
 class SpannedCircleEntry(StrictModel):
     """One distinct triple-spanned circle and all source points on it."""
 
-    center: RationalPoint2D
-    radius_squared: CanonicalRational
+    circle: GeometryCircleResult
     point_indices: tuple[StrictInt, ...] = Field(
         min_length=3, max_length=MAX_CONFIGURATION_POINTS
     )
@@ -1470,7 +1473,7 @@ class SpannedCircleEntry(StrictModel):
                 "spanned_circle_point_indices_sorted_unique",
                 "circle point indices must be sorted and distinct",
             )
-        if self.radius_squared.as_fraction() <= 0:
+        if self.circle.radius_squared.as_fraction() <= 0:
             raise _validation_error(
                 "spanned_circle_radius_squared_positive",
                 "a spanned circle must have positive radius squared",
@@ -1507,9 +1510,9 @@ class SpannedCircleProfileResult(StrictModel):
                 )
         circle_keys = tuple(
             (
-                circle.center.x.as_fraction(),
-                circle.center.y.as_fraction(),
-                circle.radius_squared.as_fraction(),
+                circle.circle.center.x.as_fraction(),
+                circle.circle.center.y.as_fraction(),
+                circle.circle.radius_squared.as_fraction(),
             )
             for circle in self.circles
         )

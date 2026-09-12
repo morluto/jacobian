@@ -50,11 +50,13 @@ CONFIGURATION_OPERATIONS: MathTools = (
         operation_id="geometry.points.spanned_circle_profile.compute",
         title="Compute the exact spanned-circle incidence profile",
         description=(
-            "Given a bounded rational planar point configuration, enumerate every "
-            "distinct circle determined by a non-collinear source triple and return "
-            "its exact center, squared radius, and complete source-point incidence "
-            "set. Collinear triples are omitted; exhaustive triple generation and "
-            "point-membership work are bounded before execution."
+            "Given a bounded rational planar point configuration (3..32 points, "
+            "each coordinate at most 256 digits, n*C(n,3)*max_digits^2<=2000000 "
+            "to bound complete circumcircle construction and incidence tests), "
+            "enumerate every distinct circle determined by a non-collinear source "
+            "triple and return its canonical circle value with the complete "
+            "source-point incidence set. Collinear triples are omitted; exhaustive "
+            "triple generation and point-membership work are bounded before execution."
         ),
         request_type=SpannedCircleProfileRequest,
         result_type=SpannedCircleProfileResult,

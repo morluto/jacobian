@@ -6,10 +6,14 @@ from fractions import Fraction
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.geometry._models import (
     CircumradiusProfileRequest,
     GeneralPositionRequest,
+    GeometryCircleResult,
     PointQuadrupleRequest,
     PointTripleRequest,
     RationalPoint2D,
@@ -239,8 +243,9 @@ class TestSpannedCircleProfile:
         )
         assert len(result.circles) == 1
         circle = result.circles[0]
-        assert circle.center == _point("1/2", "1/2")
-        assert circle.radius_squared == CanonicalRational(num=1, den=2)
+        assert isinstance(circle.circle, GeometryCircleResult)
+        assert circle.circle.center == _point("1/2", "1/2")
+        assert circle.circle.radius_squared == CanonicalRational(num=1, den=2)
         assert circle.point_indices == (0, 1, 2, 3)
         assert type(result).model_validate_json(result.model_dump_json()) == result
 
@@ -275,10 +280,17 @@ class TestSpannedCircleProfile:
         second = spanned_circle_profile(
             SpannedCircleProfileRequest(points=tuple(reordered))
         )
-        assert [(c.center, c.radius_squared) for c in first.circles] == [
-            (c.center, c.radius_squared) for c in second.circles
+        assert [(c.circle.center, c.circle.radius_squared) for c in first.circles] == [
+            (c.circle.center, c.circle.radius_squared) for c in second.circles
         ]
         assert second.circles[0].point_indices == (0, 1, 2, 3)
+
+    def test_work_ceiling_is_a_resource_admission(self) -> None:
+        points = tuple(
+            _point(str(index), str(1000 + index)) for index in range(32)
+        )
+        with pytest.raises(OperationResourceAdmissionError, match="2000000"):
+            spanned_circle_profile(SpannedCircleProfileRequest(points=points))
 
 
 @pytest.mark.parametrize("coordinates", [((0, 0), (1, 0)), ((0, 0), (1, 0), (0, 0))])

@@ -7,7 +7,10 @@ from typing import Any, cast
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.geometry._convex_polygon_intersection import (
     ConvexPolygonIntersectionResult,
     ConvexRationalPolygon,
@@ -19,6 +22,7 @@ from jacobian.math.geometry._models import (
     INVERSION_ADMISSION_DIGITS,
     MAX_CONFIGURATION_POINTS,
     MAX_COORDINATE_DIGITS,
+    MAX_SPANNED_CIRCLE_WORK,
     CircumradiusProfileResult,
     CircumradiusTripleEntry,
     ClosedSegment2D,
@@ -833,13 +837,13 @@ def spanned_circle_profile(
     # determinant budget: it is a distinct complete result with its own work.
     max_digits = _max_coordinate_digits(points)
     work = n * triples * max_digits * max_digits
-    if work > 2_000_000:
-        _reject_geometry_domain(
+    if work > MAX_SPANNED_CIRCLE_WORK:
+        raise OperationResourceAdmissionError(
             location=("points",),
             code="geometry.spanned_circle_profile_work_bound",
             message=(
-                "spanned-circle incidence work exceeds the 2000000-unit bound; "
-                "reduce point count or coordinate size"
+                f"spanned-circle incidence work exceeds the {MAX_SPANNED_CIRCLE_WORK}"
+                "-unit bound; reduce point count or coordinate size"
             ),
         )
 
@@ -880,8 +884,12 @@ def spanned_circle_profile(
 
     entries = tuple(
         SpannedCircleEntry(
-            center=RationalPoint2D(x=_wire_rational(key[0]), y=_wire_rational(key[1])),
-            radius_squared=_wire_rational(key[2]),
+            circle=GeometryCircleResult(
+                center=RationalPoint2D(
+                    x=_wire_rational(key[0]), y=_wire_rational(key[1])
+                ),
+                radius_squared=_wire_rational(key[2]),
+            ),
             point_indices=grouped[key][1],
         )
         for key in sorted(grouped)

@@ -58,6 +58,21 @@ def _merged_indices(
 _MergedPair = tuple[FormComponent, FormComponent, tuple[int, ...], int]
 
 
+def _unit_coefficient(value: CanonicalRational) -> bool:
+    fraction = value.as_fraction()
+    return fraction.numerator in (-1, 1) and fraction.denominator == 1
+
+
+def _product_digit_height(left: CanonicalRational, right: CanonicalRational) -> int:
+    if _unit_coefficient(left):
+        return canonical_rational_component_digits(right)
+    if _unit_coefficient(right):
+        return canonical_rational_component_digits(left)
+    return canonical_rational_component_digits(
+        left
+    ) + canonical_rational_component_digits(right)
+
+
 def _admit_coefficient_growth(pairs: tuple[_MergedPair, ...]) -> None:
     # Bound each output monomial from its exact products. A single rational
     # product of heights h and k has at most h+k digits; extra slack is only
@@ -72,9 +87,9 @@ def _admit_coefficient_growth(pairs: tuple[_MergedPair, ...]) -> None:
                         first_term.exponents, second_term.exponents, strict=True
                     )
                 )
-                height = canonical_rational_component_digits(
-                    first_term.coefficient
-                ) + canonical_rational_component_digits(second_term.coefficient)
+                height = _product_digit_height(
+                    first_term.coefficient, second_term.coefficient
+                )
                 key = (indices, exponents)
                 projected_digits.setdefault(key, []).append(height)
     bounds = tuple(
@@ -182,13 +197,19 @@ def wedge(
         )
     _admit_output_support(pairs)
     _admit_coefficient_growth(pairs)
+    aggregate: dict[tuple[int, ...], dict[tuple[int, ...], Fraction]] = {}
+    for first, second, indices, sign in pairs:
+        terms = aggregate.setdefault(indices, {})
+        for exponents, coefficient in _multiply_components(
+            first.coefficient, second.coefficient, sign
+        ).items():
+            terms[exponents] = terms.get(exponents, Fraction()) + coefficient
     maximum_exponent = max(
         (
-            first_term.exponents[axis] + second_term.exponents[axis]
-            for first, second, _, _ in pairs
-            for first_term in first.coefficient.polynomial.terms
-            for second_term in second.coefficient.polynomial.terms
-            for axis in range(len(left.variables))
+            max(exponents, default=0)
+            for terms in aggregate.values()
+            for exponents, coefficient in terms.items()
+            if coefficient
         ),
         default=0,
     )
@@ -198,13 +219,6 @@ def wedge(
             code="differential_form.wedge.exponent_budget",
             message="wedge coefficient exponents exceed the bounded output envelope",
         )
-    aggregate: dict[tuple[int, ...], dict[tuple[int, ...], Fraction]] = {}
-    for first, second, indices, sign in pairs:
-        terms = aggregate.setdefault(indices, {})
-        for exponents, coefficient in _multiply_components(
-            first.coefficient, second.coefficient, sign
-        ).items():
-            terms[exponents] = terms.get(exponents, Fraction()) + coefficient
     components: list[FormComponent] = []
     for indices in sorted(aggregate):
         terms = {

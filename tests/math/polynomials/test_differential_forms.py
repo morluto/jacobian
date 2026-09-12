@@ -164,6 +164,22 @@ def test_odd_self_wedge_cancels_before_exponent_admission() -> None:
     assert product.components == ()
 
 
+def test_proportional_odd_forms_cancel_before_exponent_admission() -> None:
+    alpha = _form(
+        1,
+        ((0,), _poly((1, (MAX_DIFFERENTIAL_FORM_EXPONENT, 0)))),
+        ((1,), _poly((1, (MAX_DIFFERENTIAL_FORM_EXPONENT, 0)))),
+    )
+    beta = _form(
+        1,
+        ((0,), _poly((2, (MAX_DIFFERENTIAL_FORM_EXPONENT, 0)))),
+        ((1,), _poly((2, (MAX_DIFFERENTIAL_FORM_EXPONENT, 0)))),
+    )
+    product = wedge(alpha, beta)
+    assert product.degree == 2
+    assert product.components == ()
+
+
 def test_wedge_reserves_output_support_before_convolution() -> None:
     left_terms = tuple((1, (exponent, 0)) for exponent in range(16, -1, -1))
     right_terms = tuple((1, (0, exponent)) for exponent in range(16, -1, -1))
@@ -191,6 +207,17 @@ def test_wedge_admits_one_term_product_at_coefficient_bound() -> None:
     assert (
         product.components[0].coefficient.polynomial.terms[0].coefficient.num
         == coefficient * coefficient
+    )
+
+
+def test_wedge_with_scalar_unit_preserves_full_coefficient_envelope() -> None:
+    coefficient = 10**4095
+    left = _form(0, ((), _poly((coefficient, (0, 0)))))
+    unit = _form(0, ((), _poly((1, (0, 0)))))
+    product = wedge(left, unit)
+    assert (
+        product.components[0].coefficient.polynomial.terms[0].coefficient.num
+        == coefficient
     )
 
 

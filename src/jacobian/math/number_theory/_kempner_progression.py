@@ -23,8 +23,8 @@ from jacobian.math.number_theory._kempner_models import (
 
 MAX_CARRY_GRAPH_STATES = 1_000_000
 MAX_CARRY_GRAPH_WORK = 5_000_000
-MAX_CARRY_PREDECESSOR_BYTES = 128_000_000
-MAX_CARRY_RESULT_BYTES = 2_000_000
+MAX_CARRY_PREDECESSOR_ALLOCATION = 128_000_000
+MAX_CARRY_RESULT_ALLOCATION = 2_000_000
 
 
 class _State(NamedTuple):
@@ -37,9 +37,9 @@ class _State(NamedTuple):
 class _Admission(NamedTuple):
     state_bound: int
     transition_work: int
-    predecessor_bytes: int
+    predecessor_allocation: int
     result_digits: int
-    result_bytes: int
+    result_allocation: int
 
 
 def _state_bound(arity: int) -> int:
@@ -84,12 +84,12 @@ def _require_admission(digit_set: KempnerDigitSet, arity: int) -> _Admission:
     transition_work = state_bound * base * base
     # A predecessor stores a state, two source digits, and a pointer.  This is
     # deliberately charged before BFS; the kernel never grows past the charge.
-    predecessor_bytes = state_bound * (8 * (arity + 4) + 24)
+    predecessor_allocation = state_bound * (8 * (arity + 4) + 24)
     witness_digit_bound = state_bound
     result_digits = (
         witness_digit_bound * max(1, ceil(log10(base))) + len(str(arity)) + 1
     )
-    result_bytes = arity * (result_digits + 24) + 256
+    result_allocation = arity * (result_digits + 24) + 256
     if state_bound > MAX_CARRY_GRAPH_STATES:
         raise OperationResourceAdmissionError(
             location=("arity",),
@@ -105,7 +105,7 @@ def _require_admission(digit_set: KempnerDigitSet, arity: int) -> _Admission:
             code="number_theory.kempner_progression.transition_work",
             message="the derived digit transition work exceeds the admitted budget",
         )
-    if predecessor_bytes > MAX_CARRY_PREDECESSOR_BYTES:
+    if predecessor_allocation > MAX_CARRY_PREDECESSOR_ALLOCATION:
         raise OperationResourceAdmissionError(
             location=("arity",),
             code="number_theory.kempner_progression.predecessors",
@@ -113,7 +113,7 @@ def _require_admission(digit_set: KempnerDigitSet, arity: int) -> _Admission:
         )
     if (
         result_digits > MAX_KEMPNER_INTEGER_DIGITS
-        or result_bytes > MAX_CARRY_RESULT_BYTES
+        or result_allocation > MAX_CARRY_RESULT_ALLOCATION
     ):
         raise OperationResourceAdmissionError(
             location=("arity",),
@@ -123,9 +123,9 @@ def _require_admission(digit_set: KempnerDigitSet, arity: int) -> _Admission:
     return _Admission(
         state_bound=state_bound,
         transition_work=transition_work,
-        predecessor_bytes=predecessor_bytes,
+        predecessor_allocation=predecessor_allocation,
         result_digits=result_digits,
-        result_bytes=result_bytes,
+        result_allocation=result_allocation,
     )
 
 

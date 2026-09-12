@@ -44,7 +44,9 @@ def compute_equation_profile(request: EquationProfileRequest) -> EquationProfile
 def compute_implication_countermodel_check(
     request: ImplicationCountermodelCheckRequest,
 ) -> ImplicationCountermodelCheckResult:
-    return native.implication_countermodel_check(request)
+    return native.implication_countermodel_check(
+        request.algebra, request.premises, request.target
+    )
 
 
 def compute_generated_subalgebra(request: SubalgebraRequest) -> SubalgebraResult:

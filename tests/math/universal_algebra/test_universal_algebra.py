@@ -763,3 +763,18 @@ def test_native_evaluation_binds_assignment_keys_to_the_term_variable_axis() -> 
     assert evaluate_term(algebra, term, {2: 1, 1: 0, 0: 0}) == 1
     with pytest.raises(OperationDomainValidationError, match="variable axis"):
         evaluate_term(algebra, term, {2: 1, 3: 0, 4: 0})
+
+
+def test_native_implication_check_uses_mathematical_arguments() -> None:
+    from jacobian.catalog.models import OperationDomainValidationError
+    from jacobian.math.universal_algebra import implication_countermodel_check
+
+    magma = _cyclic_addition_algebra(2)
+    target = MagmaEquation(left=_variable_term(0), right=_variable_term(1))
+    result = implication_countermodel_check(magma, (), target)
+    assert result == compute_implication_countermodel_check(
+        ImplicationCountermodelCheckRequest(algebra=magma, premises=(), target=target)
+    )
+    assert result.is_countermodel
+    with pytest.raises(OperationDomainValidationError, match="sixteen premises"):
+        implication_countermodel_check(magma, (target,) * 17, target)

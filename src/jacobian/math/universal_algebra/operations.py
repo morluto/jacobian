@@ -15,8 +15,8 @@ from ._models import (
     EvaluateResult,
     HomomorphismObstruction,
     HomomorphismProfileResult,
-    ImplicationCountermodelCheckRequest,
     ImplicationCountermodelCheckResult,
+    MagmaEquation,
     SubalgebraResult,
     _congruence_work,
 )
@@ -103,18 +103,25 @@ def _admit_equation_profile(
 
 
 def _admit_implication_countermodel(
-    request: ImplicationCountermodelCheckRequest,
+    algebra: FiniteAlgebra,
+    premises: tuple[MagmaEquation, ...],
+    target: MagmaEquation,
 ) -> None:
     """Admit one complete finite-magma implication check before evaluation."""
 
-    algebra = request.algebra
+    if len(premises) > 16:
+        _reject(
+            location=("premises",),
+            code="premise_count",
+            message="at most sixteen premises are admitted",
+        )
     if len(algebra.operations) != 1 or algebra.operations[0].arity != 2:
         _reject(
             location=("algebra",),
             code="magma_signature",
             message="the checked algebra must have exactly one binary operation",
         )
-    equations = (*request.premises, request.target)
+    equations = (*premises, target)
     total_work = 0
     for equation in equations:
         for term in (equation.left, equation.right):
@@ -272,7 +279,9 @@ def equation_profile(
 
 
 def implication_countermodel_check(
-    request: ImplicationCountermodelCheckRequest,
+    algebra: FiniteAlgebra,
+    premises: tuple[MagmaEquation, ...],
+    target: MagmaEquation,
 ) -> ImplicationCountermodelCheckResult:
     """Check whether one explicit finite magma is a countermodel.
 
@@ -281,24 +290,24 @@ def implication_countermodel_check(
     hold universally and the target has a counterassignment.
     """
 
-    _admit_implication_countermodel(request)
+    _admit_implication_countermodel(algebra, premises, target)
     profiles = tuple(
         _equation_profile_unchecked(
-            request.algebra,
+            algebra,
             equation.left,
             equation.right,
             max(equation.left.variable_count, equation.right.variable_count),
         )
-        for equation in (*request.premises, request.target)
+        for equation in (*premises, target)
     )
-    premises = profiles[:-1]
-    target = profiles[-1]
+    premise_profiles = profiles[:-1]
+    target_profile = profiles[-1]
     return ImplicationCountermodelCheckResult(
-        algebra=request.algebra,
-        premises=premises,
-        target=target,
-        is_countermodel=all(profile.status == "HOLDS" for profile in premises)
-        and target.status == "FAILS",
+        algebra=algebra,
+        premises=premise_profiles,
+        target=target_profile,
+        is_countermodel=all(profile.status == "HOLDS" for profile in premise_profiles)
+        and target_profile.status == "FAILS",
     )
 
 

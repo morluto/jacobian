@@ -358,6 +358,22 @@ class TestSpannedCircleProfile:
             )
             assert result.circles == ()
 
+    def test_bounding_box_origin_admits_two_clusters(self) -> None:
+        points = tuple(
+            _point(str(3 * index), str((7 * index * index + 11 * index) % 97))
+            for index in range(16)
+        ) + tuple(
+            _point(
+                str(1998 - 4 * index),
+                str(1998 - ((13 * index * index + 5 * index) % 89)),
+            )
+            for index in range(16)
+        )
+        result = spanned_circle_profile(
+            SpannedCircleProfileRequest(configuration=_configuration(*points))
+        )
+        assert len(result.circles) > 1
+
     def test_translated_large_origin_is_admitted_after_shift(self) -> None:
         shift = 10**256
         points = (
@@ -465,7 +481,7 @@ class TestSpannedCircleProfile:
     def test_translated_coordinate_error_uses_request_path(self) -> None:
         points = (
             _point("0", "0"),
-            _point(str(10**256), "0"),
+            _point(str(10**257), "0"),
             _point("0", "1"),
         )
         with pytest.raises(OperationDomainValidationError) as error:
@@ -473,7 +489,7 @@ class TestSpannedCircleProfile:
         assert error.value.errors()[0]["loc"] == (
             "configuration",
             "points",
-            1,
+            0,
             "coordinates",
             0,
         )

@@ -882,18 +882,28 @@ def _translated_max_digits(
     )
 
 
+def _bounding_box_origin(
+    points: tuple[tuple[Fraction, Fraction], ...],
+) -> tuple[Fraction, Fraction]:
+    xs = tuple(point[0] for point in points)
+    ys = tuple(point[1] for point in points)
+    return (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
+
+
 def _minimum_height_origin(
     points: tuple[tuple[Fraction, Fraction], ...],
 ) -> tuple[Fraction, Fraction]:
-    """Choose a source origin that minimises translated coordinate height.
+    """Choose an origin that minimises translated coordinate height.
 
-    The selected origin is independent of source order: among origins that
-    attain the same translated digit height, the lexicographically least
-    coordinate pair is kept.
+    Candidates are every source point and the axis-aligned bounding-box
+    centre, so a non-source midpoint can win when it strictly reduces digit
+    width. The selection is independent of source order: among equal heights
+    the lexicographically least coordinate pair is kept.
     """
 
+    candidates = (*points, _bounding_box_origin(points))
     return min(
-        points,
+        candidates,
         key=lambda origin: (
             _translated_max_digits(origin, points),
             origin[0],

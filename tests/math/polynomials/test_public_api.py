@@ -74,6 +74,7 @@ def test_exact_public_api_symbols() -> None:
         "derivative",
         "discriminant",
         "divide",
+        "elementary_symmetric_family",
         "evaluate",
         "factorization",
         "gcdex",

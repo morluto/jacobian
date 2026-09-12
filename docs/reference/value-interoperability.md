@@ -100,6 +100,18 @@ check there, and test false authored claims. Reuse facts within one admitted
 execution instead of checking the same field or basis for every entry. Do not
 leave a consumer trusting the property that its former constructor checked.
 
+When a canonical value retains both source data and derived fields, identify
+which relation owns their compatibility. Examples include maximal simplices and
+their face closure, a polynomial and its support profile, a poset relation and
+its order profile, or a game and its Grundy table. Matching lengths, labels,
+dimensions, or summary counts is insufficient. Enforce cheap intrinsic closure
+at the canonical value boundary; keep stronger mathematical claims structural
+there and establish the precise relied-upon relation in an admitted consumer or
+explicit verifier. In either case, retain every parent, ordered axis,
+normalization, source value, and start point needed to state that relation after
+serialization. Test a payload that preserves all declared shapes and bounds
+while changing only the source or derived claim.
+
 ## Schema and conversion rules
 
 ### Native integers and JSON encoding

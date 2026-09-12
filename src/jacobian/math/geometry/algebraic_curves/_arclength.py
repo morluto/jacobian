@@ -210,22 +210,30 @@ def _cells_for_box(
             (f"{axis}-lower", interval.lower.as_fraction()),
             (f"{axis}-upper", interval.upper.as_fraction()),
         ):
-            roots = _quadratic_roots(
+            boundary_roots = _quadratic_roots(
                 _coordinate_numerator(ellipse, axis=axis, boundary=boundary)
             )
-            if roots is None:
+            if boundary_roots is None:
                 return "IRRATIONAL_BOUNDARY"
-            for root in roots:
+            for root in boundary_roots:
                 boundaries.setdefault(root, set()).add(label)
     if any(len(labels) > 1 for labels in boundaries.values()):
         return "BOUNDARY_CORNER"
-    roots = sorted({Fraction(-1), Fraction(0), Fraction(1), *boundaries})
+    parameter_roots: tuple[Fraction, ...] = tuple(
+        sorted({Fraction(-1), Fraction(0), Fraction(1), *boundaries})
+    )
     cells: list[_ParameterCell] = []
-    for lower, upper in zip((None, *roots), (*roots, None), strict=True):
+    left_edges: tuple[Fraction | None, ...] = (None, *parameter_roots)
+    right_edges: tuple[Fraction | None, ...] = (*parameter_roots, None)
+    for lower, upper in zip(
+        left_edges, right_edges, strict=True
+    ):
         if lower is None:
-            sample = upper - 1
+            assert upper is not None
+            sample = upper - Fraction(1)
         elif upper is None:
-            sample = lower + 1
+            assert lower is not None
+            sample = lower + Fraction(1)
         else:
             sample = (lower + upper) / 2
         x, y = _parameter_coordinates(ellipse, sample)
@@ -433,16 +441,16 @@ def enclose_arclength(  # noqa: C901
             )
         cells = _cells_for_box(ellipse, request)
         if isinstance(cells, str):
-            reason = (
-                "BOUNDARY_NONTRANSVERSE"
-                if cells == "BOUNDARY_CORNER"
-                else "TOPOLOGY_UNRESOLVED"
+            if cells == "BOUNDARY_CORNER":
+                return PlaneCurveArclengthResult._from_kernel(
+                    request,
+                    outcome=ArclengthSingularUnsupported(
+                        reason="BOUNDARY_NONTRANSVERSE"
+                    ),
+                )
+            return PlaneCurveArclengthResult._from_kernel(
+                request, outcome=ArclengthUnknown(reason="TOPOLOGY_UNRESOLVED")
             )
-            if reason == "BOUNDARY_NONTRANSVERSE":
-                outcome = ArclengthSingularUnsupported(reason=reason)
-            else:
-                outcome = ArclengthUnknown(reason=reason)
-            return PlaneCurveArclengthResult._from_kernel(request, outcome=outcome)
         if not cells:
             return PlaneCurveArclengthResult._from_kernel(
                 request, outcome=ArclengthEmpty()

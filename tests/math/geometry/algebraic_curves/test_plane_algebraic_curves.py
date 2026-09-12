@@ -130,6 +130,7 @@ def test_catalog_contains_only_audited_operations() -> None:
         "algebraic_geometry.plane_curve.projective_closure.compute",
         "algebraic_geometry.projective_plane_curve.singularity_profile.compute",
         "algebraic_geometry.projective_curve.affine_chart.compute",
+        "real_algebraic.plane_curve.arclength.enclose",
     }
 
 

@@ -16,7 +16,7 @@ from jacobian.math.combinatorics.matroids.oriented._bracket_models import (
     MAX_BRACKET_CONTRIBUTIONS,
     MAX_BRACKET_FACTORS,
     MAX_BRACKET_OUTPUT_CELLS,
-    MAX_BRACKET_SERIALIZED_RESULT_BYTES,
+    MAX_BRACKET_RESULT_ALLOCATION_UNITS,
     MAX_BRACKET_TERMS,
     BracketMonomial,
     BracketPolynomial,
@@ -217,19 +217,19 @@ def _exceeds_canonical_integer_bound(value: int) -> bool:
     return bool(value >= 10**MAX_CANONICAL_INTEGER_DIGITS)
 
 
-def _admit_serialized_result(
+def _admit_result_allocation(
     output_keys: set[tuple[tuple[tuple[int, int, int], int], ...]],
     coefficient_digit_bound: int,
     ground_size: int,
 ) -> None:
-    """Admit a conservative ASCII-JSON size envelope for the residual."""
+    """Admit retained scalar digits and structural slots for the residual."""
 
     index_digits = _integer_digit_upper_bound(ground_size - 1)
     term_cells = len(output_keys)
     factor_cells = sum(len(key) for key in output_keys)
     output_cells = term_cells + factor_cells
-    serialized_bytes = 256 + term_cells * (256 + 2 * coefficient_digit_bound)
-    serialized_bytes += sum(
+    allocation_units = 256 + term_cells * (256 + 2 * coefficient_digit_bound)
+    allocation_units += sum(
         128 + 3 * index_digits + _integer_digit_upper_bound(multiplicity)
         for key in output_keys
         for _, multiplicity in key
@@ -242,11 +242,11 @@ def _admit_serialized_result(
             code="bracket.syzygy_output_cell_bound",
             message="the exact sparse residual output exceeds the supported cell bound",
         )
-    if serialized_bytes > MAX_BRACKET_SERIALIZED_RESULT_BYTES:
+    if allocation_units > MAX_BRACKET_RESULT_ALLOCATION_UNITS:
         raise OperationResourceAdmissionError(
             location=("terms",),
-            code="bracket.syzygy_serialized_result_bound",
-            message="the exact residual exceeds the serialized result envelope",
+            code="bracket.syzygy_result_allocation_bound",
+            message="the exact residual exceeds its retained allocation bound",
         )
 
 
@@ -351,7 +351,7 @@ def _admit_residual_envelope(request: BracketSyzygyResidualRequest) -> None:
             code="bracket.syzygy_coefficient_digit_bound",
             message="exact residual coefficient growth exceeds the supported digit bound",
         )
-    _admit_serialized_result(
+    _admit_result_allocation(
         output_keys, coefficient_digit_bound, request.target.ground_size
     )
 

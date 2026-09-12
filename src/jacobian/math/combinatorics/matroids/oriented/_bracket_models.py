@@ -31,10 +31,10 @@ MAX_BRACKET_TERMS = 512
 MAX_BRACKET_CONTRIBUTIONS = 65_536
 MAX_BRACKET_COEFFICIENT_DIGITS = MAX_CANONICAL_RATIONAL_DIGITS
 MAX_BRACKET_OUTPUT_CELLS = MAX_BRACKET_TERMS * (MAX_BRACKET_FACTORS + 1)
-# This is an intrinsic representation envelope for one residual value.  It is
-# deliberately larger than the useful fixtures while keeping the exact JSON
-# carrier from becoming an unbounded sparse text expansion.
-MAX_BRACKET_SERIALIZED_RESULT_BYTES = 64 * 1024 * 1024
+# Intrinsic allocation envelope for one residual value, measured in retained
+# scalar digits and structural slots. Concrete transports own encoded-byte
+# ceilings independently.
+MAX_BRACKET_RESULT_ALLOCATION_UNITS = 64 * 1024 * 1024
 
 
 def _validation_error(code: str, message: str) -> PydanticCustomError:
@@ -281,7 +281,7 @@ __all__ = [
     "MAX_BRACKET_FACTORS",
     "MAX_BRACKET_GROUND_SIZE",
     "MAX_BRACKET_OUTPUT_CELLS",
-    "MAX_BRACKET_SERIALIZED_RESULT_BYTES",
+    "MAX_BRACKET_RESULT_ALLOCATION_UNITS",
     "MAX_BRACKET_TERMS",
     "BracketMonomial",
     "BracketPolynomial",

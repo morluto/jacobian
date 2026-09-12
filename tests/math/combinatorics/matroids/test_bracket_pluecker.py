@@ -488,7 +488,7 @@ def test_syzygy_accepts_maximum_assembled_multiplicity() -> None:
     )
 
 
-def test_syzygy_rejects_serialized_result_growth_before_combine() -> None:
+def test_syzygy_rejects_result_allocation_growth_before_combine() -> None:
     atoms = [CanonicalBracket(indices=triple) for triple in combinations(range(12), 3)]
     coefficient = CanonicalRational(
         num=10 ** (MAX_CANONICAL_INTEGER_DIGITS - 1) - 1,
@@ -519,7 +519,7 @@ def test_syzygy_rejects_serialized_result_growth_before_combine() -> None:
     )
     with pytest.raises(OperationResourceAdmissionError) as error:
         bracket_syzygy_residual(BracketSyzygyResidualRequest(target=target, terms=()))
-    assert error.value.errors()[0]["type"] == "bracket.syzygy_serialized_result_bound"
+    assert error.value.errors()[0]["type"] == "bracket.syzygy_result_allocation_bound"
 
 
 def test_compressed_large_multiplicity_survives_residual_and_json() -> None:

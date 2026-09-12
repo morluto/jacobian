@@ -149,6 +149,36 @@ def _validated_request(
         ) from exc
 
 
+def _candidate_hits_all_edges(
+    selected: frozenset[str], edges: tuple[frozenset[str], ...]
+) -> tuple[bool, int]:
+    """Check candidate-edge membership and return the number of checks made."""
+
+    checks = 0
+    for edge in edges:
+        checks += 1
+        if not selected & edge:
+            return False, checks
+    return True, checks
+
+
+def _candidate_has_redundant_vertex(
+    selected: frozenset[str], edges: tuple[frozenset[str], ...]
+) -> tuple[bool, int]:
+    """Check minimality and return the number of candidate-edge checks made."""
+
+    checks = 0
+    for vertex in selected:
+        reduced = selected - {vertex}
+        for edge in edges:
+            checks += 1
+            if not reduced & edge:
+                break
+        else:
+            return True, checks
+    return False, checks
+
+
 def _admit_enumeration(
     request: MinimalTransversalEnumerationRequest,
 ) -> tuple[int, tuple[frozenset[str], ...]]:
@@ -251,12 +281,13 @@ def enumerate_minimal_transversals(
             for candidate in combinations(vertices, size):
                 request_checkpoint("during minimal transversal enumeration")
                 selected = frozenset(candidate)
-                if not all(selected & edge for edge in edges):
+                hits_all_edges, _ = _candidate_hits_all_edges(selected, edges)
+                if not hits_all_edges:
                     continue
-                if any(
-                    all((selected - {vertex}) & edge for edge in edges)
-                    for vertex in selected
-                ):
+                has_redundant_vertex, _ = _candidate_has_redundant_vertex(
+                    selected, edges
+                )
+                if has_redundant_vertex:
                     continue
                 materialized.append(candidate)
         results = tuple(materialized)

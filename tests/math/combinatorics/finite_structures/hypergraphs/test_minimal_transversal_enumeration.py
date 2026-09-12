@@ -1,9 +1,13 @@
 """Complete bounded-cardinality minimal transversal enumeration."""
 
 import time
+from math import comb
+from typing import Any
+from unittest.mock import patch
 
 import pytest
 from pydantic import ValidationError
+from tests.fixtures.accounting import assert_charged_work_parity
 
 from jacobian._execution import (
     OperationExecutionTimeoutError,
@@ -14,12 +18,18 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.combinatorics.finite_structures.hypergraphs import (
+    _transversal_enumeration as enumeration,
+)
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
 )
 from jacobian.math.combinatorics.finite_structures.hypergraphs._transversal_enumeration import (
+    MAX_TRANSVERSAL_ENUMERATION_WORK,
     MinimalTransversalEnumerationRequest,
     MinimalTransversalEnumerationResult,
+    _candidate_has_redundant_vertex,
+    _candidate_hits_all_edges,
     enumerate_minimal_transversals,
 )
 
@@ -179,3 +189,58 @@ def test_candidate_edge_and_minimality_work_is_admitted_before_search() -> None:
                 hypergraph=source, maximum_cardinality=3
             )
         )
+
+
+def test_accepted_near_envelope_execution_charges_each_search_primitive() -> None:
+    vertex_count = 20
+    maximum_cardinality = 6
+    vertices = tuple(f"v{index:02d}" for index in range(vertex_count))
+    source = FiniteHypergraph(
+        vertices=vertices,
+        edges=tuple((f"edge{index:03d}", vertices) for index in range(126)),
+    )
+    candidate_count = sum(
+        comb(vertex_count, size) for size in range(1, maximum_cardinality + 1)
+    )
+    weighted_candidate_count = sum(
+        size * comb(vertex_count, size) for size in range(1, maximum_cardinality + 1)
+    )
+    charged = {
+        "candidate_edge": candidate_count * len(source.edges),
+        "minimality": weighted_candidate_count * len(source.edges),
+    }
+    assert 100 * sum(charged.values()) >= 95 * MAX_TRANSVERSAL_ENUMERATION_WORK
+    assert sum(charged.values()) <= MAX_TRANSVERSAL_ENUMERATION_WORK
+
+    executed = dict.fromkeys(charged, 0)
+
+    def count_candidate_edge_checks(*args: Any, **kwargs: Any) -> tuple[bool, int]:
+        result = _candidate_hits_all_edges(*args, **kwargs)
+        executed["candidate_edge"] += result[1]
+        return result
+
+    def count_minimality_checks(*args: Any, **kwargs: Any) -> tuple[bool, int]:
+        result = _candidate_has_redundant_vertex(*args, **kwargs)
+        executed["minimality"] += result[1]
+        return result
+
+    request = MinimalTransversalEnumerationRequest(
+        hypergraph=source, maximum_cardinality=maximum_cardinality
+    )
+    with (
+        patch.object(
+            enumeration,
+            "_candidate_hits_all_edges",
+            side_effect=count_candidate_edge_checks,
+        ),
+        patch.object(
+            enumeration,
+            "_candidate_has_redundant_vertex",
+            side_effect=count_minimality_checks,
+        ),
+    ):
+        result = enumerate_minimal_transversals(request)
+
+    assert result.transversals == tuple((vertex,) for vertex in vertices)
+    assert set(executed) == set(charged)
+    assert_charged_work_parity(charged=charged, executed=executed)

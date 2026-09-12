@@ -62,12 +62,15 @@ def _admit_field_polynomial(
     )
 
 
-def _admit_scalar_field(polynomial: RationalPolynomial) -> None:
-    _admit_field_polynomial(
-        polynomial,
-        label="scalar field",
-        location=("polynomial",),
-    )
+def _require_dense_scalar_derivative_budget(polynomial: RationalPolynomial) -> None:
+    """Bound one scalar polynomial assembled from all its partials.
+
+    The Laplacian and a directional derivative collect partials into one
+    polynomial, so their independent terms can remain distinct.  Keep their
+    existing conservative envelope separate from the gradient's vector-valued
+    support accounting.
+    """
+
     if len(polynomial.polynomial.terms) * len(polynomial.variables) > _MAX_TERMS:
         raise OperationDomainValidationError(
             location=("polynomial",),
@@ -76,13 +79,74 @@ def _admit_scalar_field(polynomial: RationalPolynomial) -> None:
         )
 
 
+def _gradient_term_counts(polynomial: RationalPolynomial) -> tuple[int, ...]:
+    """Return the exact nonzero sparse support size of every partial derivative.
+
+    On one fixed axis the map ``e -> e - unit_axis`` is injective.  Since the
+    canonical source has nonzero rational coefficients, precisely its terms
+    with a positive exponent on that axis survive differentiation.  This
+    proves both the per-component and aggregate result counts before SymPy
+    conversion expands any expression.
+    """
+
+    return tuple(
+        sum(term.exponents[axis] > 0 for term in polynomial.polynomial.terms)
+        for axis in range(len(polynomial.variables))
+    )
+
+
+def _admit_scalar_field(polynomial: RationalPolynomial) -> None:
+    _admit_field_polynomial(
+        polynomial,
+        label="scalar field",
+        location=("polynomial",),
+    )
+    _require_dense_scalar_derivative_budget(polynomial)
+
+
+def _admit_gradient(polynomial: RationalPolynomial) -> None:
+    """Admit a scalar-field gradient using its retained sparse support."""
+
+    _admit_field_polynomial(
+        polynomial,
+        label="scalar field",
+        location=("polynomial",),
+    )
+    term_counts = _gradient_term_counts(polynomial)
+    if max(term_counts, default=0) > _MAX_TERMS or sum(term_counts) > _MAX_TERMS:
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="polynomial_vector_calc.derivative_term_budget",
+            message="gradient derivatives exceed the result-term budget",
+        )
+
+
 def _admit_vector_field(components: tuple[RationalPolynomial, ...]) -> None:
+    if not components:
+        raise OperationDomainValidationError(
+            location=("components",),
+            code="polynomial_vector_calc.empty_vector_field",
+            message="vector field must contain at least one component",
+        )
+    variables = components[0].variables
+    if len(components) != len(variables):
+        raise OperationDomainValidationError(
+            location=("components",),
+            code="polynomial_vector_calc.component_count",
+            message="vector field must have one component per variable",
+        )
     for index, component in enumerate(components):
         _admit_field_polynomial(
             component,
             label="vector-field component",
             location=("components", index),
         )
+        if component.variables != variables:
+            raise OperationDomainValidationError(
+                location=("components", index),
+                code="polynomial_vector_calc.ordered_ring",
+                message="vector-field components must use one ordered ring",
+            )
     if sum(len(item.polynomial.terms) for item in components) > _MAX_TERMS:
         raise OperationDomainValidationError(
             location=("components",),
@@ -108,7 +172,7 @@ def _expressions(
 
 
 def gradient(polynomial: RationalPolynomial) -> VectorResult:
-    _admit_scalar_field(polynomial)
+    _admit_gradient(polynomial)
     variables = polynomial.variables
     expression = rational_polynomial_to_sympy(polynomial).as_expr()
     return VectorResult._from_kernel(
@@ -142,6 +206,12 @@ def curl(components: tuple[RationalPolynomial, ...]) -> VectorResult:
 
     _admit_vector_field(components)
     variables = components[0].variables
+    if len(variables) != 3:
+        raise OperationDomainValidationError(
+            location=("components",),
+            code="polynomial_vector_calc.curl_dimensions",
+            message="curl requires exactly three variables and components",
+        )
     x, y, z = symbols_for_variables(variables)
     fx, fy, fz = _expressions(components)
     return VectorResult._from_kernel(

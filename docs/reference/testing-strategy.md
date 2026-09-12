@@ -201,6 +201,18 @@ producer-consumer round trips, or late serialization and deadline cases when
 the finding affects those boundaries. Prefer tests that exercise the supported
 interface; do not assert private helper names or copied source text.
 
+For a widened execution envelope, cover three distinct cases: the smallest
+formerly rejected valid request, a structurally simple request at the full
+carrier boundary, and a request near the derived output or storage bound. Assert
+every schema-representable limit, runtime acceptance and rejection, result
+shape, and serialization separately. For derived cross-field admission, inspect
+the schema-visible description and valid example, then exercise the exact
+accepted and rejected relation through owner admission. When measurements
+support an algorithmic repair, freeze the workload, environment, completion
+condition, and measured phase; report repeated before/after results from that
+harness. Timings are diagnostic evidence and must not become machine-sensitive
+correctness thresholds.
+
 ## What to test
 
 For an operation, test the typed request boundary, the domain result, and a
@@ -224,6 +236,12 @@ calling its producer first. The test must prove that the consumer establishes
 the mathematical property it relies on. A nominal subtype tag, `validated`
 field, or producer-shaped payload must not cross the stateless boundary as
 proof.
+
+Where native callers can bypass Pydantic validation with `model_construct()`,
+`model_copy()`, or direct mutation, submit an equivalent forged claim to the
+real consumer or verifier. Preserve valid container shape and scalar bounds so
+the test reaches the mathematical relation rather than stopping at structural
+parsing.
 
 When an operation is added or changed because of a source-backed gap, preserve
 at least one minimally reduced motivating request as a behavioral regression.
@@ -311,6 +329,11 @@ paths establish no mathematical result and do not become invalid-parameter
 responses. Do not update a semantic admission test to expect request-model
 validation merely because both validation failures appear as an
 invalid-parameter response over MCP.
+
+Native boundary tests must include empty, mismatched, and malformed values that
+could otherwise reach indexing, tuple unpacking, helper arithmetic, or result
+construction. Assert the structured domain error and stable owner code rather
+than accepting a raw built-in or Pydantic exception.
 
 For an operation that uses a nontrivial backend, enumeration, solver, or
 certificate check, add the smallest owner-local regression that proves a

@@ -32,8 +32,11 @@ def tuple_family_orbit_profile(
     )
     source_by_representative: dict[tuple[int, ...], list[int]] = {}
     orbit_data: dict[tuple[int, ...], tuple[int, tuple[int, ...]]] = {}
+    source_members = {tuple(member) for member in request.family}
+    complete_orbits = True
     for source_index, member in enumerate(request.family):
         images = {tuple(element[value] for value in member) for element in elements}
+        complete_orbits = complete_orbits and images.issubset(source_members)
         representative = min(images)
         source_by_representative.setdefault(representative, []).append(source_index)
         if representative not in orbit_data:
@@ -53,7 +56,11 @@ def tuple_family_orbit_profile(
         )
         for representative in sorted(source_by_representative)
     )
-    return TupleFamilyOrbitResult(source=request, rows=rows)
+    return TupleFamilyOrbitResult(
+        source=request,
+        rows=rows,
+        is_union_of_complete_ambient_orbits=complete_orbits,
+    )
 
 
 __all__ = ["tuple_family_orbit_profile"]

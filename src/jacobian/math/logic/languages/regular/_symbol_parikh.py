@@ -52,6 +52,16 @@ def symbol_parikh_profile(
             if target not in reachable:
                 reachable.add(target)
                 frontier.append(target)
+    if alphabet_size == 0:
+        total = count_accepted_words(dfa, length)
+        cells = (SymbolParikhCell(symbol_counts=(), multiplicity=1),) if total else ()
+        return SymbolParikhProfileResult(
+            dfa=dfa,
+            alphabet=(),
+            word_length=length,
+            cells=cells,
+            total_accepted_words=total,
+        )
     output_bound = comb(length + alphabet_size - 1, alphabet_size - 1)
     state_bound = len(reachable) * comb(length + alphabet_size, alphabet_size)
     work_bound = alphabet_size * state_bound

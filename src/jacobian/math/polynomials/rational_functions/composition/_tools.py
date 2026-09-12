@@ -32,6 +32,11 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         result_type=RationalFunctionMapComposition,
         run=_compute,
         tags=("rational-function", "map", "composition", "exact"),
+        discovery_terms=(
+            "compose rational coordinate maps",
+            "substitute one rational map into another",
+            "rational chart transition composition",
+        ),
         examples=(
             OperationExample(
                 name="two_variable_chart_transition",

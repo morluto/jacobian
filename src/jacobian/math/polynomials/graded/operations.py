@@ -55,6 +55,22 @@ def _require_monomial_order(monomial_order: object) -> None:
         )
 
 
+def _require_monomial_order(
+    monomial_order: object,
+) -> Literal["lex", "grlex", "grevlex"]:
+    if type(monomial_order) is not str or monomial_order not in {
+        "lex",
+        "grlex",
+        "grevlex",
+    }:
+        raise OperationDomainValidationError(
+            location=("monomial_order",),
+            code="graded_ideal.monomial_order",
+            message="monomial_order must be lex, grlex, or grevlex",
+        )
+    return monomial_order  # type: ignore[return-value]
+
+
 def _is_explicit_unit_ideal(ideal: RationalPolynomialIdeal) -> bool:
     return any(
         len(generator.polynomial.terms) == 1
@@ -120,7 +136,7 @@ def initial_monomial_ideal(
 ) -> InitialMonomialIdealResult:
     """Project the existing exact Gröbner result to its initial monomial ideal."""
 
-    _require_monomial_order(monomial_order)
+    monomial_order = _require_monomial_order(monomial_order)
     _require_homogeneous(ideal)
     if _is_explicit_unit_ideal(ideal):
         return _unit_initial_ideal(ideal, monomial_order)
@@ -316,6 +332,7 @@ def hilbert_function(
     *,
     resource_budget: IdealComputationBudget | None = None,
 ) -> HilbertFunctionResult:
+    monomial_order = _require_monomial_order(monomial_order)
     if type(max_degree) is not int:
         raise OperationDomainValidationError(
             location=("max_degree",),
@@ -490,6 +507,7 @@ def hilbert_series(
     *,
     resource_budget: IdealComputationBudget | None = None,
 ) -> HilbertSeriesResult:
+    monomial_order = _require_monomial_order(monomial_order)
     if type(prefix_degree) is not int:
         raise OperationDomainValidationError(
             location=("prefix_degree",),
@@ -536,6 +554,7 @@ def hilbert_polynomial(
     *,
     resource_budget: IdealComputationBudget | None = None,
 ) -> HilbertPolynomialResult:
+    monomial_order = _require_monomial_order(monomial_order)
     data = _series_projection(ideal, monomial_order, resource_budget=resource_budget)
     dimension = data.denominator_exponent
     h_degree = max(
@@ -582,6 +601,7 @@ def hilbert_dimension(
     *,
     resource_budget: IdealComputationBudget | None = None,
 ) -> HilbertDimensionResult:
+    monomial_order = _require_monomial_order(monomial_order)
     data = _series_projection(ideal, monomial_order, resource_budget=resource_budget)
     return HilbertDimensionResult(
         ideal=ideal,
@@ -597,6 +617,7 @@ def hilbert_multiplicity(
     *,
     resource_budget: IdealComputationBudget | None = None,
 ) -> HilbertMultiplicityResult:
+    monomial_order = _require_monomial_order(monomial_order)
     data = _series_projection(ideal, monomial_order, resource_budget=resource_budget)
     multiplicity = sum(
         term.coefficient.as_fraction() for term in data.h_numerator.polynomial.terms
@@ -622,6 +643,7 @@ def h_vector(
     *,
     resource_budget: IdealComputationBudget | None = None,
 ) -> HVectorResult:
+    monomial_order = _require_monomial_order(monomial_order)
     data = _series_projection(ideal, monomial_order, resource_budget=resource_budget)
     h_coefficients = {
         term.exponents[0]: int(term.coefficient.as_fraction())

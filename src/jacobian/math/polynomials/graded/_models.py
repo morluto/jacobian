@@ -183,6 +183,10 @@ class HilbertSeriesResult(StrictModel):
             raise ValueError("Hilbert-series values use the t axis")
         if self.series.numerator != self.reduced_numerator.polynomial:
             raise ValueError("reduced numerator must match the rational-series carrier")
+        if self.denominator_exponent > MAX_RATIONAL_FUNCTION_EXPONENT:
+            raise ValueError(
+                "Hilbert-series denominator exponent exceeds the rational-function envelope"
+            )
         expected_denominator = _monic_t_minus_one_power(self.denominator_exponent)
         if self.series.denominator != expected_denominator:
             raise ValueError(

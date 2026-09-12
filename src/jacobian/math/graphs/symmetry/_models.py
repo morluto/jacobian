@@ -437,6 +437,13 @@ class FullGraphAutomorphismResult(StrictModel):
                 "group generators must include exactly the source generators and a "
                 "trivial identity only when the source group has no nonidentity generator",
             )
+        if not self.generators:
+            identity = tuple(range(len(self.vertices)))
+            if self.group.generators != (identity,):
+                raise PydanticCustomError(
+                    "graph.automorphism.trivial_group_requires_identity",
+                    "empty source generators require the nested identity permutation",
+                )
         vertex_members = tuple(
             member for orbit in self.vertex_orbits for member in orbit.members
         )

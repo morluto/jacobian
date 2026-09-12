@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import unicodedata
+from collections import Counter
 from dataclasses import dataclass
-from math import factorial
+from math import factorial, prod
 from typing import Any
 
 from pydantic_core import PydanticCustomError
@@ -518,43 +519,59 @@ def _special_repeated_cliques(
             strict=True,
         )
     )
-    groups: dict[tuple[str, str], list[tuple[int, ...]]] = {}
+    groups: dict[tuple[object, object], list[tuple[int, ...]]] = {}
     for component in components:
-        vertex_color_set = {vertex_colors[vertices[index]] for index in component}
-        if len(vertex_color_set) != 1:
-            return None
+        aligned = tuple(
+            sorted(
+                component,
+                key=lambda index: (vertex_colors[vertices[index]], vertices[index]),
+            )
+        )
+        vertex_profile = tuple(
+            sorted(Counter(vertex_colors[vertices[index]] for index in aligned).items())
+        )
         component_edge_colors = {
             edge_colors[canonical_edge(vertices[left], vertices[right])]
-            for left in component
-            for right in component
+            for left in aligned
+            for right in aligned
             if left < right
         }
         if len(component_edge_colors) != 1:
             return None
-        profile = (next(iter(vertex_color_set)), next(iter(component_edge_colors)))
-        groups.setdefault(profile, []).append(component)
+        profile = (vertex_profile, next(iter(component_edge_colors)))
+        groups.setdefault(profile, []).append(aligned)
     generators: list[tuple[int, ...]] = []
     order = 1
     for group in groups.values():
-        for component in group:
-            if size >= 2:
-                swap = list(range(len(vertices)))
-                swap[component[0]], swap[component[1]] = component[1], component[0]
-                generators.append(tuple(swap))
-            if size >= 3:
-                cycle = list(range(len(vertices)))
-                for source, target in zip(
-                    component, component[1:] + component[:1], strict=True
-                ):
-                    cycle[source] = target
-                generators.append(tuple(cycle))
         first = group[0]
+        classes: dict[str, list[int]] = {}
+        for index in first:
+            classes.setdefault(vertex_colors[vertices[index]], []).append(index)
+        within_order = prod(factorial(len(members)) for members in classes.values())
+        for component in group:
+            component_classes: dict[str, list[int]] = {}
+            for index in component:
+                component_classes.setdefault(
+                    vertex_colors[vertices[index]], []
+                ).append(index)
+            for members in component_classes.values():
+                if len(members) >= 2:
+                    swap = list(range(len(vertices)))
+                    swap[members[0]], swap[members[1]] = members[1], members[0]
+                    generators.append(tuple(swap))
+                if len(members) >= 3:
+                    cycle = list(range(len(vertices)))
+                    for source, target in zip(
+                        members, members[1:] + members[:1], strict=True
+                    ):
+                        cycle[source] = target
+                    generators.append(tuple(cycle))
         for component in group[1:]:
             swap = list(range(len(vertices)))
             for left, right in zip(first, component, strict=True):
                 swap[left], swap[right] = right, left
             generators.append(tuple(swap))
-        order *= factorial(size) ** len(group) * factorial(len(group))
+        order *= within_order ** len(group) * factorial(len(group))
     return tuple(generators), order
 
 

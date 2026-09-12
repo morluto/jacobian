@@ -1,6 +1,7 @@
 """Full color-preserving graph automorphism group tests."""
 
 from itertools import pairwise
+from math import factorial
 from threading import Event
 
 import pytest
@@ -67,6 +68,23 @@ def test_vertex_colors_restrict_the_full_group() -> None:
     result = full_graph_automorphism_group(graph)
     assert result.automorphism_count == 1
     assert result.generators == ()
+
+
+def test_empty_source_generators_require_the_nested_identity() -> None:
+    result = full_graph_automorphism_group(
+        ColoredUndirectedGraph(
+            graph=SimpleUndirectedGraph(
+                vertices=("a", "b", "c"), edges=(("a", "b"), ("b", "c"))
+            ),
+            vertex_colors=("left", "middle", "right"),
+        )
+    )
+    payload = result.model_dump()
+    payload["group"]["generators"] = [(1, 0, 2)]
+    payload["automorphism_count"] = 2
+    payload["generated_group_order"] = 2
+    with pytest.raises(Exception, match="identity"):
+        FullGraphAutomorphismResult.model_validate(payload)
 
 
 def test_complete_graph_aligns_declared_colors_with_sorted_action_axis() -> None:
@@ -217,6 +235,33 @@ def test_componentwise_colored_cliques_keep_compact_presentation() -> None:
     assert result.automorphism_count == 120**3
     assert result.generated_group_order == 120**3
     assert len(result.generators) == 6
+
+
+def test_patterned_clique_colors_keep_compact_presentation() -> None:
+    vertices = tuple(
+        f"v{component}{position}" for component in range(3) for position in range(5)
+    )
+    edges = tuple(
+        (left, right)
+        for component in range(3)
+        for left in vertices[component * 5 : component * 5 + 5]
+        for right in vertices[component * 5 : component * 5 + 5]
+        if left < right
+    )
+    graph = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(vertices=vertices, edges=edges),
+        vertex_colors=tuple(
+            "red" if position < 3 else "blue"
+            for _component in range(3)
+            for position in range(5)
+        ),
+    )
+
+    result = full_graph_automorphism_group(graph)
+
+    assert result.automorphism_count == (factorial(3) * factorial(2)) ** 3 * factorial(3)
+    assert result.generated_group_order == 10_368
+    assert len(result.generators) < result.automorphism_count
 
 
 def test_uniform_vertex_colored_cliques_keep_compact_presentation() -> None:

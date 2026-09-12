@@ -4,6 +4,8 @@ import json
 from itertools import product
 from typing import TypedDict
 
+from jacobian.catalog.catalog import Catalog
+from jacobian.dispatch import invoke_operation
 from jacobian.math.number_theory.counting import congruence_box_count, floor_sum
 from jacobian.math.number_theory.counting._models import (
     _MAX_BOX_LINEAR_COEFFICIENT,
@@ -165,7 +167,7 @@ class TestCongruenceBoxCount:
         forged = restored.model_dump(mode="json")
         forged["modulus"] = 5
         assert not verify_congruence_box_count(
-            CongruenceBoxCountResult.model_validate(forged)
+            CongruenceBoxCountResult.model_validate_json(json.dumps(forged))
         )
 
     def test_admits_full_coordinate_box(self) -> None:
@@ -182,6 +184,68 @@ class TestCongruenceBoxCount:
             )
         )
         assert compute_congruence_box_count(request).count == 40_040
+
+    def test_large_exact_public_count_uses_periodic_residue_oracle(self) -> None:
+        """The O(modulus) kernel must not inherit a coordinate-width cap."""
+
+        endpoint = 10**20
+        modulus = 97
+        payload: dict[str, object] = {
+            "x_lo": str(-endpoint),
+            "x_hi": str(endpoint),
+            "y_lo": str(-endpoint),
+            "y_hi": str(endpoint),
+            "u": 17,
+            "v": 19,
+            "c": 23,
+            "modulus": modulus,
+        }
+
+        def residue_count(lower: int, upper: int, residue: int) -> int:
+            return (upper - residue) // modulus - (lower - 1 - residue) // modulus
+
+        # A period decomposition independent of the single-residue solver in
+        # the kernel: count the exact Cartesian multiplicity of every one of
+        # the 97^2 coordinate residue pairs.
+        expected = sum(
+            residue_count(-endpoint, endpoint, x_residue)
+            * residue_count(-endpoint, endpoint, y_residue)
+            for x_residue, y_residue in product(range(modulus), repeat=2)
+            if (17 * x_residue + 19 * y_residue - 23) % modulus == 0
+        )
+
+        public = invoke_operation(
+            "integer.counting.congruence_box.compute", payload, Catalog.open()
+        ).output
+        result = CongruenceBoxCountResult.model_validate_json(json.dumps(public))
+        assert result.count == expected
+        assert result.count > 2**53
+        assert public["count"] == str(expected)
+        assert public["x_lo"] == str(-endpoint)
+        assert verify_congruence_box_count(result)
+
+    def test_narrow_axis_avoids_a_full_modulus_scan(self) -> None:
+        endpoint = 10**20
+        modulus = 9_991
+        x_value = endpoint + 17
+        y_residue = ((23 - 17 * x_value) * pow(19, -1, modulus)) % modulus
+        expected = (endpoint - y_residue) // modulus - (
+            -endpoint - 1 - y_residue
+        ) // modulus
+
+        assert (
+            congruence_box_count(
+                x_lo=x_value,
+                x_hi=x_value,
+                y_lo=-endpoint,
+                y_hi=endpoint,
+                u=17,
+                v=19,
+                c=23,
+                modulus=modulus,
+            )
+            == expected
+        )
 
     def test_matches_exhaustive_small_boxes(self) -> None:
         intervals = ((-2, 2), (-1, -1), (0, 2))

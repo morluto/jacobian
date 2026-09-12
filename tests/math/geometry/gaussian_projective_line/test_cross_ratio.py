@@ -300,3 +300,35 @@ def test_mixed_full_height_products_are_rejected_before_construction() -> None:
         error.value.errors()[0]["type"]
         == "geometry.gaussian_cross_ratio.intermediate_height_bound"
     )
+
+
+def test_independent_coordinate_products_are_refused_before_multiplication() -> None:
+    scale = 10**4095
+    request = GaussianCrossRatioSource(
+        first=_point(
+            _z(1),
+            GaussianRational.from_fractions(Fraction(scale + 3), Fraction(scale + 5)),
+        ),
+        second=_point(
+            _z(1),
+            GaussianRational.from_fractions(Fraction(scale + 11), Fraction(scale + 13)),
+        ),
+        third=_point(
+            _z(1),
+            GaussianRational.from_fractions(
+                Fraction(2 * scale + 17), Fraction(3 * scale + 19)
+            ),
+        ),
+        fourth=_point(
+            _z(1),
+            GaussianRational.from_fractions(
+                Fraction(5 * scale + 23), Fraction(7 * scale + 29)
+            ),
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        gaussian_rational_cross_ratio(request)
+    assert (
+        error.value.errors()[0]["type"]
+        == "geometry.gaussian_cross_ratio.intermediate_height_bound"
+    )

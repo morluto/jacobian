@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from fractions import Fraction
+from math import gcd
 from typing import NoReturn
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
@@ -43,14 +44,6 @@ def _multiply(
     ] * right[0]
 
 
-def _determinant(
-    left: GaussianProjectiveLinePoint, right: GaussianProjectiveLinePoint
-) -> tuple[Fraction, Fraction]:
-    a, b = (coordinate.as_fractions() for coordinate in left.coordinates)
-    c, d = (coordinate.as_fractions() for coordinate in right.coordinates)
-    return _subtract(_multiply(a, d), _multiply(b, c))
-
-
 def _fraction_component_digits(value: Fraction) -> int:
     return max(
         len(format_canonical_integer(abs(value.numerator))),
@@ -60,6 +53,10 @@ def _fraction_component_digits(value: Fraction) -> int:
 
 def _gaussian_component_digits(value: tuple[Fraction, Fraction]) -> int:
     return max(_fraction_component_digits(component) for component in value)
+
+
+def _exceeds_intermediate_digits(digits: int) -> bool:
+    return 4 * digits + 3 > MAX_CROSS_RATIO_INTERMEDIATE_DIGITS
 
 
 def _reject_resource(code: str, message: str) -> NoReturn:
@@ -149,7 +146,7 @@ def _admit_request(request: GaussianCrossRatioSource) -> _CrossRatioPlan:
     product_digits = max(
         _gaussian_component_digits(numerator), _gaussian_component_digits(denominator)
     )
-    if 4 * product_digits + 3 > MAX_CROSS_RATIO_INTERMEDIATE_DIGITS:
+    if _exceeds_intermediate_digits(product_digits):
         _reject_resource(
             "intermediate_height_bound",
             "cross-ratio determinant products and quotient exceed the exact intermediate digit bound",

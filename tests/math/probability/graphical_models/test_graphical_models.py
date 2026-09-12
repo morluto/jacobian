@@ -6,7 +6,10 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.probability.graphical_models import (
     Factor,
     d_separation,
@@ -21,6 +24,7 @@ from jacobian.math.probability.graphical_models._models import (
     DSeparationRequest,
     FactorMarginalizeRequest,
     FactorMultiplyRequest,
+    FactorMultiplyResult,
 )
 from jacobian.math.probability.graphical_models._tools import (
     _d_separation,
@@ -128,6 +132,30 @@ class TestFactorValuesAndOperations:
             error.value.errors()[0]["type"] == "graphical_model.factor_entry_negative"
         )
 
+    def test_product_rational_growth_is_a_typed_admission_failure(self) -> None:
+        value = CanonicalRational(num=int("9" * 256), den=1)
+        factor = Factor(variables=(0,), domain_sizes=(2,), table=(value, value))
+
+        with pytest.raises(OperationResourceAdmissionError) as error:
+            factor_multiply(factor, factor)
+
+        assert (
+            error.value.errors()[0]["type"]
+            == "graphical_model.factor_multiply_rational_bound"
+        )
+
+    def test_marginal_rational_growth_is_a_typed_admission_failure(self) -> None:
+        value = CanonicalRational(num=int("5" + "0" * 255), den=1)
+        factor = Factor(variables=(0,), domain_sizes=(2,), table=(value, value))
+
+        with pytest.raises(OperationResourceAdmissionError) as error:
+            factor_marginalize(factor, 0)
+
+        assert (
+            error.value.errors()[0]["type"]
+            == "graphical_model.factor_marginalize_rational_bound"
+        )
+
     def test_wrong_table_size_is_rejected(self) -> None:
         with pytest.raises(ValidationError) as error:
             _factor((0,), ("1",))
@@ -173,6 +201,30 @@ class TestFactorValuesAndOperations:
         assert result.variables == (0,)
         assert _strings(result.table) == ("3", "7")
 
+    def test_elimination_preserves_sixty_four_axis_ambient_domain(self) -> None:
+        domain_sizes = (2,) * 64
+        unary = Factor(
+            variables=(0,),
+            domain_sizes=domain_sizes,
+            table=_table("1/4", "3/4"),
+        )
+        conditional = Factor(
+            variables=(0, 1),
+            domain_sizes=domain_sizes,
+            table=_table("1/2", "1/2", "1/3", "2/3"),
+        )
+
+        result = variable_elimination(
+            (unary, conditional),
+            domain_sizes,
+            elimination_order=(0,),
+            query_variables=(1,),
+        )
+
+        assert result.domain_sizes == domain_sizes
+        assert result.variables == (1,)
+        assert _strings(result.table) == ("3/8", "5/8")
+
     def test_ambient_domain_ceiling_is_distinct_from_active_table_bound(self) -> None:
         domain_sizes = (2,) * 65
         with pytest.raises(ValidationError):
@@ -191,6 +243,38 @@ class TestBoundResultContracts:
         assert result.left == request.left
         assert result.right == request.right
         assert _strings(result.factor.table) == ("3", "8")
+
+    def test_multiply_result_composes_through_json_without_losing_axes(self) -> None:
+        domain_sizes = (2,) * 17
+        request = FactorMultiplyRequest(
+            left=Factor(
+                variables=(1, 0),
+                domain_sizes=domain_sizes,
+                table=_table("1", "2", "3", "4"),
+            ),
+            right=Factor(
+                variables=(2,),
+                domain_sizes=domain_sizes,
+                table=_table("5", "6"),
+            ),
+        )
+
+        result = _factor_multiply(request)
+        decoded = FactorMultiplyResult.model_validate_json(result.model_dump_json())
+
+        assert decoded == result
+        assert decoded.left.domain_sizes == domain_sizes
+        assert decoded.factor.variables == (0, 1, 2)
+        assert _strings(decoded.factor.table) == (
+            "5",
+            "6",
+            "15",
+            "18",
+            "10",
+            "12",
+            "20",
+            "24",
+        )
 
     def test_marginal_adapter_binds_source_and_variable(self) -> None:
         source = _factor((0,), ("1", "2"))

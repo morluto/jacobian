@@ -7,8 +7,14 @@ from collections.abc import Sequence
 from fractions import Fraction
 from itertools import combinations
 
-from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian._exact import (
+    CanonicalRational,
+    require_bounded_rational,
+)
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.probability.graphical_models._models import DSeparationResult
 from jacobian.math.probability.graphical_models._validation import (
     validate_d_separation_input,
@@ -16,6 +22,7 @@ from jacobian.math.probability.graphical_models._validation import (
 from jacobian.math.probability.graphical_models.values import (
     MAX_FACTOR_COUNT,
     MAX_MODEL_VARS,
+    MAX_RATIONAL_DIGITS,
     Factor,
     scope_size,
 )
@@ -49,11 +56,7 @@ def factor_multiply(left: Factor, right: Factor) -> Factor:
             * right.table[right_index].as_fraction()
         )
         table.append(CanonicalRational.from_fraction(value))
-    return Factor(
-        variables=variables,
-        domain_sizes=left.domain_sizes,
-        table=tuple(table),
-    )
+    return _factor_from_kernel_table(variables, left.domain_sizes, table, "multiply")
 
 
 def factor_marginalize(factor: Factor, variable: int) -> Factor:
@@ -76,10 +79,8 @@ def factor_marginalize(factor: Factor, variable: int) -> Factor:
             )
             total += factor.table[source_index].as_fraction()
         table.append(CanonicalRational.from_fraction(total))
-    return Factor(
-        variables=variables,
-        domain_sizes=factor.domain_sizes,
-        table=tuple(table),
+    return _factor_from_kernel_table(
+        variables, factor.domain_sizes, table, "marginalize"
     )
 
 
@@ -127,11 +128,39 @@ def _reindex_factor(factor: Factor, target: tuple[int, ...]) -> Factor:
             source_assignment, factor.variables, factor.domain_sizes
         )
         table.append(factor.table[source_index])
-    return Factor(
-        variables=target,
-        domain_sizes=factor.domain_sizes,
-        table=tuple(table),
-    )
+    return _factor_from_kernel_table(target, factor.domain_sizes, table, "reindex")
+
+
+def _factor_from_kernel_table(
+    variables: tuple[int, ...],
+    domain_sizes: tuple[int, ...],
+    table: Sequence[CanonicalRational],
+    operation: str,
+) -> Factor:
+    """Bind one already-computed table after checking its exact result height.
+
+    Factor construction validates caller-owned values, but a kernel result is
+    not caller input.  Check the result height at this boundary so an exact
+    product or marginal that exceeds the owner envelope becomes a typed
+    admission failure instead of leaking a Pydantic ``ValidationError``.
+    The table is produced once by the kernel and then trusted by the result
+    model; no validator recomputes the mathematical operation.
+    """
+
+    for value in table:
+        try:
+            require_bounded_rational(
+                value,
+                max_digits=MAX_RATIONAL_DIGITS,
+                label="factor result",
+            )
+        except ValueError as error:
+            raise OperationResourceAdmissionError(
+                location=("factor", "table"),
+                code=f"graphical_model.factor_{operation}_rational_bound",
+                message="exact factor result exceeds the rational digit bound",
+            ) from error
+    return Factor(variables=variables, domain_sizes=domain_sizes, table=tuple(table))
 
 
 def d_separation(

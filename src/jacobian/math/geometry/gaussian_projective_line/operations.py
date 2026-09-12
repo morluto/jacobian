@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from fractions import Fraction
+from math import gcd
 from typing import NoReturn
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
@@ -122,6 +123,46 @@ def _gaussian_component_digits(value: tuple[Fraction, Fraction]) -> int:
     return max(_fraction_component_digits(component) for component in value)
 
 
+def _exceeds_intermediate_digits(digits: int) -> bool:
+    return 4 * digits + 3 > MAX_CROSS_RATIO_INTERMEDIATE_DIGITS
+
+
+def _gaussian_product_digit_bound(
+    left: tuple[Fraction, Fraction], right: tuple[Fraction, Fraction]
+) -> int:
+    """Bound reduced real/imaginary digits of a Gaussian product from operands."""
+
+    a, b = left
+    c, d = right
+    real = _cancelled_sum_digits(
+        _cancelled_product_digits(a, c),
+        _cancelled_product_digits(b, d),
+    )
+    imag = _cancelled_sum_digits(
+        _cancelled_product_digits(a, d),
+        _cancelled_product_digits(b, c),
+    )
+    return max(*real, *imag)
+
+
+def _admit_gaussian_product(
+    left: tuple[Fraction, Fraction], right: tuple[Fraction, Fraction]
+) -> tuple[Fraction, Fraction]:
+    bound = _gaussian_product_digit_bound(left, right)
+    if _exceeds_intermediate_digits(bound):
+        _reject_resource(
+            "intermediate_height_bound",
+            "cross-ratio determinant products and quotient exceed the exact intermediate digit bound",
+        )
+    product = _multiply(left, right)
+    if _exceeds_intermediate_digits(_gaussian_component_digits(product)):
+        _reject_resource(
+            "intermediate_height_bound",
+            "cross-ratio determinant products and quotient exceed the exact intermediate digit bound",
+        )
+    return product
+
+
 def _reject_resource(code: str, message: str) -> NoReturn:
     raise OperationResourceAdmissionError(
         location=("first", "second", "third", "fourth"),
@@ -152,18 +193,18 @@ def _admit_request(request: GaussianCrossRatioSource) -> _CrossRatioPlan:
                     message="cross-ratio inputs must be pairwise projectively distinct",
                 )
 
-    numerator = _multiply(
+    numerator = _admit_gaussian_product(
         _determinant(request.first, request.third),
         _determinant(request.second, request.fourth),
     )
-    denominator = _multiply(
+    denominator = _admit_gaussian_product(
         _determinant(request.first, request.fourth),
         _determinant(request.second, request.third),
     )
     product_digits = max(
         _gaussian_component_digits(numerator), _gaussian_component_digits(denominator)
     )
-    if 4 * product_digits + 3 > MAX_CROSS_RATIO_INTERMEDIATE_DIGITS:
+    if _exceeds_intermediate_digits(product_digits):
         _reject_resource(
             "intermediate_height_bound",
             "cross-ratio determinant products and quotient exceed the exact intermediate digit bound",

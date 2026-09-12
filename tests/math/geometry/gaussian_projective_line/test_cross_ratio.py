@@ -274,3 +274,32 @@ def test_large_harmonic_quadruple_cancels_to_minus_one() -> None:
     )
     result = gaussian_rational_cross_ratio(request)
     assert result.as_fractions() == (Fraction(-1), Fraction())
+
+
+def test_independent_coordinate_products_are_refused_before_multiplication() -> None:
+    scale = 10**4095
+    request = GaussianCrossRatioSource(
+        first=_point(_z(1), GaussianRational.from_fractions(Fraction(scale + 3), Fraction(scale + 5))),
+        second=_point(
+            _z(1),
+            GaussianRational.from_fractions(Fraction(scale + 11), Fraction(scale + 13)),
+        ),
+        third=_point(
+            _z(1),
+            GaussianRational.from_fractions(
+                Fraction(2 * scale + 17), Fraction(3 * scale + 19)
+            ),
+        ),
+        fourth=_point(
+            _z(1),
+            GaussianRational.from_fractions(
+                Fraction(5 * scale + 23), Fraction(7 * scale + 29)
+            ),
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        gaussian_rational_cross_ratio(request)
+    assert (
+        error.value.errors()[0]["type"]
+        == "geometry.gaussian_cross_ratio.intermediate_height_bound"
+    )

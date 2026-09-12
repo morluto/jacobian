@@ -171,6 +171,14 @@ def test_scaled_coordinate_height_is_rejected_before_carrier_construction() -> N
         Vertex(coordinates=(CanonicalRational(num=huge, den=1),)),
         Vertex(coordinates=(CanonicalRational(num=huge + 1, den=1),)),
     )
+    request = EhrhartRequest.model_validate(
+        {
+            "vertices": [_vertex(huge), _vertex(huge + 1)],
+            "degree_bound": 1,
+            "max_dilation": 3,
+        }
+    )
+    assert request.max_dilation == 3
     with pytest.raises(OperationDomainValidationError, match="maximum-dilation"):
         native_ehrhart(vertices, degree_bound=1, max_dilation=3)
 

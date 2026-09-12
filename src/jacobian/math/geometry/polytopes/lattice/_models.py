@@ -8,9 +8,11 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
+    MAX_CANONICAL_INTEGER_DIGITS,
     ExactInteger,
     require_bounded_rational,
 )
+from jacobian.canonical import format_canonical_integer
 from jacobian._models import StrictModel
 from jacobian.math.geometry.polytopes.values import Halfspace as RationalHalfspace
 from jacobian.math.geometry.polytopes.values import Vertex as RationalVertex
@@ -345,21 +347,6 @@ def _require_ehrhart_request_shape(
             "ehrhart_dilation_range",
             "max_dilation must provide degree_bound + 1 evaluations",
         )
-    from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS
-    from jacobian.canonical import format_canonical_integer
-
-    scaled_digits = 0
-    for vertex in vertices:
-        for coordinate in vertex.coordinates:
-            scaled_digits = max(
-                scaled_digits,
-                len(format_canonical_integer(abs(coordinate.num * max_dilation))),
-            )
-    if scaled_digits > MAX_CANONICAL_INTEGER_DIGITS:
-        raise _validation_error(
-            "ehrhart_scaled_coordinate",
-            "a maximum-dilation coordinate exceeds the canonical integer bound",
-        )
     return dimension
 
 
@@ -436,12 +423,32 @@ def _require_ehrhart_full_dimensional(
     return dimension
 
 
+def _admit_ehrhart_scaled_coordinates(
+    vertices: tuple[RationalVertex, ...], max_dilation: int
+) -> None:
+    """Admit maximum dilated height once at the native execution boundary."""
+
+    scaled_digits = 0
+    for vertex in vertices:
+        for coordinate in vertex.coordinates:
+            scaled_digits = max(
+                scaled_digits,
+                len(format_canonical_integer(abs(coordinate.num * max_dilation))),
+            )
+    if scaled_digits > MAX_CANONICAL_INTEGER_DIGITS:
+        raise _validation_error(
+            "ehrhart_scaled_coordinate",
+            "a maximum-dilation coordinate exceeds the canonical integer bound",
+        )
+
+
 def require_ehrhart_source(
     vertices: tuple[RationalVertex, ...], degree_bound: int, max_dilation: int
 ) -> None:
     """Admit one native Ehrhart source, including affine dimension."""
 
     _require_ehrhart_request_shape(vertices, degree_bound, max_dilation)
+    _admit_ehrhart_scaled_coordinates(vertices, max_dilation)
     _require_ehrhart_full_dimensional(vertices)
 
 

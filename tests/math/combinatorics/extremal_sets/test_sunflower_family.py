@@ -181,9 +181,7 @@ def test_qualifying_plan_stops_once_the_output_cannot_fit() -> None:
 def test_empty_cores_are_not_charged_at_an_unrelated_member_size() -> None:
     huge = tuple(range(100_000))
     isolates = tuple((100_000 + index,) for index in range(154))
-    result = construct_sunflower_family(
-        _family((huge, *isolates), ground=100_154), 2
-    )
+    result = construct_sunflower_family(_family((huge, *isolates), ground=100_154), 2)
     assert result.sunflower_count == 155 * 154 // 2
     assert all(row.core == () for row in result.sunflowers)
 

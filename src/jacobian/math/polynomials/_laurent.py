@@ -78,7 +78,9 @@ def _capped_denominator_lcm(left: int, right: int) -> int | None:
     """Merge denominators by gcd-based LCM, refusing only after a digit bound."""
 
     if left == 1:
-        return right if _integer_digits(right) <= MAX_CANONICAL_RATIONAL_DIGITS else None
+        return (
+            right if _integer_digits(right) <= MAX_CANONICAL_RATIONAL_DIGITS else None
+        )
     if right == 1:
         return left if _integer_digits(left) <= MAX_CANONICAL_RATIONAL_DIGITS else None
     overlap = gcd(left, right)

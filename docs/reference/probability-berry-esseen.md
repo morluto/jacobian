@@ -1,7 +1,8 @@
 # Berry--Esseen operation
 
 `probability.finite_distribution.berry_esseen_iid_05600.compute` implements the
-published i.i.d. finite-sum form with universal constant
+i.i.d. specialization of Shevtsova's general-independent finite-sum theorem
+with universal constant
 
 \[
  C = 0.5600 = 14/25.
@@ -24,5 +25,8 @@ The pinned source is I. G. Shevtsova, “An Improvement of Convergence Rate
 Estimates in the Lyapunov Theorem,” *Doklady Mathematics* 82(3) (2010),
 862–864, DOI
 [`10.1134/S1064562410060062`](https://doi.org/10.1134/S1064562410060062).
+Here `C=0.5600` is the general-independent theorem's constant, used as a
+valid (conservative) specialization for the compact i.i.d. request; the result
+does not claim that `0.5600` is an i.i.d.-specific sharp constant.
 The operation does not claim to compute the realized distributional distance
 or to prove a sharper constant for a narrower hypothesis class.

@@ -16,12 +16,13 @@ _FAIR_BIT = {
 
 BERRY_ESSEEN_OPERATION = MathTool(
     operation_id="probability.finite_distribution.berry_esseen_iid_05600.compute",
-    title="Exact i.i.d. Berry--Esseen bound (C=0.5600)",
+    title="Exact i.i.d. Berry--Esseen bound (general-independent C=0.5600)",
     description=(
         "For a finite rational law with positive variance and a positive i.i.d. "
         "sample count n, return exact source mean, variance, and third absolute "
         "central moment and the outward-rounded bound C*rho/(sigma^3*sqrt(n)) "
-        "using the published i.i.d. constant C=0.5600=14/25."
+        "using Shevtsova's published general-independent constant C=0.5600=14/25 "
+        "as a valid specialization to the i.i.d. request."
     ),
     request_type=BerryEsseenRequest,
     result_type=BerryEsseenResult,

@@ -43,14 +43,14 @@ def _request(
 
 
 def _five_atom_oracle_distribution() -> dict[str, object]:
-    # Independent exact oracle: mean=33, variance=4224/5,
+    # Issue #2503's independent exact oracle: mean=33, variance=4224/5,
     # rho=161792/5 and rho^2/sigma^6=62410/35937.
     return _distribution(
-        (-67, Fraction(2318683, 327008220)),
-        (-34, Fraction(55471, 90590115)),
-        (7, Fraction(1279776117, 2640839110)),
-        (46, Fraction(44859, 174083)),
-        (73, Fraction(1, 4)),
+        (1, Fraction(1, 5)),
+        (9, Fraction(1, 5)),
+        (25, Fraction(1, 5)),
+        (49, Fraction(1, 5)),
+        (81, Fraction(1, 5)),
     )
 
 
@@ -129,6 +129,13 @@ def test_sample_count_boundary_is_bounded_and_preflighted() -> None:
         )
 
 
+def test_sample_count_schema_exposes_admission_bounds() -> None:
+    schema = BerryEsseenRequest.model_json_schema()["properties"]["sample_count"]
+
+    assert schema["minimum"] == 1
+    assert schema["maximum"] == MAX_BERRY_ESSEEN_SAMPLE_COUNT
+
+
 def test_serialized_result_preserves_source_and_interval_invariants() -> None:
     result = berry_esseen_bound(_request(_five_atom_oracle_distribution(), 7))
     restored = BerryEsseenResult.model_validate_json(result.model_dump_json())
@@ -140,6 +147,27 @@ def test_serialized_result_preserves_source_and_interval_invariants() -> None:
     assert restored.source == result.source
     assert lower <= upper
     assert lower * lower <= squared <= upper * upper
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("universal_constant", {"num": 1, "den": 1}),
+        ("variance", {"num": -1, "den": 1}),
+        ("third_absolute_central_moment", {"num": 0, "den": 1}),
+        ("bound_squared", {"num": 0, "den": 1}),
+        ("bound_lower", {"num": 2, "den": 1}),
+    ),
+)
+def test_result_rejects_structurally_invalid_claims(
+    field: str, value: dict[str, int]
+) -> None:
+    genuine = berry_esseen_bound(_request(_five_atom_oracle_distribution(), 7))
+    payload = genuine.model_dump()
+    payload[field] = value
+
+    with pytest.raises(ValueError):
+        BerryEsseenResult.model_validate(payload)
 
 
 def test_zero_variance_and_bad_normalization_are_rejected_at_operation_boundary() -> (
@@ -157,7 +185,7 @@ def test_operation_declaration_pins_iid_constant_and_contract() -> None:
     assert BERRY_ESSEEN_OPERATION.operation_id.endswith(
         "berry_esseen_iid_05600.compute"
     )
-    assert "i.i.d." in BERRY_ESSEEN_OPERATION.description
+    assert "general-independent constant" in BERRY_ESSEEN_OPERATION.description
     assert "0.5600" in BERRY_ESSEEN_OPERATION.description
     assert BERRY_ESSEEN_OPERATION.request_type is BerryEsseenRequest
     assert BERRY_ESSEEN_OPERATION.result_type is BerryEsseenResult

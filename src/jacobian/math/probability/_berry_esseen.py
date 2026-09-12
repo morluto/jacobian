@@ -1,12 +1,18 @@
-"""Exact bounded i.i.d. Berry--Esseen bounds for finite rational laws."""
+"""Exact bounded i.i.d. Berry--Esseen bounds for finite rational laws.
+
+The theorem variant is Shevtsova's general-independent Berry--Esseen
+constant ``C = 0.5600 = 14/25``, specialized to repeated i.i.d. summands.
+The operation deliberately retains that explicit, conservative constant
+rather than claiming the sharper i.i.d.-specific constants from later work.
+"""
 
 from __future__ import annotations
 
 from fractions import Fraction
 from math import isqrt
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import Field, StrictInt
+from pydantic import Field, StrictInt, model_validator
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
@@ -22,29 +28,39 @@ from jacobian.math.probability._models import (
     MAX_INPUT_RATIONAL_DIGITS,
     MAX_RESULT_RATIONAL_DIGITS,
     _require_bounded_fraction,
+    _validation_error,
 )
 
 MAX_BERRY_ESSEEN_ATOMS = 16_384
 MAX_BERRY_ESSEEN_SAMPLE_COUNT = 10**12
 BERRY_ESSEEN_CONSTANT = Fraction(14, 25)
 BERRY_ESSEEN_BOUND_BITS = 64
-BERRY_ESSEEN_THEOREM_VARIANT: Literal["IID_BERRY_ESSEEN_C_05600"] = (
-    "IID_BERRY_ESSEEN_C_05600"
-)
+BERRY_ESSEEN_THEOREM_VARIANT: Literal[
+    "IID_SPECIALIZATION_OF_GENERAL_INDEPENDENT_BERRY_ESSEEN_C_05600"
+] = "IID_SPECIALIZATION_OF_GENERAL_INDEPENDENT_BERRY_ESSEEN_C_05600"
 
 
 class BerryEsseenRequest(StrictModel):
     """One finite rational law and a positive i.i.d. sample count."""
 
     distribution: FiniteRationalDistribution
-    sample_count: StrictInt = Field(description="Positive i.i.d. sample count n.")
+    sample_count: StrictInt = Field(
+        ge=1,
+        le=MAX_BERRY_ESSEEN_SAMPLE_COUNT,
+        description=(
+            "Positive i.i.d. sample count n admitted in the bounded interval "
+            f"[1, {MAX_BERRY_ESSEEN_SAMPLE_COUNT}]."
+        ),
+    )
 
 
 class BerryEsseenResult(StrictModel):
     """Exact source moments and an outward rational enclosure of the bound."""
 
     source: BerryEsseenRequest
-    theorem_variant: Literal["IID_BERRY_ESSEEN_C_05600"]
+    theorem_variant: Literal[
+        "IID_SPECIALIZATION_OF_GENERAL_INDEPENDENT_BERRY_ESSEEN_C_05600"
+    ]
     universal_constant: CanonicalRational
     mean: CanonicalRational
     variance: CanonicalRational
@@ -53,6 +69,48 @@ class BerryEsseenResult(StrictModel):
     bound_lower: CanonicalRational
     bound_upper: CanonicalRational
     bound_precision_bits: int = Field(ge=1, le=256, strict=True)
+
+    @model_validator(mode="after")
+    def require_structural_bound_invariants(self) -> Self:
+        """Validate shape and source metadata without replaying moments."""
+
+        if self.theorem_variant != BERRY_ESSEEN_THEOREM_VARIANT:
+            raise _validation_error("Berry--Esseen theorem variant is not supported")
+        if self.universal_constant.as_fraction() != BERRY_ESSEEN_CONSTANT:
+            raise _validation_error(
+                "Berry--Esseen universal constant does not match the theorem variant"
+            )
+        if not 1 <= self.source.sample_count <= MAX_BERRY_ESSEEN_SAMPLE_COUNT:
+            raise _validation_error(
+                "Berry--Esseen source sample_count is out of bounds"
+            )
+        if len(self.source.distribution.atoms) > MAX_BERRY_ESSEEN_ATOMS:
+            raise _validation_error("Berry--Esseen source atom count is out of bounds")
+        if self.bound_precision_bits != BERRY_ESSEEN_BOUND_BITS:
+            raise _validation_error("Berry--Esseen bound precision is not supported")
+
+        variance = self.variance.as_fraction()
+        third = self.third_absolute_central_moment.as_fraction()
+        bound_squared = self.bound_squared.as_fraction()
+        lower = self.bound_lower.as_fraction()
+        upper = self.bound_upper.as_fraction()
+        if variance <= 0:
+            raise _validation_error("Berry--Esseen variance must be positive")
+        if third <= 0:
+            raise _validation_error(
+                "Berry--Esseen third absolute central moment must be positive"
+            )
+        if bound_squared <= 0:
+            raise _validation_error("Berry--Esseen squared bound must be positive")
+        if lower < 0 or upper < lower:
+            raise _validation_error(
+                "Berry--Esseen outward bound interval must be ordered and nonnegative"
+            )
+        if not lower * lower <= bound_squared <= upper * upper:
+            raise _validation_error(
+                "Berry--Esseen outward interval must enclose the squared bound"
+            )
+        return self
 
 
 def _admission_fraction(

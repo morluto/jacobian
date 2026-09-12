@@ -192,8 +192,91 @@ def test_exact_complex_sic_and_design_profiles_are_decisions() -> None:
         )
     )
     assert phase_scaled.is_sic is True
+    assert phase_scaled.frame_operator[0][0].as_fractions() == (
+        Fraction(1),
+        Fraction(0),
+    )
     non_sic = _sic_profile(SicProfileRequest(frame=basis))
     assert non_sic.is_sic is False
+
+
+def test_complex_operator_uses_vector_times_conjugate_vector_and_trace_average() -> (
+    None
+):
+    frame = ComplexFrame(
+        dimension=2,
+        vectors=(
+            (_z(1), _z(0, 1)),
+            (_z(0), _z(2)),
+        ),
+    )
+    result = _complex_frame_profile(ComplexFrameProfileRequest(frame=frame))
+
+    assert result.frame_operator[0][1].as_fractions() == (Fraction(0), Fraction(-1))
+    assert result.frame_operator[1][0].as_fractions() == (Fraction(0), Fraction(1))
+    assert result.tight is False
+    assert result.tight_residual[0][0].as_fractions() == (
+        Fraction(-2),
+        Fraction(0),
+    )
+    assert result.tight_residual[1][1].as_fractions() == (
+        Fraction(2),
+        Fraction(0),
+    )
+
+
+def test_mub_accepts_scaled_nonunit_representatives() -> None:
+    standard = ComplexFrame(
+        dimension=2,
+        vectors=((_z(2), _z(0)), (_z(0), _z(3))),
+    )
+    hadamard = ComplexFrame(
+        dimension=2,
+        vectors=((_z(5), _z(5)), (_z(7), _z(-7))),
+    )
+
+    result = _mutually_unbiased_bases(
+        MutuallyUnbiasedBasesRequest(dimension=2, bases=(standard, hadamard))
+    )
+
+    assert result.is_mutually_unbiased is True
+    assert result.cross_gram_squared[0][0][0].as_integer_ratio() == (1, 2)
+
+
+def test_sic_ledgers_are_invariant_under_independent_representative_scaling() -> None:
+    base = ComplexFrame(
+        dimension=2,
+        vectors=(
+            (_z(1), _z(0)),
+            (_z(0), _z(1)),
+            (_z(1), _z(1)),
+            (_z(1), _z(2)),
+        ),
+    )
+    scaled = ComplexFrame(
+        dimension=2,
+        vectors=(
+            (_z(2), _z(0)),
+            (_z(0), _z(3)),
+            (_z(4), _z(4)),
+            (_z(5), _z(10)),
+        ),
+    )
+
+    base_result = _sic_profile(SicProfileRequest(frame=base))
+    scaled_result = _sic_profile(SicProfileRequest(frame=scaled))
+
+    assert scaled_result.is_sic == base_result.is_sic
+    assert scaled_result.squared_overlaps == base_result.squared_overlaps
+    assert scaled_result.frame_operator == base_result.frame_operator
+    assert scaled_result.tight_residual == base_result.tight_residual
+
+
+def test_complex_accumulation_height_is_admitted_before_arithmetic() -> None:
+    huge = GaussianRational.from_fractions(Fraction(10**127), Fraction(0))
+    frame = ComplexFrame(dimension=1, vectors=((huge,),) * 64)
+    with pytest.raises(OperationResourceAdmissionError, match="accumulation"):
+        _sic_profile(SicProfileRequest(frame=frame))
 
 
 def test_complex_profile_rejects_scalar_height_before_expansion() -> None:

@@ -65,7 +65,12 @@ class VectorFamily(StrictModel):
 
 
 class ComplexFrame(StrictModel):
-    """A bounded finite family of exact complex vectors."""
+    """A bounded finite family of exact complex representatives.
+
+    Complex-frame operations that describe bases or projective configurations
+    use nonzero representatives and normalize their Hermitian overlaps
+    conceptually; unit coordinate norms are not a construction requirement.
+    """
 
     dimension: int = Field(ge=1, le=MAX_DIM)
     vectors: tuple[tuple[GaussianRational, ...], ...] = Field(

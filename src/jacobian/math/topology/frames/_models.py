@@ -131,6 +131,12 @@ class TightEquiangularProfileResult(VectorFamily):
 
 
 class MutuallyUnbiasedBasesRequest(StrictModel):
+    """Nonzero orthogonal representatives of bases in one complex space.
+
+    MUB status uses normalized squared cross-overlaps, so representatives need
+    not have unit coordinate norm.
+    """
+
     dimension: int = Field(ge=1, le=MAX_DIM)
     bases: tuple[ComplexFrame, ...] = Field(
         min_length=1, max_length=MAX_COMPLEX_BASIS_COUNT
@@ -249,10 +255,14 @@ class ComplexFrameProfileResult(ComplexFrameProfileRequest):
 
 
 class SicProfileRequest(StrictModel):
+    """Complex projective representatives checked through normalized projectors."""
+
     frame: ComplexFrame
 
 
 class SicProfileResult(SicProfileRequest):
+    """A scale-invariant SIC ledger and its normalized frame operator."""
+
     is_sic: bool
     common_squared_overlap: CanonicalRational | None
     squared_overlaps: tuple[tuple[CanonicalRational, ...], ...]

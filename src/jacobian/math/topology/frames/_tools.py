@@ -90,7 +90,7 @@ TOOLS: MathTools = (
     MathTool(
         operation_id="frame.mutually_unbiased_bases.compute",
         title="Decide mutual unbiasedness of exact complex bases",
-        description="Check orthogonality within each basis and the exact normalized cross-overlap equation between every basis pair.",
+        description="Check nonzero orthogonality within each basis and the exact normalized cross-overlap equation between every basis pair; unit coordinate norms are not required.",
         request_type=MutuallyUnbiasedBasesRequest,
         result_type=MutuallyUnbiasedBasesResult,
         run=_mutually_unbiased_bases,
@@ -106,7 +106,7 @@ TOOLS: MathTools = (
     MathTool(
         operation_id="frame.sic_profile.compute",
         title="Decide the exact SIC overlap equations",
-        description="Check the d-squared cardinality, equal norms, and 1/(d+1) pairwise normalized overlap equation for an exact complex frame.",
+        description="Check the d-squared cardinality and 1/(d+1) pairwise normalized overlap equation for nonzero complex projective representatives, using normalized rank-one projectors.",
         request_type=SicProfileRequest,
         result_type=SicProfileResult,
         run=_sic_profile,

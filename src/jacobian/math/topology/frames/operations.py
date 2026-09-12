@@ -4,13 +4,17 @@ from __future__ import annotations
 
 from fractions import Fraction
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math._rational_height import RationalHeight, sum_heights
 from jacobian.math.matrices.values import IntegerMatrix
 from jacobian.math.number_theory.number_fields import GaussianRational
+from jacobian.math.number_theory.number_fields.values import (
+    MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS,
+)
 from jacobian.math.topology.frames._flint import integer_gram, integer_gram_and_rank
 from jacobian.math.topology.frames._models import (
     CoherenceResult,
@@ -73,7 +77,85 @@ def _norm_squared(vector: tuple[GaussianRational, ...]) -> Fraction:
     return real
 
 
-def _complex_frame_admitted(frame: ComplexFrame) -> tuple[Fraction, ...]:
+def _maximum_component_height(frame: ComplexFrame) -> RationalHeight:
+    heights = tuple(
+        RationalHeight.from_canonical(component)
+        for vector in frame.vectors
+        for scalar in vector
+        for component in (scalar.real, scalar.imaginary)
+    )
+    if not heights:
+        return RationalHeight(1, 1)
+    return RationalHeight(
+        max(height.numerator_digits for height in heights),
+        max(height.denominator_digits for height in heights),
+    )
+
+
+def _complex_product_height(source: RationalHeight) -> RationalHeight:
+    product = source.product(source)
+    # Both real and imaginary parts are sums of two rational products.
+    return sum_heights((product, product))
+
+
+def _complex_sum_height(term: RationalHeight, count: int) -> RationalHeight:
+    return sum_heights((term,) * count)
+
+
+def _require_complex_accumulation_height(
+    frame: ComplexFrame,
+    *,
+    normalized_operator: bool,
+    normalized_overlaps: bool,
+) -> None:
+    """Admit rational growth before constructing any exact arithmetic values."""
+
+    source = _maximum_component_height(frame)
+    product = _complex_product_height(source)
+    norm = _complex_sum_height(product, 2 * frame.dimension)
+
+    operator_term = product
+    if normalized_operator:
+        operator_term = product.quotient(norm)
+    operator = _complex_sum_height(operator_term, len(frame.vectors))
+    trace = _complex_sum_height(operator, frame.dimension).quotient(
+        RationalHeight(1, max(1, len(str(frame.dimension))))
+    )
+    residual = sum_heights((operator, trace))
+    if (
+        max(
+            operator.numerator_digits,
+            operator.denominator_digits,
+            residual.numerator_digits,
+            residual.denominator_digits,
+        )
+        > MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS
+    ):
+        raise OperationResourceAdmissionError(
+            location=("frame", "vectors"),
+            code="frames.complex_scalar_height",
+            message="Gaussian-rational frame accumulation exceeds its admitted height",
+        )
+
+    if normalized_overlaps:
+        inner_product = _complex_sum_height(product, frame.dimension)
+        squared_magnitude = sum_heights((inner_product.product(inner_product),) * 2)
+        denominator = norm.product(norm)
+        overlap = squared_magnitude.quotient(denominator)
+        if overlap.exceeds(MAX_CANONICAL_RATIONAL_DIGITS):
+            raise OperationResourceAdmissionError(
+                location=("frame", "vectors"),
+                code="frames.complex_overlap_height",
+                message="normalized complex overlap exceeds its admitted height",
+            )
+
+
+def _complex_frame_admitted(
+    frame: ComplexFrame,
+    *,
+    normalized_operator: bool = False,
+    normalized_overlaps: bool = False,
+) -> tuple[Fraction, ...]:
     if len(frame.vectors) * frame.dimension > MAX_COMPLEX_PROFILE_CELLS:
         raise OperationResourceAdmissionError(
             location=("frame", "vectors"),
@@ -95,6 +177,11 @@ def _complex_frame_admitted(frame: ComplexFrame) -> tuple[Fraction, ...]:
             code="frames.complex_scalar_digits",
             message="complex scalar components exceed the admitted profile height",
         )
+    _require_complex_accumulation_height(
+        frame,
+        normalized_operator=normalized_operator,
+        normalized_overlaps=normalized_overlaps,
+    )
     norms = tuple(_norm_squared(vector) for vector in frame.vectors)
     if any(norm <= 0 for norm in norms):
         raise OperationDomainValidationError(
@@ -105,11 +192,13 @@ def _complex_frame_admitted(frame: ComplexFrame) -> tuple[Fraction, ...]:
     return norms
 
 
-def _require_complex_profile_work(frame: ComplexFrame) -> None:
+def _require_complex_profile_work(
+    frame: ComplexFrame, *, emitted_matrix_cells: int
+) -> None:
     vectors = len(frame.vectors)
     pair_cells = vectors * vectors
-    work = pair_cells * frame.dimension
-    if pair_cells + frame.dimension * frame.dimension > MAX_COMPLEX_PROFILE_CELLS:
+    work = pair_cells * frame.dimension + len(frame.vectors) * frame.dimension**2
+    if emitted_matrix_cells > MAX_COMPLEX_PROFILE_CELLS:
         raise OperationResourceAdmissionError(
             location=("frame",),
             code="frames.complex_profile_output",
@@ -125,41 +214,47 @@ def _require_complex_profile_work(frame: ComplexFrame) -> None:
 
 def _tight_complex_frame(
     frame: ComplexFrame,
+    *,
+    normalized_projectors: bool = False,
+    norms: tuple[Fraction, ...] | None = None,
 ) -> tuple[
     bool,
     tuple[tuple[GaussianRational, ...], ...],
     tuple[tuple[GaussianRational, ...], ...],
 ]:
+    if normalized_projectors and norms is None:
+        raise ValueError("normalized frame operators require source norms")
     operator: list[list[tuple[Fraction, Fraction]]] = [
-        [
-            (
-                sum(
-                    (
-                        _inner_product((vector[row],), (vector[column],))[0]
-                        for vector in frame.vectors
-                    ),
-                    Fraction(0),
-                ),
-                sum(
-                    (
-                        _inner_product((vector[row],), (vector[column],))[1]
-                        for vector in frame.vectors
-                    ),
-                    Fraction(0),
-                ),
-            )
-            for column in range(frame.dimension)
-        ]
+        [(Fraction(0), Fraction(0)) for _ in range(frame.dimension)]
         for row in range(frame.dimension)
     ]
-    scalar = operator[0][0]
+    for index, vector in enumerate(frame.vectors):
+        scale = Fraction(1)
+        if normalized_projectors:
+            assert norms is not None
+            scale = Fraction(1, 1) / norms[index]
+        for row in range(frame.dimension):
+            first_real, first_imaginary = _complex_parts(vector[row])
+            for column in range(frame.dimension):
+                second_real, second_imaginary = _complex_parts(vector[column])
+                real = first_real * second_real + first_imaginary * second_imaginary
+                imaginary = (
+                    first_imaginary * second_real - first_real * second_imaginary
+                )
+                previous_real, previous_imaginary = operator[row][column]
+                operator[row][column] = (
+                    previous_real + scale * real,
+                    previous_imaginary + scale * imaginary,
+                )
+    trace: Fraction = sum(
+        (operator[index][index][0] for index in range(frame.dimension)), Fraction(0)
+    )
+    scalar: Fraction = trace * Fraction(1, frame.dimension)
     residual: list[list[tuple[Fraction, Fraction]]] = [
         [
             (
-                operator[row][column][0]
-                - (scalar[0] if row == column else Fraction(0)),
-                operator[row][column][1]
-                - (scalar[1] if row == column else Fraction(0)),
+                operator[row][column][0] - (scalar if row == column else Fraction(0)),
+                operator[row][column][1] - Fraction(0),
             )
             for column in range(frame.dimension)
         ]
@@ -172,8 +267,7 @@ def _tight_complex_frame(
     operator_value = tuple(tuple(to_value(entry) for entry in row) for row in operator)
     residual_value = tuple(tuple(to_value(entry) for entry in row) for row in residual)
     return (
-        all(entry == (Fraction(0), Fraction(0)) for row in residual for entry in row)
-        and scalar[1] == 0,
+        all(entry == (Fraction(0), Fraction(0)) for row in residual for entry in row),
         operator_value,
         residual_value,
     )
@@ -381,8 +475,11 @@ def complex_frame_profile(
 ) -> ComplexFrameProfileResult:
     """Return an exact complex frame operator and tight/equiangular profile."""
 
-    _require_complex_profile_work(request.frame)
-    norms = _complex_frame_admitted(request.frame)
+    dimension = request.frame.dimension
+    _require_complex_profile_work(
+        request.frame, emitted_matrix_cells=2 * dimension * dimension
+    )
+    norms = _complex_frame_admitted(request.frame, normalized_overlaps=True)
     equiangular, common = _equiangular_complex_frame(request.frame, norms)
     tight, frame_operator, tight_residual = _tight_complex_frame(request.frame)
     return ComplexFrameProfileResult._from_kernel(
@@ -407,7 +504,7 @@ def mutually_unbiased_bases(
     dimension = request.dimension
     basis_count = len(request.bases)
     pair_count = basis_count * (basis_count - 1) // 2
-    work = pair_count * dimension * dimension * dimension
+    work = (pair_count + basis_count) * dimension * dimension * dimension
     output_cells = (basis_count + pair_count) * dimension * dimension
     if pair_count > MAX_COMPLEX_BASIS_PAIRS or work > MAX_COMPLEX_INNER_PRODUCT_WORK:
         raise OperationResourceAdmissionError(
@@ -421,7 +518,10 @@ def mutually_unbiased_bases(
             code="frames.mub_output",
             message="MUB ledger output exceeds the admitted envelope",
         )
-    basis_norms = tuple(_complex_frame_admitted(basis) for basis in request.bases)
+    basis_norms = tuple(
+        _complex_frame_admitted(basis, normalized_overlaps=True)
+        for basis in request.bases
+    )
     unbiased = True
     basis_grams: list[tuple[tuple[GaussianRational, ...], ...]] = []
     for basis in request.bases:
@@ -479,8 +579,14 @@ def sic_profile(request: SicProfileRequest) -> SicProfileResult:
     """Decide the exact SIC overlap equations for a complex vector family."""
 
     frame = request.frame
-    _require_complex_profile_work(frame)
-    norms = _complex_frame_admitted(frame)
+    _require_complex_profile_work(
+        frame,
+        emitted_matrix_cells=len(frame.vectors) ** 2
+        + 2 * frame.dimension * frame.dimension,
+    )
+    norms = _complex_frame_admitted(
+        frame, normalized_operator=True, normalized_overlaps=True
+    )
     expected_count = frame.dimension * frame.dimension
     is_sic = len(frame.vectors) == expected_count
     squared_overlaps: list[tuple[CanonicalRational, ...]] = []
@@ -496,7 +602,6 @@ def sic_profile(request: SicProfileRequest) -> SicProfileResult:
         squared_overlaps.append(tuple(row))
     common: Fraction | None = None
     if is_sic:
-        is_sic = all(norm == norms[0] for norm in norms)
         common = Fraction(1, frame.dimension + 1)
         for left_index in range(len(frame.vectors)):
             for right_index in range(left_index + 1, len(frame.vectors)):
@@ -508,7 +613,9 @@ def sic_profile(request: SicProfileRequest) -> SicProfileResult:
                 )
                 if overlap != common:
                     is_sic = False
-    tight, frame_operator, tight_residual = _tight_complex_frame(frame)
+    tight, frame_operator, tight_residual = _tight_complex_frame(
+        frame, normalized_projectors=True, norms=norms
+    )
     is_sic = is_sic and tight
     return SicProfileResult._from_kernel(
         request,

@@ -131,10 +131,36 @@ def test_aggregate_scan_budget_rejects_before_scaled_geometry(
         native_ehrhart(
             tuple(
                 Vertex.model_validate(_vertex(*point))
-                for point in ((0, 0), (400, 0), (0, 400), (400, 400))
+                for point in ((0, 0), (200, 0), (0, 200), (200, 200))
             ),
             degree_bound=2,
             max_dilation=32,
+        )
+    assert calls == 0
+
+
+def test_axis_span_budget_rejects_before_scaled_geometry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.geometry.polytopes.lattice import operations
+
+    calls = 0
+    original = operations._facets_and_box
+
+    def count_geometry(*args: Any, **kwargs: Any) -> Any:
+        nonlocal calls
+        calls += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(operations, "_facets_and_box", count_geometry)
+    with pytest.raises(OperationDomainValidationError, match="per-axis span"):
+        native_ehrhart(
+            tuple(
+                Vertex.model_validate(_vertex(*point))
+                for point in ((0, 0), (10_001, 0), (0, 1), (10_001, 1))
+            ),
+            degree_bound=2,
+            max_dilation=2,
         )
     assert calls == 0
 

@@ -494,6 +494,12 @@ def _ehrhart_aggregate_scan_bound(
         - min(vertex.coordinates[axis].num for vertex in vertices)
         for axis in range(len(vertices[0].coordinates))
     ]
+    for span in spans:
+        if max_dilation * span + 1 > MAX_BOUND_SPAN:
+            raise LatticePointBudgetError(
+                "the Ehrhart dilation range exceeds the "
+                f"{MAX_BOUND_SPAN}-point per-axis span bound"
+            )
     total_scan = 0
     for dilation in range(1, max_dilation + 1):
         scan = 1

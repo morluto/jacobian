@@ -65,6 +65,24 @@ class PrimitivityAnalysis:
     ]
 
 
+def prefixes(word: FiniteWord) -> tuple[FiniteWord, ...]:
+    """Return every prefix, ordered by increasing length, including empty."""
+
+    return tuple(
+        FiniteWord(alphabet=word.alphabet, letters=word.letters[:length])
+        for length in range(len(word.letters) + 1)
+    )
+
+
+def suffixes(word: FiniteWord) -> tuple[FiniteWord, ...]:
+    """Return every suffix, ordered by starting position, including empty."""
+
+    return tuple(
+        FiniteWord(alphabet=word.alphabet, letters=word.letters[start:])
+        for start in range(len(word.letters) + 1)
+    )
+
+
 def factors_of_length(word: FiniteWord, factor_length: int) -> FactorAnalysis:
     if not 0 <= factor_length <= len(word.letters):
         raise PydanticCustomError(

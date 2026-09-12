@@ -45,15 +45,20 @@ from jacobian.math.logic.languages.words._models import (
     SubstitutionFixedPointPrefixRequest,
     SubstitutionFixedPointPrefixResult,
     SubstitutionPrimitivityProfileRequest,
+    WordFamilyRequest,
+    WordPrefixesResult,
+    WordSuffixesResult,
 )
 from jacobian.math.logic.languages.words._tools import (
     TOOLS,
     compute_factors_length,
     compute_incidence_matrix,
     compute_periods,
+    compute_prefixes,
     compute_substitution_dependency_graph,
     compute_substitution_fixed_point_prefix,
     compute_substitution_primitivity_profile,
+    compute_suffixes,
 )
 
 
@@ -83,12 +88,44 @@ def _substitution(
 
 def test_public_catalog_surface_is_the_audited_operations() -> None:
     assert tuple(tool.operation_id for tool in TOOLS) == (
+        "word.prefixes.compute",
+        "word.suffixes.compute",
         "word.factors.length.compute",
         "word.periods.compute",
         "word_morphism.incidence_matrix.compute",
         "substitution.dependency_graph.compute",
         "substitution.primitivity_profile.compute",
         "substitution.fixed_point_prefix.compute",
+    )
+
+
+def test_prefix_and_suffix_families_are_complete_and_serializable() -> None:
+    source = _word("abaab")
+    prefix_result = compute_prefixes(WordFamilyRequest(word=source))
+    suffix_result = compute_suffixes(WordFamilyRequest(word=source))
+    assert tuple(item.letters for item in prefix_result.prefixes) == (
+        (),
+        ("a",),
+        ("a", "b"),
+        ("a", "b", "a"),
+        ("a", "b", "a", "a"),
+        ("a", "b", "a", "a", "b"),
+    )
+    assert tuple(item.letters for item in suffix_result.suffixes) == (
+        ("a", "b", "a", "a", "b"),
+        ("b", "a", "a", "b"),
+        ("a", "a", "b"),
+        ("a", "b"),
+        ("b",),
+        (),
+    )
+    assert (
+        WordPrefixesResult.model_validate_json(prefix_result.model_dump_json())
+        == prefix_result
+    )
+    assert (
+        WordSuffixesResult.model_validate_json(suffix_result.model_dump_json())
+        == suffix_result
     )
 
 

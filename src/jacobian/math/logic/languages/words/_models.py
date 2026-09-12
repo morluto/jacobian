@@ -23,6 +23,62 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"word.{reason}", message)
 
 
+class WordFamilyRequest(StrictModel):
+    """Request all prefixes or suffixes of one finite word."""
+
+    word: FiniteWord
+
+
+class WordPrefixesResult(WordFamilyRequest):
+    """Complete prefix family, including the empty prefix."""
+
+    prefixes: tuple[FiniteWord, ...]
+
+    @model_validator(mode="after")
+    def require_prefix_axis(self) -> Self:
+        letters = self.word.letters
+        if len(self.prefixes) != len(letters) + 1 or any(
+            prefix.alphabet != self.word.alphabet or prefix.letters != letters[:index]
+            for index, prefix in enumerate(self.prefixes)
+        ):
+            raise _validation_error(
+                "prefix_family_shape",
+                "prefixes must be the complete ordered prefix family",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls, request: WordFamilyRequest, prefixes: tuple[FiniteWord, ...]
+    ) -> Self:
+        return cls.model_construct(word=request.word, prefixes=prefixes)
+
+
+class WordSuffixesResult(WordFamilyRequest):
+    """Complete suffix family, including the empty suffix."""
+
+    suffixes: tuple[FiniteWord, ...]
+
+    @model_validator(mode="after")
+    def require_suffix_axis(self) -> Self:
+        letters = self.word.letters
+        if len(self.suffixes) != len(letters) + 1 or any(
+            suffix.alphabet != self.word.alphabet or suffix.letters != letters[index:]
+            for index, suffix in enumerate(self.suffixes)
+        ):
+            raise _validation_error(
+                "suffix_family_shape",
+                "suffixes must be the complete ordered suffix family",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls, request: WordFamilyRequest, suffixes: tuple[FiniteWord, ...]
+    ) -> Self:
+        return cls.model_construct(word=request.word, suffixes=suffixes)
+
+
 class FactorsLengthRequest(StrictModel):
     """Enumerate all distinct factors of one valid length."""
 
@@ -331,4 +387,7 @@ __all__ = [
     "SubstitutionFixedPointPrefixResult",
     "SubstitutionPrimitivityProfileRequest",
     "SubstitutionPrimitivityProfileResult",
+    "WordFamilyRequest",
+    "WordPrefixesResult",
+    "WordSuffixesResult",
 ]

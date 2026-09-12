@@ -13,13 +13,12 @@ from ._models import (
     SignProfileResult,
     SylvesterResult,
 )
-from .values import HadamardMatrix, SignMatrix
+from .values import MAX_HADAMARD_ORDER, HadamardMatrix, SignMatrix
 
 # Cube-root of the Gram multiply-add work budget.
 MAX_GRAM_PROFILE_AXIS = 512
 MAX_GRAM_PROFILE_MULTIPLY_ADDS = MAX_GRAM_PROFILE_AXIS**3
 MAX_GRAM_PROFILE_ENTRIES = 1_000_000
-MAX_KRONECKER_ORDER = 128
 
 
 def _require_gram_profile_admission(matrix: SignMatrix) -> None:
@@ -71,6 +70,30 @@ def _sign_matrix_from_hadamard(hadamard: HadamardMatrix) -> SignMatrix:
     """Reuse structurally validated Hadamard rows as a sign-matrix carrier."""
 
     return SignMatrix.model_construct(rows=hadamard.rows)
+
+
+def _require_kronecker_admission(
+    left: HadamardMatrix, right: HadamardMatrix
+) -> tuple[int, int]:
+    """Admit the bounded Hadamard-product carrier before recognition.
+
+    For positive factor orders, ``n^3 + m^3 <= (n*m)^3 + 1``; therefore
+    ``n*m <= N`` bounds the two exact recognitions by ``N^3 + 1`` and the
+    materialized product by ``N^2`` entries.
+    """
+
+    n, m = len(left.rows), len(right.rows)
+    product_order = n * m
+    if product_order > MAX_HADAMARD_ORDER:
+        raise OperationDomainValidationError(
+            location=("left", "rows"),
+            code="combinatorial_matrix.kronecker_output_order",
+            message=(
+                "Kronecker product order exceeds the "
+                f"{MAX_HADAMARD_ORDER}-order Hadamard carrier bound"
+            ),
+        )
+    return n, m
 
 
 __all__ = [
@@ -188,11 +211,7 @@ def kronecker(left: HadamardMatrix, right: HadamardMatrix) -> KroneckerProductRe
     """Return the Kronecker product of two Hadamard matrices as a Hadamard
     matrix, factor-to-product row/column maps, and the exact Gram
     factorization."""
-    n, m = len(left.rows), len(right.rows)
-    if n * m > MAX_KRONECKER_ORDER:
-        raise ValueError(
-            f"Kronecker product order {n * m} exceeds maximum {MAX_KRONECKER_ORDER}"
-        )
+    n, m = _require_kronecker_admission(left, right)
     left_h = recognize_hadamard(_sign_matrix_from_hadamard(left))
     right_h = recognize_hadamard(_sign_matrix_from_hadamard(right))
     a = [list(row) for row in left_h.rows]

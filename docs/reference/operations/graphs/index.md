@@ -10,6 +10,7 @@ there is no graph artifact carrier or invariant-batch registry.
 - [Graph metric operations](graph-distance-matrix.md)
 - [Graph invariants](graph-invariant-batch.md)
 - [Maximum matching](graph-maximum-matching.md)
+- [Maximum induced matching](graph-induced-matching.md)
 - [Diameter and radius](graph-metric-verification.md)
 - [Exact weighted minimum spanning tree](graph-minimum-spanning-tree.md)
 - [Small exact graph reliability](graph-reliability.md)

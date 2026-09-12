@@ -17,7 +17,7 @@ def validate_d_separation_input(
     """Validate one bounded DAG and its pairwise-disjoint node sets."""
 
     if not 1 <= variable_count <= MAX_MODEL_VARS:
-        raise ValueError("variable_count must be between 1 and 16")
+        raise ValueError(f"variable_count must be between 1 and {MAX_MODEL_VARS}")
     if len(set(edges)) != len(edges):
         raise ValueError("directed edges must be distinct")
     parents: dict[int, set[int]] = {node: set() for node in range(variable_count)}

@@ -82,7 +82,7 @@ def build_plan(
     n, m = len(map_value.source_variables), len(metric.tensor.coordinate_axis)
     if not 1 <= n <= 4 or not 1 <= m <= 4:
         reject("shape", "source and target dimensions must be between 1 and 4")
-    dag = Dag(n)
+    dag = Dag(n, reject=reject, label="rational metric pullback")
     # Metric components are authored on the target axis. Reserve their raw
     # parsing, backend conversion, and canonical recognition before any
     # substituted DAG node can be evaluated.
@@ -177,7 +177,7 @@ def build_plan(
     # expressions, not merely shared raw denominator factors, as in curvature.
     guard_values = {value for value in guards if value.numerator}
     output_denominators = {value for value in output if value.denominator}
-    if len(guard_values) + len(output_denominators) > 768:
+    if len(guard_values | output_denominators) > 768:
         reject("locus", "complete pullback locus exceeds 768 guards")
 
     def source_allocation(

@@ -138,6 +138,19 @@ def pullback_metric(
         noncanonical_message="metric and map components must be reduced canonical rational functions",
     )
     normalized = dict(zip(unique_values, components, strict=True))
+    for value in plan.guards:
+        if not normalized[value].numerator.terms:
+            if value == plan.determinant:
+                raise OperationDomainValidationError(
+                    location=("metric",),
+                    code="differential_geometry.rational_metric.pullback.singular_metric",
+                    message="metric determinant vanishes identically after substitution",
+                )
+            raise OperationDomainValidationError(
+                location=("metric",),
+                code="differential_geometry.rational_metric.pullback.undefined_metric_locus",
+                message="a required metric denominator or chart guard vanishes identically after substitution",
+            )
     guards = tuple(
         sparse_rational_polynomial_from_sympy(
             sparse_rational_polynomial_to_sympy(

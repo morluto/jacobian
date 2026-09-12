@@ -11,7 +11,10 @@ from jacobian._execution import (
     bind_request_deadline,
     request_execution,
 )
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.geometry.differential.metrics import RationalCoordinateMetric
 from jacobian.math.geometry.differential.pullback import pullback_metric
 from jacobian.math.geometry.differential.values import RationalCoordinateTensor
@@ -206,3 +209,56 @@ def test_four_dimensional_translated_map_round_trips_into_tensor_consumer() -> N
     assert all(
         not value.numerator.terms for value in derivative.lie_derivative.components
     )
+
+
+def test_inherited_guard_that_cancels_after_substitution_is_rejected() -> None:
+    u, v, w, x, y = symbols("u v w x y")
+    axis = ("u", "v", "w")
+    ones = (
+        rf(1, axis),
+        rf(0, axis),
+        rf(0, axis),
+        rf(0, axis),
+        rf(1, axis),
+        rf(0, axis),
+        rf(0, axis),
+        rf(0, axis),
+        rf(1, axis),
+    )
+    guard = rf(u - v - w, axis).numerator
+    source = RationalCoordinateMetric(
+        tensor=RationalCoordinateTensor(
+            coordinate_axis=axis,
+            variance=("COVARIANT", "COVARIANT"),
+            components=ones,
+            retained_nonzero_denominators=(guard,),
+        )
+    )
+    with pytest.raises(OperationDomainValidationError, match="vanishes identically"):
+        pullback_metric(source, map_value((x + y, x, y), ("x", "y"), axis))
+
+
+def test_pullback_dag_is_bound_to_pullback_admission_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.geometry.differential.metrics._dag import Dag
+
+    seen: list[object] = []
+    original = Dag.__init__
+
+    def capturing_init(self, dimension, *, reject=None, label=None):
+        seen.append((reject, label))
+        original(self, dimension, reject=reject, label=label)
+
+    monkeypatch.setattr(Dag, "__init__", capturing_init)
+    x = symbols("x")
+    pullback_metric(metric((1,), ("u",)), map_value((x,), ("x",), ("u",)))
+    assert seen
+    reject, label = seen[0]
+    assert reject is not None
+    assert label == "rational metric pullback"
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        reject("work", "complete rational metric pullback DAG exceeds 50,000,000 work units")
+    assert "pullback" in error.value.errors()[0]["type"]
+    assert "curvature" not in error.value.errors()[0]["type"]
+

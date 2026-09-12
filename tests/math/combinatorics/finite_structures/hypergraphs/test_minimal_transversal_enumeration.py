@@ -170,8 +170,7 @@ def test_candidate_edge_and_minimality_work_is_admitted_before_search() -> None:
     source = FiniteHypergraph(
         vertices=vertices,
         edges=tuple(
-            (f"edge{index:05d}", ("v00", "v01", "v02"))
-            for index in range(8_000)
+            (f"edge{index:05d}", ("v00", "v01", "v02")) for index in range(8_000)
         ),
     )
     with pytest.raises(OperationResourceAdmissionError, match="work"):

@@ -187,6 +187,13 @@ def test_forged_noncanonical_rationals_are_rejected_before_arithmetic() -> None:
         "probability.compound_poisson.canonical_rational"
     )
 
+    missing_den = CanonicalRational.model_construct(num=1)
+    with pytest.raises(OperationDomainValidationError) as intensity_missing:
+        compound_poisson_cumulant_prefix(missing_den, jumps, 1)
+    assert intensity_missing.value.errors()[0]["type"] == (
+        "probability.compound_poisson.canonical_rational_components"
+    )
+
     forged_value = FiniteDistributionAtom.model_construct(
         value=CanonicalRational.model_construct(num=2, den=2),
         probability=_q(Fraction(1)),
@@ -229,6 +236,22 @@ def test_jump_height_outside_execution_envelope_is_a_resource_error() -> None:
     assert exc_info.value.errors()[0]["type"] == (
         "probability.compound_poisson.input_height_bound"
     )
+
+
+def test_zero_mass_atoms_are_excluded_from_the_power_plan() -> None:
+    jumps = FiniteRationalDistribution(
+        atoms=(
+            FiniteDistributionAtom(
+                value=_q(Fraction(0)), probability=_q(Fraction(1))
+            ),
+            FiniteDistributionAtom(
+                value=_q(Fraction(10**127)), probability=_q(Fraction(0))
+            ),
+        )
+    )
+    result = compound_poisson_cumulant_prefix(_q(Fraction(3)), jumps, 5)
+    assert [row.jump_raw_moment.as_fraction() for row in result.cumulants] == [0] * 5
+    assert [row.cumulant.as_fraction() for row in result.cumulants] == [0] * 5
 
 
 def test_jump_law_schema_publishes_the_execution_envelope() -> None:

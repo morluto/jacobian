@@ -185,8 +185,8 @@ def _require_canonical_rational(
             code="probability.compound_poisson.canonical_rational_type",
             message=f"{label} must be a canonical rational",
         )
-    numerator = value.num
-    denominator = value.den
+    numerator = getattr(value, "num", None)
+    denominator = getattr(value, "den", None)
     if type(numerator) is not int or type(denominator) is not int:
         raise _domain_error(
             location=location,
@@ -291,6 +291,7 @@ def _admit_and_plan(
                 code="probability.compound_poisson.nonnegative_probability",
                 message="jump probabilities must be nonnegative canonical rationals",
             )
+    active_atoms = tuple(atom for atom in atoms if atom.probability.num != 0)
     try:
         require_input_distribution(
             atoms,
@@ -316,7 +317,7 @@ def _admit_and_plan(
             code="probability.compound_poisson.distribution_admission",
             message=detail,
         ) from exc
-    products = len(atoms) * max_order
+    products = len(active_atoms) * max_order
     if products > MAX_COMPOUND_POISSON_MOMENT_PRODUCTS:
         raise _resource_error(
             location=("jump_distribution", "max_order"),
@@ -324,10 +325,10 @@ def _admit_and_plan(
             message="compound-Poisson moment work exceeds the admitted bound",
         )
 
-    values = tuple(atom.value.as_fraction() for atom in atoms)
-    probabilities = tuple(atom.probability.as_fraction() for atom in atoms)
+    values = tuple(atom.value.as_fraction() for atom in active_atoms)
+    probabilities = tuple(atom.probability.as_fraction() for atom in active_atoms)
     intensity_value = intensity.as_fraction()
-    powers = [Fraction(1) for _ in atoms]
+    powers = [Fraction(1) for _ in active_atoms]
     rows: list[tuple[int, Fraction, Fraction]] = []
     for order in range(1, max_order + 1):
         for index, value in enumerate(values):

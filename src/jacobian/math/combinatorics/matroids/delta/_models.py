@@ -18,6 +18,95 @@ from jacobian.math.combinatorics.matroids.delta.values import (
 )
 
 
+def require_twist_subset(
+    delta_matroid: FiniteDeltaMatroid, subset: tuple[int, ...]
+) -> None:
+    """Validate the canonical twist axis for native and wire callers."""
+
+    if any(type(index) is not int for index in subset):
+        raise _validation_error("subset_index_type", "twist indices must be integers")
+    if subset != tuple(sorted(set(subset))):
+        raise _validation_error(
+            "subset_not_canonical", "twist subset must be sorted and distinct"
+        )
+    if any(index < 0 or index >= len(delta_matroid.ground) for index in subset):
+        raise _validation_error(
+            "subset_out_of_range", "twist subset index is outside the ground set"
+        )
+
+
+class DeltaMatroidTwistRequest(StrictModel):
+    """Twist a delta-matroid by a canonical ground-index subset."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Twist one complete finite delta-matroid by a sorted ground-index "
+                "subset. Source recognition and the twisted family share the "
+                f"{MAX_DELTA_MEMBERSHIPS}-membership, {MAX_DELTA_LABEL_BYTES}-byte "
+                "label, and "
+                f"{MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS}-candidate envelopes."
+            ),
+            "admission_limits": {
+                "max_feasible_set_memberships": MAX_DELTA_MEMBERSHIPS,
+                "max_ground_label_utf8_bytes": MAX_DELTA_LABEL_BYTES,
+                "max_symmetric_exchange_candidate_checks_per_replay": (
+                    MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS
+                ),
+            },
+        }
+    )
+
+    delta_matroid: FiniteDeltaMatroid = Field(
+        description=(
+            "Canonical finite delta-matroid. Twist admission allows at most "
+            f"{MAX_DELTA_MEMBERSHIPS} total feasible-row memberships, "
+            f"{MAX_DELTA_LABEL_BYTES} UTF-8 ground-label bytes, and "
+            f"{MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS} symmetric-exchange candidate "
+            "checks before using the source family."
+        )
+    )
+    subset: tuple[int, ...] = Field(default=())
+
+    @model_validator(mode="after")
+    def require_canonical_subset(self) -> Self:
+        require_twist_subset(self.delta_matroid, self.subset)
+        return self
+
+
+class DeltaMatroidTwistResult(DeltaMatroidTwistRequest):
+    """The exact feasible family obtained by symmetric-difference twist."""
+
+    twisted: FiniteDeltaMatroid
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        delta_matroid: FiniteDeltaMatroid,
+        subset: tuple[int, ...],
+        twisted: FiniteDeltaMatroid,
+    ) -> Self:
+        return cls.model_construct(
+            delta_matroid=delta_matroid,
+            subset=subset,
+            twisted=twisted,
+        )
+
+
+class DeltaMatroidWidthRequest(StrictModel):
+    """Compute the width (largest minus smallest feasible-set size)."""
+
+    delta_matroid: FiniteDeltaMatroid
+
+
+class DeltaMatroidWidthResult(DeltaMatroidWidthRequest):
+    width: int = Field(ge=0)
+
+    @classmethod
+    def _from_kernel(cls, delta_matroid: FiniteDeltaMatroid, width: int) -> Self:
+        return cls.model_construct(delta_matroid=delta_matroid, width=width)
+
+
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"delta_matroid.{reason}", message)
 
@@ -104,4 +193,8 @@ class DeltaMatroidRecognitionResult(StrictModel):
 __all__ = [
     "DeltaMatroidFromFeasibleSetsRequest",
     "DeltaMatroidRecognitionResult",
+    "DeltaMatroidTwistRequest",
+    "DeltaMatroidTwistResult",
+    "DeltaMatroidWidthRequest",
+    "DeltaMatroidWidthResult",
 ]

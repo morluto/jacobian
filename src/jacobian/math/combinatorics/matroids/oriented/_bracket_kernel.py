@@ -297,11 +297,20 @@ def _integer_product_digit_upper_bound(left: int, right: int) -> int:
 
     left_digits = _integer_digit_upper_bound(left)
     right_digits = _integer_digit_upper_bound(right)
-    if abs(left) == 1:
+    if abs(left) <= 1:
         return right_digits
-    if abs(right) == 1:
+    if abs(right) <= 1:
         return left_digits
-    return left_digits + right_digits
+    naive = left_digits + right_digits
+    if naive <= MAX_BRACKET_COEFFICIENT_DIGITS:
+        return naive
+    # Adding widths overcounts by one when the product stays below 10**MAX.
+    # Compare against the cached envelope instead of rejecting those products.
+    left_abs = abs(left)
+    right_abs = abs(right)
+    if left_abs <= (_CANONICAL_INTEGER_LIMIT - 1) // right_abs:
+        return MAX_BRACKET_COEFFICIENT_DIGITS
+    return naive
 
 
 def _bounded_fraction_pair_sum(left: Fraction, right: Fraction) -> Fraction | None:

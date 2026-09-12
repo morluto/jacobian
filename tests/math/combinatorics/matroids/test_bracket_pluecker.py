@@ -964,3 +964,36 @@ def test_pair_reduction_reuses_the_canonical_integer_limit() -> None:
     assert _bounded_integer_sum(1, -(10**MAX_CANONICAL_INTEGER_DIGITS)) == (
         1 - 10**MAX_CANONICAL_INTEGER_DIGITS
     )
+
+
+def test_syzygy_admits_near_bound_denominator_products() -> None:
+    """Products 3N and 2N that still have 32,768 digits remain representable."""
+
+    modulus = 10 ** (MAX_CANONICAL_INTEGER_DIGITS - 1) + 1
+    relation = grassmann_pluecker_relation(
+        GrassmannPlueckerRelationRequest(
+            ground_size=5,
+            indices=(0, 1, 2, 3, 4),
+            family="SHARED_INDEX_THREE_TERM",
+        )
+    )
+    residual = bracket_syzygy_residual(
+        BracketSyzygyResidualRequest(
+            target=BracketPolynomial(ground_size=5, terms=()),
+            terms=(
+                (
+                    CanonicalRational(num=-modulus, den=2),
+                    BracketMonomial(factors=()),
+                    relation,
+                ),
+                (
+                    CanonicalRational(num=modulus, den=3),
+                    BracketMonomial(factors=()),
+                    relation,
+                ),
+            ),
+        )
+    )
+    masses = {term.coefficient.as_fraction() for term in residual.terms}
+    assert masses <= {Fraction(modulus, 6), Fraction(-modulus, 6)}
+    assert masses

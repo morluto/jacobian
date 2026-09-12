@@ -46,11 +46,15 @@ each create their own 50,000,000-unit work ledger; those phases do not share
 one envelope, so a request can consume up to that allowance twice. The
 recognition ledger charges only coprimality of authored source components.
 DAG-node growth, determinant and cofactor expansion, derivatives, rational
-products, complete tensor output, retained locus guards, and the 16,384-node /
-256-term / 128-digit / 768-guard caps belong to the curvature-plan ledger.
-Four coordinate axes are a metric-model cap applied during
-`RationalCoordinateMetric` validation, before any curvature-plan ledger is
-created. Transport byte limits are not used as mathematical admission
+products, complete tensor output, and the 16,384-node / 256-term / 128-digit
+caps belong to the curvature-plan ledger. Authored
+`retained_nonzero_denominators` are capped at 768 guards during
+`RationalCoordinateTensor` model validation (`preflight_tensor_shape`), before
+any curvature-plan ledger exists. The curvature plan separately caps the
+complete output locus — inherited source guards plus generated denominator
+identities — at 768 guards. Four coordinate axes are a metric-model cap applied
+during `RationalCoordinateMetric` validation, before any curvature-plan ledger
+is created. Transport byte limits are not used as mathematical admission
 quantities. A request inherits `started_at + 120` as the owner wall envelope;
 a shorter caller deadline wins.
 

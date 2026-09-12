@@ -2,6 +2,8 @@
 
 from fractions import Fraction
 
+from pydantic import ValidationError
+
 from jacobian._exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
     CanonicalRational,
@@ -27,29 +29,86 @@ class RationalLaurentMultiplyRequest(StrictModel):
     right: RationalLaurentPolynomial
 
 
+def _fraction_component_digits(value: Fraction) -> int:
+    if not value:
+        return 1
+    return max(
+        len(format_canonical_integer(abs(value.numerator))),
+        len(format_canonical_integer(value.denominator)),
+    )
+
+
+def _monomial_coefficient_digits(
+    left: RationalLaurentPolynomial, right: RationalLaurentPolynomial
+) -> (
+    tuple[
+        int,
+        RationalLaurentPolynomialTerm,
+        RationalLaurentPolynomial,
+        tuple[Fraction, ...],
+    ]
+    | None
+):
+    """Admit monomial scale products once, with cancellation checkpoints."""
+
+    for monomial, other in ((left, right), (right, left)):
+        if len(monomial.terms) != 1:
+            continue
+        factor = monomial.terms[0].coefficient.as_fraction()
+        scaled: list[Fraction] = []
+        height = 1
+        for index, term in enumerate(other.terms):
+            if index % 128 == 0:
+                request_checkpoint("during Laurent monomial height admission")
+            product = factor * term.coefficient.as_fraction()
+            scaled.append(product)
+            digits = _fraction_component_digits(product)
+            if digits > height:
+                height = digits
+        return height, monomial.terms[0], other, tuple(scaled)
+    return None
+
+
+def _operand_coefficient_digits(
+    terms: tuple[RationalLaurentPolynomialTerm, ...],
+) -> tuple[int, bool]:
+    height = 1
+    integer_coefficients = True
+    for index, term in enumerate(terms):
+        if index % 128 == 0:
+            request_checkpoint("during Laurent coefficient-height admission")
+        digits = canonical_rational_component_digits(term.coefficient)
+        if digits > height:
+            height = digits
+        if term.coefficient.den != 1:
+            integer_coefficients = False
+    return height, integer_coefficients
+
+
 def _maximum_coefficient_digits(
     left: RationalLaurentPolynomial, right: RationalLaurentPolynomial
 ) -> int:
     """Bound one collected coefficient before exact convolution begins."""
 
     collisions = min(len(left.terms), len(right.terms))
-    left_digits = max(
-        (canonical_rational_component_digits(term.coefficient) for term in left.terms),
-        default=1,
-    )
-    right_digits = max(
-        (canonical_rational_component_digits(term.coefficient) for term in right.terms),
-        default=1,
-    )
+    left_digits, left_integers = _operand_coefficient_digits(left.terms)
+    right_digits, right_integers = _operand_coefficient_digits(right.terms)
     addition_digits = len(str(collisions)) if collisions > 1 else 0
-    return collisions * (left_digits + right_digits) + addition_digits
+    product_digits = left_digits + right_digits
+    if left_integers and right_integers:
+        return product_digits + addition_digits
+    return collisions * product_digits + addition_digits
 
 
 def _result_from_coefficients(
     variables: tuple[str, ...], coefficients: dict[tuple[int, ...], Fraction]
 ) -> RationalLaurentPolynomial:
     terms: list[RationalLaurentPolynomialTerm] = []
-    for exponents, value in sorted(coefficients.items(), reverse=True):
+    for index, (exponents, value) in enumerate(
+        sorted(coefficients.items(), reverse=True)
+    ):
+        if index % 128 == 0:
+            request_checkpoint("during Laurent result construction")
         if not value:
             continue
         component_digits = max(
@@ -73,9 +132,69 @@ def _result_from_coefficients(
     return RationalLaurentPolynomial(variables=variables, terms=tuple(terms))
 
 
+def _admit_operand(
+    operand: RationalLaurentPolynomial, *, location: str
+) -> RationalLaurentPolynomial:
+    if not isinstance(operand, RationalLaurentPolynomial):
+        raise OperationDomainValidationError(
+            location=(location,),
+            code="polynomial.laurent.operand_type",
+            message="Laurent factors must be canonical rational Laurent polynomials",
+        )
+    raw_terms = getattr(operand, "terms", None)
+    if type(raw_terms) is not tuple:
+        raise OperationDomainValidationError(
+            location=(location, "terms"),
+            code="polynomial.laurent.operand_shape",
+            message="Laurent factors must expose canonical term fields",
+        )
+    if len(raw_terms) > MAX_POLYNOMIAL_TERMS:
+        raise OperationDomainValidationError(
+            location=(location, "terms"),
+            code="polynomial.laurent.term_bound",
+            message=f"Laurent factors admit at most {MAX_POLYNOMIAL_TERMS} terms",
+        )
+    admitted_terms: list[RationalLaurentPolynomialTerm] = []
+    try:
+        for index, term in enumerate(raw_terms):
+            if index % 128 == 0:
+                request_checkpoint("during Laurent operand reconstruction")
+            admitted_terms.append(
+                RationalLaurentPolynomialTerm.model_validate(
+                    {
+                        "coefficient": {
+                            "num": getattr(term.coefficient, "num", None),
+                            "den": getattr(term.coefficient, "den", None),
+                        },
+                        "exponents": getattr(term, "exponents", None),
+                    }
+                )
+            )
+        return RationalLaurentPolynomial(
+            domain=getattr(operand, "domain", "QQ"),
+            variables=getattr(operand, "variables", ()),
+            terms=tuple(admitted_terms),
+        )
+    except (AttributeError, TypeError) as error:
+        raise OperationDomainValidationError(
+            location=(location,),
+            code="polynomial.laurent.operand_shape",
+            message="Laurent factors must expose canonical term fields",
+        ) from error
+    except ValidationError as error:
+        detail = error.errors()[0]
+        raise OperationDomainValidationError(
+            location=(location, *tuple(detail.get("loc", ()))),
+            code=str(detail["type"]),
+            message=str(detail["msg"]),
+        ) from error
+
+
 def rational_laurent_multiply(
     left: RationalLaurentPolynomial, right: RationalLaurentPolynomial
 ) -> RationalLaurentPolynomial:
+    left = _admit_operand(left, location="left")
+    right = _admit_operand(right, location="right")
     if left.variables != right.variables:
         raise OperationDomainValidationError(
             location=("right", "variables"),
@@ -108,7 +227,12 @@ def rational_laurent_multiply(
             code="polynomial.laurent.convolution_bound",
             message=f"sparse convolution requires {work} term products; maximum is {MAX_POLYNOMIAL_TERMS}",
         )
-    coefficient_digits = _maximum_coefficient_digits(left, right)
+    monomial_scale = _monomial_coefficient_digits(left, right)
+    coefficient_digits = (
+        monomial_scale[0]
+        if monomial_scale is not None
+        else _maximum_coefficient_digits(left, right)
+    )
     if coefficient_digits > MAX_CANONICAL_RATIONAL_DIGITS:
         raise OperationResourceAdmissionError(
             location=("right", "terms"),
@@ -119,13 +243,14 @@ def rational_laurent_multiply(
 
     # A monomial only shifts the other support and scales its coefficients;
     # avoid paying for a general pair convolution in that common case.
-    if len(left.terms) == 1 or len(right.terms) == 1:
-        monomial, source = (
-            (left.terms[0], right) if len(left.terms) == 1 else (right.terms[0], left)
-        )
-        factor = monomial.coefficient.as_fraction()
+    if monomial_scale is not None:
+        monomial, source, scaled_coefficients = monomial_scale[1:]
         monomial_coefficients: dict[tuple[int, ...], Fraction] = {}
-        for term in source.terms:
+        for index, (term, product) in enumerate(
+            zip(source.terms, scaled_coefficients, strict=True)
+        ):
+            if index % 128 == 0:
+                request_checkpoint("during Laurent monomial multiplication")
             exponents = tuple(
                 a + b for a, b in zip(monomial.exponents, term.exponents, strict=True)
             )
@@ -135,7 +260,7 @@ def rational_laurent_multiply(
                     code="polynomial.laurent.exponent_growth",
                     message="product exponent exceeds the Laurent representation bound",
                 )
-            monomial_coefficients[exponents] = factor * term.coefficient.as_fraction()
+            monomial_coefficients[exponents] = product
         result = _result_from_coefficients(left.variables, monomial_coefficients)
         request_checkpoint("after Laurent monomial result construction")
         return result

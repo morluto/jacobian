@@ -788,14 +788,17 @@ def minimum_generalized_exact_cover(  # noqa: C901
     item_count = primary_count + len(instance.secondary_items)
     primary_items = frozenset(instance.primary_items)
     source_rows = instance.rows
-    source_incidence_count = sum(len(row.items) for row in source_rows)
     # Rows without a primary item cannot improve feasibility or a minimum
     # witness: selecting one covers no required item and can only add
     # secondary conflicts. Remove them before sizing the bitset search, while
     # retaining the source instance for the result and its coverage ledger.
-    active_rows = tuple(
-        row for row in source_rows if primary_items.intersection(row.items)
-    )
+    source_incidence_count = 0
+    active_rows_list = []
+    for row in source_rows:
+        source_incidence_count += len(row.items)
+        if primary_items.intersection(row.items):
+            active_rows_list.append(row)
+    active_rows = tuple(active_rows_list)
     primary_row_degrees = dict.fromkeys(instance.primary_items, 0)
     for row in active_rows:
         for row_item in row.items:

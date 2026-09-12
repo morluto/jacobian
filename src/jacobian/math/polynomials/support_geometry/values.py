@@ -242,13 +242,13 @@ class PolynomialWeightProfile(StrictModel):
 
     polynomial: RationalPolynomial
     weight: tuple[StrictInt, ...] = Field(min_length=0)
-    minimum_weight: int
-    minimizing_exponents: tuple[tuple[int, ...], ...] = Field(
+    minimum_weight: StrictInt
+    minimizing_exponents: tuple[tuple[StrictInt, ...], ...] = Field(
         max_length=MAX_WEIGHT_PROFILE_TERMS
     )
-    weight_layers: tuple[tuple[int, tuple[tuple[int, ...], ...]], ...] = Field(
-        max_length=MAX_WEIGHT_PROFILE_TERMS
-    )
+    weight_layers: tuple[
+        tuple[StrictInt, tuple[tuple[StrictInt, ...], ...]], ...
+    ] = Field(max_length=MAX_WEIGHT_PROFILE_TERMS)
 
     @model_validator(mode="after")
     def bind_profile_to_source(self) -> Self:

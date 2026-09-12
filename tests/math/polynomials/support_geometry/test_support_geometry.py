@@ -293,6 +293,24 @@ class TestSupport:
             with pytest.raises(ValidationError):
                 model.model_validate_json(json.dumps(payload))
 
+    def test_profile_integers_reject_json_boolean_coercion(self) -> None:
+        source = _polynomial((_term(1, [2, 0]), _term(1, [0, 2])), VARS)
+        profile = compute_weight_profile(
+            WeightProfileRequest(polynomial=source, weight=(1, 2))
+        )
+        payload = profile.model_dump(mode="json")
+        payload["minimum_weight"] = True
+        with pytest.raises(ValidationError):
+            PolynomialWeightProfile.model_validate_json(json.dumps(payload))
+        payload = profile.model_dump(mode="json")
+        payload["weight_layers"][0][0] = True
+        with pytest.raises(ValidationError):
+            PolynomialWeightProfile.model_validate_json(json.dumps(payload))
+        payload = profile.model_dump(mode="json")
+        payload["minimizing_exponents"][0][0] = True
+        with pytest.raises(ValidationError):
+            PolynomialWeightProfile.model_validate_json(json.dumps(payload))
+
     def test_verifiers_reject_hostile_monic_subtype_without_raising(self) -> None:
         from jacobian._exact import CanonicalRational
         from jacobian.math.polynomials.values import (
@@ -712,6 +730,56 @@ class TestNativeSurface:
             OperationDomainValidationError, match="weight vector length"
         ):
             initial_form(nonzero, (1,))
+
+    def test_native_weighted_admission_rejects_before_source_rebuild(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from jacobian._exact import CanonicalRational
+        from jacobian.math.polynomials.support_geometry import operations
+        from jacobian.math.polynomials.support_geometry._models import (
+            MAX_WEIGHTED_COEFFICIENT_DIGITS,
+            MAX_WEIGHTED_POLYNOMIAL_TERMS,
+        )
+        from jacobian.math.polynomials.values import (
+            RationalPolynomialTerm,
+            SparseRationalPolynomial,
+        )
+
+        def fail(*_args: object, **_kwargs: object) -> object:
+            raise AssertionError("oversized source reached rebuild")
+
+        monkeypatch.setattr(operations, "_bounded_weighted_source", fail)
+        oversized_terms = tuple(
+            RationalPolynomialTerm.model_construct(
+                coefficient=CanonicalRational(num=1, den=1),
+                exponents=(index, 0),
+            )
+            for index in range(MAX_WEIGHTED_POLYNOMIAL_TERMS + 1)
+        )
+        oversized = RationalPolynomial.model_construct(
+            domain="QQ",
+            variables=VARS,
+            polynomial=SparseRationalPolynomial.model_construct(terms=oversized_terms),
+        )
+        with raises_domain_code("polynomial_support_geometry.weighted_term_count_exceeded"):
+            weight_profile(oversized, (1, 0))
+
+        tall = RationalPolynomial.model_construct(
+            domain="QQ",
+            variables=VARS,
+            polynomial=SparseRationalPolynomial.model_construct(
+                terms=(
+                    RationalPolynomialTerm.model_construct(
+                        coefficient=CanonicalRational.model_construct(
+                            num=10**MAX_WEIGHTED_COEFFICIENT_DIGITS, den=1
+                        ),
+                        exponents=(1, 0),
+                    ),
+                )
+            ),
+        )
+        with raises_domain_code("polynomial_support_geometry.weighted_coefficient_bound"):
+            initial_form(tall, (1, 0))
 
 
 class TestSupportCrossFieldValidation:

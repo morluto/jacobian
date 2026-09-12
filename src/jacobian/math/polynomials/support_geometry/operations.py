@@ -29,7 +29,6 @@ from jacobian.math.polynomials.support_geometry.values import (
 )
 from jacobian.math.polynomials.values import (
     MAX_POLYNOMIAL_EXPONENT,
-    MAX_POLYNOMIAL_TERMS,
     RationalPolynomial,
     RationalPolynomialTerm,
     SparseRationalPolynomial,
@@ -118,11 +117,34 @@ def _require_weighted_polynomial_domain(
 def _admit_weighted_polynomial(
     polynomial: RationalPolynomial, weight: tuple[int, ...], *, label: str
 ) -> RationalPolynomial:
-    source = _bounded_weighted_source(
-        polynomial,
-        maximum_terms=MAX_POLYNOMIAL_TERMS,
-        maximum_coefficient_digits=None,
-    )
+    raw_terms = getattr(getattr(polynomial, "polynomial", None), "terms", None)
+    if type(raw_terms) is tuple and len(raw_terms) > MAX_WEIGHTED_POLYNOMIAL_TERMS:
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="polynomial_support_geometry.weighted_term_count_exceeded",
+            message=(
+                f"{label} requests are limited to {MAX_WEIGHTED_POLYNOMIAL_TERMS} terms"
+            ),
+        )
+    if type(raw_terms) is tuple:
+        for term in raw_terms:
+            coefficient = getattr(term, "coefficient", None)
+            numerator = getattr(coefficient, "num", None)
+            denominator = getattr(coefficient, "den", None)
+            if type(numerator) is not int or type(denominator) is not int:
+                continue
+            if not _within_digit_bound(
+                numerator, MAX_WEIGHTED_COEFFICIENT_DIGITS
+            ) or not _within_digit_bound(denominator, MAX_WEIGHTED_COEFFICIENT_DIGITS):
+                raise OperationDomainValidationError(
+                    location=("polynomial",),
+                    code="polynomial_support_geometry.weighted_coefficient_bound",
+                    message=(
+                        f"{label} coefficients are limited to "
+                        f"{MAX_WEIGHTED_COEFFICIENT_DIGITS} digits"
+                    ),
+                )
+    source = _bounded_weighted_source(polynomial)
     if source is None:
         raise OperationDomainValidationError(
             location=("polynomial",),

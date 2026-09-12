@@ -87,7 +87,10 @@ def symbol_parikh_profile(
     extension_cells = len(reachable) * comb(length + alphabet_size - 1, alphabet_size)
     extension_coordinate_work = extension_cells * alphabet_size * max(1, alphabet_size)
     output_materialization_work = output_bound * max(1, alphabet_size)
-    work_bound = extension_coordinate_work + output_materialization_work
+    reachability_work = len(reachable) * alphabet_size
+    work_bound = (
+        reachability_work + extension_coordinate_work + output_materialization_work
+    )
     if output_bound > MAX_SYMBOL_PARIKH_CELLS or work_bound > MAX_SYMBOL_PARIKH_DP_WORK:
         raise OperationResourceAdmissionError(
             location=("word_length",),

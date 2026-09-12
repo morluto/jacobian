@@ -129,3 +129,37 @@ def test_one_symbol_profile_retains_its_axis_at_the_length_limit() -> None:
     assert result.alphabet == (0,)
     assert result.cells[0].symbol_counts == (1_000,)
     assert result.cells[0].multiplicity == 1
+
+
+def test_symbol_profile_merges_many_distinct_transition_signatures() -> None:
+    state_count = 8
+    transitions = tuple(
+        DFATransition(
+            source=source,
+            symbol=symbol,
+            target=(2 * source + symbol) % state_count,
+        )
+        for source in range(state_count)
+        for symbol in range(2)
+    )
+    dfa = DFA(
+        state_count=state_count,
+        alphabet_size=2,
+        transitions=transitions,
+        initial_state=0,
+        accepting_states=tuple(range(state_count)),
+    )
+
+    result = symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=10))
+    transition_signatures: set[tuple[int, ...]] = set()
+    for word in product(range(2), repeat=10):
+        state = dfa.initial_state
+        signature = [0] * len(transitions)
+        for symbol in word:
+            transition_index = 2 * state + symbol
+            signature[transition_index] += 1
+            state = transitions[transition_index].target
+        transition_signatures.add(tuple(signature))
+
+    assert len(result.cells) == 11
+    assert len(transition_signatures) == 617

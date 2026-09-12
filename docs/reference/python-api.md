@@ -16,6 +16,11 @@ matrix = sympy.Matrix([[1, 2], [3, 4]])
 determinant = matrices.determinant(matrix)
 ```
 
+The polynomial expression normalizer is available natively as
+`polynomials.normalize_polynomial_expression`. It accepts the same typed
+`PolynomialExpressionNormalizeRequest` used by the catalog and never parses or
+evaluates caller-authored source strings.
+
 Each public `jacobian.math.<domain>` module declares its supported names in
 `__all__`; that is the authoritative native API. Functions accept domain values
 or a maintained backend type when it already carries the complete mathematical

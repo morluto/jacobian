@@ -200,14 +200,6 @@ def _run(payload: dict[str, Any]) -> dict[str, Any]:
     fractions = payload["fractions"]
     determinants = payload["determinants"]
     cache, _variable_count = _expand_nodes(payload)
-    if not isinstance(determinants, list) or any(
-        type(index) is not int or index < 0 or index >= len(cache)
-        for index in determinants
-    ):
-        raise ValueError("malformed determinant request")
-    for index in determinants:
-        if cache[index].is_zero:
-            return {"status": "singular"}
     if not isinstance(fractions, list):
         raise ValueError("malformed fraction request")
     cancelled: list[dict[str, Any]] = []
@@ -222,11 +214,19 @@ def _run(payload: dict[str, Any]) -> dict[str, Any]:
         ):
             raise ValueError("malformed fraction request")
         if cache[pair[1]].is_zero:
-            return {"status": "singular"}
+            return {"status": "undefined"}
         numerator, denominator = _cancel(cache[pair[0]], cache[pair[1]])
         cancelled.append(
             {"numerator": _dump(numerator), "denominator": _dump(denominator)}
         )
+    if not isinstance(determinants, list) or any(
+        type(index) is not int or index < 0 or index >= len(cache)
+        for index in determinants
+    ):
+        raise ValueError("malformed determinant request")
+    for index in determinants:
+        if cache[index].is_zero:
+            return {"status": "singular"}
     return {
         "status": "ok",
         "fractions": cancelled,

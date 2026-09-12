@@ -421,6 +421,7 @@ def enumerate_fixed_length_cycles(
     request_checkpoint("before fixed-length cycle enumeration")
     plan = _admit_fixed_cycle_enumeration(graph, cycle_length, chordless=chordless)
     if plan is None:
+        request_checkpoint("before empty fixed-length cycle result construction")
         return _empty_cycle_enumeration_result(graph, cycle_length, chordless=chordless)
     adjacency = plan.adjacency
     edge_set = {frozenset(edge) for edge in graph.edges}
@@ -515,26 +516,41 @@ class _FixedCyclePlan:
     core_vertices: tuple[str, ...]
 
 
-def _core_is_complete_multipartite(
+def _complete_multipartite_part_sizes(
     core_vertices: tuple[str, ...],
     adjacency_sets: dict[str, set[str]],
-) -> bool:
-    """Return whether the 2-core is a complete multipartite graph."""
+) -> tuple[int, ...] | None:
+    """Return independent-set sizes when the 2-core is complete multipartite."""
 
     if not core_vertices:
-        return True
+        return ()
     vertex_set = set(core_vertices)
     parts: dict[frozenset[str], set[str]] = {}
     for vertex in core_vertices:
         neighbors = frozenset(adjacency_sets[vertex])
         parts.setdefault(neighbors, set()).add(vertex)
+    sizes: list[int] = []
     for neighbors, part in parts.items():
         expected_neighbors = vertex_set - part
         if neighbors != expected_neighbors:
-            return False
+            return None
         if any(adjacency_sets[vertex] != expected_neighbors for vertex in part):
-            return False
-    return True
+            return None
+        sizes.append(len(part))
+    return tuple(sizes)
+
+
+def _chordless_four_cycle_count(part_sizes: tuple[int, ...]) -> int:
+    """Count induced 4-cycles in a complete multipartite graph."""
+
+    count = 0
+    for left_index, left in enumerate(part_sizes):
+        left_pairs = left * (left - 1) // 2
+        if left_pairs == 0:
+            continue
+        for right in part_sizes[left_index + 1 :]:
+            count += left_pairs * (right * (right - 1) // 2)
+    return count
 
 
 def _reject_fixed_cycle_resource(code: str, message: str) -> None:
@@ -605,30 +621,44 @@ def _admit_fixed_cycle_enumeration(
     max_core_degree = max(
         (len(neighbors) for neighbors in adjacency_sets.values()), default=0
     )
-    # Complete-multipartite 2-cores (cliques, complete bipartite graphs, ...)
-    # have no induced cycle of length 5 or more: every longer simple cycle
-    # uses a nonconsecutive cross-part edge. Detecting that partition is
-    # linear in the core adjacency and returns the exact empty chordless
-    # family instead of inheriting a complete-graph traversal bound.
-    if (
-        chordless
-        and cycle_length >= 5
-        and _core_is_complete_multipartite(core_vertices, adjacency_sets)
-    ):
-        _admit_fixed_cycle_result(
-            graph,
-            cycle_length,
-            cycle_upper_bound=0,
-            source_characters=source_characters,
-            largest_label=largest_label,
-        )
-        return None
+    part_sizes = (
+        _complete_multipartite_part_sizes(core_vertices, adjacency_sets)
+        if chordless
+        else None
+    )
+    chordless_four_cycle_bound: int | None = None
+    # Complete-multipartite 2-cores have no induced cycle of length 5 or more,
+    # and their induced 4-cycles are exactly the 2+2 selections from distinct
+    # parts. Empty families and the exact C4 count are therefore linear in the
+    # core adjacency instead of inheriting a complete-graph traversal bound.
+    if chordless and part_sizes is not None:
+        if cycle_length >= 5:
+            _admit_fixed_cycle_result(
+                graph,
+                cycle_length,
+                cycle_upper_bound=0,
+                source_characters=source_characters,
+                largest_label=largest_label,
+            )
+            return None
+        if cycle_length == 4:
+            chordless_four_cycle_bound = _chordless_four_cycle_count(part_sizes)
+            if chordless_four_cycle_bound == 0:
+                _admit_fixed_cycle_result(
+                    graph,
+                    cycle_length,
+                    cycle_upper_bound=0,
+                    source_characters=source_characters,
+                    largest_label=largest_label,
+                )
+                return None
     # A complete 2-core is a clique: every simple k-cycle with k >= 4 has a
     # chord. Chordless enumeration therefore returns the empty family after a
     # linear core inspection instead of inheriting the all-simple-cycle bound.
     if (
         chordless
         and cycle_length >= 4
+        and chordless_four_cycle_bound is None
         and core_order >= 2
         and max_core_degree == core_order - 1
         and all(
@@ -682,6 +712,8 @@ def _admit_fixed_cycle_enumeration(
         + 3 * (vertex_count + len(graph.edges))
     )
     cycle_upper_bound = min(complete_cycle_upper_bound, directed_paths)
+    if chordless_four_cycle_bound is not None:
+        cycle_upper_bound = chordless_four_cycle_bound
     if min(complete_work, topology_work) > MAX_FIXED_CYCLE_WORK:
         _reject_fixed_cycle_resource(
             "cycle_enumeration.work_bound",
@@ -786,6 +818,17 @@ def _empty_cycle_enumeration_result(
 ) -> FixedLengthCycleEnumerationResult:
     """Construct an admitted empty family with all source axes retained."""
 
+    vertex_incidence: list[CycleIncidenceRow] = []
+    for index, vertex in enumerate(graph.vertices):
+        if index % 64 == 0:
+            request_checkpoint("during empty fixed-length cycle incidence assembly")
+        vertex_incidence.append(CycleIncidenceRow(source=(vertex,), cycle_indices=()))
+    edge_incidence: list[CycleIncidenceRow] = []
+    for index, edge in enumerate(graph.edges):
+        if index % 64 == 0:
+            request_checkpoint("during empty fixed-length cycle incidence assembly")
+        edge_incidence.append(CycleIncidenceRow(source=edge, cycle_indices=()))
+    request_checkpoint("after empty fixed-length cycle incidence assembly")
     return FixedLengthCycleEnumerationResult._from_kernel(
         graph=graph,
         cycle_length=cycle_length,
@@ -793,11 +836,6 @@ def _empty_cycle_enumeration_result(
             CycleFamilyKind.CHORDLESS if chordless else CycleFamilyKind.SIMPLE
         ),
         cycles=(),
-        vertex_incidence=tuple(
-            CycleIncidenceRow(source=(vertex,), cycle_indices=())
-            for vertex in graph.vertices
-        ),
-        edge_incidence=tuple(
-            CycleIncidenceRow(source=edge, cycle_indices=()) for edge in graph.edges
-        ),
+        vertex_incidence=tuple(vertex_incidence),
+        edge_incidence=tuple(edge_incidence),
     )

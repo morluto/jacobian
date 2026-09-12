@@ -274,6 +274,47 @@ def test_complete_graph_chordless_four_cycles_are_empty_without_simple_bound() -
     assert len(result.edge_incidence) == 231
 
 
+def test_complete_bipartite_chordless_four_cycles_use_the_exact_count() -> None:
+    left = tuple(f"a{index:02}" for index in range(11))
+    right = tuple(f"b{index:02}" for index in range(11))
+    vertices = left + right
+    graph = SimpleUndirectedGraph(
+        vertices=vertices,
+        edges=tuple((a, b) for a in left for b in right),
+    )
+
+    result = enumerate_chordless_fixed_length_cycles(graph, 4)
+
+    assert result.cycle_count == 55 * 55
+    assert result.family_kind is CycleFamilyKind.CHORDLESS
+    assert len(result.cycles) == 3_025
+
+
+def test_empty_clique_family_honors_cancellation_during_assembly(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    vertices = tuple(f"v{index:03}" for index in range(64))
+    graph = SimpleUndirectedGraph(
+        vertices=vertices,
+        edges=tuple(
+            (left, right) for left in vertices for right in vertices if left < right
+        ),
+    )
+    cancelled = Event()
+
+    def checkpoint(stage: str) -> None:
+        request_checkpoint(stage)
+        if stage == "during empty fixed-length cycle incidence assembly":
+            cancelled.set()
+
+    monkeypatch.setattr(cycle_operations, "request_checkpoint", checkpoint)
+    with (
+        request_cancellation(cancelled),
+        pytest.raises(OperationExecutionCancelledError),
+    ):
+        enumerate_chordless_fixed_length_cycles(graph, 4)
+
+
 def test_complete_bipartite_chordless_six_cycles_are_empty() -> None:
     left = tuple(f"a{index}" for index in range(8))
     right = tuple(f"b{index}" for index in range(8))

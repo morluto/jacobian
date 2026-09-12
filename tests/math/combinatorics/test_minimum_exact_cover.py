@@ -296,3 +296,21 @@ def test_deserialized_exact_result_rejects_zero_primary_multiplicity() -> None:
     payload["item_multiplicities"][0]["multiplicity"] = 0
     with pytest.raises(ValueError, match="primary item"):
         MinimumGeneralizedExactCoverResult.model_validate(payload)
+
+
+def test_two_primary_min_degree_branching_is_admitted() -> None:
+    rows = tuple(
+        ExactCoverRow(row_id=f"p0-{index:04d}", items=("p0",)) for index in range(2_047)
+    ) + (
+        ExactCoverRow(row_id="p1-a", items=("p1",)),
+        ExactCoverRow(row_id="p1-b", items=("p1",)),
+    )
+    instance = GeneralizedExactCoverInstance(
+        primary_items=("p0", "p1"),
+        secondary_items=(),
+        rows=rows,
+    )
+    result = minimum_generalized_exact_cover(instance)
+    assert result.status == "EXACT"
+    assert result.selected_row_ids == ("p0-0000", "p1-a")
+    assert result.lower_bound == result.upper_bound == 2

@@ -894,13 +894,23 @@ def minimum_generalized_exact_cover(  # noqa: C901
             sum(1 for row in remaining_rows if item in row.items)
             for item in remaining_primary
         ]
+    remaining_min_degree = min(remaining_degrees, default=0)
     remaining_max_degree = max(remaining_degrees, default=0)
     estimated_nodes = search_node_limit
-    if len(remaining_primary) <= 1:
-        estimated_nodes = min(search_node_limit, 1 + 2 * max(len(remaining_rows), 0))
-    candidate_work = (
-        2 * estimated_nodes * remaining_max_degree * mask_words
-    )
+    listing_degree = remaining_min_degree
+    remaining_primary_count = len(remaining_primary)
+    if remaining_primary_count <= 1:
+        estimated_nodes = min(
+            search_node_limit, 1 + 2 * max(len(remaining_rows), 0)
+        )
+        listing_degree = remaining_max_degree
+    elif remaining_primary_count == 2:
+        estimated_nodes = min(
+            search_node_limit,
+            1 + remaining_min_degree * (1 + remaining_max_degree),
+        )
+        listing_degree = remaining_min_degree
+    candidate_work = 2 * estimated_nodes * listing_degree * mask_words
     if (
         shortcut_work + index_work + scan_work + candidate_work
         > _MINIMUM_EXACT_COVER_WORK_LIMIT

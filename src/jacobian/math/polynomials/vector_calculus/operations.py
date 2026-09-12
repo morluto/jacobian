@@ -62,17 +62,62 @@ def _admit_field_polynomial(
     )
 
 
+def _require_dense_scalar_derivative_budget(polynomial: RationalPolynomial) -> None:
+    """Bound one scalar polynomial assembled from all its partials.
+
+    The Laplacian and a directional derivative collect partials into one
+    polynomial, so their independent terms can remain distinct.  Keep their
+    existing conservative envelope separate from the gradient's vector-valued
+    support accounting.
+    """
+
+    if len(polynomial.polynomial.terms) * len(polynomial.variables) > _MAX_TERMS:
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="polynomial_vector_calc.derivative_term_budget",
+            message="scalar-field derivatives exceed the result-term budget",
+        )
+
+
+def _gradient_term_counts(polynomial: RationalPolynomial) -> tuple[int, ...]:
+    """Return the exact nonzero sparse support size of every partial derivative.
+
+    On one fixed axis the map ``e -> e - unit_axis`` is injective.  Since the
+    canonical source has nonzero rational coefficients, precisely its terms
+    with a positive exponent on that axis survive differentiation.  This
+    proves both the per-component and aggregate result counts before SymPy
+    conversion expands any expression.
+    """
+
+    return tuple(
+        sum(term.exponents[axis] > 0 for term in polynomial.polynomial.terms)
+        for axis in range(len(polynomial.variables))
+    )
+
+
 def _admit_scalar_field(polynomial: RationalPolynomial) -> None:
     _admit_field_polynomial(
         polynomial,
         label="scalar field",
         location=("polynomial",),
     )
-    if len(polynomial.polynomial.terms) * len(polynomial.variables) > _MAX_TERMS:
+    _require_dense_scalar_derivative_budget(polynomial)
+
+
+def _admit_gradient(polynomial: RationalPolynomial) -> None:
+    """Admit a scalar-field gradient using its retained sparse support."""
+
+    _admit_field_polynomial(
+        polynomial,
+        label="scalar field",
+        location=("polynomial",),
+    )
+    term_counts = _gradient_term_counts(polynomial)
+    if max(term_counts, default=0) > _MAX_TERMS or sum(term_counts) > _MAX_TERMS:
         raise OperationDomainValidationError(
             location=("polynomial",),
             code="polynomial_vector_calc.derivative_term_budget",
-            message="scalar-field derivatives exceed the result-term budget",
+            message="gradient derivatives exceed the result-term budget",
         )
 
 
@@ -127,7 +172,7 @@ def _expressions(
 
 
 def gradient(polynomial: RationalPolynomial) -> VectorResult:
-    _admit_scalar_field(polynomial)
+    _admit_gradient(polynomial)
     variables = polynomial.variables
     expression = rational_polynomial_to_sympy(polynomial).as_expr()
     return VectorResult._from_kernel(

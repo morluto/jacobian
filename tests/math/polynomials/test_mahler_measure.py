@@ -424,8 +424,7 @@ def test_large_nonsquare_discriminant_retains_normalized_radicand() -> None:
     assert profile.root_kind == "DISTINCT_REAL"
     assert profile.root_locations == ("INSIDE_UNIT_DISK", "OUTSIDE_UNIT_DISK")
     assert all(
-        isinstance(root, RealAlgebraicValue)
-        and root.polynomial == (1, -(10**100), -1)
+        isinstance(root, RealAlgebraicValue) and root.polynomial == (1, -(10**100), -1)
         for root in profile.roots
     )
     measure = mahler_measure(MahlerMeasureRequest(polynomial=polynomial))

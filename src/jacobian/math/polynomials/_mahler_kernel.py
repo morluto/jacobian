@@ -326,12 +326,8 @@ def _quadratic_root_data(
         )
     else:
         candidates = (
-            _QuadraticParts(
-                Fraction(-b, 2 * a), Fraction(-1, 2 * a), discriminant
-            ),
-            _QuadraticParts(
-                Fraction(-b, 2 * a), Fraction(1, 2 * a), discriminant
-            ),
+            _QuadraticParts(Fraction(-b, 2 * a), Fraction(-1, 2 * a), discriminant),
+            _QuadraticParts(Fraction(-b, 2 * a), Fraction(1, 2 * a), discriminant),
         )
     # The two roots are in one field.  Compare the exact algebraic values,
     # rather than relying on the sign of ``a`` in the quadratic formula.

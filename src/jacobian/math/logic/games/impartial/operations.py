@@ -111,6 +111,7 @@ def _outcome_profile_result(game: ImpartialGame) -> OutcomeProfileResult:
         if not any(move.source == position for move in game.moves)
     )
     return OutcomeProfileResult(
+        game=game,
         p_positions=p_positions,
         n_positions=n_positions,
         grundy_values=analysis.values,
@@ -131,11 +132,31 @@ def _disjunctive_sum_result(
         component_grundy_values.append(grundy_map[start])
     result_grundy = reduce(xor, component_grundy_values, 0)
     return DisjunctiveSumResult(
+        components=components,
+        start_positions=start_positions,
         grundy_value=result_grundy,
         component_grundy_values=tuple(component_grundy_values),
         is_p_position=result_grundy == 0,
         component_count=len(component_grundy_values),
     )
+
+
+def verify_outcome_profile(claim: OutcomeProfileResult) -> bool:
+    """Verify a serialized outcome profile against its retained game."""
+    try:
+        expected = _outcome_profile_result(claim.game)
+    except ValueError:
+        return False
+    return expected == claim
+
+
+def verify_disjunctive_sum(claim: DisjunctiveSumResult) -> bool:
+    """Verify a serialized disjunctive sum against its retained components."""
+    try:
+        expected = _disjunctive_sum_result(claim.components, claim.start_positions)
+    except ValueError:
+        return False
+    return expected == claim
 
 
 def grundy_classes(game: ImpartialGame) -> tuple[tuple[int, tuple[str, ...]], ...]:
@@ -288,4 +309,6 @@ __all__ = [
     "position_grundy",
     "subtraction_game",
     "subtraction_grundy_prefix",
+    "verify_disjunctive_sum",
+    "verify_outcome_profile",
 ]

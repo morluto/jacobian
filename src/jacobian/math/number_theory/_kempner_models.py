@@ -37,6 +37,7 @@ class KempnerDigitSet(StrictModel):
         ge=2,
         le=MAX_KEMPNER_BASE,
         description=f"Integer base in [2, {MAX_KEMPNER_BASE}].",
+        json_schema_extra={"pattern": r"^(?:[2-9]|[1-5][0-9]|6[0-4])$"},
     )
     allowed_digits: tuple[KempnerSmallInteger, ...] = Field(
         min_length=1,
@@ -82,7 +83,10 @@ class KempnerArithmeticProgressionResult(StrictModel):
     """An exact source-bound decision and, when present, one canonical witness."""
 
     digit_set: KempnerDigitSet
-    arity: KempnerSmallInteger
+    arity: KempnerSmallInteger = Field(
+        ge=3,
+        description="Number of terms in the nontrivial progression, at least three.",
+    )
     status: ProgressionStatus
     indices: tuple[KempnerSmallInteger, ...]
     values: tuple[KempnerInteger, ...]

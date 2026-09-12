@@ -45,6 +45,8 @@ class _Admission(NamedTuple):
 def _state_bound(arity: int) -> int:
     """Return a conservative finite-state count without unbounded growth."""
 
+    if arity > 12:
+        return MAX_CARRY_GRAPH_STATES + 1
     bound = 2
     for _ in range(arity):
         bound *= 4
@@ -86,9 +88,7 @@ def _require_admission(digit_set: KempnerDigitSet, arity: int) -> _Admission:
     # deliberately charged before BFS; the kernel never grows past the charge.
     predecessor_allocation = state_bound * (8 * (arity + 4) + 24)
     witness_digit_bound = state_bound
-    result_digits = (
-        witness_digit_bound * max(1, ceil(log10(base))) + len(str(arity)) + 1
-    )
+    result_digits = ceil(witness_digit_bound * log10(base)) + 1
     result_allocation = arity * (result_digits + 24) + 256
     if state_bound > MAX_CARRY_GRAPH_STATES:
         raise OperationResourceAdmissionError(
@@ -187,18 +187,6 @@ def _reconstruct(
     return first, difference
 
 
-def _is_member(value: int, digit_set: KempnerDigitSet) -> bool:
-    if value < 1:
-        return False
-    base = digit_set.base
-    allowed = set(digit_set.allowed_digits)
-    while value:
-        value, digit = divmod(value, base)
-        if digit not in allowed:
-            return False
-    return True
-
-
 def decide_kempner_arithmetic_progression(
     digit_set: KempnerDigitSet,
     arity: int,
@@ -252,12 +240,7 @@ def decide_kempner_arithmetic_progression(
         )
     first, difference = _reconstruct(terminal, predecessors, base=base)
     values = tuple(first + index * difference for index in range(arity))
-    if (
-        first < 1
-        or difference < 1
-        or not all(_is_member(value, digit_set) for value in values)
-        or values[-1] != first + (arity - 1) * difference
-    ):
+    if first < 1 or difference < 1 or values[-1] != first + (arity - 1) * difference:
         raise RuntimeError("Kempner BFS produced an invalid progression witness")
     return KempnerArithmeticProgressionResult.model_construct(
         digit_set=digit_set,

@@ -115,3 +115,37 @@ def test_derived_graph_admission_rejects_before_search() -> None:
         decide_kempner_arithmetic_progression(
             KempnerDigitSet(base=64, allowed_digits=(0,)), 4
         )
+
+
+def test_base_two_arity_four_is_admitted() -> None:
+    result = decide_kempner_arithmetic_progression(
+        KempnerDigitSet(base=2, allowed_digits=(1,)), 4
+    )
+    assert result.status in {"PROGRESSION_FREE", "CONTAINS_PROGRESSION"}
+
+
+def test_oversized_arity_is_a_typed_resource_error() -> None:
+    with pytest.raises(OperationResourceAdmissionError):
+        decide_kempner_arithmetic_progression(
+            KempnerDigitSet(base=2, allowed_digits=(1,)), 10**5000
+        )
+
+
+def test_wire_schema_rejects_base_outside_two_through_sixty_four() -> None:
+    schema = KempnerDigitSet.model_json_schema()
+    assert schema["properties"]["base"]["pattern"] == r"^(?:[2-9]|[1-5][0-9]|6[0-4])$"
+    with pytest.raises(ValidationError):
+        KempnerDigitSet.model_validate({"base": "999", "allowed_digits": ["1"]})
+
+
+def test_progression_free_result_rejects_undefined_arity() -> None:
+    with pytest.raises(ValidationError):
+        KempnerArithmeticProgressionResult.model_validate(
+            {
+                "digit_set": {"base": "3", "allowed_digits": ["1"]},
+                "arity": "0",
+                "status": "PROGRESSION_FREE",
+                "indices": [],
+                "values": [],
+            }
+        )

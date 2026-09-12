@@ -101,8 +101,11 @@ class _ExpressionMetrics:
     ``support`` bounds the monomials that can be materialized, while
     ``expansion_terms`` is the larger expansion-path bound used to charge
     convolution work.  Numerator heights are measured over the common
-    denominator in ``denominator``.  The representation and work bounds are
-    saturated so deeply nested powers cannot make admission itself expensive.
+    denominator in ``denominator``.  ``maximum_*_bits`` retain the greatest
+    scalar heights seen in intermediates, including children that cancel to
+    zero before a parent combines them.  The representation and work bounds
+    are saturated so deeply nested powers cannot make admission itself
+    expensive.
     """
 
     nodes: int
@@ -112,6 +115,9 @@ class _ExpressionMetrics:
     variables: frozenset[str]
     numerator_bits: int
     denominator: int | None
+    zero: bool
+    maximum_numerator_bits: int
+    maximum_denominator_bits: int
     work: int
     intermediate_digits: int
 
@@ -188,9 +194,15 @@ def _bounded_lcm(left: int | None, right: int | None) -> int | None:
 
 def _bounded_denominator_lcm(
     metrics: list[_ExpressionMetrics],
+    *,
+    skip_zero: bool = False,
 ) -> int | None:
+    """Return a bounded common denominator for nonzero output metrics."""
+
     denominator: int | None = 1
     for metric in metrics:
+        if skip_zero and metric.zero:
+            continue
         denominator = _bounded_lcm(denominator, metric.denominator)
         if denominator is None:
             return None
@@ -234,6 +246,46 @@ def _support_bound(candidate: int, degree: int, variables: frozenset[str]) -> in
     )
 
 
+def _is_literal_zero_add(expression: PolynomialAdd) -> bool:
+    if not all(
+        isinstance(operand, PolynomialLiteral) for operand in expression.operands
+    ):
+        return False
+    return (
+        sum(
+            (
+                operand.value.as_fraction()
+                for operand in expression.operands
+                if isinstance(operand, PolynomialLiteral)
+            ),
+            Fraction(),
+        )
+        == 0
+    )
+
+
+def _addition_numerator_bits(
+    metrics: list[_ExpressionMetrics], denominator: int | None
+) -> int:
+    if not metrics:
+        return 1
+    if denominator is None:
+        return _MAX_EXPRESSION_COEFFICIENT_BITS + 1
+    numerator_bits = 0
+    for child in metrics:
+        if child.denominator is None:
+            return _MAX_EXPRESSION_COEFFICIENT_BITS + 1
+        scale = denominator // child.denominator
+        numerator_bits = max(
+            numerator_bits,
+            child.numerator_bits + _bit_growth(scale),
+        )
+    return min(
+        _MAX_EXPRESSION_COEFFICIENT_BITS + 1,
+        numerator_bits + _ceil_log2(len(metrics)),
+    )
+
+
 def _decimal_digits_from_bits(bits: int) -> int:
     """Upper-bound decimal digits without converting a large integer."""
 
@@ -257,6 +309,7 @@ def _representation_digits(
 
 
 def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
+    denominator: int | None
     if isinstance(expression, PolynomialLiteral):
         require_bounded_rational(expression.value, max_digits=128, label="literal")
         numerator_bits = max(1, abs(expression.value.num).bit_length())
@@ -268,6 +321,9 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
             variables=frozenset(),
             numerator_bits=numerator_bits,
             denominator=expression.value.den,
+            zero=expression.value.num == 0,
+            maximum_numerator_bits=numerator_bits,
+            maximum_denominator_bits=_denominator_bits(expression.value.den),
             work=1,
             intermediate_digits=_representation_digits(
                 1, numerator_bits, _denominator_bits(expression.value.den)
@@ -283,6 +339,9 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
             variables=variables,
             numerator_bits=1,
             denominator=1,
+            zero=False,
+            maximum_numerator_bits=1,
+            maximum_denominator_bits=0,
             work=1,
             intermediate_digits=_representation_digits(1, 1, 0),
         )
@@ -298,6 +357,9 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
                 variables=frozenset(),
                 numerator_bits=1,
                 denominator=1,
+                zero=False,
+                maximum_numerator_bits=max(base.maximum_numerator_bits, 1),
+                maximum_denominator_bits=base.maximum_denominator_bits,
                 work=base.work,
                 intermediate_digits=max(base.intermediate_digits, 2),
             )
@@ -311,12 +373,17 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
         expansion_terms = _bounded_power(
             base.expansion_terms, exponent, MAX_POLYNOMIAL_TERMS
         )
-        numerator_bits = min(
-            _MAX_EXPRESSION_COEFFICIENT_BITS + 1,
-            base.numerator_bits * exponent
-            + _ceil_log2(max(1, base.support)) * exponent,
-        )
-        denominator = _bounded_denominator_power(base.denominator, exponent)
+        zero = base.zero
+        if zero:
+            numerator_bits = 1
+            denominator = 1
+        else:
+            numerator_bits = min(
+                _MAX_EXPRESSION_COEFFICIENT_BITS + 1,
+                base.numerator_bits * exponent
+                + _ceil_log2(max(1, base.support)) * exponent,
+            )
+            denominator = _bounded_denominator_power(base.denominator, exponent)
         work = base.work
         result_expansion_terms = 1
         base_expansion_terms = base.expansion_terms
@@ -361,6 +428,12 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
             variables=variables,
             numerator_bits=numerator_bits,
             denominator=denominator,
+            zero=zero,
+            maximum_numerator_bits=max(base.maximum_numerator_bits, numerator_bits),
+            maximum_denominator_bits=max(
+                base.maximum_denominator_bits,
+                _denominator_bits(denominator),
+            ),
             work=work,
             intermediate_digits=max(
                 base.intermediate_digits,
@@ -377,24 +450,22 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
             tuple(row.expansion_terms for row in child_metrics), MAX_POLYNOMIAL_TERMS
         )
         degree = max(row.degree for row in child_metrics)
-        denominator = _bounded_denominator_lcm(child_metrics)
-        if denominator is None:
-            numerator_bits = _MAX_EXPRESSION_COEFFICIENT_BITS + 1
-        else:
-            numerator_bits = 0
-            for child in child_metrics:
-                if child.denominator is None:
-                    numerator_bits = _MAX_EXPRESSION_COEFFICIENT_BITS + 1
-                    break
-                scale = denominator // child.denominator
-                numerator_bits = max(
-                    numerator_bits,
-                    child.numerator_bits + _bit_growth(scale),
-                )
-            numerator_bits = min(
-                _MAX_EXPRESSION_COEFFICIENT_BITS + 1,
-                numerator_bits + _ceil_log2(len(child_metrics)),
-            )
+        active_metrics = [child for child in child_metrics if not child.zero]
+        common_denominator = _bounded_denominator_lcm(
+            child_metrics,
+            skip_zero=True,
+        )
+        common_numerator_bits = _addition_numerator_bits(
+            active_metrics,
+            common_denominator,
+        )
+        raw_denominator = common_denominator
+        raw_numerator_bits = common_numerator_bits
+        zero = all(child.zero for child in child_metrics) or _is_literal_zero_add(
+            expression
+        )
+        denominator = 1 if zero else common_denominator
+        numerator_bits = 1 if zero else common_numerator_bits
         support = _support_bound(
             _bounded_sum(
                 tuple(row.support for row in child_metrics), MAX_POLYNOMIAL_TERMS
@@ -405,6 +476,14 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
         work = _bounded_sum(
             tuple(row.work + row.expansion_terms for row in child_metrics),
             _MAX_EXPRESSION_WORK,
+        )
+        maximum_numerator_bits = max(
+            common_numerator_bits,
+            *(child.maximum_numerator_bits for child in child_metrics),
+        )
+        maximum_denominator_bits = max(
+            _denominator_bits(common_denominator),
+            *(child.maximum_denominator_bits for child in child_metrics),
         )
     else:
         expansion_terms = 1
@@ -439,7 +518,7 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
             sum(row.degree for row in child_metrics),
         )
         support = _support_bound(support, degree, variables)
-        numerator_bits = min(
+        common_numerator_bits = min(
             _MAX_EXPRESSION_COEFFICIENT_BITS + 1,
             _bounded_sum(
                 tuple(row.numerator_bits for row in child_metrics),
@@ -455,13 +534,36 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
             denominator = _bounded_denominator_product(denominator, child.denominator)
             if denominator is None:
                 break
+        raw_denominator = denominator
+        raw_numerator_bits = common_numerator_bits
+        zero = any(child.zero for child in child_metrics)
+        numerator_bits = 1 if zero else common_numerator_bits
+        if zero:
+            denominator = 1
+        maximum_numerator_bits = max(
+            common_numerator_bits,
+            *(child.maximum_numerator_bits for child in child_metrics),
+        )
+        maximum_denominator_bits = max(
+            _denominator_bits(raw_denominator),
+            *(child.maximum_denominator_bits for child in child_metrics),
+        )
     intermediate_digits = max(
         (row.intermediate_digits for row in child_metrics),
         default=0,
     )
     intermediate_digits = max(
         intermediate_digits,
-        _representation_digits(support, numerator_bits, _denominator_bits(denominator)),
+        _representation_digits(
+            support,
+            raw_numerator_bits,
+            _denominator_bits(raw_denominator),
+        ),
+        _representation_digits(
+            support,
+            numerator_bits,
+            _denominator_bits(denominator),
+        ),
     )
     return _ExpressionMetrics(
         nodes=nodes,
@@ -471,6 +573,9 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
         variables=variables,
         numerator_bits=numerator_bits,
         denominator=denominator,
+        zero=zero,
+        maximum_numerator_bits=maximum_numerator_bits,
+        maximum_denominator_bits=maximum_denominator_bits,
         work=work,
         intermediate_digits=intermediate_digits,
     )
@@ -514,6 +619,8 @@ def normalize_polynomial_expression(
         or metrics.degree > MAX_POLYNOMIAL_EXPONENT
         or metrics.numerator_bits > _MAX_EXPRESSION_COEFFICIENT_BITS
         or _denominator_bits(metrics.denominator) > _MAX_EXPRESSION_COEFFICIENT_BITS
+        or metrics.maximum_numerator_bits > _MAX_EXPRESSION_COEFFICIENT_BITS
+        or metrics.maximum_denominator_bits > _MAX_EXPRESSION_COEFFICIENT_BITS
         or metrics.work > _MAX_EXPRESSION_WORK
     ):
         raise OperationResourceAdmissionError(

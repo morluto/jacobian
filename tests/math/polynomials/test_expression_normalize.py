@@ -1,7 +1,7 @@
 """Typed polynomial expression normalization tests."""
 
 from fractions import Fraction
-from math import comb
+from math import comb, gcd, prod
 from typing import Any
 
 import pytest
@@ -77,6 +77,68 @@ def test_constant_axis_and_exact_cancellation_are_preserved() -> None:
     )
     result = normalize_polynomial_expression(request)
     assert result.polynomial.variables == ()
+    assert result.polynomial.polynomial.terms == ()
+
+
+def test_nested_cancellation_does_not_accumulate_zero_denominators() -> None:
+    """Zero children must not contribute their cancelled denominators to a parent."""
+
+    primes = (
+        2,
+        3,
+        5,
+        7,
+        11,
+        13,
+        17,
+        19,
+        23,
+        29,
+        31,
+        37,
+        41,
+        43,
+        47,
+        53,
+        59,
+        61,
+        67,
+        71,
+        73,
+        79,
+        83,
+    )
+    base = prod(primes) * 10**93
+    denominators = tuple(base * multiplier + 1 for multiplier in range(40, 124))
+    assert all(len(str(denominator)) == 128 for denominator in denominators)
+    assert all(
+        gcd(left, right) == 1
+        for index, left in enumerate(denominators)
+        for right in denominators[index + 1 :]
+    )
+
+    def cancelling_pair(denominator: int) -> dict[str, Any]:
+        literal = {"kind": "LITERAL", "value": {"num": 1, "den": denominator}}
+        opposite = {
+            "kind": "LITERAL",
+            "value": {"num": -1, "den": denominator},
+        }
+        return {"kind": "ADD", "operands": [literal, opposite]}
+
+    expression = {
+        "kind": "ADD",
+        "operands": [
+            *(cancelling_pair(denominator) for denominator in denominators[:63]),
+            {
+                "kind": "ADD",
+                "operands": [
+                    cancelling_pair(denominator) for denominator in denominators[63:]
+                ],
+            },
+        ],
+    }
+
+    result = normalize_polynomial_expression(_request("QQ", expression))
     assert result.polynomial.polynomial.terms == ()
 
 

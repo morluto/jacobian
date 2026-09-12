@@ -7,8 +7,13 @@ from typing import Any, cast
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._execution import request_checkpoint
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.canonical import format_canonical_integer
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.number_theory.number_fields.values import (
+    MAX_NUMBER_FIELD_DISCRIMINANT_DIGITS,
     MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS,
     SimpleNumberFieldPresentation,
 )
@@ -51,6 +56,28 @@ def _monic_zz_coefficients(
             for index, coefficient in enumerate(coefficients[1:], start=1)
         ),
     )
+
+
+def _integer_digits(value: int) -> int:
+    return len(format_canonical_integer(abs(value))) if value else 1
+
+
+def monicized_discriminant_digit_bound(
+    field: SimpleNumberFieldPresentation,
+) -> int:
+    """Return a digit envelope for ``disc`` of ``A^(n-1) f(x/A)``."""
+
+    coefficients = tuple(
+        int(coefficient) for coefficient in field.coefficients_descending
+    )
+    leading = abs(coefficients[0])
+    leading_digits = _integer_digits(leading)
+    widest = 1
+    for index, coefficient in enumerate(coefficients[1:], start=1):
+        coeff_digits = _integer_digits(abs(coefficient))
+        widest = max(widest, coeff_digits + (index - 1) * leading_digits)
+    degree = field.degree
+    return max(1, (2 * degree - 1) * widest + 4 * degree)
 
 
 def _trial_primes(limit: int) -> tuple[int, ...]:
@@ -121,6 +148,16 @@ def require_factorizable_discriminant(
 
     if field.degree < 1:
         return
+    estimated_digits = monicized_discriminant_digit_bound(field)
+    if estimated_digits > MAX_NUMBER_FIELD_DISCRIMINANT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("field",),
+            code="number_field.ring_of_integers_discriminant_output_bound",
+            message=(
+                "the monicized defining-polynomial discriminant exceeds the "
+                f"{MAX_NUMBER_FIELD_DISCRIMINANT_DIGITS}-digit result envelope"
+            ),
+        )
     request_checkpoint("before number-field discriminant admission")
     import sympy
 
@@ -215,6 +252,7 @@ def _as_poly_in_alpha(expression: Any, alpha: Any) -> Any:
 
 __all__ = [
     "integral_basis_coordinates",
+    "monicized_discriminant_digit_bound",
     "recognized_integral_basis",
     "require_factorizable_discriminant",
 ]

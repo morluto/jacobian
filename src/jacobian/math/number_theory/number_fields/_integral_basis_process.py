@@ -27,6 +27,9 @@ from jacobian.canonical import (
     loads_strict_json,
     parse_canonical_integer,
 )
+from jacobian.math.number_theory.number_fields._integral_basis import (
+    monicized_discriminant_digit_bound,
+)
 from jacobian.math.number_theory.number_fields._models import NumberFieldRequest
 from jacobian.math.number_theory.number_fields.values import (
     MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS,
@@ -145,14 +148,7 @@ def _worker_stdout_limit(
     include_basis: bool,
 ) -> int:
     degree = field.degree
-    coefficient_digits = max(
-        len(format_canonical_integer(abs(value)))
-        for value in field.coefficients_descending
-    )
-    discriminant_digits = max(
-        1,
-        (2 * degree - 1) * coefficient_digits + 4 * degree,
-    )
+    discriminant_digits = monicized_discriminant_digit_bound(field)
     response: dict[str, object] = {
         "kind": "complete",
         "discriminant": "-" + "9" * discriminant_digits,

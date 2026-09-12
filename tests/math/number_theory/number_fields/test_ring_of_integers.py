@@ -11,7 +11,13 @@ from jsonschema.exceptions import ValidationError as JSONSchemaValidationError
 from pydantic import ValidationError
 
 from jacobian.canonical import encode_strict_json
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
+from jacobian.math.number_theory.number_fields._integral_basis import (
+    monicized_discriminant_digit_bound,
+)
 from jacobian.math.number_theory.number_fields._models import (
     NumberFieldRingOfIntegersRequest,
 )
@@ -23,6 +29,7 @@ from jacobian.math.number_theory.number_fields._tools import (
     compute_ring_of_integers,
 )
 from jacobian.math.number_theory.number_fields.values import (
+    MAX_NUMBER_FIELD_DISCRIMINANT_DIGITS,
     SimpleNumberFieldElement,
     SimpleNumberFieldPresentation,
 )
@@ -230,6 +237,20 @@ def test_discriminant_admission_does_not_factor_inside_perfect_power(
         ring_of_integers(field)
     assert error.value.errors()[0]["type"] == (
         "number_field.ring_of_integers_discriminant_factorization_bound"
+    )
+
+
+def test_nonmonic_eisenstein_discriminant_is_rejected_before_worker_launch() -> None:
+    field = SimpleNumberFieldPresentation(
+        coefficients_descending=(2**849, *([0] * 30), -3)
+    )
+    assert (
+        monicized_discriminant_digit_bound(field) > MAX_NUMBER_FIELD_DISCRIMINANT_DIGITS
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        ring_of_integers(field)
+    assert error.value.errors()[0]["type"] == (
+        "number_field.ring_of_integers_discriminant_output_bound"
     )
 
 

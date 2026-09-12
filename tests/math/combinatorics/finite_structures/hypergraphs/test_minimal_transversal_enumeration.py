@@ -435,6 +435,24 @@ def test_forced_vertices_are_included_in_minimality_search() -> None:
     assert result.transversals == (("b", "d", "e"), ("a", "c", "d", "e"))
 
 
+def test_forced_vertex_covering_all_edges_skips_mixed_rank_domination() -> None:
+    others = tuple(f"v{index:03d}" for index in range(120))
+    pairs = tuple(combinations(others, 2))[:7_071]
+    source = FiniteHypergraph(
+        vertices=("forced", *others),
+        edges=(
+            ("forced", ("forced",)),
+            *tuple(
+                (f"t{index:05d}", ("forced", *pair)) for index, pair in enumerate(pairs)
+            ),
+        ),
+    )
+    result = enumerate_minimal_transversals(
+        MinimalTransversalEnumerationRequest(hypergraph=source, maximum_cardinality=2)
+    )
+    assert result.transversals == (("forced",),)
+
+
 def test_forced_rank_exhaustion_with_residual_edge_is_empty() -> None:
     source = FiniteHypergraph(
         vertices=("a", "b", "c"),

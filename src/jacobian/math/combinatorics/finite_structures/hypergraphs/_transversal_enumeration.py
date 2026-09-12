@@ -248,21 +248,21 @@ def _admit_enumeration(
         return maximum, unique_edges, frozenset(), True, False
     if any(not edge for edge in unique_edges):
         return maximum, unique_edges, frozenset(), False, True
-    # Cardinality-1 search never needs domination. Equal-cardinality distinct
-    # edges are already an antichain, so skip the pairwise subset scan.
-    edge_sizes = {len(edge) for edge in unique_edges}
-    edges = (
-        unique_edges
-        if maximum <= 1 or len(edge_sizes) == 1
-        else _minimal_edges(unique_edges)
-    )
-
-    forced = _forced_vertices(edges)
+    forced = _forced_vertices(unique_edges)
+    remaining_unique = tuple(edge for edge in unique_edges if not edge & forced)
     if len(forced) > maximum:
-        return maximum, edges, forced, False, False
-    remaining_edges = tuple(edge for edge in edges if not edge & forced)
-    if not remaining_edges:
-        return maximum, remaining_edges, forced, False, False
+        return maximum, remaining_unique, forced, False, False
+    if not remaining_unique:
+        return maximum, remaining_unique, forced, False, False
+    # Cardinality-1 search never needs domination. Equal-cardinality distinct
+    # remaining edges are already an antichain, so skip the pairwise subset scan.
+    edge_sizes = {len(edge) for edge in remaining_unique}
+    edges = (
+        remaining_unique
+        if maximum <= 1 or len(edge_sizes) == 1
+        else _minimal_edges(remaining_unique)
+    )
+    remaining_edges = edges
     if len(forced) >= maximum:
         return maximum, remaining_edges, forced, False, False
     if len(remaining_edges) == 1:

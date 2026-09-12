@@ -719,3 +719,24 @@ def test_nearest_integer_distance_round_trips_through_strict_json() -> None:
         encode_strict_json(result.model_dump(mode="json")), strict=True
     )
     assert restored == result
+
+
+def test_large_multiplier_uses_exact_json_integer_encoding() -> None:
+    request = ScaledFloorRequest(multiplier=2**53, radicand=2)
+    result = scaled_floor(request)
+    restored = ScaledFloorResult.model_validate_json(
+        encode_strict_json(result.model_dump(mode="json"))
+    )
+    assert restored == result
+
+
+def test_maximum_product_precision_fits_result_envelope() -> None:
+    result = simultaneous_product(
+        SimultaneousProductRequest(
+            multiplier=1, radicands=(2, 3, 5, 6), scale_bits=4096
+        )
+    )
+    restored = type(result).model_validate_json(
+        encode_strict_json(result.model_dump(mode="json"))
+    )
+    assert restored == result

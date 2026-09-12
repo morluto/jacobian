@@ -22,7 +22,10 @@ MAX_SURD_RADICAND = 1_000_000
 MAX_SURD_SCALE_BITS = 4_096
 MAX_RANGE_LENGTH = 4_096
 MAX_SIMULTANEOUS_RADICANDS = 8
-MAX_ENCLOSURE_COMPONENT_DIGITS = 4_096
+# A product denominator has at most 8 * 4096 binary places; multiplying by
+# a 4096-bit integer keeps both components below 16384 decimal digits.
+MAX_SURD_MULTIPLIER_BITS = 4_096
+MAX_ENCLOSURE_COMPONENT_DIGITS = 16_384
 
 
 def _validation_error(code: str, message: str) -> PydanticCustomError:
@@ -70,7 +73,10 @@ def bound_enclosure(
 class ScaledFloorRequest(StrictModel):
     """Exact floor/ceiling of ``n * sqrt(d)`` for positive ``n`` and nonsquare ``d``."""
 
-    multiplier: StrictInt = Field(ge=1)
+    multiplier: ExactInteger = Field(
+        ge=1,
+        description="Positive exact multiplier; computation admits at most 4096 bits.",
+    )
     radicand: StrictInt = Field(ge=2, le=MAX_SURD_RADICAND)
 
     @model_validator(mode="after")
@@ -86,7 +92,10 @@ class ScaledFloorRequest(StrictModel):
 class ScaledFloorValue(StrictModel):
     """One exact floor/ceiling row derived from integer squares only."""
 
-    multiplier: StrictInt = Field(ge=1)
+    multiplier: ExactInteger = Field(
+        ge=1,
+        description="Positive exact multiplier; computation admits at most 4096 bits.",
+    )
     radicand: StrictInt = Field(ge=2, le=MAX_SURD_RADICAND)
     floor: ExactInteger
     ceiling: ExactInteger
@@ -123,7 +132,10 @@ class ScaledFloorResult(StrictModel):
 class NearestIntegerDistanceRequest(StrictModel):
     """Certify ``||n sqrt(d)||`` at a requested binary precision."""
 
-    multiplier: StrictInt = Field(ge=1)
+    multiplier: ExactInteger = Field(
+        ge=1,
+        description="Positive exact multiplier; computation admits at most 4096 bits.",
+    )
     radicand: StrictInt = Field(ge=2, le=MAX_SURD_RADICAND)
     scale_bits: StrictInt = Field(ge=1, le=MAX_SURD_SCALE_BITS)
 
@@ -140,7 +152,10 @@ class NearestIntegerDistanceRequest(StrictModel):
 class NearestIntegerDistanceValue(StrictModel):
     """Exact nearest-integer data plus a certified distance enclosure."""
 
-    multiplier: StrictInt = Field(ge=1)
+    multiplier: ExactInteger = Field(
+        ge=1,
+        description="Positive exact multiplier; computation admits at most 4096 bits.",
+    )
     radicand: StrictInt = Field(ge=2, le=MAX_SURD_RADICAND)
     floor: ExactInteger
     ceiling: ExactInteger
@@ -174,7 +189,10 @@ class NearestIntegerDistanceValue(StrictModel):
 class SimultaneousProductRequest(StrictModel):
     """Certify ``n * prod_i ||n sqrt(d_i)||`` over an ordered radicand axis."""
 
-    multiplier: StrictInt = Field(ge=1)
+    multiplier: ExactInteger = Field(
+        ge=1,
+        description="Positive exact multiplier; computation admits at most 4096 bits.",
+    )
     radicands: tuple[StrictInt, ...] = Field(
         min_length=1, max_length=MAX_SIMULTANEOUS_RADICANDS
     )
@@ -198,7 +216,10 @@ class SimultaneousProductRequest(StrictModel):
 class SimultaneousProductResult(StrictModel):
     """Per-factor nearest-integer rows and the certified product enclosure."""
 
-    multiplier: StrictInt = Field(ge=1)
+    multiplier: ExactInteger = Field(
+        ge=1,
+        description="Positive exact multiplier; computation admits at most 4096 bits.",
+    )
     radicands: tuple[StrictInt, ...] = Field(
         min_length=1, max_length=MAX_SIMULTANEOUS_RADICANDS
     )
@@ -250,7 +271,10 @@ class RangeProfileRequest(StrictModel):
 class RangeProfileRow(StrictModel):
     """One complete certified row: factor enclosures and their product."""
 
-    multiplier: StrictInt = Field(ge=1)
+    multiplier: ExactInteger = Field(
+        ge=1,
+        description="Positive exact multiplier; computation admits at most 4096 bits.",
+    )
     factors: tuple[NearestIntegerDistanceValue, ...] = Field(
         min_length=1, max_length=MAX_SIMULTANEOUS_RADICANDS
     )
@@ -317,7 +341,10 @@ class RecordMinimaRequest(StrictModel):
 class RecordMinimumValue(StrictModel):
     """One certified strict-record row."""
 
-    multiplier: StrictInt = Field(ge=1)
+    multiplier: ExactInteger = Field(
+        ge=1,
+        description="Positive exact multiplier; computation admits at most 4096 bits.",
+    )
     product_enclosure: ClosedRationalInterval
     incumbent_enclosure: ClosedRationalInterval
 

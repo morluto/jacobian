@@ -10,11 +10,16 @@ from __future__ import annotations
 
 from fractions import Fraction
 from math import isqrt
+from typing import Literal
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.analysis.intervals import ClosedRationalInterval
 from jacobian.math.number_theory.diophantine_approximation._surd_models import (
+    MAX_SURD_MULTIPLIER_BITS,
     MAX_SURD_SCALE_BITS,
     NearestIntegerDistanceRequest,
     NearestIntegerDistanceValue,
@@ -42,6 +47,12 @@ __all__ = [
 
 
 def _require_request_multiplier(multiplier: int) -> None:
+    if multiplier.bit_length() > MAX_SURD_MULTIPLIER_BITS:
+        raise OperationResourceAdmissionError(
+            location=("multiplier",),
+            code="diophantine.multiplier_bit_bound",
+            message="multiplier exceeds the 4096-bit exact-work bound",
+        )
     if multiplier < 1:
         raise OperationDomainValidationError(
             location=("multiplier",),
@@ -125,6 +136,7 @@ def _distance_value(
 
     # Strict separation is required: touching enclosures leave the branch
     # mathematically undecided, so they must not be read as a tie-break.
+    side: Literal["FLOOR", "CEILING"]
     if floor_distance_upper < ceiling_distance_lower:
         side = "FLOOR"
         lower, upper = floor_distance_lower, floor_distance_upper

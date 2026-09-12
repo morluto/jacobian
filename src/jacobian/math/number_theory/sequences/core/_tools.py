@@ -5,7 +5,6 @@ from typing import Any
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.number_theory.sequences.core._models import (
     AutocorrelationResult,
-    FiniteIntegerSequence,
     FiniteRationalSequence,
     FiniteSequence,
     IntegerSequenceBooleanResult,

@@ -5,8 +5,6 @@ from jacobian.math.number_theory.sequences.core import (
     AutocorrelationResult,
     FiniteIntegerSequence,
     FiniteRationalSequence,
-    aperiodic_autocorrelation,
-    cyclic_autocorrelation,
 )
 
 __all__ = [
@@ -14,6 +12,4 @@ __all__ = [
     "AutocorrelationResult",
     "FiniteIntegerSequence",
     "FiniteRationalSequence",
-    "aperiodic_autocorrelation",
-    "cyclic_autocorrelation",
 ]

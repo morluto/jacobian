@@ -7,6 +7,7 @@ from typing import cast
 
 import pytest
 from jsonschema import Draft202012Validator
+from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError
 
 from jacobian._exact import (
@@ -120,7 +121,7 @@ def test_rational_profile_accepts_integer_wire_entries_as_canonical_values() -> 
     Draft202012Validator(FiniteRationalSequence.model_json_schema()).validate(
         {"values": ["1", {"num": "3", "den": "1"}, "2"]}
     )
-    with pytest.raises(Exception):
+    with pytest.raises(JsonSchemaValidationError):
         Draft202012Validator(FiniteRationalSequence.model_json_schema()).validate(
             {"values": [2]}
         )

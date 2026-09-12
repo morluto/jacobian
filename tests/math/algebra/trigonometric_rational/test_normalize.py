@@ -54,6 +54,27 @@ def test_tangent_retains_cosine_nonzero_locus() -> None:
     assert result.denominator == result.denominator_nonzero
 
 
+def test_common_laurent_factors_are_cancelled_but_source_locus_is_retained() -> None:
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x"],
+            "expression": {
+                "kind": "DIVIDE",
+                "numerator": {"kind": "SINE", "angle": {"coefficients": [1]}},
+                "denominator": {
+                    "kind": "SINE",
+                    "angle": {"coefficients": [1]},
+                },
+            },
+        }
+    )
+    result = normalize_trigonometric_rational(request)
+    assert result.numerator.terms[0].exponents == (0,)
+    assert result.denominator.terms[0].exponents == (0,)
+    assert len(result.denominator_nonzero.terms) == 2
+    assert result.denominator != result.denominator_nonzero
+
+
 def test_zero_quotient_retains_denominator_nonzero_locus() -> None:
     request = TrigonometricRationalSource.model_validate(
         {
@@ -78,6 +99,20 @@ def test_oversized_gaussian_output_is_rejected_by_admission() -> None:
             "expression": {
                 "kind": "LITERAL",
                 "value": {"num": 10**4096, "den": 1},
+            },
+        }
+    )
+    with pytest.raises(OperationResourceAdmissionError):
+        normalize_trigonometric_rational(request)
+
+
+def test_oversized_angle_exponent_is_rejected_before_expansion() -> None:
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x"],
+            "expression": {
+                "kind": "SINE",
+                "angle": {"coefficients": [4_097]},
             },
         }
     )

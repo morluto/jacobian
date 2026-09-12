@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -26,7 +26,10 @@ _GAUSSIAN_COMPONENT_LIMIT = 10**MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS
 class IntegerAffineAngleForm(StrictModel):
     """``quarter_turns*pi/2 + sum(coefficients[j]*angles[j])``."""
 
-    coefficients: tuple[int, ...] = Field(max_length=MAX_TRIG_VARIABLES)
+    coefficients: tuple[int, ...] = Field(
+        min_length=0,
+        max_length=MAX_TRIG_VARIABLES,
+    )
     quarter_turns: int = Field(default=0, ge=-4_096, le=4_096)
 
 
@@ -86,6 +89,15 @@ type TrigonometricRationalExpression = Annotated[
 class GaussianLaurentTerm(StrictModel):
     coefficient: GaussianRational
     exponents: tuple[int, ...] = Field(max_length=MAX_TRIG_VARIABLES)
+
+    @model_validator(mode="after")
+    def require_bounded_exponents(self) -> Self:
+        if any(abs(value) > MAX_TRIG_EXPONENT for value in self.exponents):
+            raise PydanticCustomError(
+                "trigonometric.exponent_bound",
+                "Laurent exponents exceed the admitted representation limit",
+            )
+        return self
 
 
 class GaussianLaurentPolynomial(StrictModel):
@@ -195,8 +207,7 @@ def _poly_mul(left: Polynomial, right: Polynomial) -> Polynomial:
     for a_support, a_coefficient in left.items():
         for b_support, b_coefficient in right.items():
             support = tuple(a + b for a, b in zip(a_support, b_support, strict=True))
-            if any(abs(value) > MAX_TRIG_EXPONENT for value in support):
-                _refuse_growth()
+            _admit_support(support)
             result[support] = _gadd(
                 result.get(support, (Fraction(), Fraction())),
                 _gmul(a_coefficient, b_coefficient),
@@ -214,6 +225,12 @@ def _refuse_growth() -> None:
         code="trigonometric_rational.expansion_bound",
         message="trigonometric Laurent expansion exceeds the admitted support or exponent bound",
     )
+
+
+def _admit_support(support: Support) -> Support:
+    if any(abs(value) > MAX_TRIG_EXPONENT for value in support):
+        _refuse_growth()
+    return support
 
 
 def _one(axis: int) -> Polynomial:
@@ -256,6 +273,8 @@ def _trig(angle: IntegerAffineAngleForm, axis: int, *, sine: bool) -> RationalFu
         )
     forward = tuple(angle.coefficients)
     backward = tuple(-value for value in forward)
+    _admit_support(forward)
+    _admit_support(backward)
     phase = _root_of_unity(angle.quarter_turns)
     inverse_phase = (phase[0], -phase[1])
     if sine:
@@ -327,11 +346,15 @@ def _canonicalize(numerator: Polynomial, denominator: Polynomial) -> RationalFun
         for index in range(len(next(iter(denominator))))
     )
     numerator = {
-        tuple(value - shift[index] for index, value in enumerate(support)): coefficient
+        _admit_support(
+            tuple(value - shift[index] for index, value in enumerate(support))
+        ): coefficient
         for support, coefficient in numerator.items()
     }
     denominator = {
-        tuple(value - shift[index] for index, value in enumerate(support)): coefficient
+        _admit_support(
+            tuple(value - shift[index] for index, value in enumerate(support))
+        ): coefficient
         for support, coefficient in denominator.items()
     }
     leading = denominator[max(denominator)]
@@ -344,6 +367,103 @@ def _canonicalize(numerator: Polynomial, denominator: Polynomial) -> RationalFun
         for support, coefficient in denominator.items()
     }
     return numerator, denominator
+
+
+def _sympy_coefficient(value: Gaussian) -> Any:
+    """Convert one exact Gaussian rational to the pinned backend domain."""
+
+    from sympy import I, Rational
+
+    return Rational(value[0].numerator, value[0].denominator) + I * Rational(
+        value[1].numerator, value[1].denominator
+    )
+
+
+def _gaussian_from_sympy(value: Any) -> Gaussian:
+    """Convert a backend Gaussian-rational coefficient without string parsing."""
+
+    real, imaginary = value.as_real_imag()
+    if not real.is_Rational or not imaginary.is_Rational:
+        raise TypeError("trigonometric backend returned a non-rational coefficient")
+    return _admit_gaussian(
+        (
+            Fraction(int(real.p), int(real.q)),
+            Fraction(int(imaginary.p), int(imaginary.q)),
+        )
+    )
+
+
+def _polynomial_from_sympy(value: Any) -> Polynomial:
+    return {
+        tuple(int(exponent) for exponent in exponents): _gaussian_from_sympy(
+            coefficient
+        )
+        for exponents, coefficient in value.terms()
+    }
+
+
+def _reduce_common_laurent_factor(
+    numerator: Polynomial, denominator: Polynomial
+) -> RationalFunction:
+    """Cancel the exact common Laurent factor before canonical normalization."""
+
+    if not numerator:
+        return _canonicalize(numerator, denominator)
+    axis = len(next(iter(denominator)))
+    if axis == 0:
+        return _canonicalize(numerator, denominator)
+
+    # Shift both Laurent polynomials into an ordinary polynomial ring.  This
+    # is multiplication by one common torus monomial and does not change the
+    # rational function or its nonzero locus.
+    minimum = tuple(
+        min(
+            support[index]
+            for polynomial in (numerator, denominator)
+            for support in polynomial
+        )
+        for index in range(axis)
+    )
+    shifted_numerator = {
+        _admit_support(
+            tuple(value - minimum[index] for index, value in enumerate(support))
+        ): coefficient
+        for support, coefficient in numerator.items()
+    }
+    shifted_denominator = {
+        _admit_support(
+            tuple(value - minimum[index] for index, value in enumerate(support))
+        ): coefficient
+        for support, coefficient in denominator.items()
+    }
+    if len(shifted_numerator) * len(shifted_denominator) > MAX_TRIG_LAURENT_TERMS:
+        _refuse_growth()
+
+    from sympy import Poly, Symbol
+    from sympy.polys.domains import QQ_I
+
+    symbols = tuple(Symbol(f"x{index}") for index in range(axis))
+    left = Poly.from_dict(
+        {
+            support: _sympy_coefficient(coefficient)
+            for support, coefficient in shifted_numerator.items()
+        },
+        *symbols,
+        domain=QQ_I,
+    )
+    right = Poly.from_dict(
+        {
+            support: _sympy_coefficient(coefficient)
+            for support, coefficient in shifted_denominator.items()
+        },
+        *symbols,
+        domain=QQ_I,
+    )
+    common = left.gcd(right)
+    return _canonicalize(
+        _polynomial_from_sympy(left.exquo(common)),
+        _polynomial_from_sympy(right.exquo(common)),
+    )
 
 
 def _wire(
@@ -370,7 +490,9 @@ def normalize_trigonometric_rational(
         )
     axis = len(request.variables)
     raw_numerator, raw_denominator = _evaluate(request.expression, axis, [0])
-    numerator, denominator = _canonicalize(raw_numerator, raw_denominator)
+    numerator, denominator = _reduce_common_laurent_factor(
+        raw_numerator, raw_denominator
+    )
     _, denominator_nonzero = _canonicalize(_one(axis), raw_denominator)
     denominator_wire = _wire(request.variables, denominator)
     return TrigonometricRationalNormalizeResult(

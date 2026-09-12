@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
+import time
 from fractions import Fraction
 from typing import Any, Literal
 
 import sympy
 
 from jacobian._exact import CanonicalRational
+from jacobian._execution import (
+    bind_request_deadline,
+    current_request_execution,
+    request_checkpoint,
+    request_execution,
+)
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -37,6 +44,8 @@ from jacobian.math.polynomials.root_critical._models import (
 from jacobian.math.polynomials.values import RationalPolynomial
 
 __all__ = ["root_critical_distance_profile"]
+
+ROOT_CRITICAL_WALL_SECONDS = 60.0
 
 
 def _rational(value: object) -> CanonicalRational:
@@ -180,12 +189,14 @@ def _family(
     poly: sympy.Poly,
 ) -> tuple[tuple[RootCriticalRoot, ...], tuple[Any, ...]]:
     primitive_factors: list[tuple[sympy.Poly, int]] = []
+    request_checkpoint("during root-critical factor_list")
     for factor, multiplicity in poly.factor_list()[1]:
         primitive_factors.append((_primitive_integer_poly(factor), int(multiplicity)))
     primitive_factors.sort(key=lambda item: _factor_key(item[0]))
     records: list[RootCriticalRoot] = []
     values: list[Any] = []
     for factor, multiplicity in primitive_factors:
+        request_checkpoint("during root-critical all_roots")
         exact_roots = tuple(factor.all_roots())
         for root_index in range(factor.degree()):
             root = _root_value(root_index, exact_roots)
@@ -451,6 +462,7 @@ def _distance_value(
     Literal["POSITIVE", "ZERO_DISTANCE"],
 ]:
     variable = sympy.Symbol("distance")
+    request_checkpoint("during root-critical distance minpoly")
     distance = sympy.simplify(
         sympy.expand((left - right) * sympy.conjugate(left - right))
     )
@@ -567,6 +579,7 @@ def _admit(
             message="source coefficient height exceeds the exact root-critical profile envelope",
         )
     critical_degree = max(0, degree - 1)
+    request_checkpoint("during root-critical admission factor_list")
     source_factors = source.factor_list()[1]
     derivative_backend = source.diff()
     derivative_factors = derivative_backend.factor_list()[1] if critical_degree else ()
@@ -624,6 +637,7 @@ def _admit(
             code="polynomial.root_critical.distance_degree_bound",
             message="the source can produce a distance algebraic degree beyond the admitted carrier",
         )
+    request_checkpoint("during root-critical admission all_roots")
     if any(
         isinstance(root, sympy.RootOf)
         for factor, _ in (*source_factors, *derivative_factors)
@@ -644,6 +658,17 @@ def root_critical_distance_profile(
 ) -> RootCriticalDistanceProfile:
     """Return every distinct root/critical pair and its exact squared distance."""
 
+    execution = current_request_execution()
+    if execution is None:
+        with request_execution(time.monotonic()):
+            return root_critical_distance_profile(
+                polynomial, max_pair_rows=max_pair_rows
+            )
+    deadline = execution.started_at + ROOT_CRITICAL_WALL_SECONDS
+    if execution.deadline is not None:
+        deadline = min(deadline, execution.deadline)
+    bind_request_deadline(deadline)
+    request_checkpoint("before root-critical admission")
     source, _root_count, _critical_count = _admit(
         polynomial,
         max_pair_rows=max_pair_rows,
@@ -677,4 +702,5 @@ def root_critical_distance_profile(
         critical_points=critical_points,
         pairs=tuple(rows),
     )
+    request_checkpoint("after root-critical result construction")
     return result

@@ -92,6 +92,18 @@ def _exceeds_canonical_digits(value: Fraction) -> bool:
     return abs(value.numerator) >= limit or value.denominator >= limit
 
 
+def _admit_closed_form_coefficients(values: tuple[Fraction, ...]) -> None:
+    if any(_exceeds_canonical_digits(value) for value in values):
+        raise OperationResourceAdmissionError(
+            location=("polynomial",),
+            code="polynomial.discrete_antiderivative.intermediate_growth",
+            message=(
+                "discrete-antiderivative intermediate coefficients exceed the "
+                "exact-output bound"
+            ),
+        )
+
+
 def _admit_linear_group(coefficients: dict[int, Fraction]) -> None:
     """Admit degree-1 slices from the exact closed-form inverse.
 
@@ -105,17 +117,27 @@ def _admit_linear_group(coefficients: dict[int, Fraction]) -> None:
     constant = coefficients.get(0, Fraction())
     quadratic = linear / 2
     linear_term = constant - quadratic
-    if any(
-        _exceeds_canonical_digits(value) for value in (quadratic, linear_term, linear)
-    ):
-        raise OperationResourceAdmissionError(
-            location=("polynomial",),
-            code="polynomial.discrete_antiderivative.intermediate_growth",
-            message=(
-                "discrete-antiderivative intermediate coefficients exceed the "
-                "exact-output bound"
-            ),
-        )
+    _admit_closed_form_coefficients((quadratic, linear_term, linear))
+
+
+def _admit_quadratic_group(coefficients: dict[int, Fraction]) -> None:
+    """Admit degree-2 slices from the exact closed-form inverse.
+
+    For ``P(x) = a x^2 + b x + c`` the zero-based inverse is
+    ``Q(x) = (a/3) x^3 + ((b-a)/2) x^2 + (a/6 - b/2 + c) x``.  Every
+    denominator is at most 6, so a source coefficient already at the digit
+    limit stays representable even when the triangular envelope does not.
+    """
+
+    quadratic = coefficients.get(2, Fraction())
+    linear = coefficients.get(1, Fraction())
+    constant = coefficients.get(0, Fraction())
+    cubic_term = quadratic / 3
+    quadratic_term = (linear - quadratic) / 2
+    linear_term = quadratic / 6 - linear / 2 + constant
+    _admit_closed_form_coefficients(
+        (cubic_term, quadratic_term, linear_term, quadratic, linear)
+    )
 
 
 def _admit_group(
@@ -135,6 +157,9 @@ def _admit_group(
         return
     if maximum_degree == 1:
         _admit_linear_group(coefficients)
+        return
+    if maximum_degree == 2:
+        _admit_quadratic_group(coefficients)
         return
 
     common_denominator = 1

@@ -74,9 +74,14 @@ workload before restricting admission. This applies to derived work, height,
 and storage estimates as well as fixed input caps. Complete this review:
 
 1. Identify the quantities that control work, intermediate growth, and exact
-   output. Use quantities such as operand digits, coefficient height, degree,
-   terms, matrix dimensions, candidate count, witness count, or predicted
-   serialized size rather than a convenient coarse input field.
+   output in every mandatory phase: canonicalization, presolve, the selected
+   kernel or backend, owner-side postprocessing and result construction, and
+   serialization. Use quantities such as operand digits, coefficient height,
+   degree, terms, matrix dimensions, candidate count, witness count, or
+   predicted serialized size rather than a convenient coarse input field. A
+   backend complexity claim does not bound owner-side scans or result assembly;
+   a linear kernel followed by a quadratic assembly pass is a quadratic
+   operation.
 2. Compare exact algorithm and representation regimes. Consider sparse,
    factored, modular, symbolic, or implicit values before requiring an expanded
    result, and separate decision, first-witness, and complete-profile contracts
@@ -100,6 +105,9 @@ and storage estimates as well as fixed input caps. Complete this review:
 6. Define request admission from the selected algorithm's work,
    intermediate, memory, and result bounds. Large scalar inputs should remain
    admissible when those derived quantities and the returned value are small.
+   Compare an operation-specific envelope with the full canonical carrier and
+   retain a lower cap only when a derived phase or output bound requires it,
+   rather than inheriting a neighboring operation's limit.
 7. Retain a restrictive ceiling only after investigating sharper bounds,
    exact reductions, representations, algorithms, and maintained backends.
    Document the remaining bottleneck, the approaches tried, and the evidence
@@ -110,7 +118,15 @@ and storage estimates as well as fixed input caps. Complete this review:
    motivating request through the final public boundary. Boundary-rejection
    tests do not substitute for a realistic request inside the intended useful
    envelope. Use defining invariants or an independent oracle to show that
-   every selected regime has the same public semantics.
+   every selected regime has the same public semantics. For a widened envelope,
+   cover the smallest formerly rejected valid request, a simple request at the
+   full carrier boundary, and a near-output or near-storage-bound request. Check
+   that every limit representable in JSON Schema advertises the same bound that
+   runtime admission enforces. For a derived cross-field envelope that JSON
+   Schema cannot express, publish descriptive model or field guidance and a
+   valid example while keeping the exact relation solely in owner admission; do
+   not replace it with coarse independent field caps or replay it in a model
+   validator.
 
 Review the whole execution path, including presolve, certificate construction,
 and result conversion. A correct mathematical characterization need not be an

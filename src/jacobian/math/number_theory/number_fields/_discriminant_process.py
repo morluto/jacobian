@@ -38,6 +38,7 @@ from jacobian.math.number_theory.number_fields._models import (
 # number-field owners while discriminant and basis consumers share one
 # process implementation.
 
+
 def compute_nf_discriminant(
     request: NumberFieldRequest,
 ) -> NumberFieldDiscriminantResult:

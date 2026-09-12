@@ -34,7 +34,9 @@ def main() -> int:
         if include_basis:
             basis = integral_basis_coordinates(request.field, integral_basis)
             if basis is None:
-                raise RuntimeError("integral-basis recognition changed during conversion")
+                raise RuntimeError(
+                    "integral-basis recognition changed during conversion"
+                )
             response["basis"] = [
                 [
                     {

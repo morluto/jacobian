@@ -98,6 +98,39 @@ def _canonical_complex(
     return operation.run(request).complex
 
 
+def test_canonicalization_reuses_materialized_face_closure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.topology._models as topology_models
+    import jacobian.math.topology._simplicial_kernel as simplicial_kernel
+
+    calls: list[tuple[tuple[str, ...], ...]] = []
+    original = topology_models.face_closure
+
+    def tracked(
+        facets: tuple[tuple[str, ...], ...],
+    ) -> tuple[tuple[tuple[str, ...], ...], ...]:
+        calls.append(facets)
+        return original(facets)
+
+    monkeypatch.setattr(topology_models, "face_closure", tracked)
+    monkeypatch.setattr(simplicial_kernel, "face_closure", tracked)
+
+    result = _operation("topology.simplicial_complex.canonicalize").run(
+        SimplicialComplexRequest(vertices=("c", "a", "b"), facets=(("c", "b", "a"),))
+    )
+
+    assert calls == [(("a", "b", "c"),)]
+    calls.clear()
+    assert (
+        SimplicialComplexCanonicalizationResult.model_validate_json(
+            result.model_dump_json()
+        )
+        == result
+    )
+    assert calls == []
+
+
 def _rational_rank(rows: tuple[tuple[str, ...], ...]) -> int:
     """Small independent Gaussian rank oracle for topology fixtures."""
 
@@ -186,7 +219,7 @@ def test_false_face_closure_is_rejected_at_native_admission() -> None:
     payload["f_vector"] = (3, 2, 1)
     payload["closure_size"] = 6
     malformed = FiniteSimplicialComplex.model_validate(payload)
-    with pytest.raises(OperationDomainValidationError):
+    with pytest.raises(OperationDomainValidationError, match="face closure"):
         _operation("topology.simplicial_complex.chain_complex.compute").run(
             ChainComplexRequest(complex=malformed)
         )

@@ -5,8 +5,10 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.symmetric_functions._models import (
     _MAX_SCHUR_PARTITION_LENGTH,
+    _MAX_SCHUR_VARIABLE_NAME_LENGTH,
     IntegerPartition,
     PartitionConjugateResult,
     PartitionRequest,
@@ -17,6 +19,7 @@ from jacobian.math.combinatorics.symmetric_functions._tools import TOOLS
 from jacobian.math.combinatorics.symmetric_functions.operations import (
     partition_conjugate,
     schur_evaluation,
+    verify_schur_evaluation,
 )
 from jacobian.math.combinatorics.symmetric_functions.values import (
     MAX_PARTITION_SIZE,
@@ -44,6 +47,132 @@ def test_native_surface_accepts_canonical_partition_values() -> None:
 
     assert partition_conjugate(partition).parts == (2, 1)
     assert schur_evaluation(partition, (1, 1)).value == 2
+
+
+def test_schur_result_is_bound_and_verifiable() -> None:
+    result = schur_evaluation(IntegerPartition(parts=(1,)), (1, 1), ("x1", "x2"))
+    assert result.partition.parts == (1,)
+    assert result.variables == ("x1", "x2")
+    assert result.point == (1, 1)
+    assert verify_schur_evaluation(result)
+    forged = result.model_copy(update={"value": 3})
+    assert not verify_schur_evaluation(forged)
+    assert not verify_schur_evaluation(object())
+
+
+def test_native_schur_rejects_oversized_variable_axis_before_label_validation() -> None:
+    labels = tuple(f"x{index}" for index in range(21))
+
+    with pytest.raises(OperationDomainValidationError, match="same length"):
+        schur_evaluation(IntegerPartition(parts=(1,)), (1,), labels)
+
+
+def test_schur_verifier_rejects_oversized_constructed_axes_without_dumping() -> None:
+    result = schur_evaluation(IntegerPartition(parts=(1,)), (1,), ("x",))
+    claim = result.model_copy(
+        update={"variables": tuple(f"x{index}" for index in range(10_000))}
+    )
+
+    assert not verify_schur_evaluation(claim)
+
+
+def test_schur_verifier_rejects_forged_nested_partition_parts() -> None:
+    result = schur_evaluation(IntegerPartition(parts=(1,)), (1,), ("x",))
+    forged = result.model_copy(
+        update={"partition": IntegerPartition.model_construct(parts=(0,))}
+    )
+
+    assert not verify_schur_evaluation(forged)
+
+
+def test_schur_result_rejects_non_integer_point_coordinates() -> None:
+    result = schur_evaluation(IntegerPartition(parts=(1,)), (1,), ("x",))
+    with pytest.raises(ValidationError):
+        SchurExpansionResult(
+            partition=result.partition,
+            variables=result.variables,
+            point=(True,),
+            value=result.value,
+        )
+    with pytest.raises(ValidationError):
+        SchurExpansionResult(
+            partition=result.partition,
+            variables=result.variables,
+            point=(1.0,),
+            value=result.value,
+        )
+    with pytest.raises(ValidationError):
+        SchurExpansionResult(
+            partition=result.partition,
+            variables=result.variables,
+            point=("1",),
+            value=result.value,
+        )
+    for coordinate in (True, 1.0, "1"):
+        forged = SchurExpansionResult.model_construct(
+            partition=result.partition,
+            variables=result.variables,
+            point=(coordinate,),
+            value=result.value,
+        )
+        assert not verify_schur_evaluation(forged)
+
+
+def test_schur_verifier_rejects_unvalidated_claim_copies() -> None:
+    result = schur_evaluation(IntegerPartition(parts=(1,)), (1,), ("x",))
+    invalid_copies = (
+        result.model_copy(update={"variables": ()}),
+        SchurExpansionResult.model_construct(
+            partition=result.partition,
+            variables=result.variables,
+            point=result.point,
+            value=True,
+        ),
+    )
+
+    assert all(not verify_schur_evaluation(claim) for claim in invalid_copies)
+
+
+def test_schur_verifier_propagates_claim_outside_execution_envelope() -> None:
+    claim = SchurExpansionResult(
+        partition=IntegerPartition(parts=(1,) * 51),
+        variables=("x",),
+        point=(1,),
+        value=0,
+    )
+
+    with pytest.raises(
+        OperationDomainValidationError,
+        match="partition length must not exceed 50",
+    ):
+        verify_schur_evaluation(claim)
+
+
+def test_schur_verifier_accepts_boundary_execution_envelope() -> None:
+    claim = SchurExpansionResult(
+        partition=IntegerPartition(parts=(1,) * 50),
+        variables=("x",),
+        point=(0,),
+        value=0,
+    )
+
+    assert verify_schur_evaluation(claim)
+
+
+def test_schur_verifier_propagates_computation_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    claim = schur_evaluation(IntegerPartition(parts=(1,)), (1,), ("x",))
+
+    def fail(*args: object, **kwargs: object) -> SchurExpansionResult:
+        raise RuntimeError("computation failed")
+
+    monkeypatch.setattr(
+        "jacobian.math.combinatorics.symmetric_functions.operations.schur_evaluation",
+        fail,
+    )
+    with pytest.raises(RuntimeError, match="computation failed"):
+        verify_schur_evaluation(claim)
 
 
 def test_conjugate_self_conjugate_partition() -> None:
@@ -173,6 +302,8 @@ def test_request_schema_publishes_schur_invariants() -> None:
     assert "length must equal the length of point" in variables_description
     assert variables.get("uniqueItems") is True
     assert variables["minItems"] == 1 and variables["maxItems"] == 20
+    assert variables["items"]["maxLength"] == _MAX_SCHUR_VARIABLE_NAME_LENGTH
+    assert f"{_MAX_SCHUR_VARIABLE_NAME_LENGTH} characters" in variables["description"]
     assert point["items"]["minimum"] == -999_999
     assert point["items"]["maximum"] == 999_999
     assert "decimal digits" in point["items"]["description"]
@@ -193,6 +324,57 @@ def test_schur_rejects_coordinate_exceeding_digit_bound() -> None:
             variables=("x1",),
             point=(1_000_000,),
         )
+
+
+def test_schur_rejects_variable_name_exceeding_length_bound() -> None:
+    variable = "x" * (_MAX_SCHUR_VARIABLE_NAME_LENGTH + 1)
+    with pytest.raises(ValidationError) as request_error:
+        SchurExpansionRequest(
+            partition=IntegerPartition(parts=(1,)),
+            variables=(variable,),
+            point=(1,),
+        )
+    assert request_error.value.errors()[0]["type"] == "string_too_long"
+
+    with pytest.raises(ValidationError) as result_error:
+        SchurExpansionResult(
+            partition=IntegerPartition(parts=(1,)),
+            variables=(variable,),
+            point=(1,),
+            value=1,
+        )
+    assert result_error.value.errors()[0]["type"] == "string_too_long"
+
+
+def test_native_schur_rejects_variable_name_exceeding_length_bound() -> None:
+    variable = "x" * (_MAX_SCHUR_VARIABLE_NAME_LENGTH + 1)
+    with pytest.raises(
+        OperationDomainValidationError,
+        match="canonical nonempty labels",
+    ):
+        schur_evaluation(IntegerPartition(parts=(1,)), (1,), (variable,))
+
+
+@pytest.mark.parametrize("variable", (" x", "x ", "x\x00"))
+def test_schur_rejects_noncanonical_variable_name(variable: str) -> None:
+    with pytest.raises(ValidationError):
+        SchurExpansionRequest(
+            partition=IntegerPartition(parts=(1,)),
+            variables=(variable,),
+            point=(1,),
+        )
+    with pytest.raises(ValidationError):
+        SchurExpansionResult(
+            partition=IntegerPartition(parts=(1,)),
+            variables=(variable,),
+            point=(1,),
+            value=1,
+        )
+    with pytest.raises(
+        OperationDomainValidationError,
+        match="canonical nonempty labels",
+    ):
+        schur_evaluation(IntegerPartition(parts=(1,)), (1,), (variable,))
 
 
 def test_schur_accepts_boundary_coordinate() -> None:

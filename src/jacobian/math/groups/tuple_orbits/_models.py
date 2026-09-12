@@ -1,41 +1,538 @@
-"""Typed diagonal-action tuple-family orbit profiles."""
+"""Typed diagonal-action tuple-family orbit profiles.
 
-from typing import Self
+Tuple coordinates are positions on one finite permutation action. Keeping the
+action with the source family makes coordinate axes explicit across a
+serialized producer/consumer boundary; tuple coordinate order is never
+normalized.
+"""
 
-from pydantic import Field, StrictInt, model_validator
+from __future__ import annotations
+
+from collections.abc import Iterable, Mapping, Sized
+from typing import Any, Self
+
+from pydantic import ConfigDict, Field, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import ExactInteger
-from jacobian._models import StrictModel
-from jacobian.math.groups._models import MAX_GROUP_DEGREE, PermutationGroup
+from jacobian._models import StrictModel, canonicalize_json_containers
+from jacobian.math.groups._models import MAX_GROUP_DEGREE
+from jacobian.math.groups.actions._models import (
+    MAX_DOMAIN_SIZE,
+    MAX_FAMILY_MEMBERS,
+    MAX_GENERATORS,
+    MAX_GROUP_ORDER,
+    FinitePermutationAction,
+)
+
+MAX_TUPLE_ARITY = MAX_GROUP_DEGREE
+
+
+def _tuple_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"finite_group_action.tuple_family_{reason}", message)
+
+
+def _collection_length(value: object) -> int | None:
+    if isinstance(value, (str, bytes, bytearray, Mapping)):
+        return None
+    if isinstance(value, Sized):
+        try:
+            return len(value)
+        except TypeError:
+            return None
+    return None
+
+
+_SEQUENCE_OVERFLOW = object()
+
+
+def _materialize_bounded_sequence(value: object, limit: int) -> object:
+    if isinstance(value, (str, bytes, bytearray, Mapping)) or value is None:
+        return value
+    length = _collection_length(value)
+    if length is not None:
+        if length > limit:
+            return _SEQUENCE_OVERFLOW
+        return tuple(value)
+    if isinstance(value, Iterable):
+        items: list[Any] = []
+        for item in value:
+            items.append(item)
+            if len(items) > limit:
+                return _SEQUENCE_OVERFLOW
+        return tuple(items)
+    return value
+
+
+def _preflight_action_dimensions(*, domain: object, generators: object) -> None:
+    domain_length = _collection_length(domain)
+    if domain_length is not None and domain_length > MAX_DOMAIN_SIZE:
+        raise _tuple_error(
+            "action_domain_bound",
+            f"action domain admits at most {MAX_DOMAIN_SIZE} labels",
+        )
+    degree = domain_length if domain_length is not None else MAX_DOMAIN_SIZE
+    generator_length = _collection_length(generators)
+    if generator_length is None:
+        if not isinstance(generators, Iterable) or isinstance(
+            generators, (str, bytes, bytearray, Mapping)
+        ):
+            return
+        rows: list[object] = []
+        for generator in generators:
+            rows.append(generator)
+            if len(rows) > MAX_GENERATORS:
+                raise _tuple_error(
+                    "action_generator_bound",
+                    f"actions admit at most {MAX_GENERATORS} generators",
+                )
+        generators = rows
+        generator_length = len(rows)
+    if generator_length > MAX_GENERATORS:
+        raise _tuple_error(
+            "action_generator_bound",
+            f"actions admit at most {MAX_GENERATORS} generators",
+        )
+    for generator in generators:
+        row_length = _collection_length(generator)
+        if row_length is None and isinstance(generator, Iterable):
+            if isinstance(generator, (str, bytes, bytearray, Mapping)):
+                continue
+            for counted, _item in enumerate(generator, start=1):
+                if counted > degree:
+                    raise _tuple_error(
+                        "generator_length_mismatch",
+                        "every generator must be a permutation of the domain",
+                    )
+            continue
+        if row_length is not None and row_length > degree:
+            raise _tuple_error(
+                "generator_length_mismatch",
+                "every generator must be a permutation of the domain",
+            )
+
+
+def _declared_attr(owner: object, name: str) -> object | None:
+    if isinstance(owner, Mapping):
+        return owner.get(name)
+    fields_set = getattr(owner, "__pydantic_fields_set__", None)
+    if isinstance(fields_set, (set, frozenset)) and name not in fields_set:
+        return None
+    return getattr(owner, name, None)
+
+
+def _preflight_action_payload(action: object) -> None:
+    if action is None:
+        return
+    _preflight_action_dimensions(
+        domain=_declared_attr(action, "domain"),
+        generators=_declared_attr(action, "generators"),
+    )
+
+
+def _row_field(row: object, name: str) -> object:
+    return _declared_attr(row, name)
+
+
+def _action_mapping(action: object) -> dict[str, Any] | None:
+    if action is None:
+        return None
+    if isinstance(action, Mapping):
+        payload = dict(action)
+    else:
+        payload = {
+            "domain": _declared_attr(action, "domain"),
+            "generators": _declared_attr(action, "generators"),
+        }
+    generators = payload.get("generators")
+    domain = payload.get("domain")
+    degree = _collection_length(domain)
+    if degree is None:
+        degree = MAX_DOMAIN_SIZE
+    if isinstance(generators, Iterable) and not isinstance(
+        generators, (str, bytes, bytearray, Mapping)
+    ):
+        bounded_rows: list[Any] = []
+        for generator in generators:
+            materialized = _materialize_bounded_sequence(generator, degree)
+            if materialized is _SEQUENCE_OVERFLOW:
+                raise _tuple_error(
+                    "generator_length_mismatch",
+                    "every generator must be a permutation of the domain",
+                )
+            bounded_rows.append(materialized)
+            if len(bounded_rows) > MAX_GENERATORS:
+                raise _tuple_error(
+                    "action_generator_bound",
+                    f"actions admit at most {MAX_GENERATORS} generators",
+                )
+        payload["generators"] = tuple(bounded_rows)
+    return payload
+
+
+def _row_mapping(row: object) -> dict[str, Any]:
+    if isinstance(row, Mapping):
+        return dict(row)
+    return {
+        "representative": _declared_attr(row, "representative"),
+        "source_indices": _declared_attr(row, "source_indices"),
+        "orbit_size": _declared_attr(row, "orbit_size"),
+        "stabilizer_size": _declared_attr(row, "stabilizer_size"),
+        "least_transporter": _declared_attr(row, "least_transporter"),
+    }
+
+
+def _source_mapping(data: object) -> dict[str, Any]:
+    if isinstance(data, Mapping):
+        payload = dict(data)
+    else:
+        payload = {
+            "action": _declared_attr(data, "action"),
+            "arity": _declared_attr(data, "arity"),
+            "family": _declared_attr(data, "family"),
+        }
+    action = _action_mapping(payload.get("action"))
+    if action is not None:
+        payload["action"] = action
+    family = payload.get("family")
+    if isinstance(family, Iterable) and not isinstance(
+        family, (str, bytes, bytearray, Mapping)
+    ):
+        bounded_family: list[Any] = []
+        for member in family:
+            materialized = _materialize_bounded_sequence(member, MAX_TUPLE_ARITY)
+            if materialized is _SEQUENCE_OVERFLOW:
+                raise _tuple_error(
+                    "arity_out_of_range",
+                    "tuple arity must be a non-negative action-domain-sized integer",
+                )
+            bounded_family.append(materialized)
+            if len(bounded_family) > MAX_FAMILY_MEMBERS:
+                raise _tuple_error(
+                    "input_bound",
+                    f"at most {MAX_FAMILY_MEMBERS} tuple rows are admitted",
+                )
+        payload["family"] = tuple(bounded_family)
+    return payload
+
+
+def _preflight_source_payload(data: object) -> None:
+    _preflight_action_payload(_declared_attr(data, "action"))
+    family = _declared_attr(data, "family")
+    raw_arity = _declared_attr(data, "arity")
+    family_length = _collection_length(family)
+    if family_length is None:
+        if not isinstance(family, Iterable) or isinstance(
+            family, (str, bytes, bytearray, Mapping)
+        ):
+            return
+        family_length = 0
+        for _member in family:
+            family_length += 1
+            if family_length > MAX_FAMILY_MEMBERS:
+                raise _tuple_error(
+                    "input_bound",
+                    f"at most {MAX_FAMILY_MEMBERS} tuple rows are admitted",
+                )
+        return
+    if family_length > MAX_FAMILY_MEMBERS:
+        raise _tuple_error(
+            "input_bound",
+            f"at most {MAX_FAMILY_MEMBERS} tuple rows are admitted",
+        )
+    arity_is_int = isinstance(raw_arity, int) and not isinstance(raw_arity, bool)
+    row_limit = raw_arity if arity_is_int else MAX_TUPLE_ARITY
+    for member in family:
+        length = _collection_length(member)
+        if length is None:
+            if not isinstance(member, Iterable) or isinstance(
+                member, (str, bytes, bytearray, Mapping)
+            ):
+                continue
+            counted = 0
+            for _item in member:
+                counted += 1
+                if counted > row_limit:
+                    raise _tuple_error(
+                        "arity_out_of_range",
+                        "tuple arity must be a non-negative action-domain-sized integer",
+                    )
+            length = counted
+        if arity_is_int and length != raw_arity:
+            raise _tuple_error(
+                "arity_mismatch",
+                "every family member must have the declared arity",
+            )
+        if length > MAX_TUPLE_ARITY:
+            raise _tuple_error(
+                "arity_out_of_range",
+                "tuple arity must be a non-negative action-domain-sized integer",
+            )
+
+
+def _preflight_row_payload(row: object) -> None:
+    representative = _row_field(row, "representative")
+    if (
+        isinstance(representative, (list, tuple))
+        and len(representative) > MAX_TUPLE_ARITY
+    ):
+        raise _tuple_error(
+            "arity_out_of_range",
+            "tuple arity must be a non-negative action-domain-sized integer",
+        )
+    source_indices = _row_field(row, "source_indices")
+    if (
+        isinstance(source_indices, (list, tuple))
+        and len(source_indices) > MAX_FAMILY_MEMBERS
+    ):
+        raise _tuple_error(
+            "input_bound",
+            f"at most {MAX_FAMILY_MEMBERS} tuple rows are admitted",
+        )
+    transporter = _row_field(row, "least_transporter")
+    if isinstance(transporter, (list, tuple)) and len(transporter) > MAX_GROUP_DEGREE:
+        raise _tuple_error(
+            "transporter_axis",
+            "transporters must be permutations of the action axis",
+        )
 
 
 class TupleFamilyOrbitSource(StrictModel):
-    group: PermutationGroup
-    arity: StrictInt = Field(ge=0, le=MAX_GROUP_DEGREE)
-    family: tuple[tuple[StrictInt, ...], ...] = Field(max_length=4096)
+    """One explicit family of tuples on a finite permutation action.
+
+    ``family`` is source ordered and preserves repeated source rows for
+    compatibility with materialized research families. Repetition *within* a
+    tuple is meaningful, so ``(a, b)`` and ``(b, a)`` remain distinct and
+    ``(a, a)`` is valid.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        revalidate_instances="always",
+    )
+
+    action: FinitePermutationAction
+    arity: StrictInt = Field(
+        ge=0,
+        le=MAX_TUPLE_ARITY,
+        description=(
+            "Fixed tuple arity. Coordinates retain this order, including "
+            "repeated positions; arity zero is the singleton empty tuple."
+        ),
+    )
+    family: tuple[tuple[StrictInt, ...], ...] = Field(
+        max_length=MAX_FAMILY_MEMBERS,
+        description=(
+            "Source-ordered tuple rows on action.domain. Rows may repeat; "
+            "the action orbit profile retains every source index."
+        ),
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_json_containers(cls, data: Any) -> Any:
+        payload = _source_mapping(data)
+        _preflight_source_payload(payload)
+        return canonicalize_json_containers(payload)
 
     @model_validator(mode="after")
     def bind_family_axis(self) -> Self:
+        degree = len(self.action.domain)
         if any(len(member) != self.arity for member in self.family):
-            raise ValueError("every family member must have the declared arity")
+            raise _tuple_error(
+                "arity_mismatch", "every family member must have the declared arity"
+            )
         if any(
-            not 0 <= coordinate < self.group.degree
+            not 0 <= coordinate < degree
             for member in self.family
             for coordinate in member
         ):
-            raise ValueError("tuple coordinates must lie on the group axis")
+            raise _tuple_error(
+                "coordinate_out_of_range",
+                "tuple coordinates must lie on the action domain axis",
+            )
         return self
 
 
 class TupleOrbitRow(StrictModel):
-    representative: tuple[StrictInt, ...]
-    source_indices: tuple[StrictInt, ...]
-    orbit_size: ExactInteger
-    stabilizer_size: ExactInteger
-    least_transporter: tuple[StrictInt, ...]
+    """One ambient orbit represented in the supplied family.
+
+    ``least_transporter`` maps the first source row listed in
+    ``source_indices`` to ``representative``. The result owner checks that
+    source-to-codomain map structurally without replaying group enumeration.
+    """
+
+    representative: tuple[StrictInt, ...] = Field(
+        max_length=MAX_TUPLE_ARITY,
+        description="Lexicographically least ambient tuple in this orbit.",
+    )
+    source_indices: tuple[StrictInt, ...] = Field(
+        min_length=1,
+        max_length=MAX_FAMILY_MEMBERS,
+        description="Increasing indices of all supplied rows in this orbit.",
+    )
+    orbit_size: ExactInteger = Field(
+        ge=1,
+        le=MAX_GROUP_ORDER,
+        description="Full ambient orbit cardinality, not only supplied rows.",
+    )
+    stabilizer_size: ExactInteger = Field(
+        ge=1,
+        le=MAX_GROUP_ORDER,
+        description="Ambient stabilizer cardinality of the representative.",
+    )
+    least_transporter: tuple[StrictInt, ...] = Field(
+        min_length=1,
+        max_length=MAX_GROUP_DEGREE,
+        description=(
+            "Lexicographically least permutation map from the first supplied "
+            "source tuple to the representative."
+        ),
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_json_containers(cls, data: Any) -> Any:
+        payload = data if isinstance(data, Mapping) else _row_mapping(data)
+        _preflight_row_payload(payload)
+        return canonicalize_json_containers(payload)
+
+    @model_validator(mode="after")
+    def bind_row_shape(self) -> Self:
+        if tuple(sorted(set(self.source_indices))) != self.source_indices:
+            raise _tuple_error(
+                "source_indices_not_canonical",
+                "source indices must be distinct and increasing",
+            )
+        return self
 
 
 class TupleFamilyOrbitResult(StrictModel):
+    """Exact source-indexed diagonal-action orbit profile.
+
+    Result decoding checks only source axes, canonical ordering, permutation
+    map shape, and partition structure. Group membership, orbit generation,
+    and completeness are established once by the producing operation; a
+    consumer that relies on an authored profile must run its own operation
+    admission rather than relying on result parsing.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        revalidate_instances="always",
+    )
+
     source: TupleFamilyOrbitSource
-    rows: tuple[TupleOrbitRow, ...] = Field(max_length=4096)
+    rows: tuple[TupleOrbitRow, ...] = Field(max_length=MAX_FAMILY_MEMBERS)
     is_union_of_complete_ambient_orbits: bool
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_json_containers(cls, data: Any) -> Any:
+        if not isinstance(data, Mapping):
+            rows = _declared_attr(data, "rows")
+            source = _declared_attr(data, "source")
+            complete = _declared_attr(data, "is_union_of_complete_ambient_orbits")
+            if rows is None and source is None:
+                return data
+            data = {
+                "source": source,
+                "rows": rows,
+                "is_union_of_complete_ambient_orbits": complete,
+            }
+        payload = dict(data)
+        rows = payload.get("rows")
+        if isinstance(rows, (list, tuple)):
+            if len(rows) > MAX_FAMILY_MEMBERS:
+                raise _tuple_error(
+                    "input_bound",
+                    f"at most {MAX_FAMILY_MEMBERS} tuple rows are admitted",
+                )
+            materialized_rows = []
+            total_source_indices = 0
+            for row in rows:
+                mapped = _row_mapping(row)
+                source_indices = mapped.get("source_indices")
+                materialized_indices = _materialize_bounded_sequence(
+                    source_indices, MAX_FAMILY_MEMBERS
+                )
+                if materialized_indices is _SEQUENCE_OVERFLOW:
+                    raise _tuple_error(
+                        "input_bound",
+                        f"at most {MAX_FAMILY_MEMBERS} tuple rows are admitted",
+                    )
+                if isinstance(materialized_indices, tuple):
+                    mapped["source_indices"] = materialized_indices
+                    source_indices = materialized_indices
+                _preflight_row_payload(mapped)
+                if isinstance(source_indices, (list, tuple)):
+                    total_source_indices += len(source_indices)
+                    if total_source_indices > MAX_FAMILY_MEMBERS:
+                        raise _tuple_error(
+                            "input_bound",
+                            f"at most {MAX_FAMILY_MEMBERS} tuple rows are admitted",
+                        )
+                materialized_rows.append(mapped)
+            payload["rows"] = materialized_rows
+        source = payload.get("source")
+        if source is not None:
+            payload["source"] = _source_mapping(source)
+            _preflight_source_payload(payload["source"])
+        return canonicalize_json_containers(payload)
+
+    @model_validator(mode="after")
+    def bind_result_axes(self) -> Self:
+        action = self.source.action
+        degree = len(action.domain)
+        family = self.source.family
+        representatives = tuple(row.representative for row in self.rows)
+        if representatives != tuple(sorted(set(representatives))):
+            raise _tuple_error(
+                "rows_not_canonical",
+                "rows must be ordered by unique representatives",
+            )
+        covered: list[int] = []
+        for row in self.rows:
+            if len(row.representative) != self.source.arity or any(
+                not 0 <= coordinate < degree for coordinate in row.representative
+            ):
+                raise _tuple_error(
+                    "representative_axis",
+                    "representatives must use the source arity and action axis",
+                )
+            if any(index < 0 or index >= len(family) for index in row.source_indices):
+                raise _tuple_error(
+                    "source_index_out_of_range",
+                    "source indices must index the retained family",
+                )
+            transporter = row.least_transporter
+            if len(transporter) != degree or sorted(transporter) != list(range(degree)):
+                raise _tuple_error(
+                    "transporter_axis",
+                    "transporters must be permutations of the action axis",
+                )
+            first_source = family[row.source_indices[0]]
+            if (
+                tuple(transporter[position] for position in first_source)
+                != row.representative
+            ):
+                raise _tuple_error(
+                    "transporter_mismatch",
+                    "the transporter must map the first source tuple to the representative",
+                )
+            covered.extend(row.source_indices)
+        if tuple(sorted(covered)) != tuple(range(len(family))):
+            raise _tuple_error(
+                "source_partition",
+                "rows must partition every source index exactly once",
+            )
+        return self
+
+
+__all__ = [
+    "TupleFamilyOrbitResult",
+    "TupleFamilyOrbitSource",
+    "TupleOrbitRow",
+]

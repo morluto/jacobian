@@ -791,6 +791,20 @@ unfinished work rather than claiming that narrowing admission fixed it.
 
 ### Finite enumeration budgets
 
+The finite group-action tuple-family profile is a useful bounded-profile
+boundary. Its source retains one labelled `FinitePermutationAction`, a fixed
+tuple arity, and source-ordered coordinate rows; tuple coordinate order and
+repeated coordinates are mathematical data. The diagonal action maps every
+coordinate through the same permutation, so `(a,b)` and `(b,a)` need not share
+an orbit and `(a,a)` is representable. Admission charges the generated group
+order, full permutation materialization, the supplied-family action count,
+ambient tuple-image cells, transporter work, and result cells. It never uses
+`|X|^r` or an encoded transport size as a substitute for those quantities.
+The result retains source indices and full ambient orbit/stabilizer sizes; an
+empty family is the canonical empty profile, while duplicate source rows are
+retained and prevent complete-orbit status unless every ambient tuple occurs
+exactly once.
+
 Large finite enumeration is compatible with a bounded exact operation. Admit it
 using the mathematical quantities that actually control the computation rather
 than treating small inputs as a goal in themselves. Record independent bounds

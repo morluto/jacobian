@@ -234,7 +234,7 @@ def decide_kempner_arithmetic_progression(
         return KempnerArithmeticProgressionResult(
             digit_set=digit_set,
             arity=arity,
-            conclusion=KempnerProgressionFree(),
+            conclusion=KempnerProgressionFree(status="PROGRESSION_FREE"),
         )
     first, difference = _reconstruct(terminal, predecessors, base=base)
     values = tuple(first + index * difference for index in range(arity))
@@ -244,6 +244,7 @@ def decide_kempner_arithmetic_progression(
         digit_set=digit_set,
         arity=arity,
         conclusion=KempnerContainsProgression(
+            status="CONTAINS_PROGRESSION",
             indices=tuple(range(arity)),
             values=values,
             first_term=first,

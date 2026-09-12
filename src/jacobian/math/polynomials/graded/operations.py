@@ -6,6 +6,8 @@ from itertools import combinations
 from math import comb
 from typing import Literal
 
+from sympy import QQ, Poly, Symbol, binomial, cancel, expand_func, fraction
+
 from jacobian._exact import CanonicalRational
 from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import (
@@ -71,14 +73,14 @@ def _is_explicit_unit_ideal(ideal: RationalPolynomialIdeal) -> bool:
 
 
 def _require_homogeneous(ideal: RationalPolynomialIdeal) -> None:
+    if _is_explicit_unit_ideal(ideal):
+        return
     try:
         _admit_source(ideal, label="graded ideal")
     except ValueError as error:
         raise OperationResourceAdmissionError(
             location=("ideal",), code="graded_ideal.input_budget", message=str(error)
         ) from error
-    if _is_explicit_unit_ideal(ideal):
-        return
     for generator in ideal.generators:
         degrees = {sum(term.exponents) for term in generator.polynomial.terms}
         if len(degrees) > 1:
@@ -135,8 +137,6 @@ def initial_monomial_ideal(
     )
     variables = ideal.variables
     order = {"lex": "lex", "grlex": "grlex", "grevlex": "grevlex"}[monomial_order]
-    from sympy import Poly
-
     exponents: set[tuple[int, ...]] = set()
     zero_basis = False
     for generator in basis_result.basis.generators:
@@ -244,7 +244,7 @@ def standard_monomials(
             count=0,
         )
     variables = len(initial_ideal.variables)
-    domain_size = comb(degree + variables - 1, variables - 1)
+    domain_size = _pruned_standard_monomial_bound(generators, variables, degree)
     if domain_size > MAX_STANDARD_MONOMIALS:
         raise OperationResourceAdmissionError(
             location=("degree",),
@@ -267,13 +267,64 @@ def standard_monomials(
     )
 
 
-def _require_hilbert_function_slices(variable_count: int, max_degree: int) -> None:
-    for degree in range(max_degree + 1):
-        domain_size = (
-            1
-            if variable_count == 0
-            else comb(degree + variable_count - 1, variable_count - 1)
+def _pure_power_caps(
+    generators: tuple[tuple[int, ...], ...], variable_count: int
+) -> tuple[int | None, ...]:
+    caps: list[int | None] = [None] * variable_count
+    for generator in generators:
+        nonzero = [index for index, exponent in enumerate(generator) if exponent]
+        if len(nonzero) != 1:
+            continue
+        axis = nonzero[0]
+        current = caps[axis]
+        caps[axis] = (
+            generator[axis] if current is None else min(current, generator[axis])
         )
+    return tuple(caps)
+
+
+def _pruned_standard_monomial_bound(
+    generators: tuple[tuple[int, ...], ...], variable_count: int, degree: int
+) -> int:
+    if variable_count == 0:
+        return 1 if degree == 0 else 0
+    if any(not any(exponent) for exponent in generators):
+        return 0
+    caps = _pure_power_caps(generators, variable_count)
+    ways = [0] * (degree + 1)
+    ways[0] = 1
+    for cap in caps:
+        next_ways = [0] * (degree + 1)
+        max_exponent = degree if cap is None else cap - 1
+        for current in range(degree + 1):
+            count = ways[current]
+            if count == 0:
+                continue
+            limit = current + max_exponent
+            if limit > degree:
+                limit = degree
+            for target in range(current, limit + 1):
+                next_ways[target] += count
+        ways = next_ways
+    return ways[degree]
+
+
+def _require_hilbert_function_slices(
+    generators: tuple[tuple[int, ...], ...] | None,
+    variable_count: int,
+    max_degree: int,
+) -> None:
+    for degree in range(max_degree + 1):
+        if generators is None:
+            domain_size = (
+                1
+                if variable_count == 0
+                else comb(degree + variable_count - 1, variable_count - 1)
+            )
+        else:
+            domain_size = _pruned_standard_monomial_bound(
+                generators, variable_count, degree
+            )
         if domain_size > MAX_STANDARD_MONOMIALS:
             raise OperationResourceAdmissionError(
                 location=("max_degree",),
@@ -282,17 +333,41 @@ def _require_hilbert_function_slices(variable_count: int, max_degree: int) -> No
             )
 
 
-def _minimal_source_monomials(
+def _monomial_greater(
+    left: tuple[int, ...],
+    right: tuple[int, ...],
+    monomial_order: Literal["lex", "grlex", "grevlex"],
+) -> bool:
+    if monomial_order == "lex":
+        return left > right
+    left_degree = sum(left)
+    right_degree = sum(right)
+    if left_degree != right_degree:
+        return left_degree > right_degree
+    if monomial_order == "grlex":
+        return left > right
+    for left_exponent, right_exponent in zip(
+        reversed(left), reversed(right), strict=True
+    ):
+        if left_exponent != right_exponent:
+            return left_exponent < right_exponent
+    return False
+
+
+def _leading_source_monomials(
     ideal: RationalPolynomialIdeal,
-) -> tuple[tuple[int, ...], ...] | None:
+    monomial_order: Literal["lex", "grlex", "grevlex"],
+) -> tuple[tuple[int, ...], ...]:
     exponents: list[tuple[int, ...]] = []
     for generator in ideal.generators:
         terms = generator.polynomial.terms
         if not terms:
             continue
-        if len(terms) != 1:
-            return None
-        exponents.append(terms[0].exponents)
+        leading = terms[0].exponents
+        for term in terms[1:]:
+            if _monomial_greater(term.exponents, leading, monomial_order):
+                leading = term.exponents
+        exponents.append(leading)
     unique = tuple(dict.fromkeys(exponents))
     return tuple(
         exponent
@@ -305,9 +380,12 @@ def _minimal_source_monomials(
     )
 
 
-def _preflight_series_generator_bound(ideal: RationalPolynomialIdeal) -> None:
-    monomials = _minimal_source_monomials(ideal)
-    if monomials is not None and len(monomials) > MAX_HILBERT_SERIES_GENERATORS:
+def _preflight_series_generator_bound(
+    ideal: RationalPolynomialIdeal,
+    monomial_order: Literal["lex", "grlex", "grevlex"],
+) -> None:
+    monomials = _leading_source_monomials(ideal, monomial_order)
+    if len(monomials) > MAX_HILBERT_SERIES_GENERATORS:
         raise OperationResourceAdmissionError(
             location=("ideal",),
             code="graded_ideal.series_generator_budget",
@@ -336,9 +414,9 @@ def hilbert_function(
             message="Hilbert-function prefixes support degrees from 0 through 32",
         )
     if not _is_explicit_unit_ideal(ideal):
-        monomials = _minimal_source_monomials(ideal)
-        if monomials is None or not any(not any(exponent) for exponent in monomials):
-            _require_hilbert_function_slices(len(ideal.variables), max_degree)
+        leading = _leading_source_monomials(ideal, monomial_order)
+        if not any(not any(exponent) for exponent in leading):
+            _require_hilbert_function_slices(leading, len(ideal.variables), max_degree)
     initial = initial_monomial_ideal(
         ideal, monomial_order, resource_budget=resource_budget
     )
@@ -422,12 +500,12 @@ def _series_data(
         degree: value for degree, value in subset_coefficients.items() if value
     }
     ambient_numerator = _polynomial_from_integer_coefficients(subset_coefficients)
-    from sympy import QQ, Poly, Symbol, cancel, fraction
-
+    request_checkpoint("during Hilbert-series cancellation")
     t = Symbol("t")
     ambient_expression = rational_polynomial_to_sympy(ambient_numerator).as_expr()
     unreduced = ambient_expression / (1 - t) ** variable_count
     numerator_expression, denominator_expression = fraction(cancel(unreduced))
+    request_checkpoint("during Hilbert-series degree inspection")
     numerator_poly = Poly(numerator_expression, t, domain=QQ)
     denominator_poly = Poly(denominator_expression, t, domain=QQ)
     reduced_degree = max(
@@ -467,8 +545,6 @@ def _series_data(
     )
     h_numerator = _polynomial_from_integer_coefficients(h_coefficients)
     prefix = []
-    from math import comb
-
     for degree in range(prefix_degree + 1):
         if denominator_exponent == 0:
             value = h_coefficients.get(degree, 0)
@@ -514,7 +590,7 @@ def hilbert_series(
             code="graded_ideal.series_prefix_budget",
             message="Hilbert-series prefixes support degrees from 0 through 16",
         )
-    _preflight_series_generator_bound(ideal)
+    _preflight_series_generator_bound(ideal, monomial_order)
     initial = initial_monomial_ideal(
         ideal, monomial_order, resource_budget=resource_budget
     )
@@ -560,8 +636,7 @@ def hilbert_polynomial(
     else:
         stabilization = max(0, h_degree - dimension + 1)
 
-    from sympy import QQ, Poly, Symbol, binomial, expand_func
-
+    request_checkpoint("during Hilbert-polynomial construction")
     m = Symbol("m")
     if dimension == 0:
         polynomial = RationalPolynomial(

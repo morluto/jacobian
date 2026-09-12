@@ -21,6 +21,7 @@ from jacobian.math.polynomials.graded._models import (
     HilbertSeriesRequest,
     HilbertSeriesResult,
     HVectorResult,
+    InitialMonomialIdealResult,
     StandardMonomialsResult,
 )
 from jacobian.math.polynomials.graded.operations import (
@@ -624,3 +625,143 @@ def test_hilbert_projection_results_bind_the_source_ring(
     payload["initial_ideal"] = other.initial_ideal.model_dump()
     with pytest.raises(ValidationError, match="source ring"):
         result_type.model_validate(payload)
+
+
+def test_hilbert_series_rejects_nine_leading_terms_of_multiterm_sources(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    variables = ("x", "y")
+    generators = []
+    for index in range(9):
+        leading = (8 - index, index)
+        lesser = (7 - index, index + 1) if index < 8 else (0, 7)
+        generators.append(
+            RationalPolynomial(
+                variables=variables,
+                polynomial=SparseRationalPolynomial(
+                    terms=(
+                        RationalPolynomialTerm(
+                            coefficient=CanonicalRational(num=1, den=1),
+                            exponents=leading,
+                        ),
+                        RationalPolynomialTerm(
+                            coefficient=CanonicalRational(num=1, den=1),
+                            exponents=lesser,
+                        ),
+                    )
+                ),
+            )
+        )
+    ideal = RationalPolynomialIdeal(variables=variables, generators=tuple(generators))
+
+    def fail(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError(
+            "multi-term leading-term overflow must not expand Groebner"
+        )
+
+    monkeypatch.setattr(graded_operations, "initial_monomial_ideal", fail)
+    with pytest.raises(
+        OperationResourceAdmissionError, match="at most 8 minimal generators"
+    ):
+        hilbert_series(ideal, prefix_degree=1)
+
+
+def test_linear_generators_prune_standard_monomial_domain() -> None:
+    variables = tuple(f"x{index}" for index in range(8))
+    generators = tuple(
+        RationalPolynomial(
+            variables=variables,
+            polynomial=SparseRationalPolynomial(
+                terms=(
+                    RationalPolynomialTerm(
+                        coefficient=CanonicalRational(num=1, den=1),
+                        exponents=tuple(1 if axis == index else 0 for axis in range(8)),
+                    ),
+                )
+            ),
+        )
+        for index in range(7)
+    )
+    ideal = RationalPolynomialIdeal(variables=variables, generators=generators)
+    enumerated = standard_monomials(ideal, 11)
+    assert enumerated.count == 1
+    assert enumerated.monomials == ((0, 0, 0, 0, 0, 0, 0, 11),)
+    profile = hilbert_function(ideal, max_degree=11)
+    assert profile.values[-1] == 1
+
+
+def test_unit_generator_with_oversized_redundant_summand_short_circuits() -> None:
+    from jacobian.math.polynomials.ideals._models import MAX_INPUT_EXPONENT
+
+    variables = ("x",)
+    unit = RationalPolynomial(
+        variables=variables,
+        polynomial=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=1, den=1),
+                    exponents=(0,),
+                ),
+            )
+        ),
+    )
+    oversized = RationalPolynomial(
+        variables=variables,
+        polynomial=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=1, den=1),
+                    exponents=(MAX_INPUT_EXPONENT + 1,),
+                ),
+            )
+        ),
+    )
+    ideal = RationalPolynomialIdeal(variables=variables, generators=(unit, oversized))
+    initial = initial_monomial_ideal(ideal)
+    assert initial.initial_ideal.generators[0].polynomial.terms[0].exponents == (0,)
+
+
+def test_initial_ideal_result_rejects_multiterm_generators() -> None:
+    result = initial_monomial_ideal(_ideal((2, 0)))
+    payload = result.model_dump()
+    payload["initial_ideal"]["generators"][0]["polynomial"]["terms"] = [
+        {"coefficient": {"num": "1", "den": "1"}, "exponents": [1, 0]},
+        {"coefficient": {"num": "1", "den": "1"}, "exponents": [0, 1]},
+    ]
+    with pytest.raises(ValidationError, match="unit monomials"):
+        InitialMonomialIdealResult.model_validate(payload)
+
+
+def test_hilbert_results_bound_dimension_by_the_ambient_ring() -> None:
+    series = hilbert_series(_ideal((1, 0), (0, 1)), prefix_degree=0)
+    payload = series.model_dump()
+    payload["denominator_exponent"] = 3
+    payload["series"]["denominator"]["terms"] = [
+        {"coefficient": {"num": 1, "den": 1}, "exponents": [3]},
+        {"coefficient": {"num": -3, "den": 1}, "exponents": [2]},
+        {"coefficient": {"num": 3, "den": 1}, "exponents": [1]},
+        {"coefficient": {"num": -1, "den": 1}, "exponents": [0]},
+    ]
+    with pytest.raises(ValidationError, match="source-ring dimension"):
+        HilbertSeriesResult.model_validate(payload)
+    polynomial = hilbert_polynomial(_ideal((2, 0)))
+    poly_payload = polynomial.model_dump()
+    poly_payload["dimension"] = 3
+    with pytest.raises(ValidationError, match="source-ring dimension"):
+        HilbertPolynomialResult.model_validate(poly_payload)
+
+
+def test_catalog_examples_state_homogeneity_and_monomial_shape() -> None:
+    from jacobian.math.polynomials.graded._tools import TOOLS
+
+    descriptions = {tool.operation_id: tool.examples[0].description for tool in TOOLS}
+    assert "homogeneous" in descriptions["graded_quotient.hilbert_series.compute"]
+    assert "homogeneous" in descriptions["graded_quotient.hilbert_polynomial.compute"]
+    assert (
+        "homogeneous" in descriptions["polynomial.ideal.initial_monomial_ideal.compute"]
+    )
+    assert (
+        "unit monomial"
+        in descriptions["monomial_ideal.standard_monomials.degree.compute"]
+    )
+    assert "homogeneous" in descriptions["graded_quotient.hilbert_function.compute"]

@@ -56,7 +56,7 @@ TOOLS = (
         examples=(
             OperationExample(
                 name="hypersurface",
-                description="Compute the series of QQ[x,y]/(x^2).",
+                description="Compute the Hilbert series of the homogeneous ideal (x^2) in QQ[x,y].",
                 input={"ideal": _EXAMPLE_IDEAL, "prefix_degree": 3},
             ),
         ),
@@ -76,7 +76,7 @@ TOOLS = (
         examples=(
             OperationExample(
                 name="line",
-                description="Compute the eventual Hilbert polynomial of QQ[x,y]/(x^2).",
+                description="Compute the eventual Hilbert polynomial of the homogeneous ideal (x^2) in QQ[x,y].",
                 input={"ideal": _EXAMPLE_IDEAL},
             ),
         ),
@@ -96,7 +96,7 @@ TOOLS = (
         examples=(
             OperationExample(
                 name="principal_square",
-                description="Compute the initial ideal of (x^2).",
+                description="Compute the initial monomial ideal of the homogeneous ideal (x^2).",
                 input={"ideal": _EXAMPLE_IDEAL},
             ),
         ),
@@ -112,7 +112,7 @@ TOOLS = (
         examples=(
             OperationExample(
                 name="degree_two",
-                description="Enumerate degree-two standard monomials modulo (x^2).",
+                description="Enumerate degree-two standard monomials modulo the unit monomial ideal (x^2).",
                 input={"initial_ideal": _EXAMPLE_IDEAL, "degree": 2},
             ),
         ),
@@ -133,7 +133,7 @@ TOOLS = (
         examples=(
             OperationExample(
                 name="prefix",
-                description="Compute the Hilbert-function prefix through degree two for (x^2).",
+                description="Compute the Hilbert-function prefix through degree two for the homogeneous ideal (x^2).",
                 input={"ideal": _EXAMPLE_IDEAL, "max_degree": 2},
             ),
         ),

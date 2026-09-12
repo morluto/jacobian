@@ -106,12 +106,8 @@ def test_shard_requires_canonical_in_range_triples() -> None:
 
 def test_fixed_triple_family_is_lexicographically_canonical() -> None:
     """An unordered block family has one serialization, independent of tuple order."""
-    first = SteinerTripleSystemShard(
-        order=7, fixed_triples=((0, 3, 6), (0, 1, 2))
-    )
-    second = SteinerTripleSystemShard(
-        order=7, fixed_triples=((0, 1, 2), (0, 3, 6))
-    )
+    first = SteinerTripleSystemShard(order=7, fixed_triples=((0, 3, 6), (0, 1, 2)))
+    second = SteinerTripleSystemShard(order=7, fixed_triples=((0, 1, 2), (0, 3, 6)))
     assert first == second
     assert first.fixed_triples == ((0, 1, 2), (0, 3, 6))
     assert first.model_dump(mode="json") == second.model_dump(mode="json")
@@ -238,9 +234,7 @@ def test_nonsemantic_shard_prefix_is_a_typed_domain_error() -> None:
         construct_steiner_triple_system(
             7,
             100,
-            SteinerTripleSystemShard(
-                order=7, fixed_triples=((0, 1, 2), (0, 1, 3))
-            ),
+            SteinerTripleSystemShard(order=7, fixed_triples=((0, 1, 2), (0, 1, 3))),
         )
 
 

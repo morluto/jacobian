@@ -289,70 +289,77 @@ class SteinerTripleSystemResult(StrictModel):
                 "a searched source shard must have the result order",
             )
         if self.status == "COMPUTED":
-            if self.unresolved_frontier:
-                raise _validation_error(
-                    "steiner_computed_frontier",
-                    "COMPUTED results cannot carry unresolved frontier shards",
-                )
-            if self.design is None:
-                raise _validation_error(
-                    "steiner_computed_without_design",
-                    "COMPUTED requires an incidence design",
-                )
-            if len(self.design.points) != self.order:
-                raise _validation_error(
-                    "steiner_design_order", "design point count must equal order"
-                )
-            expected_blocks = self.order * (self.order - 1) // 6
-            if len(self.design.blocks) != expected_blocks:
-                raise _validation_error(
-                    "steiner_design_block_count",
-                    "design block count must equal v(v-1)/6",
-                )
-            expected_points = tuple(f"p{point}" for point in range(self.order))
-            expected_block_ids = tuple(f"b{index}" for index in range(expected_blocks))
-            if self.design.points != expected_points:
-                raise _validation_error(
-                    "steiner_design_point_axis",
-                    "computed designs must use the canonical point axis",
-                )
-            if self.design.block_ids != expected_block_ids:
-                raise _validation_error(
-                    "steiner_design_block_axis",
-                    "computed designs must use canonical block IDs",
-                )
-            if any(len(block) != 3 for block in self.design.blocks):
-                raise _validation_error(
-                    "steiner_block_size",
-                    "every Steiner block must contain exactly 3 points",
-                )
-            point_index = {point: index for index, point in enumerate(expected_points)}
-            block_indices = tuple(
-                tuple(point_index[point] for point in block)
-                for block in self.design.blocks
-            )
-            if block_indices != tuple(sorted(block_indices)):
-                raise _validation_error(
-                    "steiner_block_order",
-                    "computed blocks must be in canonical lexicographic order",
-                )
+            _require_computed_steiner_design(self)
         elif self.status == "UNKNOWN":
-            if self.design is not None:
-                raise _validation_error(
-                    "steiner_unknown_design",
-                    "UNKNOWN outcomes cannot carry a design",
-                )
-            if not self.unresolved_frontier:
-                raise _validation_error(
-                    "steiner_unknown_frontier",
-                    "UNKNOWN outcomes must retain unresolved frontier shards",
-                )
+            _require_unknown_steiner_payload(self)
         elif self.design is not None or self.unresolved_frontier:
             raise _validation_error(
                 "steiner_noncomputed_payload",
                 "non-COMPUTED, non-UNKNOWN outcomes cannot carry a design or frontier",
             )
         return self
+
+
+def _require_computed_steiner_design(result: SteinerTripleSystemResult) -> None:
+    if result.unresolved_frontier:
+        raise _validation_error(
+            "steiner_computed_frontier",
+            "COMPUTED results cannot carry unresolved frontier shards",
+        )
+    if result.design is None:
+        raise _validation_error(
+            "steiner_computed_without_design",
+            "COMPUTED requires an incidence design",
+        )
+    if len(result.design.points) != result.order:
+        raise _validation_error(
+            "steiner_design_order", "design point count must equal order"
+        )
+    expected_blocks = result.order * (result.order - 1) // 6
+    if len(result.design.blocks) != expected_blocks:
+        raise _validation_error(
+            "steiner_design_block_count",
+            "design block count must equal v(v-1)/6",
+        )
+    expected_points = tuple(f"p{point}" for point in range(result.order))
+    expected_block_ids = tuple(f"b{index}" for index in range(expected_blocks))
+    if result.design.points != expected_points:
+        raise _validation_error(
+            "steiner_design_point_axis",
+            "computed designs must use the canonical point axis",
+        )
+    if result.design.block_ids != expected_block_ids:
+        raise _validation_error(
+            "steiner_design_block_axis",
+            "computed designs must use canonical block IDs",
+        )
+    if any(len(block) != 3 for block in result.design.blocks):
+        raise _validation_error(
+            "steiner_block_size",
+            "every Steiner block must contain exactly 3 points",
+        )
+    point_index = {point: index for index, point in enumerate(expected_points)}
+    block_indices = tuple(
+        tuple(point_index[point] for point in block) for block in result.design.blocks
+    )
+    if block_indices != tuple(sorted(block_indices)):
+        raise _validation_error(
+            "steiner_block_order",
+            "computed blocks must be in canonical lexicographic order",
+        )
+
+
+def _require_unknown_steiner_payload(result: SteinerTripleSystemResult) -> None:
+    if result.design is not None:
+        raise _validation_error(
+            "steiner_unknown_design",
+            "UNKNOWN outcomes cannot carry a design",
+        )
+    if not result.unresolved_frontier:
+        raise _validation_error(
+            "steiner_unknown_frontier",
+            "UNKNOWN outcomes must retain unresolved frontier shards",
+        )
 
 
 def _require_steiner_frontier_order(

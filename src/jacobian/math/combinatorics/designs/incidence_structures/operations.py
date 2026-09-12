@@ -85,6 +85,96 @@ def containment_profile(
     )
 
 
+def _covered_pairs_from_fixed_triples(
+    selected_triples: tuple[tuple[int, int, int], ...],
+) -> set[tuple[int, int]]:
+    covered_pairs: set[tuple[int, int]] = set()
+    for triple in selected_triples:
+        for pair in combinations(triple, 2):
+            if pair in covered_pairs:
+                raise OperationDomainValidationError(
+                    location=("shard", "fixed_triples"),
+                    code="incidence_structure.steiner_shard_overlap",
+                    message="fixed triples must cover distinct pairs",
+                )
+            covered_pairs.add(pair)
+    return covered_pairs
+
+
+def _complete_remaining_steiner_cover(
+    *,
+    order: int,
+    search_budget: int,
+    selected_triples: tuple[tuple[int, int, int], ...],
+    pairs: tuple[tuple[int, int], ...],
+    pair_labels: dict[tuple[int, int], str],
+    triple_by_row_id: dict[str, tuple[int, int, int]],
+    covered_pairs: set[tuple[int, int]],
+) -> tuple[
+    str,
+    tuple[str, ...],
+    int,
+    tuple[SteinerTripleSystemShard, ...],
+]:
+    remaining_pair_labels = tuple(
+        pair_labels[pair] for pair in pairs if pair not in covered_pairs
+    )
+    if not remaining_pair_labels:
+        selected_row_ids = tuple(
+            f"triple:{a:02d}:{b:02d}:{c:02d}" for a, b, c in selected_triples
+        )
+        return "FOUND", selected_row_ids, 0, ()
+    remaining_rows = tuple(
+        ExactCoverRow(
+            row_id=row_id,
+            items=tuple(sorted(pair_labels[pair] for pair in combinations(triple, 2))),
+        )
+        for row_id, triple in triple_by_row_id.items()
+        if triple not in selected_triples
+        and not any(pair in covered_pairs for pair in combinations(triple, 2))
+    )
+    exact_cover = GeneralizedExactCoverInstance(
+        primary_items=tuple(sorted(remaining_pair_labels)),
+        secondary_items=(),
+        rows=remaining_rows,
+    )
+    try:
+        cover = find_generalized_exact_cover(
+            exact_cover, search_node_limit=search_budget
+        )
+    except PydanticCustomError as exc:
+        raise OperationDomainValidationError(
+            location=("shard",),
+            code="incidence_structure.steiner_shard_prefix",
+            message=str(exc),
+        ) from exc
+    if cover.status == "FOUND":
+        selected_row_ids = tuple(
+            f"triple:{a:02d}:{b:02d}:{c:02d}" for a, b, c in selected_triples
+        ) + (cover.selected_row_ids or ())
+        return "FOUND", selected_row_ids, cover.searched_node_count, ()
+    if cover.status == "UNKNOWN":
+        frontier = tuple(
+            SteinerTripleSystemShard(
+                order=order,
+                fixed_triples=tuple(
+                    sorted(
+                        (
+                            *selected_triples,
+                            *(
+                                triple_by_row_id[row_id]
+                                for row_id in frontier_shard.fixed_row_prefix
+                            ),
+                        )
+                    )
+                ),
+            )
+            for frontier_shard in cover.unresolved_frontier
+        )
+        return "UNKNOWN", (), cover.searched_node_count, frontier
+    return cover.status, (), cover.searched_node_count, ()
+
+
 def construct_steiner_triple_system(
     order: int,
     search_budget: int = MAX_STEINER_SEARCH_STATES,
@@ -138,82 +228,18 @@ def construct_steiner_triple_system(
         for triple in triples
     }
     selected_triples = () if shard is None else shard.fixed_triples
-    covered_pairs: set[tuple[int, int]] = set()
-    for triple in selected_triples:
-        for pair in combinations(triple, 2):
-            if pair in covered_pairs:
-                raise OperationDomainValidationError(
-                    location=("shard", "fixed_triples"),
-                    code="incidence_structure.steiner_shard_overlap",
-                    message="fixed triples must cover distinct pairs",
-                )
-            covered_pairs.add(pair)
-    remaining_pair_labels = tuple(
-        pair_labels[pair] for pair in pairs if pair not in covered_pairs
+    covered_pairs = _covered_pairs_from_fixed_triples(selected_triples)
+    cover_status, selected_row_ids, states, frontier = (
+        _complete_remaining_steiner_cover(
+            order=order,
+            search_budget=search_budget,
+            selected_triples=selected_triples,
+            pairs=pairs,
+            pair_labels=pair_labels,
+            triple_by_row_id=triple_by_row_id,
+            covered_pairs=covered_pairs,
+        )
     )
-    remaining_rows = tuple(
-        ExactCoverRow(
-            row_id=row_id,
-            items=tuple(
-                sorted(pair_labels[pair] for pair in combinations(triple, 2))
-            ),
-        )
-        for row_id, triple in triple_by_row_id.items()
-        if triple not in selected_triples
-        and not any(pair in covered_pairs for pair in combinations(triple, 2))
-    )
-    if not remaining_pair_labels:
-        cover_status = "FOUND"
-        selected_row_ids = tuple(
-            f"triple:{a:02d}:{b:02d}:{c:02d}" for a, b, c in selected_triples
-        )
-        states = 0
-        frontier: tuple[SteinerTripleSystemShard, ...] = ()
-    else:
-        exact_cover = GeneralizedExactCoverInstance(
-            primary_items=tuple(sorted(remaining_pair_labels)),
-            secondary_items=(),
-            rows=remaining_rows,
-        )
-        try:
-            cover = find_generalized_exact_cover(
-                exact_cover, search_node_limit=search_budget
-            )
-        except PydanticCustomError as exc:
-            raise OperationDomainValidationError(
-                location=("shard",),
-                code="incidence_structure.steiner_shard_prefix",
-                message=str(exc),
-            ) from exc
-        states = cover.searched_node_count
-        cover_status = cover.status
-        if cover_status == "FOUND":
-            selected_row_ids = tuple(
-                f"triple:{a:02d}:{b:02d}:{c:02d}" for a, b, c in selected_triples
-            ) + (cover.selected_row_ids or ())
-            frontier = ()
-        elif cover_status == "UNKNOWN":
-            selected_row_ids = ()
-            frontier = tuple(
-                SteinerTripleSystemShard(
-                    order=order,
-                    fixed_triples=tuple(
-                        sorted(
-                            (
-                                *selected_triples,
-                                *(
-                                    triple_by_row_id[row_id]
-                                    for row_id in frontier_shard.fixed_row_prefix
-                                ),
-                            )
-                        )
-                    ),
-                )
-                for frontier_shard in cover.unresolved_frontier
-            )
-        else:
-            selected_row_ids = ()
-            frontier = ()
     if cover_status != "FOUND":
         return SteinerTripleSystemResult(
             status="UNKNOWN" if cover_status == "UNKNOWN" else "NOT_FOUND",

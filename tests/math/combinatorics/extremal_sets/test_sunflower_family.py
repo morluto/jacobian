@@ -260,7 +260,9 @@ def test_native_package_exports_the_domain_entrypoint() -> None:
 
 
 def test_reconstructed_rows_must_stay_strictly_ordered() -> None:
-    result = construct_sunflower_family(_family(((0, 1), (0, 2), (0, 3))), 3)
+    result = construct_sunflower_family(
+        _family(((0, 1), (0, 2), (0, 4), (0, 5), (1, 2), (4, 5)), ground=6), 3
+    )
     payload = result.model_dump(mode="json")
     payload["sunflowers"] = list(reversed(payload["sunflowers"]))
     payload["hypergraph_edges"] = list(reversed(payload["hypergraph_edges"]))

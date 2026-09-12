@@ -987,13 +987,34 @@ def evaluate_finite_polynomial(
     """Evaluate with Python-FLINT while preserving the exact parent."""
 
     if value.presentation != polynomial.presentation:
-        raise ValueError("polynomial and value must share their exact presentation")
+        raise OperationDomainValidationError(
+            location=("value", "presentation"),
+            code="finite_field.finite_polynomial_evaluation_parent_mismatch",
+            message="polynomial and value must share their exact presentation",
+        )
+    _admit_polynomial_point_evaluation(polynomial, location=("polynomial",))
     from jacobian.math.finite_fields import _flint
 
     return FiniteFieldElement(
         presentation=polynomial.presentation,
         coordinates=_flint.evaluate_polynomial(polynomial.coefficients, value),
     )
+
+
+def _admit_polynomial_point_evaluation(
+    polynomial: FinitePolynomial,
+    *,
+    location: tuple[str, ...],
+) -> None:
+    """Admit one-point evaluation without charging complete-field enumeration."""
+
+    work = len(polynomial.coefficients) * polynomial.presentation.degree
+    if work > _MAX_FINITE_MAP_WORK:
+        raise OperationResourceAdmissionError(
+            location=location,
+            code="finite_field.finite_polynomial_evaluation_exceeds_operation_work_budget",
+            message="finite polynomial evaluation exceeds the operation work budget",
+        )
 
 
 def _admit_map_evaluation(

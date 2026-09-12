@@ -2,21 +2,27 @@
 
 All operations in this module act on an undirected simple graph supplied as
 a vertex count and a tuple of ``(source, target)`` integer edges.  Vertices
-are labelled ``0..vertex_count-1``; the vertex axis holds at most 64
-vertices, so a simple graph admits up to ``C(64, 2) = 2016`` edges, matching
-the shared multigraph carrier bounds.
+are labelled ``0..vertex_count-1``. Most decomposition operations use a
+64-vertex execution envelope; block-cut construction uses the full indexed
+graph carrier envelope because its incidence construction is output-linear.
 """
 
 from __future__ import annotations
 
 from typing import Annotated, Literal, Self
 
-from pydantic import AfterValidator, Field, model_validator
+from pydantic import AfterValidator, Field, WithJsonSchema, model_validator
+from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.graphs.multigraph._models import MAX_EDGES, LooplessMultigraph
-from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
+from jacobian.math.graphs.values import (
+    MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
+    IndexedSimpleUndirectedGraph,
+)
+
+MAX_BLOCK_CUT_TREE_VERTICES = MAX_INDEXED_SIMPLE_GRAPH_VERTICES
 
 
 def _require_decomposition_graph(
@@ -36,8 +42,41 @@ _DecompositionGraph = Annotated[
 ]
 
 
+def _require_block_cut_graph(
+    graph: IndexedSimpleUndirectedGraph,
+) -> IndexedSimpleUndirectedGraph:
+    """Admit the linear block-cut construction up to the shared graph axis."""
+    if not 1 <= graph.vertex_count <= MAX_BLOCK_CUT_TREE_VERTICES:
+        raise PydanticCustomError(
+            "graph.block_cut_tree_vertex_count",
+            "block-cut tree requires between 1 and "
+            f"{MAX_BLOCK_CUT_TREE_VERTICES} vertices",
+        )
+    return graph
+
+
+def _block_cut_graph_schema() -> JsonSchemaValue:
+    schema = IndexedSimpleUndirectedGraph.model_json_schema()
+    schema["description"] = (
+        "A finite simple indexed graph accepted by block-cut decomposition: "
+        f"at most {MAX_BLOCK_CUT_TREE_VERTICES} vertices."
+    )
+    schema["properties"]["vertex_count"].update(
+        minimum=1,
+        maximum=MAX_BLOCK_CUT_TREE_VERTICES,
+    )
+    return schema
+
+
+_BlockCutGraph = Annotated[
+    IndexedSimpleUndirectedGraph,
+    AfterValidator(_require_block_cut_graph),
+    WithJsonSchema(_block_cut_graph_schema()),
+]
+
+
 class BlockCutTreeRequest(StrictModel):
-    graph: _DecompositionGraph
+    graph: _BlockCutGraph
 
 
 class BlockCutTreeResult(StrictModel):

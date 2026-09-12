@@ -255,9 +255,11 @@ def _chromatic_bipartition_reconstruction_work(
     return partitions * 2 * (order + edge_count)
 
 
-def _chromatic_deadline_expired() -> NoReturn:
+def _chromatic_deadline_expired(request: ChromaticBipartitionRequest) -> NoReturn:
     raise OperationExecutionTimeoutError(
-        "chromatic bipartition deadline expired during the kernel search"
+        "chromatic bipartition deadline expired during the kernel search",
+        configured_seconds=request.resource_budget.wall_seconds,
+        adjustable_field_path=("resource_budget", "wall_seconds"),
     )
 
 
@@ -324,6 +326,7 @@ def _unit_threshold_bipartition(
 
     vertices = request.graph.vertices
     started = time.monotonic()
+    checked = 0
     for index in range(len(vertices)):
         side_a, side_b = _unit_threshold_remainder(vertices, index)
         core = _induced_edge_core(request.graph, side_b)
@@ -331,7 +334,8 @@ def _unit_threshold_bipartition(
             continue
         chromatic_b = _exact_induced_chromatic(request.graph, side_b, request, started)
         if chromatic_b is None:
-            _chromatic_deadline_expired()
+            _chromatic_deadline_expired(request)
+        checked += 1
         return ChromaticBipartitionResult(
             graph=request.graph,
             s=request.s,
@@ -341,7 +345,7 @@ def _unit_threshold_bipartition(
             side_b=side_b,
             chromatic_a=1,
             chromatic_b=chromatic_b,
-            checked_partitions=index + 1,
+            checked_partitions=checked,
         )
     return ChromaticBipartitionResult(
         graph=request.graph,
@@ -364,25 +368,29 @@ def _refuse_chromatic_bipartition_work() -> None:
 
 
 def _admit_unit_threshold_chromatic(request: ChromaticBipartitionRequest) -> None:
-    """Admit the full singleton traversal and its first usable remainder."""
+    """Admit singleton traversal, including skipped cores, for both phases."""
 
     vertices = request.graph.vertices
-    extraction_work = 0
-    coloring_work = 0
+    order = len(vertices)
+    edge_count = len(request.graph.edges)
+    work = 0
     has_admitted_candidate = False
-    for index in range(len(vertices)):
+    for index in range(order):
         _, side_b = _unit_threshold_remainder(vertices, index)
-        extraction_work += 2 * (len(vertices) + len(request.graph.edges))
+        reconstruction = 2 * (order + edge_count)
         core = _induced_edge_core(request.graph, side_b)
+        classification = len(core.vertices) + len(core.edges) + 1
+        # Admission reconstructs and classifies each remainder; the worker
+        # repeats that work before coloring the first usable core.
+        work += 2 * (reconstruction + classification)
         if not _unit_threshold_core_is_admitted(core):
             continue
         has_admitted_candidate = True
-        coloring_work = _unit_threshold_coloring_work(core)
+        coloring = _unit_threshold_coloring_work(core)
+        if coloring > classification:
+            work += coloring
         break
-    if (
-        has_admitted_candidate
-        and extraction_work + coloring_work <= MAX_CHROMATIC_BIPARTITION_WORK
-    ):
+    if has_admitted_candidate and work <= MAX_CHROMATIC_BIPARTITION_WORK:
         return
     _refuse_chromatic_bipartition_work()
 
@@ -461,13 +469,13 @@ def _find_chromatic_bipartition_kernel(
             if not mask & (1 << index)
         )
         if remaining_ms(started, request.resource_budget.wall_seconds) <= 0:
-            _chromatic_deadline_expired()
+            _chromatic_deadline_expired(request)
         chromatic_a = _chromatic_number(_induced_graph(graph, side_a), request, started)
         if chromatic_a is None:
-            _chromatic_deadline_expired()
+            _chromatic_deadline_expired(request)
         chromatic_b = _chromatic_number(_induced_graph(graph, side_b), request, started)
         if chromatic_b is None:
-            _chromatic_deadline_expired()
+            _chromatic_deadline_expired(request)
         checked += 1
         if chromatic_a >= request.s and chromatic_b >= request.t:
             return ChromaticBipartitionResult(

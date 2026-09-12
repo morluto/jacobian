@@ -163,8 +163,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         description="Count lattice points in every integral V-polytope dilation from "
         "0 through max_dilation and interpolate the exact rational Ehrhart "
         "polynomial. Integral vertices are required because rational polytopes "
-        "have quasi-polynomial counts; every extra requested count is replayed "
-        "against the recovered polynomial.",
+        "have quasi-polynomial counts; the result retains the source vertices, "
+        "complete dilation table, and canonical QQ[t] polynomial. Every extra "
+        "requested count is replayed against the recovered polynomial.",
         request_type=EhrhartRequest,
         result_type=EhrhartResult,
         run=ehrhart_polynomial,

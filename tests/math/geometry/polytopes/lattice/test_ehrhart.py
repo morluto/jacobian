@@ -2,11 +2,23 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 from pydantic import ValidationError
 
-from jacobian.math.geometry.polytopes.lattice._models import EhrhartRequest
+from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.geometry.polytopes.lattice._models import (
+    EhrhartRequest,
+    EhrhartResult,
+)
 from jacobian.math.geometry.polytopes.lattice._tools import ehrhart_polynomial
+from jacobian.math.geometry.polytopes.lattice.operations import (
+    ehrhart_polynomial as native_ehrhart,
+)
+from jacobian.math.geometry.polytopes.values import Vertex
+from jacobian.math.polynomials.values import RationalPolynomial
 
 
 def _vertex(*coordinates: int) -> dict[str, list[dict[str, int]]]:
@@ -23,11 +35,11 @@ def test_unit_square_ehrhart_polynomial_and_dilation_counts() -> None:
     )
     result = ehrhart_polynomial(request)
     assert result.counts == ((0, 1), (1, 4), (2, 9), (3, 16), (4, 25))
-    assert [(item.num, item.den) for item in result.coefficients] == [
-        (1, 1),
-        (2, 1),
-        (1, 1),
-    ]
+    assert result.polynomial.variables == ("t",)
+    assert [
+        (term.coefficient.num, term.coefficient.den, term.exponents)
+        for term in result.polynomial.polynomial.terms
+    ] == [(1, 1, (2,)), (2, 1, (1,)), (1, 1, (0,))]
 
 
 def test_unit_interval_has_zero_dilate_and_exact_linear_coefficients() -> None:
@@ -37,7 +49,11 @@ def test_unit_interval_has_zero_dilate_and_exact_linear_coefficients() -> None:
         )
     )
     assert result.counts == ((0, 1), (1, 2), (2, 3), (3, 4))
-    assert [(item.num, item.den) for item in result.coefficients] == [(1, 1), (1, 1)]
+    assert [
+        (term.coefficient.num, term.coefficient.den, term.exponents)
+        for term in result.polynomial.polynomial.terms
+    ] == [(1, 1, (1,)), (1, 1, (0,))]
+    assert result.max_dilation == 3
 
 
 def test_rational_vertices_are_rejected_until_quasipolynomial_scope_exists() -> None:
@@ -59,6 +75,105 @@ def test_degree_bound_must_cover_dimension() -> None:
             {
                 "vertices": [_vertex(0, 0), _vertex(1, 0), _vertex(0, 1)],
                 "degree_bound": 1,
+            }
+        )
+
+
+def test_non_full_dimensional_one_point_source_is_rejected() -> None:
+    with pytest.raises(ValidationError, match="affinely span"):
+        EhrhartRequest.model_validate(
+            {"vertices": [_vertex(0)], "degree_bound": 1, "max_dilation": 1}
+        )
+
+
+def test_all_dilation_scans_are_admitted_before_any_scan(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.geometry.polytopes.lattice import operations
+
+    calls = 0
+
+    def fail_if_scanned(*_args: Any, **_kwargs: Any) -> None:
+        nonlocal calls
+        calls += 1
+        raise AssertionError("scan started before aggregate admission")
+
+    monkeypatch.setattr(operations, "_scan_box", fail_if_scanned)
+    with pytest.raises(OperationDomainValidationError, match="aggregate"):
+        native_ehrhart(
+            tuple(
+                Vertex.model_validate(_vertex(*point))
+                for point in ((0, 0), (50, 0), (0, 50), (50, 50))
+            ),
+            degree_bound=2,
+            max_dilation=32,
+        )
+    assert calls == 0
+
+
+def test_scaled_coordinate_height_is_rejected_before_carrier_construction() -> None:
+    huge = 4 * 10**32767
+    vertices = (
+        Vertex(coordinates=(CanonicalRational(num=huge, den=1),)),
+        Vertex(coordinates=(CanonicalRational(num=huge + 1, den=1),)),
+    )
+    with pytest.raises(OperationDomainValidationError, match="maximum-dilation"):
+        native_ehrhart(vertices, degree_bound=1, max_dilation=3)
+
+
+def test_result_round_trip_retains_source_and_canonical_polynomial() -> None:
+    result = ehrhart_polynomial(
+        EhrhartRequest.model_validate(
+            {"vertices": [_vertex(0), _vertex(1)], "degree_bound": 1, "max_dilation": 2}
+        )
+    )
+    restored = EhrhartResult.model_validate_json(result.model_dump_json())
+    assert restored == result
+    assert restored.vertices == result.vertices
+    assert isinstance(restored.polynomial, RationalPolynomial)
+
+
+def test_forged_count_axes_and_values_are_rejected() -> None:
+    with pytest.raises(ValidationError, match="dilation"):
+        EhrhartResult.model_validate(
+            {
+                "vertices": [_vertex(0), _vertex(1)],
+                "dimension": 1,
+                "degree_bound": 1,
+                "max_dilation": 2,
+                "counts": [[0, 1], [2, -7], [2, 3]],
+                "polynomial": {
+                    "variables": ["t"],
+                    "polynomial": {
+                        "terms": [
+                            {
+                                "coefficient": {"num": 1, "den": 1},
+                                "exponents": [0],
+                            }
+                        ]
+                    },
+                },
+            }
+        )
+    with pytest.raises(ValidationError, match="nonnegative"):
+        EhrhartResult.model_validate(
+            {
+                "vertices": [_vertex(0), _vertex(1)],
+                "dimension": 1,
+                "degree_bound": 1,
+                "max_dilation": 2,
+                "counts": [[0, 1], [1, -7], [2, 3]],
+                "polynomial": {
+                    "variables": ["t"],
+                    "polynomial": {
+                        "terms": [
+                            {
+                                "coefficient": {"num": 1, "den": 1},
+                                "exponents": [0],
+                            }
+                        ]
+                    },
+                },
             }
         )
 

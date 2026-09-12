@@ -326,6 +326,42 @@ class TestSpannedCircleProfile:
         )
         assert result.circles == ()
 
+    def test_translated_large_origin_is_admitted_after_shift(self) -> None:
+        shift = 10**256
+        points = (
+            _point(str(shift), str(shift)),
+            _point(str(shift + 1), str(shift)),
+            _point(str(shift), str(shift + 1)),
+        )
+        result = spanned_circle_profile(
+            SpannedCircleProfileRequest(configuration=_configuration(*points))
+        )
+        assert len(result.circles) == 1
+        assert result.circles[0].point_indices == (0, 1, 2)
+        center = result.circles[0].circle.center
+        expected = CanonicalRational.from_fraction(Fraction(shift) + Fraction(1, 2))
+        assert center.x == expected
+        assert center.y == expected
+
+    def test_result_rejects_nonplanar_configuration(self) -> None:
+        points = tuple(
+            LabelledRationalPoint(
+                label=f"p{index}",
+                coordinates=(
+                    CanonicalRational(num=index, den=1),
+                    CanonicalRational(num=0, den=1),
+                    CanonicalRational(num=1, den=1),
+                ),
+            )
+            for index in range(3)
+        )
+        with pytest.raises(ValidationError, match="planar"):
+            SpannedCircleProfileResult(
+                configuration=PointConfiguration(points=points),
+                num_points=3,
+                circles=(),
+            )
+
     def test_translated_parabola_is_admitted_like_the_origin_frame(self) -> None:
         points = tuple(
             _point(str(index), str(1000 + index * index)) for index in range(32)

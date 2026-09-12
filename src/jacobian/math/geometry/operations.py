@@ -847,12 +847,22 @@ def spanned_circle_profile(
     """Return every distinct circle spanned by a non-collinear source triple."""
 
     points = _admit_spanned_circle_source(configuration)
-    _admit_configuration(points, output_bound=True)
     point_values = _points_to_fractions(points)
     origin = point_values[0]
     translated = tuple(
         (point[0] - origin[0], point[1] - origin[1]) for point in point_values
     )
+    for index, point in enumerate(translated):
+        for axis, value in enumerate(point):
+            if _fraction_digits(value) > MAX_COORDINATE_DIGITS:
+                _reject_geometry_domain(
+                    location=("configuration", index, ("x", "y")[axis]),
+                    code="geometry.coordinate_digits_max",
+                    message=(
+                        "translated spanned-circle coordinates exceed the "
+                        f"{MAX_COORDINATE_DIGITS}-digit bound"
+                    ),
+                )
     n = len(translated)
     triples = n * (n - 1) * (n - 2) // 6
     max_digits = max(

@@ -1498,6 +1498,11 @@ class SpannedCircleProfileResult(StrictModel):
             raise _validation_error(
                 "point_set_coordinates_unique", "point-set coordinates must be unique"
             )
+        if any(len(point.coordinates) != 2 for point in points):
+            raise _validation_error(
+                "spanned_circle_requires_planar_points",
+                "spanned-circle profiles require planar source points",
+            )
         if self.num_points != len(points):
             raise _validation_error(
                 "num_points_len_points", "num_points must equal len(points)"

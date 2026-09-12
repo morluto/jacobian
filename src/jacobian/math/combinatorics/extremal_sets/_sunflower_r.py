@@ -365,9 +365,17 @@ def construct_sunflower_family(
     """Return every ``petal_count``-member sunflower with its exact common core."""
 
     if not isinstance(source, IndexedFiniteSetFamily):
-        raise TypeError("source must be an IndexedFiniteSetFamily")
+        raise OperationDomainValidationError(
+            location=("source",),
+            code="set_system.sunflower.source_type",
+            message="source must be an IndexedFiniteSetFamily",
+        )
     if type(petal_count) is not int:
-        raise TypeError("petal_count must be an integer")
+        raise OperationDomainValidationError(
+            location=("petal_count",),
+            code="set_system.sunflower.petal_count_type",
+            message="petal_count must be an integer",
+        )
     source, petal_count, member_count, source_work, source_units = _admit_source(
         source, petal_count
     )

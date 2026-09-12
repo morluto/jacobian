@@ -144,6 +144,13 @@ def test_petal_count_below_two_is_rejected() -> None:
         construct_sunflower_family(_family(((0,), (1,))), 1)
 
 
+def test_native_invalid_argument_types_are_typed_domain_errors() -> None:
+    with pytest.raises(OperationDomainValidationError, match="integer"):
+        construct_sunflower_family(_family(((0,), (1,))), True)  # type: ignore[arg-type]
+    with pytest.raises(OperationDomainValidationError, match="IndexedFiniteSetFamily"):
+        construct_sunflower_family({}, 2)  # type: ignore[arg-type]
+
+
 def test_hypergraph_projection_is_empty_but_source_bound_when_no_rows() -> None:
     result = construct_sunflower_family(_family(((0, 1), (0, 2), (1, 2))), 3)
     assert result.hypergraph.vertices == ("0", "1", "2")

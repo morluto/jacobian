@@ -33,6 +33,7 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
 MAX_SUNFLOWER_PETALS = 8
 MAX_SUNFLOWER_INTERSECTION_WORK = 20_000_000
 MAX_SUNFLOWER_CANDIDATES = 1_000_000
+_SUNFLOWER_CHECKPOINT_UNITS = 65_536
 # The source value is retained unchanged in every result, including the
 # vacuous case. These operation-owned limits cover the ambient axis, aggregate
 # membership inspection, and retained result allocation. One allocation unit
@@ -119,23 +120,21 @@ def _admit_source(
 
 
 def _intersection_search_work(sizes: tuple[int, ...], petal_count: int) -> int:
-    """Charge pairwise work from participating member sizes, not a global max."""
+    """Charge pairwise and core-bound work from each actual candidate."""
 
     member_count = len(sizes)
     if member_count < petal_count:
         return 0
     pair_occurrences = comb(member_count - 2, petal_count - 2)
-    pair_min_sum = 0
-    max_pair_min = 0
-    for left, right in combinations(range(member_count), 2):
-        pair_min = min(sizes[left], sizes[right])
-        pair_min_sum += pair_min
-        if pair_min > max_pair_min:
-            max_pair_min = pair_min
-    candidate_bound = comb(member_count, petal_count)
-    # Intersection and equality for every pair in every r-tuple, plus one
-    # core materialization bounded by the largest participating pair min.
-    return 2 * pair_occurrences * pair_min_sum + 2 * candidate_bound * max_pair_min
+    pair_min_sum = sum(
+        min(sizes[left], sizes[right])
+        for left, right in combinations(range(member_count), 2)
+    )
+    core_bound_sum = sum(
+        min(sizes[index] for index in indices)
+        for indices in combinations(range(member_count), petal_count)
+    )
+    return 2 * pair_occurrences * pair_min_sum + 2 * core_bound_sum
 
 
 def _admit_candidates(
@@ -193,16 +192,13 @@ def _admit_qualifying_result(
                 f"{MAX_EDGES}-edge/{MAX_TOTAL_INCIDENCES}-incidence output bound"
             ),
         )
-    member_digits = len(str(max(member_count - 1, 0)))
-    ground_digits = len(str(max(source.ground_set_size - 1, 0)))
-    edge_id_units = 10 + petal_count * (member_digits + 1)
-    fixed_row_units = 128 + edge_id_units + petal_count * (member_digits + 2)
-    edge_projection_units = 64 + edge_id_units + petal_count * (member_digits + 2)
-    base_result_units = source_units + 1024 + member_count * (member_digits + 3)
-    allocation_units = (
-        base_result_units
-        + row_count * (fixed_row_units + 2 * edge_projection_units)
-        + core_elements * (ground_digits + 1)
+    allocation_units = _result_allocation_units(
+        source=source,
+        petal_count=petal_count,
+        member_count=member_count,
+        source_units=source_units,
+        row_count=row_count,
+        core_elements=core_elements,
     )
     if allocation_units > MAX_SUNFLOWER_RESULT_ALLOCATION_UNITS:
         raise OperationResourceAdmissionError(
@@ -214,6 +210,71 @@ def _admit_qualifying_result(
                 f"{MAX_SUNFLOWER_RESULT_ALLOCATION_UNITS}-unit result bound"
             ),
         )
+
+
+def _result_allocation_units(
+    *,
+    source: IndexedFiniteSetFamily,
+    petal_count: int,
+    member_count: int,
+    source_units: int,
+    row_count: int,
+    core_elements: int,
+) -> int:
+    member_digits = len(str(max(member_count - 1, 0)))
+    ground_digits = len(str(max(source.ground_set_size - 1, 0)))
+    edge_id_units = 10 + petal_count * (member_digits + 1)
+    fixed_row_units = 128 + edge_id_units + petal_count * (member_digits + 2)
+    edge_projection_units = 64 + edge_id_units + petal_count * (member_digits + 2)
+    base_result_units = source_units + 1024 + member_count * (member_digits + 3)
+    return (
+        base_result_units
+        + row_count * (fixed_row_units + 2 * edge_projection_units)
+        + core_elements * (ground_digits + 1)
+    )
+
+
+def _charge_intersection_work(
+    work_since_checkpoint: int, units: int, checkpoint_units: int
+) -> int:
+    work_since_checkpoint += units
+    if work_since_checkpoint >= checkpoint_units:
+        request_checkpoint("during sunflower intersection work")
+        return 0
+    return work_since_checkpoint
+
+
+def _candidate_common_core(
+    sets: tuple[frozenset[int], ...],
+    sizes: tuple[int, ...],
+    indices: tuple[int, ...],
+    work_since_checkpoint: int,
+    checkpoint_units: int,
+) -> tuple[frozenset[int] | None, int]:
+    pairs = combinations(indices, 2)
+    first_left, first_right = next(pairs)
+    work_since_checkpoint = _charge_intersection_work(
+        work_since_checkpoint,
+        2 * min(sizes[first_left], sizes[first_right]),
+        checkpoint_units,
+    )
+    core = sets[first_left] & sets[first_right]
+    for left, right in pairs:
+        work_since_checkpoint = _charge_intersection_work(
+            work_since_checkpoint,
+            2 * min(sizes[left], sizes[right]),
+            checkpoint_units,
+        )
+        if sets[left] & sets[right] != core:
+            return None, work_since_checkpoint
+    return (
+        core,
+        _charge_intersection_work(
+            work_since_checkpoint,
+            2 * min(sizes[index] for index in indices),
+            checkpoint_units,
+        ),
+    )
 
 
 class SunflowerFamilyRequest(StrictModel):
@@ -395,34 +456,46 @@ def construct_sunflower_family(
     plan: list[tuple[tuple[int, ...], tuple[int, ...]]] = []
     core_elements = 0
     work_since_checkpoint = 0
-    checkpoint_units = 65_536
+    checkpoint_units = _SUNFLOWER_CHECKPOINT_UNITS
     for indices in combinations(range(member_count), petal_count):
-        pair_min_sum = sum(
-            min(sizes[left], sizes[right]) for left, right in combinations(indices, 2)
+        core, work_since_checkpoint = _candidate_common_core(
+            sets, sizes, indices, work_since_checkpoint, checkpoint_units
         )
-        core_bound = min(sizes[index] for index in indices)
-        work_since_checkpoint += 2 * pair_min_sum + 2 * core_bound
-        if work_since_checkpoint >= checkpoint_units:
-            request_checkpoint("during sunflower intersection work")
-            work_since_checkpoint = 0
-        core = sets[indices[0]] & sets[indices[1]]
-        if all(
-            sets[left] & sets[right] == core for left, right in combinations(indices, 2)
-        ):
-            next_rows = len(plan) + 1
-            if next_rows > MAX_EDGES or next_rows * petal_count > MAX_TOTAL_INCIDENCES:
-                raise OperationResourceAdmissionError(
-                    location=("source", "members"),
-                    code="set_system.sunflower.output_bound",
-                    message=(
-                        f"the complete family requires at least {next_rows} edges "
-                        f"and {next_rows * petal_count} incidences, exceeding the "
-                        f"{MAX_EDGES}-edge/{MAX_TOTAL_INCIDENCES}-incidence output bound"
-                    ),
-                )
-            ordered_core = tuple(sorted(core))
-            plan.append((indices, ordered_core))
-            core_elements += len(ordered_core)
+        if core is None:
+            continue
+        next_rows = len(plan) + 1
+        ordered_core = tuple(sorted(core))
+        next_core_elements = core_elements + len(ordered_core)
+        if next_rows > MAX_EDGES or next_rows * petal_count > MAX_TOTAL_INCIDENCES:
+            raise OperationResourceAdmissionError(
+                location=("source", "members"),
+                code="set_system.sunflower.output_bound",
+                message=(
+                    f"the complete family requires at least {next_rows} edges "
+                    f"and {next_rows * petal_count} incidences, exceeding the "
+                    f"{MAX_EDGES}-edge/{MAX_TOTAL_INCIDENCES}-incidence output bound"
+                ),
+            )
+        allocation_units = _result_allocation_units(
+            source=source,
+            petal_count=petal_count,
+            member_count=member_count,
+            source_units=source_units,
+            row_count=next_rows,
+            core_elements=next_core_elements,
+        )
+        if allocation_units > MAX_SUNFLOWER_RESULT_ALLOCATION_UNITS:
+            raise OperationResourceAdmissionError(
+                location=("source", "members"),
+                code="set_system.sunflower.result_allocation_bound",
+                message=(
+                    "the complete sunflower result may require "
+                    f"{allocation_units} allocation units, exceeding the "
+                    f"{MAX_SUNFLOWER_RESULT_ALLOCATION_UNITS}-unit result bound"
+                ),
+            )
+        plan.append((indices, ordered_core))
+        core_elements = next_core_elements
     _admit_qualifying_result(
         source,
         petal_count,

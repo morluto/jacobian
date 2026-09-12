@@ -221,6 +221,25 @@ def test_sparse_large_member_does_not_price_every_pair_at_global_max() -> None:
     assert result.sunflower_free is True
 
 
+def test_core_bounds_are_summed_over_actual_candidates() -> None:
+    """A 10_000/10_001 tail must not price every 4-candidate at the global max."""
+    members = (
+        *(tuple(range(index + 1)) for index in range(28)),
+        tuple(range(10_000)),
+        tuple(range(10_001)),
+    )
+    result = construct_sunflower_family(_family(members, ground=10_001), 4)
+    assert result.sunflowers == ()
+    assert result.sunflower_free is True
+
+
+def test_shared_core_allocation_is_rejected_while_enumerating() -> None:
+    core = tuple(range(280))
+    members = tuple((*core, 280 + index) for index in range(155))
+    with pytest.raises(OperationResourceAdmissionError, match="allocation units"):
+        construct_sunflower_family(_family(members, ground=435), 2)
+
+
 def test_result_allocation_is_admitted_before_row_construction(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -332,3 +351,20 @@ def test_cancellation_is_checkpointed_by_intersection_work(
         2,
     )
     assert "before sunflower member expansion" in messages
+
+
+def test_pair_comparisons_checkpoint_inside_a_single_candidate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    messages: list[str] = []
+
+    def capture(message: str) -> None:
+        messages.append(message)
+
+    monkeypatch.setattr(sunflower_module, "request_checkpoint", capture)
+    monkeypatch.setattr(sunflower_module, "_SUNFLOWER_CHECKPOINT_UNITS", 1)
+    construct_sunflower_family(
+        _family(((0, 1, 2), (0, 1, 3), (0, 1, 4)), ground=5),
+        3,
+    )
+    assert messages.count("during sunflower intersection work") >= 3

@@ -15,6 +15,7 @@ from jacobian.catalog.models import (
 from jacobian.math.graphs._networkx import biconnected_components
 from jacobian.math.graphs.cycle_length_profile._models import (
     MAX_VERTICES,
+    CycleFamilyKind,
     CycleIncidenceRow,
     CycleLengthProfileResult,
     CycleLengthRow,
@@ -421,7 +422,7 @@ def enumerate_fixed_length_cycles(
     request_checkpoint("before fixed-length cycle enumeration")
     plan = _admit_fixed_cycle_enumeration(graph, cycle_length, chordless=chordless)
     if plan is None:
-        return _empty_cycle_enumeration_result(graph, cycle_length)
+        return _empty_cycle_enumeration_result(graph, cycle_length, chordless=chordless)
     adjacency = plan.adjacency
     edge_set = {frozenset(edge) for edge in graph.edges}
     cycles: set[tuple[str, ...]] = set()
@@ -489,6 +490,9 @@ def enumerate_fixed_length_cycles(
     return FixedLengthCycleEnumerationResult._from_kernel(
         graph=graph,
         cycle_length=cycle_length,
+        family_kind=(
+            CycleFamilyKind.CHORDLESS if chordless else CycleFamilyKind.SIMPLE
+        ),
         cycles=ordered,
         vertex_incidence=vertex_rows,
         edge_incidence=edge_rows,
@@ -676,13 +680,16 @@ def _admit_fixed_cycle_result(
 
 
 def _empty_cycle_enumeration_result(
-    graph: SimpleUndirectedGraph, cycle_length: int
+    graph: SimpleUndirectedGraph, cycle_length: int, *, chordless: bool
 ) -> FixedLengthCycleEnumerationResult:
     """Construct an admitted empty family with all source axes retained."""
 
     return FixedLengthCycleEnumerationResult._from_kernel(
         graph=graph,
         cycle_length=cycle_length,
+        family_kind=(
+            CycleFamilyKind.CHORDLESS if chordless else CycleFamilyKind.SIMPLE
+        ),
         cycles=(),
         vertex_incidence=tuple(
             CycleIncidenceRow(source=(vertex,), cycle_indices=())

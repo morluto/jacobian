@@ -9,6 +9,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.graphs.cycle_length_profile._models import (
+    CycleFamilyKind,
     FixedLengthCycleEnumerationResult,
 )
 from jacobian.math.graphs.cycle_length_profile._tools import TOOLS
@@ -33,6 +34,20 @@ def test_simple_and_chordless_cycle_families_are_distinct() -> None:
 
     assert simple.cycles == (("0", "1", "2", "3"),)
     assert chordless.cycles == ()
+    assert simple.family_kind is CycleFamilyKind.SIMPLE
+    assert chordless.family_kind is CycleFamilyKind.CHORDLESS
+    assert (
+        FixedLengthCycleEnumerationResult.model_validate_json(
+            simple.model_dump_json()
+        ).family_kind
+        is CycleFamilyKind.SIMPLE
+    )
+    assert (
+        FixedLengthCycleEnumerationResult.model_validate_json(
+            chordless.model_dump_json()
+        ).family_kind
+        is CycleFamilyKind.CHORDLESS
+    )
     assert simple.vertex_incidence[0].cycle_indices == (0,)
     assert simple.edge_incidence[1].source == ("0", "2")
     assert simple.edge_incidence[1].cycle_indices == ()
@@ -140,6 +155,12 @@ def test_serialized_family_checks_axes_and_incidence_without_replaying_edges() -
         result.model_dump_json()
     )
     assert restored == result
+    chordless = enumerate_chordless_fixed_length_cycles(graph, 3)
+    restored_chordless = FixedLengthCycleEnumerationResult.model_validate_json(
+        chordless.model_dump_json()
+    )
+    assert restored_chordless == chordless
+    assert restored_chordless.family_kind is CycleFamilyKind.CHORDLESS
 
     payload = result.model_dump(mode="json")
     payload["edge_incidence"][0]["cycle_indices"] = []

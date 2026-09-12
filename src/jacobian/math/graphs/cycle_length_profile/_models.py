@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Self
 
 from pydantic import Field, StrictInt, model_validator
@@ -131,17 +132,27 @@ class CycleIncidenceRow(StrictModel):
     )
 
 
+class CycleFamilyKind(StrEnum):
+    """The completeness interpretation carried by a cycle family."""
+
+    SIMPLE = "SIMPLE"
+    CHORDLESS = "CHORDLESS"
+
+
 class FixedLengthCycleEnumerationResult(StrictModel):
     """Complete dihedrally canonical fixed-length cycle family.
 
     The incidence rows are structural indexes over the retained source axes.
     They bind every source vertex and edge to the cycle indices. Deserialization
-    checks only the local cycle-edge relation and these indexes; complete-family
-    and chordlessness claims are established by the producing operation.
+    checks only the local cycle-edge relation and these indexes. ``family_kind``
+    records whether completeness is over all simple or only chordless cycles.
     """
 
     graph: SimpleUndirectedGraph
     cycle_length: StrictInt = Field(ge=3, le=MAX_VERTICES)
+    family_kind: CycleFamilyKind = Field(
+        description="Whether the complete family contains simple or chordless cycles."
+    )
     cycle_count: StrictInt = Field(ge=0, le=20_000)
     cycles: tuple[tuple[str, ...], ...] = Field(max_length=20_000)
     vertex_incidence: tuple[CycleIncidenceRow, ...]
@@ -269,6 +280,7 @@ class FixedLengthCycleEnumerationResult(StrictModel):
         *,
         graph: SimpleUndirectedGraph,
         cycle_length: int,
+        family_kind: CycleFamilyKind,
         cycles: tuple[tuple[str, ...], ...],
         vertex_incidence: tuple[CycleIncidenceRow, ...],
         edge_incidence: tuple[CycleIncidenceRow, ...],
@@ -278,6 +290,7 @@ class FixedLengthCycleEnumerationResult(StrictModel):
         return cls.model_construct(
             graph=graph,
             cycle_length=cycle_length,
+            family_kind=family_kind,
             cycle_count=len(cycles),
             cycles=cycles,
             vertex_incidence=vertex_incidence,
@@ -287,6 +300,7 @@ class FixedLengthCycleEnumerationResult(StrictModel):
 
 __all__ = [
     "MAX_VERTICES",
+    "CycleFamilyKind",
     "CycleIncidenceRow",
     "CycleLengthProfileRequest",
     "CycleLengthProfileResult",

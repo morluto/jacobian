@@ -1,6 +1,7 @@
 """Cycle-length profile operations."""
 
 from jacobian.math.graphs.cycle_length_profile._models import (
+    CycleFamilyKind,
     CycleLengthProfileResult,
     CycleLengthRow,
     FixedLengthCycleEnumerationRequest,
@@ -15,6 +16,7 @@ from jacobian.math.graphs.cycle_length_profile.operations import (
 )
 
 __all__ = [
+    "CycleFamilyKind",
     "CycleLengthProfileResult",
     "CycleLengthRow",
     "FixedLengthCycleEnumerationRequest",

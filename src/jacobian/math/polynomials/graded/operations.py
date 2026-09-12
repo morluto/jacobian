@@ -18,6 +18,7 @@ from jacobian.math.polynomials._conversions import (
     symbols_for_variables,
 )
 from jacobian.math.polynomials.graded._models import (
+    MAX_GRADED_DEGREE,
     MAX_HILBERT_PREFIX,
     MAX_HILBERT_SERIES_GENERATORS,
     MAX_STANDARD_MONOMIALS,
@@ -208,6 +209,12 @@ def hilbert_function(
     *,
     resource_budget: IdealComputationBudget | None = None,
 ) -> HilbertFunctionResult:
+    if max_degree < 0 or max_degree > MAX_GRADED_DEGREE:
+        raise OperationResourceAdmissionError(
+            location=("max_degree",),
+            code="graded_ideal.function_degree_budget",
+            message="Hilbert-function prefixes support degrees from 0 through 32",
+        )
     initial = initial_monomial_ideal(
         ideal, monomial_order, resource_budget=resource_budget
     )
@@ -363,11 +370,11 @@ def hilbert_series(
     *,
     resource_budget: IdealComputationBudget | None = None,
 ) -> HilbertSeriesResult:
-    if prefix_degree > MAX_HILBERT_PREFIX:
+    if prefix_degree < 0 or prefix_degree > MAX_HILBERT_PREFIX:
         raise OperationResourceAdmissionError(
             location=("prefix_degree",),
             code="graded_ideal.series_prefix_budget",
-            message="Hilbert-series prefixes support degree at most 16",
+            message="Hilbert-series prefixes support degrees from 0 through 16",
         )
     initial = initial_monomial_ideal(
         ideal, monomial_order, resource_budget=resource_budget

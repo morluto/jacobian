@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.polynomials.graded._models import (
     HilbertFunctionResult,
     HilbertSeriesResult,
@@ -188,3 +193,28 @@ def test_graded_result_axes_publish_structural_transport_bounds() -> None:
         == 17
     )
     assert HVectorResult.model_json_schema()["properties"]["h_vector"]["maxItems"] == 65
+
+
+@pytest.mark.parametrize(
+    ("operation", "keyword", "value"),
+    (
+        (hilbert_function, "max_degree", -1),
+        (hilbert_function, "max_degree", 33),
+        (hilbert_series, "prefix_degree", -1),
+        (hilbert_series, "prefix_degree", 17),
+    ),
+)
+def test_native_hilbert_prefix_bounds_precede_initial_ideal_expansion(
+    monkeypatch: pytest.MonkeyPatch,
+    operation: Callable[..., object],
+    keyword: str,
+    value: int,
+) -> None:
+    import jacobian.math.polynomials.graded.operations as graded_operations
+
+    def fail(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("inadmissible prefixes must not expand an initial ideal")
+
+    monkeypatch.setattr(graded_operations, "initial_monomial_ideal", fail)
+    with pytest.raises(OperationResourceAdmissionError, match="prefixes support"):
+        operation(_ideal((2, 0)), **{keyword: value})

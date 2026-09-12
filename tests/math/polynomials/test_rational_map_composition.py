@@ -63,6 +63,30 @@ def test_example_states_the_intermediate_axis_precondition() -> None:
     assert "source_variables equal the inner target_coordinates" in description
 
 
+def test_native_composition_is_exported_without_exposing_wire_request() -> None:
+    import jacobian.math.polynomials.rational_functions as rational_functions
+
+    assert rational_functions.compose_maps is compose_maps
+    assert "compose_maps" in rational_functions.__all__
+    assert "RationalMapCompositionRequest" not in rational_functions.__all__
+
+
+def test_native_composition_rejects_non_map_outer() -> None:
+    with pytest.raises(OperationDomainValidationError) as error:
+        compose_maps(object(), object())  # type: ignore[arg-type]
+
+    assert error.value.errors()[0]["loc"] == ("outer",)
+
+
+def test_native_composition_rejects_non_map_inner() -> None:
+    y = symbols("y")
+    outer = _map(("y",), ("z",), (_rf(y, (y,)),))
+    with pytest.raises(OperationDomainValidationError) as error:
+        compose_maps(outer, object())  # type: ignore[arg-type]
+
+    assert error.value.errors()[0]["loc"] == ("inner",)
+
+
 def test_example_composition_retains_all_construction_guards() -> None:
     x = symbols("x")
     y1, y2 = symbols("y1 y2")
@@ -198,6 +222,19 @@ def test_empty_inner_axis_composes_exact_constants() -> None:
     result = compose_maps(outer, inner)
     assert result.composite.source_variables == ()
     assert result.composite.components[0] == _rf(6, ())
+    assert result.construction_locus_guard == ()
+
+
+def test_zero_dimensional_intermediate_axis_retains_inner_source() -> None:
+    x = symbols("x")
+    inner = _map(("x",), (), ())
+    outer = _map((), ("z",), (_rf(2, ()),))
+
+    result = compose_maps(outer, inner)
+
+    assert result.composite.source_variables == ("x",)
+    assert result.composite.target_coordinates == ("z",)
+    assert result.composite.components == (_rf(2, (x,)),)
     assert result.construction_locus_guard == ()
 
 

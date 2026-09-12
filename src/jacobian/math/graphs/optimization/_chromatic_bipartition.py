@@ -242,7 +242,7 @@ def _retained_label_characters(
     )
     if not charge_witness_axes:
         return source
-    return source + 2 * sum(map(len, graph.vertices))
+    return source + sum(map(len, graph.vertices))
 
 
 def _chromatic_bipartition_reconstruction_work(

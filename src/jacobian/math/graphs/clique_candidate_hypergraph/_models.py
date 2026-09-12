@@ -9,9 +9,15 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
+    MAX_EDGES,
+    MAX_TOTAL_INCIDENCES,
     FiniteHypergraph,
 )
-from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.graphs.values import (
+    MAX_SIMPLE_GRAPH_EDGES,
+    MAX_SIMPLE_GRAPH_VERTICES,
+    SimpleUndirectedGraph,
+)
 
 
 def _validation_error(code: str, message: str) -> PydanticCustomError:
@@ -38,7 +44,7 @@ class CandidateCliqueMap(StrictModel):
     """One candidate ID bound to its original vertex subset."""
 
     candidate: str = Field(min_length=1)
-    members: tuple[str, ...] = Field(min_length=2)
+    members: tuple[str, ...] = Field(min_length=2, max_length=MAX_SIMPLE_GRAPH_VERTICES)
 
 
 class CliqueCandidateHypergraphResult(StrictModel):
@@ -53,12 +59,29 @@ class CliqueCandidateHypergraphResult(StrictModel):
 
     graph: SimpleUndirectedGraph
     hypergraph: FiniteHypergraph
-    resource_map: tuple[ResourceEdgeMap, ...]
-    candidate_map: tuple[CandidateCliqueMap, ...]
+    resource_map: tuple[ResourceEdgeMap, ...] = Field(max_length=MAX_SIMPLE_GRAPH_EDGES)
+    candidate_map: tuple[CandidateCliqueMap, ...] = Field(max_length=MAX_EDGES)
     candidate_count: StrictInt = Field(ge=0)
 
     @model_validator(mode="after")
     def bind_maps_to_source(self) -> Self:
+        if any(
+            len(entry.members) > MAX_SIMPLE_GRAPH_VERTICES
+            for entry in self.candidate_map
+        ):
+            raise _validation_error(
+                "graph.clique_candidate.candidate_size",
+                "candidate members cannot exceed the graph vertex bound",
+            )
+        pair_work = sum(
+            len(entry.members) * (len(entry.members) - 1) // 2
+            for entry in self.candidate_map
+        )
+        if pair_work > MAX_TOTAL_INCIDENCES:
+            raise _validation_error(
+                "graph.clique_candidate.incidence_bound",
+                "candidate internal-edge supports exceed the incidence bound",
+            )
         resources = {entry.resource: entry.endpoints for entry in self.resource_map}
         if len(resources) != len(self.resource_map):
             raise _validation_error(

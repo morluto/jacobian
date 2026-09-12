@@ -96,6 +96,18 @@ class TestCompleteConstructor:
         with pytest.raises(ValueError, match="declared vertex"):
             CliqueCandidateHypergraphResult.model_validate(payload)
 
+    def test_serialized_result_rejects_oversized_candidate_axes(self) -> None:
+        result = construct_all_clique_candidate_hypergraph(_graph(BOWTIE))
+        payload = result.model_dump(mode="json")
+        payload["candidate_map"] = payload["candidate_map"] * 1501
+        with pytest.raises(ValueError, match="at most 12000 items"):
+            CliqueCandidateHypergraphResult.model_validate(payload)
+
+        payload = result.model_dump(mode="json")
+        payload["candidate_map"][0]["members"] = ["a"] * 257
+        with pytest.raises(ValueError, match="at most 256 items"):
+            CliqueCandidateHypergraphResult.model_validate(payload)
+
     def test_request_path_matches_native(self) -> None:
         from jacobian.math.graphs.clique_candidate_hypergraph._tools import (
             _compute_all_clique_candidates,

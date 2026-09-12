@@ -60,6 +60,24 @@ def test_schur_result_is_bound_and_verifiable() -> None:
     assert not verify_schur_evaluation(object())
 
 
+def test_native_schur_rejects_oversized_variable_axis_before_label_validation() -> None:
+    labels = tuple(f"x{index}" for index in range(21))
+
+    with pytest.raises(
+        OperationDomainValidationError, match="same length"
+    ):
+        schur_evaluation(IntegerPartition(parts=(1,)), (1,), labels)
+
+
+def test_schur_verifier_rejects_oversized_constructed_axes_without_dumping() -> None:
+    result = schur_evaluation(IntegerPartition(parts=(1,)), (1,), ("x",))
+    claim = result.model_copy(
+        update={"variables": tuple(f"x{index}" for index in range(10_000))}
+    )
+
+    assert not verify_schur_evaluation(claim)
+
+
 def test_schur_verifier_rejects_unvalidated_claim_copies() -> None:
     result = schur_evaluation(IntegerPartition(parts=(1,)), (1,), ("x",))
     invalid_copies = (

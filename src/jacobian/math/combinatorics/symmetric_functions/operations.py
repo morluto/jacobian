@@ -79,11 +79,23 @@ def schur_evaluation(
             message="point must contain 1..20 bounded integer coordinates",
         )
 
-    variables = (
-        variables
-        if variables is not None
-        else tuple(f"x{i}" for i in range(len(point)))
-    )
+    if variables is None:
+        variables = tuple(f"x{i}" for i in range(len(point)))
+    else:
+        try:
+            variable_count = len(variables)
+        except TypeError as error:
+            raise OperationDomainValidationError(
+                location=("variables",),
+                code="symmetric_function.schur_dimensions_mismatch",
+                message="variables and point must have the same length",
+            ) from error
+        if variable_count != len(point):
+            raise OperationDomainValidationError(
+                location=("variables",),
+                code="symmetric_function.schur_dimensions_mismatch",
+                message="variables and point must have the same length",
+            )
     for variable in variables:
         try:
             _SCHUR_VARIABLE_NAME_ADAPTER.validate_python(variable, strict=True)
@@ -96,12 +108,6 @@ def schur_evaluation(
                     f"{_MAX_SCHUR_VARIABLE_NAME_LENGTH} characters"
                 ),
             ) from error
-    if len(variables) != len(point):
-        raise OperationDomainValidationError(
-            location=("variables",),
-            code="symmetric_function.schur_dimensions_mismatch",
-            message="variables and point must have the same length",
-        )
     if len(set(variables)) != len(variables):
         raise OperationDomainValidationError(
             location=("variables",),
@@ -152,8 +158,20 @@ def verify_schur_evaluation(claim: object) -> bool:
     if not isinstance(claim, SchurExpansionResult):
         return False
     try:
+        variables = claim.variables
+        point = claim.point
+        if type(variables) is not tuple or type(point) is not tuple:
+            return False
+        if not 1 <= len(variables) <= 20 or not 1 <= len(point) <= 20:
+            return False
         canonical_claim = SchurExpansionResult.model_validate(
-            claim.model_dump(mode="python"), strict=True
+            {
+                "partition": claim.partition,
+                "variables": variables,
+                "point": point,
+                "value": claim.value,
+            },
+            strict=True,
         )
     except (AttributeError, TypeError, ValueError):
         return False

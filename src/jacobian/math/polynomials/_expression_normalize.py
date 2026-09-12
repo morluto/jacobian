@@ -343,9 +343,11 @@ def _multiply_monomials(
 
 def _addends_are_disjoint(children: list[_ExpressionMetrics]) -> bool:
     monomials = [child.monomial for child in children if not child.zero]
-    return bool(monomials) and all(
-        monomial is not None for monomial in monomials
-    ) and len(set(monomials)) == len(monomials)
+    return (
+        bool(monomials)
+        and all(monomial is not None for monomial in monomials)
+        and len(set(monomials)) == len(monomials)
+    )
 
 
 def _product_total_coefficient_digits(
@@ -362,7 +364,9 @@ def _product_total_coefficient_digits(
 
     return min(
         _MAX_EXPRESSION_TOTAL_COEFFICIENT_DIGITS + 1,
-        _bounded_product(left_support, right_digits, _MAX_EXPRESSION_TOTAL_COEFFICIENT_DIGITS)
+        _bounded_product(
+            left_support, right_digits, _MAX_EXPRESSION_TOTAL_COEFFICIENT_DIGITS
+        )
         + _bounded_product(
             right_support, left_digits, _MAX_EXPRESSION_TOTAL_COEFFICIENT_DIGITS
         ),
@@ -633,9 +637,7 @@ def _nary_expression_metrics(  # noqa: C901
             tuple(row.work + row.expansion_terms for row in child_metrics),
             _MAX_EXPRESSION_WORK,
         )
-        carry_digits = _decimal_digits_from_bits(
-            _ceil_log2(max(1, len(child_metrics)))
-        )
+        carry_digits = _decimal_digits_from_bits(_ceil_log2(max(1, len(child_metrics))))
         if zero:
             total_coefficient_digits = 1
         elif disjoint:
@@ -761,8 +763,10 @@ def _nary_expression_metrics(  # noqa: C901
             constant = product
         else:
             constant = None
-        zero = constant == 0 if constant is not None else any(
-            child.zero for child in child_metrics
+        zero = (
+            constant == 0
+            if constant is not None
+            else any(child.zero for child in child_metrics)
         )
         numerator_bits = 1 if zero else common_numerator_bits
         if zero:
@@ -792,9 +796,11 @@ def _nary_expression_metrics(  # noqa: C901
         zero=zero,
         constant=constant,
         monomial=(
-            next((child.monomial for child in child_metrics if not child.zero), frozenset())
-            if disjoint
-            and sum(1 for child in child_metrics if not child.zero) == 1
+            next(
+                (child.monomial for child in child_metrics if not child.zero),
+                frozenset(),
+            )
+            if disjoint and sum(1 for child in child_metrics if not child.zero) == 1
             else _multiply_monomials(child_metrics)
             if not isinstance(expression, PolynomialAdd)
             else None

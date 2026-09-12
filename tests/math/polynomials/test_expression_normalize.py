@@ -476,8 +476,14 @@ def test_nested_constant_powers_are_capped_before_evaluation(
     original_pow = ExactFraction.__pow__
 
     def fail_huge_power(self: ExactFraction, exponent: object) -> ExactFraction:
-        if isinstance(exponent, int) and exponent == 32 and abs(self.numerator) > 10**200:
-            raise AssertionError("exact constant power evaluated past the digit envelope")
+        if (
+            isinstance(exponent, int)
+            and exponent == 32
+            and abs(self.numerator) > 10**200
+        ):
+            raise AssertionError(
+                "exact constant power evaluated past the digit envelope"
+            )
         return original_pow(self, exponent)
 
     monkeypatch.setattr(ExactFraction, "__pow__", fail_huge_power)
@@ -535,7 +541,9 @@ def test_powered_disjoint_sum_preserves_child_denominators() -> None:
         "exponent": 9,
     }
     with pytest.raises(OperationResourceAdmissionError):
-        normalize_polynomial_expression(_request("QQ", expression, variables=("x", "y")))
+        normalize_polynomial_expression(
+            _request("QQ", expression, variables=("x", "y"))
+        )
 
 
 def test_constant_add_caps_denominators_before_fraction_sum(
@@ -570,4 +578,3 @@ def test_constant_add_caps_denominators_before_fraction_sum(
     }
     with pytest.raises(OperationResourceAdmissionError):
         normalize_polynomial_expression(_request("QQ", expression))
-

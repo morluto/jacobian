@@ -39,6 +39,11 @@ from jacobian.math.combinatorics.designs.incidence_structures._models import (
     _require_incidence_trade_admitted,
     _require_steiner_triple_system_admitted,
 )
+from jacobian.math.combinatorics.exact_cover import (
+    ExactCoverRow,
+    GeneralizedExactCoverInstance,
+    find_generalized_exact_cover,
+)
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
 )
@@ -77,61 +82,15 @@ def containment_profile(
     )
 
 
-def _search_steiner_exact_cover(
-    pairs: tuple[tuple[int, int], ...],
-    by_pair: dict[tuple[int, int], list[tuple[int, int, int]]],
-    search_budget: int,
-) -> tuple[bool, list[tuple[int, int, int]], int]:
-    """Search a materialized triple family under one admitted state budget."""
-
-    chosen: list[tuple[int, int, int]] = []
-    covered: set[tuple[int, int]] = set()
-    states = 0
-    exhausted = False
-
-    def search() -> bool:
-        nonlocal states, exhausted
-        if states >= search_budget:
-            exhausted = True
-            return False
-        states += 1
-        request_checkpoint("during Steiner exact-cover search")
-        if len(covered) == len(pairs):
-            return True
-        uncovered = [pair for pair in pairs if pair not in covered]
-        pair = min(
-            uncovered,
-            key=lambda candidate: sum(
-                all(edge not in covered for edge in combinations(triple, 2))
-                for triple in by_pair[candidate]
-            ),
-        )
-        for triple in by_pair[pair]:
-            triple_pairs = tuple(combinations(triple, 2))
-            if any(edge in covered for edge in triple_pairs):
-                continue
-            covered.update(triple_pairs)
-            chosen.append(triple)
-            if search():
-                return True
-            chosen.pop()
-            covered.difference_update(triple_pairs)
-            if exhausted:
-                return False
-        return False
-
-    return search(), chosen, states
-
-
 def construct_steiner_triple_system(
     order: int, search_budget: int = MAX_STEINER_SEARCH_STATES
 ) -> SteinerTripleSystemResult:
     """Construct one STS(order) using bounded exact cover over point pairs.
 
-    Each candidate triple covers exactly three pair constraints.  The search
-    branches on the uncovered pair with the fewest currently available
-    triples, so a returned design is independently checked by replaying all
-    pair multiplicities before it crosses the operation boundary.
+    Each candidate triple covers exactly three pair constraints. The canonical
+    instance is solved by the maintained generalized exact-cover backend, and
+    the returned design is independently checked by replaying all pair
+    multiplicities before it crosses the operation boundary.
     """
     if type(order) is not int or type(search_budget) is not int:
         raise TypeError("order and search_budget must be integers")
@@ -158,23 +117,39 @@ def construct_steiner_triple_system(
     points = tuple(range(order))
     pairs = tuple(combinations(points, 2))
     triples = tuple(combinations(points, 3))
-    by_pair: dict[tuple[int, int], list[tuple[int, int, int]]] = {
-        pair: [] for pair in pairs
+    pair_labels = {pair: f"pair:{pair[0]:02d}:{pair[1]:02d}" for pair in pairs}
+    triple_by_row_id = {
+        f"triple:{triple[0]:02d}:{triple[1]:02d}:{triple[2]:02d}": triple
+        for triple in triples
     }
-    for triple in triples:
-        for pair in combinations(triple, 2):
-            by_pair[pair].append(triple)
-
-    found, chosen, states = _search_steiner_exact_cover(pairs, by_pair, search_budget)
-    if not found:
+    exact_cover = GeneralizedExactCoverInstance(
+        primary_items=tuple(sorted(pair_labels.values())),
+        secondary_items=(),
+        rows=tuple(
+            ExactCoverRow(
+                row_id=row_id,
+                items=tuple(
+                    sorted(pair_labels[pair] for pair in combinations(triple, 2))
+                ),
+            )
+            for row_id, triple in triple_by_row_id.items()
+        ),
+    )
+    cover = find_generalized_exact_cover(exact_cover, search_node_limit=search_budget)
+    states = cover.searched_node_count
+    if cover.status != "FOUND":
         return SteinerTripleSystemResult(
-            status="UNKNOWN" if states >= search_budget else "NOT_FOUND",
+            status="UNKNOWN" if cover.status == "UNKNOWN" else "NOT_FOUND",
             order=order,
-            states_explored=min(states, search_budget),
+            states_explored=states,
         )
 
     # Replay the defining incidence axiom independently of the cover search.
     pair_multiplicity = dict.fromkeys(pairs, 0)
+    selected_row_ids = cover.selected_row_ids
+    if selected_row_ids is None:
+        raise RuntimeError("FOUND exact-cover result omitted selected rows")
+    chosen = tuple(triple_by_row_id[row_id] for row_id in selected_row_ids)
     for triple in chosen:
         for pair in combinations(triple, 2):
             pair_multiplicity[pair] += 1

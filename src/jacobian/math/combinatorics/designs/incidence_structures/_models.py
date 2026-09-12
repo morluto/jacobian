@@ -34,13 +34,14 @@ MAX_LABEL_BYTES = 1_024
 MAX_TRADE_ORDER = MAX_T
 MAX_TRADE_DIFFERENCES = MAX_POINTS + MAX_SUBSETS
 
-# A small exact-cover envelope for the first public design constructor.  The
-# complete candidate triple family is materialized before search, so this
-# bound covers both candidate generation and the recursive search state.
+# A small exact-cover envelope for the first public design constructor. The
+# complete candidate triple family is materialized before the maintained
+# generalized exact-cover backend runs, so these bounds cover both the
+# candidate representation and its deterministic node-by-item scan.
 MAX_STEINER_TRIPLE_ORDER = 15
 MAX_STEINER_SEARCH_STATES = 100_000
 MAX_STEINER_OUTPUT_BYTES = 64 * 1024
-_MAX_STEINER_WORK_UNITS = 600_000_000
+_MAX_STEINER_EXACT_COVER_WORK_UNITS = 256 * 100_000 * 64
 _MAX_STEINER_INTERMEDIATE_UNITS = 8_192
 
 _MAX_CONTAINMENT_TOTAL_WORK_UNITS = 4_000_000
@@ -264,11 +265,12 @@ def _require_steiner_triple_system_admitted(order: int, search_budget: int) -> N
         )
     pair_count = comb(order, 2)
     triple_count = comb(order, 3)
-    # Every state scans the uncovered-pair choices and candidate triples. The
-    # factor twelve covers the three pair incidences checked by each
-    # candidate, the candidate-count pass, and the branch feasibility check.
-    work_units = search_budget * (pair_count + 12 * triple_count)
-    if work_units > _MAX_STEINER_WORK_UNITS:
+    # Match the generalized exact-cover backend's admitted node-by-item scan
+    # bound before materializing its canonical instance.
+    work_units = (
+        search_budget * pair_count * ((max(triple_count, pair_count) + 63) // 64)
+    )
+    if work_units > _MAX_STEINER_EXACT_COVER_WORK_UNITS:
         raise IncidenceStructureAdmissionError(
             "steiner_work_budget_exceeded",
             "Steiner construction exceeds the exact-cover work budget",

@@ -110,12 +110,11 @@ class PolynomialExpressionSource(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def bound_raw_tree(cls, value: object) -> object:
-        """Reject deep or oversized raw trees before recursive AST parsing."""
+        """Reject deep or oversized raw trees before copying or parsing them."""
 
-        value = canonicalize_json_containers(value)
         if isinstance(value, Mapping):
             _bound_raw_expression(value.get("expression"))
-        return value
+        return canonicalize_json_containers(value)
 
     @model_validator(mode="after")
     def require_variable_axis(self) -> Self:
@@ -172,6 +171,14 @@ class _ExpressionMetrics:
 
 
 def _expression_children(node: object) -> tuple[object, ...]:
+    if isinstance(node, (PolynomialAdd, PolynomialMultiply)):
+        operands = getattr(node, "operands", ())
+        if isinstance(operands, (list, tuple)):
+            return tuple(operands)
+        return ()
+    if isinstance(node, PolynomialPower):
+        base = getattr(node, "base", None)
+        return (base,) if base is not None else ()
     if isinstance(node, Mapping):
         kind = node.get("kind")
         if kind in ("ADD", "MULTIPLY"):
@@ -180,26 +187,19 @@ def _expression_children(node: object) -> tuple[object, ...]:
                 return tuple(operands)
         elif kind == "POWER" and "base" in node:
             return (node["base"],)
-        return ()
-    kind = getattr(node, "kind", None)
-    if kind in ("ADD", "MULTIPLY"):
-        operands = getattr(node, "operands", ())
-        if isinstance(operands, (list, tuple)):
-            return tuple(operands)
-        return ()
-    if kind == "POWER":
-        base = getattr(node, "base", None)
-        return (base,) if base is not None else ()
     return ()
 
 
 def _bound_raw_expression(expression: object) -> None:
     """Bound AST depth and cardinality for mappings and validated models."""
 
-    stack = [(expression, 1)]
+    stack: list[tuple[object, int, tuple[int, ...]]] = [(expression, 1, ())]
     count = 0
     while stack:
-        node, depth = stack.pop()
+        node, depth, path = stack.pop()
+        identity = id(node)
+        if identity in path:
+            raise ValueError("expression nodes may not form a cycle")
         count += 1
         if depth > _MAX_EXPRESSION_DEPTH:
             raise ValueError(
@@ -210,7 +210,8 @@ def _bound_raw_expression(expression: object) -> None:
         children = _expression_children(node)
         if len(children) > 64:
             raise ValueError("expression nodes may have at most 64 operands")
-        stack.extend((child, depth + 1) for child in children)
+        child_path = (*path, identity)
+        stack.extend((child, depth + 1, child_path) for child in children)
 
 
 def _bounded_sum(values: list[int] | tuple[int, ...], limit: int) -> int:
@@ -665,7 +666,7 @@ def _admit_source_domain_claims(source: PolynomialExpressionSource) -> None:
     """Reject ZZ fractional literals and undeclared variables before expansion."""
 
     declared = set(source.variables)
-    stack = [source.expression]
+    stack: list[PolynomialExpression] = [source.expression]
     while stack:
         node = stack.pop()
         if isinstance(node, PolynomialLiteral):
@@ -675,15 +676,17 @@ def _admit_source_domain_claims(source: PolynomialExpressionSource) -> None:
                     code="polynomial.expression.nonintegral_literal",
                     message="ZZ expressions require integral literals",
                 )
-        elif (
-            isinstance(node, PolynomialVariableExpression) and node.name not in declared
-        ):
-            raise OperationDomainValidationError(
-                location=("expression",),
-                code="polynomial.expression.undeclared_variable",
-                message="every expression variable must belong to the declared axis",
-            )
-        stack.extend(_expression_children(node))
+        elif isinstance(node, PolynomialVariableExpression):
+            if node.name not in declared:
+                raise OperationDomainValidationError(
+                    location=("expression",),
+                    code="polynomial.expression.undeclared_variable",
+                    message="every expression variable must belong to the declared axis",
+                )
+        elif isinstance(node, (PolynomialAdd, PolynomialMultiply)):
+            stack.extend(node.operands)
+        elif isinstance(node, PolynomialPower):
+            stack.append(node.base)
 
 
 def normalize_polynomial_expression(  # noqa: C901

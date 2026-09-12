@@ -18,6 +18,7 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.polynomials._expression_normalize import (
     _MAX_EXPRESSION_DEPTH,
+    _MAX_EXPRESSION_NODES,
     PolynomialAdd,
     PolynomialExpressionNormalizeRequest,
     PolynomialExpressionNormalizeResult,
@@ -184,6 +185,44 @@ def test_forged_deep_ast_is_bounded_before_serialization() -> None:
     with pytest.raises(OperationResourceAdmissionError) as error:
         normalize_polynomial_expression(source)
     assert error.value.errors()[0]["type"] == "polynomial.expression.expansion_bound"
+
+
+def test_forged_kind_does_not_skip_model_children() -> None:
+    expression: PolynomialAdd | PolynomialPower | PolynomialVariableExpression = (
+        PolynomialVariableExpression.model_construct(name="x")
+    )
+    for _ in range(_MAX_EXPRESSION_DEPTH + 8):
+        expression = PolynomialPower.model_construct(
+            kind="LITERAL",
+            base=expression,
+            exponent=1,
+        )
+    source = PolynomialExpressionSource.model_construct(
+        coefficient_domain="QQ",
+        variables=("x",),
+        expression=expression,
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        normalize_polynomial_expression(source)
+    assert error.value.errors()[0]["type"] == "polynomial.expression.expansion_bound"
+
+
+def test_wide_raw_tree_is_rejected_before_canonicalization() -> None:
+    leaf = {"kind": "LITERAL", "value": {"num": 1, "den": 1}}
+    wide = {
+        "kind": "ADD",
+        "operands": [{"kind": "ADD", "operands": [leaf] * 64} for _ in range(4)],
+    }
+    assert _MAX_EXPRESSION_NODES < 1 + 4 + 4 * 64
+    with pytest.raises(ValidationError, match="node count"):
+        _request("QQ", wide)
+
+
+def test_cyclic_raw_expression_is_rejected() -> None:
+    expression: dict[str, Any] = {"kind": "POWER", "exponent": 1}
+    expression["base"] = expression
+    with pytest.raises(ValidationError, match="cycle"):
+        _request("QQ", expression)
 
 
 def test_forged_negative_exponent_is_rejected_before_metrics() -> None:

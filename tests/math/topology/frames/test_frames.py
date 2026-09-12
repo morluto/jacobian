@@ -326,7 +326,7 @@ def test_complex_accumulation_height_is_admitted_before_arithmetic() -> None:
         vectors=tuple(
             (
                 GaussianRational.from_fractions(
-                    Fraction(1, 10 ** (100 + index) + 3), Fraction(0)
+                    Fraction(1, 10**70 + index), Fraction(0)
                 ),
             )
             for index in range(64)

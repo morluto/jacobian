@@ -13,6 +13,8 @@ from jacobian.math.universal_algebra._models import (
     EvaluateResult,
     HomomorphismProfileRequest,
     HomomorphismProfileResult,
+    ImplicationCountermodelCheckRequest,
+    ImplicationCountermodelCheckResult,
     QuotientRequest,
     SubalgebraRequest,
     SubalgebraResult,
@@ -37,6 +39,12 @@ def compute_equation_profile(request: EquationProfileRequest) -> EquationProfile
     return native.equation_profile(
         request.algebra, request.left, request.right, request.variable_count
     )
+
+
+def compute_implication_countermodel_check(
+    request: ImplicationCountermodelCheckRequest,
+) -> ImplicationCountermodelCheckResult:
+    return native.implication_countermodel_check(request)
 
 
 def compute_generated_subalgebra(request: SubalgebraRequest) -> SubalgebraResult:
@@ -137,6 +145,102 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         "root": 0,
                     },
                     "variable_count": 1,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="universal_algebra.finite_magma.implication_countermodel.check",
+        title="Check a finite magma implication countermodel",
+        description=(
+            "Exhaust every assignment for each premise and target equation in "
+            "one explicit finite magma. Return complete equation profiles and "
+            "true exactly when all premises hold while the target fails."
+        ),
+        request_type=ImplicationCountermodelCheckRequest,
+        result_type=ImplicationCountermodelCheckResult,
+        run=compute_implication_countermodel_check,
+        tags=("universal-algebra", "finite-magma", "countermodel", "exact"),
+        examples=(
+            OperationExample(
+                name="associativity_countermodel",
+                description=(
+                    "Check associativity as a premise and commutativity as a target "
+                    "in a two-element magma; the algebra must have exactly one "
+                    "binary operation."
+                ),
+                input={
+                    "algebra": {
+                        "carrier": ["0", "1"],
+                        "operations": [{"operation_id": "mul", "arity": 2}],
+                        "tables": [[0, 0, 1, 1]],
+                    },
+                    "premises": [
+                        {
+                            "left": {
+                                "nodes": [
+                                    {"kind": "variable", "variable_id": 0},
+                                    {"kind": "variable", "variable_id": 1},
+                                    {"kind": "variable", "variable_id": 2},
+                                    {
+                                        "kind": "application",
+                                        "operation": 0,
+                                        "children": [0, 1],
+                                    },
+                                    {
+                                        "kind": "application",
+                                        "operation": 0,
+                                        "children": [3, 2],
+                                    },
+                                ],
+                                "root": 4,
+                            },
+                            "right": {
+                                "nodes": [
+                                    {"kind": "variable", "variable_id": 0},
+                                    {"kind": "variable", "variable_id": 1},
+                                    {"kind": "variable", "variable_id": 2},
+                                    {
+                                        "kind": "application",
+                                        "operation": 0,
+                                        "children": [1, 2],
+                                    },
+                                    {
+                                        "kind": "application",
+                                        "operation": 0,
+                                        "children": [0, 3],
+                                    },
+                                ],
+                                "root": 4,
+                            },
+                        }
+                    ],
+                    "target": {
+                        "left": {
+                            "nodes": [
+                                {"kind": "variable", "variable_id": 0},
+                                {"kind": "variable", "variable_id": 1},
+                                {
+                                    "kind": "application",
+                                    "operation": 0,
+                                    "children": [0, 1],
+                                },
+                            ],
+                            "root": 2,
+                        },
+                        "right": {
+                            "nodes": [
+                                {"kind": "variable", "variable_id": 1},
+                                {"kind": "variable", "variable_id": 0},
+                                {
+                                    "kind": "application",
+                                    "operation": 0,
+                                    "children": [0, 1],
+                                },
+                            ],
+                            "root": 2,
+                        },
+                    },
                 },
             ),
         ),

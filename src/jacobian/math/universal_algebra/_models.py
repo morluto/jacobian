@@ -106,6 +106,66 @@ class EquationProfileResult(StrictModel):
         return self
 
 
+class MagmaEquation(StrictModel):
+    """One equation over a source-bound binary magma term language."""
+
+    left: FlatTerm
+    right: FlatTerm
+
+
+class ImplicationCountermodelCheckRequest(StrictModel):
+    """Check an explicit finite magma against premises and one target."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "The algebra must have exactly one binary operation. Terms use "
+                "the algebra's operation index and variable axis; every assignment "
+                "to the variables occurring in an equation is exhausted."
+            )
+        }
+    )
+
+    algebra: FiniteAlgebra = Field(
+        description="A finite algebra with exactly one binary operation (a magma)."
+    )
+    premises: tuple[MagmaEquation, ...] = Field(
+        max_length=16,
+        description="Premise equations checked universally over this magma.",
+    )
+    target: MagmaEquation = Field(
+        description="The target equation whose failure is sought after premise checks."
+    )
+
+
+class ImplicationCountermodelCheckResult(StrictModel):
+    """Complete premise and target profiles for one explicit finite magma."""
+
+    algebra: FiniteAlgebra
+    premises: tuple[EquationProfileResult, ...] = Field(max_length=16)
+    target: EquationProfileResult
+    is_countermodel: bool
+
+    @model_validator(mode="after")
+    def bind_countermodel_status(self) -> Self:
+        expected = all(profile.status == "HOLDS" for profile in self.premises) and (
+            self.target.status == "FAILS"
+        )
+        if self.is_countermodel != expected:
+            raise _validation_error(
+                "countermodel_status_mismatch",
+                "is_countermodel must mean all premises hold and the target fails",
+            )
+        if any(profile.algebra != self.algebra for profile in self.premises) or (
+            self.target.algebra != self.algebra
+        ):
+            raise _validation_error(
+                "countermodel_source_mismatch",
+                "all equation profiles must retain the checked magma",
+            )
+        return self
+
+
 class SubalgebraRequest(StrictModel):
     algebra: FiniteAlgebra
     generators: tuple[int, ...] = Field(
@@ -308,6 +368,9 @@ __all__ = [
     "HomomorphismObstruction",
     "HomomorphismProfileRequest",
     "HomomorphismProfileResult",
+    "ImplicationCountermodelCheckRequest",
+    "ImplicationCountermodelCheckResult",
+    "MagmaEquation",
     "QuotientRequest",
     "SubalgebraRequest",
     "SubalgebraResult",

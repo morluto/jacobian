@@ -15,6 +15,8 @@ from ._models import (
     EvaluateResult,
     HomomorphismObstruction,
     HomomorphismProfileResult,
+    ImplicationCountermodelCheckRequest,
+    ImplicationCountermodelCheckResult,
     SubalgebraResult,
     _congruence_work,
 )
@@ -38,6 +40,7 @@ __all__ = [
     "evaluate_term",
     "generated_subalgebra",
     "homomorphism_profile",
+    "implication_countermodel_check",
     "quotient",
     "verify_congruence",
     "verify_equation_profile",
@@ -96,6 +99,44 @@ def _admit_equation_profile(
             location=("variable_count",),
             code="equation_work_bound",
             message="equation profile exceeds the assignment work budget",
+        )
+
+
+def _admit_implication_countermodel(
+    request: ImplicationCountermodelCheckRequest,
+) -> None:
+    """Admit one complete finite-magma implication check before evaluation."""
+
+    algebra = request.algebra
+    if len(algebra.operations) != 1 or algebra.operations[0].arity != 2:
+        _reject(
+            location=("algebra",),
+            code="magma_signature",
+            message="the checked algebra must have exactly one binary operation",
+        )
+    equations = (*request.premises, request.target)
+    total_work = 0
+    for equation in equations:
+        for term in (equation.left, equation.right):
+            try:
+                require_term_for_algebra(term, algebra)
+            except UniversalAlgebraAdmissionError as exc:
+                _reject(location=("equation",), code="term_signature", message=str(exc))
+        variable_count = max(
+            equation.left.variable_count, equation.right.variable_count
+        )
+        if variable_count > 8:
+            _reject(
+                location=("equation",),
+                code="variable_count_bound",
+                message="an equation may use at most eight variables",
+            )
+        total_work += len(algebra.carrier) ** variable_count
+    if total_work > MAX_ENUMERATION_WORK:
+        _reject(
+            location=("equations",),
+            code="countermodel_work_bound",
+            message="complete premise and target assignment work exceeds the bound",
         )
 
 
@@ -228,6 +269,37 @@ def equation_profile(
     """
     _admit_equation_profile(algebra, left, right, variable_count)
     return _equation_profile_unchecked(algebra, left, right, variable_count)
+
+
+def implication_countermodel_check(
+    request: ImplicationCountermodelCheckRequest,
+) -> ImplicationCountermodelCheckResult:
+    """Check whether one explicit finite magma is a countermodel.
+
+    Every premise and the target is evaluated over its complete finite
+    assignment space.  ``is_countermodel`` is true exactly when all premises
+    hold universally and the target has a counterassignment.
+    """
+
+    _admit_implication_countermodel(request)
+    profiles = tuple(
+        _equation_profile_unchecked(
+            request.algebra,
+            equation.left,
+            equation.right,
+            max(equation.left.variable_count, equation.right.variable_count),
+        )
+        for equation in (*request.premises, request.target)
+    )
+    premises = profiles[:-1]
+    target = profiles[-1]
+    return ImplicationCountermodelCheckResult(
+        algebra=request.algebra,
+        premises=premises,
+        target=target,
+        is_countermodel=all(profile.status == "HOLDS" for profile in premises)
+        and target.status == "FAILS",
+    )
 
 
 def verify_equation_profile(claim: EquationProfileResult) -> bool:

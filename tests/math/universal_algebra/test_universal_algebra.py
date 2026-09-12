@@ -19,6 +19,8 @@ from jacobian.math.universal_algebra._models import (
     EquationProfileRequest,
     EvaluateRequest,
     HomomorphismProfileRequest,
+    ImplicationCountermodelCheckRequest,
+    MagmaEquation,
     QuotientRequest,
     SubalgebraRequest,
 )
@@ -29,6 +31,7 @@ from jacobian.math.universal_algebra._tools import (
     compute_evaluate,
     compute_generated_subalgebra,
     compute_homomorphism_profile,
+    compute_implication_countermodel_check,
     compute_quotient,
 )
 from jacobian.math.universal_algebra.operations import (
@@ -102,6 +105,7 @@ def test_catalog_contains_only_audited_agent_outcomes() -> None:
     assert {tool.operation_id for tool in TOOLS} == {
         "universal_algebra.term.evaluate.compute",
         "universal_algebra.equation.profile.compute",
+        "universal_algebra.finite_magma.implication_countermodel.check",
         "universal_algebra.subalgebra.generated.compute",
         "universal_algebra.map.homomorphism_profile.compute",
         "universal_algebra.congruence.check.compute",
@@ -176,6 +180,83 @@ class TestEquationProfile:
         assert result.satisfying_count < 4
         assert result.first_counterassignment is not None
         assert verify_equation_profile(result)
+
+
+class TestMagmaImplicationCountermodel:
+    def test_associative_noncommutative_magma_is_countermodel(self) -> None:
+        # Left projection x*y=x is associative but not commutative.
+        magma = FiniteAlgebra(
+            carrier=("0", "1"),
+            operations=(OperationSymbol(operation_id="mul", arity=2),),
+            tables=((0, 0, 1, 1),),
+        )
+        x, y, z = (_variable_term(index) for index in range(3))
+        associative_left = FlatTerm(
+            nodes=(
+                *x.nodes,
+                *y.nodes,
+                *z.nodes,
+                ApplicationTerm(kind="application", operation=0, children=(0, 1)),
+                ApplicationTerm(kind="application", operation=0, children=(3, 2)),
+            ),
+            root=4,
+        )
+        associative_right = FlatTerm(
+            nodes=(
+                *x.nodes,
+                *y.nodes,
+                *z.nodes,
+                ApplicationTerm(kind="application", operation=0, children=(1, 2)),
+                ApplicationTerm(kind="application", operation=0, children=(0, 3)),
+            ),
+            root=4,
+        )
+        xy = _and_term()
+        # Build y*x using the same flat representation with swapped children.
+        yx = FlatTerm(
+            nodes=(
+                VariableTerm(kind="variable", variable_id=0),
+                VariableTerm(kind="variable", variable_id=1),
+                ApplicationTerm(kind="application", operation=0, children=(1, 0)),
+            ),
+            root=2,
+        )
+        result = compute_implication_countermodel_check(
+            ImplicationCountermodelCheckRequest(
+                algebra=magma,
+                premises=(
+                    MagmaEquation(left=associative_left, right=associative_right),
+                ),
+                target=MagmaEquation(left=xy, right=yx),
+            )
+        )
+        assert result.premises[0].status == "HOLDS"
+        assert result.target.status == "FAILS"
+        assert result.target.first_counterassignment is not None
+        assert result.target.first_counterassignment.assignment == (0, 1)
+        assert result.is_countermodel is True
+
+    def test_premise_failure_prevents_countermodel_claim(self) -> None:
+        magma = _cyclic_addition_algebra(2)
+        x, y = _variable_term(0), _variable_term(1)
+        xy = FlatTerm(
+            nodes=(
+                *x.nodes,
+                *y.nodes,
+                ApplicationTerm(kind="application", operation=0, children=(0, 1)),
+            ),
+            root=2,
+        )
+        result = compute_implication_countermodel_check(
+            ImplicationCountermodelCheckRequest(
+                algebra=magma,
+                premises=(MagmaEquation(left=xy, right=x),),
+                target=MagmaEquation(left=xy, right=y),
+            )
+        )
+        assert result.premises[0].status == "FAILS"
+        assert result.target.status == "FAILS"
+        assert result.is_countermodel is False
 
 
 # ---------------------------------------------------------------------------

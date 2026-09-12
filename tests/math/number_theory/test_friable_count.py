@@ -215,6 +215,9 @@ def test_number_theory_native_api_is_explicit() -> None:
 
     assert tuple(number_theory.__all__) == (
         "FriableCountResult",
+        "KempnerArithmeticProgressionRequest",
+        "KempnerArithmeticProgressionResult",
+        "KempnerDigitSet",
         "PrimeShiftProfileResult",
         "RFullEnumerateResult",
         "binomial_prime_valuation",
@@ -229,6 +232,7 @@ def test_number_theory_native_api_is_explicit() -> None:
         "floor_square_root",
         "is_prime",
         "jacobi_symbol",
+        "kempner_arithmetic_progression",
         "ksigma_preimage",
         "legendre_symbol",
         "mobius",

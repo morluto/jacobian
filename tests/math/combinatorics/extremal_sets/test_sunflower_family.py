@@ -381,7 +381,7 @@ def test_reconstructed_rows_must_stay_strictly_ordered() -> None:
     payload["sunflowers"] = list(reversed(payload["sunflowers"]))
     payload["hypergraph_edges"] = list(reversed(payload["hypergraph_edges"]))
     payload["hypergraph"]["edges"] = list(reversed(payload["hypergraph"]["edges"]))
-    with pytest.raises(ValidationError, match="strictly ordered|lexicographic"):
+    with pytest.raises(ValidationError, match="canonical ordinals|strictly ordered|lexicographic"):
         SunflowerFamilyResult.model_validate(payload)
 
 

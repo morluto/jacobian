@@ -19,7 +19,7 @@ from jacobian._exact import (
     CanonicalRational,
     ExactInteger,
 )
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.number_theory.sequences.core.values import (
     MAX_SEQUENCE_LENGTH,
@@ -112,6 +112,32 @@ class IntegerSequenceBooleanResult(StrictModel):
 class FiniteSequence(StrictModel):
     """Catalog request base for canonical integer or rational sequences."""
 
+    @classmethod
+    def __get_pydantic_core_schema__(
+        cls,
+        source_type: Any,
+        handler: GetCoreSchemaHandler,
+    ) -> core_schema.CoreSchema:
+        if cls is not FiniteSequence:
+            return handler(source_type)
+        return core_schema.union_schema(
+            [
+                handler.generate_schema(FiniteRationalSequence),
+                handler.generate_schema(FiniteIntegerSequence),
+            ]
+        )
+
+    @classmethod
+    def __get_pydantic_json_schema__(
+        cls,
+        core_schema_obj: core_schema.CoreSchema,
+        handler: GetJsonSchemaHandler,
+    ) -> dict[str, Any]:
+        schema = dict(handler(core_schema_obj))
+        if cls is FiniteSequence and "type" not in schema:
+            schema["type"] = "object"
+        return schema
+
 
 class FiniteIntegerSequence(FiniteSequence):
     """A possibly empty finite integer sequence."""
@@ -153,6 +179,7 @@ class FiniteRationalSequence(FiniteSequence):
     @model_validator(mode="before")
     @classmethod
     def accept_integer_wire_entries(cls, data: object, info: ValidationInfo) -> object:
+        data = canonicalize_json_containers(data)
         if not isinstance(data, dict) or not isinstance(
             data.get("values"), (list, tuple)
         ):
@@ -263,36 +290,4 @@ class SequenceOrderShapeResult(StrictModel):
     has_internal_zero: bool
 
 
-def _finite_sequence_core_schema(
-    cls: type[FiniteSequence],
-    source_type: Any,
-    handler: GetCoreSchemaHandler,
-) -> core_schema.CoreSchema:
-    if cls is not FiniteSequence:
-        return handler(source_type)
-    return core_schema.union_schema(
-        [
-            handler.generate_schema(FiniteRationalSequence),
-            handler.generate_schema(FiniteIntegerSequence),
-        ]
-    )
-
-
-def _finite_sequence_json_schema(
-    cls: type[FiniteSequence],
-    core_schema_obj: core_schema.CoreSchema,
-    handler: GetJsonSchemaHandler,
-) -> dict[str, Any]:
-    schema = dict(handler(core_schema_obj))
-    if cls is FiniteSequence and "type" not in schema:
-        schema["type"] = "object"
-    return schema
-
-
-FiniteSequence.__get_pydantic_core_schema__ = classmethod(  # type: ignore[method-assign,assignment]
-    _finite_sequence_core_schema
-)
-FiniteSequence.__get_pydantic_json_schema__ = classmethod(  # type: ignore[method-assign,assignment]
-    _finite_sequence_json_schema
-)
 FiniteSequence.model_rebuild(force=True)

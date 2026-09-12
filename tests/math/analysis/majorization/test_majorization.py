@@ -23,6 +23,7 @@ from jacobian.math.analysis.majorization._tools import (
     _t_transform_sequence,
     _weak_majorization_check,
 )
+from jacobian.math.analysis.majorization.operations import weak_majorization_check
 from jacobian.math.matrices.values import RationalMatrix, rational_matrix_from_fractions
 
 
@@ -94,6 +95,14 @@ class TestMajorizationCheck:
 
 
 class TestWeakMajorization:
+    def test_native_rejects_invalid_direction_with_typed_error(self) -> None:
+        vector = rv(["a"], [(1, 1)])
+
+        with pytest.raises(OperationDomainValidationError) as error:
+            weak_majorization_check(vector, vector, "invalid")  # type: ignore[arg-type]
+
+        assert error.value.errors()[0]["type"] == "majorization.direction"
+
     def test_weak_sub_holds(self) -> None:
         """Weak submajorization holds when x >= y in prefix sums."""
         result = _weak_majorization_check(

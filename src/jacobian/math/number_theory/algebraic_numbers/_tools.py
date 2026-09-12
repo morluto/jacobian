@@ -50,14 +50,17 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         title="Compute an exact radix prefix of a real algebraic number",
         description=(
             "Return the exact base-b prefix of one canonical real algebraic "
-            "value: its integer part and exactly the requested number of "
-            "base-b fractional digits. Rational values use the canonical "
-            "terminating-zero convention; irrational values are compared "
-            "exactly against a scaled defining polynomial, never by binary "
-            "floating point. Source growth, root-isolation precision, exact "
-            "arithmetic, and exact result allocation are admitted before "
-            "backend expansion. The result asserts only the requested finite "
-            "prefix."
+            "value: its integer part (the additive floor) and exactly the "
+            "requested number of nonnegative base-b fractional digits. The "
+            "prefix reconstructs as integer_part + sum_i digit_i * "
+            "base**(-(i+1)); negative nonintegers such as -sqrt(2) therefore "
+            "use integer_part=-2 with digits 58578..., not sign-magnitude "
+            "-2.58578... Rational values use the canonical terminating-zero "
+            "convention; irrational values are compared exactly against a "
+            "scaled defining polynomial, never by binary floating point. "
+            "Source growth, root-isolation precision, exact arithmetic, and "
+            "exact result allocation are admitted before backend expansion. "
+            "The result asserts only the requested finite prefix."
         ),
         request_type=RadixPrefixRequest,
         result_type=RadixPrefixResult,

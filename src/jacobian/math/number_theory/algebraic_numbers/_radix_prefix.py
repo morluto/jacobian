@@ -7,6 +7,10 @@ values are handled by isolating the root of the scaled polynomial
 exactly ``b**q * alpha``,
 so the integer part of the scaled value is obtained from one exact isolating
 interval.  No binary floating point enters the result.
+
+The integer part is the additive floor: nonnegative fractional digits are
+added to it, so ``-sqrt(2)`` is ``integer_part=-2`` with digits ``58578...``,
+meaning ``-2 + 0.58578...``, not the sign-magnitude spelling ``-2.58578...``.
 """
 
 from __future__ import annotations
@@ -96,10 +100,21 @@ class RadixPrefixResult(StrictModel):
     value: RealAlgebraicValue
     base: StrictInt = Field(ge=2, le=MAX_RADIX_BASE)
     fractional_places: StrictInt = Field(ge=0, le=MAX_RADIX_PLACES)
-    integer_part: RadixIntegerPart
+    integer_part: RadixIntegerPart = Field(
+        description=(
+            "Floor of the real algebraic value. Nonnegative fractional digits "
+            "are added to this floor: the represented prefix is integer_part + "
+            "sum_i digit_i * base**(-(i+1)). For a negative noninteger such as "
+            "-sqrt(2) this is integer_part=-2 with digits 58578..., meaning "
+            "-2 + 0.58578..., not the sign-magnitude spelling -2.58578..."
+        ),
+    )
     fractional_digits: tuple[StrictInt, ...] = Field(
         max_length=MAX_RADIX_PLACES,
-        description="Exactly one digit in [0, base) for each requested place.",
+        description=(
+            "Exactly one digit in [0, base) for each requested place; digits "
+            "are added to integer_part, never subtracted for negative values."
+        ),
     )
     convention: Literal["TERMINATING_ZEROS_FOR_RATIONALS"] = (
         "TERMINATING_ZEROS_FOR_RATIONALS"

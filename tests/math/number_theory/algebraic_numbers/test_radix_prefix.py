@@ -81,6 +81,18 @@ def test_negative_root_uses_a_signed_integer_part() -> None:
     assert result.integer_part == -2
     # Truncation toward -infinity keeps the nonnegative fractional part.
     assert result.fractional_digits == (5, 8, 5, 7, 8)
+    reconstructed = result.integer_part + sum(
+        digit * 10 ** -(index + 1)
+        for index, digit in enumerate(result.fractional_digits)
+    )
+    assert reconstructed == -2 + 0.58578
+
+
+def test_integer_part_schema_states_the_additive_floor_convention() -> None:
+    """Discovery text must distinguish floor-plus-digits from sign-magnitude."""
+    schema = RadixPrefixResult.model_json_schema()["properties"]["integer_part"]
+    assert "added to this floor" in schema["description"]
+    assert "-2 + 0.58578" in schema["description"]
 
 
 def test_rational_root_uses_the_terminating_zero_convention() -> None:

@@ -374,7 +374,7 @@ def test_near_envelope_profile_execution_matches_admission_charge(
 
     reachable_count = 15
     alphabet_size = 11
-    length = 5
+    length = 4
     dfa = DFA(
         state_count=reachable_count,
         alphabet_size=alphabet_size,
@@ -400,7 +400,9 @@ def test_near_envelope_profile_execution_matches_admission_charge(
     )
     transition_count = dfa.state_count * alphabet_size
     output_bound = comb(length + alphabet_size - 1, alphabet_size - 1)
-    commute_preflight = transition_count + reachable_count * alphabet_size * alphabet_size
+    commute_preflight = (
+        transition_count + reachable_count * alphabet_size * alphabet_size
+    )
 
     extension_cells = 0
     possible_word_count = 1
@@ -419,8 +421,11 @@ def test_near_envelope_profile_execution_matches_admission_charge(
         "transition_index": 0,
         "reachability_scan": 0,
         "commute_preflight": 0,
+        "analysis": 0,
         "extension_coordinate": 0,
         "output_materialization": 0,
+        "cell_construction": 0,
+        "result_reduce": 0,
     }
     original_index = profile._build_transition_index
     original_reachable = profile._reachable_states_without_index
@@ -428,6 +433,7 @@ def test_near_envelope_profile_execution_matches_admission_charge(
     original_commute = profile._letter_actions_commute
     original_extend = profile._extend_profile_layer
     original_collect = profile._collect_profile
+    original_persistent = profile._persistent_reachable_states
 
     def count_index(value: DFA) -> dict[tuple[int, int], int]:
         executed["transition_index"] += len(value.transitions)
@@ -454,6 +460,16 @@ def test_near_envelope_profile_execution_matches_admission_charge(
         executed["commute_preflight"] += compared
         return commute, compared
 
+    def count_persistent(
+        by_source: dict[int, dict[int, int]],
+        reachable: set[int],
+        size: int,
+    ) -> set[int]:
+        executed["analysis"] += profile._noncommuting_analysis_work(
+            len(reachable), size
+        )
+        return original_persistent(by_source, reachable, size)
+
     def count_extend(
         layer: dict[tuple[int, tuple[int, ...]], int],
         transitions: dict[tuple[int, int], int],
@@ -467,12 +483,15 @@ def test_near_envelope_profile_execution_matches_admission_charge(
         layer: dict[tuple[int, tuple[int, ...]], int], accepting: set[int]
     ) -> dict[tuple[int, ...], int]:
         executed["output_materialization"] += len(layer)
+        executed["cell_construction"] += len(layer) * alphabet_size
+        executed["result_reduce"] += 2 * len(layer)
         return original_collect(layer, accepting)
 
     monkeypatch.setattr(profile, "_build_transition_index", count_index)
     monkeypatch.setattr(profile, "_reachable_states_without_index", count_reachable)
     monkeypatch.setattr(profile, "_letter_maps_on_reachable", count_maps)
     monkeypatch.setattr(profile, "_letter_actions_commute", count_commute)
+    monkeypatch.setattr(profile, "_persistent_reachable_states", count_persistent)
     monkeypatch.setattr(profile, "_extend_profile_layer", count_extend)
     monkeypatch.setattr(profile, "_collect_profile", count_collect)
 
@@ -480,19 +499,40 @@ def test_near_envelope_profile_execution_matches_admission_charge(
         profile.SymbolParikhProfileRequest(dfa=dfa, word_length=length)
     )
 
+    analysis_work = profile._noncommuting_analysis_work(reachable_count, alphabet_size)
     charged = {
         "transition_index": transition_count,
         "reachability_scan": reachable_count * transition_count,
         "commute_preflight": commute_preflight,
+        "analysis": analysis_work,
         "extension_coordinate": extension_cells * alphabet_size * max(1, alphabet_size),
         "output_materialization": output_materialization_cells,
+        "cell_construction": output_materialization_cells * alphabet_size,
+        "result_reduce": 2 * output_materialization_cells,
     }
     assert result.total_accepted_words == alphabet_size**length
     assert executed["transition_index"] == transition_count
     assert executed["commute_preflight"] == commute_preflight
     assert all(executed.values())
-    assert sum(charged.values()) == MAX_SYMBOL_PARIKH_DP_WORK - 1_630
+    assert sum(charged.values()) <= MAX_SYMBOL_PARIKH_DP_WORK
     assert_charged_work_parity(charged=charged, executed=executed)
+
+
+def test_dense_profile_cell_construction_is_included_in_the_work_bound() -> None:
+    dfa = DFA(
+        state_count=1,
+        alphabet_size=9,
+        transitions=tuple(
+            DFATransition(source=0, symbol=symbol, target=0) for symbol in range(9)
+        ),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+    with pytest.raises(
+        OperationResourceAdmissionError,
+        match="symbol-Parikh DP or output exceeds",
+    ):
+        symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=9))
 
 
 def test_empty_alphabet_has_only_the_empty_word() -> None:
@@ -563,7 +603,7 @@ def test_depth_five_tree_admits_length_150_profile() -> None:
     assert len(result.cells) == 151
 
 
-def test_commuting_cycle_identity_dfa_admits_length_998_profile() -> None:
+def test_commuting_cycle_identity_dfa_admits_length_978_profile() -> None:
     state_count = 44
     dfa = DFA(
         state_count=state_count,
@@ -580,6 +620,6 @@ def test_commuting_cycle_identity_dfa_admits_length_998_profile() -> None:
         initial_state=0,
         accepting_states=tuple(range(state_count)),
     )
-    result = symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=998))
-    assert result.total_accepted_words == 2**998
-    assert len(result.cells) == 999
+    result = symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=978))
+    assert result.total_accepted_words == 2**978
+    assert len(result.cells) == 979

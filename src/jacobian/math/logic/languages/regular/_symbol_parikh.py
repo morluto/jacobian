@@ -128,9 +128,7 @@ def _letter_actions_commute(
         outgoing = by_source.get(source, {})
         for first in alphabet:
             image_first = outgoing.get(first)
-            first_reachable = (
-                image_first is not None and image_first in reachable
-            )
+            first_reachable = image_first is not None and image_first in reachable
             first_outgoing = by_source.get(image_first, {}) if first_reachable else {}
             for second in alphabet:
                 compared += 1
@@ -150,11 +148,11 @@ def _letter_actions_commute(
     return commute, compared
 
 
-def _persistent_reachable_states(
+def _reachable_letter_graph(
     by_source: dict[int, dict[int, int]],
     reachable: set[int],
     alphabet_size: int,
-) -> set[int]:
+) -> dict[int, set[int]]:
     graph = {state: set() for state in reachable}
     for source in reachable:
         outgoing = by_source.get(source, {})
@@ -162,7 +160,10 @@ def _persistent_reachable_states(
             target = outgoing.get(symbol)
             if target in reachable:
                 graph[source].add(target)
+    return graph
 
+
+def _cyclic_components(graph: dict[int, set[int]]) -> set[int]:
     index = 0
     stack: list[int] = []
     on_stack: set[int] = set()
@@ -195,10 +196,19 @@ def _persistent_reachable_states(
             if looping:
                 cyclic.update(component)
 
-    for state in reachable:
+    for state in graph:
         if state not in indices:
             strongconnect(state)
+    return cyclic
 
+
+def _persistent_reachable_states(
+    by_source: dict[int, dict[int, int]],
+    reachable: set[int],
+    alphabet_size: int,
+) -> set[int]:
+    graph = _reachable_letter_graph(by_source, reachable, alphabet_size)
+    cyclic = _cyclic_components(graph)
     persistent = set(cyclic)
     frontier = list(cyclic)
     while frontier:
@@ -219,7 +229,7 @@ def _longest_transient_walk(
 ) -> int:
     if initial_state not in transient:
         return -1
-    longest = {state: -1 for state in transient}
+    longest = dict.fromkeys(transient, -1)
     longest[initial_state] = 0
     for _ in range(len(transient)):
         changed = False
@@ -238,6 +248,15 @@ def _longest_transient_walk(
         if not changed:
             break
     return max(longest.values(), default=-1)
+
+
+def _noncommuting_analysis_work(reachable_count: int, alphabet_size: int) -> int:
+    """Charge persistent-graph, SCC/closure, and transient-walk phases."""
+
+    edge_probes = reachable_count * alphabet_size
+    scc_and_closure = 2 * (reachable_count + edge_probes)
+    transient_relaxations = reachable_count * reachable_count * alphabet_size
+    return edge_probes + scc_and_closure + transient_relaxations
 
 
 def _states_per_layer(
@@ -333,10 +352,22 @@ def symbol_parikh_profile(
         by_source, reachable, alphabet_size
     )
     commute_preflight_work = commute_scan_work + commute_compare_work
+    reachable_count = len(reachable)
+    analysis_work = (
+        0 if commute else _noncommuting_analysis_work(reachable_count, alphabet_size)
+    )
     persistent = (
         reachable
         if commute
         else _persistent_reachable_states(by_source, reachable, alphabet_size)
+    )
+    transient = set() if commute else reachable - persistent
+    max_transient_step = (
+        -1
+        if commute
+        else _longest_transient_walk(
+            by_source, transient, alphabet_size, dfa.initial_state
+        )
     )
     transient = set() if commute else reachable - persistent
     max_transient_step = (
@@ -373,6 +404,8 @@ def symbol_parikh_profile(
         possible_word_count,
     )
     output_materialization_work = output_materialization_cells
+    cell_construction_work = output_materialization_cells * max(1, alphabet_size)
+    result_reduce_work = 2 * output_materialization_cells
     # The transition index is built from every DFA edge, including edges from
     # states that are unreachable from the initial state.
     transition_index_work = transition_count
@@ -381,8 +414,11 @@ def symbol_parikh_profile(
         transition_index_work
         + reachability_scan_work
         + commute_preflight_work
+        + analysis_work
         + extension_coordinate_work
         + output_materialization_work
+        + cell_construction_work
+        + result_reduce_work
     )
     if work_bound > MAX_SYMBOL_PARIKH_DP_WORK:
         raise OperationResourceAdmissionError(

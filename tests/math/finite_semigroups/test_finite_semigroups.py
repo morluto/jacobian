@@ -100,9 +100,13 @@ def test_native_surface_accepts_semigroup_value() -> None:
     assert idempotents(semigroup).idempotents == ("0",)
     assert principal_ideals(semigroup, ("1",)).ideals == (("0", "1", "2"),)
     assert len(green_relations(semigroup).L) == 1
-    assert tuple(
-        element for element, _witness in regular_elements(semigroup).regular_elements
-    ) == semigroup.elements
+    assert (
+        tuple(
+            element
+            for element, _witness in regular_elements(semigroup).regular_elements
+        )
+        == semigroup.elements
+    )
 
 
 def test_regular_elements_use_the_ax_a_definition() -> None:

@@ -243,7 +243,9 @@ class RegularElementsResult(StrictModel):
             raise _validation_error(
                 "regular_rows_duplicate", "regular rows must identify distinct elements"
             )
-        expected = tuple(element for element in self.semigroup.elements if element in elements)
+        expected = tuple(
+            element for element in self.semigroup.elements if element in elements
+        )
         if elements != expected:
             raise _validation_error(
                 "regular_rows_order", "regular rows must retain source element order"
@@ -282,12 +284,14 @@ class NilpotentElementsResult(StrictModel):
         declared = set(self.semigroup.elements)
         if self.zero not in declared:
             raise _validation_error(
-                "nilpotent_zero_axis", "nilpotent zero must use the source semigroup axis"
+                "nilpotent_zero_axis",
+                "nilpotent zero must use the source semigroup axis",
             )
         elements = tuple(element for element, _exponent in self.nilpotent_elements)
         if any(element not in declared for element in elements):
             raise _validation_error(
-                "nilpotent_row_axis", "nilpotent rows must use the source semigroup axis"
+                "nilpotent_row_axis",
+                "nilpotent rows must use the source semigroup axis",
             )
         if any(
             exponent < 1 or exponent > len(self.semigroup.elements)
@@ -302,10 +306,13 @@ class NilpotentElementsResult(StrictModel):
                 "nilpotent_rows_duplicate",
                 "nilpotent rows must identify distinct elements",
             )
-        expected = tuple(element for element in self.semigroup.elements if element in elements)
+        expected = tuple(
+            element for element in self.semigroup.elements if element in elements
+        )
         if elements != expected:
             raise _validation_error(
-                "nilpotent_rows_order", "nilpotent rows must retain source element order"
+                "nilpotent_rows_order",
+                "nilpotent rows must retain source element order",
             )
         return self
 

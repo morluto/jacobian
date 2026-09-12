@@ -259,7 +259,9 @@ def regular_elements(semigroup: "FiniteSemigroup") -> RegularElementsResult:
         ai = index[a]
         for x in semigroup.elements:
             if (
-                semigroup.multiplication[index[semigroup.multiplication[ai][index[x]]]][ai]
+                semigroup.multiplication[index[semigroup.multiplication[ai][index[x]]]][
+                    ai
+                ]
                 == a
             ):
                 regular.append((a, x))

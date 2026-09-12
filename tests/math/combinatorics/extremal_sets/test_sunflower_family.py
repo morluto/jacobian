@@ -215,6 +215,25 @@ def test_output_edge_bound_is_admitted_before_row_construction() -> None:
         construct_sunflower_family(source, 2)
 
 
+def test_nested_chain_is_sunflower_free_without_candidate_output_rejection() -> None:
+    """A nested chain has no 4-sunflowers; C(30, 4) candidates must not be an output bound."""
+    members = tuple(tuple(range(index + 1)) for index in range(30))
+    result = construct_sunflower_family(_family(members, ground=30), 4)
+    assert result.sunflowers == ()
+    assert result.sunflower_free is True
+
+
+def test_sparse_large_member_does_not_price_every_pair_at_global_max() -> None:
+    """A 10_000-set with 29 nested prefixes remains a cheap empty 4-sunflower search."""
+    members = (
+        *(tuple(range(index + 1)) for index in range(29)),
+        tuple(range(10_000)),
+    )
+    result = construct_sunflower_family(_family(members, ground=10_000), 4)
+    assert result.sunflowers == ()
+    assert result.sunflower_free is True
+
+
 def test_result_allocation_is_admitted_before_row_construction(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -355,24 +374,6 @@ def test_native_package_does_not_export_the_wire_request() -> None:
     assert not hasattr(extremal_sets, "SunflowerFamilyRequest")
 
 
-def test_nested_chain_is_sunflower_free_without_candidate_output_rejection() -> None:
-    """A nested chain has no 4-sunflowers; C(30, 4) candidates must not be an output bound."""
-    members = tuple(tuple(range(index + 1)) for index in range(30))
-    result = construct_sunflower_family(_family(members, ground=30), 4)
-    assert result.sunflowers == ()
-    assert result.sunflower_free is True
-
-
-def test_sparse_large_member_does_not_price_every_pair_at_global_max() -> None:
-    """A 10_000-set with 29 nested prefixes remains a cheap empty 4-sunflower search."""
-    members = tuple(tuple(range(index + 1)) for index in range(29)) + (
-        tuple(range(10_000)),
-    )
-    result = construct_sunflower_family(_family(members, ground=10_000), 4)
-    assert result.sunflowers == ()
-    assert result.sunflower_free is True
-
-
 def test_reconstructed_rows_must_stay_strictly_ordered() -> None:
     result = construct_sunflower_family(
         _family(((0, 1), (0, 2), (0, 4), (0, 5), (1, 2), (4, 5)), ground=6), 3
@@ -388,7 +389,7 @@ def test_reconstructed_rows_must_stay_strictly_ordered() -> None:
 def test_core_equality_work_is_included_in_admission() -> None:
     """Pairwise equality against the core is charged, not only intersection size."""
     core = tuple(range(2_499))
-    members = tuple(core + (2_499 + index,) for index in range(20))
+    members = tuple((*core, 2_499 + index) for index in range(20))
     with pytest.raises(OperationResourceAdmissionError, match="intersection work"):
         construct_sunflower_family(_family(members, ground=2_520), 3)
 
@@ -405,4 +406,3 @@ def test_cancellation_is_checkpointed_before_member_expansion(
         2,
     )
     assert "before sunflower member expansion" in messages
-

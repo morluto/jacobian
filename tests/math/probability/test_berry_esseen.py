@@ -259,7 +259,7 @@ def test_atom_count_boundary_is_admitted_and_overflow_is_preflighted() -> None:
     overflow_request = BerryEsseenRequest.model_validate(
         {"distribution": over_bound, "sample_count": 1}
     )
-    with pytest.raises(OperationResourceAdmissionError, match="16,384"):
+    with pytest.raises(OperationResourceAdmissionError, match="16384"):
         berry_esseen_bound(overflow_request)
     schema = BerryEsseenRequest.model_json_schema()
     atoms_schema = schema["$defs"]["FiniteRationalDistribution"]["properties"]["atoms"]

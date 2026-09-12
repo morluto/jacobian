@@ -121,6 +121,7 @@ class _ExpressionMetrics:
     total_coefficient_digits: int
     maximum_numerator_bits: int
     maximum_denominator_bits: int
+    denominator_mass_bits: int
     work: int
     intermediate_digits: int
 
@@ -394,6 +395,7 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
             ),
             maximum_numerator_bits=numerator_bits,
             maximum_denominator_bits=_denominator_bits(expression.value.den),
+            denominator_mass_bits=_denominator_bits(expression.value.den),
             work=1,
             intermediate_digits=_representation_digits(
                 1, numerator_bits, _denominator_bits(expression.value.den)
@@ -415,6 +417,7 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
             total_coefficient_digits=2,
             maximum_numerator_bits=1,
             maximum_denominator_bits=0,
+            denominator_mass_bits=0,
             work=1,
             intermediate_digits=_representation_digits(1, 1, 0),
         )
@@ -436,6 +439,7 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
                 total_coefficient_digits=2,
                 maximum_numerator_bits=max(base.maximum_numerator_bits, 1),
                 maximum_denominator_bits=base.maximum_denominator_bits,
+                denominator_mass_bits=0,
                 work=base.work,
                 intermediate_digits=max(base.intermediate_digits, 2),
             )
@@ -546,6 +550,14 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
             maximum_denominator_bits=max(
                 base.maximum_denominator_bits,
                 _denominator_bits(denominator),
+                min(
+                    _MAX_EXPRESSION_COEFFICIENT_BITS + 1,
+                    base.denominator_mass_bits * exponent,
+                ),
+            ),
+            denominator_mass_bits=min(
+                _MAX_EXPRESSION_COEFFICIENT_BITS + 1,
+                base.denominator_mass_bits * exponent,
             ),
             work=work,
             intermediate_digits=max(
@@ -683,10 +695,21 @@ def _nary_expression_metrics(  # noqa: C901
                 (child.maximum_denominator_bits for child in child_metrics),
                 default=0,
             )
+            denominator_mass_bits = _bounded_sum(
+                tuple(child.denominator_mass_bits for child in child_metrics),
+                _MAX_EXPRESSION_COEFFICIENT_BITS,
+            )
         else:
             maximum_denominator_bits = max(
                 _denominator_bits(common_denominator),
                 *(child.maximum_denominator_bits for child in child_metrics),
+            )
+            denominator_mass_bits = max(
+                _denominator_bits(common_denominator),
+                _bounded_sum(
+                    tuple(child.denominator_mass_bits for child in child_metrics),
+                    _MAX_EXPRESSION_COEFFICIENT_BITS,
+                ),
             )
     else:
         disjoint = False
@@ -752,8 +775,10 @@ def _nary_expression_metrics(  # noqa: C901
         raw_denominator = denominator
         if any(child.zero for child in child_metrics):
             constant = Fraction(0)
-        elif child_metrics and all(
-            child.constant is not None for child in child_metrics
+        elif (
+            child_metrics
+            and all(child.constant is not None for child in child_metrics)
+            and denominator is not None
         ):
             product = Fraction(1)
             for child in child_metrics:
@@ -779,6 +804,13 @@ def _nary_expression_metrics(  # noqa: C901
         maximum_denominator_bits = max(
             _denominator_bits(raw_denominator),
             *(child.maximum_denominator_bits for child in child_metrics),
+        )
+        denominator_mass_bits = max(
+            _denominator_bits(raw_denominator),
+            _bounded_sum(
+                tuple(child.denominator_mass_bits for child in child_metrics),
+                _MAX_EXPRESSION_COEFFICIENT_BITS,
+            ),
         )
     intermediate_digits = max(
         (row.intermediate_digits for row in child_metrics),
@@ -808,6 +840,7 @@ def _nary_expression_metrics(  # noqa: C901
         total_coefficient_digits=total_coefficient_digits,
         maximum_numerator_bits=maximum_numerator_bits,
         maximum_denominator_bits=maximum_denominator_bits,
+        denominator_mass_bits=denominator_mass_bits,
         work=work,
         intermediate_digits=intermediate_digits,
     )

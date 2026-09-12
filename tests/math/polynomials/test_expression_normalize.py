@@ -578,3 +578,72 @@ def test_constant_add_caps_denominators_before_fraction_sum(
     }
     with pytest.raises(OperationResourceAdmissionError):
         normalize_polynomial_expression(_request("QQ", expression))
+
+
+def test_powered_univariate_disjoint_sum_accounts_for_colliding_dens() -> None:
+    primes = tuple(10**127 + 39 + 210 * index for index in range(33))
+    addends = [
+        {
+            "kind": "MULTIPLY",
+            "operands": [
+                {
+                    "kind": "POWER",
+                    "base": {"kind": "VARIABLE", "name": "x"},
+                    "exponent": index,
+                },
+                {
+                    "kind": "POWER",
+                    "base": {
+                        "kind": "LITERAL",
+                        "value": {"num": 1, "den": prime},
+                    },
+                    "exponent": 32,
+                },
+            ],
+        }
+        for index, prime in enumerate(primes)
+    ]
+    expression = {
+        "kind": "POWER",
+        "base": {"kind": "ADD", "operands": addends},
+        "exponent": 2,
+    }
+    with pytest.raises(OperationResourceAdmissionError, match="coefficient-height"):
+        normalize_polynomial_expression(_request("QQ", expression))
+
+
+def test_constant_product_skips_exact_fractions_past_the_envelope(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_mul = Fraction.__mul__
+
+    def fail_huge_mul(self: Fraction, other: object) -> Fraction:
+        if isinstance(other, Fraction) and (
+            self.denominator.bit_length() > 20_000
+            or other.denominator.bit_length() > 20_000
+        ):
+            raise AssertionError("unadmitted constant product materialized")
+        return original_mul(self, other)
+
+    monkeypatch.setattr(Fraction, "__mul__", fail_huge_mul)
+    primes = [10**127 + 39 + 210 * index for index in range(108)]
+    groups = [
+        {
+            "kind": "MULTIPLY",
+            "operands": [
+                {
+                    "kind": "POWER",
+                    "base": {
+                        "kind": "LITERAL",
+                        "value": {"num": 1, "den": primes[start + offset]},
+                    },
+                    "exponent": 32,
+                }
+                for offset in range(3)
+            ],
+        }
+        for start in range(0, 108, 3)
+    ]
+    expression = {"kind": "MULTIPLY", "operands": groups}
+    with pytest.raises(OperationResourceAdmissionError):
+        normalize_polynomial_expression(_request("QQ", expression))

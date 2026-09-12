@@ -966,9 +966,7 @@ def test_syzygy_rejects_coprime_wide_denominators_before_fraction_sum() -> None:
     )
     for prime in primes:
         exponent = (
-            math.floor(
-                MAX_CANONICAL_INTEGER_DIGITS * math.log(10) / math.log(prime)
-            )
+            math.floor(MAX_CANONICAL_INTEGER_DIGITS * math.log(10) / math.log(prime))
             - 1
         )
         denominator = pow(prime, max(exponent, 1))

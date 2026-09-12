@@ -78,9 +78,7 @@ def _admit_coefficient_growth(pairs: tuple[_MergedPair, ...]) -> None:
             )
             + 1
         )
-        projected_digits[indices] = (
-            projected_digits.get(indices, 0) + products * height
-        )
+        projected_digits[indices] = projected_digits.get(indices, 0) + products * height
     if (
         any(
             height > MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS
@@ -105,8 +103,7 @@ def _admit_output_support(pairs: tuple[_MergedPair, ...]) -> None:
             * len(second.coefficient.polynomial.terms)
         )
     if any(
-        support > MAX_DIFFERENTIAL_FORM_TERMS
-        for support in projected_support.values()
+        support > MAX_DIFFERENTIAL_FORM_TERMS for support in projected_support.values()
     ):
         raise OperationResourceAdmissionError(
             location=("left", "right"),

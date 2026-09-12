@@ -34,7 +34,7 @@ class FormComponent(StrictModel):
 
     indices: tuple[int, ...] = Field(
         max_length=MAX_POLYNOMIAL_VARIABLES,
-        description="Strictly increasing coordinate indices in the differential basis."
+        description="Strictly increasing coordinate indices in the differential basis.",
     )
     coefficient: RationalPolynomial
 

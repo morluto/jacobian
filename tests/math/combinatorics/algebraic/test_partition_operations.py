@@ -22,11 +22,6 @@ from jacobian.math.combinatorics.algebraic import (
     hook_content_count as public_hook_content_count,
 )
 from jacobian.math.combinatorics.algebraic import operations as native
-from jacobian.math.combinatorics.algebraic.operations import (
-    _MAX_SSYT_COUNT_DIGITS,
-    _ssyt_count_digit_bound,
-    _upper_decimal_digits,
-)
 from jacobian.math.combinatorics.algebraic import (
     partition_dominance as public_partition_dominance,
 )
@@ -44,6 +39,11 @@ from jacobian.math.combinatorics.algebraic._tools import (
     check_standard_tableau,
     hook_content_count,
     partition_dominance,
+)
+from jacobian.math.combinatorics.algebraic.operations import (
+    _MAX_SSYT_COUNT_DIGITS,
+    _ssyt_count_digit_bound,
+    _upper_decimal_digits,
 )
 from jacobian.math.combinatorics.symmetric_functions.values import (
     IntegerPartition,

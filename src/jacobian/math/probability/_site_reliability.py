@@ -26,7 +26,6 @@ from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.probability._models import MAX_INPUT_RATIONAL_DIGITS
 
 MAX_SITE_RELIABILITY_VERTICES = 12
-MAX_SITE_RELIABILITY_EDGES = 24
 MAX_SITE_RELIABILITY_STATES = 1 << MAX_SITE_RELIABILITY_VERTICES
 # A state mass contains one probability (or its complement) per vertex.  The
 # input contract allows 128 digits per factor, and summing at most 2**n state
@@ -39,11 +38,13 @@ MAX_SITE_RELIABILITY_RATIONAL_DIGITS = (
 )
 # One unit reserves either a retained scalar digit, label code point, container
 # slot, or fixed record field.  This is a mathematical allocation envelope;
-# concrete transports own their independent encoded-byte ceilings.
+# concrete transports own their independent encoded-byte ceilings.  In
+# particular, native admission does not estimate a hypothetical JSON payload.
 MAX_SITE_RELIABILITY_LEDGER_UNITS = 64_000_000
-MAX_SITE_RELIABILITY_LOGICAL_WORK = MAX_SITE_RELIABILITY_STATES * (
-    4 * MAX_SITE_RELIABILITY_VERTICES + 4 * MAX_SITE_RELIABILITY_EDGES + 16
-)
+# This calibrated total work budget is checked against each request's actual
+# vertex and edge scans below.  It deliberately does not impose a separate
+# graph-edge cardinality cap.
+MAX_SITE_RELIABILITY_LOGICAL_WORK = 655_360
 
 
 def _validation_error(message: str) -> PydanticCustomError:
@@ -70,9 +71,9 @@ class GraphSiteReliabilitySource(StrictModel):
     graph: SimpleUndirectedGraph = Field(
         description=(
             "Simple undirected graph with at most "
-            f"{MAX_SITE_RELIABILITY_VERTICES} vertices and "
-            f"{MAX_SITE_RELIABILITY_EDGES} edges for complete vertex-subset "
-            "enumeration."
+            f"{MAX_SITE_RELIABILITY_VERTICES} vertices. Complete vertex-subset "
+            "enumeration is admitted by its intrinsic work and retained-ledger "
+            "bounds."
         )
     )
     # The shared graph carrier is larger than this operation's powerset
@@ -232,14 +233,6 @@ def _admit_site_request(
             message=(
                 "site reliability exceeds the "
                 f"{MAX_SITE_RELIABILITY_VERTICES}-vertex bound"
-            ),
-        )
-    if len(request.graph.edges) > MAX_SITE_RELIABILITY_EDGES:
-        raise OperationResourceAdmissionError(
-            location=("graph", "edges"),
-            code="probability.site_reliability.edge_bound",
-            message=(
-                f"site reliability exceeds the {MAX_SITE_RELIABILITY_EDGES}-edge bound"
             ),
         )
     if (
@@ -434,7 +427,6 @@ SITE_CONNECTION_PROBABILITY_OPERATION = MathTool(
 )
 
 __all__ = [
-    "MAX_SITE_RELIABILITY_EDGES",
     "MAX_SITE_RELIABILITY_LEDGER_UNITS",
     "MAX_SITE_RELIABILITY_LOGICAL_WORK",
     "MAX_SITE_RELIABILITY_STATES",

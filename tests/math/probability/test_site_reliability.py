@@ -159,6 +159,22 @@ def test_high_height_inputs_are_admitted_by_the_complete_result_carrier() -> Non
     assert all(state.state_probability.as_fraction() >= 0 for state in result.states)
 
 
+def test_long_labels_are_admitted_without_native_json_size_estimation() -> None:
+    """Native admission charges retained labels without a transport byte budget."""
+    label_prefix = "\U0001f600" * 100_000
+    vertices = tuple(sorted(f"{label_prefix}{index}" for index in range(12)))
+    result = compute_site_connection_probability(
+        _source(
+            vertices,
+            (),
+            (Fraction(1, 2),) * len(vertices),
+            (vertices[0], vertices[1]),
+        )
+    )
+    assert result.visited_states == 1 << len(vertices)
+    assert result.source.graph.vertices == vertices
+
+
 def test_successful_state_mass_equals_reported_total() -> None:
     """The reported scalar is the exact sum of the successful ledger rows."""
     result = compute_site_connection_probability(
@@ -239,6 +255,25 @@ def test_site_resource_bound_uses_resource_admission_error() -> None:
                 ("v0", "v1"),
             )
         )
+
+
+def test_complete_k8_is_admitted_by_the_actual_work_bound() -> None:
+    vertices = tuple(f"v{index}" for index in range(8))
+    edges = tuple(
+        (left, right)
+        for index, left in enumerate(vertices)
+        for right in vertices[index + 1 :]
+    )
+    result = compute_site_connection_probability(
+        _source(
+            vertices,
+            edges,
+            (Fraction(1, 2),) * len(vertices),
+            ("v0", "v1"),
+        )
+    )
+    assert result.visited_states == 1 << len(vertices)
+    assert result.connection_probability.as_fraction() == Fraction(1, 4)
 
 
 def test_site_vertex_bound_is_owned_by_operation_admission() -> None:

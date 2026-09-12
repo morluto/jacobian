@@ -275,6 +275,20 @@ def test_hyperedge_bound_is_owned_by_operation_admission() -> None:
         compute_hypergraph_bond_connection_probability(source)
 
 
+def test_isolated_declared_vertices_are_charged_as_retained_source_only() -> None:
+    vertices = tuple(f"v{index}" for index in range(25))
+    source = _source(
+        vertices,
+        (("edge", ("v0", "v1")),),
+        {"edge": Fraction(1, 2)},
+        ("v0", "v1"),
+    )
+    result = compute_hypergraph_bond_connection_probability(source)
+    assert result.visited_states == 2
+    assert result.connection_probability.as_fraction() == Fraction(1, 2)
+    assert result.source.hypergraph.vertices == vertices
+
+
 def test_hypergraph_ledger_allocation_is_admitted_before_enumeration(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

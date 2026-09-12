@@ -28,7 +28,6 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
 from jacobian.math.probability._models import MAX_INPUT_RATIONAL_DIGITS
 
 MAX_HYPERGRAPH_RELIABILITY_HYPEREDGES = 12
-MAX_HYPERGRAPH_RELIABILITY_VERTICES = 24
 MAX_HYPERGRAPH_RELIABILITY_STATES = 1 << MAX_HYPERGRAPH_RELIABILITY_HYPEREDGES
 # A state mass has one probability (or complement) factor per hyperedge and
 # the successful-state sum has at most 2**k terms.  This is the result-carrier
@@ -41,12 +40,10 @@ MAX_HYPERGRAPH_RELIABILITY_RATIONAL_DIGITS = (
 # One unit reserves either a retained scalar digit, label code point, container
 # slot, or fixed record field.  Concrete transports own encoded-byte ceilings.
 MAX_HYPERGRAPH_RELIABILITY_LEDGER_UNITS = 64_000_000
-MAX_HYPERGRAPH_RELIABILITY_LOGICAL_WORK = MAX_HYPERGRAPH_RELIABILITY_STATES * (
-    4 * MAX_HYPERGRAPH_RELIABILITY_HYPEREDGES
-    + 4 * MAX_HYPERGRAPH_RELIABILITY_VERTICES
-    + 4 * MAX_HYPERGRAPH_RELIABILITY_HYPEREDGES * MAX_HYPERGRAPH_RELIABILITY_VERTICES
-    + 16
-)
+# This calibrated total work budget charges actual traversal vertices and
+# incidences per state below.  Declared isolated vertices are retained once in
+# the source/result and are charged by the separate source/output envelope.
+MAX_HYPERGRAPH_RELIABILITY_LOGICAL_WORK = 5_373_952
 
 
 def _validation_error(message: str) -> PydanticCustomError:
@@ -73,9 +70,10 @@ class HypergraphBondReliabilitySource(StrictModel):
     hypergraph: FiniteHypergraph = Field(
         description=(
             "Finite simple hypergraph with at most "
-            f"{MAX_HYPERGRAPH_RELIABILITY_VERTICES} vertices and "
             f"{MAX_HYPERGRAPH_RELIABILITY_HYPEREDGES} nonempty hyperedges "
-            "for complete hyperedge-subset enumeration."
+            "for complete hyperedge-subset enumeration. Traversal work is "
+            "charged by relevant hyperedge incidences, while declared vertices "
+            "are retained and charged separately."
         )
     )
     # The shared finite-hypergraph carrier is larger than this operation's
@@ -231,15 +229,6 @@ def _connected_in_incidence_graph(
 def _admit_hypergraph_request(
     request: HypergraphBondReliabilitySource,
 ) -> None:
-    if len(request.hypergraph.vertices) > MAX_HYPERGRAPH_RELIABILITY_VERTICES:
-        raise OperationResourceAdmissionError(
-            location=("hypergraph", "vertices"),
-            code="probability.hypergraph_reliability.vertex_bound",
-            message=(
-                "hypergraph reliability exceeds the "
-                f"{MAX_HYPERGRAPH_RELIABILITY_VERTICES}-vertex bound"
-            ),
-        )
     if len(request.hypergraph.edges) > MAX_HYPERGRAPH_RELIABILITY_HYPEREDGES:
         raise OperationResourceAdmissionError(
             location=("hypergraph", "edges"),
@@ -289,10 +278,15 @@ def _admit_hypergraph_request(
         for item in request.hyperedge_probabilities
     )
     state_count = 1 << len(request.hypergraph.edges)
+    incidence_count = sum(len(members) for _, members in request.hypergraph.edges)
+    relevant_vertices = {
+        *request.terminals,
+        *(vertex for _, members in request.hypergraph.edges for vertex in members),
+    }
     logical_work = state_count * (
         4 * len(request.hypergraph.edges)
-        + 4 * len(request.hypergraph.vertices)
-        + 4 * sum(len(members) for _, members in request.hypergraph.edges)
+        + 4 * len(relevant_vertices)
+        + 4 * incidence_count
         + 16
     )
     if logical_work > MAX_HYPERGRAPH_RELIABILITY_LOGICAL_WORK:
@@ -451,7 +445,6 @@ __all__ = [
     "MAX_HYPERGRAPH_RELIABILITY_LEDGER_UNITS",
     "MAX_HYPERGRAPH_RELIABILITY_LOGICAL_WORK",
     "MAX_HYPERGRAPH_RELIABILITY_STATES",
-    "MAX_HYPERGRAPH_RELIABILITY_VERTICES",
     "HyperedgeOpenProbability",
     "HypergraphBondConnectionProbabilityResult",
     "HypergraphBondReliabilitySource",

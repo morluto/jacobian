@@ -203,6 +203,38 @@ def test_consumers_reject_integer_graded_flag_as_domain_errors() -> None:
         width(forged)
 
 
+def test_consumers_reject_foreign_ordered_pair_models_as_domain_errors() -> None:
+    class ForeignOrderedPair(OrderedPair):
+        extra: str = "foreign"
+
+    poset = _materialize(["a", "b"], [("a", "b")])
+    forged_pairs = tuple(
+        ForeignOrderedPair(lower=pair.lower, upper=pair.upper)
+        for pair in poset.strict_order_pairs
+    )
+    forged = poset.model_copy(
+        update={
+            "strict_order_pairs": forged_pairs,
+            "poset_digest": finite_poset_digest(
+                elements=poset.elements,
+                strict_order_pairs=forged_pairs,
+                cover_relations=poset.cover_relations,
+                incomparable_pairs=poset.incomparable_pairs,
+                minimal_elements=poset.minimal_elements,
+                maximal_elements=poset.maximal_elements,
+                graded=poset.graded,
+                ranks=poset.ranks,
+            ),
+        }
+    )
+
+    assert all(isinstance(pair, OrderedPair) for pair in forged.strict_order_pairs)
+    assert any(type(pair) is not OrderedPair for pair in forged.strict_order_pairs)
+    assert verify_finite_poset(forged) is False
+    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+        width(forged)
+
+
 def test_consumers_reject_foreign_rank_models_as_domain_errors() -> None:
     class ForeignRank(ElementRank):
         extra: str = "foreign"

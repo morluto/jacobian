@@ -7,7 +7,10 @@ from pydantic import Field, StrictInt, model_validator
 
 from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.logic.languages.regular.values import (
     DFA,
     MAX_COUNT_RESULT_DIGITS,
@@ -219,6 +222,25 @@ def _symbol_parikh_profile_request(
 def symbol_parikh_profile(dfa: DFA, word_length: int) -> SymbolParikhProfileResult:
     """Return the accepted-word symbol Parikh profile for one exact length."""
 
+    if not isinstance(dfa, DFA):
+        raise OperationDomainValidationError(
+            location=("dfa",),
+            code="regular_language.symbol_parikh.dfa_type",
+            message="dfa must be a canonical DFA value",
+        )
+    if (
+        type(word_length) is not int
+        or word_length < 0
+        or word_length > MAX_SYMBOL_PARIKH_LENGTH
+    ):
+        raise OperationDomainValidationError(
+            location=("word_length",),
+            code="regular_language.symbol_parikh.word_length",
+            message=(
+                "word_length must be an integer from 0 through "
+                f"{MAX_SYMBOL_PARIKH_LENGTH}"
+            ),
+        )
     return _symbol_parikh_profile_request(
         SymbolParikhProfileRequest(dfa=dfa, word_length=word_length)
     )

@@ -15,3 +15,4 @@ that need more context than an operation card:
 - [Exact quadratic forms](quadratic-forms.md)
 - [Homogeneous monomial systems on algebraic tori](algebraic-torus-monomial-systems.md)
 - [Prime-field homogeneous fixed subspaces](prime-field-homogeneous-fixed-subspaces.md)
+- [Regular-language operations](regular-languages.md)

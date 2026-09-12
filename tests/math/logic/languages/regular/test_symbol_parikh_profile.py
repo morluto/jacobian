@@ -47,6 +47,18 @@ def test_catalog_request_adapter_delegates_to_native_signature() -> None:
     assert via_tool == via_native
 
 
+def test_native_entry_point_rejects_unparsed_arguments_with_domain_errors() -> None:
+    from jacobian.catalog.models import OperationDomainValidationError
+
+    with pytest.raises(OperationDomainValidationError) as length_error:
+        symbol_parikh_profile(ending_in_one(), -1)
+    assert length_error.value.errors()[0]["loc"] == ("word_length",)
+
+    with pytest.raises(OperationDomainValidationError) as type_error:
+        symbol_parikh_profile(object(), 3)  # type: ignore[arg-type]
+    assert type_error.value.errors()[0]["loc"] == ("dfa",)
+
+
 def test_profile_matches_independent_word_enumeration() -> None:
     dfa = ending_in_one()
     result = symbol_parikh_profile(dfa, 3)

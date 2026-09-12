@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
@@ -12,6 +12,8 @@ from jacobian.math.polynomials.ideals._models import (
     IdealComputationBudget,
 )
 from jacobian.math.polynomials.values import (
+    MAX_POLYNOMIAL_VARIABLES,
+    MAX_RATIONAL_FUNCTION_EXPONENT,
     RationalFunction,
     RationalPolynomial,
     RationalPolynomialIdeal,
@@ -21,6 +23,11 @@ MAX_GRADED_DEGREE = 32
 MAX_STANDARD_MONOMIALS = 20_000
 MAX_HILBERT_SERIES_GENERATORS = 8
 MAX_HILBERT_PREFIX = 16
+
+GradedMonomial = Annotated[
+    tuple[StrictInt, ...],
+    Field(max_length=MAX_POLYNOMIAL_VARIABLES),
+]
 
 
 class InitialMonomialIdealRequest(StrictModel):
@@ -56,7 +63,7 @@ class StandardMonomialsRequest(StrictModel):
 class StandardMonomialsResult(StrictModel):
     initial_ideal: RationalPolynomialIdeal
     degree: StrictInt = Field(ge=0, le=MAX_GRADED_DEGREE)
-    monomials: tuple[tuple[int, ...], ...]
+    monomials: tuple[GradedMonomial, ...] = Field(max_length=MAX_STANDARD_MONOMIALS)
     count: StrictInt = Field(ge=0, le=MAX_STANDARD_MONOMIALS)
 
     @model_validator(mode="after")
@@ -90,7 +97,7 @@ class HilbertFunctionResult(StrictModel):
     ideal: RationalPolynomialIdeal
     initial_ideal: RationalPolynomialIdeal
     monomial_order: Literal["lex", "grlex", "grevlex"]
-    values: tuple[StrictInt, ...]
+    values: tuple[StrictInt, ...] = Field(max_length=MAX_GRADED_DEGREE + 1)
 
     @model_validator(mode="after")
     def require_source_ring(self) -> Self:
@@ -126,7 +133,7 @@ class HilbertSeriesResult(StrictModel):
     reduced_numerator: RationalPolynomial
     h_numerator: RationalPolynomial
     denominator_exponent: StrictInt = Field(ge=0)
-    prefix: tuple[StrictInt, ...]
+    prefix: tuple[StrictInt, ...] = Field(max_length=MAX_HILBERT_PREFIX + 1)
 
     @model_validator(mode="after")
     def require_source_and_axes(self) -> Self:
@@ -178,7 +185,9 @@ class HVectorResult(StrictModel):
     initial_ideal: RationalPolynomialIdeal
     monomial_order: Literal["lex", "grlex", "grevlex"]
     dimension: StrictInt = Field(ge=0)
-    h_vector: tuple[ExactInteger, ...]
+    h_vector: tuple[ExactInteger, ...] = Field(
+        max_length=MAX_RATIONAL_FUNCTION_EXPONENT + 1
+    )
 
 
 __all__ = [

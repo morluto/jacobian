@@ -4,6 +4,12 @@ import pytest
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.polynomials.graded._models import (
+    HVectorResult,
+    HilbertFunctionResult,
+    HilbertSeriesResult,
+    StandardMonomialsResult,
+)
 from jacobian.math.polynomials.graded.operations import (
     h_vector,
     hilbert_dimension,
@@ -164,3 +170,21 @@ def test_hilbert_invariants_are_order_invariant_even_when_initial_generators_dif
         hilbert_series(ideal, "lex", prefix_degree=5).prefix
         == hilbert_series(ideal, "grevlex", prefix_degree=5).prefix
     )
+
+
+def test_graded_result_axes_publish_structural_transport_bounds() -> None:
+    assert (
+        StandardMonomialsResult.model_json_schema()["properties"]["monomials"][
+            "maxItems"
+        ]
+        == 20_000
+    )
+    assert (
+        HilbertFunctionResult.model_json_schema()["properties"]["values"]["maxItems"]
+        == 33
+    )
+    assert (
+        HilbertSeriesResult.model_json_schema()["properties"]["prefix"]["maxItems"]
+        == 17
+    )
+    assert HVectorResult.model_json_schema()["properties"]["h_vector"]["maxItems"] == 65

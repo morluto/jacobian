@@ -44,6 +44,7 @@ from jacobian.math.polynomials.values import (
     SparseRationalPolynomial,
 )
 
+
 def _require_monomial_order(
     monomial_order: object,
 ) -> Literal["lex", "grlex", "grevlex"]:

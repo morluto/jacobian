@@ -194,6 +194,16 @@ def test_expired_request_is_rejected_before_factorization() -> None:
         _run(CyclotomicRequest(index=12))
 
 
+def test_prime_index_uses_the_geometric_sum_fast_path() -> None:
+    prime = 4093
+    result = _run(CyclotomicRequest(index=prime))
+    assert result.totient == prime - 1
+    assert result.polynomial.coefficients == (1,) * prime
+    product = fmpz_poly([-1, 1]) * fmpz_poly(ascending(result))
+    expected = fmpz_poly([-1] + [0] * (prime - 1) + [1])
+    assert product == expected
+
+
 def test_squarefree_construction_work_is_charged_from_the_radical() -> None:
     with pytest.raises(OperationResourceAdmissionError, match="construction"):
         cyclotomic(16_530)

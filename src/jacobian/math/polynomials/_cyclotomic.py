@@ -149,19 +149,25 @@ def _admit(index: int, factorization: dict[int, int]) -> _CyclotomicAdmission:
             ),
         )
 
-    # SymPy's dense cyclotomic construction is charged from the radical of
-    # the index, matching the existing exact kernel bound used by spectral
-    # character sums: 10 * bit_length(rad) * (rad + 1)^2, plus the
-    # intermediate bit envelope 2*rad + bit_length(rad+1) + 1.
-    radical = prod(factorization) if factorization else 1
-    construction_work = 10 * max(1, radical.bit_length()) * (radical + 1) ** 2
+    if _is_prime_index(index, factorization):
+        # Phi_p is the geometric sum 1+x+...+x^{p-1}; charge writing those
+        # unit coefficients instead of the general radical-square envelope.
+        construction_work = max(1, index.bit_length()) * index
+        intermediate_bits = 2
+    else:
+        # SymPy's dense cyclotomic construction is charged from the radical of
+        # the index, matching the existing exact kernel bound used by spectral
+        # character sums: 10 * bit_length(rad) * (rad + 1)^2, plus the
+        # intermediate bit envelope 2*rad + bit_length(rad+1) + 1.
+        radical = prod(factorization) if factorization else 1
+        construction_work = 10 * max(1, radical.bit_length()) * (radical + 1) ** 2
+        intermediate_bits = 2 * radical + (radical + 1).bit_length() + 1
     if construction_work > MAX_CYCLOTOMIC_CONSTRUCTION_WORK:
         raise OperationResourceAdmissionError(
             location=("index",),
             code="polynomial.cyclotomic.construction_work_bound",
             message="cyclotomic backend construction exceeds the admitted work bound",
         )
-    intermediate_bits = 2 * radical + (radical + 1).bit_length() + 1
     if intermediate_bits > MAX_CYCLOTOMIC_INTERMEDIATE_BITS:
         raise OperationResourceAdmissionError(
             location=("index",),
@@ -222,12 +228,25 @@ def _factor_index(index: int) -> dict[int, int]:
     return factors
 
 
+def _is_prime_index(index: int, factorization: dict[int, int]) -> bool:
+    return factorization == {index: 1}
+
+
+def _prime_cyclotomic(prime: int) -> IntegerPolynomial:
+    request_checkpoint("during prime cyclotomic geometric sum")
+    return IntegerPolynomial(coefficients=(1,) * prime)
+
+
 def _compute(index: int) -> tuple[int, IntegerPolynomial]:
     request_checkpoint("before cyclotomic admission")
     _require_factorization_work(index)
     factorization = _factor_index(index)
     admission = _admit(index, factorization)
     request_checkpoint("after cyclotomic admission")
+    if _is_prime_index(index, factorization):
+        polynomial_value = _prime_cyclotomic(index)
+        request_checkpoint("before cyclotomic result construction")
+        return admission.degree, polynomial_value
     try:
         from sympy import Symbol, cyclotomic_poly
     except Exception as exc:

@@ -11,11 +11,7 @@ from contextlib import contextmanager
 import pytest
 from pydantic import ValidationError
 
-from jacobian.canonical import CanonicalLimits
-from jacobian.catalog.models import (
-    OperationDomainValidationError,
-    OperationResourceAdmissionError,
-)
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic.languages.words import (
     FiniteWord,
     ProlongableSubstitution,
@@ -95,9 +91,8 @@ def _substitution(
 
 
 def test_public_catalog_surface_is_the_audited_operations() -> None:
-    assert tuple(tool.operation_id for tool in TOOLS) == (
-        "word.prefixes.compute",
-        "word.suffixes.compute",
+    operation_ids = tuple(tool.operation_id for tool in TOOLS)
+    assert operation_ids == (
         "word.factors.length.compute",
         "word.periods.compute",
         "word_morphism.incidence_matrix.compute",
@@ -105,6 +100,8 @@ def test_public_catalog_surface_is_the_audited_operations() -> None:
         "substitution.primitivity_profile.compute",
         "substitution.fixed_point_prefix.compute",
     )
+    assert "word.prefixes.compute" not in operation_ids
+    assert "word.suffixes.compute" not in operation_ids
 
 
 def test_prefix_and_suffix_families_are_complete_and_serializable() -> None:
@@ -156,6 +153,18 @@ def test_word_family_result_rejects_over_bound_serialized_axis(
     assert error.value.errors()[0]["type"] == "too_long"
 
 
+def test_large_word_family_json_round_trip_uses_bounded_validation() -> None:
+    source = _word("ab" * (MAX_WORD_LENGTH // 2))
+    result = WordPrefixesResult(
+        word=source,
+        prefixes=prefixes(source),
+    )
+
+    decoded = WordPrefixesResult.model_validate_json(result.model_dump_json())
+
+    assert decoded == result
+
+
 def test_word_family_operations_retain_empty_alphabet_and_empty_word() -> None:
     source = FiniteWord(alphabet=(), letters=())
 
@@ -186,7 +195,7 @@ def test_word_family_operations_retain_both_maximum_axes() -> None:
     assert all(item.alphabet == alphabet for item in suffixes_result.suffixes)
 
 
-def test_ascii_maximum_family_stays_within_transport_output_bound() -> None:
+def test_maximum_family_stays_within_materialization_cell_bound() -> None:
     alphabet = tuple(chr(65 + index) * 64 for index in range(MAX_ALPHABET_SIZE))
     source = FiniteWord(
         alphabet=alphabet,
@@ -194,11 +203,11 @@ def test_ascii_maximum_family_stays_within_transport_output_bound() -> None:
     )
     result = compute_prefixes(WordFamilyRequest(word=source))
 
-    assert len(result.model_dump_json().encode()) <= CanonicalLimits().max_output_bytes
+    assert len(result.prefixes) == MAX_WORD_LENGTH + 1
 
 
 @pytest.mark.parametrize("operation", (compute_prefixes, compute_suffixes))
-def test_unicode_maximum_family_is_rejected_before_materialization(
+def test_unicode_maximum_family_is_admitted_with_bounded_materialization(
     operation: Callable[[WordFamilyRequest], WordPrefixesResult | WordSuffixesResult],
 ) -> None:
     alphabet = tuple(chr(0x1F600 + index) * 64 for index in range(MAX_ALPHABET_SIZE))
@@ -207,8 +216,11 @@ def test_unicode_maximum_family_is_rejected_before_materialization(
         letters=(alphabet[0],) * MAX_WORD_LENGTH,
     )
 
-    with pytest.raises(OperationResourceAdmissionError, match="output bound"):
-        operation(WordFamilyRequest(word=source))
+    result = operation(WordFamilyRequest(word=source))
+    family = (
+        result.prefixes if isinstance(result, WordPrefixesResult) else result.suffixes
+    )
+    assert len(family) == MAX_WORD_LENGTH + 1
 
 
 def test_narrowed_scalar_symbol_contract_rejects_lone_surrogates() -> None:

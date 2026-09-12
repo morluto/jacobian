@@ -2,17 +2,16 @@
 
 from __future__ import annotations
 
-import json
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.logic.languages.words.values import (
     MAX_MORPHISM_OUTPUT_LENGTH,
+    MAX_WORD_FAMILY_CELLS,
     MAX_WORD_LENGTH,
     FiniteWord,
     ProlongableSubstitution,
@@ -27,68 +26,23 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"word.{reason}", message)
 
 
-def _json_string_size(value: str) -> int:
-    return len(json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode())
-
-
-def _json_array_size(item_sizes: list[int]) -> int:
-    return 2 + sum(item_sizes) + max(len(item_sizes) - 1, 0)
-
-
-def require_word_family_output(
+def require_word_family_allocation(
     word: FiniteWord, family_name: Literal["prefixes", "suffixes"]
 ) -> None:
     """Admit the complete source-bound family before materializing its cells."""
 
-    symbol_sizes = {symbol: _json_string_size(symbol) for symbol in word.alphabet}
-    alphabet_size = _json_array_size([symbol_sizes[symbol] for symbol in word.alphabet])
-    letter_sizes = [symbol_sizes[letter] for letter in word.letters]
-    source_letters_size = _json_array_size(letter_sizes)
-    source_word_size = (
-        len(b'{"alphabet":')
-        + alphabet_size
-        + len(b',"letters":')
-        + source_letters_size
-        + 1
+    word_length = len(word.letters)
+    family_count = word_length + 1
+    family_cells = (
+        family_count * len(word.alphabet) + word_length * (word_length + 1) // 2
     )
-    family_count = len(letter_sizes) + 1
-    if family_name == "prefixes":
-        family_letter_size = sum(
-            (len(letter_sizes) - index) * size
-            for index, size in enumerate(letter_sizes)
-        )
-    else:
-        family_letter_size = sum(
-            (index + 1) * size for index, size in enumerate(letter_sizes)
-        )
-    family_letters_size = (
-        2 * family_count
-        + family_letter_size
-        + len(letter_sizes) * max(len(letter_sizes) - 1, 0) // 2
-    )
-    family_member_static_size = (
-        len(b'{"alphabet":') + alphabet_size + len(b',"letters":') + 1
-    )
-    family_members_size = (
-        family_count * family_member_static_size
-        + family_letters_size
-        + max(family_count - 1, 0)
-    )
-    estimated_output_bytes = (
-        len(b'{"word":')
-        + source_word_size
-        + len(f',"{family_name}":['.encode())
-        + family_members_size
-        + 2
-    )
-    limit = CanonicalLimits().max_output_bytes
-    if estimated_output_bytes > limit:
+    if family_cells > MAX_WORD_FAMILY_CELLS:
         raise OperationResourceAdmissionError(
             location=("word", family_name),
-            code="word.family_output_bytes",
+            code="word.family_cells",
             message=(
-                f"{family_name} output requires approximately {estimated_output_bytes} "
-                f"UTF-8 bytes, exceeding the {limit}-byte output bound"
+                f"{family_name} materialization requires {family_cells} cells, "
+                f"exceeding the {MAX_WORD_FAMILY_CELLS}-cell allocation bound"
             ),
         )
 

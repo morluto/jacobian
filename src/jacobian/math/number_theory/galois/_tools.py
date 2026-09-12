@@ -55,6 +55,11 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         result_type=GaloisFactorResult,
         run=_galois_factor,
         tags=("galois-theory", "factorization", "exact"),
+        discovery_terms=(
+            "finite field irreducibility",
+            "degree 108 polynomial using Frobenius",
+            "irreducibility from coefficients",
+        ),
         examples=(
             OperationExample(
                 name="factor_x2_plus_1_over_f5",
@@ -74,6 +79,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         result_type=FrobeniusCycleResult,
         run=_frobenius_cycle,
         tags=("galois-theory", "frobenius", "exact"),
+        discovery_terms=(
+            "Frobenius cycle type from supplied factor degrees",
+            "factorization degrees partition",
+        ),
         examples=(
             OperationExample(
                 name="irreducible_quadratic",

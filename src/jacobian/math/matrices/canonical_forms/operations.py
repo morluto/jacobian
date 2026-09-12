@@ -9,7 +9,11 @@ from typing import Any
 
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
+from jacobian._exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    CanonicalRational,
+    canonical_rational_component_digits,
+)
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -19,6 +23,7 @@ from jacobian.math.matrices.canonical_forms._models import (
     MAX_CANONICAL_FORM_DIMENSION,
     MAX_CANONICAL_FORM_SCALAR_DIGITS,
     MAX_MATRIX_POLYNOMIAL_DIGIT_WORK,
+    MAX_MATRIX_POLYNOMIAL_REMAINDER_DIGIT_WORK,
     MAX_MATRIX_POLYNOMIAL_SCALAR_PRODUCTS,
     InvariantFactorEntry,
     MinimalPolynomialResult,
@@ -38,6 +43,8 @@ from jacobian.math.polynomials.values import (
     MAX_POLYNOMIAL_EXPONENT,
     MAX_POLYNOMIAL_TERMS,
     RationalPolynomial,
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
     require_polynomial_budget,
 )
 
@@ -47,6 +54,7 @@ __all__ = [
     "invariant_factors",
     "minimal_polynomial",
     "primary_decomposition",
+    "reduce_matrix_polynomial",
     "verify_minimal_polynomial",
     "verify_primary_decomposition",
     "verify_rational_canonical_form",
@@ -438,13 +446,16 @@ def _matrix_entries(
     return tuple(tuple(value.as_fraction() for value in row) for row in matrix.entries)
 
 
-def _to_monic_polynomial(coefficients: Sequence[Fraction]) -> MonicPolynomial:
+def _to_monic_polynomial(
+    coefficients: Sequence[Fraction], *, variable: str = "t"
+) -> MonicPolynomial:
     from jacobian.math.polynomials.values import monic_polynomial_from_coefficients
 
     return monic_polynomial_from_coefficients(
         tuple(
             CanonicalRational.from_fraction(coefficient) for coefficient in coefficients
-        )
+        ),
+        variable=variable,
     )
 
 
@@ -478,6 +489,155 @@ def _evaluate_matrix_polynomial_value(
         _dense_polynomial_coefficients(polynomial),
     )
     return rational_matrix_from_fractions(evaluated)
+
+
+def _polynomial_from_coefficients(
+    coefficients: Sequence[Fraction], variable: str
+) -> RationalPolynomial:
+    """Encode increasing-degree coefficients in the canonical sparse form."""
+
+    terms = tuple(
+        RationalPolynomialTerm(
+            coefficient=CanonicalRational.from_fraction(coefficient),
+            exponents=(degree,),
+        )
+        for degree, coefficient in reversed(tuple(enumerate(coefficients)))
+        if coefficient
+    )
+    return RationalPolynomial(
+        variables=(variable,), polynomial=SparseRationalPolynomial(terms=terms)
+    )
+
+
+def _divide_polynomials(
+    dividend: RationalPolynomial, divisor: MonicPolynomial
+) -> tuple[RationalPolynomial, RationalPolynomial]:
+    """Perform exact univariate Euclidean division over QQ."""
+
+    variable = dividend.variables[0]
+    remainder = {
+        term.exponents[0]: term.coefficient.as_fraction()
+        for term in dividend.polynomial.terms
+    }
+    divisor_coefficients = {
+        term.exponents[0]: term.coefficient.as_fraction()
+        for term in divisor.polynomial.terms
+    }
+    divisor_degree = divisor.polynomial.terms[0].exponents[0]
+    quotient: dict[int, Fraction] = {}
+    while remainder and max(remainder) >= divisor_degree:
+        degree = max(remainder)
+        shift = degree - divisor_degree
+        factor = remainder[degree]  # the divisor is monic
+        quotient[shift] = quotient.get(shift, Fraction(0)) + factor
+        for divisor_exponent, divisor_coefficient in divisor_coefficients.items():
+            exponent = divisor_exponent + shift
+            value = remainder.get(exponent, Fraction(0)) - factor * divisor_coefficient
+            if value:
+                remainder[exponent] = value
+            else:
+                remainder.pop(exponent, None)
+    return (
+        _polynomial_from_coefficients(
+            [
+                quotient.get(index, Fraction(0))
+                for index in range(max(quotient, default=-1) + 1)
+            ],
+            variable,
+        ),
+        _polynomial_from_coefficients(
+            [
+                remainder.get(index, Fraction(0))
+                for index in range(max(remainder, default=-1) + 1)
+            ],
+            variable,
+        ),
+    )
+
+
+def reduce_matrix_polynomial(
+    matrix: RationalMatrix, polynomial: RationalPolynomial
+) -> tuple[MonicPolynomial, RationalPolynomial, RationalPolynomial]:
+    """Return the minimal polynomial and exact quotient/remainder of ``polynomial``."""
+
+    _admit_square(matrix)
+    if len(polynomial.variables) != 1:
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="matrix.polynomial.remainder.variable",
+            message="polynomial reduction requires exactly one variable",
+        )
+    try:
+        require_polynomial_budget(
+            polynomial,
+            maximum_terms=MAX_POLYNOMIAL_TERMS,
+            maximum_exponent=MAX_POLYNOMIAL_EXPONENT,
+            maximum_coefficient_digits=MAX_CANONICAL_RATIONAL_DIGITS,
+            label="matrix polynomial remainder",
+        )
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="matrix.polynomial.remainder.budget",
+            message=str(exc),
+        ) from exc
+    source_degree = max(
+        (term.exponents[0] for term in polynomial.polynomial.terms), default=0
+    )
+    source_digits = max(
+        (
+            canonical_rational_component_digits(term.coefficient)
+            for term in polynomial.polynomial.terms
+        ),
+        default=1,
+    )
+    # Euclidean division can fill every degree from zero through the leading
+    # quotient degree. Reject a quotient whose canonical sparse carrier could
+    # not hold that complete support before computing the matrix modulus.
+    if source_degree > MAX_POLYNOMIAL_TERMS:
+        raise OperationResourceAdmissionError(
+            location=("polynomial",),
+            code="matrix.polynomial.remainder.output",
+            message="polynomial remainder quotient support exceeds the canonical term bound",
+        )
+    # The characteristic polynomial bounds the minimal polynomial degree by n.
+    # Clearing all n-entry products gives a coefficient-height bound of
+    # n*(entry-height + 2) + ceil(log10(n+1)); the larger additive slack also
+    # covers rational Krylov elimination used by the private producer.
+    dimension = matrix.row_count
+    matrix_digits = max(
+        (
+            canonical_rational_component_digits(entry)
+            for row in matrix.entries
+            for entry in row
+        ),
+        default=1,
+    )
+    minimal_digits_bound = dimension * (matrix_digits + 2) + dimension.bit_length() + 2
+    # A recurrence step adds at most one minimal-polynomial coefficient times
+    # a previous quotient coefficient. This is intentionally an upper bound:
+    # it charges every source-degree step even when the source is sparse or
+    # cancellation later reduces the exact result.
+    estimated_digits = source_digits + (source_degree + 1) * (
+        minimal_digits_bound + dimension.bit_length() + 2
+    )
+    digit_work = (
+        len(polynomial.polynomial.terms) * (source_degree + 1) * (estimated_digits**2)
+    )
+    if estimated_digits > MAX_CANONICAL_RATIONAL_DIGITS or (
+        digit_work > MAX_MATRIX_POLYNOMIAL_REMAINDER_DIGIT_WORK
+    ):
+        raise OperationResourceAdmissionError(
+            location=("polynomial",),
+            code="matrix.polynomial.remainder.output",
+            message="polynomial remainder quotient growth exceeds the admitted exact-arithmetic bound",
+        )
+    minimal_coefficients = minimal_polynomial(_matrix_entries(matrix))
+    minimal = _to_monic_polynomial(
+        minimal_coefficients, variable=polynomial.variables[0]
+    )
+    quotient, remainder = _divide_polynomials(polynomial, minimal)
+    return minimal, quotient, remainder
 
 
 def _minimal_polynomial_components(

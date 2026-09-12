@@ -37,6 +37,10 @@ MATRIX_POLYNOMIAL_EVALUATION_PASSES = 2
 # costs about 33 billion proxy units and 1.5 seconds; a 1x1 degree-327 request
 # with a 32,701-digit denominator costs about 700 billion units and one second.
 MAX_MATRIX_POLYNOMIAL_DIGIT_WORK = 1_000_000_000_000
+# Polynomial division can repeatedly multiply by every non-leading modulus
+# coefficient.  Charge the source degree and the resulting component width
+# before materializing the quotient, rather than discovering growth midway.
+MAX_MATRIX_POLYNOMIAL_REMAINDER_DIGIT_WORK = 1_000_000_000_000
 
 # Admission may materialize bounded powers to prove shared numerator factors
 # before digit budgets are charged. Eight bits per canonical digit sits far
@@ -1383,6 +1387,75 @@ class MatrixPolynomialEvaluationResult(StrictModel):
         )
 
 
+class MatrixPolynomialRemainderRequest(StrictModel):
+    """Reduce one exact univariate polynomial modulo a matrix's minimal polynomial."""
+
+    matrix: RationalMatrix = Field(
+        description="Nonempty square rational matrix whose minimal polynomial supplies the modulus."
+    )
+    polynomial: RationalPolynomial = Field(
+        description="Sparse univariate rational polynomial; its declared variable is retained in every result polynomial."
+    )
+
+
+class MatrixPolynomialRemainderResult(StrictModel):
+    """Exact Euclidean division by the matrix minimal polynomial.
+
+    The quotient and remainder establish the defining relation
+    ``polynomial = quotient * minimal_polynomial + remainder`` and the
+    remainder has degree strictly below the minimal-polynomial degree.
+    """
+
+    source_matrix: RationalMatrix
+    polynomial: RationalPolynomial
+    minimal_polynomial: MonicPolynomial
+    quotient: RationalPolynomial
+    remainder: RationalPolynomial
+
+    @model_validator(mode="after")
+    def require_division_shape(self) -> Self:
+        if self.source_matrix.row_count != self.source_matrix.column_count:
+            raise _validation_error("shape_mismatch", "source matrix must be square")
+        variable = self.polynomial.variables
+        if self.minimal_polynomial.variables != variable:
+            raise _validation_error(
+                "invariant_mismatch", "minimal polynomial must use the source variable"
+            )
+        if self.quotient.variables != variable or self.remainder.variables != variable:
+            raise _validation_error(
+                "invariant_mismatch", "division outputs must use the source variable"
+            )
+        minimal_degree = self.minimal_polynomial.polynomial.terms[0].exponents[0]
+        remainder_degree = max(
+            (term.exponents[0] for term in self.remainder.polynomial.terms),
+            default=-1,
+        )
+        if remainder_degree >= minimal_degree:
+            raise _validation_error(
+                "invariant_mismatch",
+                "remainder degree must be smaller than the minimal-polynomial degree",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        matrix: RationalMatrix,
+        polynomial: RationalPolynomial,
+        minimal_polynomial: MonicPolynomial,
+        quotient: RationalPolynomial,
+        remainder: RationalPolynomial,
+    ) -> Self:
+        return cls.model_construct(
+            source_matrix=matrix,
+            polynomial=polynomial,
+            minimal_polynomial=minimal_polynomial,
+            quotient=quotient,
+            remainder=remainder,
+        )
+
+
 class SquareMatrixRequest(StrictModel):
     """One square rational matrix bounded for canonical-form computation."""
 
@@ -1534,10 +1607,13 @@ __all__ = [
     "MAX_CANONICAL_FORM_DIMENSION",
     "MAX_CANONICAL_FORM_SCALAR_DIGITS",
     "MAX_MATRIX_POLYNOMIAL_DIGIT_WORK",
+    "MAX_MATRIX_POLYNOMIAL_REMAINDER_DIGIT_WORK",
     "MAX_MATRIX_POLYNOMIAL_SCALAR_PRODUCTS",
     "InvariantFactorEntry",
     "MatrixPolynomialEvaluationRequest",
     "MatrixPolynomialEvaluationResult",
+    "MatrixPolynomialRemainderRequest",
+    "MatrixPolynomialRemainderResult",
     "MinimalPolynomialResult",
     "MonicPolynomial",
     "PrimaryDecompositionResult",

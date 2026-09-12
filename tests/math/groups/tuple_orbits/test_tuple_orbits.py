@@ -219,6 +219,41 @@ def test_raw_family_dimensions_are_rejected_before_container_copy() -> None:
     assert "arity_mismatch" in arity_mismatch.value.errors()[0]["type"]
 
 
+def test_range_generator_rows_are_rejected_before_container_copy() -> None:
+    payload = {
+        "action": {"domain": ["a"], "generators": [range(2_000_000)]},
+        "arity": 0,
+        "family": [],
+    }
+    with pytest.raises(ValidationError) as generator_length:
+        TupleFamilyOrbitSource.model_validate(payload)
+    assert "generator_length_mismatch" in generator_length.value.errors()[0]["type"]
+
+
+def test_constructed_nested_action_is_revalidated() -> None:
+    payload = {
+        "action": FinitePermutationAction.model_construct(
+            domain=("a", "a"), generators=((0, 1),)
+        ),
+        "arity": 0,
+        "family": [],
+    }
+    with pytest.raises(ValidationError) as labels:
+        TupleFamilyOrbitSource.model_validate(payload)
+    assert "domain_labels_not_distinct" in labels.value.errors()[0]["type"]
+
+
+def test_unknown_action_fields_are_preserved_for_strict_rejection() -> None:
+    payload = {
+        "action": {"domain": ["a"], "generators": [[0]], "generator": [[0]]},
+        "arity": 0,
+        "family": [],
+    }
+    with pytest.raises(ValidationError) as extra:
+        TupleFamilyOrbitSource.model_validate(payload)
+    assert extra.value.errors()[0]["type"] == "extra_forbidden"
+
+
 def test_raw_action_generator_dimensions_are_rejected_before_container_copy() -> None:
     class _HugeGenerator(tuple):
         def __len__(self) -> int:

@@ -8,7 +8,7 @@ normalized.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping, Sized
 from typing import Any, Self
 
 from pydantic import ConfigDict, Field, StrictInt, model_validator
@@ -32,22 +32,80 @@ def _tuple_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"finite_group_action.tuple_family_{reason}", message)
 
 
+def _collection_length(value: object) -> int | None:
+    if isinstance(value, (str, bytes, bytearray, Mapping)):
+        return None
+    if isinstance(value, Sized):
+        try:
+            return len(value)
+        except TypeError:
+            return None
+    return None
+
+
+_SEQUENCE_OVERFLOW = object()
+
+
+def _materialize_bounded_sequence(value: object, limit: int) -> object:
+    if isinstance(value, (str, bytes, bytearray, Mapping)) or value is None:
+        return value
+    length = _collection_length(value)
+    if length is not None:
+        if length > limit:
+            return _SEQUENCE_OVERFLOW
+        return tuple(value)
+    if isinstance(value, Iterable):
+        items: list[Any] = []
+        for item in value:
+            items.append(item)
+            if len(items) > limit:
+                return _SEQUENCE_OVERFLOW
+        return tuple(items)
+    return value
+
+
 def _preflight_action_dimensions(*, domain: object, generators: object) -> None:
-    if isinstance(domain, (list, tuple)) and len(domain) > MAX_DOMAIN_SIZE:
+    domain_length = _collection_length(domain)
+    if domain_length is not None and domain_length > MAX_DOMAIN_SIZE:
         raise _tuple_error(
             "action_domain_bound",
             f"action domain admits at most {MAX_DOMAIN_SIZE} labels",
         )
-    degree = len(domain) if isinstance(domain, (list, tuple)) else MAX_DOMAIN_SIZE
-    if not isinstance(generators, (list, tuple)):
-        return
-    if len(generators) > MAX_GENERATORS:
+    degree = domain_length if domain_length is not None else MAX_DOMAIN_SIZE
+    generator_length = _collection_length(generators)
+    if generator_length is None:
+        if not isinstance(generators, Iterable) or isinstance(
+            generators, (str, bytes, bytearray, Mapping)
+        ):
+            return
+        rows: list[object] = []
+        for generator in generators:
+            rows.append(generator)
+            if len(rows) > MAX_GENERATORS:
+                raise _tuple_error(
+                    "action_generator_bound",
+                    f"actions admit at most {MAX_GENERATORS} generators",
+                )
+        generators = rows
+        generator_length = len(rows)
+    if generator_length > MAX_GENERATORS:
         raise _tuple_error(
             "action_generator_bound",
             f"actions admit at most {MAX_GENERATORS} generators",
         )
     for generator in generators:
-        if isinstance(generator, (list, tuple)) and len(generator) > degree:
+        row_length = _collection_length(generator)
+        if row_length is None and isinstance(generator, Iterable):
+            if isinstance(generator, (str, bytes, bytearray, Mapping)):
+                continue
+            for counted, _item in enumerate(generator, start=1):
+                if counted > degree:
+                    raise _tuple_error(
+                        "generator_length_mismatch",
+                        "every generator must be a permutation of the domain",
+                    )
+            continue
+        if row_length is not None and row_length > degree:
             raise _tuple_error(
                 "generator_length_mismatch",
                 "every generator must be a permutation of the domain",
@@ -80,14 +138,36 @@ def _action_mapping(action: object) -> dict[str, Any] | None:
     if action is None:
         return None
     if isinstance(action, Mapping):
-        return {
-            "domain": action.get("domain"),
-            "generators": action.get("generators"),
+        payload = dict(action)
+    else:
+        payload = {
+            "domain": _declared_attr(action, "domain"),
+            "generators": _declared_attr(action, "generators"),
         }
-    return {
-        "domain": _declared_attr(action, "domain"),
-        "generators": _declared_attr(action, "generators"),
-    }
+    generators = payload.get("generators")
+    domain = payload.get("domain")
+    degree = _collection_length(domain)
+    if degree is None:
+        degree = MAX_DOMAIN_SIZE
+    if isinstance(generators, Iterable) and not isinstance(
+        generators, (str, bytes, bytearray, Mapping)
+    ):
+        bounded_rows: list[Any] = []
+        for generator in generators:
+            materialized = _materialize_bounded_sequence(generator, degree)
+            if materialized is _SEQUENCE_OVERFLOW:
+                raise _tuple_error(
+                    "generator_length_mismatch",
+                    "every generator must be a permutation of the domain",
+                )
+            bounded_rows.append(materialized)
+            if len(bounded_rows) > MAX_GENERATORS:
+                raise _tuple_error(
+                    "action_generator_bound",
+                    f"actions admit at most {MAX_GENERATORS} generators",
+                )
+        payload["generators"] = tuple(bounded_rows)
+    return payload
 
 
 def _row_mapping(row: object) -> dict[str, Any]:
@@ -179,6 +259,12 @@ class TupleFamilyOrbitSource(StrictModel):
     tuple is meaningful, so ``(a, b)`` and ``(b, a)`` remain distinct and
     ``(a, a)`` is valid.
     """
+
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        revalidate_instances="always",
+    )
 
     action: FinitePermutationAction
     arity: StrictInt = Field(

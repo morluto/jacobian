@@ -7,8 +7,8 @@ from fractions import Fraction
 from jacobian._exact import (
     MAX_CANONICAL_INTEGER_DIGITS,
     CanonicalRational,
-    canonical_rational_component_digits,
 )
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -56,45 +56,54 @@ def _merged_indices(
 
 
 _MergedPair = tuple[FormComponent, FormComponent, tuple[int, ...], int]
+_RemainingTerms = dict[tuple[int, ...], dict[tuple[int, ...], Fraction]]
 
 
-def _unit_coefficient(value: CanonicalRational) -> bool:
-    fraction = value.as_fraction()
-    return fraction.numerator in (-1, 1) and fraction.denominator == 1
+def _fraction_component_digits(value: Fraction) -> int:
+    return max(
+        len(format_canonical_integer(abs(value.numerator))),
+        len(format_canonical_integer(value.denominator)),
+    )
 
 
-def _product_digit_height(left: CanonicalRational, right: CanonicalRational) -> int:
-    if _unit_coefficient(left):
-        return canonical_rational_component_digits(right)
-    if _unit_coefficient(right):
-        return canonical_rational_component_digits(left)
-    return canonical_rational_component_digits(
-        left
-    ) + canonical_rational_component_digits(right)
+def _convolve_pairs(pairs: tuple[_MergedPair, ...]) -> _RemainingTerms:
+    aggregate: _RemainingTerms = {}
+    for first, second, indices, sign in pairs:
+        terms = aggregate.setdefault(indices, {})
+        for exponents, coefficient in _multiply_components(
+            first.coefficient, second.coefficient, sign
+        ).items():
+            terms[exponents] = terms.get(exponents, Fraction()) + coefficient
+    return {
+        indices: {
+            exponents: coefficient
+            for exponents, coefficient in terms.items()
+            if coefficient
+        }
+        for indices, terms in aggregate.items()
+    }
 
 
-def _admit_coefficient_growth(pairs: tuple[_MergedPair, ...]) -> None:
-    # Bound each output monomial from its exact products. A single rational
-    # product of heights h and k has at most h+k digits; extra slack is only
-    # needed when several products are summed into one coefficient.
-    projected_digits: dict[tuple[tuple[int, ...], tuple[int, ...]], list[int]] = {}
-    for first, second, indices, _ in pairs:
-        for first_term in first.coefficient.polynomial.terms:
-            for second_term in second.coefficient.polynomial.terms:
-                exponents = tuple(
-                    left + right
-                    for left, right in zip(
-                        first_term.exponents, second_term.exponents, strict=True
-                    )
-                )
-                height = _product_digit_height(
-                    first_term.coefficient, second_term.coefficient
-                )
-                key = (indices, exponents)
-                projected_digits.setdefault(key, []).append(height)
+def _admit_remaining_support(aggregate: _RemainingTerms) -> None:
+    """Cap surviving monomials after signed convolution cancellation."""
+
+    if any(
+        len(terms) > MAX_DIFFERENTIAL_FORM_TERMS for terms in aggregate.values()
+    ):
+        raise OperationResourceAdmissionError(
+            location=("left", "right"),
+            code="differential_form.wedge.output_budget",
+            message="wedge coefficient support exceeds the bounded output envelope",
+        )
+
+
+def _admit_remaining_coefficients(aggregate: _RemainingTerms) -> None:
+    """Cap surviving cancelled rationals after signed convolution."""
+
     bounds = tuple(
-        heights[0] if len(heights) == 1 else sum(height + 1 for height in heights)
-        for heights in projected_digits.values()
+        _fraction_component_digits(coefficient)
+        for terms in aggregate.values()
+        for coefficient in terms.values()
     )
     if (
         any(height > MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS for height in bounds)
@@ -104,33 +113,6 @@ def _admit_coefficient_growth(pairs: tuple[_MergedPair, ...]) -> None:
             location=("left", "right"),
             code="differential_form.wedge.coefficient_budget",
             message="wedge coefficient growth exceeds the admitted digit-work or output envelope",
-        )
-
-
-def _admit_output_support(pairs: tuple[_MergedPair, ...]) -> None:
-    """Reserve distinct merged-exponent support before coefficient products exist."""
-
-    projected_support: dict[tuple[int, ...], set[tuple[int, ...]]] = {}
-    for first, second, indices, _ in pairs:
-        exponents = projected_support.setdefault(indices, set())
-        for first_term in first.coefficient.polynomial.terms:
-            for second_term in second.coefficient.polynomial.terms:
-                exponents.add(
-                    tuple(
-                        left + right
-                        for left, right in zip(
-                            first_term.exponents, second_term.exponents, strict=True
-                        )
-                    )
-                )
-    if any(
-        len(support) > MAX_DIFFERENTIAL_FORM_TERMS
-        for support in projected_support.values()
-    ):
-        raise OperationResourceAdmissionError(
-            location=("left", "right"),
-            code="differential_form.wedge.output_budget",
-            message="wedge coefficient support exceeds the bounded output envelope",
         )
 
 
@@ -195,21 +177,14 @@ def wedge(
             code="differential_form.wedge.term_budget",
             message="wedge polynomial convolution exceeds the bounded work envelope",
         )
-    _admit_output_support(pairs)
-    _admit_coefficient_growth(pairs)
-    aggregate: dict[tuple[int, ...], dict[tuple[int, ...], Fraction]] = {}
-    for first, second, indices, sign in pairs:
-        terms = aggregate.setdefault(indices, {})
-        for exponents, coefficient in _multiply_components(
-            first.coefficient, second.coefficient, sign
-        ).items():
-            terms[exponents] = terms.get(exponents, Fraction()) + coefficient
+    aggregate = _convolve_pairs(pairs)
+    _admit_remaining_support(aggregate)
+    _admit_remaining_coefficients(aggregate)
     maximum_exponent = max(
         (
             max(exponents, default=0)
             for terms in aggregate.values()
-            for exponents, coefficient in terms.items()
-            if coefficient
+            for exponents in terms
         ),
         default=0,
     )
@@ -221,11 +196,7 @@ def wedge(
         )
     components: list[FormComponent] = []
     for indices in sorted(aggregate):
-        terms = {
-            exponents: coefficient
-            for exponents, coefficient in aggregate[indices].items()
-            if coefficient
-        }
+        terms = aggregate[indices]
         if not terms:
             continue
         polynomial_coefficient = RationalPolynomial(

@@ -30,7 +30,8 @@ R = CanonicalRational
 
 
 def _poly_on_axis(
-    variables: tuple[str, ...], *terms: tuple[int, tuple[int, ...]]
+    variables: tuple[str, ...],
+    *terms: tuple[int | Fraction, tuple[int, ...]],
 ) -> RationalPolynomial:
     return RationalPolynomial(
         variables=variables,
@@ -46,7 +47,7 @@ def _poly_on_axis(
     )
 
 
-def _poly(*terms: tuple[int, tuple[int, int]]) -> RationalPolynomial:
+def _poly(*terms: tuple[int | Fraction, tuple[int, int]]) -> RationalPolynomial:
     return _poly_on_axis(("x", "y"), *terms)
 
 
@@ -162,6 +163,45 @@ def test_odd_self_wedge_cancels_before_exponent_admission() -> None:
     product = wedge(alpha, alpha)
     assert product.degree == 2
     assert product.components == ()
+
+
+def test_proportional_odd_polynomial_wedges_cancel_before_support_cap() -> None:
+    terms = tuple((1, (exponent, 0)) for exponent in range(128, -1, -1))
+    polynomial = _poly(*terms)
+    doubled = _poly(*((2, exponents) for _, exponents in terms))
+    alpha = _form(1, ((0,), polynomial), ((1,), polynomial))
+    beta = _form(1, ((0,), doubled), ((1,), doubled))
+    product = wedge(alpha, beta)
+    assert product.degree == 2
+    assert product.components == ()
+
+
+def test_signed_linear_factors_cancel_before_coefficient_cap() -> None:
+    coefficient = 10**4095
+    left = _form(
+        0,
+        ((), _poly((coefficient, (1, 0)), (coefficient, (0, 0)))),
+    )
+    right = _form(0, ((), _poly((1, (1, 0)), (-1, (0, 0)))))
+    product = wedge(left, right)
+    terms = {
+        term.exponents: term.coefficient
+        for term in product.components[0].coefficient.polynomial.terms
+    }
+    assert terms == {
+        (2, 0): R(num=coefficient, den=1),
+        (0, 0): R(num=-coefficient, den=1),
+    }
+
+
+def test_reciprocal_scalars_cancel_to_the_unit() -> None:
+    coefficient = 10**4095
+    left = _form(0, ((), _poly((coefficient, (0, 0)))))
+    right = _form(0, ((), _poly((Fraction(1, coefficient), (0, 0)))))
+    product = wedge(left, right)
+    assert product.components[0].coefficient.polynomial.terms[0].coefficient == R(
+        num=1, den=1
+    )
 
 
 def test_proportional_odd_forms_cancel_before_exponent_admission() -> None:

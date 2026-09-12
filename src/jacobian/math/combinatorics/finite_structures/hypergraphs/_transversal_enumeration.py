@@ -8,8 +8,8 @@ from typing import Annotated, Self
 from pydantic import Field, StrictInt, ValidationError, model_validator
 
 from jacobian._execution import (
-    bind_request_deadline,
     current_request_execution,
+    execution_deadline,
     request_checkpoint,
     request_execution,
 )
@@ -179,36 +179,65 @@ def _candidate_has_redundant_vertex(
     return False, checks
 
 
+def _unique_edges(
+    request: MinimalTransversalEnumerationRequest,
+) -> tuple[frozenset[str], ...]:
+    seen: set[frozenset[str]] = set()
+    edges: list[frozenset[str]] = []
+    for _, members in request.hypergraph.edges:
+        edge = frozenset(members)
+        if edge in seen:
+            continue
+        seen.add(edge)
+        edges.append(edge)
+    return tuple(edges)
+
+
+def _forced_vertices(edges: tuple[frozenset[str], ...]) -> frozenset[str]:
+    forced: set[str] = set()
+    for edge in edges:
+        if len(edge) == 1:
+            forced.update(edge)
+    return frozenset(forced)
+
+
 def _admit_enumeration(
     request: MinimalTransversalEnumerationRequest,
-) -> tuple[int, tuple[frozenset[str], ...]]:
-    """Admit exhaustive work and every materialized result envelope."""
+) -> tuple[int, tuple[frozenset[str], ...], frozenset[str], bool, bool]:
+    """Admit exhaustive work after edge dedup and singleton presolve."""
 
     vertices = request.hypergraph.vertices
     maximum = min(request.maximum_cardinality, len(vertices))
-    edges = tuple(frozenset(members) for _, members in request.hypergraph.edges)
+    edges = _unique_edges(request)
+    if not edges:
+        return maximum, edges, frozenset(), True, False
+    if any(not edge for edge in edges):
+        return maximum, edges, frozenset(), False, True
 
-    # These degenerate families have closed results and need no candidate
-    # enumeration, regardless of the caller's cardinality slice.
-    if not edges or any(not edge for edge in edges):
-        return maximum, edges
-    if len(edges) == 1:
-        return maximum, edges
+    forced = _forced_vertices(edges)
+    if len(forced) > maximum:
+        return maximum, edges, forced, False, False
+    remaining_edges = tuple(edge for edge in edges if not edge & forced)
+    if not remaining_edges:
+        return maximum, remaining_edges, forced, False, False
+    if len(remaining_edges) == 1:
+        return maximum, remaining_edges, forced, False, False
 
-    candidate_count = sum(comb(len(vertices), size) for size in range(1, maximum + 1))
-    weighted_candidate_count = sum(
-        size * comb(len(vertices), size) for size in range(1, maximum + 1)
+    free_vertices = tuple(vertex for vertex in vertices if vertex not in forced)
+    free_maximum = maximum - len(forced)
+    candidate_count = sum(
+        comb(len(free_vertices), size) for size in range(1, free_maximum + 1)
     )
-    edge_count = len(edges)
+    weighted_candidate_count = sum(
+        size * comb(len(free_vertices), size) for size in range(1, free_maximum + 1)
+    )
+    edge_count = len(remaining_edges)
     candidate_edge_work = candidate_count * edge_count
     minimality_work = weighted_candidate_count * edge_count
     total_work = candidate_edge_work + minimality_work
 
-    # Minimal transversals form an antichain. By the LYM inequality, the
-    # number of rows in ranks 1..k is at most the largest binomial coefficient
-    # among those ranks.
     possible_rows = max(
-        (comb(len(vertices), size) for size in range(1, maximum + 1)),
+        (comb(len(free_vertices), size) for size in range(1, free_maximum + 1)),
         default=0,
     )
     if possible_rows > MAX_ENUMERATED_TRANSVERSALS:
@@ -253,7 +282,7 @@ def _admit_enumeration(
             ),
         )
 
-    return maximum, edges
+    return maximum, remaining_edges, forced, False, False
 
 
 def enumerate_minimal_transversals(
@@ -265,35 +294,51 @@ def enumerate_minimal_transversals(
     if execution is None:
         with request_execution(time.monotonic()):
             return enumerate_minimal_transversals(request)
-    if execution.deadline is None:
-        bind_request_deadline(execution.started_at + _OWNER_DEADLINE_SECONDS)
+    execution_deadline(_OWNER_DEADLINE_SECONDS)
     request_checkpoint("before minimal transversal admission")
     request = _validated_request(request)
     request_checkpoint("after minimal transversal request validation")
     vertices = request.hypergraph.vertices
-    maximum, edges = _admit_enumeration(request)
+    maximum, remaining_edges, forced, source_empty, has_empty_edge = _admit_enumeration(
+        request
+    )
     request_checkpoint("after minimal transversal admission")
-    if not edges:
+    forced_row = tuple(vertex for vertex in vertices if vertex in forced)
+    if source_empty:
         results: tuple[tuple[str, ...], ...] = ((),)
-    elif any(not edge for edge in edges) or maximum == 0:
+    elif has_empty_edge or maximum == 0:
         results = ()
-    elif len(edges) == 1:
-        results = tuple((vertex,) for vertex in vertices if vertex in edges[0])
+    elif len(forced) > maximum:
+        results = ()
+    elif not remaining_edges:
+        results = (forced_row,)
+    elif len(remaining_edges) == 1:
+        results = tuple(
+            tuple(vertex for vertex in vertices if vertex in forced or vertex == extra)
+            for extra in vertices
+            if extra in remaining_edges[0]
+        )
     else:
         materialized: list[tuple[str, ...]] = []
-        for size in range(1, maximum + 1):
-            for candidate in combinations(vertices, size):
+        free_vertices = tuple(vertex for vertex in vertices if vertex not in forced)
+        free_maximum = maximum - len(forced)
+        for size in range(0 if forced else 1, free_maximum + 1):
+            for extra in combinations(free_vertices, size):
                 request_checkpoint("during minimal transversal enumeration")
-                selected = frozenset(candidate)
-                hits_all_edges, _ = _candidate_hits_all_edges(selected, edges)
+                selected = forced | frozenset(extra)
+                hits_all_edges, _ = _candidate_hits_all_edges(selected, remaining_edges)
                 if not hits_all_edges:
                     continue
                 has_redundant_vertex, _ = _candidate_has_redundant_vertex(
-                    selected, edges
+                    selected,
+                    remaining_edges
+                    + tuple(frozenset({vertex}) for vertex in forced),
                 )
                 if has_redundant_vertex:
                     continue
-                materialized.append(candidate)
+                materialized.append(
+                    tuple(vertex for vertex in vertices if vertex in selected)
+                )
         results = tuple(materialized)
 
     request_checkpoint("before minimal transversal result construction")

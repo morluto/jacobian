@@ -8,8 +8,10 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.symmetric_functions._models import (
     _MAX_POINT_COORDINATE_ABS,
     _MAX_SCHUR_PARTITION_LENGTH,
+    _MAX_SCHUR_VARIABLE_NAME_LENGTH,
     IntegerPartition,
     SchurExpansionResult,
+    SchurVariableName,
 )
 
 
@@ -46,7 +48,7 @@ def _complete_homogeneous(variables: Sequence[int], k: int) -> int:
 def schur_evaluation(
     partition: IntegerPartition,
     point: tuple[int, ...],
-    variables: tuple[str, ...] | None = None,
+    variables: tuple[SchurVariableName, ...] | None = None,
 ) -> SchurExpansionResult:
     """Evaluate a Schur function s_lambda at a point using the Jacobi-Trudi formula.
 
@@ -78,6 +80,19 @@ def schur_evaluation(
         if variables is not None
         else tuple(f"x{i}" for i in range(len(point)))
     )
+    if any(
+        type(variable) is not str
+        or not 1 <= len(variable) <= _MAX_SCHUR_VARIABLE_NAME_LENGTH
+        for variable in variables
+    ):
+        raise OperationDomainValidationError(
+            location=("variables",),
+            code="symmetric_function.schur_variable_name_bounded",
+            message=(
+                "variable names must be nonempty strings of at most "
+                f"{_MAX_SCHUR_VARIABLE_NAME_LENGTH} characters"
+            ),
+        )
     if len(variables) != len(point):
         raise OperationDomainValidationError(
             location=("variables",),
@@ -130,7 +145,7 @@ def _determinant(matrix: list[list[int]]) -> int:
     return int(Matrix(matrix).det())
 
 
-def verify_schur_evaluation(claim: SchurExpansionResult) -> bool:
+def verify_schur_evaluation(claim: object) -> bool:
     if not isinstance(claim, SchurExpansionResult):
         return False
     expected = schur_evaluation(claim.partition, claim.point, claim.variables)

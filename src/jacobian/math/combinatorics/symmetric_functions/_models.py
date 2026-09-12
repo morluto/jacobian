@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Self
 
-from pydantic import Field, WithJsonSchema, model_validator
+from pydantic import Field, StringConstraints, WithJsonSchema, model_validator
 from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import PydanticCustomError
 
@@ -20,6 +20,7 @@ _MAX_POINT_COORDINATE_DIGITS = 6
 _MAX_POINT_COORDINATE_ABS = 10**_MAX_POINT_COORDINATE_DIGITS - 1
 _MAX_SCHUR_RESULT_DIGITS = 4000
 _MAX_SCHUR_PARTITION_LENGTH = 50
+_MAX_SCHUR_VARIABLE_NAME_LENGTH = 64
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -40,6 +41,17 @@ PointCoordinate = Annotated[
     ),
 ]
 """One bounded evaluation coordinate: ``abs(value) <= 10**6 - 1``."""
+
+
+SchurVariableName = Annotated[
+    str,
+    StringConstraints(
+        min_length=1,
+        max_length=_MAX_SCHUR_VARIABLE_NAME_LENGTH,
+        strict=True,
+    ),
+]
+"""One bounded variable label retained in a Schur evaluation context."""
 
 
 def _schur_partition_schema() -> JsonSchemaValue:
@@ -84,12 +96,13 @@ class SchurExpansionRequest(StrictModel):
             "parts for the admitted Jacobi-Trudi determinant."
         )
     )
-    variables: tuple[str, ...] = Field(
+    variables: tuple[SchurVariableName, ...] = Field(
         min_length=1,
         max_length=20,
         description=(
             "Distinct variable names; the length must equal the length of "
-            "point (between 1 and 20)."
+            "point (between 1 and 20), and each name must contain at most "
+            f"{_MAX_SCHUR_VARIABLE_NAME_LENGTH} characters."
         ),
         json_schema_extra={"uniqueItems": True},
     )
@@ -126,9 +139,13 @@ class SchurExpansionRequest(StrictModel):
 
 class SchurExpansionResult(StrictModel):
     partition: IntegerPartition
-    variables: tuple[str, ...] = Field(
+    variables: tuple[SchurVariableName, ...] = Field(
         min_length=1,
         max_length=20,
+        description=(
+            "Distinct variable names, each containing at most "
+            f"{_MAX_SCHUR_VARIABLE_NAME_LENGTH} characters."
+        ),
         json_schema_extra={"uniqueItems": True},
     )
     point: tuple[PointCoordinate, ...] = Field(min_length=1, max_length=20)
@@ -160,4 +177,5 @@ __all__ = [
     "PartitionRequest",
     "SchurExpansionRequest",
     "SchurExpansionResult",
+    "SchurVariableName",
 ]

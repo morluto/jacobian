@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.symmetric_functions._models import (
     _MAX_SCHUR_PARTITION_LENGTH,
+    _MAX_SCHUR_VARIABLE_NAME_LENGTH,
     IntegerPartition,
     PartitionConjugateResult,
     PartitionRequest,
@@ -228,6 +229,8 @@ def test_request_schema_publishes_schur_invariants() -> None:
     assert "length must equal the length of point" in variables_description
     assert variables.get("uniqueItems") is True
     assert variables["minItems"] == 1 and variables["maxItems"] == 20
+    assert variables["items"]["maxLength"] == _MAX_SCHUR_VARIABLE_NAME_LENGTH
+    assert f"{_MAX_SCHUR_VARIABLE_NAME_LENGTH} characters" in variables["description"]
     assert point["items"]["minimum"] == -999_999
     assert point["items"]["maximum"] == 999_999
     assert "decimal digits" in point["items"]["description"]
@@ -248,6 +251,35 @@ def test_schur_rejects_coordinate_exceeding_digit_bound() -> None:
             variables=("x1",),
             point=(1_000_000,),
         )
+
+
+def test_schur_rejects_variable_name_exceeding_length_bound() -> None:
+    variable = "x" * (_MAX_SCHUR_VARIABLE_NAME_LENGTH + 1)
+    with pytest.raises(ValidationError) as request_error:
+        SchurExpansionRequest(
+            partition=IntegerPartition(parts=(1,)),
+            variables=(variable,),
+            point=(1,),
+        )
+    assert request_error.value.errors()[0]["type"] == "string_too_long"
+
+    with pytest.raises(ValidationError) as result_error:
+        SchurExpansionResult(
+            partition=IntegerPartition(parts=(1,)),
+            variables=(variable,),
+            point=(1,),
+            value=1,
+        )
+    assert result_error.value.errors()[0]["type"] == "string_too_long"
+
+
+def test_native_schur_rejects_variable_name_exceeding_length_bound() -> None:
+    variable = "x" * (_MAX_SCHUR_VARIABLE_NAME_LENGTH + 1)
+    with pytest.raises(
+        OperationDomainValidationError,
+        match="variable names must be nonempty strings",
+    ):
+        schur_evaluation(IntegerPartition(parts=(1,)), (1,), (variable,))
 
 
 def test_schur_accepts_boundary_coordinate() -> None:

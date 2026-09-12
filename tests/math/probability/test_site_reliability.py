@@ -162,7 +162,7 @@ def test_high_height_inputs_are_admitted_by_the_complete_result_carrier() -> Non
 def test_long_labels_are_admitted_without_native_json_size_estimation() -> None:
     """Native admission charges retained labels without a transport byte budget."""
     label_prefix = "\U0001f600" * 100_000
-    vertices = tuple(sorted(f"{label_prefix}{index}" for index in range(12)))
+    vertices = tuple(sorted(f"{label_prefix}{index}" for index in range(2)))
     result = compute_site_connection_probability(
         _source(
             vertices,
@@ -173,6 +173,21 @@ def test_long_labels_are_admitted_without_native_json_size_estimation() -> None:
     )
     assert result.visited_states == 1 << len(vertices)
     assert result.source.graph.vertices == vertices
+
+
+def test_repeated_state_labels_are_charged_in_the_ledger_bound() -> None:
+    """A 12-vertex powerset repeats each long label in 2,048 rows."""
+    label_prefix = "\U0001f600" * 100_000
+    vertices = tuple(sorted(f"{label_prefix}{index}" for index in range(12)))
+    with pytest.raises(OperationResourceAdmissionError, match="allocation bound"):
+        compute_site_connection_probability(
+            _source(
+                vertices,
+                (),
+                (Fraction(1, 2),) * len(vertices),
+                (vertices[0], vertices[1]),
+            )
+        )
 
 
 def test_successful_state_mass_equals_reported_total() -> None:
@@ -233,6 +248,12 @@ def test_forged_site_state_subset_is_rejected_after_json_round_trip() -> None:
     )
     payload = result.model_dump(mode="json")
     payload["states"][1]["open_vertices"] = ["b"]
+    with pytest.raises(ValidationError, match="state vertices"):
+        GraphSiteReliabilityResult.model_validate_json(
+            encode_strict_json(payload), strict=True
+        )
+    payload = result.model_dump(mode="json")
+    payload["states"][1]["open_vertices"] = ["z"]
     with pytest.raises(ValidationError, match="state vertices"):
         GraphSiteReliabilityResult.model_validate_json(
             encode_strict_json(payload), strict=True

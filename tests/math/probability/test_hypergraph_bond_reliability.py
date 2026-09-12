@@ -260,6 +260,12 @@ def test_forged_hyperedge_state_ids_are_rejected_after_json_round_trip() -> None
         HypergraphBondConnectionProbabilityResult.model_validate_json(
             encode_strict_json(payload), strict=True
         )
+    payload = result.model_dump(mode="json")
+    payload["states"][1]["open_hyperedge_ids"] = ["unknown"]
+    with pytest.raises(ValidationError, match="state IDs"):
+        HypergraphBondConnectionProbabilityResult.model_validate_json(
+            encode_strict_json(payload), strict=True
+        )
 
 
 def test_hyperedge_bound_is_owned_by_operation_admission() -> None:

@@ -144,6 +144,10 @@ class HypergraphBondReliabilityState(StrictModel):
             raise _validation_error("hypergraph state hyperedge IDs must be canonical")
         return self
 
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        return cls.model_construct(**values)
+
 
 class HypergraphBondConnectionProbabilityResult(StrictModel):
     source: HypergraphBondReliabilitySource
@@ -308,8 +312,11 @@ def _admit_hypergraph_request(
 
     hyperedge_count = len(request.hypergraph.edges)
     state_memberships = hyperedge_count * (state_count // 2) if hyperedge_count else 0
-    label_units = sum(len(vertex) for vertex in request.hypergraph.vertices) + sum(
-        len(edge_id) for edge_id, _ in request.hypergraph.edges
+    vertex_label_units = sum(len(vertex) for vertex in request.hypergraph.vertices)
+    hyperedge_label_units = sum(len(edge_id) for edge_id, _ in request.hypergraph.edges)
+    label_units = vertex_label_units + hyperedge_label_units
+    repeated_label_units = (
+        hyperedge_label_units * (state_count // 2) if state_count else 0
     )
     source_units = (
         label_units
@@ -321,6 +328,7 @@ def _admit_hypergraph_request(
         source_units
         + state_count * 4
         + state_memberships
+        + repeated_label_units
         + 2 * (state_count + 1) * rational_digits
     )
     if ledger_units > MAX_HYPERGRAPH_RELIABILITY_LEDGER_UNITS:
@@ -376,7 +384,7 @@ def compute_hypergraph_bond_connection_probability(
         if connected:
             connection_probability += state_probability
         states.append(
-            HypergraphBondReliabilityState(
+            HypergraphBondReliabilityState._from_kernel(
                 state_index=state_index,
                 open_hyperedge_ids=tuple(
                     source.hypergraph.edges[index][0]
@@ -414,8 +422,8 @@ HYPERGRAPH_BOND_CONNECTION_PROBABILITY_OPERATION = MathTool(
         OperationExample(
             name="two_hyperedges_through_a_bridge",
             description=(
-                "Terminals a and d connect when both hyperedges ab and cd are "
-                "open and share vertex b=c, so the probability is 1/4."
+                "Terminals a and d connect when both hyperedges ab and bd are "
+                "open and share vertex b, so the probability is 1/4."
             ),
             input={
                 "hypergraph": {

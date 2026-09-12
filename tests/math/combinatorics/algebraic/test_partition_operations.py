@@ -135,7 +135,9 @@ def test_hook_content_large_exact_integers_roundtrip_strict_json() -> None:
     assert wire["alphabet_size"] == str(alphabet_size)
     assert set(wire) == {"partition", "alphabet_size", "count"}
     assert (
-        SemistandardYoungTableauCountResult.model_validate_json(json.dumps(wire), strict=True)
+        SemistandardYoungTableauCountResult.model_validate_json(
+            json.dumps(wire), strict=True
+        )
         == result
     )
 
@@ -149,7 +151,9 @@ def test_hook_content_result_rejects_derivation_artifacts() -> None:
         "hook_product": "3",
     }
     with pytest.raises(ValidationError):
-        SemistandardYoungTableauCountResult.model_validate_json(json.dumps(payload), strict=True)
+        SemistandardYoungTableauCountResult.model_validate_json(
+            json.dumps(payload), strict=True
+        )
 
 
 def test_hook_content_admits_growing_product_within_work_bound() -> None:

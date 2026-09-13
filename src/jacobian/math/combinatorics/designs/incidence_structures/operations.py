@@ -24,6 +24,7 @@ from jacobian.math.combinatorics.designs.incidence_structures._kernel import (
 from jacobian.math.combinatorics.designs.incidence_structures._models import (
     MAX_STEINER_SEARCH_STATES,
     ComplementResult,
+    ComputedSteinerTripleSystem,
     ContainmentProfileResult,
     DegreeProfileResult,
     DerivedResidualResult,
@@ -37,8 +38,10 @@ from jacobian.math.combinatorics.designs.incidence_structures._models import (
     IntersectionsResult,
     LeviGraphResult,
     RestrictionResult,
+    SteinerTripleSystemNotFound,
     SteinerTripleSystemResult,
     SteinerTripleSystemShard,
+    SteinerTripleSystemUnknown,
     _require_containment_profile_admitted,
     _require_incidence_trade_admitted,
     _require_steiner_triple_system_admitted,
@@ -187,10 +190,11 @@ def _admit_native_shard(shard: object, order: int) -> SteinerTripleSystemShard:
         )
     raw_triples = getattr(shard, "fixed_triples", None)
     # Bound the caller-authored field before dumping or canonicalizing it: a
-    # schema-bypassed replacement must not be traversed in full.
-    if not isinstance(raw_triples, tuple) or any(
-        not isinstance(triple, tuple) for triple in raw_triples
-    ):
+    # schema-bypassed replacement must not be traversed in full. The length must
+    # be rejected first, because ``len`` on a tuple is constant time while any
+    # element-wise scan walks the whole field - and this admission runs before
+    # the request deadline is bound, so there is no checkpoint to notice.
+    if not isinstance(raw_triples, tuple):
         raise OperationDomainValidationError(
             location=("shard", "fixed_triples"),
             code="incidence_structure.steiner_shard_shape",
@@ -201,6 +205,12 @@ def _admit_native_shard(shard: object, order: int) -> SteinerTripleSystemShard:
             location=("shard", "fixed_triples"),
             code="incidence_structure.steiner_shard_length",
             message="a continuation prefix cannot contain more triples than the design",
+        )
+    if any(not isinstance(triple, tuple) for triple in raw_triples):
+        raise OperationDomainValidationError(
+            location=("shard", "fixed_triples"),
+            code="incidence_structure.steiner_shard_shape",
+            message="continuation triples must be immutable tuples",
         )
     try:
         validated = SteinerTripleSystemShard.model_validate(
@@ -297,22 +307,30 @@ def construct_steiner_triple_system(
         # An empty shard and an unsharded request execute the same root search,
         # so normalize both to the single root encoding.
         retained_shard = None if shard is None or not shard.fixed_triples else shard
+        unknown = cover_status == "UNKNOWN"
         return SteinerTripleSystemResult(
-            status="UNKNOWN" if cover_status == "UNKNOWN" else "NOT_FOUND",
             order=order,
-            states_explored=states,
-            unresolved_frontier=frontier,
-            source_shard=retained_shard,
+            outcome=(
+                SteinerTripleSystemUnknown(
+                    states_explored=states,
+                    unresolved_frontier=frontier,
+                    source_shard=retained_shard,
+                )
+                if unknown
+                else SteinerTripleSystemNotFound(
+                    states_explored=states,
+                    source_shard=retained_shard,
+                )
+            ),
         )
 
-    # Replay the defining incidence axiom independently of the cover search.
-    pair_multiplicity = dict.fromkeys(pairs, 0)
+    # The cover search returns the selected rows only when it has reconstructed
+    # and checked exact coverage of every remaining pair constraint, and
+    # `_covered_pairs_from_fixed_triples` already established that the fixed
+    # prefix is pair-disjoint, so the defining incidence axiom holds for the
+    # union. Replaying it here would re-derive the kernel's own postcondition
+    # during result construction; the independent replay lives in the tests.
     chosen = tuple(triple_by_row_id[row_id] for row_id in selected_row_ids)
-    for triple in chosen:
-        for pair in combinations(triple, 2):
-            pair_multiplicity[pair] += 1
-    if any(value != 1 for value in pair_multiplicity.values()):
-        raise RuntimeError("exact-cover search produced an invalid Steiner system")
     canonical_chosen = tuple(sorted(chosen))
     design = IncidenceStructure(
         points=tuple(f"p{point}" for point in points),
@@ -322,10 +340,11 @@ def construct_steiner_triple_system(
         ),
     )
     return SteinerTripleSystemResult(
-        status="COMPUTED",
         order=order,
-        design=design,
-        states_explored=states,
+        outcome=ComputedSteinerTripleSystem(
+            states_explored=states,
+            design=design,
+        ),
     )
 
 

@@ -1,13 +1,17 @@
 """Supported native exact finite-incidence APIs."""
 
 from jacobian.math.combinatorics.designs.incidence_structures._models import (
+    ComputedSteinerTripleSystem,
     ContainmentProfileResult,
     IncidenceMomentComparison,
     IncidenceStructure,
     IncidenceTradeResult,
+    SteinerTripleSystemNotFound,
+    SteinerTripleSystemOutcome,
     SteinerTripleSystemRequest,
     SteinerTripleSystemResult,
     SteinerTripleSystemShard,
+    SteinerTripleSystemUnknown,
 )
 from jacobian.math.combinatorics.designs.incidence_structures.operations import (
     check_incidence_trade,
@@ -25,13 +29,17 @@ from jacobian.math.combinatorics.designs.incidence_structures.operations import 
 )
 
 __all__ = [
+    "ComputedSteinerTripleSystem",
     "ContainmentProfileResult",
     "IncidenceMomentComparison",
     "IncidenceStructure",
     "IncidenceTradeResult",
+    "SteinerTripleSystemNotFound",
+    "SteinerTripleSystemOutcome",
     "SteinerTripleSystemRequest",
     "SteinerTripleSystemResult",
     "SteinerTripleSystemShard",
+    "SteinerTripleSystemUnknown",
     "check_incidence_trade",
     "complement",
     "construct_steiner_triple_system",

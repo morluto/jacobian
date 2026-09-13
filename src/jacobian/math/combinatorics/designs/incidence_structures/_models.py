@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from math import comb
-from typing import Any, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import (
     ConfigDict,
@@ -256,117 +256,126 @@ class SteinerTripleSystemShard(StrictModel):
         return self
 
 
-class SteinerTripleSystemResult(StrictModel):
-    """One exact construction outcome, including bounded non-completion."""
+class ComputedSteinerTripleSystem(StrictModel):
+    """A complete design, established by an exact cover of every pair."""
 
-    status: Literal["COMPUTED", "NOT_FOUND", "UNKNOWN"]
-    order: StrictInt = Field(ge=3, le=MAX_STEINER_TRIPLE_ORDER)
-    design: IncidenceStructure | None = None
+    status: Literal["COMPUTED"] = "COMPUTED"
     states_explored: StrictInt = Field(ge=0, le=MAX_STEINER_SEARCH_STATES)
-    unresolved_frontier: tuple[SteinerTripleSystemShard, ...] = Field(
-        default=(), max_length=MAX_STEINER_FRONTIER_SHARDS
-    )
+    design: IncidenceStructure
+
+
+class SteinerTripleSystemNotFound(StrictModel):
+    """No completion was found within the admitted search envelope."""
+
+    status: Literal["NOT_FOUND"] = "NOT_FOUND"
+    states_explored: StrictInt = Field(ge=0, le=MAX_STEINER_SEARCH_STATES)
     source_shard: SteinerTripleSystemShard | None = Field(
         default=None,
         description=(
-            "The continuation prefix actually searched. Only shard-scoped incomplete "
-            "or negative outcomes retain it: a COMPUTED design already contains "
-            "every selected triple, while a NOT_FOUND result with this field set "
-            "is shard-local infeasibility, not global nonexistence of an STS of "
+            "The continuation prefix actually searched. When set, this is "
+            "shard-local infeasibility, not global nonexistence of an STS of "
             "this order."
         ),
     )
 
+
+class SteinerTripleSystemUnknown(StrictModel):
+    """A bounded stop that retains at least one unresolved frontier shard."""
+
+    status: Literal["UNKNOWN"] = "UNKNOWN"
+    states_explored: StrictInt = Field(ge=0, le=MAX_STEINER_SEARCH_STATES)
+    unresolved_frontier: tuple[SteinerTripleSystemShard, ...] = Field(
+        min_length=1, max_length=MAX_STEINER_FRONTIER_SHARDS
+    )
+    source_shard: SteinerTripleSystemShard | None = Field(
+        default=None,
+        description=(
+            "The continuation prefix actually searched, when the request was "
+            "itself a continuation."
+        ),
+    )
+
+
+SteinerTripleSystemOutcome = Annotated[
+    ComputedSteinerTripleSystem
+    | SteinerTripleSystemNotFound
+    | SteinerTripleSystemUnknown,
+    Field(discriminator="status"),
+]
+
+
+class SteinerTripleSystemResult(StrictModel):
+    """One exact construction outcome, including bounded non-completion.
+
+    The status selects the payload: only ``COMPUTED`` carries a design, only
+    ``UNKNOWN`` carries a frontier, and neither optional field can appear on a
+    branch that does not guarantee it. Encoding the branches as a
+    status-discriminated union rather than one model with independently
+    optional fields means a schema-driven caller learns the same guarantee
+    from the generated JSON Schema that the runtime enforces.
+    """
+
+    order: StrictInt = Field(ge=3, le=MAX_STEINER_TRIPLE_ORDER)
+    outcome: SteinerTripleSystemOutcome
+
     @model_validator(mode="after")
-    def require_status_payload(self) -> Self:
+    def bind_outcome_to_order(self) -> Self:
         if self.order % 6 not in (1, 3):
             raise _validation_error(
                 "steiner_order_necessary_condition",
                 "a Steiner triple system requires order congruent to 1 or 3 modulo 6",
             )
-        _require_steiner_frontier_order(self.order, self.unresolved_frontier)
-        if self.source_shard is not None and self.source_shard.order != self.order:
+        outcome = self.outcome
+        if isinstance(outcome, ComputedSteinerTripleSystem):
+            _require_computed_steiner_design(self.order, outcome.design)
+            return self
+        if isinstance(outcome, SteinerTripleSystemUnknown):
+            _require_steiner_frontier_order(self.order, outcome.unresolved_frontier)
+        source_shard = outcome.source_shard
+        if source_shard is not None and source_shard.order != self.order:
             raise _validation_error(
                 "steiner_source_shard_order",
                 "a searched source shard must have the result order",
             )
-        if self.status == "COMPUTED":
-            if self.source_shard is not None:
-                raise _validation_error(
-                    "steiner_computed_source_shard",
-                    "a COMPUTED design contains every selected triple, so it cannot "
-                    "retain the searched shard as extra provenance",
-                )
-            _require_computed_steiner_design(self)
-        elif self.status == "UNKNOWN":
-            _require_unknown_steiner_payload(self)
-        elif self.design is not None or self.unresolved_frontier:
-            raise _validation_error(
-                "steiner_noncomputed_payload",
-                "non-COMPUTED, non-UNKNOWN outcomes cannot carry a design or frontier",
-            )
         return self
 
 
-def _require_computed_steiner_design(result: SteinerTripleSystemResult) -> None:
-    if result.unresolved_frontier:
-        raise _validation_error(
-            "steiner_computed_frontier",
-            "COMPUTED results cannot carry unresolved frontier shards",
-        )
-    if result.design is None:
-        raise _validation_error(
-            "steiner_computed_without_design",
-            "COMPUTED requires an incidence design",
-        )
-    if len(result.design.points) != result.order:
+def _require_computed_steiner_design(order: int, design: IncidenceStructure) -> None:
+    if len(design.points) != order:
         raise _validation_error(
             "steiner_design_order", "design point count must equal order"
         )
-    expected_blocks = result.order * (result.order - 1) // 6
-    if len(result.design.blocks) != expected_blocks:
+    expected_blocks = order * (order - 1) // 6
+    if len(design.blocks) != expected_blocks:
         raise _validation_error(
             "steiner_design_block_count",
             "design block count must equal v(v-1)/6",
         )
-    expected_points = tuple(f"p{point}" for point in range(result.order))
+    expected_points = tuple(f"p{point}" for point in range(order))
     expected_block_ids = tuple(f"b{index}" for index in range(expected_blocks))
-    if result.design.points != expected_points:
+    if design.points != expected_points:
         raise _validation_error(
             "steiner_design_point_axis",
             "computed designs must use the canonical point axis",
         )
-    if result.design.block_ids != expected_block_ids:
+    if design.block_ids != expected_block_ids:
         raise _validation_error(
             "steiner_design_block_axis",
             "computed designs must use canonical block IDs",
         )
-    if any(len(block) != 3 for block in result.design.blocks):
+    if any(len(block) != 3 for block in design.blocks):
         raise _validation_error(
             "steiner_block_size",
             "every Steiner block must contain exactly 3 points",
         )
     point_index = {point: index for index, point in enumerate(expected_points)}
     block_indices = tuple(
-        tuple(point_index[point] for point in block) for block in result.design.blocks
+        tuple(point_index[point] for point in block) for block in design.blocks
     )
     if block_indices != tuple(sorted(block_indices)):
         raise _validation_error(
             "steiner_block_order",
             "computed blocks must be in canonical lexicographic order",
-        )
-
-
-def _require_unknown_steiner_payload(result: SteinerTripleSystemResult) -> None:
-    if result.design is not None:
-        raise _validation_error(
-            "steiner_unknown_design",
-            "UNKNOWN outcomes cannot carry a design",
-        )
-    if not result.unresolved_frontier:
-        raise _validation_error(
-            "steiner_unknown_frontier",
-            "UNKNOWN outcomes must retain unresolved frontier shards",
         )
 
 

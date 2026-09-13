@@ -5,13 +5,17 @@ from jacobian.math.combinatorics.designs import incidence_structures
 
 def test_exact_public_api_symbols() -> None:
     expected = (
+        "ComputedSteinerTripleSystem",
         "ContainmentProfileResult",
         "IncidenceMomentComparison",
         "IncidenceStructure",
         "IncidenceTradeResult",
+        "SteinerTripleSystemNotFound",
+        "SteinerTripleSystemOutcome",
         "SteinerTripleSystemRequest",
         "SteinerTripleSystemResult",
         "SteinerTripleSystemShard",
+        "SteinerTripleSystemUnknown",
         "check_incidence_trade",
         "complement",
         "construct_steiner_triple_system",

@@ -10,6 +10,10 @@ from typing import Any, cast
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.exact_cover import (
     MAX_EXACT_COVER_INCIDENCES,
     MAX_EXACT_COVER_PRIMARY_ITEMS,
@@ -20,6 +24,7 @@ from jacobian.math.combinatorics.exact_cover import (
     GeneralizedExactCoverRequest,
     GeneralizedExactCoverResult,
     find_generalized_exact_cover,
+    minimum_generalized_exact_cover,
     verify_generalized_exact_cover,
 )
 
@@ -64,10 +69,13 @@ def test_native_exact_cover_accepts_canonical_values_not_wire_requests() -> None
     instance = _instance(primary=("p",), rows=(("row", ("p",)),))
 
     assert find_generalized_exact_cover(instance).selected_row_ids == ("row",)
-    with pytest.raises(TypeError, match="GeneralizedExactCoverInstance"):
+    # A wire request is rejected at the native boundary with the owner-defined
+    # domain error, so native callers can use the stable error taxonomy.
+    with pytest.raises(OperationDomainValidationError) as error:
         find_generalized_exact_cover(
             cast(Any, GeneralizedExactCoverRequest(instance=instance))
         )
+    assert error.value.errors()[0]["type"] == "combinatorics.exact_cover_instance"
 
 
 def test_knuth_exact_cover_known_answer_is_deterministic() -> None:
@@ -511,3 +519,48 @@ def test_schema_publishes_the_exact_cover_contract() -> None:
     )
     assert "NO_COVER" in schema["description"]
     assert "UNKNOWN" in schema["description"]
+
+
+def test_dense_cyclic_instance_refuses_before_the_residual_scan() -> None:
+    """A dense residual degree scan must be refused, not executed."""
+    import time
+
+    primary = 2048
+    label = lambda index: f"p{index:05d}"  # noqa: E731
+    rows = tuple(
+        ExactCoverRow(
+            row_id=f"r{index:05d}",
+            items=tuple(sorted(label((index + step) % primary) for step in range(16))),
+        )
+        for index in range(4096)
+    )
+    instance = GeneralizedExactCoverInstance(
+        primary_items=tuple(label(index) for index in range(primary)),
+        secondary_items=(),
+        rows=rows,
+    )
+    started = time.monotonic()
+    with pytest.raises(OperationResourceAdmissionError):
+        minimum_generalized_exact_cover(instance)
+    # The previous per-primary row scan performed ~134 million comparisons here.
+    assert time.monotonic() - started < 2.0
+
+
+def test_native_entry_points_report_the_typed_domain_taxonomy() -> None:
+    """Invalid native arguments use the owner-defined domain error, not TypeError."""
+    instance = _instance(primary=("p",), rows=(("row", ("p",)),))
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        find_generalized_exact_cover(cast(Any, "not-an-instance"))
+    assert error.value.errors()[0]["type"] == "combinatorics.exact_cover_instance"
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        minimum_generalized_exact_cover(cast(Any, "not-an-instance"))
+    assert error.value.errors()[0]["type"] == "combinatorics.exact_cover_instance"
+
+    for entry in (find_generalized_exact_cover, minimum_generalized_exact_cover):
+        with pytest.raises(OperationDomainValidationError) as error:
+            entry(instance, search_node_limit=cast(Any, "wide"))
+        assert error.value.errors()[0]["type"] == (
+            "combinatorics.exact_cover_node_limit"
+        )

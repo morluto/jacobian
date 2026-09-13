@@ -68,7 +68,6 @@ def test_issue_fixture_three_petal_sunflowers() -> None:
         (row.edge_id, tuple(str(index) for index in row.source_indices))
         for row in result.sunflowers
     )
-    assert result.hypergraph_edges == result.hypergraph.edges
 
 
 def test_four_petals_share_one_core() -> None:
@@ -77,7 +76,7 @@ def test_four_petals_share_one_core() -> None:
     assert [(row.source_indices, row.core) for row in result.sunflowers] == [
         ((0, 1, 2, 3), (0,)),
     ]
-    assert result.hypergraph_edges == (("sunflower_1", ("0", "1", "2", "3")),)
+    assert result.hypergraph.edges == (("sunflower_1", ("0", "1", "2", "3")),)
 
 
 def test_large_petal_count_keeps_bounded_row_ids() -> None:
@@ -88,7 +87,7 @@ def test_large_petal_count_keeps_bounded_row_ids() -> None:
         (tuple(range(22)), (0,)),
     ]
     assert [row.edge_id for row in result.sunflowers] == ["sunflower_1"]
-    assert result.hypergraph_edges == (
+    assert result.hypergraph.edges == (
         ("sunflower_1", tuple(sorted(str(i) for i in range(22)))),
     )
 
@@ -222,7 +221,6 @@ def test_projection_uses_canonical_multi_digit_member_order() -> None:
     result = construct_sunflower_family(
         _family(tuple((i,) for i in range(11)), ground=11), 2
     )
-    assert result.hypergraph_edges == result.hypergraph.edges
     assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
@@ -476,11 +474,10 @@ def test_reversed_rows_with_renumbered_ids_are_rejected() -> None:
     for position, row in enumerate(reversed_rows, start=1):
         row["edge_id"] = f"sunflower_{position}"
     forged["sunflowers"] = reversed_rows
-    forged["hypergraph_edges"] = [
+    forged["hypergraph"]["edges"] = [
         (row["edge_id"], [str(index) for index in row["source_indices"]])
         for row in reversed_rows
     ]
-    forged["hypergraph"]["edges"] = forged["hypergraph_edges"]
     with pytest.raises(ValidationError, match="lexicographic source-index order"):
         SunflowerFamilyResult.model_validate(forged)
 
@@ -563,7 +560,6 @@ def test_reconstructed_rows_must_stay_strictly_ordered() -> None:
     )
     payload = result.model_dump(mode="json")
     payload["sunflowers"] = list(reversed(payload["sunflowers"]))
-    payload["hypergraph_edges"] = list(reversed(payload["hypergraph_edges"]))
     payload["hypergraph"]["edges"] = list(reversed(payload["hypergraph"]["edges"]))
     with pytest.raises(
         ValidationError, match=r"canonical ordinals|strictly ordered|lexicographic"

@@ -420,11 +420,7 @@ class SunflowerFamilyResult(StrictModel):
     sunflowers: tuple[SunflowerFamily, ...] = Field(max_length=MAX_EDGES)
     sunflower_count: StrictInt = Field(ge=0, le=MAX_EDGES)
     sunflower_free: StrictBool
-    hypergraph_edges: tuple[tuple[str, tuple[str, ...]], ...] = Field(
-        max_length=MAX_EDGES
-    )
-    # A domain-owned projection, unlike ``hypergraph_edges`` which is retained
-    # as a compact compatibility ledger for callers that only need rows.
+    # The canonical composable edge value; callers read ``hypergraph.edges``.
     hypergraph: FiniteHypergraph
 
     @model_validator(mode="after")
@@ -510,13 +506,10 @@ class SunflowerFamilyResult(StrictModel):
             raise _result_error(
                 "status", "sunflower_free must agree with whether rows are present"
             )
-        if (
-            self.hypergraph_edges != canonical_edges
-            or self.hypergraph.edges != canonical_edges
-        ):
+        if self.hypergraph.edges != canonical_edges:
             raise _result_error(
                 "projection",
-                "hypergraph projections must equal the canonical sunflower rows",
+                "hypergraph edges must equal the canonical sunflower rows",
             )
         return self
 
@@ -537,7 +530,6 @@ class SunflowerFamilyResult(StrictModel):
             sunflowers=sunflowers,
             sunflower_count=len(sunflowers),
             sunflower_free=not sunflowers,
-            hypergraph_edges=hypergraph.edges,
             hypergraph=hypergraph,
         )
 

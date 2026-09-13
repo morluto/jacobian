@@ -6,7 +6,7 @@ from collections.abc import Callable
 from fractions import Fraction
 from importlib import import_module
 from math import isqrt
-from typing import cast
+from typing import Any, cast
 
 import pytest
 from pydantic import ValidationError
@@ -319,7 +319,7 @@ def test_native_sample_count_rejects_non_integers() -> None:
             berry_esseen_bound(
                 BerryEsseenRequest.model_construct(
                     distribution=request.distribution,
-                    sample_count=sample_count,  # type: ignore[arg-type]
+                    sample_count=sample_count,
                 )
             )
 
@@ -591,7 +591,7 @@ def test_atom_cap_stops_before_revalidating_every_atom(
     validations = 0
     original = FiniteDistributionAtom.model_validate
 
-    def counted(*args: object, **kwargs: object) -> FiniteDistributionAtom:
+    def counted(*args: Any, **kwargs: Any) -> FiniteDistributionAtom:
         nonlocal validations
         validations += 1
         return original(*args, **kwargs)
@@ -600,3 +600,69 @@ def test_atom_cap_stops_before_revalidating_every_atom(
     with pytest.raises(OperationResourceAdmissionError):
         module.berry_esseen_bound(request)
     assert validations == 0
+
+
+def test_zero_mass_atom_cannot_reject_an_otherwise_cheap_law() -> None:
+    """A support point that carries no mass contributes nothing.
+
+    Centering `(1/q2, 0)` still divides by `q2`, so with coprime 128-digit
+    `q1` and `q2` the zero-mass point has a 255-digit centered denominator and
+    a 763-digit cube. Every real moment of this law, and the returned bound,
+    fit the 512-digit envelope, so the irrelevant atom must not decide the
+    answer.
+    """
+
+    q1 = 10**127 + 19
+    q2 = 10**127 + 79
+    with_irrelevant = BerryEsseenRequest.model_validate(
+        {
+            "distribution": _distribution(
+                (0, Fraction(1, 2)),
+                (Fraction(1, q2), Fraction(0)),
+                (Fraction(1, q1), Fraction(1, 2)),
+            ),
+            "sample_count": 10,
+        }
+    )
+    reduced = BerryEsseenRequest.model_validate(
+        {
+            "distribution": _distribution(
+                (0, Fraction(1, 2)),
+                (Fraction(1, q1), Fraction(1, 2)),
+            ),
+            "sample_count": 10,
+        }
+    )
+
+    result = berry_esseen_bound(with_irrelevant)
+    expected = berry_esseen_bound(reduced)
+
+    assert result.model_dump(exclude={"source"}) == expected.model_dump(
+        exclude={"source"}
+    )
+    # The irrelevant point is retained on the source, not silently dropped.
+    assert len(result.source.distribution.atoms) == 3
+
+    # Independent oracle: the two-atom law's own central moments.
+    values = [Fraction(0), Fraction(1, q1)]
+    masses = [Fraction(1, 2), Fraction(1, 2)]
+    mean = sum(v * p for v, p in zip(values, masses, strict=True))
+    variance = sum(p * (v - mean) ** 2 for v, p in zip(values, masses, strict=True))
+    third = sum(p * abs(v - mean) ** 3 for v, p in zip(values, masses, strict=True))
+    assert Fraction(result.mean.num, result.mean.den) == mean
+    assert Fraction(result.variance.num, result.variance.den) == variance
+    assert (
+        Fraction(
+            result.third_absolute_central_moment.num,
+            result.third_absolute_central_moment.den,
+        )
+        == third
+    )
+    bound_squared = BERRY_ESSEEN_CONSTANT**2 * third * third / (variance**3 * 10)
+    assert Fraction(result.bound_squared.num, result.bound_squared.den) == (
+        bound_squared
+    )
+    lower = Fraction(result.bound_lower.num, result.bound_lower.den)
+    upper = Fraction(result.bound_upper.num, result.bound_upper.den)
+    assert lower <= upper
+    assert lower * lower <= bound_squared <= upper * upper

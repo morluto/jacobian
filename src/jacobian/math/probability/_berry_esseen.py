@@ -527,6 +527,9 @@ def berry_esseen_bound(request: BerryEsseenRequest) -> BerryEsseenResult:
     for index, atom in enumerate(request.distribution.atoms):
         if index % 256 == 0:
             request_checkpoint("during Berry--Esseen mean scan")
+        if atom.probability.as_fraction() == 0:
+            # A zero-mass atom shifts this law by nothing.
+            continue
         mean = _add(
             mean,
             _mul(
@@ -544,6 +547,17 @@ def berry_esseen_bound(request: BerryEsseenRequest) -> BerryEsseenResult:
     for index, atom in enumerate(request.distribution.atoms):
         if index % 256 == 0:
             request_checkpoint("during Berry--Esseen moment scan")
+        weight = atom.probability.as_fraction()
+        if weight == 0:
+            # Skip before any centered power is formed. An atom of zero mass
+            # contributes nothing to the mean, the variance, or the third
+            # absolute moment, but centering it still divides by that atom's
+            # denominator: on `x^0 + (1/q2)x^0 + (1/q1)x^1`-shaped laws with
+            # coprime 128-digit `q1`, `q2` the zero-mass point has a 255-digit
+            # centered denominator and a 763-digit cube, so an irrelevant
+            # support point could reject a law whose own moments all fit the
+            # 512-digit envelope.
+            continue
         centered = _admission_fraction(
             atom.value.as_fraction() - mean,
             location=location,
@@ -564,7 +578,7 @@ def berry_esseen_bound(request: BerryEsseenRequest) -> BerryEsseenResult:
         variance = _add(
             variance,
             _mul(
-                atom.probability.as_fraction(),
+                weight,
                 squared,
                 location=location,
                 label="Berry--Esseen variance contribution",
@@ -575,7 +589,7 @@ def berry_esseen_bound(request: BerryEsseenRequest) -> BerryEsseenResult:
         third = _add(
             third,
             _mul(
-                atom.probability.as_fraction(),
+                weight,
                 cubed_absolute,
                 location=location,
                 label="Berry--Esseen third absolute contribution",

@@ -8,6 +8,8 @@ import typing
 from dataclasses import dataclass
 from typing import Literal
 
+from pydantic import ValidationError
+
 from jacobian._exact import CanonicalRational
 from jacobian.math._singular import (
     SingularProtocolReader,
@@ -76,6 +78,23 @@ SingularOutcome = Literal[
 
 class _ResultLimitExceededError(ValueError):
     """The backend returned evidence outside the declared result bound."""
+
+
+def _is_kernel_type_mismatch(error: BaseException) -> bool:
+    """Report whether a model rejection is a typing defect rather than a limit.
+
+    Pydantic separates a value of an unexpected Python type from a value that
+    breaches a declared constraint. Only the second establishes that an exact
+    result left the admitted representation, so the first stays an internal
+    defect and is never reported as a result-bound limitation.
+    """
+
+    if not isinstance(error, ValidationError):
+        return False
+    issues = error.errors()
+    return bool(issues) and all(
+        str(issue.get("type", "")).endswith("_type") for issue in issues
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -292,15 +311,21 @@ def _parse_parameter_monomial(
 
 
 def _sparse_parameter_polynomial(
-    terms: typing.Iterable[tuple[tuple[int, ...], typing.Any]],
+    terms: typing.Iterable[tuple[typing.Sequence[typing.SupportsIndex], typing.Any]],
 ) -> SparseRationalPolynomial:
+    """Narrow one FLINT sparse polynomial into declared canonical term data.
+
+    FLINT yields ``fmpz`` exponent vectors and ``fmpq`` coefficients while the
+    canonical models declare strict Python integers, so every kernel value is
+    narrowed here rather than reaching a strict model as a coercion failure.
+    """
+
     return SparseRationalPolynomial(
         terms=tuple(
             RationalPolynomialTerm(
                 coefficient=CanonicalRational.from_integer_ratio(
                     int(value.p), int(value.q)
                 ),
-                # FLINT returns exponents as fmpz; coerce to int for Pydantic.
                 exponents=tuple(int(exponent) for exponent in exponents),
             )
             for exponents, value in terms
@@ -347,13 +372,19 @@ def _parse_generic_fiber_coefficient(
             len(numerator_terms) > MAX_GENERIC_FIBER_PARAMETER_TERMS
             or len(denominator_terms) > MAX_GENERIC_FIBER_PARAMETER_TERMS
         ):
-            raise ValueError("normalized coefficient support exceeds its bound")
+            raise _ResultLimitExceededError(
+                "normalized Singular coefficient support exceeds the exact-result limit"
+            )
         value = RationalFunction._from_kernel(
             variables=target_parameters,
             numerator=_sparse_parameter_polynomial(numerator_terms),
             denominator=_sparse_parameter_polynomial(denominator_terms),
         )
+    except _ResultLimitExceededError:
+        raise
     except (ArithmeticError, ValueError) as exc:
+        if _is_kernel_type_mismatch(exc):
+            raise
         raise _ResultLimitExceededError(
             "normalized Singular coefficient exceeds the exact-result limit"
         ) from exc
@@ -687,7 +718,9 @@ def run_singular_generic_fiber(
             outcome="TIMEOUT",
             detail="Singular coefficient reduction exceeded the declared wall-time limit.",
         )
-    except ValueError:
+    except ValueError as exc:
+        if _is_kernel_type_mismatch(exc):
+            raise
         return SingularGenericFiberResult(
             outcome="ERROR",
             detail=(

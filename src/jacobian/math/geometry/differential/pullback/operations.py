@@ -121,13 +121,16 @@ def _preflight_pullback_sources(
     )
     targets = getattr(map_value, "target_coordinates", None)
     components = getattr(map_value, "components", None)
-    if isinstance(targets, Sized) and isinstance(components, Sized):
-        if len(components) != len(targets):
-            raise OperationDomainValidationError(
-                location=("map", "components"),
-                code="differential_geometry.rational_metric.pullback.invalid_source",
-                message="metric and map must be canonical native values before planning",
-            )
+    if (
+        isinstance(targets, Sized)
+        and isinstance(components, Sized)
+        and len(components) != len(targets)
+    ):
+        raise OperationDomainValidationError(
+            location=("map", "components"),
+            code="differential_geometry.rational_metric.pullback.invalid_source",
+            message="metric and map must be canonical native values before planning",
+        )
     try:
         metric = RationalCoordinateMetric.model_validate(metric.model_dump())
         map_value = RationalFunctionMap.model_validate(map_value.model_dump())
@@ -230,9 +233,7 @@ def pullback_metric(
         fractions=tuple(plan.fractions[value] for value in unique_values),
         determinants=tuple(dict.fromkeys(plan.determinant.numerator)),
         undefined_numerators=tuple(
-            dict.fromkeys(
-                plan.fractions[value][0] for value in plan.guards[:-1]
-            )
+            dict.fromkeys(plan.fractions[value][0] for value in plan.guards[:-1])
         ),
         sources=(),
         deadline=deadline,

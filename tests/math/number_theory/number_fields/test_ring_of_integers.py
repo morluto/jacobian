@@ -444,3 +444,64 @@ def test_high_degree_monic_field_is_not_rejected_on_the_phantom_digit_estimate()
     admitted = require_factorizable_discriminant(field)
     assert admitted is not None
     assert abs(admitted) < 10**MAX_NUMBER_FIELD_DISCRIMINANT_DIGITS
+
+
+def test_native_discriminant_shares_the_worker_admission(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The exported `discriminant` must not take a cheaper route than `math.run`.
+
+    It previously called `recognized_integral_basis` synchronously with no
+    `require_factorizable_discriminant`, so `x^2 - 100003*100019` was refused on
+    the catalog path while the native path entered the unbounded factorization.
+    """
+
+    import jacobian.process as process_runtime
+    from jacobian.math.number_theory.number_fields.operations import discriminant
+
+    launched: list[bool] = []
+    original = process_runtime.run_bounded_process
+
+    def record_launch(*args: Any, **kwargs: Any) -> Any:
+        launched.append(True)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(process_runtime, "run_bounded_process", record_launch)
+    field = SimpleNumberFieldPresentation(
+        coefficients_descending=(1, 0, -100003 * 100019)
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        discriminant(field)
+    assert error.value.errors()[0]["type"] == (
+        "number_field.ring_of_integers_discriminant_factorization_bound"
+    )
+    assert launched
+    # The admitted case still agrees with the catalog adapter.
+    assert (
+        discriminant(SimpleNumberFieldPresentation(coefficients_descending=(1, 0, -5)))
+        == 5
+    )
+
+
+def test_native_fields_reject_non_presentation_arguments() -> None:
+    """Public native entries validate the runtime type before dereferencing it.
+
+    `ring_of_integers({"coefficients_descending": (1, 0, -5)})` used to raise a
+    raw `AttributeError` from `field.degree` instead of the structured domain
+    diagnostic this admission boundary owes its callers.
+    """
+
+    from jacobian.math.number_theory.number_fields.operations import discriminant
+
+    malformed = {"coefficients_descending": (1, 0, -5)}
+    with pytest.raises(OperationDomainValidationError) as ring_error:
+        ring_of_integers(malformed)  # type: ignore[arg-type]
+    assert ring_error.value.errors()[0]["type"] == (
+        "number_field.ring_of_integers_field_type"
+    )
+
+    with pytest.raises(OperationDomainValidationError) as discriminant_error:
+        discriminant(malformed)  # type: ignore[arg-type]
+    assert discriminant_error.value.errors()[0]["type"] == (
+        "number_field.discriminant_field_type"
+    )

@@ -115,6 +115,15 @@ def ring_of_integers(
     observed on the same path as a ``math.run`` request.
     """
 
+    if not isinstance(field, SimpleNumberFieldPresentation):
+        raise OperationDomainValidationError(
+            location=("field",),
+            code="number_field.ring_of_integers_field_type",
+            message=(
+                "ring_of_integers requires a SimpleNumberFieldPresentation "
+                "field argument"
+            ),
+        )
     if field.degree > MAX_INTEGRAL_BASIS_DEGREE:
         raise OperationDomainValidationError(
             location=("field",),

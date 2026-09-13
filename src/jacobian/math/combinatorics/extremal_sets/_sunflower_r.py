@@ -126,11 +126,14 @@ def _admit_source(
     # The ground axis is retained as a single scalar; charge each membership
     # by the actual decimal width of its coordinates, not the ambient axis
     # width applied to every coordinate.
-    membership_digits = sum(
-        len(str(member_element))
-        for member in source.members
-        for member_element in member
-    )
+    membership_digits = 0
+    processed = 0
+    for member in source.members:
+        for member_element in member:
+            processed += 1
+            if processed % 4096 == 0:
+                request_checkpoint("during sunflower membership-digit admission")
+            membership_digits += len(str(member_element))
     source_units = 16 + member_count + membership_digits
     if source_units > MAX_SUNFLOWER_RESULT_ALLOCATION_UNITS:
         raise OperationResourceAdmissionError(
@@ -209,7 +212,7 @@ def _admit_qualifying_result(
     member_count: int,
     source_units: int,
     row_count: int,
-    core_elements: int,
+    core_digits: int,
 ) -> None:
     """Admit retained rows after the exact qualifying plan is known."""
 
@@ -229,7 +232,7 @@ def _admit_qualifying_result(
         member_count=member_count,
         source_units=source_units,
         row_count=row_count,
-        core_elements=core_elements,
+        core_digits=core_digits,
     )
     if allocation_units > MAX_SUNFLOWER_RESULT_ALLOCATION_UNITS:
         raise OperationResourceAdmissionError(
@@ -250,10 +253,9 @@ def _result_allocation_units(
     member_count: int,
     source_units: int,
     row_count: int,
-    core_elements: int,
+    core_digits: int,
 ) -> int:
     member_digits = len(str(max(member_count - 1, 0)))
-    ground_digits = len(str(max(source.ground_set_size - 1, 0)))
     edge_id_units = 10 + petal_count * (member_digits + 1)
     fixed_row_units = 128 + edge_id_units + petal_count * (member_digits + 2)
     edge_projection_units = 64 + edge_id_units + petal_count * (member_digits + 2)
@@ -261,7 +263,7 @@ def _result_allocation_units(
     return (
         base_result_units
         + row_count * (fixed_row_units + 2 * edge_projection_units)
-        + core_elements * (ground_digits + 1)
+        + core_digits
     )
 
 
@@ -485,7 +487,7 @@ def construct_sunflower_family(
     sets = tuple(sets_list)
     sizes = tuple(len(member) for member in source.members)
     plan: list[tuple[tuple[int, ...], tuple[int, ...]]] = []
-    core_elements = 0
+    core_digits = 0
     work_since_checkpoint = 0
     checkpoint_units = _SUNFLOWER_CHECKPOINT_UNITS
     for indices in combinations(range(member_count), petal_count):
@@ -496,7 +498,9 @@ def construct_sunflower_family(
             continue
         next_rows = len(plan) + 1
         ordered_core = tuple(sorted(core))
-        next_core_elements = core_elements + len(ordered_core)
+        next_core_digits = core_digits + sum(
+            len(str(coordinate)) for coordinate in ordered_core
+        )
         if next_rows > MAX_EDGES or next_rows * petal_count > MAX_TOTAL_INCIDENCES:
             raise OperationResourceAdmissionError(
                 location=("source", "members"),
@@ -513,7 +517,7 @@ def construct_sunflower_family(
             member_count=member_count,
             source_units=source_units,
             row_count=next_rows,
-            core_elements=next_core_elements,
+            core_digits=next_core_digits,
         )
         if allocation_units > MAX_SUNFLOWER_RESULT_ALLOCATION_UNITS:
             raise OperationResourceAdmissionError(
@@ -526,14 +530,14 @@ def construct_sunflower_family(
                 ),
             )
         plan.append((indices, ordered_core))
-        core_elements = next_core_elements
+        core_digits = next_core_digits
     _admit_qualifying_result(
         source,
         petal_count,
         member_count,
         source_units,
         len(plan),
-        core_elements,
+        core_digits,
     )
     rows = tuple(
         SunflowerFamily.model_construct(

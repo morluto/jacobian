@@ -231,11 +231,12 @@ def test_core_bounds_are_summed_over_actual_candidates() -> None:
     assert result.sunflower_free is True
 
 
-def test_shared_core_allocation_is_rejected_while_enumerating() -> None:
+def test_shared_core_allocation_uses_actual_coordinate_widths() -> None:
+    """A shared core is priced by its real coordinate widths, not the axis width."""
     core = tuple(range(280))
     members = tuple((*core, 280 + index) for index in range(155))
-    with pytest.raises(OperationResourceAdmissionError, match="allocation units"):
-        construct_sunflower_family(_family(members, ground=435), 2)
+    result = construct_sunflower_family(_family(members, ground=435), 2)
+    assert result.sunflower_count == 11_935
 
 
 def test_result_allocation_is_admitted_before_row_construction(
@@ -423,6 +424,36 @@ def test_member_materialization_observes_cancellation() -> None:
             cancelled.set()
 
     source = _family(tuple((index, index + 1) for index in range(200)), ground=400)
+    with (
+        patch.object(sunflower_module, "request_checkpoint", checkpoint),
+        request_cancellation(cancelled),
+        pytest.raises(OperationExecutionCancelledError),
+    ):
+        construct_sunflower_family(source, 2)
+
+
+def test_membership_digit_admission_observes_cancellation() -> None:
+    """Cancellation during membership-digit admission is observed."""
+    from threading import Event
+
+    from jacobian._execution import (
+        OperationExecutionCancelledError,
+        request_cancellation,
+    )
+
+    cancelled = Event()
+    original = sunflower_module.request_checkpoint
+
+    def checkpoint(stage: str) -> None:
+        original(stage)
+        if stage == "during sunflower membership-digit admission":
+            cancelled.set()
+
+    members = tuple(
+        tuple(index for index in range(4096) if (index + offset) % 4 != 0)
+        for offset in (0, 1, 2, 3)
+    )
+    source = _family(members, ground=4096)
     with (
         patch.object(sunflower_module, "request_checkpoint", checkpoint),
         request_cancellation(cancelled),

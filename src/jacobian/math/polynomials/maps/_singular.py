@@ -300,7 +300,8 @@ def _sparse_parameter_polynomial(
                 coefficient=CanonicalRational.from_integer_ratio(
                     int(value.p), int(value.q)
                 ),
-                exponents=exponents,
+                # FLINT returns exponents as fmpz; coerce to int for Pydantic.
+                exponents=tuple(int(exponent) for exponent in exponents),
             )
             for exponents, value in terms
         )

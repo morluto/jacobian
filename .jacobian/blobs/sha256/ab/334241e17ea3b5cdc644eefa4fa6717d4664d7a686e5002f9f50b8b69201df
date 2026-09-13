@@ -1,1 +1,0 @@
-{"definition":{"entrypoint":"jacobian.plugins.graph_paths:find_witness_capability","module_digest":"sha256:fb1504fe4abc5d4837e575e4351c90ad5d7ec7701f81075524ee596e7f361184"},"descriptor_version":"1","kind":"implementation","name":"jacobian.plugins.graph_paths:find_witness_capability","version":"1"}

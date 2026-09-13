@@ -1,1 +1,0 @@
-{"definition":{"additionalProperties":false,"properties":{"claim_schema_version":{"const":"1"},"predicate":{"const":"finite_partition"},"require_disjoint":{"type":"boolean"}},"required":["claim_schema_version","predicate","require_disjoint"],"type":"object"},"descriptor_version":"1","kind":"schema","name":"jacobian.finite-partition-claim","version":"1"}

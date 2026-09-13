@@ -1,1 +1,0 @@
-{"definition":{"entrypoint":"jacobian.plugins.matrices:materialize","module_digest":"sha256:3f84b76af406952d2a9f5387a7f985142eb59e39ab633f7e0a6e5f859d9506a3"},"descriptor_version":"1","kind":"implementation","name":"jacobian.plugins.matrices:materialize","version":"1"}

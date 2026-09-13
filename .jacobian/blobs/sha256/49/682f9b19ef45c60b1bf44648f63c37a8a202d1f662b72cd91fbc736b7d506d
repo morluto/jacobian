@@ -1,1 +1,0 @@
-{"definition":{"disjointness":"required when require_disjoint is true","domain":"finite sets of distinct string identifiers","partition":"named cases whose union is the scope"},"descriptor_version":"1","kind":"semantics","name":"jacobian.finite-enumerated-partition","version":"1"}

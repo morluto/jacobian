@@ -428,6 +428,14 @@ def test_tableau_checkers_return_false_for_non_partition_shapes() -> None:
     assert semistandard.is_member is False
 
 
+def test_tableau_candidate_represents_non_young_diagram_rows() -> None:
+    """A candidate whose row lengths are not a partition stays usable."""
+
+    candidate = TableauCandidate(rows=((1,), (2, 3)))
+    assert candidate.rows == ((1,), (2, 3))
+    assert not hasattr(candidate, "shape")
+
+
 def test_tableau_checkers_reject_oversized_carriers_at_admission() -> None:
     # Rows [[1, ..., 500], [501]] are mathematically a standard tableau of
     # shape (500, 1), but 501 cells exceed the canonical budget: request

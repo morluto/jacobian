@@ -231,11 +231,6 @@ class TableauCandidate(StrictModel):
             )
         return self
 
-    @property
-    def shape(self) -> IntegerPartition:
-        """Return the candidate shape derived from its row lengths."""
-        return _shape(self.rows)
-
 
 __all__ = [
     "MAX_PARTITION_PARTS",

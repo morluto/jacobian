@@ -1,1 +1,0 @@
-{"definition":{"additionalProperties":false,"properties":{"elements":{"items":{"type":"string"},"type":"array","uniqueItems":true},"scope_schema_version":{"const":"1"}},"required":["scope_schema_version","elements"],"type":"object"},"descriptor_version":"1","kind":"schema","name":"jacobian.finite-enumerated-scope","version":"1"}

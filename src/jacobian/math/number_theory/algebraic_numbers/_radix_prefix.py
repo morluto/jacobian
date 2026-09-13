@@ -364,9 +364,17 @@ def radix_prefix(
     """Return the exact base-b prefix of one canonical real algebraic value."""
 
     if not isinstance(value, RealAlgebraicValue):
-        raise TypeError("value must be a RealAlgebraicValue")
+        raise OperationDomainValidationError(
+            location=("value",),
+            code="algebraic_number.radix_value_type",
+            message="value must be a RealAlgebraicValue",
+        )
     if type(base) is not int or type(fractional_places) is not int:
-        raise TypeError("base and fractional_places must be integers")
+        raise OperationDomainValidationError(
+            location=("base", "fractional_places"),
+            code="algebraic_number.radix_argument_type",
+            message="base and fractional_places must be integers",
+        )
     execution = current_request_execution()
     if execution is None:
         with request_execution(time.monotonic()):

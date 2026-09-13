@@ -497,3 +497,18 @@ def test_valid_worker_payload_is_decoded(monkeypatch: pytest.MonkeyPatch) -> Non
         )
         == 141
     )
+
+
+def test_native_radix_boundary_raises_typed_domain_errors() -> None:
+    """Invalid native arguments use the declared domain error, not TypeError."""
+
+    value = RealAlgebraicValue(polynomial=(1, 0, -2), real_root_index=1)
+    with pytest.raises(OperationDomainValidationError) as value_error:
+        radix_prefix("not-a-value", 10, 1)  # type: ignore[arg-type]
+    assert value_error.value.errors()[0]["type"] == "algebraic_number.radix_value_type"
+    for base, places in ((True, 1), (10, 1.0)):
+        with pytest.raises(OperationDomainValidationError) as argument_error:
+            radix_prefix(value, base, places)  # type: ignore[arg-type]
+        assert argument_error.value.errors()[0]["type"] == (
+            "algebraic_number.radix_argument_type"
+        )

@@ -745,3 +745,67 @@ class TestSpannedCircleDeadline:
             )
         assert observed
         assert all(deadline is not None for deadline in observed)
+
+
+class TestSpannedCircleEnvelopeForNativeCallers:
+    def test_native_call_opens_its_own_bounded_envelope(self) -> None:
+        """A published native call has a wall bound, not inert checkpoints.
+
+        Reached directly there is no `current_request_execution()`, and
+        `bind_request_deadline` stores nothing in that case, so the advertised
+        120-second operation wall and every checkpoint were inert.
+        """
+
+        from jacobian._execution import current_request_execution
+
+        observed: list[float | None] = []
+        original = operations_module._admit_spanned_circle_source
+
+        def _observe(configuration: object) -> object:
+            execution = current_request_execution()
+            assert execution is not None, "native admission ran without an envelope"
+            observed.append(execution.deadline)
+            return original(configuration)  # type: ignore[arg-type]
+
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setattr(operations_module, "_admit_spanned_circle_source", _observe)
+            native_spanned_circle_profile(
+                _configuration(_point("0", "0"), _point("1", "0"), _point("0", "1"))
+            )
+
+        assert len(observed) == 1
+        assert observed[0] is not None
+
+    def test_ordering_phase_checkpoints_inside_the_comparison_sort(self) -> None:
+        """`sorted(...)` is eager, so the sort itself must be interruptible."""
+
+        observed: list[str] = []
+
+        def _observe(stage: str) -> None:
+            observed.append(stage)
+
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setattr(
+                "jacobian.math.geometry.operations.request_checkpoint", _observe
+            )
+            native_spanned_circle_profile(
+                _configuration(
+                    _point("0", "0"),
+                    _point("1", "0"),
+                    _point("0", "1"),
+                    _point("1", "1"),
+                    _point("2", "3"),
+                )
+            )
+        assert any("ordering spanned-circle keys" in stage for stage in observed)
+
+    def test_checkpointed_sort_matches_the_builtin_order(self) -> None:
+        keys = [
+            (Fraction(2), Fraction(1), Fraction(7)),
+            (Fraction(0), Fraction(5), Fraction(3)),
+            (Fraction(0), Fraction(5), Fraction(2)),
+            (Fraction(-1), Fraction(9), Fraction(9)),
+            (Fraction(2), Fraction(1), Fraction(1)),
+        ]
+        assert operations_module._checkpointed_sorted(keys) == sorted(keys)
+        assert operations_module._checkpointed_sorted([]) == []

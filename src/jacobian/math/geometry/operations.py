@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Iterable
 from fractions import Fraction
 from itertools import combinations
 from typing import Any, cast
@@ -14,6 +15,7 @@ from jacobian._execution import (
     bind_request_deadline,
     current_request_execution,
     request_checkpoint,
+    request_execution,
 )
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
@@ -959,6 +961,50 @@ def _checkpoint_circle_work(completed: int, stage: str) -> int:
     return completed
 
 
+def _merge_sorted_keys(
+    left: list[tuple[Fraction, Fraction, Fraction]],
+    right: list[tuple[Fraction, Fraction, Fraction]],
+) -> list[tuple[Fraction, Fraction, Fraction]]:
+    """Merge two ascending key runs using the same total order as ``sorted``."""
+
+    result: list[tuple[Fraction, Fraction, Fraction]] = []
+    left_index = 0
+    right_index = 0
+    while left_index < len(left) and right_index < len(right):
+        if left[left_index] <= right[right_index]:
+            result.append(left[left_index])
+            left_index += 1
+        else:
+            result.append(right[right_index])
+            right_index += 1
+    result.extend(left[left_index:])
+    result.extend(right[right_index:])
+    return result
+
+
+def _checkpointed_sorted(
+    keys: Iterable[tuple[Fraction, Fraction, Fraction]],
+) -> list[tuple[Fraction, Fraction, Fraction]]:
+    """Sort circle keys while staying cancellable inside the comparison sort.
+
+    ``sorted(keys)`` is evaluated eagerly, so the result-construction checkpoint
+    that follows it could not observe a cancellation raised during the sort. A
+    profile can hold thousands of exact-rational keys, so this runs a bottom-up
+    merge sort and checkpoints once per merge.
+    """
+
+    level = [[key] for key in keys]
+    while len(level) > 1:
+        merged: list[list[tuple[Fraction, Fraction, Fraction]]] = []
+        for index in range(0, len(level) - 1, 2):
+            request_checkpoint("while ordering spanned-circle keys")
+            merged.append(_merge_sorted_keys(level[index], level[index + 1]))
+        if len(level) % 2:
+            merged.append(level[-1])
+        level = merged
+    return level[0] if level else []
+
+
 def _wire_spanned_circle_entries(
     grouped: dict[tuple[Fraction, Fraction, Fraction], None],
     incidences: dict[tuple[Fraction, Fraction, Fraction], tuple[int, ...]],
@@ -966,7 +1012,7 @@ def _wire_spanned_circle_entries(
 ) -> tuple[SpannedCircleEntry, ...]:
     entries: list[SpannedCircleEntry] = []
     completed = 0
-    for key in sorted(grouped):
+    for key in _checkpointed_sorted(grouped):
         completed = _checkpoint_circle_work(
             completed, "during spanned-circle result construction"
         )
@@ -990,10 +1036,24 @@ def spanned_circle_profile(
 ) -> SpannedCircleProfileResult:
     """Return every distinct circle spanned by a non-collinear source triple.
 
-    The operation wall envelope is bound before the source is revalidated so
-    the copy, projection, and per-point digit checks are participants in the
-    same envelope as the circle search that follows them.
+    The operation wall envelope is opened for the whole call and bound before
+    the source is revalidated, so the copy, projection, and per-point digit
+    checks are participants in the same envelope as the circle search that
+    follows them. A native caller arrives without a request envelope, and
+    `bind_request_deadline` stores nothing in that case, so this opens one here
+    rather than letting the wall bound and every checkpoint stay inert.
     """
+
+    if current_request_execution() is None:
+        with request_execution(time.monotonic()):
+            return spanned_circle_profile(configuration)
+    return _spanned_circle_profile(configuration)
+
+
+def _spanned_circle_profile(
+    configuration: PointConfiguration,
+) -> SpannedCircleProfileResult:
+    """Compute the profile inside an already bound operation envelope."""
 
     _bind_circle_deadline()
     configuration, points = _admit_spanned_circle_source(configuration)

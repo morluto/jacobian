@@ -15,6 +15,7 @@ from jacobian.math import number_theory
 from jacobian.math.analysis._models import MAX_DYADIC_EXPONENT, ExactDyadic
 from jacobian.math.number_theory._dickman_rho import (
     DickmanRhoAffinePiece,
+    DickmanRhoPiecewiseEnclosureParameters,
     DickmanRhoPiecewiseEnclosureRequest,
     DickmanRhoPiecewiseEnclosureResult,
     DyadicCoefficientBall,
@@ -286,4 +287,17 @@ def test_precision_bits_must_be_a_strict_int() -> None:
             CanonicalRational(num=2, den=1),
             ExactDyadic(mantissa=1, exponent=-5),
             precision_bits=128.0,  # type: ignore[arg-type]
+        )
+
+
+def test_near_maximal_positive_target_exponent_is_rejected_at_parse() -> None:
+    """A near-maximal positive exponent cannot materialize during parsing."""
+
+    with pytest.raises(ValidationError):
+        DickmanRhoPiecewiseEnclosureParameters.model_validate(
+            {
+                "endpoint": {"num": 2, "den": 1},
+                "target_width": {"mantissa": 1, "exponent": MAX_DYADIC_EXPONENT},
+                "precision_bits": 64,
+            }
         )

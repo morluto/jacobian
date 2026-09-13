@@ -87,6 +87,16 @@ class DickmanRhoPiecewiseEnclosureParameters(StrictModel):
 
     @model_validator(mode="after")
     def require_admitted_range(self) -> Self:
+        # Check the target exponent structurally before any conversion, so a
+        # near-maximal positive exponent cannot materialize 2**exponent during
+        # request parsing (before _admit_request runs).
+        if (
+            self.target_width.mantissa <= 0
+            or abs(self.target_width.exponent) > MAX_DICKMAN_TARGET_EXPONENT
+        ):
+            raise ValueError(
+                "target width must be a positive dyadic within the admitted exponent"
+            )
         endpoint = self.endpoint.as_fraction()
         if endpoint < 0 or endpoint > MAX_DICKMAN_ENDPOINT:
             raise ValueError("Dickman endpoint must lie in [0, 8]")

@@ -170,12 +170,18 @@ class _ExpressionMetrics:
     common_denominator: int | None
 
 
+class _MalformedExpressionError(ValueError):
+    """A node violates the closed expression grammar or operand shape."""
+
+
 def _expression_children(node: object) -> tuple[object, ...]:
     if isinstance(node, (PolynomialAdd, PolynomialMultiply)):
         operands = getattr(node, "operands", ())
         if isinstance(operands, (list, tuple)):
             return tuple(operands)
-        return ()
+        raise _MalformedExpressionError(
+            "expression operands must be a bounded sequence"
+        )
     if isinstance(node, PolynomialPower):
         base = getattr(node, "base", None)
         return (base,) if base is not None else ()
@@ -185,13 +191,28 @@ def _expression_children(node: object) -> tuple[object, ...]:
             operands = node.get("operands")
             if isinstance(operands, (list, tuple)):
                 return tuple(operands)
-        elif kind == "POWER" and "base" in node:
+            raise _MalformedExpressionError(
+                "expression operands must be a bounded sequence"
+            )
+        if kind == "POWER":
+            if "base" not in node:
+                raise _MalformedExpressionError("a POWER node requires a base")
             return (node["base"],)
+        if kind is None:
+            return ()
+        if kind in ("VARIABLE", "LITERAL"):
+            return ()
+        raise _MalformedExpressionError(f"unrecognized expression node kind: {kind!r}")
     return ()
 
 
 def _bound_raw_expression(expression: object) -> None:
-    """Bound AST depth and cardinality for mappings and validated models."""
+    """Bound AST depth and cardinality for mappings and validated models.
+
+    Malformed recognized nodes are rejected here rather than treated as
+    childless, so an unexpected container field cannot reach the recursive
+    canonicalization copy without first being bounded.
+    """
 
     stack: list[tuple[object, int, tuple[int, ...]]] = [(expression, 1, ())]
     count = 0
@@ -210,8 +231,38 @@ def _bound_raw_expression(expression: object) -> None:
         children = _expression_children(node)
         if len(children) > 64:
             raise ValueError("expression nodes may have at most 64 operands")
+        if isinstance(node, Mapping):
+            _require_bounded_mapping_fields(node)
         child_path = (*path, identity)
         stack.extend((child, depth + 1, child_path) for child in children)
+
+
+def _require_bounded_mapping_fields(node: Mapping[str, object]) -> None:
+    """Reject unexpected keys and unbounded scalar/container fields."""
+
+    kind = node.get("kind")
+    allowed = {
+        "ADD": {"kind", "operands"},
+        "MULTIPLY": {"kind", "operands"},
+        "POWER": {"kind", "base", "exponent"},
+        "VARIABLE": {"kind", "name"},
+        "LITERAL": {"kind", "value"},
+    }.get(kind if isinstance(kind, str) else "")
+    if allowed is None:
+        raise _MalformedExpressionError(f"unrecognized expression node kind: {kind!r}")
+    unexpected = set(node).difference(allowed)
+    if unexpected:
+        raise _MalformedExpressionError(
+            "expression nodes may not carry unexpected fields: "
+            + ", ".join(sorted(map(str, unexpected)))
+        )
+    value = node.get("value")
+    if (
+        value is not None
+        and isinstance(value, Mapping)
+        and (set(value).difference({"num", "den"}) or len(value) > 2)
+    ):
+        raise _MalformedExpressionError("LITERAL value must contain only num and den")
 
 
 def _bounded_sum(values: list[int] | tuple[int, ...], limit: int) -> int:
@@ -642,6 +693,25 @@ def _multiply(
     }
 
 
+def _bound_source_expression(expression: object) -> None:
+    """Bound an expression node tree, mapping failures to typed errors."""
+
+    try:
+        _bound_raw_expression(expression)
+    except _MalformedExpressionError as exc:
+        raise OperationDomainValidationError(
+            location=("expression",),
+            code="polynomial.expression.invalid_source",
+            message=str(exc),
+        ) from exc
+    except ValueError as exc:
+        raise OperationResourceAdmissionError(
+            location=("expression",),
+            code="polynomial.expression.expansion_bound",
+            message=str(exc),
+        ) from exc
+
+
 def _revalidate_expression_source(
     source: PolynomialExpressionSource,
 ) -> PolynomialExpressionSource:
@@ -653,14 +723,7 @@ def _revalidate_expression_source(
             code="polynomial.expression.invalid_source",
             message="expression source must be a PolynomialExpressionSource",
         )
-    try:
-        _bound_raw_expression(source.expression)
-    except ValueError as exc:
-        raise OperationResourceAdmissionError(
-            location=("expression",),
-            code="polynomial.expression.expansion_bound",
-            message=str(exc),
-        ) from exc
+    _bound_source_expression(source.expression)
     try:
         return PolynomialExpressionSource.model_validate(
             source.model_dump(mode="python")
@@ -716,14 +779,7 @@ def normalize_polynomial_expression(  # noqa: C901
             return normalize_polynomial_expression(source)
     source = _revalidate_expression_source(source)
     _admit_source_domain_claims(source)
-    try:
-        _bound_raw_expression(source.expression)
-    except ValueError as exc:
-        raise OperationResourceAdmissionError(
-            location=("expression",),
-            code="polynomial.expression.expansion_bound",
-            message=str(exc),
-        ) from exc
+    _bound_source_expression(source.expression)
     metrics = _metrics(source.expression, len(source.variables))
     if (
         metrics.nodes > _MAX_EXPRESSION_NODES

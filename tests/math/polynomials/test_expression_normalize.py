@@ -407,3 +407,33 @@ def test_cancelled_request_interrupts_expansion() -> None:
         pytest.raises(OperationExecutionCancelledError),
     ):
         _normalize(request)
+
+
+def test_malformed_operand_container_is_bounded_before_copying() -> None:
+    """An operands mapping must be rejected without copying a huge container."""
+    payload = {
+        "coefficient_domain": "ZZ",
+        "variables": ["x"],
+        "expression": {"kind": "ADD", "operands": {str(i): i for i in range(5_000_000)}},
+    }
+    started = time.monotonic()
+    with pytest.raises(ValidationError):
+        PolynomialExpressionNormalizeRequest.model_validate(payload)
+    assert time.monotonic() - started < 1.0
+
+
+def test_unexpected_node_field_is_bounded_before_copying() -> None:
+    """A LITERAL with a huge extra field is rejected without copying it."""
+    payload = {
+        "coefficient_domain": "ZZ",
+        "variables": ["x"],
+        "expression": {
+            "kind": "LITERAL",
+            "value": {"num": 1, "den": 1},
+            "extra": {str(i): i for i in range(5_000_000)},
+        },
+    }
+    started = time.monotonic()
+    with pytest.raises(ValidationError):
+        PolynomialExpressionNormalizeRequest.model_validate(payload)
+    assert time.monotonic() - started < 1.0

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from fractions import Fraction
 from math import gcd
 from typing import Annotated, Any, Literal, Self
@@ -152,6 +153,24 @@ Gaussian = tuple[Fraction, Fraction]
 Support = tuple[int, ...]
 Polynomial = dict[Support, Gaussian]
 RationalFunction = tuple[Polynomial, Polynomial]
+
+
+@dataclass(frozen=True, slots=True)
+class _Evaluated:
+    """One evaluated subexpression with its structural factor atoms.
+
+    ``loci`` collects the atomic factors of every division denominator in the
+    subtree, so shared factors between two loci stay a single atom and the zero
+    locus is represented by their least common multiple. ``numerator_atoms``
+    and ``denominator_atoms`` are the atomic factors of this numerator and
+    denominator, used to decompose a denominator when it becomes a locus.
+    """
+
+    numerator: Polynomial
+    denominator: Polynomial
+    loci: tuple[Polynomial, ...]
+    numerator_atoms: tuple[Polynomial, ...]
+    denominator_atoms: tuple[Polynomial, ...]
 
 
 def _admit_gaussian(value: Gaussian) -> Gaussian:
@@ -319,12 +338,12 @@ def _scale(polynomial: Polynomial, scalar: Gaussian) -> Polynomial:
 
 
 def _power(
-    value: tuple[Polynomial, Polynomial, tuple[Polynomial, ...]],
+    value: _Evaluated,
     exponent: int,
     axis: int,
-) -> tuple[Polynomial, Polynomial, tuple[Polynomial, ...]]:
+) -> _Evaluated:
     result_num, result_den = _one(axis), _one(axis)
-    base_num, base_den = value[0], value[1]
+    base_num, base_den = value.numerator, value.denominator
     remaining = exponent
     while remaining:
         if remaining & 1:
@@ -334,7 +353,25 @@ def _power(
         if remaining:
             base_num = _poly_mul(base_num, base_num)
             base_den = _poly_mul(base_den, base_den)
-    return result_num, result_den, value[2]
+    # ``X**n = 0`` if and only if ``X = 0``, so a positive exponent does not
+    # change the zero locus and the numerator atoms are the base's atoms. A zero
+    # exponent gives the constant one, whose numerator and denominator have no
+    # factor atoms, though any restriction recorded inside the base remains.
+    if exponent == 0:
+        return _Evaluated(
+            numerator=result_num,
+            denominator=result_den,
+            loci=value.loci,
+            numerator_atoms=(),
+            denominator_atoms=(),
+        )
+    return _Evaluated(
+        numerator=result_num,
+        denominator=result_den,
+        loci=value.loci,
+        numerator_atoms=value.numerator_atoms,
+        denominator_atoms=value.denominator_atoms,
+    )
 
 
 def _root_of_unity(quarter_turns: int) -> Gaussian:
@@ -346,9 +383,7 @@ def _root_of_unity(quarter_turns: int) -> Gaussian:
     )[quarter_turns % 4]
 
 
-def _trig(
-    angle: IntegerAffineAngleForm, axis: int, *, sine: bool
-) -> tuple[Polynomial, Polynomial, tuple[Polynomial, ...]]:
+def _trig(angle: IntegerAffineAngleForm, axis: int, *, sine: bool) -> _Evaluated:
     if len(angle.coefficients) != axis:
         raise PydanticCustomError(
             "trigonometric.angle_axis", "angle coefficients must align with variables"
@@ -367,20 +402,30 @@ def _trig(
     else:
         numerator = _poly_add({forward: phase}, {backward: inverse_phase})
         denominator = _scale(_one(axis), (Fraction(2), Fraction()))
-    return numerator, denominator, ()
+    return _Evaluated(
+        numerator=numerator,
+        denominator=denominator,
+        loci=(),
+        numerator_atoms=(numerator,),
+        denominator_atoms=(denominator,),
+    )
 
 
 def _evaluate(
     expression: TrigonometricRationalExpression, axis: int, nodes: list[int]
-) -> tuple[Polynomial, Polynomial, tuple[Polynomial, ...]]:
+) -> _Evaluated:
     nodes[0] += 1
     if nodes[0] > MAX_TRIG_AST_NODES:
         _refuse_growth()
     if isinstance(expression, TrigLiteral):
-        return (
-            _scale(_one(axis), (expression.value.as_fraction(), Fraction())),
-            _one(axis),
-            (),
+        numerator = _scale(_one(axis), (expression.value.as_fraction(), Fraction()))
+        denominator = _one(axis)
+        return _Evaluated(
+            numerator=numerator,
+            denominator=denominator,
+            loci=(),
+            numerator_atoms=(),
+            denominator_atoms=(),
         )
     if isinstance(expression, TrigSine):
         return _trig(expression.angle, axis, sine=True)
@@ -393,34 +438,49 @@ def _evaluate(
     if isinstance(expression, TrigDivide):
         left = _evaluate(expression.numerator, axis, nodes)
         right = _evaluate(expression.denominator, axis, nodes)
-        if not right[0]:
+        if not right.numerator:
             raise PydanticCustomError(
                 "trigonometric.zero_denominator",
                 "division by the identically zero expression is undefined",
             )
-        return (
-            _poly_mul(left[0], right[1]),
-            _poly_mul(left[1], right[0]),
-            (*left[2], *right[2], right[0]),
+        # The denominator's zero locus is its numerator's zero locus (the
+        # denominator's own denominator is a nonzero monomial): record those
+        # atoms so a factor shared with another division stays a single atom.
+        return _Evaluated(
+            numerator=_poly_mul(left.numerator, right.denominator),
+            denominator=_poly_mul(left.denominator, right.numerator),
+            loci=(*left.loci, *right.loci, *right.numerator_atoms),
+            numerator_atoms=(*left.numerator_atoms, *right.denominator_atoms),
+            denominator_atoms=(*left.denominator_atoms, *right.numerator_atoms),
         )
     values = [_evaluate(child, axis, nodes) for child in expression.children]
+    is_multiply = isinstance(expression, TrigMultiply)
     result_num, result_den = (
-        (_one(axis), _one(axis))
-        if isinstance(expression, TrigMultiply)
-        else ({}, _one(axis))
+        (_one(axis), _one(axis)) if is_multiply else ({}, _one(axis))
     )
+    atoms: tuple[Polynomial, ...] = ()
     loci: tuple[Polynomial, ...] = ()
-    for numerator, denominator, child_loci in values:
-        loci = (*loci, *child_loci)
-        if isinstance(expression, TrigMultiply):
-            result_num = _poly_mul(result_num, numerator)
-            result_den = _poly_mul(result_den, denominator)
+    for value in values:
+        loci = (*loci, *value.loci)
+        if is_multiply:
+            result_num = _poly_mul(result_num, value.numerator)
+            result_den = _poly_mul(result_den, value.denominator)
+            atoms = (*atoms, *value.numerator_atoms)
         else:
             result_num = _poly_add(
-                _poly_mul(result_num, denominator), _poly_mul(numerator, result_den)
+                _poly_mul(result_num, value.denominator),
+                _poly_mul(value.numerator, result_den),
             )
-            result_den = _poly_mul(result_den, denominator)
-    return result_num, result_den, loci
+            result_den = _poly_mul(result_den, value.denominator)
+    if not is_multiply:
+        atoms = (result_num,) if result_num else ()
+    return _Evaluated(
+        numerator=result_num,
+        denominator=result_den,
+        loci=loci,
+        numerator_atoms=atoms,
+        denominator_atoms=(result_den,),
+    )
 
 
 def _canonicalize(numerator: Polynomial, denominator: Polynomial) -> RationalFunction:
@@ -694,6 +754,14 @@ def _to_sympy_poly(polynomial: Polynomial) -> Any:
 
 
 def _combine_loci(loci: tuple[Polynomial, ...], axis: int) -> Polynomial:
+    """Combine locus atoms into the least common multiple of their zero sets.
+
+    ``loci`` are the atomic factors of every division denominator, so a factor
+    shared by two loci (for example ``P`` in ``P*sin(x)`` and ``P*cos(x)``)
+    arrives as one atom and is charged once. Proportional and divisible atoms
+    are pruned as before; the surviving atoms are multiplied.
+    """
+
     unique: list[Polynomial] = []
     for polynomial in loci:
         if not polynomial:
@@ -727,8 +795,10 @@ def normalize_trigonometric_rational(
             "trigonometric.variable_axis", "variables must be unique"
         )
     axis = len(request.variables)
-    raw_numerator, raw_denominator, loci = _evaluate(request.expression, axis, [0])
-    combined_loci = _combine_loci(loci, axis)
+    evaluated = _evaluate(request.expression, axis, [0])
+    raw_numerator = evaluated.numerator
+    raw_denominator = evaluated.denominator
+    combined_loci = _combine_loci(evaluated.loci, axis)
     source_locus = combined_loci if combined_loci != _one(axis) else raw_denominator
     denominator_nonzero = _canonicalize_nonzero_locus(source_locus)
     numerator, denominator = _reduce_common_laurent_factor(

@@ -711,11 +711,10 @@ def test_locus_union_retains_the_larger_zero_set() -> None:
 
 
 def test_locus_divisibility_uses_the_laurent_ring() -> None:
-    """sin(3000x) divides sin(3000x)*sin(x) in the Laurent ring.
+    """sin(x) divides sin(3000x) in the Laurent ring, so sin(3000x) is the locus.
 
-    The reduced zero-set cover keeps the larger factor, so 1/(P/(P*sin(x)))
-    with P = sin(3000x) is admitted instead of rejecting the product of both
-    recorded factors at exponent 6001.
+    The minimal zero-set cover keeps only ``sin(3000x)``, whose zero set
+    contains the zeros of ``sin(x)``, instead of multiplying both factors.
     """
     request = TrigonometricRationalSource.model_validate(
         {
@@ -738,7 +737,52 @@ def test_locus_divisibility_uses_the_laurent_ring() -> None:
         }
     )
     result = normalize_trigonometric_rational(request)
-    assert len(result.denominator_nonzero.terms) == 4
+    assert len(result.denominator_nonzero.terms) == 2
+
+
+def test_shared_locus_factor_is_charged_once() -> None:
+    """A factor shared by two loci is a single atom of the zero locus.
+
+    For ``1/((P*sin(x))/(P*cos(x)))`` with ``P = 2 + sin(3000*x)`` the two
+    division denominators share ``P``; the structural atom decomposition keeps
+    one ``P`` so the locus is ``P*sin(x)*cos(x)`` at exponent 3002 instead of
+    ``P^2`` at exponent 6002, which would exceed the envelope.
+    """
+    product = {
+        "kind": "ADD",
+        "children": [
+            {"kind": "LITERAL", "value": {"num": 2, "den": 1}},
+            {"kind": "SINE", "angle": {"coefficients": [3000]}},
+        ],
+    }
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x"],
+            "expression": {
+                "kind": "DIVIDE",
+                "numerator": {"kind": "LITERAL", "value": {"num": 1, "den": 1}},
+                "denominator": {
+                    "kind": "DIVIDE",
+                    "numerator": {
+                        "kind": "MULTIPLY",
+                        "children": [
+                            product,
+                            {"kind": "SINE", "angle": {"coefficients": [1]}},
+                        ],
+                    },
+                    "denominator": {
+                        "kind": "MULTIPLY",
+                        "children": [
+                            product,
+                            {"kind": "COSINE", "angle": {"coefficients": [1]}},
+                        ],
+                    },
+                },
+            },
+        }
+    )
+    result = normalize_trigonometric_rational(request)
+    assert len(result.denominator_nonzero.terms) == 6
 
 
 def test_worker_cancels_a_laurent_common_factor_in_the_fallback() -> None:
@@ -799,3 +843,51 @@ def test_worker_cancels_a_laurent_common_factor_in_the_fallback() -> None:
     # The shared factor is cancelled, leaving the coprime cofactors.
     assert len(response["left"]["supports"]) == 2
     assert len(response["right"]["supports"]) == 2
+
+
+def test_zero_power_drops_base_factor_atoms() -> None:
+    """``1 / (sin(x) ** 0)`` has denominator one and no nonzero restriction.
+
+    A zero exponent gives the constant one, so the base's factor atoms must not
+    leak into the nonzero locus and exclude the zeros of ``sin(x)``.
+    """
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x"],
+            "expression": {
+                "kind": "DIVIDE",
+                "numerator": {"kind": "LITERAL", "value": {"num": 1, "den": 1}},
+                "denominator": {
+                    "kind": "POWER",
+                    "base": {"kind": "SINE", "angle": {"coefficients": [1]}},
+                    "exponent": 0,
+                },
+            },
+        }
+    )
+    result = normalize_trigonometric_rational(request)
+    assert len(result.denominator_nonzero.terms) == 1
+
+
+def test_zero_power_keeps_inner_base_restrictions() -> None:
+    """A restriction recorded inside a zero-power base is still retained.
+
+    ``(1 / sin(x)) ** 0`` is the constant one, but the inner division restricts
+    the locus to ``sin(x) != 0``, which the source evaluation must preserve.
+    """
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x"],
+            "expression": {
+                "kind": "POWER",
+                "base": {
+                    "kind": "DIVIDE",
+                    "numerator": {"kind": "LITERAL", "value": {"num": 1, "den": 1}},
+                    "denominator": {"kind": "SINE", "angle": {"coefficients": [1]}},
+                },
+                "exponent": 0,
+            },
+        }
+    )
+    result = normalize_trigonometric_rational(request)
+    assert len(result.denominator_nonzero.terms) == 2

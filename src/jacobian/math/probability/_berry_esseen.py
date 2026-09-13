@@ -245,14 +245,10 @@ class BerryEsseenResult(StrictModel):
         _require_source_sample_count(self.source.sample_count)
         if len(self.source.distribution.atoms) > MAX_BERRY_ESSEEN_ATOMS:
             raise _validation_error("Berry--Esseen source atom count is out of bounds")
-        # Re-admit the serialized source law, but do not replay the reported
-        # moments or bound. The source must retain the operation's normalized
-        # finite-law and input rational-height contract after transport.
-        require_input_distribution(
-            self.source.distribution.atoms,
-            require_canonical=True,
-            max_digits=MAX_INPUT_RATIONAL_DIGITS,
-        )
+        # Restore canonical structure only. Exact probability normalization and
+        # the aggregate input-height admission are operation-boundary work, not
+        # deserialization work.
+        _require_structural_source_atoms(self.source.distribution.atoms)
         if self.bound_precision_bits != BERRY_ESSEEN_BOUND_BITS:
             raise _validation_error("Berry--Esseen bound precision is not supported")
 
@@ -311,6 +307,28 @@ class BerryEsseenResult(StrictModel):
                 "points on the 2^-bound_precision_bits grid"
             )
         return self
+
+
+def _require_structural_source_atoms(
+    atoms: tuple[FiniteDistributionAtom, ...],
+) -> None:
+    """Revalidate each source atom's canonical carrier without normalization."""
+
+    for atom in atoms:
+        try:
+            FiniteDistributionAtom.model_validate(
+                {
+                    "value": {"num": atom.value.num, "den": atom.value.den},
+                    "probability": {
+                        "num": atom.probability.num,
+                        "den": atom.probability.den,
+                    },
+                }
+            )
+        except (ValidationError, PydanticCustomError) as exc:
+            raise _validation_error(
+                "Berry--Esseen source atoms must be canonical nonnegative masses"
+            ) from exc
 
 
 def _require_source_sample_count(sample_count: object) -> None:
@@ -428,20 +446,6 @@ def _require_native_berry_request(request: BerryEsseenRequest) -> None:
             code="probability.berry_esseen.distribution_type",
             message="Berry--Esseen distribution must be a finite rational law",
         )
-    # A constructed atom is returned unchanged by the default Pydantic
-    # configuration, so validate a fresh payload to rerun the canonical
-    # rational and nonnegative-probability contract.
-    for index, atom in enumerate(atoms):
-        try:
-            FiniteDistributionAtom.model_validate(
-                {"value": atom.value, "probability": atom.probability}
-            )
-        except (ValidationError, PydanticCustomError) as exc:
-            raise OperationDomainValidationError(
-                location=("distribution", "atoms", index),
-                code="probability.berry_esseen.atom_contract",
-                message="Berry--Esseen atoms must be canonical nonnegative masses",
-            ) from exc
     if len(atoms) > MAX_BERRY_ESSEEN_ATOMS:
         raise OperationResourceAdmissionError(
             location=("distribution", "atoms"),
@@ -451,6 +455,26 @@ def _require_native_berry_request(request: BerryEsseenRequest) -> None:
                 f"{MAX_BERRY_ESSEEN_ATOMS} input atoms"
             ),
         )
+    # A constructed atom is returned unchanged by the default Pydantic
+    # configuration, so validate a fresh payload with raw components to rerun
+    # the nested canonical-rational and nonnegative-probability contract.
+    for index, atom in enumerate(atoms):
+        try:
+            FiniteDistributionAtom.model_validate(
+                {
+                    "value": {"num": atom.value.num, "den": atom.value.den},
+                    "probability": {
+                        "num": atom.probability.num,
+                        "den": atom.probability.den,
+                    },
+                }
+            )
+        except (ValidationError, PydanticCustomError) as exc:
+            raise OperationDomainValidationError(
+                location=("distribution", "atoms", index),
+                code="probability.berry_esseen.atom_contract",
+                message="Berry--Esseen atoms must be canonical nonnegative masses",
+            ) from exc
 
 
 def berry_esseen_bound(request: BerryEsseenRequest) -> BerryEsseenResult:

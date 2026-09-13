@@ -369,7 +369,8 @@ def test_serialized_result_preserves_source_and_interval_invariants() -> None:
     assert lower * lower <= squared <= upper * upper
 
 
-def test_result_rejects_forged_source_normalization() -> None:
+def test_result_deserialization_is_structural_for_source_masses() -> None:
+    """Normalization is operation-owned, so deserialization restores structure."""
     genuine = berry_esseen_bound(_request(_five_atom_oracle_distribution(), 7))
     payload = json.loads(genuine.model_dump_json())
     payload["source"]["distribution"]["atoms"][0]["probability"] = {
@@ -377,19 +378,20 @@ def test_result_rejects_forged_source_normalization() -> None:
         "den": "1",
     }
 
-    with pytest.raises(ValueError, match="sum exactly to 1"):
-        BerryEsseenResult.model_validate_json(json.dumps(payload))
+    restored = BerryEsseenResult.model_validate_json(json.dumps(payload))
+    assert restored.source.distribution.atoms[0].probability.as_fraction() == 1
 
 
-def test_result_rejects_forged_source_input_height() -> None:
+def test_result_deserialization_rejects_a_noncanonical_mass() -> None:
+    """A structurally malformed atom is still refused at the boundary."""
     genuine = berry_esseen_bound(_request(_five_atom_oracle_distribution(), 7))
     payload = genuine.model_dump()
-    payload["source"]["distribution"]["atoms"][-1]["value"] = {
-        "num": 10**128,
+    payload["source"]["distribution"]["atoms"][0]["probability"] = {
+        "num": -1,
         "den": 1,
     }
 
-    with pytest.raises(ValueError, match="128-digit bound"):
+    with pytest.raises(ValueError, match="nonnegative"):
         BerryEsseenResult.model_validate(payload)
 
 
@@ -532,3 +534,69 @@ def test_result_source_sample_count_contract_is_enforced() -> None:
     forged["source"] = forged_source
     with pytest.raises(ValidationError):
         BerryEsseenResult.model_validate(forged)
+
+
+def test_nested_noncanonical_rational_is_rejected() -> None:
+    """A constructed atom's nested rational is revalidated from raw fields."""
+    from jacobian._exact import CanonicalRational
+    from jacobian.math.probability._distribution import (
+        FiniteDistributionAtom,
+        FiniteRationalDistribution,
+    )
+
+    broken = FiniteDistributionAtom.model_construct(
+        value=CanonicalRational.model_construct(num=1, den=0),
+        probability=CanonicalRational(num=1, den=2),
+    )
+    request = BerryEsseenRequest.model_construct(
+        distribution=FiniteRationalDistribution.model_construct(
+            atoms=(
+                broken,
+                FiniteDistributionAtom.model_construct(
+                    value=CanonicalRational(num=2, den=1),
+                    probability=CanonicalRational(num=1, den=2),
+                ),
+            )
+        ),
+        sample_count=1,
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        berry_esseen_bound(request)
+    assert error.value.errors()[0]["type"] == "probability.berry_esseen.atom_contract"
+
+
+def test_atom_cap_stops_before_revalidating_every_atom(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The cap is enforced before the per-atom revalidation loop runs."""
+    from jacobian._exact import CanonicalRational
+    from jacobian.math.probability import _berry_esseen as module
+    from jacobian.math.probability._distribution import (
+        FiniteDistributionAtom,
+        FiniteRationalDistribution,
+    )
+
+    atoms = tuple(
+        FiniteDistributionAtom.model_construct(
+            value=CanonicalRational(num=index, den=1),
+            probability=CanonicalRational(num=1, den=20_000),
+        )
+        for index in range(20_000)
+    )
+    request = BerryEsseenRequest.model_construct(
+        distribution=FiniteRationalDistribution.model_construct(atoms=atoms),
+        sample_count=1,
+    )
+
+    validations = 0
+    original = FiniteDistributionAtom.model_validate
+
+    def counted(*args: object, **kwargs: object) -> FiniteDistributionAtom:
+        nonlocal validations
+        validations += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(FiniteDistributionAtom, "model_validate", counted)
+    with pytest.raises(OperationResourceAdmissionError):
+        module.berry_esseen_bound(request)
+    assert validations == 0

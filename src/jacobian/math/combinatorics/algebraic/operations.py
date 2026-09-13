@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 from math import factorial, prod
+from typing import Any, cast
 
 from pydantic import ValidationError
 from pydantic_core import PydanticCustomError
@@ -372,7 +373,10 @@ def _require_canonical_partition(partition: object) -> IntegerPartition:
             message="partition size exceeds the admitted Ferrers envelope",
         )
     try:
-        return IntegerPartition.model_validate(partition)
+        # A constructed instance is returned unchanged by the default Pydantic
+        # configuration, so validate a fresh payload to rerun the canonical
+        # weak-decreasing, positive-part invariants.
+        return IntegerPartition.model_validate({"parts": tuple(parts)})
     except (ValidationError, PydanticCustomError) as error:
         raise OperationDomainValidationError(
             location=("partition",),
@@ -509,9 +513,31 @@ def _is_shape_rejection(error: ValidationError) -> bool:
     return bool(types) and all(item in _MEMBERSHIP_SHAPE_ERRORS for item in types)
 
 
+def _revalidate_tableau(tableau: object, carrier: type[Any]) -> object:
+    """Return a freshly validated carrier, rejecting forged instances."""
+
+    if type(tableau) is not carrier:
+        raise OperationDomainValidationError(
+            location=("tableau",),
+            code="algebraic_combinatorics.tableau_carrier",
+            message="membership checks require a canonical tableau value",
+        )
+    rows = getattr(tableau, "rows", None)
+    if not isinstance(rows, tuple):
+        raise OperationDomainValidationError(
+            location=("tableau", "rows"),
+            code="algebraic_combinatorics.tableau_shape",
+            message="a canonical tableau has a tuple of rows",
+        )
+    return carrier.model_validate({"rows": rows})
+
+
 def check_standard_tableau(tableau: StandardYoungTableau) -> StandardTableauCheckResult:
     """Return a source-bound membership decision for one standard candidate."""
 
+    tableau = cast(
+        StandardYoungTableau, _revalidate_tableau(tableau, StandardYoungTableau)
+    )
     try:
         require_standard(tableau)
     except PydanticCustomError:
@@ -528,6 +554,10 @@ def check_semistandard_tableau(
 ) -> SemistandardTableauCheckResult:
     """Return a source-bound membership decision for one semistandard candidate."""
 
+    tableau = cast(
+        SemistandardYoungTableau,
+        _revalidate_tableau(tableau, SemistandardYoungTableau),
+    )
     try:
         require_semistandard(tableau)
     except PydanticCustomError:

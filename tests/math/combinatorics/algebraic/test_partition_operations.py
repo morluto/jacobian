@@ -535,3 +535,34 @@ def test_native_tableau_checks_return_typed_nonmembership() -> None:
     assert native.check_semistandard_tableau(
         semistandard
     ) == SemistandardTableauCheckResult(tableau=semistandard, is_member=False)
+
+
+def test_ssyt_count_revalidates_constructed_partition_parts() -> None:
+    """A constructed partition with a negative part is a typed domain error."""
+    from jacobian.catalog.models import OperationDomainValidationError
+
+    forged = IntegerPartition.model_construct(parts=(1, -1))
+    with pytest.raises(OperationDomainValidationError) as error:
+        native.semistandard_young_tableaux_count(forged, 3)
+    assert error.value.errors()[0]["type"] == (
+        "algebraic_combinatorics.partition_carrier"
+    )
+
+
+def test_partition_dominance_revalidates_constructed_operands() -> None:
+    from jacobian.catalog.models import OperationDomainValidationError
+
+    forged = IntegerPartition.model_construct(parts=(1, 2))
+    with pytest.raises(OperationDomainValidationError):
+        native.partition_dominance(forged, IntegerPartition(parts=(3,)))
+
+
+def test_tableau_checkers_revalidate_constructed_carriers() -> None:
+    """Boolean entries cannot masquerade as tableaux and report membership."""
+
+    forged_standard = StandardYoungTableau.model_construct(rows=((True,),))
+    with pytest.raises(ValidationError):
+        native.check_standard_tableau(forged_standard)
+    forged_semistandard = SemistandardYoungTableau.model_construct(rows=((True,),))
+    with pytest.raises(ValidationError):
+        native.check_semistandard_tableau(forged_semistandard)

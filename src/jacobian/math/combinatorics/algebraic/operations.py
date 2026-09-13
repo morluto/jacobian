@@ -514,9 +514,7 @@ def _is_shape_rejection(error: ValidationError) -> bool:
     return bool(types) and all(item in _MEMBERSHIP_SHAPE_ERRORS for item in types)
 
 
-def _revalidate_tableau(
-    tableau: object, carrier: type[StrictModel]
-) -> StrictModel:
+def _revalidate_tableau(tableau: object, carrier: type[StrictModel]) -> StrictModel:
     """Return a freshly validated carrier, rejecting forged instances."""
 
     if type(tableau) is not carrier:

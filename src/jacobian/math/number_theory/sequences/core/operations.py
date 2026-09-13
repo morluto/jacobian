@@ -210,14 +210,20 @@ def _order_shape_rationals(
 ) -> tuple[CanonicalRational, ...]:
     if isinstance(request, FiniteRationalSequence):
         return request.values
-    raise TypeError("sequence_order_shape requires FiniteRationalSequence")
+    raise OperationDomainValidationError(
+        location=("values",),
+        code="sequences.order_shape.sequence_type",
+        message="sequence_order_shape requires a FiniteRationalSequence value",
+    )
 
 
-def _product_component_digits(left: CanonicalRational, right: CanonicalRational) -> int:
-    """Bound retained numerator/denominator digits of one exact product."""
+def _product_component_digits(
+    left: CanonicalRational, right: CanonicalRational
+) -> tuple[int, int]:
+    """Bound retained numerator and denominator digits of one exact product."""
 
     if left.num == 0 or right.num == 0:
-        return 1
+        return 1, 1
     left_num = abs(left.num)
     right_num = abs(right.num)
     cancel_left = gcd(left_num, right.den)
@@ -228,7 +234,7 @@ def _product_component_digits(left: CanonicalRational, right: CanonicalRational)
     denominator_digits = len(format_canonical_integer(left.den // cancel_right)) + len(
         format_canonical_integer(right.den // cancel_left)
     )
-    return max(1, numerator_digits, denominator_digits)
+    return max(1, numerator_digits), max(1, denominator_digits)
 
 
 def _admit_order_shape(
@@ -253,32 +259,7 @@ def _admit_order_shape(
         + len(format_canonical_integer(value.den))
         for value in rational_values
     )
-    if size * component_digits > MAX_ORDER_SHAPE_WORK:
-        raise OperationResourceAdmissionError(
-            location=("values",),
-            code="sequences.order_shape.work_bound",
-            message="order-shape comparisons exceed the admitted exact-work bound",
-        )
     row_count = max(0, size - 2)
-    product_digits = 1
-    result_digits = source_digits
-    for index in range(1, size - 1):
-        if index % 128 == 0:
-            request_checkpoint("during sequence order-shape product admission")
-        square_digits = _product_component_digits(
-            rational_values[index], rational_values[index]
-        )
-        neighbor_digits = _product_component_digits(
-            rational_values[index - 1], rational_values[index + 1]
-        )
-        product_digits = max(product_digits, square_digits, neighbor_digits)
-        result_digits += 2 * square_digits + 2 * neighbor_digits
-    if row_count and product_digits > MAX_CANONICAL_RATIONAL_DIGITS:
-        raise OperationDomainValidationError(
-            location=("values",),
-            code="sequences.order_shape.result_digits_exceeded",
-            message="order-shape cross-products exceed the exact rational digit bound",
-        )
     # The result retains the source, one peak-position slot per source entry,
     # and four slots (index, two exact products, decision) per interior row.
     result_allocations = size + size + 4 * row_count + 8
@@ -291,6 +272,46 @@ def _admit_order_shape(
                 f"{result_allocations} result allocations; maximum is "
                 f"{MAX_ORDER_SHAPE_RESULT_ALLOCATIONS}"
             ),
+        )
+    if size * component_digits > MAX_ORDER_SHAPE_WORK:
+        raise OperationResourceAdmissionError(
+            location=("values",),
+            code="sequences.order_shape.work_bound",
+            message="order-shape comparisons exceed the admitted exact-work bound",
+        )
+    # Integer axes are retained verbatim: every peak position and every interior
+    # row index contributes its own decimal width to the exact result.
+    index_digits = sum(len(str(index)) for index in range(size))
+    interior_index_digits = sum(len(str(index)) for index in range(1, max(size - 1, 1)))
+    result_digits = source_digits + index_digits + interior_index_digits + 5
+    product_component_digits = 1
+    for index in range(1, size - 1):
+        if index % 128 == 0:
+            request_checkpoint("during sequence order-shape product admission")
+        square_numerator, square_denominator = _product_component_digits(
+            rational_values[index], rational_values[index]
+        )
+        neighbor_numerator, neighbor_denominator = _product_component_digits(
+            rational_values[index - 1], rational_values[index + 1]
+        )
+        product_component_digits = max(
+            product_component_digits,
+            square_numerator,
+            square_denominator,
+            neighbor_numerator,
+            neighbor_denominator,
+        )
+        result_digits += (
+            square_numerator
+            + square_denominator
+            + neighbor_numerator
+            + neighbor_denominator
+        )
+    if row_count and product_component_digits > MAX_CANONICAL_RATIONAL_DIGITS:
+        raise OperationDomainValidationError(
+            location=("values",),
+            code="sequences.order_shape.result_digits_exceeded",
+            message="order-shape cross-products exceed the exact rational digit bound",
         )
     if result_digits > MAX_SEQUENCE_TOTAL_DIGITS:
         raise OperationDomainValidationError(
@@ -431,11 +452,15 @@ def sequence_order_shape(
     )
     nondecreasing_prefix = [True] * len(fractions)
     for index in range(1, len(fractions)):
+        if index % 512 == 0:
+            request_checkpoint("during order-shape prefix scan")
         nondecreasing_prefix[index] = (
             nondecreasing_prefix[index - 1] and fractions[index - 1] <= fractions[index]
         )
     nonincreasing_suffix = [True] * len(fractions)
     for index in range(len(fractions) - 2, -1, -1):
+        if index % 512 == 0:
+            request_checkpoint("during order-shape suffix scan")
         nonincreasing_suffix[index] = (
             nonincreasing_suffix[index + 1] and fractions[index] >= fractions[index + 1]
         )
@@ -444,17 +469,21 @@ def sequence_order_shape(
         for index in range(len(fractions))
         if nondecreasing_prefix[index] and nonincreasing_suffix[index]
     )
-    log_rows = tuple(
-        SequenceLogConcavityRow(
-            index=index,
-            square=_order_shape_scalar(fractions[index] ** 2),
-            neighbor_product=_order_shape_scalar(
-                fractions[index - 1] * fractions[index + 1]
-            ),
-            holds=fractions[index] ** 2 >= fractions[index - 1] * fractions[index + 1],
+    log_row_list: list[SequenceLogConcavityRow] = []
+    for index in range(1, len(fractions) - 1):
+        if index % 512 == 0:
+            request_checkpoint("during order-shape row construction")
+        square = fractions[index] ** 2
+        neighbor_product = fractions[index - 1] * fractions[index + 1]
+        log_row_list.append(
+            SequenceLogConcavityRow(
+                index=index,
+                square=_order_shape_scalar(square),
+                neighbor_product=_order_shape_scalar(neighbor_product),
+                holds=square >= neighbor_product,
+            )
         )
-        for index in range(1, len(fractions) - 1)
-    )
+    log_rows = tuple(log_row_list)
     first_log_violation = next((row.index for row in log_rows if not row.holds), None)
     first_negative = next(
         (index for index, value in enumerate(fractions) if value < 0), None

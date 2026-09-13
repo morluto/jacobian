@@ -15,6 +15,10 @@ from jacobian._exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
     CanonicalRational,
 )
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    request_execution,
+)
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
@@ -161,10 +165,11 @@ def test_rational_profile_reports_first_witnesses_and_vacuous_edges() -> None:
 
 
 def test_order_shape_native_guard_rejects_unrelated_integer_sequence_value() -> None:
-    with pytest.raises(TypeError, match="FiniteRationalSequence"):
+    with pytest.raises(OperationDomainValidationError) as error:
         sequence_order_shape(
             cast(FiniteRationalSequence, FiniteIntegerSequence(values=(1, 2)))
         )
+    assert error.value.errors()[0]["type"] == "sequences.order_shape.sequence_type"
 
 
 def test_order_shape_skips_product_bounds_when_no_interior_rows() -> None:
@@ -279,6 +284,51 @@ def test_order_shape_result_rejects_out_of_range_monotonicity_witness() -> None:
     forged["first_nondecreasing_violation"] = 1
     with pytest.raises(ValueError, match="adjacent source pair"):
         SequenceOrderShapeResult.model_validate(forged)
+
+
+def test_order_shape_result_rejects_mutually_exclusive_witnesses() -> None:
+    """One adjacent pair cannot violate both weak monotonicity directions."""
+    result = sequence_order_shape(
+        FiniteRationalSequence(
+            values=tuple(CanonicalRational(num=value, den=1) for value in (1, 3, 2, 1))
+        )
+    )
+    forged = result.model_dump()
+    forged["first_nondecreasing_violation"] = 1
+    forged["first_nonincreasing_violation"] = 1
+    with pytest.raises(ValueError, match="both weak monotonicity directions"):
+        SequenceOrderShapeResult.model_validate(forged)
+
+
+def test_order_shape_product_admission_tracks_components_separately() -> None:
+    """A constant integer sequence is admitted without doubling its width."""
+    value = CanonicalRational(num=100_000_000, den=1)
+    sequence = FiniteRationalSequence(values=(value,) * 65_000)
+    result = sequence_order_shape(sequence)
+    assert len(result.log_concavity_rows) == 65_000 - 2
+    assert result.first_log_concavity_violation is None
+
+
+def test_order_shape_allocation_bound_precedes_product_admission() -> None:
+    """A too-long sequence is refused before any per-row product work."""
+    value = CanonicalRational(num=100_000_000, den=1)
+    sequence = FiniteRationalSequence(values=(value,) * 100_000)
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        sequence_order_shape(sequence)
+    assert error.value.errors()[0]["type"] == (
+        "sequences.order_shape.result_allocation_bound"
+    )
+
+
+def test_order_shape_counts_retained_index_digits() -> None:
+    """Peak and row indices contribute their own decimal digits."""
+    value = CanonicalRational(num=999_983, den=100_003)
+    sequence = FiniteRationalSequence(values=(value,) * 80_000)
+    with pytest.raises(OperationDomainValidationError) as error:
+        sequence_order_shape(sequence)
+    assert error.value.errors()[0]["type"] == (
+        "sequences.order_shape.result_representation_too_large"
+    )
 
 
 def test_order_shape_reversal_and_positive_scaling_preserve_decisions() -> None:
@@ -573,3 +623,19 @@ def test_autocorrelation_catalog_schema_registers_canonical_rational_defs() -> N
         if operation.operation_id == "sequence.autocorrelation.aperiodic.compute"
     )
     assert "CanonicalRational" in json.dumps(descriptor.input_schema)
+
+
+def test_order_shape_observes_request_cancellation() -> None:
+    """The kernel and result construction share the request envelope."""
+
+    class Cancelled:
+        def is_set(self) -> bool:
+            return True
+
+    value = CanonicalRational(num=100_000_000, den=1)
+    sequence = FiniteRationalSequence(values=(value,) * 64)
+    with (
+        request_execution(0.0, cancellation_signal=Cancelled()),
+        pytest.raises(OperationExecutionCancelledError),
+    ):
+        sequence_order_shape(sequence)

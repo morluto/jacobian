@@ -302,6 +302,13 @@ class SequenceOrderShapeResult(StrictModel):
         ):
             if index is not None and index >= max(size - 1, 0):
                 raise ValueError(f"{field_name} must identify an adjacent source pair")
+        if (
+            self.first_nondecreasing_violation is not None
+            and self.first_nondecreasing_violation == self.first_nonincreasing_violation
+        ):
+            raise ValueError(
+                "one adjacent pair cannot violate both weak monotonicity directions"
+            )
         if self.first_negative_index is not None and self.first_negative_index >= size:
             raise ValueError("negative index must identify a source position")
         if self.first_internal_zero_index is not None and (

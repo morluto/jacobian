@@ -181,7 +181,7 @@ def _canonical_carrier_elements(elements: object) -> tuple[str, ...]:
         if type(entry) is not str:
             raise TypeError("carrier labels must be canonical strings")
         _ELEMENT_LABEL.validate_python(entry, strict=True)
-    return elements  # type: ignore[return-value]
+    return elements
 
 
 def _canonical_ordered_pairs(pairs: object) -> tuple[OrderedPair, ...]:

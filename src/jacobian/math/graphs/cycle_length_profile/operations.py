@@ -181,8 +181,9 @@ def _wheel_cycle_count(wheel_order: tuple[str, ...], cycle_length: int) -> int:
     if cycle_length < 3 or cycle_length > rim_count + 1:
         return 0
     if cycle_length == rim_count + 1:
-        # Hamiltonians use the whole rim plus the hub; there is exactly one.
-        return 1
+        # A Hamiltonian cycle uses the whole rim plus the hub; removing any one
+        # of the ``rim_count`` rim edges gives a distinct Hamiltonian cycle.
+        return rim_count
     # Hub cycles: one per consecutive arc of ``cycle_length - 1`` rim vertices,
     # of which there are ``rim_count`` proper arcs.
     count = rim_count
@@ -198,6 +199,10 @@ def _wheel_chordless_cycle_count(
     """Exact number of induced `cycle_length`-cycles in a wheel."""
 
     rim_count = len(wheel_order) - 1
+    if cycle_length == rim_count:
+        # The rim itself is an induced cycle (a wheel rim has no chords) for
+        # length at least five; a four-vertex rim is also induced.
+        return 1 if rim_count >= 4 else 0
     if cycle_length == 3:
         # Triangles use the hub plus a rim edge, one per rim edge; the rim edge
         # is a chord-free triangle.
@@ -206,9 +211,6 @@ def _wheel_chordless_cycle_count(
         # Hub + three consecutive rim vertices has the chord hub-to-middle, so
         # there is no induced four-cycle through the hub.
         return 0
-    if cycle_length == rim_count:
-        # The rim itself is induced (no rim chords in a wheel) for length >= 5.
-        return 1 if rim_count >= 5 else 0
     return 0
 
 

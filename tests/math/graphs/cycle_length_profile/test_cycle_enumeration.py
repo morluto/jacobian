@@ -600,3 +600,17 @@ def test_sparse_wheel_blocks_use_an_exact_cycle_bound() -> None:
     assert simple.cycle_count == 21
     chordless = enumerate_chordless_fixed_length_cycles(graph, 4)
     assert chordless.cycle_count == 0
+
+
+def test_five_vertex_wheel_keeps_the_induced_rim_cycle() -> None:
+    """The four rim vertices of W_5 form an induced 4-cycle."""
+    graph = _wheel(4)
+    chordless = enumerate_chordless_fixed_length_cycles(graph, 4)
+    assert chordless.cycle_count == 1
+
+
+def test_wheel_hamiltonian_count_covers_every_rim_edge() -> None:
+    """W_6 has six Hamiltonian cycles with cycle_length = rim_count + 1."""
+    graph = _wheel(5)
+    result = enumerate_fixed_length_cycles(graph, 6)
+    assert result.cycle_count == 5

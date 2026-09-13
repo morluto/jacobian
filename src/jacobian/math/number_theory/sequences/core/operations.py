@@ -10,6 +10,7 @@ from itertools import pairwise
 from math import gcd
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
+from jacobian._execution import request_checkpoint
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -198,7 +199,13 @@ def _admit_autocorrelation(
             code="sequences.autocorrelation.result_representation_too_large",
             message="autocorrelation output exceeds the exact representation bound",
         )
-    operand_width = max(1, common_numerator_digits + denominator_digits)
+    if isinstance(request, FiniteIntegerSequence):
+        # Every integer operand has denominator one, so charge only its
+        # numerator width; adding the unit denominator would reject cheap
+        # small-integer sequences that the operation can execute exactly.
+        operand_width = max(1, common_numerator_digits)
+    else:
+        operand_width = max(1, common_numerator_digits + denominator_digits)
     return fractions, result_digits, operand_width
 
 
@@ -258,22 +265,26 @@ def aperiodic_autocorrelation(
         multiplications, additions, operand_width, convention="aperiodic"
     )
     rational_output = isinstance(request, FiniteRationalSequence)
-    cells = tuple(
-        AutocorrelationCell(
-            lag=lag,
-            value=_autocorrelation_scalar(
-                sum(
-                    (
-                        values[index] * values[index + lag]
-                        for index in range(size - lag)
+    cells_list: list[AutocorrelationCell] = []
+    for lag in range(size):
+        if lag % 64 == 0:
+            request_checkpoint("during aperiodic autocorrelation expansion")
+        cells_list.append(
+            AutocorrelationCell(
+                lag=lag,
+                value=_autocorrelation_scalar(
+                    sum(
+                        (
+                            values[index] * values[index + lag]
+                            for index in range(size - lag)
+                        ),
+                        Fraction(0),
                     ),
-                    Fraction(0),
+                    rational_output=rational_output,
                 ),
-                rational_output=rational_output,
-            ),
+            )
         )
-        for lag in range(size)
-    )
+    cells = tuple(cells_list)
     negative = tuple(
         AutocorrelationCell(lag=-cell.lag, value=cell.value)
         for cell in reversed(cells[1:])
@@ -294,10 +305,11 @@ def cyclic_autocorrelation(
         multiplications, additions, operand_width, convention="cyclic"
     )
     rational_output = isinstance(request, FiniteRationalSequence)
-    return AutocorrelationResult(
-        convention="cyclic",
-        source=request,
-        cells=tuple(
+    cyclic_cells: list[AutocorrelationCell] = []
+    for lag in range(size):
+        if lag % 64 == 0:
+            request_checkpoint("during cyclic autocorrelation expansion")
+        cyclic_cells.append(
             AutocorrelationCell(
                 lag=lag,
                 value=_autocorrelation_scalar(
@@ -311,8 +323,9 @@ def cyclic_autocorrelation(
                     rational_output=rational_output,
                 ),
             )
-            for lag in range(size)
-        ),
+        )
+    return AutocorrelationResult(
+        convention="cyclic", source=request, cells=tuple(cyclic_cells)
     )
 
 

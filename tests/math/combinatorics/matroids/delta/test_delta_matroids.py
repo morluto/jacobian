@@ -383,3 +383,17 @@ def test_width_ignores_recognition_label_envelope() -> None:
 
     source = FiniteDeltaMatroid(ground=("a" * 2049,), feasible=((),))
     assert width(source) == 0
+
+
+def test_width_rejects_a_forged_malformed_source() -> None:
+    """A constructed source with duplicate row indices is not a valid value."""
+
+    from pydantic import ValidationError as PydanticValidationError
+
+    from jacobian.math.combinatorics.matroids.delta import width
+
+    forged = FiniteDeltaMatroid.model_construct(
+        ground=("a", "b"), feasible=((), (0, 0))
+    )
+    with pytest.raises(PydanticValidationError):
+        width(forged)

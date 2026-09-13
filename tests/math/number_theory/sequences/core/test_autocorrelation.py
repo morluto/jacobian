@@ -217,6 +217,15 @@ def test_large_quadratic_autocorrelation_is_rejected(
         operation(source)
 
 
+def test_small_integer_autocorrelation_keeps_unit_operand_width() -> None:
+    """Integer operands have denominator one, so they charge unit width."""
+    source = FiniteIntegerSequence(values=(1,) * 2_000)
+    result = cyclic_autocorrelation(source)
+    assert all(cell.value == 2_000 for cell in result.cells)
+    with pytest.raises(OperationResourceAdmissionError):
+        cyclic_autocorrelation(FiniteIntegerSequence(values=(1,) * 2_001))
+
+
 def test_rational_autocorrelation_admission_counts_both_output_components() -> None:
     width = 5_000
     numerator = parse_canonical_integer("1" + "0" * (width - 1))

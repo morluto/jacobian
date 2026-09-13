@@ -114,7 +114,15 @@ def twist(
 
 
 def width(delta_matroid: FiniteDeltaMatroid) -> int:
-    """Return the delta-matroid width ``max |F| - min |F|``."""
+    """Return the delta-matroid width ``max |F| - min |F|``.
 
-    sizes = tuple(len(row) for row in delta_matroid.feasible)
+    The width is a linear projection of the feasible rows, so recognition
+    admission is not replayed; the structural carrier is reconstructed so a
+    forged instance with malformed rows cannot produce an incorrect value.
+    """
+
+    system = FiniteFeasibleSetSystem(
+        ground=delta_matroid.ground, feasible=delta_matroid.feasible
+    )
+    sizes = tuple(len(row) for row in system.feasible)
     return max(sizes) - min(sizes)

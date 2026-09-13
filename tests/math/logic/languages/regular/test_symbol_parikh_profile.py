@@ -788,3 +788,21 @@ def test_commuting_cycle_identity_dfa_admits_length_978_profile() -> None:
     result = symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=978))
     assert result.total_accepted_words == 2**978
     assert len(result.cells) == 979
+
+
+def test_unreachable_acceptance_at_depth_constructs_no_cells() -> None:
+    """An accepting state unreachable at the requested depth yields no cells."""
+    dfa = DFA(
+        state_count=2,
+        alphabet_size=2,
+        transitions=tuple(
+            DFATransition(source=source, symbol=symbol, target=1)
+            for source in range(2)
+            for symbol in range(2)
+        ),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+    result = symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=999))
+    assert result.cells == ()
+    assert result.total_accepted_words == 0

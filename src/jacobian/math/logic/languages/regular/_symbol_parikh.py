@@ -6,6 +6,7 @@ from typing import Self
 from pydantic import Field, StrictInt, model_validator
 
 from jacobian._exact import ExactInteger
+from jacobian._execution import request_checkpoint
 from jacobian._models import StrictModel
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.logic.languages.regular.values import (
@@ -390,6 +391,30 @@ def _states_per_layer(
     return bounds
 
 
+def _states_at_exact_depth(
+    dfa: DFA,
+    reachable: set[int],
+    alphabet_size: int,
+    length: int,
+) -> set[int]:
+    """Return the reachable states that are live after exactly ``length`` steps."""
+
+    outgoing: dict[int, list[int]] = {}
+    for transition in dfa.transitions:
+        if transition.source in reachable and transition.target in reachable:
+            outgoing.setdefault(transition.source, []).append(transition.target)
+    frontier = {dfa.initial_state}
+    for _ in range(length):
+        request_checkpoint("during symbol-Parikh exact-depth reachability")
+        if not frontier:
+            return set()
+        next_frontier: set[int] = set()
+        for state in frontier:
+            next_frontier.update(outgoing.get(state, ()))
+        frontier = next_frontier
+    return frontier
+
+
 def _extend_profile_layer(
     layer: dict[tuple[int, tuple[int, ...]], int],
     transitions: dict[tuple[int, int], int],
@@ -519,9 +544,14 @@ def symbol_parikh_profile(
         possible_word_count,
     )
     output_materialization_work = output_materialization_cells
-    # Result cells are unique accepting count vectors, not the whole final
-    # DP layer.  An empty accepting set therefore constructs no cells.
-    if not set(dfa.accepting_states).intersection(reachable):
+    # Result cells are unique accepting count vectors in the final layer. Only
+    # accepting states that are live after exactly `length` steps can
+    # contribute, so a graph-reachable accepting state that cannot be reached
+    # at the requested depth constructs no cells.
+    accepting_at_depth = set(dfa.accepting_states).intersection(
+        _states_at_exact_depth(dfa, reachable, alphabet_size, length)
+    )
+    if not accepting_at_depth:
         collected_cells = 0
     else:
         collected_cells = min(
@@ -531,8 +561,6 @@ def symbol_parikh_profile(
         )
     cell_construction_work = collected_cells * max(1, alphabet_size)
     result_reduce_work = 2 * collected_cells
-    # The transition index is built from every DFA edge, including edges from
-    # states that are unreachable from the initial state.
     transition_index_work = transition_count
     reachability_scan_work = len(reachable) * transition_count
     work_bound = (

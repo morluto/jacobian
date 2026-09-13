@@ -1,7 +1,6 @@
 """Canonical graph-symmetry operations and result values."""
 
 from jacobian.math.graphs.symmetry._models import (
-    FullGraphAutomorphismRequest,
     FullGraphAutomorphismResult,
     GraphAutomorphismGenerator,
     GraphEdgeOrbit,
@@ -16,7 +15,6 @@ from jacobian.math.graphs.symmetry.operations import (
 )
 
 __all__ = [
-    "FullGraphAutomorphismRequest",
     "FullGraphAutomorphismResult",
     "GraphAutomorphismGenerator",
     "GraphEdgeOrbit",

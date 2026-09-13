@@ -778,9 +778,9 @@ def test_commuting_cycle_identity_dfa_admits_length_900_profile() -> None:
         initial_state=0,
         accepting_states=tuple(range(state_count)),
     )
-    result = symbol_parikh_profile(dfa, 978)
-    assert result.total_accepted_words == 2**978
-    assert len(result.cells) == 979
+    result = symbol_parikh_profile(dfa, 900)
+    assert result.total_accepted_words == 2**900
+    assert len(result.cells) == 901
 
 
 def test_profile_preserves_49_reachable_state_case() -> None:

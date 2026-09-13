@@ -172,9 +172,7 @@ def _simplest_rational_between(low: Fraction, high: Fraction) -> Fraction:
         Fraction(frac_high.denominator, frac_high.numerator),
         Fraction(frac_low.denominator, frac_low.numerator),
     )
-    return Fraction(
-        floor_low * inner.numerator + inner.denominator, inner.numerator
-    )
+    return Fraction(floor_low * inner.numerator + inner.denominator, inner.numerator)
 
 
 def _representable_separating_bound(low: Fraction, high: Fraction) -> CanonicalRational:

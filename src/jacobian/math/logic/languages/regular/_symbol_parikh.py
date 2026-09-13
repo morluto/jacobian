@@ -1,7 +1,9 @@
 """Exact symbol-level Parikh profiles for accepted DFA words."""
 
+from collections.abc import Iterable
+from itertools import islice
 from math import comb
-from typing import Annotated, Self
+from typing import Annotated, Self, cast
 
 from pydantic import Field, StrictInt, ValidationError, model_validator
 from pydantic_core import PydanticCustomError
@@ -677,8 +679,19 @@ def _symbol_parikh_profile_request(
     return symbol_parikh_profile(request.dfa, request.word_length)
 
 
-def _bounded_dfa_tuple(value: object, limit: int) -> tuple[object, ...]:
-    """Materialize a DFA container only when its bounded size is known first."""
+def _bounded_dfa_tuple(
+    value: object,
+    limit: int,
+    item_fields: tuple[str, ...] | None = None,
+) -> tuple[object, ...]:
+    """Materialize a DFA container only when its bounded size is known first.
+
+    ``__len__`` is not trusted: at most ``limit + 1`` items are consumed, so a
+    lying or infinite iterable cannot allocate past the carrier bound.  When
+    ``item_fields`` is given, already-constructed nested models are rewritten
+    as plain field maps so strict validation revalidates them instead of
+    accepting a validation-bypassed instance.
+    """
 
     if value is None or isinstance(value, (str, bytes, bytearray)):
         raise PydanticCustomError(
@@ -691,19 +704,33 @@ def _bounded_dfa_tuple(value: object, limit: int) -> tuple[object, ...]:
                 "regular_language.symbol_parikh.dfa_contract",
                 "dfa container exceeds its admitted length",
             )
-        return value
-    length = getattr(value, "__len__", None)
-    if length is None:
-        raise PydanticCustomError(
-            "regular_language.symbol_parikh.dfa_contract",
-            "dfa containers must be bounded tuples",
-        )
-    if len(value) > limit:  # type: ignore[arg-type]
-        raise PydanticCustomError(
-            "regular_language.symbol_parikh.dfa_contract",
-            "dfa container exceeds its admitted length",
-        )
-    return tuple(value)  # type: ignore[arg-type]
+        items = list(value)
+    else:
+        if getattr(value, "__len__", None) is None:
+            raise PydanticCustomError(
+                "regular_language.symbol_parikh.dfa_contract",
+                "dfa containers must be bounded tuples",
+            )
+        try:
+            items = list(islice(cast(Iterable[object], value), limit + 1))
+        except TypeError:
+            raise PydanticCustomError(
+                "regular_language.symbol_parikh.dfa_contract",
+                "dfa containers must be bounded tuples",
+            ) from None
+        if len(items) > limit:
+            raise PydanticCustomError(
+                "regular_language.symbol_parikh.dfa_contract",
+                "dfa container exceeds its admitted length",
+            )
+    if item_fields is None:
+        return tuple(items)
+    return tuple(
+        item
+        if isinstance(item, dict)
+        else {field: getattr(item, field, None) for field in item_fields}
+        for item in items
+    )
 
 
 def symbol_parikh_profile(dfa: DFA, word_length: int) -> SymbolParikhProfileResult:
@@ -721,7 +748,9 @@ def symbol_parikh_profile(dfa: DFA, word_length: int) -> SymbolParikhProfileResu
                 "state_count": getattr(dfa, "state_count", None),
                 "alphabet_size": getattr(dfa, "alphabet_size", None),
                 "transitions": _bounded_dfa_tuple(
-                    getattr(dfa, "transitions", None), MAX_DFA_TRANSITIONS
+                    getattr(dfa, "transitions", None),
+                    MAX_DFA_TRANSITIONS,
+                    item_fields=("source", "symbol", "target"),
                 ),
                 "initial_state": getattr(dfa, "initial_state", None),
                 "accepting_states": _bounded_dfa_tuple(

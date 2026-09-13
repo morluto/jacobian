@@ -882,6 +882,48 @@ def test_forged_dfa_fields_are_bounded_before_materialization() -> None:
     )
 
 
+def test_forged_iterable_does_not_trust_reported_length() -> None:
+    """A lying ``__len__`` cannot make materialization run past the bound."""
+
+    class LyingIterable:
+        def __len__(self) -> int:
+            return 0
+
+        def __iter__(self):
+            while True:
+                yield 0
+
+    forged = DFA.model_construct(
+        state_count=1,
+        alphabet_size=1,
+        transitions=LyingIterable(),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        symbol_parikh_profile(forged, 3)
+    assert error.value.errors()[0]["type"] == (
+        "regular_language.symbol_parikh.dfa_contract"
+    )
+
+
+def test_validation_bypassed_transition_instance_is_revalidated() -> None:
+    """A constructed transition without fields is a typed domain rejection."""
+
+    forged = DFA.model_construct(
+        state_count=2,
+        alphabet_size=1,
+        transitions=(DFATransition.model_construct(),),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        symbol_parikh_profile(forged, 3)
+    assert error.value.errors()[0]["type"] == (
+        "regular_language.symbol_parikh.dfa_contract"
+    )
+
+
 def test_unreachable_acceptance_at_depth_constructs_no_cells() -> None:
     """An accepting state unreachable at the requested depth yields no cells."""
     dfa = DFA(

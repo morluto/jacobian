@@ -367,6 +367,85 @@ def test_transition_index_charge_rejects_before_indexing(
         )
 
 
+def _transient_prefix_noncommuting_dfa(
+    *, reachable_count: int, alphabet_size: int, transient_count: int = 4
+) -> DFA:
+    """A transient chain feeding a noncommuting cycle.
+
+    The strongly connected fixture used previously left ``transient`` empty, so
+    the transient-walk helper returned immediately and its instrumentation was
+    vacuous.
+    """
+
+    core = tuple(range(transient_count, reachable_count))
+
+    def rotate(state: int, step: int) -> int:
+        return core[(core.index(state) + step) % len(core)]
+
+    transitions: list[DFATransition] = []
+    for source in range(transient_count):
+        for symbol in range(alphabet_size):
+            transitions.append(
+                DFATransition(
+                    source=source,
+                    symbol=symbol,
+                    target=source + 1 if source < transient_count - 1 else core[0],
+                )
+            )
+    for source in core:
+        for symbol in range(alphabet_size):
+            if symbol == 0:
+                target = rotate(source, 1)
+            elif symbol == 1:
+                target = rotate(source, -1)
+            else:
+                target = source
+            transitions.append(
+                DFATransition(source=source, symbol=symbol, target=target)
+            )
+    return DFA(
+        state_count=reachable_count,
+        alphabet_size=alphabet_size,
+        transitions=tuple(transitions),
+        initial_state=0,
+        accepting_states=tuple(range(reachable_count)),
+    )
+
+
+def _transient_walk_probes(
+    by_source: dict[int, dict[int, int]],
+    transient: set[int],
+    alphabet_size: int,
+    initial_state: int,
+) -> int:
+    """Replay `_longest_transient_walk` and count its actual relaxation probes."""
+
+    if initial_state not in transient:
+        return 0
+    probes = 0
+    longest = dict.fromkeys(transient, -1)
+    longest[initial_state] = 0
+    for _ in range(len(transient)):
+        changed = False
+        for source in transient:
+            probes += 1
+            if longest[source] < 0:
+                continue
+            outgoing = by_source.get(source, {})
+            for symbol in range(alphabet_size):
+                probes += 1
+                target = outgoing.get(symbol)
+                if target not in transient:
+                    continue
+                candidate = longest[source] + 1
+                if candidate > longest[target]:
+                    longest[target] = candidate
+                    changed = True
+        if not changed:
+            break
+    return probes
+
+
 def test_near_envelope_profile_execution_matches_admission_charge(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -375,28 +454,8 @@ def test_near_envelope_profile_execution_matches_admission_charge(
     reachable_count = 10
     alphabet_size = 7
     length = 8
-    dfa = DFA(
-        state_count=reachable_count,
-        alphabet_size=alphabet_size,
-        transitions=tuple(
-            DFATransition(
-                source=source,
-                symbol=symbol,
-                target=(
-                    0
-                    if symbol == 1
-                    else source + 1
-                    if symbol == 0 and source < reachable_count - 1
-                    else 0
-                    if symbol == 0
-                    else source
-                ),
-            )
-            for source in range(reachable_count)
-            for symbol in range(alphabet_size)
-        ),
-        initial_state=0,
-        accepting_states=tuple(range(reachable_count)),
+    dfa = _transient_prefix_noncommuting_dfa(
+        reachable_count=reachable_count, alphabet_size=alphabet_size
     )
     transition_count = dfa.state_count * alphabet_size
     output_bound = comb(length + alphabet_size - 1, alphabet_size - 1)
@@ -492,7 +551,12 @@ def test_near_envelope_profile_execution_matches_admission_charge(
         size: int,
         initial_state: int,
     ) -> int:
-        executed["analysis"] += reachable_count * reachable_count * size
+        # Count the helper's actual relaxation probes so added or undercharged
+        # work inside it is visible. The admission charge is quadratic in the
+        # reachable count; the helper only probes transient states.
+        executed["analysis"] += _transient_walk_probes(
+            by_source, transient, size, initial_state
+        )
         return original_walk(by_source, transient, size, initial_state)
 
     def count_extend(

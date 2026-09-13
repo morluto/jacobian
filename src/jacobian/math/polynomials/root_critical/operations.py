@@ -361,7 +361,7 @@ def _enclose_rational_power(
         return None
     numerator = int(exponent.p if hasattr(exponent, "p") else exponent.numerator)
     denominator = int(exponent.q if hasattr(exponent, "q") else exponent.denominator)
-    if denominator not in {1, 2, 3} or numerator < 0:
+    if denominator <= 0 or numerator < 0:
         return None
     r0, r1, i0, i1 = _enclose_sympy(base)
     if i0 != 0 or i1 != 0:
@@ -927,6 +927,24 @@ def root_critical_distance_profile(
             return root_critical_distance_profile(
                 polynomial, max_pair_rows=max_pair_rows
             )
+    if not isinstance(polynomial, RationalPolynomial):
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="polynomial.root_critical.polynomial_type",
+            message="root-critical profile requires a rational polynomial",
+        )
+    if type(max_pair_rows) is not int or isinstance(max_pair_rows, bool):
+        raise OperationDomainValidationError(
+            location=("max_pair_rows",),
+            code="polynomial.root_critical.pair_row_type",
+            message="max_pair_rows must be a non-boolean integer",
+        )
+    if max_pair_rows < 0 or max_pair_rows > MAX_ROOT_CRITICAL_PAIRS:
+        raise OperationDomainValidationError(
+            location=("max_pair_rows",),
+            code="polynomial.root_critical.pair_row_range",
+            message="max_pair_rows must lie in the admitted 0..64 row budget",
+        )
     deadline = execution.started_at + ROOT_CRITICAL_WALL_SECONDS
     if execution.deadline is not None:
         deadline = min(deadline, execution.deadline)

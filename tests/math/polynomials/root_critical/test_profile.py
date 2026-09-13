@@ -356,3 +356,30 @@ def test_short_deadline_kills_the_blocking_sympy_kernel() -> None:
     ):
         root_critical_distance_profile(_polynomial((3, 1), (0, -1)))
     assert time_module.monotonic() - started < 5.0
+
+
+def test_fourth_root_radical_is_certified_by_the_enclose_grammar() -> None:
+    """z^4-2 roots are fourth roots and must enclose exactly, not heuristically."""
+    import sympy
+
+    from jacobian.math.polynomials.root_critical.operations import _enclose_sympy
+
+    z = sympy.Symbol("z")
+    roots = sympy.Poly(z**4 - 2, z).all_roots()
+    assert len(roots) == 4
+    for root in roots:
+        real_lo, real_hi, imag_lo, imag_hi = _enclose_sympy(root)
+        value = root.evalf(50)
+        real, imag = value.as_real_imag()
+        assert float(real_lo) <= float(real) <= float(real_hi)
+        assert float(imag_lo) <= float(imag) <= float(imag_hi)
+
+
+def test_native_arguments_are_validated_before_worker_serialization() -> None:
+    with pytest.raises(OperationDomainValidationError, match="rational polynomial"):
+        root_critical_distance_profile("not a polynomial")  # type: ignore[arg-type]
+    with pytest.raises(OperationDomainValidationError, match="non-boolean"):
+        root_critical_distance_profile(
+            _polynomial((3, 1), (0, -1)),
+            max_pair_rows="64",  # type: ignore[arg-type]
+        )

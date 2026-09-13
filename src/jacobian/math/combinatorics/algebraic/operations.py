@@ -15,7 +15,10 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS
 from jacobian._execution import request_checkpoint
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.algebraic._models import (
     DominanceRelation,
     PartitionDominanceResult,
@@ -35,6 +38,7 @@ from jacobian.math.combinatorics.algebraic._rsk import (
 )
 from jacobian.math.combinatorics.algebraic.values import RSKTableauPair
 from jacobian.math.combinatorics.symmetric_functions.values import (
+    MAX_PARTITION_SIZE,
     IntegerPartition,
     SemistandardYoungTableau,
     StandardYoungTableau,
@@ -200,7 +204,7 @@ def _digits_upper_from_log10_units(units: int) -> int:
 
     if units <= 0:
         return 1
-    return units // _LOG10_SCALE + 1
+    return (units - 1) // _LOG10_SCALE + 1
 
 
 def _ssyt_count_digit_bound(
@@ -215,6 +219,7 @@ def _ssyt_count_digit_bound(
     numerator_log_units = 0
     hook_product = 1
     for row, length in enumerate(partition.parts):
+        request_checkpoint("during SSYT digit admission")
         for column in range(length):
             content = alphabet_size + column - row
             if content <= 0:
@@ -324,6 +329,36 @@ def verify_rsk(claim: RSKResult) -> bool:
     )
 
 
+def _require_canonical_partition(partition: object) -> IntegerPartition:
+    if type(partition) is not IntegerPartition:
+        raise OperationDomainValidationError(
+            location=("partition",),
+            code="algebraic_combinatorics.partition_carrier",
+            message="partition operations require an IntegerPartition value",
+        )
+    parts = partition.parts
+    if not isinstance(parts, tuple):
+        raise OperationDomainValidationError(
+            location=("partition", "parts"),
+            code="algebraic_combinatorics.partition_shape",
+            message="a canonical partition has a tuple of parts",
+        )
+    if parts and (type(parts[0]) is not int or parts[0] > MAX_PARTITION_SIZE):
+        raise OperationResourceAdmissionError(
+            location=("partition", "parts"),
+            code="algebraic_combinatorics.partition_size",
+            message="partition size exceeds the admitted Ferrers envelope",
+        )
+    try:
+        return IntegerPartition.model_validate(partition)
+    except (ValidationError, PydanticCustomError) as error:
+        raise OperationDomainValidationError(
+            location=("partition",),
+            code="algebraic_combinatorics.partition_carrier",
+            message="partition operations require a canonical IntegerPartition",
+        ) from error
+
+
 def conjugate_partition(partition: IntegerPartition) -> IntegerPartition:
     """Return the conjugate of one canonical partition.
 
@@ -331,6 +366,7 @@ def conjugate_partition(partition: IntegerPartition) -> IntegerPartition:
     ``lambda`` that are at least ``j``, i.e. the column heights of the Ferrers
     diagram.
     """
+    partition = _require_canonical_partition(partition)
     parts = partition.parts
     if not parts:
         return IntegerPartition(parts=())

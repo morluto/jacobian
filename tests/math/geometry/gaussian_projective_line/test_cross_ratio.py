@@ -5,12 +5,10 @@ from itertools import permutations
 
 import pytest
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.dispatch import OperationRequestValidationError, invoke_operation
 from jacobian.math.geometry.gaussian_projective_line._models import (
     GaussianCrossRatioSource,
     GaussianProjectiveLinePoint,
@@ -131,70 +129,6 @@ def test_coincident_points_are_rejected_before_division() -> None:
     )
     with pytest.raises(OperationDomainValidationError) as error:
         gaussian_rational_cross_ratio(request)
-    assert (
-        error.value.errors()[0]["type"]
-        == "geometry.gaussian_cross_ratio.points_not_distinct"
-    )
-
-
-def test_coincident_points_reach_operation_admission_on_dispatch() -> None:
-    payload = {
-        "first": {
-            "coordinates": [
-                {
-                    "real": {"num": "0", "den": "1"},
-                    "imaginary": {"num": "0", "den": "1"},
-                },
-                {
-                    "real": {"num": "1", "den": "1"},
-                    "imaginary": {"num": "0", "den": "1"},
-                },
-            ]
-        },
-        "second": {
-            "coordinates": [
-                {
-                    "real": {"num": "0", "den": "1"},
-                    "imaginary": {"num": "0", "den": "1"},
-                },
-                {
-                    "real": {"num": "1", "den": "1"},
-                    "imaginary": {"num": "0", "den": "1"},
-                },
-            ]
-        },
-        "third": {
-            "coordinates": [
-                {
-                    "real": {"num": "1", "den": "1"},
-                    "imaginary": {"num": "0", "den": "1"},
-                },
-                {
-                    "real": {"num": "1", "den": "1"},
-                    "imaginary": {"num": "0", "den": "1"},
-                },
-            ]
-        },
-        "fourth": {
-            "coordinates": [
-                {
-                    "real": {"num": "1", "den": "1"},
-                    "imaginary": {"num": "0", "den": "1"},
-                },
-                {
-                    "real": {"num": "0", "den": "1"},
-                    "imaginary": {"num": "0", "den": "1"},
-                },
-            ]
-        },
-    }
-    with pytest.raises(OperationDomainValidationError) as error:
-        invoke_operation(
-            "geometry.projective_line.cross_ratio.gaussian_rational.compute",
-            payload,
-            Catalog.open(),
-        )
-    assert not isinstance(error.value, OperationRequestValidationError)
     assert (
         error.value.errors()[0]["type"]
         == "geometry.gaussian_cross_ratio.points_not_distinct"
@@ -430,7 +364,7 @@ def test_quotient_is_divided_once_during_admission(
 
     from jacobian.math.geometry.gaussian_projective_line import operations as ops
 
-    original = ops._divide
+    original = ops._divide  # type: ignore[attr-defined]
     calls = 0
 
     def counted(

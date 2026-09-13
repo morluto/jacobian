@@ -250,6 +250,73 @@ def _wheel_order_for_block(
     return (hub, *order)
 
 
+def _fan_order_for_block(
+    block: tuple[str, ...], local: dict[str, set[str]]
+) -> tuple[str, ...] | None:
+    """Return ``(hub, path...)`` when the block is a fan, else ``None``.
+
+    A fan joins one hub to every vertex of an ``m``-vertex path (``m >= 2``),
+    giving ``m + 1`` vertices and ``2m - 1`` edges.
+    """
+
+    vertex_count = len(block)
+    if vertex_count < 3:
+        return None
+    hubs = [vertex for vertex in block if len(local[vertex]) == vertex_count - 1]
+    if len(hubs) != 1:
+        return None
+    hub = hubs[0]
+    path = [vertex for vertex in block if vertex != hub]
+    path_adjacency = {vertex: local[vertex] - {hub} for vertex in path}
+    endpoints = sorted(vertex for vertex in path if len(path_adjacency[vertex]) == 1)
+    if len(endpoints) != 2 or any(
+        len(neighbors) not in (1, 2) for neighbors in path_adjacency.values()
+    ):
+        return None
+    order = [endpoints[0]]
+    previous: str | None = None
+    current = endpoints[0]
+    while len(order) < len(path):
+        candidates = sorted(
+            neighbor for neighbor in path_adjacency[current] if neighbor != previous
+        )
+        next_vertex = next(
+            (candidate for candidate in candidates if candidate not in order), None
+        )
+        if next_vertex is None:
+            return None
+        order.append(next_vertex)
+        previous, current = current, next_vertex
+    return (hub, *order)
+
+
+def _fan_cycle_count(fan_order: tuple[str, ...], cycle_length: int) -> int:
+    """Exact simple-cycle count of a fan block.
+
+    Cycles use the hub plus a contiguous path segment of ``cycle_length - 1``
+    path vertices, of which a path of ``m`` vertices has ``m - L + 2``.
+    """
+
+    path_count = len(fan_order) - 1
+    arc_length = cycle_length - 1
+    if arc_length < 2 or arc_length > path_count:
+        return 0
+    return path_count - arc_length + 1
+
+
+def _fan_chordless_cycle_count(fan_order: tuple[str, ...], cycle_length: int) -> int:
+    """Exact induced-cycle count of a fan block.
+
+    Only a triangle (hub plus one path edge) is induced; any longer hub cycle
+    has a chord from the hub to an interior path vertex, and the path has no
+    cycle of its own.
+    """
+
+    if cycle_length != 3:
+        return 0
+    return max(0, len(fan_order) - 2)
+
+
 def _cycle_core_vertices(graph: SimpleUndirectedGraph) -> set[str]:
     """Return vertices in the graph's cycle-bearing 2-core."""
     adjacency: dict[str, set[str]] = {vertex: set() for vertex in graph.vertices}
@@ -486,6 +553,33 @@ def _find_cycle_of_length(
     return None
 
 
+def _fan_cycles(
+    fan_order: tuple[str, ...], cycle_length: int, *, chordless: bool
+) -> set[tuple[str, ...]]:
+    """Enumerate the exact cycles of one recognized fan block.
+
+    ``fan_order`` is ``(hub, path...)``. Every cycle uses the hub plus a
+    contiguous path segment; only the triangle is induced.
+    """
+
+    hub = fan_order[0]
+    path = fan_order[1:]
+    path_count = len(path)
+    cycles: set[tuple[str, ...]] = set()
+    arc_length = cycle_length - 1
+    if chordless:
+        if cycle_length == 3:
+            for index in range(path_count - 1):
+                cycles.add(_canonicalize_cycle((hub, path[index], path[index + 1])))
+        return cycles
+    if arc_length < 2 or arc_length > path_count:
+        return cycles
+    for start in range(path_count - arc_length + 1):
+        segment = tuple(path[start : start + arc_length])
+        cycles.add(_canonicalize_cycle((hub, *segment)))
+    return cycles
+
+
 def _wheel_cycles(
     wheel_order: tuple[str, ...], cycle_length: int, *, chordless: bool
 ) -> set[tuple[str, ...]]:
@@ -565,6 +659,11 @@ def _enumerate_cycles(
         if block.wheel_order is not None:
             cycles.update(
                 _wheel_cycles(block.wheel_order, cycle_length, chordless=chordless)
+            )
+            continue
+        if block.fan_order is not None:
+            cycles.update(
+                _fan_cycles(block.fan_order, cycle_length, chordless=chordless)
             )
             continue
         adjacency = block.adjacency
@@ -668,6 +767,7 @@ class _FixedCycleBlock:
     adjacency: dict[str, tuple[str, ...]]
     core_vertices: tuple[str, ...]
     wheel_order: tuple[str, ...] | None = None
+    fan_order: tuple[str, ...] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -872,6 +972,14 @@ def _block_fixed_cycle_bounds(
         # The wheel family is enumerated directly, so charge linear work for
         # emitting its arcs rather than the DFS envelope.
         return core_order, count, adjacency
+    fan_order = _fan_order_for_block(block, local)
+    if fan_order is not None:
+        count = (
+            _fan_chordless_cycle_count(fan_order, cycle_length)
+            if chordless
+            else _fan_cycle_count(fan_order, cycle_length)
+        )
+        return core_order, count, adjacency
     max_core_degree = max((len(local[vertex]) for vertex in block), default=0)
     prefix_bound = core_order
     for depth in range(1, cycle_length):
@@ -1072,6 +1180,9 @@ def _admit_fixed_cycle_search_plan(
                     adjacency=block_adjacency,
                     core_vertices=block,
                     wheel_order=_wheel_order_for_block(
+                        block, _block_adjacency(block, adjacency_sets)
+                    ),
+                    fan_order=_fan_order_for_block(
                         block, _block_adjacency(block, adjacency_sets)
                     ),
                 )

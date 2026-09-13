@@ -696,3 +696,21 @@ def test_complete_graph_six_vertices_four_cycle_count() -> None:
     graph = SimpleUndirectedGraph(vertices=vertices, edges=edges)
     assert enumerate_fixed_length_cycles(graph, 4).cycle_count == 45
     assert enumerate_chordless_fixed_length_cycles(graph, 4).cycle_count == 0
+
+
+def _fan(path_count: int) -> SimpleUndirectedGraph:
+    path = tuple(f"r{index}" for index in range(path_count))
+    hub = "h"
+    edges = tuple(canonical_edge(hub, vertex) for vertex in path) + tuple(
+        canonical_edge(path[index], path[index + 1]) for index in range(path_count - 1)
+    )
+    return SimpleUndirectedGraph(vertices=(*path, hub), edges=edges)
+
+
+def test_sparse_fan_blocks_use_an_exact_cycle_bound() -> None:
+    """A 22-vertex fan has 19 four-cycles and no induced four-cycle."""
+    graph = _fan(21)
+    assert enumerate_fixed_length_cycles(graph, 4).cycle_count == 19
+    assert enumerate_chordless_fixed_length_cycles(graph, 4).cycle_count == 0
+    assert enumerate_fixed_length_cycles(graph, 3).cycle_count == 20
+    assert enumerate_chordless_fixed_length_cycles(graph, 3).cycle_count == 20

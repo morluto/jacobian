@@ -2,6 +2,7 @@
 
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.geometry.gaussian_projective_line._models import (
+    CROSS_RATIO_ORDER,
     GaussianCrossRatioSource,
 )
 from jacobian.math.geometry.gaussian_projective_line.operations import (
@@ -11,9 +12,13 @@ from jacobian.math.number_theory.number_fields import GaussianRational
 
 TOOLS: MathTools = (
     MathTool(
-        operation_id="geometry.projective_line.gaussian_rational.cross_ratio.compute",
+        operation_id="geometry.projective_line.cross_ratio.gaussian_rational.compute",
         title="Compute a Gaussian-rational projective cross-ratio",
-        description="Normalize homogeneous P1(Q(i)) points and compute their exact cross-ratio through homogeneous determinants.",
+        description=(
+            "Compute the exact cross-ratio in Q(i) of four pairwise distinct "
+            "homogeneous points of P1(Q(i)) using the ordered convention "
+            f"{CROSS_RATIO_ORDER}; infinity is represented by [1:0]."
+        ),
         request_type=GaussianCrossRatioSource,
         result_type=GaussianRational,
         run=gaussian_rational_cross_ratio,
@@ -23,6 +28,11 @@ TOOLS: MathTools = (
             "cross-ratio",
             "gaussian-rational",
             "exact",
+        ),
+        discovery_terms=(
+            "exact Gaussian-rational cross-ratio",
+            "cross-ratio of four Q(i) projective points",
+            "projective invariant of four ordered points",
         ),
         examples=(
             OperationExample(

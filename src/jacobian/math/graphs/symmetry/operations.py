@@ -1087,9 +1087,9 @@ def _special_graph_generators(
     # complete bipartite K_{n,n}) has the same automorphism group as that
     # complement, so the compact presentation transfers unchanged. A uniform
     # vertex color changes no automorphism and is treated as uncolored; a
-    # nontrivial coloring or any edge coloring needs its own profile and is
-    # left to the generic search.
-    if graph.edge_colors:
+    # uniform edge color also removes no automorphism. A nontrivial vertex or
+    # edge coloring needs its own profile and is left to the generic search.
+    if graph.edge_colors and len(set(graph.edge_colors)) > 1:
         return None
     if graph.vertex_colors and len(set(graph.vertex_colors)) > 1:
         return None

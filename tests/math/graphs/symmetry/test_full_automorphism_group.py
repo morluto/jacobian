@@ -855,3 +855,17 @@ def test_noncanonical_vertex_order_round_trips() -> None:
     result = full_graph_automorphism_group(graph)
     reparsed = FullGraphAutomorphismResult.model_validate_json(result.model_dump_json())
     assert reparsed.generators == result.generators
+
+
+def test_uniform_edge_color_keeps_complement_presentation() -> None:
+    """A uniform edge color removes no automorphism from K8,8."""
+    left = tuple(f"a{index}" for index in range(8))
+    right = tuple(f"b{index}" for index in range(8))
+    edges = tuple(canonical_edge(first, second) for first in left for second in right)
+    graph = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(vertices=left + right, edges=edges),
+        edge_colors=("only",) * len(edges),
+    )
+    result = full_graph_automorphism_group(graph)
+    assert result.automorphism_count == (factorial(8) ** 2) * 2
+    assert result.generated_group_order == result.automorphism_count

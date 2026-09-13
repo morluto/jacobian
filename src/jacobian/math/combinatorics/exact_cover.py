@@ -991,24 +991,13 @@ def minimum_generalized_exact_cover(  # noqa: C901
         listing_degree = remaining_min_degree
     if estimated_nodes_ceiling is not None:
         estimated_nodes = min(estimated_nodes, estimated_nodes_ceiling)
-    elif remaining_rows and not any(
-        remaining_primary <= set(row.items) for row in remaining_rows
-    ):
-        for secondary in instance.secondary_items:
-            if secondary in secondary_rows:
-                missing = remaining_row_count - secondary_rows[secondary]
-            else:
-                missing = sum(1 for row in remaining_rows if secondary not in row.items)
-            if 0 < missing <= remaining_min_degree:
-                estimated_nodes = min(
-                    estimated_nodes,
-                    1 + 2 * remaining_min_degree * (missing + 1),
-                )
-                break
+    # A secondary that is missing from some but not all rows does not linearly
+    # bound the combinations among the remaining rows, so retain the full node
+    # ceiling rather than an unproven per-secondary tightening.
     scan_work = estimated_nodes * primary_count * mask_words
     candidate_work = 2 * estimated_nodes * listing_degree * mask_words
     if (
-        shortcut_work + index_work + scan_work + candidate_work
+        shortcut_work + forcing_work + index_work + scan_work + candidate_work
         > _MINIMUM_EXACT_COVER_WORK_LIMIT
     ):
         raise OperationResourceAdmissionError(

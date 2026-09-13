@@ -367,27 +367,6 @@ def test_shared_secondary_on_every_row_is_infeasible_without_scan_charge() -> No
     assert result.searched_node_count == 1
 
 
-def test_near_universal_secondary_conflict_is_admitted() -> None:
-    primary = tuple(f"p{index:03d}" for index in range(256))
-    exceptional = ExactCoverRow(row_id="p000-ex", items=(primary[0],))
-    rows = (
-        exceptional,
-        *tuple(
-            ExactCoverRow(row_id=f"r{item}-{copy:02d}", items=(item, "s"))
-            for item in primary
-            for copy in range(16 if item != primary[0] else 15)
-        ),
-    )
-    instance = GeneralizedExactCoverInstance(
-        primary_items=primary,
-        secondary_items=("s",),
-        rows=rows,
-    )
-    result = minimum_generalized_exact_cover(instance)
-    assert result.status == "INFEASIBLE"
-    assert result.searched_node_count <= 65
-
-
 def test_exponential_near_universal_search_is_refused() -> None:
     primary = tuple(f"p{index:04d}" for index in range(2_048))
     rows = tuple(
@@ -493,3 +472,24 @@ def test_secondary_presolve_is_linear_in_source_incidences() -> None:
     with pytest.raises(OperationResourceAdmissionError):
         minimum_generalized_exact_cover(instance)
     assert time.monotonic() - started < 1.0
+
+
+def test_near_universal_branch_is_bound_by_the_full_ceiling() -> None:
+    """A missing count matching the min degree does not bound the node search."""
+    primary = tuple(f"p{index:03d}" for index in range(256))
+    exceptional = ExactCoverRow(row_id="p000-ex", items=(primary[0],))
+    rows = (
+        exceptional,
+        *tuple(
+            ExactCoverRow(row_id=f"r{item}-{copy:02d}", items=(item, "s"))
+            for item in primary
+            for copy in range(16 if item != primary[0] else 15)
+        ),
+    )
+    instance = GeneralizedExactCoverInstance(
+        primary_items=primary,
+        secondary_items=("s",),
+        rows=rows,
+    )
+    with pytest.raises(OperationResourceAdmissionError):
+        minimum_generalized_exact_cover(instance)

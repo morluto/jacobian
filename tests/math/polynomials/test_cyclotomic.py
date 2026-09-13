@@ -107,8 +107,10 @@ def test_backend_failure_is_typed(monkeypatch: pytest.MonkeyPatch) -> None:
         raise RuntimeError("backend unavailable")
 
     monkeypatch.setattr(sympy, "cyclotomic_poly", fail)
+    # 105 = 3*5*7 is radical and not a distinct-prime semiprime, so it still
+    # reaches the dense backend the fake replaces.
     with pytest.raises(OperationBackendError) as exc_info:
-        _run(CyclotomicRequest(index=30))
+        _run(CyclotomicRequest(index=105))
     assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT
 
 
@@ -125,7 +127,7 @@ def test_backend_nonintegral_coefficients_are_not_truncated(
         sympy, "cyclotomic_poly", lambda *args, **kwargs: FakePolynomial()
     )
     with pytest.raises(OperationBackendError) as exc_info:
-        _run(CyclotomicRequest(index=30))
+        _run(CyclotomicRequest(index=105))
     assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT
 
 
@@ -142,7 +144,7 @@ def test_backend_wrong_constant_is_rejected_on_the_native_path(
         sympy, "cyclotomic_poly", lambda *args, **kwargs: FakePolynomial()
     )
     with pytest.raises(OperationBackendError) as exc_info:
-        cyclotomic(30)
+        cyclotomic(105)
     assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT
 
 
@@ -337,10 +339,11 @@ def test_reduced_backend_coefficients_are_validated(
     monkeypatch.setattr(
         sympy, "cyclotomic_poly", lambda *args, **kwargs: FakePolynomial()
     )
-    # 426 = 2 * 213 uses the odd-half backend, whose coefficients must be
-    # checked before the result is returned.
+    # 210 = 2 * 105 uses the odd-half backend (105 = 3*5*7 has three distinct
+    # primes, so no bounded quotient reduction applies), and its coefficients
+    # must be checked before the result is returned.
     with pytest.raises(OperationBackendError) as exc_info:
-        module.cyclotomic(426)
+        module.cyclotomic(210)
     assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT
 
 
@@ -386,7 +389,7 @@ def test_twice_odd_base_shape_is_required_before_returning(
 
     from jacobian.math.polynomials._cyclotomic import _admit, _factor_index
 
-    admission = _admit(426, _factor_index(426))
+    admission = _admit(210, _factor_index(210))
 
     class WrongConstant:
         def all_coeffs(self) -> tuple[int, ...]:
@@ -403,5 +406,63 @@ def test_twice_odd_base_shape_is_required_before_returning(
             lambda *args, carrier=fake, **kwargs: carrier,
         )
         with pytest.raises(OperationBackendError) as exc_info:
-            cyclotomic(426)
+            cyclotomic(210)
         assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT
+
+
+def test_twice_odd_index_reuses_the_odd_half_regime() -> None:
+    """Phi_894 = Phi_447(-x) must not fall back to the dense radical estimate."""
+    import sympy
+
+    assert _construction_regime(894, {2: 1, 3: 1, 149: 1})[0] < 16_000_000
+    result = _run(CyclotomicRequest(index=894))
+    assert result.totient == 296
+    reference = sympy.Poly(
+        sympy.cyclotomic_poly(894, sympy.Symbol("x")), sympy.Symbol("x")
+    )
+    assembled = sympy.Poly(
+        sum(
+            coefficient * sympy.Symbol("x") ** (296 - offset)
+            for offset, coefficient in enumerate(result.polynomial.coefficients)
+        ),
+        sympy.Symbol("x"),
+    )
+    assert assembled == reference
+
+
+def test_twice_odd_halves_agree_with_the_backend_for_every_reduction() -> None:
+    """The reused odd-half kernel matches the backend across reduction shapes."""
+    import sympy
+
+    for index in (6, 12, 30, 42, 894):
+        result = _run(CyclotomicRequest(index=index))
+        reference = sympy.Poly(
+            sympy.cyclotomic_poly(index, sympy.Symbol("x")), sympy.Symbol("x")
+        )
+        degree = result.totient
+        assembled = sympy.Poly(
+            sum(
+                coefficient * sympy.Symbol("x") ** (degree - offset)
+                for offset, coefficient in enumerate(result.polynomial.coefficients)
+            ),
+            sympy.Symbol("x"),
+        )
+        assert assembled == reference
+
+
+def test_oversized_backend_integer_is_a_typed_backend_failure() -> None:
+    """A float-digit backend coefficient must not leak a raw ValueError."""
+    from jacobian._execution import OperationBackendError
+    from jacobian.math.polynomials._cyclotomic import (
+        _admit,
+        _factor_index,
+        _require_admitted_coefficients,
+    )
+
+    admission = _admit(30, _factor_index(30))
+    oversized = 10**5000
+    for coefficients in ((1, oversized, 1), (1, oversized)):
+        with pytest.raises(OperationBackendError) as exc_info:
+            _require_admitted_coefficients(coefficients, admission)
+        assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT
+    _require_admitted_coefficients((1, 0, 1), admission)

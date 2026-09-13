@@ -145,18 +145,15 @@ def _construction_regime(index: int, factorization: dict[int, int]) -> tuple[int
         return max(1, index.bit_length()) * index, 2
     if _is_twice_odd_index(index, factorization):
         # ``Phi_{2m}(x) = Phi_m(-x)`` for odd ``m``: the construction only has
-        # to build the odd half, then negate alternate coefficients.
+        # to build the odd half, then negate alternate coefficients. Charging the
+        # odd half's own regime keeps every reduction it admits (for example the
+        # bounded semiprime quotient) available through this path.
         odd_half = index // 2
         odd_factorization = {
             prime: exponent for prime, exponent in factorization.items() if prime != 2
         }
-        if _is_prime_index(odd_half, odd_factorization):
-            return max(1, odd_half.bit_length()) * odd_half, 2
-        odd_radical = prod(odd_factorization) if odd_factorization else 1
-        return (
-            10 * max(1, odd_radical.bit_length()) * (odd_radical + 1) ** 2,
-            2 * odd_radical + (odd_radical + 1).bit_length() + 1,
-        )
+        odd_work, odd_bits = _construction_regime(odd_half, odd_factorization)
+        return odd_work + odd_half + 1, odd_bits + 1
     semiprime = _semiprime_primes(factorization)
     if semiprime is not None:
         # ``Phi_{pq}(x) = Phi_p(x**q) / Phi_p(x)`` for distinct primes ``p < q``:
@@ -332,7 +329,15 @@ def _twice_odd_cyclotomic(
     if _is_prime_index(odd, odd_factorization):
         base_coefficients: tuple[int, ...] = (1,) * odd
     else:
-        base_coefficients = _backend_cyclotomic_coefficients(odd)
+        odd_primes = _semiprime_primes(odd_factorization)
+        if odd_primes is not None:
+            # Reuse the odd half's own bounded quotient instead of paying for a
+            # dense backend construction of the halved index.
+            base_coefficients = _semiprime_quotient_coefficients(
+                odd, odd_primes, admission
+            )
+        else:
+            base_coefficients = _backend_cyclotomic_coefficients(odd)
         # The odd half is ``Phi_odd`` with the same degree as ``Phi_{2*odd}``
         # and, for odd > 1, the exact constant term 1. Checking only digit
         # widths would let a malformed monic tuple ending in -1 through.
@@ -379,12 +384,12 @@ def _exact_divide(
     return IntegerPolynomial(coefficients=tuple(quotient))
 
 
-def _semiprime_quotient_cyclotomic(
+def _semiprime_quotient_coefficients(
     index: int,
     primes: tuple[int, int],
     admission: _CyclotomicAdmission,
-) -> IntegerPolynomial:
-    """Return ``Phi_{pq}(x) = Phi_p(x**q) / Phi_p(x)`` for distinct primes."""
+) -> tuple[int, ...]:
+    """Return the coefficients of ``Phi_{pq}(x) = Phi_p(x**q) / Phi_p(x)``."""
 
     low, high = primes
     request_checkpoint("during semiprime cyclotomic construction")
@@ -394,10 +399,51 @@ def _semiprime_quotient_cyclotomic(
     )
     if len(quotient.coefficients) != admission.degree + 1:
         raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
-    _require_admitted_coefficients(
-        quotient.coefficients, admission, expected_constant=1
-    )
-    return quotient
+    return quotient.coefficients
+
+
+def _semiprime_quotient_cyclotomic(
+    index: int,
+    primes: tuple[int, int],
+    admission: _CyclotomicAdmission,
+) -> IntegerPolynomial:
+    """Return ``Phi_{pq}(x) = Phi_p(x**q) / Phi_p(x)`` for distinct primes."""
+
+    coefficients = _semiprime_quotient_coefficients(index, primes, admission)
+    _require_admitted_coefficients(coefficients, admission, expected_constant=1)
+    return IntegerPolynomial(coefficients=coefficients)
+
+
+def _exceeds_coefficient_digits(
+    coefficients: tuple[int, ...], admission: _CyclotomicAdmission
+) -> bool:
+    """Report whether any coefficient leaves the admitted exact-output envelope.
+
+    A malformed backend value can exceed Python's active integer-to-string digit
+    limit, where ``str`` raises ``ValueError`` before the tuple could be
+    classified as a backend failure. Binary magnitude decides that case without
+    any decimal conversion, and the exact digit totals are computed only for
+    values that can be formatted.
+    """
+
+    total_digits = 0
+    for value in coefficients:
+        magnitude = abs(value)
+        # ``bit_length`` bounds the decimal width from above and below:
+        # digits <= bit_length, and bit_length <= 4 * digits for digits >= 1.
+        bits = magnitude.bit_length()
+        if bits > 4 * admission.coefficient_digits:
+            return True
+        try:
+            digits = len(str(magnitude))
+        except ValueError:
+            return True
+        if digits > admission.coefficient_digits:
+            return True
+        total_digits += digits
+        if total_digits > admission.output_digits:
+            return True
+    return False
 
 
 def _require_admitted_coefficients(
@@ -421,11 +467,7 @@ def _require_admitted_coefficients(
         or (expected_degree is not None and len(coefficients) != expected_degree + 1)
         or (expected_constant is not None and coefficients[-1] != expected_constant)
         or (expected_constant is None and coefficients[-1] not in (1, -1))
-        or any(
-            len(str(abs(value))) > admission.coefficient_digits
-            for value in coefficients
-        )
-        or sum(len(str(abs(value))) for value in coefficients) > admission.output_digits
+        or _exceeds_coefficient_digits(coefficients, admission)
     ):
         raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
 

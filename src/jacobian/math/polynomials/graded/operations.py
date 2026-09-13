@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Iterator
-from math import comb
+from math import ceil, comb
 from typing import Literal
 
 from sympy import QQ, Poly, Symbol, binomial, cancel, expand_func, fraction
@@ -155,9 +155,11 @@ def initial_monomial_ideal(
     if remaining <= 0:
         require_execution_deadline(deadline)
     nested_budget = resource_budget.model_copy(
-        update={"wall_seconds": max(1.0, remaining)}
+        update={"wall_seconds": max(1, ceil(remaining))}
     )
-    basis_result = groebner_basis(ideal, monomial_order, resource_budget=nested_budget)
+    basis_result = groebner_basis(
+        ideal, monomial_order, resource_budget=nested_budget, _outer_deadline=deadline
+    )
     require_execution_deadline(deadline)
     variables = ideal.variables
     order = {"lex": "lex", "grlex": "grlex", "grevlex": "grevlex"}[monomial_order]

@@ -1108,3 +1108,22 @@ def test_hilbert_function_inherits_the_outer_deadline(
     monkeypatch.setattr(module, "initial_monomial_ideal", tracked)
     hilbert_function(_ideal((2, 0)), max_degree=2)
     assert captured and captured[0] is not None
+
+
+def test_nested_groebner_deadline_never_exceeds_the_outer_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A subsecond outer remainder must not grant a fresh full second."""
+    from jacobian.math.polynomials.graded import operations as module
+    from jacobian.math.polynomials.ideals import operations as ideal_module
+
+    seen: list[float | None] = []
+    original = ideal_module.groebner_basis
+
+    def tracked(ideal: object, order: str = "grevlex", **kwargs: object) -> object:
+        seen.append(kwargs.get("_outer_deadline"))  # type: ignore[arg-type]
+        return original(ideal, order, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(module, "groebner_basis", tracked)
+    hilbert_function(_ideal((2, 0)), max_degree=2)
+    assert seen and seen[0] is not None

@@ -30,7 +30,7 @@ def compute_binary_union_relation(
 TOOLS: MathTools = (
     MathTool(
         operation_id="set_system.sunflower_family.construct",
-        title="Construct the complete sunflower triple hypergraph family",
+        title="Construct the complete r-petal sunflower hypergraph family",
         description=(
             "Return every distinct-index subfamily of exactly r >= 2 members "
             "whose pairwise intersections are all equal to one common core, "
@@ -44,7 +44,11 @@ TOOLS: MathTools = (
         result_type=SunflowerFamilyResult,
         run=compute_sunflower_family,
         tags=("combinatorics", "set-system", "sunflower", "hypergraph", "complete"),
-        discovery_terms=("sunflower triple hypergraph construction",),
+        discovery_terms=(
+            "r-petal sunflower family construction",
+            "complete sunflower hypergraph for any petal count",
+            "equal pairwise intersection set family",
+        ),
         examples=(
             OperationExample(
                 name="four_petals",

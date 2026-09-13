@@ -76,11 +76,28 @@ def run_scaled_integer_part_worker(
     check_bounded_process_result(completed)
     try:
         response = json.loads(completed.stdout.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
-        raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE) from exc
-    if not response.get("ok"):
+        if not isinstance(response, dict):
+            raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE)
+        ok = response.get("ok")
+        if ok is not True and ok is not False:
+            raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE)
         code = response.get("code")
         message = str(response.get("message", "radix isolation failed"))
+        scaled_floor = response.get("scaled_floor")
+        if ok and not isinstance(scaled_floor, str):
+            raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE)
+    except OperationBackendError:
+        raise
+    except (
+        UnicodeDecodeError,
+        json.JSONDecodeError,
+        TypeError,
+        ValueError,
+        KeyError,
+        AttributeError,
+    ) as exc:
+        raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE) from exc
+    if not ok:
         if code == "root_index":
             raise OperationDomainValidationError(
                 location=("value", "real_root_index"),
@@ -94,7 +111,11 @@ def run_scaled_integer_part_worker(
                 message=message,
             )
         raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
-    return int(parse_canonical_integer(response["scaled_floor"]))
+    assert scaled_floor is not None
+    try:
+        return int(parse_canonical_integer(scaled_floor))
+    except (TypeError, ValueError) as exc:
+        raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE) from exc
 
 
 __all__ = ["RADIX_ISOLATION_OWNER_SECONDS", "run_scaled_integer_part_worker"]

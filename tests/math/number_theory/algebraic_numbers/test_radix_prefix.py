@@ -444,3 +444,56 @@ def test_worker_abnormal_exit_is_a_backend_failure(
             deadline=time.monotonic() + 30,
         )
     assert exc_info.value.reason is BackendFailureReason.ABNORMAL_EXIT
+
+
+class _Completed:
+    def __init__(self, stdout: bytes) -> None:
+        self.stdout = stdout
+        self.returncode = 0
+
+
+def _worker_result(monkeypatch: pytest.MonkeyPatch, payload: bytes) -> None:
+    monkeypatch.setattr(process, "check_bounded_process_result", lambda _: None)
+    monkeypatch.setattr(
+        process, "run_bounded_process", lambda *a, **k: _Completed(payload)
+    )
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        b"[]",
+        b'{"ok": true}',
+        b'{"ok": true, "scaled_floor": 7}',
+        b'{"ok": true, "scaled_floor": "07"}',
+    ],
+)
+def test_malformed_worker_payloads_are_typed_backend_failures(
+    monkeypatch: pytest.MonkeyPatch, payload: bytes
+) -> None:
+    """Syntactically valid but malformed worker JSON is a MALFORMED_RESPONSE."""
+
+    _worker_result(monkeypatch, payload)
+    with pytest.raises(OperationBackendError) as error:
+        process.run_scaled_integer_part_worker(
+            polynomial=(1, 0, -2),
+            real_root_index=1,
+            scale=10,
+            isolation_bits=64,
+            deadline=time.monotonic() + 30,
+        )
+    assert error.value.reason is BackendFailureReason.MALFORMED_RESPONSE
+
+
+def test_valid_worker_payload_is_decoded(monkeypatch: pytest.MonkeyPatch) -> None:
+    _worker_result(monkeypatch, b'{"ok": true, "scaled_floor": "141"}')
+    assert (
+        process.run_scaled_integer_part_worker(
+            polynomial=(1, 0, -2),
+            real_root_index=1,
+            scale=10,
+            isolation_bits=64,
+            deadline=time.monotonic() + 30,
+        )
+        == 141
+    )

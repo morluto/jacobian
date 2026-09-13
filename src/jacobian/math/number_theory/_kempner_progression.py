@@ -223,6 +223,18 @@ def decide_kempner_arithmetic_progression(
             arity=arity,
             conclusion=KempnerProgressionFree(status="PROGRESSION_FREE"),
         )
+    if len(digit_set.allowed_digits) == 1:
+        # A singleton nonzero digit admits only repdigits
+        # d*(base**k-1)/(base-1), which contain no three-term (hence no longer)
+        # nontrivial progression: 2*base**j = base**i + base**k forces i=j=k.
+        # Every arity is trivially progression-free; do not charge the
+        # carry-graph envelope, whose source-blind bound would reject sparse
+        # cases such as base 64 with a single allowed digit.
+        return KempnerArithmeticProgressionResult(
+            digit_set=digit_set,
+            arity=arity,
+            conclusion=KempnerProgressionFree(status="PROGRESSION_FREE"),
+        )
     admission = _require_admission(digit_set, arity)
     base = digit_set.base
     allowed = frozenset(digit_set.allowed_digits)

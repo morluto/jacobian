@@ -1215,7 +1215,19 @@ def _validate_graph_carrier(graph: SimpleUndirectedGraph) -> None:
             "cycle_enumeration.graph_structure",
             "graph vertices must be a tuple of string labels",
         )
+    source_characters = 0
     for vertex in vertices:
+        source_characters += len(vertex)
+        if source_characters > MAX_FIXED_CYCLE_RETAINED_LABEL_CHARACTERS // 2:
+            # ``len`` is O(1), while encoding and NFC-scanning below walk the
+            # whole label. The retained envelope always reserves at least twice
+            # the source characters, so exceeding half the ceiling here means
+            # the later envelope check would refuse the input anyway; reject
+            # before the full-string operations.
+            _reject_fixed_cycle_resource(
+                "cycle_enumeration.retained_labels_exceed_bound",
+                "the complete fixed-length cycle result exceeds the admitted retained-label envelope",
+            )
         try:
             vertex.encode("utf-8")
         except UnicodeEncodeError:

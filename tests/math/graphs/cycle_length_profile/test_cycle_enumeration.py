@@ -714,3 +714,24 @@ def test_sparse_fan_blocks_use_an_exact_cycle_bound() -> None:
     assert enumerate_chordless_fixed_length_cycles(graph, 4).cycle_count == 0
     assert enumerate_fixed_length_cycles(graph, 3).cycle_count == 20
     assert enumerate_chordless_fixed_length_cycles(graph, 3).cycle_count == 20
+
+
+def test_oversized_label_rejects_before_full_string_scans(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An over-ceiling label is refused without encoding or NFC-scanning it."""
+    import unicodedata
+
+    scanned: list[int] = []
+    real_is_normalized = unicodedata.is_normalized
+
+    def spy(value: str) -> bool:
+        scanned.append(len(value))
+        return real_is_normalized(value)
+
+    monkeypatch.setattr(unicodedata, "is_normalized", spy)
+    oversized = "x" * (100_000_000 // 2 + 1)
+    forged = SimpleUndirectedGraph.model_construct(vertices=(oversized,), edges=())
+    with pytest.raises(OperationResourceAdmissionError, match="retained"):
+        enumerate_fixed_length_cycles(forged, 3)
+    assert all(length <= 100_000_000 // 2 for length in scanned)

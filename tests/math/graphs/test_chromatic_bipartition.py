@@ -320,6 +320,44 @@ def test_unit_threshold_charges_only_the_first_usable_remainder() -> None:
     assert result.chromatic_b == 8
 
 
+def test_unit_threshold_charges_the_first_usable_worker_phases() -> None:
+    """The usable candidate repeats reconstruct/classify inside the worker.
+
+    A near-boundary request that skips large non-bipartite remainders must be
+    rejected when the repeated worker phases would exceed the work bound; the
+    previously undercharged estimate admitted it.
+    """
+    source = _isolated_apex_bipartite_graph(isolate_count=23)
+    with pytest.raises(OperationResourceAdmissionError, match="complete-search work"):
+        find_chromatic_bipartition(ChromaticBipartitionRequest(graph=source, s=1, t=1))
+
+
+def test_unit_threshold_still_returns_the_split_below_the_work_bound() -> None:
+    """The corrected charge keeps an adjacent cheap request exactly decidable."""
+    source = _isolated_apex_bipartite_graph(isolate_count=22)
+    result = find_chromatic_bipartition(
+        ChromaticBipartitionRequest(graph=source, s=1, t=1)
+    )
+    assert result.status == "SPLIT"
+    assert result.side_a == ("apex",)
+    assert result.chromatic_b == 2
+
+
+def _isolated_apex_bipartite_graph(isolate_count: int) -> SimpleUndirectedGraph:
+    """Build isolates plus an apex over a complete bipartite graph.
+
+    Deleting an isolate leaves a non-bipartite core above the backend order, so
+    the unit-threshold search skips those candidates; deleting the apex leaves
+    the complete bipartite graph and is the first usable remainder.
+    """
+    isolates = tuple(f"z{index:02d}" for index in range(isolate_count))
+    left = tuple(f"a{index:03d}" for index in range(115))
+    right = tuple(f"b{index:03d}" for index in range(115))
+    edges = {tuple(sorted(pair)) for pair in ((u, v) for u in left for v in right)}
+    edges.update(tuple(sorted(pair)) for pair in (("apex", u) for u in (*left, *right)))
+    return graph((*isolates, "apex", *left, *right), tuple(sorted(edges)))
+
+
 def test_unit_threshold_nonbipartite_core_above_backend_order_is_refused() -> None:
     vertices = tuple(f"v{i:02d}" for i in range(34))
     edges = tuple(

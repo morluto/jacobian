@@ -378,15 +378,17 @@ def _admit_unit_threshold_chromatic(request: ChromaticBipartitionRequest) -> Non
         reconstruction = 2 * (order + edge_count)
         core = _induced_edge_core(request.graph, side_b)
         classification = len(core.vertices) + len(core.edges) + 1
-        # Admission reconstructs and classifies each remainder; the worker
-        # repeats that work before coloring the first usable core.
+        # This admission pass reconstructs and classifies every remainder, and
+        # the worker repeats that pair of phases for each skipped candidate.
         work += 2 * (reconstruction + classification)
         if not _unit_threshold_core_is_admitted(core):
             continue
         has_admitted_candidate = True
-        coloring = _unit_threshold_coloring_work(core)
-        if coloring > classification:
-            work += coloring
+        # For the first usable candidate the worker reconstructs and classifies
+        # the remainder again, and `_exact_induced_chromatic` then rebuilds and
+        # reclassifies the induced core a second time before coloring it.
+        work += 2 * (reconstruction + classification)
+        work += _unit_threshold_coloring_work(core)
         break
     if has_admitted_candidate and work <= MAX_CHROMATIC_BIPARTITION_WORK:
         return

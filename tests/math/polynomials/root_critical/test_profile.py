@@ -486,3 +486,38 @@ def test_large_coefficient_cubic_rectangles_are_pairwise_isolating() -> None:
         key=abs,
     )
     assert Fraction(1, 10**41) < small <= Fraction(1, 10**39)
+
+
+def test_rectangles_are_isolating_across_factors() -> None:
+    """A near-rational irrational root excludes the distinct rational sibling.
+
+    ``(z - r)(z^2 - 2)`` with a 40-digit rational approximation ``r`` of
+    ``sqrt(2)`` puts ``r`` inside ``sqrt(2)``'s naive rectangle; the refinement
+    must shrink it so each rectangle contains exactly one root.
+    """
+    import sympy
+
+    from fractions import Fraction
+
+    from jacobian.math.polynomials.root_critical.operations import _family
+
+    rational = Fraction(14142135623730950488016887242096980785696, 10**40)
+    z = sympy.Symbol("z")
+    polynomial = sympy.Poly(
+        (z - sympy.Rational(rational.numerator, rational.denominator)) * (z**2 - 2),
+        z,
+        domain="QQ",
+    )
+    records, _values = _family(polynomial)
+    for record in records:
+        real_lower = record.rectangle.real_lower.as_fraction()
+        real_upper = record.rectangle.real_upper.as_fraction()
+        imaginary_lower = record.rectangle.imaginary_lower.as_fraction()
+        imaginary_upper = record.rectangle.imaginary_upper.as_fraction()
+        contains_rational = (
+            real_lower <= rational <= real_upper
+            and imaginary_lower <= 0 <= imaginary_upper
+        )
+        # Only the rational root's own singleton rectangle may contain it.
+        if contains_rational:
+            assert real_lower == real_upper == rational

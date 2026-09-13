@@ -251,24 +251,107 @@ def _family(
     for factor, multiplicity in poly.factor_list()[1]:
         primitive_factors.append((_primitive_integer_poly(factor), int(multiplicity)))
     primitive_factors.sort(key=lambda item: _factor_key(item[0]))
-    records: list[RootCriticalRoot] = []
-    values: list[Any] = []
+    # Collect every root first, so each rectangle can be refined to exclude the
+    # other roots it might otherwise contain across factors.
+    collected: list[tuple[sympy.Poly, int, int, Any]] = []
     for factor, multiplicity in primitive_factors:
         request_checkpoint("during root-critical all_roots")
         exact_roots = tuple(factor.all_roots())
         for root_index in range(factor.degree()):
-            root = _root_value(root_index, exact_roots)
-            rectangle = _rectangle(root)
-            records.append(
-                RootCriticalRoot(
-                    axis_index=len(records),
-                    value=_algebraic_root_value(factor, root_index, rectangle),
-                    multiplicity=multiplicity,
-                    rectangle=rectangle,
-                )
+            collected.append(
+                (factor, multiplicity, root_index, _root_value(root_index, exact_roots))
             )
-            values.append(root)
+    real_values = tuple(
+        value
+        for _, _, _, root in collected
+        if _root_is_real(root) and (value := _root_rational_value(root)) is not None
+    )
+    records: list[RootCriticalRoot] = []
+    values: list[Any] = []
+    for factor, multiplicity, root_index, root in collected:
+        rectangle = _isolating_rectangle(root, _root_rational_value(root), real_values)
+        records.append(
+            RootCriticalRoot(
+                axis_index=len(records),
+                value=_algebraic_root_value(factor, root_index, rectangle),
+                multiplicity=multiplicity,
+                rectangle=rectangle,
+            )
+        )
+        values.append(root)
     return tuple(records), tuple(values)
+
+
+def _root_is_real(root: Any) -> bool:
+    """Whether a backend root is real."""
+
+    return bool(getattr(root, "is_real", False))
+
+
+def _root_rational_value(root: Any) -> CanonicalRational | None:
+    """Exact value of a rational root, or None when it is irrational."""
+
+    if not getattr(root, "is_rational", False):
+        return None
+    return _rational(root)
+
+
+def _isolating_rectangle(
+    root: Any,
+    own_value: CanonicalRational | None,
+    real_values: tuple[CanonicalRational, ...],
+) -> RootCriticalRectangle:
+    """Return a rectangle refined to exclude every other real root value.
+
+    A rational root can lie inside an irrational sibling's rectangle (for
+    example a good rational approximation of ``sqrt(2)``). Refine the interval
+    around this root until all colliding rational values fall outside it.
+    """
+
+    rectangle = _rectangle(root)
+    if own_value is not None:
+        # A rational root is its own singleton; nothing to refine.
+        return rectangle
+    colliding = sorted(value.as_fraction() for value in real_values)
+    lower = rectangle.real_lower.as_fraction()
+    upper = rectangle.real_upper.as_fraction()
+    if not colliding or not any(lower <= value <= upper for value in colliding):
+        return rectangle
+    # Refine toward the root at increasing precision until no colliding rational
+    # lies inside the interval; the isolating interval is eventually disjoint
+    # from each finite set of distinct rationals.
+    for digits in (60, 120, 240, 480, 960, 1920):
+        refined_lower, refined_upper = _refined_real_interval(root, digits)
+        candidate_lower = max(lower, refined_lower)
+        candidate_upper = min(upper, refined_upper)
+        if candidate_lower > candidate_upper:
+            break
+        lower, upper = candidate_lower, candidate_upper
+        if not any(lower <= value <= upper for value in colliding):
+            break
+    return RootCriticalRectangle(
+        real_lower=_fit_rectangle_component(lower, round_up=False),
+        real_upper=_fit_rectangle_component(upper, round_up=True),
+        imaginary_lower=rectangle.imaginary_lower,
+        imaginary_upper=rectangle.imaginary_upper,
+    )
+
+
+def _refined_real_interval(root: Any, digits: int) -> tuple[Fraction, Fraction]:
+    """A narrow certified real interval for a real algebraic root."""
+
+    try:
+        real_lo, real_hi, _imag_lo, _imag_hi = _enclose_sympy(root)
+    except (ValueError, AttributeError, TypeError):
+        real_lo, real_hi, _imag_lo, _imag_hi = _evalf_containing_box(root)
+    value = root.evalf(digits)
+    real = value.as_real_imag()[0]
+    centre = Fraction(int(sympy.Rational(real).p), int(sympy.Rational(real).q))
+    # A ``digits``-significant-digit approximation has absolute error at most
+    # ``|value| * 10**(1 - digits)``; combine it with the certified interval.
+    magnitude = abs(centre)
+    guard = magnitude / 10 ** (digits - 1) + Fraction(1, 10**digits)
+    return max(real_lo, centre - guard), min(real_hi, centre + guard)
 
 
 def _enclose_add(expr: Any) -> tuple[Fraction, Fraction, Fraction, Fraction]:

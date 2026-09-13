@@ -223,7 +223,13 @@ def _canonical_claims_match(
 ) -> bool:
     try:
         _canonical_carrier_elements(poset.elements)
-    except (AttributeError, PydanticCustomError, TypeError, ValidationError, ValueError):
+    except (
+        AttributeError,
+        PydanticCustomError,
+        TypeError,
+        ValidationError,
+        ValueError,
+    ):
         return False
     if tuple(sorted(set(poset.elements))) != poset.elements:
         return False

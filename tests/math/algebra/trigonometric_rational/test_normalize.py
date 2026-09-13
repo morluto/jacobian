@@ -1,4 +1,5 @@
 import time
+from fractions import Fraction
 
 import pytest
 
@@ -782,3 +783,63 @@ def test_shared_locus_factor_is_charged_once() -> None:
     )
     result = normalize_trigonometric_rational(request)
     assert len(result.denominator_nonzero.terms) == 6
+
+
+def test_worker_cancels_a_laurent_common_factor_in_the_fallback() -> None:
+    """The sympy worker fallback cancels a Laurent common factor exactly.
+
+    ``P*sin(x)`` and ``P*cos(x)`` for ``P = 2 + sin(3000*x)`` share ``P``; the
+    sparse ring GCD raised ``ExactQuotientFailed`` on the negative-exponent
+    operands, so both operands must reduce to their coprimes.
+    """
+    from jacobian.math.algebra.trigonometric_rational._laurent_gcd_worker import (
+        _sympy_cancel,
+    )
+
+    def _laurent(polynomial: dict) -> dict:
+        keys = sorted(polynomial)
+        return {
+            "supports": [[key[0]] for key in keys],
+            "real_numerators": [str(polynomial[key][0].numerator) for key in keys],
+            "real_denominators": [str(polynomial[key][0].denominator) for key in keys],
+            "imag_numerators": [str(polynomial[key][1].numerator) for key in keys],
+            "imag_denominators": [str(polynomial[key][1].denominator) for key in keys],
+        }
+
+    def _sine(k: int) -> dict:
+        return {
+            (k,): (Fraction(0), Fraction(1)),
+            (-k,): (Fraction(0), Fraction(-1)),
+        }
+
+    def _cosine(k: int) -> dict:
+        return {(k,): (Fraction(1), Fraction(0)), (-k,): (Fraction(1), Fraction(0))}
+
+    def _multiply(left: dict, right: dict) -> dict:
+        result: dict = {}
+        for left_support, left_value in left.items():
+            for right_support, right_value in right.items():
+                support = (left_support[0] + right_support[0],)
+                real = left_value[0] * right_value[0] - left_value[1] * right_value[1]
+                imag = left_value[0] * right_value[1] + left_value[1] * right_value[0]
+                current = result.get(support, (Fraction(), Fraction()))
+                result[support] = (current[0] + real, current[1] + imag)
+        return {
+            key: value
+            for key, value in result.items()
+            if value != (Fraction(), Fraction())
+        }
+
+    common = {
+        (0,): (Fraction(2), Fraction()),
+        (3000,): (Fraction(0), Fraction(1)),
+        (-3000,): (Fraction(0), Fraction(-1)),
+    }
+    left = _multiply(common, _sine(1))
+    right = _multiply(common, _cosine(1))
+    response = _sympy_cancel(
+        {"axis": 1, "left": _laurent(left), "right": _laurent(right)}
+    )
+    # The shared factor is cancelled, leaving the coprime cofactors.
+    assert len(response["left"]["supports"]) == 2
+    assert len(response["right"]["supports"]) == 2

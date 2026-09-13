@@ -693,3 +693,96 @@ def test_powered_disjoint_binomial_keeps_per_term_denominators() -> None:
         _request("QQ", expression, variables=("x", "y"))
     )
     assert len(result.polynomial.polynomial.terms) == 13
+
+
+def test_multivariate_power_includes_colliding_denominator_mass() -> None:
+    """A dependent multivariate support must not use the per-term tight bound.
+
+    ``(sum x^i y^j / d[i,j]^32)^2`` has colliding products, so the ``x^2 y^2``
+    coefficient combines every denominator; the uniquely-decomposable shortcut
+    must not apply to this linearly dependent exponent-vector support.
+    """
+    operands = []
+    for index, (i, j) in enumerate((i, j) for i in range(3) for j in range(3)):
+        denominator = 10**113 + 7 * (index + 1)
+        operands.append(
+            {
+                "kind": "MULTIPLY",
+                "operands": [
+                    {
+                        "kind": "POWER",
+                        "base": {"kind": "VARIABLE", "name": "x"},
+                        "exponent": i,
+                    },
+                    {
+                        "kind": "POWER",
+                        "base": {"kind": "VARIABLE", "name": "y"},
+                        "exponent": j,
+                    },
+                    {
+                        "kind": "POWER",
+                        "base": {
+                            "kind": "LITERAL",
+                            "value": {"num": 1, "den": denominator},
+                        },
+                        "exponent": 32,
+                    },
+                ],
+            }
+        )
+    expression = {
+        "kind": "POWER",
+        "base": {"kind": "ADD", "operands": operands},
+        "exponent": 2,
+    }
+    with pytest.raises(OperationResourceAdmissionError):
+        normalize_polynomial_expression(
+            _request("QQ", expression, variables=("x", "y"))
+        )
+
+
+def test_power_of_one_preserves_the_base_aggregate_size() -> None:
+    """``POWER(P, 1)`` is the identity and must not inflate the size bound.
+
+    A sparse base with one wide coefficient is admitted directly; wrapping it
+    in ``POWER(..., 1)`` must not replace its aggregate size with
+    ``support * maximum coefficient width``.
+    """
+
+    operands = [
+        {
+            "kind": "MULTIPLY",
+            "operands": [
+                {
+                    "kind": "POWER",
+                    "base": {"kind": "VARIABLE", "name": "x"},
+                    "exponent": index,
+                },
+                {
+                    "kind": "LITERAL",
+                    "value": {
+                        "num": 10**100 + 1 if index == 0 else 1,
+                        "den": 1,
+                    },
+                },
+            ],
+        }
+        for index in range(1, 33)
+    ]
+    base = {
+        "kind": "POWER",
+        "base": {"kind": "ADD", "operands": operands},
+        "exponent": 1,
+    }
+    wrapped = {"kind": "POWER", "base": base, "exponent": 1}
+    direct_result = normalize_polynomial_expression(_request("ZZ", base))
+    wrapped_result = normalize_polynomial_expression(_request("ZZ", wrapped))
+    assert wrapped_result.polynomial.polynomial == direct_result.polynomial.polynomial
+    from jacobian.math.polynomials._expression_normalize import _metrics
+
+    inner = _request("ZZ", {"kind": "ADD", "operands": operands})
+    outer = _request("ZZ", wrapped)
+    assert (
+        _metrics(outer.expression).total_coefficient_digits
+        <= _metrics(inner.expression).total_coefficient_digits
+    )

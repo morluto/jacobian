@@ -344,18 +344,48 @@ def _multiply_monomials(
     return frozenset((name, power) for name, power in powers.items() if power)
 
 
-def _support_keys_are_univariate(
+def _support_keys_are_uniquely_decomposable(
     keys: frozenset[tuple[tuple[str, int], ...]] | None,
 ) -> bool:
+    """Decide whether monomial products uniquely determine the factor multiset.
+
+    A power's coefficients each combine only one factor multiset when distinct
+    multisets cannot multiply to the same monomial. That holds exactly when the
+    support's exponent vectors are linearly independent over the rationals: a
+    dependent relation ``sum c_i v_i = 0`` with nonnegative and nonpositive
+    parts yields two distinct multisets of the same size with an equal sum.
+    """
+
     if not keys:
         return False
-    names: set[str] = set()
-    for key in keys:
-        for name, _power in key:
-            names.add(name)
-        if len(names) > 1:
-            return False
-    return True
+    vectors = [dict(key) for key in keys]
+    if len(vectors) <= 1:
+        return True
+    names = sorted({name for vector in vectors for name in vector})
+    # Gaussian elimination over Fractions; independence requires full column rank.
+    rows = [[Fraction(vector.get(name, 0)) for name in names] for vector in vectors]
+    rank = 0
+    column_count = len(names)
+    for column in range(column_count):
+        pivot = next(
+            (row for row in range(rank, len(rows)) if rows[row][column] != 0), None
+        )
+        if pivot is None:
+            continue
+        rows[rank], rows[pivot] = rows[pivot], rows[rank]
+        pivot_value = rows[rank][column]
+        rows[rank] = [value / pivot_value for value in rows[rank]]
+        for row in range(len(rows)):
+            if row != rank and rows[row][column] != 0:
+                factor = rows[row][column]
+                rows[row] = [
+                    value - factor * base
+                    for value, base in zip(rows[row], rows[rank], strict=True)
+                ]
+        rank += 1
+        if rank == len(rows):
+            break
+    return rank == len(vectors)
 
 
 def _scale_support_keys(
@@ -594,7 +624,7 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
                     base_expansion_terms,
                     MAX_POLYNOMIAL_TERMS,
                 )
-        if base.termwise_disjoint and not _support_keys_are_univariate(
+        if base.termwise_disjoint and _support_keys_are_uniquely_decomposable(
             base.support_keys
         ):
             powered_denominator_bits = min(
@@ -622,6 +652,8 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
             total_coefficient_digits=(
                 _digits_of_rational(constant)
                 if constant is not None
+                else base.total_coefficient_digits
+                if exponent == 1
                 else _representation_digits(
                     support, numerator_bits, _denominator_bits(denominator)
                 )

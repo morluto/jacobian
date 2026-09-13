@@ -14,6 +14,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.number_theory._kempner_models import (
+    MAX_KEMPNER_ARITY,
     MAX_KEMPNER_BASE,
     MAX_KEMPNER_INTEGER_DIGITS,
     KempnerArithmeticProgressionRequest,
@@ -61,7 +62,9 @@ def _state_bound(arity: int) -> int:
     return bound
 
 
-def _require_admission(digit_set: KempnerDigitSet, arity: int) -> _Admission:
+def _require_canonical_digit_set(digit_set: KempnerDigitSet) -> None:
+    """Reject a non-canonical or out-of-domain digit set at the boundary."""
+
     if (
         not isinstance(digit_set.base, int)
         or isinstance(digit_set.base, bool)
@@ -83,6 +86,10 @@ def _require_admission(digit_set: KempnerDigitSet, arity: int) -> _Admission:
             code="number_theory.kempner_progression.canonical_digit_set",
             message="digit_set must be a canonical proper digit subset",
         )
+
+
+def _require_admission(digit_set: KempnerDigitSet, arity: int) -> _Admission:
+    _require_canonical_digit_set(digit_set)
     state_bound = _state_bound(arity)
     base = digit_set.base
     transition_work = state_bound * base * base
@@ -201,6 +208,13 @@ def decide_kempner_arithmetic_progression(
             code="number_theory.kempner_progression.arity",
             message="arity must be an integer of at least three",
         )
+    if arity > MAX_KEMPNER_ARITY:
+        raise OperationResourceAdmissionError(
+            location=("arity",),
+            code="number_theory.kempner_progression.arity_bound",
+            message=f"arity must be at most {MAX_KEMPNER_ARITY}",
+        )
+    _require_canonical_digit_set(digit_set)
     if tuple(digit_set.allowed_digits) == (0,):
         # The only digit is 0, so there is no positive member and every arity
         # is trivially progression-free; do not charge the carry-graph envelope.

@@ -293,3 +293,25 @@ def test_serialized_branches_require_status_discriminators() -> None:
                 "conclusion": {},
             }
         )
+
+
+def test_zero_only_shortcut_still_validates_the_domain() -> None:
+    """A constructed out-of-domain digit set is refused before the presolve."""
+    from jacobian.catalog.models import OperationDomainValidationError
+
+    forged = KempnerDigitSet.model_construct(base=1, allowed_digits=(0,))
+    with pytest.raises(OperationDomainValidationError) as error:
+        decide_kempner_arithmetic_progression(forged, 4)
+    assert error.value.errors()[0]["type"] == (
+        "number_theory.kempner_progression.canonical_digit_set"
+    )
+
+
+def test_zero_only_shortcut_rejects_oversized_arity() -> None:
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        decide_kempner_arithmetic_progression(
+            KempnerDigitSet(base=64, allowed_digits=(0,)), 1_000
+        )
+    assert error.value.errors()[0]["type"] == (
+        "number_theory.kempner_progression.arity_bound"
+    )

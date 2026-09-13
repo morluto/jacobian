@@ -286,6 +286,28 @@ def test_admitted_monic_discriminant_is_request_scoped_and_reused(
     assert int(field_discriminant) == 5
 
 
+def test_admitted_discriminant_seeds_the_round_two_factor_cache() -> None:
+    """Admission hands the proved cofactor to SymPy's factor cache.
+
+    ``round_two`` factors the same discriminant again; recording the proved
+    prime for the post-trial remainder lets the backend skip the repeated
+    primality test instead of replaying the admission mathematics.
+    """
+
+    from sympy import factor_cache
+    from sympy.ntheory.factor_ import _factorint_small
+
+    prime = int(sympy.nextprime(10**200))
+    while prime % 4 != 1:
+        prime = int(sympy.nextprime(prime + 1))
+    field = SimpleNumberFieldPresentation(coefficients_descending=(1, 0, -prime))
+    factor_cache.clear()
+    discriminant = require_factorizable_discriminant(field)
+    assert discriminant is not None
+    remainder, _ = _factorint_small({}, abs(discriminant), 2**15, 600)
+    assert factor_cache.get(int(remainder)) == prime
+
+
 def test_reducible_semiprime_linear_factor_is_not_a_factorization_bound() -> None:
     field = SimpleNumberFieldPresentation(
         coefficients_descending=(1, -(100003 * 100019), 0)

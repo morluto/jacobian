@@ -109,42 +109,81 @@ def _trial_primes(limit: int) -> tuple[int, ...]:
     return tuple(index for index, prime in enumerate(sieve) if prime)
 
 
-def _strip_small_factors(value: int) -> int:
-    """Remove every prime factor up to the trial bound from ``value``."""
+def _factorize_small_factors(value: int) -> tuple[int, dict[int, int]]:
+    """Remove every prime factor up to the trial bound from ``value``.
+
+    Returns the stripped cofactor together with the small-prime exponents so
+    admission can later hand the complete factorization back to the backend.
+    """
 
     cofactor = value
+    factors: dict[int, int] = {}
     for prime in _trial_primes(_ROUND_TWO_TRIAL_PRIME_BOUND):
         if prime * prime > cofactor:
             break
+        exponent = 0
         while cofactor % prime == 0:
             cofactor //= prime
+            exponent += 1
+        if exponent:
+            factors[prime] = exponent
         if cofactor == 1:
             break
-    return cofactor
+    return cofactor, factors
 
 
-def _cofactor_is_factorizable(cofactor: int) -> bool:
-    """Decide whether SymPy's factorint short-circuits on ``cofactor``.
+def _cofactor_prime_power(cofactor: int) -> tuple[int, int] | None:
+    """Return the proved prime base and exponent of a stripped cofactor.
 
     ``cofactor`` must already be stripped of every prime factor up to the
     trial bound. factorint then terminates through its exact
-    prime/perfect-power checks without search exactly when the cofactor is
-    one, prime, or a prime power.
+    prime/perfect-power short-circuits without search exactly when the cofactor
+    is prime or a prime power; return ``None`` otherwise.
     """
 
     from sympy.ntheory import isprime, perfect_power
 
     candidate: int | bool = cofactor
+    exponent = 1
     while isinstance(candidate, int):
         if candidate == 1:
-            return True
+            return None
         if candidate >= _ROUND_TWO_COFACTOR_LIMIT:
-            return False
+            return None
         power = perfect_power(candidate, factor=False)
         if power is False:
-            return bool(isprime(candidate))
-        candidate, _ = power
-    return False
+            return (candidate, exponent) if isprime(candidate) else None
+        candidate, step = power
+        exponent *= int(step)
+    return None
+
+
+def _seed_round_two_factor_cache(
+    discriminant: int, factorization: dict[int, int]
+) -> None:
+    """Seed SymPy's factor cache so ``round_two`` reuses the admitted work.
+
+    ``round_two`` factors the same discriminant again through ``factorint``.
+    Reproducing that call's initial trial-division remainder and recording the
+    already-proved prime there lets the backend skip the repeated primality
+    test.  This is only a hint; correctness never depends on the cache.
+    """
+
+    from sympy import factor_cache
+    from sympy.ntheory.factor_ import _factorint_small
+
+    remaining, _ = _factorint_small({}, abs(discriminant), 2**15, 600)
+    remaining = int(remaining)
+    while remaining > 1:
+        for prime in sorted(factorization):
+            if remaining % prime == 0:
+                factor_cache[remaining] = int(prime)
+                remaining //= prime ** factorization[prime]
+                break
+        else:
+            # An unrecognized remainder shape: leave the cache untouched and
+            # let the backend factor it itself.
+            return
 
 
 def require_factorizable_discriminant(
@@ -192,18 +231,24 @@ def require_factorizable_discriminant(
     discriminant = int(polynomial.discriminant())
     if discriminant == 0:
         return None
-    cofactor = _strip_small_factors(abs(discriminant))
-    if _cofactor_is_factorizable(cofactor):
-        return discriminant
-    raise OperationResourceAdmissionError(
-        location=("field",),
-        code="number_field.ring_of_integers_discriminant_factorization_bound",
-        message=(
-            "the defining-polynomial discriminant has a composite cofactor "
-            "beyond the bounded trial envelope, so round_two factorization "
-            "work is not soundly bounded"
-        ),
-    )
+    cofactor, small_factors = _factorize_small_factors(abs(discriminant))
+    factorization = dict(small_factors)
+    if cofactor != 1:
+        prime_power = _cofactor_prime_power(cofactor)
+        if prime_power is None:
+            raise OperationResourceAdmissionError(
+                location=("field",),
+                code="number_field.ring_of_integers_discriminant_factorization_bound",
+                message=(
+                    "the defining-polynomial discriminant has a composite "
+                    "cofactor beyond the bounded trial envelope, so round_two "
+                    "factorization work is not soundly bounded"
+                ),
+            )
+        base, exponent = prime_power
+        factorization[base] = factorization.get(base, 0) + exponent
+    _seed_round_two_factor_cache(discriminant, factorization)
+    return discriminant
 
 
 def _poly_with_admitted_round_two_work(

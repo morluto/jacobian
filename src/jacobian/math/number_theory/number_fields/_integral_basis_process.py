@@ -27,6 +27,10 @@ from jacobian.canonical import (
     loads_strict_json,
     parse_canonical_integer,
 )
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.number_theory.number_fields._integral_basis import (
     monicized_discriminant_digit_bound,
 )
@@ -179,6 +183,16 @@ def _worker_stdout_limit(
     return len(encode_strict_json(response))
 
 
+class _WorkerRejectionError(Exception):
+    """A typed admission rejection reported by the bounded worker."""
+
+    def __init__(self, *, resource: bool, code: str, message: str) -> None:
+        super().__init__(message)
+        self.resource = resource
+        self.code = code
+        self.message = message
+
+
 def _decode_worker_response(
     output: bytes,
     *,
@@ -199,6 +213,25 @@ def _decode_worker_response(
             raise ValueError("worker response must be an object")
         if response.get("request_digest") != hashlib.sha256(input_bytes).hexdigest():
             raise ValueError("worker response is not bound to its request")
+        if response.get("kind") == "rejected":
+            if set(response) != {
+                "kind",
+                "resource",
+                "code",
+                "message",
+                "request_digest",
+            }:
+                raise ValueError("rejected worker response has invalid fields")
+            code = response["code"]
+            message = response["message"]
+            resource = response["resource"]
+            if (
+                not isinstance(code, str)
+                or not isinstance(message, str)
+                or not isinstance(resource, bool)
+            ):
+                raise ValueError("rejected worker response has invalid values")
+            raise _WorkerRejectionError(resource=resource, code=code, message=message)
         if response.get("kind") == "invalid":
             if set(response) != {"kind", "request_digest"}:
                 raise ValueError("invalid worker response has invalid fields")
@@ -223,6 +256,19 @@ def _decode_worker_response(
             field_discriminant=discriminant,
             basis=basis,
         )
+    except _WorkerRejectionError as rejection:
+        location = ("field",)
+        if rejection.resource:
+            raise OperationResourceAdmissionError(
+                location=location,
+                code=rejection.code,
+                message=rejection.message,
+            ) from rejection
+        raise OperationDomainValidationError(
+            location=location,
+            code=rejection.code,
+            message=rejection.message,
+        ) from rejection
     except (CanonicalizationError, KeyError, TypeError, ValueError) as exc:
         raise RuntimeError(
             "bounded number-field worker returned malformed output"

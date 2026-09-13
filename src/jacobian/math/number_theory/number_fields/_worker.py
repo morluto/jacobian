@@ -9,11 +9,15 @@ from jacobian.canonical import (
     encode_strict_json,
     format_canonical_integer,
     loads_strict_json,
-    parse_canonical_integer,
+)
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
 )
 from jacobian.math.number_theory.number_fields._integral_basis import (
     integral_basis_coordinates,
     recognized_integral_basis,
+    require_factorizable_discriminant,
 )
 from jacobian.math.number_theory.number_fields._models import NumberFieldRequest
 
@@ -26,21 +30,27 @@ def main() -> int:
     payload = loads_strict_json(input_bytes)
     if not isinstance(payload, dict):
         raise RuntimeError("number-field worker request must be an object")
-    admitted_raw = payload.pop("admitted_polynomial_discriminant", None)
-    admitted_irreducible_raw = payload.pop("admitted_irreducible", None)
-    admitted_discriminant = (
-        parse_canonical_integer(admitted_raw) if admitted_raw is not None else None
-    )
-    if admitted_irreducible_raw is None:
-        admitted_irreducible = None
-    elif isinstance(admitted_irreducible_raw, bool):
-        admitted_irreducible = admitted_irreducible_raw
-    else:
-        raise RuntimeError("admitted irreducibility must be a boolean")
     request = NumberFieldRequest.model_validate_json(
         encode_strict_json(payload),
         strict=True,
     )
+    # The discriminant admission algebra (irreducibility, discriminant, and
+    # trial division) runs inside this killable process so a high-degree or
+    # wide-coefficient field cannot exhaust the request lease before launch.
+    try:
+        admitted_discriminant = require_factorizable_discriminant(request.field)
+    except (OperationResourceAdmissionError, OperationDomainValidationError) as exc:
+        detail = exc.errors()[0]
+        rejected: dict[str, object] = {
+            "kind": "rejected",
+            "resource": isinstance(exc, OperationResourceAdmissionError),
+            "code": str(detail["type"]),
+            "message": str(detail["msg"]),
+            "request_digest": hashlib.sha256(input_bytes).hexdigest(),
+        }
+        sys.stdout.buffer.write(encode_strict_json(rejected))
+        return 0
+    admitted_irreducible = admitted_discriminant is not None
     integral_basis = recognized_integral_basis(
         request.field,
         admitted_polynomial_discriminant=admitted_discriminant,

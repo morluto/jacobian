@@ -196,18 +196,24 @@ def test_semiprime_discriminant_is_rejected_before_backend_expansion() -> None:
     )
 
 
-def test_semiprime_discriminant_is_rejected_before_worker_launch(
+def test_semiprime_discriminant_is_rejected_inside_the_worker(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """The discriminant admission algebra runs inside the killable worker."""
     from jacobian import process as process_runtime
     from jacobian.math.number_theory.number_fields._ring_of_integers_process import (
         compute_nf_ring_of_integers,
     )
 
-    def fail_to_launch(*_args: object, **_kwargs: object) -> object:
-        raise AssertionError("unbounded discriminant must not launch a worker")
+    launched = False
+    original = process_runtime.run_bounded_process
 
-    monkeypatch.setattr(process_runtime, "run_bounded_process", fail_to_launch)
+    def record_launch(*args: object, **kwargs: object) -> object:
+        nonlocal launched
+        launched = True
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(process_runtime, "run_bounded_process", record_launch)
     request = NumberFieldRingOfIntegersRequest(
         field=SimpleNumberFieldPresentation(
             coefficients_descending=(1, 0, -100003 * 100019)
@@ -218,6 +224,7 @@ def test_semiprime_discriminant_is_rejected_before_worker_launch(
     assert error.value.errors()[0]["type"] == (
         "number_field.ring_of_integers_discriminant_factorization_bound"
     )
+    assert launched
 
 
 def test_discriminant_admission_does_not_factor_inside_perfect_power(

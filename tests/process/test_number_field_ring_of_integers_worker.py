@@ -144,8 +144,9 @@ def test_ring_worker_uses_private_cwd_and_os_resource_limits(
     assert command[-1] == "--basis"
     payload = loads_strict_json(recorded["input_bytes"])
     assert isinstance(payload, dict)
-    assert payload["admitted_irreducible"] is True
-    assert payload["admitted_polynomial_discriminant"] == "20"
+    # Admission algebra now runs inside the worker, so the parent sends only
+    # the source field.
+    assert set(payload) == {"field"}
     assert recorded["resource_limits"] == ProcessResourceLimits(
         cpu_seconds=60,
         address_space_bytes=1024 * 1024 * 1024,

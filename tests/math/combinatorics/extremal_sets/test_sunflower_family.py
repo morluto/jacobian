@@ -11,6 +11,7 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.combinatorics import extremal_sets
 from jacobian.math.combinatorics.extremal_sets import _sunflower_r as sunflower_module
 from jacobian.math.combinatorics.extremal_sets._sunflower_r import (
     MAX_SUNFLOWER_GROUND_SET_SIZE,
@@ -21,7 +22,6 @@ from jacobian.math.combinatorics.extremal_sets._sunflower_r import (
 )
 from jacobian.math.combinatorics.extremal_sets._tools import compute_sunflower_family
 from jacobian.math.combinatorics.extremal_sets.values import IndexedFiniteSetFamily
-from jacobian.math.combinatorics import extremal_sets
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     MAX_VERTICES,
 )
@@ -219,7 +219,9 @@ def test_schema_advertises_the_complete_declared_petals_envelope() -> None:
 
 
 def test_projection_uses_canonical_multi_digit_member_order() -> None:
-    result = construct_sunflower_family(_family(tuple((i,) for i in range(11)), ground=11), 2)
+    result = construct_sunflower_family(
+        _family(tuple((i,) for i in range(11)), ground=11), 2
+    )
     assert result.hypergraph_edges == result.hypergraph.edges
     assert type(result).model_validate_json(result.model_dump_json()) == result
 
@@ -334,7 +336,9 @@ def test_result_allocation_is_admitted_before_row_construction(
         1,
     )
     source = _family(((0,), (1,)), ground=2)
-    with pytest.raises(OperationResourceAdmissionError, match="allocation units|result bound"):
+    with pytest.raises(
+        OperationResourceAdmissionError, match=r"allocation units|result bound"
+    ):
         construct_sunflower_family(source, 2)
 
 
@@ -368,13 +372,17 @@ def test_exact_candidate_count_at_the_output_boundary_is_admitted() -> None:
 
 def test_ground_and_membership_bounds_apply_to_vacuous_requests() -> None:
     with pytest.raises(OperationResourceAdmissionError, match="ground set"):
-        construct_sunflower_family(_family((), ground=MAX_SUNFLOWER_GROUND_SET_SIZE + 1), 2)
+        construct_sunflower_family(
+            _family((), ground=MAX_SUNFLOWER_GROUND_SET_SIZE + 1), 2
+        )
     member = tuple(range(MAX_SUNFLOWER_MEMBERSHIPS // 2 + 1))
     second_member = tuple(
         range(MAX_SUNFLOWER_MEMBERSHIPS // 2 - 1, MAX_SUNFLOWER_MEMBERSHIPS)
     )
     with pytest.raises(OperationResourceAdmissionError, match="memberships"):
-        construct_sunflower_family(_family( (member, second_member), ground=MAX_SUNFLOWER_MEMBERSHIPS ), 2)
+        construct_sunflower_family(
+            _family((member, second_member), ground=MAX_SUNFLOWER_MEMBERSHIPS), 2
+        )
 
 
 def test_forged_summary_fields_cannot_contradict_rows() -> None:
@@ -459,9 +467,7 @@ def test_few_large_pairwise_intersections_checkpoint_by_element_work(
     result = construct_sunflower_family(_family(members, ground=137), 9)
     assert result.sunflower_count == 1
     pairwise = [
-        label
-        for label in labels
-        if label == "during sunflower intersection work"
+        label for label in labels if label == "during sunflower intersection work"
     ]
     # One r=9 candidate has 36 pairs, so a scan-count modulo 64 never fires.
     assert len(pairwise) >= 36
@@ -495,7 +501,9 @@ def test_reconstructed_rows_must_stay_strictly_ordered() -> None:
     payload["sunflowers"] = list(reversed(payload["sunflowers"]))
     payload["hypergraph_edges"] = list(reversed(payload["hypergraph_edges"]))
     payload["hypergraph"]["edges"] = list(reversed(payload["hypergraph"]["edges"]))
-    with pytest.raises(ValidationError, match="canonical ordinals|strictly ordered|lexicographic"):
+    with pytest.raises(
+        ValidationError, match=r"canonical ordinals|strictly ordered|lexicographic"
+    ):
         SunflowerFamilyResult.model_validate(payload)
 
 

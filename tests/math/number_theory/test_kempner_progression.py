@@ -207,7 +207,29 @@ def test_wire_schema_bounds_item_specific_witness_values() -> None:
 
     witness_schema = KempnerContainsProgression.model_json_schema()
     index_items = witness_schema["properties"]["indices"]["items"]
-    assert index_items["pattern"].startswith("^(?:[0-9]|[1-9][0-9]{1,2})")
+    assert index_items["pattern"].startswith(
+        "^(?:[0-9]|[1-9][0-9]|[1-8][0-9]{2}|9[0-8][0-9]|99[0-8])"
+    )
+    with pytest.raises(ValidationError):
+        KempnerContainsProgression.model_validate(
+            {
+                "status": "CONTAINS_PROGRESSION",
+                "indices": ["999", "1", "2"],
+                "values": ["1", "2", "3"],
+                "first_term": "1",
+                "common_difference": "1",
+            }
+        )
+    with pytest.raises(ValidationError):
+        KempnerContainsProgression.model_validate(
+            {
+                "status": "CONTAINS_PROGRESSION",
+                "indices": ["0", "1", "2"],
+                "values": ["0", "1", "2"],
+                "first_term": "1",
+                "common_difference": "1",
+            }
+        )
     for field in ("first_term", "common_difference"):
         assert witness_schema["properties"][field]["ge"] == 1
     base_witness = {

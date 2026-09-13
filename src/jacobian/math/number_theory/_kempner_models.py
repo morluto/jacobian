@@ -18,7 +18,9 @@ MAX_KEMPNER_ARITY = 999
 _KEMPNER_BASE_PATTERN = r"^(?:[2-9]|[1-5][0-9]|6[0-4])(?![\s\S])"
 _KEMPNER_ARITY_PATTERN = r"^(?:[3-9]|[1-9][0-9]{1,2})(?![\s\S])"
 _KEMPNER_DIGIT_PATTERN = r"^(?:[0-9]|[1-5][0-9]|6[0-3])(?![\s\S])"
-_KEMPNER_INDEX_PATTERN = r"^(?:[0-9]|[1-9][0-9]{1,2})(?![\s\S])"
+_KEMPNER_INDEX_PATTERN = (
+    r"^(?:[0-9]|[1-9][0-9]|[1-8][0-9]{2}|9[0-8][0-9]|99[0-8])(?![\s\S])"
+)
 _KEMPNER_POSITIVE_PATTERN = (
     rf"^(?:[1-9][0-9]{{0,{MAX_KEMPNER_INTEGER_DIGITS - 1}}})(?![\s\S])"
 )
@@ -129,7 +131,7 @@ class KempnerContainsProgression(StrictModel):
         min_length=MIN_KEMPNER_ARITY,
         max_length=MAX_KEMPNER_ARITY,
     )
-    values: tuple[KempnerInteger, ...] = Field(
+    values: tuple[KempnerPositiveInteger, ...] = Field(
         min_length=MIN_KEMPNER_ARITY,
         max_length=MAX_KEMPNER_ARITY,
     )

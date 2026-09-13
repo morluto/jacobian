@@ -124,6 +124,49 @@ def test_hook_content_rejects_wire_bound_growth_before_expansion() -> None:
         )
 
 
+def test_ssyt_bound_is_tight_at_the_exact_digit_boundary() -> None:
+    """The leading-bit log10 lower bound keeps an exactly-32,768-digit count."""
+    import sys
+
+    sys.set_int_max_str_digits(200_000)
+    partition = IntegerPartition(parts=(500,))
+    alphabet_size = 154_750 * 2**208
+    alphabet_digits = _upper_decimal_digits(alphabet_size)
+    assert _ssyt_count_digit_bound(partition, alphabet_size, alphabet_digits) == 32_768
+    result = semistandard_young_tableaux_count(
+        SemistandardYoungTableauCountRequest(
+            partition=partition, alphabet_size=alphabet_size
+        )
+    )
+    assert result.count == math.comb(alphabet_size + 499, 500)
+
+
+def test_ssyt_count_rejects_a_non_carrier_partition() -> None:
+    """The exported native boundary classifies the wrong type as a domain error."""
+    from jacobian.catalog.models import OperationDomainValidationError
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        native.semistandard_young_tableaux_count((1, 2), 3)
+    assert error.value.errors()[0]["type"] == (
+        "algebraic_combinatorics.partition_carrier"
+    )
+
+
+def test_ssyt_count_rejects_an_oversized_constructed_partition() -> None:
+    """A forged partition is resource-refused before conjugation."""
+    forged = IntegerPartition.model_construct(parts=(10**9,))
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        native.semistandard_young_tableaux_count(forged, 5)
+    assert error.value.errors()[0]["type"] == "algebraic_combinatorics.partition_size"
+
+
+def test_partition_dominance_rejects_a_non_carrier_argument() -> None:
+    from jacobian.catalog.models import OperationDomainValidationError
+
+    with pytest.raises(OperationDomainValidationError):
+        native.partition_dominance((1,), IntegerPartition(parts=(1,)))
+
+
 def test_hook_content_large_exact_integers_roundtrip_strict_json() -> None:
     alphabet_size = (1 << 53) + 1
     request = SemistandardYoungTableauCountRequest.model_validate_json(

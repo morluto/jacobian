@@ -168,6 +168,7 @@ _LOG10_SCALE = 1_000_000_000
 _LOG10_2_UPPER_UNITS = 301_029_996
 _LOG10_2_LOWER_UNITS = 301_029_995
 _INV_LN10_UPPER_UNITS = 434_294_482
+_INV_LN10_LOWER_UNITS = 434_294_481
 
 
 def _log10_upper_units(value: int) -> int:
@@ -190,9 +191,25 @@ def _log10_upper_units(value: int) -> int:
 
 
 def _log10_lower_units(value: int) -> int:
-    """Return L such that log10(value) >= L / _LOG10_SCALE for value >= 1."""
+    """Return L such that log10(value) >= L / _LOG10_SCALE for value >= 1.
 
-    return max(value.bit_length() - 1, 0) * _LOG10_2_LOWER_UNITS
+    Use the leading bit and a truncated series for the fractional part instead
+    of discarding it; the discarded fraction is up to ``log10(2)``, which is
+    enough to reject an exactly representable result at the digit boundary.
+    """
+
+    bit_length = value.bit_length()
+    if bit_length == 0:
+        return 0
+    leading = 1 << (bit_length - 1)
+    remainder = value - leading
+    units = (bit_length - 1) * _LOG10_2_LOWER_UNITS
+    if remainder == 0:
+        return units
+    # ln(1+x) > x - x^2/2 for x = remainder/leading in (0, 1).
+    quadratic = 2 * remainder * leading - remainder * remainder
+    denominator = 2 * leading * leading
+    return units + (quadratic * _INV_LN10_LOWER_UNITS) // denominator
 
 
 def _digits_upper_from_log10_units(units: int) -> int:
@@ -218,9 +235,13 @@ def _ssyt_count_digit_bound(
     conjugate = conjugate_partition(partition).parts
     numerator_log_units = 0
     hook_product = 1
+    probes = 0
     for row, length in enumerate(partition.parts):
         request_checkpoint("during SSYT digit admission")
         for column in range(length):
+            probes += 1
+            if probes % 256 == 0:
+                request_checkpoint("during SSYT hook-content admission")
             content = alphabet_size + column - row
             if content <= 0:
                 return max(1, alphabet_digits)
@@ -238,6 +259,7 @@ def _admit_hook_content(partition: IntegerPartition, alphabet_size: int) -> None
     """Admit hook-content arithmetic before constructing any factors."""
     if type(alphabet_size) is not int or alphabet_size < 1:
         raise ValueError("alphabet_size must be a positive integer")
+    partition = _require_canonical_partition(partition)
 
     cell_count = sum(partition.parts)
     alphabet_digits = _upper_decimal_digits(alphabet_size)
@@ -424,6 +446,7 @@ def semistandard_young_tableaux_count(
     The hook-content factors are private kernel intermediates. The public
     result carries only the exact count and its source shape and alphabet.
     """
+    partition = _require_canonical_partition(partition)
     _admit_hook_content(partition, alphabet_size)
     hooks = hook_lengths(partition)
     numerators = tuple(
@@ -447,6 +470,8 @@ def partition_dominance(
     left: IntegerPartition, right: IntegerPartition
 ) -> PartitionDominanceResult:
     """Compare partitions using leading-row prefix sums privately."""
+    left = _require_canonical_partition(left)
+    right = _require_canonical_partition(right)
     if sum(left.parts) != sum(right.parts):
         relation: DominanceRelation = "NOT_COMPARABLE_DIFFERENT_SIZE"
     else:

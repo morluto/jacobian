@@ -9,6 +9,10 @@ import pytest
 from pydantic import ValidationError
 from tests.fixtures.accounting import assert_charged_work_parity
 
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    request_execution,
+)
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -143,7 +147,9 @@ def test_large_accepted_profile_uses_trusted_result_construction(
             raise AssertionError("profile result construction replayed cell sorting")
         return builtin_sorted(*args, **kwargs)
 
-    monkeypatch.setattr(profile_module, "sorted", cast(Any, counted_sorted), raising=False)
+    monkeypatch.setattr(
+        profile_module, "sorted", cast(Any, counted_sorted), raising=False
+    )
     result = symbol_parikh_profile(dfa, 3)
 
     assert len(result.cells) == 5_984
@@ -550,6 +556,7 @@ def test_near_envelope_profile_execution_matches_admission_charge(
     assert sum(charged.values()) > MAX_SYMBOL_PARIKH_DP_WORK // 2
     assert_charged_work_parity(charged=charged, executed=executed)
 
+
 def test_commuting_counter_dfa_admits_length_408_profile() -> None:
     state_count = 6
     dfa = DFA(
@@ -570,6 +577,7 @@ def test_commuting_counter_dfa_admits_length_408_profile() -> None:
     result = symbol_parikh_profile(dfa, 408)
     assert result.total_accepted_words == 2**408
     assert len(result.cells) == 409
+
 
 def _depth_five_binary_tree(state_count: int = 64) -> DFA:
     alphabet_size = 2
@@ -594,10 +602,12 @@ def _depth_five_binary_tree(state_count: int = 64) -> DFA:
         accepting_states=tuple(range(state_count)),
     )
 
+
 def test_depth_five_tree_admits_length_150_profile() -> None:
     result = symbol_parikh_profile(_depth_five_binary_tree(), 150)
     assert result.total_accepted_words == 2**150
     assert len(result.cells) == 151
+
 
 def test_commuting_cycle_identity_dfa_admits_length_978_profile() -> None:
     state_count = 44
@@ -620,6 +630,7 @@ def test_commuting_cycle_identity_dfa_admits_length_978_profile() -> None:
     assert result.total_accepted_words == 2**978
     assert len(result.cells) == 979
 
+
 def test_profile_preserves_49_reachable_state_case() -> None:
     result = symbol_parikh_profile(
         _source_sensitive_dfa(
@@ -633,3 +644,27 @@ def test_profile_preserves_49_reachable_state_case() -> None:
     assert len(result.cells) == comb(17, 14)
     assert result.total_accepted_words == 15**3
 
+
+def test_native_profile_observes_request_cancellation() -> None:
+    """The DP kernel checkpoints so native calls share the request envelope."""
+
+    class Cancelled:
+        def is_set(self) -> bool:
+            return True
+
+    dfa = DFA(
+        state_count=3,
+        alphabet_size=2,
+        transitions=tuple(
+            DFATransition(source=source, symbol=symbol, target=symbol)
+            for source in range(3)
+            for symbol in range(2)
+        ),
+        initial_state=0,
+        accepting_states=(0, 1, 2),
+    )
+    with (
+        request_execution(0.0, cancellation_signal=Cancelled()),
+        pytest.raises(OperationExecutionCancelledError),
+    ):
+        symbol_parikh_profile(dfa, 4)

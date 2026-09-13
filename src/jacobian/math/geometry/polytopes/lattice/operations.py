@@ -371,7 +371,7 @@ def _facets_and_box(  # noqa: C901
                 ]
             )
             if diffs.rank() < d:
-                raise LatticePointBudgetError(
+                raise LatticePolytopeAdmissionError(
                     "V-representation is not full-dimensional; lower-dimensional hulls require exact handling"
                 )
         if d == 1:

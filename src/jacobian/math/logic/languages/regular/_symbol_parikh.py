@@ -6,12 +6,12 @@ from typing import Annotated, Self
 from pydantic import Field, StrictInt, model_validator
 
 from jacobian._exact import ExactInteger
+from jacobian._execution import request_checkpoint
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.math.logic.languages.regular.operations import count_accepted_words
 from jacobian.math.logic.languages.regular.values import (
     DFA,
     MAX_COUNT_RESULT_DIGITS,
@@ -21,6 +21,7 @@ from jacobian.math.logic.languages.regular.values import (
 MAX_SYMBOL_PARIKH_LENGTH = 1_000
 MAX_SYMBOL_PARIKH_DP_WORK = 2_000_000
 MAX_SYMBOL_PARIKH_CELLS = 43_000
+_CHECKPOINT_STRIDE = 512
 
 
 class SymbolParikhProfileRequest(StrictModel):
@@ -332,8 +333,12 @@ def _extend_profile_layer(
     alphabet_size: int,
 ) -> dict[tuple[int, tuple[int, ...]], int]:
     next_layer: dict[tuple[int, tuple[int, ...]], int] = {}
+    visited = 0
     for (state, counts), multiplicity in layer.items():
         for symbol in range(alphabet_size):
+            if visited % _CHECKPOINT_STRIDE == 0:
+                request_checkpoint("during symbol-Parikh DP extension")
+            visited += 1
             target = transitions[(state, symbol)]
             if target not in reachable:
                 continue
@@ -348,7 +353,9 @@ def _collect_profile(
     accepting: set[int],
 ) -> dict[tuple[int, ...], int]:
     profile: dict[tuple[int, ...], int] = {}
-    for (state, counts), multiplicity in layer.items():
+    for index, ((state, counts), multiplicity) in enumerate(layer.items()):
+        if index % _CHECKPOINT_STRIDE == 0:
+            request_checkpoint("during symbol-Parikh profile collection")
         if state in accepting:
             profile[counts] = profile.get(counts, 0) + multiplicity
     return profile
@@ -466,7 +473,9 @@ def _compute_symbol_parikh_profile(
     transitions = _build_transition_index(dfa)
     zero = (0,) * alphabet_size
     layer: dict[tuple[int, tuple[int, ...]], int] = {(dfa.initial_state, zero): 1}
-    for _step in range(length):
+    for step in range(length):
+        if step % _CHECKPOINT_STRIDE == 0:
+            request_checkpoint("during symbol-Parikh DP")
         layer = _extend_profile_layer(layer, transitions, reachable, alphabet_size)
     accepting = set(dfa.accepting_states)
     profile = _collect_profile(layer, accepting)

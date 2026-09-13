@@ -278,7 +278,9 @@ class TestBudgets:
         # A 1D interval spanning more than MAX_BOUND_SPAN integer points.
         far = MAX_BOUND_SPAN + 5
         request = LatticePolytopeRequest(vertices=(_v((0, 1)), _v((far, 1))))
-        with pytest.raises(OperationResourceAdmissionError, match="per-axis span bound"):
+        with pytest.raises(
+            OperationResourceAdmissionError, match="per-axis span bound"
+        ):
             count_lattice_points(request)
 
     @pytest.mark.scale
@@ -449,18 +451,23 @@ class TestLowerDimensionalRejection:
         # Two affinely dependent vertices in 3-D define a segment.  The old
         # behaviour skipped the rank guard when len(vertices) < dimension and
         # counted the whole eight-point bounding box instead of the segment.
+        # A lower-dimensional hull is an invalid input, not a budget refusal.
         request = LatticePolytopeRequest(
             vertices=(
                 _v((0, 1), (0, 1), (0, 1)),
                 _v((1, 1), (1, 1), (1, 1)),
             )
         )
-        with pytest.raises(ValueError, match="not full-dimensional"):
+        with pytest.raises(
+            OperationDomainValidationError, match="not full-dimensional"
+        ):
             count_lattice_points(request)
 
     def test_single_vertex_in_two_d_rejected(self) -> None:
         request = LatticePolytopeRequest(vertices=(_v((0, 1), (0, 1)),))
-        with pytest.raises(ValueError, match="not full-dimensional"):
+        with pytest.raises(
+            OperationDomainValidationError, match="not full-dimensional"
+        ):
             count_lattice_points(request)
 
     def test_collinear_triangle_rejected(self) -> None:
@@ -472,7 +479,9 @@ class TestLowerDimensionalRejection:
                 _v((2, 1), (2, 1)),
             )
         )
-        with pytest.raises(ValueError, match="not full-dimensional"):
+        with pytest.raises(
+            OperationDomainValidationError, match="not full-dimensional"
+        ):
             count_lattice_points(request)
 
     def test_declarations_advertise_full_dimensional_restriction(self) -> None:

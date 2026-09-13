@@ -509,3 +509,57 @@ def test_collision_group_lcm_reduction_below_the_cap_is_admitted() -> None:
     assert product.terms[1].coefficient == CanonicalRational(
         num=1, den=15 * 10 ** (MAX_CANONICAL_RATIONAL_DIGITS - 2)
     )
+
+
+def test_collision_group_growth_is_bounded_before_materialization() -> None:
+    """One collision group of unrelated denominators is refused early.
+
+    Every pair of a 64-term ``(x^i y^-i)`` factor with a 64-term
+    ``(x^-j y^j)`` factor lands in the single exponent-zero group.  With
+    pairwise-coprime 17,000-digit denominators the reduced running denominator
+    would grow to megabytes before the final check; admission must refuse once
+    the reduced group leaves the canonical envelope.
+    """
+
+    import math
+    import time
+
+    primes: list[int] = []
+    candidate = 2
+    while len(primes) < 64:
+        if all(candidate % prime for prime in primes):
+            primes.append(candidate)
+        candidate += 1 if candidate == 2 else 2
+    denominators = [
+        prime ** max(1, int(17_000 / math.log10(prime)) + 1) for prime in primes
+    ]
+    left = RationalLaurentPolynomial(
+        variables=("x", "y"),
+        terms=tuple(
+            sorted(
+                (
+                    _rational_term(1, denominators[index], index, -index)
+                    for index in range(64)
+                ),
+                key=lambda item: item.exponents,
+                reverse=True,
+            )
+        ),
+    )
+    right = RationalLaurentPolynomial(
+        variables=("x", "y"),
+        terms=tuple(
+            sorted(
+                (
+                    _rational_term(1, denominators[index], -index, index)
+                    for index in range(64)
+                ),
+                key=lambda item: item.exponents,
+                reverse=True,
+            )
+        ),
+    )
+    started = time.monotonic()
+    with pytest.raises(OperationResourceAdmissionError, match="coefficient"):
+        rational_laurent_multiply(left, right)
+    assert time.monotonic() - started < 2.0

@@ -98,15 +98,26 @@ def _maximum_coefficient_digits(
                 a + b
                 for a, b in zip(left_term.exponents, right_term.exponents, strict=True)
             )
-            # Accumulate the exact signed pair coefficient. Fraction keeps the
-            # running sum reduced, so both a sign cancellation and a reduction
-            # below an oversized intermediate LCM are reflected in the final
-            # coefficient height.
+            # Accumulate the exact signed pair coefficient and bound the
+            # reduced running group after every addition.  Checking the reduced
+            # sum (rather than the pre-reduction merged denominator) keeps a
+            # collision whose intermediate LCM reduces below the cap admissible
+            # while a group of unrelated denominators cannot grow unbounded.
             pair = Fraction(
                 left_coefficient.num * right_term.coefficient.num,
                 left_coefficient.den * right_term.coefficient.den,
             )
-            groups[exponent] = groups.get(exponent, Fraction()) + pair
+            current = groups.get(exponent)
+            result = pair if current is None else current + pair
+            if (
+                max(
+                    _integer_digits(result.numerator),
+                    _integer_digits(result.denominator),
+                )
+                > MAX_CANONICAL_RATIONAL_DIGITS
+            ):
+                return MAX_CANONICAL_RATIONAL_DIGITS + 1, groups
+            groups[exponent] = result
             pairs += 1
     height = 1
     for total in groups.values():

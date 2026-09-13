@@ -495,9 +495,9 @@ def test_rectangles_are_isolating_across_factors() -> None:
     ``sqrt(2)`` puts ``r`` inside ``sqrt(2)``'s naive rectangle; the refinement
     must shrink it so each rectangle contains exactly one root.
     """
-    import sympy
-
     from fractions import Fraction
+
+    import sympy
 
     from jacobian.math.polynomials.root_critical.operations import _family
 

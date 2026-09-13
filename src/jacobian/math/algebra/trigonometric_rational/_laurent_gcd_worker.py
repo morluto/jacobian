@@ -242,6 +242,13 @@ def _modular_gaussian_gcd_degree(
         return None
     if left.is_zero() or right.is_zero():
         return None
+    # The reduction must preserve both degrees: an unlucky prime that kills a
+    # leading coefficient can erase a common factor and falsely report
+    # coprimality, so fall back to the exact field in that case.
+    left_degree = max(int(support[0]) for support in left_payload["supports"])
+    right_degree = max(int(support[0]) for support in right_payload["supports"])
+    if left.degree() != left_degree or right.degree() != right_degree:
+        return None
     return int(left.gcd(right).degree())
 
 

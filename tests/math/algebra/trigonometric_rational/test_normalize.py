@@ -683,3 +683,27 @@ def test_imaginary_flint_terms_keep_their_real_component() -> None:
     }
     assert pairs[2] == ("1", "0")
     assert pairs[1] == ("0", "1")
+
+
+def test_locus_union_retains_the_larger_zero_set() -> None:
+    """A locus factor dividing another must not replace it in the union.
+
+    The union of zero sets is represented by the factor with the larger zero
+    set: ``(1-z^2)`` has zeros at z = +-1, so ``(1-z^2)`` must be retained over
+    the smaller ``(1-z)``.
+    """
+    from fractions import Fraction
+
+    from jacobian.math.algebra.trigonometric_rational.operations import _combine_loci
+
+    gaussian = (Fraction(1), Fraction())
+    larger = {
+        (2,): (-gaussian[0], gaussian[1]),
+        (0,): gaussian,
+    }
+    smaller = {
+        (1,): (-gaussian[0], gaussian[1]),
+        (0,): gaussian,
+    }
+    combined = _combine_loci((larger, smaller), 1)
+    assert set(combined) == set(larger)

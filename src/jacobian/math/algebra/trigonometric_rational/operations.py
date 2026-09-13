@@ -687,11 +687,14 @@ def _combine_loci(loci: tuple[Polynomial, ...], axis: int) -> Polynomial:
         normalized = _scalar_unit(polynomial)
         if any(_gaussian_proportional(normalized, existing) for existing in unique):
             continue
-        # Drop a factor already implied by a retained factor, and replace a
-        # retained factor that is itself implied by this one.
-        if any(_divides(existing, normalized) for existing in unique):
+        # The locus is the union of the factors' zero sets, and ``a | b`` means
+        # ``b`` has the larger zero set (``b = 0`` whenever ``a = 0``). Keep the
+        # factor with the larger zero set: skip ``normalized`` if a retained
+        # factor is a multiple of it, and drop any retained factor that is a
+        # multiple of ``normalized``.
+        if any(_divides(normalized, existing) for existing in unique):
             continue
-        unique = [existing for existing in unique if not _divides(normalized, existing)]
+        unique = [existing for existing in unique if not _divides(existing, normalized)]
         unique.append(normalized)
     result = _one(axis)
     for polynomial in unique:

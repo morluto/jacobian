@@ -39,6 +39,7 @@ def run_scaled_integer_part_worker(
     scale: int,
     isolation_bits: int,
     deadline: float,
+    scaled_floor_digit_bound: int,
 ) -> int:
     """Isolate one scaled algebraic integer part in a killable child."""
 
@@ -112,6 +113,11 @@ def run_scaled_integer_part_worker(
             )
         raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
     assert scaled_floor is not None
+    # A child that reports a canonical but oversized floor must not be
+    # materialized: bound its decimal width by the admitted scaled-coefficient
+    # envelope before parsing.
+    if len(scaled_floor) > scaled_floor_digit_bound + 2:
+        raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE)
     try:
         return int(parse_canonical_integer(scaled_floor))
     except (TypeError, ValueError) as exc:

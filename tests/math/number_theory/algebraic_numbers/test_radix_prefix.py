@@ -248,6 +248,7 @@ def test_owner_envelope_is_the_calibrated_isolation_budget(
         scale: int,
         isolation_bits: int,
         deadline: float,
+        scaled_floor_digit_bound: int,
     ) -> int:
         seen.append(deadline)
         return radix_module._scaled_integer_part_in_process(
@@ -286,6 +287,7 @@ def test_shorter_caller_deadline_is_passed_to_the_killable_worker(
         scale: int,
         isolation_bits: int,
         deadline: float,
+        scaled_floor_digit_bound: int,
     ) -> int:
         seen.append(deadline)
         return radix_module._scaled_integer_part_in_process(
@@ -329,6 +331,7 @@ def test_later_enclosing_deadline_does_not_replace_the_owner_envelope(
         scale: int,
         isolation_bits: int,
         deadline: float,
+        scaled_floor_digit_bound: int,
     ) -> int:
         seen.append(deadline)
         return radix_module._scaled_integer_part_in_process(
@@ -386,6 +389,7 @@ def test_worker_refinement_code_is_a_backend_failure(
             scale=10,
             isolation_bits=8,
             deadline=time.monotonic() + 30,
+            scaled_floor_digit_bound=1_000,
         )
     assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT
 
@@ -423,6 +427,7 @@ def test_worker_stdout_overflow_is_resource_exhausted(
             scale=10,
             isolation_bits=8,
             deadline=time.monotonic() + 30,
+            scaled_floor_digit_bound=1_000,
         )
     assert exc_info.value.resource is ExecutionResource.OUTPUT
 
@@ -442,6 +447,7 @@ def test_worker_abnormal_exit_is_a_backend_failure(
             scale=10,
             isolation_bits=8,
             deadline=time.monotonic() + 30,
+            scaled_floor_digit_bound=1_000,
         )
     assert exc_info.value.reason is BackendFailureReason.ABNORMAL_EXIT
 
@@ -481,6 +487,7 @@ def test_malformed_worker_payloads_are_typed_backend_failures(
             scale=10,
             isolation_bits=64,
             deadline=time.monotonic() + 30,
+            scaled_floor_digit_bound=1_000,
         )
     assert error.value.reason is BackendFailureReason.MALFORMED_RESPONSE
 
@@ -494,6 +501,7 @@ def test_valid_worker_payload_is_decoded(monkeypatch: pytest.MonkeyPatch) -> Non
             scale=10,
             isolation_bits=64,
             deadline=time.monotonic() + 30,
+            scaled_floor_digit_bound=1_000,
         )
         == 141
     )
@@ -512,3 +520,23 @@ def test_native_radix_boundary_raises_typed_domain_errors() -> None:
         assert argument_error.value.errors()[0]["type"] == (
             "algebraic_number.radix_argument_type"
         )
+
+
+def test_oversized_worker_floor_is_a_malformed_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A canonical but over-envelope floor is refused before decoding."""
+    oversized = "1" + "0" * 4_999
+    _worker_result(
+        monkeypatch, f'{{"ok": true, "scaled_floor": "{oversized}"}}'.encode()
+    )
+    with pytest.raises(OperationBackendError) as error:
+        process.run_scaled_integer_part_worker(
+            polynomial=(1, 0, -2),
+            real_root_index=1,
+            scale=10,
+            isolation_bits=64,
+            deadline=time.monotonic() + 30,
+            scaled_floor_digit_bound=1_000,
+        )
+    assert error.value.reason is BackendFailureReason.MALFORMED_RESPONSE

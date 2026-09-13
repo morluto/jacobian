@@ -308,6 +308,7 @@ def _scaled_integer_part(
         scale=scale,
         isolation_bits=isolation_bits,
         deadline=deadline,
+        scaled_floor_digit_bound=MAX_RADIX_SCALED_COEFFICIENT_DIGITS,
     )
 
 

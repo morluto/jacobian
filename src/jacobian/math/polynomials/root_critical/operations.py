@@ -627,6 +627,31 @@ def _conjugate_field_multiplier(factor: sympy.Poly) -> int:
     return 2
 
 
+def _admit_cleared_coefficient_heights(candidates: tuple[Any, ...]) -> None:
+    """Reject over-height cleared primitive polynomials before factorization."""
+
+    for candidate in candidates:
+        if candidate.degree() <= 0:
+            continue
+        primitive = _primitive_integer_poly(candidate)
+        digits = max(
+            (
+                len(format_canonical_integer(abs(int(coefficient))))
+                for coefficient in primitive.all_coeffs()
+            ),
+            default=1,
+        )
+        if digits > MAX_ROOT_CRITICAL_ROOT_COMPONENT_DIGITS:
+            raise OperationResourceAdmissionError(
+                location=("polynomial",),
+                code="polynomial.root_critical.factor_coefficient_bound",
+                message=(
+                    "the cleared primitive source or derivative exceeds the "
+                    "admitted exact root-component digit envelope"
+                ),
+            )
+
+
 def _admit(
     polynomial: object,
     *,
@@ -687,6 +712,10 @@ def _admit(
             message="source coefficient height exceeds the exact root-critical profile envelope",
         )
     critical_degree = max(0, degree - 1)
+    # Bound the cleared primitive source and derivative before factorization:
+    # clearing denominators can grow the coefficients far past the input
+    # component height, and factor_list is the expensive phase.
+    _admit_cleared_coefficient_heights((source, source.diff()))
     request_checkpoint("during root-critical admission factor_list")
     source_factors = source.factor_list()[1]
     derivative_backend = source.diff()

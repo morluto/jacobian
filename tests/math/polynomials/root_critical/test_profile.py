@@ -383,3 +383,35 @@ def test_native_arguments_are_validated_before_worker_serialization() -> None:
             _polynomial((3, 1), (0, -1)),
             max_pair_rows="64",  # type: ignore[arg-type]
         )
+
+
+def test_cleared_coefficient_height_is_bounded_before_factorization() -> None:
+    """A source whose cleared coefficients exceed the envelope is refused.
+
+    The input components are within the 128-digit source bound, but clearing
+    denominators grows the primitive coefficients past the 256-digit factor
+    envelope, so the request must fail on the cleared height rather than after
+    the expensive factorization.
+    """
+    import random
+
+    import sympy
+
+    from jacobian.math.polynomials._conversions import rational_polynomial_from_sympy
+
+    random.seed(1)
+    primes = [sympy.nextprime(random.getrandbits(300)) for _ in range(4)]
+    z = sympy.Symbol("z")
+    source = sympy.Poly(
+        sympy.Rational(1, primes[0]) * z**3
+        + sympy.Rational(1, primes[1]) * z**2
+        + sympy.Rational(1, primes[2]) * z
+        + sympy.Rational(1, primes[3]),
+        z,
+        domain="QQ",
+    )
+    primitive = source.clear_denoms(convert=True)[1]
+    assert max(len(str(abs(int(c)))) for c in primitive.all_coeffs()) > 256
+    polynomial = rational_polynomial_from_sympy(source, ("z",))
+    with pytest.raises(OperationResourceAdmissionError, match="cleared primitive"):
+        root_critical_distance_profile(polynomial)

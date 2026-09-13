@@ -5,8 +5,10 @@ from __future__ import annotations
 import importlib
 from typing import Any, Literal
 
+from pydantic import TypeAdapter, ValidationError
 from pydantic_core import PydanticCustomError
 
+from jacobian._digest import Sha256Digest
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.posets.core._closure_kernel import (
     dual_poset as _dual_poset_kernel,
@@ -37,6 +39,8 @@ from jacobian.math.combinatorics.posets.core._models import (
     MAX_ANTICHAIN_PROFILE_ELEMENTS,
     MAX_LINEAR_EXTENSION_ELEMENTS,
     AntichainProfileResult,
+    ElementLabel,
+    ElementRank,
     FinitePoset,
     IncidenceConvolutionResult,
     IncomparablePair,
@@ -96,8 +100,14 @@ def _admit_finite_poset(
 
 def _admit_canonical_poset(poset: FinitePoset) -> None:
     """Admit the partial-order relation before running a consumer kernel."""
-    _run_admission(
-        lambda: _validated_presentation(
+    if type(poset) is not FinitePoset:
+        raise OperationDomainValidationError(
+            location=("poset",),
+            code="poset.invalid_canonical_value",
+            message="poset claims do not describe its canonical finite poset",
+        )
+    try:
+        strict, reduction = _validated_presentation(
             poset.elements,
             tuple(
                 PresentationPair(lower=pair.lower, upper=pair.upper)
@@ -106,6 +116,184 @@ def _admit_canonical_poset(poset: FinitePoset) -> None:
             RelationInterpretation.COMPARABLE_PAIRS,
             ReflexivePairPolicy.FORBIDDEN,
         )
+    except PydanticCustomError as exc:
+        raise OperationDomainValidationError(
+            location=("poset",), code=exc.type, message=exc.message()
+        ) from exc
+    except (AttributeError, TypeError, ValidationError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("poset",),
+            code="poset.invalid_canonical_value",
+            message="poset claims do not describe its canonical finite poset",
+        ) from exc
+    try:
+        claims_match = _canonical_claims_match(poset, strict, reduction)
+    except (AttributeError, TypeError, ValidationError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("poset",),
+            code="poset.invalid_canonical_value",
+            message="poset claims do not describe its canonical finite poset",
+        ) from exc
+    if not claims_match:
+        raise OperationDomainValidationError(
+            location=("poset",),
+            code="poset.invalid_canonical_value",
+            message="poset claims do not describe its canonical finite poset",
+        )
+
+
+def _revalidated_ranks(ranks: object) -> tuple[ElementRank, ...] | None:
+    if ranks is None:
+        return None
+    if type(ranks) is not tuple:
+        raise TypeError("ranks must be a tuple")
+    for entry in ranks:
+        if type(entry) is not ElementRank:
+            raise TypeError("rank entries must use the canonical ElementRank type")
+        if type(entry.element) is not str:
+            raise TypeError("rank labels must be canonical strings")
+        if type(entry.rank) is not int:
+            raise TypeError("rank values must be canonical integers")
+        _ELEMENT_LABEL.validate_python(entry.element, strict=True)
+    return tuple(
+        ElementRank.model_validate(entry.model_dump(mode="python"), strict=True)
+        for entry in ranks
+    )
+
+
+_SHA256_DIGEST = TypeAdapter(Sha256Digest)
+_ELEMENT_LABEL = TypeAdapter(ElementLabel)
+
+
+def _canonical_carrier_elements(elements: object) -> tuple[str, ...]:
+    """Strictly revalidate the in-memory carrier before matching claims.
+
+    ``model_copy``/``model_construct`` bypass Pydantic validation, so a
+    ``str`` subclass with identical text would otherwise pass the
+    ordering/equality check while digest canonicalization normalizes it to
+    an ordinary string.  Require the exact ``tuple`` container and exact
+    ``str`` labels here; callers map failures to ``False``/domain errors.
+    """
+
+    if type(elements) is not tuple:
+        raise TypeError("elements must be a tuple")
+    for entry in elements:
+        if type(entry) is not str:
+            raise TypeError("carrier labels must be canonical strings")
+        _ELEMENT_LABEL.validate_python(entry, strict=True)
+    return elements  # type: ignore[return-value]
+
+
+def _canonical_ordered_pairs(pairs: object) -> tuple[OrderedPair, ...]:
+    if type(pairs) is not tuple:
+        raise TypeError("order pairs must be a tuple")
+    canonical: list[OrderedPair] = []
+    for entry in pairs:
+        if type(entry) is not OrderedPair:
+            raise TypeError("order pairs must use the canonical OrderedPair type")
+        if type(entry.lower) is not str or type(entry.upper) is not str:
+            raise TypeError("order pair labels must be canonical strings")
+        _ELEMENT_LABEL.validate_python(entry.lower, strict=True)
+        _ELEMENT_LABEL.validate_python(entry.upper, strict=True)
+        canonical.append(entry)
+    return tuple(canonical)
+
+
+def _canonical_poset_digest(digest: object) -> str:
+    if type(digest) is not str:
+        raise TypeError("poset_digest must be a canonical sha256 string")
+    return _SHA256_DIGEST.validate_python(digest, strict=True)
+
+
+def _canonical_element_labels(labels: object) -> tuple[str, ...]:
+    if type(labels) is not tuple:
+        raise TypeError("extremal labels must be a tuple")
+    canonical: list[str] = []
+    for entry in labels:
+        if type(entry) is not str:
+            raise TypeError("extremal labels must be canonical strings")
+        canonical.append(_ELEMENT_LABEL.validate_python(entry, strict=True))
+    return tuple(canonical)
+
+
+def _canonical_claims_match(
+    poset: FinitePoset,
+    strict: set[tuple[str, str]],
+    reduction: set[tuple[str, str]],
+) -> bool:
+    try:
+        _canonical_carrier_elements(poset.elements)
+    except (
+        AttributeError,
+        PydanticCustomError,
+        TypeError,
+        ValidationError,
+        ValueError,
+    ):
+        return False
+    if tuple(sorted(set(poset.elements))) != poset.elements:
+        return False
+    if type(poset.graded) is not bool:
+        return False
+    try:
+        authored_strict = _canonical_ordered_pairs(poset.strict_order_pairs)
+        authored_covers = _canonical_ordered_pairs(poset.cover_relations)
+    except TypeError:
+        return False
+    if (
+        tuple(OrderedPair(lower=a, upper=b) for a, b in sorted(strict))
+        != authored_strict
+    ):
+        return False
+    if (
+        tuple(OrderedPair(lower=a, upper=b) for a, b in sorted(reduction))
+        != authored_covers
+    ):
+        return False
+    try:
+        _validate_poset_incomparable_pairs(
+            poset.elements, poset.incomparable_pairs, strict
+        )
+        expected_minimal, expected_maximal = _compute_poset_extremal_elements(
+            poset.elements, strict
+        )
+        _validate_poset_extremal_elements(
+            _canonical_element_labels(poset.minimal_elements),
+            _canonical_element_labels(poset.maximal_elements),
+            expected_minimal,
+            expected_maximal,
+        )
+        expected_ranks = canonical_poset_ranks(poset.elements, reduction)
+        _validate_poset_rank_structure(
+            poset.elements,
+            poset.graded,
+            _revalidated_ranks(poset.ranks),
+            expected_ranks,
+            expected_minimal,
+            expected_maximal,
+            reduction,
+        )
+        authored_digest = _canonical_poset_digest(poset.poset_digest)
+    except (
+        AttributeError,
+        PydanticCustomError,
+        TypeError,
+        ValidationError,
+        ValueError,
+    ):
+        return False
+    return (
+        finite_poset_digest(
+            elements=poset.elements,
+            strict_order_pairs=poset.strict_order_pairs,
+            cover_relations=poset.cover_relations,
+            incomparable_pairs=poset.incomparable_pairs,
+            minimal_elements=poset.minimal_elements,
+            maximal_elements=poset.maximal_elements,
+            graded=poset.graded,
+            ranks=poset.ranks,
+        )
+        == authored_digest
     )
 
 
@@ -134,23 +322,32 @@ def induced_subposet(
 def verify_finite_poset(poset: FinitePoset) -> bool:
     """Verify all retained canonical order/profile claims of a poset value."""
     try:
+        if type(poset) is not FinitePoset:
+            return False
+        _canonical_carrier_elements(poset.elements)
+        if tuple(sorted(set(poset.elements))) != poset.elements:
+            return False
+        if type(poset.graded) is not bool:
+            return False
+        authored_strict = _canonical_ordered_pairs(poset.strict_order_pairs)
+        authored_covers = _canonical_ordered_pairs(poset.cover_relations)
         strict, reduction = _validated_presentation(
             poset.elements,
             tuple(
                 PresentationPair(lower=pair.lower, upper=pair.upper)
-                for pair in poset.strict_order_pairs
+                for pair in authored_strict
             ),
             RelationInterpretation.COMPARABLE_PAIRS,
             ReflexivePairPolicy.FORBIDDEN,
         )
         if (
             tuple(OrderedPair(lower=a, upper=b) for a, b in sorted(strict))
-            != poset.strict_order_pairs
+            != authored_strict
         ):
             return False
         if (
             tuple(OrderedPair(lower=a, upper=b) for a, b in sorted(reduction))
-            != poset.cover_relations
+            != authored_covers
         ):
             return False
         _validate_poset_incomparable_pairs(
@@ -160,8 +357,8 @@ def verify_finite_poset(poset: FinitePoset) -> bool:
             poset.elements, strict
         )
         _validate_poset_extremal_elements(
-            poset.minimal_elements,
-            poset.maximal_elements,
+            _canonical_element_labels(poset.minimal_elements),
+            _canonical_element_labels(poset.maximal_elements),
             expected_minimal,
             expected_maximal,
         )
@@ -169,26 +366,30 @@ def verify_finite_poset(poset: FinitePoset) -> bool:
         _validate_poset_rank_structure(
             poset.elements,
             poset.graded,
-            poset.ranks,
+            _revalidated_ranks(poset.ranks),
             expected_ranks,
             expected_minimal,
             expected_maximal,
             reduction,
         )
-        return (
-            finite_poset_digest(
-                elements=poset.elements,
-                strict_order_pairs=poset.strict_order_pairs,
-                cover_relations=poset.cover_relations,
-                incomparable_pairs=poset.incomparable_pairs,
-                minimal_elements=poset.minimal_elements,
-                maximal_elements=poset.maximal_elements,
-                graded=poset.graded,
-                ranks=poset.ranks,
-            )
-            == poset.poset_digest
-        )
-    except (OperationDomainValidationError, PydanticCustomError, TypeError, ValueError):
+        return finite_poset_digest(
+            elements=poset.elements,
+            strict_order_pairs=poset.strict_order_pairs,
+            cover_relations=poset.cover_relations,
+            incomparable_pairs=poset.incomparable_pairs,
+            minimal_elements=poset.minimal_elements,
+            maximal_elements=poset.maximal_elements,
+            graded=poset.graded,
+            ranks=poset.ranks,
+        ) == _canonical_poset_digest(poset.poset_digest)
+    except (
+        AttributeError,
+        OperationDomainValidationError,
+        PydanticCustomError,
+        TypeError,
+        ValidationError,
+        ValueError,
+    ):
         return False
 
 

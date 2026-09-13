@@ -387,6 +387,25 @@ def test_near_universal_secondary_conflict_is_admitted() -> None:
     assert result.searched_node_count <= 65
 
 
+def test_exponential_near_universal_search_is_refused() -> None:
+    primary = tuple(f"p{index:04d}" for index in range(2_048))
+    rows = tuple(
+        ExactCoverRow(
+            row_id=f"{item}-{suffix}",
+            items=(item,) if index < 50 else (item, "s"),
+        )
+        for index, item in enumerate(primary)
+        for suffix in ("a", "b")
+    )
+    instance = GeneralizedExactCoverInstance(
+        primary_items=primary,
+        secondary_items=("s",),
+        rows=rows,
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="work"):
+        minimum_generalized_exact_cover(instance)
+
+
 def test_unit_forcing_honors_an_expired_deadline() -> None:
     primary = tuple(f"p{index:04d}" for index in range(4_096))
     rows = tuple(ExactCoverRow(row_id=f"r{item}", items=(item,)) for item in primary)

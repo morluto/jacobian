@@ -18,7 +18,10 @@ from jacobian._execution import (
 )
 from jacobian._models import StrictModel
 from jacobian.canonical import canonicalize_json
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math._labels import OpaqueLabel
 
 
@@ -659,8 +662,6 @@ def find_generalized_exact_cover(
         * max(1, (max(len(instance.rows), len(instance.primary_items)) + 63) // 64)
     )
     if work > 256 * 100_000 * 64:
-        from jacobian.catalog.models import OperationDomainValidationError
-
         raise OperationDomainValidationError(
             location=("search_node_limit",),
             code="combinatorics.exact_cover_work",
@@ -857,6 +858,18 @@ def minimum_generalized_exact_cover(  # noqa: C901
     remaining_primary = set(instance.primary_items)
     remaining_rows = list(active_rows)
     forced_selected: list[ExactCoverRow] = []
+    row_mask_words = max(1, (max(len(active_rows), primary_count) + 63) // 64)
+    forcing_work = (
+        max(1, primary_count) * max(1, source_incidence_count) * row_mask_words
+    )
+    if shortcut_work + forcing_work > _MINIMUM_EXACT_COVER_WORK_LIMIT:
+        raise OperationResourceAdmissionError(
+            location=("search_node_limit",),
+            code="combinatorics.minimum_exact_cover_work",
+            message=(
+                "minimum exact-cover unit forcing exceeds the admitted work envelope"
+            ),
+        )
     while remaining_primary:
         request_checkpoint("during minimum exact-cover unit forcing")
         coverage: dict[str, list[ExactCoverRow]] = {
@@ -940,15 +953,6 @@ def minimum_generalized_exact_cover(  # noqa: C901
                     if estimated_nodes_ceiling is None
                     else min(estimated_nodes_ceiling, universal_ceiling)
                 )
-                continue
-            near_universal_ceiling = (
-                1 + remaining_primary_count + (without + 1) * remaining_max_degree
-            )
-            estimated_nodes_ceiling = (
-                near_universal_ceiling
-                if estimated_nodes_ceiling is None
-                else min(estimated_nodes_ceiling, near_universal_ceiling)
-            )
     item_index = {item: index for index, item in enumerate(items)}
     row_count = len(active_rows)
     mask_words = max(1, (max(row_count, primary_count) + 63) // 64)

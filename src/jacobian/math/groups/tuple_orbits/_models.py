@@ -454,6 +454,19 @@ class TupleFamilyOrbitResult(StrictModel):
             }
         payload = dict(data)
         rows = payload.get("rows")
+        if rows is not None:
+            # Materialize any accepted rows iterable once, bounded by the row
+            # budget, so a generator cannot be validated row-by-row before the
+            # row-count and aggregate-index bounds run.
+            materialized_rows_input = _materialize_bounded_sequence(
+                rows, MAX_FAMILY_MEMBERS
+            )
+            if materialized_rows_input is _SEQUENCE_OVERFLOW:
+                raise _tuple_error(
+                    "input_bound",
+                    f"at most {MAX_FAMILY_MEMBERS} tuple rows are admitted",
+                )
+            rows = materialized_rows_input
         if isinstance(rows, (list, tuple)):
             if len(rows) > MAX_FAMILY_MEMBERS:
                 raise _tuple_error(

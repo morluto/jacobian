@@ -478,6 +478,32 @@ def test_result_payloads_are_preflighted_before_container_copy() -> None:
     assert "input_bound" in rows_bound.value.errors()[0]["type"]
 
 
+def test_result_rows_generator_is_materialized_under_the_row_bound() -> None:
+    """A rows generator is consumed once and bounded, not handed to Pydantic."""
+
+    yields = 0
+
+    def rows():
+        nonlocal yields
+        while True:
+            yields += 1
+            yield {}
+
+    payload = {
+        "source": {
+            "action": {"domain": ["a"], "generators": [[0]]},
+            "arity": 0,
+            "family": [],
+        },
+        "rows": rows(),
+        "is_union_of_complete_ambient_orbits": True,
+    }
+    with pytest.raises(ValidationError) as rows_bound:
+        TupleFamilyOrbitResult.model_validate(payload)
+    assert "input_bound" in rows_bound.value.errors()[0]["type"]
+    assert yields == MAX_FAMILY_MEMBERS + 1
+
+
 def test_missing_arity_on_forged_source_is_a_typed_domain_error() -> None:
     request = TupleFamilyOrbitSource.model_construct(action=_swap_action(), family=())
     with pytest.raises(OperationDomainValidationError) as exc_info:
@@ -710,19 +736,24 @@ def test_many_orbits_reuse_image_pass_transporters() -> None:
         )
 
 
-def test_first_indexed_source_seeds_each_orbit(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A shifted first source still reuses the image-pass transporter.
+def test_first_indexed_source_seeds_each_orbit() -> None:
+    """The seed is the first indexed unclassified source, not the least tuple.
 
     The ``(1,)`` member is the first indexed source of its orbit while ``(0,)``
-    is lexicographically smaller, so the old lexicographic seed forced a second
-    transporter scan.  A zero transporter budget makes any fallback fail.
+    is lexicographically smaller, so a lexicographic seed would force a second
+    transporter scan.
     """
 
-    import jacobian.math.groups.tuple_orbits.operations as native
+    from jacobian.math.groups.tuple_orbits.operations import _next_unclassified_seed
 
-    monkeypatch.setattr(native, "MAX_TUPLE_ORBIT_TRANSPORTERS", 0)
+    order = ((1,), (0,), (2,))
+    unclassified = {(1,), (0,), (2,)}
+    seed, index = _next_unclassified_seed(order, 0, unclassified)
+    assert (seed, index) == ((1,), 0)
+    unclassified.discard((1,))
+    seed, index = _next_unclassified_seed(order, index, unclassified)
+    assert (seed, index) == ((0,), 1)
+
     family = ((1,), (0,), (2,))
     result = tuple_family_orbit_profile(
         TupleFamilyOrbitSource(action=_cyclic_action(), arity=1, family=family)

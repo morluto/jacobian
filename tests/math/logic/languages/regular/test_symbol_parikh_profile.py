@@ -668,3 +668,19 @@ def test_native_profile_observes_request_cancellation() -> None:
         pytest.raises(OperationExecutionCancelledError),
     ):
         symbol_parikh_profile(dfa, 4)
+
+
+def test_native_profile_revalidates_a_constructed_dfa() -> None:
+    """A non-total constructed DFA is a typed domain rejection, not KeyError."""
+    forged = DFA.model_construct(
+        state_count=1,
+        alphabet_size=1,
+        transitions=(),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        symbol_parikh_profile(forged, 3)
+    assert error.value.errors()[0]["type"] == (
+        "regular_language.symbol_parikh.dfa_contract"
+    )

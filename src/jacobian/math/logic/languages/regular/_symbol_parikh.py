@@ -3,7 +3,8 @@
 from math import comb
 from typing import Annotated, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, StrictInt, ValidationError, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import ExactInteger
 from jacobian._execution import request_checkpoint
@@ -506,6 +507,22 @@ def symbol_parikh_profile(dfa: DFA, word_length: int) -> SymbolParikhProfileResu
             code="regular_language.symbol_parikh.dfa_type",
             message="dfa must be a canonical DFA value",
         )
+    try:
+        dfa = DFA.model_validate(
+            {
+                "state_count": dfa.state_count,
+                "alphabet_size": dfa.alphabet_size,
+                "transitions": tuple(dfa.transitions),
+                "initial_state": dfa.initial_state,
+                "accepting_states": tuple(dfa.accepting_states),
+            }
+        )
+    except (ValidationError, PydanticCustomError) as exc:
+        raise OperationDomainValidationError(
+            location=("dfa",),
+            code="regular_language.symbol_parikh.dfa_contract",
+            message="dfa must be a total deterministic automaton",
+        ) from exc
     if (
         type(word_length) is not int
         or word_length < 0

@@ -486,6 +486,49 @@ def _find_cycle_of_length(
     return None
 
 
+def _wheel_cycles(
+    wheel_order: tuple[str, ...], cycle_length: int, *, chordless: bool
+) -> set[tuple[str, ...]]:
+    """Enumerate the exact cycles of one recognized wheel block.
+
+    ``wheel_order`` is ``(hub, rim...)`` in cyclic rim order. Emitting the
+    family directly avoids a DFS that explores every hub placement between rim
+    arcs, which the admission work bound cannot charge tightly.
+    """
+
+    hub = wheel_order[0]
+    rim = wheel_order[1:]
+    rim_count = len(rim)
+    cycles: set[tuple[str, ...]] = set()
+    if chordless:
+        if cycle_length == 3:
+            for index in range(rim_count):
+                cycles.add(
+                    _canonicalize_cycle((hub, rim[index], rim[(index + 1) % rim_count]))
+                )
+        elif cycle_length == rim_count and rim_count >= 4:
+            cycles.add(_canonicalize_cycle(rim))
+        return cycles
+    if cycle_length == rim_count + 1:
+        # Hamiltonians: the hub plus all ``rim_count`` rim vertices, which is a
+        # rim path between two rim vertices; each removed rim edge gives one.
+        for start in range(rim_count):
+            arc = tuple(
+                rim[(start + offset) % rim_count] for offset in range(rim_count)
+            )
+            cycles.add(_canonicalize_cycle((hub, *arc)))
+        return cycles
+    if cycle_length < 3 or cycle_length > rim_count:
+        return cycles
+    arc_length = cycle_length - 1
+    for start in range(rim_count):
+        arc = tuple(rim[(start + offset) % rim_count] for offset in range(arc_length))
+        cycles.add(_canonicalize_cycle((hub, *arc)))
+    if cycle_length == rim_count:
+        cycles.add(_canonicalize_cycle(rim))
+    return cycles
+
+
 def _canonicalize_cycle(cycle: tuple[str, ...]) -> tuple[str, ...]:
     """Return the lexicographically smallest rotation in either orientation."""
 
@@ -519,6 +562,11 @@ def _enumerate_cycles(
     visited_prefixes = 0
 
     for block in plan.blocks:
+        if block.wheel_order is not None:
+            cycles.update(
+                _wheel_cycles(block.wheel_order, cycle_length, chordless=chordless)
+            )
+            continue
         adjacency = block.adjacency
 
         def search_from(
@@ -619,6 +667,7 @@ def enumerate_chordless_fixed_length_cycles(
 class _FixedCycleBlock:
     adjacency: dict[str, tuple[str, ...]]
     core_vertices: tuple[str, ...]
+    wheel_order: tuple[str, ...] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -777,7 +826,9 @@ def _block_fixed_cycle_bounds(
             if chordless
             else _wheel_cycle_count(wheel_order, cycle_length)
         )
-        return 2 * core_order * core_order, count, adjacency
+        # The wheel family is enumerated directly, so charge linear work for
+        # emitting its arcs rather than the DFS envelope.
+        return core_order, count, adjacency
     max_core_degree = max((len(local[vertex]) for vertex in block), default=0)
     prefix_bound = core_order
     for depth in range(1, cycle_length):
@@ -959,7 +1010,13 @@ def _admit_fixed_cycle_search_plan(
         cycle_upper_bound += block_cycles
         if block_cycles:
             search_blocks.append(
-                _FixedCycleBlock(adjacency=block_adjacency, core_vertices=block)
+                _FixedCycleBlock(
+                    adjacency=block_adjacency,
+                    core_vertices=block,
+                    wheel_order=_wheel_order_for_block(
+                        block, _block_adjacency(block, adjacency_sets)
+                    ),
+                )
             )
     if complete_work > MAX_FIXED_CYCLE_WORK:
         _reject_fixed_cycle_resource(

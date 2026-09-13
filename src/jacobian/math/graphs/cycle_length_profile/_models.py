@@ -259,6 +259,32 @@ class FixedLengthCycleEnumerationResult(StrictModel):
                 "edge incidence must cover the source edge axis in source order",
             )
 
+        # Compare each row with the already-built expected tuple first, so a
+        # structurally invalid result is rejected without sorting every forged
+        # index row. The expected rows are sorted, unique, and in range, so only
+        # mismatched rows need the per-row checks below.
+        expected_vertex_incidence_tuple = tuple(
+            tuple(expected_vertex_incidence[vertex]) for vertex in self.graph.vertices
+        )
+        expected_edge_incidence_tuple = tuple(
+            tuple(expected_edge_incidence[frozenset(edge)]) for edge in self.graph.edges
+        )
+        if (
+            tuple(row.cycle_indices for row in self.vertex_incidence)
+            != expected_vertex_incidence_tuple
+        ):
+            raise PydanticCustomError(
+                "cycle_enumeration.vertex_incidence_mismatch",
+                "vertex incidence does not bind to the returned cycle family",
+            )
+        if (
+            tuple(row.cycle_indices for row in self.edge_incidence)
+            != expected_edge_incidence_tuple
+        ):
+            raise PydanticCustomError(
+                "cycle_enumeration.edge_incidence_mismatch",
+                "edge incidence does not bind to the returned cycle family",
+            )
         valid_indices = range(self.cycle_count)
         for row in (*self.vertex_incidence, *self.edge_incidence):
             if len(row.cycle_indices) > 20_000:
@@ -276,30 +302,6 @@ class FixedLengthCycleEnumerationResult(StrictModel):
                     "cycle_enumeration.incidence_index_out_of_range",
                     "incidence indices must refer to returned cycles",
                 )
-
-        expected_vertex_incidence_tuple = tuple(
-            tuple(expected_vertex_incidence[vertex]) for vertex in self.graph.vertices
-        )
-        if (
-            tuple(row.cycle_indices for row in self.vertex_incidence)
-            != expected_vertex_incidence_tuple
-        ):
-            raise PydanticCustomError(
-                "cycle_enumeration.vertex_incidence_mismatch",
-                "vertex incidence does not bind to the returned cycle family",
-            )
-
-        expected_edge_incidence_tuple = tuple(
-            tuple(expected_edge_incidence[frozenset(edge)]) for edge in self.graph.edges
-        )
-        if (
-            tuple(row.cycle_indices for row in self.edge_incidence)
-            != expected_edge_incidence_tuple
-        ):
-            raise PydanticCustomError(
-                "cycle_enumeration.edge_incidence_mismatch",
-                "edge incidence does not bind to the returned cycle family",
-            )
         return self
 
     @classmethod

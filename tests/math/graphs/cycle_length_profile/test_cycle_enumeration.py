@@ -1,6 +1,7 @@
 """Complete fixed-length cycle enumeration tests."""
 
 import json
+import time
 from threading import Event
 
 import pytest
@@ -614,3 +615,31 @@ def test_wheel_hamiltonian_count_covers_every_rim_edge() -> None:
     graph = _wheel(5)
     result = enumerate_fixed_length_cycles(graph, 6)
     assert result.cycle_count == 5
+
+
+def test_wheel_block_enumerates_directly_without_dfs() -> None:
+    """A 125-vertex wheel with a last-ordered hub returns 124 Hamiltonians fast."""
+    rim = tuple(f"r{index:03}" for index in range(124))
+    hub = "zzz"
+    edges = tuple(canonical_edge(hub, vertex) for vertex in rim) + tuple(
+        canonical_edge(rim[index], rim[(index + 1) % 124]) for index in range(124)
+    )
+    graph = SimpleUndirectedGraph(vertices=(*rim, hub), edges=edges)
+    started = time.monotonic()
+    result = enumerate_fixed_length_cycles(graph, 125)
+    assert result.cycle_count == 124
+    assert time.monotonic() - started < 2.0
+
+
+def test_forged_incidence_rows_reject_before_sorting() -> None:
+    """A mismatch is caught by comparison, not by sorting every forged row."""
+    graph = _complete_bipartite(2, 2)
+    result = enumerate_fixed_length_cycles(graph, 4)
+    payload = result.model_dump(mode="json")
+    # Replace every incidence row with an in-range sorted sequence that does
+    # not match the real incidence; the mismatch must be rejected.
+    payload["vertex_incidence"] = [
+        {"source": [vertex], "cycle_indices": [0, 1]} for vertex in graph.vertices
+    ]
+    with pytest.raises(ValidationError):
+        FixedLengthCycleEnumerationResult.model_validate(payload)

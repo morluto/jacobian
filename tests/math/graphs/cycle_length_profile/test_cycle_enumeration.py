@@ -26,7 +26,7 @@ from jacobian.math.graphs.cycle_length_profile.operations import (
     enumerate_chordless_fixed_length_cycles,
     enumerate_fixed_length_cycles,
 )
-from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.graphs.values import MAX_SIMPLE_GRAPH_VERTICES, SimpleUndirectedGraph
 
 
 def _square_with_diagonal() -> SimpleUndirectedGraph:
@@ -546,3 +546,37 @@ def test_exact_chordless_four_cycle_block_charges_traversal_work() -> None:
     graph = SimpleUndirectedGraph(vertices=vertices, edges=edges)
     with pytest.raises(OperationResourceAdmissionError, match="work"):
         enumerate_chordless_fixed_length_cycles(graph, 4)
+
+
+def test_dominant_multipartite_part_makes_long_cycles_empty() -> None:
+    """K_{9,1,1} has no cycle longer than four: the small parts separate two."""
+    parts = [tuple(f"p{index}" for index in range(9)), ("p9",), ("p10",)]
+    vertices = tuple(vertex for part in parts for vertex in part)
+    part_of = {vertex: index for index, part in enumerate(parts) for vertex in part}
+    edges = tuple(
+        tuple(sorted((first, second)))
+        for index, first in enumerate(vertices)
+        for second in vertices[index + 1 :]
+        if part_of[first] != part_of[second]
+    )
+    graph = SimpleUndirectedGraph(vertices=vertices, edges=edges)
+    result = enumerate_fixed_length_cycles(graph, 6)
+    assert result.cycles == ()
+    assert result.cycle_count == 0
+
+
+def test_oversized_cycle_row_is_bounded_before_decoding() -> None:
+    """The inner cycle tuple carries a field-level maximum length."""
+    graph = _complete_bipartite(2, 2)
+    payload = {
+        "graph": graph.model_dump(),
+        "cycle_length": 4,
+        "family_kind": "SIMPLE",
+        "cycle_count": 1,
+        "cycles": [["x"] * (MAX_SIMPLE_GRAPH_VERTICES + 1)],
+        "vertex_incidence": [],
+        "edge_incidence": [],
+    }
+    with pytest.raises(ValidationError) as error:
+        FixedLengthCycleEnumerationResult.model_validate(payload)
+    assert error.value.errors()[0]["loc"] == ("cycles", 0)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Self
+from typing import Annotated, Self
 
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
@@ -165,7 +165,9 @@ class FixedLengthCycleEnumerationResult(StrictModel):
         description="Whether the complete family contains simple or chordless cycles."
     )
     cycle_count: StrictInt = Field(ge=0, le=20_000)
-    cycles: tuple[tuple[str, ...], ...] = Field(max_length=20_000)
+    cycles: tuple[Annotated[tuple[str, ...], Field(max_length=MAX_VERTICES)], ...] = (
+        Field(max_length=20_000)
+    )
     vertex_incidence: tuple[CycleIncidenceRow, ...] = Field(
         max_length=MAX_VERTICES,
         description="One incidence row per declared source vertex.",

@@ -585,9 +585,13 @@ def _multipartite_cycle_exists(part_sizes: tuple[int, ...], cycle_length: int) -
         # and a ``cycle_length``-cycle needs ``cycle_length / 2`` vertices from
         # each part.
         return cycle_length % 2 == 0 and 2 * min(part_sizes, default=0) >= cycle_length
-    # At least three parts: any length from 3 to the total vertex count is
-    # realizable (a triangle needs three distinct parts, which we have).
-    return True
+    # At least three parts. A cycle alternates between parts, so a part of size
+    # ``m`` can contribute at most ``total - m + 1`` of its vertices (each
+    # separated by at least one non-part vertex). When the largest part
+    # dominates, that caps the longest cycle at ``2 * (total - m)``.
+    largest = max(part_sizes)
+    longest = total if 2 * largest <= total else 2 * (total - largest)
+    return cycle_length <= longest
 
 
 def _chordless_four_cycle_count(part_sizes: tuple[int, ...]) -> int:

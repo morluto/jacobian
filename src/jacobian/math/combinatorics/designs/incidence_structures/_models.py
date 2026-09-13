@@ -213,22 +213,37 @@ class SteinerTripleSystemShard(StrictModel):
         if not isinstance(data, dict):
             return data
         triples = data.get("fixed_triples")
-        if triples is None or not isinstance(triples, (list, tuple)):
+        if triples is None:
             return data
+        # Require the exact built-in containers: a list/tuple subclass can
+        # override ``__len__`` to report a value under the ceiling while
+        # iteration still yields the whole underlying family, so any
+        # ``isinstance`` guard would let the copy and sort run unbounded.
+        if type(triples) not in (list, tuple):
+            raise _validation_error(
+                "steiner_shard_shape",
+                "fixed_triples must be a bounded list or tuple",
+            )
         if len(triples) > MAX_STEINER_BLOCKS:
             # The field's own `max_length` already decides this request, and it
             # costs one length read. Copying every inner list and sorting the
             # whole family first would make a guaranteed rejection spend work
             # proportional to an arbitrarily large input.
             return data
+        normalized: list[tuple[int, ...]] = []
+        for triple in triples:
+            if type(triple) is list:
+                normalized.append(tuple(triple))
+            elif type(triple) is tuple:
+                normalized.append(triple)
+            else:
+                raise _validation_error(
+                    "steiner_shard_shape",
+                    "each fixed triple must be a list or tuple of three integers",
+                )
         payload = dict(data)
-        payload["fixed_triples"] = tuple(
-            tuple(triple) if isinstance(triple, list) else triple for triple in triples
-        )
-        if all(
-            isinstance(triple, tuple) and len(triple) == 3
-            for triple in payload["fixed_triples"]
-        ):
+        payload["fixed_triples"] = tuple(normalized)
+        if all(len(triple) == 3 for triple in payload["fixed_triples"]):
             payload["fixed_triples"] = tuple(sorted(payload["fixed_triples"]))
         return payload
 

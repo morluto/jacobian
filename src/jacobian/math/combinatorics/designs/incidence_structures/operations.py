@@ -225,7 +225,10 @@ def _admit_native_shard(shard: object, order: int) -> SteinerTripleSystemShard:
         )
     try:
         validated = SteinerTripleSystemShard.model_validate(
-            {"order": shard.order, "fixed_triples": raw_triples}
+            {
+                "order": getattr(shard, "order", None),
+                "fixed_triples": raw_triples,
+            }
         )
     except (ValidationError, PydanticCustomError) as exc:
         if isinstance(exc, ValidationError):

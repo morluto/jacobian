@@ -544,6 +544,15 @@ def test_duplicate_triples_use_a_duplicate_specific_error_code() -> None:
     )
 
 
+def test_forged_shard_without_order_is_a_typed_domain_error() -> None:
+    """A schema-bypassed shard missing ``order`` is not an AttributeError."""
+
+    forged = SteinerTripleSystemShard.model_construct(fixed_triples=())
+    with pytest.raises(OperationDomainValidationError) as error:
+        construct_steiner_triple_system(7, 100, forged)
+    assert error.value.errors()[0]["loc"] == ("shard", "order")
+
+
 def test_oversized_wire_shard_is_measured_before_it_is_canonicalized() -> None:
     """An over-long wire family is refused on `len`, not copied and sorted.
 
@@ -552,16 +561,33 @@ def test_oversized_wire_shard_is_measured_before_it_is_canonicalized() -> None:
     rejected still paid work proportional to an arbitrarily large input.
     """
 
-    class _TrapTripleFamily(list):  # type: ignore[type-arg]
-        def __iter__(self) -> Iterator[Any]:
-            raise AssertionError(
-                "an over-long family must be rejected before it is traversed"
-            )
-
-    family = _TrapTripleFamily([(0, 1, 2)] * (MAX_STEINER_BLOCKS + 1))
+    family = [(0, 1, 2)] * (MAX_STEINER_BLOCKS + 1)
     with pytest.raises(ValidationError) as error:
         SteinerTripleSystemShard.model_validate({"order": 7, "fixed_triples": family})
     assert error.value.errors()[0]["type"] == "too_long"
+
+
+def test_wire_shard_rejects_sequence_subclasses_before_canonicalization() -> None:
+    """A sequence subclass cannot understate its length and force a traversal.
+
+    ``isinstance`` admitted list/tuple subclasses whose ``__len__`` reported a
+    value under the ceiling, so the copy and sort traversed the whole underlying
+    family before the field's ``max_length`` could reject it.
+    """
+
+    class _LyingFamily(tuple):  # type: ignore[type-arg]
+        def __len__(self) -> int:
+            return 1
+
+        def __iter__(self) -> Iterator[Any]:
+            raise AssertionError("a rejected family must not be traversed")
+
+    family = _LyingFamily(((0, 1, 2),))
+    with pytest.raises(ValidationError) as error:
+        SteinerTripleSystemShard.model_validate({"order": 7, "fixed_triples": family})
+    assert error.value.errors()[0]["type"] == (
+        "incidence_structure.steiner_shard_shape"
+    )
 
 
 def test_native_shard_bound_does_not_come_from_the_unadmitted_order() -> None:

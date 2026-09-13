@@ -17,10 +17,40 @@ MIN_KEMPNER_ARITY = 3
 MAX_KEMPNER_ARITY = 999
 _KEMPNER_BASE_PATTERN = r"^(?:[2-9]|[1-5][0-9]|6[0-4])(?![\s\S])"
 _KEMPNER_ARITY_PATTERN = r"^(?:[3-9]|[1-9][0-9]{1,2})(?![\s\S])"
+_KEMPNER_DIGIT_PATTERN = r"^(?:[0-9]|[1-5][0-9]|6[0-3])(?![\s\S])"
+_KEMPNER_INDEX_PATTERN = r"^(?:[0-9]|[1-9][0-9]{1,2})(?![\s\S])"
+_KEMPNER_POSITIVE_PATTERN = (
+    rf"^(?:[1-9][0-9]{{0,{MAX_KEMPNER_INTEGER_DIGITS - 1}}})(?![\s\S])"
+)
 
 KempnerSmallInteger = Annotated[int, DecimalIntegerEncoding(max_digits=3)]
 KempnerInteger = Annotated[
     int, DecimalIntegerEncoding(max_digits=MAX_KEMPNER_INTEGER_DIGITS)
+]
+# Item-specific wire bounds: the generic three-digit schema would admit digits
+# and indices the runtime canonicalization rejects.
+KempnerDigit = Annotated[
+    int,
+    DecimalIntegerEncoding(max_digits=2),
+    Field(
+        ge=0,
+        le=MAX_ALLOWED_DIGITS,
+        json_schema_extra={"pattern": _KEMPNER_DIGIT_PATTERN},
+    ),
+]
+KempnerIndex = Annotated[
+    int,
+    DecimalIntegerEncoding(max_digits=3),
+    Field(
+        ge=0,
+        le=MAX_KEMPNER_ARITY - 1,
+        json_schema_extra={"pattern": _KEMPNER_INDEX_PATTERN},
+    ),
+]
+KempnerPositiveInteger = Annotated[
+    int,
+    DecimalIntegerEncoding(max_digits=MAX_KEMPNER_INTEGER_DIGITS),
+    Field(ge=1, json_schema_extra={"pattern": _KEMPNER_POSITIVE_PATTERN}),
 ]
 
 
@@ -43,7 +73,7 @@ class KempnerDigitSet(StrictModel):
         description=f"Integer base in [2, {MAX_KEMPNER_BASE}].",
         json_schema_extra={"pattern": _KEMPNER_BASE_PATTERN},
     )
-    allowed_digits: tuple[KempnerSmallInteger, ...] = Field(
+    allowed_digits: tuple[KempnerDigit, ...] = Field(
         min_length=1,
         max_length=MAX_ALLOWED_DIGITS,
         description="Strictly increasing proper subset of the base digit alphabet.",
@@ -95,7 +125,7 @@ class KempnerContainsProgression(StrictModel):
     """One canonical shortest-padded witness of a fixed-arity progression."""
 
     status: Literal["CONTAINS_PROGRESSION"]
-    indices: tuple[KempnerSmallInteger, ...] = Field(
+    indices: tuple[KempnerIndex, ...] = Field(
         min_length=MIN_KEMPNER_ARITY,
         max_length=MAX_KEMPNER_ARITY,
     )
@@ -103,8 +133,8 @@ class KempnerContainsProgression(StrictModel):
         min_length=MIN_KEMPNER_ARITY,
         max_length=MAX_KEMPNER_ARITY,
     )
-    first_term: KempnerInteger
-    common_difference: KempnerInteger
+    first_term: KempnerPositiveInteger
+    common_difference: KempnerPositiveInteger
 
     @model_validator(mode="after")
     def require_witness_shape(self) -> Self:

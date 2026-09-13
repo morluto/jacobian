@@ -195,6 +195,39 @@ def test_result_schema_discriminates_status_branches() -> None:
         )
 
 
+def test_wire_schema_bounds_item_specific_witness_values() -> None:
+    """Items must advertise the same domain as runtime canonicalization."""
+    digit_schema = KempnerDigitSet.model_json_schema()
+    digit_items = digit_schema["properties"]["allowed_digits"]["items"]
+    assert digit_items["pattern"].startswith("^(?:[0-9]|[1-5][0-9]|6[0-3])")
+    with pytest.raises(ValidationError):
+        KempnerDigitSet.model_validate({"base": "10", "allowed_digits": ["-1"]})
+    with pytest.raises(ValidationError):
+        KempnerDigitSet.model_validate({"base": "10", "allowed_digits": ["999"]})
+
+    witness_schema = KempnerContainsProgression.model_json_schema()
+    index_items = witness_schema["properties"]["indices"]["items"]
+    assert index_items["pattern"].startswith("^(?:[0-9]|[1-9][0-9]{1,2})")
+    for field in ("first_term", "common_difference"):
+        assert witness_schema["properties"][field]["ge"] == 1
+    base_witness = {
+        "status": "CONTAINS_PROGRESSION",
+        "indices": ["0", "1", "2"],
+        "values": ["1", "2", "3"],
+        "first_term": "1",
+        "common_difference": "1",
+    }
+    for field, bad in (
+        ("indices", ["-1", "1", "2"]),
+        ("first_term", "0"),
+        ("common_difference", "-1"),
+    ):
+        payload = dict(base_witness)
+        payload[field] = bad
+        with pytest.raises(ValidationError):
+            KempnerContainsProgression.model_validate(payload)
+
+
 def test_witness_arrays_are_capped_at_max_arity() -> None:
     schema = KempnerContainsProgression.model_json_schema()
     assert schema["properties"]["indices"]["maxItems"] == MAX_KEMPNER_ARITY

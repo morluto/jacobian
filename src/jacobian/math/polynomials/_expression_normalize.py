@@ -207,7 +207,7 @@ def _expression_children(node: object) -> tuple[object, ...]:
     return ()
 
 
-def _bound_raw_request(value: Mapping) -> None:
+def _bound_raw_request(value: Mapping[str, object]) -> None:
     """Bound every raw request field before the recursive canonicalization copy."""
 
     allowed = {"coefficient_domain", "variables", "expression"}

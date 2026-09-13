@@ -786,3 +786,110 @@ def test_power_of_one_preserves_the_base_aggregate_size() -> None:
         _metrics(outer.expression).total_coefficient_digits
         <= _metrics(inner.expression).total_coefficient_digits
     )
+
+
+def _powered_sum_square(i: int, exponent: int) -> dict[str, Any]:
+    p = 10**127 + 7 * (2 * i)
+    q = 10**127 + 7 * (2 * i + 1)
+    inner = {
+        "kind": "ADD",
+        "operands": [
+            {
+                "kind": "MULTIPLY",
+                "operands": [
+                    {
+                        "kind": "POWER",
+                        "base": {"kind": "VARIABLE", "name": "x"},
+                        "exponent": i,
+                    },
+                    {
+                        "kind": "POWER",
+                        "base": {"kind": "VARIABLE", "name": "y"},
+                        "exponent": i + 1,
+                    },
+                    {
+                        "kind": "POWER",
+                        "base": {"kind": "LITERAL", "value": {"num": 1, "den": p}},
+                        "exponent": exponent,
+                    },
+                ],
+            },
+            {
+                "kind": "MULTIPLY",
+                "operands": [
+                    {
+                        "kind": "POWER",
+                        "base": {"kind": "VARIABLE", "name": "x"},
+                        "exponent": 20 - i,
+                    },
+                    {
+                        "kind": "POWER",
+                        "base": {"kind": "VARIABLE", "name": "y"},
+                        "exponent": 19 - i,
+                    },
+                    {
+                        "kind": "POWER",
+                        "base": {"kind": "LITERAL", "value": {"num": 1, "den": q}},
+                        "exponent": exponent,
+                    },
+                ],
+            },
+        ],
+    }
+    return {"kind": "POWER", "base": inner, "exponent": 2}
+
+
+def test_power_support_keys_include_mixed_products() -> None:
+    """A multi-term power's support is the Minkowski sum, not the pure powers."""
+    expression = {
+        "kind": "ADD",
+        "operands": [_powered_sum_square(i, 32) for i in range(1, 6)],
+    }
+    with pytest.raises(OperationResourceAdmissionError):
+        normalize_polynomial_expression(
+            _request("QQ", expression, variables=("x", "y"))
+        )
+
+
+def test_identity_power_preserves_intermediate_digits() -> None:
+    """Wrapping an accepted expression in POWER(..., 1) cannot inflate its size."""
+    base = {
+        "kind": "ADD",
+        "operands": [
+            {
+                "kind": "POWER",
+                "base": {"kind": "LITERAL", "value": {"num": 10**127, "den": 1}},
+                "exponent": 32,
+            },
+            *(
+                {
+                    "kind": "MULTIPLY",
+                    "operands": [
+                        {
+                            "kind": "ADD",
+                            "operands": [
+                                {"kind": "LITERAL", "value": {"num": 1, "den": 1}},
+                                {"kind": "VARIABLE", "name": f"x{index}"},
+                                {
+                                    "kind": "POWER",
+                                    "base": {"kind": "VARIABLE", "name": f"x{index}"},
+                                    "exponent": 2,
+                                },
+                            ],
+                        }
+                    ],
+                }
+                for index in range(1, 8)
+            ),
+        ],
+    }
+    variables = tuple(f"x{index}" for index in range(1, 8))
+    wrapped = {"kind": "POWER", "base": base, "exponent": 1}
+    direct_result = normalize_polynomial_expression(_request("QQ", base, variables))
+    wrapped_result = normalize_polynomial_expression(_request("QQ", wrapped, variables))
+    assert wrapped_result.polynomial.polynomial == direct_result.polynomial.polynomial
+    from jacobian.math.polynomials._expression_normalize import _metrics
+
+    direct_metrics = _metrics(_request("QQ", base, variables).expression)
+    wrapped_metrics = _metrics(_request("QQ", wrapped, variables).expression)
+    assert wrapped_metrics.intermediate_digits == direct_metrics.intermediate_digits

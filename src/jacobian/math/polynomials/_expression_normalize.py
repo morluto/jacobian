@@ -392,10 +392,22 @@ def _support_keys_are_uniquely_decomposable(
     return rank == len(vectors)
 
 
-def _scale_support_keys(
+def _power_support_keys(
     keys: frozenset[tuple[tuple[str, int], ...]] | None, exponent: int
 ) -> frozenset[tuple[tuple[str, int], ...]] | None:
+    """Return the complete support keys of a power, or ``None`` when unknown.
+
+    Scaling each base monomial records only the pure powers; the true support
+    of ``(sum m_i)^k`` is the ``k``-fold Minkowski sum, which includes mixed
+    products. Only a single base monomial (or the identity power) has a known
+    complete support here.
+    """
+
     if keys is None:
+        return None
+    if exponent <= 1:
+        return keys
+    if len(keys) != 1:
         return None
     scaled: set[tuple[tuple[str, int], ...]] = set()
     for key in keys:
@@ -670,13 +682,17 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
             ),
             denominator_mass_bits=powered_denominator_bits,
             work=work,
-            intermediate_digits=max(
-                base.intermediate_digits,
-                _representation_digits(
-                    support, numerator_bits, _denominator_bits(denominator)
-                ),
+            intermediate_digits=(
+                base.intermediate_digits
+                if exponent == 1
+                else max(
+                    base.intermediate_digits,
+                    _representation_digits(
+                        support, numerator_bits, _denominator_bits(denominator)
+                    ),
+                )
             ),
-            support_keys=_scale_support_keys(base.support_keys, exponent),
+            support_keys=_power_support_keys(base.support_keys, exponent),
             termwise_disjoint=base.termwise_disjoint
             and (
                 exponent <= 1

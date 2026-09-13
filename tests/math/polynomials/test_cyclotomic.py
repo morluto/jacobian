@@ -106,42 +106,35 @@ def test_backend_failure_is_typed(monkeypatch: pytest.MonkeyPatch) -> None:
     def fail(*args: object, **kwargs: object) -> object:
         raise RuntimeError("backend unavailable")
 
-    monkeypatch.setattr(sympy, "cyclotomic_poly", fail)
-    # 105 = 3*5*7 is radical and not a distinct-prime semiprime, so it still
-    # reaches the dense backend the fake replaces.
+    monkeypatch.setattr(sympy, "factorint", fail)
     with pytest.raises(OperationBackendError) as exc_info:
         _run(CyclotomicRequest(index=105))
-    assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT
+    assert exc_info.value.reason is BackendFailureReason.INITIALIZATION
 
 
-def test_backend_nonintegral_coefficients_are_not_truncated(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    import sympy
+def test_inexact_division_is_a_typed_backend_failure() -> None:
+    """The exact quotient seam never truncates: a remainder is typed."""
+    from jacobian.math.polynomials._cyclotomic import _exact_divide
+    from jacobian.math.polynomials._models import IntegerPolynomial
 
-    class FakePolynomial:
-        def all_coeffs(self) -> list[object]:
-            return [sympy.Rational(1, 2), sympy.Integer(1)]
-
-    monkeypatch.setattr(
-        sympy, "cyclotomic_poly", lambda *args, **kwargs: FakePolynomial()
-    )
     with pytest.raises(OperationBackendError) as exc_info:
-        _run(CyclotomicRequest(index=105))
+        _exact_divide(
+            IntegerPolynomial(coefficients=(1, 0, 0)),
+            IntegerPolynomial(coefficients=(1, 1, 1)),
+        )
     assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT
 
 
 def test_backend_wrong_constant_is_rejected_on_the_native_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import sympy
-
-    class FakePolynomial:
-        def all_coeffs(self) -> tuple[int, ...]:
-            return (1, 0)
+    from jacobian.math.polynomials import _cyclotomic as module
+    from jacobian.math.polynomials._models import IntegerPolynomial
 
     monkeypatch.setattr(
-        sympy, "cyclotomic_poly", lambda *args, **kwargs: FakePolynomial()
+        module,
+        "_exact_divide",
+        lambda dividend, divisor: IntegerPolynomial(coefficients=(1,) * 48 + (-1,)),
     )
     with pytest.raises(OperationBackendError) as exc_info:
         cyclotomic(105)
@@ -272,6 +265,20 @@ def test_factor_map_exponents_are_bounded_before_exponentiation(
     assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT
 
 
+def test_factor_map_bases_are_bounded_before_exponentiation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A malformed factor base cannot request multi-million-digit powers."""
+    import sympy
+
+    # The exponent passes the bit-length screen, so only the base bound stops
+    # the reconstruction from materializing a ~50-million-digit power.
+    monkeypatch.setattr(sympy, "factorint", lambda index: {10**10_000_000 + 7: 5})
+    with pytest.raises(OperationBackendError) as exc_info:
+        cyclotomic(30)
+    assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT
+
+
 def test_composite_reported_as_a_prime_base_is_rejected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -287,9 +294,51 @@ def test_composite_reported_as_a_prime_base_is_rejected(
     assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT
 
 
-def test_squarefree_construction_work_is_charged_from_the_radical() -> None:
+def test_construction_work_is_admitted_before_backend_expansion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.polynomials import _cyclotomic as module
+
+    monkeypatch.setattr(module, "MAX_CYCLOTOMIC_CONSTRUCTION_WORK", 1)
     with pytest.raises(OperationResourceAdmissionError, match="construction"):
-        cyclotomic(16_530)
+        cyclotomic(30)
+
+
+def test_three_prime_lifting_charge_stays_inside_the_construction_envelope() -> None:
+    """The prime-lifting regime admits cheap multi-prime squarefree indices."""
+    from jacobian.math.polynomials._cyclotomic import (
+        MAX_CYCLOTOMIC_CONSTRUCTION_WORK,
+        _factor_index,
+    )
+
+    assert (
+        _construction_regime(455, _factor_index(455))[0]
+        < MAX_CYCLOTOMIC_CONSTRUCTION_WORK
+    )
+    assert (
+        _construction_regime(16_530, _factor_index(16_530))[0]
+        < MAX_CYCLOTOMIC_CONSTRUCTION_WORK
+    )
+
+
+def test_three_prime_cyclotomic_matches_the_backend_oracle() -> None:
+    """``Phi_455 = Phi_91(x**5)/Phi_91(x)`` is admitted and exact."""
+    import sympy
+
+    result = _run(CyclotomicRequest(index=455))
+    assert result.totient == 288
+    assert len(result.polynomial.coefficients) == 289
+    reference = sympy.Poly(
+        sympy.cyclotomic_poly(455, sympy.Symbol("x")), sympy.Symbol("x")
+    )
+    assembled = sympy.Poly(
+        sum(
+            coefficient * sympy.Symbol("x") ** (288 - offset)
+            for offset, coefficient in enumerate(result.polynomial.coefficients)
+        ),
+        sympy.Symbol("x"),
+    )
+    assert assembled == reference
 
 
 def test_large_degree_is_admitted_before_backend_expansion() -> None:
@@ -327,21 +376,20 @@ def test_power_of_two_multiple_uses_the_reduced_path() -> None:
 def test_reduced_backend_coefficients_are_validated(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A twice-odd composite backend tuple is checked against the envelope."""
-    import sympy
-
+    """A twice-odd odd-half quotient tuple is checked against the envelope."""
     from jacobian.math.polynomials import _cyclotomic as module
-
-    class FakePolynomial:
-        def all_coeffs(self) -> list[object]:
-            return [1, 10**200, 1]
+    from jacobian.math.polynomials._models import IntegerPolynomial
 
     monkeypatch.setattr(
-        sympy, "cyclotomic_poly", lambda *args, **kwargs: FakePolynomial()
+        module,
+        "_exact_divide",
+        lambda dividend, divisor: IntegerPolynomial(
+            coefficients=(1, 10**200, 1)
+        ),
     )
-    # 210 = 2 * 105 uses the odd-half backend (105 = 3*5*7 has three distinct
-    # primes, so no bounded quotient reduction applies), and its coefficients
-    # must be checked before the result is returned.
+    # 210 = 2 * 105 builds its odd half through the exact prime-lifting
+    # quotient (105 = 3*5*7), and a malformed quotient tuple must be checked
+    # before the result is returned.
     with pytest.raises(OperationBackendError) as exc_info:
         module.cyclotomic(210)
     assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT
@@ -385,25 +433,22 @@ def test_twice_odd_base_shape_is_required_before_returning(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A malformed odd half must not reach the native return."""
-    import sympy
-
+    from jacobian.math.polynomials import _cyclotomic as module
     from jacobian.math.polynomials._cyclotomic import _admit, _factor_index
 
     admission = _admit(210, _factor_index(210))
 
     class WrongConstant:
-        def all_coeffs(self) -> tuple[int, ...]:
-            return (1,) + (0,) * (admission.degree - 1) + (-1,)
+        coefficients: tuple[int, ...] = (1,) + (0,) * (admission.degree - 1) + (-1,)
 
     class Short:
-        def all_coeffs(self) -> tuple[int, ...]:
-            return (1,) + (0,) * (admission.degree - 2)
+        coefficients: tuple[int, ...] = (1,) + (0,) * (admission.degree - 2)
 
     for fake in (WrongConstant(), Short()):
         monkeypatch.setattr(
-            sympy,
-            "cyclotomic_poly",
-            lambda *args, carrier=fake, **kwargs: carrier,
+            module,
+            "_prime_lift_quotient_coefficients",
+            lambda *args, carrier=fake, **kwargs: carrier.coefficients,
         )
         with pytest.raises(OperationBackendError) as exc_info:
             cyclotomic(210)

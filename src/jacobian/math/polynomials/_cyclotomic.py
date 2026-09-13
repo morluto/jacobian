@@ -132,6 +132,34 @@ def _semiprime_primes(factorization: dict[int, int]) -> tuple[int, int] | None:
     return low, high
 
 
+def _lift_prime(index: int, factorization: dict[int, int]) -> tuple[int, int] | None:
+    """Return ``(p, m)`` with ``index = p * m`` and prime ``p`` not dividing ``m``.
+
+    The prime-lifting identity ``Phi_{pm}(x) = Phi_m(x**p) / Phi_m(x)`` then
+    builds the index from the smaller ``m`` through one exact division. The
+    largest eligible prime is peeled so the charged division is the smallest.
+    """
+
+    candidates = [
+        prime
+        for prime, exponent in factorization.items()
+        if exponent == 1 and index % (prime * prime) != 0
+    ]
+    if not candidates:
+        return None
+    prime = max(candidates)
+    return prime, index // prime
+
+
+def _totient_from_factorization(index: int, factorization: dict[int, int]) -> int:
+    """Return Euler's totient from an exact prime-exponent map."""
+
+    totient = index
+    for prime in factorization:
+        totient = totient // prime * (prime - 1)
+    return totient
+
+
 def _construction_regime(index: int, factorization: dict[int, int]) -> tuple[int, int]:
     """Return the ``(work, intermediate bits)`` for one index's construction.
 
@@ -166,6 +194,25 @@ def _construction_regime(index: int, factorization: dict[int, int]) -> tuple[int
     radical = prod(factorization) if factorization else 1
     if radical != index:
         return _construction_regime(radical, dict.fromkeys(factorization, 1))
+    lifted = _lift_prime(index, factorization)
+    if lifted is not None:
+        # ``Phi_{pm}(x) = Phi_m(x**p) / Phi_m(x)`` for prime ``p`` not dividing
+        # ``m``: one exact division of ``(phi(n) + 1) * (phi(m) + 1)`` products
+        # on top of the smaller index's own regime. Charging the universal
+        # radical-square estimate here would reject cheaply executable families
+        # such as the three-prime ``455 = 5*7*13``.
+        prime, other = lifted
+        other_factorization = {
+            base: exponent
+            for base, exponent in factorization.items()
+            if base != prime
+        }
+        other_work, other_bits = _construction_regime(other, other_factorization)
+        phi_other = _totient_from_factorization(other, other_factorization)
+        return (
+            other_work + 10 * prime * (phi_other + 1) * (phi_other + 1),
+            other_bits + 8 * (phi_other + 1),
+        )
     # SymPy's dense cyclotomic construction is charged from the radical of the
     # index, matching the exact kernel bound used by spectral character sums:
     # 10 * bit_length(rad) * (rad + 1)^2, plus the intermediate bit envelope
@@ -267,6 +314,14 @@ def _factor_index(index: int) -> dict[int, int]:
         for prime, exponent in factors.items()
     ):
         raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    # Every valid base is at most ``index`` and the map holds at most
+    # ``bit_length(index)`` distinct primes. Reject larger bases or wider maps
+    # before exponentiation so malformed backend output cannot trigger
+    # unadmitted power growth while reconstructing the index.
+    if len(factors) > max(1, index.bit_length()) or any(
+        prime > index for prime in factors
+    ):
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
     # Any valid exponent satisfies ``prime**exponent <= index``, so it is bounded
     # by ``index.bit_length()``. Reject larger exponents before exponentiation so
     # malformed backend output cannot trigger unadmitted CPU or memory growth.
@@ -337,7 +392,11 @@ def _twice_odd_cyclotomic(
                 odd, odd_primes, admission
             )
         else:
-            base_coefficients = _backend_cyclotomic_coefficients(odd)
+            # The odd half may itself need a bounded reduction (for example a
+            # three-prime lift); dispatch through the admitted construction so
+            # every shape it accepts is available through this path.
+            _, odd_value = _compute(odd)
+            base_coefficients = odd_value.coefficients
         # The odd half is ``Phi_odd`` with the same degree as ``Phi_{2*odd}``
         # and, for odd > 1, the exact constant term 1. Checking only digit
         # widths would let a malformed monic tuple ending in -1 through.
@@ -412,6 +471,31 @@ def _semiprime_quotient_cyclotomic(
     coefficients = _semiprime_quotient_coefficients(index, primes, admission)
     _require_admitted_coefficients(coefficients, admission, expected_constant=1)
     return IntegerPolynomial(coefficients=coefficients)
+
+
+def _prime_lift_quotient_coefficients(
+    index: int,
+    prime: int,
+    other: int,
+    admission: _CyclotomicAdmission,
+) -> tuple[int, ...]:
+    """Return ``Phi_{pm}(x) = Phi_m(x**p) / Phi_m(x)`` for prime ``p`` not dividing ``m``."""
+
+    request_checkpoint("during prime-lift cyclotomic construction")
+    try:
+        _, base = _compute(other)
+        quotient = _exact_divide(_substitute_power(base, prime), base)
+    except (
+        OperationDomainValidationError,
+        OperationResourceAdmissionError,
+        OperationBackendError,
+    ):
+        raise
+    except Exception as exc:
+        _backend_error(BackendFailureReason.INVALID_OUTPUT, exc)
+    if len(quotient.coefficients) != admission.degree + 1:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    return quotient.coefficients
 
 
 def _exceeds_coefficient_digits(
@@ -544,21 +628,38 @@ def _compute(index: int) -> tuple[int, IntegerPolynomial]:
         # and substitute the sparse power.
         _, reduced_polynomial = _compute(radical)
         request_checkpoint("before cyclotomic result construction")
-        return admission.degree, _substitute_power(reduced_polynomial, index // radical)
-    coefficients = _backend_cyclotomic_coefficients(index)
-    actual_output_digits = sum(len(str(abs(value))) for value in coefficients)
-    if (
-        len(coefficients) != admission.degree + 1
-        or not coefficients
-        or coefficients[0] != 1
-        or coefficients[-1] != (-1 if index == 1 else 1)
-        or any(
-            len(str(abs(value))) > admission.coefficient_digits
-            for value in coefficients
+        substituted = _substitute_power(reduced_polynomial, index // radical)
+        _require_admitted_coefficients(
+            substituted.coefficients,
+            admission,
+            expected_degree=admission.degree,
+            expected_constant=1,
         )
-        or actual_output_digits > admission.output_digits
-    ):
-        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+        return admission.degree, substituted
+    lifted = _lift_prime(index, factorization)
+    if lifted is not None:
+        prime, other = lifted
+        coefficients = _prime_lift_quotient_coefficients(
+            index, prime, other, admission
+        )
+        _require_admitted_coefficients(
+            coefficients,
+            admission,
+            expected_degree=admission.degree,
+            expected_constant=1,
+        )
+        request_checkpoint("before cyclotomic result construction")
+        try:
+            return admission.degree, IntegerPolynomial(coefficients=coefficients)
+        except Exception as exc:
+            _backend_error(BackendFailureReason.INVALID_OUTPUT, exc)
+    coefficients = _backend_cyclotomic_coefficients(index)
+    _require_admitted_coefficients(
+        coefficients,
+        admission,
+        expected_degree=admission.degree,
+        expected_constant=-1 if index == 1 else 1,
+    )
     request_checkpoint("before cyclotomic result construction")
     try:
         polynomial_value = IntegerPolynomial(

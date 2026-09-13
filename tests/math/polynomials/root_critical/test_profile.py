@@ -433,3 +433,56 @@ def test_cancellation_signal_is_forwarded_to_the_kernel_worker() -> None:
         pytest.raises(OperationExecutionCancelledError),
     ):
         root_critical_distance_profile(_polynomial((3, 1), (0, -1)))
+
+
+def test_nth_root_enclosure_scales_with_the_radicand_magnitude() -> None:
+    """A fixed 2**-32 grid cannot separate roots of a large-coefficient radical."""
+    from fractions import Fraction
+
+    from jacobian.math.polynomials.root_critical.operations import _nth_root_bounds
+
+    radicand = Fraction(10**80 - 4)
+    lower, upper = _nth_root_bounds(radicand, 2)
+    # ``sqrt(10**80 - 4)`` sits within 2/10**40 *below* 10**40, so an enclosure
+    # of width 2**-32 (about 2.3e-10) would be far too coarse to certify it.
+    assert upper - lower < Fraction(1, 10**60)
+    assert lower * lower <= radicand <= upper * upper
+    # The root is 10**40 - 2 * 10**-40 + O(10**-120), so a usable enclosure
+    # stays strictly below the neighbouring value 10**40.
+    assert lower < Fraction(10**40) < upper + Fraction(1, 10**39)
+    assert upper < Fraction(10**40)
+
+
+def test_large_coefficient_cubic_rectangles_are_pairwise_isolating() -> None:
+    """The small root of z(z**2 - A z + 1) must not share a box with root 0."""
+    from fractions import Fraction
+
+    scale = 10**40
+    profile = root_critical_distance_profile(_polynomial((3, 1), (2, -scale), (1, 1)))
+    rectangles = [
+        (row.rectangle.real_lower.as_fraction(), row.rectangle.real_upper.as_fraction())
+        for row in profile.roots
+    ]
+    for index, (lower, upper) in enumerate(rectangles):
+        assert lower <= upper
+        for other_index, (other_lower, _other_upper) in enumerate(rectangles):
+            if other_index == index:
+                continue
+            assert not (lower <= other_lower <= upper), (
+                f"rectangle {index} contains rectangle {other_index}"
+            )
+    # The two nonzero roots bracket 10**40 and 1/10**40; only the origin root
+    # may be pinned at zero.
+    zero_rows = [
+        index for index, (lower, upper) in enumerate(rectangles) if lower == 0 == upper
+    ]
+    assert len(zero_rows) == 1
+    small = min(
+        (
+            upper
+            for index, (lower, upper) in enumerate(rectangles)
+            if index not in zero_rows
+        ),
+        key=abs,
+    )
+    assert Fraction(1, 10**41) < small <= Fraction(1, 10**39)

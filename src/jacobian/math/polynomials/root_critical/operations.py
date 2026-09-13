@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-import math
-import sys
 import time
 from fractions import Fraction
-from pathlib import Path
 from typing import Any, Literal, NoReturn
 
 import sympy
@@ -21,7 +18,6 @@ from jacobian._execution import (
 )
 from jacobian.canonical import (
     CanonicalLimits,
-    encode_strict_json,
     format_canonical_integer,
     loads_strict_json,
 )
@@ -51,18 +47,15 @@ from jacobian.math.polynomials.root_critical._models import (
     RootCriticalRectangle,
     RootCriticalRoot,
 )
-from jacobian.math.polynomials.values import RationalPolynomial
-from jacobian.process import (
-    ProcessResourceLimits,
-    run_bounded_process,
-    worker_environment,
+from jacobian.math.polynomials.root_critical._profile_process import (
+    PROFILE_STDOUT_BYTES,
+    run_profile_worker_process,
 )
+from jacobian.math.polynomials.values import RationalPolynomial
 
-_PROFILE_WORKER_PATH = Path(__file__).resolve().with_name("_profile_worker.py")
-_PROFILE_STDOUT_BYTES = 64 * 1024 * 1024
-_PROFILE_STDERR_BYTES = 64 * 1024
-_PROFILE_ADDRESS_SPACE_BYTES = 4 * 1024 * 1024 * 1024
 _PROFILE_FINALIZATION_SECONDS = 1.0
+
+_NTH_ROOT_RELATIVE_BITS = 96
 
 __all__ = ["root_critical_distance_profile"]
 
@@ -134,7 +127,18 @@ def _fit_rectangle_component(value: Fraction, *, round_up: bool) -> CanonicalRat
         <= MAX_ROOT_CRITICAL_ROOT_COMPONENT_DIGITS
     ):
         return CanonicalRational.from_fraction(value)
-    scale = 10 ** (MAX_ROOT_CRITICAL_ROOT_COMPONENT_DIGITS - 1)
+    scale_power = MAX_ROOT_CRITICAL_ROOT_COMPONENT_DIGITS - 1
+    if value != 0:
+        # Place the grid relative to the component's own magnitude. A fixed
+        # absolute grid rounds a root below ``10**-31`` to zero, which would
+        # publish an origin-containing rectangle for a root away from the axis
+        # origin and make the selected root ambiguous.
+        decimal_exponent = _component_digit_count(
+            value.numerator
+        ) - _component_digit_count(value.denominator)
+        if decimal_exponent < 0:
+            scale_power -= decimal_exponent
+    scale = 10**scale_power
     scaled = value * scale
     quotient, remainder = divmod(scaled.numerator, scaled.denominator)
     if remainder:
@@ -324,12 +328,20 @@ def _nth_root_bounds(value: Fraction, n: int) -> tuple[Fraction, Fraction]:
     coarse_upper = Fraction(upper_int, denominator)
     if coarse_lower == coarse_upper:
         return coarse_lower, coarse_upper
-    scale = 1 << 32
+    # Refine on a dyadic grid sized to the radicand's own magnitude. A fixed
+    # absolute grid is not usable here: ``sqrt(A**2 - 4)`` with ``A = 10**40``
+    # would be published with width ``2**-32``, which is wider than the gap
+    # between the two neighbouring roots, so the corresponding isolating
+    # rectangle would also contain the root at the origin.
+    magnitude_bits = (value.numerator.bit_length() + n - 1) // n
+    bits = max(32, magnitude_bits + _NTH_ROOT_RELATIVE_BITS)
+    scale = 1 << bits
+    scaled_radicand = value.numerator << (bits * n)
     low = 0
     high = int(coarse_upper * scale) + 1
     while low < high:
         mid = (low + high + 1) // 2
-        if Fraction(mid, scale) ** n <= value:
+        if mid**n * value.denominator <= scaled_radicand:
             low = mid
         else:
             high = mid - 1
@@ -850,57 +862,17 @@ def _run_profile_worker(
         raise OperationExecutionTimeoutError(
             "root-critical profile deadline expired before the kernel worker"
         )
-    payload = encode_strict_json(
-        {
-            "polynomial": polynomial.model_dump_json(),
-            "max_pair_rows": max_pair_rows,
-        }
+    worker_stdout = run_profile_worker_process(
+        polynomial,
+        max_pair_rows=max_pair_rows,
+        remaining_seconds=remaining,
+        cancellation_signal=cancellation_signal,
     )
-    try:
-        completed = run_bounded_process(
-            [sys.executable, str(_PROFILE_WORKER_PATH)],
-            input_bytes=payload,
-            timeout_seconds=remaining,
-            environment=worker_environment(locale="C.UTF-8"),
-            stdout_limit=_PROFILE_STDOUT_BYTES,
-            stderr_limit=_PROFILE_STDERR_BYTES,
-            resource_limits=ProcessResourceLimits(
-                cpu_seconds=max(1, math.ceil(remaining)),
-                address_space_bytes=_PROFILE_ADDRESS_SPACE_BYTES,
-                file_size_bytes=_PROFILE_STDOUT_BYTES,
-            ),
-            cancellation_event=cancellation_signal,
-        )
-    except OSError as exc:
-        raise RuntimeError(
-            "bounded root-critical kernel worker could not be started"
-        ) from exc
-    from jacobian._execution import (
-        OperationExecutionCancelledError,
-        OperationExecutionTimeoutError,
-    )
-
-    if completed.cancelled:
-        raise OperationExecutionCancelledError(
-            "root-critical profile cancelled during the kernel worker"
-        )
-    if completed.timed_out:
-        raise OperationExecutionTimeoutError(
-            "root-critical profile deadline expired during the kernel worker"
-        )
-    if (
-        completed.stdout_exceeded
-        or completed.stderr_exceeded
-        or completed.returncode != 0
-    ):
-        raise RuntimeError(
-            "bounded root-critical kernel worker did not establish a profile"
-        )
     response = loads_strict_json(
-        completed.stdout,
+        worker_stdout,
         limits=CanonicalLimits(
-            max_input_bytes=_PROFILE_STDOUT_BYTES,
-            max_output_bytes=_PROFILE_STDOUT_BYTES,
+            max_input_bytes=PROFILE_STDOUT_BYTES,
+            max_output_bytes=PROFILE_STDOUT_BYTES,
         ),
     )
     if not isinstance(response, dict):

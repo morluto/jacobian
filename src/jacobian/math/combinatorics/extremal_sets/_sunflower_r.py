@@ -139,6 +139,28 @@ def _admit_source(
     return source, petal_count, member_count, source_work, source_units
 
 
+def _disjoint_selection_lower_bound(
+    members: tuple[tuple[int, ...], ...], petal_count: int
+) -> int:
+    """Lower-bound qualifying sunflowers from pairwise-disjoint members.
+
+    Any ``petal_count`` pairwise-disjoint members form a sunflower with empty
+    common core, so a greedy disjoint selection of size ``d`` certifies at
+    least ``C(d, petal_count)`` retained rows. This is a sound lower bound: it
+    may reject an unrepresentable request early but never an admissible one.
+    """
+
+    used: set[int] = set()
+    selected = 0
+    for member in sorted(members, key=len):
+        if used.isdisjoint(member):
+            selected += 1
+            used.update(member)
+    if selected < petal_count:
+        return 0
+    return comb(selected, petal_count)
+
+
 def _intersection_search_work(sizes: tuple[int, ...], petal_count: int) -> int:
     """Charge pairwise and core-bound work from each actual candidate."""
 
@@ -194,6 +216,22 @@ def _admit_candidates(
             candidate_bound,
             core_bound,
         )
+    else:
+        # A greedy pairwise-disjoint selection certifies that at least this many
+        # candidates qualify, so an unrepresentable request is refused before
+        # any intersection is computed instead of mid-enumeration.
+        guaranteed_rows = _disjoint_selection_lower_bound(
+            tuple(tuple(member) for member in source.members), petal_count
+        )
+        if guaranteed_rows:
+            _admit_qualifying_result(
+                source,
+                petal_count,
+                member_count,
+                source_units,
+                guaranteed_rows,
+                0,
+            )
     search_work = _intersection_search_work(sizes, petal_count)
     total_work = source_work + search_work
     if total_work > MAX_SUNFLOWER_INTERSECTION_WORK:
@@ -487,7 +525,16 @@ def construct_sunflower_family(
             hypergraph=FiniteHypergraph(vertices=vertices, edges=()),
         )
     request_checkpoint("before sunflower member expansion")
-    sets = tuple(frozenset(member) for member in source.members)
+    sets_list: list[frozenset[int]] = []
+    materialized = 0
+    for member in source.members:
+        sets_list.append(frozenset(member))
+        materialized += len(member)
+        if materialized >= SUNFLOWER_PAIRWISE_CHECKPOINT_WORK:
+            request_checkpoint("during sunflower member expansion")
+            materialized = 0
+    request_checkpoint("after sunflower member expansion")
+    sets = tuple(sets_list)
     sizes = tuple(len(member) for member in source.members)
     plan: list[tuple[tuple[int, ...], tuple[int, ...]]] = []
     core_elements = 0

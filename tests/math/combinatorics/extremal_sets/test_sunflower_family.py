@@ -233,8 +233,22 @@ def test_output_edge_bound_is_admitted_before_row_construction() -> None:
         construct_sunflower_family(source, 2)
 
 
-def test_qualifying_plan_stops_once_the_output_bound_is_exceeded() -> None:
-    """C(20, 9) empty-core rows must not be fully retained before output refusal."""
+def test_qualifying_plan_stops_once_the_output_bound_is_exceeded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """C(20, 9) empty-core rows must not be enumerated before output refusal.
+
+    All 20 singletons are pairwise disjoint, so every candidate qualifies and the
+    complete family exceeds the edge/incidence bound. The disjoint-selection
+    lower bound must refuse the request before any intersection is computed.
+    """
+
+    def fail_core_scan(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError(
+            "disjoint singleton sunflowers must be refused before enumeration"
+        )
+
+    monkeypatch.setattr(sunflower_module, "_candidate_common_core", fail_core_scan)
     source = _family(tuple((index,) for index in range(20)), ground=20)
     with pytest.raises(OperationResourceAdmissionError, match="output bound"):
         construct_sunflower_family(source, 9)
@@ -544,3 +558,18 @@ def test_pair_comparisons_checkpoint_inside_a_single_candidate(
         3,
     )
     assert messages.count("during sunflower intersection work") >= 3
+
+
+def test_member_materialization_is_checkpointed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    messages: list[str] = []
+    monkeypatch.setattr(
+        sunflower_module, "request_checkpoint", lambda message: messages.append(message)
+    )
+    monkeypatch.setattr(sunflower_module, "SUNFLOWER_PAIRWISE_CHECKPOINT_WORK", 4)
+    construct_sunflower_family(
+        _family(tuple((index,) for index in range(8)), ground=8),
+        2,
+    )
+    assert "during sunflower member expansion" in messages

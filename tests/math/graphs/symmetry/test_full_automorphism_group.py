@@ -841,3 +841,17 @@ def test_reordered_generator_rows_are_rejected() -> None:
     }
     with pytest.raises(ValidationError):
         FullGraphAutomorphismResult.model_validate(forged)
+
+
+def test_noncanonical_vertex_order_round_trips() -> None:
+    """Generators sort on the declared source axis, not the internal axis."""
+    vertices = ("d", "a", "c", "b")
+    edges = tuple(
+        canonical_edge(vertices[index], vertices[(index + 1) % 4]) for index in range(4)
+    )
+    graph = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(vertices=vertices, edges=edges)
+    )
+    result = full_graph_automorphism_group(graph)
+    reparsed = FullGraphAutomorphismResult.model_validate_json(result.model_dump_json())
+    assert reparsed.generators == result.generators

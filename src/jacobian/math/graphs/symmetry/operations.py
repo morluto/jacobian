@@ -40,6 +40,10 @@ from jacobian.math.graphs.values import ColoredUndirectedGraph
 from jacobian.math.groups._models import MAX_GROUP_DEGREE, PermutationGroup
 
 MAX_FULL_AUTOMORPHISM_PERMUTATIONS = 100_000
+# Partial assignments explored by the colored quotient VF2 search. A quotient
+# with few automorphisms can still require a large search, so bound the work
+# independently of the number of yielded mappings.
+MAX_QUOTIENT_SEARCH_WORK = 2_000_000
 MAX_FULL_AUTOMORPHISM_WORK = 25_600_000
 
 
@@ -425,7 +429,24 @@ def _quotient_automorphisms(
             quotient.add_edge(
                 left, right, color=pair_color.get((left, right), _UNCOLORED)
             )
-    matcher = iso.GraphMatcher(
+
+    class _WorkBoundedMatcher(iso.GraphMatcher):
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            super().__init__(*args, **kwargs)
+            self._work = 0
+
+        def semantic_feasibility(self, g1_node: Any, g2_node: Any) -> bool:
+            self._work += 1
+            request_checkpoint("during full graph automorphism quotient search")
+            if self._work > MAX_QUOTIENT_SEARCH_WORK:
+                raise OperationResourceAdmissionError(
+                    location=("graph",),
+                    code="graph.automorphism.quotient_search_bound",
+                    message="colored quotient automorphism search exceeds its admitted work",
+                )
+            return bool(super().semantic_feasibility(g1_node, g2_node))
+
+    matcher = _WorkBoundedMatcher(
         quotient,
         quotient,
         node_match=iso.categorical_node_match("color", None),
@@ -1344,13 +1365,8 @@ def full_graph_automorphism_group(
         raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
 
     # Serialize generators in a canonical order so one exact group has a single
-    # representation: sort by the source-axis image tuple and reorder the nested
-    # group generators to match.
-    if backend_group is not None:
-        paired = tuple(zip(selected, group_generators, strict=True))
-        paired = tuple(sorted(paired, key=lambda item: item[0]))
-        selected = [item[0] for item in paired]
-        group_generators = tuple(item[1] for item in paired)
+    # representation: sort by the declared source-axis mapping, which is what the
+    # result validator compares, and reorder the nested group generators to match.
     source_vertices = graph.graph.vertices
     generator_rows = tuple(
         GraphAutomorphismGenerator(
@@ -1361,6 +1377,15 @@ def full_graph_automorphism_group(
             ),
         )
         for index, candidate in enumerate(selected)
+    )
+    if backend_group is not None:
+        paired = tuple(zip(generator_rows, group_generators, strict=True))
+        paired = tuple(sorted(paired, key=lambda item: tuple(item[0].mapping)))
+        generator_rows = tuple(item[0] for item in paired)
+        group_generators = tuple(item[1] for item in paired)
+    generator_rows = tuple(
+        row.model_copy(update={"generator_id": f"g{index}"})
+        for index, row in enumerate(generator_rows)
     )
     source_actions = tuple(dict(generator.mapping) for generator in generator_rows)
     vertex_members, edge_members = declared_orbit_partitions(

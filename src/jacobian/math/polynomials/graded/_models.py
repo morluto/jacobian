@@ -165,6 +165,65 @@ class HilbertPolynomialRequest(StrictModel):
     )
 
 
+def _one_minus_t_power(degree: int) -> SparseRationalPolynomial:
+    """Return ``(1-t)^degree`` as a sparse polynomial."""
+
+    terms = tuple(
+        RationalPolynomialTerm(
+            coefficient=CanonicalRational(
+                num=comb(degree, index) * ((-1) ** index), den=1
+            ),
+            exponents=(index,),
+        )
+        for index in range(degree, -1, -1)
+        if comb(degree, index) != 0
+    )
+    return SparseRationalPolynomial(terms=terms)
+
+
+def _sparse_t_multiply(
+    left: SparseRationalPolynomial, right: SparseRationalPolynomial
+) -> SparseRationalPolynomial:
+    """Multiply two univariate sparse rational polynomials exactly."""
+
+    from fractions import Fraction
+
+    coefficients: dict[int, Fraction] = {}
+    for left_term in left.terms:
+        for right_term in right.terms:
+            exponent = left_term.exponents[0] + right_term.exponents[0]
+            product = Fraction(
+                left_term.coefficient.num * right_term.coefficient.num,
+                left_term.coefficient.den * right_term.coefficient.den,
+            )
+            coefficients[exponent] = coefficients.get(exponent, Fraction()) + product
+    terms = tuple(
+        RationalPolynomialTerm(
+            coefficient=CanonicalRational.from_fraction(value),
+            exponents=(exponent,),
+        )
+        for exponent, value in sorted(coefficients.items(), reverse=True)
+        if value != 0
+    )
+    return SparseRationalPolynomial(terms=terms)
+
+
+def _sparse_t_negate(
+    polynomial: SparseRationalPolynomial,
+) -> SparseRationalPolynomial:
+    return SparseRationalPolynomial(
+        terms=tuple(
+            RationalPolynomialTerm(
+                coefficient=CanonicalRational(
+                    num=-term.coefficient.num, den=term.coefficient.den
+                ),
+                exponents=term.exponents,
+            )
+            for term in polynomial.terms
+        )
+    )
+
+
 def _monic_t_minus_one_power(degree: int) -> SparseRationalPolynomial:
     terms = tuple(
         RationalPolynomialTerm(
@@ -219,6 +278,10 @@ class HilbertSeriesResult(StrictModel):
             raise ValueError("Hilbert-series values use the t axis")
         if self.series.numerator != self.reduced_numerator.polynomial:
             raise ValueError("reduced numerator must match the rational-series carrier")
+        if self.reduced_numerator.variables != ("t",) or self.h_numerator.variables != (
+            "t",
+        ):
+            raise ValueError("Hilbert-series numerators use the t axis")
         if self.denominator_exponent > MAX_RATIONAL_FUNCTION_EXPONENT:
             raise ValueError(
                 "Hilbert-series denominator exponent exceeds the rational-function envelope"
@@ -241,33 +304,21 @@ class HilbertSeriesResult(StrictModel):
         if self.h_numerator.polynomial.terms != expected_h:
             raise ValueError("h-numerator must match the (1-t)^d sign convention")
         # The ambient presentation ``ambient_numerator / (1-t)^n`` must reduce to
-        # the reported series, so the two identities describe one value.
-        from sympy import Poly as _SympyPoly
-        from sympy import Symbol as _Symbol
-        from sympy import cancel as _cancel
-        from sympy import fraction as _fraction
-
-        from jacobian.math.polynomials._conversions import (
-            rational_polynomial_to_sympy as _to_sympy,
+        # the reported series. Clearing denominators gives the exact polynomial
+        # identity ``ambient_numerator = (-1)^d reduced_numerator (1-t)^(n-d)``,
+        # checked by bounded sparse multiplication rather than symbolic
+        # cancellation so result construction does not replay the kernel.
+        exponent = self.ambient_denominator_exponent - self.denominator_exponent
+        if exponent < 0:
+            raise ValueError(
+                "ambient denominator exponent cannot be below the series dimension"
+            )
+        expected = _sparse_t_multiply(
+            self.reduced_numerator.polynomial, _one_minus_t_power(exponent)
         )
-
-        t_symbol = _Symbol("t")
-        ambient_expression = (
-            _to_sympy(self.ambient_numerator).as_expr()
-            / (1 - t_symbol) ** self.ambient_denominator_exponent
-        )
-        ambient_num_expr, ambient_den_expr = _fraction(_cancel(ambient_expression))
-        series_num_expr = _to_sympy(self.reduced_numerator).as_expr()
-        series_den_expr = _to_sympy(
-            RationalPolynomial(variables=("t",), polynomial=self.series.denominator)
-        ).as_expr()
-        if (
-            _SympyPoly(
-                ambient_num_expr * series_den_expr - series_num_expr * ambient_den_expr,
-                t_symbol,
-            ).is_zero
-            is not True
-        ):
+        if self.denominator_exponent % 2:
+            expected = _sparse_t_negate(expected)
+        if self.ambient_numerator.polynomial.terms != expected.terms:
             raise ValueError(
                 "ambient numerator must reduce to the reported Hilbert series"
             )

@@ -366,11 +366,53 @@ def _pruned_standard_monomial_bound(
     cap_bound = ways[degree]
     # Mixed generators (more than one nonzero axis) are not captured by the
     # per-axis caps. Count the degree slice exactly when the ambient slice is
-    # small enough to enumerate; otherwise keep the pure-power bound.
+    # small enough to enumerate; otherwise fall back to a support relaxation
+    # that still accounts for the mixed constraints without the ambient count.
     ambient = comb(degree + variable_count - 1, variable_count - 1)
-    if cap_bound > MAX_STANDARD_MONOMIALS and ambient <= _MONOMIAL_ENUMERATION_CEILING:
+    if cap_bound <= MAX_STANDARD_MONOMIALS:
+        return cap_bound
+    if ambient <= _MONOMIAL_ENUMERATION_CEILING:
         return _enumerated_standard_monomial_count(generators, variable_count, degree)
+    relaxation = _support_relaxation_bound(generators, variable_count, degree)
+    if relaxation is not None and relaxation < cap_bound:
+        return relaxation
     return cap_bound
+
+
+def _support_relaxation_bound(
+    generators: tuple[tuple[int, ...], ...], variable_count: int, degree: int
+) -> int | None:
+    """Sound upper bound counting only support-avoiding monomials.
+
+    A standard monomial's support cannot contain every axis of a generator, so
+    every standard monomial of degree ``d`` has a support set that contains no
+    generator support (ignoring the exponent lower bounds). Summing
+    compositions over those admissible supports is a sound over-count that still
+    captures the mixed constraints.
+    """
+
+    if degree == 0:
+        return 0 if any(not any(exponent) for exponent in generators) else 1
+    if variable_count > 20:
+        return None
+    forbidden = tuple(
+        frozenset(index for index, exponent in enumerate(generator) if exponent)
+        for generator in generators
+    )
+    bound = 0
+    for mask in range(1, 1 << variable_count):
+        support = frozenset(
+            index for index in range(variable_count) if mask >> index & 1
+        )
+        if any(generator_support <= support for generator_support in forbidden):
+            continue
+        # Positive compositions of ``degree`` into ``len(support)`` parts.
+        size = len(support)
+        if size <= degree:
+            bound += comb(degree - 1, size - 1)
+        if bound > MAX_STANDARD_MONOMIALS:
+            return bound
+    return bound
 
 
 def _enumerated_standard_monomial_count(
@@ -403,8 +445,11 @@ def _require_hilbert_function_slices(
     generators: tuple[tuple[int, ...], ...] | None,
     variable_count: int,
     max_degree: int,
+    *,
+    deadline: float,
 ) -> None:
     for degree in range(max_degree + 1):
+        require_execution_deadline(deadline)
         if generators is None:
             domain_size = (
                 1
@@ -515,19 +560,57 @@ def hilbert_function(
             code="graded_ideal.function_degree_budget",
             message="Hilbert-function prefixes support degrees from 0 through 32",
         )
-    if not _is_explicit_unit_ideal(ideal):
-        # Validate source applicability and homogeneity before estimating the
-        # slice budget, so a nonhomogeneous presentation reports the domain
-        # error instead of an oversized-computation resource error.
-        _require_homogeneous(ideal)
-        leading = _leading_source_monomials(ideal, monomial_order)
-        if not any(not any(exponent) for exponent in leading):
-            _require_hilbert_function_slices(leading, len(ideal.variables), max_degree)
     resource_budget = resource_budget or IdealComputationBudget()
     deadline = execution_deadline(float(resource_budget.wall_seconds))
+    if not _is_explicit_unit_ideal(ideal):
+        # Validate source applicability and homogeneity before any kernel work,
+        # so a nonhomogeneous presentation reports the domain error rather than
+        # an oversized-computation resource error. The deadline is bound first
+        # because slice admission may count monomials.
+        _require_homogeneous(ideal)
+        require_execution_deadline(deadline)
+        # When every generator is already a monomial, the source leading terms
+        # are the exact initial ideal and can decide the slice budget before the
+        # Groebner step. Otherwise the source leadings are only an upper bound
+        # that Groebner reduction can strengthen, so the computed initial ideal
+        # decides instead.
+        if _all_source_generators_are_unit_monomials(ideal):
+            leading = _leading_source_monomials(ideal, monomial_order)
+            if not any(not any(exponent) for exponent in leading):
+                _require_hilbert_function_slices(
+                    leading, len(ideal.variables), max_degree, deadline=deadline
+                )
+            initial = initial_monomial_ideal(
+                ideal, monomial_order, resource_budget=resource_budget
+            )
+            require_execution_deadline(deadline)
+            return _hilbert_function_values(
+                ideal, monomial_order, initial, max_degree, deadline
+            )
     initial = initial_monomial_ideal(
         ideal, monomial_order, resource_budget=resource_budget
     )
+    require_execution_deadline(deadline)
+    computed_leading = _leading_monomials_of_ideal(initial.initial_ideal)
+    if not any(not any(exponent) for exponent in computed_leading):
+        _require_hilbert_function_slices(
+            computed_leading,
+            len(ideal.variables),
+            max_degree,
+            deadline=deadline,
+        )
+    return _hilbert_function_values(
+        ideal, monomial_order, initial, max_degree, deadline
+    )
+
+
+def _hilbert_function_values(
+    ideal: RationalPolynomialIdeal,
+    monomial_order: Literal["lex", "grlex", "grevlex"],
+    initial: InitialMonomialIdealResult,
+    max_degree: int,
+    deadline: float,
+) -> HilbertFunctionResult:
     values = []
     for degree in range(max_degree + 1):
         request_checkpoint("during Hilbert-function enumeration")
@@ -857,3 +940,17 @@ __all__ = [
     "initial_monomial_ideal",
     "standard_monomials",
 ]
+
+
+def _leading_monomials_of_ideal(
+    ideal: RationalPolynomialIdeal,
+) -> tuple[tuple[int, ...], ...]:
+    """Exponent vectors of a monomial ideal's generators (its leading terms)."""
+
+    exponents: list[tuple[int, ...]] = []
+    for generator in ideal.generators:
+        terms = generator.polynomial.terms
+        if not terms:
+            continue
+        exponents.append(terms[0].exponents)
+    return tuple(dict.fromkeys(exponents))

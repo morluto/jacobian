@@ -920,3 +920,53 @@ def test_hilbert_series_ambient_numerator_must_reduce_to_series() -> None:
     payload["ambient_numerator"]["polynomial"]["terms"] = []
     with pytest.raises(ValidationError):
         HilbertSeriesResult.model_validate(payload)
+
+
+def test_hilbert_function_admits_mixed_constraints_above_enumerator_ceiling() -> None:
+    """The 28 pairwise products have 8 standard monomials at degree 32."""
+    variables = tuple("xyzwuvst")
+    generators = tuple(
+        tuple(1 if axis in (left, right) else 0 for axis in range(8))
+        for left in range(8)
+        for right in range(left + 1, 8)
+    )
+    ideal = _monomial_ideal(variables, generators)
+    result = hilbert_function(ideal, max_degree=32)
+    assert result.values[-1] == 8
+
+
+def test_hilbert_function_uses_reduced_initial_ideal_leadings() -> None:
+    """(x0+x1, x0-x1) under lex reduces to (x0, x1), not the source leadings."""
+    variables = tuple("xyzwuvst")
+    e0 = (1, 0, 0, 0, 0, 0, 0, 0)
+    e1 = (0, 1, 0, 0, 0, 0, 0, 0)
+
+    def binomial(first: int, second: int) -> RationalPolynomial:
+        return RationalPolynomial(
+            variables=variables,
+            polynomial=SparseRationalPolynomial(
+                terms=(
+                    RationalPolynomialTerm(
+                        coefficient=CanonicalRational(num=first, den=1), exponents=e0
+                    ),
+                    RationalPolynomialTerm(
+                        coefficient=CanonicalRational(num=second, den=1), exponents=e1
+                    ),
+                )
+            ),
+        )
+
+    ideal = RationalPolynomialIdeal(
+        variables=variables, generators=(binomial(1, 1), binomial(1, -1))
+    )
+    result = hilbert_function(ideal, "lex", max_degree=15)
+    assert result.values[-1] == 15504
+
+
+def test_hilbert_series_structural_validator_rejects_bad_axis() -> None:
+    """A numerator in the wrong ring is rejected without symbolic cancellation."""
+    series = hilbert_series(_ideal((2, 0)), prefix_degree=2)
+    payload = series.model_dump()
+    payload["h_numerator"]["variables"] = ["m"]
+    with pytest.raises(ValidationError):
+        HilbertSeriesResult.model_validate(payload)

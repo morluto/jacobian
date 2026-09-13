@@ -20,6 +20,11 @@ from jacobian.math.polynomials._expression_normalize import (
     PolynomialExpressionSource,
     normalize_polynomial_expression,
 )
+from jacobian.math.polynomials._mahler_kernel import (
+    mahler_measure,
+    quadratic_root_profile,
+    reciprocal_profile,
+)
 from jacobian.math.polynomials.operations import (
     derivative,
     discriminant,
@@ -88,6 +93,7 @@ __all__ = [
     "integer_polynomial_primitive_part",
     "integer_polynomial_shift",
     "integral",
+    "mahler_measure",
     "multiply",
     "normalize_polynomial_expression",
     "partial_fractions",
@@ -97,11 +103,13 @@ __all__ = [
     "polynomial_groebner_basis",
     "polynomial_resultant",
     "polynomial_square_free_decomposition",
+    "quadratic_root_profile",
     "rational_partial_fraction_decomposition",
     "rational_polynomial_derivative",
     "rational_polynomial_division",
     "rational_polynomial_evaluate",
     "rational_polynomial_integral",
+    "reciprocal_profile",
     "resultant",
     "square_free_decomposition",
     "verify_hermite_reduction",

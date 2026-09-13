@@ -19,7 +19,6 @@ import sympy
 from jacobian._exact import CanonicalRational
 from jacobian._execution import (
     OperationExecutionTimeoutError,
-    current_request_execution,
     execution_deadline,
 )
 from jacobian.catalog.models import (

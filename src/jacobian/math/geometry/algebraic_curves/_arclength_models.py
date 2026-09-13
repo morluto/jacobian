@@ -9,6 +9,7 @@ quadratic restriction is an admission boundary, not a change of meaning.
 
 from __future__ import annotations
 
+from itertools import pairwise
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
@@ -181,7 +182,7 @@ class ArclengthEnclosed(StrictModel):
                 segment.upper.as_fraction() if segment.upper is not None else 0,
             ),
         )
-        for previous, current in zip(ordered, ordered[1:], strict=False):
+        for previous, current in pairwise(ordered):
             if previous.upper is None or current.lower is None:
                 raise _validation_error(
                     "segment_overlap",

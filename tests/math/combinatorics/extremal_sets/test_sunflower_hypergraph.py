@@ -25,7 +25,7 @@ def test_all_sunflower_triples_and_cores_are_retained() -> None:
         ((0, 1, 2), (0,)),
     ]
     assert result.hypergraph.vertices == ("0", "1", "2", "3")
-    assert result.hypergraph_edges == (("sunflower_0_1_2", ("0", "1", "2")),)
+    assert result.hypergraph.edges == (("sunflower_0_1_2", ("0", "1", "2")),)
 
 
 def test_empty_family_returns_empty_complete_hypergraph() -> None:
@@ -33,4 +33,4 @@ def test_empty_family_returns_empty_complete_hypergraph() -> None:
     result = construct_sunflower_family(source, 3)
     assert result.sunflowers == ()
     assert result.hypergraph.vertices == ()
-    assert result.hypergraph_edges == ()
+    assert result.hypergraph.edges == ()

@@ -60,7 +60,6 @@ def test_issue_fixture_three_petal_sunflowers() -> None:
         (row.edge_id, tuple(str(index) for index in row.source_indices))
         for row in result.sunflowers
     )
-    assert result.hypergraph_edges == result.hypergraph.edges
 
 
 def test_four_petals_share_one_core() -> None:
@@ -69,7 +68,7 @@ def test_four_petals_share_one_core() -> None:
     assert [(row.source_indices, row.core) for row in result.sunflowers] == [
         ((0, 1, 2, 3), (0,)),
     ]
-    assert result.hypergraph_edges == (("sunflower_0_1_2_3", ("0", "1", "2", "3")),)
+    assert result.hypergraph.edges == (("sunflower_0_1_2_3", ("0", "1", "2", "3")),)
 
 
 def test_empty_core_is_a_valid_sunflower() -> None:
@@ -176,7 +175,6 @@ def test_projection_uses_canonical_multi_digit_member_order() -> None:
     result = construct_sunflower_family(
         _family(tuple((i,) for i in range(11)), ground=11), 2
     )
-    assert result.hypergraph_edges == result.hypergraph.edges
     assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
@@ -323,7 +321,6 @@ def test_reconstructed_rows_must_stay_strictly_ordered() -> None:
     )
     payload = result.model_dump(mode="json")
     payload["sunflowers"] = list(reversed(payload["sunflowers"]))
-    payload["hypergraph_edges"] = list(reversed(payload["hypergraph_edges"]))
     payload["hypergraph"]["edges"] = list(reversed(payload["hypergraph"]["edges"]))
     with pytest.raises(ValidationError, match="strictly ordered"):
         SunflowerFamilyResult.model_validate(payload)

@@ -126,14 +126,20 @@ def _intersection_search_work(sizes: tuple[int, ...], petal_count: int) -> int:
     if member_count < petal_count:
         return 0
     pair_occurrences = comb(member_count - 2, petal_count - 2)
-    pair_min_sum = sum(
-        min(sizes[left], sizes[right])
-        for left, right in combinations(range(member_count), 2)
-    )
-    core_bound_sum = sum(
-        min(sizes[index] for index in indices)
-        for indices in combinations(range(member_count), petal_count)
-    )
+    pair_min_sum = 0
+    for pairs, (left, right) in enumerate(
+        combinations(range(member_count), 2), start=1
+    ):
+        if pairs % 4096 == 0:
+            request_checkpoint("during sunflower pairwise-work admission")
+        pair_min_sum += min(sizes[left], sizes[right])
+    core_bound_sum = 0
+    for cores, indices in enumerate(
+        combinations(range(member_count), petal_count), start=1
+    ):
+        if cores % 4096 == 0:
+            request_checkpoint("during sunflower core-bound admission")
+        core_bound_sum += min(sizes[index] for index in indices)
     return 2 * pair_occurrences * pair_min_sum + 2 * core_bound_sum
 
 
@@ -308,11 +314,9 @@ class SunflowerFamilyResult(StrictModel):
     sunflowers: tuple[SunflowerFamily, ...] = Field(max_length=MAX_EDGES)
     sunflower_count: StrictInt = Field(ge=0, le=MAX_EDGES)
     sunflower_free: StrictBool
-    hypergraph_edges: tuple[tuple[str, tuple[str, ...]], ...] = Field(
-        max_length=MAX_EDGES
-    )
-    # A domain-owned projection, unlike ``hypergraph_edges`` which is retained
-    # as a compact compatibility ledger for callers that only need rows.
+    # The domain-owned projection of the sunflower rows. Callers that need the
+    # edge sequence use ``hypergraph.edges``; a second parallel ledger would
+    # give one exact value multiple noncanonical encodings.
     hypergraph: FiniteHypergraph
 
     @model_validator(mode="after")
@@ -387,10 +391,7 @@ class SunflowerFamilyResult(StrictModel):
             raise _result_error(
                 "status", "sunflower_free must agree with whether rows are present"
             )
-        if (
-            self.hypergraph_edges != canonical_edges
-            or self.hypergraph.edges != canonical_edges
-        ):
+        if self.hypergraph.edges != canonical_edges:
             raise _result_error(
                 "projection",
                 "hypergraph projections must equal the canonical sunflower rows",
@@ -414,7 +415,6 @@ class SunflowerFamilyResult(StrictModel):
             sunflowers=sunflowers,
             sunflower_count=len(sunflowers),
             sunflower_free=not sunflowers,
-            hypergraph_edges=hypergraph.edges,
             hypergraph=hypergraph,
         )
 

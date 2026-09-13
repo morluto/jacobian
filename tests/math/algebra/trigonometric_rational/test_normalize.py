@@ -1,3 +1,5 @@
+import time
+
 import pytest
 
 from jacobian.catalog.models import OperationResourceAdmissionError
@@ -478,3 +480,100 @@ def test_reduced_denominator_support_is_bounded_before_gcd(
     )
     with pytest.raises(OperationResourceAdmissionError, match="support"):
         normalize_trigonometric_rational(request)
+
+
+def test_coupled_denominator_reduction_reports_typed_resource_admission() -> None:
+    """A reduced quotient that exceeds the envelope must fail with a typed error.
+
+    ``sin(65x)sin(65y)/(sin(x)sin(y)cos(x+y))`` cancels to a numerator with
+    4225 terms, which is inside the preflight estimate but beyond the admitted
+    output support. The reduction must surface the typed resource-admission
+    error rather than an untyped model-validation failure.
+    """
+
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x", "y"],
+            "expression": {
+                "kind": "DIVIDE",
+                "numerator": {
+                    "kind": "MULTIPLY",
+                    "children": [
+                        {"kind": "SINE", "angle": {"coefficients": [65, 0]}},
+                        {"kind": "SINE", "angle": {"coefficients": [0, 65]}},
+                    ],
+                },
+                "denominator": {
+                    "kind": "MULTIPLY",
+                    "children": [
+                        {"kind": "SINE", "angle": {"coefficients": [1, 0]}},
+                        {"kind": "SINE", "angle": {"coefficients": [0, 1]}},
+                        {
+                            "kind": "COSINE",
+                            "angle": {"coefficients": [1, 1]},
+                        },
+                    ],
+                },
+            },
+        }
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="expansion"):
+        normalize_trigonometric_rational(request)
+
+
+def test_high_degree_sparse_denominator_reduction_stays_within_deadline() -> None:
+    """A sparse high-degree quotient must reduce through the fast backend.
+
+    ``sin(4096x)/(cos(x)+2sin(x))`` shares the shifted support of
+    ``sin(4096x)/sin(x)`` but does not cancel; its reduced numerator exceeds the
+    output envelope. The reduction must return the typed admission error well
+    inside the worker lease instead of exhausting the deadline.
+    """
+
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x"],
+            "expression": {
+                "kind": "DIVIDE",
+                "numerator": {"kind": "SINE", "angle": {"coefficients": [4096]}},
+                "denominator": {
+                    "kind": "ADD",
+                    "children": [
+                        {"kind": "COSINE", "angle": {"coefficients": [1]}},
+                        {
+                            "kind": "MULTIPLY",
+                            "children": [
+                                {"kind": "LITERAL", "value": {"num": 2, "den": 1}},
+                                {
+                                    "kind": "SINE",
+                                    "angle": {"coefficients": [1]},
+                                },
+                            ],
+                        },
+                    ],
+                },
+            },
+        }
+    )
+    started = time.monotonic()
+    with pytest.raises(OperationResourceAdmissionError, match="expansion"):
+        normalize_trigonometric_rational(request)
+    assert time.monotonic() - started < 5.0
+
+
+def test_univariate_lattice_stride_still_admits_after_fast_backend() -> None:
+    """The fast reduction must not regress the accepted ``sin(4096x)/sin(x)``."""
+
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x"],
+            "expression": {
+                "kind": "DIVIDE",
+                "numerator": {"kind": "SINE", "angle": {"coefficients": [4096]}},
+                "denominator": {"kind": "SINE", "angle": {"coefficients": [1]}},
+            },
+        }
+    )
+    result = normalize_trigonometric_rational(request)
+    assert len(result.numerator.terms) == 4096
+    assert len(result.denominator.terms) == 1

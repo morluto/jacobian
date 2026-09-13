@@ -452,6 +452,11 @@ def _canonicalize(numerator: Polynomial, denominator: Polynomial) -> RationalFun
         support: _gdiv(coefficient, leading)
         for support, coefficient in denominator.items()
     }
+    if (
+        len(numerator) > MAX_TRIG_LAURENT_TERMS
+        or len(denominator) > MAX_TRIG_LAURENT_TERMS
+    ):
+        _refuse_growth()
     return numerator, denominator
 
 
@@ -551,10 +556,13 @@ def _reduce_common_laurent_factor(
             "right": _polynomial_payload(shifted_denominator),
         }
     )
-    return _canonicalize(
-        _polynomial_from_payload(response["left"]),
-        _polynomial_from_payload(response["right"]),
-    )
+    reduced_numerator = _polynomial_from_payload(response["left"])
+    reduced_denominator = _polynomial_from_payload(response["right"])
+    # The cancellation can expand the numerator beyond the preflight envelope
+    # (for example a coupled denominator factor); _canonicalize re-admits the
+    # reduced pair with the typed resource bound so an oversized result cannot
+    # surface as an untyped model-validation failure.
+    return _canonicalize(reduced_numerator, reduced_denominator)
 
 
 def _canonicalize_nonzero_locus(denominator: Polynomial) -> Polynomial:

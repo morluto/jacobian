@@ -1173,7 +1173,9 @@ def test_nested_budget_keeps_the_request_start_anchor(
 
     captured: dict[str, object] = {}
 
-    def fake_groebner(ideal: object, order: str = "grevlex", **kwargs: object) -> object:
+    def fake_groebner(
+        ideal: object, order: str = "grevlex", **kwargs: object
+    ) -> object:
         captured["wall_seconds"] = kwargs["resource_budget"].wall_seconds  # type: ignore[union-attr]
         captured["outer_deadline"] = kwargs["_outer_deadline"]
         raise StopError()
@@ -1229,6 +1231,7 @@ def test_embedded_initial_ideals_must_be_monomial() -> None:
     )
 
     variables = ("x", "y")
+
     def _poly(terms: tuple[tuple[tuple[int, ...], int], ...]) -> RationalPolynomial:
         from jacobian.math.polynomials.values import RationalPolynomialTerm
 

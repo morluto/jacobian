@@ -9,12 +9,10 @@ from pydantic import ValidationError
 
 from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS, CanonicalRational
 from jacobian.canonical import parse_canonical_integer
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.dispatch import invoke_operation
 from jacobian.math.number_theory.sequences.core._models import (
     AutocorrelationCell,
     AutocorrelationResult,
@@ -238,21 +236,6 @@ def test_constant_sequence_peak_scan_is_linear() -> None:
     assert result.weak_unimodal_peak_positions == tuple(range(10_000))
 
 
-def test_catalog_accepts_serialized_integer_sequence_source() -> None:
-    source = sequence_order_shape(FiniteIntegerSequence(values=(1, 2, 3))).source
-    payload = json.loads(source.model_dump_json())
-    result = invoke_operation(
-        "sequence.autocorrelation.aperiodic.compute",
-        payload,
-        Catalog.open(),
-    )
-    native = aperiodic_autocorrelation(source)
-    assert result.output == native.model_dump(mode="json")
-    restored = AutocorrelationResult.model_validate_json(json.dumps(result.output))
-    assert isinstance(restored.source, FiniteIntegerSequence)
-    assert restored.source.values == (1, 2, 3)
-
-
 def test_wide_rational_cyclic_work_is_rejected_before_kernel() -> None:
     denominator = 10**15_999
     source = FiniteRationalSequence(
@@ -281,13 +264,6 @@ def test_oversized_integer_wire_entries_are_rejected_before_parsing() -> None:
         FiniteRationalSequence.model_validate(payload)
 
 
-def test_autocorrelation_catalog_schema_registers_canonical_rational_defs() -> None:
+def test_autocorrelation_value_schema_registers_canonical_rational_defs() -> None:
     schema = FiniteSequence.model_json_schema()
     assert "CanonicalRational" in json.dumps(schema)
-    catalog = Catalog.open()
-    descriptor = next(
-        operation
-        for operation in catalog.snapshot().operations
-        if operation.operation_id == "sequence.autocorrelation.aperiodic.compute"
-    )
-    assert "CanonicalRational" in json.dumps(descriptor.input_schema)

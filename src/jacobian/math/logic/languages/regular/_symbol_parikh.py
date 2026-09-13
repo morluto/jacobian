@@ -602,6 +602,17 @@ def _compute_symbol_parikh_profile(
     exact_depth_work = 0
     if not reachable_accepting:
         collected_cells = 0
+    elif reachable_accepting == reachable:
+        # Every reachable state accepts, so the exact-depth traversal cannot
+        # sharpen `collected_cells`: any state it would exclude is already
+        # bounded out above, and the cap below is the materialization bound.
+        # Skipping it avoids charging traversal work that cannot change the
+        # result and would otherwise reject an admitted request.
+        collected_cells = min(
+            output_bound,
+            possible_word_count,
+            output_materialization_cells,
+        )
     else:
         exact_depth_work = len(dfa.transitions) + length * reachable_count * max(
             1, alphabet_size

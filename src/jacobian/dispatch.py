@@ -17,6 +17,7 @@ from jacobian._execution import (
     request_cancellation,
     request_checkpoint,
     request_execution,
+    request_stage,
 )
 from jacobian._models import StrictModel
 from jacobian.canonical import (
@@ -119,7 +120,8 @@ def execute_operation[ProjectedT](
         if binding is None:
             raise _OperationResolutionError(f"unknown operation: {operation_id}")
         try:
-            request = parse_operation_input(binding.request_type, payload)
+            with request_stage(OperationExecutionStage.REQUEST_PARSING):
+                request = parse_operation_input(binding.request_type, payload)
         except (CanonicalizationError, ValidationError) as exc:
             raise OperationRequestValidationError(exc) from exc
         request_checkpoint(
@@ -127,8 +129,12 @@ def execute_operation[ProjectedT](
         )
         result = binding.run(request)
         request_checkpoint("after operation execution")
-        projected = projector(operation_id, result, started)
-        request_checkpoint("after result projection")
+        with request_stage(OperationExecutionStage.RESULT_PROJECTION):
+            projected = projector(operation_id, result, started)
+        request_checkpoint(
+            "after result projection",
+            public_stage=OperationExecutionStage.RESULT_PROJECTION,
+        )
         return projected
 
 

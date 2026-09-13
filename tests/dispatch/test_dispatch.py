@@ -11,6 +11,7 @@ from jacobian._execution import (
     OperationExecutionStage,
     bind_request_deadline,
     current_request_execution,
+    request_checkpoint,
 )
 from jacobian._models import StrictModel
 from jacobian.catalog.catalog import Catalog
@@ -53,6 +54,34 @@ class _EnvelopeRequest(StrictModel):
     def require_request_envelope(self) -> _EnvelopeRequest:
         assert current_request_execution() is not None
         return self
+
+
+class _ParsingCheckpointRequest(StrictModel):
+    """A request whose validator reaches a shared admission checkpoint."""
+
+    value: int
+
+    @model_validator(mode="after")
+    def require_admission(self) -> _ParsingCheckpointRequest:
+        request_checkpoint("during shared request validation")
+        return self
+
+
+class _ParsingCheckpointOperation:
+    operation_id = "test.parsing-checkpoint"
+    request_type = _ParsingCheckpointRequest
+
+    @staticmethod
+    def run(request: StrictModel) -> StrictModel:
+        assert isinstance(request, _ParsingCheckpointRequest)
+        return _Result(value=request.value)
+
+
+class _CatalogWithParsingCheckpoint:
+    @staticmethod
+    def _binding(operation_id: str) -> _ParsingCheckpointOperation:
+        del operation_id
+        return _ParsingCheckpointOperation()
 
 
 class _EnvelopeResult(_Result):
@@ -327,6 +356,29 @@ def test_shared_execution_reports_cancellation_observed_after_parsing() -> None:
             cast(Catalog, _CatalogWithInvalidResult()),
             projector=lambda _operation_id, result, _started: result,
             cancellation_signal=CancelledAfterParsing(),
+        )
+
+    assert error.value.stage is OperationExecutionStage.REQUEST_PARSING
+
+
+def test_validation_checkpoint_reports_request_parsing_stage() -> None:
+    """A shared admission checkpoint inside a validator owns the parsing phase."""
+
+    class CancelAfterBeforeParsing:
+        checks = 0
+
+        @classmethod
+        def is_set(cls) -> bool:
+            cls.checks += 1
+            return cls.checks > 1
+
+    with pytest.raises(OperationExecutionCancelledError) as error:
+        execute_operation(
+            "test.parsing-checkpoint",
+            {"value": 1},
+            cast(Catalog, _CatalogWithParsingCheckpoint()),
+            projector=lambda _operation_id, result, _started: result,
+            cancellation_signal=CancelAfterBeforeParsing(),
         )
 
     assert error.value.stage is OperationExecutionStage.REQUEST_PARSING

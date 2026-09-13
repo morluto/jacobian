@@ -9,6 +9,7 @@ from math import isqrt
 from typing import cast
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian._execution import (
     OperationExecutionTimeoutError,
@@ -489,3 +490,45 @@ def test_operation_declaration_pins_iid_constant_and_contract() -> None:
     assert "512 decimal digits" in BERRY_ESSEEN_OPERATION.description
     assert BERRY_ESSEEN_OPERATION.request_type is BerryEsseenRequest
     assert BERRY_ESSEEN_OPERATION.result_type is BerryEsseenResult
+
+
+def test_native_boundary_rejects_a_non_request_argument() -> None:
+    with pytest.raises(OperationDomainValidationError) as error:
+        berry_esseen_bound(None)  # type: ignore[arg-type]
+    assert error.value.errors()[0]["type"] == "probability.berry_esseen.request_type"
+
+
+def test_native_boundary_revalidates_constructed_atom_masses() -> None:
+    """A signed measure cannot pass the nonnegative-mass contract."""
+    from jacobian._exact import CanonicalRational
+    from jacobian.math.probability._distribution import (
+        FiniteDistributionAtom,
+        FiniteRationalDistribution,
+    )
+
+    atom = FiniteDistributionAtom.model_construct(
+        value=CanonicalRational(num=0, den=1),
+        probability=CanonicalRational(num=-1, den=1),
+    )
+    distribution = FiniteRationalDistribution.model_construct(atoms=(atom,))
+    request = BerryEsseenRequest.model_construct(
+        distribution=distribution, sample_count=10
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        berry_esseen_bound(request)
+    assert error.value.errors()[0]["type"] == "probability.berry_esseen.atom_contract"
+
+
+def test_result_source_sample_count_contract_is_enforced() -> None:
+    """A deserialized result cannot carry an out-of-envelope sample count."""
+    result = berry_esseen_bound(
+        _request(_distribution((0, Fraction(1, 2)), (1, Fraction(1, 2))))
+    )
+    forged_source = BerryEsseenRequest.model_construct(
+        distribution=result.source.distribution,
+        sample_count=10**512,
+    )
+    forged = result.model_dump()
+    forged["source"] = forged_source
+    with pytest.raises(ValidationError):
+        BerryEsseenResult.model_validate(forged)

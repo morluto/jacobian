@@ -12,8 +12,9 @@ from fractions import Fraction
 from math import isqrt
 from typing import Annotated, Any, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, ValidationError, model_validator
 from pydantic.json_schema import GenerateJsonSchema, JsonSchemaMode
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
     CanonicalRational,
@@ -241,10 +242,7 @@ class BerryEsseenResult(StrictModel):
             raise _validation_error(
                 "Berry--Esseen universal constant does not match the theorem variant"
             )
-        if self.source.sample_count < 1:
-            raise _validation_error(
-                "Berry--Esseen source sample_count is out of bounds"
-            )
+        _require_source_sample_count(self.source.sample_count)
         if len(self.source.distribution.atoms) > MAX_BERRY_ESSEEN_ATOMS:
             raise _validation_error("Berry--Esseen source atom count is out of bounds")
         # Re-admit the serialized source law, but do not replay the reported
@@ -315,6 +313,19 @@ class BerryEsseenResult(StrictModel):
         return self
 
 
+def _require_source_sample_count(sample_count: object) -> None:
+    """Validate the source sample-count contract on a deserialized result."""
+
+    if type(sample_count) is not int:
+        raise _validation_error("Berry--Esseen source sample_count must be an integer")
+    if sample_count < 1:
+        raise _validation_error("Berry--Esseen source sample_count is out of bounds")
+    if sample_count > MAX_BERRY_ESSEEN_SAMPLE_COUNT:
+        raise _validation_error(
+            "Berry--Esseen source sample_count exceeds the representable height"
+        )
+
+
 def _admission_fraction(
     value: Fraction,
     *,
@@ -375,6 +386,12 @@ def _sqrt_interval(value: Fraction) -> tuple[Fraction, Fraction]:
 
 
 def _require_native_berry_request(request: BerryEsseenRequest) -> None:
+    if not isinstance(request, BerryEsseenRequest):
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="probability.berry_esseen.request_type",
+            message="Berry--Esseen requires a BerryEsseenRequest value",
+        )
     if type(request.sample_count) is not int:
         raise OperationDomainValidationError(
             location=("sample_count",),
@@ -411,6 +428,20 @@ def _require_native_berry_request(request: BerryEsseenRequest) -> None:
             code="probability.berry_esseen.distribution_type",
             message="Berry--Esseen distribution must be a finite rational law",
         )
+    # A constructed atom is returned unchanged by the default Pydantic
+    # configuration, so validate a fresh payload to rerun the canonical
+    # rational and nonnegative-probability contract.
+    for index, atom in enumerate(atoms):
+        try:
+            FiniteDistributionAtom.model_validate(
+                {"value": atom.value, "probability": atom.probability}
+            )
+        except (ValidationError, PydanticCustomError) as exc:
+            raise OperationDomainValidationError(
+                location=("distribution", "atoms", index),
+                code="probability.berry_esseen.atom_contract",
+                message="Berry--Esseen atoms must be canonical nonnegative masses",
+            ) from exc
     if len(atoms) > MAX_BERRY_ESSEEN_ATOMS:
         raise OperationResourceAdmissionError(
             location=("distribution", "atoms"),

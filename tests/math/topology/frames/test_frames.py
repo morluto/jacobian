@@ -845,6 +845,92 @@ def test_equal_denominator_widths_do_not_collapse_distinct_primes() -> None:
     assert error.value.errors()[0]["type"] == "frames.complex_inner_product_height"
 
 
+def test_dimension_32_independent_denominators_admit_before_tight_residual() -> None:
+    """A trace of independently scaled basis vectors is refused, not raised.
+
+    Each vector is ``e_i / p_i`` with pairwise-coprime 70-digit denominators,
+    so every operator entry fits but the diagonal trace denominator does not.
+    """
+
+    primes: list[int] = []
+    candidate = 2
+    while len(primes) < 32:
+        if all(candidate % prime for prime in primes):
+            primes.append(candidate)
+        candidate += 1 if candidate == 2 else 2
+    denominators = []
+    for prime in primes:
+        denominator = prime
+        while len(str(denominator)) < 70:
+            denominator *= prime
+        denominators.append(denominator)
+    vectors = tuple(
+        tuple(
+            GaussianRational.from_fractions(
+                Fraction(1, denominators[index]), Fraction(0)
+            )
+            if index == axis
+            else GaussianRational.from_fractions(Fraction(0), Fraction(0))
+            for index in range(32)
+        )
+        for axis in range(32)
+    )
+    frame = ComplexFrame(dimension=32, vectors=vectors)
+    with pytest.raises(OperationResourceAdmissionError, match="height") as error:
+        _complex_frame_profile(ComplexFrameProfileRequest(frame=frame))
+    assert error.value.errors()[0]["type"] == "frames.complex_scalar_height"
+
+
+def test_mub_cross_basis_overlap_is_preflighted_before_construction() -> None:
+    """Independent cross-basis denominators are refused before the ledger.
+
+    Two dimension-64 Sylvester-Hadamard bases differ by rational unit phases
+    whose denominators are pairwise coprime.  Each within-basis Gram is
+    integral, but a cross overlap exceeds the frame scalar envelope, so the
+    request must be refused before the ledger is materialized.
+    """
+
+    primes: list[int] = []
+    candidate = 2
+    while len(primes) < 64:
+        if all(candidate % prime for prime in primes):
+            primes.append(candidate)
+        candidate += 1 if candidate == 2 else 2
+    unit_phases = []
+    for prime in primes:
+        scale = prime
+        while len(str(scale)) < 35:
+            scale *= prime
+        denominator = scale * scale + 1
+        unit_phases.append(
+            GaussianRational.from_fractions(
+                Fraction(scale * scale - 1, denominator),
+                Fraction(2 * scale, denominator),
+            )
+        )
+    rows: tuple[tuple[int, ...], ...] = ((1,),)
+    while len(rows) < 64:
+        rows = tuple(row + row for row in rows) + tuple(
+            row + tuple(-entry for entry in row) for row in rows
+        )
+    standard = ComplexFrame(
+        dimension=64,
+        vectors=tuple(tuple(_z(entry) for entry in row) for row in rows),
+    )
+    phased = ComplexFrame(
+        dimension=64,
+        vectors=tuple(
+            tuple(_z(rows[row][column]) * unit_phases[column] for column in range(64))
+            for row in range(64)
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="overlap") as error:
+        _mutually_unbiased_bases(
+            MutuallyUnbiasedBasesRequest(dimension=64, bases=(standard, phased))
+        )
+    assert error.value.errors()[0]["type"] == "frames.mub_cross_overlap_height"
+
+
 def test_mub_status_is_not_replayed_on_deserialization() -> None:
     standard = ComplexFrame(dimension=2, vectors=((_z(1), _z(0)), (_z(0), _z(1))))
     result = _mutually_unbiased_bases(

@@ -466,7 +466,10 @@ def _complex_operator_residual_height(
         max(item.denominator_digits for item in entries),
     )
     diagonal = tuple(entries[axis * dimension + axis] for axis in range(dimension))
-    trace = _sum_shared_denominator_heights(diagonal, tuple(1 for _ in diagonal))
+    # The diagonal entries need not share a reduced denominator (for example an
+    # independently scaled standard basis e_i / p_i), so bound the trace with
+    # the product-denominator sum instead of asserting a unit denominator.
+    trace = sum_heights(diagonal)
     scalar = trace.quotient(RationalHeight(len(str(dimension)), 1))
     residual_entries = []
     for row in range(dimension):
@@ -861,6 +864,56 @@ def tight_equiangular_profile(value: VectorFamily) -> TightEquiangularProfileRes
     )
 
 
+def _require_cross_basis_overlap_height(
+    left: ComplexFrame,
+    right: ComplexFrame,
+    left_norms: tuple[Fraction, ...],
+    right_norms: tuple[Fraction, ...],
+) -> None:
+    """Admit every cross-basis normalized overlap before constructing it.
+
+    Within-basis admission bounds each basis against its own inner products,
+    but an overlap between vectors of two different bases can carry
+    denominators from both.  Bound every cross pair here so an oversized
+    overlap is a resource refusal rather than an exception raised while the
+    ledger is materialized.
+    """
+
+    for left_vector, left_norm in zip(left.vectors, left_norms, strict=True):
+        if left_norm <= 0:
+            continue
+        left_height = _height_from_fraction(left_norm)
+        for right_vector, right_norm in zip(right.vectors, right_norms, strict=True):
+            if right_norm <= 0:
+                continue
+            inner = _sparse_inner_product_height(left_vector, right_vector)
+            squared = sum_heights((inner.product(inner),) * 2)
+            denominator = left_height.product(_height_from_fraction(right_norm))
+            if squared.quotient(denominator).exceeds(
+                MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS
+            ):
+                raise OperationResourceAdmissionError(
+                    location=("bases",),
+                    code="frames.mub_cross_overlap_height",
+                    message=(
+                        "MUB cross-basis normalized overlap exceeds its admitted height"
+                    ),
+                )
+
+
+def _require_mub_cross_overlap_heights(
+    bases: tuple[ComplexFrame, ...],
+    basis_norms: tuple[tuple[Fraction, ...], ...],
+) -> None:
+    """Preflight every cross-basis overlap before any ledger is built."""
+
+    for first in range(len(bases)):
+        for second in range(first + 1, len(bases)):
+            _require_cross_basis_overlap_height(
+                bases[first], bases[second], basis_norms[first], basis_norms[second]
+            )
+
+
 def complex_frame_profile(frame: ComplexFrame) -> ComplexFrameProfileResult:
     """Return an exact complex frame operator and tight/equiangular profile."""
 
@@ -915,6 +968,7 @@ def mutually_unbiased_bases(
         )
         for basis in bases
     )
+    _require_mub_cross_overlap_heights(bases, basis_norms)
     unbiased = True
     basis_grams: list[tuple[tuple[GaussianRational, ...], ...]] = []
     for basis in bases:

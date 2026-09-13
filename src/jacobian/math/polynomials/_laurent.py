@@ -8,7 +8,6 @@ from pydantic import ValidationError
 from jacobian._exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
     CanonicalRational,
-    canonical_rational_component_digits,
 )
 from jacobian._execution import request_checkpoint
 from jacobian._models import StrictModel
@@ -95,66 +94,59 @@ def _capped_denominator_lcm(left: int, right: int) -> int | None:
     return merged
 
 
-def _operand_coefficient_digits(
-    terms: tuple[RationalLaurentPolynomialTerm, ...],
-) -> tuple[int, int | None]:
-    height = 1
-    shared_denominator: int | None = 1
-    for index, term in enumerate(terms):
-        if index % 128 == 0:
-            request_checkpoint("during Laurent coefficient-height admission")
-        digits = canonical_rational_component_digits(term.coefficient)
-        if digits > height:
-            height = digits
-        if shared_denominator is None:
-            continue
-        shared_denominator = _capped_denominator_lcm(
-            shared_denominator, term.coefficient.den
-        )
-    return height, shared_denominator
-
-
-def _scaled_operand_digits(
-    terms: tuple[RationalLaurentPolynomialTerm, ...], shared_lcm: int
-) -> int:
-    height = 1
-    for index, term in enumerate(terms):
-        if index % 128 == 0:
-            request_checkpoint("during Laurent coefficient-height admission")
-        numerator = abs(term.coefficient.num)
-        if numerator == 0:
-            continue
-        # Measure the actual scaled numerator; a product's decimal width can be
-        # one less than the sum of its factors' widths, so a digit subtraction
-        # can overestimate (and a plain sum can overestimate too).
-        scaled = numerator * (shared_lcm // term.coefficient.den)
-        digits = _integer_digits(scaled)
-        if digits > height:
-            height = digits
-    return height
-
-
 def _maximum_coefficient_digits(
     left: RationalLaurentPolynomial, right: RationalLaurentPolynomial
 ) -> int:
-    """Bound one collected coefficient before exact convolution begins."""
+    """Bound one collected coefficient before exact convolution begins.
 
-    collisions = min(len(left.terms), len(right.terms))
-    left_digits, left_lcm = _operand_coefficient_digits(left.terms)
-    right_digits, right_lcm = _operand_coefficient_digits(right.terms)
-    addition_digits = len(str(collisions)) if collisions > 1 else 0
-    product_digits = left_digits + right_digits
-    if left_lcm is None or right_lcm is None:
-        return collisions * product_digits + addition_digits
-    collected_numerator = (
-        _scaled_operand_digits(left.terms, left_lcm)
-        + _scaled_operand_digits(right.terms, right_lcm)
-        + addition_digits
-    )
-    # Measure the actual common-denominator product: the sum of the two widths
-    # can exceed the product's width by one.
-    denominator_digits = _integer_digits(left_lcm * right_lcm)
-    return max(collected_numerator, denominator_digits)
+    Each output coefficient collects only the pairs whose exponents sum to one
+    output exponent. Its denominator is the LCM of those pairs' denominators
+    and never combines unrelated supports, so bound per collision group rather
+    than from the operand-wide LCM.
+    """
+
+    groups: dict[tuple[int, ...], int] = {}
+    pair_counts: dict[tuple[int, ...], int] = {}
+    pairs: list[tuple[tuple[int, ...], int, int]] = []
+    for left_index, left_term in enumerate(left.terms):
+        if left_index % 32 == 0:
+            request_checkpoint("during Laurent coefficient-height admission")
+        left_coefficient = left_term.coefficient
+        for right_term in right.terms:
+            exponent = tuple(
+                a + b
+                for a, b in zip(left_term.exponents, right_term.exponents, strict=True)
+            )
+            pair_numerator = abs(left_coefficient.num) * abs(right_term.coefficient.num)
+            pair_denominator = left_coefficient.den * right_term.coefficient.den
+            current = groups.get(exponent, 1)
+            merged = _capped_denominator_lcm(current, pair_denominator)
+            if merged is None:
+                # This collision group genuinely exceeds the canonical envelope.
+                return MAX_CANONICAL_RATIONAL_DIGITS + 1
+            groups[exponent] = merged
+            pair_counts[exponent] = pair_counts.get(exponent, 0) + 1
+            pairs.append((exponent, pair_numerator, pair_denominator))
+    numerator_digits_by_group: dict[tuple[int, ...], int] = {}
+    for exponent, pair_numerator, pair_denominator in pairs:
+        group_lcm = groups[exponent]
+        addition_digits = (
+            len(str(pair_counts[exponent])) if pair_counts[exponent] > 1 else 0
+        )
+        digits = (
+            _integer_digits(pair_numerator * (group_lcm // pair_denominator))
+            + addition_digits
+        )
+        if digits > numerator_digits_by_group.get(exponent, 0):
+            numerator_digits_by_group[exponent] = digits
+    height = 1
+    for exponent, group_lcm in groups.items():
+        height = max(
+            height,
+            numerator_digits_by_group.get(exponent, 1),
+            _integer_digits(group_lcm),
+        )
+    return height
 
 
 def _result_from_coefficients(

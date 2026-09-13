@@ -396,3 +396,39 @@ def test_multiaxis_opposite_boundary_exponents_preserve_cancellation() -> None:
     assert rational_laurent_multiply(left, right) == RationalLaurentPolynomial(
         variables=("x", "y"), terms=(term(1, 0, 0),)
     )
+
+
+def test_sparse_product_admits_large_operand_wide_lcm() -> None:
+    """A product whose collision groups never combine a wide operand LCM.
+
+    One factor has coprime 20,000-digit denominators on separate terms and the
+    other has integer support with distinct pair sums, so no output coefficient
+    ever needs both denominators. The operand-wide LCM is refused, but the
+    per-collision-group bound admits the representable convolution.
+    """
+
+    left_denominator = 10**19999 + 1
+    right_denominator = 10**19999 + 7
+    left = RationalLaurentPolynomial(
+        variables=("x",),
+        terms=(
+            RationalLaurentPolynomialTerm(
+                coefficient=CanonicalRational(num=1, den=left_denominator),
+                exponents=(1,),
+            ),
+            RationalLaurentPolynomialTerm(
+                coefficient=CanonicalRational(num=1, den=right_denominator),
+                exponents=(0,),
+            ),
+        ),
+    )
+    right = RationalLaurentPolynomial(
+        variables=("x",),
+        terms=(term(1, 2), term(1, 0)),
+    )
+    product = rational_laurent_multiply(left, right)
+    assert tuple(item.exponents for item in product.terms) == ((3,), (2,), (1,), (0,))
+    assert all(
+        item.coefficient.den in (left_denominator, right_denominator)
+        for item in product.terms
+    )

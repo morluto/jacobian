@@ -577,3 +577,27 @@ def test_univariate_lattice_stride_still_admits_after_fast_backend() -> None:
     result = normalize_trigonometric_rational(request)
     assert len(result.numerator.terms) == 4096
     assert len(result.denominator.terms) == 1
+
+
+def test_reduced_canonical_exponent_is_admitted_before_result_construction() -> None:
+    """``sin(4096x)/sin(4095x)`` reduces past the output exponent envelope.
+
+    The reduced numerator reaches exponent 8189, so the request must fail with
+    the typed resource-admission error instead of constructing thousands of
+    quotient terms and failing model validation afterwards.
+    """
+
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x"],
+            "expression": {
+                "kind": "DIVIDE",
+                "numerator": {"kind": "SINE", "angle": {"coefficients": [4096]}},
+                "denominator": {"kind": "SINE", "angle": {"coefficients": [4095]}},
+            },
+        }
+    )
+    started = time.monotonic()
+    with pytest.raises(OperationResourceAdmissionError, match="expansion"):
+        normalize_trigonometric_rational(request)
+    assert time.monotonic() - started < 5.0

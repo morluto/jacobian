@@ -134,6 +134,7 @@ def initial_monomial_ideal(
     monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex",
     *,
     resource_budget: IdealComputationBudget | None = None,
+    _outer_deadline: float | None = None,
 ) -> InitialMonomialIdealResult:
     """Project the existing exact Gröbner result to its initial monomial ideal."""
 
@@ -141,6 +142,10 @@ def initial_monomial_ideal(
     _require_homogeneous(ideal)
     resource_budget = resource_budget or IdealComputationBudget()
     deadline = execution_deadline(float(resource_budget.wall_seconds))
+    if _outer_deadline is not None:
+        # Inherit an earlier absolute deadline so a native caller's shared wall
+        # limit is not restarted by a fresh sub-window here.
+        deadline = min(deadline, _outer_deadline)
     if _is_explicit_unit_ideal(ideal):
         require_execution_deadline(deadline)
         return _unit_initial_ideal(ideal, monomial_order)
@@ -248,6 +253,7 @@ def _enumerate_standard_monomials(
     degree: int,
     generators: tuple[tuple[int, ...], ...],
     caps: tuple[int | None, ...],
+    deadline: float | None = None,
 ) -> Iterator[tuple[int, ...]]:
     variable_count = len(caps)
     if variable_count == 0:
@@ -262,6 +268,8 @@ def _enumerate_standard_monomials(
         steps += 1
         if steps % 256 == 0:
             request_checkpoint("during standard-monomial composition enumeration")
+            if deadline is not None:
+                require_execution_deadline(deadline)
         if _prefix_already_nonstandard(prefix, generators, variable_count):
             return
         cap = caps[axis]
@@ -285,7 +293,10 @@ def _enumerate_standard_monomials(
 
 
 def standard_monomials(
-    initial_ideal: RationalPolynomialIdeal, degree: int
+    initial_ideal: RationalPolynomialIdeal,
+    degree: int,
+    *,
+    _deadline: float | None = None,
 ) -> StandardMonomialsResult:
     if type(degree) is not int:
         raise OperationDomainValidationError(
@@ -308,7 +319,9 @@ def standard_monomials(
             count=0,
         )
     variables = len(initial_ideal.variables)
-    domain_size = _pruned_standard_monomial_bound(generators, variables, degree)
+    domain_size = _pruned_standard_monomial_bound(
+        generators, variables, degree, _deadline
+    )
     if domain_size > MAX_STANDARD_MONOMIALS:
         raise OperationResourceAdmissionError(
             location=("degree",),
@@ -318,7 +331,7 @@ def standard_monomials(
     monomials = tuple(
         sorted(
             _enumerate_standard_monomials(
-                degree, generators, _pure_power_caps(generators, variables)
+                degree, generators, _pure_power_caps(generators, variables), _deadline
             ),
             reverse=True,
         )
@@ -380,6 +393,12 @@ def _pruned_standard_monomial_bound(
     # that still accounts for the mixed constraints without the ambient count.
     ambient = comb(degree + variable_count - 1, variable_count - 1)
     if cap_bound <= MAX_STANDARD_MONOMIALS:
+        return cap_bound
+    # When every generator is a pure power, the per-axis caps are the exact
+    # standard-monomial count, so an exact scan would only repeat the bound.
+    if not any(
+        sum(1 for exponent in generator if exponent) > 1 for generator in generators
+    ):
         return cap_bound
     if ambient <= _MONOMIAL_ENUMERATION_CEILING:
         return _enumerated_standard_monomial_count(
@@ -607,14 +626,17 @@ def hilbert_function(
                     leading, len(ideal.variables), max_degree, deadline=deadline
                 )
             initial = initial_monomial_ideal(
-                ideal, monomial_order, resource_budget=resource_budget
+                ideal,
+                monomial_order,
+                resource_budget=resource_budget,
+                _outer_deadline=deadline,
             )
             require_execution_deadline(deadline)
             return _hilbert_function_values(
                 ideal, monomial_order, initial, max_degree, deadline
             )
     initial = initial_monomial_ideal(
-        ideal, monomial_order, resource_budget=resource_budget
+        ideal, monomial_order, resource_budget=resource_budget, _outer_deadline=deadline
     )
     require_execution_deadline(deadline)
     computed_leading = _leading_monomials_of_ideal(initial.initial_ideal)
@@ -641,7 +663,10 @@ def _hilbert_function_values(
     for degree in range(max_degree + 1):
         request_checkpoint("during Hilbert-function enumeration")
         require_execution_deadline(deadline)
-        values.append(standard_monomials(initial.initial_ideal, degree).count)
+        values.append(
+            standard_monomials(initial.initial_ideal, degree, _deadline=deadline).count
+        )
+    require_execution_deadline(deadline)
     return HilbertFunctionResult(
         ideal=ideal,
         initial_ideal=initial.initial_ideal,

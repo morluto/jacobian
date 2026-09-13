@@ -19,6 +19,7 @@ from jacobian._execution import (
     bind_request_deadline,
     current_request_execution,
     request_cancelled,
+    request_checkpoint,
 )
 from jacobian.backends import BackendUnavailableError
 from jacobian.catalog.models import (
@@ -1512,10 +1513,15 @@ def groebner_basis(
             f"exact basis: {error}"
         ) from error
 
-    basis_generators = [
-        RationalPolynomial.model_validate_json(json.dumps(item))
-        for item in result_payload["generators"]
-    ]
+    basis_generators = []
+    request_checkpoint("after Groebner kernel worker")
+    for position, item in enumerate(result_payload["generators"]):
+        if position % 256 == 0:
+            request_checkpoint("during Groebner basis decoding")
+        basis_generators.append(
+            RationalPolynomial.model_validate_json(json.dumps(item))
+        )
+    request_checkpoint("after Groebner basis decoding")
     if not basis_generators:
         from jacobian.math.polynomials.values import SparseRationalPolynomial
 
@@ -1529,7 +1535,7 @@ def groebner_basis(
         variables=variables,
         generators=tuple(basis_generators),
     )
-
+    request_checkpoint("before Groebner result construction")
     return GroebnerBasisResult._from_kernel(source_ideal, basis_ideal, monomial_order)
 
 

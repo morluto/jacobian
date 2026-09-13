@@ -1064,3 +1064,47 @@ def test_request_models_document_structural_preconditions() -> None:
     ):
         assert model.model_fields["ideal"].description
     assert StandardMonomialsRequest.model_fields["initial_ideal"].description
+
+
+def test_pure_power_ideal_skips_the_exact_slice_scan(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The pure-power bound is exact, so no composition scan runs.
+
+    A degree slice above the result bound but below the enumeration ceiling
+    would otherwise scan every composition before returning the same rejection.
+    """
+    from jacobian.math.polynomials.graded import operations as module
+
+    def fail(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("pure-power slice entered the exact scan")
+
+    monkeypatch.setattr(module, "_enumerated_standard_monomial_count", fail)
+    variables = tuple(f"x{index}" for index in range(8))
+    ideal = _monomial_ideal(
+        variables,
+        (
+            (16, 0, 0, 0, 0, 0, 0, 0),
+            (0, 16, 0, 0, 0, 0, 0, 0),
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError):
+        hilbert_function(ideal, max_degree=30)
+
+
+def test_hilbert_function_inherits_the_outer_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A nested initial-ideal computation receives the outer deadline."""
+    from jacobian.math.polynomials.graded import operations as module
+
+    captured: list[float | None] = []
+    original = module.initial_monomial_ideal
+
+    def tracked(ideal: object, order: str, **kwargs: object) -> object:
+        captured.append(kwargs.get("_outer_deadline"))  # type: ignore[arg-type]
+        return original(ideal, order, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(module, "initial_monomial_ideal", tracked)
+    hilbert_function(_ideal((2, 0)), max_degree=2)
+    assert captured and captured[0] is not None

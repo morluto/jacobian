@@ -176,6 +176,15 @@ _SSYT_CHECKPOINT_DIGIT_WORK = 256_000
 # canonical count envelope is 32,768 digits, so this only covers operands whose
 # quotient can still be near the boundary.
 _EXACT_BOUNDARY_MAX_OPERAND_DIGITS = 1_000_000
+# Largest logarithmic-bound overshoot (in digits) that exact boundary
+# resolution can still overturn. Each ``_log10_upper_units`` probe overshoots by
+# less than ``(ln2 - 1/2 + 1/3)/ln10`` (the cubic series remainder), about
+# 0.109 digits, and the hook lower bound undershoots by under 0.145 digits, so
+# over the at most 500 cells of a canonical partition the total slack is below
+# 55 digits; 64 leaves margin. A bound further past the canonical envelope
+# cannot be admissible, and resolving it exactly would only materialize a huge
+# numerator to refuse it.
+_EXACT_BOUNDARY_SLACK_DIGITS = 64
 _LOG10_2_UPPER_UNITS = 301_029_996
 _LOG10_2_LOWER_UNITS = 301_029_995
 _INV_LN10_UPPER_UNITS = 434_294_482
@@ -280,6 +289,15 @@ def _ssyt_count_digit_bound(
     # has 32,768 digits while the estimate reports 32,769.  Resolve the boundary
     # exactly instead of refusing a cheaply executable count, and keep the
     # logarithmic estimate as the answer whenever it already fits.
+    #
+    # Only a genuinely near-boundary estimate can hide an admissible count: the
+    # per-factor log bounds overshoot by fractions of a unit, at most about
+    # 0.109 digits per cell plus a fraction for the hook lower bound, so over
+    # the at most 500 cells of a canonical partition the total overshoot stays
+    # below ``_EXACT_BOUNDARY_SLACK_DIGITS``.  A more distant estimate is a
+    # sound refusal, and materializing its numerator could only confirm it.
+    if bound > _MAX_SSYT_COUNT_DIGITS + _EXACT_BOUNDARY_SLACK_DIGITS:
+        return max(1, alphabet_digits, bound)
     if (
         _digits_upper_from_log10_units(numerator_log_units)
         > _EXACT_BOUNDARY_MAX_OPERAND_DIGITS

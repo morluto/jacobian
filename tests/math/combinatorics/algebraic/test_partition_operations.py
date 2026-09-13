@@ -671,6 +671,36 @@ def test_ssyt_digit_bound_resolves_the_boundary_exactly() -> None:
     assert result.count == exact
 
 
+def test_ssyt_digit_bound_refuses_far_overflow_without_exact_resolution() -> None:
+    """A logarithmically far-overflowing count is refused before any numerator.
+
+    For ``partition=(500), alphabet_size=10**1998`` the estimate is hundreds of
+    thousands of digits past the canonical envelope while still below the
+    numerator-digit cutoff, so the boundary path used to build and divide a
+    roughly 999,000-digit numerator only to reject it.
+    """
+
+    alphabet_size = 10**1998
+    partition = IntegerPartition(parts=(500,))
+
+    def _forbid_exact(*_args: object, **_kwargs: object) -> NoReturn:
+        raise AssertionError("far-overflowing bound must not resolve exactly")
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(native, "_exact_count_digits", _forbid_exact)
+        bound = _ssyt_count_digit_bound(
+            partition,
+            alphabet_size,
+            _upper_decimal_digits(alphabet_size),
+        )
+    assert bound > _MAX_SSYT_COUNT_DIGITS
+    request = SemistandardYoungTableauCountRequest.model_validate(
+        {"partition": {"parts": [500]}, "alphabet_size": alphabet_size}
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="digit bound"):
+        semistandard_young_tableaux_count(request)
+
+
 def test_decimal_width_matches_str_beyond_the_conversion_limit() -> None:
     """The boundary path must not rely on int-to-str conversion."""
     from jacobian.math.combinatorics.algebraic.operations import _decimal_width

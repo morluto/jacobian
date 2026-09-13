@@ -70,7 +70,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         operation_id="graphical_model.factor.multiply",
         title="Multiply two factors",
         description="Compute the product of two factors over the union of their variables "
-        "using bounded exact rational arithmetic. Scalar factors use an empty scope.",
+        "using bounded exact rational arithmetic. Table entries must be nonnegative "
+        "canonical rationals. Scalar factors use an empty scope.",
         request_type=FactorMultiplyRequest,
         result_type=FactorMultiplyResult,
         run=_factor_multiply,
@@ -96,7 +97,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="graphical_model.factor.marginalize",
         title="Marginalize out a variable from a factor",
-        description="Sum out a variable from a factor, producing a factor over the "
+        description="Sum out a variable from a factor with nonnegative table entries, "
+        "producing a factor over the "
         "remaining variables using exact rational arithmetic.",
         request_type=FactorMarginalizeRequest,
         result_type=FactorMarginalizeResult,

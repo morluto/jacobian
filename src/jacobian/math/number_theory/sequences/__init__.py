@@ -1,4 +1,8 @@
-"""Finite exact sequences and recurrence solving."""
+"""Finite exact sequences and recurrence solving.
+
+Canonical public sequence values and operations live in
+``jacobian.math.number_theory.sequences.core``.
+"""
 
 from jacobian.math.number_theory.sequences.core import (
     AutocorrelationCell,

@@ -11,6 +11,7 @@ from sympy import QQ, Poly, Symbol, binomial, cancel, expand_func, fraction
 
 from jacobian._exact import CanonicalRational
 from jacobian._execution import (
+    current_request_execution,
     execution_deadline,
     request_checkpoint,
     require_execution_deadline,
@@ -39,7 +40,11 @@ from jacobian.math.polynomials.graded._models import (
     InitialMonomialIdealResult,
     StandardMonomialsResult,
 )
-from jacobian.math.polynomials.ideals._models import IdealComputationBudget
+from jacobian.math.polynomials.ideals._models import (
+    MAX_GENERATORS,
+    MAX_VARS,
+    IdealComputationBudget,
+)
 from jacobian.math.polynomials.ideals.operations import _admit_source, groebner_basis
 from jacobian.math.polynomials.values import (
     MAX_RATIONAL_FUNCTION_EXPONENT,
@@ -84,6 +89,13 @@ def _is_explicit_unit_ideal(ideal: RationalPolynomialIdeal) -> bool:
 def _require_homogeneous(ideal: RationalPolynomialIdeal) -> None:
     if _is_explicit_unit_ideal(ideal):
         return
+    if _all_source_generators_are_unit_monomials(ideal):
+        # Single-term generators are homogeneous by construction and need no
+        # Groebner expansion, so the backend-specific input envelope (in
+        # particular its exponent cap) does not apply; the ring and
+        # generator-count budgets still bound minimization and enumeration.
+        _require_monomial_presentation_budgets(ideal)
+        return
     try:
         _admit_source(ideal, label="graded ideal")
     except ValueError as error:
@@ -98,6 +110,23 @@ def _require_homogeneous(ideal: RationalPolynomialIdeal) -> None:
                 code="graded_ideal.nonhomogeneous",
                 message="every ideal generator must be homogeneous",
             )
+
+
+def _require_monomial_presentation_budgets(ideal: RationalPolynomialIdeal) -> None:
+    """Structural budgets for backend-free monomial presentations."""
+
+    if len(ideal.variables) > MAX_VARS:
+        raise OperationResourceAdmissionError(
+            location=("ideal",),
+            code="graded_ideal.variable_budget",
+            message=f"monomial presentations use at most {MAX_VARS} variables",
+        )
+    if len(ideal.generators) > MAX_GENERATORS:
+        raise OperationResourceAdmissionError(
+            location=("ideal",),
+            code="graded_ideal.generator_budget",
+            message=f"monomial presentations use at most {MAX_GENERATORS} generators",
+        )
 
 
 def _unit_monomial(
@@ -129,6 +158,59 @@ def _unit_initial_ideal(
     )
 
 
+def _monomial_initial_ideal(
+    ideal: RationalPolynomialIdeal,
+    monomial_order: Literal["lex", "grlex", "grevlex"],
+) -> InitialMonomialIdealResult | None:
+    """Initial ideal of a monomial presentation without backend work.
+
+    Monomials are their own leading terms under every order and already form
+    a Groebner basis for the ideal they generate, so coefficient
+    normalization plus divisibility minimization is the exact initial ideal.
+    Return None when every generator is zero so the caller keeps the existing
+    backend path for the zero ideal.
+    """
+
+    unique: list[tuple[int, ...]] = []
+    for generator in ideal.generators:
+        terms = generator.polynomial.terms
+        if not terms:
+            continue
+        exponents = terms[0].exponents
+        if exponents not in unique:
+            unique.append(exponents)
+    if not unique:
+        return None
+    request_checkpoint("during monomial initial-ideal minimization")
+    minimal = tuple(
+        sorted(
+            (
+                exponent
+                for exponent in unique
+                if not any(
+                    other != exponent
+                    and all(
+                        left <= right
+                        for left, right in zip(other, exponent, strict=True)
+                    )
+                    for other in unique
+                )
+            ),
+            reverse=True,
+        )
+    )
+    minimized = RationalPolynomialIdeal(
+        variables=ideal.variables,
+        generators=tuple(_unit_monomial(ideal.variables, e) for e in minimal),
+    )
+    return InitialMonomialIdealResult(
+        ideal=ideal,
+        groebner_basis=minimized,
+        initial_ideal=minimized,
+        monomial_order=monomial_order,
+    )
+
+
 def initial_monomial_ideal(
     ideal: RationalPolynomialIdeal,
     monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex",
@@ -149,13 +231,28 @@ def initial_monomial_ideal(
     if _is_explicit_unit_ideal(ideal):
         require_execution_deadline(deadline)
         return _unit_initial_ideal(ideal, monomial_order)
+    if _all_source_generators_are_unit_monomials(ideal):
+        # A monomial presentation needs no Groebner expansion: its generators
+        # are already a Groebner basis, so normalization and minimization give
+        # the exact initial ideal directly, including exponents past the
+        # backend-specific source envelope.
+        minimized = _monomial_initial_ideal(ideal, monomial_order)
+        if minimized is not None:
+            require_execution_deadline(deadline)
+            return minimized
     # Pass the already-bound absolute deadline to the nested Groebner call so a
     # native call without a request envelope does not restart a fresh window.
     remaining = deadline - time.monotonic()
     if remaining <= 0:
         require_execution_deadline(deadline)
+    # Budgets anchor at the request start, not at now: rebasing the remaining
+    # duration into ``wall_seconds`` would make the nested bind add it to the
+    # original ``started_at`` and time out immediately. Pass the remaining
+    # window measured from the request start with the absolute cap instead.
+    execution = current_request_execution()
+    started_at = execution.started_at if execution is not None else time.monotonic()
     nested_budget = resource_budget.model_copy(
-        update={"wall_seconds": max(1, ceil(remaining))}
+        update={"wall_seconds": max(1, ceil(deadline - started_at))}
     )
     basis_result = groebner_basis(
         ideal, monomial_order, resource_budget=nested_budget, _outer_deadline=deadline

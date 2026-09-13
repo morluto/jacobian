@@ -852,7 +852,8 @@ def test_graded_binds_one_deadline_before_groebner(
     started = monotonic()
     with request_execution(started, outer_deadline=started + 30):
         initial_monomial_ideal(
-            _ideal((2, 0)), resource_budget=IdealComputationBudget(wall_seconds=5)
+            _nonmonomial_quadratic(),
+            resource_budget=IdealComputationBudget(wall_seconds=5),
         )
     assert observed["deadline"] is not None
     assert observed["deadline"] <= started + 5 + 1
@@ -876,6 +877,31 @@ def _monomial_ideal(
                 ),
             )
             for exponent in exponents
+        ),
+    )
+
+
+def _nonmonomial_quadratic() -> RationalPolynomialIdeal:
+    """Homogeneous x^2 + xy: genuinely non-monomial, so nested calls run."""
+    variables = ("x", "y")
+    return RationalPolynomialIdeal(
+        variables=variables,
+        generators=(
+            RationalPolynomial(
+                variables=variables,
+                polynomial=SparseRationalPolynomial(
+                    terms=(
+                        RationalPolynomialTerm(
+                            coefficient=CanonicalRational(num=1, den=1),
+                            exponents=(2, 0),
+                        ),
+                        RationalPolynomialTerm(
+                            coefficient=CanonicalRational(num=1, den=1),
+                            exponents=(1, 1),
+                        ),
+                    )
+                ),
+            ),
         ),
     )
 
@@ -1125,5 +1151,159 @@ def test_nested_groebner_deadline_never_exceeds_the_outer_deadline(
         return original(ideal, order, **kwargs)  # type: ignore[arg-type]
 
     monkeypatch.setattr(module, "groebner_basis", tracked)
-    hilbert_function(_ideal((2, 0)), max_degree=2)
+    hilbert_function(_nonmonomial_quadratic(), max_degree=2)
     assert seen and seen[0] is not None
+
+
+def test_nested_budget_keeps_the_request_start_anchor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A remaining duration must not be rebased to the request start."""
+    import time as time_module
+
+    from jacobian._execution import request_execution
+    from jacobian.math.polynomials.graded import operations as module
+    from jacobian.math.polynomials.ideals._models import IdealComputationBudget
+
+    now = [1_000.0]
+    monkeypatch.setattr(time_module, "monotonic", lambda: now[0])
+
+    class StopError(Exception):
+        pass
+
+    captured: dict[str, object] = {}
+
+    def fake_groebner(ideal: object, order: str = "grevlex", **kwargs: object) -> object:
+        captured["wall_seconds"] = kwargs["resource_budget"].wall_seconds  # type: ignore[union-attr]
+        captured["outer_deadline"] = kwargs["_outer_deadline"]
+        raise StopError()
+
+    monkeypatch.setattr(module, "groebner_basis", fake_groebner)
+    # Six seconds into a ten-second request, four seconds remain before the
+    # outer deadline. Rebasing that remainder to the request start would bind
+    # the nested worker at started_at + 4 and time out immediately. The source
+    # is genuinely non-monomial so the nested Groebner call is reached.
+    with (
+        request_execution(now[0] - 6, outer_deadline=now[0] + 4),
+        pytest.raises(StopError),
+    ):
+        initial_monomial_ideal(
+            _nonmonomial_quadratic(),
+            resource_budget=IdealComputationBudget(wall_seconds=10),
+        )
+    assert captured["wall_seconds"] == 10
+    assert captured["outer_deadline"] == now[0] + 4
+
+
+def test_monomial_ideal_skips_backend_source_admission() -> None:
+    """A representable monomial exponent past 20 needs no backend work."""
+    result = initial_monomial_ideal(_ideal((21,)))
+    assert [
+        generator.polynomial.terms[0].exponents
+        for generator in result.initial_ideal.generators
+    ] == [(21,)]
+    assert result.groebner_basis.generators == result.initial_ideal.generators
+    assert hilbert_function(_ideal((21,)), max_degree=4).values == (1, 1, 1, 1, 1)
+
+
+def test_monomial_initial_ideal_minimizes_divisible_generators() -> None:
+    """Divisible monomials drop out of the exact initial ideal."""
+    result = initial_monomial_ideal(_monomial_ideal(("x",), ((2,), (3,))))
+    assert [
+        generator.polynomial.terms[0].exponents
+        for generator in result.initial_ideal.generators
+    ] == [(2,)]
+    result = initial_monomial_ideal(
+        _monomial_ideal(("x", "y"), ((2, 0), (1, 1), (0, 2)))
+    )
+    assert sorted(
+        generator.polynomial.terms[0].exponents
+        for generator in result.initial_ideal.generators
+    ) == [(0, 2), (1, 1), (2, 0)]
+
+
+def test_embedded_initial_ideals_must_be_monomial() -> None:
+    """A non-monomial value cannot hide under an initial-ideal context."""
+    from jacobian.math.polynomials.values import (
+        SparseRationalPolynomial,
+    )
+
+    variables = ("x", "y")
+    def _poly(terms: tuple[tuple[tuple[int, ...], int], ...]) -> RationalPolynomial:
+        from jacobian.math.polynomials.values import RationalPolynomialTerm
+
+        return RationalPolynomial(
+            variables=variables,
+            polynomial=SparseRationalPolynomial(
+                terms=tuple(
+                    RationalPolynomialTerm(
+                        coefficient=CanonicalRational(num=num, den=1),
+                        exponents=exponents,
+                    )
+                    for exponents, num in terms
+                ),
+            ),
+        )
+
+    ideal = RationalPolynomialIdeal(
+        variables=variables,
+        generators=(_poly((((1, 0), 1),)),),
+    )
+    non_monomial = RationalPolynomialIdeal(
+        variables=variables,
+        generators=(_poly((((1, 0), 1), ((0, 1), 1))),),
+    )
+    with pytest.raises(ValidationError):
+        HilbertFunctionResult(
+            ideal=ideal,
+            initial_ideal=non_monomial,
+            monomial_order="grevlex",
+            values=(1,),
+        )
+    with pytest.raises(ValidationError):
+        HilbertPolynomialResult(
+            ideal=ideal,
+            initial_ideal=non_monomial,
+            monomial_order="grevlex",
+            dimension=1,
+            polynomial=RationalPolynomial(
+                variables=("m",),
+                polynomial=SparseRationalPolynomial(
+                    terms=(
+                        RationalPolynomialTerm(
+                            coefficient=CanonicalRational(num=1, den=1),
+                            exponents=(1,),
+                        ),
+                    )
+                ),
+            ),
+            stabilization_degree=1,
+        )
+    with pytest.raises(ValidationError):
+        HilbertDimensionResult(
+            ideal=ideal,
+            initial_ideal=non_monomial,
+            monomial_order="grevlex",
+            dimension=1,
+        )
+    with pytest.raises(ValidationError):
+        HilbertMultiplicityResult(
+            ideal=ideal,
+            initial_ideal=non_monomial,
+            monomial_order="grevlex",
+            dimension=1,
+            multiplicity=1,
+        )
+    with pytest.raises(ValidationError):
+        HVectorResult(
+            ideal=ideal,
+            initial_ideal=non_monomial,
+            monomial_order="grevlex",
+            dimension=1,
+            h_vector=(1,),
+        )
+    series = hilbert_series(_ideal((2, 0)), prefix_degree=2)
+    payload = series.model_dump(mode="json")
+    payload["initial_ideal"] = non_monomial.model_dump(mode="json")
+    with pytest.raises(ValidationError):
+        HilbertSeriesResult.model_validate(payload)

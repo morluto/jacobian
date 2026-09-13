@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -241,13 +241,13 @@ class PolynomialWeightProfile(StrictModel):
     """
 
     polynomial: RationalPolynomial
-    weight: tuple[int, ...] = Field(min_length=1)
-    minimum_weight: int
-    minimizing_exponents: tuple[tuple[int, ...], ...] = Field(
+    weight: tuple[StrictInt, ...] = Field(min_length=0)
+    minimum_weight: StrictInt
+    minimizing_exponents: tuple[tuple[StrictInt, ...], ...] = Field(
         max_length=MAX_WEIGHT_PROFILE_TERMS
     )
-    weight_layers: tuple[tuple[int, tuple[tuple[int, ...], ...]], ...] = Field(
-        max_length=MAX_WEIGHT_PROFILE_TERMS
+    weight_layers: tuple[tuple[StrictInt, tuple[tuple[StrictInt, ...], ...]], ...] = (
+        Field(max_length=MAX_WEIGHT_PROFILE_TERMS)
     )
 
     @model_validator(mode="after")
@@ -286,7 +286,7 @@ class PolynomialFaceData(StrictModel):
     """
 
     polynomial: RationalPolynomial
-    weight: tuple[int, ...] = Field(min_length=1)
+    weight: tuple[StrictInt, ...] = Field(min_length=0)
     initial_form: RationalPolynomial
 
     @model_validator(mode="after")

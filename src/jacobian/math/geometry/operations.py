@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from fractions import Fraction
 from itertools import combinations
 from typing import Any, cast
@@ -9,7 +10,11 @@ from typing import Any, cast
 from pydantic import ValidationError
 
 from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS, CanonicalRational
-from jacobian._execution import request_checkpoint
+from jacobian._execution import (
+    bind_request_deadline,
+    current_request_execution,
+    request_checkpoint,
+)
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -59,6 +64,11 @@ from jacobian.math.geometry._models import (
 )
 from jacobian.math.geometry._predicates import are_collinear, determinant4
 from jacobian.math.geometry.exact._models import PointConfiguration
+
+# Exact circle construction shares one operation-owned wall envelope, and
+# every full-sequence phase checkpoints at this interval.
+SPANNED_CIRCLE_WALL_SECONDS = 120.0
+_CIRCLE_CHECKPOINT_INTERVAL = 64
 
 __all__ = [
     "centroid",
@@ -909,17 +919,32 @@ def _minimum_height_origin(
     """
 
     candidates = (*points, _bounding_box_origin(points), (Fraction(0), Fraction(0)))
-    return min(
-        candidates,
-        key=lambda origin: (
+    best_origin: tuple[Fraction, Fraction] | None = None
+    best_key: tuple[int, Fraction, Fraction] | None = None
+    for index, origin in enumerate(candidates):
+        if index % _CIRCLE_CHECKPOINT_INTERVAL == 0:
+            request_checkpoint("during spanned-circle origin selection")
+        key = (
             _translated_max_digits(origin, points),
             origin[0],
             origin[1],
-        ),
-    )
+        )
+        if best_key is None or key < best_key:
+            best_key = key
+            best_origin = origin
+    assert best_origin is not None
+    return best_origin
 
 
-_CIRCLE_CHECKPOINT_INTERVAL = 64
+def _bind_circle_deadline() -> None:
+    """Bind the operation-owned wall envelope before exact circle work."""
+
+    execution = current_request_execution()
+    started = execution.started_at if execution is not None else time.monotonic()
+    deadline = started + SPANNED_CIRCLE_WALL_SECONDS
+    if execution is not None and execution.deadline is not None:
+        deadline = min(deadline, execution.deadline)
+    bind_request_deadline(deadline)
 
 
 def _checkpoint_circle_work(completed: int, stage: str) -> int:
@@ -961,6 +986,7 @@ def spanned_circle_profile(
     """Return every distinct circle spanned by a non-collinear source triple."""
 
     configuration, points = _admit_spanned_circle_source(configuration)
+    _bind_circle_deadline()
     point_values = tuple(_points_to_fractions(points))
     origin = _minimum_height_origin(point_values)
     translated = tuple(

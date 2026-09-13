@@ -1,6 +1,7 @@
 """Tests for configuration-level geometry operations (#2107, #2106)."""
 
 import json
+import time
 from fractions import Fraction
 
 import pytest
@@ -11,6 +12,7 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.geometry import operations as operations_module
 from jacobian.math.geometry._models import (
     MAX_SPANNED_CIRCLE_WORK,
     MAX_SPANNED_CIRCLES,
@@ -641,3 +643,57 @@ def test_native_spanned_circles_reject_invalid_source(
     points = tuple(_point(str(x), str(y)) for x, y in coordinates)
     with pytest.raises(OperationDomainValidationError):
         native_spanned_circle_profile(_configuration(*points))
+
+
+class TestSpannedCircleDeadline:
+    def test_origin_selection_checkpoints(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        observed: list[str] = []
+
+        def _observe(stage: str) -> None:
+            observed.append(stage)
+
+        monkeypatch.setattr(
+            "jacobian.math.geometry.operations.request_checkpoint", _observe
+        )
+        monkeypatch.setattr(
+            "jacobian.math.geometry.operations._CIRCLE_CHECKPOINT_INTERVAL", 1
+        )
+        native_spanned_circle_profile(
+            _configuration(
+                _point("0", "0"),
+                _point("1", "0"),
+                _point("0", "1"),
+                _point("1", "1"),
+            )
+        )
+        assert any("origin selection" in stage for stage in observed)
+
+    def test_operation_binds_its_wall_deadline(self) -> None:
+        """The profile binds an operation-owned absolute deadline."""
+        from jacobian._execution import (
+            current_request_execution,
+            request_execution,
+        )
+
+        observed: list[float | None] = []
+        original = operations_module.request_checkpoint
+
+        def _observe(stage: str) -> None:
+            execution = current_request_execution()
+            observed.append(execution.deadline if execution is not None else None)
+            original(stage)
+
+        with (
+            request_execution(time.monotonic()),
+            pytest.MonkeyPatch.context() as patch,
+        ):
+            patch.setattr(
+                "jacobian.math.geometry.operations.request_checkpoint", _observe
+            )
+            native_spanned_circle_profile(
+                _configuration(_point("0", "0"), _point("1", "0"), _point("0", "1"))
+            )
+        assert observed
+        assert all(deadline is not None for deadline in observed)

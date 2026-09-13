@@ -893,3 +893,79 @@ def test_identity_power_preserves_intermediate_digits() -> None:
     direct_metrics = _metrics(_request("QQ", base, variables).expression)
     wrapped_metrics = _metrics(_request("QQ", wrapped, variables).expression)
     assert wrapped_metrics.intermediate_digits == direct_metrics.intermediate_digits
+
+
+def test_constant_plus_variable_power_uses_affine_uniqueness() -> None:
+    """``(1/p**4 + x/q**4)**12`` is admitted with a 13-term result."""
+    p = 10**127 + 3
+    q = 10**127 + 7
+
+    def lit(num: int, den: int) -> dict[str, Any]:
+        return {"kind": "LITERAL", "value": {"num": num, "den": den}}
+
+    expression = {
+        "kind": "POWER",
+        "base": {
+            "kind": "ADD",
+            "operands": [
+                {"kind": "POWER", "base": lit(1, p), "exponent": 4},
+                {
+                    "kind": "MULTIPLY",
+                    "operands": [
+                        {"kind": "VARIABLE", "name": "x"},
+                        {"kind": "POWER", "base": lit(1, q), "exponent": 4},
+                    ],
+                },
+            ],
+        },
+        "exponent": 12,
+    }
+    result = normalize_polynomial_expression(_request("QQ", expression))
+    assert len(result.polynomial.polynomial.terms) == 13
+
+
+def test_mutually_exclusive_factor_denominators_are_not_summed() -> None:
+    """A product of binomials selects one denominator per factor."""
+    variables = tuple(f"a{index}" for index in range(6))
+    factors = []
+    for index in range(3):
+        left = 10**127 + 11 * index
+        right = left + 5
+        factors.append(
+            {
+                "kind": "ADD",
+                "operands": [
+                    {
+                        "kind": "MULTIPLY",
+                        "operands": [
+                            {"kind": "VARIABLE", "name": f"a{2 * index}"},
+                            {
+                                "kind": "POWER",
+                                "base": {
+                                    "kind": "LITERAL",
+                                    "value": {"num": 1, "den": left},
+                                },
+                                "exponent": 16,
+                            },
+                        ],
+                    },
+                    {
+                        "kind": "MULTIPLY",
+                        "operands": [
+                            {"kind": "VARIABLE", "name": f"a{2 * index + 1}"},
+                            {
+                                "kind": "POWER",
+                                "base": {
+                                    "kind": "LITERAL",
+                                    "value": {"num": 1, "den": right},
+                                },
+                                "exponent": 16,
+                            },
+                        ],
+                    },
+                ],
+            }
+        )
+    expression = {"kind": "MULTIPLY", "operands": factors}
+    result = normalize_polynomial_expression(_request("QQ", expression, variables))
+    assert len(result.polynomial.polynomial.terms) == 8

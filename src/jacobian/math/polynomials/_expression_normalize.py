@@ -350,10 +350,12 @@ def _support_keys_are_uniquely_decomposable(
     """Decide whether monomial products uniquely determine the factor multiset.
 
     A power's coefficients each combine only one factor multiset when distinct
-    multisets cannot multiply to the same monomial. That holds exactly when the
-    support's exponent vectors are linearly independent over the rationals: a
-    dependent relation ``sum c_i v_i = 0`` with nonnegative and nonpositive
-    parts yields two distinct multisets of the same size with an equal sum.
+    multisets of the same size cannot multiply to the same monomial. That holds
+    exactly when the support's *homogenized* exponent vectors ``(v_i, 1)`` are
+    linearly independent over the rationals: a dependence among them is an
+    affine relation ``sum c_i v_i = 0`` with ``sum c_i = 0``, whose
+    nonnegative and nonpositive parts are distinct equal-size multisets with an
+    equal sum.
     """
 
     if not keys:
@@ -362,14 +364,17 @@ def _support_keys_are_uniquely_decomposable(
     if len(vectors) <= 1:
         return True
     names = sorted({name for vector in vectors for name in vector})
-    # More vectors than ambient coordinates cannot be independent, and the
-    # check must stay cheap inside admission.
-    if len(vectors) > len(names):
+    # A homogenized coordinate is appended to every vector, so more vectors
+    # than ambient coordinates plus one cannot be independent.
+    if len(vectors) > len(names) + 1:
         return False
-    # Gaussian elimination over Fractions; independence requires full column rank.
-    rows = [[Fraction(vector.get(name, 0)) for name in names] for vector in vectors]
+    # Gaussian elimination over Fractions on the homogenized vectors.
+    rows = [
+        [Fraction(vector.get(name, 0)) for name in names] + [Fraction(1)]
+        for vector in vectors
+    ]
     rank = 0
-    column_count = len(names)
+    column_count = len(names) + 1
     for column in range(column_count):
         pivot = next(
             (row for row in range(rank, len(rows)) if rows[row][column] != 0), None
@@ -937,10 +942,39 @@ def _nary_expression_metrics(  # noqa: C901
             common_numerator_bits,
             *(child.maximum_numerator_bits for child in child_metrics),
         )
-        denominator_mass_bits = _bounded_sum(
-            tuple(child.denominator_mass_bits for child in child_metrics),
-            _MAX_EXPRESSION_COEFFICIENT_BITS,
-        )
+        # When the combined product support has exactly the product of the
+        # factor support sizes, no two factor choices collide, so each output
+        # monomial selects exactly one denominator from each factor and
+        # mutually exclusive denominators are not summed.
+        product_keys = frozenset(((),))
+        keys_known = True
+        expected_keys = 1
+        for child in child_metrics:
+            if child.support_keys is None:
+                keys_known = False
+                break
+            expected_keys *= len(child.support_keys)
+            if expected_keys > MAX_POLYNOMIAL_TERMS:
+                keys_known = False
+                break
+            product_keys = _multiply_support_keys(product_keys, child.support_keys)
+            if product_keys is None:
+                keys_known = False
+                break
+        if (
+            keys_known
+            and product_keys is not None
+            and len(product_keys) == expected_keys
+        ):
+            denominator_mass_bits = max(
+                (child.denominator_mass_bits for child in child_metrics),
+                default=0,
+            )
+        else:
+            denominator_mass_bits = _bounded_sum(
+                tuple(child.denominator_mass_bits for child in child_metrics),
+                _MAX_EXPRESSION_COEFFICIENT_BITS,
+            )
         maximum_denominator_bits = max(
             _denominator_bits(raw_denominator),
             denominator_mass_bits,

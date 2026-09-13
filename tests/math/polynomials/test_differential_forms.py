@@ -653,3 +653,37 @@ def test_wedge_constructs_trusted_result_without_budget_replay(
     assert result.components[0].coefficient.polynomial.terms[0].coefficient == R(
         num=6, den=1
     )
+
+
+def test_related_denominators_reduce_before_the_cap() -> None:
+    """A sum that reduces to an integer is admitted at the boundary height."""
+    from jacobian.math.polynomials.differential_forms.operations import (
+        _bounded_fraction_add,
+    )
+
+    q = 10**2047 + 3
+    r = 10**2047 + 7
+    p = q + r
+    total = _bounded_fraction_add(Fraction(1, p * q), Fraction(1, p * r))
+    total = _bounded_fraction_add(total, Fraction(-1, q * r))
+    assert total.denominator == 1
+
+
+def test_native_admission_rechecks_the_coefficient_axis() -> None:
+    """A coefficient on a different axis is a typed domain rejection."""
+    from jacobian.math.polynomials.differential_forms.operations import _admit_form
+
+    coefficient = RationalPolynomial(
+        variables=("y",),
+        polynomial=SparseRationalPolynomial(
+            terms=(RationalPolynomialTerm(coefficient=R(num=1, den=1), exponents=(1,)),)
+        ),
+    )
+    forged = PolynomialDifferentialForm.model_construct(
+        variables=("x",),
+        degree=1,
+        components=(FormComponent(indices=(0,), coefficient=coefficient),),
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        _admit_form(forged, location=("left",))
+    assert error.value.errors()[0]["type"] == "differential_form.coefficient_axis"

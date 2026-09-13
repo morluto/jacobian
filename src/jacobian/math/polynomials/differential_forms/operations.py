@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from math import gcd
 
 from jacobian._exact import (
     MAX_CANONICAL_INTEGER_DIGITS,
@@ -83,24 +82,21 @@ def _bounded_fraction_add(current: Fraction, value: Fraction) -> Fraction:
     """Add exact rationals, refusing unadmitted common-denominator growth first.
 
     Same-denominator contributions are cancelled before this helper runs.
-    Distinct remaining denominators still cannot grow past the output envelope.
+    Distinct denominators may share algebraic factors, so the exact reduced
+    sum is computed and its actual denominator measured rather than rejecting
+    on an unreduced LCM estimate.
     """
 
     if not current:
         return value
     if not value:
         return current
-    left_den, right_den = current.denominator, value.denominator
-    if left_den != right_den:
-        overlap = gcd(left_den, right_den)
-        den_digits = (
-            _integer_decimal_digits(left_den)
-            + _integer_decimal_digits(right_den)
-            - _integer_decimal_digits(overlap)
-        )
-        if den_digits > MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS:
-            _coefficient_budget()
-    return current + value
+    total = current + value
+    if _integer_decimal_digits(total.denominator) > (
+        MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS
+    ):
+        _coefficient_budget()
+    return total
 
 
 def _sum_signed_fractions(values: list[Fraction]) -> Fraction:
@@ -334,43 +330,70 @@ def _admit_form(
     for completed, component in enumerate(components, start=1):
         if completed % _CONVOLUTION_CHECKPOINT_INTERVAL == 0:
             request_checkpoint("during differential wedge operand admission")
-        if not isinstance(component, FormComponent):
-            raise OperationDomainValidationError(
-                location=(*location, "components"),
-                code="differential_form.operand_type",
-                message="wedge components must be polynomial form components",
-            )
-        indices = component.indices
-        if not isinstance(indices, tuple) or len(indices) > MAX_POLYNOMIAL_VARIABLES:
-            raise OperationDomainValidationError(
-                location=(*location, "components", "indices"),
-                code="differential_form.component_basis",
-                message="component indices must be a bounded increasing tuple",
-            )
-        if degree <= dimension and len(indices) != degree:
-            raise OperationDomainValidationError(
-                location=(*location, "components", "indices"),
-                code="differential_form.component_basis",
-                message="component indices must match the form degree on the variable axis",
-            )
-        coefficient = component.coefficient
-        if not isinstance(coefficient, RationalPolynomial):
-            raise OperationDomainValidationError(
-                location=(*location, "components", "coefficient"),
-                code="differential_form.coefficient_axis",
-                message="every form coefficient must be a sparse rational polynomial",
-            )
-        terms = coefficient.polynomial.terms
-        if len(terms) > MAX_DIFFERENTIAL_FORM_TERMS:
-            raise OperationDomainValidationError(
-                location=(*location, "components", "coefficient"),
-                code="differential_form.coefficient_budget",
-                message="wedge operands exceed the bounded coefficient-term envelope",
-            )
-        for term_count, _term in enumerate(terms, start=1):
-            if term_count % _CONVOLUTION_CHECKPOINT_INTERVAL == 0:
-                request_checkpoint("during differential wedge operand admission")
+        _admit_component(
+            component,
+            variables=variables,
+            degree=degree,
+            dimension=dimension,
+            location=location,
+        )
     return value
+
+
+def _admit_component(
+    component: object,
+    *,
+    variables: tuple[str, ...],
+    degree: int,
+    dimension: int,
+    location: tuple[str, ...],
+) -> None:
+    """Admit one native form component's basis and coefficient carrier."""
+
+    if not isinstance(component, FormComponent):
+        raise OperationDomainValidationError(
+            location=(*location, "components"),
+            code="differential_form.operand_type",
+            message="wedge components must be polynomial form components",
+        )
+    indices = component.indices
+    if not isinstance(indices, tuple) or len(indices) > MAX_POLYNOMIAL_VARIABLES:
+        raise OperationDomainValidationError(
+            location=(*location, "components", "indices"),
+            code="differential_form.component_basis",
+            message="component indices must be a bounded increasing tuple",
+        )
+    if degree <= dimension and len(indices) != degree:
+        raise OperationDomainValidationError(
+            location=(*location, "components", "indices"),
+            code="differential_form.component_basis",
+            message="component indices must match the form degree on the variable axis",
+        )
+    coefficient = component.coefficient
+    if not isinstance(coefficient, RationalPolynomial):
+        raise OperationDomainValidationError(
+            location=(*location, "components", "coefficient"),
+            code="differential_form.coefficient_axis",
+            message="every form coefficient must be a sparse rational polynomial",
+        )
+    if coefficient.variables != variables:
+        raise OperationDomainValidationError(
+            location=(*location, "components", "coefficient"),
+            code="differential_form.coefficient_axis",
+            message=(
+                "every form coefficient must share the form's ordered variable axis"
+            ),
+        )
+    terms = coefficient.polynomial.terms
+    if len(terms) > MAX_DIFFERENTIAL_FORM_TERMS:
+        raise OperationDomainValidationError(
+            location=(*location, "components", "coefficient"),
+            code="differential_form.coefficient_budget",
+            message="wedge operands exceed the bounded coefficient-term envelope",
+        )
+    for term_count, _term in enumerate(terms, start=1):
+        if term_count % _CONVOLUTION_CHECKPOINT_INTERVAL == 0:
+            request_checkpoint("during differential wedge operand admission")
 
 
 def _admit_degree(degree: int) -> None:
@@ -467,6 +490,23 @@ def wedge(
     )
     if term_pair_count > MAX_WEDGE_TERM_PAIRS:
         _term_budget()
+    # Preflight the weighted digit work from operand term heights before
+    # multiplying or retaining any product.
+    digit_work = 0
+    for first, second, _, _ in pairs:
+        left_heights = tuple(
+            _rational_height_digits(term.coefficient)
+            for term in first.coefficient.polynomial.terms
+        )
+        right_heights = tuple(
+            _rational_height_digits(term.coefficient)
+            for term in second.coefficient.polynomial.terms
+        )
+        for left_digits in left_heights:
+            for right_digits in right_heights:
+                digit_work += left_digits * right_digits
+                if digit_work > MAX_WEDGE_DIGIT_WORK:
+                    _term_budget()
     aggregate = _reduce_contributions(_collect_contributions(pairs))
     _admit_remaining_support(aggregate)
     maximum_exponent = max(

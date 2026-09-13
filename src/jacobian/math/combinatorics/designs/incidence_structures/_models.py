@@ -301,6 +301,35 @@ class SteinerTripleSystemUnknown(StrictModel):
         ),
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def canonicalize_unresolved_frontier(cls, data: Any) -> Any:
+        """Normalize the frontier to one sorted, duplicate-free encoding.
+
+        The frontier is an unordered family of unresolved subdomains and no
+        ordering semantics are documented, so accepting several orders - or
+        duplicates - would expose private DFS ordering as wire-visible
+        structure and admit multiple encodings of one continuation state.
+        """
+
+        if not isinstance(data, dict):
+            return data
+        frontier = data.get("unresolved_frontier")
+        if frontier is None or not isinstance(frontier, (list, tuple)):
+            return data
+        if len(frontier) > MAX_STEINER_FRONTIER_SHARDS:
+            # Let the field's own `max_length` decide; sorting a guaranteed
+            # rejection would spend work proportional to its input.
+            return data
+        if any(not isinstance(shard, SteinerTripleSystemShard) for shard in frontier):
+            return data
+        canonical = {(shard.order, shard.fixed_triples): shard for shard in frontier}
+        payload = dict(data)
+        payload["unresolved_frontier"] = tuple(
+            canonical[key] for key in sorted(canonical)
+        )
+        return payload
+
 
 SteinerTripleSystemOutcome = Annotated[
     ComputedSteinerTripleSystem

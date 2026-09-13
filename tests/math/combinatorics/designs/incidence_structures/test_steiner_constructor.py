@@ -446,7 +446,20 @@ def test_oversized_forged_shard_is_measured_before_its_elements_are_inspected() 
     )
     with pytest.raises(OperationDomainValidationError) as error:
         construct_steiner_triple_system(7, 100, forged)
+    # A tuple subclass is refused outright, before its length is even read: a
+    # subclass can report a length under the ceiling while iteration still
+    # yields the whole underlying family.
     assert error.value.errors()[0]["type"] == (
+        "incidence_structure.steiner_shard_shape"
+    )
+
+    # An exact oversized tuple is still measured before its elements are read.
+    exact_oversized = SteinerTripleSystemShard.model_construct(
+        order=7, fixed_triples=tuple([0, 1, 2] for _ in range(200_000))
+    )
+    with pytest.raises(OperationDomainValidationError) as exact_error:
+        construct_steiner_triple_system(7, 100, exact_oversized)
+    assert exact_error.value.errors()[0]["type"] == (
         "incidence_structure.steiner_shard_length"
     )
 
@@ -573,3 +586,67 @@ def test_native_shard_bound_does_not_come_from_the_unadmitted_order() -> None:
     assert error.value.errors()[0]["type"] == (
         "incidence_structure.steiner_shard_length"
     )
+
+
+def test_tuple_subclass_cannot_understate_the_prefix_length() -> None:
+    """A lying `__len__` must not authorise an unbounded traversal.
+
+    `isinstance(raw_triples, tuple)` admitted subclasses, so a forged shard
+    could report a length under the ceiling while iteration still yielded the
+    whole underlying family, letting the element scan and Pydantic
+    canonicalization run without bound.
+    """
+
+    class _UnderstatingTuple(tuple):  # type: ignore[type-arg]
+        def __len__(self) -> int:
+            return 1
+
+        def __iter__(self) -> Iterator[Any]:
+            raise AssertionError("a subverted length must not reach the scan")
+
+    forged = SteinerTripleSystemShard.model_construct(
+        order=7, fixed_triples=_UnderstatingTuple([(0, 1, 2)] * 50_000)
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        construct_steiner_triple_system(7, 100, forged)
+    assert error.value.errors()[0]["type"] == (
+        "incidence_structure.steiner_shard_shape"
+    )
+
+
+def test_unresolved_frontier_has_one_canonical_encoding() -> None:
+    """The frontier is an unordered family, so order and duplicates are erased.
+
+    Two payloads carrying the same shards in different orders used to validate
+    and serialize differently, exposing private DFS ordering as wire-visible
+    structure and admitting several encodings of one continuation state.
+    """
+
+    first = SteinerTripleSystemShard(order=7, fixed_triples=((0, 1, 2),))
+    second = SteinerTripleSystemShard(order=7, fixed_triples=((0, 1, 3),))
+    reversed_payload = SteinerTripleSystemResult(
+        order=7,
+        outcome=SteinerTripleSystemUnknown(
+            states_explored=4, unresolved_frontier=(second, first)
+        ),
+    )
+    forward_payload = SteinerTripleSystemResult(
+        order=7,
+        outcome=SteinerTripleSystemUnknown(
+            states_explored=4, unresolved_frontier=(first, second)
+        ),
+    )
+    assert reversed_payload.model_dump_json() == forward_payload.model_dump_json()
+
+    duplicated = SteinerTripleSystemResult(
+        order=7,
+        outcome=SteinerTripleSystemUnknown(
+            states_explored=4, unresolved_frontier=(first, second, first)
+        ),
+    )
+    assert isinstance(duplicated.outcome, SteinerTripleSystemUnknown)
+    assert duplicated.outcome.unresolved_frontier == (first, second)
+
+    # An empty frontier is still refused: the field requires at least one.
+    with pytest.raises(ValidationError):
+        SteinerTripleSystemUnknown(states_explored=1, unresolved_frontier=())

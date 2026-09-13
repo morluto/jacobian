@@ -195,7 +195,12 @@ def _admit_native_shard(shard: object, order: int) -> SteinerTripleSystemShard:
     # be rejected first, because ``len`` on a tuple is constant time while any
     # element-wise scan walks the whole field - and this admission runs before
     # the request deadline is bound, so there is no checkpoint to notice.
-    if not isinstance(raw_triples, tuple):
+    #
+    # The exact built-in type is required, not ``isinstance``: a tuple subclass
+    # can override ``__len__`` to report a value under the ceiling while
+    # iteration still yields the whole underlying family, which would let the
+    # element scan and Pydantic canonicalization run unbounded.
+    if type(raw_triples) is not tuple:
         raise OperationDomainValidationError(
             location=("shard", "fixed_triples"),
             code="incidence_structure.steiner_shard_shape",
@@ -212,7 +217,7 @@ def _admit_native_shard(shard: object, order: int) -> SteinerTripleSystemShard:
             code="incidence_structure.steiner_shard_length",
             message="a continuation prefix cannot contain more triples than the design",
         )
-    if any(not isinstance(triple, tuple) for triple in raw_triples):
+    if any(type(triple) is not tuple for triple in raw_triples):
         raise OperationDomainValidationError(
             location=("shard", "fixed_triples"),
             code="incidence_structure.steiner_shard_shape",

@@ -103,7 +103,6 @@ def _maximum_coefficient_digits(
     """
 
     groups: dict[tuple[int, ...], int] = {}
-    pair_counts: dict[tuple[int, ...], int] = {}
     pairs: list[tuple[tuple[int, ...], int, int]] = []
     for left_index, left_term in enumerate(left.terms):
         if left_index % 32 == 0:
@@ -131,20 +130,25 @@ def _maximum_coefficient_digits(
                 # This collision group genuinely exceeds the canonical envelope.
                 return MAX_CANONICAL_RATIONAL_DIGITS + 1
             groups[exponent] = merged
-            pair_counts[exponent] = pair_counts.get(exponent, 0) + 1
             pairs.append((exponent, pair_numerator, pair_denominator))
-    numerator_digits_by_group: dict[tuple[int, ...], int] = {}
+    # Accumulate each collision group's exact scaled integer numerator so the
+    # bound reflects the actual sum rather than adding a full term-count digit
+    # to every summand width. Bail out as soon as any partial sum is clearly
+    # over the envelope so admission stays bounded.
+    limit = 10**MAX_CANONICAL_RATIONAL_DIGITS
+    scaled_sums: dict[tuple[int, ...], int] = {}
     for exponent, pair_numerator, pair_denominator in pairs:
         group_lcm = groups[exponent]
-        addition_digits = (
-            len(str(pair_counts[exponent])) if pair_counts[exponent] > 1 else 0
-        )
-        digits = (
-            _integer_digits(pair_numerator * (group_lcm // pair_denominator))
-            + addition_digits
-        )
-        if digits > numerator_digits_by_group.get(exponent, 0):
-            numerator_digits_by_group[exponent] = digits
+        scaled = pair_numerator * (group_lcm // pair_denominator)
+        if scaled >= limit:
+            return MAX_CANONICAL_RATIONAL_DIGITS + 1
+        total = scaled_sums.get(exponent, 0) + scaled
+        if total >= limit:
+            return MAX_CANONICAL_RATIONAL_DIGITS + 1
+        scaled_sums[exponent] = total
+    numerator_digits_by_group = {
+        exponent: _integer_digits(total) for exponent, total in scaled_sums.items()
+    }
     height = 1
     for exponent, group_lcm in groups.items():
         height = max(

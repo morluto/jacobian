@@ -454,3 +454,18 @@ def test_capped_lcm_measures_the_exact_merge() -> None:
         RationalLaurentPolynomial(variables=("x",), terms=right_terms),
     )
     assert len(product.terms) == 3
+
+
+def test_boundary_width_collision_sum_is_admitted() -> None:
+    """A collision of two 32,768-digit summands is admitted when it fits."""
+    huge = 10**32_767
+    left = RationalLaurentPolynomial(
+        variables=("x",), terms=(term(huge, 1), term(huge, 0))
+    )
+    right = RationalLaurentPolynomial(variables=("x",), terms=(term(1, 1), term(1, 0)))
+    product = rational_laurent_multiply(left, right)
+    assert [item.coefficient.as_fraction() for item in product.terms] == [
+        Fraction(huge),
+        Fraction(2 * huge),
+        Fraction(huge),
+    ]

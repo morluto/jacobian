@@ -365,7 +365,9 @@ def _scale_support_keys(
         return None
     scaled: set[tuple[tuple[str, int], ...]] = set()
     for key in keys:
-        scaled.add(tuple(sorted((name, power * exponent) for name, power in key if power)))
+        scaled.add(
+            tuple(sorted((name, power * exponent) for name, power in key if power))
+        )
     return frozenset(scaled)
 
 
@@ -384,7 +386,9 @@ def _multiply_support_keys(
             merged = dict(left_map)
             for name, power in right_key:
                 merged[name] = merged.get(name, 0) + power
-            product.add(tuple(sorted((name, power) for name, power in merged.items() if power)))
+            product.add(
+                tuple(sorted((name, power) for name, power in merged.items() if power))
+            )
     return frozenset(product)
 
 
@@ -478,7 +482,7 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
             denominator_mass_bits=0,
             work=1,
             intermediate_digits=_representation_digits(1, 1, 0),
-            support_keys=frozenset(((((expression.name, 1),),))),
+            support_keys=frozenset((((expression.name, 1),),)),
             termwise_disjoint=True,
         )
     if isinstance(expression, PolynomialPower):
@@ -590,7 +594,9 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
                     base_expansion_terms,
                     MAX_POLYNOMIAL_TERMS,
                 )
-        if base.termwise_disjoint and not _support_keys_are_univariate(base.support_keys):
+        if base.termwise_disjoint and not _support_keys_are_univariate(
+            base.support_keys
+        ):
             powered_denominator_bits = min(
                 _MAX_EXPRESSION_COEFFICIENT_BITS + 1,
                 max(base.maximum_denominator_bits, 1) * exponent
@@ -636,7 +642,10 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
             ),
             support_keys=_scale_support_keys(base.support_keys, exponent),
             termwise_disjoint=base.termwise_disjoint
-            and (exponent <= 1 or (base.support_keys is not None and len(base.support_keys) <= 1)),
+            and (
+                exponent <= 1
+                or (base.support_keys is not None and len(base.support_keys) <= 1)
+            ),
         )
     if isinstance(expression, (PolynomialAdd, PolynomialMultiply)):
         return _nary_expression_metrics(expression)

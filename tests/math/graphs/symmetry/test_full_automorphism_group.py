@@ -869,3 +869,44 @@ def test_uniform_edge_color_keeps_complement_presentation() -> None:
     result = full_graph_automorphism_group(graph)
     assert result.automorphism_count == (factorial(8) ** 2) * 2
     assert result.generated_group_order == result.automorphism_count
+
+
+def test_side_colored_complete_bipartite_keeps_compact_presentation() -> None:
+    """K8,8 with one color per side is the compact S8 x S8."""
+    left = tuple(f"a{index}" for index in range(8))
+    right = tuple(f"b{index}" for index in range(8))
+    edges = tuple(canonical_edge(first, second) for first in left for second in right)
+    graph = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(vertices=left + right, edges=edges),
+        vertex_colors=("red",) * 8 + ("blue",) * 8,
+    )
+    result = full_graph_automorphism_group(graph)
+    assert result.automorphism_count == factorial(8) ** 2
+    assert result.generated_group_order == result.automorphism_count
+    assert len(result.generators) == 4
+
+
+def test_independent_swap_quotient_reduces_without_recomputation() -> None:
+    """A product of independent part swaps keeps a compact presentation."""
+    parts = tuple((f"p{index}a", f"p{index}b") for index in range(10))
+    vertices = tuple(vertex for part in parts for vertex in part)
+    part_of = {vertex: index for index, part in enumerate(parts) for vertex in part}
+    edges = tuple(
+        canonical_edge(left, right)
+        for index, left in enumerate(vertices)
+        for right in vertices[index + 1 :]
+    )
+    edge_colors = tuple(
+        "within" if part_of[left] == part_of[right] else "between"
+        for left, right in edges
+    )
+    graph = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(vertices=vertices, edges=edges),
+        vertex_colors=tuple(
+            "red" if vertex.endswith("a") else "blue" for vertex in vertices
+        ),
+        edge_colors=edge_colors,
+    )
+    result = full_graph_automorphism_group(graph)
+    assert result.automorphism_count == factorial(10)
+    assert result.generated_group_order == result.automorphism_count

@@ -40,6 +40,7 @@ from jacobian.math.combinatorics.algebraic._rsk import (
 )
 from jacobian.math.combinatorics.algebraic.values import RSKTableauPair
 from jacobian.math.combinatorics.symmetric_functions.values import (
+    MAX_PARTITION_PARTS,
     MAX_PARTITION_SIZE,
     IntegerPartition,
     SemistandardYoungTableau,
@@ -167,6 +168,10 @@ def _upper_decimal_digits(value: int) -> int:
 # (0.434294481, 0.434294482). These 1e-9 units keep the per-factor bound
 # sound while removing the bit_length * log10(2) slack on powers of two.
 _LOG10_SCALE = 1_000_000_000
+# Digit-operations allowed between SSYT hook-content cancellation checks. This
+# bounds one uninterrupted batch of ``_log10_upper_units`` probes regardless of
+# the alphabet's integer width.
+_SSYT_CHECKPOINT_DIGIT_WORK = 256_000
 _LOG10_2_UPPER_UNITS = 301_029_996
 _LOG10_2_LOWER_UNITS = 301_029_995
 _INV_LN10_UPPER_UNITS = 434_294_482
@@ -238,11 +243,19 @@ def _ssyt_count_digit_bound(
     numerator_log_units = 0
     hook_product = 1
     probes = 0
+    # ``_log10_upper_units`` walks the whole integer, so its cost grows with
+    # ``alphabet_digits``.  A fixed probe batch would leave a schema-valid
+    # 32767-digit alphabet uncancellable for seconds, so the batch is derived
+    # from a bounded amount of per-probe digit work instead.
+    probe_interval = min(
+        256,
+        max(1, _SSYT_CHECKPOINT_DIGIT_WORK // max(1, alphabet_digits)),
+    )
     for row, length in enumerate(partition.parts):
         request_checkpoint("during SSYT digit admission")
         for column in range(length):
             probes += 1
-            if probes % 256 == 0:
+            if probes % probe_interval == 0:
                 request_checkpoint("during SSYT hook-content admission")
             content = alphabet_size + column - row
             if content <= 0:
@@ -368,10 +381,25 @@ def _require_canonical_partition(partition: object) -> IntegerPartition:
     if not isinstance(parts, tuple):
         raise OperationDomainValidationError(
             location=("partition", "parts"),
-            code="algebraic_combinatorics.partition_shape",
+            code="algebraic_combinatorics.partition_carrier",
             message="a canonical partition has a tuple of parts",
         )
-    if parts and (type(parts[0]) is not int or parts[0] > MAX_PARTITION_SIZE):
+    # Domain invariants are checked for every part before the resource
+    # envelope, so a forged carrier is classified by what it actually violates
+    # instead of by whichever field happens to be inspected first.
+    if any(type(part) is not int or part <= 0 for part in parts):
+        raise OperationDomainValidationError(
+            location=("partition", "parts"),
+            code="algebraic_combinatorics.partition_carrier",
+            message="partition parts must be positive integers",
+        )
+    if any(parts[index] < parts[index + 1] for index in range(len(parts) - 1)):
+        raise OperationDomainValidationError(
+            location=("partition", "parts"),
+            code="algebraic_combinatorics.partition_carrier",
+            message="partition parts must be weakly decreasing",
+        )
+    if len(parts) > MAX_PARTITION_PARTS or sum(parts) > MAX_PARTITION_SIZE:
         raise OperationResourceAdmissionError(
             location=("partition", "parts"),
             code="algebraic_combinatorics.partition_size",

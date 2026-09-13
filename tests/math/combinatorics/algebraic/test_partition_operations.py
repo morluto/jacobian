@@ -588,3 +588,63 @@ def test_tableau_checkers_revalidate_constructed_carriers() -> None:
         assert error.value.errors()[0]["type"] == (
             "algebraic_combinatorics.tableau_carrier"
         )
+
+
+def test_forged_partition_carriers_keep_domain_and_resource_classes_apart() -> None:
+    """A forged carrier is classified by what it violates, not by field order."""
+    from jacobian.math.combinatorics.symmetric_functions.values import IntegerPartition
+
+    # Structural violations are domain errors even though ``True`` is an int
+    # subclass and even when the violating part is not the first one.
+    for parts in ((True,), (2, 3), (0,), (-1,)):
+        carrier = IntegerPartition.model_construct(parts=parts)
+        with pytest.raises(OperationDomainValidationError) as error:
+            native._require_canonical_partition(carrier)
+        assert (
+            error.value.errors()[0]["type"]
+            == "algebraic_combinatorics.partition_carrier"
+        )
+
+    # The Ferrers envelope is a resource limit and is measured on the complete
+    # carrier, so a multi-part overflow agrees with the single-part case.
+    for parts in ((501,), (500, 1)):
+        carrier = IntegerPartition.model_construct(parts=parts)
+        with pytest.raises(OperationResourceAdmissionError) as error:
+            native._require_canonical_partition(carrier)
+        assert (
+            error.value.errors()[0]["type"] == "algebraic_combinatorics.partition_size"
+        )
+
+
+def test_ssyt_digit_admission_checks_cancellation_at_bounded_intervals() -> None:
+    """A wide alphabet must not blind the hook-content scan to cancellation."""
+    import time
+    from threading import Event
+
+    from jacobian._execution import (
+        OperationExecutionCancelledError,
+        request_cancellation,
+    )
+    from jacobian.math.combinatorics.symmetric_functions.values import IntegerPartition
+
+    cancelled = Event()
+    original = native.request_checkpoint
+
+    def checkpoint(stage: str) -> None:
+        original(stage)
+        if stage == "during SSYT hook-content admission":
+            cancelled.set()
+
+    partition = IntegerPartition(parts=(500,))
+    started = time.monotonic()
+    with (
+        pytest.MonkeyPatch.context() as patch,
+        request_cancellation(cancelled),
+        pytest.raises(OperationExecutionCancelledError),
+    ):
+        patch.setattr(native, "request_checkpoint", checkpoint)
+        native.semistandard_young_tableaux_count(partition, 10**32767)
+    elapsed = time.monotonic() - started
+    # The old fixed 256-probe batch needed about 3.6 seconds of uncheckpointed
+    # 32767-digit logarithms before the cancellation could be seen.
+    assert elapsed < 2.0

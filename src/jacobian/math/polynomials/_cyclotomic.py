@@ -203,9 +203,7 @@ def _construction_regime(index: int, factorization: dict[int, int]) -> tuple[int
         # such as the three-prime ``455 = 5*7*13``.
         prime, other = lifted
         other_factorization = {
-            base: exponent
-            for base, exponent in factorization.items()
-            if base != prime
+            base: exponent for base, exponent in factorization.items() if base != prime
         }
         other_work, other_bits = _construction_regime(other, other_factorization)
         phi_other = _totient_from_factorization(other, other_factorization)
@@ -639,9 +637,7 @@ def _compute(index: int) -> tuple[int, IntegerPolynomial]:
     lifted = _lift_prime(index, factorization)
     if lifted is not None:
         prime, other = lifted
-        coefficients = _prime_lift_quotient_coefficients(
-            index, prime, other, admission
-        )
+        coefficients = _prime_lift_quotient_coefficients(index, prime, other, admission)
         _require_admitted_coefficients(
             coefficients,
             admission,

@@ -383,9 +383,7 @@ def test_reduced_backend_coefficients_are_validated(
     monkeypatch.setattr(
         module,
         "_exact_divide",
-        lambda dividend, divisor: IntegerPolynomial(
-            coefficients=(1, 10**200, 1)
-        ),
+        lambda dividend, divisor: IntegerPolynomial(coefficients=(1, 10**200, 1)),
     )
     # 210 = 2 * 105 builds its odd half through the exact prime-lifting
     # quotient (105 = 3*5*7), and a malformed quotient tuple must be checked

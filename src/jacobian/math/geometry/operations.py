@@ -6,6 +6,7 @@ import time
 from collections.abc import Iterable
 from fractions import Fraction
 from itertools import combinations
+from math import gcd
 from typing import Any, cast
 
 from pydantic import ValidationError
@@ -893,18 +894,33 @@ def _axis_origin_candidates(values: tuple[Fraction, ...]) -> tuple[Fraction, ...
     """Return the origin values this axis considers, in a stable order.
 
     A fixed list of source points cannot reach the origin that matters for a
-    shifted family: for `x_i = 10^20 + 1/q_i` the source points and the
-    bounding-box centre all leave a 20-digit integer part in every offset,
-    while truncating toward zero cancels it and leaves the 1/q_i. Every
-    coordinate is therefore paired with its truncation, and the ambient origin
-    plus the bounding interval's endpoints and centre are retained so those
-    earlier candidates keep their reach.
+    shifted family. Two shifts are common in practice and both are cheap to
+    derive exactly:
+
+    * an integer part, removed by truncating toward zero: for
+      `x_i = 10^20 + 1/q_i` the source points and the bounding-box centre all
+      leave a 20-digit integer part, while the truncation cancels it.
+    * a rational common offset whose denominator divides every coordinate
+      denominator. Then `g = gcd(denominators)` is a multiple of that
+      denominator, so the offset is an integer multiple of `1/g` and `1/g`
+      reaches the same lattice. For `x_i = 1/(10^20+39) + 1/q_i` the common
+      offset is exactly `1/g`, and it leaves 11-digit offsets where every
+      source or endpoint candidate leaves 21.
+
+    The ambient origin and the bounding interval's endpoints and centre are
+    retained so those earlier candidates keep their reach.
     """
 
     candidates: set[Fraction] = {Fraction(0)}
+    denominator_gcd = 0
     for value in values:
         candidates.add(value)
         candidates.add(Fraction(value.numerator // value.denominator))
+        denominator_gcd = gcd(denominator_gcd, value.denominator)
+    if denominator_gcd > 1:
+        lattice = Fraction(1, denominator_gcd)
+        candidates.add(lattice)
+        candidates.add(-lattice)
     low = min(values)
     high = max(values)
     candidates.update((low, high, (low + high) / 2))
@@ -1127,6 +1143,14 @@ def _spanned_circle_profile(
         )
 
     grouped: dict[tuple[Fraction, Fraction, Fraction], None] = {}
+    # The generated triples already carry every incidence: a point lies on a
+    # circle exactly when it appears in a generated triple with that circle's
+    # key, because any point `q` on a circle through the non-collinear `a, b`
+    # yields the non-collinear triple `(a, b, q)` with the same key. Accumulating
+    # the three indices here therefore replaces the previous per-circle rescan
+    # of every source point, which charged `n * len(grouped)` and refused
+    # full-size profiles whose circles are cheap to build.
+    incidence_members: dict[tuple[Fraction, Fraction, Fraction], set[int]] = {}
     completed = 0
     for i, j, k in generated:
         completed = _checkpoint_circle_work(
@@ -1150,9 +1174,18 @@ def _spanned_circle_profile(
             + third_norm * (second[0] - first[0])
         ) / (2 * cross)
         radius_squared = (center_x - first[0]) ** 2 + (center_y - first[1]) ** 2
-        grouped[(center_x, center_y, radius_squared)] = None
+        key = (center_x, center_y, radius_squared)
+        grouped[key] = None
+        members = incidence_members.get(key)
+        if members is None:
+            incidence_members[key] = {i, j, k}
+        else:
+            members.update((i, j, k))
 
-    incidence_work = n * len(grouped) * digit_work
+    # Deriving the incidences is linear in the generated triples, which the
+    # construction charge above already admits; the old `n * len(grouped)`
+    # rescan is gone with the work it measured.
+    incidence_work = len(generated)
     if collinearity_work + construction_work + incidence_work > MAX_SPANNED_CIRCLE_WORK:
         raise OperationResourceAdmissionError(
             location=("configuration",),
@@ -1163,18 +1196,9 @@ def _spanned_circle_profile(
             ),
         )
 
-    incidences: dict[tuple[Fraction, Fraction, Fraction], tuple[int, ...]] = {}
-    completed = 0
-    for key in grouped:
-        completed = _checkpoint_circle_work(
-            completed, "during spanned-circle incidence"
-        )
-        center_x, center_y, radius_squared = key
-        incidences[key] = tuple(
-            source_index
-            for source_index, point in enumerate(translated)
-            if (point[0] - center_x) ** 2 + (point[1] - center_y) ** 2 == radius_squared
-        )
+    incidences: dict[tuple[Fraction, Fraction, Fraction], tuple[int, ...]] = {
+        key: tuple(sorted(members)) for key, members in incidence_members.items()
+    }
 
     if len(grouped) > MAX_SPANNED_CIRCLES:
         raise OperationResourceAdmissionError(
@@ -1223,6 +1247,7 @@ def _spanned_circle_profile(
             ),
         )
 
+    request_checkpoint("after spanned-circle result construction")
     return SpannedCircleProfileResult._from_kernel(
         configuration=configuration,
         circles=_wire_spanned_circle_entries(grouped, incidences, origin),

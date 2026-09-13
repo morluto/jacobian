@@ -437,8 +437,17 @@ class TestSpannedCircleProfile:
         assert result.circles
 
     def test_non_collinear_work_ceiling_is_a_resource_admission(self) -> None:
+        """A genuinely over-budget source is still refused.
+
+        The ceiling is now reached through collinearity and circle construction
+        alone, because incidences are derived from the generated triples instead
+        of rescanned per circle. Wide coordinates raise `digit_work` enough to
+        exceed it with a full-size source.
+        """
+
+        wide = 10**20
         points = tuple(
-            _point(str(index), str(index * index * 10_000)) for index in range(32)
+            _point(str(index * wide), str(index * index * wide)) for index in range(32)
         )
         with pytest.raises(OperationResourceAdmissionError, match="2000000"):
             spanned_circle_profile(
@@ -632,8 +641,10 @@ class TestSpannedCircleProfile:
         )
         assert any("collinearity" in stage for stage in observed)
         assert any("construction" in stage for stage in observed)
-        assert any("incidence" in stage for stage in observed)
         assert any("result construction" in stage for stage in observed)
+        # The incidence phase is not a separate rescan any more: it is derived
+        # inside the construction loop, so it has no stage of its own.
+        assert not any("incidence" in stage for stage in observed)
 
 
 @pytest.mark.parametrize("coordinates", [((0, 0), (1, 0)), ((0, 0), (1, 0), (0, 0))])
@@ -848,3 +859,109 @@ class TestSpannedCircleEnvelopeForNativeCallers:
         ]
         assert operations_module._checkpointed_sorted(keys) == sorted(keys)
         assert operations_module._checkpointed_sorted([]) == []
+
+
+class TestSpannedCircleIncidences:
+    def test_full_size_profile_derives_incidences_without_a_rescan(self) -> None:
+        """Incidences come from the generated triples, not a per-circle rescan.
+
+        For `(i, 1000 i^2)`, `i = 0..31`, every triple determines a distinct
+        circle, so the removed all-points rescan charged
+        `n * circles * digit_work = 32 * 4960 * 49` and refused a profile whose
+        collinearity plus construction cost is only about 357k units.
+        """
+
+        points = tuple(
+            _point(str(index), str(1000 * index * index)) for index in range(32)
+        )
+        result = spanned_circle_profile(
+            SpannedCircleProfileRequest(configuration=_configuration(*points))
+        )
+        assert len(result.circles) == 4960
+        # One triple per circle here, so every incidence list is exactly one
+        # triple's three indices.
+        assert all(len(entry.point_indices) == 3 for entry in result.circles)
+
+    def test_incidences_match_an_independent_per_point_oracle(self) -> None:
+        """A point shared by several circles is reported on all of them."""
+
+        points = (
+            _point("0", "0"),
+            _point("1", "0"),
+            _point("0", "1"),
+            _point("1", "1"),
+            _point("2", "2"),
+        )
+        result = spanned_circle_profile(
+            SpannedCircleProfileRequest(configuration=_configuration(*points))
+        )
+        collected: dict[tuple[Fraction, Fraction], tuple[int, ...]] = {}
+        for entry in result.circles:
+            center = entry.circle.center
+            key = (
+                Fraction(center.x.num, center.x.den),
+                Fraction(center.y.num, center.y.den),
+            )
+            collected[key] = entry.point_indices
+        # The unit circle through (0,0), (1,0), (0,1) and (1,1) is one circle
+        # with four incident points, recovered only because each of those points
+        # appears in some generated triple with that key.
+        assert collected[(Fraction(1, 2), Fraction(1, 2))] == (0, 1, 2, 3)
+
+
+class TestSpannedCircleFinalCheckpoint:
+    def test_result_construction_is_followed_by_a_checkpoint(self) -> None:
+        """The public path observes expiry after the tail of entry wiring."""
+
+        observed: list[str] = []
+
+        def _observe(stage: str) -> None:
+            observed.append(stage)
+
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setattr(
+                "jacobian.math.geometry.operations.request_checkpoint", _observe
+            )
+            native_spanned_circle_profile(
+                _configuration(_point("0", "0"), _point("1", "0"), _point("0", "1"))
+            )
+        assert observed[-1] == "after spanned-circle result construction"
+
+
+class TestSpannedCircleRationalOffsetOrigin:
+    def test_rational_common_offset_is_reached_by_the_denominator_lattice(
+        self,
+    ) -> None:
+        """A shared rational offset must not defeat the origin search.
+
+        For `x_i = H + 1/q_i` with `H = 1/(10^20 + 39)` and 32 distinct
+        11-digit primes, zero and integer truncations retain ~31-digit
+        coordinates and every source or endpoint candidate leaves ~21-digit
+        pairwise denominators, charging `4960 * 21^2 = 2,187,360` and refusing
+        a request that `H` itself makes cheap at 11 digits. `H` is exactly
+        `1/gcd(denominators)`, so the lattice candidate reaches it.
+        """
+
+        import sympy
+
+        from jacobian._exact import CanonicalRational
+        from jacobian.math.geometry.operations import _minimum_axis_origin
+
+        shift = 10**20 + 39
+        coordinates = tuple(
+            Fraction(1, shift) + Fraction(1, sympy.prime(10**9 + index))
+            for index in range(32)
+        )
+        assert _minimum_axis_origin(coordinates) == Fraction(1, shift)
+
+        configuration = _configuration(
+            *tuple(
+                RationalPoint2D(
+                    x=CanonicalRational(num=value.numerator, den=value.denominator),
+                    y=CanonicalRational(num=0, den=1),
+                )
+                for value in coordinates
+            )
+        )
+        result = native_spanned_circle_profile(configuration)
+        assert result.circles == ()

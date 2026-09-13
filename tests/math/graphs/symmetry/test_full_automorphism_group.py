@@ -910,3 +910,29 @@ def test_independent_swap_quotient_reduces_without_recomputation() -> None:
     result = full_graph_automorphism_group(graph)
     assert result.automorphism_count == factorial(10)
     assert result.generated_group_order == result.automorphism_count
+
+
+def test_tripartite_class_pair_edge_colors_keep_compact_presentation() -> None:
+    """K8,8,8 with a vertex color per side and an edge color per pair."""
+    sides = [tuple(f"s{side}_{index}" for index in range(8)) for side in range(3)]
+    vertices = tuple(vertex for side in sides for vertex in side)
+    side_of = {vertex: side for side, group in enumerate(sides) for vertex in group}
+    edges = tuple(
+        canonical_edge(left, right)
+        for index, left in enumerate(vertices)
+        for right in vertices[index + 1 :]
+        if side_of[left] != side_of[right]
+    )
+    edge_colors = tuple(
+        "-".join(map(str, sorted((side_of[left], side_of[right]))))
+        for left, right in edges
+    )
+    graph = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(vertices=vertices, edges=edges),
+        vertex_colors=tuple(f"side{side_of[vertex]}" for vertex in vertices),
+        edge_colors=edge_colors,
+    )
+    result = full_graph_automorphism_group(graph)
+    assert result.automorphism_count == factorial(8) ** 3
+    assert result.generated_group_order == result.automorphism_count
+    assert len(result.generators) == 6

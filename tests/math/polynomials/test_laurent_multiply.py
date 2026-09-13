@@ -163,6 +163,80 @@ def test_related_denominator_two_term_product_stays_inside_the_output_envelope()
     )
 
 
+def test_denominator_product_width_is_measured_exactly() -> None:
+    """A representable denominator product at the canonical boundary is admitted.
+
+    ``D * E`` with ``D = 10**16383`` and ``E = 10**16384`` has exactly 32,768
+    digits, one less than the sum of the two factors' widths.
+    """
+    left_denominator = 10**16383
+    right_denominator = 10**16384
+    left = RationalLaurentPolynomial(
+        variables=("x",),
+        terms=(
+            RationalLaurentPolynomialTerm(
+                coefficient=CanonicalRational(num=1, den=left_denominator),
+                exponents=(1,),
+            ),
+            RationalLaurentPolynomialTerm(
+                coefficient=CanonicalRational(num=1, den=left_denominator),
+                exponents=(0,),
+            ),
+        ),
+    )
+    right = RationalLaurentPolynomial(
+        variables=("x",),
+        terms=(
+            RationalLaurentPolynomialTerm(
+                coefficient=CanonicalRational(num=1, den=right_denominator),
+                exponents=(1,),
+            ),
+            RationalLaurentPolynomialTerm(
+                coefficient=CanonicalRational(num=1, den=right_denominator),
+                exponents=(0,),
+            ),
+        ),
+    )
+    product = rational_laurent_multiply(left, right)
+    assert len(product.terms) == 3
+    expected_denominator = left_denominator * right_denominator
+    assert product.terms[0].coefficient.den == expected_denominator
+    assert expected_denominator == 10 ** (MAX_CANONICAL_RATIONAL_DIGITS - 1)
+
+
+def test_scaled_numerator_width_is_measured_not_subtracted() -> None:
+    """An oversized scaled numerator is refused during semantic admission.
+
+    ``2401 * N1 * N2 + 4`` has 32,769 digits for 9-repdigit ``N1``, ``N2``, so
+    the request must be refused before the convolution expands it.
+    """
+    left = RationalLaurentPolynomial(
+        variables=("x",),
+        terms=(
+            RationalLaurentPolynomialTerm(
+                coefficient=CanonicalRational(num=10**16382 - 1, den=2), exponents=(1,)
+            ),
+            RationalLaurentPolynomialTerm(
+                coefficient=CanonicalRational(num=1, den=49), exponents=(0,)
+            ),
+        ),
+    )
+    right = RationalLaurentPolynomial(
+        variables=("x",),
+        terms=(
+            RationalLaurentPolynomialTerm(
+                coefficient=CanonicalRational(num=1, den=49), exponents=(1,)
+            ),
+            RationalLaurentPolynomialTerm(
+                coefficient=CanonicalRational(num=10**16383 - 1, den=2), exponents=(0,)
+            ),
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
+        rational_laurent_multiply(left, right)
+    assert exc_info.value.errors()[0]["type"] == "polynomial.laurent.coefficient_growth"
+
+
 def test_rescaled_collision_numerator_is_rejected_before_convolution() -> None:
     scale = 10**9999
     denominator = scale + 1

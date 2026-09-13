@@ -118,16 +118,17 @@ def _scaled_operand_digits(
     terms: tuple[RationalLaurentPolynomialTerm, ...], shared_lcm: int
 ) -> int:
     height = 1
-    lcm_digits = _integer_digits(shared_lcm)
     for index, term in enumerate(terms):
         if index % 128 == 0:
             request_checkpoint("during Laurent coefficient-height admission")
-        numerator = abs(term.coefficient.num) or 1
-        digits = (
-            _integer_digits(numerator)
-            + lcm_digits
-            - _integer_digits(term.coefficient.den)
-        )
+        numerator = abs(term.coefficient.num)
+        if numerator == 0:
+            continue
+        # Measure the actual scaled numerator; a product's decimal width can be
+        # one less than the sum of its factors' widths, so a digit subtraction
+        # can overestimate (and a plain sum can overestimate too).
+        scaled = numerator * (shared_lcm // term.coefficient.den)
+        digits = _integer_digits(scaled)
         if digits > height:
             height = digits
     return height
@@ -150,7 +151,9 @@ def _maximum_coefficient_digits(
         + _scaled_operand_digits(right.terms, right_lcm)
         + addition_digits
     )
-    denominator_digits = _integer_digits(left_lcm) + _integer_digits(right_lcm)
+    # Measure the actual common-denominator product: the sum of the two widths
+    # can exceed the product's width by one.
+    denominator_digits = _integer_digits(left_lcm * right_lcm)
     return max(collected_numerator, denominator_digits)
 
 

@@ -19,6 +19,7 @@ import sympy
 from jacobian._exact import CanonicalRational
 from jacobian._execution import (
     OperationExecutionTimeoutError,
+    current_request_execution,
     execution_deadline,
 )
 from jacobian.catalog.models import (
@@ -142,6 +143,20 @@ def _coordinate_numerator(
     return (ellipse.k - boundary, 2 * b, ellipse.k - boundary)
 
 
+def _is_vertical_tangent(ellipse: _Ellipse, axis: str, boundary: Fraction) -> bool:
+    """Whether ``boundary`` is the ellipse's leftmost or rightmost ``x`` line."""
+
+    if axis != "x":
+        return False
+    a = _square_root_rational(ellipse.a2)
+    if a is None:
+        return False
+    _constant, linear, quadratic = _coordinate_numerator(
+        ellipse, axis=axis, boundary=boundary
+    )
+    return linear == 0 and quadratic == 0
+
+
 def _quadratic_roots(
     coefficients: tuple[Fraction, Fraction, Fraction],
 ) -> tuple[Fraction, ...] | None:
@@ -207,12 +222,59 @@ def _cells_for_box(  # noqa: C901
             and box_y.lower.as_fraction() <= ellipse.k - b_hi
             and box_y.upper.as_fraction() >= ellipse.k + b_hi
         ):
+            # The box contains the ellipse. A rational semiaxis still has a
+            # tangent face at its extreme point; that tangency is a singular
+            # unsupported case when the extreme point lies on the finite face.
+            x0 = box_x.lower.as_fraction()
+            x1 = box_x.upper.as_fraction()
+            y0 = box_y.lower.as_fraction()
+            y1 = box_y.upper.as_fraction()
+            if b is not None and (
+                (x0 <= ellipse.h <= x1)
+                and (
+                    box_y.lower.as_fraction() == ellipse.k - b
+                    or box_y.upper.as_fraction() == ellipse.k + b
+                )
+            ):
+                raise ValueError("BOUNDARY_NONTRANSVERSE")
+            if a is not None and (
+                (y0 <= ellipse.k <= y1)
+                and (
+                    box_x.lower.as_fraction() == ellipse.h - a
+                    or box_x.upper.as_fraction() == ellipse.h + a
+                )
+            ):
+                raise ValueError("BOUNDARY_NONTRANSVERSE")
             return (
                 _ParameterCell(lower=None, upper=Fraction(-1)),
                 _ParameterCell(lower=Fraction(-1), upper=Fraction()),
                 _ParameterCell(lower=Fraction(), upper=Fraction(1)),
                 _ParameterCell(lower=Fraction(1), upper=None),
             )
+        # One irrational semiaxis fails full containment, but if it is fully
+        # contained on its own axis while the other semiaxis is rational, only
+        # the rational axis can clip the curve. Build the cells from those
+        # rational half-angle endpoints instead of refusing the whole box.
+        if (
+            a is None
+            and b is not None
+            and box_x.lower.as_fraction() <= ellipse.h - a_hi
+            and box_x.upper.as_fraction() >= ellipse.h + a_hi
+        ):
+            rational_boundaries = _rational_axis_boundaries(ellipse, box_y, "y")
+            if isinstance(rational_boundaries, str):
+                return rational_boundaries
+            return _cells_from_boundaries(ellipse, request, rational_boundaries, ("y",))
+        if (
+            b is None
+            and a is not None
+            and box_y.lower.as_fraction() <= ellipse.k - b_hi
+            and box_y.upper.as_fraction() >= ellipse.k + b_hi
+        ):
+            rational_boundaries = _rational_axis_boundaries(ellipse, box_x, "x")
+            if isinstance(rational_boundaries, str):
+                return rational_boundaries
+            return _cells_from_boundaries(ellipse, request, rational_boundaries, ("x",))
         return "IRRATIONAL_BOUNDARY"
     if (
         box_x.upper.as_fraction() < ellipse.h - a
@@ -237,6 +299,13 @@ def _cells_for_box(  # noqa: C901
             (f"{axis}-lower", interval.lower.as_fraction()),
             (f"{axis}-upper", interval.upper.as_fraction()),
         ):
+            if _is_vertical_tangent(ellipse, axis, boundary):
+                # The boundary is the ellipse's leftmost or rightmost line; the
+                # projective double root is ``(boundary, k)``. It is only a
+                # non-transverse hit when that point lies on the finite face.
+                if y0 <= ellipse.k <= y1:
+                    raise ValueError("BOUNDARY_NONTRANSVERSE")
+                continue
             boundary_roots = _quadratic_roots(
                 _coordinate_numerator(ellipse, axis=axis, boundary=boundary)
             )
@@ -263,6 +332,54 @@ def _cells_for_box(  # noqa: C901
                     if quadratic != 0 and discriminant == 0:
                         raise ValueError("BOUNDARY_NONTRANSVERSE")
                 boundaries.setdefault(root, set()).add(label)
+    return _cells_from_boundaries(ellipse, request, boundaries, ("x", "y"))
+
+
+def _rational_axis_boundaries(
+    ellipse: _Ellipse, interval: object, axis: str
+) -> dict[Fraction, set[str]] | str:
+    """Half-angle roots of one rational-semaxis box face pair.
+
+    The other (irrational) axis is fully contained, so every root on this axis
+    lies inside the box and needs no further face filter.
+    """
+
+    boundaries: dict[Fraction, set[str]] = {}
+    for side, boundary in (
+        ("lower", interval.lower.as_fraction()),  # type: ignore[attr-defined]
+        ("upper", interval.upper.as_fraction()),  # type: ignore[attr-defined]
+    ):
+        boundary_roots = _quadratic_roots(
+            _coordinate_numerator(ellipse, axis=axis, boundary=boundary)
+        )
+        if boundary_roots is None:
+            return "IRRATIONAL_BOUNDARY"
+        for root in boundary_roots:
+            if len(boundary_roots) == 1:
+                constant, linear, quadratic = _coordinate_numerator(
+                    ellipse, axis=axis, boundary=boundary
+                )
+                discriminant = linear * linear - 4 * quadratic * constant
+                if quadratic != 0 and discriminant == 0:
+                    raise ValueError("BOUNDARY_NONTRANSVERSE")
+            boundaries.setdefault(root, set()).add(f"{axis}-{side}")
+    return boundaries
+
+
+def _cells_from_boundaries(
+    ellipse: _Ellipse,
+    request: PlaneCurveArclengthRequest,
+    boundaries: dict[Fraction, set[str]],
+    checked_axes: tuple[str, ...],
+) -> tuple[_ParameterCell, ...] | str:
+    """Build parameter cells from the rational half-angle boundary roots.
+
+    ``checked_axes`` names the axes whose containment must be tested; an axis
+    with an irrational, fully contained semiaxis is omitted so no irrational
+    coordinate is needed.
+    """
+
+    box_x, box_y = (interval for interval in request.box.intervals)
     if any(len(labels) > 1 for labels in boundaries.values()):
         return "BOUNDARY_CORNER"
     parameter_roots: tuple[Fraction, ...] = tuple(
@@ -280,13 +397,38 @@ def _cells_for_box(  # noqa: C901
             sample = lower + Fraction(1)
         else:
             sample = (lower + upper) / 2
-        x, y = _parameter_coordinates(ellipse, sample)
-        if (
-            box_x.lower.as_fraction() <= x <= box_x.upper.as_fraction()
-            and box_y.lower.as_fraction() <= y <= box_y.upper.as_fraction()
-        ):
-            cells.append(_ParameterCell(lower=lower, upper=upper))
+        if not _sample_in_box(ellipse, sample, box_x, box_y, checked_axes):
+            continue
+        cells.append(_ParameterCell(lower=lower, upper=upper))
     return tuple(cells)
+
+
+def _sample_in_box(
+    ellipse: _Ellipse,
+    sample: Fraction,
+    box_x: object,
+    box_y: object,
+    checked_axes: tuple[str, ...],
+) -> bool:
+    """Whether the sample parameter lies in the requested box faces."""
+
+    denominator = 1 + sample * sample
+    for axis in checked_axes:
+        if axis == "x":
+            a = _square_root_rational(ellipse.a2)
+            if a is None:
+                raise AssertionError("rational x coordinate is required")
+            x = ellipse.h + a * (1 - sample * sample) / denominator
+            if not (box_x.lower.as_fraction() <= x <= box_x.upper.as_fraction()):  # type: ignore[attr-defined]
+                return False
+        else:
+            b = _square_root_rational(ellipse.b2)
+            if b is None:
+                raise AssertionError("rational y coordinate is required")
+            y = ellipse.k + b * 2 * sample / denominator
+            if not (box_y.lower.as_fraction() <= y <= box_y.upper.as_fraction()):  # type: ignore[attr-defined]
+                return False
+    return True
 
 
 def _sqrt_lower_bound(value: Fraction) -> Fraction:
@@ -410,7 +552,17 @@ def _integrate_cell(
                 raise OperationExecutionTimeoutError(
                     "arclength deadline expired before Arb integration"
                 )
-            nested_wall = max(1, min(120, int(remaining_seconds + 0.999)))
+            # ``_compute_definite_integral_enclosure`` anchors its wall budget at
+            # the request's dispatch timestamp, so pass the dispatch-relative
+            # duration to make the nested absolute deadline coincide with ours.
+            # A standalone call has no dispatch anchor and uses its remaining
+            # time directly.
+            execution = current_request_execution()
+            if execution is not None:
+                nested_seconds = deadline - execution.started_at
+            else:
+                nested_seconds = remaining_seconds
+            nested_wall = max(1, min(120, int(nested_seconds + 0.999)))
             integral_request = DefiniteIntegralEnclosureRequest(
                 expression=_integrand("t", first, second),
                 box=RationalIntervalBox(

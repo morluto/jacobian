@@ -182,6 +182,11 @@ class ArclengthEnclosed(StrictModel):
                 segment.upper.as_fraction() if segment.upper is not None else 0,
             ),
         )
+        if tuple(ordered) != self.segments:
+            raise _validation_error(
+                "segment_order",
+                "enclosed arclength segments must be stored in canonical order",
+            )
         for previous, current in pairwise(ordered):
             if previous.upper is None or current.lower is None:
                 raise _validation_error(

@@ -154,7 +154,13 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             OperationExample(
                 name="unit_circle",
-                description="Enclose the unit-circle length inside a containing box.",
+                description=(
+                    "Enclose the unit-circle length inside a containing box. The "
+                    "polynomial must be a regular quadratic with positive "
+                    "diagonal coefficients (an ellipse or circle) over the same "
+                    "ordered two-variable axis as the box, so the request is "
+                    "admissible."
+                ),
                 input={
                     "polynomial": _polynomial(
                         ("x", "y"),

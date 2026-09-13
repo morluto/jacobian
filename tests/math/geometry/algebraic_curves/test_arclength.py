@@ -229,3 +229,59 @@ def test_overlapping_enclosed_segments_are_rejected() -> None:
             upper=_rational(2),
             segments=(segment, segment),
         )
+
+
+def test_projective_left_tangency_off_the_face_is_empty() -> None:
+    """x=-1 is the projective double root, but (-1, 0) is outside y in [4/5, 1]."""
+    result = enclose_arclength(
+        _request(
+            _polynomial((1, (2, 0)), (1, (0, 2)), (-1, (0, 0))),
+            _box(-1, Fraction(-4, 5), Fraction(4, 5), 1),
+        )
+    )
+    assert result.outcome.status == "EMPTY"
+
+
+def test_rational_axis_clip_of_contained_irrational_ellipse_is_enclosed() -> None:
+    """x^2+2y^2-2=0 in [-2,2]x[0,2]: the y=0 clip has rational endpoints."""
+    result = enclose_arclength(
+        _request(
+            _polynomial((1, (2, 0)), (2, (0, 2)), (-2, (0, 0))),
+            _box(-2, 2, 0, 2),
+        )
+    )
+    assert result.outcome.status == "ENCLOSED"
+
+
+def test_rational_axis_tangent_of_irrational_ellipse_is_unsupported() -> None:
+    """x^2+2y^2-2=0 in [-2,2]x[-1,1]: y=+-1 are tangent at (0, +-1)."""
+    result = enclose_arclength(
+        _request(
+            _polynomial((1, (2, 0)), (2, (0, 2)), (-2, (0, 0))),
+            _box(-2, 2, -1, 1),
+        )
+    )
+    assert result.outcome.status == "SINGULAR_CASE_UNSUPPORTED"
+    assert result.outcome.reason == "BOUNDARY_NONTRANSVERSE"
+
+
+def test_permuted_enclosed_segments_are_rejected() -> None:
+    """Enclosed segments must be stored in canonical order."""
+    first = ArclengthSegment(
+        lower=_rational(0),
+        upper=_rational(1),
+        contribution_lower=_rational(1),
+        contribution_upper=_rational(1),
+    )
+    second = ArclengthSegment(
+        lower=_rational(1),
+        upper=_rational(2),
+        contribution_lower=_rational(1),
+        contribution_upper=_rational(1),
+    )
+    with pytest.raises(ValidationError, match="canonical order"):
+        ArclengthEnclosed(
+            lower=_rational(2),
+            upper=_rational(2),
+            segments=(second, first),
+        )

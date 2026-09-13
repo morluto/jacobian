@@ -9,7 +9,6 @@ from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._execution import request_checkpoint
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
-    OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.number_theory.number_fields.values import (
@@ -196,7 +195,7 @@ def require_factorizable_discriminant(
     cofactor = _strip_small_factors(abs(discriminant))
     if _cofactor_is_factorizable(cofactor):
         return discriminant
-    raise OperationDomainValidationError(
+    raise OperationResourceAdmissionError(
         location=("field",),
         code="number_field.ring_of_integers_discriminant_factorization_bound",
         message=(

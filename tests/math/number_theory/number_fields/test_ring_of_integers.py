@@ -191,7 +191,7 @@ def test_semiprime_discriminant_is_rejected_before_backend_expansion() -> None:
     field = SimpleNumberFieldPresentation(
         coefficients_descending=(1, 0, -100003 * 100019)
     )
-    with pytest.raises(OperationDomainValidationError) as error:
+    with pytest.raises(OperationResourceAdmissionError) as error:
         ring_of_integers(field)
     assert error.value.errors()[0]["type"] == (
         "number_field.ring_of_integers_discriminant_factorization_bound"
@@ -223,7 +223,7 @@ def test_semiprime_discriminant_is_rejected_inside_the_worker(
             coefficients_descending=(1, 0, -100003 * 100019)
         )
     )
-    with pytest.raises(OperationDomainValidationError) as error:
+    with pytest.raises(OperationResourceAdmissionError) as error:
         compute_nf_ring_of_integers(request)
     assert error.value.errors()[0]["type"] == (
         "number_field.ring_of_integers_discriminant_factorization_bound"
@@ -245,7 +245,7 @@ def test_discriminant_admission_does_not_factor_inside_perfect_power(
     field = SimpleNumberFieldPresentation(
         coefficients_descending=(1, 0, -100003 * 100019)
     )
-    with pytest.raises(OperationDomainValidationError) as error:
+    with pytest.raises(OperationResourceAdmissionError) as error:
         ring_of_integers(field)
     assert error.value.errors()[0]["type"] == (
         "number_field.ring_of_integers_discriminant_factorization_bound"
@@ -322,7 +322,7 @@ def test_mersenne_power_discriminant_rejects_without_converting_the_cofactor() -
     field = SimpleNumberFieldPresentation(
         coefficients_descending=(1, *([0] * 30), -(2**607 - 1))
     )
-    with pytest.raises(OperationDomainValidationError) as error:
+    with pytest.raises(OperationResourceAdmissionError) as error:
         ring_of_integers(field)
     assert error.value.errors()[0]["type"] == (
         "number_field.ring_of_integers_discriminant_factorization_bound"
@@ -387,7 +387,7 @@ def test_native_ring_of_integers_runs_in_the_killable_worker(
         return original(*args, **kwargs)
 
     monkeypatch.setattr(process_runtime, "run_bounded_process", record_launch)
-    with pytest.raises(OperationDomainValidationError) as error:
+    with pytest.raises(OperationResourceAdmissionError) as error:
         ring_of_integers(
             SimpleNumberFieldPresentation(
                 coefficients_descending=(1, 0, -100003 * 100019)

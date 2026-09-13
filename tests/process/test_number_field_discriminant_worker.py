@@ -113,11 +113,11 @@ def test_semiprime_discriminant_rejection_survives_the_stdout_envelope() -> None
     motivating field must therefore return the declared domain error.
     """
 
-    from jacobian.catalog.models import OperationDomainValidationError
+    from jacobian.catalog.models import OperationResourceAdmissionError
 
     request = NumberFieldRequest(field=_number_field("1", "0", str(-100003 * 100019)))
 
-    with pytest.raises(OperationDomainValidationError) as error:
+    with pytest.raises(OperationResourceAdmissionError) as error:
         compute_nf_discriminant(request)
 
     assert error.value.errors()[0]["type"] == (

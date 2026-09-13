@@ -423,3 +423,27 @@ def test_vanishing_inherited_guard_precedes_singular_determinant() -> None:
     with pytest.raises(OperationDomainValidationError) as error:
         pullback_metric(source, map_value((0, x), ("x",), axis))
     assert error.value.errors()[0]["type"].endswith("undefined_metric_locus")
+
+
+def test_forged_oversize_metric_components_are_rejected_before_dump() -> None:
+    class _Huge:
+        def __len__(self) -> int:
+            return 1_000_000
+
+    forged = RationalCoordinateMetric.model_construct(
+        tensor=RationalCoordinateTensor.model_construct(
+            coordinate_axis=("x",),
+            variance=("COVARIANT", "COVARIANT"),
+            components=_Huge(),  # type: ignore[arg-type]
+            retained_nonzero_denominators=(),
+        ),
+        chart_semantics="GENERIC_NONDEGENERATE_LOCUS",
+    )
+    mapping = RationalFunctionMap.model_construct(
+        source_variables=("x",),
+        target_coordinates=("x",),
+        components=(rf(1, ("x",)),),
+        domain="COMMON_REGULAR_LOCUS",
+    )
+    with pytest.raises(OperationDomainValidationError, match="component"):
+        pullback_metric(forged, mapping)

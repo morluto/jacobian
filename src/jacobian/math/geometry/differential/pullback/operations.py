@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Sized
 
 from pydantic import ValidationError
 from pydantic_core import PydanticCustomError
@@ -27,6 +28,8 @@ from jacobian.math.geometry.differential.pullback._models import (
 )
 from jacobian.math.geometry.differential.pullback._plan import build_plan
 from jacobian.math.geometry.differential.values import (
+    MAX_RATIONAL_TENSOR_COMPONENTS,
+    MAX_RATIONAL_TENSOR_LOCUS_GUARDS,
     RationalCoordinateTensor,
     canonical_locus_guards,
 )
@@ -34,12 +37,90 @@ from jacobian.math.polynomials._conversions import (
     sparse_rational_polynomial_from_sympy,
     sparse_rational_polynomial_to_sympy,
 )
-from jacobian.math.polynomials.rational_functions.values import RationalFunctionMap
+from jacobian.math.polynomials.rational_functions.values import (
+    MAX_RATIONAL_MAP_COMPONENTS,
+    RationalFunctionMap,
+)
 from jacobian.math.polynomials.values import (
     MAX_POLYNOMIAL_VARIABLES,
     RationalFunction,
     require_canonical_rational_function,
 )
+
+
+def _bounded_sized(
+    value: object,
+    limit: int,
+    *,
+    location: tuple[str, ...],
+    message: str,
+) -> None:
+    if not isinstance(value, Sized) or isinstance(value, (str, bytes, bytearray)):
+        raise OperationDomainValidationError(
+            location=location,
+            code="differential_geometry.rational_metric.pullback.invalid_source",
+            message=message,
+        )
+    if len(value) > limit:
+        raise OperationDomainValidationError(
+            location=location,
+            code="differential_geometry.rational_metric.pullback.invalid_source",
+            message=message,
+        )
+
+
+def _preflight_pullback_sources(
+    metric: object, map_value: object
+) -> tuple[RationalCoordinateMetric, RationalFunctionMap]:
+    if type(metric) is not RationalCoordinateMetric:
+        raise TypeError("metric must be a RationalCoordinateMetric")
+    if type(map_value) is not RationalFunctionMap:
+        raise TypeError("map_value must be a RationalFunctionMap")
+    tensor = getattr(metric, "tensor", None)
+    axis = getattr(tensor, "coordinate_axis", None)
+    components = getattr(tensor, "components", None)
+    _bounded_sized(
+        axis,
+        4,
+        location=("metric", "tensor", "coordinate_axis"),
+        message="metric coordinate axis exceeds the admitted envelope",
+    )
+    _bounded_sized(
+        components,
+        MAX_RATIONAL_TENSOR_COMPONENTS,
+        location=("metric", "tensor", "components"),
+        message="metric tensor exceeds the admitted component envelope",
+    )
+    if isinstance(axis, Sized) and isinstance(components, Sized):
+        expected = len(axis) ** 2
+        if len(components) != expected:
+            raise OperationDomainValidationError(
+                location=("metric", "tensor", "components"),
+                code="differential_geometry.rational_metric.pullback.invalid_source",
+                message="metric and map must be canonical native values before planning",
+            )
+    _bounded_sized(
+        getattr(tensor, "retained_nonzero_denominators", None),
+        MAX_RATIONAL_TENSOR_LOCUS_GUARDS,
+        location=("metric", "tensor", "retained_nonzero_denominators"),
+        message="metric locus guards exceed the admitted envelope",
+    )
+    _bounded_sized(
+        getattr(map_value, "components", None),
+        MAX_RATIONAL_MAP_COMPONENTS,
+        location=("map", "components"),
+        message="map exceeds the admitted component envelope",
+    )
+    try:
+        metric = RationalCoordinateMetric.model_validate(metric)
+        map_value = RationalFunctionMap.model_validate(map_value)
+    except ValidationError as exc:
+        raise OperationDomainValidationError(
+            location=("metric", "map"),
+            code="differential_geometry.rational_metric.pullback.invalid_source",
+            message="metric and map must be canonical native values before planning",
+        ) from exc
+    return metric, map_value
 
 
 def _recognize_sources(
@@ -92,19 +173,7 @@ def pullback_metric(
         deadline = min(deadline, execution.deadline)
     bind_request_deadline(deadline)
     request_checkpoint("before rational metric pullback admission")
-    try:
-        metric = RationalCoordinateMetric.model_validate(
-            metric.model_dump(mode="python")
-        )
-        map_value = RationalFunctionMap.model_validate(
-            map_value.model_dump(mode="python")
-        )
-    except ValidationError as exc:
-        raise OperationDomainValidationError(
-            location=("metric", "map"),
-            code="differential_geometry.rational_metric.pullback.invalid_source",
-            message="metric and map must be canonical native values before planning",
-        ) from exc
+    metric, map_value = _preflight_pullback_sources(metric, map_value)
     if map_value.target_coordinates != metric.tensor.coordinate_axis:
         raise OperationDomainValidationError(
             location=("map", "target_coordinates"),

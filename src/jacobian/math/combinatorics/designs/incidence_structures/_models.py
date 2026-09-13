@@ -285,6 +285,38 @@ class SteinerTripleSystemNotFound(StrictModel):
     )
 
 
+def _canonical_shard_family_key(shard: object) -> tuple[Any, ...] | None:
+    """Return the canonical frontier key for an instance or wire shard dict.
+
+    A validated ``SteinerTripleSystemShard`` exposes its canonical fields
+    directly.  A Pydantic wire payload supplies each shard as a plain dict, so
+    the same key is recovered from ``order`` and ``fixed_triples`` after the
+    shard's own family canonicalization.  Anything unrecognized returns
+    ``None`` so strict validation still reports the offending field.
+    """
+
+    if isinstance(shard, SteinerTripleSystemShard):
+        return (shard.order, shard.fixed_triples)
+    if not isinstance(shard, dict):
+        return None
+    if set(shard) - {"order", "fixed_triples"}:
+        return None
+    order = shard.get("order")
+    if type(order) is not int:
+        return None
+    raw = shard.get("fixed_triples", ())
+    if not isinstance(raw, (list, tuple)) or len(raw) > MAX_STEINER_BLOCKS:
+        return None
+    triples: list[tuple[int, int, int]] = []
+    for triple in raw:
+        if not isinstance(triple, (list, tuple)) or len(triple) != 3:
+            return None
+        if any(type(point) is not int for point in triple):
+            return None
+        triples.append((triple[0], triple[1], triple[2]))
+    return (order, tuple(sorted(triples)))
+
+
 class SteinerTripleSystemUnknown(StrictModel):
     """A bounded stop that retains at least one unresolved frontier shard."""
 
@@ -321,9 +353,14 @@ class SteinerTripleSystemUnknown(StrictModel):
             # Let the field's own `max_length` decide; sorting a guaranteed
             # rejection would spend work proportional to its input.
             return data
-        if any(not isinstance(shard, SteinerTripleSystemShard) for shard in frontier):
-            return data
-        canonical = {(shard.order, shard.fixed_triples): shard for shard in frontier}
+        canonical: dict[tuple[Any, ...], Any] = {}
+        for shard in frontier:
+            key = _canonical_shard_family_key(shard)
+            if key is None:
+                # An unrecognized or malformed shard must reach strict field
+                # validation unchanged so it is reported, not silently merged.
+                return data
+            canonical.setdefault(key, shard)
         payload = dict(data)
         payload["unresolved_frontier"] = tuple(
             canonical[key] for key in sorted(canonical)

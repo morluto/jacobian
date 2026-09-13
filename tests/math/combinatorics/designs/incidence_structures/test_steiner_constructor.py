@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 from collections import Counter
 from collections.abc import Iterator
@@ -650,3 +651,42 @@ def test_unresolved_frontier_has_one_canonical_encoding() -> None:
     # An empty frontier is still refused: the field requires at least one.
     with pytest.raises(ValidationError):
         SteinerTripleSystemUnknown(states_explored=1, unresolved_frontier=())
+
+
+def test_wire_frontier_shards_are_canonicalized_after_decoding() -> None:
+    """Wire shard dicts canonicalize like already-instantiated shards.
+
+    ``model_validate_json`` supplies each frontier shard as a dict, so the
+    instance-only guard left reversed or duplicated wire payloads as distinct
+    serialized continuation states.
+    """
+
+    payload = {
+        "order": 7,
+        "outcome": {
+            "status": "UNKNOWN",
+            "states_explored": 4,
+            "unresolved_frontier": [
+                {"order": 7, "fixed_triples": [[0, 1, 2]]},
+                {"order": 7, "fixed_triples": [[0, 1, 3]]},
+            ],
+        },
+    }
+    forward = SteinerTripleSystemResult.model_validate_json(json.dumps(payload))
+
+    reversed_payload = json.loads(json.dumps(payload))
+    reversed_payload["outcome"]["unresolved_frontier"].reverse()
+    reversed_result = SteinerTripleSystemResult.model_validate_json(
+        json.dumps(reversed_payload)
+    )
+    assert reversed_result.model_dump_json() == forward.model_dump_json()
+
+    duplicated_payload = json.loads(json.dumps(payload))
+    duplicated_payload["outcome"]["unresolved_frontier"].append(
+        {"order": 7, "fixed_triples": [[0, 1, 2]]}
+    )
+    duplicated = SteinerTripleSystemResult.model_validate_json(
+        json.dumps(duplicated_payload)
+    )
+    assert isinstance(duplicated.outcome, SteinerTripleSystemUnknown)
+    assert len(duplicated.outcome.unresolved_frontier) == 2

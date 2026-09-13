@@ -297,19 +297,78 @@ def _flint_to_payload(polynomial: Any, minimum_exponent: int) -> dict[str, list[
 
 
 def _sympy_cancel(payload: dict[str, Any]) -> dict[str, Any]:
-    from sympy import Symbol
-    from sympy.polys.domains import QQ_I
-    from sympy.polys.rings import ring
+    """Cancel a common Laurent factor over ``QQ(i)``.
+
+    The sparse ``ring`` GCD does not reduce these Laurent operands reliably, so
+    shift both by one common monomial (a unit, so the rational function is
+    unchanged) into non-negative exponents and use ``Poly.gcd`` over ``QQ(i)``.
+    """
+
+    from sympy import I, Poly, Rational, Symbol
 
     axis = int(payload["axis"])
     symbols = tuple(Symbol(f"x{index}") for index in range(axis))
-    polynomial_ring, *_ = ring(symbols, QQ_I)
-    left = _load_polynomial(polynomial_ring, payload["left"])
-    right = _load_polynomial(polynomial_ring, payload["right"])
+
+    def _shifted(polynomial: dict[str, Any], minimum: tuple[int, ...]) -> Any:
+        mapping = {}
+        for support, real_num, real_den, imag_num, imag_den in zip(
+            polynomial["supports"],
+            polynomial["real_numerators"],
+            polynomial["real_denominators"],
+            polynomial["imag_numerators"],
+            polynomial["imag_denominators"],
+            strict=True,
+        ):
+            shifted = tuple(
+                int(value) - minimum[index] for index, value in enumerate(support)
+            )
+            mapping[shifted] = Rational(int(real_num), int(real_den)) + I * Rational(
+                int(imag_num), int(imag_den)
+            )
+        return Poly.from_dict(mapping, *symbols, domain="QQ_I")
+
+    supports = [
+        [int(value) for value in support]
+        for polynomial in (payload["left"], payload["right"])
+        for support in polynomial["supports"]
+    ]
+    minimum = tuple(
+        min(support[index] for support in supports) for index in range(axis)
+    )
+    left = _shifted(payload["left"], minimum)
+    right = _shifted(payload["right"], minimum)
     common = left.gcd(right)
+    left_quotient = left.exquo(common)
+    right_quotient = right.exquo(common)
     return {
-        "left": _dump_polynomial(left.exquo(common)),
-        "right": _dump_polynomial(right.exquo(common)),
+        "left": _poly_to_payload(left_quotient, minimum),
+        "right": _poly_to_payload(right_quotient, minimum),
+    }
+
+
+def _poly_to_payload(polynomial: Any, minimum: tuple[int, ...]) -> dict[str, Any]:
+    """Convert a shifted ``Poly`` over ``QQ_I`` back to the wire payload."""
+
+    supports: list[list[int]] = []
+    real_numerators: list[str] = []
+    real_denominators: list[str] = []
+    imag_numerators: list[str] = []
+    imag_denominators: list[str] = []
+    for monomial, coefficient in polynomial.terms():
+        real, imaginary = coefficient.as_real_imag()
+        supports.append(
+            [int(exponent) + minimum[index] for index, exponent in enumerate(monomial)]
+        )
+        real_numerators.append(str(int(real.p)))
+        real_denominators.append(str(int(real.q)))
+        imag_numerators.append(str(int(imaginary.p)))
+        imag_denominators.append(str(int(imaginary.q)))
+    return {
+        "supports": supports,
+        "real_numerators": real_numerators,
+        "real_denominators": real_denominators,
+        "imag_numerators": imag_numerators,
+        "imag_denominators": imag_denominators,
     }
 
 

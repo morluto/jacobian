@@ -362,6 +362,10 @@ def _support_keys_are_uniquely_decomposable(
     if len(vectors) <= 1:
         return True
     names = sorted({name for vector in vectors for name in vector})
+    # More vectors than ambient coordinates cannot be independent, and the
+    # check must stay cheap inside admission.
+    if len(vectors) > len(names):
+        return False
     # Gaussian elimination over Fractions; independence requires full column rank.
     rows = [[Fraction(vector.get(name, 0)) for name in names] for vector in vectors]
     rank = 0

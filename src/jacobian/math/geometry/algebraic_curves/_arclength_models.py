@@ -172,6 +172,26 @@ class ArclengthEnclosed(StrictModel):
                 "upper_reconstruction",
                 "segment upper contributions exceed the aggregate upper bound",
             )
+        ordered = sorted(
+            self.segments,
+            key=lambda segment: (
+                segment.lower is not None,
+                segment.lower.as_fraction() if segment.lower is not None else 0,
+                segment.upper is None,
+                segment.upper.as_fraction() if segment.upper is not None else 0,
+            ),
+        )
+        for previous, current in zip(ordered, ordered[1:], strict=False):
+            if previous.upper is None or current.lower is None:
+                raise _validation_error(
+                    "segment_overlap",
+                    "enclosed arclength segments must form a nonoverlapping partition",
+                )
+            if previous.upper.as_fraction() > current.lower.as_fraction():
+                raise _validation_error(
+                    "segment_overlap",
+                    "enclosed arclength segments must form a nonoverlapping partition",
+                )
         return self
 
 

@@ -2,10 +2,15 @@
 
 from fractions import Fraction
 
+import pytest
+from pydantic_core import ValidationError
+
 from jacobian._exact import CanonicalRational
 from jacobian.math.analysis.intervals import ClosedRationalInterval, RationalBox
 from jacobian.math.geometry.algebraic_curves._arclength import enclose_arclength
 from jacobian.math.geometry.algebraic_curves._arclength_models import (
+    ArclengthEnclosed,
+    ArclengthSegment,
     PlaneCurveArclengthRequest,
 )
 from jacobian.math.polynomials.values import (
@@ -209,3 +214,18 @@ def test_tangency_outside_the_box_face_is_empty() -> None:
         )
     )
     assert result.outcome.status == "EMPTY"
+
+
+def test_overlapping_enclosed_segments_are_rejected() -> None:
+    segment = ArclengthSegment(
+        lower=_rational(0),
+        upper=_rational(1),
+        contribution_lower=_rational(1),
+        contribution_upper=_rational(1),
+    )
+    with pytest.raises(ValidationError, match="nonoverlapping"):
+        ArclengthEnclosed(
+            lower=_rational(2),
+            upper=_rational(2),
+            segments=(segment, segment),
+        )

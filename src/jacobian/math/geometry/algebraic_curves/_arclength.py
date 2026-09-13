@@ -406,14 +406,12 @@ def _integrate_cell(
                 raise OperationExecutionTimeoutError(
                     "arclength deadline expired before Arb integration"
                 )
-            remaining = max(1, int(deadline - monotonic()))
-            execution = current_request_execution()
-            if execution is not None:
-                nested_wall = max(
-                    1, min(120, int(deadline - execution.started_at + 0.999))
+            remaining_seconds = deadline - monotonic()
+            if remaining_seconds <= 0:
+                raise OperationExecutionTimeoutError(
+                    "arclength deadline expired before Arb integration"
                 )
-            else:
-                nested_wall = remaining
+            nested_wall = max(1, min(120, int(remaining_seconds + 0.999)))
             integral_request = DefiniteIntegralEnclosureRequest(
                 expression=_integrand("t", first, second),
                 box=RationalIntervalBox(
@@ -450,6 +448,9 @@ def _integrate_cell(
 def enclose_arclength(  # noqa: C901
     request: PlaneCurveArclengthRequest,
 ) -> PlaneCurveArclengthResult:
+    if type(request) is not PlaneCurveArclengthRequest:
+        raise TypeError("request must be a PlaneCurveArclengthRequest")
+    request = PlaneCurveArclengthRequest.model_validate(request)
     deadline = execution_deadline(request.resource_budget.wall_seconds)
     try:
         source = rational_polynomial_to_sympy(request.polynomial)

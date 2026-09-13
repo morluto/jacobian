@@ -221,9 +221,7 @@ def _signature_group_quotient(
     classes = list(groups.values())
     part_count = len(signatures)
     class_of = {
-        index: class_id
-        for class_id, group in enumerate(classes)
-        for index in group
+        index: class_id for class_id, group in enumerate(classes) for index in group
     }
     seen: dict[tuple[int, int], str] = {}
     processed = 0

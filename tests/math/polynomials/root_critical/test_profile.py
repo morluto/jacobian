@@ -415,3 +415,21 @@ def test_cleared_coefficient_height_is_bounded_before_factorization() -> None:
     polynomial = rational_polynomial_from_sympy(source, ("z",))
     with pytest.raises(OperationResourceAdmissionError, match="cleared primitive"):
         root_critical_distance_profile(polynomial)
+
+
+def test_cancellation_signal_is_forwarded_to_the_kernel_worker() -> None:
+    """A cancellation during the kernel is reported as cancellation."""
+    from threading import Event
+
+    from jacobian._execution import (
+        OperationExecutionCancelledError,
+        request_execution,
+    )
+
+    imported = Event()
+    imported.set()
+    with (
+        request_execution(time.monotonic(), cancellation_signal=imported),
+        pytest.raises(OperationExecutionCancelledError),
+    ):
+        root_critical_distance_profile(_polynomial((3, 1), (0, -1)))

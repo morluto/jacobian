@@ -13,6 +13,7 @@ import sympy
 
 from jacobian._exact import CanonicalRational
 from jacobian._execution import (
+    RequestCancellationSignal,
     bind_request_deadline,
     current_request_execution,
     request_checkpoint,
@@ -838,6 +839,7 @@ def _run_profile_worker(
     *,
     max_pair_rows: object,
     deadline: float,
+    cancellation_signal: RequestCancellationSignal | None,
 ) -> RootCriticalDistanceProfile:
     """Run the blocking kernel in a killable child and revalidate its profile."""
 
@@ -867,6 +869,7 @@ def _run_profile_worker(
                 address_space_bytes=_PROFILE_ADDRESS_SPACE_BYTES,
                 file_size_bytes=_PROFILE_STDOUT_BYTES,
             ),
+            cancellation_event=cancellation_signal,
         )
     except OSError as exc:
         raise RuntimeError(
@@ -979,5 +982,8 @@ def root_critical_distance_profile(
         deadline = min(deadline, execution.deadline)
     bind_request_deadline(deadline)
     return _run_profile_worker(
-        polynomial, max_pair_rows=max_pair_rows, deadline=deadline
+        polynomial,
+        max_pair_rows=max_pair_rows,
+        deadline=deadline,
+        cancellation_signal=execution.cancellation_signal,
     )

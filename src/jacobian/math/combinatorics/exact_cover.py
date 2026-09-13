@@ -645,13 +645,25 @@ def find_generalized_exact_cover(
     """
 
     if not isinstance(instance, GeneralizedExactCoverInstance):
-        raise TypeError("instance must be a GeneralizedExactCoverInstance")
+        raise OperationDomainValidationError(
+            location=("instance",),
+            code="combinatorics.exact_cover_instance",
+            message="instance must be a GeneralizedExactCoverInstance value",
+        )
     if type(search_node_limit) is not int:
-        raise TypeError("search_node_limit must be an integer")
+        raise OperationDomainValidationError(
+            location=("search_node_limit",),
+            code="combinatorics.exact_cover_node_limit",
+            message="search_node_limit must be an integer",
+        )
     if not 1 <= search_node_limit <= MAX_EXACT_COVER_SEARCH_NODES_PER_PASS:
-        raise _combinatorics_validation_error(
-            "search_node_limit must be between 1 and "
-            f"{MAX_EXACT_COVER_SEARCH_NODES_PER_PASS}"
+        raise OperationDomainValidationError(
+            location=("search_node_limit",),
+            code="combinatorics.exact_cover_node_limit",
+            message=(
+                "search_node_limit must be between 1 and "
+                f"{MAX_EXACT_COVER_SEARCH_NODES_PER_PASS}"
+            ),
         )
     # Price the widest item scan per visited node. Preserve the former
     # 256 items * 100000 nodes * 64 words envelope while allowing deeper,
@@ -784,12 +796,22 @@ def minimum_generalized_exact_cover(  # noqa: C901
     request_checkpoint("before minimum exact-cover admission")
 
     if not isinstance(instance, GeneralizedExactCoverInstance):
-        raise TypeError("instance must be a GeneralizedExactCoverInstance")
-    if type(search_node_limit) is not int or not (
-        1 <= search_node_limit <= MAX_EXACT_COVER_SEARCH_NODES_PER_PASS
-    ):
-        raise _combinatorics_validation_error(
-            "search_node_limit must be within the exact-cover node bound"
+        raise OperationDomainValidationError(
+            location=("instance",),
+            code="combinatorics.exact_cover_instance",
+            message="instance must be a GeneralizedExactCoverInstance value",
+        )
+    if type(search_node_limit) is not int:
+        raise OperationDomainValidationError(
+            location=("search_node_limit",),
+            code="combinatorics.exact_cover_node_limit",
+            message="search_node_limit must be an integer",
+        )
+    if not 1 <= search_node_limit <= MAX_EXACT_COVER_SEARCH_NODES_PER_PASS:
+        raise OperationDomainValidationError(
+            location=("search_node_limit",),
+            code="combinatorics.exact_cover_node_limit",
+            message="search_node_limit must be within the exact-cover node bound",
         )
     primary_count = len(instance.primary_items)
     item_count = primary_count + len(instance.secondary_items)
@@ -865,6 +887,23 @@ def minimum_generalized_exact_cover(  # noqa: C901
     # rejected such cheaply executable carriers before examining the conflict.
     forcing_budget = _MINIMUM_EXACT_COVER_WORK_LIMIT - shortcut_work
     forcing_work = 0
+    # Admit the forcing phase before executing it. Each iteration rescans the
+    # remaining rows and their incidences, and every productive iteration
+    # removes at least one primary and one row, so the phase is bounded by
+    # ``min(primaries, rows + 1)`` scans of the surviving axes. The executed
+    # charge below stays incremental and tighter; this is the sound
+    # pre-execution gate that refuses before doing the mathematical work.
+    forcing_scan_bound = min(len(remaining_primary), len(remaining_rows) + 1) * (
+        source_incidence_count + len(remaining_primary)
+    )
+    if forcing_scan_bound > forcing_budget:
+        raise OperationResourceAdmissionError(
+            location=("search_node_limit",),
+            code="combinatorics.minimum_exact_cover_work",
+            message=(
+                "minimum exact-cover unit forcing exceeds the admitted work envelope"
+            ),
+        )
     while remaining_primary:
         request_checkpoint("during minimum exact-cover unit forcing")
         coverage: dict[str, list[ExactCoverRow]] = {
@@ -904,10 +943,29 @@ def minimum_generalized_exact_cover(  # noqa: C901
         request_checkpoint("during minimum exact-cover unit forcing")
     remaining_degrees = [0]
     if remaining_primary:
-        remaining_degrees = [
-            sum(1 for row in remaining_rows if item in row.items)
-            for item in remaining_primary
-        ]
+        # Build the residual degrees in one checkpointed incidence pass. The
+        # previous per-primary row scan was O(primaries * rows) and could not
+        # observe cancellation for millions of comparisons.
+        residual_degree: dict[str, int] = dict.fromkeys(remaining_primary, 0)
+        residual_incidences = 0
+        for row_index, row in enumerate(remaining_rows):
+            if row_index % 256 == 0:
+                request_checkpoint("during minimum exact-cover residual degrees")
+            residual_incidences += len(row.items)
+            for item in row.items:
+                if item in residual_degree:
+                    residual_degree[item] += 1
+        forcing_work += residual_incidences + len(remaining_primary)
+        if shortcut_work + forcing_work > _MINIMUM_EXACT_COVER_WORK_LIMIT:
+            raise OperationResourceAdmissionError(
+                location=("search_node_limit",),
+                code="combinatorics.minimum_exact_cover_work",
+                message=(
+                    "minimum exact-cover unit forcing exceeds the admitted work "
+                    "envelope"
+                ),
+            )
+        remaining_degrees = [residual_degree[item] for item in remaining_primary]
     remaining_min_degree = min(remaining_degrees, default=0)
     remaining_max_degree = max(remaining_degrees, default=0)
     if remaining_primary and remaining_min_degree == 0:

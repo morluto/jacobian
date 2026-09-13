@@ -17,6 +17,8 @@ from jacobian.math.logic.languages.regular.values import (
     DFA,
     MAX_COUNT_RESULT_DIGITS,
     MAX_DFA_ALPHABET,
+    MAX_DFA_STATES,
+    MAX_DFA_TRANSITIONS,
 )
 
 MAX_SYMBOL_PARIKH_LENGTH = 1_000
@@ -498,6 +500,35 @@ def _symbol_parikh_profile_request(
     return symbol_parikh_profile(request.dfa, request.word_length)
 
 
+def _bounded_dfa_tuple(value: object, limit: int) -> tuple[object, ...]:
+    """Materialize a DFA container only when its bounded size is known first."""
+
+    if value is None or isinstance(value, (str, bytes, bytearray)):
+        raise PydanticCustomError(
+            "regular_language.symbol_parikh.dfa_contract",
+            "dfa containers must be bounded tuples",
+        )
+    if isinstance(value, tuple):
+        if len(value) > limit:
+            raise PydanticCustomError(
+                "regular_language.symbol_parikh.dfa_contract",
+                "dfa container exceeds its admitted length",
+            )
+        return value
+    length = getattr(value, "__len__", None)
+    if length is None:
+        raise PydanticCustomError(
+            "regular_language.symbol_parikh.dfa_contract",
+            "dfa containers must be bounded tuples",
+        )
+    if len(value) > limit:  # type: ignore[arg-type]
+        raise PydanticCustomError(
+            "regular_language.symbol_parikh.dfa_contract",
+            "dfa container exceeds its admitted length",
+        )
+    return tuple(value)  # type: ignore[arg-type]
+
+
 def symbol_parikh_profile(dfa: DFA, word_length: int) -> SymbolParikhProfileResult:
     """Return the accepted-word symbol Parikh profile for one exact length."""
 
@@ -510,11 +541,15 @@ def symbol_parikh_profile(dfa: DFA, word_length: int) -> SymbolParikhProfileResu
     try:
         dfa = DFA.model_validate(
             {
-                "state_count": dfa.state_count,
-                "alphabet_size": dfa.alphabet_size,
-                "transitions": tuple(dfa.transitions),
-                "initial_state": dfa.initial_state,
-                "accepting_states": tuple(dfa.accepting_states),
+                "state_count": getattr(dfa, "state_count", None),
+                "alphabet_size": getattr(dfa, "alphabet_size", None),
+                "transitions": _bounded_dfa_tuple(
+                    getattr(dfa, "transitions", None), MAX_DFA_TRANSITIONS
+                ),
+                "initial_state": getattr(dfa, "initial_state", None),
+                "accepting_states": _bounded_dfa_tuple(
+                    getattr(dfa, "accepting_states", None), MAX_DFA_STATES
+                ),
             }
         )
     except (ValidationError, PydanticCustomError) as exc:

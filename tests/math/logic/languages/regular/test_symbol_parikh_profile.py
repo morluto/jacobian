@@ -684,3 +684,29 @@ def test_native_profile_revalidates_a_constructed_dfa() -> None:
     assert error.value.errors()[0]["type"] == (
         "regular_language.symbol_parikh.dfa_contract"
     )
+
+
+def test_forged_dfa_fields_are_bounded_before_materialization() -> None:
+    """Omitted fields and unbounded iterables are typed rejections, not hangs."""
+    with pytest.raises(OperationDomainValidationError) as omitted:
+        symbol_parikh_profile(DFA.model_construct(), 3)
+    assert omitted.value.errors()[0]["type"] == (
+        "regular_language.symbol_parikh.dfa_contract"
+    )
+
+    def unbounded():
+        while True:
+            yield 0
+
+    forged = DFA.model_construct(
+        state_count=1,
+        alphabet_size=1,
+        transitions=unbounded(),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+    with pytest.raises(OperationDomainValidationError) as huge:
+        symbol_parikh_profile(forged, 3)
+    assert huge.value.errors()[0]["type"] == (
+        "regular_language.symbol_parikh.dfa_contract"
+    )

@@ -1,14 +1,16 @@
 """Behavioral tests for the pinned finite i.i.d. Berry--Esseen operation."""
 
 import json
+import random
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from fractions import Fraction
 from importlib import import_module
 from math import isqrt
 from typing import Any, cast
 
 import pytest
+import sympy
 from pydantic import ValidationError
 
 from jacobian._execution import (
@@ -666,3 +668,133 @@ def test_zero_mass_atom_cannot_reject_an_otherwise_cheap_law() -> None:
     upper = Fraction(result.bound_upper.num, result.bound_upper.den)
     assert lower <= upper
     assert lower * lower <= bound_squared <= upper * upper
+
+
+def test_atom_cap_is_enforced_before_atoms_are_traversed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A forged over-long distribution is refused without walking it.
+
+    `any(not isinstance(atom, FiniteDistributionAtom) for atom in atoms)` sat in
+    the same condition as the container test, ahead of the `len(atoms)` cap, so
+    an arbitrarily large tuple of genuine atoms was traversed element by element
+    before the resource refusal that is meant to bound it. This field reports an
+    oversized length and fails if anything iterates it.
+    """
+
+    class _ForgedAtomTuple(tuple):  # type: ignore[type-arg]
+        declared_length: int
+
+        def __new__(cls, declared_length: int) -> "_ForgedAtomTuple":
+            forged = tuple.__new__(cls)
+            forged.declared_length = declared_length
+            return forged
+
+        def __len__(self) -> int:
+            return self.declared_length
+
+        def __iter__(self) -> Iterator[Any]:
+            raise AssertionError(
+                "atom-cap admission must not traverse an over-long distribution"
+            )
+
+    distribution = _request(_five_atom_oracle_distribution()).distribution
+    forged_distribution = type(distribution).model_construct(
+        atoms=_ForgedAtomTuple(MAX_BERRY_ESSEEN_ATOMS + 1)
+    )
+    request = BerryEsseenRequest.model_construct(
+        distribution=forged_distribution, sample_count=1
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        berry_esseen_bound(request)
+    assert error.value.errors()[0]["type"] == (
+        "probability.berry_esseen.atom_work_bound"
+    )
+
+
+def test_nested_atom_components_are_not_dereferenced_unguarded() -> None:
+    """A malformed nested carrier yields the domain diagnostic, not AttributeError."""
+
+    from jacobian._exact import CanonicalRational
+    from jacobian.math.probability._distribution import FiniteDistributionAtom
+
+    atoms = (
+        FiniteDistributionAtom.model_construct(
+            value="not-a-rational",
+            probability=CanonicalRational(num=1, den=1),
+        ),
+    )
+    distribution = type(
+        _request(_five_atom_oracle_distribution()).distribution
+    ).model_construct(atoms=atoms)
+    request = BerryEsseenRequest.model_construct(
+        distribution=distribution, sample_count=1
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        berry_esseen_bound(request)
+    assert error.value.errors()[0]["type"] == ("probability.berry_esseen.atom_contract")
+
+
+def test_probability_normalization_does_not_depend_on_support_order() -> None:
+    """Complementary masses must reduce before the intermediate bound bites.
+
+    Eleven 50-digit `p_i` with pairs `1/(11 p_i)` and `(p_i - 1)/(11 p_i)` sum to
+    exactly one. Accumulating in canonical support order drives the partial
+    denominator past the 512-digit bound before the complementary mass arrives,
+    so the refusal was an artifact of how the caller happened to list its atoms.
+    """
+
+    from jacobian.math.probability._distribution import _bounded_fraction_sum
+
+    primes = [sympy.prime(index + 100) * 10**49 + 3 for index in range(11)]
+    masses: list[Fraction] = []
+    for prime in primes:
+        masses.append(Fraction(1, 11 * prime))
+        masses.append(Fraction(prime - 1, 11 * prime))
+
+    assert _bounded_fraction_sum(tuple(sorted(masses)), label="test") == 1
+
+    shuffled = list(masses)
+    random.shuffle(shuffled)
+    assert _bounded_fraction_sum(tuple(shuffled), label="test") == 1
+
+
+def test_atom_revalidation_checkpoints_while_it_validates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The native revalidation loop is a cooperative phase.
+
+    It performs up to `MAX_BERRY_ESSEEN_ATOMS` separate Pydantic validations
+    after the after-parsing checkpoint, so cancellation and expiry would not be
+    observed until the later input-height scan without a checkpoint here.
+    """
+
+    from jacobian._exact import CanonicalRational
+    from jacobian.math.probability import _berry_esseen as module
+    from jacobian.math.probability._distribution import (
+        FiniteDistributionAtom,
+        FiniteRationalDistribution,
+    )
+
+    atoms = tuple(
+        FiniteDistributionAtom.model_construct(
+            value=CanonicalRational(num=index, den=1),
+            probability=CanonicalRational(num=1, den=600),
+        )
+        for index in range(600)
+    )
+    request = BerryEsseenRequest.model_construct(
+        distribution=FiniteRationalDistribution.model_construct(atoms=atoms),
+        sample_count=1,
+    )
+
+    observed: list[str] = []
+
+    def _observe(stage: str) -> None:
+        observed.append(stage)
+
+    monkeypatch.setattr(
+        "jacobian.math.probability._berry_esseen.request_checkpoint", _observe
+    )
+    module.berry_esseen_bound(request)
+    assert any("atom revalidation" in stage for stage in observed)

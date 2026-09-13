@@ -438,9 +438,12 @@ def _require_native_berry_request(request: BerryEsseenRequest) -> None:
             message="Berry--Esseen distribution must be a finite rational law",
         )
     atoms = getattr(request.distribution, "atoms", None)
-    if not isinstance(atoms, tuple) or any(
-        not isinstance(atom, FiniteDistributionAtom) for atom in atoms
-    ):
+    # Split the container-shape test from the element-type scan and put the
+    # length cap between them: a forged distribution may hold an arbitrarily
+    # large tuple of genuine atoms, and an element-wise `any(...)` ahead of
+    # `len(atoms)` would traverse all of it before issuing the resource refusal
+    # that is supposed to bound it.
+    if not isinstance(atoms, tuple):
         raise OperationDomainValidationError(
             location=("distribution", "atoms"),
             code="probability.berry_esseen.distribution_type",
@@ -455,21 +458,37 @@ def _require_native_berry_request(request: BerryEsseenRequest) -> None:
                 f"{MAX_BERRY_ESSEEN_ATOMS} input atoms"
             ),
         )
+    if any(not isinstance(atom, FiniteDistributionAtom) for atom in atoms):
+        raise OperationDomainValidationError(
+            location=("distribution", "atoms"),
+            code="probability.berry_esseen.distribution_type",
+            message="Berry--Esseen distribution must be a finite rational law",
+        )
     # A constructed atom is returned unchanged by the default Pydantic
     # configuration, so validate a fresh payload with raw components to rerun
     # the nested canonical-rational and nonnegative-probability contract.
     for index, atom in enumerate(atoms):
+        if index % 256 == 0:
+            request_checkpoint("during Berry--Esseen atom revalidation")
         try:
-            FiniteDistributionAtom.model_validate(
-                {
-                    "value": {"num": atom.value.num, "den": atom.value.den},
-                    "probability": {
-                        "num": atom.probability.num,
-                        "den": atom.probability.den,
-                    },
-                }
-            )
-        except (ValidationError, PydanticCustomError) as exc:
+            value = atom.value
+            probability = atom.probability
+            payload = {
+                "value": {"num": value.num, "den": value.den},
+                "probability": {"num": probability.num, "den": probability.den},
+            }
+        except AttributeError as exc:
+            # A forged atom can carry a wrongly typed nested carrier, such as
+            # `value="bad"`. That is a malformed input contract, not an
+            # implementation leak: report the stable domain diagnostic.
+            raise OperationDomainValidationError(
+                location=("distribution", "atoms", index, "value"),
+                code="probability.berry_esseen.atom_contract",
+                message="Berry--Esseen atoms must be canonical nonnegative masses",
+            ) from exc
+        try:
+            FiniteDistributionAtom.model_validate(payload)
+        except (ValidationError, PydanticCustomError, TypeError) as exc:
             raise OperationDomainValidationError(
                 location=("distribution", "atoms", index),
                 code="probability.berry_esseen.atom_contract",

@@ -728,9 +728,10 @@ def _multipartite_cycle_exists(part_sizes: tuple[int, ...], cycle_length: int) -
 def _simple_four_cycle_count(part_sizes: tuple[int, ...]) -> int:
     """Count simple four-cycles in a complete multipartite graph.
 
-    Adds the three-part cycles (two vertices from one part, one from each of
-    two others) to the induced family; these cycles have a chord between the
-    two single-part vertices.
+    A four-cycle either uses two vertices from each of two parts, two vertices
+    from one part and one from each of two others (with a chord between the
+    single-part vertices), or one vertex from each of four distinct parts
+    (which spans K4 and therefore supports three four-cycles).
     """
 
     count = _chordless_four_cycle_count(part_sizes)
@@ -744,15 +745,20 @@ def _simple_four_cycle_count(part_sizes: tuple[int, ...]) -> int:
         for left_index, left in enumerate(others):
             for right in others[left_index + 1 :]:
                 count += pairs * left * right
+    # Four distinct parts: the induced four vertices form K4 with three cycles.
+    for indices in combinations(range(len(part_sizes)), 4):
+        product = 1
+        for index in indices:
+            product *= part_sizes[index]
+        count += 3 * product
     return count
 
 
 def _chordless_four_cycle_count(part_sizes: tuple[int, ...]) -> int:
     """Count induced 4-cycles in a complete multipartite graph.
 
-    An induced four-cycle either uses two vertices from each of two parts, or
-    one vertex from each of four distinct parts (any two vertices in distinct
-    parts are non-adjacent within the cycle's part gaps, so no chord exists).
+    An induced four-cycle uses exactly two vertices from each of two parts; four
+    distinct parts would induce K4, which has no induced four-cycle.
     """
 
     count = 0
@@ -762,12 +768,6 @@ def _chordless_four_cycle_count(part_sizes: tuple[int, ...]) -> int:
             continue
         for right in part_sizes[left_index + 1 :]:
             count += left_pairs * (right * (right - 1) // 2)
-    # Four distinct parts, one vertex from each.
-    for indices in combinations(range(len(part_sizes)), 4):
-        product = 1
-        for index in indices:
-            product *= part_sizes[index]
-        count += product
     return count
 
 

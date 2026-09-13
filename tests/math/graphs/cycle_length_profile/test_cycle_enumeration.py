@@ -665,3 +665,34 @@ def test_multipartite_complete_four_cycles_use_the_exact_count() -> None:
     graph = SimpleUndirectedGraph(vertices=vertices, edges=edges)
     result = enumerate_fixed_length_cycles(graph, 4)
     assert result.cycle_count == 108
+
+
+def test_complete_graph_four_cycle_count_admits_below_the_ceiling() -> None:
+    """K22 has C(22,4)*3 = 21,945 four-cycles and must be refused at admission.
+
+    Four distinct singleton parts induce K4, which supports three four-cycles,
+    so the exact count exceeds the 20,000-cycle result bound and the request is
+    rejected rather than returning a result that cannot round-trip.
+    """
+    vertices = tuple(f"v{index:02d}" for index in range(22))
+    edges = tuple(
+        canonical_edge(left, right)
+        for index, left in enumerate(vertices)
+        for right in vertices[index + 1 :]
+    )
+    graph = SimpleUndirectedGraph(vertices=vertices, edges=edges)
+    with pytest.raises(OperationResourceAdmissionError):
+        enumerate_fixed_length_cycles(graph, 4)
+
+
+def test_complete_graph_six_vertices_four_cycle_count() -> None:
+    """K6 has C(6,4)*3 = 45 simple four-cycles and none induced."""
+    vertices = tuple(f"v{index}" for index in range(6))
+    edges = tuple(
+        canonical_edge(left, right)
+        for index, left in enumerate(vertices)
+        for right in vertices[index + 1 :]
+    )
+    graph = SimpleUndirectedGraph(vertices=vertices, edges=edges)
+    assert enumerate_fixed_length_cycles(graph, 4).cycle_count == 45
+    assert enumerate_chordless_fixed_length_cycles(graph, 4).cycle_count == 0

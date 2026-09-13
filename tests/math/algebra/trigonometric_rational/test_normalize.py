@@ -601,3 +601,85 @@ def test_reduced_canonical_exponent_is_admitted_before_result_construction() -> 
     with pytest.raises(OperationResourceAdmissionError, match="expansion"):
         normalize_trigonometric_rational(request)
     assert time.monotonic() - started < 5.0
+
+
+def test_gaussian_gcd_uses_the_field_relation() -> None:
+    """cos(2x)/(sin(x)+cos(x)) shares z^2+1-type factors over QQ(i).
+
+    The flint QQ[z,I] path cannot see a factor that needs ``I^2 = -1``, so the
+    worker must verify the candidate over QQ(i) and fall back to the ring path.
+    The reduced quotient is real; sample it at x = 1/3 against the direct
+    trigonometric value.
+    """
+    import sympy
+
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x"],
+            "expression": {
+                "kind": "DIVIDE",
+                "numerator": {"kind": "COSINE", "angle": {"coefficients": [2]}},
+                "denominator": {
+                    "kind": "ADD",
+                    "children": [
+                        {"kind": "SINE", "angle": {"coefficients": [1]}},
+                        {"kind": "COSINE", "angle": {"coefficients": [1]}},
+                    ],
+                },
+            },
+        }
+    )
+    result = normalize_trigonometric_rational(request)
+    z = sympy.Symbol("z")
+    num = sum(
+        (
+            sympy.Rational(term.coefficient.real.as_fraction())
+            + sympy.I * sympy.Rational(term.coefficient.imaginary.as_fraction())
+        )
+        * z ** term.exponents[0]
+        for term in result.numerator.terms
+    )
+    den = sum(
+        (
+            sympy.Rational(term.coefficient.real.as_fraction())
+            + sympy.I * sympy.Rational(term.coefficient.imaginary.as_fraction())
+        )
+        * z ** term.exponents[0]
+        for term in result.denominator.terms
+    )
+    value = complex(
+        sympy.N((num / den).subs(z, sympy.exp(sympy.I * sympy.Rational(1, 3))), 30)
+    )
+    direct = complex(
+        sympy.N(
+            sympy.cos(sympy.Rational(2, 3))
+            / (sympy.sin(sympy.Rational(1, 3)) + sympy.cos(sympy.Rational(1, 3))),
+            30,
+        )
+    )
+    assert abs(value - direct) < 1e-9
+    assert abs(value.imag) < 1e-9
+
+
+def test_imaginary_flint_terms_keep_their_real_component() -> None:
+    """A quotient term ``I*z^e`` must not be folded into the real component."""
+    from flint import fmpq_mpoly_ctx
+
+    from jacobian.math.algebra.trigonometric_rational._laurent_gcd_worker import (
+        _flint_to_payload,
+    )
+
+    ctx = fmpq_mpoly_ctx.get(["z", "I"])
+    z, imaginary = ctx.gens()
+    payload = _flint_to_payload(z**2 + imaginary * z, 0)
+    pairs = {
+        support[0]: (real, imag)
+        for support, real, imag in zip(
+            payload["supports"],
+            payload["real_numerators"],
+            payload["imag_numerators"],
+            strict=True,
+        )
+    }
+    assert pairs[2] == ("1", "0")
+    assert pairs[1] == ("0", "1")

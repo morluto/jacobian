@@ -620,6 +620,62 @@ def _scalar_unit(polynomial: Polynomial) -> Polynomial:
     }
 
 
+def _divides(candidate: Polynomial, target: Polynomial) -> bool:
+    """Whether one Laurent polynomial divides another over ``QQ(i)``.
+
+    Used to drop locus factors already implied by another retained factor, so
+    the zero-set union is represented by its square-free cover rather than a
+    redundant product that can exceed the exponent envelope.
+    """
+
+    if candidate == target:
+        return True
+    axis = len(next(iter(candidate)))
+    minimum = tuple(
+        min(support[index] for support in candidate) for index in range(axis)
+    )
+    shifted_target = {
+        tuple(
+            value - minimum[index] for index, value in enumerate(support)
+        ): coefficient
+        for support, coefficient in target.items()
+    }
+    if any(value < 0 for support in shifted_target for value in support):
+        return False
+    shifted_candidate = {
+        tuple(
+            value - minimum[index] for index, value in enumerate(support)
+        ): coefficient
+        for support, coefficient in candidate.items()
+    }
+    try:
+        divisor = _to_sympy_poly(shifted_candidate)
+        dividend = _to_sympy_poly(shifted_target)
+    except (ValueError, TypeError):
+        return False
+    from sympy import QQ_I, div
+
+    _quotient, remainder = div(dividend, divisor, domain=QQ_I)
+    return bool(remainder.is_zero)
+
+
+def _to_sympy_poly(polynomial: Polynomial) -> object:
+    from sympy import I, Integer, Poly, Rational, Symbol
+
+    axis = len(next(iter(polynomial)))
+    symbols = tuple(Symbol(f"y{index}") for index in range(axis))
+    expression = Integer(0)
+    for support, coefficient in polynomial.items():
+        term = Integer(1)
+        for index, exponent in enumerate(support):
+            term *= symbols[index] ** exponent
+        expression += term * (
+            Rational(coefficient[0].numerator, coefficient[0].denominator)
+            + I * Rational(coefficient[1].numerator, coefficient[1].denominator)
+        )
+    return Poly(expression, *symbols, domain="QQ_I")
+
+
 def _combine_loci(loci: tuple[Polynomial, ...], axis: int) -> Polynomial:
     unique: list[Polynomial] = []
     for polynomial in loci:
@@ -631,6 +687,11 @@ def _combine_loci(loci: tuple[Polynomial, ...], axis: int) -> Polynomial:
         normalized = _scalar_unit(polynomial)
         if any(_gaussian_proportional(normalized, existing) for existing in unique):
             continue
+        # Drop a factor already implied by a retained factor, and replace a
+        # retained factor that is itself implied by this one.
+        if any(_divides(existing, normalized) for existing in unique):
+            continue
+        unique = [existing for existing in unique if not _divides(normalized, existing)]
         unique.append(normalized)
     result = _one(axis)
     for polynomial in unique:

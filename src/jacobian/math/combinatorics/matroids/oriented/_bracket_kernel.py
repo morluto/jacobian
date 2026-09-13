@@ -10,6 +10,7 @@ from pydantic import ValidationError
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS, CanonicalRational
+from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -518,6 +519,43 @@ def _admit_surviving_components(
     return coefficients, coefficient_digit_bound
 
 
+def _revalidate_carrier[T: StrictModel](
+    value: object,
+    model: type[T],
+    *,
+    location: str,
+    code: str,
+) -> T:
+    """Rerun a canonical value's own contract on a possibly forged instance.
+
+    ``model_construct`` and ``model_copy(update=...)`` bypass validation, so an
+    ``isinstance`` check alone lets a malformed carrier reach field access and
+    leak ``AttributeError`` or ``TypeError``. Reconstructing the declared
+    payload either returns a canonical value or reports the operation's typed
+    domain error.
+    """
+
+    try:
+        payload = {name: getattr(value, name) for name in model.model_fields}
+        return model.model_validate(payload)
+    except (ValidationError, PydanticCustomError, AttributeError, TypeError) as exc:
+        if isinstance(exc, ValidationError):
+            detail = exc.errors()[0]
+            detail_code = str(detail["type"])
+            detail_message = str(detail["msg"])
+        elif isinstance(exc, PydanticCustomError):
+            detail_code = exc.type
+            detail_message = exc.message()
+        else:
+            detail_code = code
+            detail_message = str(exc)
+        raise OperationDomainValidationError(
+            location=(location,),
+            code=detail_code or code,
+            message=detail_message,
+        ) from exc
+
+
 def _require_syzygy_terms(
     target: BracketPolynomial,
     terms: object,
@@ -563,6 +601,18 @@ def _require_syzygy_terms(
                     "source-bound Grassmann-Pluecker relation"
                 ),
             )
+        scalar = _revalidate_carrier(
+            scalar,
+            CanonicalRational,
+            location="terms",
+            code="bracket.syzygy_scalar_carrier",
+        )
+        multiplier = _revalidate_carrier(
+            multiplier,
+            BracketMonomial,
+            location="terms",
+            code="bracket.syzygy_multiplier_carrier",
+        )
         if relation.ground_size != target.ground_size:
             raise OperationDomainValidationError(
                 location=("terms",),
@@ -715,5 +765,11 @@ def bracket_syzygy_residual(
             code="bracket.syzygy_target_type",
             message="syzygy target must be a canonical bracket polynomial",
         )
+    target = _revalidate_carrier(
+        target,
+        BracketPolynomial,
+        location="target",
+        code="bracket.syzygy_target_carrier",
+    )
     coefficients = _admit_residual_envelope(target, terms)
     return _polynomial_from_coefficients(coefficients, target.ground_size)

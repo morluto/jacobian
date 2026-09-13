@@ -1063,3 +1063,39 @@ def test_syzygy_admits_a_forged_relation_before_reading_its_polynomial() -> None
             relation.polynomial,
             ((CanonicalRational(num=1, den=1), BracketMonomial(factors=()), forged),),
         )
+
+
+def test_syzygy_revalidates_forged_native_value_carriers() -> None:
+    """Bypass-constructed native values must not leak raw field-access errors."""
+    relation = grassmann_pluecker_relation(
+        5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM"
+    )
+    target = relation.polynomial
+    scalar = CanonicalRational(num=1, den=1)
+    multiplier = BracketMonomial(factors=())
+
+    forged_targets = (
+        BracketPolynomial.model_construct(ground_size=5, terms=None),
+        BracketPolynomial.model_construct(ground_size="wide", terms=()),
+    )
+    for forged in forged_targets:
+        with pytest.raises(OperationDomainValidationError):
+            bracket_syzygy_residual(forged, ())
+
+    with pytest.raises(OperationDomainValidationError):
+        bracket_syzygy_residual(
+            target,
+            (
+                (
+                    CanonicalRational.model_construct(num="bad", den=1),
+                    multiplier,
+                    relation,
+                ),
+            ),
+        )
+
+    with pytest.raises(OperationDomainValidationError):
+        bracket_syzygy_residual(
+            target,
+            ((scalar, BracketMonomial.model_construct(factors=None), relation),),
+        )

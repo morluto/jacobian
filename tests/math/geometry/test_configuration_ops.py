@@ -609,7 +609,7 @@ class TestSpannedCircleProfile:
         source = _configuration(_point("0", "0"), _point("1", "0"), _point("0", "1"))
         forged = PointConfiguration.model_construct(points=list(source.points))
         result = native_spanned_circle_profile(forged)
-        forged.points.clear()  # type: ignore[union-attr]
+        forged.points.clear()  # type: ignore[attr-defined]
         assert len(result.configuration.points) == 3
         assert type(result).model_validate_json(result.model_dump_json()) == result
 
@@ -646,9 +646,18 @@ def test_native_spanned_circles_reject_invalid_source(
 
 
 class TestSpannedCircleDeadline:
-    def test_origin_selection_checkpoints(
+    def test_origin_selection_checkpoints_every_candidate(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        """Origin selection checkpoints each candidate, not every 64th.
+
+        A maximum source has `MAX_CONFIGURATION_POINTS` points, so the candidate
+        list is shorter than the enumeration interval used elsewhere in this
+        owner. This test deliberately does *not* lower
+        `_CIRCLE_CHECKPOINT_INTERVAL`: patching it to 1 is what let the
+        interval exceed the whole loop unnoticed.
+        """
+
         observed: list[str] = []
 
         def _observe(stage: str) -> None:
@@ -657,28 +666,67 @@ class TestSpannedCircleDeadline:
         monkeypatch.setattr(
             "jacobian.math.geometry.operations.request_checkpoint", _observe
         )
-        monkeypatch.setattr(
-            "jacobian.math.geometry.operations._CIRCLE_CHECKPOINT_INTERVAL", 1
+        points = (
+            _point("0", "0"),
+            _point("1", "0"),
+            _point("0", "1"),
+            _point("1", "1"),
+            _point("2", "1"),
         )
-        native_spanned_circle_profile(
-            _configuration(
-                _point("0", "0"),
-                _point("1", "0"),
-                _point("0", "1"),
-                _point("1", "1"),
-            )
+        native_spanned_circle_profile(_configuration(*points))
+        # Every source point plus the bounding-box centre and the zero origin.
+        assert (
+            observed.count("during spanned-circle origin selection") == len(points) + 2
         )
-        assert any("origin selection" in stage for stage in observed)
 
-    def test_operation_binds_its_wall_deadline(self) -> None:
-        """The profile binds an operation-owned absolute deadline."""
+    def test_source_admission_runs_inside_the_bound_wall_envelope(self) -> None:
+        """The deadline is bound before the source is copied and projected.
+
+        Source revalidation re-validates a maximum configuration of 32,768-digit
+        components and rebuilds its planar projection, so it has to be a
+        cooperative participant in the same envelope rather than an unbounded
+        prefix that cancellation and expiry cannot interrupt.
+        """
+
         from jacobian._execution import (
             current_request_execution,
             request_execution,
         )
 
         observed: list[float | None] = []
-        original = operations_module.request_checkpoint
+        original = operations_module._admit_spanned_circle_source
+
+        def _observe_source_admission(configuration: object) -> object:
+            execution = current_request_execution()
+            observed.append(execution.deadline if execution is not None else None)
+            return original(configuration)  # type: ignore[arg-type]
+
+        with (
+            request_execution(time.monotonic()),
+            pytest.MonkeyPatch.context() as patch,
+        ):
+            patch.setattr(
+                operations_module,
+                "_admit_spanned_circle_source",
+                _observe_source_admission,
+            )
+            native_spanned_circle_profile(
+                _configuration(_point("0", "0"), _point("1", "0"), _point("0", "1"))
+            )
+
+        assert len(observed) == 1
+        assert observed[0] is not None
+
+    def test_operation_binds_its_wall_deadline(self) -> None:
+        """The profile binds an operation-owned absolute deadline."""
+        from jacobian._execution import (
+            current_request_execution,
+            request_checkpoint,
+            request_execution,
+        )
+
+        observed: list[float | None] = []
+        original = request_checkpoint
 
         def _observe(stage: str) -> None:
             execution = current_request_execution()

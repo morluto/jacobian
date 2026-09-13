@@ -226,6 +226,7 @@ def _admit_spanned_circle_source(
         configuration = PointConfiguration.model_validate(
             configuration.model_dump(warnings="none")
         )
+        request_checkpoint("during spanned-circle source revalidation")
     except ValidationError as error:
         detail = error.errors()[0]
         _reject_geometry_domain(
@@ -250,6 +251,7 @@ def _admit_spanned_circle_source(
             ),
         )
     for index, point in enumerate(points):
+        request_checkpoint("during spanned-circle source admission")
         coordinates = getattr(point, "coordinates", None)
         if not isinstance(coordinates, tuple) or len(coordinates) != 2:
             _reject_geometry_domain(
@@ -921,9 +923,12 @@ def _minimum_height_origin(
     candidates = (*points, _bounding_box_origin(points), (Fraction(0), Fraction(0)))
     best_origin: tuple[Fraction, Fraction] | None = None
     best_key: tuple[int, Fraction, Fraction] | None = None
-    for index, origin in enumerate(candidates):
-        if index % _CIRCLE_CHECKPOINT_INTERVAL == 0:
-            request_checkpoint("during spanned-circle origin selection")
+    for origin in candidates:
+        # One checkpoint per candidate, not per `_CIRCLE_CHECKPOINT_INTERVAL`
+        # candidates: a maximum source has 32 points, so a 34-element loop at
+        # an interval of 64 observes cancellation only at index 0 and then
+        # scores every remaining candidate unseen.
+        request_checkpoint("during spanned-circle origin selection")
         key = (
             _translated_max_digits(origin, points),
             origin[0],
@@ -983,10 +988,15 @@ def _wire_spanned_circle_entries(
 def spanned_circle_profile(
     configuration: PointConfiguration,
 ) -> SpannedCircleProfileResult:
-    """Return every distinct circle spanned by a non-collinear source triple."""
+    """Return every distinct circle spanned by a non-collinear source triple.
 
-    configuration, points = _admit_spanned_circle_source(configuration)
+    The operation wall envelope is bound before the source is revalidated so
+    the copy, projection, and per-point digit checks are participants in the
+    same envelope as the circle search that follows them.
+    """
+
     _bind_circle_deadline()
+    configuration, points = _admit_spanned_circle_source(configuration)
     point_values = tuple(_points_to_fractions(points))
     origin = _minimum_height_origin(point_values)
     translated = tuple(

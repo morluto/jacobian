@@ -5,7 +5,7 @@ from __future__ import annotations
 import unicodedata
 from collections import Counter
 from dataclasses import dataclass
-from itertools import permutations
+from itertools import pairwise, permutations
 from math import factorial, prod
 from typing import Any
 
@@ -202,6 +202,57 @@ def _part_signature(
     )
 
 
+def _signature_group_quotient(
+    signatures: tuple[tuple[object, ...], ...],
+    pair_color: dict[tuple[int, int], str],
+) -> tuple[tuple[tuple[int, ...], ...], int] | None:
+    """Compact quotient presentation when pair colors are class-constant.
+
+    When every part-pair edge color depends only on the endpoint signature
+    classes, the quotient is the direct product of symmetric groups on the
+    signature classes: emit adjacent transpositions within each class instead
+    of enumerating permutations. Return the quotient generators and the
+    quotient order, or None when one signature-class pair carries mixed colors.
+    """
+
+    groups: dict[tuple[object, ...], list[int]] = {}
+    for index, signature in enumerate(signatures):
+        groups.setdefault(signature, []).append(index)
+    classes = list(groups.values())
+    part_count = len(signatures)
+    class_of = {
+        index: class_id
+        for class_id, group in enumerate(classes)
+        for index in group
+    }
+    seen: dict[tuple[int, int], str] = {}
+    processed = 0
+    for left in range(part_count):
+        for right in range(left + 1, part_count):
+            class_pair = (class_of[left], class_of[right])
+            if class_pair[0] > class_pair[1]:
+                class_pair = (class_pair[1], class_pair[0])
+            color = pair_color.get((left, right), _UNCOLORED)
+            previous = seen.get(class_pair)
+            if previous is None:
+                seen[class_pair] = color
+            elif previous != color:
+                return None
+            processed += 1
+            if processed % 4096 == 0:
+                request_checkpoint("during full graph automorphism quotient admission")
+    generators: list[tuple[int, ...]] = []
+    order = 1
+    for group in classes:
+        ordered = sorted(group)
+        order *= factorial(len(ordered))
+        for first, second in pairwise(ordered):
+            transposition = list(range(part_count))
+            transposition[first], transposition[second] = second, first
+            generators.append(tuple(transposition))
+    return tuple(generators), order
+
+
 def _is_quotient_automorphism(
     sigma: tuple[int, ...],
     signatures: tuple[tuple[object, ...], ...],
@@ -308,23 +359,6 @@ def _extend_quotient_closure(
     return closure
 
 
-def _symmetric_quotient_generators(
-    indexed_parts: tuple[tuple[int, ...], ...], n: int
-) -> list[tuple[int, ...]]:
-    """Adjacent part transpositions for a full symmetric quotient."""
-
-    generators: list[tuple[int, ...]] = []
-    for source in range(len(indexed_parts) - 1):
-        permutation = list(range(n))
-        for left, right in zip(
-            indexed_parts[source], indexed_parts[source + 1], strict=True
-        ):
-            permutation[left] = right
-            permutation[right] = left
-        generators.append(tuple(permutation))
-    return generators
-
-
 def _wreath_generators_for_labeled_parts(
     n: int,
     vertices: tuple[str, ...],
@@ -351,23 +385,20 @@ def _wreath_generators_for_labeled_parts(
     signatures = tuple(
         _part_signature(part, vertex_colors, inside[i]) for i, part in enumerate(parts)
     )
-    if (
-        len(set(signatures)) == 1
-        and len(
-            {
-                pair_color.get((left, right), _UNCOLORED)
-                for left in range(part_count)
-                for right in range(left + 1, part_count)
-            }
+    grouped = _signature_group_quotient(signatures, pair_color)
+    if grouped is not None:
+        # Every cross-part edge color depends only on the endpoint signature
+        # classes (the single-signature case is the one-class instance), so the
+        # quotient is the direct product of symmetric groups on the classes.
+        # Emit its adjacent transpositions directly instead of enumerating
+        # ``part_count!`` permutations, which would exceed the admitted bound.
+        quotient_generators, quotient_order = grouped
+        order *= quotient_order
+        generators.extend(
+            _part_permutation_generator(sigma, indexed_parts, n)
+            for sigma in quotient_generators
+            if sigma != tuple(range(part_count))
         )
-        <= 1
-    ):
-        # Every part has one signature and every cross-part edge one color, so
-        # the quotient is the full symmetric group. Emit its adjacent
-        # transpositions directly instead of enumerating ``part_count!``
-        # permutations, which would exceed the admitted bound.
-        order *= factorial(part_count)
-        generators.extend(_symmetric_quotient_generators(indexed_parts, n))
         return tuple(generators), order
     automorphisms = _quotient_color_automorphisms(part_count, signatures, pair_color)
     if automorphisms is None:
@@ -1006,10 +1037,92 @@ def _component_class_pair_edge_profile(
     return tuple(sorted(pair_color.items()))
 
 
+def _original_cross_component_colors(
+    graph: ColoredUndirectedGraph,
+    vertices: tuple[str, ...],
+    complement_edges: set[tuple[int, int]],
+) -> dict[tuple[int, int], str] | None:
+    """Uniform original edge color per complement-component pair, else None.
+
+    Complement components are independent sets in the original graph, so a
+    component permutation is an original-graph automorphism only when it
+    preserves the declared colors on every cross-component edge. A component
+    pair carrying mixed colors cannot be handled compactly and declines the
+    complement shortcut.
+    """
+
+    components = _connected_components(
+        len(vertices), _indexed_adjacency(len(vertices), complement_edges)
+    )
+    if len(components) <= 1:
+        return None
+    component_of = {
+        position: index for index, part in enumerate(components) for position in part
+    }
+    position = {vertex: index for index, vertex in enumerate(vertices)}
+    declared = dict(
+        zip(
+            graph.graph.edges,
+            graph.edge_colors or (_UNCOLORED,) * len(graph.graph.edges),
+            strict=True,
+        )
+    )
+    pair_color: dict[tuple[int, int], str] = {}
+    for processed, (left, right) in enumerate(graph.graph.edges):
+        first, second = component_of[position[left]], component_of[position[right]]
+        if first == second:
+            continue
+        key = (first, second) if first < second else (second, first)
+        color = declared[canonical_edge(left, right)]
+        previous = pair_color.get(key)
+        if previous is None:
+            pair_color[key] = color
+        elif previous != color:
+            return None
+        if processed % 4096 == 0:
+            request_checkpoint("during special graph family recognition")
+    return pair_color
+
+
+def _append_clique_within_part_generators(
+    generators: list[tuple[int, ...]],
+    group: list[tuple[int, ...]],
+    vertex_colors: dict[str, str],
+    vertices: tuple[str, ...],
+) -> int:
+    """Append within-part symmetric generators; return the within order."""
+
+    first = group[0]
+    classes: dict[str, list[int]] = {}
+    for index in first:
+        classes.setdefault(vertex_colors[vertices[index]], []).append(index)
+    within_order = prod(factorial(len(members)) for members in classes.values())
+    for component in group:
+        component_classes: dict[str, list[int]] = {}
+        for index in component:
+            component_classes.setdefault(vertex_colors[vertices[index]], []).append(
+                index
+            )
+        for members in component_classes.values():
+            if len(members) >= 2:
+                swap = list(range(len(vertices)))
+                swap[members[0]], swap[members[1]] = members[1], members[0]
+                generators.append(tuple(swap))
+            if len(members) >= 3:
+                cycle = list(range(len(vertices)))
+                for source, target in zip(
+                    members, members[1:] + members[:1], strict=True
+                ):
+                    cycle[source] = target
+                generators.append(tuple(cycle))
+    return within_order
+
+
 def _special_repeated_cliques(
     graph: ColoredUndirectedGraph,
     vertices: tuple[str, ...],
     edges: set[tuple[int, int]],
+    cross_pair_colors: dict[tuple[int, int], str] | None = None,
 ) -> tuple[tuple[tuple[int, ...], ...], int] | None:
     components = _connected_components(
         len(vertices), _indexed_adjacency(len(vertices), edges)
@@ -1045,6 +1158,8 @@ def _special_repeated_cliques(
         for left, right in edges
     }
     groups: dict[tuple[object, ...], list[tuple[int, ...]]] = {}
+    signatures: list[tuple[object, ...]] = []
+    aligned_parts: list[tuple[int, ...]] = []
     for component in components:
         aligned = tuple(
             sorted(
@@ -1061,39 +1176,44 @@ def _special_repeated_cliques(
         if edge_profile is None:
             return None
         profile = (len(aligned), vertex_profile, edge_profile)
+        signatures.append(profile)
+        aligned_parts.append(aligned)
         groups.setdefault(profile, []).append(aligned)
     generators: list[tuple[int, ...]] = []
     order = 1
+    within_count = 0
+    within_product = 1
     for group in groups.values():
+        within_order = _append_clique_within_part_generators(
+            generators, group, vertex_colors, vertices
+        )
         first = group[0]
-        classes: dict[str, list[int]] = {}
-        for index in first:
-            classes.setdefault(vertex_colors[vertices[index]], []).append(index)
-        within_order = prod(factorial(len(members)) for members in classes.values())
-        for component in group:
-            component_classes: dict[str, list[int]] = {}
-            for index in component:
-                component_classes.setdefault(vertex_colors[vertices[index]], []).append(
-                    index
+        within_count = len(generators)
+        within_product *= within_order ** len(group)
+        if cross_pair_colors is None:
+            for component in group[1:]:
+                swap = list(range(len(vertices)))
+                for left, right in zip(first, component, strict=True):
+                    swap[left], swap[right] = right, left
+                generators.append(tuple(swap))
+            order *= within_order ** len(group) * factorial(len(group))
+    if cross_pair_colors is not None:
+        # Complement-mode swaps must additionally preserve the original
+        # cross-component edge colors, so the star swaps above are skipped in
+        # favor of the class-constant quotient presentation (or the shortcut
+        # declines when one signature-class pair carries mixed colors).
+        quotient = _signature_group_quotient(tuple(signatures), cross_pair_colors)
+        if quotient is None:
+            return None
+        quotient_generators, quotient_order = quotient
+        generators = generators[:within_count]
+        order = within_product * quotient_order
+        for sigma in quotient_generators:
+            generators.append(
+                _part_permutation_generator(
+                    tuple(sigma), tuple(aligned_parts), len(vertices)
                 )
-            for members in component_classes.values():
-                if len(members) >= 2:
-                    swap = list(range(len(vertices)))
-                    swap[members[0]], swap[members[1]] = members[1], members[0]
-                    generators.append(tuple(swap))
-                if len(members) >= 3:
-                    cycle = list(range(len(vertices)))
-                    for source, target in zip(
-                        members, members[1:] + members[:1], strict=True
-                    ):
-                        cycle[source] = target
-                    generators.append(tuple(cycle))
-        for component in group[1:]:
-            swap = list(range(len(vertices)))
-            for left, right in zip(first, component, strict=True):
-                swap[left], swap[right] = right, left
-            generators.append(tuple(swap))
-        order *= within_order ** len(group) * factorial(len(group))
+            )
     return tuple(generators), order
 
 
@@ -1123,21 +1243,25 @@ def _special_graph_generators(
         return complete_or_empty or path_or_cycle or repeated_cliques
     # A graph whose complement is a compact union of cliques (for example
     # complete bipartite K_{n,n}) has the same automorphism group as that
-    # complement, so the compact presentation transfers unchanged. The
-    # complement's edges are the original non-edges, whose declared colors are
-    # ignored by the clique recognition, so the shortcut is only sound when the
-    # edge coloring cannot distinguish parts: absent or uniform. A nonuniform
-    # edge coloring can pin a specific cross-component edge and must fall back to
-    # the generic search.
-    if graph.edge_colors and len(set(graph.edge_colors)) > 1:
-        return None
+    # complement, so the compact presentation transfers unchanged. Between
+    # complement components the original edge colors are carried through: only
+    # component permutations preserving the cross-component color profile are
+    # emitted, and a component pair with mixed colors declines the shortcut to
+    # the generic search instead of reporting too large a group.
     complement_edges = {
         (left, right)
         for left in range(len(vertices))
         for right in range(left + 1, len(vertices))
         if (left, right) not in edges
     }
-    return _special_repeated_cliques(graph, vertices, complement_edges)
+    cross_pair_colors = _original_cross_component_colors(
+        graph, vertices, complement_edges
+    )
+    if cross_pair_colors is None:
+        return None
+    return _special_repeated_cliques(
+        graph, vertices, complement_edges, cross_pair_colors=cross_pair_colors
+    )
 
 
 def _admit_graph_symmetry_orbit(

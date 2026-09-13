@@ -936,3 +936,83 @@ def test_nonuniform_edge_colors_never_use_the_complement_shortcut() -> None:
     result = full_graph_automorphism_group(graph)
     assert result.automorphism_count == 4
     assert result.generated_group_order == result.automorphism_count
+
+
+def test_tripartite_pair_edge_colors_keep_complement_presentation() -> None:
+    """K8,8,8 with per-side vertex colors and per-pair edge colors is S8^3."""
+    sides = tuple(tuple(f"v{side}{index}" for index in range(8)) for side in range(3))
+    vertices = sides[0] + sides[1] + sides[2]
+    side_of = {vertex: side for side, part in enumerate(sides) for vertex in part}
+    edges = tuple(
+        canonical_edge(left, right)
+        for index, left in enumerate(vertices)
+        for right in vertices[index + 1 :]
+        if side_of[left] != side_of[right]
+    )
+    pair_names = {(0, 1): "between01", (0, 2): "between02", (1, 2): "between12"}
+    edge_colors = tuple(
+        pair_names[tuple(sorted((side_of[left], side_of[right])))]
+        for left, right in edges
+    )
+    graph = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(vertices=vertices, edges=edges),
+        vertex_colors=tuple(f"side{side}" for side in range(3) for _ in range(8)),
+        edge_colors=edge_colors,
+    )
+    result = full_graph_automorphism_group(graph)
+    assert result.automorphism_count == factorial(8) ** 3
+    assert result.generated_group_order == result.automorphism_count
+    assert len(result.generators) == 6
+
+
+def test_two_signature_quotient_keeps_compact_presentation() -> None:
+    """Thirty-two pairs in two vertex-color classes keep a 62-generator S-quotient."""
+    pairs = tuple((f"p{index}a", f"p{index}b") for index in range(32))
+    vertices = tuple(vertex for pair in pairs for vertex in pair)
+    pair_of = {vertex: index for index, pair in enumerate(pairs) for vertex in pair}
+    edges = tuple(
+        canonical_edge(left, right)
+        for index, left in enumerate(vertices)
+        for right in vertices[index + 1 :]
+    )
+    edge_colors = tuple(
+        "within" if pair_of[left] == pair_of[right] else "between"
+        for left, right in edges
+    )
+    graph = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(vertices=vertices, edges=edges),
+        vertex_colors=tuple(
+            "red" if pair_of[vertex] < 16 else "blue" for vertex in vertices
+        ),
+        edge_colors=edge_colors,
+    )
+    result = full_graph_automorphism_group(graph)
+    assert result.automorphism_count == (2**32) * (factorial(16) ** 2)
+    assert result.generated_group_order == result.automorphism_count
+    assert len(result.generators) == 62
+
+
+def test_distinct_pair_colors_block_quotient_side_swaps() -> None:
+    """K2,2,2 with distinct per-pair edge colors has quotient identity."""
+    sides = tuple(tuple(f"w{side}{index}" for index in range(2)) for side in range(3))
+    vertices = sides[0] + sides[1] + sides[2]
+    side_of = {vertex: side for side, part in enumerate(sides) for vertex in part}
+    edges = tuple(
+        canonical_edge(left, right)
+        for index, left in enumerate(vertices)
+        for right in vertices[index + 1 :]
+        if side_of[left] != side_of[right]
+    )
+    pair_names = {(0, 1): "between01", (0, 2): "between02", (1, 2): "between12"}
+    edge_colors = tuple(
+        pair_names[tuple(sorted((side_of[left], side_of[right])))]
+        for left, right in edges
+    )
+    graph = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(vertices=vertices, edges=edges),
+        edge_colors=edge_colors,
+    )
+    result = full_graph_automorphism_group(graph)
+    assert result.automorphism_count == 2**3
+    assert result.generated_group_order == result.automorphism_count
+    assert len(result.generators) == 3

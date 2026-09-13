@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from itertools import combinations
 from math import comb
 from typing import Literal
 
 from sympy import QQ, Poly, Symbol, binomial, cancel, expand_func, fraction
 
 from jacobian._exact import CanonicalRational
-from jacobian._execution import request_checkpoint
+from jacobian._execution import (
+    execution_deadline,
+    request_checkpoint,
+    require_execution_deadline,
+)
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -131,11 +134,15 @@ def initial_monomial_ideal(
 
     monomial_order = _require_monomial_order(monomial_order)
     _require_homogeneous(ideal)
+    resource_budget = resource_budget or IdealComputationBudget()
+    deadline = execution_deadline(float(resource_budget.wall_seconds))
     if _is_explicit_unit_ideal(ideal):
+        require_execution_deadline(deadline)
         return _unit_initial_ideal(ideal, monomial_order)
     basis_result = groebner_basis(
         ideal, monomial_order, resource_budget=resource_budget
     )
+    require_execution_deadline(deadline)
     variables = ideal.variables
     order = {"lex": "lex", "grlex": "grlex", "grevlex": "grevlex"}[monomial_order]
     exponents: set[tuple[int, ...]] = set()
@@ -209,19 +216,67 @@ def _require_monomial_ideal(
     return tuple(generators)
 
 
-def _compositions(degree: int, variables: int) -> Iterator[tuple[int, ...]]:
-    if variables == 1:
-        yield (degree,)
-        return
-    for index, cuts in enumerate(
-        combinations(range(1, degree + variables), variables - 1)
-    ):
-        if index % 256 == 0:
-            request_checkpoint("during standard-monomial composition enumeration")
-        boundaries = (0, *cuts, degree + variables)
-        yield tuple(
-            boundaries[axis + 1] - boundaries[axis] - 1 for axis in range(variables)
+def _divides_monomial(
+    generator: tuple[int, ...], monomial: tuple[int, ...]
+) -> bool:
+    return all(
+        left <= right for left, right in zip(generator, monomial, strict=True)
+    )
+
+
+def _prefix_already_nonstandard(
+    prefix: list[int],
+    generators: tuple[tuple[int, ...], ...],
+    variable_count: int,
+) -> bool:
+    assigned = len(prefix)
+    return any(
+        all(generator[index] <= prefix[index] for index in range(assigned))
+        and all(
+            generator[index] == 0 for index in range(assigned, variable_count)
         )
+        for generator in generators
+    )
+
+
+def _enumerate_standard_monomials(
+    degree: int,
+    generators: tuple[tuple[int, ...], ...],
+    caps: tuple[int | None, ...],
+) -> Iterator[tuple[int, ...]]:
+    variable_count = len(caps)
+    if variable_count == 0:
+        if degree == 0 and not any(not any(generator) for generator in generators):
+            yield ()
+        return
+    prefix: list[int] = []
+    steps = 0
+
+    def visit(axis: int, remaining: int) -> Iterator[tuple[int, ...]]:
+        nonlocal steps
+        steps += 1
+        if steps % 256 == 0:
+            request_checkpoint("during standard-monomial composition enumeration")
+        if _prefix_already_nonstandard(prefix, generators, variable_count):
+            return
+        cap = caps[axis]
+        if axis == variable_count - 1:
+            maximum = remaining if cap is None else cap - 1
+            if remaining < 0 or remaining > maximum:
+                return
+            monomial = (*prefix, remaining)
+            if not any(
+                _divides_monomial(generator, monomial) for generator in generators
+            ):
+                yield monomial
+            return
+        maximum = remaining if cap is None else min(remaining, cap - 1)
+        for exponent in range(maximum + 1):
+            prefix.append(exponent)
+            yield from visit(axis + 1, remaining - exponent)
+            prefix.pop()
+
+    yield from visit(0, degree)
 
 
 def standard_monomials(
@@ -256,17 +311,17 @@ def standard_monomials(
             message="standard-monomial domain exceeds the bounded enumeration envelope",
         )
     monomials = tuple(
-        monomial
-        for monomial in _compositions(degree, variables)
-        if not any(
-            all(left <= right for left, right in zip(generator, monomial, strict=True))
-            for generator in generators
+        sorted(
+            _enumerate_standard_monomials(
+                degree, generators, _pure_power_caps(generators, variables)
+            ),
+            reverse=True,
         )
     )
     return StandardMonomialsResult(
         initial_ideal=initial_ideal,
         degree=degree,
-        monomials=tuple(sorted(monomials, reverse=True)),
+        monomials=monomials,
         count=len(monomials),
     )
 
@@ -389,7 +444,7 @@ def _all_source_generators_are_unit_monomials(ideal: RationalPolynomialIdeal) ->
         terms = generator.polynomial.terms
         if not terms:
             continue
-        if len(terms) != 1 or terms[0].coefficient != CanonicalRational(num=1, den=1):
+        if len(terms) != 1 or terms[0].coefficient.num == 0:
             return False
     return True
 
@@ -488,6 +543,7 @@ def _polynomial_from_integer_coefficients(
 def _series_data(
     initial_ideal: RationalPolynomialIdeal,
     prefix_degree: int,
+    deadline: float,
 ) -> tuple[
     RationalPolynomial,
     RationalFunction,
@@ -517,11 +573,13 @@ def _series_data(
     }
     ambient_numerator = _polynomial_from_integer_coefficients(subset_coefficients)
     request_checkpoint("during Hilbert-series cancellation")
+    require_execution_deadline(deadline)
     t = Symbol("t")
     ambient_expression = rational_polynomial_to_sympy(ambient_numerator).as_expr()
     unreduced = ambient_expression / (1 - t) ** variable_count
     numerator_expression, denominator_expression = fraction(cancel(unreduced))
     request_checkpoint("during Hilbert-series degree inspection")
+    require_execution_deadline(deadline)
     numerator_poly = Poly(numerator_expression, t, domain=QQ)
     denominator_poly = Poly(denominator_expression, t, domain=QQ)
     reduced_degree = max(
@@ -538,9 +596,7 @@ def _series_data(
         unreduced,
         ("t",),
         maximum_terms=MAX_RATIONAL_FUNCTION_TERMS,
-        deadline_check=lambda: request_checkpoint(
-            "during Hilbert-series normalization"
-        ),
+        deadline_check=lambda: require_execution_deadline(deadline),
     )
     denominator_exponent = max(
         (term.exponents[0] for term in series.denominator.terms),
@@ -607,10 +663,14 @@ def hilbert_series(
             message="Hilbert-series prefixes support degrees from 0 through 16",
         )
     _preflight_monomial_series_generator_bound(ideal, monomial_order)
+    resource_budget = resource_budget or IdealComputationBudget()
+    deadline = execution_deadline(float(resource_budget.wall_seconds))
     initial = initial_monomial_ideal(
         ideal, monomial_order, resource_budget=resource_budget
     )
-    data = _series_data(initial.initial_ideal, prefix_degree)
+    require_execution_deadline(deadline)
+    data = _series_data(initial.initial_ideal, prefix_degree, deadline)
+    require_execution_deadline(deadline)
     return HilbertSeriesResult(
         ideal=ideal,
         initial_ideal=initial.initial_ideal,
@@ -641,6 +701,8 @@ def hilbert_polynomial(
     resource_budget: IdealComputationBudget | None = None,
 ) -> HilbertPolynomialResult:
     monomial_order = _require_monomial_order(monomial_order)
+    resource_budget = resource_budget or IdealComputationBudget()
+    deadline = execution_deadline(float(resource_budget.wall_seconds))
     data = _series_projection(ideal, monomial_order, resource_budget=resource_budget)
     dimension = data.denominator_exponent
     h_degree = max(
@@ -652,7 +714,7 @@ def hilbert_polynomial(
     else:
         stabilization = max(0, h_degree - dimension + 1)
 
-    request_checkpoint("during Hilbert-polynomial construction")
+    require_execution_deadline(deadline)
     m = Symbol("m")
     if dimension == 0:
         polynomial = RationalPolynomial(

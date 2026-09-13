@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from time import monotonic
 
 import pytest
 from pydantic import ValidationError
@@ -777,3 +778,81 @@ def test_hilbert_series_admits_after_source_leadings_reduce() -> None:
     )
     result = hilbert_series(linear_pair, "lex", prefix_degree=2)
     assert result.prefix == (1, 0, 0)
+
+
+def test_nonzero_monomial_coefficients_count_toward_series_preflight(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    variables = ("x", "y")
+    generators = tuple(
+        RationalPolynomial(
+            variables=variables,
+            polynomial=SparseRationalPolynomial(
+                terms=(
+                    RationalPolynomialTerm(
+                        coefficient=CanonicalRational(num=2, den=1),
+                        exponents=(8 - index, index),
+                    ),
+                )
+            ),
+        )
+        for index in range(9)
+    )
+    ideal = RationalPolynomialIdeal(variables=variables, generators=generators)
+
+    def fail(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("scalar monomials must preflight before Groebner")
+
+    monkeypatch.setattr(graded_operations, "initial_monomial_ideal", fail)
+    with pytest.raises(
+        OperationResourceAdmissionError, match="at most 8 minimal generators"
+    ):
+        hilbert_series(ideal, prefix_degree=1)
+
+
+def test_linear_generators_prune_degree_thirty_two_traversal() -> None:
+    variables = tuple(f"x{index}" for index in range(8))
+    generators = tuple(
+        RationalPolynomial(
+            variables=variables,
+            polynomial=SparseRationalPolynomial(
+                terms=(
+                    RationalPolynomialTerm(
+                        coefficient=CanonicalRational(num=1, den=1),
+                        exponents=tuple(1 if axis == index else 0 for axis in range(8)),
+                    ),
+                )
+            ),
+        )
+        for index in range(7)
+    )
+    ideal = RationalPolynomialIdeal(variables=variables, generators=generators)
+    enumerated = standard_monomials(ideal, 32)
+    assert enumerated.count == 1
+    assert enumerated.monomials == ((0, 0, 0, 0, 0, 0, 0, 32),)
+
+
+def test_graded_binds_one_deadline_before_groebner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian._execution import current_request_execution, request_execution
+    from jacobian.math.polynomials.ideals._models import IdealComputationBudget
+
+    observed: dict[str, float | None] = {}
+    real_groebner = graded_operations.groebner_basis
+
+    def wrapped(
+        *args: object, **kwargs: object
+    ) -> object:
+        execution = current_request_execution()
+        observed["deadline"] = None if execution is None else execution.deadline
+        return real_groebner(*args, **kwargs)
+
+    monkeypatch.setattr(graded_operations, "groebner_basis", wrapped)
+    started = monotonic()
+    with request_execution(started, outer_deadline=started + 30):
+        initial_monomial_ideal(
+            _ideal((2, 0)), resource_budget=IdealComputationBudget(wall_seconds=5)
+        )
+    assert observed["deadline"] is not None
+    assert observed["deadline"] <= started + 5 + 1

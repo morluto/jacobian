@@ -1473,6 +1473,7 @@ def groebner_basis(
     """Compute a reduced Gröbner basis for a bounded ideal over QQ using SymPy."""
     resource_budget = resource_budget or IdealComputationBudget()
     _run_admission(lambda: _admit_groebner(ideal))
+    deadline = _bind_relation_deadline(resource_budget)
     source_ideal = ideal
     variables = source_ideal.variables
     order_map = {"lex": "lex", "grlex": "grlex", "grevlex": "grevlex"}
@@ -1487,11 +1488,10 @@ def groebner_basis(
         ],
     }
 
-    # The unbounded search runs in a killable worker under the declared
-    # wall-time budget; result assembly then operates only on the declared
-    # output limits.
+    # The unbounded search runs in a killable worker under the one shared
+    # request deadline; result assembly then charges the remaining allowance.
     try:
-        result_payload = _run_sympy_kernel(payload, resource_budget.wall_seconds)
+        result_payload = _run_relation_kernel_before_deadline(payload, deadline)
     except _SympyKernelCancelledError:
         raise OperationExecutionCancelledError(
             "the Groebner computation was cancelled before producing a result"

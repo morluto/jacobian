@@ -281,7 +281,6 @@ def construct_steiner_triple_system(
         order=order,
         design=design,
         states_explored=states,
-        source_shard=shard,
     )
 
 

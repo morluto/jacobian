@@ -269,9 +269,11 @@ class SteinerTripleSystemResult(StrictModel):
     source_shard: SteinerTripleSystemShard | None = Field(
         default=None,
         description=(
-            "The continuation prefix actually searched. A NOT_FOUND result "
-            "with this field set is shard-local infeasibility, not global "
-            "nonexistence of an STS of this order."
+            "The continuation prefix actually searched. Only shard-scoped incomplete "
+            "or negative outcomes retain it: a COMPUTED design already contains "
+            "every selected triple, while a NOT_FOUND result with this field set "
+            "is shard-local infeasibility, not global nonexistence of an STS of "
+            "this order."
         ),
     )
 
@@ -289,6 +291,12 @@ class SteinerTripleSystemResult(StrictModel):
                 "a searched source shard must have the result order",
             )
         if self.status == "COMPUTED":
+            if self.source_shard is not None:
+                raise _validation_error(
+                    "steiner_computed_source_shard",
+                    "a COMPUTED design contains every selected triple, so it cannot "
+                    "retain the searched shard as extra provenance",
+                )
             _require_computed_steiner_design(self)
         elif self.status == "UNKNOWN":
             _require_unknown_steiner_payload(self)

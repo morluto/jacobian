@@ -203,6 +203,18 @@ def _admit_source(
     return backend, group_order, degree, admitted
 
 
+def _next_unclassified_seed(
+    source_seed_order: tuple[tuple[int, ...], ...],
+    next_seed_index: int,
+    unclassified: set[tuple[int, ...]],
+) -> tuple[tuple[int, ...], int]:
+    """Return the first indexed unclassified source and its order position."""
+
+    while source_seed_order[next_seed_index] not in unclassified:
+        next_seed_index += 1
+    return source_seed_order[next_seed_index], next_seed_index
+
+
 def tuple_family_orbit_profile(
     request: TupleFamilyOrbitSource,
 ) -> TupleFamilyOrbitResult:
@@ -231,6 +243,14 @@ def tuple_family_orbit_profile(
     source_indices_by_tuple: dict[tuple[int, ...], list[int]] = {}
     for index, member in enumerate(source_positions):
         source_indices_by_tuple.setdefault(member, []).append(index)
+    # Seed each orbit from its first indexed source so the least transporter
+    # recorded during image enumeration is reused as the source-to-
+    # representative transporter.  The ambient orbit and its representative do
+    # not depend on which member generates them, so this never changes the
+    # result; it only avoids a second transporter scan when the first source is
+    # not the lexicographically least member of its orbit.
+    source_seed_order = tuple(dict.fromkeys(source_positions))
+    next_seed_index = 0
     unclassified = set(source_positions)
     rows: list[TupleOrbitRow] = []
     ambient_orbits: list[set[tuple[int, ...]]] = []
@@ -241,7 +261,9 @@ def tuple_family_orbit_profile(
 
     while unclassified:
         request_checkpoint("during tuple-family orbit partition")
-        seed = min(unclassified)
+        seed, next_seed_index = _next_unclassified_seed(
+            source_seed_order, next_seed_index, unclassified
+        )
         images: dict[tuple[int, ...], tuple[int, ...]] = {}
         for element in elements:
             request_checkpoint("during tuple-family image enumeration")

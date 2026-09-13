@@ -708,3 +708,30 @@ def test_many_orbits_reuse_image_pass_transporters() -> None:
         assert tuple(row.least_transporter[value] for value in source) == (
             row.representative
         )
+
+
+def test_first_indexed_source_seeds_each_orbit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A shifted first source still reuses the image-pass transporter.
+
+    The ``(1,)`` member is the first indexed source of its orbit while ``(0,)``
+    is lexicographically smaller, so the old lexicographic seed forced a second
+    transporter scan.  A zero transporter budget makes any fallback fail.
+    """
+
+    import jacobian.math.groups.tuple_orbits.operations as native
+
+    monkeypatch.setattr(native, "MAX_TUPLE_ORBIT_TRANSPORTERS", 0)
+    family = ((1,), (0,), (2,))
+    result = tuple_family_orbit_profile(
+        TupleFamilyOrbitSource(action=_cyclic_action(), arity=1, family=family)
+    )
+    assert len(result.rows) == 1
+    row = result.rows[0]
+    assert row.source_indices == (0, 1, 2)
+    assert row.representative == (0,)
+    first_source = family[row.source_indices[0]]
+    assert tuple(row.least_transporter[value] for value in first_source) == (
+        row.representative
+    )

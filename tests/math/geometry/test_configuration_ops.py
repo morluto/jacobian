@@ -674,10 +674,49 @@ class TestSpannedCircleDeadline:
             _point("2", "1"),
         )
         native_spanned_circle_profile(_configuration(*points))
-        # Every source point plus the bounding-box centre and the zero origin.
-        assert (
-            observed.count("during spanned-circle origin selection") == len(points) + 2
+        # Each axis selects its component independently, evaluating every
+        # candidate on that axis exactly once, and checkpoints per candidate.
+        from fractions import Fraction
+
+        from jacobian.math.geometry.operations import _axis_origin_candidates
+
+        xs = tuple(Fraction(point.x.num, point.x.den) for point in points)
+        ys = tuple(Fraction(point.y.num, point.y.den) for point in points)
+        expected = len(_axis_origin_candidates(xs)) + len(_axis_origin_candidates(ys))
+        assert observed.count("during spanned-circle origin selection") == expected
+
+    def test_shifted_reciprocal_family_reaches_the_truncating_origin(self) -> None:
+        """A shared integer part must not defeat the origin search.
+
+        For `x_i = 10^20 + 1/q_i` on 32 collinear points with 11-digit primes,
+        every source origin and the bounding-box centre leave a 20-digit integer
+        part in the offsets, charging 21 digits, while truncating toward zero
+        leaves `1/q_i` and charges 11. The fixed candidate list rejected this
+        valid family at the collinearity work bound.
+        """
+
+        import sympy
+
+        from jacobian._exact import CanonicalRational
+        from jacobian.math.geometry.operations import _minimum_height_origin
+
+        primes = [sympy.prime(10**9 + index) for index in range(32)]
+        coordinates = tuple(10**20 + Fraction(1, prime) for prime in primes)
+        points = tuple((value, Fraction(0)) for value in coordinates)
+        origin = _minimum_height_origin(points)
+        assert origin == (Fraction(10**20), Fraction(0))
+
+        configuration = _configuration(
+            *tuple(
+                RationalPoint2D(
+                    x=CanonicalRational(num=10**20 * prime + 1, den=prime),
+                    y=CanonicalRational(num=0, den=1),
+                )
+                for prime in primes
+            )
         )
+        result = native_spanned_circle_profile(configuration)
+        assert result.circles == ()
 
     def test_source_admission_runs_inside_the_bound_wall_envelope(self) -> None:
         """The deadline is bound before the source is copied and projected.

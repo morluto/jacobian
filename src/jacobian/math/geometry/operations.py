@@ -889,25 +889,45 @@ def _fraction_serialized_digits(value: Fraction) -> int:
     )
 
 
-def _translated_max_digits(
-    origin: tuple[Fraction, Fraction],
-    points: tuple[tuple[Fraction, Fraction], ...],
-) -> int:
-    return max(
-        max(
-            _fraction_digits(point[0] - origin[0]),
-            _fraction_digits(point[1] - origin[1]),
-        )
-        for point in points
-    )
+def _axis_origin_candidates(values: tuple[Fraction, ...]) -> tuple[Fraction, ...]:
+    """Return the origin values this axis considers, in a stable order.
+
+    A fixed list of source points cannot reach the origin that matters for a
+    shifted family: for `x_i = 10^20 + 1/q_i` the source points and the
+    bounding-box centre all leave a 20-digit integer part in every offset,
+    while truncating toward zero cancels it and leaves the 1/q_i. Every
+    coordinate is therefore paired with its truncation, and the ambient origin
+    plus the bounding interval's endpoints and centre are retained so those
+    earlier candidates keep their reach.
+    """
+
+    candidates: set[Fraction] = {Fraction(0)}
+    for value in values:
+        candidates.add(value)
+        candidates.add(Fraction(value.numerator // value.denominator))
+    low = min(values)
+    high = max(values)
+    candidates.update((low, high, (low + high) / 2))
+    return tuple(sorted(candidates))
 
 
-def _bounding_box_origin(
-    points: tuple[tuple[Fraction, Fraction], ...],
-) -> tuple[Fraction, Fraction]:
-    xs = tuple(point[0] for point in points)
-    ys = tuple(point[1] for point in points)
-    return (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
+def _minimum_axis_origin(values: tuple[Fraction, ...]) -> Fraction:
+    """Choose the origin component minimising this axis's widest offset.
+
+    Ties are broken by the smallest candidate value, so the choice depends only
+    on the multiset of coordinates and not on the order the caller listed them.
+    """
+
+    best_key: tuple[int, Fraction] | None = None
+    best: Fraction | None = None
+    for candidate in _axis_origin_candidates(values):
+        request_checkpoint("during spanned-circle origin selection")
+        key = (max(_fraction_digits(value - candidate) for value in values), candidate)
+        if best_key is None or key < best_key:
+            best_key = key
+            best = candidate
+    assert best is not None
+    return best
 
 
 def _minimum_height_origin(
@@ -915,32 +935,18 @@ def _minimum_height_origin(
 ) -> tuple[Fraction, Fraction]:
     """Choose an origin that minimises translated coordinate height.
 
-    Candidates are every source point, the zero origin, and the axis-aligned
-    bounding-box centre, so a non-source midpoint or the ambient origin can
-    win when it strictly reduces digit width. The selection is independent of
-    source order: among equal heights the lexicographically least coordinate
-    pair is kept.
+    The widest translated offset is
+    `max(max_i digits(x_i - o_x), max_j digits(y_j - o_y))`, which is separable:
+    the two axes never interact. Minimising each axis independently therefore
+    attains the joint minimum over the product of the per-axis candidate sets,
+    and no joint choice can beat `max(min_x, min_y)` because each offset bounds
+    its own axis minimum. The selection is independent of source order.
     """
 
-    candidates = (*points, _bounding_box_origin(points), (Fraction(0), Fraction(0)))
-    best_origin: tuple[Fraction, Fraction] | None = None
-    best_key: tuple[int, Fraction, Fraction] | None = None
-    for origin in candidates:
-        # One checkpoint per candidate, not per `_CIRCLE_CHECKPOINT_INTERVAL`
-        # candidates: a maximum source has 32 points, so a 34-element loop at
-        # an interval of 64 observes cancellation only at index 0 and then
-        # scores every remaining candidate unseen.
-        request_checkpoint("during spanned-circle origin selection")
-        key = (
-            _translated_max_digits(origin, points),
-            origin[0],
-            origin[1],
-        )
-        if best_key is None or key < best_key:
-            best_key = key
-            best_origin = origin
-    assert best_origin is not None
-    return best_origin
+    return (
+        _minimum_axis_origin(tuple(point[0] for point in points)),
+        _minimum_axis_origin(tuple(point[1] for point in points)),
+    )
 
 
 def _bind_circle_deadline() -> None:

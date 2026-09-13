@@ -643,3 +643,25 @@ def test_forged_incidence_rows_reject_before_sorting() -> None:
     ]
     with pytest.raises(ValidationError):
         FixedLengthCycleEnumerationResult.model_validate(payload)
+
+
+def test_bipartite_complete_four_cycles_use_the_exact_count() -> None:
+    """K_{2,20} has C(2,2)*C(20,2) = 190 four-cycles."""
+    result = enumerate_fixed_length_cycles(_complete_bipartite(2, 20), 4)
+    assert result.cycle_count == 190
+
+
+def test_multipartite_complete_four_cycles_use_the_exact_count() -> None:
+    """K_{3,3,3} four-cycles match the induced multipartite count."""
+    parts = [tuple(f"p{part}{index}" for index in range(3)) for part in range(3)]
+    vertices = tuple(vertex for part in parts for vertex in part)
+    part_of = {vertex: index for index, part in enumerate(parts) for vertex in part}
+    edges = tuple(
+        canonical_edge(left, right)
+        for index, left in enumerate(vertices)
+        for right in vertices[index + 1 :]
+        if part_of[left] != part_of[right]
+    )
+    graph = SimpleUndirectedGraph(vertices=vertices, edges=edges)
+    result = enumerate_fixed_length_cycles(graph, 4)
+    assert result.cycle_count == 108

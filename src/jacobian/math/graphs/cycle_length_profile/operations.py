@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unicodedata
 from dataclasses import dataclass
-from itertools import pairwise
+from itertools import combinations, pairwise
 
 import networkx as nx
 
@@ -725,8 +725,35 @@ def _multipartite_cycle_exists(part_sizes: tuple[int, ...], cycle_length: int) -
     return cycle_length <= longest
 
 
+def _simple_four_cycle_count(part_sizes: tuple[int, ...]) -> int:
+    """Count simple four-cycles in a complete multipartite graph.
+
+    Adds the three-part cycles (two vertices from one part, one from each of
+    two others) to the induced family; these cycles have a chord between the
+    two single-part vertices.
+    """
+
+    count = _chordless_four_cycle_count(part_sizes)
+    for doubled in range(len(part_sizes)):
+        pairs = part_sizes[doubled] * (part_sizes[doubled] - 1) // 2
+        if pairs == 0:
+            continue
+        others = [
+            part_sizes[index] for index in range(len(part_sizes)) if index != doubled
+        ]
+        for left_index, left in enumerate(others):
+            for right in others[left_index + 1 :]:
+                count += pairs * left * right
+    return count
+
+
 def _chordless_four_cycle_count(part_sizes: tuple[int, ...]) -> int:
-    """Count induced 4-cycles in a complete multipartite graph."""
+    """Count induced 4-cycles in a complete multipartite graph.
+
+    An induced four-cycle either uses two vertices from each of two parts, or
+    one vertex from each of four distinct parts (any two vertices in distinct
+    parts are non-adjacent within the cycle's part gaps, so no chord exists).
+    """
 
     count = 0
     for left_index, left in enumerate(part_sizes):
@@ -735,6 +762,12 @@ def _chordless_four_cycle_count(part_sizes: tuple[int, ...]) -> int:
             continue
         for right in part_sizes[left_index + 1 :]:
             count += left_pairs * (right * (right - 1) // 2)
+    # Four distinct parts, one vertex from each.
+    for indices in combinations(range(len(part_sizes)), 4):
+        product = 1
+        for index in indices:
+            product *= part_sizes[index]
+        count += product
     return count
 
 
@@ -803,6 +836,16 @@ def _falling_factorial(n: int, k: int) -> int:
     for offset in range(k):
         result *= n - offset
     return result
+
+
+def _multipartite_four_cycle_work(
+    block: tuple[str, ...], adjacency_sets: dict[str, set[str]]
+) -> tuple[int, dict[str, tuple[str, ...]]]:
+    """Traversal work and adjacency for a multipartite four-cycle block."""
+
+    local = _block_adjacency(block, adjacency_sets)
+    adjacency = {vertex: tuple(sorted(local[vertex])) for vertex in block}
+    return len(block) ** 2, adjacency
 
 
 def _block_fixed_cycle_bounds(
@@ -1002,6 +1045,21 @@ def _admit_fixed_cycle_search_plan(
         ):
             # A recognized multipartite block with no cycle of this length
             # contributes nothing and must not pay the generic all-vertex bound.
+            continue
+        if part_sizes is not None and cycle_length == 4 and not chordless:
+            # The simple four-cycles of a complete multipartite graph are the
+            # induced family plus the three-part cycles that take two vertices
+            # from one part and one from each of two others (which have a
+            # chord), so use the exact simple count instead of the
+            # complete-graph bound.
+            block_work, block_adjacency = _multipartite_four_cycle_work(
+                block, adjacency_sets
+            )
+            complete_work += block_work
+            cycle_upper_bound += _simple_four_cycle_count(part_sizes)
+            search_blocks.append(
+                _FixedCycleBlock(adjacency=block_adjacency, core_vertices=block)
+            )
             continue
         block_work, block_cycles, block_adjacency = _block_fixed_cycle_bounds(
             block, adjacency_sets, cycle_length, chordless=chordless

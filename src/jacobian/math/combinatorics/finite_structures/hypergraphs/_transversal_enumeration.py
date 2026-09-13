@@ -250,6 +250,15 @@ def _minimal_edges(
                 comparisons += 1
                 if comparisons % 256 == 0:
                     request_checkpoint("during minimal transversal domination")
+                if comparisons > MAX_TRANSVERSAL_ENUMERATION_WORK:
+                    raise OperationResourceAdmissionError(
+                        location=("hypergraph", "edges"),
+                        code="hypergraph.minimal_transversal.antichain_work_bound",
+                        message=(
+                            "edge-domination presolve exceeds the "
+                            f"{MAX_TRANSVERSAL_ENUMERATION_WORK}-comparison work bound"
+                        ),
+                    )
                 if other < edge:
                     dominated = True
                     break

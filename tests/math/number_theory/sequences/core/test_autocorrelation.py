@@ -613,7 +613,7 @@ def test_oversized_integer_wire_entries_are_rejected_before_parsing() -> None:
         FiniteRationalSequence.model_validate(payload)
 
 
-def test_autocorrelation_catalog_schema_registers_canonical_rational_defs() -> None:
+def test_autocorrelation_value_schema_registers_canonical_rational_defs() -> None:
     schema = FiniteSequence.model_json_schema()
     assert "CanonicalRational" in json.dumps(schema)
     catalog = Catalog.open()
@@ -649,3 +649,23 @@ def test_unit_factor_does_not_add_a_product_digit() -> None:
     )
     result = sequence_order_shape(sequence)
     assert result.first_log_concavity_violation is not None or result.log_concavity_rows
+
+
+def test_sparse_wide_entry_charges_actual_comparisons() -> None:
+    """Only comparisons adjacent to a wide entry are charged, not all entries."""
+    wide = CanonicalRational(num=10**32_767, den=1)
+    zero = CanonicalRational(num=0, den=1)
+    sequence = FiniteRationalSequence(values=(wide, *(zero for _ in range(199))))
+    result = sequence_order_shape(sequence)
+    assert len(result.log_concavity_rows) == 198
+
+
+def test_alternating_sequence_counts_actual_peak_slots() -> None:
+    """A peak-free 90,000-entry profile is admitted with its real peak count."""
+    one = CanonicalRational(num=1, den=1)
+    zero = CanonicalRational(num=0, den=1)
+    sequence = FiniteRationalSequence(
+        values=tuple(one if index % 2 == 0 else zero for index in range(90_000))
+    )
+    result = sequence_order_shape(sequence)
+    assert result.weak_unimodal_peak_positions == ()

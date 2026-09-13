@@ -238,6 +238,31 @@ def _product_component_digits(
     )
 
 
+def _weak_unimodal_peak_count(fractions: tuple[Fraction, ...]) -> int:
+    """Count positions that are both a weak-nondecreasing prefix and suffix end."""
+
+    size = len(fractions)
+    if size == 0:
+        return 0
+    nondecreasing_prefix = [True] * size
+    for index in range(1, size):
+        if index % 512 == 0:
+            request_checkpoint("during order-shape prefix scan")
+        nondecreasing_prefix[index] = (
+            nondecreasing_prefix[index - 1] and fractions[index - 1] <= fractions[index]
+        )
+    count = 0
+    nonincreasing = True
+    for index in range(size - 1, -1, -1):
+        if index % 512 == 0:
+            request_checkpoint("during order-shape suffix scan")
+        if index < size - 1:
+            nonincreasing = nonincreasing and fractions[index] >= fractions[index + 1]
+        if nondecreasing_prefix[index] and nonincreasing:
+            count += 1
+    return count
+
+
 def _admit_order_shape(
     request: FiniteRationalSequence,
 ) -> tuple[CanonicalRational, ...]:
@@ -245,25 +270,25 @@ def _admit_order_shape(
 
     rational_values = _order_shape_rationals(request)
     size = len(rational_values)
-    component_digits = max(
-        (
-            max(
-                len(format_canonical_integer(abs(value.num))),
-                len(format_canonical_integer(value.den)),
-            )
-            for value in rational_values
-        ),
-        default=1,
-    )
     source_digits = sum(
         len(format_canonical_integer(abs(value.num)))
         + len(format_canonical_integer(value.den))
         for value in rational_values
     )
+    component_widths = tuple(
+        max(
+            len(format_canonical_integer(abs(value.num))),
+            len(format_canonical_integer(value.den)),
+        )
+        for value in rational_values
+    )
     row_count = max(0, size - 2)
-    # The result retains the source, one peak-position slot per source entry,
-    # and four slots (index, two exact products, decision) per interior row.
-    result_allocations = size + size + 4 * row_count + 8
+    peak_count = _weak_unimodal_peak_count(
+        tuple(value.as_fraction() for value in rational_values)
+    )
+    # The result retains the source, one slot per actual peak position, and
+    # four slots (index, two exact products, decision) per interior row.
+    result_allocations = size + peak_count + 4 * row_count + 8
     if result_allocations > MAX_ORDER_SHAPE_RESULT_ALLOCATIONS:
         raise OperationResourceAdmissionError(
             location=("values",),
@@ -274,7 +299,19 @@ def _admit_order_shape(
                 f"{MAX_ORDER_SHAPE_RESULT_ALLOCATIONS}"
             ),
         )
-    if size * component_digits > MAX_ORDER_SHAPE_WORK:
+    # Charge the actual comparison operands: only adjacent and neighbouring
+    # widths are compared, not the widest component across every entry.
+    comparison_work = 0
+    for index in range(size):
+        if index % 512 == 0:
+            request_checkpoint("during order-shape comparison admission")
+        if index + 1 < size:
+            comparison_work += max(component_widths[index], component_widths[index + 1])
+        if 0 < index < size - 1:
+            comparison_work += max(
+                component_widths[index - 1], component_widths[index + 1]
+            )
+    if comparison_work > MAX_ORDER_SHAPE_WORK:
         raise OperationResourceAdmissionError(
             location=("values",),
             code="sequences.order_shape.work_bound",
@@ -431,45 +468,58 @@ def _order_shape_scalar(
     return CanonicalRational.from_fraction(value)
 
 
-def sequence_order_shape(
-    request: FiniteRationalSequence,
-) -> SequenceOrderShapeResult:
-    fractions = tuple(value.as_fraction() for value in _admit_order_shape(request))
-    nondecreasing_violation = next(
-        (
-            index
-            for index in range(len(fractions) - 1)
-            if fractions[index] > fractions[index + 1]
-        ),
-        None,
-    )
-    nonincreasing_violation = next(
-        (
-            index
-            for index in range(len(fractions) - 1)
-            if fractions[index] < fractions[index + 1]
-        ),
-        None,
-    )
-    nondecreasing_prefix = [True] * len(fractions)
-    for index in range(1, len(fractions)):
+def _order_shape_monotonicity(
+    fractions: tuple[Fraction, ...],
+) -> tuple[int | None, int | None]:
+    """Return the first weak-monotonicity violations in each direction."""
+
+    nondecreasing_violation = None
+    nonincreasing_violation = None
+    for index in range(len(fractions) - 1):
+        if index % 512 == 0:
+            request_checkpoint("during order-shape monotonicity scan")
+        if nondecreasing_violation is None and fractions[index] > fractions[index + 1]:
+            nondecreasing_violation = index
+        if nonincreasing_violation is None and fractions[index] < fractions[index + 1]:
+            nonincreasing_violation = index
+    return nondecreasing_violation, nonincreasing_violation
+
+
+def _order_shape_peaks(fractions: tuple[Fraction, ...]) -> tuple[int, ...]:
+    """Return every weak-unimodal peak position."""
+
+    size = len(fractions)
+    nondecreasing_prefix = [True] * size
+    for index in range(1, size):
         if index % 512 == 0:
             request_checkpoint("during order-shape prefix scan")
         nondecreasing_prefix[index] = (
             nondecreasing_prefix[index - 1] and fractions[index - 1] <= fractions[index]
         )
-    nonincreasing_suffix = [True] * len(fractions)
-    for index in range(len(fractions) - 2, -1, -1):
+    nonincreasing_suffix = [True] * size
+    for index in range(size - 2, -1, -1):
         if index % 512 == 0:
             request_checkpoint("during order-shape suffix scan")
         nonincreasing_suffix[index] = (
             nonincreasing_suffix[index + 1] and fractions[index] >= fractions[index + 1]
         )
-    peaks = tuple(
-        index
-        for index in range(len(fractions))
-        if nondecreasing_prefix[index] and nonincreasing_suffix[index]
+    peaks: list[int] = []
+    for index in range(size):
+        if index % 512 == 0:
+            request_checkpoint("during order-shape peak scan")
+        if nondecreasing_prefix[index] and nonincreasing_suffix[index]:
+            peaks.append(index)
+    return tuple(peaks)
+
+
+def sequence_order_shape(
+    request: FiniteRationalSequence,
+) -> SequenceOrderShapeResult:
+    fractions = tuple(value.as_fraction() for value in _admit_order_shape(request))
+    nondecreasing_violation, nonincreasing_violation = _order_shape_monotonicity(
+        fractions
     )
+    peaks = _order_shape_peaks(fractions)
     log_row_list: list[SequenceLogConcavityRow] = []
     for index in range(1, len(fractions) - 1):
         if index % 512 == 0:
@@ -486,19 +536,23 @@ def sequence_order_shape(
         )
     log_rows = tuple(log_row_list)
     first_log_violation = next((row.index for row in log_rows if not row.holds), None)
-    first_negative = next(
-        (index for index, value in enumerate(fractions) if value < 0), None
-    )
-    nonzero = [index for index, value in enumerate(fractions) if value != 0]
-    internal_zero_indices = (
-        tuple(
-            index
-            for index in range(nonzero[0] + 1, nonzero[-1])
-            if fractions[index] == 0
-        )
-        if nonzero
-        else ()
-    )
+    first_negative = None
+    nonzero: list[int] = []
+    for index, value in enumerate(fractions):
+        if index % 512 == 0:
+            request_checkpoint("during order-shape witness scan")
+        if first_negative is None and value < 0:
+            first_negative = index
+        if value != 0:
+            nonzero.append(index)
+    internal_zero_list: list[int] = []
+    if nonzero:
+        for index in range(nonzero[0] + 1, nonzero[-1]):
+            if index % 512 == 0:
+                request_checkpoint("during order-shape internal-zero scan")
+            if fractions[index] == 0:
+                internal_zero_list.append(index)
+    internal_zero_indices = tuple(internal_zero_list)
     first_internal_zero = internal_zero_indices[0] if internal_zero_indices else None
     return SequenceOrderShapeResult(
         source=request,

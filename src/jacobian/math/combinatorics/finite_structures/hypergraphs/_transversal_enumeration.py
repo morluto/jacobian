@@ -352,9 +352,7 @@ def _admit_enumeration(
             for size in range(0 if forced else 1, pre_free_maximum + 1)
         )
         if (
-            pre_candidate_count * len(pre_edges)
-            + pre_minimality_work
-            + domination_work
+            pre_candidate_count * len(pre_edges) + pre_minimality_work + domination_work
             > MAX_TRANSVERSAL_ENUMERATION_WORK
         ):
             raise OperationResourceAdmissionError(
@@ -425,9 +423,7 @@ def _admit_enumeration(
             ),
         )
 
-    output_incidences = possible_rows * min(
-        maximum, len(forced) + len(free_vertices)
-    )
+    output_incidences = possible_rows * min(maximum, len(forced) + len(free_vertices))
     if output_incidences > MAX_TRANSVERSAL_OUTPUT_INCIDENCES:
         raise OperationResourceAdmissionError(
             location=("maximum_cardinality",),

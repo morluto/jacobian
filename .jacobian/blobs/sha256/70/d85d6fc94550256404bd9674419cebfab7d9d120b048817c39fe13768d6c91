@@ -1,0 +1,1 @@
+{"definition":{"entrypoint":"jacobian.plugins.matrices:transform_row_major_capability","module_digest":"sha256:34a19eddc22777d4d5f65705a2c9159e00d01d24a1da796ab89bf62f30db4bef"},"descriptor_version":"1","kind":"implementation","name":"jacobian.plugins.matrices:transform_row_major_capability","version":"1"}

@@ -15,6 +15,7 @@ def test_exact_public_api_symbols() -> None:
         "SemistandardTableauCheckResult",
         "SemistandardYoungTableauCountResult",
         "StandardTableauCheckResult",
+        "TableauCandidate",
         "WeightedOrderedWord",
         "check_semistandard_tableau",
         "check_standard_tableau",

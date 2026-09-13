@@ -1,0 +1,1 @@
+{"definition":{"bipartite_semantics":"underlying undirected graph","description":"finite directed graphs, underlying-edge bipartiteness, and all simple source-terminal paths","path_semantics":"all simple paths induced by graph arcs"},"descriptor_version":"1","kind":"semantics","name":"jacobian.graph-paths","version":"1"}

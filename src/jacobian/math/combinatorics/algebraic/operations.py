@@ -45,6 +45,7 @@ from jacobian.math.combinatorics.symmetric_functions.values import (
     IntegerPartition,
     SemistandardYoungTableau,
     StandardYoungTableau,
+    TableauCandidate,
     require_semistandard,
     require_standard,
 )
@@ -252,6 +253,24 @@ def _ssyt_count_digit_bound(
     cell_count = sum(partition.parts)
     if cell_count == 0:
         return max(1, alphabet_digits)
+    # Cheap overflow test before the per-cell logarithmic scan.  For a
+    # partition of ``n`` cells in ``r`` rows, every hook-content numerator
+    # factor is at least ``alphabet_size - r + 1`` and the hook product is at
+    # most ``n!``, so the exact count is at least
+    # ``(alphabet_size - r + 1)**n / n!``.  If that lower bound already exceeds
+    # the canonical envelope, return a cheap sound upper bound without walking
+    # the whole alphabet for every cell (which costs seconds at 32,767 digits).
+    smallest_factor = alphabet_size - len(partition.parts) + 1
+    if smallest_factor >= 1:
+        lower_units = cell_count * (
+            _log10_lower_units(smallest_factor) - _log10_upper_units(cell_count)
+        )
+        if lower_units >= _MAX_SSYT_COUNT_DIGITS * _LOG10_SCALE:
+            return max(
+                1,
+                alphabet_digits,
+                cell_count * _upper_decimal_digits(alphabet_size + cell_count),
+            )
     conjugate = conjugate_partition(partition).parts
     numerator_log_units = 0
     hook_product = 1
@@ -631,25 +650,6 @@ def _is_shape_rejection(error: ValidationError) -> bool:
     return bool(types) and all(item in _MEMBERSHIP_SHAPE_ERRORS for item in types)
 
 
-def _revalidate_tableau(tableau: object, carrier: type[StrictModel]) -> StrictModel:
-    """Return a freshly validated carrier, rejecting forged instances."""
-
-    if type(tableau) is not carrier:
-        raise OperationDomainValidationError(
-            location=("tableau",),
-            code="algebraic_combinatorics.tableau_carrier",
-            message="membership checks require a canonical tableau value",
-        )
-    rows = getattr(tableau, "rows", None)
-    if not isinstance(rows, tuple):
-        raise OperationDomainValidationError(
-            location=("tableau", "rows"),
-            code="algebraic_combinatorics.tableau_shape",
-            message="a canonical tableau has a tuple of rows",
-        )
-    return _validate_tableau_carrier(carrier, rows)
-
-
 def _validate_tableau_carrier(
     carrier: type[StrictModel], rows: tuple[object, ...]
 ) -> StrictModel:
@@ -665,38 +665,56 @@ def _validate_tableau_carrier(
         ) from exc
 
 
-def check_standard_tableau(tableau: StandardYoungTableau) -> StandardTableauCheckResult:
+def _revalidate_candidate(tableau: object) -> TableauCandidate:
+    """Return a freshly validated structural candidate, rejecting forged rows."""
+
+    if not isinstance(
+        tableau, (TableauCandidate, StandardYoungTableau, SemistandardYoungTableau)
+    ):
+        raise OperationDomainValidationError(
+            location=("tableau",),
+            code="algebraic_combinatorics.tableau_carrier",
+            message="membership checks require a canonical tableau candidate",
+        )
+    rows = getattr(tableau, "rows", None)
+    if not isinstance(rows, tuple):
+        raise OperationDomainValidationError(
+            location=("tableau", "rows"),
+            code="algebraic_combinatorics.tableau_shape",
+            message="a canonical tableau candidate has a tuple of rows",
+        )
+    return cast(TableauCandidate, _validate_tableau_carrier(TableauCandidate, rows))
+
+
+def check_standard_tableau(
+    tableau: TableauCandidate | StandardYoungTableau,
+) -> StandardTableauCheckResult:
     """Return a source-bound membership decision for one standard candidate."""
 
-    tableau = cast(
-        StandardYoungTableau, _revalidate_tableau(tableau, StandardYoungTableau)
-    )
+    candidate = _revalidate_candidate(tableau)
     try:
-        require_standard(tableau)
+        require_standard(candidate)
     except PydanticCustomError:
-        return StandardTableauCheckResult(tableau=tableau, is_member=False)
+        return StandardTableauCheckResult(tableau=candidate, is_member=False)
     except ValidationError as error:
         if _is_shape_rejection(error):
-            return StandardTableauCheckResult(tableau=tableau, is_member=False)
+            return StandardTableauCheckResult(tableau=candidate, is_member=False)
         raise
-    return StandardTableauCheckResult(tableau=tableau, is_member=True)
+    return StandardTableauCheckResult(tableau=candidate, is_member=True)
 
 
 def check_semistandard_tableau(
-    tableau: SemistandardYoungTableau,
+    tableau: TableauCandidate | SemistandardYoungTableau,
 ) -> SemistandardTableauCheckResult:
     """Return a source-bound membership decision for one semistandard candidate."""
 
-    tableau = cast(
-        SemistandardYoungTableau,
-        _revalidate_tableau(tableau, SemistandardYoungTableau),
-    )
+    candidate = _revalidate_candidate(tableau)
     try:
-        require_semistandard(tableau)
+        require_semistandard(candidate)
     except PydanticCustomError:
-        return SemistandardTableauCheckResult(tableau=tableau, is_member=False)
+        return SemistandardTableauCheckResult(tableau=candidate, is_member=False)
     except ValidationError as error:
         if _is_shape_rejection(error):
-            return SemistandardTableauCheckResult(tableau=tableau, is_member=False)
+            return SemistandardTableauCheckResult(tableau=candidate, is_member=False)
         raise
-    return SemistandardTableauCheckResult(tableau=tableau, is_member=True)
+    return SemistandardTableauCheckResult(tableau=candidate, is_member=True)

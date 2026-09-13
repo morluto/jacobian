@@ -27,6 +27,7 @@ from jacobian.math.combinatorics.algebraic.weighted_monotone._models import (
 from jacobian.math.combinatorics.algebraic.weighted_monotone.operations import (
     compute_endpoint_profile,
 )
+from jacobian.math.combinatorics.symmetric_functions.values import TableauCandidate
 
 __all__ = [
     "EndpointProfileEntry",
@@ -36,6 +37,7 @@ __all__ = [
     "SemistandardTableauCheckResult",
     "SemistandardYoungTableauCountResult",
     "StandardTableauCheckResult",
+    "TableauCandidate",
     "WeightedOrderedWord",
     "check_semistandard_tableau",
     "check_standard_tableau",

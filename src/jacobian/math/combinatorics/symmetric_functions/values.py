@@ -100,7 +100,7 @@ def _require_strict_columns(rows: tuple[TableauRow, ...]) -> None:
 
 
 def require_semistandard(
-    tableau: SemistandardYoungTableau | StandardYoungTableau,
+    tableau: SemistandardYoungTableau | StandardYoungTableau | TableauCandidate,
 ) -> None:
     """Admit the semistandard membership claim for a tableau carrier."""
     _shape(tableau.rows)
@@ -113,7 +113,7 @@ def require_semistandard(
     _require_strict_columns(tableau.rows)
 
 
-def require_standard(tableau: StandardYoungTableau) -> None:
+def require_standard(tableau: StandardYoungTableau | TableauCandidate) -> None:
     """Admit the standard membership claim for a tableau carrier."""
     shape = _shape(tableau.rows)
     for row in tableau.rows:
@@ -201,6 +201,42 @@ class StandardYoungTableau(StrictModel):
         return _shape(self.rows)
 
 
+class TableauCandidate(StrictModel):
+    """A bounded structural tableau candidate for a membership check.
+
+    Rows are nonempty bounded tuples of positive JSON-safe integers with a
+    total of at most ``MAX_PARTITION_SIZE`` cells.  It deliberately states no
+    monotonicity, Young-diagram, or consecutive-entry claim: whether the rows
+    form a standard or semistandard tableau is exactly what the check
+    operation decides, so a negative outcome is a representable value rather
+    than a schema contradiction.
+    """
+
+    rows: tuple[TableauRow, ...] = Field(
+        max_length=MAX_PARTITION_PARTS,
+        description=(
+            "Candidate rows of positive integers with a total of at most "
+            f"{MAX_PARTITION_SIZE} cells. No monotonicity, Young-diagram, or "
+            "consecutive-entry claim is made; the check operation decides "
+            "membership."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_cell_budget(self) -> Self:
+        if sum(len(row) for row in self.rows) > MAX_PARTITION_SIZE:
+            raise _validation_error(
+                "tableau_size_exceeded",
+                "tableau cell count exceeds the supported bound",
+            )
+        return self
+
+    @property
+    def shape(self) -> IntegerPartition:
+        """Return the candidate shape derived from its row lengths."""
+        return _shape(self.rows)
+
+
 __all__ = [
     "MAX_PARTITION_PARTS",
     "MAX_PARTITION_SIZE",
@@ -208,6 +244,7 @@ __all__ = [
     "IntegerPartition",
     "SemistandardYoungTableau",
     "StandardYoungTableau",
+    "TableauCandidate",
     "TableauEntry",
     "TableauRow",
     "require_semistandard",

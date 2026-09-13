@@ -21,8 +21,8 @@ from jacobian.math.combinatorics.symmetric_functions.values import (
 )
 from jacobian.math.combinatorics.symmetric_functions.values import (
     IntegerPartition,
-    SemistandardYoungTableau,
     StandardYoungTableau,
+    TableauCandidate,
 )
 from jacobian.math.logic.languages.words.values import FiniteWord
 
@@ -127,14 +127,14 @@ class SemistandardYoungTableauCountResult(StrictModel):
 class StandardTableauCheckResult(StrictModel):
     """Standard-tableau membership bound to the checked structural source."""
 
-    tableau: StandardYoungTableau
+    tableau: TableauCandidate
     is_member: bool
 
 
 class SemistandardTableauCheckResult(StrictModel):
     """Semistandard-tableau membership bound to the checked structural source."""
 
-    tableau: SemistandardYoungTableau
+    tableau: TableauCandidate
     is_member: bool
 
 
@@ -165,13 +165,13 @@ class PartitionDominanceResult(StrictModel):
 class StandardTableauCheckRequest(StrictModel):
     """Check a candidate standard Young tableau."""
 
-    tableau: StandardYoungTableau
+    tableau: TableauCandidate
 
 
 class SemistandardTableauCheckRequest(StrictModel):
     """Check a candidate semistandard Young tableau."""
 
-    tableau: SemistandardYoungTableau
+    tableau: TableauCandidate
 
 
 # ---------------------------------------------------------------------------

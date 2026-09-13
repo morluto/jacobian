@@ -53,6 +53,7 @@ from jacobian.math.combinatorics.symmetric_functions.values import (
     IntegerPartition,
     SemistandardYoungTableau,
     StandardYoungTableau,
+    TableauCandidate,
 )
 
 
@@ -522,22 +523,26 @@ def test_native_operations_are_published_from_algebraic_package() -> None:
         relation="LEFT_DOMINATES",
     )
     assert public_check_standard_tableau(standard) == StandardTableauCheckResult(
-        tableau=standard, is_member=True
+        tableau=TableauCandidate(rows=standard.rows), is_member=True
     )
     assert public_check_semistandard_tableau(
         semistandard
-    ) == SemistandardTableauCheckResult(tableau=semistandard, is_member=True)
+    ) == SemistandardTableauCheckResult(
+        tableau=TableauCandidate(rows=semistandard.rows), is_member=True
+    )
 
 
 def test_native_tableau_checks_return_typed_nonmembership() -> None:
     standard = StandardYoungTableau(rows=((1, 1), (2,)))
     semistandard = SemistandardYoungTableau(rows=((1, 2), (1,)))
     assert native.check_standard_tableau(standard) == StandardTableauCheckResult(
-        tableau=standard, is_member=False
+        tableau=TableauCandidate(rows=standard.rows), is_member=False
     )
     assert native.check_semistandard_tableau(
         semistandard
-    ) == SemistandardTableauCheckResult(tableau=semistandard, is_member=False)
+    ) == SemistandardTableauCheckResult(
+        tableau=TableauCandidate(rows=semistandard.rows), is_member=False
+    )
 
 
 def test_ssyt_count_revalidates_constructed_partition_parts() -> None:
@@ -616,38 +621,35 @@ def test_forged_partition_carriers_keep_domain_and_resource_classes_apart() -> N
         )
 
 
-def test_ssyt_digit_admission_checks_cancellation_at_bounded_intervals() -> None:
-    """A wide alphabet must not blind the hook-content scan to cancellation."""
+def test_ssyt_digit_admission_refuses_wide_alphabet_before_scanning() -> None:
+    """A far-overflowing alphabet is refused by a cheap bound, not a scan.
+
+    ``partition=(500), alphabet_size=10**32767`` previously ran 500 cubic
+    logarithms on 32,767-digit integers before the output-limit rejection.
+    """
+
     import time
-    from threading import Event
-
-    from jacobian._execution import (
-        OperationExecutionCancelledError,
-        request_cancellation,
-    )
-    from jacobian.math.combinatorics.symmetric_functions.values import IntegerPartition
-
-    cancelled = Event()
-    original = native.request_checkpoint
-
-    def checkpoint(stage: str) -> None:
-        original(stage)
-        if stage == "during SSYT hook-content admission":
-            cancelled.set()
 
     partition = IntegerPartition(parts=(500,))
     started = time.monotonic()
-    with (
-        pytest.MonkeyPatch.context() as patch,
-        request_cancellation(cancelled),
-        pytest.raises(OperationExecutionCancelledError),
-    ):
-        patch.setattr(native, "request_checkpoint", checkpoint)
+    with pytest.raises(OperationResourceAdmissionError, match="digit bound"):
         native.semistandard_young_tableaux_count(partition, 10**32767)
-    elapsed = time.monotonic() - started
-    # The old fixed 256-probe batch needed about 3.6 seconds of uncheckpointed
-    # 32767-digit logarithms before the cancellation could be seen.
-    assert elapsed < 2.0
+    assert time.monotonic() - started < 2.0
+
+
+def test_ssyt_digit_bound_is_a_sound_upper_bound_at_far_overflow() -> None:
+    """The cheap overflow bound still upper-bounds the exact decimal width."""
+
+    alphabet_size = 10**100
+    partition = IntegerPartition(parts=(500,))
+    bound = _ssyt_count_digit_bound(
+        partition,
+        alphabet_size,
+        _upper_decimal_digits(alphabet_size),
+    )
+    exact = math.comb(alphabet_size + 499, 500)
+    assert bound > _MAX_SSYT_COUNT_DIGITS
+    assert bound >= _upper_decimal_digits(exact)
 
 
 def test_ssyt_digit_bound_resolves_the_boundary_exactly() -> None:
@@ -682,17 +684,11 @@ def test_ssyt_digit_bound_refuses_far_overflow_without_exact_resolution() -> Non
 
     alphabet_size = 10**1998
     partition = IntegerPartition(parts=(500,))
-
-    def _forbid_exact(*_args: object, **_kwargs: object) -> NoReturn:
-        raise AssertionError("far-overflowing bound must not resolve exactly")
-
-    with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(native, "_exact_count_digits", _forbid_exact)
-        bound = _ssyt_count_digit_bound(
-            partition,
-            alphabet_size,
-            _upper_decimal_digits(alphabet_size),
-        )
+    bound = _ssyt_count_digit_bound(
+        partition,
+        alphabet_size,
+        _upper_decimal_digits(alphabet_size),
+    )
     assert bound > _MAX_SSYT_COUNT_DIGITS
     request = SemistandardYoungTableauCountRequest.model_validate(
         {"partition": {"parts": [500]}, "alphabet_size": alphabet_size}

@@ -5,6 +5,7 @@ from math import factorial
 from threading import Event
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian._execution import (
     OperationExecutionCancelledError,
@@ -676,3 +677,100 @@ def test_dense_graph_edge_scan_work_is_rejected_before_enumeration() -> None:
     )
     with pytest.raises(OperationResourceAdmissionError):
         full_graph_automorphism_group(graph)
+
+
+def test_complete_bipartite_graph_uses_complement_compact_presentation() -> None:
+    """K8,8 complement is two K8 cliques; the compact presentation transfers."""
+    left = tuple(f"a{index}" for index in range(8))
+    right = tuple(f"b{index}" for index in range(8))
+    vertices = left + right
+    edges = tuple(canonical_edge(first, second) for first in left for second in right)
+    graph = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(vertices=vertices, edges=edges)
+    )
+
+    result = full_graph_automorphism_group(graph)
+
+    assert result.automorphism_count == (factorial(8) ** 2) * 2
+    assert result.generated_group_order == result.automorphism_count
+    assert len(result.generators) < 20
+
+
+def test_vertex_colored_pairs_keep_the_pair_blocks() -> None:
+    """Ten red/blue pairs keep the diagonal S10 rather than splitting pairs."""
+    pairs = tuple((f"r{index}", f"b{index}") for index in range(10))
+    vertices = tuple(vertex for pair in pairs for vertex in pair)
+    pair_of = {vertex: index for index, pair in enumerate(pairs) for vertex in pair}
+    vertex_color = {
+        vertex: "red" if vertex.startswith("r") else "blue" for vertex in vertices
+    }
+    edges = tuple(
+        canonical_edge(left, right)
+        for index, left in enumerate(vertices)
+        for right in vertices[index + 1 :]
+    )
+    edge_colors = tuple(
+        "within" if pair_of[left] == pair_of[right] else "between"
+        for left, right in edges
+    )
+    graph = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(vertices=vertices, edges=edges),
+        vertex_colors=tuple(vertex_color[vertex] for vertex in vertices),
+        edge_colors=edge_colors,
+    )
+
+    result = full_graph_automorphism_group(graph)
+
+    assert result.automorphism_count == factorial(10)
+    assert result.generated_group_order == result.automorphism_count
+    assert group_order(result.group) == result.automorphism_count
+
+
+def test_repeated_source_swap_generators_are_rejected() -> None:
+    graph = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(vertices=("a", "b"), edges=(("a", "b"),))
+    )
+    valid = full_graph_automorphism_group(graph).model_dump()
+    swap = {"generator_id": "g1", "mapping": [["a", "b"], ["b", "a"]]}
+    forged = {
+        **valid,
+        "generators": [*valid["generators"], swap],
+        "group": {"degree": 2, "generators": [[1, 0], [1, 0]]},
+    }
+    with pytest.raises(ValidationError):
+        FullGraphAutomorphismResult.model_validate(forged)
+
+
+def test_tied_edge_color_partitions_resolve_canonically() -> None:
+    """Red on ab and blue on cd give equal-size parts; the sorted color wins.
+
+    Iterating the edge colors in sorted order fixes the partition choice, so the
+    generator order does not depend on the interpreter hash seed.
+    """
+    vertices = ("a", "b", "c", "d")
+    edges = tuple(
+        canonical_edge(left, right)
+        for index, left in enumerate(vertices)
+        for right in vertices[index + 1 :]
+    )
+
+    def color(left: str, right: str) -> str:
+        pair = frozenset((left, right))
+        if pair == frozenset(("a", "b")):
+            return "red"
+        if pair == frozenset(("c", "d")):
+            return "blue"
+        return "green"
+
+    graph = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(vertices=vertices, edges=edges),
+        edge_colors=tuple(color(left, right) for left, right in edges),
+    )
+
+    result = full_graph_automorphism_group(graph)
+
+    # "blue" sorts before "red", so the cd swap is generated first.
+    assert [dict(row.mapping) for row in result.generators] == [
+        {"a": "a", "b": "b", "c": "d", "d": "c"},
+        {"a": "b", "b": "a", "c": "c", "d": "d"},
+    ]

@@ -425,6 +425,17 @@ class FullGraphAutomorphismResult(StrictModel):
                 "graph.automorphism.source_generators_must_be_nonidentity",
                 "source generators must be nonidentity permutations",
             )
+        if len({tuple(generator.mapping) for generator in self.generators}) != len(
+            self.generators
+        ):
+            raise PydanticCustomError(
+                "graph.automorphism.source_generators_must_be_unique",
+                "source generators must be distinct permutations",
+            )
+        self._require_group_generators()
+        return self
+
+    def _require_group_generators(self) -> None:
         if len(self.group.generators) == 0:
             raise PydanticCustomError(
                 "graph.automorphism.group_requires_identity_generator",
@@ -458,7 +469,6 @@ class FullGraphAutomorphismResult(StrictModel):
                     "empty source generators require the nested identity permutation",
                 )
         self._require_canonical_orbit_partitions()
-        return self
 
     def _require_canonical_orbit_partitions(self) -> None:
         vertex_members = tuple(

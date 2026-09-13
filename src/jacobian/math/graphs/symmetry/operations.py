@@ -153,7 +153,10 @@ def _infer_complete_edge_parts(
         return None
     edge_colors = _edge_color_lookup(graph)
     best: tuple[tuple[str, ...], ...] | None = None
-    for color in set(edge_colors.values()):
+    # Iterate colors canonically so tied partitions resolve identically across
+    # processes; a hash-randomized set order would otherwise pick whichever
+    # color the interpreter visited first.
+    for color in sorted(set(edge_colors.values())):
         colored_edges = tuple(
             edge for edge, edge_color in edge_colors.items() if edge_color == color
         )
@@ -259,6 +262,23 @@ def _compact_quotient_generators(
     return tuple(compact)
 
 
+def _symmetric_quotient_generators(
+    indexed_parts: tuple[tuple[int, ...], ...], n: int
+) -> list[tuple[int, ...]]:
+    """Adjacent part transpositions for a full symmetric quotient."""
+
+    generators: list[tuple[int, ...]] = []
+    for source in range(len(indexed_parts) - 1):
+        permutation = list(range(n))
+        for left, right in zip(
+            indexed_parts[source], indexed_parts[source + 1], strict=True
+        ):
+            permutation[left] = right
+            permutation[right] = left
+        generators.append(tuple(permutation))
+    return generators
+
+
 def _wreath_generators_for_labeled_parts(
     n: int,
     vertices: tuple[str, ...],
@@ -267,11 +287,6 @@ def _wreath_generators_for_labeled_parts(
     vertex_colors: dict[str, str],
 ) -> tuple[tuple[tuple[int, ...], ...], int] | None:
     part_count = len(parts)
-    permutation_count = 1
-    for step in range(2, part_count + 1):
-        permutation_count *= step
-        if permutation_count > MAX_FULL_AUTOMORPHISM_PERMUTATIONS:
-            return None
     index = {vertex: position for position, vertex in enumerate(vertices)}
     indexed_parts = tuple(
         tuple(
@@ -305,6 +320,29 @@ def _wreath_generators_for_labeled_parts(
     signatures = tuple(
         _part_signature(part, vertex_colors, inside[i]) for i, part in enumerate(parts)
     )
+    if (
+        len(set(signatures)) == 1
+        and len(
+            {
+                pair_color.get((left, right), _UNCOLORED)
+                for left in range(part_count)
+                for right in range(left + 1, part_count)
+            }
+        )
+        <= 1
+    ):
+        # Every part has one signature and every cross-part edge one color, so
+        # the quotient is the full symmetric group. Emit its adjacent
+        # transpositions directly instead of enumerating ``part_count!``
+        # permutations, which would exceed the admitted bound.
+        order *= factorial(part_count)
+        generators.extend(_symmetric_quotient_generators(indexed_parts, n))
+        return tuple(generators), order
+    permutation_count = 1
+    for step in range(2, part_count + 1):
+        permutation_count *= step
+        if permutation_count > MAX_FULL_AUTOMORPHISM_PERMUTATIONS:
+            return None
     automorphisms = tuple(
         sigma
         for sigma in permutations(range(part_count))
@@ -382,7 +420,9 @@ def _admit_full_graph_automorphism(
         adjacency[left].add(right)
         adjacency[right].add(left)
     vertices = _full_graph_vertex_axis(graph)
+    request_checkpoint("before special graph presentation")
     special = _special_graph_generators(graph, vertices)
+    request_checkpoint("after special graph presentation")
     if special is not None:
         return _FullGraphAdmission(vertices, special, None)
     classes: dict[tuple[Any, ...], list[str]] = {}
@@ -519,7 +559,10 @@ def _special_complete_or_empty(
                 strict=True,
             )
         )
-        inferred = _refine_parts_by_vertex_colors(inferred, vertex_colors)
+        # Keep the edge-induced parts intact: refining them by vertex color
+        # would split a colored pair into singletons and force a factorial
+        # part-permutation enumeration. ``_wreath_generators_for_labeled_parts``
+        # already handles the vertex-color classes inside each part.
         pair_color = _part_pair_edge_colors(inferred, _edge_color_lookup(graph))
         if pair_color is None:
             return None
@@ -847,6 +890,14 @@ def _special_repeated_cliques(
             strict=True,
         )
     )
+    # The passed ``edges`` may be the graph complement; edges absent from the
+    # declared coloring stay uncolored rather than raising a lookup error.
+    edge_colors = {
+        canonical_edge(vertices[left], vertices[right]): edge_colors.get(
+            canonical_edge(vertices[left], vertices[right]), _UNCOLORED
+        )
+        for left, right in edges
+    }
     groups: dict[tuple[object, ...], list[tuple[int, ...]]] = {}
     for component in components:
         aligned = tuple(
@@ -907,6 +958,7 @@ def _special_graph_generators(
 
     if not vertices:
         return ((), 1)
+    request_checkpoint("during special graph family recognition")
     index = {vertex: position for position, vertex in enumerate(vertices)}
     edges: set[tuple[int, int]] = {
         (
@@ -915,11 +967,28 @@ def _special_graph_generators(
         )
         for left, right in graph.graph.edges
     }
-    return (
-        _special_complete_or_empty(graph, vertices, edges)
-        or _special_path_or_cycle(graph, vertices, edges)
-        or _special_repeated_cliques(graph, vertices, edges)
-    )
+    complete_or_empty = _special_complete_or_empty(graph, vertices, edges)
+    request_checkpoint("during special graph family recognition")
+    path_or_cycle = _special_path_or_cycle(graph, vertices, edges)
+    request_checkpoint("during special graph family recognition")
+    repeated_cliques = _special_repeated_cliques(graph, vertices, edges)
+    request_checkpoint("during special graph family recognition")
+    if complete_or_empty or path_or_cycle or repeated_cliques:
+        return complete_or_empty or path_or_cycle or repeated_cliques
+    # A graph whose complement is a compact union of cliques (for example
+    # complete bipartite K_{n,n}) has the same automorphism group as that
+    # complement, so the compact presentation transfers unchanged. Only the
+    # uncolored case is handled: colored complements need their own edge-color
+    # profile and are left to the generic search.
+    if graph.vertex_colors or graph.edge_colors:
+        return None
+    complement_edges = {
+        (left, right)
+        for left in range(len(vertices))
+        for right in range(left + 1, len(vertices))
+        if (left, right) not in edges
+    }
+    return _special_repeated_cliques(graph, vertices, complement_edges)
 
 
 def _admit_graph_symmetry_orbit(
@@ -1086,6 +1155,42 @@ def verify_graph_symmetry_orbits(claim: GraphSymmetryOrbitResult) -> bool:
     )
 
 
+def _checkpointed_group_order(
+    generators: list[tuple[int, ...]], degree: int, expected_order: int
+) -> int:
+    """Compute a permutation group order with checkpoints between generators.
+
+    SymPy's ``PermutationGroup.order()`` is synchronous, so build the group
+    incrementally and check the request between generators. When the partial
+    order already reaches the independently known ``expected_order`` the search
+    stops early instead of running the full Schreier-Sims base.
+    """
+
+    from sympy.combinatorics import Permutation as SympyPermutation
+    from sympy.combinatorics import PermutationGroup as SympyPermutationGroup
+
+    partial = SympyPermutationGroup(
+        [SympyPermutation(list(generators[0]), size=degree)]
+    )
+    order = int(partial.order())
+    if order >= expected_order:
+        request_checkpoint("during full graph automorphism order computation")
+        return order
+    for generator in generators[1:]:
+        request_checkpoint("during full graph automorphism order computation")
+        partial = SympyPermutationGroup(
+            [
+                *partial.generators,
+                SympyPermutation(list(generator), size=degree),
+            ]
+        )
+        order = int(partial.order())
+        if order >= expected_order:
+            break
+    request_checkpoint("after full graph automorphism order computation")
+    return order
+
+
 def full_graph_automorphism_group(
     graph: ColoredUndirectedGraph,
 ) -> FullGraphAutomorphismResult:
@@ -1141,7 +1246,9 @@ def full_graph_automorphism_group(
         generated_order = 1
         group_generators = (tuple(range(len(vertices))),)
     else:
-        generated_order = int(backend_group.order())
+        generated_order = _checkpointed_group_order(
+            selected, len(vertices), expected_order
+        )
         group_generators = tuple(selected)
     if generated_order != expected_order:
         raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)

@@ -6,7 +6,7 @@ import hashlib
 from enum import StrEnum
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, StrictInt, StringConstraints, model_validator
+from pydantic import Field, StrictBool, StrictInt, StringConstraints, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._digest import Sha256Digest
@@ -310,15 +310,31 @@ def _validate_canonical_poset_elements_and_pairs(
 
 def _validate_poset_incomparable_pairs(
     elements: tuple[str, ...],
-    incomparable_pairs: tuple[IncomparablePair, ...],
+    incomparable_pairs: object,
     closure: set[tuple[str, str]],
 ) -> None:
+    if type(incomparable_pairs) is not tuple:
+        raise _validation_error(
+            "canonical_incomparable_pairs",
+            "incomparable_pairs must be a tuple",
+        )
     expected_incomparable = tuple(
         (left, right)
         for index, left in enumerate(elements)
         for right in elements[index + 1 :]
         if (left, right) not in closure and (right, left) not in closure
     )
+    for pair in incomparable_pairs:
+        if type(pair) is not IncomparablePair:
+            raise _validation_error(
+                "canonical_incomparable_pairs",
+                "incomparable_pairs must use the canonical IncomparablePair type",
+            )
+        if type(pair.left) is not str or type(pair.right) is not str:
+            raise _validation_error(
+                "canonical_incomparable_pairs",
+                "incomparable pair labels must be canonical strings",
+            )
     actual_incomparable = tuple((pair.left, pair.right) for pair in incomparable_pairs)
     if actual_incomparable != expected_incomparable:
         raise _validation_error(
@@ -345,11 +361,22 @@ def _compute_poset_extremal_elements(
 
 
 def _validate_poset_extremal_elements(
-    minimal_elements: tuple[str, ...],
-    maximal_elements: tuple[str, ...],
+    minimal_elements: object,
+    maximal_elements: object,
     expected_minimal: tuple[str, ...],
     expected_maximal: tuple[str, ...],
 ) -> None:
+    if type(minimal_elements) is not tuple or type(maximal_elements) is not tuple:
+        raise _validation_error(
+            "canonical_extremal_elements",
+            "extremal elements must be tuples",
+        )
+    for entry in (*minimal_elements, *maximal_elements):
+        if type(entry) is not str:
+            raise _validation_error(
+                "canonical_extremal_elements",
+                "extremal elements must be canonical strings",
+            )
     if minimal_elements != expected_minimal or maximal_elements != expected_maximal:
         raise _validation_error(
             "extremal_elements_complete", "minimal or maximal elements are incomplete"
@@ -412,7 +439,7 @@ class FinitePoset(StrictModel):
     )
     minimal_elements: tuple[ElementLabel, ...] = ()
     maximal_elements: tuple[ElementLabel, ...] = ()
-    graded: bool
+    graded: StrictBool
     ranks: tuple[ElementRank, ...] | None = None
     poset_digest: Sha256Digest
 

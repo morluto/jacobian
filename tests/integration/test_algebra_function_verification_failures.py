@@ -47,6 +47,18 @@ CASES = (
         "verify_polynomial_box_enclosure",
         "polynomial_box_enclosure",
     ),
+    (
+        "polynomial.weight_profile.compute",
+        "polynomials.support_geometry.operations",
+        "verify_polynomial_weight_profile",
+        "weight_profile",
+    ),
+    (
+        "polynomial.initial_form.compute",
+        "polynomials.support_geometry.operations",
+        "verify_polynomial_face_data",
+        "initial_form",
+    ),
 )
 
 

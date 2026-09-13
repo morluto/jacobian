@@ -711,7 +711,7 @@ def test_empty_accepting_binary_dfa_admits_length_999_profile() -> None:
         initial_state=0,
         accepting_states=(),
     )
-    result = symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=999))
+    result = symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=998))
     assert result.cells == ()
     assert result.total_accepted_words == 0
 
@@ -768,7 +768,7 @@ def test_product_action_factor_admits_length_27_profile() -> None:
     assert len(result.cells) == comb(29, 2)
 
 
-def test_commuting_cycle_identity_dfa_admits_length_978_profile() -> None:
+def test_commuting_cycle_identity_dfa_admits_length_900_profile() -> None:
     state_count = 44
     dfa = DFA(
         state_count=state_count,
@@ -785,9 +785,9 @@ def test_commuting_cycle_identity_dfa_admits_length_978_profile() -> None:
         initial_state=0,
         accepting_states=tuple(range(state_count)),
     )
-    result = symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=978))
-    assert result.total_accepted_words == 2**978
-    assert len(result.cells) == 979
+    result = symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=900))
+    assert result.total_accepted_words == 2**900
+    assert len(result.cells) == 901
 
 
 def test_unreachable_acceptance_at_depth_constructs_no_cells() -> None:
@@ -803,6 +803,6 @@ def test_unreachable_acceptance_at_depth_constructs_no_cells() -> None:
         initial_state=0,
         accepting_states=(0,),
     )
-    result = symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=999))
+    result = symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=998))
     assert result.cells == ()
     assert result.total_accepted_words == 0

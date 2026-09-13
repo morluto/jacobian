@@ -546,19 +546,27 @@ def symbol_parikh_profile(
     output_materialization_work = output_materialization_cells
     # Result cells are unique accepting count vectors in the final layer. Only
     # accepting states that are live after exactly `length` steps can
-    # contribute, so a graph-reachable accepting state that cannot be reached
-    # at the requested depth constructs no cells.
-    accepting_at_depth = set(dfa.accepting_states).intersection(
-        _states_at_exact_depth(dfa, reachable, alphabet_size, length)
-    )
-    if not accepting_at_depth:
+    # contribute. When no accepting state is even graph-reachable the exact-
+    # depth traversal is skipped entirely; otherwise its cost is charged below.
+    reachable_accepting = set(dfa.accepting_states).intersection(reachable)
+    exact_depth_work = 0
+    if not reachable_accepting:
         collected_cells = 0
     else:
-        collected_cells = min(
-            output_bound,
-            possible_word_count,
-            output_materialization_cells,
+        exact_depth_work = len(dfa.transitions) + length * reachable_count * max(
+            1, alphabet_size
         )
+        accepting_at_depth = reachable_accepting.intersection(
+            _states_at_exact_depth(dfa, reachable, alphabet_size, length)
+        )
+        if not accepting_at_depth:
+            collected_cells = 0
+        else:
+            collected_cells = min(
+                output_bound,
+                possible_word_count,
+                output_materialization_cells,
+            )
     cell_construction_work = collected_cells * max(1, alphabet_size)
     result_reduce_work = 2 * collected_cells
     transition_index_work = transition_count
@@ -573,6 +581,7 @@ def symbol_parikh_profile(
         + output_materialization_work
         + cell_construction_work
         + result_reduce_work
+        + exact_depth_work
     )
     if work_bound > MAX_SYMBOL_PARIKH_DP_WORK:
         raise OperationResourceAdmissionError(

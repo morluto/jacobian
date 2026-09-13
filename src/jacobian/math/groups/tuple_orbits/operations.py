@@ -276,20 +276,26 @@ def tuple_family_orbit_profile(
         if not source_indices:
             raise RuntimeError("orbit generation lost every source tuple")
         first_source = source_positions[source_indices[0]]
-        transporter: tuple[int, ...] | None = None
-        for element in elements:
-            request_checkpoint("during tuple-family transporter enumeration")
-            generated_transporters += 1
-            if generated_transporters > MAX_TUPLE_ORBIT_TRANSPORTERS:
-                raise OperationResourceAdmissionError(
-                    location=("family",),
-                    code="finite_group_action.tuple_family_transporter_bound",
-                    message="transporter enumeration exceeds the admitted bound",
-                )
-            if tuple(element[value] for value in first_source) == representative and (
-                transporter is None or element < transporter
-            ):
-                transporter = element
+        # The image pass already recorded the least group element mapping the
+        # seed to each image. When the seed is the row's first source, that
+        # entry is exactly the required least transporter.
+        if seed == first_source:
+            transporter = images[representative]
+        else:
+            transporter = None
+            for element in elements:
+                request_checkpoint("during tuple-family transporter enumeration")
+                generated_transporters += 1
+                if generated_transporters > MAX_TUPLE_ORBIT_TRANSPORTERS:
+                    raise OperationResourceAdmissionError(
+                        location=("family",),
+                        code="finite_group_action.tuple_family_transporter_bound",
+                        message="transporter enumeration exceeds the admitted bound",
+                    )
+                if tuple(
+                    element[value] for value in first_source
+                ) == representative and (transporter is None or element < transporter):
+                    transporter = element
         if transporter is None:
             raise RuntimeError(
                 "orbit generation lost a source-to-representative transporter"

@@ -673,3 +673,38 @@ def test_distinct_source_rows_are_indexed_once_before_orbit_partition() -> None:
         (index,) for index in range(40)
     ]
     assert all(row.orbit_size == 1 for row in result.rows)
+
+
+def test_many_orbits_reuse_image_pass_transporters() -> None:
+    """Distinct orbit rows reuse the least transporter found while imaging."""
+    modulus = 40
+    generator = tuple((index + 1) % modulus for index in range(modulus))
+    action = FinitePermutationAction(
+        domain=tuple(str(index) for index in range(modulus)),
+        generators=(generator,),
+    )
+    rows: list[tuple[int, ...]] = []
+    seen: set[tuple[int, ...]] = set()
+    for second in range(modulus):
+        for third in range(modulus):
+            for fourth in range(modulus):
+                candidate = (0, second, third, fourth)
+                if candidate not in seen:
+                    seen.add(candidate)
+                    rows.append(candidate)
+                if len(rows) >= 2_501:
+                    break
+            if len(rows) >= 2_501:
+                break
+        if len(rows) >= 2_501:
+            break
+    result = tuple_family_orbit_profile(
+        TupleFamilyOrbitSource(action=action, arity=4, family=tuple(rows))
+    )
+    assert len(result.rows) == 2_501
+    for row in result.rows:
+        first = row.source_indices[0]
+        source = rows[first]
+        assert tuple(row.least_transporter[value] for value in source) == (
+            row.representative
+        )

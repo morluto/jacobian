@@ -298,24 +298,9 @@ def _wreath_generators_for_labeled_parts(
     generators: list[tuple[int, ...]] = []
     order = 1
     for labels in parts:
-        classes: dict[str, list[int]] = {}
-        for vertex in labels:
-            classes.setdefault(vertex_colors[vertex], []).append(index[vertex])
-        for members in classes.values():
-            members.sort()
-            size = len(members)
-            order *= factorial(size)
-            if size >= 2:
-                swap = list(range(n))
-                swap[members[0]], swap[members[1]] = members[1], members[0]
-                generators.append(tuple(swap))
-            if size >= 3:
-                cycle = list(range(n))
-                for source, target in zip(
-                    members, members[1:] + members[:1], strict=True
-                ):
-                    cycle[source] = target
-                generators.append(tuple(cycle))
+        order *= _append_within_part_generators(
+            generators, labels, vertex_colors, index, n
+        )
     inside = tuple(pair_color.get((i, i), _UNCOLORED) for i in range(part_count))
     signatures = tuple(
         _part_signature(part, vertex_colors, inside[i]) for i, part in enumerate(parts)
@@ -338,28 +323,130 @@ def _wreath_generators_for_labeled_parts(
         order *= factorial(part_count)
         generators.extend(_symmetric_quotient_generators(indexed_parts, n))
         return tuple(generators), order
+    automorphisms = _quotient_color_automorphisms(part_count, signatures, pair_color)
+    if automorphisms is None:
+        return None
+    order *= len(automorphisms)
+    generators.extend(
+        _part_permutation_generator(sigma, indexed_parts, n)
+        for sigma in _compact_quotient_generators(automorphisms, part_count)
+        if sigma != tuple(range(part_count))
+    )
+    return tuple(generators), order
+
+
+def _append_within_part_generators(
+    generators: list[tuple[int, ...]],
+    labels: tuple[str, ...],
+    vertex_colors: dict[str, str],
+    index: dict[str, int],
+    n: int,
+) -> int:
+    """Append the within-part symmetric generators and return the class order."""
+
+    order = 1
+    classes: dict[str, list[int]] = {}
+    for vertex in labels:
+        classes.setdefault(vertex_colors[vertex], []).append(index[vertex])
+    for members in classes.values():
+        members.sort()
+        size = len(members)
+        order *= factorial(size)
+        if size >= 2:
+            swap = list(range(n))
+            swap[members[0]], swap[members[1]] = members[1], members[0]
+            generators.append(tuple(swap))
+        if size >= 3:
+            cycle = list(range(n))
+            for source, target in zip(members, members[1:] + members[:1], strict=True):
+                cycle[source] = target
+            generators.append(tuple(cycle))
+    return order
+
+
+def _part_permutation_generator(
+    sigma: tuple[int, ...], indexed_parts: tuple[tuple[int, ...], ...], n: int
+) -> tuple[int, ...]:
+    """Lift a part permutation to the induced vertex permutation."""
+
+    permutation = list(range(n))
+    for source, image in enumerate(sigma):
+        for left, right in zip(
+            indexed_parts[source], indexed_parts[image], strict=True
+        ):
+            permutation[left] = right
+    return tuple(permutation)
+
+
+def _quotient_color_automorphisms(
+    part_count: int,
+    signatures: tuple[tuple[object, ...], ...],
+    pair_color: dict[tuple[int, int], str],
+) -> tuple[tuple[int, ...], ...] | None:
+    """Enumerate quotient automorphisms without scanning every permutation.
+
+    Small quotients are scanned directly; larger ones use the bounded VF2
+    search over the colored complete quotient graph, so a compact quotient
+    (for example a dihedral coloring of many parts) is admitted.
+    """
+
     permutation_count = 1
     for step in range(2, part_count + 1):
         permutation_count *= step
         if permutation_count > MAX_FULL_AUTOMORPHISM_PERMUTATIONS:
-            return None
-    automorphisms = tuple(
+            return _quotient_automorphisms(part_count, signatures, pair_color)
+    return tuple(
         sigma
         for sigma in permutations(range(part_count))
         if _is_quotient_automorphism(sigma, signatures, pair_color)
     )
-    order *= len(automorphisms)
-    for sigma in _compact_quotient_generators(automorphisms, part_count):
-        if sigma == tuple(range(part_count)):
-            continue
-        permutation = list(range(n))
-        for source, image in enumerate(sigma):
-            for left, right in zip(
-                indexed_parts[source], indexed_parts[image], strict=True
-            ):
-                permutation[left] = right
-        generators.append(tuple(permutation))
-    return tuple(generators), order
+
+
+def _quotient_automorphisms(
+    part_count: int,
+    signatures: tuple[tuple[object, ...], ...],
+    pair_color: dict[tuple[int, int], str],
+) -> tuple[tuple[int, ...], ...] | None:
+    """Enumerate part permutations preserving signatures and pair colors.
+
+    Uses a bounded VF2 search over the colored complete quotient graph, so a
+    compact quotient (for example a dihedral coloring of many parts) is
+    admitted without scanning ``part_count!`` permutations.
+    """
+
+    import networkx as nx
+    import networkx.algorithms.isomorphism as iso
+
+    quotient: Any = nx.Graph()
+    for index in range(part_count):
+        quotient.add_node(index, color=signatures[index])
+    for left in range(part_count):
+        for right in range(left + 1, part_count):
+            quotient.add_edge(
+                left, right, color=pair_color.get((left, right), _UNCOLORED)
+            )
+    matcher = iso.GraphMatcher(
+        quotient,
+        quotient,
+        node_match=iso.categorical_node_match("color", None),
+        edge_match=iso.categorical_edge_match("color", _UNCOLORED),
+    )
+    mappings: list[tuple[int, ...]] = []
+    try:
+        for mapping in matcher.isomorphisms_iter():
+            request_checkpoint("during full graph automorphism quotient search")
+            mappings.append(tuple(mapping[index] for index in range(part_count)))
+            if len(mappings) > MAX_FULL_AUTOMORPHISM_PERMUTATIONS:
+                return None
+    except (
+        OperationResourceAdmissionError,
+        OperationExecutionCancelledError,
+        OperationExecutionTimeoutError,
+    ):
+        raise
+    except Exception:
+        return None
+    return tuple(mappings)
 
 
 @dataclass(frozen=True)
@@ -977,10 +1064,13 @@ def _special_graph_generators(
         return complete_or_empty or path_or_cycle or repeated_cliques
     # A graph whose complement is a compact union of cliques (for example
     # complete bipartite K_{n,n}) has the same automorphism group as that
-    # complement, so the compact presentation transfers unchanged. Only the
-    # uncolored case is handled: colored complements need their own edge-color
-    # profile and are left to the generic search.
-    if graph.vertex_colors or graph.edge_colors:
+    # complement, so the compact presentation transfers unchanged. A uniform
+    # vertex color changes no automorphism and is treated as uncolored; a
+    # nontrivial coloring or any edge coloring needs its own profile and is
+    # left to the generic search.
+    if graph.edge_colors:
+        return None
+    if graph.vertex_colors and len(set(graph.vertex_colors)) > 1:
         return None
     complement_edges = {
         (left, right)
@@ -1253,6 +1343,14 @@ def full_graph_automorphism_group(
     if generated_order != expected_order:
         raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
 
+    # Serialize generators in a canonical order so one exact group has a single
+    # representation: sort by the source-axis image tuple and reorder the nested
+    # group generators to match.
+    if backend_group is not None:
+        paired = tuple(zip(selected, group_generators, strict=True))
+        paired = tuple(sorted(paired, key=lambda item: item[0]))
+        selected = [item[0] for item in paired]
+        group_generators = tuple(item[1] for item in paired)
     source_vertices = graph.graph.vertices
     generator_rows = tuple(
         GraphAutomorphismGenerator(

@@ -774,3 +774,70 @@ def test_tied_edge_color_partitions_resolve_canonically() -> None:
         {"a": "a", "b": "b", "c": "d", "d": "c"},
         {"a": "b", "b": "a", "c": "c", "d": "d"},
     ]
+
+
+def test_colored_dihedral_quotient_keeps_compact_presentation() -> None:
+    """Ten paired parts with adjacent/nonadjacent colors on a 10-cycle.
+
+    The quotient is dihedral of order 20 and the full group is ``2^10 * 20``;
+    the bounded quotient search must admit it without scanning ``10!``.
+    """
+    parts = tuple((f"p{index}a", f"p{index}b") for index in range(10))
+    vertices = tuple(vertex for part in parts for vertex in part)
+    part_of = {vertex: index for index, part in enumerate(parts) for vertex in part}
+    edges = tuple(
+        canonical_edge(left, right)
+        for index, left in enumerate(vertices)
+        for right in vertices[index + 1 :]
+    )
+
+    def color(left: str, right: str) -> str:
+        left_part, right_part = part_of[left], part_of[right]
+        if left_part == right_part:
+            return "within"
+        distance = (left_part - right_part) % 10
+        return "adjacent" if distance in (1, 9) else "nonadjacent"
+
+    graph = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(vertices=vertices, edges=edges),
+        edge_colors=tuple(color(left, right) for left, right in edges),
+    )
+    result = full_graph_automorphism_group(graph)
+    assert result.automorphism_count == (2**10) * 20
+    assert result.generated_group_order == result.automorphism_count
+
+
+def test_uniform_vertex_color_keeps_complement_presentation() -> None:
+    """A uniform vertex color removes no automorphism from K8,8."""
+    left = tuple(f"a{index}" for index in range(8))
+    right = tuple(f"b{index}" for index in range(8))
+    edges = tuple(canonical_edge(first, second) for first in left for second in right)
+    graph = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(vertices=left + right, edges=edges),
+        vertex_colors=("same",) * 16,
+    )
+    result = full_graph_automorphism_group(graph)
+    assert result.automorphism_count == (factorial(8) ** 2) * 2
+    assert result.generated_group_order == result.automorphism_count
+
+
+def test_reordered_generator_rows_are_rejected() -> None:
+    """Swapping source generator rows with their nested permutations must fail."""
+    vertices = ("a", "b", "c", "d")
+    edges = (("a", "b"), ("b", "c"), ("c", "d"), ("a", "d"))
+    graph = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(vertices=vertices, edges=edges)
+    )
+    valid = full_graph_automorphism_group(graph).model_dump()
+    rows = list(valid["generators"])
+    swapped = [rows[1], rows[0]]
+    for index, row in enumerate(swapped):
+        row["generator_id"] = f"g{index}"
+    nested = valid["group"]["generators"]
+    forged = {
+        **valid,
+        "generators": swapped,
+        "group": {**valid["group"], "generators": [nested[1], nested[0]]},
+    }
+    with pytest.raises(ValidationError):
+        FullGraphAutomorphismResult.model_validate(forged)

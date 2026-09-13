@@ -432,6 +432,12 @@ class FullGraphAutomorphismResult(StrictModel):
                 "graph.automorphism.source_generators_must_be_unique",
                 "source generators must be distinct permutations",
             )
+        mappings = [tuple(generator.mapping) for generator in self.generators]
+        if mappings != sorted(mappings):
+            raise PydanticCustomError(
+                "graph.automorphism.source_generators_must_be_ordered",
+                "source generators must follow the canonical ordering",
+            )
         self._require_group_generators()
         return self
 

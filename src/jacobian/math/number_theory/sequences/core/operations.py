@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from collections import Counter
+from collections.abc import Iterable
 from fractions import Fraction
 from functools import reduce
 from itertools import pairwise
@@ -236,6 +237,21 @@ def _autocorrelation_scalar(
     return value.numerator
 
 
+def _autocorrelation_sum(
+    products: Iterable[Fraction],
+    *,
+    label: str,
+) -> Fraction:
+    """Accumulate one lag with a checkpoint on the actual product count."""
+
+    total = Fraction(0)
+    for index, product in enumerate(products):
+        if index % 512 == 0:
+            request_checkpoint(label)
+        total += product
+    return total
+
+
 def _require_autocorrelation_work(
     multiplications: int, additions: int, operand_width: int, *, convention: str
 ) -> None:
@@ -267,18 +283,16 @@ def aperiodic_autocorrelation(
     rational_output = isinstance(request, FiniteRationalSequence)
     cells_list: list[AutocorrelationCell] = []
     for lag in range(size):
-        if lag % 64 == 0:
-            request_checkpoint("during aperiodic autocorrelation expansion")
         cells_list.append(
             AutocorrelationCell(
                 lag=lag,
                 value=_autocorrelation_scalar(
-                    sum(
+                    _autocorrelation_sum(
                         (
                             values[index] * values[index + lag]
                             for index in range(size - lag)
                         ),
-                        Fraction(0),
+                        label="during aperiodic autocorrelation expansion",
                     ),
                     rational_output=rational_output,
                 ),
@@ -307,18 +321,16 @@ def cyclic_autocorrelation(
     rational_output = isinstance(request, FiniteRationalSequence)
     cyclic_cells: list[AutocorrelationCell] = []
     for lag in range(size):
-        if lag % 64 == 0:
-            request_checkpoint("during cyclic autocorrelation expansion")
         cyclic_cells.append(
             AutocorrelationCell(
                 lag=lag,
                 value=_autocorrelation_scalar(
-                    sum(
+                    _autocorrelation_sum(
                         (
                             values[index] * values[(index + lag) % size]
                             for index in range(size)
                         ),
-                        Fraction(0),
+                        label="during cyclic autocorrelation expansion",
                     ),
                     rational_output=rational_output,
                 ),

@@ -12,7 +12,7 @@ from itertools import combinations
 from math import comb
 from typing import Self
 
-from pydantic import Field, StrictBool, StrictInt, model_validator
+from pydantic import Field, StrictBool, StrictInt, ValidationError, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._execution import request_checkpoint
@@ -43,7 +43,6 @@ MAX_SUNFLOWER_CANDIDATES = 1_000_000
 # membership inspection, and retained result allocation. One allocation unit
 # conservatively reserves a scalar digit, label code point, container slot, or
 # fixed record field; transports own encoded-byte limits separately.
-MAX_SUNFLOWER_GROUND_SET_SIZE = 1_000_000
 MAX_SUNFLOWER_MEMBERSHIPS = 1_000_000
 MAX_SUNFLOWER_RESULT_ALLOCATION_UNITS = 16 * 1024 * 1024
 # Pairwise frozenset intersection cost tracks admitted element work, not scan
@@ -54,6 +53,30 @@ SUNFLOWER_PAIRWISE_CHECKPOINT_WORK = 64
 
 def _result_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"set_system.sunflower.{reason}", message)
+
+
+def _revalidate_source(source: IndexedFiniteSetFamily) -> IndexedFiniteSetFamily:
+    """Reconstruct a constructed source so its field invariants are rerun."""
+
+    raw_members = getattr(source, "members", None)
+    if not isinstance(raw_members, tuple) or any(
+        not isinstance(member, tuple) for member in raw_members
+    ):
+        raise OperationDomainValidationError(
+            location=("source", "members"),
+            code="set_system.sunflower.source_shape",
+            message="members must be immutable index tuples",
+        )
+    try:
+        return IndexedFiniteSetFamily.model_validate(
+            {"ground_set_size": source.ground_set_size, "members": raw_members}
+        )
+    except (ValidationError, PydanticCustomError) as exc:
+        raise OperationDomainValidationError(
+            location=("source",),
+            code="set_system.sunflower.source_contract",
+            message="source is not a canonical indexed set family",
+        ) from exc
 
 
 def _admit_source(
@@ -68,6 +91,7 @@ def _admit_source(
             code="set_system.sunflower.source_type",
             message="sunflower construction requires an IndexedFiniteSetFamily",
         )
+    source = _revalidate_source(source)
     if type(petal_count) is not int:
         raise OperationDomainValidationError(
             location=("petal_count",),
@@ -96,15 +120,10 @@ def _admit_source(
             code="set_system.sunflower.vertex_bound",
             message=f"sunflower construction supports at most {MAX_VERTICES} members",
         )
-    if source.ground_set_size > MAX_SUNFLOWER_GROUND_SET_SIZE:
-        raise OperationResourceAdmissionError(
-            location=("source", "ground_set_size"),
-            code="set_system.sunflower.ground_set_bound",
-            message=(
-                f"the source ground set exceeds the {MAX_SUNFLOWER_GROUND_SET_SIZE}-element "
-                "sunflower admission envelope"
-            ),
-        )
+    # The carrier already bounds ``ground_set_size`` (at ``(1 << 53) - 1``) and
+    # the result retains it as a single scalar; the membership, candidate,
+    # intersection, and allocation accounting below bound every materialized
+    # quantity, so no separate coarse axis cap is needed.
     memberships = sum(len(member) for member in source.members)
     if memberships > MAX_SUNFLOWER_MEMBERSHIPS:
         raise OperationResourceAdmissionError(
@@ -125,8 +144,19 @@ def _admit_source(
                 f"{MAX_SUNFLOWER_INTERSECTION_WORK}-unit bound"
             ),
         )
-    ground_digits = len(str(max(source.ground_set_size - 1, 0)))
-    source_units = 16 + member_count + memberships * (ground_digits + 1)
+    # Charge the retained axis by the digits the source actually holds, not by
+    # the widest ground-set element it could hold, and keep the scan
+    # cancellable: a large ground-set axis is a scalar bound, not a materialized
+    # set, but walking its memberships still costs real time.
+    membership_digits = 0
+    processed = 0
+    for member in source.members:
+        for member_element in member:
+            processed += 1
+            if processed % 4096 == 0:
+                request_checkpoint("during sunflower membership-digit admission")
+            membership_digits += len(str(member_element))
+    source_units = 16 + member_count + membership_digits
     if source_units > MAX_SUNFLOWER_RESULT_ALLOCATION_UNITS:
         raise OperationResourceAdmissionError(
             location=("source",),
@@ -168,14 +198,20 @@ def _intersection_search_work(sizes: tuple[int, ...], petal_count: int) -> int:
     if member_count < petal_count:
         return 0
     pair_occurrences = comb(member_count - 2, petal_count - 2)
-    pair_min_sum = sum(
-        min(sizes[left], sizes[right])
-        for left, right in combinations(range(member_count), 2)
-    )
-    core_bound_sum = sum(
-        min(sizes[index] for index in indices)
-        for indices in combinations(range(member_count), petal_count)
-    )
+    pair_min_sum = 0
+    for pairs, (left, right) in enumerate(
+        combinations(range(member_count), 2), start=1
+    ):
+        if pairs % 4096 == 0:
+            request_checkpoint("during sunflower pairwise-work admission")
+        pair_min_sum += min(sizes[left], sizes[right])
+    core_bound_sum = 0
+    for cores, indices in enumerate(
+        combinations(range(member_count), petal_count), start=1
+    ):
+        if cores % 4096 == 0:
+            request_checkpoint("during sunflower core-bound admission")
+        core_bound_sum += min(sizes[index] for index in indices)
     return 2 * pair_occurrences * pair_min_sum + 2 * core_bound_sum
 
 
@@ -252,7 +288,7 @@ def _admit_qualifying_result(
     member_count: int,
     source_units: int,
     row_count: int,
-    core_elements: int,
+    core_digits: int,
 ) -> None:
     """Admit retained rows after the exact qualifying plan is known."""
 
@@ -272,7 +308,7 @@ def _admit_qualifying_result(
         member_count=member_count,
         source_units=source_units,
         row_count=row_count,
-        core_elements=core_elements,
+        core_digits=core_digits,
     )
     if allocation_units > MAX_SUNFLOWER_RESULT_ALLOCATION_UNITS:
         raise OperationResourceAdmissionError(
@@ -293,11 +329,12 @@ def _result_allocation_units(
     member_count: int,
     source_units: int,
     row_count: int,
-    core_elements: int,
+    core_digits: int,
 ) -> int:
     member_digits = len(str(max(member_count - 1, 0)))
-    ground_digits = len(str(max(source.ground_set_size - 1, 0)))
-    # Row IDs are bounded ordinals (``sunflower_<position>``).
+    # Row IDs are bounded ordinals (``sunflower_<position>``), so an ID never
+    # carries petal coordinates; the core is charged by the widths it actually
+    # holds rather than the widest ground-set element it could hold.
     edge_id_units = 10 + len(str(max(row_count, 1)))
     fixed_row_units = 128 + edge_id_units + petal_count * (member_digits + 2)
     edge_projection_units = 64 + edge_id_units + petal_count * (member_digits + 2)
@@ -305,7 +342,7 @@ def _result_allocation_units(
     return (
         base_result_units
         + row_count * (fixed_row_units + 2 * edge_projection_units)
-        + core_elements * (ground_digits + 1)
+        + core_digits
     )
 
 
@@ -537,7 +574,7 @@ def construct_sunflower_family(
     sets = tuple(sets_list)
     sizes = tuple(len(member) for member in source.members)
     plan: list[tuple[tuple[int, ...], tuple[int, ...]]] = []
-    core_elements = 0
+    core_digits = 0
     work_since_checkpoint = 0
     checkpoint_units = SUNFLOWER_PAIRWISE_CHECKPOINT_WORK
     for indices in combinations(range(member_count), petal_count):
@@ -548,24 +585,26 @@ def construct_sunflower_family(
             continue
         next_rows = len(plan) + 1
         ordered_core = tuple(sorted(core))
-        next_core_elements = core_elements + len(ordered_core)
+        next_core_digits = core_digits + sum(
+            len(str(coordinate)) for coordinate in ordered_core
+        )
         _admit_qualifying_result(
             source,
             petal_count,
             member_count,
             source_units,
             next_rows,
-            next_core_elements,
+            next_core_digits,
         )
         plan.append((indices, ordered_core))
-        core_elements = next_core_elements
+        core_digits = next_core_digits
     _admit_qualifying_result(
         source,
         petal_count,
         member_count,
         source_units,
         len(plan),
-        core_elements,
+        core_digits,
     )
     rows = tuple(
         SunflowerFamily.model_construct(
@@ -592,7 +631,6 @@ def construct_sunflower_family(
 
 __all__ = [
     "MAX_SUNFLOWER_CANDIDATES",
-    "MAX_SUNFLOWER_GROUND_SET_SIZE",
     "MAX_SUNFLOWER_MEMBERSHIPS",
     "MAX_SUNFLOWER_PETALS",
     "MAX_SUNFLOWER_RESULT_ALLOCATION_UNITS",

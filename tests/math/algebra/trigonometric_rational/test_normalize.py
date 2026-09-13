@@ -707,3 +707,34 @@ def test_locus_union_retains_the_larger_zero_set() -> None:
     }
     combined = _combine_loci((larger, smaller), 1)
     assert set(combined) == set(larger)
+
+
+def test_locus_divisibility_uses_the_laurent_ring() -> None:
+    """sin(3000x) divides sin(3000x)*sin(x) in the Laurent ring.
+
+    The reduced zero-set cover keeps the larger factor, so 1/(P/(P*sin(x)))
+    with P = sin(3000x) is admitted instead of rejecting the product of both
+    recorded factors at exponent 6001.
+    """
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x"],
+            "expression": {
+                "kind": "DIVIDE",
+                "numerator": {"kind": "LITERAL", "value": {"num": 1, "den": 1}},
+                "denominator": {
+                    "kind": "DIVIDE",
+                    "numerator": {"kind": "SINE", "angle": {"coefficients": [3000]}},
+                    "denominator": {
+                        "kind": "MULTIPLY",
+                        "children": [
+                            {"kind": "SINE", "angle": {"coefficients": [3000]}},
+                            {"kind": "SINE", "angle": {"coefficients": [1]}},
+                        ],
+                    },
+                },
+            },
+        }
+    )
+    result = normalize_trigonometric_rational(request)
+    assert len(result.denominator_nonzero.terms) == 4

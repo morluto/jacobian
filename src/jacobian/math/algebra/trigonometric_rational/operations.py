@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 from math import gcd
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -23,6 +23,9 @@ from jacobian.math.number_theory.number_fields.values import (
 MAX_TRIG_VARIABLES = 8
 MAX_TRIG_AST_NODES = 128
 MAX_TRIG_LAURENT_TERMS = 4_096
+# Locus divisibility runs a synchronous exact division before the bounded GCD
+# worker; bound the operand product so it cannot become an unbounded phase.
+_MAX_LOCUS_DIVISIBILITY_TERMS = 65_536
 MAX_TRIG_EXPONENT = 4_096
 MAX_TRIG_GCD_EXPONENT = 2 * MAX_TRIG_EXPONENT
 _GAUSSIAN_COMPONENT_LIMIT = 10**MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS
@@ -630,36 +633,50 @@ def _divides(candidate: Polynomial, target: Polynomial) -> bool:
 
     if candidate == target:
         return True
+    # Bound the divisibility check: it runs synchronously before the GCD worker
+    # starts, so decline a large pair rather than perform unbounded exact
+    # division. Declining only skips the pruning optimization.
+    if len(candidate) * len(target) > _MAX_LOCUS_DIVISIBILITY_TERMS:
+        return False
     axis = len(next(iter(candidate)))
-    minimum = tuple(
-        min(support[index] for support in candidate) for index in range(axis)
-    )
-    shifted_target = {
-        tuple(
-            value - minimum[index] for index, value in enumerate(support)
-        ): coefficient
-        for support, coefficient in target.items()
-    }
-    if any(value < 0 for support in shifted_target for value in support):
-        return False
-    shifted_candidate = {
-        tuple(
-            value - minimum[index] for index, value in enumerate(support)
-        ): coefficient
-        for support, coefficient in candidate.items()
-    }
+    # Test divisibility in the Laurent ring: divide the two exact expressions and
+    # require the quotient to have no negative-exponent terms. Cancelling first
+    # keeps the comparison exact and bounded by the operand sizes.
+    from sympy import QQ_I, Poly, Symbol, cancel, fraction
+    from sympy.polys.polyerrors import CoercionFailed
+
+    symbol = Symbol("z0")
     try:
-        divisor = _to_sympy_poly(shifted_candidate)
-        dividend = _to_sympy_poly(shifted_target)
-    except (ValueError, TypeError):
+        candidate_expr = _to_sympy_poly(_shift_to_zero(candidate, axis)).as_expr()
+        target_expr = _to_sympy_poly(_shift_to_zero(target, axis)).as_expr()
+    except (ValueError, TypeError, CoercionFailed):
         return False
-    from sympy import QQ_I, div
+    if candidate_expr == 0:
+        return bool(target_expr == 0)
+    _numerator, denominator = fraction(cancel(target_expr / candidate_expr))
+    # The quotient is a Laurent polynomial exactly when the residual denominator
+    # is a monomial ``z0**k``.
+    try:
+        return bool(Poly(denominator, symbol, domain=QQ_I).is_monomial)
+    except CoercionFailed:
+        return False
 
-    _quotient, remainder = div(dividend, divisor, domain=QQ_I)
-    return bool(remainder.is_zero)
+
+def _shift_to_zero(polynomial: Polynomial, axis: int) -> Polynomial:
+    """Shift a Laurent polynomial so its minimum exponent is zero per axis."""
+
+    minimum = tuple(
+        min(support[index] for support in polynomial) for index in range(axis)
+    )
+    return {
+        tuple(
+            value - minimum[index] for index, value in enumerate(support)
+        ): coefficient
+        for support, coefficient in polynomial.items()
+    }
 
 
-def _to_sympy_poly(polynomial: Polynomial) -> object:
+def _to_sympy_poly(polynomial: Polynomial) -> Any:
     from sympy import I, Integer, Poly, Rational, Symbol
 
     axis = len(next(iter(polynomial)))

@@ -119,6 +119,19 @@ def _require_factorization_work(
         )
 
 
+def _semiprime_primes(factorization: dict[int, int]) -> tuple[int, int] | None:
+    """Return ``(p, q)`` when the index is a product of two distinct primes."""
+
+    if len(factorization) != 2 or any(
+        exponent != 1 for exponent in factorization.values()
+    ):
+        return None
+    low, high = sorted(factorization)
+    if not (_is_prime(low) and _is_prime(high)):
+        return None
+    return low, high
+
+
 def _construction_regime(index: int, factorization: dict[int, int]) -> tuple[int, int]:
     """Return the ``(work, intermediate bits)`` for one index's construction.
 
@@ -144,6 +157,15 @@ def _construction_regime(index: int, factorization: dict[int, int]) -> tuple[int
             10 * max(1, odd_radical.bit_length()) * (odd_radical + 1) ** 2,
             2 * odd_radical + (odd_radical + 1).bit_length() + 1,
         )
+    semiprime = _semiprime_primes(factorization)
+    if semiprime is not None:
+        # ``Phi_{pq}(x) = Phi_p(x**q) / Phi_p(x)`` for distinct primes ``p < q``:
+        # one p-term geometric series, one sparse substitution, and one exact
+        # division whose quotient has ``(p-1)*(q-1)+1`` coefficients in
+        # ``{-1, 0, 1}``. Charging the universal radical-square estimate here
+        # would reject cheaply executable indices such as ``447 = 3*149``.
+        low, high = semiprime
+        return 10 * (low + 1) * (high + 1), 4 * low + 4
     radical = prod(factorization) if factorization else 1
     if radical != index:
         return _construction_regime(radical, dict.fromkeys(factorization, 1))
@@ -311,7 +333,15 @@ def _twice_odd_cyclotomic(
         base_coefficients: tuple[int, ...] = (1,) * odd
     else:
         base_coefficients = _backend_cyclotomic_coefficients(odd)
-        _require_admitted_coefficients(base_coefficients, admission)
+        # The odd half is ``Phi_odd`` with the same degree as ``Phi_{2*odd}``
+        # and, for odd > 1, the exact constant term 1. Checking only digit
+        # widths would let a malformed monic tuple ending in -1 through.
+        _require_admitted_coefficients(
+            base_coefficients,
+            admission,
+            expected_degree=admission.degree,
+            expected_constant=1,
+        )
     degree = len(base_coefficients) - 1
     return IntegerPolynomial(
         coefficients=tuple(
@@ -321,15 +351,76 @@ def _twice_odd_cyclotomic(
     )
 
 
+def _exact_divide(
+    dividend: IntegerPolynomial, divisor: IntegerPolynomial
+) -> IntegerPolynomial:
+    """Return ``dividend / divisor`` for a monic dense divisor over ``ZZ``."""
+
+    remainder = list(dividend.coefficients)
+    divisor_coefficients = list(divisor.coefficients)
+    divisor_degree = len(divisor_coefficients) - 1
+    leading = divisor_coefficients[0]
+    if divisor_degree < 0 or leading == 0:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    quotient_length = len(remainder) - divisor_degree
+    quotient = [0] * quotient_length
+    for position in range(quotient_length):
+        if position % 64 == 0:
+            request_checkpoint("during semiprime cyclotomic division")
+        factor, residual = divmod(remainder[position], leading)
+        if residual:
+            raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+        quotient[position] = factor
+        if factor:
+            for offset, coefficient in enumerate(divisor_coefficients):
+                remainder[position + offset] -= factor * coefficient
+    if any(remainder[quotient_length:]):
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    return IntegerPolynomial(coefficients=tuple(quotient))
+
+
+def _semiprime_quotient_cyclotomic(
+    index: int,
+    primes: tuple[int, int],
+    admission: _CyclotomicAdmission,
+) -> IntegerPolynomial:
+    """Return ``Phi_{pq}(x) = Phi_p(x**q) / Phi_p(x)`` for distinct primes."""
+
+    low, high = primes
+    request_checkpoint("during semiprime cyclotomic construction")
+    quotient = _exact_divide(
+        _substitute_power(_prime_cyclotomic(low), high),
+        _prime_cyclotomic(low),
+    )
+    if len(quotient.coefficients) != admission.degree + 1:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    _require_admitted_coefficients(
+        quotient.coefficients, admission, expected_constant=1
+    )
+    return quotient
+
+
 def _require_admitted_coefficients(
-    coefficients: tuple[int, ...], admission: _CyclotomicAdmission
+    coefficients: tuple[int, ...],
+    admission: _CyclotomicAdmission,
+    *,
+    expected_degree: int | None = None,
+    expected_constant: int | None = None,
 ) -> None:
-    """Check a backend coefficient tuple against the admitted output envelope."""
+    """Check a backend coefficient tuple against the admitted output envelope.
+
+    ``expected_degree`` and ``expected_constant`` pin the carrier's shape: a
+    cyclotomic returned by a reduced construction path must still have the
+    admitted degree and the exact constant term, not merely bounded digit
+    widths.
+    """
 
     if (
         not coefficients
         or coefficients[0] != 1
-        or coefficients[-1] not in (1, -1)
+        or (expected_degree is not None and len(coefficients) != expected_degree + 1)
+        or (expected_constant is not None and coefficients[-1] != expected_constant)
+        or (expected_constant is None and coefficients[-1] not in (1, -1))
         or any(
             len(str(abs(value))) > admission.coefficient_digits
             for value in coefficients
@@ -398,6 +489,11 @@ def _compute(index: int) -> tuple[int, IntegerPolynomial]:
         return admission.degree, polynomial_value
     if _is_twice_odd_index(index, factorization):
         polynomial_value = _twice_odd_cyclotomic(index, factorization, admission)
+        request_checkpoint("before cyclotomic result construction")
+        return admission.degree, polynomial_value
+    semiprime = _semiprime_primes(factorization)
+    if semiprime is not None:
+        polynomial_value = _semiprime_quotient_cyclotomic(index, semiprime, admission)
         request_checkpoint("before cyclotomic result construction")
         return admission.degree, polynomial_value
     radical = prod(factorization) if factorization else 1

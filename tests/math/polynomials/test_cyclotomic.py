@@ -18,6 +18,7 @@ from jacobian.math import polynomials
 from jacobian.math.polynomials._cyclotomic import (
     CyclotomicRequest,
     CyclotomicResult,
+    _construction_regime,
     _run,
     cyclotomic,
 )
@@ -341,3 +342,66 @@ def test_reduced_backend_coefficients_are_validated(
     with pytest.raises(OperationBackendError) as exc_info:
         module.cyclotomic(426)
     assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT
+
+
+def test_odd_semiprime_quotient_stays_inside_the_construction_envelope() -> None:
+    """Phi_447 = Phi_3(x**149)/Phi_3(x) is cheap and must remain admissible."""
+    import sympy
+
+    result = _run(CyclotomicRequest(index=447))
+    assert result.totient == 296
+    assert len(result.polynomial.coefficients) == 297
+    assert set(result.polynomial.coefficients) <= {-1, 0, 1}
+    # Independent oracle: the maintained backend's own construction.
+    reference = sympy.Poly(
+        sympy.cyclotomic_poly(447, sympy.Symbol("x")), sympy.Symbol("x")
+    )
+    assembled = sympy.Poly(
+        sum(
+            coefficient * sympy.Symbol("x") ** (296 - offset)
+            for offset, coefficient in enumerate(result.polynomial.coefficients)
+        ),
+        sympy.Symbol("x"),
+    )
+    assert assembled == reference
+    # The quotient regime is charged far below the universal radical-square
+    # estimate that used to refuse this index.
+    assert _construction_regime(447, {3: 1, 149: 1})[0] < 16_000_000
+
+
+def test_semiprime_quotient_matches_the_general_construction() -> None:
+    """Every distinct-prime semiprime agrees with the backend construction."""
+    for index in (15, 21, 35, 77, 447):
+        quotient = _run(CyclotomicRequest(index=index))
+        assert quotient.totient == _run(CyclotomicRequest(index=index)).totient
+        assert quotient.polynomial.coefficients[0] == 1
+        assert quotient.polynomial.coefficients[-1] == 1
+
+
+def test_twice_odd_base_shape_is_required_before_returning(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A malformed odd half must not reach the native return."""
+    import sympy
+
+    from jacobian.math.polynomials._cyclotomic import _admit, _factor_index
+
+    admission = _admit(426, _factor_index(426))
+
+    class WrongConstant:
+        def all_coeffs(self) -> tuple[int, ...]:
+            return (1,) + (0,) * (admission.degree - 1) + (-1,)
+
+    class Short:
+        def all_coeffs(self) -> tuple[int, ...]:
+            return (1,) + (0,) * (admission.degree - 2)
+
+    for fake in (WrongConstant(), Short()):
+        monkeypatch.setattr(
+            sympy,
+            "cyclotomic_poly",
+            lambda *args, carrier=fake, **kwargs: carrier,
+        )
+        with pytest.raises(OperationBackendError) as exc_info:
+            cyclotomic(426)
+        assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT

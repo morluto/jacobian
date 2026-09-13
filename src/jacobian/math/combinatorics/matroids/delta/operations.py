@@ -124,5 +124,7 @@ def width(delta_matroid: FiniteDeltaMatroid) -> int:
     system = FiniteFeasibleSetSystem(
         ground=delta_matroid.ground, feasible=delta_matroid.feasible
     )
+    if not system.feasible:
+        raise ValueError("a delta-matroid has at least one feasible set")
     sizes = tuple(len(row) for row in system.feasible)
     return max(sizes) - min(sizes)

@@ -1,5 +1,7 @@
 """Canonical rational Laurent-polynomial multiplication."""
 
+from fractions import Fraction
+
 import pytest
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
@@ -432,3 +434,47 @@ def test_sparse_product_admits_large_operand_wide_lcm() -> None:
         item.coefficient.den in (left_denominator, right_denominator)
         for item in product.terms
     )
+
+
+def term_object(
+    coefficient: CanonicalRational, *exponents: int
+) -> RationalLaurentPolynomialTerm:
+    return RationalLaurentPolynomialTerm(coefficient=coefficient, exponents=exponents)
+
+
+def test_cross_cancelling_pair_coefficients_are_reduced_first() -> None:
+    """A pair coefficient reduced to 1 is admitted despite wide denominators."""
+    denominator = 10**19_999
+    first = CanonicalRational(num=denominator, den=denominator + 1)
+    second = CanonicalRational(num=denominator + 1, den=denominator)
+    left = RationalLaurentPolynomial(
+        variables=("x",), terms=(term_object(first, 1), term_object(first, 0))
+    )
+    right = RationalLaurentPolynomial(
+        variables=("x",), terms=(term_object(second, 1), term_object(second, 0))
+    )
+    product = rational_laurent_multiply(left, right)
+    assert tuple(item.exponents for item in product.terms) == ((2,), (1,), (0,))
+    assert [item.coefficient.as_fraction() for item in product.terms] == [
+        Fraction(1),
+        Fraction(2),
+        Fraction(1),
+    ]
+
+
+def test_capped_lcm_measures_the_exact_merge() -> None:
+    """An exact LCM of exactly 32,768 digits is admitted, not refused."""
+    largest = 10**32_767 - 1
+    left_terms = (
+        term_object(CanonicalRational(num=1, den=2 * largest), 1),
+        term_object(CanonicalRational(num=1, den=3 * largest), 0),
+    )
+    right_terms = (
+        term_object(CanonicalRational(num=1, den=1), 1),
+        term_object(CanonicalRational(num=1, den=1), 0),
+    )
+    product = rational_laurent_multiply(
+        RationalLaurentPolynomial(variables=("x",), terms=left_terms),
+        RationalLaurentPolynomial(variables=("x",), terms=right_terms),
+    )
+    assert len(product.terms) == 3

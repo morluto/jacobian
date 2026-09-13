@@ -397,3 +397,13 @@ def test_width_rejects_a_forged_malformed_source() -> None:
     )
     with pytest.raises(PydanticValidationError):
         width(forged)
+
+
+def test_width_rejects_an_empty_forged_source() -> None:
+    """An empty feasible family is not a delta-matroid and has no width."""
+
+    from jacobian.math.combinatorics.matroids.delta import width
+
+    forged = FiniteDeltaMatroid.model_construct(ground=(), feasible=())
+    with pytest.raises(ValueError, match="at least one feasible set"):
+        width(forged)

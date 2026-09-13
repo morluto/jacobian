@@ -83,11 +83,8 @@ def _capped_denominator_lcm(left: int, right: int) -> int | None:
     if right == 1:
         return left if _integer_digits(left) <= MAX_CANONICAL_RATIONAL_DIGITS else None
     overlap = gcd(left, right)
-    left_digits = _integer_digits(left)
-    right_digits = _integer_digits(right)
-    overlap_digits = _integer_digits(overlap)
-    if left_digits + right_digits - overlap_digits > MAX_CANONICAL_RATIONAL_DIGITS:
-        return None
+    # Compute the exact merge first: the sum-of-widths estimate can overstate
+    # the product's width by one and reject a representable LCM.
     merged = (left // overlap) * right
     if _integer_digits(merged) > MAX_CANONICAL_RATIONAL_DIGITS:
         return None
@@ -117,8 +114,17 @@ def _maximum_coefficient_digits(
                 a + b
                 for a, b in zip(left_term.exponents, right_term.exponents, strict=True)
             )
-            pair_numerator = abs(left_coefficient.num) * abs(right_term.coefficient.num)
-            pair_denominator = left_coefficient.den * right_term.coefficient.den
+            # Form the reduced pair coefficient first: the unreduced
+            # denominator product can exceed the cap even when the exact pair
+            # coefficient cancels to a small value.
+            gcd_left = gcd(abs(left_coefficient.num), right_term.coefficient.den)
+            gcd_right = gcd(abs(right_term.coefficient.num), left_coefficient.den)
+            pair_numerator = (abs(left_coefficient.num) // gcd_left) * (
+                abs(right_term.coefficient.num) // gcd_right
+            )
+            pair_denominator = (left_coefficient.den // gcd_right) * (
+                right_term.coefficient.den // gcd_left
+            )
             current = groups.get(exponent, 1)
             merged = _capped_denominator_lcm(current, pair_denominator)
             if merged is None:

@@ -109,6 +109,24 @@ def test_content_profile_matches_primitive_part_on_the_zero_polynomial() -> None
     assert restored == result
 
 
+def test_content_profile_rejects_a_non_carrier_native_argument() -> None:
+    """A native boundary classifies the wrong type as a domain error."""
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        integer_polynomial_primitive_part((1, 2))  # type: ignore[arg-type]
+    assert exc_info.value.errors()[0]["type"] == "polynomial.primitive_part_carrier"
+
+
+def test_content_profile_reports_the_duplicated_output_envelope() -> None:
+    """A carrier-valid polynomial can still exceed the retained digit bound."""
+    coefficients = tuple(10**1000 + index for index in range(MAX_POLYNOMIAL_TERMS))
+    polynomial = IntegerPolynomial(coefficients=coefficients)
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
+        integer_polynomial_primitive_part(polynomial)
+    assert exc_info.value.errors()[0]["type"] == (
+        "polynomial.content_profile_result_digits"
+    )
+
+
 def test_mahler_coefficient_digit_bound_is_an_admission_error() -> None:
     oversized = 10**MAX_MAHLER_COEFFICIENT_DIGITS
     with pytest.raises(OperationResourceAdmissionError, match="digit bound"):

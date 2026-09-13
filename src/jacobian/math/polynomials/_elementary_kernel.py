@@ -83,6 +83,12 @@ def _admit_integer(polynomial: IntegerPolynomial) -> None:
 def _admit_primitive_part(polynomial: IntegerPolynomial) -> None:
     """Admit content/primitive decomposition on the integer-polynomial carrier."""
 
+    if not isinstance(polynomial, IntegerPolynomial):
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="polynomial.primitive_part_carrier",
+            message="primitive decomposition requires an IntegerPolynomial value",
+        )
     coefficients = polynomial.coefficients
     if not isinstance(coefficients, tuple) or not coefficients:
         raise OperationDomainValidationError(

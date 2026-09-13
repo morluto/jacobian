@@ -54,7 +54,11 @@ INTEGER_POLYNOMIAL_PROFILE_OPERATIONS = (
             "positive-leading primitive part, the degree, and the exact "
             "reconstruction of one canonical integer polynomial. This is the "
             "same IntegerPolynomialPrimitivePartResult produced by the native "
-            "integer_polynomial_primitive_part contract."
+            "integer_polynomial_primitive_part contract. The retained "
+            "primitive part and reconstruction must together satisfy "
+            "2 * (source coefficient digits) + 1 <= 8000000, since the "
+            "operation duplicates the coefficient payload; a wider request "
+            "receives a typed resource refusal."
         ),
         request_type=IntegerPolynomialRequest,
         result_type=IntegerPolynomialPrimitivePartResult,

@@ -171,6 +171,31 @@ def _bounded_sum(
     return Fraction(numerator, denominator)
 
 
+def _reduced_signed_terms(terms: list[Fraction]) -> list[Fraction]:
+    """Cancel exact sign-opposite pairs before denominator admission.
+
+    Complementary charges such as ``+1/(12 p)`` and ``-1/(12 p)`` sum to zero
+    but would otherwise force their unrelated denominators into one common
+    LCM.  Reducing by absolute value first keeps the signed sum unchanged while
+    removing the pairs that cancel exactly.
+    """
+
+    net: dict[Fraction, int] = {}
+    for term in terms:
+        if term == 0:
+            continue
+        key = abs(term)
+        sign = 1 if term > 0 else -1
+        net[key] = net.get(key, 0) + sign
+    reduced: list[Fraction] = []
+    for magnitude, count in net.items():
+        if count > 0:
+            reduced.extend([magnitude] * count)
+        elif count < 0:
+            reduced.extend([-magnitude] * -count)
+    return reduced
+
+
 def _require_bounded_denominator_lcm(
     terms: list[Fraction],
     *,
@@ -388,12 +413,13 @@ def _admit_and_plan(
         moment_location: tuple[str, ...] = ("jump_distribution", "atoms")
         if len(values) == 1:
             moment_location = ("jump_distribution", "atoms", str(values[0][0]))
+        reduced_terms = _reduced_signed_terms(weighted_powers)
         _require_bounded_denominator_lcm(
-            weighted_powers,
+            reduced_terms,
             location=moment_location,
             label="jump raw moment",
         )
-        moment = sum(weighted_powers, start=Fraction())
+        moment = sum(reduced_terms, start=Fraction())
         if (
             abs(moment.numerator) > _RESULT_VALUE_LIMIT
             or moment.denominator > _RESULT_VALUE_LIMIT

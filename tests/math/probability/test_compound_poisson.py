@@ -381,6 +381,39 @@ def test_signed_jump_moments_cancel_before_the_height_bound() -> None:
     ]
 
 
+def test_opposite_jump_charges_cancel_before_the_denominator_bound() -> None:
+    """Independent cancelling charges are not summed into one common LCM.
+
+    Six pairwise-coprime 100-digit denominators carry ``+1/p_i`` and ``-1/p_i``
+    with mass ``1/12``; the first moment is exactly zero, so the unrelated
+    denominator product must not be materialized to prove that.
+    """
+
+    primes = (5, 7, 11, 13, 17, 19)
+    denominators = []
+    for prime in primes:
+        denominator = prime
+        while len(str(denominator)) < 100:
+            denominator *= prime
+        denominators.append(denominator)
+    atoms = [
+        FiniteDistributionAtom(
+            value=_q(Fraction(1, denominator)), probability=_q(Fraction(1, 12))
+        )
+        for denominator in denominators
+    ] + [
+        FiniteDistributionAtom(
+            value=_q(Fraction(-1, denominator)), probability=_q(Fraction(1, 12))
+        )
+        for denominator in denominators
+    ]
+    atoms.sort(key=lambda atom: atom.value.as_fraction())
+    jumps = FiniteRationalDistribution(atoms=tuple(atoms))
+    result = compound_poisson_cumulant_prefix(_q(Fraction(1)), jumps, 1)
+    assert result.cumulants[0].jump_raw_moment.as_fraction() == 0
+    assert result.cumulants[0].cumulant.as_fraction() == 0
+
+
 def test_oversized_support_is_rejected_before_atom_type_scan() -> None:
     atom = FiniteDistributionAtom(value=_q(Fraction(0)), probability=_q(Fraction(1)))
     forged = FiniteRationalDistribution.model_construct(

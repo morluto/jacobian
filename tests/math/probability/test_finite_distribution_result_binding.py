@@ -122,12 +122,19 @@ def test_normalization_is_admitted_by_consuming_operations() -> None:
 
 
 def test_exact_lcm_is_measured_before_rejecting_the_boundary() -> None:
-    """An in-envelope normalized law is admitted at the digit boundary."""
+    """An in-envelope normalized law is admitted at the digit boundary.
+
+    With ``g = 2*10**99+3`` and ``a = 6*10**411+3`` the merged denominator is
+    exactly 512 digits, while a bit-length estimate reports 513.
+    """
     from jacobian.math.probability._distribution import _bounded_fraction_sum
+    from jacobian.math.probability._models import MAX_RESULT_RATIONAL_DIGITS
 
     g = 2 * 10**99 + 3
-    a = 5 * 10**411 + 3
+    a = 6 * 10**411 + 3
     limit = g * a
+    merged = 5 * limit
+    assert len(str(merged)) == MAX_RESULT_RATIONAL_DIGITS
     values = (
         Fraction(1, limit),
         Fraction(1, 5 * g),

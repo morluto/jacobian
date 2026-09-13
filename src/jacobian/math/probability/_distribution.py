@@ -27,13 +27,6 @@ MAX_FINITE_CONVOLUTION_POWER = 10**15
 MAX_FINITE_DISTRIBUTION_SUM_DIGITS = MAX_RESULT_RATIONAL_DIGITS
 
 
-def _decimal_digits(value: int) -> int:
-    magnitude = abs(value)
-    if magnitude <= 1:
-        return 1
-    return magnitude.bit_length() * 30_103 // 100_000 + 1
-
-
 def _remove_prime_power(value: int, prime: int) -> int:
     if value % prime:
         return value
@@ -124,7 +117,9 @@ def _bounded_fraction_sum(
         # Compute the exact merged denominator: a width estimate can overstate
         # the product by one and reject an in-envelope normalized law.
         merged = running // shared * denominator
-        if _decimal_digits(merged) > MAX_FINITE_DISTRIBUTION_SUM_DIGITS:
+        # Exact boundary comparison: the bit-length estimate could overstate a
+        # 512-digit denominator as 513 and reject an in-envelope law.
+        if merged >= _SUM_VALUE_LIMIT:
             _raise_normalization_bound(label)
         running = merged
     total = Fraction()

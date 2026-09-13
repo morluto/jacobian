@@ -171,6 +171,35 @@ def _bounded_sum(
     return Fraction(numerator, denominator)
 
 
+def _require_bounded_denominator_lcm(
+    terms: list[Fraction],
+    *,
+    location: tuple[str, ...],
+    label: str,
+) -> None:
+    """Reject a sum whose exact common denominator would exceed the envelope.
+
+    Summing terms with unrelated denominators materializes their LCM before
+    the result can be inspected, so bound that denominator here.  Signed
+    numerators may still cancel because only the common denominator grows.
+    """
+
+    lcm = 1
+    for term in terms:
+        denominator = term.denominator
+        scale = denominator // gcd(lcm, denominator)
+        if scale > _RESULT_VALUE_LIMIT // lcm:
+            raise _resource_error(
+                location=location,
+                code="probability.compound_poisson.intermediate_height_bound",
+                message=(
+                    f"{label} exceeds the {MAX_RESULT_RATIONAL_DIGITS}-digit "
+                    "exact intermediate bound"
+                ),
+            )
+        lcm *= scale
+
+
 def _require_canonical_rational(
     value: object,
     *,
@@ -356,16 +385,21 @@ def _admit_and_plan(
     for order in range(1, max_order + 1):
         for slot, (_source_index, value) in enumerate(values):
             weighted_powers[slot] *= value
+        moment_location: tuple[str, ...] = ("jump_distribution", "atoms")
+        if len(values) == 1:
+            moment_location = ("jump_distribution", "atoms", str(values[0][0]))
+        _require_bounded_denominator_lcm(
+            weighted_powers,
+            location=moment_location,
+            label="jump raw moment",
+        )
         moment = sum(weighted_powers, start=Fraction())
         if (
             abs(moment.numerator) > _RESULT_VALUE_LIMIT
             or moment.denominator > _RESULT_VALUE_LIMIT
         ):
-            location: tuple[str, ...] = ("jump_distribution", "atoms")
-            if len(values) == 1:
-                location = ("jump_distribution", "atoms", str(values[0][0]))
             raise _resource_error(
-                location=location,
+                location=moment_location,
                 code="probability.compound_poisson.intermediate_height_bound",
                 message=(
                     "jump raw moment exceeds the "

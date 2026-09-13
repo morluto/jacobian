@@ -324,6 +324,41 @@ def test_height_errors_keep_source_atom_indices_after_zero_mass_filter() -> None
     assert error["loc"] == ("jump_distribution", "atoms", "1")
 
 
+def test_unrelated_moment_denominators_are_bounded_before_summing() -> None:
+    """Unrelated tall denominators are refused before the common LCM forms.
+
+    Each atom value ``i + 1/p_i`` contributes the probability-scaled term
+    ``1/(16 p_i)``; summing them directly would materialize the product
+    denominator before the height check could reject it.
+    """
+
+    primes: list[int] = []
+    candidate = 2
+    while len(primes) < 16:
+        if all(candidate % prime for prime in primes):
+            primes.append(candidate)
+        candidate += 1 if candidate == 2 else 2
+    denominators: list[int] = []
+    for prime in primes:
+        denominator = prime
+        while len(str(denominator)) < 120:
+            denominator *= prime
+        denominators.append(denominator)
+    atoms = tuple(
+        FiniteDistributionAtom(
+            value=_q(Fraction(index) + Fraction(1, denominators[index])),
+            probability=_q(Fraction(1, 16)),
+        )
+        for index in range(16)
+    )
+    jumps = FiniteRationalDistribution(atoms=atoms)
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
+        compound_poisson_cumulant_prefix(_q(Fraction(1)), jumps, 1)
+    error = exc_info.value.errors()[0]
+    assert error["type"] == "probability.compound_poisson.intermediate_height_bound"
+    assert error["loc"] == ("jump_distribution", "atoms")
+
+
 def test_signed_jump_moments_cancel_before_the_height_bound() -> None:
     tall = 10**127
     jumps = FiniteRationalDistribution(

@@ -290,3 +290,69 @@ def test_expired_owner_deadline_stops_before_the_sympy_kernel() -> None:
         pytest.raises(OperationExecutionTimeoutError),
     ):
         root_critical_distance_profile(_polynomial((3, 1), (0, -1)))
+
+
+def test_rectangle_component_rounds_negative_upper_endpoint_up() -> None:
+    """A negative upper endpoint must round toward +infinity to stay an upper bound."""
+    from fractions import Fraction
+
+    from jacobian.math.polynomials.root_critical.operations import (
+        MAX_ROOT_CRITICAL_ROOT_COMPONENT_DIGITS,
+        _fit_rectangle_component,
+    )
+
+    scale = 10 ** (MAX_ROOT_CRITICAL_ROOT_COMPONENT_DIGITS - 1)
+    # The scaled value has a nonzero remainder and a negative numerator, so the
+    # upper endpoint must round up (toward +infinity) to contain ``value``.
+    value = Fraction(-(10**300) * scale * 3 + 1, scale * 3)
+    fitted = _fit_rectangle_component(value, round_up=True)
+    assert fitted.as_fraction() >= value
+
+
+def test_evalf_containing_box_scales_with_component_magnitude() -> None:
+    """The fallback enclosure must not use a fixed 1e-8 absolute pad."""
+    import sympy
+
+    from jacobian.math.polynomials.root_critical.operations import (
+        _evalf_containing_box,
+    )
+
+    root = sympy.sqrt(1 + 10**200)
+    real_lo, real_hi, imag_lo, imag_hi = _evalf_containing_box(root)
+    # The magnitude is about 1e100; the enclosure must be far wider than the
+    # old fixed 1e-8 pad and must contain the true value.
+    assert real_hi - real_lo > 10**50
+    assert real_lo <= int(sympy.sqrt(1 + 10**200).evalf(80)) <= real_hi
+    assert imag_lo <= 0 <= imag_hi
+
+
+def test_complex_square_root_enclosure_contains_the_principal_root() -> None:
+    import mpmath
+    import sympy
+
+    from jacobian.math.polynomials.root_critical.operations import _enclose_sympy
+
+    for expression, value in (
+        (sympy.sqrt(1 + sympy.I), mpmath.sqrt(1 + 1j)),
+        (sympy.sqrt(3 - 2 * sympy.I), mpmath.sqrt(3 - 2j)),
+    ):
+        real_lo, real_hi, imag_lo, imag_hi = _enclose_sympy(expression)
+        assert float(real_lo) <= value.real <= float(real_hi)
+        assert float(imag_lo) <= value.imag <= float(imag_hi)
+
+
+def test_short_deadline_kills_the_blocking_sympy_kernel() -> None:
+    """The blocking SymPy phases run in a killable worker, not in-process.
+
+    A fresh execution with a sub-second deadline must stop during the kernel
+    rather than waiting for the unbounded factorization to finish.
+    """
+    import time as time_module
+
+    started = time_module.monotonic()
+    with (
+        request_execution(started, outer_deadline=started + 0.05),
+        pytest.raises(OperationExecutionTimeoutError),
+    ):
+        root_critical_distance_profile(_polynomial((3, 1), (0, -1)))
+    assert time_module.monotonic() - started < 5.0

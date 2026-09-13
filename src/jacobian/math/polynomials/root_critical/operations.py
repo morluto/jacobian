@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import math
+import sys
 import time
 from fractions import Fraction
-from typing import Any, Literal
+from pathlib import Path
+from typing import Any, Literal, NoReturn
 
 import sympy
 
@@ -15,7 +18,12 @@ from jacobian._execution import (
     request_checkpoint,
     request_execution,
 )
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import (
+    CanonicalLimits,
+    encode_strict_json,
+    format_canonical_integer,
+    loads_strict_json,
+)
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -24,6 +32,7 @@ from jacobian.math.number_theory.algebraic_numbers.complex import (
     ComplexAlgebraicValue,
 )
 from jacobian.math.number_theory.algebraic_numbers.real import (
+    MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS,
     RationalIsolatingInterval,
     RealAlgebraicValue,
 )
@@ -42,6 +51,17 @@ from jacobian.math.polynomials.root_critical._models import (
     RootCriticalRoot,
 )
 from jacobian.math.polynomials.values import RationalPolynomial
+from jacobian.process import (
+    ProcessResourceLimits,
+    run_bounded_process,
+    worker_environment,
+)
+
+_PROFILE_WORKER_PATH = Path(__file__).resolve().with_name("_profile_worker.py")
+_PROFILE_STDOUT_BYTES = 64 * 1024 * 1024
+_PROFILE_STDERR_BYTES = 64 * 1024
+_PROFILE_ADDRESS_SPACE_BYTES = 4 * 1024 * 1024 * 1024
+_PROFILE_FINALIZATION_SECONDS = 1.0
 
 __all__ = ["root_critical_distance_profile"]
 
@@ -51,6 +71,11 @@ ROOT_CRITICAL_WALL_SECONDS = 60.0
 def _rational(value: object) -> CanonicalRational:
     rational = sympy.Rational(value)
     return CanonicalRational(num=int(rational.p), den=int(rational.q))
+
+
+def _rational_fraction(value: object) -> Fraction:
+    rational = sympy.Rational(value)
+    return Fraction(int(rational.p), int(rational.q))
 
 
 def _primitive_integer_poly(poly: sympy.Poly) -> sympy.Poly:
@@ -112,9 +137,12 @@ def _fit_rectangle_component(value: Fraction, *, round_up: bool) -> CanonicalRat
     scaled = value * scale
     quotient, remainder = divmod(scaled.numerator, scaled.denominator)
     if remainder:
-        if round_up and scaled.numerator > 0:
+        if round_up:
+            # The denominator is positive, so ``quotient`` is the floor and the
+            # ceiling is one higher for every sign. Rounding a negative upper
+            # endpoint down would narrow the certified enclosure below its root.
             quotient += 1
-        elif not round_up and scaled.numerator < 0:
+        elif scaled.numerator < 0:
             quotient -= 1
     return CanonicalRational.from_fraction(Fraction(quotient, scale))
 
@@ -122,19 +150,44 @@ def _fit_rectangle_component(value: Fraction, *, round_up: bool) -> CanonicalRat
 def _evalf_containing_box(
     root: object,
 ) -> tuple[Fraction, Fraction, Fraction, Fraction]:
-    """Contain a radical in a request-local box without reading CRootOf's cache."""
+    """Contain a radical in a request-local box without reading CRootOf's cache.
 
-    value = root.evalf(20)
-    real, imag = value.as_real_imag()
-    pad = Fraction(1, 10**8)
-    real_center = Fraction(int(sympy.Rational(real).p), int(sympy.Rational(real).q))
-    imag_center = Fraction(int(sympy.Rational(imag).p), int(sympy.Rational(imag).q))
+    The expression is outside the certified enclosure grammar, so evaluate it at
+    two precisions and pad by their agreement scaled to the component magnitude.
+    A fixed absolute pad is unsound for roots with large components, where a
+    low-precision approximation can be wrong by far more than the pad.
+    """
+
+    coarse = root.evalf(30)  # type: ignore[attr-defined]
+    fine = root.evalf(60)  # type: ignore[attr-defined]
+    coarse_real, coarse_imag = coarse.as_real_imag()
+    fine_real, fine_imag = fine.as_real_imag()
+    real = _rational_fraction(coarse_real)
+    imag = _rational_fraction(coarse_imag)
+    real_error = abs(real - _rational_fraction(fine_real))
+    imag_error = abs(imag - _rational_fraction(fine_imag))
+    # Add a magnitude-scaled guard so a 30-digit approximation of a large
+    # component is contained even when the two precisions happen to agree.
+    real_guard = real_error + _magnitude_guard(real)
+    imag_guard = imag_error + _magnitude_guard(imag)
     return (
-        real_center - pad,
-        real_center + pad,
-        imag_center - pad,
-        imag_center + pad,
+        real - real_guard,
+        real + real_guard,
+        imag - imag_guard,
+        imag + imag_guard,
     )
+
+
+def _magnitude_guard(value: Fraction) -> Fraction:
+    """Absolute error guard for a 30-significant-digit approximation."""
+
+    if not value:
+        return Fraction(1, 10**30)
+    magnitude = abs(value.numerator) // value.denominator
+    digits = len(str(magnitude)) if magnitude else 1
+    # 30 significant digits at this magnitude, with a factor-of-ten safety.
+    guard: Fraction = Fraction(10, 10**30) * Fraction(10 ** (digits - 1), 1)
+    return guard
 
 
 def _root_value(root_index: int, roots: tuple[Any, ...]) -> Any:
@@ -312,6 +365,8 @@ def _enclose_rational_power(
         return None
     r0, r1, i0, i1 = _enclose_sympy(base)
     if i0 != 0 or i1 != 0:
+        if denominator == 2 and numerator == 1:
+            return _enclose_complex_square_root(r0, r1, i0, i1)
         raise ValueError("certified radical requires a real box")
     if denominator > 1:
         if r0 < 0 and denominator % 2 == 0:
@@ -336,6 +391,48 @@ def _enclose_pow(expr: Any) -> tuple[Fraction, Fraction, Fraction, Fraction]:
     if getattr(exponent, "is_Integer", False):
         return _integer_power_box(_enclose_sympy(base), int(exponent))
     raise ValueError("expression is outside the certified enclosure grammar")
+
+
+def _enclose_complex_square_root(
+    r0: Fraction, r1: Fraction, i0: Fraction, i1: Fraction
+) -> tuple[Fraction, Fraction, Fraction, Fraction]:
+    """Certify the principal square root of a complex box.
+
+    For ``z = r + i s`` the principal root has real part
+    ``sqrt((|z| + r) / 2)`` and imaginary part ``sign(s) sqrt((|z| - r) / 2)``.
+    The box must stay off the branch cut (not straddle the negative real axis),
+    which the caller checks. Each inner term is bounded over the box corners.
+    """
+
+    if i0 <= 0 <= i1:
+        raise ValueError("complex square root requires a definite imaginary sign")
+    negative_real_axis = r1 < 0 and i0 <= 0 <= i1
+    if negative_real_axis:
+        raise ValueError("complex square root crosses the branch cut")
+    sign = Fraction(1) if i0 > 0 else Fraction(-1)
+    # |z|^2 = r^2 + s^2 over the box corners.
+    squared_corners = tuple(
+        real * real + imaginary * imaginary
+        for real in (r0, r1)
+        for imaginary in (i0, i1)
+    )
+    squared_lo = min(squared_corners)
+    squared_hi = max(squared_corners)
+    modulus_lo = _nth_root_bounds(max(squared_lo, Fraction()), 2)[0]
+    modulus_hi = _nth_root_bounds(squared_hi, 2)[1]
+    # Real part: sqrt((|z| + r) / 2).
+    real_inner_lo = (modulus_lo + r0) / 2
+    real_inner_hi = (modulus_hi + r1) / 2
+    real_lo = _nth_root_bounds(max(real_inner_lo, Fraction()), 2)[0]
+    real_hi = _nth_root_bounds(max(real_inner_hi, Fraction()), 2)[1]
+    # Imaginary magnitude: sqrt((|z| - r) / 2) >= 0.
+    imaginary_inner_lo = max(modulus_lo - r1, Fraction()) / 2
+    imaginary_inner_hi = max(modulus_hi - r0, Fraction()) / 2
+    imaginary_lo = _nth_root_bounds(imaginary_inner_lo, 2)[0]
+    imaginary_hi = _nth_root_bounds(imaginary_inner_hi, 2)[1]
+    if sign < 0:
+        return real_lo, real_hi, -imaginary_hi, -imaginary_lo
+    return real_lo, real_hi, imaginary_lo, imaginary_hi
 
 
 def _enclose_sympy(expr: Any) -> tuple[Fraction, Fraction, Fraction, Fraction]:
@@ -483,6 +580,19 @@ def _distance_value(
             message="exact distance degree exceeds the bounded real-algebraic carrier",
         )
     coefficients = tuple(int(value) for value in minimal.all_coeffs())
+    if any(
+        len(format_canonical_integer(abs(coefficient)))
+        > MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS
+        for coefficient in coefficients
+    ):
+        raise OperationResourceAdmissionError(
+            location=("pairs",),
+            code="polynomial.root_critical.distance_coefficient_bound",
+            message=(
+                "squared-distance minimal polynomial coefficients exceed the "
+                f"{MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS}-digit real-algebraic carrier"
+            ),
+        )
     selected_index = _select_real_algebraic_root(minimal, distance)
     intervals = minimal.intervals()
     lower, upper = intervals[selected_index][0]
@@ -649,23 +759,13 @@ def _admit(
     return source, root_count, critical_count
 
 
-def root_critical_distance_profile(
+def _compute_profile(
     polynomial: RationalPolynomial,
     *,
-    max_pair_rows: int = MAX_ROOT_CRITICAL_PAIRS,
+    max_pair_rows: object,
 ) -> RootCriticalDistanceProfile:
-    """Return every distinct root/critical pair and its exact squared distance."""
+    """Compute the exact profile in-process after admission."""
 
-    execution = current_request_execution()
-    if execution is None:
-        with request_execution(time.monotonic()):
-            return root_critical_distance_profile(
-                polynomial, max_pair_rows=max_pair_rows
-            )
-    deadline = execution.started_at + ROOT_CRITICAL_WALL_SECONDS
-    if execution.deadline is not None:
-        deadline = min(deadline, execution.deadline)
-    bind_request_deadline(deadline)
     request_checkpoint("before root-critical admission")
     source, _root_count, _critical_count = _admit(
         polynomial,
@@ -702,3 +802,135 @@ def root_critical_distance_profile(
     )
     request_checkpoint("after root-critical result construction")
     return result
+
+
+def _run_profile_worker(
+    polynomial: RationalPolynomial,
+    *,
+    max_pair_rows: object,
+    deadline: float,
+) -> RootCriticalDistanceProfile:
+    """Run the blocking kernel in a killable child and revalidate its profile."""
+
+    remaining = deadline - time.monotonic() - _PROFILE_FINALIZATION_SECONDS
+    if remaining <= 0:
+        from jacobian._execution import OperationExecutionTimeoutError
+
+        raise OperationExecutionTimeoutError(
+            "root-critical profile deadline expired before the kernel worker"
+        )
+    payload = encode_strict_json(
+        {
+            "polynomial": polynomial.model_dump_json(),
+            "max_pair_rows": max_pair_rows,
+        }
+    )
+    try:
+        completed = run_bounded_process(
+            [sys.executable, str(_PROFILE_WORKER_PATH)],
+            input_bytes=payload,
+            timeout_seconds=remaining,
+            environment=worker_environment(locale="C.UTF-8"),
+            stdout_limit=_PROFILE_STDOUT_BYTES,
+            stderr_limit=_PROFILE_STDERR_BYTES,
+            resource_limits=ProcessResourceLimits(
+                cpu_seconds=max(1, math.ceil(remaining)),
+                address_space_bytes=_PROFILE_ADDRESS_SPACE_BYTES,
+                file_size_bytes=_PROFILE_STDOUT_BYTES,
+            ),
+        )
+    except OSError as exc:
+        raise RuntimeError(
+            "bounded root-critical kernel worker could not be started"
+        ) from exc
+    from jacobian._execution import (
+        OperationExecutionCancelledError,
+        OperationExecutionTimeoutError,
+    )
+
+    if completed.cancelled:
+        raise OperationExecutionCancelledError(
+            "root-critical profile cancelled during the kernel worker"
+        )
+    if completed.timed_out:
+        raise OperationExecutionTimeoutError(
+            "root-critical profile deadline expired during the kernel worker"
+        )
+    if (
+        completed.stdout_exceeded
+        or completed.stderr_exceeded
+        or completed.returncode != 0
+    ):
+        raise RuntimeError(
+            "bounded root-critical kernel worker did not establish a profile"
+        )
+    response = loads_strict_json(
+        completed.stdout,
+        limits=CanonicalLimits(
+            max_input_bytes=_PROFILE_STDOUT_BYTES,
+            max_output_bytes=_PROFILE_STDOUT_BYTES,
+        ),
+    )
+    if not isinstance(response, dict):
+        raise RuntimeError(
+            "bounded root-critical kernel worker returned malformed output"
+        )
+    if response.get("ok") is False:
+        return _raise_worker_error(response)
+    if response.get("ok") is not True or not isinstance(response.get("profile"), str):
+        raise RuntimeError(
+            "bounded root-critical kernel worker returned malformed output"
+        )
+    request_checkpoint("after root-critical kernel worker")
+    return RootCriticalDistanceProfile.model_validate_json(response["profile"])
+
+
+def _raise_worker_error(response: dict[str, object]) -> NoReturn:
+    """Re-raise the typed admission or domain error the kernel worker reported."""
+
+    location = response.get("location")
+    code = response.get("code")
+    message = response.get("message")
+    kind = response.get("kind")
+    if (
+        not isinstance(location, list)
+        or not isinstance(code, str)
+        or not isinstance(message, str)
+        or kind not in {"domain", "resource"}
+    ):
+        raise RuntimeError(
+            "bounded root-critical kernel worker returned malformed diagnostics"
+        )
+    error_type = (
+        OperationResourceAdmissionError
+        if kind == "resource"
+        else OperationDomainValidationError
+    )
+    raise error_type(location=tuple(location), code=code, message=message)
+
+
+def root_critical_distance_profile(
+    polynomial: RationalPolynomial,
+    *,
+    max_pair_rows: int = MAX_ROOT_CRITICAL_PAIRS,
+) -> RootCriticalDistanceProfile:
+    """Return every distinct root/critical pair and its exact squared distance.
+
+    The blocking SymPy phases (``factor_list``, ``all_roots``, and ``minpoly``)
+    run inside a killable child process so the request deadline and cancellation
+    can stop them; the returned profile is re-validated before it is trusted.
+    """
+
+    execution = current_request_execution()
+    if execution is None:
+        with request_execution(time.monotonic()):
+            return root_critical_distance_profile(
+                polynomial, max_pair_rows=max_pair_rows
+            )
+    deadline = execution.started_at + ROOT_CRITICAL_WALL_SECONDS
+    if execution.deadline is not None:
+        deadline = min(deadline, execution.deadline)
+    bind_request_deadline(deadline)
+    return _run_profile_worker(
+        polynomial, max_pair_rows=max_pair_rows, deadline=deadline
+    )

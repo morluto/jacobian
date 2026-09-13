@@ -408,3 +408,21 @@ def test_native_reparse_and_admission_observe_cancellation(
         pytest.raises(OperationExecutionCancelledError),
     ):
         rational_discrete_antiderivative(source, "k")
+
+
+def test_quintic_coefficient_at_the_digit_limit_has_an_exact_inverse() -> None:
+    """A degree-5 boundary input is admitted by the closed-form preflight."""
+    coefficient = 10**32_766 + 1
+    source = RationalPolynomial(
+        variables=("x",),
+        polynomial=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=coefficient, den=1),
+                    exponents=(5,),
+                ),
+            )
+        ),
+    )
+    result = rational_discrete_antiderivative(source, "x")
+    assert result.reconstructed_difference == source

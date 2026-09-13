@@ -254,6 +254,75 @@ def _admit_quartic_group(coefficients: dict[int, Fraction]) -> None:
     _admit_closed_form_coefficients((linear_term,))
 
 
+def _admit_quintic_group(coefficients: dict[int, Fraction]) -> None:
+    """Admit degree-5 slices from the exact closed-form inverse.
+
+    The degree-5 inverse has denominator at most 60, and the triangular
+    solver's widest intermediate is ``10*a5/3``, so a source coefficient at
+    the digit limit stays representable.
+    """
+
+    quintic = coefficients.get(5, Fraction())
+    quartic = coefficients.get(4, Fraction())
+    cubic = coefficients.get(3, Fraction())
+    quadratic = coefficients.get(2, Fraction())
+    linear = coefficients.get(1, Fraction())
+    constant = coefficients.get(0, Fraction())
+    sextic_term = quintic / 6
+    quintic_term = quartic / 5 - quintic / 2
+    quartic_term = cubic / 4 - quartic / 2 + 5 * quintic / 12
+    cubic_term = quadratic / 3 - cubic / 2 + quartic / 3
+    quadratic_term = linear / 2 - quadratic / 2 + cubic / 4 - quintic / 12
+    linear_term = constant - linear / 2 + quadratic / 6 - quartic / 30
+    _admit_closed_form_coefficients(
+        (
+            sextic_term,
+            quintic_term,
+            quartic_term,
+            cubic_term,
+            quadratic_term,
+            linear_term,
+            quintic,
+            quartic,
+            cubic,
+            quadratic,
+            linear,
+        )
+    )
+    # Intermediate triangular-solve residuals, from the leading term inward.
+    _admit_closed_form_coefficients(
+        (
+            constant - sextic_term,
+            linear - quintic,
+            quadratic - Fraction(5, 2) * quintic,
+            cubic - Fraction(10, 3) * quintic,
+            quartic - Fraction(5, 2) * quintic,
+        )
+    )
+    _admit_closed_form_coefficients(
+        (
+            constant - quartic / 5 + quintic / 3,
+            linear - quartic + Fraction(3, 2) * quintic,
+            quadratic - 2 * quartic + Fraction(5, 2) * quintic,
+            cubic - 2 * quartic + Fraction(5, 3) * quintic,
+        )
+    )
+    _admit_closed_form_coefficients(
+        (
+            constant - cubic / 4 + Fraction(3, 10) * quartic - quintic / 12,
+            linear - cubic + quartic - quintic / 6,
+            quadratic - Fraction(3, 2) * cubic + quartic,
+        )
+    )
+    _admit_closed_form_coefficients(
+        (
+            constant - quadratic / 3 + cubic / 4 - quartic / 30 - quintic / 12,
+            linear - quadratic + cubic / 2 - quintic / 6,
+        )
+    )
+    _admit_closed_form_coefficients((linear_term,))
+
+
 def _admit_group(
     coefficients: dict[int, Fraction],
     *,
@@ -280,6 +349,9 @@ def _admit_group(
         return
     if maximum_degree == 4:
         _admit_quartic_group(coefficients)
+        return
+    if maximum_degree == 5:
+        _admit_quintic_group(coefficients)
         return
 
     common_denominator = 1

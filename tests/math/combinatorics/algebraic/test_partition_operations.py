@@ -648,3 +648,34 @@ def test_ssyt_digit_admission_checks_cancellation_at_bounded_intervals() -> None
     # The old fixed 256-probe batch needed about 3.6 seconds of uncheckpointed
     # 32767-digit logarithms before the cancellation could be seen.
     assert elapsed < 2.0
+
+
+def test_ssyt_digit_bound_resolves_the_boundary_exactly() -> None:
+    """A 32,768-digit count must not be refused by one unit of log slack."""
+    alphabet_size = 154850 * 2**208
+    partition = IntegerPartition(parts=(500,))
+    exact = math.comb(alphabet_size + 499, 500)
+    exact_digits = _upper_decimal_digits(exact)
+    assert exact_digits == _MAX_SSYT_COUNT_DIGITS
+    bound = _ssyt_count_digit_bound(
+        partition,
+        alphabet_size,
+        _upper_decimal_digits(alphabet_size),
+    )
+    assert bound == exact_digits
+    assert bound <= _MAX_SSYT_COUNT_DIGITS
+    request = SemistandardYoungTableauCountRequest.model_validate(
+        {"partition": {"parts": [500]}, "alphabet_size": alphabet_size}
+    )
+    result = semistandard_young_tableaux_count(request)
+    assert result.count == exact
+
+
+def test_decimal_width_matches_str_beyond_the_conversion_limit() -> None:
+    """The boundary path must not rely on int-to-str conversion."""
+    from jacobian.math.combinatorics.algebraic.operations import _decimal_width
+
+    for exponent in (1, 2, 10, 100, 4999, 5000):
+        value = 10**exponent
+        assert _decimal_width(value) == exponent + 1
+        assert _decimal_width(value - 1) == exponent

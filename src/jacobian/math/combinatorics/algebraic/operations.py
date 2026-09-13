@@ -172,6 +172,10 @@ _LOG10_SCALE = 1_000_000_000
 # bounds one uninterrupted batch of ``_log10_upper_units`` probes regardless of
 # the alphabet's integer width.
 _SSYT_CHECKPOINT_DIGIT_WORK = 256_000
+# Largest numerator the exact digit-boundary resolution will materialize; the
+# canonical count envelope is 32,768 digits, so this only covers operands whose
+# quotient can still be near the boundary.
+_EXACT_BOUNDARY_MAX_OPERAND_DIGITS = 1_000_000
 _LOG10_2_UPPER_UNITS = 301_029_996
 _LOG10_2_LOWER_UNITS = 301_029_995
 _INV_LN10_UPPER_UNITS = 434_294_482
@@ -267,7 +271,70 @@ def _ssyt_count_digit_bound(
     cancelled_units = numerator_log_units - _log10_lower_units(hook_product)
     if cancelled_units < 0:
         return max(1, alphabet_digits)
-    return max(1, alphabet_digits, _digits_upper_from_log10_units(cancelled_units))
+    bound = _digits_upper_from_log10_units(cancelled_units)
+    if bound <= _MAX_SSYT_COUNT_DIGITS:
+        return max(1, alphabet_digits, bound)
+    # The logarithmic bound carries a small per-factor slack, which is enough to
+    # overshoot by one digit exactly at the canonical output boundary: for
+    # ``partition=(500)`` and ``alphabet_size=154850 * 2**208`` the exact count
+    # has 32,768 digits while the estimate reports 32,769.  Resolve the boundary
+    # exactly instead of refusing a cheaply executable count, and keep the
+    # logarithmic estimate as the answer whenever it already fits.
+    if (
+        _digits_upper_from_log10_units(numerator_log_units)
+        > _EXACT_BOUNDARY_MAX_OPERAND_DIGITS
+    ):
+        # A far-overflowing numerator must stay a refusal: materializing it to
+        # resolve the boundary exactly would cost more than the result envelope.
+        return max(1, alphabet_digits, bound)
+    exact = _exact_count_digits(partition, alphabet_size, hook_product)
+    if exact is None:
+        return max(1, alphabet_digits, bound)
+    return max(1, alphabet_digits, exact)
+
+
+def _exact_count_digits(
+    partition: IntegerPartition, alphabet_size: int, hook_product: int
+) -> int | None:
+    """Return the exact decimal width of the hook-content count, or ``None``.
+
+    Only reached at the canonical digit boundary, where the logarithmic
+    estimate cannot decide.  The numerator product and the exact division are
+    bounded by the same factor count the caller already charges.
+    """
+
+    numerator_product = 1
+    for row, length in enumerate(partition.parts):
+        if row % 64 == 0:
+            request_checkpoint("during exact SSYT boundary resolution")
+        for column in range(length):
+            numerator_product *= alphabet_size + column - row
+    quotient, remainder = divmod(numerator_product, hook_product)
+    if remainder:
+        # The hook-content numerator is only guaranteed to divide for an
+        # admitted partition; anything else keeps the sound estimate.
+        return None
+    return _decimal_width(quotient)
+
+
+def _decimal_width(value: int) -> int:
+    """Return the decimal digit count of a positive integer without ``str``.
+
+    ``str`` refuses integers above Python's active conversion limit, which is
+    exactly the magnitude this boundary path handles, so the width is found by
+    exact comparison against powers of ten.
+    """
+
+    if value <= 0:
+        return 1
+    # log10(2) < 30103 / 100000, so this is a tight upper estimate: the decimal
+    # width is at most ``bit_length * log10(2) + 1`` and differs by at most one.
+    estimate = value.bit_length() * 30103 // 100000 + 1
+    if estimate > 1 and 10 ** (estimate - 1) > value:
+        estimate -= 1
+    if 10**estimate <= value:
+        estimate += 1
+    return estimate
 
 
 def _admit_hook_content(partition: IntegerPartition, alphabet_size: int) -> None:

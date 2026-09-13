@@ -698,7 +698,7 @@ def _bounded_dfa_tuple(
             "regular_language.symbol_parikh.dfa_contract",
             "dfa containers must be bounded tuples",
         )
-    if isinstance(value, tuple):
+    if type(value) is tuple:
         if len(value) > limit:
             raise PydanticCustomError(
                 "regular_language.symbol_parikh.dfa_contract",

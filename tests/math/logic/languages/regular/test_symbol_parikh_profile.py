@@ -907,6 +907,28 @@ def test_forged_iterable_does_not_trust_reported_length() -> None:
     )
 
 
+def test_forged_tuple_subclass_still_uses_bounded_iteration() -> None:
+    """A tuple subclass's overridden ``__iter__`` is bounded by islice."""
+
+    class LyingTuple(tuple):  # type: ignore[type-arg]
+        def __iter__(self):
+            while True:
+                yield 0
+
+    forged = DFA.model_construct(
+        state_count=1,
+        alphabet_size=1,
+        transitions=LyingTuple((0, 0, 0)),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        symbol_parikh_profile(forged, 3)
+    assert error.value.errors()[0]["type"] == (
+        "regular_language.symbol_parikh.dfa_contract"
+    )
+
+
 def test_validation_bypassed_transition_instance_is_revalidated() -> None:
     """A constructed transition without fields is a typed domain rejection."""
 

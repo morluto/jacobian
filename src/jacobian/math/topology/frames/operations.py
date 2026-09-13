@@ -344,15 +344,37 @@ def _hermitian_term_heights(
     left_imaginary = RationalHeight.from_canonical(left.imaginary)
     right_real = RationalHeight.from_canonical(right.real)
     right_imaginary = RationalHeight.from_canonical(right.imaginary)
+
+    def product_height(
+        first_value: CanonicalRational,
+        first_height: RationalHeight,
+        second_value: CanonicalRational,
+        second_height: RationalHeight,
+    ) -> RationalHeight:
+        # A zero factor contributes no width; charging the full product height
+        # would double-count the width of the surviving factor and reject
+        # in-envelope sums whose zero components simply cancel.
+        if first_value.num == 0 or second_value.num == 0:
+            return RationalHeight(1, 1)
+        return first_height.product(second_height)
+
     real = _sum_shared_denominator_heights(
-        (left_real.product(right_real), left_imaginary.product(right_imaginary)),
+        (
+            product_height(left.real, left_real, right.real, right_real),
+            product_height(
+                left.imaginary, left_imaginary, right.imaginary, right_imaginary
+            ),
+        ),
         (
             _product_denominator(left.real, right.real),
             _product_denominator(left.imaginary, right.imaginary),
         ),
     )
     imaginary = _sum_shared_denominator_heights(
-        (left_imaginary.product(right_real), left_real.product(right_imaginary)),
+        (
+            product_height(left.imaginary, left_imaginary, right.real, right_real),
+            product_height(left.real, left_real, right.imaginary, right_imaginary),
+        ),
         (
             _product_denominator(left.imaginary, right.real),
             _product_denominator(left.real, right.imaginary),
@@ -889,9 +911,7 @@ def _require_cross_basis_overlap_height(
             inner = _sparse_inner_product_height(left_vector, right_vector)
             squared = sum_heights((inner.product(inner),) * 2)
             denominator = left_height.product(_height_from_fraction(right_norm))
-            if squared.quotient(denominator).exceeds(
-                MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS
-            ):
+            if squared.quotient(denominator).exceeds(MAX_CANONICAL_RATIONAL_DIGITS):
                 raise OperationResourceAdmissionError(
                     location=("bases",),
                     code="frames.mub_cross_overlap_height",

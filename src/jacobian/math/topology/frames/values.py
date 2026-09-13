@@ -74,7 +74,12 @@ class ComplexFrame(StrictModel):
 
     dimension: int = Field(ge=1, le=MAX_DIM)
     vectors: tuple[tuple[GaussianRational, ...], ...] = Field(
-        max_length=MAX_VECTOR_CELLS
+        max_length=MAX_VECTOR_CELLS,
+        description=(
+            "Ordered complex vectors with len(vectors) * dimension <= "
+            f"{MAX_COMPLEX_FRAME_CELLS} materialized cells and exactly "
+            "dimension entries per vector."
+        ),
     )
 
     @model_validator(mode="after")

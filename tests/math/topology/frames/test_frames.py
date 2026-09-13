@@ -5,7 +5,11 @@ from fractions import Fraction
 
 import pytest
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    CanonicalRational,
+    canonical_rational_component_digits,
+)
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -881,13 +885,13 @@ def test_dimension_32_independent_denominators_admit_before_tight_residual() -> 
     assert error.value.errors()[0]["type"] == "frames.complex_scalar_height"
 
 
-def test_mub_cross_basis_overlap_is_preflighted_before_construction() -> None:
-    """Independent cross-basis denominators are refused before the ledger.
+def test_mub_cross_basis_independent_denominators_are_admitted() -> None:
+    """Independent cross denominators below the canonical limit are admitted.
 
     Two dimension-64 Sylvester-Hadamard bases differ by rational unit phases
     whose denominators are pairwise coprime.  Each within-basis Gram is
-    integral, but a cross overlap exceeds the frame scalar envelope, so the
-    request must be refused before the ledger is materialized.
+    integral, and the cross overlaps fit the ``CanonicalRational`` result type,
+    so the request must not be refused by the tighter Gaussian scalar bound.
     """
 
     primes: list[int] = []
@@ -924,11 +928,21 @@ def test_mub_cross_basis_overlap_is_preflighted_before_construction() -> None:
             for row in range(64)
         ),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="overlap") as error:
-        _mutually_unbiased_bases(
-            MutuallyUnbiasedBasesRequest(dimension=64, bases=(standard, phased))
-        )
-    assert error.value.errors()[0]["type"] == "frames.mub_cross_overlap_height"
+    result = _mutually_unbiased_bases(
+        MutuallyUnbiasedBasesRequest(dimension=64, bases=(standard, phased))
+    )
+    assert result.is_mutually_unbiased is False
+    overlap = result.cross_gram_squared[0][0][0]
+    assert canonical_rational_component_digits(overlap) <= MAX_CANONICAL_RATIONAL_DIGITS
+
+
+def test_complex_frame_schema_advertises_the_cell_constraint() -> None:
+    """The generated schema states the materialized-cell relation."""
+
+    schema = ComplexFrame.model_json_schema()
+    text = schema["properties"]["vectors"].get("description", "")
+    assert "len(vectors) * dimension" in text
+    assert "4_096" in text or "4096" in text
 
 
 def test_mub_status_is_not_replayed_on_deserialization() -> None:

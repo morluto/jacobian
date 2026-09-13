@@ -667,6 +667,22 @@ def test_multipartite_complete_four_cycles_use_the_exact_count() -> None:
     assert result.cycle_count == 108
 
 
+def test_multipartite_complete_triangles_use_the_exact_count() -> None:
+    """K_{1,1,50} has exactly 50 simple and chordless triangles."""
+    parts = (("a",), ("b",), tuple(f"c{index}" for index in range(50)))
+    vertices = tuple(vertex for part in parts for vertex in part)
+    part_of = {vertex: index for index, part in enumerate(parts) for vertex in part}
+    edges = tuple(
+        canonical_edge(left, right)
+        for index, left in enumerate(vertices)
+        for right in vertices[index + 1 :]
+        if part_of[left] != part_of[right]
+    )
+    graph = SimpleUndirectedGraph(vertices=vertices, edges=edges)
+    assert enumerate_fixed_length_cycles(graph, 3).cycle_count == 50
+    assert enumerate_chordless_fixed_length_cycles(graph, 3).cycle_count == 50
+
+
 def test_complete_graph_four_cycle_count_admits_below_the_ceiling() -> None:
     """K22 has C(22,4)*3 = 21,945 four-cycles and must be refused at admission.
 

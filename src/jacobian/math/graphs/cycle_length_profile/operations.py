@@ -825,6 +825,21 @@ def _multipartite_cycle_exists(part_sizes: tuple[int, ...], cycle_length: int) -
     return cycle_length <= longest
 
 
+def _simple_triangle_count(part_sizes: tuple[int, ...]) -> int:
+    """Count triangles in a complete multipartite graph.
+
+    A triangle needs one vertex from each of three distinct parts, and every
+    such choice is an induced (chordless) triangle.
+    """
+
+    count = 0
+    for indices in combinations(range(len(part_sizes)), 3):
+        count += (
+            part_sizes[indices[0]] * part_sizes[indices[1]] * part_sizes[indices[2]]
+        )
+    return count
+
+
 def _simple_four_cycle_count(part_sizes: tuple[int, ...]) -> int:
     """Count simple four-cycles in a complete multipartite graph.
 
@@ -936,6 +951,16 @@ def _falling_factorial(n: int, k: int) -> int:
     for offset in range(k):
         result *= n - offset
     return result
+
+
+def _multipartite_triangle_work(
+    block: tuple[str, ...], adjacency_sets: dict[str, set[str]]
+) -> tuple[int, dict[str, tuple[str, ...]]]:
+    """Traversal work and adjacency for a multipartite triangle block."""
+
+    local = _block_adjacency(block, adjacency_sets)
+    adjacency = {vertex: tuple(sorted(local[vertex])) for vertex in block}
+    return len(block) ** 2, adjacency
 
 
 def _multipartite_four_cycle_work(
@@ -1153,6 +1178,19 @@ def _admit_fixed_cycle_search_plan(
         ):
             # A recognized multipartite block with no cycle of this length
             # contributes nothing and must not pay the generic all-vertex bound.
+            continue
+        if part_sizes is not None and cycle_length == 3:
+            # Every triangle selects one vertex from each of three distinct
+            # parts, so its exact count is a bounded polynomial in the part
+            # sizes rather than the generic all-vertex permutation bound.
+            block_work, block_adjacency = _multipartite_triangle_work(
+                block, adjacency_sets
+            )
+            complete_work += block_work
+            cycle_upper_bound += _simple_triangle_count(part_sizes)
+            search_blocks.append(
+                _FixedCycleBlock(adjacency=block_adjacency, core_vertices=block)
+            )
             continue
         if part_sizes is not None and cycle_length == 4 and not chordless:
             # The simple four-cycles of a complete multipartite graph are the

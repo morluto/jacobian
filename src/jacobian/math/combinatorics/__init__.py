@@ -6,7 +6,10 @@ from jacobian.math.combinatorics.exact_cover import (
     ExactCoverSearchStatus,
     GeneralizedExactCoverInstance,
     GeneralizedExactCoverResult,
+    MinimumExactCoverStatus,
+    MinimumGeneralizedExactCoverResult,
     find_generalized_exact_cover,
+    minimum_generalized_exact_cover,
     verify_generalized_exact_cover,
 )
 from jacobian.math.combinatorics.operations import (
@@ -47,6 +50,8 @@ __all__ = [
     "GeneralizedExactCoverInstance",
     "GeneralizedExactCoverResult",
     "IndexedRecurrenceResidual",
+    "MinimumExactCoverStatus",
+    "MinimumGeneralizedExactCoverResult",
     "PolynomialCoefficientRecurrenceTableResult",
     "bell_number",
     "bernoulli_number",
@@ -63,6 +68,7 @@ __all__ = [
     "find_generalized_exact_cover",
     "integer_partitions",
     "lucas_number",
+    "minimum_generalized_exact_cover",
     "motzkin_number",
     "multinomial",
     "partition_number",

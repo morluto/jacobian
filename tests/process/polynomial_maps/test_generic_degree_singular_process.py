@@ -6,9 +6,11 @@ import os
 import shutil
 import sys
 import threading
+import typing
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 import jacobian.math.polynomials.maps.operations as operations
 from jacobian._exact import CanonicalRational
@@ -414,6 +416,101 @@ def test_protocol_coefficient_with_common_factor_is_normalized_on_construction()
         (term.exponents, term.coefficient.num, term.coefficient.den)
         for term in coefficient.denominator.terms
     ) == (((0,), 1, 1),)
+
+
+def test_reduced_multivariable_coefficient_crosses_the_flint_boundary() -> None:
+    """A reduced fiber coefficient arrives as declared canonical data.
+
+    ``jtp1^2-jtp2^2`` over ``jtp1-jtp2`` reduces to the independently known
+    quotient ``jtp1+jtp2``. FLINT reports that exponent vector as ``fmpz``
+    while the canonical term model declares strict ``int``, so the narrowing
+    boundary must complete for a multi-parameter vector and yield the reduced
+    value, not a refusal.
+    """
+
+    coefficient, raw_terms = _singular._parse_generic_fiber_coefficient(
+        "jtp1^2-jtp2^2",
+        "jtp1-jtp2",
+        target_parameters=("t1", "t2"),
+    )
+
+    unit = CanonicalRational(num=1, den=1)
+    assert raw_terms == 4
+    assert coefficient == RationalFunction(
+        variables=("t1", "t2"),
+        numerator=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(coefficient=unit, exponents=(1, 0)),
+                RationalPolynomialTerm(coefficient=unit, exponents=(0, 1)),
+            )
+        ),
+        denominator=SparseRationalPolynomial(
+            terms=(RationalPolynomialTerm(coefficient=unit, exponents=(0, 0)),)
+        ),
+    )
+
+
+def test_unnarrowable_kernel_value_is_not_reported_as_a_result_bound(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A typing defect stays one instead of claiming a mathematical limit.
+
+    Reporting ``LIMIT_EXCEEDED`` asserts that the exact certificate left the
+    admitted representation. A kernel value the canonical models cannot type at
+    all asserts nothing of the kind, so it must surface unchanged rather than
+    be relabeled as the nearest bound outcome.
+    """
+
+    def _unnarrowable(
+        terms: typing.Iterable[tuple[typing.Any, typing.Any]],
+    ) -> SparseRationalPolynomial:
+        return SparseRationalPolynomial(
+            terms=tuple(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational.from_integer_ratio(
+                        int(value.p), int(value.q)
+                    ),
+                    exponents=tuple(exponents),
+                )
+                for exponents, value in terms
+            )
+        )
+
+    records = (
+        "JACOBIAN_SINGULAR_GENERIC_FIBER_V1",
+        "44105",
+        "0",
+        "1",
+        "1",
+        "1",
+        "POLYNOMIAL",
+        "1",
+        "1",
+        "1",
+        "0",
+        "(-jtp1)",
+        "1",
+        "END_POLYNOMIAL",
+        "POLYNOMIAL",
+        "0",
+        "1",
+        "1",
+        "END_POLYNOMIAL",
+        "END",
+    )
+    monkeypatch.setattr(_singular, "_sparse_parameter_polynomial", _unnarrowable)
+    executable = _executable(tmp_path, f"print({chr(10).join(records)!r})")
+    _select_executable(monkeypatch, executable)
+
+    with pytest.raises(ValidationError) as captured:
+        _singular.run_singular_generic_fiber(
+            _map(),
+            GenericDegreeComputationBudget(),
+        )
+
+    assert not isinstance(captured.value, _singular._ResultLimitExceededError)
+    assert "exceeds" not in str(captured.value)
 
 
 def test_backend_script_uses_only_fixed_internal_identifiers() -> None:

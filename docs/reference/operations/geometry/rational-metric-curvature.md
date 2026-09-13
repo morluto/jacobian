@@ -35,9 +35,11 @@ R = sum_(k,j) g^kj Ric_kj
 
 Every field is an exact canonical rational function over the source axis.
 Zero curvature is retained as an exact zero; it does not erase the source or
-nondegenerate-locus guards. The represented locus is the source denominator
-locus intersected with `det(g) != 0`, together with any complete component
-denominator guards required by the canonical returned fields.
+nondegenerate-locus guards. The represented locus intersects the complete
+source retained chart locus (`metric.tensor.retained_nonzero_denominators`,
+which may include inherited restrictions beyond the component denominators)
+with `det(g) != 0`, together with any complete component denominator guards
+required by the canonical returned fields.
 
 ## Admission and failures
 

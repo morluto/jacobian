@@ -443,6 +443,66 @@ def _multiply_support_keys(
     return frozenset(product)
 
 
+def _product_support_collision(
+    child_metrics: list[_ExpressionMetrics],
+) -> bool:
+    """Decide whether two choices of factor monomials can share an exponent.
+
+    When every factor's tracked support multiplies to exactly the product of
+    its sizes, each output monomial selects one term per factor, so no two
+    factor choices are ever summed and each factor contributes its own reduced
+    denominator. Any other shape - an untracked support, a product above the
+    admitted term ceiling, or a collapsed key set - can collide, and the
+    caller must then bound the numerator as a sum over a common denominator.
+    """
+
+    combined: frozenset[tuple[tuple[str, int], ...]] = frozenset(((),))
+    expected = 1
+    for child in child_metrics:
+        if child.support_keys is None:
+            return True
+        expected *= len(child.support_keys)
+        if expected > MAX_POLYNOMIAL_TERMS:
+            return True
+        multiplied = _multiply_support_keys(combined, child.support_keys)
+        if multiplied is None:
+            return True
+        combined = multiplied
+    return len(combined) != expected
+
+
+def _product_denominator_scaling_bits(
+    child_metrics: list[_ExpressionMetrics],
+    *,
+    colliding: bool,
+) -> int:
+    """Bound the numerator growth from writing colliding products over one denominator.
+
+    A colliding output coefficient sums products ``n_1/d_1 * ... * n_k/d_k``, so
+    each summand is scaled by the denominators the other factors contributed.
+    The combined denominator divides ``d_1 * ... * d_k``, so summand ``i``
+    grows by at most the bits of every other factor denominator: ``(k - 1)``
+    times the total. Without collisions this scaling never happens and the
+    bound is zero. This mirrors ``_addition_numerator_bits``, which already
+    charges an addition for reaching its common denominator.
+    """
+
+    if not colliding:
+        return 0
+    total_bits = 0
+    for child in child_metrics:
+        if child.denominator is None:
+            return _MAX_EXPRESSION_COEFFICIENT_BITS + 1
+        total_bits = min(
+            _MAX_EXPRESSION_COEFFICIENT_BITS + 1,
+            total_bits + _denominator_bits(child.denominator),
+        )
+    return min(
+        _MAX_EXPRESSION_COEFFICIENT_BITS + 1,
+        total_bits * max(0, len(child_metrics) - 1),
+    )
+
+
 def _addends_are_disjoint(children: list[_ExpressionMetrics]) -> bool:
     known = [child.support_keys for child in children if not child.zero]
     if known and all(keys is not None for keys in known):
@@ -896,6 +956,7 @@ def _nary_expression_metrics(  # noqa: C901
             sum(row.degree for row in child_metrics),
         )
         support = _support_bound(support, degree, variables)
+        collides = _product_support_collision(child_metrics)
         common_numerator_bits = min(
             _MAX_EXPRESSION_COEFFICIENT_BITS + 1,
             _bounded_sum(
@@ -905,7 +966,8 @@ def _nary_expression_metrics(  # noqa: C901
             + _bounded_sum(
                 tuple(_ceil_log2(max(1, row.support)) for row in child_metrics),
                 _MAX_EXPRESSION_COEFFICIENT_BITS,
-            ),
+            )
+            + _product_denominator_scaling_bits(child_metrics, colliding=collides),
         )
         denominator = 1
         for child in child_metrics:
@@ -946,26 +1008,7 @@ def _nary_expression_metrics(  # noqa: C901
         # factor support sizes, no two factor choices collide, so each output
         # monomial selects exactly one denominator from each factor and
         # mutually exclusive denominators are not summed.
-        product_keys = frozenset(((),))
-        keys_known = True
-        expected_keys = 1
-        for child in child_metrics:
-            if child.support_keys is None:
-                keys_known = False
-                break
-            expected_keys *= len(child.support_keys)
-            if expected_keys > MAX_POLYNOMIAL_TERMS:
-                keys_known = False
-                break
-            product_keys = _multiply_support_keys(product_keys, child.support_keys)
-            if product_keys is None:
-                keys_known = False
-                break
-        if (
-            keys_known
-            and product_keys is not None
-            and len(product_keys) == expected_keys
-        ):
+        if not collides:
             denominator_mass_bits = max(
                 (child.denominator_mass_bits for child in child_metrics),
                 default=0,

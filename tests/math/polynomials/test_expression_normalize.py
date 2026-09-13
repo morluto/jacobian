@@ -5,6 +5,7 @@ from math import comb, gcd, prod
 from typing import Any
 
 import pytest
+import sympy
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -12,6 +13,9 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.polynomials._expression_normalize import (
     PolynomialExpressionNormalizeRequest,
+    PolynomialMultiply,
+    _ceil_log2,
+    _metrics,
     normalize_polynomial_expression,
 )
 
@@ -484,7 +488,9 @@ def test_nested_constant_powers_are_capped_before_evaluation(
             raise AssertionError(
                 "exact constant power evaluated past the digit envelope"
             )
-        return original_pow(self, exponent)
+        raised = original_pow(self, exponent)  # type: ignore[call-overload]
+        assert isinstance(raised, ExactFraction)
+        return raised
 
     monkeypatch.setattr(ExactFraction, "__pow__", fail_huge_power)
     expression = {
@@ -558,7 +564,9 @@ def test_constant_add_caps_denominators_before_fraction_sum(
             and other.denominator.bit_length() > 8_000
         ):
             raise AssertionError("unadmitted constant sum materialized")
-        return original_add(self, other)
+        summed = original_add(self, other)  # type: ignore[call-overload]
+        assert isinstance(summed, Fraction)
+        return summed
 
     monkeypatch.setattr(Fraction, "__add__", fail_huge_add)
     primes = [10**127 + 3 + 2 * index for index in range(8)]
@@ -623,7 +631,9 @@ def test_constant_product_skips_exact_fractions_past_the_envelope(
             or other.denominator.bit_length() > 20_000
         ):
             raise AssertionError("unadmitted constant product materialized")
-        return original_mul(self, other)
+        product = original_mul(self, other)  # type: ignore[call-overload]
+        assert isinstance(product, Fraction)
+        return product
 
     monkeypatch.setattr(Fraction, "__mul__", fail_huge_mul)
     primes = [10**127 + 39 + 210 * index for index in range(108)]
@@ -969,3 +979,127 @@ def test_mutually_exclusive_factor_denominators_are_not_summed() -> None:
     expression = {"kind": "MULTIPLY", "operands": factors}
     result = normalize_polynomial_expression(_request("QQ", expression, variables))
     assert len(result.polynomial.polynomial.terms) == 8
+
+
+@pytest.mark.parametrize(
+    ("factor_count", "denominator_digits"), [(4, 40), (6, 100), (8, 80)]
+)
+def test_colliding_product_envelope_covers_the_coefficient_it_returns(
+    factor_count: int, denominator_digits: int
+) -> None:
+    """A colliding product must pay for reaching a common denominator.
+
+    Each factor here contributes two pairwise-coprime denominators, so several
+    factor choices land on the same exponent and their products are summed over
+    the lcm of every denominator in the product. The previous numerator bound
+    added only the child numerator heights and a collision count, which
+    under-called the returned coefficient by five- to thirteen-fold on these
+    accepted requests: the declared coefficient-height envelope was not a
+    property of the result actually produced.
+    """
+
+    low = 10 ** (denominator_digits - 1)
+    seen: set[int] = set()
+
+    def fresh_prime() -> int:
+        candidate = int(sympy.randprime(low, 10**denominator_digits - 1))
+        while candidate in seen:
+            candidate = int(sympy.randprime(low, 10**denominator_digits - 1))
+        seen.add(candidate)
+        return candidate
+
+    numerator = 2**60
+    factors = tuple(
+        {
+            "kind": "ADD",
+            "operands": [
+                {"kind": "LITERAL", "value": {"num": numerator, "den": fresh_prime()}},
+                {
+                    "kind": "MULTIPLY",
+                    "operands": [
+                        {"kind": "LITERAL", "value": {"num": 1, "den": fresh_prime()}},
+                        {"kind": "VARIABLE", "name": "x"},
+                    ],
+                },
+            ],
+        }
+        for _ in range(factor_count)
+    )
+    expression: dict[str, Any] = {
+        "kind": "MULTIPLY",
+        "operands": [factors[0], factors[1]],
+    }
+    for factor in factors[2:]:
+        expression = {"kind": "MULTIPLY", "operands": [expression, factor]}
+
+    request = _request("QQ", expression)
+    metrics = _metrics(request.expression)
+    result = normalize_polynomial_expression(request)
+    returned_bits = max(
+        term.coefficient.num.bit_length() for term in result.polynomial.polynomial.terms
+    )
+    assert returned_bits <= metrics.maximum_numerator_bits
+    # Every factor contributes two coprime denominators, so the envelope has to
+    # carry that mass: the collision-blind estimate charged only child
+    # numerators and a collision count.
+    assert metrics.denominator_mass_bits > 0
+
+
+def test_noncolliding_product_charges_no_denominator_scaling() -> None:
+    """Only a colliding product pays for a common denominator.
+
+    When every factor choice lands on its own exponent the numerator bound must
+    stay what it was, so the repair does not turn ordinary disjoint products
+    into rejected requests.
+    """
+
+    factors = (
+        {
+            "kind": "ADD",
+            "operands": [
+                {"kind": "LITERAL", "value": {"num": 1, "den": 10**120 + 7}},
+                {
+                    "kind": "MULTIPLY",
+                    "operands": [
+                        {"kind": "LITERAL", "value": {"num": 1, "den": 10**120 + 19}},
+                        {"kind": "VARIABLE", "name": "a"},
+                    ],
+                },
+            ],
+        },
+        {
+            "kind": "ADD",
+            "operands": [
+                {"kind": "LITERAL", "value": {"num": 1, "den": 10**120 + 31}},
+                {
+                    "kind": "MULTIPLY",
+                    "operands": [
+                        {"kind": "LITERAL", "value": {"num": 1, "den": 10**120 + 37}},
+                        {"kind": "VARIABLE", "name": "b"},
+                    ],
+                },
+            ],
+        },
+    )
+    request = _request(
+        "QQ", {"kind": "MULTIPLY", "operands": list(factors)}, ("a", "b")
+    )
+    from jacobian.math.polynomials._expression_normalize import (
+        _product_denominator_scaling_bits,
+        _product_support_collision,
+    )
+
+    metrics = _metrics(request.expression)
+    expression = request.expression
+    assert isinstance(expression, PolynomialMultiply)
+    child_metrics = [_metrics(operand) for operand in expression.operands]
+    assert not _product_support_collision(child_metrics)
+    assert _product_denominator_scaling_bits(child_metrics, colliding=False) == 0
+    assert _product_denominator_scaling_bits(child_metrics, colliding=True) > 0
+    # The combined envelope is exactly the collision-blind sum: no denominator
+    # mass was charged onto the numerator because no two choices are summed.
+    assert metrics.maximum_numerator_bits == sum(
+        child.numerator_bits + _ceil_log2(child.support) for child in child_metrics
+    )
+    result = normalize_polynomial_expression(request)
+    assert len(result.polynomial.polynomial.terms) == 4

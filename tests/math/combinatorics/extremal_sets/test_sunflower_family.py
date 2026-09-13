@@ -393,12 +393,17 @@ def test_r2_allocation_is_refused_before_enumerating_every_pair(
 
 
 def test_shared_core_allocation_uses_actual_coordinate_widths() -> None:
-    """A shared core is priced by its real coordinate widths, not the axis width."""
+    """A shared core is priced by its real coordinate widths at admission.
+
+    The 280-element core in every pair charges about 13.4 million core digit
+    units, so the request is refused before enumeration instead of raising
+    after the first qualifying intersection.
+    """
 
     core = tuple(range(280))
     members = tuple((*core, 280 + index) for index in range(155))
-    result = construct_sunflower_family(_family(members, ground=435), 2)
-    assert result.sunflower_count == 11_935
+    with pytest.raises(OperationResourceAdmissionError, match="allocation units"):
+        construct_sunflower_family(_family(members, ground=435), 2)
 
 
 def test_output_edge_bound_uses_qualifying_rows() -> None:
@@ -722,3 +727,17 @@ def test_membership_digit_admission_observes_cancellation() -> None:
         pytest.raises(OperationExecutionCancelledError),
     ):
         construct_sunflower_family(source, 2)
+
+
+def test_disjoint_selection_scan_is_checkpointed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The greedy disjoint scan checkpoints as it hashes memberships."""
+    messages: list[str] = []
+    monkeypatch.setattr(
+        sunflower_module, "request_checkpoint", lambda message: messages.append(message)
+    )
+    monkeypatch.setattr(sunflower_module, "SUNFLOWER_PAIRWISE_CHECKPOINT_WORK", 4)
+    members = tuple(tuple(range(index * 4, index * 4 + 4)) for index in range(4))
+    construct_sunflower_family(_family(members, ground=16), 3)
+    assert "during sunflower disjoint-selection admission" in messages

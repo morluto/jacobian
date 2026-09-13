@@ -182,7 +182,12 @@ def _disjoint_selection_lower_bound(
 
     used: set[int] = set()
     selected = 0
+    work_since_checkpoint = 0
     for member in sorted(members, key=len):
+        work_since_checkpoint += len(member)
+        if work_since_checkpoint >= SUNFLOWER_PAIRWISE_CHECKPOINT_WORK:
+            request_checkpoint("during sunflower disjoint-selection admission")
+            work_since_checkpoint = 0
         if used.isdisjoint(member):
             selected += 1
             used.update(member)
@@ -240,17 +245,21 @@ def _admit_candidates(
     # Every pair is a sunflower; bound stored cores by pairwise size mins
     # without enumerating intersection tuples.
     if petal_count == 2 and candidate_bound:
+        # Charge each stored core element by the coordinate width it actually
+        # holds; a bare element count underestimates multi-digit coordinates.
+        coordinate_digits = len(str(max(source.ground_set_size - 1, 0)))
         core_bound = sum(
             min(sizes[left], sizes[right])
             for left, right in combinations(range(member_count), 2)
         )
+        core_digits = core_bound * (coordinate_digits + 1)
         _admit_qualifying_result(
             source,
             petal_count,
             member_count,
             source_units,
             candidate_bound,
-            core_bound,
+            core_digits,
         )
     else:
         # A greedy pairwise-disjoint selection certifies that at least this many

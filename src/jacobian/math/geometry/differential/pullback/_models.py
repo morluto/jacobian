@@ -26,7 +26,9 @@ class RationalMetricPullbackRequest(StrictModel):
     map: RationalFunctionMap = Field(
         description=(
             "Coordinate map. target_coordinates must equal "
-            "metric.tensor.coordinate_axis."
+            "metric.tensor.coordinate_axis, and source_variables must be "
+            "nonempty because the pullback tensor is a rank-two covariant "
+            "tensor on that source axis."
         )
     )
 
@@ -34,6 +36,11 @@ class RationalMetricPullbackRequest(StrictModel):
     def require_target_axis(self) -> Self:
         if self.map.target_coordinates != self.metric.tensor.coordinate_axis:
             raise ValueError("map target coordinates must equal metric coordinate axis")
+        if not self.map.source_variables:
+            raise ValueError(
+                "map source coordinate axis must be nonempty for a rank-two "
+                "pullback tensor"
+            )
         return self
 
 
@@ -46,6 +53,11 @@ class RationalMetricPullbackProfile(StrictModel):
     @model_validator(mode="after")
     def require_profile_contract(self) -> Self:
         source_axis = self.map.source_variables
+        if not source_axis:
+            raise ValueError(
+                "map source coordinate axis must be nonempty for a rank-two "
+                "pullback tensor"
+            )
         if self.pullback.coordinate_axis != source_axis:
             raise ValueError("pullback must use the map source coordinate axis")
         if self.pullback.variance != ("COVARIANT", "COVARIANT"):

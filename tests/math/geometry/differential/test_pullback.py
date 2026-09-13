@@ -4,6 +4,7 @@ import time
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 from sympy import Matrix, simplify, symbols
 
 from jacobian._exact import CanonicalRational
@@ -473,7 +474,22 @@ def test_request_schema_states_target_axis_constraint() -> None:
     )
     assert "target_coordinates" in text
     assert "coordinate_axis" in text
+    assert "source_variables" in text
+    assert "nonempty" in text
     assert "target_coordinates" in TOOLS[0].examples[0].description
+
+
+def test_empty_source_axis_is_rejected_at_the_request_boundary() -> None:
+    """A rank-two pullback tensor needs a nonempty source axis."""
+
+    from jacobian.math.geometry.differential.pullback._models import (
+        RationalMetricPullbackRequest,
+    )
+
+    source = metric((1,), ("u",))
+    mapping = map_value((1,), (), ("u",))
+    with pytest.raises(ValidationError, match="nonempty"):
+        RationalMetricPullbackRequest(metric=source, map=mapping)
 
 
 def test_forged_short_map_is_rejected_before_planning() -> None:

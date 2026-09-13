@@ -11,7 +11,7 @@ from itertools import combinations
 from math import comb
 from typing import Self
 
-from pydantic import Field, StrictBool, StrictInt, model_validator
+from pydantic import Field, StrictBool, StrictInt, ValidationError, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._execution import request_checkpoint
@@ -45,6 +45,30 @@ MAX_SUNFLOWER_RESULT_ALLOCATION_UNITS = 16 * 1024 * 1024
 
 def _result_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"set_system.sunflower.{reason}", message)
+
+
+def _revalidate_source(source: IndexedFiniteSetFamily) -> IndexedFiniteSetFamily:
+    """Reconstruct a constructed source so its field invariants are rerun."""
+
+    raw_members = getattr(source, "members", None)
+    if not isinstance(raw_members, tuple) or any(
+        not isinstance(member, tuple) for member in raw_members
+    ):
+        raise OperationDomainValidationError(
+            location=("source", "members"),
+            code="set_system.sunflower.source_shape",
+            message="members must be immutable index tuples",
+        )
+    try:
+        return IndexedFiniteSetFamily.model_validate(
+            {"ground_set_size": source.ground_set_size, "members": raw_members}
+        )
+    except (ValidationError, PydanticCustomError) as exc:
+        raise OperationDomainValidationError(
+            location=("source",),
+            code="set_system.sunflower.source_contract",
+            message="source is not a canonical indexed set family",
+        ) from exc
 
 
 def _admit_source(
@@ -99,8 +123,15 @@ def _admit_source(
                 f"{MAX_SUNFLOWER_INTERSECTION_WORK}-unit bound"
             ),
         )
-    ground_digits = len(str(max(source.ground_set_size - 1, 0)))
-    source_units = 16 + member_count + memberships * (ground_digits + 1)
+    # The ground axis is retained as a single scalar; charge each membership
+    # by the actual decimal width of its coordinates, not the ambient axis
+    # width applied to every coordinate.
+    membership_digits = sum(
+        len(str(member_element))
+        for member in source.members
+        for member_element in member
+    )
+    source_units = 16 + member_count + membership_digits
     if source_units > MAX_SUNFLOWER_RESULT_ALLOCATION_UNITS:
         raise OperationResourceAdmissionError(
             location=("source",),
@@ -425,6 +456,7 @@ def construct_sunflower_family(
             code="set_system.sunflower.source_type",
             message="source must be an IndexedFiniteSetFamily",
         )
+    source = _revalidate_source(source)
     if type(petal_count) is not int:
         raise OperationDomainValidationError(
             location=("petal_count",),
@@ -445,7 +477,12 @@ def construct_sunflower_family(
             hypergraph=FiniteHypergraph(vertices=vertices, edges=()),
         )
     request_checkpoint("before sunflower member expansion")
-    sets = tuple(frozenset(member) for member in source.members)
+    sets_list: list[frozenset[int]] = []
+    for index, member in enumerate(source.members):
+        if index % 64 == 0:
+            request_checkpoint("during sunflower member materialization")
+        sets_list.append(frozenset(member))
+    sets = tuple(sets_list)
     sizes = tuple(len(member) for member in source.members)
     plan: list[tuple[tuple[int, ...], tuple[int, ...]]] = []
     core_elements = 0

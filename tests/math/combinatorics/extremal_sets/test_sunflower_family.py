@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import itertools
+from unittest.mock import patch
 
 import pytest
 from pydantic import ValidationError
@@ -371,3 +372,60 @@ def test_compact_large_ground_set_is_admitted() -> None:
     assert result.hypergraph.vertices == ()
     assert result.source.ground_set_size == ground
     assert type(result).model_validate_json(result.model_dump_json()) == result
+
+
+def test_large_ground_axis_charges_actual_membership_digits() -> None:
+    """The ambient axis width is not multiplied across every coordinate."""
+    from jacobian.math.combinatorics.extremal_sets._sunflower_r import (
+        MAX_SUNFLOWER_RESULT_ALLOCATION_UNITS,
+        _admit_source,
+    )
+
+    per_member = 141_428
+    members = tuple(
+        tuple(range(index * 1_000, index * 1_000 + per_member)) for index in range(7)
+    )
+    source = _family(members, ground=(1 << 53) - 1)
+    source_units = _admit_source(source, 8)[4]
+    assert source_units < MAX_SUNFLOWER_RESULT_ALLOCATION_UNITS
+    assert construct_sunflower_family(source, 8).sunflowers == ()
+
+
+def test_native_constructor_revalidates_constructed_sources() -> None:
+    """A constructed source must satisfy the canonical family contract."""
+    forged = IndexedFiniteSetFamily.model_construct(
+        ground_set_size=10, members=((2, 1),)
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        construct_sunflower_family(forged, 2)
+    assert error.value.errors()[0]["type"] == "set_system.sunflower.source_contract"
+
+    malformed = IndexedFiniteSetFamily.model_construct(ground_set_size="x", members=())
+    with pytest.raises(OperationDomainValidationError):
+        construct_sunflower_family(malformed, 2)
+
+
+def test_member_materialization_observes_cancellation() -> None:
+    """Cancellation during member materialization is not ignored."""
+    from threading import Event
+
+    from jacobian._execution import (
+        OperationExecutionCancelledError,
+        request_cancellation,
+    )
+
+    cancelled = Event()
+    original = sunflower_module.request_checkpoint
+
+    def checkpoint(stage: str) -> None:
+        original(stage)
+        if stage == "during sunflower member materialization":
+            cancelled.set()
+
+    source = _family(tuple((index, index + 1) for index in range(200)), ground=400)
+    with (
+        patch.object(sunflower_module, "request_checkpoint", checkpoint),
+        request_cancellation(cancelled),
+        pytest.raises(OperationExecutionCancelledError),
+    ):
+        construct_sunflower_family(source, 2)

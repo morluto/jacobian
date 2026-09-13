@@ -9,13 +9,14 @@ from __future__ import annotations
 
 from fractions import Fraction
 from math import factorial, prod
-from typing import Any, cast
+from typing import cast
 
 from pydantic import ValidationError
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS
 from jacobian._execution import request_checkpoint
+from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -513,7 +514,9 @@ def _is_shape_rejection(error: ValidationError) -> bool:
     return bool(types) and all(item in _MEMBERSHIP_SHAPE_ERRORS for item in types)
 
 
-def _revalidate_tableau(tableau: object, carrier: type[Any]) -> object:
+def _revalidate_tableau(
+    tableau: object, carrier: type[StrictModel]
+) -> StrictModel:
     """Return a freshly validated carrier, rejecting forged instances."""
 
     if type(tableau) is not carrier:

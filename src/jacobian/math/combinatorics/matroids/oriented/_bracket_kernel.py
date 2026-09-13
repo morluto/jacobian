@@ -6,6 +6,7 @@ from fractions import Fraction
 from math import gcd
 from typing import Literal
 
+from pydantic import ValidationError
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS, CanonicalRational
@@ -253,6 +254,36 @@ def _relation_polynomial(
 def _admit_source_relation(relation: GrassmannPlueckerRelation) -> None:
     """Admit the caller's source-bound relation claim once per request."""
 
+    if not isinstance(relation, GrassmannPlueckerRelation):
+        raise OperationDomainValidationError(
+            location=("terms",),
+            code="bracket.syzygy_relation_type",
+            message="every multiplier must be a Grassmann-Pluecker relation",
+        )
+    # Rerun the structural relation contract so a model_construct or
+    # model_copy claim cannot reach the tuple unpacking below malformed.
+    try:
+        relation = GrassmannPlueckerRelation.model_validate(
+            {
+                "ground_size": relation.ground_size,
+                "indices": tuple(relation.indices),
+                "family": relation.family,
+                "polynomial": relation.polynomial,
+            }
+        )
+    except (ValidationError, PydanticCustomError) as exc:
+        if isinstance(exc, ValidationError):
+            detail = exc.errors()[0]
+            code = str(detail["type"])
+            message = str(detail["msg"])
+        else:
+            code = exc.type
+            message = exc.message()
+        raise OperationDomainValidationError(
+            location=("terms",),
+            code=code,
+            message=message,
+        ) from exc
     expected = _relation_polynomial(
         relation.ground_size,
         relation.indices,
@@ -367,14 +398,26 @@ def _bounded_component_sum(
         shared = gcd(denominator_lcm, denominator)
         cofactor = denominator // shared
         if _integer_product_exceeds_canonical(denominator_lcm, cofactor):
-            raise OperationResourceAdmissionError(
-                location=("terms",),
-                code="bracket.syzygy_coefficient_digit_bound",
-                message=(
-                    "exact residual coefficient growth exceeds the supported "
-                    "digit bound"
-                ),
-            )
+            # The unreduced LCM would exceed the cap. The exact reduced sum may
+            # still fit when related denominators cancel, so attempt it and
+            # retain the reduced denominator for the next step.
+            candidate = total + value
+            if candidate and (
+                _exceeds_canonical_integer_bound(abs(candidate.numerator))
+                or _exceeds_canonical_integer_bound(candidate.denominator)
+            ):
+                raise OperationResourceAdmissionError(
+                    location=("terms",),
+                    code="bracket.syzygy_coefficient_digit_bound",
+                    message=(
+                        "exact residual coefficient growth exceeds the supported "
+                        "digit bound"
+                    ),
+                )
+            total = candidate
+            denominator_lcm = total.denominator if total else 1
+            work_digit_bound = max(work_digit_bound, widths[0], widths[1])
+            continue
         denominator_lcm *= cofactor
         total += value
         work_digit_bound = max(work_digit_bound, widths[0], widths[1])
@@ -665,5 +708,11 @@ def bracket_syzygy_residual(
     vanishes on minors.
     """
 
+    if not isinstance(target, BracketPolynomial):
+        raise OperationDomainValidationError(
+            location=("target",),
+            code="bracket.syzygy_target_type",
+            message="syzygy target must be a canonical bracket polynomial",
+        )
     coefficients = _admit_residual_envelope(target, terms)
     return _polynomial_from_coefficients(coefficients, target.ground_size)

@@ -990,3 +990,53 @@ def test_syzygy_rejects_coprime_wide_denominators_before_fraction_sum() -> None:
             BracketPolynomial(ground_size=5, terms=()), tuple(terms)
         )
     assert error.value.errors()[0]["type"] == "bracket.syzygy_coefficient_digit_bound"
+
+
+def test_related_denominators_cancel_before_the_cap() -> None:
+    """A zero residual that reduces below the LCM cap is admitted."""
+    limit = 10**MAX_CANONICAL_INTEGER_DIGITS
+    shared = limit // 20 + 1
+    total, _ = _bounded_component_sum(
+        [
+            (Fraction(1, 6 * shared), (0, 0)),
+            (Fraction(1, 10 * shared), (0, 0)),
+            (Fraction(-4, 15 * shared), (0, 0)),
+        ]
+    )
+    assert total == 0
+
+
+def test_syzygy_rejects_a_non_polynomial_target() -> None:
+    with pytest.raises(OperationDomainValidationError) as error:
+        bracket_syzygy_residual({}, ())  # type: ignore[arg-type]
+    assert error.value.errors()[0]["type"] == "bracket.syzygy_target_type"
+
+
+def test_syzygy_revalidates_a_forged_relation() -> None:
+    from jacobian.math.combinatorics.matroids.oriented._bracket_kernel import (
+        _admit_source_relation,
+    )
+
+    forged = GrassmannPlueckerRelation.model_construct(
+        ground_size=6,
+        indices=(0,),
+        family="FOUR_TERM",
+        polynomial=BracketPolynomial(ground_size=6, terms=()),
+    )
+    with pytest.raises(OperationDomainValidationError):
+        _admit_source_relation(forged)
+
+
+def test_syzygy_forged_relation_never_unpacks_malformed_indices() -> None:
+    from jacobian.math.combinatorics.matroids.oriented._bracket_kernel import (
+        _admit_source_relation,
+    )
+
+    forged = GrassmannPlueckerRelation.model_construct(
+        ground_size=6,
+        indices=(0, 1),
+        family="SHARED_INDEX_THREE_TERM",
+        polynomial=BracketPolynomial(ground_size=6, terms=()),
+    )
+    with pytest.raises(OperationDomainValidationError):
+        _admit_source_relation(forged)

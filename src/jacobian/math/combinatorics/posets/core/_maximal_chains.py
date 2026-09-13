@@ -232,7 +232,7 @@ def _admit_typed_source(poset: FinitePoset) -> int:
     )
 
     request_checkpoint("before maximal-chain source admission")
-    if not isinstance(poset, FinitePoset):
+    if type(poset) is not FinitePoset:
         raise OperationDomainValidationError(
             location=("poset",),
             code="poset.maximal_chains.request_type",

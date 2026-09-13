@@ -453,7 +453,9 @@ def test_native_non_models_raise_structured_domain_errors() -> None:
     x = symbols("x")
     mapping = map_value((x,), ("x",), ("u",))
     source = metric((1,), ("u",))
-    with pytest.raises(OperationDomainValidationError, match="RationalCoordinateMetric"):
+    with pytest.raises(
+        OperationDomainValidationError, match="RationalCoordinateMetric"
+    ):
         pullback_metric({"tensor": {}}, mapping)  # type: ignore[arg-type]
     with pytest.raises(OperationDomainValidationError, match="RationalFunctionMap"):
         pullback_metric(source, {"components": ()})  # type: ignore[arg-type]

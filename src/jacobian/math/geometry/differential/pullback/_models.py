@@ -21,9 +21,7 @@ class RationalMetricPullbackRequest(StrictModel):
     """
 
     metric: RationalCoordinateMetric = Field(
-        description=(
-            "Source metric. The ordered tensor axis is the map target axis."
-        )
+        description=("Source metric. The ordered tensor axis is the map target axis.")
     )
     map: RationalFunctionMap = Field(
         description=(

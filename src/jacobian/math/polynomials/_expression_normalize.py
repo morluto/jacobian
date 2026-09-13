@@ -30,6 +30,7 @@ from jacobian.catalog.models import (
 from jacobian.math.polynomials.values import (
     MAX_POLYNOMIAL_EXPONENT,
     MAX_POLYNOMIAL_TERMS,
+    MAX_POLYNOMIAL_VARIABLES,
     PolynomialVariable,
     RationalPolynomial,
     RationalPolynomialTerm,
@@ -113,7 +114,7 @@ class PolynomialExpressionSource(StrictModel):
         """Reject deep or oversized raw trees before copying or parsing them."""
 
         if isinstance(value, Mapping):
-            _bound_raw_expression(value.get("expression"))
+            _bound_raw_request(value)
         return canonicalize_json_containers(value)
 
     @model_validator(mode="after")
@@ -204,6 +205,28 @@ def _expression_children(node: object) -> tuple[object, ...]:
             return ()
         raise _MalformedExpressionError(f"unrecognized expression node kind: {kind!r}")
     return ()
+
+
+def _bound_raw_request(value: Mapping) -> None:
+    """Bound every raw request field before the recursive canonicalization copy."""
+
+    allowed = {"coefficient_domain", "variables", "expression"}
+    unexpected = set(value).difference(allowed)
+    if unexpected:
+        raise ValueError(
+            "expression requests may not carry unexpected fields: "
+            + ", ".join(sorted(map(str, unexpected)))
+        )
+    variables = value.get("variables")
+    if variables is not None:
+        if not isinstance(variables, (list, tuple)):
+            raise ValueError("variables must be a bounded sequence")
+        if len(variables) > MAX_POLYNOMIAL_VARIABLES:
+            raise ValueError("variables exceed the admitted axis bound")
+    domain = value.get("coefficient_domain")
+    if domain is not None and not isinstance(domain, str):
+        raise ValueError("coefficient_domain must be a string")
+    _bound_raw_expression(value.get("expression"))
 
 
 def _bound_raw_expression(expression: object) -> None:
@@ -460,6 +483,11 @@ def _power_metrics(
             result_terms_support = _support_bound(
                 variable_count, result_degree, result_terms
             )
+            # `_multiply` scans its result to drop zero coefficients.
+            work = min(
+                _MAX_EXPRESSION_WORK + 1,
+                work + result_terms_support,
+            )
         remaining //= 2
         if remaining:
             work = min(
@@ -477,6 +505,10 @@ def _power_metrics(
                 variable_count,
                 base_degree,
                 base_terms,
+            )
+            work = min(
+                _MAX_EXPRESSION_WORK + 1,
+                work + base_terms_support,
             )
     degree = min(MAX_POLYNOMIAL_EXPONENT + 1, base.degree * exponent)
     support_terms = _support_bound(variable_count, degree, terms)
@@ -600,6 +632,12 @@ def _metrics(
                 variable_count,
                 current_degree,
                 current_terms,
+            )
+            # `_multiply` also scans its result dictionary to drop zero
+            # coefficients, so charge that output-support scan.
+            work = min(
+                _MAX_EXPRESSION_WORK + 1,
+                work + current_support_terms,
             )
         degree = min(
             MAX_POLYNOMIAL_EXPONENT + 1,

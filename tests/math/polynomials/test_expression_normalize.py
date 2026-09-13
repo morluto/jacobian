@@ -440,3 +440,28 @@ def test_unexpected_node_field_is_bounded_before_copying() -> None:
     with pytest.raises(ValidationError):
         PolynomialExpressionNormalizeRequest.model_validate(payload)
     assert time.monotonic() - started < 1.0
+
+
+def test_oversized_variable_axis_is_bounded_before_copying() -> None:
+    payload = {
+        "coefficient_domain": "ZZ",
+        "variables": ["x"] * 3_000_000,
+        "expression": {"kind": "VARIABLE", "name": "x"},
+    }
+    started = time.monotonic()
+    with pytest.raises(ValidationError):
+        PolynomialExpressionNormalizeRequest.model_validate(payload)
+    assert time.monotonic() - started < 1.0
+
+
+def test_unexpected_top_level_field_is_bounded_before_copying() -> None:
+    payload = {
+        "coefficient_domain": "ZZ",
+        "variables": ["x"],
+        "expression": {"kind": "VARIABLE", "name": "x"},
+        "extra": {str(index): index for index in range(3_000_000)},
+    }
+    started = time.monotonic()
+    with pytest.raises(ValidationError):
+        PolynomialExpressionNormalizeRequest.model_validate(payload)
+    assert time.monotonic() - started < 1.0

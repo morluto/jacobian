@@ -970,3 +970,70 @@ def test_hilbert_series_structural_validator_rejects_bad_axis() -> None:
     payload["h_numerator"]["variables"] = ["m"]
     with pytest.raises(ValidationError):
         HilbertSeriesResult.model_validate(payload)
+
+
+def test_support_bound_accounts_for_exponent_thresholds() -> None:
+    """x_i^17 x_j^17 cannot divide a degree-32 monomial, so it must not prune."""
+    from jacobian.math.polynomials.graded.operations import _support_relaxation_bound
+
+    generators = tuple(
+        tuple(17 if axis in (left, right) else 0 for axis in range(8))
+        for left in range(8)
+        for right in range(left + 1, 8)
+    )
+    # Non-squarefree generators have exponent thresholds, so the support
+    # relaxation is not a sound upper bound and must decline.
+    assert _support_relaxation_bound(generators, 8, 32) is None
+
+
+def test_series_rejects_common_t_minus_one_factor() -> None:
+    """A numerator sharing (t-1) with the denominator lowers the dimension.
+
+    For (x) in QQ[x,y] the reduced form is 1/(1-t) with dimension 1; a forged
+    payload claiming dimension 2 with numerator 1-t satisfies every other
+    identity but reduces to dimension 1.
+    """
+    import json
+
+    variables = ("x", "y")
+    ideal = _monomial_ideal(variables, ((1, 0),))
+    base = json.loads(hilbert_series(ideal, prefix_degree=3).model_dump_json())
+    numerator_terms = [
+        {"coefficient": {"num": "-1", "den": "1"}, "exponents": [1]},
+        {"coefficient": {"num": "1", "den": "1"}, "exponents": [0]},
+    ]
+    base["ambient_numerator"] = {
+        "domain": "QQ",
+        "variables": ["t"],
+        "polynomial": {"terms": numerator_terms},
+    }
+    base["series"]["numerator"] = {"terms": numerator_terms}
+    base["reduced_numerator"] = {
+        "domain": "QQ",
+        "variables": ["t"],
+        "polynomial": {"terms": numerator_terms},
+    }
+    base["h_numerator"] = {
+        "domain": "QQ",
+        "variables": ["t"],
+        "polynomial": {"terms": numerator_terms},
+    }
+    base["denominator_exponent"] = 2
+    base["series"]["denominator"] = {
+        "terms": [
+            {"coefficient": {"num": "1", "den": "1"}, "exponents": [2]},
+            {"coefficient": {"num": "-2", "den": "1"}, "exponents": [1]},
+            {"coefficient": {"num": "1", "den": "1"}, "exponents": [0]},
+        ]
+    }
+    with pytest.raises(ValidationError, match=r"t-1"):
+        HilbertSeriesResult.model_validate_json(json.dumps(base))
+
+
+def test_series_prefix_must_match_the_h_numerator() -> None:
+    """A forged constant prefix coefficient is rejected."""
+    series = hilbert_series(_ideal((2, 0)), prefix_degree=3)
+    payload = series.model_dump()
+    payload["prefix"] = [value + 1 for value in payload["prefix"]]
+    with pytest.raises(ValidationError, match="prefix"):
+        HilbertSeriesResult.model_validate(payload)

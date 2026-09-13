@@ -384,13 +384,18 @@ def _support_relaxation_bound(
 ) -> int | None:
     """Sound upper bound counting only support-avoiding monomials.
 
-    A standard monomial's support cannot contain every axis of a generator, so
-    every standard monomial of degree ``d`` has a support set that contains no
-    generator support (ignoring the exponent lower bounds). Summing
-    compositions over those admissible supports is a sound over-count that still
-    captures the mixed constraints.
+    For squarefree generators, a monomial is divisible by a generator exactly
+    when its support contains the generator's support, so the standard
+    monomials of degree ``d`` are those whose support contains no generator
+    support. Summing compositions over those admissible supports is then an
+    exact count. A non-squarefree generator has an exponent threshold, so
+    support containment no longer implies divisibility and this relaxation is
+    not an upper bound; return ``None`` so the caller keeps the sound ambient
+    bound.
     """
 
+    if any(any(exponent > 1 for exponent in generator) for generator in generators):
+        return None
     if degree == 0:
         return 0 if any(not any(exponent) for exponent in generators) else 1
     if variable_count > 20:

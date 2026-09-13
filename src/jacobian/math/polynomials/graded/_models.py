@@ -165,6 +165,30 @@ class HilbertPolynomialRequest(StrictModel):
     )
 
 
+def _t_minus_one_divides(h_coefficients: dict[int, int]) -> bool:
+    """Whether ``h(t)`` is divisible by ``t - 1`` (equivalently ``h(1) = 0``)."""
+
+    return sum(h_coefficients.values()) == 0
+
+
+def _series_coefficient(
+    h_coefficients: dict[int, int], denominator_exponent: int, degree: int
+) -> int:
+    """Coefficient of ``t^degree`` in ``h(t) / (1-t)^denominator_exponent``."""
+
+    if denominator_exponent == 0:
+        return h_coefficients.get(degree, 0)
+    return sum(
+        coefficient
+        * comb(
+            degree - shift + denominator_exponent - 1,
+            denominator_exponent - 1,
+        )
+        for shift, coefficient in h_coefficients.items()
+        if shift <= degree
+    )
+
+
 def _one_minus_t_power(degree: int) -> SparseRationalPolynomial:
     """Return ``(1-t)^degree`` as a sparse polynomial."""
 
@@ -303,6 +327,45 @@ class HilbertSeriesResult(StrictModel):
         )
         if self.h_numerator.polynomial.terms != expected_h:
             raise ValueError("h-numerator must match the (1-t)^d sign convention")
+        self._require_reduced_series()
+        # The ambient presentation ``ambient_numerator / (1-t)^n`` must reduce to
+        # the reported series. Clearing denominators gives the exact polynomial
+        # identity ``ambient_numerator = (-1)^d reduced_numerator (1-t)^(n-d)``,
+        # checked by bounded sparse multiplication rather than symbolic
+        # cancellation so result construction does not replay the kernel.
+        exponent = self.ambient_denominator_exponent - self.denominator_exponent
+        if exponent < 0:
+            raise ValueError(
+                "ambient denominator exponent cannot be below the series dimension"
+            )
+        expected = _sparse_t_multiply(
+            self.reduced_numerator.polynomial, _one_minus_t_power(exponent)
+        )
+        if self.denominator_exponent % 2:
+            expected = _sparse_t_negate(expected)
+        if self.ambient_numerator.polynomial.terms != expected.terms:
+            raise ValueError(
+                "ambient numerator must reduce to the reported Hilbert series"
+            )
+        return self
+
+    def _require_reduced_series(self) -> None:
+        """Reject a common (t-1) factor and bind the prefix to the numerator."""
+
+        h_coefficients = {
+            term.exponents[0]: int(term.coefficient.as_fraction())
+            for term in self.h_numerator.polynomial.terms
+        }
+        if self.denominator_exponent >= 1 and _t_minus_one_divides(h_coefficients):
+            raise ValueError(
+                "reduced numerator must not share a (t-1) factor with the denominator"
+            )
+        expected_prefix = tuple(
+            _series_coefficient(h_coefficients, self.denominator_exponent, degree)
+            for degree in range(len(self.prefix))
+        )
+        if tuple(self.prefix) != expected_prefix:
+            raise ValueError("prefix must equal the h-numerator series coefficients")
         # The ambient presentation ``ambient_numerator / (1-t)^n`` must reduce to
         # the reported series. Clearing denominators gives the exact polynomial
         # identity ``ambient_numerator = (-1)^d reduced_numerator (1-t)^(n-d)``,

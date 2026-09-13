@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections import Counter
 from itertools import combinations
 
@@ -319,3 +320,43 @@ def test_constructor_executes_through_public_catalog_boundary() -> None:
     )
     assert result.output["status"] == "COMPUTED"
     assert len(result.output["design"]["blocks"]) == 7
+
+
+def test_native_constructor_raises_typed_domain_errors() -> None:
+    """Wrong native argument types use the declared domain error, not TypeError."""
+    for order, budget in ((True, 100), (7, 1.0)):
+        with pytest.raises(OperationDomainValidationError) as error:
+            construct_steiner_triple_system(order, budget)  # type: ignore[arg-type]
+        assert error.value.errors()[0]["type"] == (
+            "incidence_structure.steiner_argument_type"
+        )
+    with pytest.raises(OperationDomainValidationError) as shard_error:
+        construct_steiner_triple_system(7, 100, "not-a-shard")  # type: ignore[arg-type]
+    assert shard_error.value.errors()[0]["type"] == (
+        "incidence_structure.steiner_shard_type"
+    )
+
+
+def test_forged_shard_is_bounded_before_canonicalization() -> None:
+    """An oversized forged prefix is refused without traversing every triple."""
+    forged = SteinerTripleSystemShard.model_construct(
+        order=7, fixed_triples=tuple((0, 1, 2) for _ in range(500_000))
+    )
+    started = time.monotonic()
+    with pytest.raises(OperationDomainValidationError) as error:
+        construct_steiner_triple_system(7, 100, forged)
+    assert error.value.errors()[0]["type"] == (
+        "incidence_structure.steiner_shard_length"
+    )
+    assert time.monotonic() - started < 1.0
+
+
+def test_empty_shard_normalizes_to_the_root_encoding() -> None:
+    """An empty shard and an unsharded UNKNOWN result serialize identically."""
+    sharded = construct_steiner_triple_system(
+        7, 1, SteinerTripleSystemShard(order=7, fixed_triples=())
+    )
+    unsharded = construct_steiner_triple_system(7, 1)
+    assert sharded.status == "UNKNOWN"
+    assert sharded.source_shard is None
+    assert sharded.model_dump_json() == unsharded.model_dump_json()

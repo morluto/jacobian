@@ -176,6 +176,60 @@ def _complete_remaining_steiner_cover(
     return cover.status, (), cover.searched_node_count, ()
 
 
+def _admit_native_shard(shard: object, order: int) -> SteinerTripleSystemShard:
+    """Canonicalize one native continuation shard under bounded inspection."""
+
+    if not isinstance(shard, SteinerTripleSystemShard):
+        raise OperationDomainValidationError(
+            location=("shard",),
+            code="incidence_structure.steiner_shard_type",
+            message="shard must be a SteinerTripleSystemShard or None",
+        )
+    raw_triples = getattr(shard, "fixed_triples", None)
+    # Bound the caller-authored field before dumping or canonicalizing it: a
+    # schema-bypassed replacement must not be traversed in full.
+    if not isinstance(raw_triples, tuple) or any(
+        not isinstance(triple, tuple) for triple in raw_triples
+    ):
+        raise OperationDomainValidationError(
+            location=("shard", "fixed_triples"),
+            code="incidence_structure.steiner_shard_shape",
+            message="continuation triples must be immutable tuples",
+        )
+    if len(raw_triples) > order * (order - 1) // 6:
+        raise OperationDomainValidationError(
+            location=("shard", "fixed_triples"),
+            code="incidence_structure.steiner_shard_length",
+            message="a continuation prefix cannot contain more triples than the design",
+        )
+    try:
+        validated = SteinerTripleSystemShard.model_validate(
+            {"order": shard.order, "fixed_triples": raw_triples}
+        )
+    except (ValidationError, PydanticCustomError) as exc:
+        if isinstance(exc, ValidationError):
+            error = exc.errors()[0]
+            location = ("shard", *error["loc"])
+            code = str(error["type"])
+            message = str(error["msg"])
+        else:
+            location = ("shard", "fixed_triples")
+            code = exc.type
+            message = exc.message()
+        raise OperationDomainValidationError(
+            location=location,
+            code=code,
+            message=message,
+        ) from exc
+    if validated.order != order:
+        raise OperationDomainValidationError(
+            location=("order", "shard"),
+            code="incidence_structure.steiner_shard_order",
+            message="a continuation shard must have the same order as the request",
+        )
+    return validated
+
+
 def construct_steiner_triple_system(
     order: int,
     search_budget: int = MAX_STEINER_SEARCH_STATES,
@@ -191,25 +245,13 @@ def construct_steiner_triple_system(
     the operation boundary.
     """
     if type(order) is not int or type(search_budget) is not int:
-        raise TypeError("order and search_budget must be integers")
+        raise OperationDomainValidationError(
+            location=("order", "search_budget"),
+            code="incidence_structure.steiner_argument_type",
+            message="order and search_budget must be integers",
+        )
     if shard is not None:
-        if not isinstance(shard, SteinerTripleSystemShard):
-            raise TypeError("shard must be a SteinerTripleSystemShard or None")
-        try:
-            shard = SteinerTripleSystemShard.model_validate(shard.model_dump())
-        except ValidationError as exc:
-            error = exc.errors()[0]
-            raise OperationDomainValidationError(
-                location=("shard", *error["loc"]),
-                code=str(error["type"]),
-                message=str(error["msg"]),
-            ) from exc
-        if shard.order != order:
-            raise OperationDomainValidationError(
-                location=("order", "shard"),
-                code="incidence_structure.steiner_shard_order",
-                message="a continuation shard must have the same order as the request",
-            )
+        shard = _admit_native_shard(shard, order)
 
     execution = current_request_execution()
     if execution is None:
@@ -252,12 +294,15 @@ def construct_steiner_triple_system(
         )
     )
     if cover_status != "FOUND":
+        # An empty shard and an unsharded request execute the same root search,
+        # so normalize both to the single root encoding.
+        retained_shard = None if shard is None or not shard.fixed_triples else shard
         return SteinerTripleSystemResult(
             status="UNKNOWN" if cover_status == "UNKNOWN" else "NOT_FOUND",
             order=order,
             states_explored=states,
             unresolved_frontier=frontier,
-            source_shard=shard,
+            source_shard=retained_shard,
         )
 
     # Replay the defining incidence axiom independently of the cover search.

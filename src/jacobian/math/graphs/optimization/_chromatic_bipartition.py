@@ -381,6 +381,8 @@ def _admit_unit_threshold_chromatic(request: ChromaticBipartitionRequest) -> Non
         # This admission pass reconstructs and classifies every remainder, and
         # the worker repeats that pair of phases for each skipped candidate.
         work += 2 * (reconstruction + classification)
+        if work > MAX_CHROMATIC_BIPARTITION_WORK:
+            _refuse_chromatic_bipartition_work()
         if not _unit_threshold_core_is_admitted(core):
             continue
         has_admitted_candidate = True

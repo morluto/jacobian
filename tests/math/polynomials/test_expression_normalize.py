@@ -647,3 +647,49 @@ def test_constant_product_skips_exact_fractions_past_the_envelope(
     expression = {"kind": "MULTIPLY", "operands": groups}
     with pytest.raises(OperationResourceAdmissionError):
         normalize_polynomial_expression(_request("QQ", expression))
+
+
+def test_powered_disjoint_binomial_keeps_per_term_denominators() -> None:
+    p = 10**127 + 39
+    q = 10**127 + 79
+    expression = {
+        "kind": "POWER",
+        "base": {
+            "kind": "ADD",
+            "operands": [
+                {
+                    "kind": "MULTIPLY",
+                    "operands": [
+                        {"kind": "VARIABLE", "name": "x"},
+                        {
+                            "kind": "POWER",
+                            "base": {
+                                "kind": "LITERAL",
+                                "value": {"num": 1, "den": p},
+                            },
+                            "exponent": 4,
+                        },
+                    ],
+                },
+                {
+                    "kind": "MULTIPLY",
+                    "operands": [
+                        {"kind": "VARIABLE", "name": "y"},
+                        {
+                            "kind": "POWER",
+                            "base": {
+                                "kind": "LITERAL",
+                                "value": {"num": 1, "den": q},
+                            },
+                            "exponent": 4,
+                        },
+                    ],
+                },
+            ],
+        },
+        "exponent": 12,
+    }
+    result = normalize_polynomial_expression(
+        _request("QQ", expression, variables=("x", "y"))
+    )
+    assert len(result.polynomial.polynomial.terms) == 13

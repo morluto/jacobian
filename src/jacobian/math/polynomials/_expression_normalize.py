@@ -124,6 +124,8 @@ class _ExpressionMetrics:
     denominator_mass_bits: int
     work: int
     intermediate_digits: int
+    support_keys: frozenset[tuple[tuple[str, int], ...]] | None = None
+    termwise_disjoint: bool = False
 
 
 def _bounded_sum(values: list[int] | tuple[int, ...], limit: int) -> int:
@@ -342,7 +344,61 @@ def _multiply_monomials(
     return frozenset((name, power) for name, power in powers.items() if power)
 
 
+def _support_keys_are_univariate(
+    keys: frozenset[tuple[tuple[str, int], ...]] | None,
+) -> bool:
+    if not keys:
+        return False
+    names: set[str] = set()
+    for key in keys:
+        for name, _power in key:
+            names.add(name)
+        if len(names) > 1:
+            return False
+    return True
+
+
+def _scale_support_keys(
+    keys: frozenset[tuple[tuple[str, int], ...]] | None, exponent: int
+) -> frozenset[tuple[tuple[str, int], ...]] | None:
+    if keys is None:
+        return None
+    scaled: set[tuple[tuple[str, int], ...]] = set()
+    for key in keys:
+        scaled.add(tuple(sorted((name, power * exponent) for name, power in key if power)))
+    return frozenset(scaled)
+
+
+def _multiply_support_keys(
+    left: frozenset[tuple[tuple[str, int], ...]] | None,
+    right: frozenset[tuple[tuple[str, int], ...]] | None,
+) -> frozenset[tuple[tuple[str, int], ...]] | None:
+    if left is None or right is None:
+        return None
+    if len(left) * len(right) > MAX_POLYNOMIAL_TERMS:
+        return None
+    product: set[tuple[tuple[str, int], ...]] = set()
+    for left_key in left:
+        left_map = dict(left_key)
+        for right_key in right:
+            merged = dict(left_map)
+            for name, power in right_key:
+                merged[name] = merged.get(name, 0) + power
+            product.add(tuple(sorted((name, power) for name, power in merged.items() if power)))
+    return frozenset(product)
+
+
 def _addends_are_disjoint(children: list[_ExpressionMetrics]) -> bool:
+    known = [child.support_keys for child in children if not child.zero]
+    if known and all(keys is not None for keys in known):
+        seen: set[tuple[tuple[str, int], ...]] = set()
+        for keys in known:
+            assert keys is not None
+            for key in keys:
+                if key in seen:
+                    return False
+                seen.add(key)
+        return bool(seen)
     monomials = [child.monomial for child in children if not child.zero]
     return (
         bool(monomials)
@@ -400,6 +456,8 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
             intermediate_digits=_representation_digits(
                 1, numerator_bits, _denominator_bits(expression.value.den)
             ),
+            support_keys=frozenset() if expression.value.num == 0 else frozenset(((),)),
+            termwise_disjoint=True,
         )
     if isinstance(expression, PolynomialVariableExpression):
         variables = frozenset((expression.name,))
@@ -420,6 +478,8 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
             denominator_mass_bits=0,
             work=1,
             intermediate_digits=_representation_digits(1, 1, 0),
+            support_keys=frozenset(((((expression.name, 1),),))),
+            termwise_disjoint=True,
         )
     if isinstance(expression, PolynomialPower):
         base = _metrics(expression.base)
@@ -442,6 +502,8 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
                 denominator_mass_bits=0,
                 work=base.work,
                 intermediate_digits=max(base.intermediate_digits, 2),
+                support_keys=frozenset(((),)),
+                termwise_disjoint=True,
             )
         degree = min(MAX_POLYNOMIAL_EXPONENT + 1, base.degree * exponent)
         variables = base.variables
@@ -528,6 +590,18 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
                     base_expansion_terms,
                     MAX_POLYNOMIAL_TERMS,
                 )
+        if base.termwise_disjoint and not _support_keys_are_univariate(base.support_keys):
+            powered_denominator_bits = min(
+                _MAX_EXPRESSION_COEFFICIENT_BITS + 1,
+                max(base.maximum_denominator_bits, 1) * exponent
+                if base.maximum_denominator_bits
+                else 0,
+            )
+        else:
+            powered_denominator_bits = min(
+                _MAX_EXPRESSION_COEFFICIENT_BITS + 1,
+                base.denominator_mass_bits * exponent,
+            )
         return _ExpressionMetrics(
             nodes=min(_MAX_EXPRESSION_NODES + 1, base.nodes + 1),
             support=support,
@@ -550,15 +624,9 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
             maximum_denominator_bits=max(
                 base.maximum_denominator_bits,
                 _denominator_bits(denominator),
-                min(
-                    _MAX_EXPRESSION_COEFFICIENT_BITS + 1,
-                    base.denominator_mass_bits * exponent,
-                ),
+                powered_denominator_bits,
             ),
-            denominator_mass_bits=min(
-                _MAX_EXPRESSION_COEFFICIENT_BITS + 1,
-                base.denominator_mass_bits * exponent,
-            ),
+            denominator_mass_bits=powered_denominator_bits,
             work=work,
             intermediate_digits=max(
                 base.intermediate_digits,
@@ -566,6 +634,9 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
                     support, numerator_bits, _denominator_bits(denominator)
                 ),
             ),
+            support_keys=_scale_support_keys(base.support_keys, exponent),
+            termwise_disjoint=base.termwise_disjoint
+            and (exponent <= 1 or (base.support_keys is not None and len(base.support_keys) <= 1)),
         )
     if isinstance(expression, (PolynomialAdd, PolynomialMultiply)):
         return _nary_expression_metrics(expression)
@@ -700,16 +771,19 @@ def _nary_expression_metrics(  # noqa: C901
                 _MAX_EXPRESSION_COEFFICIENT_BITS,
             )
         else:
+            extras = tuple(
+                max(0, child.denominator_mass_bits - child.maximum_denominator_bits)
+                for child in child_metrics
+            )
+            hidden_bits = _bounded_sum(extras, _MAX_EXPRESSION_COEFFICIENT_BITS)
             maximum_denominator_bits = max(
                 _denominator_bits(common_denominator),
+                hidden_bits,
                 *(child.maximum_denominator_bits for child in child_metrics),
             )
             denominator_mass_bits = max(
+                maximum_denominator_bits,
                 _denominator_bits(common_denominator),
-                _bounded_sum(
-                    tuple(child.denominator_mass_bits for child in child_metrics),
-                    _MAX_EXPRESSION_COEFFICIENT_BITS,
-                ),
             )
     else:
         disjoint = False
@@ -779,6 +853,7 @@ def _nary_expression_metrics(  # noqa: C901
             child_metrics
             and all(child.constant is not None for child in child_metrics)
             and denominator is not None
+            and common_numerator_bits <= _MAX_EXPRESSION_COEFFICIENT_BITS
         ):
             product = Fraction(1)
             for child in child_metrics:
@@ -801,22 +876,38 @@ def _nary_expression_metrics(  # noqa: C901
             common_numerator_bits,
             *(child.maximum_numerator_bits for child in child_metrics),
         )
+        denominator_mass_bits = _bounded_sum(
+            tuple(child.denominator_mass_bits for child in child_metrics),
+            _MAX_EXPRESSION_COEFFICIENT_BITS,
+        )
         maximum_denominator_bits = max(
             _denominator_bits(raw_denominator),
+            denominator_mass_bits,
             *(child.maximum_denominator_bits for child in child_metrics),
-        )
-        denominator_mass_bits = max(
-            _denominator_bits(raw_denominator),
-            _bounded_sum(
-                tuple(child.denominator_mass_bits for child in child_metrics),
-                _MAX_EXPRESSION_COEFFICIENT_BITS,
-            ),
         )
     intermediate_digits = max(
         (row.intermediate_digits for row in child_metrics),
         default=0,
     )
     intermediate_digits = max(intermediate_digits, total_coefficient_digits)
+    combined_keys: frozenset[tuple[tuple[str, int], ...]] | None
+    if isinstance(expression, PolynomialAdd):
+        combined_keys = frozenset()
+        for child in child_metrics:
+            if child.zero:
+                continue
+            if child.support_keys is None:
+                combined_keys = None
+                break
+            combined_keys = combined_keys | child.support_keys
+        add_disjoint = disjoint
+    else:
+        add_disjoint = False
+        combined_keys = frozenset(((),))
+        for child in child_metrics:
+            combined_keys = _multiply_support_keys(combined_keys, child.support_keys)
+            if combined_keys is None:
+                break
     return _ExpressionMetrics(
         nodes=nodes,
         support=support,
@@ -843,6 +934,13 @@ def _nary_expression_metrics(  # noqa: C901
         denominator_mass_bits=denominator_mass_bits,
         work=work,
         intermediate_digits=intermediate_digits,
+        support_keys=combined_keys,
+        termwise_disjoint=add_disjoint
+        or (
+            not isinstance(expression, PolynomialAdd)
+            and all(child.termwise_disjoint for child in child_metrics)
+            and combined_keys is not None
+        ),
     )
 
 

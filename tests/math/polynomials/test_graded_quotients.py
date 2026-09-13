@@ -22,7 +22,9 @@ from jacobian.math.polynomials.graded._models import (
     HilbertSeriesRequest,
     HilbertSeriesResult,
     HVectorResult,
+    InitialMonomialIdealRequest,
     InitialMonomialIdealResult,
+    StandardMonomialsRequest,
     StandardMonomialsResult,
 )
 from jacobian.math.polynomials.graded.operations import (
@@ -1037,3 +1039,28 @@ def test_series_prefix_must_match_the_h_numerator() -> None:
     payload["prefix"] = [value + 1 for value in payload["prefix"]]
     with pytest.raises(ValidationError, match="prefix"):
         HilbertSeriesResult.model_validate(payload)
+
+
+def test_series_rejects_fractional_h_numerator() -> None:
+    """A nonintegral h-numerator coefficient is truncated to an invalid series."""
+    import json
+
+    series = hilbert_series(_ideal((2, 0)), prefix_degree=3)
+    payload = json.loads(series.model_dump_json())
+    payload["h_numerator"]["polynomial"]["terms"] = [
+        {"coefficient": {"num": "3", "den": "2"}, "exponents": [0]}
+    ]
+    with pytest.raises(ValidationError):
+        HilbertSeriesResult.model_validate_json(json.dumps(payload))
+
+
+def test_request_models_document_structural_preconditions() -> None:
+    """The graded request schemas describe their structural ideal constraints."""
+    for model in (
+        InitialMonomialIdealRequest,
+        HilbertFunctionRequest,
+        HilbertSeriesRequest,
+        HilbertPolynomialRequest,
+    ):
+        assert model.model_fields["ideal"].description
+    assert StandardMonomialsRequest.model_fields["initial_ideal"].description

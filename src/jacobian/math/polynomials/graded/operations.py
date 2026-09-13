@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Iterator
 from math import comb
 from typing import Literal
@@ -143,9 +144,15 @@ def initial_monomial_ideal(
     if _is_explicit_unit_ideal(ideal):
         require_execution_deadline(deadline)
         return _unit_initial_ideal(ideal, monomial_order)
-    basis_result = groebner_basis(
-        ideal, monomial_order, resource_budget=resource_budget
+    # Pass the already-bound absolute deadline to the nested Groebner call so a
+    # native call without a request envelope does not restart a fresh window.
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        require_execution_deadline(deadline)
+    nested_budget = resource_budget.model_copy(
+        update={"wall_seconds": max(1.0, remaining)}
     )
+    basis_result = groebner_basis(ideal, monomial_order, resource_budget=nested_budget)
     require_execution_deadline(deadline)
     variables = ideal.variables
     order = {"lex": "lex", "grlex": "grlex", "grevlex": "grevlex"}[monomial_order]
@@ -341,7 +348,10 @@ def _pure_power_caps(
 
 
 def _pruned_standard_monomial_bound(
-    generators: tuple[tuple[int, ...], ...], variable_count: int, degree: int
+    generators: tuple[tuple[int, ...], ...],
+    variable_count: int,
+    degree: int,
+    deadline: float | None = None,
 ) -> int:
     if variable_count == 0:
         return 1 if degree == 0 else 0
@@ -372,7 +382,9 @@ def _pruned_standard_monomial_bound(
     if cap_bound <= MAX_STANDARD_MONOMIALS:
         return cap_bound
     if ambient <= _MONOMIAL_ENUMERATION_CEILING:
-        return _enumerated_standard_monomial_count(generators, variable_count, degree)
+        return _enumerated_standard_monomial_count(
+            generators, variable_count, degree, deadline
+        )
     relaxation = _support_relaxation_bound(generators, variable_count, degree)
     if relaxation is not None and relaxation < cap_bound:
         return relaxation
@@ -421,12 +433,21 @@ def _support_relaxation_bound(
 
 
 def _enumerated_standard_monomial_count(
-    generators: tuple[tuple[int, ...], ...], variable_count: int, degree: int
+    generators: tuple[tuple[int, ...], ...],
+    variable_count: int,
+    degree: int,
+    deadline: float | None = None,
 ) -> int:
     """Count degree-slice monomials not divisible by any generator."""
 
     count = 0
-    for composition in _degree_compositions(variable_count, degree):
+    for index, composition in enumerate(
+        _degree_compositions(variable_count, degree), start=1
+    ):
+        if index % 4096 == 0:
+            request_checkpoint("during graded standard-monomial counting")
+            if deadline is not None:
+                require_execution_deadline(deadline)
         if not any(
             all(composition[axis] >= generator[axis] for axis in range(variable_count))
             for generator in generators
@@ -463,7 +484,7 @@ def _require_hilbert_function_slices(
             )
         else:
             domain_size = _pruned_standard_monomial_bound(
-                generators, variable_count, degree
+                generators, variable_count, degree, deadline
             )
         if domain_size > MAX_STANDARD_MONOMIALS:
             raise OperationResourceAdmissionError(

@@ -35,7 +35,12 @@ GradedMonomial = Annotated[
 
 
 class InitialMonomialIdealRequest(StrictModel):
-    ideal: RationalPolynomialIdeal
+    ideal: RationalPolynomialIdeal = Field(
+        description=(
+            "A homogeneous ideal over QQ whose generators share the source ring, "
+            "so its Groebner basis and initial monomial ideal are well defined."
+        )
+    )
     monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex"
     resource_budget: IdealComputationBudget = Field(
         default_factory=IdealComputationBudget
@@ -70,7 +75,12 @@ class InitialMonomialIdealResult(StrictModel):
 
 
 class StandardMonomialsRequest(StrictModel):
-    initial_ideal: RationalPolynomialIdeal
+    initial_ideal: RationalPolynomialIdeal = Field(
+        description=(
+            "A monomial ideal over QQ whose generators are unit monomials "
+            "(coefficient one), the initial ideal of a graded quotient."
+        )
+    )
     degree: StrictInt = Field(ge=0, le=MAX_GRADED_DEGREE)
 
 
@@ -125,7 +135,12 @@ class StandardMonomialsResult(StrictModel):
 
 
 class HilbertFunctionRequest(StrictModel):
-    ideal: RationalPolynomialIdeal
+    ideal: RationalPolynomialIdeal = Field(
+        description=(
+            "A homogeneous ideal over QQ whose generators share the source ring; "
+            "nonhomogeneous generators are rejected before enumeration."
+        )
+    )
     monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex"
     max_degree: StrictInt = Field(default=0, ge=0, le=MAX_GRADED_DEGREE)
     resource_budget: IdealComputationBudget = Field(
@@ -149,7 +164,12 @@ class HilbertFunctionResult(StrictModel):
 
 
 class HilbertSeriesRequest(StrictModel):
-    ideal: RationalPolynomialIdeal
+    ideal: RationalPolynomialIdeal = Field(
+        description=(
+            "A homogeneous ideal over QQ whose generators share the source ring; "
+            "nonhomogeneous generators are rejected before enumeration."
+        )
+    )
     monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex"
     prefix_degree: StrictInt = Field(default=0, ge=0, le=MAX_HILBERT_PREFIX)
     resource_budget: IdealComputationBudget = Field(
@@ -158,7 +178,12 @@ class HilbertSeriesRequest(StrictModel):
 
 
 class HilbertPolynomialRequest(StrictModel):
-    ideal: RationalPolynomialIdeal
+    ideal: RationalPolynomialIdeal = Field(
+        description=(
+            "A homogeneous ideal over QQ whose generators share the source ring; "
+            "nonhomogeneous generators are rejected before enumeration."
+        )
+    )
     monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex"
     resource_budget: IdealComputationBudget = Field(
         default_factory=IdealComputationBudget
@@ -352,10 +377,12 @@ class HilbertSeriesResult(StrictModel):
     def _require_reduced_series(self) -> None:
         """Reject a common (t-1) factor and bind the prefix to the numerator."""
 
-        h_coefficients = {
-            term.exponents[0]: int(term.coefficient.as_fraction())
-            for term in self.h_numerator.polynomial.terms
-        }
+        h_coefficients: dict[int, int] = {}
+        for term in self.h_numerator.polynomial.terms:
+            coefficient = term.coefficient.as_fraction()
+            if coefficient.denominator != 1:
+                raise ValueError("h-numerator coefficients must be integers")
+            h_coefficients[term.exponents[0]] = coefficient.numerator
         if self.denominator_exponent >= 1 and _t_minus_one_divides(h_coefficients):
             raise ValueError(
                 "reduced numerator must not share a (t-1) factor with the denominator"

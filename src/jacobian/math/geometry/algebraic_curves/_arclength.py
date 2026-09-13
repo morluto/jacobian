@@ -203,6 +203,14 @@ def _cells_for_box(  # noqa: C901
     a = _square_root_rational(ellipse.a2)
     b = _square_root_rational(ellipse.b2)
     box_x, box_y = (interval for interval in request.box.intervals)
+    if (
+        box_x.lower.as_fraction() == box_x.upper.as_fraction()
+        or box_y.lower.as_fraction() == box_y.upper.as_fraction()
+    ):
+        # A degenerate (zero-width) box meets the curve in at most two points,
+        # whose one-dimensional Hausdorff measure is exactly zero, so this is
+        # an exact empty result regardless of the semiaxis rationality.
+        return ()
     if a is None or b is None:
         a_hi = _sqrt_upper_bound(ellipse.a2)
         b_hi = _sqrt_upper_bound(ellipse.b2)

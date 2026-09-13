@@ -285,3 +285,14 @@ def test_permuted_enclosed_segments_are_rejected() -> None:
             upper=_rational(2),
             segments=(second, first),
         )
+
+
+def test_degenerate_box_with_irrational_semiaxis_has_exact_zero_length() -> None:
+    """A zero-width box meets x^2+2y^2-2=0 in at most two points."""
+    result = enclose_arclength(
+        _request(
+            _polynomial((1, (2, 0)), (2, (0, 2)), (-2, (0, 0))),
+            _box(0, 0, -2, 2),
+        )
+    )
+    assert result.outcome.status == "EMPTY"

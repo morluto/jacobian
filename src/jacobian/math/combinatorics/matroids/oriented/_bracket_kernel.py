@@ -596,6 +596,10 @@ def _admit_residual_envelope(
         for scalar, multiplier, relation in terms
         if scalar.num != 0
     )
+    # Admit every authored relation before reading its polynomial, so a forged
+    # carrier cannot leak an AttributeError from the contribution count below.
+    for _, _, relation in active_terms:
+        _admit_source_relation(relation)
     contribution_count = len(target.terms) + sum(
         len(relation.polynomial.terms) for _, _, relation in active_terms
     )
@@ -605,9 +609,6 @@ def _admit_residual_envelope(
             code="bracket.syzygy_contribution_bound",
             message="the formal residual contribution count exceeds the bound",
         )
-
-    for _, _, relation in active_terms:
-        _admit_source_relation(relation)
 
     def admit_monomial(
         factors: tuple[tuple[CanonicalBracket, int], ...],

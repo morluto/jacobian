@@ -1040,3 +1040,26 @@ def test_syzygy_forged_relation_never_unpacks_malformed_indices() -> None:
     )
     with pytest.raises(OperationDomainValidationError):
         _admit_source_relation(forged)
+
+
+def test_syzygy_admits_a_forged_relation_before_reading_its_polynomial() -> None:
+    """A relation with a non-polynomial carrier is a typed domain error.
+
+    ``model_construct`` bypasses the model validator, so the contribution
+    count must not dereference ``relation.polynomial`` before the relation is
+    structurally admitted.
+    """
+    relation = grassmann_pluecker_relation(
+        5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM"
+    )
+    forged = GrassmannPlueckerRelation.model_construct(
+        ground_size=relation.ground_size,
+        indices=relation.indices,
+        family=relation.family,
+        polynomial=object(),
+    )
+    with pytest.raises(OperationDomainValidationError):
+        bracket_syzygy_residual(
+            relation.polynomial,
+            ((CanonicalRational(num=1, den=1), BracketMonomial(factors=()), forged),),
+        )

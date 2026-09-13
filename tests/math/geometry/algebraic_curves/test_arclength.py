@@ -244,6 +244,10 @@ def test_projective_left_tangency_off_the_face_is_empty() -> None:
 
 def test_rational_axis_clip_of_contained_irrational_ellipse_is_enclosed() -> None:
     """x^2+2y^2-2=0 in [-2,2]x[0,2]: the y=0 clip has rational endpoints."""
+
+    import mpmath
+
+    mpmath.mp.dps = 40
     result = enclose_arclength(
         _request(
             _polynomial((1, (2, 0)), (2, (0, 2)), (-2, (0, 0))),
@@ -251,6 +255,22 @@ def test_rational_axis_clip_of_contained_irrational_ellipse_is_enclosed() -> Non
         )
     )
     assert result.outcome.status == "ENCLOSED"
+    # The retained locus is exactly the upper half of the ellipse, because
+    # y = 2t/(1+t^2) keeps the sign of the half-angle parameter t.
+    assert [
+        (
+            segment.lower.as_fraction() if segment.lower is not None else None,
+            segment.upper.as_fraction() if segment.upper is not None else None,
+        )
+        for segment in result.outcome.segments
+    ] == [(Fraction(0), Fraction(1)), (Fraction(1), None)]
+    # Independent oracle: semiaxes sqrt(2) and 1 give a full circumference of
+    # 4a*E(e) with e^2 = 1 - b^2/a^2 = 1/2, so the claim is half of that.
+    reference = 2 * mpmath.sqrt(2) * mpmath.ellipe(mpmath.mpf(1) / 2)
+    lower = result.outcome.lower.as_fraction()
+    upper = result.outcome.upper.as_fraction()
+    assert mpmath.mpf(lower.numerator) / lower.denominator < reference
+    assert reference < mpmath.mpf(upper.numerator) / upper.denominator
 
 
 def test_rational_axis_tangent_of_irrational_ellipse_is_unsupported() -> None:

@@ -1,7 +1,6 @@
 """Exact sparse rational Laurent-polynomial multiplication."""
 
 from fractions import Fraction
-from math import gcd
 
 from pydantic import ValidationError
 
@@ -73,24 +72,6 @@ def _integer_digits(value: int) -> int:
     return 1 if value == 0 else len(format_canonical_integer(abs(value)))
 
 
-def _capped_denominator_lcm(left: int, right: int) -> int | None:
-    """Merge denominators by gcd-based LCM, refusing only after a digit bound."""
-
-    if left == 1:
-        return (
-            right if _integer_digits(right) <= MAX_CANONICAL_RATIONAL_DIGITS else None
-        )
-    if right == 1:
-        return left if _integer_digits(left) <= MAX_CANONICAL_RATIONAL_DIGITS else None
-    overlap = gcd(left, right)
-    # Compute the exact merge first: the sum-of-widths estimate can overstate
-    # the product's width by one and reject a representable LCM.
-    merged = (left // overlap) * right
-    if _integer_digits(merged) > MAX_CANONICAL_RATIONAL_DIGITS:
-        return None
-    return merged
-
-
 def _maximum_coefficient_digits(
     left: RationalLaurentPolynomial, right: RationalLaurentPolynomial
 ) -> int:
@@ -102,8 +83,7 @@ def _maximum_coefficient_digits(
     than from the operand-wide LCM.
     """
 
-    groups: dict[tuple[int, ...], int] = {}
-    pairs: list[tuple[tuple[int, ...], int, int]] = []
+    groups: dict[tuple[int, ...], Fraction] = {}
     for left_index, left_term in enumerate(left.terms):
         if left_index % 32 == 0:
             request_checkpoint("during Laurent coefficient-height admission")
@@ -113,49 +93,25 @@ def _maximum_coefficient_digits(
                 a + b
                 for a, b in zip(left_term.exponents, right_term.exponents, strict=True)
             )
-            # Form the reduced pair coefficient first: the unreduced
-            # denominator product can exceed the cap even when the exact pair
-            # coefficient cancels to a small value.
-            gcd_left = gcd(abs(left_coefficient.num), right_term.coefficient.den)
-            gcd_right = gcd(abs(right_term.coefficient.num), left_coefficient.den)
-            pair_numerator = (abs(left_coefficient.num) // gcd_left) * (
-                abs(right_term.coefficient.num) // gcd_right
+            # Accumulate the exact signed pair coefficient. Fraction keeps the
+            # running sum reduced, so both a sign cancellation and a reduction
+            # below an oversized intermediate LCM are reflected in the final
+            # coefficient height.
+            pair = Fraction(
+                left_coefficient.num * right_term.coefficient.num,
+                left_coefficient.den * right_term.coefficient.den,
             )
-            pair_denominator = (left_coefficient.den // gcd_right) * (
-                right_term.coefficient.den // gcd_left
-            )
-            current = groups.get(exponent, 1)
-            merged = _capped_denominator_lcm(current, pair_denominator)
-            if merged is None:
-                # This collision group genuinely exceeds the canonical envelope.
-                return MAX_CANONICAL_RATIONAL_DIGITS + 1
-            groups[exponent] = merged
-            pairs.append((exponent, pair_numerator, pair_denominator))
-    # Accumulate each collision group's exact scaled integer numerator so the
-    # bound reflects the actual sum rather than adding a full term-count digit
-    # to every summand width. Bail out as soon as any partial sum is clearly
-    # over the envelope so admission stays bounded.
-    limit = 10**MAX_CANONICAL_RATIONAL_DIGITS
-    scaled_sums: dict[tuple[int, ...], int] = {}
-    for exponent, pair_numerator, pair_denominator in pairs:
-        group_lcm = groups[exponent]
-        scaled = pair_numerator * (group_lcm // pair_denominator)
-        if scaled >= limit:
-            return MAX_CANONICAL_RATIONAL_DIGITS + 1
-        total = scaled_sums.get(exponent, 0) + scaled
-        if total >= limit:
-            return MAX_CANONICAL_RATIONAL_DIGITS + 1
-        scaled_sums[exponent] = total
-    numerator_digits_by_group = {
-        exponent: _integer_digits(total) for exponent, total in scaled_sums.items()
-    }
+            groups[exponent] = groups.get(exponent, Fraction()) + pair
     height = 1
-    for exponent, group_lcm in groups.items():
-        height = max(
-            height,
-            numerator_digits_by_group.get(exponent, 1),
-            _integer_digits(group_lcm),
+    for total in groups.values():
+        if total == 0:
+            continue
+        digits = max(
+            _integer_digits(total.numerator), _integer_digits(total.denominator)
         )
+        if digits > MAX_CANONICAL_RATIONAL_DIGITS:
+            return MAX_CANONICAL_RATIONAL_DIGITS + 1
+        height = max(height, digits)
     return height
 
 

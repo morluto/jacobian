@@ -469,3 +469,55 @@ def test_boundary_width_collision_sum_is_admitted() -> None:
         Fraction(2 * huge),
         Fraction(huge),
     ]
+
+
+def _rational_term(
+    num: int, den: int, *exponents: int
+) -> RationalLaurentPolynomialTerm:
+    return RationalLaurentPolynomialTerm(
+        coefficient=CanonicalRational(num=num, den=den), exponents=exponents
+    )
+
+
+def test_boundary_width_collision_cancels_by_sign() -> None:
+    """(A*x + A)*(x - 1) = A*x^2 - A even though A is at the digit cap."""
+    tall = 6 * 10 ** (MAX_CANONICAL_RATIONAL_DIGITS - 1)
+    left = RationalLaurentPolynomial(
+        variables=("x",), terms=(term(tall, 1), term(tall, 0))
+    )
+    right = RationalLaurentPolynomial(variables=("x",), terms=(term(1, 1), term(-1, 0)))
+    product = rational_laurent_multiply(left, right)
+    assert [(t.exponents, t.coefficient.num) for t in product.terms] == [
+        ((2,), tall),
+        ((0,), -tall),
+    ]
+
+
+def test_boundary_width_collision_sum_stays_within_the_cap() -> None:
+    """(A*x + A)*(x + 1) has middle coefficient 2A within the digit cap."""
+    tall = 10 ** (MAX_CANONICAL_RATIONAL_DIGITS - 1)
+    left = RationalLaurentPolynomial(
+        variables=("x",), terms=(term(tall, 1), term(tall, 0))
+    )
+    right = RationalLaurentPolynomial(variables=("x",), terms=(term(1, 1), term(1, 0)))
+    product = rational_laurent_multiply(left, right)
+    assert len(product.terms) == 3
+    assert product.terms[1].coefficient.num == 2 * tall
+
+
+def test_collision_group_lcm_reduction_below_the_cap_is_admitted() -> None:
+    """A collision whose intermediate LCM is oversized but reduces is admitted."""
+    scale = 4 * 10 ** (MAX_CANONICAL_RATIONAL_DIGITS - 2)
+    left = RationalLaurentPolynomial(
+        variables=("x",),
+        terms=(
+            _rational_term(1, 6 * scale, 1),
+            _rational_term(1, 10 * scale, 0),
+        ),
+    )
+    right = RationalLaurentPolynomial(variables=("x",), terms=(term(1, 1), term(1, 0)))
+    product = rational_laurent_multiply(left, right)
+    # The middle coefficient reduces to 1/(15 * 10^(cap-2)).
+    assert product.terms[1].coefficient == CanonicalRational(
+        num=1, den=15 * 10 ** (MAX_CANONICAL_RATIONAL_DIGITS - 2)
+    )

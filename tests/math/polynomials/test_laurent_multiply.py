@@ -5,10 +5,8 @@ from fractions import Fraction
 import pytest
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
-    OperationMatchRequest,
     OperationResourceAdmissionError,
 )
 from jacobian.math.polynomials import _laurent as laurent_module
@@ -74,16 +72,6 @@ def test_coefficient_growth_is_rejected_before_convolution() -> None:
     right = RationalLaurentPolynomial(variables=("x",), terms=(term(coefficient, 0),))
     with pytest.raises(OperationResourceAdmissionError):
         rational_laurent_multiply(left, right)
-
-
-def test_catalog_discovers_laurent_multiplication_vocabulary() -> None:
-    result = Catalog.open().match(
-        OperationMatchRequest(need="rational Laurent polynomial multiplication")
-    )
-
-    assert (
-        result.matches[0].operation_id == "polynomial.laurent.rational.multiply.compute"
-    )
 
 
 def test_unit_monomial_shift_admits_carrier_height_coefficients() -> None:

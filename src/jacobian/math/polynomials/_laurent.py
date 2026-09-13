@@ -74,21 +74,26 @@ def _integer_digits(value: int) -> int:
 
 def _maximum_coefficient_digits(
     left: RationalLaurentPolynomial, right: RationalLaurentPolynomial
-) -> int:
+) -> tuple[int, dict[tuple[int, ...], Fraction]]:
     """Bound one collected coefficient before exact convolution begins.
 
     Each output coefficient collects only the pairs whose exponents sum to one
     output exponent. Its denominator is the LCM of those pairs' denominators
     and never combines unrelated supports, so bound per collision group rather
     than from the operand-wide LCM.
+
+    Returns the bound together with the collected exponent-to-Fraction
+    convolution so the kernel can reuse it instead of recomputing every
+    exact product.
     """
 
     groups: dict[tuple[int, ...], Fraction] = {}
-    for left_index, left_term in enumerate(left.terms):
-        if left_index % 32 == 0:
-            request_checkpoint("during Laurent coefficient-height admission")
+    pairs = 0
+    for left_term in left.terms:
         left_coefficient = left_term.coefficient
         for right_term in right.terms:
+            if pairs % 128 == 0:
+                request_checkpoint("during Laurent coefficient-height admission")
             exponent = tuple(
                 a + b
                 for a, b in zip(left_term.exponents, right_term.exponents, strict=True)
@@ -102,6 +107,7 @@ def _maximum_coefficient_digits(
                 left_coefficient.den * right_term.coefficient.den,
             )
             groups[exponent] = groups.get(exponent, Fraction()) + pair
+            pairs += 1
     height = 1
     for total in groups.values():
         if total == 0:
@@ -110,9 +116,9 @@ def _maximum_coefficient_digits(
             _integer_digits(total.numerator), _integer_digits(total.denominator)
         )
         if digits > MAX_CANONICAL_RATIONAL_DIGITS:
-            return MAX_CANONICAL_RATIONAL_DIGITS + 1
+            return MAX_CANONICAL_RATIONAL_DIGITS + 1, groups
         height = max(height, digits)
-    return height
+    return height, groups
 
 
 def _result_from_coefficients(
@@ -243,11 +249,11 @@ def rational_laurent_multiply(
             message=f"sparse convolution requires {work} term products; maximum is {MAX_POLYNOMIAL_TERMS}",
         )
     monomial_scale = _monomial_coefficient_digits(left, right)
-    coefficient_digits = (
-        monomial_scale[0]
-        if monomial_scale is not None
-        else _maximum_coefficient_digits(left, right)
-    )
+    collected: dict[tuple[int, ...], Fraction] | None = None
+    if monomial_scale is not None:
+        coefficient_digits = monomial_scale[0]
+    else:
+        coefficient_digits, collected = _maximum_coefficient_digits(left, right)
     if coefficient_digits > MAX_CANONICAL_RATIONAL_DIGITS:
         raise OperationResourceAdmissionError(
             location=("right", "terms"),
@@ -280,21 +286,22 @@ def rational_laurent_multiply(
         request_checkpoint("after Laurent monomial result construction")
         return result
 
-    coefficients: dict[tuple[int, ...], Fraction] = {}
-    pairs = 0
-    for left_term in left.terms:
-        for right_term in right.terms:
-            if pairs % 128 == 0:
-                request_checkpoint("during Laurent convolution")
-            exponents = tuple(
-                a + b
-                for a, b in zip(left_term.exponents, right_term.exponents, strict=True)
-            )
-            coefficients[exponents] = coefficients.get(exponents, Fraction()) + (
-                left_term.coefficient.as_fraction()
-                * right_term.coefficient.as_fraction()
-            )
-            pairs += 1
+    coefficients: dict[tuple[int, ...], Fraction] = collected or {}
+    if collected is None:
+        pairs = 0
+        for left_term in left.terms:
+            for right_term in right.terms:
+                if pairs % 128 == 0:
+                    request_checkpoint("during Laurent convolution")
+                exponents = tuple(
+                    a + b
+                    for a, b in zip(left_term.exponents, right_term.exponents, strict=True)
+                )
+                coefficients[exponents] = coefficients.get(exponents, Fraction()) + (
+                    left_term.coefficient.as_fraction()
+                    * right_term.coefficient.as_fraction()
+                )
+                pairs += 1
     result = _result_from_coefficients(left.variables, coefficients)
     request_checkpoint("after Laurent result construction")
     return result

@@ -391,9 +391,40 @@ def _admit_component(
             code="differential_form.coefficient_budget",
             message="wedge operands exceed the bounded coefficient-term envelope",
         )
-    for term_count, _term in enumerate(terms, start=1):
+    for term_count, term in enumerate(terms, start=1):
         if term_count % _CONVOLUTION_CHECKPOINT_INTERVAL == 0:
             request_checkpoint("during differential wedge operand admission")
+        term_coefficient = getattr(term, "coefficient", None)
+        term_exponents = getattr(term, "exponents", None)
+        if (
+            not isinstance(term_coefficient, CanonicalRational)
+            or not isinstance(term_exponents, tuple)
+            or any(type(exponent) is not int for exponent in term_exponents)
+            or len(term_exponents) != dimension
+        ):
+            raise OperationDomainValidationError(
+                location=(*location, "components", "coefficient"),
+                code="differential_form.coefficient_shape",
+                message="wedge coefficient terms must use the bounded variable axis",
+            )
+        if any(
+            exponent < 0 or exponent > MAX_DIFFERENTIAL_FORM_EXPONENT
+            for exponent in term_exponents
+        ):
+            raise OperationDomainValidationError(
+                location=(*location, "components", "coefficient"),
+                code="differential_form.coefficient_exponent",
+                message="wedge coefficient exponents exceed the bounded output envelope",
+            )
+        if (
+            _rational_height_digits(term_coefficient)
+            > MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS
+        ):
+            raise OperationDomainValidationError(
+                location=(*location, "components", "coefficient"),
+                code="differential_form.coefficient_height",
+                message="wedge coefficient height exceeds the bounded output envelope",
+            )
 
 
 def _admit_degree(degree: int) -> None:
@@ -493,6 +524,7 @@ def wedge(
     # Preflight the weighted digit work from operand term heights before
     # multiplying or retaining any product.
     digit_work = 0
+    completed = 0
     for first, second, _, _ in pairs:
         left_heights = tuple(
             _rational_height_digits(term.coefficient)
@@ -504,6 +536,9 @@ def wedge(
         )
         for left_digits in left_heights:
             for right_digits in right_heights:
+                completed += 1
+                if completed % _CONVOLUTION_CHECKPOINT_INTERVAL == 0:
+                    request_checkpoint("during differential wedge work preflight")
                 digit_work += left_digits * right_digits
                 if digit_work > MAX_WEDGE_DIGIT_WORK:
                     _term_budget()

@@ -687,3 +687,56 @@ def test_native_admission_rechecks_the_coefficient_axis() -> None:
     with pytest.raises(OperationDomainValidationError) as error:
         _admit_form(forged, location=("left",))
     assert error.value.errors()[0]["type"] == "differential_form.coefficient_axis"
+
+
+def test_native_admission_revalidates_forged_term_bounds() -> None:
+    """Forged exponents and heights are typed rejections before the shortcuts."""
+    base = _form(0, ((), _poly((1, (0, 0)))))
+
+    def _forged_scalar(term: RationalPolynomialTerm) -> PolynomialDifferentialForm:
+        coefficient = RationalPolynomial.model_construct(
+            variables=("x", "y"),
+            polynomial=SparseRationalPolynomial.model_construct(terms=(term,)),
+        )
+        return PolynomialDifferentialForm.model_construct(
+            variables=("x", "y"),
+            degree=0,
+            components=(FormComponent(indices=(), coefficient=coefficient),),
+        )
+
+    tall_exponent = RationalPolynomialTerm.model_construct(
+        coefficient=R(num=1, den=1), exponents=(257, 0)
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        wedge(_forged_scalar(tall_exponent), base)
+    assert error.value.errors()[0]["type"] == "differential_form.coefficient_exponent"
+
+    tall_height = RationalPolynomialTerm.model_construct(
+        coefficient=R.model_construct(num=10**5000, den=1), exponents=(0, 0)
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        wedge(_forged_scalar(tall_height), base)
+    assert error.value.errors()[0]["type"] == "differential_form.coefficient_height"
+
+
+def test_wedge_work_preflight_checkpoints_during_height_scans(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The digit-work preflight observes cancellation before convolution."""
+    observed: list[str] = []
+
+    def _observe(phase: str) -> None:
+        observed.append(phase)
+
+    monkeypatch.setattr(
+        "jacobian.math.polynomials.differential_forms.operations.request_checkpoint",
+        _observe,
+    )
+    monkeypatch.setattr(
+        "jacobian.math.polynomials.differential_forms.operations._CONVOLUTION_CHECKPOINT_INTERVAL",
+        4,
+    )
+    terms = tuple((1, (exponent, 0)) for exponent in range(20, -1, -1))
+    scalar = _form(0, ((), _poly(*terms)))
+    wedge(scalar, scalar)
+    assert any("preflight" in phase for phase in observed)

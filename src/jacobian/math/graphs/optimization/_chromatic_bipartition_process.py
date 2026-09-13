@@ -27,8 +27,10 @@ from jacobian._worker_protocol import (
     encode_worker_result_frame,
 )
 from jacobian.math.graphs.optimization._chromatic_bipartition import (
+    MAX_CHROMATIC_BIPARTITION_PARTITIONS,
     ChromaticBipartitionRequest,
     ChromaticBipartitionResult,
+    _chromatic_bipartition_can_return_split,
     _unordered_partition_count,
 )
 from jacobian.process import (
@@ -53,7 +55,10 @@ def _chromatic_bipartition_worker_stdout_limit(
     """Measure the largest admitted canonical worker result for this request."""
 
     vertices = request.graph.vertices
-    checked = _unordered_partition_count(len(vertices))
+    checked = min(
+        _unordered_partition_count(len(vertices)),
+        MAX_CHROMATIC_BIPARTITION_PARTITIONS,
+    )
     envelopes = [
         ChromaticBipartitionResult(
             graph=request.graph,
@@ -61,9 +66,9 @@ def _chromatic_bipartition_worker_stdout_limit(
             t=request.t,
             status="NO_SPLIT",
             checked_partitions=checked,
-        ),
+        )
     ]
-    if len(vertices) >= 2:
+    if _chromatic_bipartition_can_return_split(request):
         envelopes.append(
             ChromaticBipartitionResult(
                 graph=request.graph,
@@ -78,6 +83,16 @@ def _chromatic_bipartition_worker_stdout_limit(
             )
         )
     return max(_serialized_result_bytes(result) for result in envelopes)
+
+
+def _chromatic_bipartition_timeout(
+    message: str, request: ChromaticBipartitionRequest
+) -> None:
+    raise OperationExecutionTimeoutError(
+        message,
+        configured_seconds=request.resource_budget.wall_seconds,
+        adjustable_field_path=("resource_budget", "wall_seconds"),
+    )
 
 
 def find_chromatic_bipartition(
@@ -105,10 +120,9 @@ def find_chromatic_bipartition(
         with TemporaryDirectory(prefix="jacobian-graph-bipartition-") as directory:
             remaining_seconds = lease.backend_deadline - time.monotonic()
             if remaining_seconds <= 0:
-                raise OperationExecutionTimeoutError(
-                    "chromatic bipartition backend lease expired",
-                    configured_seconds=request.resource_budget.wall_seconds,
-                    adjustable_field_path=("resource_budget", "wall_seconds"),
+                _chromatic_bipartition_timeout(
+                    "chromatic bipartition deadline expired before the worker started",
+                    request,
                 )
             completed = run_bounded_process(
                 [sys.executable, str(_BIPARTITION_WORKER)],
@@ -136,10 +150,9 @@ def find_chromatic_bipartition(
     if completed.cancelled:
         raise OperationExecutionCancelledError("chromatic bipartition worker cancelled")
     if completed.timed_out:
-        raise OperationExecutionTimeoutError(
-            "chromatic bipartition worker deadline expired",
-            configured_seconds=request.resource_budget.wall_seconds,
-            adjustable_field_path=("resource_budget", "wall_seconds"),
+        _chromatic_bipartition_timeout(
+            "chromatic bipartition deadline expired during the worker",
+            request,
         )
     request_checkpoint("after chromatic bipartition worker")
     if completed.stdout_exceeded or completed.stderr_exceeded:
@@ -147,10 +160,9 @@ def find_chromatic_bipartition(
     if completed.returncode != 0:
         raise OperationBackendError(BackendFailureReason.ABNORMAL_EXIT)
     if time.monotonic() >= deadline:
-        raise OperationExecutionTimeoutError(
-            "chromatic bipartition operation deadline expired",
-            configured_seconds=request.resource_budget.wall_seconds,
-            adjustable_field_path=("resource_budget", "wall_seconds"),
+        _chromatic_bipartition_timeout(
+            "chromatic bipartition deadline expired after the worker returned",
+            request,
         )
     try:
         result = decode_checked_worker_output(

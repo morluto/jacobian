@@ -403,13 +403,16 @@ class TestKillableWorkerContract:
             wall_seconds: float,
             stdout_limit: int,
             stderr_limit: int,
+            deadline: float | None = None,
         ) -> tuple[bool | str, str, bool]:
             observed["timeout"] = wall_seconds
+            observed["deadline"] = deadline
             observed["child_is_process"] = True
             return real_runner(
                 script,
                 payload_json,
                 wall_seconds=wall_seconds,
+                deadline=deadline,
                 stdout_limit=stdout_limit,
                 stderr_limit=stderr_limit,
             )
@@ -423,7 +426,9 @@ class TestKillableWorkerContract:
                 resource_budget=IdealComputationBudget(wall_seconds=10),
             )
         )
-        assert observed["timeout"] == 10
+        assert observed["timeout"] is not None
+        assert float(observed["timeout"]) <= 10
+        assert observed["deadline"] is not None
         assert result.basis is not None
 
     def test_timed_out_call_leaves_no_lingering_threads(

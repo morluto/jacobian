@@ -858,29 +858,36 @@ def minimum_generalized_exact_cover(  # noqa: C901
     remaining_primary = set(instance.primary_items)
     remaining_rows = list(active_rows)
     forced_selected: list[ExactCoverRow] = []
-    row_mask_words = max(1, (max(len(active_rows), primary_count) + 63) // 64)
-    forcing_work = (
-        max(1, primary_count) * max(1, source_incidence_count) * row_mask_words
-    )
-    if shortcut_work + forcing_work > _MINIMUM_EXACT_COVER_WORK_LIMIT:
-        raise OperationResourceAdmissionError(
-            location=("search_node_limit",),
-            code="combinatorics.minimum_exact_cover_work",
-            message=(
-                "minimum exact-cover unit forcing exceeds the admitted work envelope"
-            ),
-        )
+    # Charge the forcing scan incrementally from the actual remaining rows
+    # instead of a coarse `primary_count * source_incidence_count` product. A
+    # shared-secondary instance can force one row per primary and empty the
+    # remaining row axis after a couple of linear scans; the coarse product
+    # rejected such cheaply executable carriers before examining the conflict.
+    forcing_budget = _MINIMUM_EXACT_COVER_WORK_LIMIT - shortcut_work
+    forcing_work = 0
     while remaining_primary:
         request_checkpoint("during minimum exact-cover unit forcing")
         coverage: dict[str, list[ExactCoverRow]] = {
             item: [] for item in remaining_primary
         }
+        iteration_incidences = 0
         for row_index, row in enumerate(remaining_rows):
             if row_index % 256 == 0:
                 request_checkpoint("during minimum exact-cover unit forcing")
+            iteration_incidences += len(row.items)
             for row_item in row.items:
                 if row_item in coverage:
                     coverage[row_item].append(row)
+        forcing_work += iteration_incidences + len(remaining_primary)
+        if forcing_work > forcing_budget:
+            raise OperationResourceAdmissionError(
+                location=("search_node_limit",),
+                code="combinatorics.minimum_exact_cover_work",
+                message=(
+                    "minimum exact-cover unit forcing exceeds the admitted work "
+                    "envelope"
+                ),
+            )
         if any(not coverage[item] for item in remaining_primary):
             remaining_rows = []
             break
@@ -926,15 +933,28 @@ def minimum_generalized_exact_cover(  # noqa: C901
         request_checkpoint("after minimum exact-cover result construction")
         return result
     estimated_nodes_ceiling = None
+    secondary_rows: dict[str, int] = {}
     remaining_primary_count = len(remaining_primary)
     if remaining_rows:
         remaining_row_count = len(remaining_rows)
         covering_row_exists = any(
             remaining_primary <= set(row.items) for row in remaining_rows
         )
-        for secondary in instance.secondary_items:
-            without = sum(1 for row in remaining_rows if secondary not in row.items)
-            with_secondary = remaining_row_count - without
+        # Index secondary incidences once so each secondary is evaluated in
+        # linear time; the previous per-secondary membership scan was quadratic
+        # and uncheckpointed, so a cancellation could not be observed for
+        # hundreds of millions of comparisons.
+        secondary_rows = dict.fromkeys(instance.secondary_items, 0)
+        for row_index, row in enumerate(remaining_rows):
+            if row_index % 256 == 0:
+                request_checkpoint("during minimum exact-cover secondary presolve")
+            for item in row.items:
+                if item in secondary_rows:
+                    secondary_rows[item] += 1
+        for with_secondary in secondary_rows.values():
+            if with_secondary == 0:
+                continue
+            without = remaining_row_count - with_secondary
             if with_secondary < 2:
                 continue
             if without == 0:
@@ -975,7 +995,10 @@ def minimum_generalized_exact_cover(  # noqa: C901
         remaining_primary <= set(row.items) for row in remaining_rows
     ):
         for secondary in instance.secondary_items:
-            missing = sum(1 for row in remaining_rows if secondary not in row.items)
+            if secondary in secondary_rows:
+                missing = remaining_row_count - secondary_rows[secondary]
+            else:
+                missing = sum(1 for row in remaining_rows if secondary not in row.items)
             if 0 < missing <= remaining_min_degree:
                 estimated_nodes = min(
                     estimated_nodes,
@@ -1061,8 +1084,8 @@ def minimum_generalized_exact_cover(  # noqa: C901
         remaining = uncovered
         while remaining:
             bit = remaining & -remaining
-            item = bit.bit_length() - 1
-            candidates = item_rows[item] & available
+            item_index_value = bit.bit_length() - 1
+            candidates = item_rows[item_index_value] & available
             if candidates.bit_count() < fewest:
                 fewest = candidates.bit_count()
                 chosen_rows = candidates

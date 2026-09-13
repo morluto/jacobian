@@ -7,6 +7,7 @@ import pytest
 
 import jacobian.math.combinatorics.exact_cover as exact_cover_module
 from jacobian._execution import (
+    OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
     bind_request_deadline,
     request_execution,
@@ -418,3 +419,77 @@ def test_unit_forcing_honors_an_expired_deadline() -> None:
         bind_request_deadline(time.monotonic() - 1)
         with pytest.raises(OperationExecutionTimeoutError, match="deadline expired"):
             minimum_generalized_exact_cover(instance)
+
+
+def test_secondary_presolve_observes_request_cancellation() -> None:
+    """The secondary scan checkpoints so cancellation is observed promptly."""
+
+    class Cancelled:
+        def is_set(self) -> bool:
+            return True
+
+    primary = ("p0", "p1")
+    secondaries = tuple(f"s{index:04d}" for index in range(4_094))
+    rows = tuple(
+        ExactCoverRow(
+            row_id=f"r{index:04d}",
+            items=tuple(
+                sorted(
+                    (
+                        primary[index % 2],
+                        *(
+                            secondaries[(index + step) % len(secondaries)]
+                            for step in range(15)
+                        ),
+                    )
+                )
+            ),
+        )
+        for index in range(4_096)
+    )
+    instance = GeneralizedExactCoverInstance(
+        primary_items=primary,
+        secondary_items=secondaries,
+        rows=rows,
+    )
+    with (
+        request_execution(0.0, cancellation_signal=Cancelled()),
+        pytest.raises(OperationExecutionCancelledError),
+    ):
+        minimum_generalized_exact_cover(instance)
+
+
+def test_secondary_presolve_is_linear_in_source_incidences() -> None:
+    """Indexing secondaries once avoids a quadratic, uncheckpointed scan.
+
+    The same request is rejected by the inclusive work bound, but the scan is
+    now linear: the pre-fix quadratic membership scan took several seconds.
+    """
+    primary = ("p0", "p1")
+    secondaries = tuple(f"s{index:04d}" for index in range(4_094))
+    rows = tuple(
+        ExactCoverRow(
+            row_id=f"r{index:04d}",
+            items=tuple(
+                sorted(
+                    {
+                        primary[index % 2],
+                        *(
+                            secondaries[(index + step) % len(secondaries)]
+                            for step in range(15)
+                        ),
+                    }
+                )
+            ),
+        )
+        for index in range(4_096)
+    )
+    instance = GeneralizedExactCoverInstance(
+        primary_items=primary,
+        secondary_items=secondaries,
+        rows=rows,
+    )
+    started = time.monotonic()
+    with pytest.raises(OperationResourceAdmissionError):
+        minimum_generalized_exact_cover(instance)
+    assert time.monotonic() - started < 1.0

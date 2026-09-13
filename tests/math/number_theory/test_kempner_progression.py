@@ -120,8 +120,17 @@ def test_schema_rejects_noncanonical_digit_sets() -> None:
 def test_derived_graph_admission_rejects_before_search() -> None:
     with pytest.raises(OperationResourceAdmissionError):
         decide_kempner_arithmetic_progression(
-            KempnerDigitSet(base=64, allowed_digits=(0,)), 4
+            KempnerDigitSet(base=64, allowed_digits=(1, 63)), 12
         )
+
+
+def test_zero_only_family_is_progression_free_at_every_arity() -> None:
+    """The positive family is empty, so no carry graph is needed."""
+    for arity in (3, 4, 5, 10):
+        result = decide_kempner_arithmetic_progression(
+            KempnerDigitSet(base=64, allowed_digits=(0,)), arity
+        )
+        assert result.conclusion.status == "PROGRESSION_FREE"
 
 
 def test_base_two_arity_four_is_admitted() -> None:

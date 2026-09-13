@@ -201,6 +201,14 @@ def decide_kempner_arithmetic_progression(
             code="number_theory.kempner_progression.arity",
             message="arity must be an integer of at least three",
         )
+    if tuple(digit_set.allowed_digits) == (0,):
+        # The only digit is 0, so there is no positive member and every arity
+        # is trivially progression-free; do not charge the carry-graph envelope.
+        return KempnerArithmeticProgressionResult(
+            digit_set=digit_set,
+            arity=arity,
+            conclusion=KempnerProgressionFree(status="PROGRESSION_FREE"),
+        )
     admission = _require_admission(digit_set, arity)
     base = digit_set.base
     allowed = frozenset(digit_set.allowed_digits)

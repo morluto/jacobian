@@ -16,6 +16,7 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.dispatch import OperationRequestValidationError, invoke_operation
 from jacobian.math.combinatorics.designs.incidence_structures import _models as models
 from jacobian.math.combinatorics.designs.incidence_structures._models import (
+    MAX_STEINER_BLOCKS,
     ComputedSteinerTripleSystem,
     IncidenceStructure,
     SteinerTripleSystemNotFound,
@@ -503,3 +504,72 @@ def test_sharded_completion_replays_pair_coverage(order: int) -> None:
     pairs = Counter(pair for block in design.blocks for pair in combinations(block, 2))
     assert pairs == Counter(combinations(design.points, 2))
     assert len(design.blocks) == order * (order - 1) // 6
+
+
+def test_duplicate_triples_use_a_duplicate_specific_error_code() -> None:
+    """A malformed prefix is distinguishable from a request/shard order mismatch.
+
+    `steiner_shard_order` already reports "a continuation shard must have the
+    same order as the request", so reusing it for duplicates left callers unable
+    to tell a malformed `fixed_triples` field from the actionable need to change
+    the requested order.
+    """
+
+    with pytest.raises(ValidationError) as error:
+        SteinerTripleSystemShard(order=7, fixed_triples=((0, 1, 2), (0, 1, 2)))
+    assert error.value.errors()[0]["type"] == (
+        "incidence_structure.steiner_shard_duplicate"
+    )
+
+    with pytest.raises(OperationDomainValidationError) as mismatch:
+        construct_steiner_triple_system(
+            7, 100, SteinerTripleSystemShard(order=9, fixed_triples=())
+        )
+    assert mismatch.value.errors()[0]["type"] == (
+        "incidence_structure.steiner_shard_order"
+    )
+
+
+def test_oversized_wire_shard_is_measured_before_it_is_canonicalized() -> None:
+    """An over-long wire family is refused on `len`, not copied and sorted.
+
+    The before-validator converted every inner list and sorted the whole family
+    ahead of the field's own `max_length`, so a request that is guaranteed to be
+    rejected still paid work proportional to an arbitrarily large input.
+    """
+
+    class _TrapTripleFamily(list):  # type: ignore[type-arg]
+        def __iter__(self) -> Iterator[Any]:
+            raise AssertionError(
+                "an over-long family must be rejected before it is traversed"
+            )
+
+    family = _TrapTripleFamily([(0, 1, 2)] * (MAX_STEINER_BLOCKS + 1))
+    with pytest.raises(ValidationError) as error:
+        SteinerTripleSystemShard.model_validate({"order": 7, "fixed_triples": family})
+    assert error.value.errors()[0]["type"] == "too_long"
+
+
+def test_native_shard_bound_does_not_come_from_the_unadmitted_order() -> None:
+    """A forged order cannot widen the prefix ceiling.
+
+    `order * (order - 1) // 6` is derived from a request value that has not been
+    range-admitted when the shard is inspected, so a forged large `order` used
+    to authorise a family of any size to reach Pydantic canonicalization and
+    sorting. The ceiling is now the fixed structural maximum, which no admitted
+    design exceeds.
+    """
+
+    forged = SteinerTripleSystemShard.model_construct(
+        order=10**6,
+        fixed_triples=tuple((0, 1, 2) for _ in range(MAX_STEINER_BLOCKS + 5)),
+    )
+    # The ceiling was `order * (order - 1) // 6` over the *request* order, which
+    # is range-admitted only after this inspection, so a forged large order let
+    # the whole family through to Pydantic canonicalization and surfaced a raw
+    # `less_than_equal` instead of the shard diagnostic.
+    with pytest.raises(OperationDomainValidationError) as error:
+        construct_steiner_triple_system(10**6, 100, forged)
+    assert error.value.errors()[0]["type"] == (
+        "incidence_structure.steiner_shard_length"
+    )

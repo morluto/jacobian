@@ -22,6 +22,7 @@ from jacobian.math.combinatorics.designs.incidence_structures._kernel import (
     incidence_trade_data,
 )
 from jacobian.math.combinatorics.designs.incidence_structures._models import (
+    MAX_STEINER_BLOCKS,
     MAX_STEINER_SEARCH_STATES,
     ComplementResult,
     ComputedSteinerTripleSystem,
@@ -200,7 +201,12 @@ def _admit_native_shard(shard: object, order: int) -> SteinerTripleSystemShard:
             code="incidence_structure.steiner_shard_shape",
             message="continuation triples must be immutable tuples",
         )
-    if len(raw_triples) > order * (order - 1) // 6:
+    if len(raw_triples) > MAX_STEINER_BLOCKS:
+        # Use the fixed structural ceiling, not `order * (order - 1) // 6`: the
+        # request order has not been range-admitted yet at this point, so a
+        # forged `order` would otherwise authorise a family of any size to reach
+        # Pydantic canonicalization and sorting. No design admits more than
+        # MAX_STEINER_BLOCKS triples regardless of the order claimed.
         raise OperationDomainValidationError(
             location=("shard", "fixed_triples"),
             code="incidence_structure.steiner_shard_length",

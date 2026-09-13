@@ -215,6 +215,12 @@ class SteinerTripleSystemShard(StrictModel):
         triples = data.get("fixed_triples")
         if triples is None or not isinstance(triples, (list, tuple)):
             return data
+        if len(triples) > MAX_STEINER_BLOCKS:
+            # The field's own `max_length` already decides this request, and it
+            # costs one length read. Copying every inner list and sorting the
+            # whole family first would make a guaranteed rejection spend work
+            # proportional to an arbitrarily large input.
+            return data
         payload = dict(data)
         payload["fixed_triples"] = tuple(
             tuple(triple) if isinstance(triple, list) else triple for triple in triples
@@ -250,7 +256,7 @@ class SteinerTripleSystemShard(StrictModel):
             )
         if len(set(self.fixed_triples)) != len(self.fixed_triples):
             raise _validation_error(
-                "steiner_shard_order",
+                "steiner_shard_duplicate",
                 "continuation triples must be unique",
             )
         return self

@@ -119,6 +119,44 @@ def _require_factorization_work(
         )
 
 
+def _construction_regime(index: int, factorization: dict[int, int]) -> tuple[int, int]:
+    """Return the ``(work, intermediate bits)`` for one index's construction.
+
+    The identity ``Phi_n(x) = Phi_rad(n)(x^(n/rad(n)))`` reduces every repeated
+    prime factor, so the charged regime is the reduced index's own regime. A
+    dense backend construction is only charged when the index is already
+    radical.
+    """
+
+    if _is_prime_index(index, factorization):
+        return max(1, index.bit_length()) * index, 2
+    if _is_twice_odd_index(index, factorization):
+        # ``Phi_{2m}(x) = Phi_m(-x)`` for odd ``m``: the construction only has
+        # to build the odd half, then negate alternate coefficients.
+        odd_half = index // 2
+        odd_factorization = {
+            prime: exponent for prime, exponent in factorization.items() if prime != 2
+        }
+        if _is_prime_index(odd_half, odd_factorization):
+            return max(1, odd_half.bit_length()) * odd_half, 2
+        odd_radical = prod(odd_factorization) if odd_factorization else 1
+        return (
+            10 * max(1, odd_radical.bit_length()) * (odd_radical + 1) ** 2,
+            2 * odd_radical + (odd_radical + 1).bit_length() + 1,
+        )
+    radical = prod(factorization) if factorization else 1
+    if radical != index:
+        return _construction_regime(radical, dict.fromkeys(factorization, 1))
+    # SymPy's dense cyclotomic construction is charged from the radical of the
+    # index, matching the exact kernel bound used by spectral character sums:
+    # 10 * bit_length(rad) * (rad + 1)^2, plus the intermediate bit envelope
+    # 2*rad + bit_length(rad+1) + 1.
+    return (
+        10 * max(1, radical.bit_length()) * (radical + 1) ** 2,
+        2 * radical + (radical + 1).bit_length() + 1,
+    )
+
+
 def _admit(index: int, factorization: dict[int, int]) -> _CyclotomicAdmission:
     """Preflight factorization, divisor, intermediate, and output envelopes."""
 
@@ -149,34 +187,7 @@ def _admit(index: int, factorization: dict[int, int]) -> _CyclotomicAdmission:
             ),
         )
 
-    if _is_prime_index(index, factorization):
-        coefficient_count = index
-        construction_work = max(1, coefficient_count.bit_length()) * coefficient_count
-        intermediate_bits = 2
-    elif _is_twice_odd_index(index, factorization):
-        # ``Phi_{2m}(x) = Phi_m(-x)`` for odd ``m``: the construction only has
-        # to build the odd half, then negate alternate coefficients.
-        odd_half = index // 2
-        odd_factorization = {
-            prime: exponent for prime, exponent in factorization.items() if prime != 2
-        }
-        if _is_prime_index(odd_half, odd_factorization):
-            construction_work = max(1, odd_half.bit_length()) * odd_half
-            intermediate_bits = 2
-        else:
-            odd_radical = prod(odd_factorization) if odd_factorization else 1
-            construction_work = (
-                10 * max(1, odd_radical.bit_length()) * (odd_radical + 1) ** 2
-            )
-            intermediate_bits = 2 * odd_radical + (odd_radical + 1).bit_length() + 1
-    else:
-        # SymPy's dense cyclotomic construction is charged from the radical of
-        # the index, matching the existing exact kernel bound used by spectral
-        # character sums: 10 * bit_length(rad) * (rad + 1)^2, plus the
-        # intermediate bit envelope 2*rad + bit_length(rad+1) + 1.
-        radical = prod(factorization) if factorization else 1
-        construction_work = 10 * max(1, radical.bit_length()) * (radical + 1) ** 2
-        intermediate_bits = 2 * radical + (radical + 1).bit_length() + 1
+    construction_work, intermediate_bits = _construction_regime(index, factorization)
     if construction_work > MAX_CYCLOTOMIC_CONSTRUCTION_WORK:
         raise OperationResourceAdmissionError(
             location=("index",),
@@ -285,7 +296,9 @@ def _prime_cyclotomic(prime: int) -> IntegerPolynomial:
 
 
 def _twice_odd_cyclotomic(
-    index: int, factorization: dict[int, int]
+    index: int,
+    factorization: dict[int, int],
+    admission: _CyclotomicAdmission,
 ) -> IntegerPolynomial:
     """Return ``Phi_{2m}(x) = Phi_m(-x)`` for ``index = 2m`` with odd ``m``."""
 
@@ -298,6 +311,7 @@ def _twice_odd_cyclotomic(
         base_coefficients: tuple[int, ...] = (1,) * odd
     else:
         base_coefficients = _backend_cyclotomic_coefficients(odd)
+        _require_admitted_coefficients(base_coefficients, admission)
     degree = len(base_coefficients) - 1
     return IntegerPolynomial(
         coefficients=tuple(
@@ -305,6 +319,39 @@ def _twice_odd_cyclotomic(
             for offset, coefficient in enumerate(base_coefficients)
         )
     )
+
+
+def _require_admitted_coefficients(
+    coefficients: tuple[int, ...], admission: _CyclotomicAdmission
+) -> None:
+    """Check a backend coefficient tuple against the admitted output envelope."""
+
+    if (
+        not coefficients
+        or coefficients[0] != 1
+        or coefficients[-1] not in (1, -1)
+        or any(
+            len(str(abs(value))) > admission.coefficient_digits
+            for value in coefficients
+        )
+        or sum(len(str(abs(value))) for value in coefficients) > admission.output_digits
+    ):
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+
+
+def _substitute_power(
+    polynomial: IntegerPolynomial, multiplier: int
+) -> IntegerPolynomial:
+    """Return ``polynomial(x**multiplier)`` as a sparse dense carrier."""
+
+    coefficients = polynomial.coefficients
+    degree = len(coefficients) - 1
+    # ``coefficients[i]`` is the degree ``degree - i`` term; assign it to the
+    # substituted degree ``(degree - i) * multiplier`` in an ascending list.
+    ascending = [0] * (degree * multiplier + 1)
+    for offset, coefficient in enumerate(coefficients):
+        ascending[(degree - offset) * multiplier] = coefficient
+    return IntegerPolynomial(coefficients=tuple(reversed(ascending)))
 
 
 def _backend_cyclotomic_coefficients(index: int) -> tuple[int, ...]:
@@ -350,9 +397,16 @@ def _compute(index: int) -> tuple[int, IntegerPolynomial]:
         request_checkpoint("before cyclotomic result construction")
         return admission.degree, polynomial_value
     if _is_twice_odd_index(index, factorization):
-        polynomial_value = _twice_odd_cyclotomic(index, factorization)
+        polynomial_value = _twice_odd_cyclotomic(index, factorization, admission)
         request_checkpoint("before cyclotomic result construction")
         return admission.degree, polynomial_value
+    radical = prod(factorization) if factorization else 1
+    if radical != index:
+        # ``Phi_n(x) = Phi_rad(n)(x^(n/rad(n)))``: build the reduced cyclotomic
+        # and substitute the sparse power.
+        _, reduced_polynomial = _compute(radical)
+        request_checkpoint("before cyclotomic result construction")
+        return admission.degree, _substitute_power(reduced_polynomial, index // radical)
     coefficients = _backend_cyclotomic_coefficients(index)
     actual_output_digits = sum(len(str(abs(value))) for value in coefficients)
     if (

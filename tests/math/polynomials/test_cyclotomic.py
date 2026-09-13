@@ -107,7 +107,7 @@ def test_backend_failure_is_typed(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(sympy, "cyclotomic_poly", fail)
     with pytest.raises(OperationBackendError) as exc_info:
-        _run(CyclotomicRequest(index=12))
+        _run(CyclotomicRequest(index=30))
     assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT
 
 
@@ -124,7 +124,7 @@ def test_backend_nonintegral_coefficients_are_not_truncated(
         sympy, "cyclotomic_poly", lambda *args, **kwargs: FakePolynomial()
     )
     with pytest.raises(OperationBackendError) as exc_info:
-        _run(CyclotomicRequest(index=12))
+        _run(CyclotomicRequest(index=30))
     assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT
 
 
@@ -141,7 +141,7 @@ def test_backend_wrong_constant_is_rejected_on_the_native_path(
         sympy, "cyclotomic_poly", lambda *args, **kwargs: FakePolynomial()
     )
     with pytest.raises(OperationBackendError) as exc_info:
-        cyclotomic(12)
+        cyclotomic(30)
     assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT
 
 
@@ -181,7 +181,7 @@ def test_factorization_work_is_admitted_before_backend_factorint(
 
     monkeypatch.setattr(sympy, "factorint", fail_factorint)
     with pytest.raises(OperationResourceAdmissionError, match="factorization"):
-        cyclotomic(12)
+        cyclotomic(30)
 
 
 def test_expired_request_is_rejected_before_factorization() -> None:
@@ -191,7 +191,7 @@ def test_expired_request_is_rejected_before_factorization() -> None:
         request_execution(monotonic(), outer_deadline=monotonic() - 1),
         pytest.raises(OperationExecutionTimeoutError),
     ):
-        _run(CyclotomicRequest(index=12))
+        _run(CyclotomicRequest(index=30))
 
 
 def test_prime_index_uses_the_geometric_sum_fast_path() -> None:
@@ -265,7 +265,7 @@ def test_factor_map_exponents_are_bounded_before_exponentiation(
 
     monkeypatch.setattr(sympy, "factorint", lambda index: {2: 1_000_000_000})
     with pytest.raises(OperationBackendError) as exc_info:
-        cyclotomic(12)
+        cyclotomic(30)
     assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT
 
 
@@ -280,7 +280,7 @@ def test_composite_reported_as_a_prime_base_is_rejected(
     monkeypatch.setattr(sympy, "factorint", lambda index: {12: 1})
     monkeypatch.setattr(sympy, "cyclotomic_poly", fail_poly)
     with pytest.raises(OperationBackendError) as exc_info:
-        cyclotomic(12)
+        cyclotomic(30)
     assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT
 
 
@@ -303,3 +303,41 @@ def test_divisor_product_identity_through_twenty() -> None:
                 product *= fmpz_poly(ascending(result))
         expected = fmpz_poly([-1] + [0] * (index - 1) + [1])
         assert product == expected
+
+
+def test_power_of_two_multiple_uses_the_reduced_path() -> None:
+    """``3988 = 2**2 * 997`` reduces to ``Phi_1994(x**2)`` and is admitted."""
+    import sympy
+
+    index = 3_988
+    result = _run(CyclotomicRequest(index=index))
+    assert result.totient == 1_992
+    expected = tuple(
+        int(coefficient)
+        for coefficient in sympy.cyclotomic_poly(
+            index, sympy.Symbol("x"), polys=True
+        ).all_coeffs()
+    )
+    assert result.polynomial.coefficients == expected
+
+
+def test_reduced_backend_coefficients_are_validated(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A twice-odd composite backend tuple is checked against the envelope."""
+    import sympy
+
+    from jacobian.math.polynomials import _cyclotomic as module
+
+    class FakePolynomial:
+        def all_coeffs(self) -> list[object]:
+            return [1, 10**200, 1]
+
+    monkeypatch.setattr(
+        sympy, "cyclotomic_poly", lambda *args, **kwargs: FakePolynomial()
+    )
+    # 426 = 2 * 213 uses the odd-half backend, whose coefficients must be
+    # checked before the result is returned.
+    with pytest.raises(OperationBackendError) as exc_info:
+        module.cyclotomic(426)
+    assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT

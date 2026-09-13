@@ -119,3 +119,18 @@ def test_normalization_is_admitted_by_consuming_operations() -> None:
     )
     with pytest.raises(OperationDomainValidationError):
         condition(malformed, (_q(0),))
+
+
+def test_exact_lcm_is_measured_before_rejecting_the_boundary() -> None:
+    """An in-envelope normalized law is admitted at the digit boundary."""
+    from jacobian.math.probability._distribution import _bounded_fraction_sum
+
+    g = 2 * 10**99 + 3
+    a = 5 * 10**411 + 3
+    limit = g * a
+    values = (
+        Fraction(1, limit),
+        Fraction(1, 5 * g),
+        1 - Fraction(1, limit) - Fraction(1, 5 * g),
+    )
+    assert _bounded_fraction_sum(values, label="boundary law") == 1

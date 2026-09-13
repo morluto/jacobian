@@ -118,17 +118,15 @@ def _bounded_fraction_sum(
         )
     reduced = list(buckets.values())
     running = 1
-    running_digits = 1
     for term in reduced:
         denominator = term.denominator
         shared = gcd(running, denominator)
-        next_digits = (
-            running_digits + _decimal_digits(denominator) - _decimal_digits(shared)
-        )
-        if next_digits > MAX_FINITE_DISTRIBUTION_SUM_DIGITS:
+        # Compute the exact merged denominator: a width estimate can overstate
+        # the product by one and reject an in-envelope normalized law.
+        merged = running // shared * denominator
+        if _decimal_digits(merged) > MAX_FINITE_DISTRIBUTION_SUM_DIGITS:
             _raise_normalization_bound(label)
-        running = running // shared * denominator
-        running_digits = _decimal_digits(running)
+        running = merged
     total = Fraction()
     for term in reduced:
         total = _add_height_bounded(total, term, label=label)

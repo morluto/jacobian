@@ -493,3 +493,37 @@ def test_near_universal_branch_is_bound_by_the_full_ceiling() -> None:
     )
     with pytest.raises(OperationResourceAdmissionError):
         minimum_generalized_exact_cover(instance)
+
+
+def test_mandatory_secondary_with_covering_row_keeps_the_full_ceiling() -> None:
+    """A mandatory secondary plus a covering row is not a proven linear search.
+
+    Every row contains ``s`` and one row covers all primaries, but after
+    selecting it the DFS can still enumerate the residual ``8^8`` combinations
+    of non-``s`` rows, so the request is refused at the full work envelope.
+    """
+    primary = tuple(f"p{index:04d}" for index in range(300))
+    others = primary[1:]
+    rows: list[ExactCoverRow] = []
+    for item in primary[:8]:
+        for copy in range(8):
+            rows.append(ExactCoverRow(row_id=f"{item}-{copy}", items=(item,)))
+    for copy in range(64):
+        rows.append(ExactCoverRow(row_id=f"single-{copy:03d}", items=(primary[8], "s")))
+    for copy in range(64):
+        rows.append(
+            ExactCoverRow(
+                row_id=f"bulk-{copy:03d}", items=tuple(sorted(("s", *others)))
+            )
+        )
+    index = 0
+    while len(rows) < 4_096:
+        rows.append(ExactCoverRow(row_id=f"pad-{index:04d}", items=(primary[0], "s")))
+        index += 1
+    instance = GeneralizedExactCoverInstance(
+        primary_items=primary,
+        secondary_items=("s",),
+        rows=tuple(sorted(rows, key=lambda row: row.row_id)),
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="work"):
+        minimum_generalized_exact_cover(instance)

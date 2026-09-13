@@ -990,7 +990,6 @@ def minimum_generalized_exact_cover(  # noqa: C901
         )
         request_checkpoint("after minimum exact-cover result construction")
         return result
-    estimated_nodes_ceiling = None
     secondary_rows: dict[str, int] = {}
     remaining_primary_count = len(remaining_primary)
     if remaining_rows:
@@ -1013,24 +1012,18 @@ def minimum_generalized_exact_cover(  # noqa: C901
             if with_secondary == 0:
                 continue
             without = remaining_row_count - with_secondary
-            if with_secondary < 2:
-                continue
-            if without == 0:
-                if not covering_row_exists:
-                    result = MinimumGeneralizedExactCoverResult._from_kernel(
-                        instance=instance,
-                        status="INFEASIBLE",
-                        lower_bound=len(forced_selected),
-                        searched_node_count=1,
-                    )
-                    request_checkpoint("after minimum exact-cover result construction")
-                    return result
-                universal_ceiling = 1 + 2 * remaining_row_count
-                estimated_nodes_ceiling = (
-                    universal_ceiling
-                    if estimated_nodes_ceiling is None
-                    else min(estimated_nodes_ceiling, universal_ceiling)
+            if with_secondary >= 2 and without == 0 and not covering_row_exists:
+                result = MinimumGeneralizedExactCoverResult._from_kernel(
+                    instance=instance,
+                    status="INFEASIBLE",
+                    lower_bound=len(forced_selected),
+                    searched_node_count=1,
                 )
+                request_checkpoint("after minimum exact-cover result construction")
+                return result
+            # Every residual row containing this secondary with a covering row
+            # present has no proven linear node bound, so the full ceiling is
+            # retained.
     item_index = {item: index for index, item in enumerate(items)}
     row_count = len(active_rows)
     mask_words = max(1, (max(row_count, primary_count) + 63) // 64)
@@ -1047,8 +1040,6 @@ def minimum_generalized_exact_cover(  # noqa: C901
             1 + remaining_min_degree * (1 + remaining_max_degree),
         )
         listing_degree = remaining_min_degree
-    if estimated_nodes_ceiling is not None:
-        estimated_nodes = min(estimated_nodes, estimated_nodes_ceiling)
     # A secondary that is missing from some but not all rows does not linearly
     # bound the combinations among the remaining rows, so retain the full node
     # ceiling rather than an unproven per-secondary tightening.

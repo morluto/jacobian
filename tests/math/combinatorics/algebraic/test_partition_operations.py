@@ -11,7 +11,10 @@ from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 
 from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.algebraic import (
     check_semistandard_tableau as public_check_semistandard_tableau,
 )
@@ -557,12 +560,31 @@ def test_partition_dominance_revalidates_constructed_operands() -> None:
         native.partition_dominance(forged, IntegerPartition(parts=(3,)))
 
 
+def test_tableau_checkers_reject_invalid_native_alphabets() -> None:
+    """An invalid native alphabet is the declared domain error, not ValueError."""
+    partition = IntegerPartition(parts=(1,))
+    for alphabet in (0, True, 1.0):
+        with pytest.raises(OperationDomainValidationError) as error:
+            native.semistandard_young_tableaux_count(partition, alphabet)  # type: ignore[arg-type]
+        assert error.value.errors()[0]["type"] == (
+            "algebraic_combinatorics.hook_content_alphabet"
+        )
+
+
 def test_tableau_checkers_revalidate_constructed_carriers() -> None:
     """Boolean entries cannot masquerade as tableaux and report membership."""
-
-    forged_standard = StandardYoungTableau.model_construct(rows=((True,),))
-    with pytest.raises(ValidationError):
-        native.check_standard_tableau(forged_standard)
-    forged_semistandard = SemistandardYoungTableau.model_construct(rows=((True,),))
-    with pytest.raises(ValidationError):
-        native.check_semistandard_tableau(forged_semistandard)
+    for constructed, checker in (
+        (
+            StandardYoungTableau.model_construct(rows=((True,),)),
+            native.check_standard_tableau,
+        ),
+        (
+            SemistandardYoungTableau.model_construct(rows=((True,),)),
+            native.check_semistandard_tableau,
+        ),
+    ):
+        with pytest.raises(OperationDomainValidationError) as error:
+            checker(constructed)
+        assert error.value.errors()[0]["type"] == (
+            "algebraic_combinatorics.tableau_carrier"
+        )

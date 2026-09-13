@@ -260,7 +260,11 @@ def _ssyt_count_digit_bound(
 def _admit_hook_content(partition: IntegerPartition, alphabet_size: int) -> None:
     """Admit hook-content arithmetic before constructing any factors."""
     if type(alphabet_size) is not int or alphabet_size < 1:
-        raise ValueError("alphabet_size must be a positive integer")
+        raise OperationDomainValidationError(
+            location=("alphabet_size",),
+            code="algebraic_combinatorics.hook_content_alphabet",
+            message="alphabet_size must be a positive integer",
+        )
     partition = _require_canonical_partition(partition)
 
     cell_count = sum(partition.parts)
@@ -530,7 +534,22 @@ def _revalidate_tableau(tableau: object, carrier: type[StrictModel]) -> StrictMo
             code="algebraic_combinatorics.tableau_shape",
             message="a canonical tableau has a tuple of rows",
         )
-    return carrier.model_validate({"rows": rows})
+    return _validate_tableau_carrier(carrier, rows)
+
+
+def _validate_tableau_carrier(
+    carrier: type[StrictModel], rows: tuple[object, ...]
+) -> StrictModel:
+    """Revalidate a tableau, translating structural failures to domain errors."""
+
+    try:
+        return carrier.model_validate({"rows": rows})
+    except (ValidationError, PydanticCustomError) as exc:
+        raise OperationDomainValidationError(
+            location=("tableau", "rows"),
+            code="algebraic_combinatorics.tableau_carrier",
+            message="tableau rows violate the canonical carrier contract",
+        ) from exc
 
 
 def check_standard_tableau(tableau: StandardYoungTableau) -> StandardTableauCheckResult:

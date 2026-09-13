@@ -716,6 +716,23 @@ def test_empty_accepting_binary_dfa_admits_length_999_profile() -> None:
     assert result.total_accepted_words == 0
 
 
+def test_all_accepting_binary_dfa_admits_length_998_profile() -> None:
+    """All-accepting reachability must not charge a redundant depth walk."""
+    dfa = DFA(
+        state_count=1,
+        alphabet_size=2,
+        transitions=(
+            DFATransition(source=0, symbol=0, target=0),
+            DFATransition(source=0, symbol=1, target=0),
+        ),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+    result = symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=998))
+    assert result.total_accepted_words == 2**998
+    assert len(result.cells) == 999
+
+
 def _cycle_times_symmetric_factor() -> DFA:
     cycle = 21
     factor = 3

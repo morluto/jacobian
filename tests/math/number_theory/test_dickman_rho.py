@@ -222,8 +222,6 @@ def test_dickman_native_api_exports_canonical_value_family() -> None:
     expected = {
         "DickmanRhoAffineAxis",
         "DickmanRhoAffinePiece",
-        "DickmanRhoPiecewiseEnclosureParameters",
-        "DickmanRhoPiecewiseEnclosureRequest",
         "DickmanRhoPiecewiseEnclosureResult",
         "DyadicCoefficientBall",
         "dickman_rho_piecewise_enclosure",

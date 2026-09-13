@@ -7,8 +7,6 @@ if TYPE_CHECKING:
     from jacobian.math.number_theory._dickman_rho import (
         DickmanRhoAffineAxis,
         DickmanRhoAffinePiece,
-        DickmanRhoPiecewiseEnclosureParameters,
-        DickmanRhoPiecewiseEnclosureRequest,
         DickmanRhoPiecewiseEnclosureResult,
         DyadicCoefficientBall,
         dickman_rho_piecewise_enclosure,
@@ -60,8 +58,6 @@ if TYPE_CHECKING:
 __all__ = [
     "DickmanRhoAffineAxis",
     "DickmanRhoAffinePiece",
-    "DickmanRhoPiecewiseEnclosureParameters",
-    "DickmanRhoPiecewiseEnclosureRequest",
     "DickmanRhoPiecewiseEnclosureResult",
     "DyadicCoefficientBall",
     "FriableCountResult",
@@ -107,8 +103,6 @@ __all__ = [
 _OWNER_MODULES = {
     "DickmanRhoAffineAxis": "_dickman_rho",
     "DickmanRhoAffinePiece": "_dickman_rho",
-    "DickmanRhoPiecewiseEnclosureParameters": "_dickman_rho",
-    "DickmanRhoPiecewiseEnclosureRequest": "_dickman_rho",
     "DickmanRhoPiecewiseEnclosureResult": "_dickman_rho",
     "DyadicCoefficientBall": "_dickman_rho",
     "FriableCountResult": "_friable_models",

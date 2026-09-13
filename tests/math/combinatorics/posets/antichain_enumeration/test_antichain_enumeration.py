@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import cast
+
 import pytest
 from pydantic import ValidationError
 
@@ -12,6 +14,7 @@ from jacobian.math.combinatorics.posets.antichain_enumeration.operations import 
 )
 from jacobian.math.combinatorics.posets.core._models import (
     FinitePoset,
+    IncomparablePair,
     PresentationPair,
     ReflexivePairPolicy,
     RelationInterpretation,
@@ -135,3 +138,45 @@ def test_request_retains_intrinsic_cardinality_range_shape() -> None:
         AntichainEnumerationRequest(
             poset=_make_chain(3), min_cardinality=2, max_cardinality=1
         )
+
+
+def test_rejects_forged_poset_relation_claims() -> None:
+    poset = _make_chain(2)
+    forged = poset.model_copy(
+        update={
+            "strict_order_pairs": (),
+            "cover_relations": (),
+            "incomparable_pairs": (IncomparablePair(left="0", right="1"),),
+        }
+    )
+
+    with pytest.raises(OperationDomainValidationError):
+        enumerate_antichains(forged, 1, 2)
+
+
+def test_enumeration_admits_before_inspecting_the_carrier() -> None:
+    poset = _make_chain(2)
+    malformed = poset.model_copy(update={"elements": object()})
+
+    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+        enumerate_antichains(malformed, 1, 1)
+    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+        enumerate_antichains(cast(FinitePoset, object()), 1, 1)
+
+
+def test_enumeration_rejects_size_bound_before_strict_closure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.combinatorics.posets.core import _models as poset_models
+    from jacobian.math.combinatorics.posets.core import operations as poset_operations
+
+    poset = _make_antichain_poset(25)
+
+    def fail_presentation(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("presentation ran before the enumeration bound")
+
+    monkeypatch.setattr(poset_models, "_validated_presentation", fail_presentation)
+    monkeypatch.setattr(poset_operations, "_validated_presentation", fail_presentation)
+    monkeypatch.setattr(poset_models, "_strict_closure", fail_presentation)
+    with pytest.raises(OperationDomainValidationError, match="at most 24 elements"):
+        enumerate_antichains(poset, 1, 1)

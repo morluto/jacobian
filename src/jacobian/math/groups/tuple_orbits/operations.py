@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from collections import Counter
-from typing import Any
+from collections.abc import Sized
+from typing import Any, cast
 
 from pydantic import ValidationError
 from pydantic_core import PydanticCustomError
@@ -49,7 +50,12 @@ def _backend_action(action: FinitePermutationAction) -> Any:
             code="finite_group_action.tuple_family_action_type",
             message="tuple-family source must retain a finite permutation action",
         )
-    return _backend_group(PermutationGroup(degree=len(domain), generators=generators))
+    return _backend_group(
+        PermutationGroup(
+            degree=len(cast(Sized, domain)),
+            generators=cast(tuple[tuple[int, ...], ...], generators),
+        )
+    )
 
 
 def _rebuild_permutation_action(

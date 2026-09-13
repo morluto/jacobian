@@ -9,7 +9,7 @@ normalized.
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sized
-from typing import Any, Self
+from typing import Any, Self, cast
 
 from pydantic import ConfigDict, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
@@ -53,7 +53,7 @@ def _materialize_bounded_sequence(value: object, limit: int) -> object:
     if length is not None:
         if length > limit:
             return _SEQUENCE_OVERFLOW
-        return tuple(value)
+        return tuple(cast(Iterable[Any], value))
     if isinstance(value, Iterable):
         items: list[Any] = []
         for item in value:
@@ -93,7 +93,7 @@ def _preflight_action_dimensions(*, domain: object, generators: object) -> None:
             "action_generator_bound",
             f"actions admit at most {MAX_GENERATORS} generators",
         )
-    for generator in generators:
+    for generator in cast(Iterable[Any], generators):
         row_length = _collection_length(generator)
         if row_length is None and isinstance(generator, Iterable):
             if isinstance(generator, (str, bytes, bytearray, Mapping)):
@@ -149,6 +149,10 @@ def _action_mapping(action: object) -> dict[str, Any] | None:
     degree = _collection_length(domain)
     if degree is None:
         degree = MAX_DOMAIN_SIZE
+    # A domain longer than the admitted carrier is rejected later by
+    # `_preflight_action_dimensions`; clamp here so an oversized declared
+    # domain cannot drive materialization of a matching oversized generator row.
+    degree = min(degree, MAX_DOMAIN_SIZE)
     if isinstance(generators, Iterable) and not isinstance(
         generators, (str, bytes, bytearray, Mapping)
     ):
@@ -241,8 +245,8 @@ def _preflight_source_payload(data: object) -> None:
             f"at most {MAX_FAMILY_MEMBERS} tuple rows are admitted",
         )
     arity_is_int = isinstance(raw_arity, int) and not isinstance(raw_arity, bool)
-    row_limit = raw_arity if arity_is_int else MAX_TUPLE_ARITY
-    for member in family:
+    row_limit = cast(int, raw_arity) if arity_is_int else MAX_TUPLE_ARITY
+    for member in cast(Iterable[Any], family):
         length = _collection_length(member)
         if length is None:
             if not isinstance(member, Iterable) or isinstance(
@@ -362,6 +366,12 @@ class TupleOrbitRow(StrictModel):
     ``source_indices`` to ``representative``. The result owner checks that
     source-to-codomain map structurally without replaying group enumeration.
     """
+
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        revalidate_instances="always",
+    )
 
     representative: tuple[StrictInt, ...] = Field(
         max_length=MAX_TUPLE_ARITY,

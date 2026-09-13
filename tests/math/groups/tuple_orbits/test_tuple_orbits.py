@@ -231,6 +231,44 @@ def test_range_generator_rows_are_rejected_before_container_copy() -> None:
     assert "generator_length_mismatch" in generator_length.value.errors()[0]["type"]
 
 
+def test_oversized_domain_clamps_generator_materialization() -> None:
+    """An invalid oversized domain cannot drive a matching row materialization."""
+
+    class _HugeDomain:
+        def __len__(self) -> int:
+            return 2_000_000
+
+        def __iter__(self):
+            return iter(())
+
+    payload = {
+        "action": {
+            "domain": _HugeDomain(),
+            "generators": [range(2_000_000)],
+        },
+        "arity": 0,
+        "family": [],
+    }
+    with pytest.raises(ValidationError) as domain_bound:
+        TupleFamilyOrbitSource.model_validate(payload)
+    # Clamping the materialization limit means the oversized row is refused by
+    # the bounded sequence check before the invalid domain is classified.
+    assert "generator_length_mismatch" in domain_bound.value.errors()[0]["type"]
+
+
+def test_constructed_orbit_row_is_revalidated_on_direct_validation() -> None:
+    """The exported row type rejects values it would never produce."""
+    constructed = TupleOrbitRow.model_construct(
+        representative=(0,),
+        source_indices=(0,),
+        orbit_size="bogus",
+        stabilizer_size=1,
+        least_transporter=(0,),
+    )
+    with pytest.raises(ValidationError):
+        TupleOrbitRow.model_validate(constructed)
+
+
 def test_constructed_nested_action_is_revalidated() -> None:
     payload = {
         "action": FinitePermutationAction.model_construct(

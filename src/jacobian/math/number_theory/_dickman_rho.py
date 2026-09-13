@@ -38,6 +38,7 @@ MIN_DICKMAN_PRECISION_BITS = 32
 MAX_DICKMAN_PRECISION_BITS = 512
 DEFAULT_DICKMAN_PRECISION_BITS = 128
 MAX_DICKMAN_ENDPOINT_DIGITS = 4
+MAX_DICKMAN_TARGET_EXPONENT = 1_000_000
 MAX_DICKMAN_RESULT_COEFFICIENTS = MAX_DICKMAN_ENDPOINT * (MAX_DICKMAN_DEGREE + 1)
 MAX_DICKMAN_WORK_UNITS = 1_500_000_000
 # Exact recurrence coefficients are Fractions. Each of at most eight pieces
@@ -70,7 +71,8 @@ class DickmanRhoPiecewiseEnclosureParameters(StrictModel):
     target_width: ExactDyadic = Field(
         description=(
             "Positive pointwise enclosure width required on every returned "
-            "unit interval."
+            "unit interval. Its dyadic exponent must lie in "
+            f"[-{MAX_DICKMAN_TARGET_EXPONENT}, {MAX_DICKMAN_TARGET_EXPONENT}]."
         )
     )
     precision_bits: StrictInt = Field(
@@ -315,8 +317,8 @@ def _admit_request(request: DickmanRhoPiecewiseEnclosureParameters) -> int:
             message="endpoint components exceed the admitted exact preflight bound",
         )
     if (
-        request.target_width.exponent < -1_000_000
-        or request.target_width.exponent > 1_000_000
+        request.target_width.exponent < -MAX_DICKMAN_TARGET_EXPONENT
+        or request.target_width.exponent > MAX_DICKMAN_TARGET_EXPONENT
     ):
         raise OperationResourceAdmissionError(
             location=("target_width",),

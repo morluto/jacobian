@@ -39,7 +39,10 @@ to the pointwise width separately.
 The operation admits the interval count, all degree candidates through the
 published degree ceiling, exact coefficient-growth estimate, and result carrier
 before expanding the recurrence. Requests whose target width cannot fit the
-bounded degree or precision are typed resource-admission failures.
+bounded degree or precision are typed resource-admission failures. The
+target-width dyadic exponent is additionally limited to
+`[-1000000, 1000000]`, since a wider exponent cannot be compared structurally
+without expanding it.
 
 The operation is an enclosure, not the distinct de Bruijn asymptotic
 approximation. The exact controls are `rho=1` on `[0,1]`,

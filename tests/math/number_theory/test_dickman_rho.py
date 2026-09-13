@@ -42,14 +42,18 @@ def _evaluate_bounds(
 ) -> tuple[float, float]:
     piece = next(piece for piece in result.pieces if piece.lower <= u <= piece.upper)
     t = 2 * (u - float(piece.axis.center.as_fraction()))
-    lower = sum(
-        float(ball.lower.as_fraction()) * t**k
-        for k, ball in enumerate(piece.coefficients)
-    )
-    upper = sum(
-        float(ball.upper.as_fraction()) * t**k
-        for k, ball in enumerate(piece.coefficients)
-    )
+    lower = 0.0
+    upper = 0.0
+    for k, ball in enumerate(piece.coefficients):
+        low = float(ball.lower.as_fraction())
+        high = float(ball.upper.as_fraction())
+        power = t**k
+        if power >= 0:
+            product_low, product_high = low * power, high * power
+        else:
+            product_low, product_high = high * power, low * power
+        lower += product_low
+        upper += product_high
     remainder = float(piece.uniform_remainder.as_fraction())
     return lower - remainder, upper + remainder
 

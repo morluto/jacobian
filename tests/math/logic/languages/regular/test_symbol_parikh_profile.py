@@ -397,6 +397,85 @@ def test_dense_profile_cell_construction_is_included_in_the_work_bound() -> None
         symbol_parikh_profile(dfa, 9)
 
 
+def _transient_prefix_noncommuting_dfa(
+    *, reachable_count: int, alphabet_size: int, transient_count: int = 4
+) -> DFA:
+    """A transient chain feeding a noncommuting cycle.
+
+    The strongly connected fixture used previously left ``transient`` empty, so
+    the transient-walk helper returned immediately and its instrumentation was
+    vacuous.
+    """
+
+    core = tuple(range(transient_count, reachable_count))
+
+    def rotate(state: int, step: int) -> int:
+        return core[(core.index(state) + step) % len(core)]
+
+    transitions: list[DFATransition] = []
+    for source in range(transient_count):
+        for symbol in range(alphabet_size):
+            transitions.append(
+                DFATransition(
+                    source=source,
+                    symbol=symbol,
+                    target=source + 1 if source < transient_count - 1 else core[0],
+                )
+            )
+    for source in core:
+        for symbol in range(alphabet_size):
+            if symbol == 0:
+                target = rotate(source, 1)
+            elif symbol == 1:
+                target = rotate(source, -1)
+            else:
+                target = source
+            transitions.append(
+                DFATransition(source=source, symbol=symbol, target=target)
+            )
+    return DFA(
+        state_count=reachable_count,
+        alphabet_size=alphabet_size,
+        transitions=tuple(transitions),
+        initial_state=0,
+        accepting_states=tuple(range(reachable_count)),
+    )
+
+
+def _transient_walk_probes(
+    by_source: dict[int, dict[int, int]],
+    transient: set[int],
+    alphabet_size: int,
+    initial_state: int,
+) -> int:
+    """Replay `_longest_transient_walk` and count its actual relaxation probes."""
+
+    if initial_state not in transient:
+        return 0
+    probes = 0
+    longest = dict.fromkeys(transient, -1)
+    longest[initial_state] = 0
+    for _ in range(len(transient)):
+        changed = False
+        for source in transient:
+            probes += 1
+            if longest[source] < 0:
+                continue
+            outgoing = by_source.get(source, {})
+            for symbol in range(alphabet_size):
+                probes += 1
+                target = outgoing.get(symbol)
+                if target not in transient:
+                    continue
+                candidate = longest[source] + 1
+                if candidate > longest[target]:
+                    longest[target] = candidate
+                    changed = True
+        if not changed:
+            break
+    return probes
+
+
 def test_near_envelope_profile_execution_matches_admission_charge(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -405,28 +484,8 @@ def test_near_envelope_profile_execution_matches_admission_charge(
     reachable_count = 10
     alphabet_size = 7
     length = 8
-    dfa = DFA(
-        state_count=reachable_count,
-        alphabet_size=alphabet_size,
-        transitions=tuple(
-            DFATransition(
-                source=source,
-                symbol=symbol,
-                target=(
-                    0
-                    if symbol == 1
-                    else source + 1
-                    if symbol == 0 and source < reachable_count - 1
-                    else 0
-                    if symbol == 0
-                    else source
-                ),
-            )
-            for source in range(reachable_count)
-            for symbol in range(alphabet_size)
-        ),
-        initial_state=0,
-        accepting_states=tuple(range(reachable_count)),
+    dfa = _transient_prefix_noncommuting_dfa(
+        reachable_count=reachable_count, alphabet_size=alphabet_size
     )
     transition_count = dfa.state_count * alphabet_size
     output_bound = comb(length + alphabet_size - 1, alphabet_size - 1)
@@ -446,11 +505,17 @@ def test_near_envelope_profile_execution_matches_admission_charge(
         reachable_count * output_bound,
         possible_word_count,
     )
+    collected_cells = min(
+        output_bound,
+        possible_word_count,
+        output_materialization_cells,
+    )
 
     executed = {
         "transition_index": 0,
         "reachability_scan": 0,
         "commute_preflight": 0,
+        "vector_state": 0,
         "analysis": 0,
         "extension_coordinate": 0,
         "output_materialization": 0,
@@ -461,6 +526,7 @@ def test_near_envelope_profile_execution_matches_admission_charge(
     original_reachable = profile._reachable_states_without_index
     original_maps = profile._letter_maps_on_reachable
     original_commute = profile._letter_actions_commute
+    original_vector_bound = profile._parikh_vector_state_bound
     original_extend = profile._extend_profile_layer
     original_collect = profile._collect_profile
     original_persistent = profile._persistent_reachable_states
@@ -491,6 +557,15 @@ def test_near_envelope_profile_execution_matches_admission_charge(
         executed["commute_preflight"] += compared
         return commute, compared
 
+    def count_vector_bound(
+        by_source: dict[int, dict[int, int]],
+        reachable: set[int],
+        size: int,
+    ) -> tuple[int, int]:
+        bound, probes = original_vector_bound(by_source, reachable, size)
+        executed["vector_state"] += probes
+        return bound, probes
+
     def count_persistent(
         by_source: dict[int, dict[int, int]],
         reachable: set[int],
@@ -506,7 +581,12 @@ def test_near_envelope_profile_execution_matches_admission_charge(
         size: int,
         initial_state: int,
     ) -> int:
-        executed["analysis"] += reachable_count * reachable_count * size
+        # Count the helper's actual relaxation probes so added or undercharged
+        # work inside it is visible. The admission charge is quadratic in the
+        # reachable count; the helper only probes transient states.
+        executed["analysis"] += _transient_walk_probes(
+            by_source, transient, size, initial_state
+        )
         return original_walk(by_source, transient, size, initial_state)
 
     def count_extend(
@@ -521,15 +601,17 @@ def test_near_envelope_profile_execution_matches_admission_charge(
     def count_collect(
         layer: dict[tuple[int, tuple[int, ...]], int], accepting: set[int]
     ) -> dict[tuple[int, ...], int]:
+        profile_cells = original_collect(layer, accepting)
         executed["output_materialization"] += len(layer)
-        executed["cell_construction"] += len(layer) * alphabet_size
-        executed["result_reduce"] += 2 * len(layer)
-        return original_collect(layer, accepting)
+        executed["cell_construction"] += len(profile_cells) * alphabet_size
+        executed["result_reduce"] += 2 * len(profile_cells)
+        return profile_cells
 
     monkeypatch.setattr(profile, "_build_transition_index", count_index)
     monkeypatch.setattr(profile, "_reachable_states_without_index", count_reachable)
     monkeypatch.setattr(profile, "_letter_maps_on_reachable", count_maps)
     monkeypatch.setattr(profile, "_letter_actions_commute", count_commute)
+    monkeypatch.setattr(profile, "_parikh_vector_state_bound", count_vector_bound)
     monkeypatch.setattr(profile, "_persistent_reachable_states", count_persistent)
     monkeypatch.setattr(profile, "_longest_transient_walk", count_walk)
     monkeypatch.setattr(profile, "_extend_profile_layer", count_extend)
@@ -542,11 +624,15 @@ def test_near_envelope_profile_execution_matches_admission_charge(
         "transition_index": transition_count,
         "reachability_scan": reachable_count * transition_count,
         "commute_preflight": commute_preflight,
+        "vector_state": (
+            reachable_count * alphabet_size * alphabet_size
+            + reachable_count * reachable_count * alphabet_size
+        ),
         "analysis": analysis_work,
         "extension_coordinate": extension_cells * alphabet_size * max(1, alphabet_size),
         "output_materialization": output_materialization_cells,
-        "cell_construction": output_materialization_cells * alphabet_size,
-        "result_reduce": 2 * output_materialization_cells,
+        "cell_construction": collected_cells * alphabet_size,
+        "result_reduce": 2 * collected_cells,
     }
     assert result.total_accepted_words == alphabet_size**length
     assert executed["transition_index"] == transition_count
@@ -609,7 +695,73 @@ def test_depth_five_tree_admits_length_150_profile() -> None:
     assert len(result.cells) == 151
 
 
-def test_commuting_cycle_identity_dfa_admits_length_978_profile() -> None:
+def test_empty_accepting_binary_dfa_admits_length_999_profile() -> None:
+    dfa = DFA(
+        state_count=1,
+        alphabet_size=2,
+        transitions=(
+            DFATransition(source=0, symbol=0, target=0),
+            DFATransition(source=0, symbol=1, target=0),
+        ),
+        initial_state=0,
+        accepting_states=(),
+    )
+    result = symbol_parikh_profile(dfa, 998)
+    assert result.cells == ()
+    assert result.total_accepted_words == 0
+
+
+def _cycle_times_symmetric_factor() -> DFA:
+    cycle = 21
+    factor = 3
+    state_count = cycle * factor
+
+    def permute(index: int, symbol: int) -> int:
+        if symbol == 1:
+            return 1 if index == 0 else 0 if index == 1 else 2
+        return 2 if index == 0 else 1 if index == 1 else 0
+
+    transitions: list[DFATransition] = []
+    for residue in range(cycle):
+        for index in range(factor):
+            source = index * cycle + residue
+            transitions.append(
+                DFATransition(
+                    source=source,
+                    symbol=0,
+                    target=index * cycle + (residue + 1) % cycle,
+                )
+            )
+            transitions.append(
+                DFATransition(
+                    source=source,
+                    symbol=1,
+                    target=permute(index, 1) * cycle + residue,
+                )
+            )
+            transitions.append(
+                DFATransition(
+                    source=source,
+                    symbol=2,
+                    target=permute(index, 2) * cycle + residue,
+                )
+            )
+    return DFA(
+        state_count=state_count,
+        alphabet_size=3,
+        transitions=tuple(transitions),
+        initial_state=0,
+        accepting_states=tuple(range(state_count)),
+    )
+
+
+def test_product_action_factor_admits_length_27_profile() -> None:
+    result = symbol_parikh_profile(_cycle_times_symmetric_factor(), 27)
+    assert result.total_accepted_words == 3**27
+    assert len(result.cells) == comb(29, 2)
+
+
+def test_commuting_cycle_identity_dfa_admits_length_900_profile() -> None:
     state_count = 44
     dfa = DFA(
         state_count=state_count,
@@ -710,3 +862,21 @@ def test_forged_dfa_fields_are_bounded_before_materialization() -> None:
     assert huge.value.errors()[0]["type"] == (
         "regular_language.symbol_parikh.dfa_contract"
     )
+
+
+def test_unreachable_acceptance_at_depth_constructs_no_cells() -> None:
+    """An accepting state unreachable at the requested depth yields no cells."""
+    dfa = DFA(
+        state_count=2,
+        alphabet_size=2,
+        transitions=tuple(
+            DFATransition(source=source, symbol=symbol, target=1)
+            for source in range(2)
+            for symbol in range(2)
+        ),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+    result = symbol_parikh_profile(dfa, 998)
+    assert result.cells == ()
+    assert result.total_accepted_words == 0

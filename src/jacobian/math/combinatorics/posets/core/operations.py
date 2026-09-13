@@ -150,6 +150,11 @@ def _revalidated_ranks(ranks: object) -> tuple[ElementRank, ...] | None:
     for entry in ranks:
         if type(entry) is not ElementRank:
             raise TypeError("rank entries must use the canonical ElementRank type")
+        if type(entry.element) is not str:
+            raise TypeError("rank labels must be canonical strings")
+        if type(entry.rank) is not int:
+            raise TypeError("rank values must be canonical integers")
+        _ELEMENT_LABEL.validate_python(entry.element, strict=True)
     return tuple(
         ElementRank.model_validate(entry.model_dump(mode="python"), strict=True)
         for entry in ranks
@@ -160,6 +165,25 @@ _SHA256_DIGEST = TypeAdapter(Sha256Digest)
 _ELEMENT_LABEL = TypeAdapter(ElementLabel)
 
 
+def _canonical_carrier_elements(elements: object) -> tuple[str, ...]:
+    """Strictly revalidate the in-memory carrier before matching claims.
+
+    ``model_copy``/``model_construct`` bypass Pydantic validation, so a
+    ``str`` subclass with identical text would otherwise pass the
+    ordering/equality check while digest canonicalization normalizes it to
+    an ordinary string.  Require the exact ``tuple`` container and exact
+    ``str`` labels here; callers map failures to ``False``/domain errors.
+    """
+
+    if type(elements) is not tuple:
+        raise TypeError("elements must be a tuple")
+    for entry in elements:
+        if type(entry) is not str:
+            raise TypeError("carrier labels must be canonical strings")
+        _ELEMENT_LABEL.validate_python(entry, strict=True)
+    return elements  # type: ignore[return-value]
+
+
 def _canonical_ordered_pairs(pairs: object) -> tuple[OrderedPair, ...]:
     if type(pairs) is not tuple:
         raise TypeError("order pairs must be a tuple")
@@ -167,6 +191,10 @@ def _canonical_ordered_pairs(pairs: object) -> tuple[OrderedPair, ...]:
     for entry in pairs:
         if type(entry) is not OrderedPair:
             raise TypeError("order pairs must use the canonical OrderedPair type")
+        if type(entry.lower) is not str or type(entry.upper) is not str:
+            raise TypeError("order pair labels must be canonical strings")
+        _ELEMENT_LABEL.validate_python(entry.lower, strict=True)
+        _ELEMENT_LABEL.validate_python(entry.upper, strict=True)
         canonical.append(entry)
     return tuple(canonical)
 
@@ -193,6 +221,10 @@ def _canonical_claims_match(
     strict: set[tuple[str, str]],
     reduction: set[tuple[str, str]],
 ) -> bool:
+    try:
+        _canonical_carrier_elements(poset.elements)
+    except (AttributeError, PydanticCustomError, TypeError, ValidationError, ValueError):
+        return False
     if tuple(sorted(set(poset.elements))) != poset.elements:
         return False
     if type(poset.graded) is not bool:
@@ -286,6 +318,7 @@ def verify_finite_poset(poset: FinitePoset) -> bool:
     try:
         if type(poset) is not FinitePoset:
             return False
+        _canonical_carrier_elements(poset.elements)
         if tuple(sorted(set(poset.elements))) != poset.elements:
             return False
         if type(poset.graded) is not bool:

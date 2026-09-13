@@ -179,6 +179,118 @@ def test_consumers_reject_mixed_carrier_elements_as_domain_errors() -> None:
         width(malformed)
 
 
+def test_consumers_reject_str_subclass_carrier_labels_as_domain_errors() -> None:
+    class CarrierSubclass(str):
+        pass
+
+    poset = _materialize(["a", "b"], [("a", "b")])
+    forged_elements = tuple(CarrierSubclass(element) for element in poset.elements)
+    assert forged_elements == poset.elements
+    assert any(type(element) is not str for element in forged_elements)
+    forged = poset.model_copy(
+        update={
+            "elements": forged_elements,
+            "poset_digest": finite_poset_digest(
+                elements=forged_elements,
+                strict_order_pairs=poset.strict_order_pairs,
+                cover_relations=poset.cover_relations,
+                incomparable_pairs=poset.incomparable_pairs,
+                minimal_elements=poset.minimal_elements,
+                maximal_elements=poset.maximal_elements,
+                graded=poset.graded,
+                ranks=poset.ranks,
+            ),
+        }
+    )
+
+    assert verify_finite_poset(forged) is False
+    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+        width(forged)
+
+
+def test_consumers_reject_str_subclass_pair_labels_as_domain_errors() -> None:
+    class LabelSubclass(str):
+        pass
+
+    poset = _materialize(["a", "b"], [("a", "b")])
+    forged_order = tuple(
+        OrderedPair.model_construct(
+            lower=LabelSubclass(pair.lower), upper=LabelSubclass(pair.upper)
+        )
+        for pair in poset.strict_order_pairs
+    )
+    forged = poset.model_copy(
+        update={
+            "strict_order_pairs": forged_order,
+            "cover_relations": forged_order,
+            "poset_digest": finite_poset_digest(
+                elements=poset.elements,
+                strict_order_pairs=forged_order,
+                cover_relations=forged_order,
+                incomparable_pairs=poset.incomparable_pairs,
+                minimal_elements=poset.minimal_elements,
+                maximal_elements=poset.maximal_elements,
+                graded=poset.graded,
+                ranks=poset.ranks,
+            ),
+        }
+    )
+    assert verify_finite_poset(forged) is False
+    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+        width(forged)
+
+    antichain = _materialize(["a", "b"], [])
+    forged_incomparable = tuple(
+        IncomparablePair.model_construct(
+            left=LabelSubclass(pair.left), right=LabelSubclass(pair.right)
+        )
+        for pair in antichain.incomparable_pairs
+    )
+    forged_antichain = antichain.model_copy(
+        update={
+            "incomparable_pairs": forged_incomparable,
+            "poset_digest": finite_poset_digest(
+                elements=antichain.elements,
+                strict_order_pairs=antichain.strict_order_pairs,
+                cover_relations=antichain.cover_relations,
+                incomparable_pairs=forged_incomparable,
+                minimal_elements=antichain.minimal_elements,
+                maximal_elements=antichain.maximal_elements,
+                graded=antichain.graded,
+                ranks=antichain.ranks,
+            ),
+        }
+    )
+    assert verify_finite_poset(forged_antichain) is False
+    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+        width(forged_antichain)
+
+    forged_ranks = tuple(
+        ElementRank.model_construct(
+            element=LabelSubclass(entry.element), rank=entry.rank
+        )
+        for entry in poset.ranks or ()
+    )
+    forged_ranked = poset.model_copy(
+        update={
+            "ranks": forged_ranks,
+            "poset_digest": finite_poset_digest(
+                elements=poset.elements,
+                strict_order_pairs=poset.strict_order_pairs,
+                cover_relations=poset.cover_relations,
+                incomparable_pairs=poset.incomparable_pairs,
+                minimal_elements=poset.minimal_elements,
+                maximal_elements=poset.maximal_elements,
+                graded=poset.graded,
+                ranks=forged_ranks,
+            ),
+        }
+    )
+    assert verify_finite_poset(forged_ranked) is False
+    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+        width(forged_ranked)
+
+
 def test_consumers_reject_integer_graded_flag_as_domain_errors() -> None:
     poset = _materialize(["a", "b"], [("a", "b")])
     forged = poset.model_copy(

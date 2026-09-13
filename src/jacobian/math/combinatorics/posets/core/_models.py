@@ -330,6 +330,11 @@ def _validate_poset_incomparable_pairs(
                 "canonical_incomparable_pairs",
                 "incomparable_pairs must use the canonical IncomparablePair type",
             )
+        if type(pair.left) is not str or type(pair.right) is not str:
+            raise _validation_error(
+                "canonical_incomparable_pairs",
+                "incomparable pair labels must be canonical strings",
+            )
     actual_incomparable = tuple((pair.left, pair.right) for pair in incomparable_pairs)
     if actual_incomparable != expected_incomparable:
         raise _validation_error(

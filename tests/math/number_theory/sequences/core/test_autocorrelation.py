@@ -639,3 +639,13 @@ def test_order_shape_observes_request_cancellation() -> None:
         pytest.raises(OperationExecutionCancelledError),
     ):
         sequence_order_shape(sequence)
+
+
+def test_unit_factor_does_not_add_a_product_digit() -> None:
+    """A neighbor product by a unit denominator stays within the envelope."""
+    huge = CanonicalRational(num=10**32_767, den=1)
+    sequence = FiniteRationalSequence(
+        values=(huge, CanonicalRational(num=0, den=1), CanonicalRational(num=1, den=1))
+    )
+    result = sequence_order_shape(sequence)
+    assert result.first_log_concavity_violation is not None or result.log_concavity_rows

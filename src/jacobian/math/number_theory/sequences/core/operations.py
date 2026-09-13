@@ -228,13 +228,14 @@ def _product_component_digits(
     right_num = abs(right.num)
     cancel_left = gcd(left_num, right.den)
     cancel_right = gcd(right_num, left.den)
-    numerator_digits = len(format_canonical_integer(left_num // cancel_left)) + len(
-        format_canonical_integer(right_num // cancel_right)
+    # Measure the actual reduced components so a unit factor cannot add a
+    # spurious digit.
+    numerator = (left_num // cancel_left) * (right_num // cancel_right)
+    denominator = (left.den // cancel_right) * (right.den // cancel_left)
+    return (
+        max(1, len(format_canonical_integer(numerator))),
+        max(1, len(format_canonical_integer(denominator))),
     )
-    denominator_digits = len(format_canonical_integer(left.den // cancel_right)) + len(
-        format_canonical_integer(right.den // cancel_left)
-    )
-    return max(1, numerator_digits), max(1, denominator_digits)
 
 
 def _admit_order_shape(

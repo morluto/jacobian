@@ -353,8 +353,18 @@ def _power(
         if remaining:
             base_num = _poly_mul(base_num, base_num)
             base_den = _poly_mul(base_den, base_den)
-    # ``X**n = 0`` if and only if ``X = 0``, so the exponent does not change the
-    # zero locus and the numerator atoms are the base's atoms.
+    # ``X**n = 0`` if and only if ``X = 0``, so a positive exponent does not
+    # change the zero locus and the numerator atoms are the base's atoms. A zero
+    # exponent gives the constant one, whose numerator and denominator have no
+    # factor atoms, though any restriction recorded inside the base remains.
+    if exponent == 0:
+        return _Evaluated(
+            numerator=result_num,
+            denominator=result_den,
+            loci=value.loci,
+            numerator_atoms=(),
+            denominator_atoms=(),
+        )
     return _Evaluated(
         numerator=result_num,
         denominator=result_den,

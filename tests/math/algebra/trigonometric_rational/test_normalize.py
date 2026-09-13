@@ -843,3 +843,51 @@ def test_worker_cancels_a_laurent_common_factor_in_the_fallback() -> None:
     # The shared factor is cancelled, leaving the coprime cofactors.
     assert len(response["left"]["supports"]) == 2
     assert len(response["right"]["supports"]) == 2
+
+
+def test_zero_power_drops_base_factor_atoms() -> None:
+    """``1 / (sin(x) ** 0)`` has denominator one and no nonzero restriction.
+
+    A zero exponent gives the constant one, so the base's factor atoms must not
+    leak into the nonzero locus and exclude the zeros of ``sin(x)``.
+    """
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x"],
+            "expression": {
+                "kind": "DIVIDE",
+                "numerator": {"kind": "LITERAL", "value": {"num": 1, "den": 1}},
+                "denominator": {
+                    "kind": "POWER",
+                    "base": {"kind": "SINE", "angle": {"coefficients": [1]}},
+                    "exponent": 0,
+                },
+            },
+        }
+    )
+    result = normalize_trigonometric_rational(request)
+    assert len(result.denominator_nonzero.terms) == 1
+
+
+def test_zero_power_keeps_inner_base_restrictions() -> None:
+    """A restriction recorded inside a zero-power base is still retained.
+
+    ``(1 / sin(x)) ** 0`` is the constant one, but the inner division restricts
+    the locus to ``sin(x) != 0``, which the source evaluation must preserve.
+    """
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x"],
+            "expression": {
+                "kind": "POWER",
+                "base": {
+                    "kind": "DIVIDE",
+                    "numerator": {"kind": "LITERAL", "value": {"num": 1, "den": 1}},
+                    "denominator": {"kind": "SINE", "angle": {"coefficients": [1]}},
+                },
+                "exponent": 0,
+            },
+        }
+    )
+    result = normalize_trigonometric_rational(request)
+    assert len(result.denominator_nonzero.terms) == 2

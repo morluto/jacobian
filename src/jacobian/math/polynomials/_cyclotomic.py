@@ -149,12 +149,26 @@ def _admit(index: int, factorization: dict[int, int]) -> _CyclotomicAdmission:
             ),
         )
 
-    if _is_unit_coefficient_fast_path(index, factorization):
-        coefficient_count = (
-            index if _is_prime_index(index, factorization) else index // 2
-        )
+    if _is_prime_index(index, factorization):
+        coefficient_count = index
         construction_work = max(1, coefficient_count.bit_length()) * coefficient_count
         intermediate_bits = 2
+    elif _is_twice_odd_index(index, factorization):
+        # ``Phi_{2m}(x) = Phi_m(-x)`` for odd ``m``: the construction only has
+        # to build the odd half, then negate alternate coefficients.
+        odd_half = index // 2
+        odd_factorization = {
+            prime: exponent for prime, exponent in factorization.items() if prime != 2
+        }
+        if _is_prime_index(odd_half, odd_factorization):
+            construction_work = max(1, odd_half.bit_length()) * odd_half
+            intermediate_bits = 2
+        else:
+            odd_radical = prod(odd_factorization) if odd_factorization else 1
+            construction_work = (
+                10 * max(1, odd_radical.bit_length()) * (odd_radical + 1) ** 2
+            )
+            intermediate_bits = 2 * odd_radical + (odd_radical + 1).bit_length() + 1
     else:
         # SymPy's dense cyclotomic construction is charged from the radical of
         # the index, matching the existing exact kernel bound used by spectral
@@ -223,6 +237,12 @@ def _factor_index(index: int) -> dict[int, int]:
         for prime, exponent in factors.items()
     ):
         raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    # Any valid exponent satisfies ``prime**exponent <= index``, so it is bounded
+    # by ``index.bit_length()``. Reject larger exponents before exponentiation so
+    # malformed backend output cannot trigger unadmitted CPU or memory growth.
+    exponent_limit = index.bit_length()
+    if any(exponent > exponent_limit for exponent in factors.values()):
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
     reconstructed = prod(prime**exponent for prime, exponent in factors.items())
     if reconstructed != index:
         raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
@@ -250,17 +270,13 @@ def _is_prime_index(index: int, factorization: dict[int, int]) -> bool:
     return factorization == {index: 1}
 
 
-def _is_twice_odd_prime_index(index: int, factorization: dict[int, int]) -> bool:
-    if index % 2 != 0 or index < 6:
-        return False
-    odd = index // 2
-    return odd % 2 == 1 and factorization == {2: 1, odd: 1}
+def _is_twice_odd_index(index: int, factorization: dict[int, int]) -> bool:
+    """True when ``index = 2 * m`` for an odd ``m > 1``.
 
+    ``Phi_{2m}(x) = Phi_m(-x)`` holds for every odd ``m``, prime or not.
+    """
 
-def _is_unit_coefficient_fast_path(index: int, factorization: dict[int, int]) -> bool:
-    return _is_prime_index(index, factorization) or _is_twice_odd_prime_index(
-        index, factorization
-    )
+    return index % 2 == 0 and index >= 6 and (index // 2) % 2 == 1
 
 
 def _prime_cyclotomic(prime: int) -> IntegerPolynomial:
@@ -268,30 +284,35 @@ def _prime_cyclotomic(prime: int) -> IntegerPolynomial:
     return IntegerPolynomial(coefficients=(1,) * prime)
 
 
-def _twice_odd_prime_cyclotomic(index: int) -> IntegerPolynomial:
-    request_checkpoint("during twice-prime cyclotomic geometric sum")
+def _twice_odd_cyclotomic(
+    index: int, factorization: dict[int, int]
+) -> IntegerPolynomial:
+    """Return ``Phi_{2m}(x) = Phi_m(-x)`` for ``index = 2m`` with odd ``m``."""
+
     odd = index // 2
-    return IntegerPolynomial(coefficients=tuple((-1) ** k for k in range(odd)))
+    odd_factorization = {
+        prime: exponent for prime, exponent in factorization.items() if prime != 2
+    }
+    request_checkpoint("during twice-odd cyclotomic construction")
+    if _is_prime_index(odd, odd_factorization):
+        base_coefficients: tuple[int, ...] = (1,) * odd
+    else:
+        base_coefficients = _backend_cyclotomic_coefficients(odd)
+    degree = len(base_coefficients) - 1
+    return IntegerPolynomial(
+        coefficients=tuple(
+            coefficient if (degree - offset) % 2 == 0 else -coefficient
+            for offset, coefficient in enumerate(base_coefficients)
+        )
+    )
 
 
-def _compute(index: int) -> tuple[int, IntegerPolynomial]:
-    request_checkpoint("before cyclotomic admission")
-    _require_factorization_work(index)
-    factorization = _factor_index(index)
-    admission = _admit(index, factorization)
-    request_checkpoint("after cyclotomic admission")
-    if _is_prime_index(index, factorization):
-        polynomial_value = _prime_cyclotomic(index)
-        request_checkpoint("before cyclotomic result construction")
-        return admission.degree, polynomial_value
-    if _is_twice_odd_prime_index(index, factorization):
-        polynomial_value = _twice_odd_prime_cyclotomic(index)
-        request_checkpoint("before cyclotomic result construction")
-        return admission.degree, polynomial_value
+def _backend_cyclotomic_coefficients(index: int) -> tuple[int, ...]:
     try:
         from sympy import Symbol, cyclotomic_poly
     except Exception as exc:
         _backend_error(BackendFailureReason.INITIALIZATION, exc)
+    request_checkpoint("before cyclotomic backend")
     try:
         polynomial = cyclotomic_poly(index, Symbol("x"), polys=True)
         raw_coefficients = tuple(polynomial.all_coeffs())
@@ -301,8 +322,8 @@ def _compute(index: int) -> tuple[int, IntegerPolynomial]:
         _backend_error(BackendFailureReason.INVALID_OUTPUT, exc)
     request_checkpoint("after cyclotomic backend")
     coefficients: tuple[int, ...]
+    normalized_coefficients: list[int] = []
     try:
-        normalized_coefficients: list[int] = []
         for value in raw_coefficients:
             if (
                 type(value) is not int
@@ -315,6 +336,24 @@ def _compute(index: int) -> tuple[int, IntegerPolynomial]:
     except Exception as exc:
         _backend_error(BackendFailureReason.INVALID_OUTPUT, exc)
     coefficients = tuple(normalized_coefficients)
+    return coefficients
+
+
+def _compute(index: int) -> tuple[int, IntegerPolynomial]:
+    request_checkpoint("before cyclotomic admission")
+    _require_factorization_work(index)
+    factorization = _factor_index(index)
+    admission = _admit(index, factorization)
+    request_checkpoint("after cyclotomic admission")
+    if _is_prime_index(index, factorization):
+        polynomial_value = _prime_cyclotomic(index)
+        request_checkpoint("before cyclotomic result construction")
+        return admission.degree, polynomial_value
+    if _is_twice_odd_index(index, factorization):
+        polynomial_value = _twice_odd_cyclotomic(index, factorization)
+        request_checkpoint("before cyclotomic result construction")
+        return admission.degree, polynomial_value
+    coefficients = _backend_cyclotomic_coefficients(index)
     actual_output_digits = sum(len(str(abs(value))) for value in coefficients)
     if (
         len(coefficients) != admission.degree + 1

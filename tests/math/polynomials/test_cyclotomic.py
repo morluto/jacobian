@@ -220,6 +220,55 @@ def test_twice_odd_prime_index_uses_phi_m_of_minus_x() -> None:
     assert product == expected
 
 
+def test_twice_odd_composite_index_uses_phi_m_of_minus_x() -> None:
+    """``Phi_{2m}(x) = Phi_m(-x)`` holds for composite odd ``m`` too.
+
+    ``426 = 2 * 213`` has the same radical-free identity as a twice-prime
+    index, so it must be admitted by charging the odd half rather than the
+    full index radical.
+    """
+    import sympy
+
+    index = 426
+    result = _run(CyclotomicRequest(index=index))
+    assert result.totient == 140
+    expected = tuple(
+        int(coefficient)
+        for coefficient in sympy.cyclotomic_poly(
+            index, sympy.Symbol("x"), polys=True
+        ).all_coeffs()
+    )
+    assert result.polynomial.coefficients == expected
+    # The odd half is the construction source; alternating signs reconstruct it.
+    odd_result = _run(CyclotomicRequest(index=index // 2))
+    assert result.polynomial.coefficients == tuple(
+        coefficient
+        if (len(odd_result.polynomial.coefficients) - 1 - offset) % 2 == 0
+        else -coefficient
+        for offset, coefficient in enumerate(odd_result.polynomial.coefficients)
+    )
+
+
+def test_twice_odd_reduction_generalizes_beyond_prime_halves() -> None:
+    """A previously rejected twice-odd composite is now admitted."""
+    from jacobian.math.polynomials._cyclotomic import _admit, _factor_index
+
+    admission = _admit(426, _factor_index(426))
+    assert admission.degree == 140
+
+
+def test_factor_map_exponents_are_bounded_before_exponentiation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Malformed backend output cannot request ``prime**exponent`` growth."""
+    import sympy
+
+    monkeypatch.setattr(sympy, "factorint", lambda index: {2: 1_000_000_000})
+    with pytest.raises(OperationBackendError) as exc_info:
+        cyclotomic(12)
+    assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT
+
+
 def test_composite_reported_as_a_prime_base_is_rejected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

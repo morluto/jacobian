@@ -102,8 +102,13 @@ def _gaussian_component_digits(value: tuple[Fraction, Fraction]) -> int:
 def _gaussian_quotient_digit_bound(
     numerator: tuple[Fraction, Fraction],
     denominator: tuple[Fraction, Fraction],
-) -> int:
-    """Bound real/imaginary component digits of a Gaussian quotient."""
+) -> tuple[int, tuple[Fraction, Fraction] | None]:
+    """Bound the Gaussian quotient and return the exact fallback quotient.
+
+    When the coarse digit estimate already fits the bound, the quotient is not
+    computed and ``None`` is returned. Otherwise the exact quotient is computed
+    once here and handed back so admission does not divide a second time.
+    """
 
     real, imag = numerator
     denom_real, denom_imag = denominator
@@ -129,12 +134,18 @@ def _gaussian_quotient_digit_bound(
 
     coarse = max(_divide_digits(real_num, norm), _divide_digits(imag_num, norm))
     if coarse <= MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS:
-        return coarse
-    return _gaussian_component_digits(_divide(numerator, denominator))
+        return coarse, None
+    exact = _divide(numerator, denominator)
+    return _gaussian_component_digits(exact), exact
 
 
 def _exceeds_intermediate_digits(digits: int) -> bool:
-    return 4 * digits + 3 > MAX_CROSS_RATIO_INTERMEDIATE_DIGITS
+    # ``digits`` bounds a Gaussian component of an intermediate product. The
+    # quotient squares that product (the denominator norm), which roughly doubles
+    # the component width, so reserve one further factor of two. The earlier
+    # factor of four rejected values whose square already fits the envelope, for
+    # example cancellation-driven cross-ratios near the carrier boundary.
+    return 2 * digits + 1 > MAX_CROSS_RATIO_INTERMEDIATE_DIGITS
 
 
 def _reject_resource(code: str, message: str) -> NoReturn:
@@ -165,15 +176,16 @@ def _admitted_multiply(
     left: tuple[Fraction, Fraction], right: tuple[Fraction, Fraction]
 ) -> tuple[Fraction, Fraction]:
     bound = _gaussian_multiply_digit_bound(left, right)
-    if bound > MAX_CROSS_RATIO_INTERMEDIATE_DIGITS or _exceeds_intermediate_digits(
-        bound
-    ):
+    if bound > MAX_CROSS_RATIO_INTERMEDIATE_DIGITS:
         _reject_resource(
             "intermediate_height_bound",
             "cross-ratio determinant products and quotient exceed the exact intermediate digit bound",
         )
     product = _multiply(left, right)
-    if _gaussian_component_digits(product) > MAX_CROSS_RATIO_INTERMEDIATE_DIGITS:
+    # The bound is a sum-of-products overestimate; cancellation between the two
+    # products can make the exact result far smaller. Admit on the computed
+    # product and reserve only the square that the quotient norm will require.
+    if _exceeds_intermediate_digits(_gaussian_component_digits(product)):
         _reject_resource(
             "intermediate_height_bound",
             "cross-ratio determinant products and quotient exceed the exact intermediate digit bound",
@@ -241,15 +253,17 @@ def _admit_request(request: GaussianCrossRatioSource) -> _CrossRatioPlan:
             code="geometry.gaussian_cross_ratio.undefined",
             message="cross-ratio denominator determinants must be nonzero",
         )
-    if (
-        _gaussian_quotient_digit_bound(numerator, denominator)
-        > MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS
-    ):
+    bound, fallback_quotient = _gaussian_quotient_digit_bound(numerator, denominator)
+    if bound > MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS:
         _reject_resource(
             "output_height_bound",
             "cross-ratio output exceeds the Gaussian-rational component bound",
         )
-    quotient = _divide(numerator, denominator)
+    # _gaussian_quotient_digit_bound computes the exact quotient when the coarse
+    # estimate exceeds the bound; reuse it instead of dividing a second time.
+    quotient = fallback_quotient if fallback_quotient is not None else _divide(
+        numerator, denominator
+    )
     if _gaussian_component_digits(quotient) > MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS:
         _reject_resource(
             "output_height_bound",

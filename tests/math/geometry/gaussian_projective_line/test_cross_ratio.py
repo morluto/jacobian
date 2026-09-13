@@ -302,7 +302,12 @@ def test_mixed_full_height_products_are_rejected_before_construction() -> None:
     )
 
 
-def test_independent_coordinate_products_are_refused_before_multiplication() -> None:
+def test_independent_coordinate_products_are_refused_before_division() -> None:
+    """Independent coordinate products exceed the output envelope, not the
+    intermediate one: the operand products fit the intermediate bound and the
+    cross-ratio quotient is refused during admission before the output
+    division."""
+
     scale = 10**4095
     request = GaussianCrossRatioSource(
         first=_point(
@@ -330,7 +335,7 @@ def test_independent_coordinate_products_are_refused_before_multiplication() -> 
         gaussian_rational_cross_ratio(request)
     assert (
         error.value.errors()[0]["type"]
-        == "geometry.gaussian_cross_ratio.intermediate_height_bound"
+        == "geometry.gaussian_cross_ratio.output_height_bound"
     )
 
 
@@ -379,3 +384,76 @@ def test_stereographic_conjugate_product_keeps_shared_denominators() -> None:
     real, imag = result.as_fractions()
     assert real == 0
     assert imag == Fraction(-(1 + scale * scale), 4 * scale)
+
+
+def test_cancellation_driven_square_keeps_carrier_boundary_cross_ratio() -> None:
+    """Cancellation between determinant products must not be over-rejected.
+
+    The four normalized real points below have 4095-digit numerators and
+    denominators, so the determinant products have 12287-digit components, but
+    the products cancel and the cross-ratio is exactly ``-1``. The required
+    square stays inside the intermediate envelope, so the request is admitted.
+    """
+
+    scale = 10**4095
+    request = GaussianCrossRatioSource(
+        first=_point(
+            _z(1),
+            GaussianRational.from_fractions(
+                Fraction(2 * scale + 1, 5 * scale + 1), Fraction()
+            ),
+        ),
+        second=_point(
+            _z(1),
+            GaussianRational.from_fractions(
+                Fraction(scale + 1, 3 * scale + 1), Fraction()
+            ),
+        ),
+        third=_point(
+            _z(1),
+            GaussianRational.from_fractions(
+                Fraction(3 * scale + 2, 8 * scale + 2), Fraction()
+            ),
+        ),
+        fourth=_point(
+            _z(1), GaussianRational.from_fractions(Fraction(1, 2), Fraction())
+        ),
+    )
+    result = gaussian_rational_cross_ratio(request)
+    assert result.as_fractions() == (Fraction(-1), Fraction())
+
+
+def test_quotient_is_divided_once_during_admission(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Admission must reuse the exact quotient instead of dividing twice."""
+
+    from jacobian.math.geometry.gaussian_projective_line import operations as ops
+
+    original = ops._divide
+    calls = 0
+
+    def counted(
+        numerator: tuple[Fraction, Fraction], denominator: tuple[Fraction, Fraction]
+    ) -> tuple[Fraction, Fraction]:
+        nonlocal calls
+        calls += 1
+        return original(numerator, denominator)
+
+    monkeypatch.setattr(ops, "_divide", counted)
+    scale = 10**4094
+    request = GaussianCrossRatioSource(
+        first=_point(_z(0), _z(1)),
+        second=_point(_z(1), _z(0)),
+        third=_point(
+            GaussianRational.from_fractions(Fraction(scale), Fraction(scale)), _z(1)
+        ),
+        fourth=_point(
+            GaussianRational.from_fractions(Fraction(scale), Fraction()), _z(1)
+        ),
+    )
+    result = gaussian_rational_cross_ratio(request)
+    assert result.as_fractions() == (Fraction(1), Fraction(1))
+    # One division comes from projective-point normalization; the cross-ratio
+    # quotient itself must not be computed a second time during admission.
+    assert calls == 1

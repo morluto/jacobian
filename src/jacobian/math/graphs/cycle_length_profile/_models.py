@@ -10,6 +10,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.graphs.values import (
+    MAX_SIMPLE_GRAPH_EDGES,
     MAX_SIMPLE_GRAPH_VERTICES,
     SimpleUndirectedGraph,
 )
@@ -165,8 +166,14 @@ class FixedLengthCycleEnumerationResult(StrictModel):
     )
     cycle_count: StrictInt = Field(ge=0, le=20_000)
     cycles: tuple[tuple[str, ...], ...] = Field(max_length=20_000)
-    vertex_incidence: tuple[CycleIncidenceRow, ...]
-    edge_incidence: tuple[CycleIncidenceRow, ...]
+    vertex_incidence: tuple[CycleIncidenceRow, ...] = Field(
+        max_length=MAX_VERTICES,
+        description="One incidence row per declared source vertex.",
+    )
+    edge_incidence: tuple[CycleIncidenceRow, ...] = Field(
+        max_length=MAX_SIMPLE_GRAPH_EDGES,
+        description="One incidence row per declared source edge.",
+    )
 
     @model_validator(mode="after")
     def require_structural_family(self) -> Self:  # noqa: C901

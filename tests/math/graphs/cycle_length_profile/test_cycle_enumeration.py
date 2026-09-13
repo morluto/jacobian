@@ -39,7 +39,7 @@ def _square_with_diagonal() -> SimpleUndirectedGraph:
 def test_simple_and_chordless_cycle_families_are_distinct() -> None:
     graph = _square_with_diagonal()
     simple = enumerate_fixed_length_cycles(graph, 4)
-    chordless = enumerate_fixed_length_cycles(graph, 4, chordless=True)
+    chordless = enumerate_chordless_fixed_length_cycles(graph, 4)
 
     assert simple.cycles == (("0", "1", "2", "3"),)
     assert chordless.cycles == ()
@@ -70,7 +70,7 @@ def test_complete_graph_triangle_enumeration_matches_binomial_count() -> None:
             (left, right) for left in vertices for right in vertices if left < right
         ),
     )
-    result = enumerate_fixed_length_cycles(graph, 3, chordless=True)
+    result = enumerate_chordless_fixed_length_cycles(graph, 3)
     assert len(result.cycles) == 10
     assert all(
         cycle == min(cycle, (cycle[0], cycle[2], cycle[1])) for cycle in result.cycles
@@ -454,3 +454,64 @@ def test_exact_catalog_ids_are_published() -> None:
     ids = {tool.operation_id for tool in TOOLS}
     assert "graph.cycle.fixed_length.enumerate" in ids
     assert "graph.cycle.chordless_fixed_length.enumerate" in ids
+
+
+def _complete_bipartite(left: int, right: int) -> SimpleUndirectedGraph:
+    lefts = tuple(f"a{index}" for index in range(left))
+    rights = tuple(f"b{index}" for index in range(right))
+    return SimpleUndirectedGraph(
+        vertices=lefts + rights,
+        edges=tuple((a, b) for a in lefts for b in rights),
+    )
+
+
+def test_bipartite_odd_cycle_family_is_presolved_empty() -> None:
+    """K26,25 has no triangle; the empty family must not pay the generic bound."""
+    result = enumerate_fixed_length_cycles(_complete_bipartite(26, 25), 3)
+    assert result.cycles == ()
+    assert result.cycle_count == 0
+
+
+def test_bipartite_infeasible_even_length_is_presolved_empty() -> None:
+    """K2,9 has no 6-cycle: a part with two vertices cannot supply three."""
+    result = enumerate_fixed_length_cycles(_complete_bipartite(2, 9), 6)
+    assert result.cycles == ()
+    assert result.cycle_count == 0
+
+
+def test_mixed_blocks_keep_exact_multipartite_bound() -> None:
+    """A disjoint K11,11 plus a 5-cycle keeps the exact chordless 4-cycle count."""
+    lefts = tuple(f"a{index}" for index in range(11))
+    rights = tuple(f"b{index}" for index in range(11))
+    pentagon = tuple(f"c{index}" for index in range(5))
+    edges = tuple((a, b) for a in lefts for b in rights) + tuple(
+        tuple(sorted((pentagon[index], pentagon[(index + 1) % 5])))
+        for index in range(5)
+    )
+    graph = SimpleUndirectedGraph(vertices=lefts + rights + pentagon, edges=edges)
+    result = enumerate_chordless_fixed_length_cycles(graph, 4)
+    assert result.cycle_count == 3025
+
+
+def test_incidence_rows_are_bounded_before_decoding() -> None:
+    """A forged result with excess incidence rows fails at field level."""
+    graph = _complete_bipartite(2, 2)
+    payload = {
+        "graph": graph.model_dump(),
+        "cycle_length": 4,
+        "family_kind": "SIMPLE",
+        "cycle_count": 1,
+        "cycles": [["a0", "b0", "a1", "b1"]],
+        "vertex_incidence": [
+            {"source": [vertex], "cycle_indices": []} for vertex in graph.vertices
+        ]
+        * 100,
+        "edge_incidence": [
+            {"source": list(edge), "cycle_indices": []} for edge in graph.edges
+        ],
+    }
+    with pytest.raises(ValidationError) as error:
+        FixedLengthCycleEnumerationResult.model_validate(payload)
+    # The outer incidence arrays are rejected at field level before any
+    # structural validator walks the forged rows.
+    assert error.value.errors()[0]["loc"] == ("vertex_incidence",)

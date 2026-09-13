@@ -413,10 +413,19 @@ def _canonicalize_cycle(cycle: tuple[str, ...]) -> tuple[str, ...]:
 def enumerate_fixed_length_cycles(
     graph: SimpleUndirectedGraph,
     cycle_length: int,
-    *,
-    chordless: bool = False,
 ) -> FixedLengthCycleEnumerationResult:
-    """Return every simple (or, privately, chordless) cycle of one length."""
+    """Return every simple cycle of one fixed length."""
+
+    return _enumerate_cycles(graph, cycle_length, chordless=False)
+
+
+def _enumerate_cycles(
+    graph: SimpleUndirectedGraph,
+    cycle_length: int,
+    *,
+    chordless: bool,
+) -> FixedLengthCycleEnumerationResult:
+    """Return every simple or chordless cycle of one length."""
 
     request_checkpoint("before fixed-length cycle enumeration")
     plan = _admit_fixed_cycle_enumeration(graph, cycle_length, chordless=chordless)
@@ -521,7 +530,7 @@ def enumerate_chordless_fixed_length_cycles(
 ) -> FixedLengthCycleEnumerationResult:
     """Return every induced simple cycle of one fixed length."""
 
-    return enumerate_fixed_length_cycles(graph, cycle_length, chordless=True)
+    return _enumerate_cycles(graph, cycle_length, chordless=True)
 
 
 @dataclass(frozen=True, slots=True)
@@ -557,6 +566,27 @@ def _complete_multipartite_part_sizes(
             return None
         sizes.append(len(part))
     return tuple(sizes)
+
+
+def _multipartite_cycle_exists(part_sizes: tuple[int, ...], cycle_length: int) -> bool:
+    """Return whether a complete multipartite graph contains a cycle of this length.
+
+    Edges join distinct parts. A cycle of length ``L`` needs at least three
+    parts, or exactly two parts when ``L`` is even and each part supplies
+    ``L / 2`` distinct vertices. In every case the cycle cannot exceed the
+    total vertex count.
+    """
+
+    total = sum(part_sizes)
+    if cycle_length > total or cycle_length < 3:
+        return False
+    if cycle_length == 3:
+        return len(part_sizes) >= 3
+    if cycle_length % 2 == 0 and 2 * min(part_sizes, default=0) < cycle_length:
+        # An even cycle may still route through three or more parts.
+        non_minimum = total - min(part_sizes, default=0)
+        return len(part_sizes) >= 3 and non_minimum >= cycle_length // 2 + 1
+    return True
 
 
 def _chordless_four_cycle_count(part_sizes: tuple[int, ...]) -> int:
@@ -600,24 +630,30 @@ def _block_adjacency(
     return {vertex: adjacency_sets[vertex] & block_set for vertex in block}
 
 
-def _chordless_multipartite_cycle_bound(
-    blocks: tuple[tuple[str, ...], ...],
+def _chordless_multipartite_block_bound(
+    block: tuple[str, ...],
     adjacency_sets: dict[str, set[str]],
     cycle_length: int,
 ) -> int | None:
-    """Exact chordless bound when every cyclic block is complete multipartite."""
+    """Exact induced-cycle count for one complete multipartite block.
 
-    total = 0
-    for block in blocks:
-        part_sizes = _complete_multipartite_part_sizes(
-            block, _block_adjacency(block, adjacency_sets)
-        )
-        if part_sizes is None:
-            return None
-        if cycle_length >= 5:
-            continue
-        total += _chordless_four_cycle_count(part_sizes)
-    return total
+    Returns the exact count when the block is complete multipartite (zero when
+    the block admits no induced cycle of this length) and ``None`` when the
+    block is not complete multipartite and needs the generic bound.
+    """
+
+    part_sizes = _complete_multipartite_part_sizes(
+        block, _block_adjacency(block, adjacency_sets)
+    )
+    if part_sizes is None:
+        return None
+    if not _multipartite_cycle_exists(part_sizes, cycle_length):
+        return 0
+    if cycle_length == 4:
+        return _chordless_four_cycle_count(part_sizes)
+    # A complete multipartite graph has no induced cycle of length at least
+    # five: any longer cycle closes a chord between distinct parts.
+    return 0
 
 
 def _reject_fixed_cycle_resource(code: str, message: str) -> None:
@@ -771,33 +807,17 @@ def _admit_fixed_cycle_search_plan(
     max_core_degree = max(
         (len(neighbors) for neighbors in adjacency_sets.values()), default=0
     )
-    chordless_four_cycle_bound: int | None = None
-    if chordless and cycle_length >= 4:
-        multipartite_bound = _chordless_multipartite_cycle_bound(
-            cyclic_blocks,
-            adjacency_sets,
-            cycle_length,
-        )
-        if multipartite_bound is not None:
-            if cycle_length >= 5 or multipartite_bound == 0:
-                _admit_empty_fixed_cycle(
-                    graph,
-                    cycle_length,
-                    source_characters=source_characters,
-                    largest_label=largest_label,
-                )
-                return None
-            chordless_four_cycle_bound = multipartite_bound
     if (
         chordless
         and cycle_length >= 4
-        and chordless_four_cycle_bound is None
         and core_order >= 2
         and max_core_degree == core_order - 1
         and all(
             len(neighbors) == core_order - 1 for neighbors in adjacency_sets.values()
         )
     ):
+        # The whole core is a complete graph, which has no induced cycle of
+        # length at least four.
         _admit_empty_fixed_cycle(
             graph,
             cycle_length,
@@ -810,6 +830,33 @@ def _admit_fixed_cycle_search_plan(
     cycle_upper_bound = 0
     search_blocks: list[_FixedCycleBlock] = []
     for block in cyclic_blocks:
+        exact_chordless = None
+        if chordless and cycle_length >= 4:
+            exact_chordless = _chordless_multipartite_block_bound(
+                block, adjacency_sets, cycle_length
+            )
+        if exact_chordless is not None:
+            cycle_upper_bound += exact_chordless
+            if exact_chordless and cycle_length == 4:
+                search_blocks.append(
+                    _FixedCycleBlock(
+                        adjacency={
+                            vertex: tuple(sorted(adjacency_sets[vertex] & set(block)))
+                            for vertex in block
+                        },
+                        core_vertices=block,
+                    )
+                )
+            continue
+        part_sizes = _complete_multipartite_part_sizes(
+            block, _block_adjacency(block, adjacency_sets)
+        )
+        if part_sizes is not None and not _multipartite_cycle_exists(
+            part_sizes, cycle_length
+        ):
+            # A recognized multipartite block with no cycle of this length
+            # contributes nothing and must not pay the generic all-vertex bound.
+            continue
         block_work, block_cycles, block_adjacency = _block_fixed_cycle_bounds(
             block, adjacency_sets, cycle_length, chordless=chordless
         )
@@ -819,8 +866,6 @@ def _admit_fixed_cycle_search_plan(
             search_blocks.append(
                 _FixedCycleBlock(adjacency=block_adjacency, core_vertices=block)
             )
-    if chordless_four_cycle_bound is not None:
-        cycle_upper_bound = chordless_four_cycle_bound
     if complete_work > MAX_FIXED_CYCLE_WORK:
         _reject_fixed_cycle_resource(
             "cycle_enumeration.work_bound",

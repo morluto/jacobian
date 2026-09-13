@@ -295,7 +295,9 @@ def rational_laurent_multiply(
                     request_checkpoint("during Laurent convolution")
                 exponents = tuple(
                     a + b
-                    for a, b in zip(left_term.exponents, right_term.exponents, strict=True)
+                    for a, b in zip(
+                        left_term.exponents, right_term.exponents, strict=True
+                    )
                 )
                 coefficients[exponents] = coefficients.get(exponents, Fraction()) + (
                     left_term.coefficient.as_fraction()

@@ -1123,16 +1123,13 @@ def _special_graph_generators(
         return complete_or_empty or path_or_cycle or repeated_cliques
     # A graph whose complement is a compact union of cliques (for example
     # complete bipartite K_{n,n}) has the same automorphism group as that
-    # complement, so the compact presentation transfers unchanged. A nonuniform
-    # vertex coloring is passed through the complement recognition, which reads
-    # the declared vertex colors. The ignored cross-component edge colors can
-    # only add a part permutation when they are nonuniform AND the vertex colors
-    # fail to separate the components, so skip only that combination.
-    if (
-        graph.edge_colors
-        and len(set(graph.edge_colors)) > 1
-        and len(set(graph.vertex_colors or ())) < 2
-    ):
+    # complement, so the compact presentation transfers unchanged. The
+    # complement's edges are the original non-edges, whose declared colors are
+    # ignored by the clique recognition, so the shortcut is only sound when the
+    # edge coloring cannot distinguish parts: absent or uniform. A nonuniform
+    # edge coloring can pin a specific cross-component edge and must fall back to
+    # the generic search.
+    if graph.edge_colors and len(set(graph.edge_colors)) > 1:
         return None
     complement_edges = {
         (left, right)

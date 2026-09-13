@@ -329,6 +329,44 @@ def _admit_enumeration(
     domination_work = (
         _domination_comparison_count(remaining_unique) if need_domination else 0
     )
+    if need_domination:
+        # Charge the domination presolve and the search it precedes under one
+        # bound before the subset scan expands. The pre-domination edge set is
+        # a superset of the minimal edges, so its candidate and minimality work
+        # is a sound upper bound.
+        pre_edges = remaining_unique
+        pre_occupied = frozenset().union(*pre_edges)
+        pre_free = tuple(
+            vertex
+            for vertex in vertices
+            if vertex not in forced and vertex in pre_occupied
+        )
+        pre_free_maximum = maximum - len(forced)
+        pre_candidate_count = sum(
+            comb(len(pre_free), size)
+            for size in range(0 if forced else 1, pre_free_maximum + 1)
+        )
+        pre_constraint_count = len(pre_edges) + len(forced)
+        pre_minimality_work = sum(
+            (len(forced) + size) * pre_constraint_count * comb(len(pre_free), size)
+            for size in range(0 if forced else 1, pre_free_maximum + 1)
+        )
+        if (
+            pre_candidate_count * len(pre_edges)
+            + pre_minimality_work
+            + domination_work
+            > MAX_TRANSVERSAL_ENUMERATION_WORK
+        ):
+            raise OperationResourceAdmissionError(
+                location=("maximum_cardinality",),
+                code="hypergraph.minimal_transversal.work_bound",
+                message=(
+                    "candidate-edge membership and minimality work has "
+                    f"{pre_candidate_count * len(pre_edges) + pre_minimality_work + domination_work} "
+                    "checks; maximum is "
+                    f"{MAX_TRANSVERSAL_ENUMERATION_WORK}"
+                ),
+            )
     edges = _minimal_edges(remaining_unique) if need_domination else remaining_unique
     remaining_edges = edges
     if len(remaining_edges) == 1:
@@ -387,7 +425,9 @@ def _admit_enumeration(
             ),
         )
 
-    output_incidences = possible_rows * maximum
+    output_incidences = possible_rows * min(
+        maximum, len(forced) + len(free_vertices)
+    )
     if output_incidences > MAX_TRANSVERSAL_OUTPUT_INCIDENCES:
         raise OperationResourceAdmissionError(
             location=("maximum_cardinality",),

@@ -655,3 +655,47 @@ def test_uniform_triples_skip_pairwise_domination_inside_search_envelope() -> No
     assert forced == frozenset()
     assert maximum == 2
     assert len(remaining) == 12_000
+
+
+def test_accepted_mixed_size_request_charges_domination_parity() -> None:
+    """An accepted mixed-size request exercises and bounds the domination scan."""
+    vertex_count = 12
+    maximum_cardinality = 4
+    vertices = tuple(f"v{index:02d}" for index in range(vertex_count))
+    mixed = (
+        tuple(combinations(vertices, 2))[:20] + tuple(combinations(vertices, 3))[:20]
+    )
+    source = FiniteHypergraph(
+        vertices=vertices,
+        edges=tuple((f"edge{index:03d}", edge) for index, edge in enumerate(mixed)),
+    )
+    charged_domination = enumeration._domination_comparison_count(
+        tuple(frozenset(edge) for edge in mixed)
+    )
+    assert charged_domination > 0
+
+    executed = {"domination": 0}
+    original = enumeration._minimal_edges
+
+    def count_minimal_edges(
+        edges: tuple[frozenset[str], ...],
+    ) -> tuple[frozenset[str], ...]:
+        # Replay the size-ordered subset scan to measure the actual comparisons.
+        counts: dict[int, int] = {}
+        for edge in edges:
+            counts[len(edge)] = counts.get(len(edge), 0) + 1
+        smaller = 0
+        for size in sorted(counts):
+            executed["domination"] += counts[size] * smaller
+            smaller += counts[size]
+        return original(edges)
+
+    with patch.object(enumeration, "_minimal_edges", side_effect=count_minimal_edges):
+        result = enumerate_minimal_transversals(
+            MinimalTransversalEnumerationRequest(
+                hypergraph=source, maximum_cardinality=maximum_cardinality
+            )
+        )
+    assert result.transversals
+    assert executed["domination"] > 0
+    assert executed["domination"] <= charged_domination

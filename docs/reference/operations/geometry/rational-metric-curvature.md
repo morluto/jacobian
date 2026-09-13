@@ -61,6 +61,13 @@ also caps the axis at four coordinates. Authored
 `RationalCoordinateTensor` model validation (`preflight_tensor_shape`). The
 curvature plan then separately caps the complete output locus — inherited
 source guards plus generated denominator identities — at 768 guards.
+Independently of source-model validation, the plan's canonical-output
+admission (`Dag.admit_output` via `_validate_canonical_result_bound`) applies
+its own per-polynomial caps on every produced numerator and denominator: at
+most 256 terms, an exponent of at most 64, and coefficient components of at
+most 128 digits. An authored fraction that satisfies the source limits can
+still be refused when its inverse or curvature expands beyond these result
+caps.
 Transport byte limits are not used as mathematical admission quantities. A
 request inherits `started_at + 120` as the fixed operation-owned wall safety
 envelope; a shorter caller deadline wins.

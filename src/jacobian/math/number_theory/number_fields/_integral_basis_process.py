@@ -46,6 +46,14 @@ _WORKER_ADDRESS_SPACE_BYTES = 1024 * 1024 * 1024
 _WORKER_FILE_SIZE_BYTES = 1024 * 1024
 _WORKER_STDERR_BYTES = 64 * 1024
 
+# A worker answers a rejected admission with a typed ``rejected`` response that
+# is larger than the bare discriminant it replaces, so the stdout envelope must
+# budget both branches. The two character ceilings below bound what the worker
+# may emit; ``bounded_rejection_text`` is the only producer of that text, so
+# the parent can budget a rejection it has not seen yet.
+_WORKER_REJECTION_CODE_CHARACTERS = 96
+_WORKER_REJECTION_MESSAGE_CHARACTERS = 512
+
 
 @dataclass(frozen=True, slots=True)
 class IntegralBasisWorkerResult:
@@ -160,6 +168,65 @@ def run_integral_basis_worker(
     return response
 
 
+def bounded_rejection_text(value: str, *, limit: int) -> str:
+    """Return a rejection-text prefix whose strict-JSON encoding fits ``limit``.
+
+    Rejection code and message are diagnostics, not mathematical content, so
+    the worker may rewrite them to fit the envelope. Every retained character is
+    single-byte ASCII that needs no JSON escape, which makes the character
+    ceiling an exact byte ceiling. Control characters, multi-byte UTF-8, and the
+    two bytes a quote or backslash expands to are therefore folded away instead
+    of inflating a response the parent has not seen yet.
+    """
+
+    cleaned = "".join(
+        character
+        if 0x20 <= ord(character) < 0x7F and character not in {'"', "\\"}
+        else " "
+        for character in value
+    )
+    return cleaned[:limit]
+
+
+def worker_rejection(
+    error: OperationDomainValidationError | OperationResourceAdmissionError,
+    *,
+    request_digest: str,
+) -> dict[str, object]:
+    """Project one typed admission failure into the bounded worker response.
+
+    The parent and the worker share this projection so the advertised stdout
+    envelope and the emitted rejection cannot drift apart.
+    """
+
+    detail = error.errors()[0]
+    return {
+        "kind": "rejected",
+        "resource": isinstance(error, OperationResourceAdmissionError),
+        "code": bounded_rejection_text(
+            str(detail["type"]),
+            limit=_WORKER_REJECTION_CODE_CHARACTERS,
+        ),
+        "message": bounded_rejection_text(
+            str(detail["msg"]),
+            limit=_WORKER_REJECTION_MESSAGE_CHARACTERS,
+        ),
+        "request_digest": request_digest,
+    }
+
+
+def _worker_rejection_envelope() -> dict[str, object]:
+    """Return the largest rejection response the worker is allowed to emit."""
+
+    return {
+        "kind": "rejected",
+        "resource": False,
+        "code": "x" * _WORKER_REJECTION_CODE_CHARACTERS,
+        "message": "x" * _WORKER_REJECTION_MESSAGE_CHARACTERS,
+        "request_digest": "0" * 64,
+    }
+
+
 def _worker_stdout_limit(
     field: SimpleNumberFieldPresentation,
     *,
@@ -180,7 +247,10 @@ def _worker_stdout_limit(
         response["basis"] = [
             [dict(rational) for _ in range(degree)] for _ in range(degree)
         ]
-    return len(encode_strict_json(response))
+    return max(
+        len(encode_strict_json(response)),
+        len(encode_strict_json(_worker_rejection_envelope())),
+    )
 
 
 class _WorkerRejectionError(Exception):

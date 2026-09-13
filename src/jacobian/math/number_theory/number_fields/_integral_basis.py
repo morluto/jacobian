@@ -62,6 +62,23 @@ def _integer_digits(value: int) -> int:
     return len(format_canonical_integer(abs(value))) if value else 1
 
 
+def _monicization_digit_growth(leading: int) -> int:
+    """Return the digits one multiplication by ``leading`` can add.
+
+    Monicizing ``f`` to ``A^(n-1) f(x/A)`` scales the coefficient at index
+    ``i`` by ``A^(i-1)``, so each power of the leading coefficient adds at most
+    ``ceil(log10 A)`` digits. A unit leading coefficient multiplies by one and
+    adds nothing: counting its one digit as growth charges ``i - 1`` phantom
+    digits to every monic field and rejects valid discriminants that already
+    fit the declared carrier.
+    """
+
+    magnitude = abs(leading)
+    if magnitude <= 1:
+        return 0
+    return _integer_digits(magnitude - 1)
+
+
 def monicized_discriminant_digit_bound(
     field: SimpleNumberFieldPresentation,
 ) -> int:
@@ -71,11 +88,11 @@ def monicized_discriminant_digit_bound(
         int(coefficient) for coefficient in field.coefficients_descending
     )
     leading = abs(coefficients[0])
-    leading_digits = _integer_digits(leading)
+    growth = _monicization_digit_growth(leading)
     widest = 1
     for index, coefficient in enumerate(coefficients[1:], start=1):
         coeff_digits = _integer_digits(abs(coefficient))
-        widest = max(widest, coeff_digits + (index - 1) * leading_digits)
+        widest = max(widest, coeff_digits + (index - 1) * growth)
     degree = field.degree
     return max(1, (2 * degree - 1) * widest + 4 * degree)
 

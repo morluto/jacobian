@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from typing import Any
 
 import pytest
 import sympy
@@ -33,6 +34,7 @@ from jacobian.math.number_theory.number_fields._tools import (
 )
 from jacobian.math.number_theory.number_fields.values import (
     MAX_NUMBER_FIELD_DISCRIMINANT_DIGITS,
+    MAX_SIMPLE_NUMBER_FIELD_DEGREE,
     SimpleNumberFieldElement,
     SimpleNumberFieldPresentation,
 )
@@ -208,7 +210,9 @@ def test_semiprime_discriminant_is_rejected_inside_the_worker(
     launched = False
     original = process_runtime.run_bounded_process
 
-    def record_launch(*args: object, **kwargs: object) -> object:
+    def record_launch(
+        *args: Any, **kwargs: Any
+    ) -> process_runtime.BoundedProcessResult:
         nonlocal launched
         launched = True
         return original(*args, **kwargs)
@@ -358,3 +362,85 @@ def test_ring_of_integers_result_rejects_a_basis_from_another_field() -> None:
     assert error.value.errors()[0]["type"] == (
         "number_field.ring_of_integers_basis_field"
     )
+
+
+def test_native_ring_of_integers_runs_in_the_killable_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The package-exported native entry shares the catalog process boundary.
+
+    A native Python call is an admitted boundary like ``math.run``: the
+    irreducibility, discriminant, and ``round_two`` work must sit behind the
+    request-owned killable worker so cancellation and the request envelope are
+    observed identically on both routes.
+    """
+
+    import jacobian.process as process_runtime
+
+    launched: list[bool] = []
+    original = process_runtime.run_bounded_process
+
+    def record_launch(
+        *args: Any, **kwargs: Any
+    ) -> process_runtime.BoundedProcessResult:
+        launched.append(True)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(process_runtime, "run_bounded_process", record_launch)
+    with pytest.raises(OperationDomainValidationError) as error:
+        ring_of_integers(
+            SimpleNumberFieldPresentation(
+                coefficients_descending=(1, 0, -100003 * 100019)
+            )
+        )
+    assert launched
+    assert error.value.errors()[0]["type"] == (
+        "number_field.ring_of_integers_discriminant_factorization_bound"
+    )
+
+
+def test_monic_leading_coefficient_adds_no_monicization_growth() -> None:
+    """Multiplying by ``1**k`` adds no digits, so monic fields are not charged.
+
+    The previous estimate treated a unit leading coefficient as one digit of
+    growth per power and overcharged every coefficient by ``index - 1`` digits,
+    rejecting monic fields whose discriminant already fit the carrier.
+    """
+
+    unit_leading = SimpleNumberFieldPresentation(
+        coefficients_descending=(1, *([0] * 125), -(2 * 3**534))
+    )
+    assert unit_leading.degree == MAX_SIMPLE_NUMBER_FIELD_DEGREE
+    assert monicized_discriminant_digit_bound(unit_leading) == (
+        MAX_NUMBER_FIELD_DISCRIMINANT_DIGITS
+    )
+
+    # A leading coefficient of ten contributes ceil(log10 10) == 1 digit per
+    # power, not the two digits of its own decimal representation, so the
+    # constant term is scaled to 10**4 and the envelope grows by four digits.
+    ten_leading = SimpleNumberFieldPresentation(
+        coefficients_descending=(10, *([0] * 4), -1)
+    )
+    monic_quintic = SimpleNumberFieldPresentation(
+        coefficients_descending=(1, *([0] * 4), -1)
+    )
+    assert monicized_discriminant_digit_bound(monic_quintic) == 9 * 1 + 4 * 5
+    assert monicized_discriminant_digit_bound(ten_leading) == 9 * 5 + 4 * 5
+
+
+def test_high_degree_monic_field_is_not_rejected_on_the_phantom_digit_estimate() -> (
+    None
+):
+    """The degree-126 Eisenstein discriminant fits the declared carrier.
+
+    ``x^126 + 2*3^534`` has a 32,151-digit polynomial discriminant. The
+    monicization envelope must admit it instead of rejecting the request on an
+    estimate that charged 125 phantom digits to the constant coefficient.
+    """
+
+    field = SimpleNumberFieldPresentation(
+        coefficients_descending=(1, *([0] * 125), -(2 * 3**534))
+    )
+    admitted = require_factorizable_discriminant(field)
+    assert admitted is not None
+    assert abs(admitted) < 10**MAX_NUMBER_FIELD_DISCRIMINANT_DIGITS

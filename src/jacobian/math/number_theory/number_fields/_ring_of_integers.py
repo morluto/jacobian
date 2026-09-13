@@ -15,13 +15,12 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.number_theory.number_fields._integral_basis import (
-    integral_basis_coordinates,
-    recognized_integral_basis,
-    require_factorizable_discriminant,
+from jacobian.math.number_theory.number_fields._integral_basis_process import (
+    run_integral_basis_worker,
 )
 from jacobian.math.number_theory.number_fields._models import (
     MAX_INTEGRAL_BASIS_DEGREE,
+    NumberFieldRequest,
 )
 from jacobian.math.number_theory.number_fields.values import (
     NumberFieldDiscriminantInteger,
@@ -107,7 +106,14 @@ def _one_coordinates(degree: int) -> tuple[CanonicalRational, ...]:
 def ring_of_integers(
     field: SimpleNumberFieldPresentation,
 ) -> NumberFieldRingOfIntegersResult:
-    """Return the integral basis in the presentation's own power basis."""
+    """Return the integral basis in the presentation's own power basis.
+
+    Both the catalog operation and this package-exported native entry share one
+    implementation, so the irreducibility, discriminant, and ``round_two`` work
+    always runs behind the request-owned killable boundary. A native caller that
+    cancels, or whose request envelope expires mid-computation, is therefore
+    observed on the same path as a ``math.run`` request.
+    """
 
     if field.degree > MAX_INTEGRAL_BASIS_DEGREE:
         raise OperationDomainValidationError(
@@ -118,21 +124,18 @@ def ring_of_integers(
                 f"{MAX_INTEGRAL_BASIS_DEGREE}"
             ),
         )
-    admitted_discriminant = require_factorizable_discriminant(field)
-    recognized = recognized_integral_basis(
-        field,
-        admitted_polynomial_discriminant=admitted_discriminant,
-        admitted_irreducible=admitted_discriminant is not None,
+    worker_result = run_integral_basis_worker(
+        NumberFieldRequest(field=field),
+        include_basis=True,
     )
-    if recognized is None:
+    if worker_result is None:
         raise OperationDomainValidationError(
             location=("field",),
             code="number_field.defining_polynomial_must_be_irreducible",
             message="a number field requires an irreducible defining polynomial",
         )
-    coordinates = integral_basis_coordinates(field, recognized)
-    assert coordinates is not None
-    _ring, field_discriminant, _alpha, _leading = recognized
+    if worker_result.basis is None:
+        raise RuntimeError("number-field worker returned no integral basis")
     result = NumberFieldRingOfIntegersResult(
         field=field,
         basis=tuple(
@@ -140,9 +143,9 @@ def ring_of_integers(
                 presentation=field,
                 coefficients_ascending=vector,
             )
-            for vector in coordinates
+            for vector in worker_result.basis
         ),
-        field_discriminant=int(field_discriminant),
+        field_discriminant=worker_result.field_discriminant,
     )
     result.require_canonical_basis()
     return result

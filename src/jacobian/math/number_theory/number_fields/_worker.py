@@ -19,6 +19,9 @@ from jacobian.math.number_theory.number_fields._integral_basis import (
     recognized_integral_basis,
     require_factorizable_discriminant,
 )
+from jacobian.math.number_theory.number_fields._integral_basis_process import (
+    worker_rejection,
+)
 from jacobian.math.number_theory.number_fields._models import NumberFieldRequest
 
 
@@ -40,14 +43,10 @@ def main() -> int:
     try:
         admitted_discriminant = require_factorizable_discriminant(request.field)
     except (OperationResourceAdmissionError, OperationDomainValidationError) as exc:
-        detail = exc.errors()[0]
-        rejected: dict[str, object] = {
-            "kind": "rejected",
-            "resource": isinstance(exc, OperationResourceAdmissionError),
-            "code": str(detail["type"]),
-            "message": str(detail["msg"]),
-            "request_digest": hashlib.sha256(input_bytes).hexdigest(),
-        }
+        rejected = worker_rejection(
+            exc,
+            request_digest=hashlib.sha256(input_bytes).hexdigest(),
+        )
         sys.stdout.buffer.write(encode_strict_json(rejected))
         return 0
     admitted_irreducible = admitted_discriminant is not None

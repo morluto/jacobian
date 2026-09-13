@@ -142,7 +142,9 @@ def test_ring_worker_uses_private_cwd_and_os_resource_limits(
     command = recorded["command"]
     assert isinstance(command, list)
     assert command[-1] == "--basis"
-    payload = loads_strict_json(recorded["input_bytes"])
+    raw_input = recorded["input_bytes"]
+    assert isinstance(raw_input, bytes)
+    payload = loads_strict_json(raw_input)
     assert isinstance(payload, dict)
     # Admission algebra now runs inside the worker, so the parent sends only
     # the source field.

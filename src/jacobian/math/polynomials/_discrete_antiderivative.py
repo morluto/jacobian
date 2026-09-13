@@ -118,6 +118,10 @@ def _admit_linear_group(coefficients: dict[int, Fraction]) -> None:
     quadratic = linear / 2
     linear_term = constant - quadratic
     _admit_closed_form_coefficients((quadratic, linear_term, linear))
+    # The solver's residual after processing the leading term is exactly the
+    # retained linear term; charge it so an intermediate can never exceed the
+    # admitted envelope during the triangular solve.
+    _admit_closed_form_coefficients((linear_term,))
 
 
 def _admit_quadratic_group(coefficients: dict[int, Fraction]) -> None:
@@ -127,6 +131,8 @@ def _admit_quadratic_group(coefficients: dict[int, Fraction]) -> None:
     ``Q(x) = (a/3) x^3 + ((b-a)/2) x^2 + (a/6 - b/2 + c) x``.  Every
     denominator is at most 6, so a source coefficient already at the digit
     limit stays representable even when the triangular envelope does not.
+    The solver's intermediate residuals (for example ``2a`` and ``4a/3``) can
+    exceed the source and final coefficients, so charge them too.
     """
 
     quadratic = coefficients.get(2, Fraction())
@@ -138,6 +144,13 @@ def _admit_quadratic_group(coefficients: dict[int, Fraction]) -> None:
     _admit_closed_form_coefficients(
         (cubic_term, quadratic_term, linear_term, quadratic, linear)
     )
+    _admit_closed_form_coefficients(
+        (
+            constant - cubic_term,
+            linear - quadratic,
+        )
+    )
+    _admit_closed_form_coefficients((linear_term,))
 
 
 def _admit_cubic_group(coefficients: dict[int, Fraction]) -> None:
@@ -168,6 +181,77 @@ def _admit_cubic_group(coefficients: dict[int, Fraction]) -> None:
             linear,
         )
     )
+    _admit_closed_form_coefficients(
+        (
+            constant - quartic_term,
+            linear - cubic,
+            quadratic - Fraction(3, 2) * cubic,
+        )
+    )
+    _admit_closed_form_coefficients(
+        (
+            constant - quadratic / 3 + quartic_term,
+            linear - quadratic + cubic / 2,
+        )
+    )
+    _admit_closed_form_coefficients((linear_term,))
+
+
+def _admit_quartic_group(coefficients: dict[int, Fraction]) -> None:
+    """Admit degree-4 slices from the exact closed-form inverse.
+
+    For ``P(x) = a x^4`` the zero-based inverse is
+    ``Q(x) = a x^5/5 - a x^4/2 + a x^3/3 - a x/30``.  Every denominator is
+    at most 30 and the intermediate residuals stay within the same envelope,
+    so a source coefficient at the digit limit stays representable.
+    """
+
+    quartic = coefficients.get(4, Fraction())
+    cubic = coefficients.get(3, Fraction())
+    quadratic = coefficients.get(2, Fraction())
+    linear = coefficients.get(1, Fraction())
+    constant = coefficients.get(0, Fraction())
+    quintic_term = quartic / 5
+    quartic_term = -quartic / 2 + cubic / 4
+    cubic_term = quartic / 3 - cubic / 2 + quadratic / 3
+    quadratic_term = cubic / 4 - quadratic / 2 + linear / 2
+    linear_term = quartic * Fraction(-1, 30) + quadratic / 6 - linear / 2 + constant
+    _admit_closed_form_coefficients(
+        (
+            quintic_term,
+            quartic_term,
+            cubic_term,
+            quadratic_term,
+            linear_term,
+            quartic,
+            cubic,
+            quadratic,
+            linear,
+        )
+    )
+    # Intermediate triangular-solve residuals, from the leading term inward.
+    _admit_closed_form_coefficients(
+        (
+            constant - quintic_term,
+            linear - quartic,
+            quadratic - 2 * quartic,
+            cubic - 2 * quartic,
+        )
+    )
+    _admit_closed_form_coefficients(
+        (
+            constant - cubic / 4 + Fraction(3, 10) * quartic,
+            linear - cubic + quartic,
+            quadratic - Fraction(3, 2) * cubic + quartic,
+        )
+    )
+    _admit_closed_form_coefficients(
+        (
+            constant - quadratic / 3 + cubic / 4 + Fraction(-1, 30) * quartic,
+            linear - quadratic + cubic / 2,
+        )
+    )
+    _admit_closed_form_coefficients((linear_term,))
 
 
 def _admit_group(
@@ -193,6 +277,9 @@ def _admit_group(
         return
     if maximum_degree == 3:
         _admit_cubic_group(coefficients)
+        return
+    if maximum_degree == 4:
+        _admit_quartic_group(coefficients)
         return
 
     common_denominator = 1
@@ -341,6 +428,7 @@ def _compute_discrete_antiderivative(
             message="polynomial must be a RationalPolynomial",
         )
     source = _parse_native_polynomial(source)
+    request_checkpoint("after discrete antiderivative native reparse")
     if type(variable) is not str or not variable.isidentifier():
         raise OperationDomainValidationError(
             location=("variable",),
@@ -387,7 +475,9 @@ def _compute_discrete_antiderivative(
             code="polynomial.discrete_antiderivative.work_bound",
             message="discrete-antiderivative work exceeds the admitted bound",
         )
-    for coefficients in groups.values():
+    for index, coefficients in enumerate(groups.values()):
+        if index % 64 == 0:
+            request_checkpoint("during discrete antiderivative group admission")
         _admit_group(
             coefficients,
             maximum_degree=max(coefficients, default=0),

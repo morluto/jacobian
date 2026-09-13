@@ -224,6 +224,62 @@ def test_cubic_coefficient_at_the_digit_limit_has_an_exact_inverse() -> None:
     assert result.reconstructed_difference == source
 
 
+def test_quartic_coefficient_at_the_digit_limit_has_an_exact_inverse() -> None:
+    coefficient = 10**32_767 + 1
+    source = RationalPolynomial(
+        variables=("x",),
+        polynomial=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=coefficient, den=1),
+                    exponents=(4,),
+                ),
+            )
+        ),
+    )
+    result = rational_discrete_antiderivative(source, "x")
+    terms = {
+        term.exponents: term.coefficient.as_fraction()
+        for term in result.antiderivative.polynomial.terms
+    }
+    assert terms == {
+        (5,): Fraction(coefficient, 5),
+        (4,): Fraction(-coefficient, 2),
+        (3,): Fraction(coefficient, 3),
+        (1,): Fraction(-coefficient, 30),
+    }
+    assert result.reconstructed_difference == source
+
+
+def test_quadratic_intermediate_residual_growth_is_rejected() -> None:
+    """The closed form must charge the triangular solver's residuals."""
+    coefficient = 10**32_768 - 1
+    source = RationalPolynomial(
+        variables=("x",),
+        polynomial=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=-coefficient, den=1),
+                    exponents=(2,),
+                ),
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=coefficient, den=1),
+                    exponents=(1,),
+                ),
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=coefficient, den=1),
+                    exponents=(0,),
+                ),
+            )
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        rational_discrete_antiderivative(source, "x")
+    assert error.value.errors()[0]["type"] == (
+        "polynomial.discrete_antiderivative.intermediate_growth"
+    )
+
+
 def test_quadratic_triangular_work_is_rejected_before_expansion() -> None:
     source = _polynomial(((1, (1_024, 0)),))
     with pytest.raises(OperationResourceAdmissionError, match="work"):
@@ -323,3 +379,32 @@ def test_catalog_invocation_returns_the_declared_typed_result() -> None:
         "antiderivative",
         "reconstructed_difference",
     }
+
+
+def test_native_reparse_and_admission_observe_cancellation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Cancellation is observed before the triangular solve starts."""
+    from threading import Event
+
+    from jacobian._execution import (
+        OperationExecutionCancelledError,
+        request_cancellation,
+        request_checkpoint,
+    )
+    from jacobian.math.polynomials import _discrete_antiderivative as module
+
+    source = _polynomial(((1, (40, 0)),))
+    cancelled = Event()
+
+    def checkpoint(stage: str) -> None:
+        request_checkpoint(stage)
+        if stage == "after discrete antiderivative native reparse":
+            cancelled.set()
+
+    monkeypatch.setattr(module, "request_checkpoint", checkpoint)
+    with (
+        request_cancellation(cancelled),
+        pytest.raises(OperationExecutionCancelledError),
+    ):
+        rational_discrete_antiderivative(source, "k")

@@ -155,7 +155,17 @@ def test_reciprocal_profile_accepts_negative_leading_source() -> None:
     assert result.state == "RECIPROCAL"
 
 
-def test_reciprocal_profile_identifies_palindromic_and_antipalindromic() -> None:
+def test_reciprocal_profile_accepts_the_zero_polynomial() -> None:
+    result = reciprocal_profile(IntegerPolynomial(coefficients=(0,)))
+    assert result.degree == 0
+    assert result.reversed_coefficients == (0,)
+    assert result.state == "RECIPROCAL"
+    assert result.leading_coefficient == 0
+    assert result.constant_coefficient == 0
+    restored = ReciprocalProfileResult.model_validate_json(
+        encode_strict_json(result.model_dump(mode="json")), strict=True
+    )
+    assert restored == result
     """Reciprocal and antireciprocal states are distinguished exactly."""
     palindromic = reciprocal_profile(IntegerPolynomial(coefficients=(1, 2, 1)))
     assert palindromic.state == "RECIPROCAL"

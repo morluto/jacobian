@@ -304,7 +304,6 @@ def _require_integer_polynomial(polynomial: object) -> IntegerPolynomial:
 def reciprocal_profile(polynomial: IntegerPolynomial) -> ReciprocalProfileResult:
     polynomial = _require_integer_polynomial(polynomial)
     coefficients = polynomial.coefficients
-    _require_nonzero_polynomial(coefficients, location=("polynomial",))
     source_digits = _coefficient_digit_total(coefficients)
     # reversed_coefficients copies every source coefficient; the pair ledger
     # retains each coefficient once more, and the middle term of odd length
@@ -320,7 +319,7 @@ def reciprocal_profile(polynomial: IntegerPolynomial) -> ReciprocalProfileResult
     degree = len(coefficients) - 1
     leading, constant = coefficients[0], coefficients[-1]
     state: Literal["RECIPROCAL", "ANTIRECIPROCAL", "NEITHER"]
-    if constant != 0 and all(
+    if all(
         coefficients[index] == coefficients[degree - index]
         for index in range(degree + 1)
     ):

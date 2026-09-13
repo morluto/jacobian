@@ -253,6 +253,30 @@ def test_infeasible_continuation_retains_the_source_shard() -> None:
     assert complete.status == "COMPUTED"
 
 
+def test_computed_result_omits_request_provenance() -> None:
+    """An empty-shard and an unsharded COMPUTED result share one encoding."""
+    unsharded = construct_steiner_triple_system(7, 100_000)
+    sharded = construct_steiner_triple_system(
+        7, 100_000, SteinerTripleSystemShard(order=7, fixed_triples=())
+    )
+    assert unsharded.status == "COMPUTED"
+    assert sharded.status == "COMPUTED"
+    assert unsharded.source_shard is None
+    assert sharded.source_shard is None
+    assert unsharded.model_dump_json() == sharded.model_dump_json()
+
+
+def test_computed_result_rejects_retained_source_shard() -> None:
+    """The canonical COMPUTED encoding cannot carry shard provenance."""
+    result = construct_steiner_triple_system(7, 100_000)
+    payload = result.model_dump()
+    payload["source_shard"] = SteinerTripleSystemShard(
+        order=7, fixed_triples=()
+    ).model_dump()
+    with pytest.raises(ValidationError):
+        SteinerTripleSystemResult.model_validate(payload)
+
+
 def test_nonsemantic_shard_prefix_is_a_typed_domain_error() -> None:
     """Overlapping pair constraints are rejected independently of traversal."""
     with pytest.raises(OperationDomainValidationError, match="distinct pairs"):

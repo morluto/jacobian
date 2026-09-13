@@ -13,7 +13,10 @@ from jacobian._execution import (
     current_request_execution,
 )
 from jacobian.canonical import format_canonical_integer
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.number_theory.algebraic_numbers.complex import (
     ComplexAlgebraicValue,
     algebraic_root_separation_denominator_bound,
@@ -381,6 +384,11 @@ def verify_discriminant(claim: NumberFieldDiscriminantResult) -> bool:
 
     try:
         expected = compute_nf_discriminant(NumberFieldRequest(field=claim.field))
+    except OperationResourceAdmissionError:
+        # Resource non-completion is not a negative mathematical conclusion:
+        # a discriminant outside the factorization envelope is unknown here,
+        # not false.
+        raise
     except (ArithmeticError, TypeError, ValueError):
         return False
     return expected.discriminant == claim.discriminant

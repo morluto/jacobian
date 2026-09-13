@@ -699,3 +699,19 @@ def test_accepted_mixed_size_request_charges_domination_parity() -> None:
     assert result.transversals
     assert executed["domination"] > 0
     assert executed["domination"] <= charged_domination
+
+
+def test_dominated_supersets_reduce_before_charging_search() -> None:
+    """A dominated family reduces to one edge before the search bound applies."""
+    vertices = ("a", "b", *(f"v{index:04d}" for index in range(36)))
+    extras = vertices[2:]
+    supersets = tuple(combinations(extras, 3))[:7_071]
+    edges = [("base", ("a", "b"))] + [
+        (f"e{index}", tuple(sorted(("a", "b", *extra))))
+        for index, extra in enumerate(supersets)
+    ]
+    source = FiniteHypergraph(vertices=vertices, edges=tuple(edges))
+    result = enumerate_minimal_transversals(
+        MinimalTransversalEnumerationRequest(hypergraph=source, maximum_cardinality=3)
+    )
+    assert result.transversals == (("a",), ("b",))

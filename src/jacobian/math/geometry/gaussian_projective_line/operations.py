@@ -261,8 +261,10 @@ def _admit_request(request: GaussianCrossRatioSource) -> _CrossRatioPlan:
         )
     # _gaussian_quotient_digit_bound computes the exact quotient when the coarse
     # estimate exceeds the bound; reuse it instead of dividing a second time.
-    quotient = fallback_quotient if fallback_quotient is not None else _divide(
-        numerator, denominator
+    quotient = (
+        fallback_quotient
+        if fallback_quotient is not None
+        else _divide(numerator, denominator)
     )
     if _gaussian_component_digits(quotient) > MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS:
         _reject_resource(

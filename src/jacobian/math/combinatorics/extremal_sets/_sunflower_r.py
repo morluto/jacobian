@@ -39,7 +39,6 @@ _SUNFLOWER_CHECKPOINT_UNITS = 65_536
 # membership inspection, and retained result allocation. One allocation unit
 # conservatively reserves a scalar digit, label code point, container slot, or
 # fixed record field; transports own encoded-byte limits separately.
-MAX_SUNFLOWER_GROUND_SET_SIZE = 1_000_000
 MAX_SUNFLOWER_MEMBERSHIPS = 1_000_000
 MAX_SUNFLOWER_RESULT_ALLOCATION_UNITS = 16 * 1024 * 1024
 
@@ -76,15 +75,10 @@ def _admit_source(
             code="set_system.sunflower.vertex_bound",
             message=f"sunflower construction supports at most {MAX_VERTICES} members",
         )
-    if source.ground_set_size > MAX_SUNFLOWER_GROUND_SET_SIZE:
-        raise OperationResourceAdmissionError(
-            location=("source", "ground_set_size"),
-            code="set_system.sunflower.ground_set_bound",
-            message=(
-                f"the source ground set exceeds the {MAX_SUNFLOWER_GROUND_SET_SIZE}-element "
-                "sunflower admission envelope"
-            ),
-        )
+    # The carrier already bounds ``ground_set_size`` (at ``(1 << 53) - 1``) and
+    # the result retains it as a single scalar; the membership, candidate,
+    # intersection, and allocation accounting below bound every materialized
+    # quantity, so no separate coarse axis cap is needed.
     memberships = sum(len(member) for member in source.members)
     if memberships > MAX_SUNFLOWER_MEMBERSHIPS:
         raise OperationResourceAdmissionError(
@@ -529,7 +523,6 @@ def construct_sunflower_family(
 
 __all__ = [
     "MAX_SUNFLOWER_CANDIDATES",
-    "MAX_SUNFLOWER_GROUND_SET_SIZE",
     "MAX_SUNFLOWER_MEMBERSHIPS",
     "MAX_SUNFLOWER_PETALS",
     "MAX_SUNFLOWER_RESULT_ALLOCATION_UNITS",

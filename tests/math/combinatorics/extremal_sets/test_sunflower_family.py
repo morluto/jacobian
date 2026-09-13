@@ -13,7 +13,6 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.combinatorics.extremal_sets import _sunflower_r as sunflower_module
 from jacobian.math.combinatorics.extremal_sets._sunflower_r import (
-    MAX_SUNFLOWER_GROUND_SET_SIZE,
     MAX_SUNFLOWER_MEMBERSHIPS,
     MAX_SUNFLOWER_PETALS,
     SunflowerFamilyResult,
@@ -257,11 +256,7 @@ def test_exact_candidate_count_at_the_output_boundary_is_admitted() -> None:
     assert result.sunflower_count == 155 * 154 // 2
 
 
-def test_ground_and_membership_bounds_apply_to_vacuous_requests() -> None:
-    with pytest.raises(OperationResourceAdmissionError, match="ground set"):
-        construct_sunflower_family(
-            _family((), ground=MAX_SUNFLOWER_GROUND_SET_SIZE + 1), 2
-        )
+def test_membership_bounds_apply_to_vacuous_requests() -> None:
     member = tuple(range(MAX_SUNFLOWER_MEMBERSHIPS // 2 + 1))
     second_member = tuple(
         range(MAX_SUNFLOWER_MEMBERSHIPS // 2 - 1, MAX_SUNFLOWER_MEMBERSHIPS)
@@ -365,3 +360,14 @@ def test_pair_comparisons_checkpoint_inside_a_single_candidate(
         3,
     )
     assert messages.count("during sunflower intersection work") >= 3
+
+
+def test_compact_large_ground_set_is_admitted() -> None:
+    """A vacuous request retains only the scalar axis, not every ground point."""
+
+    ground = 1_000_001
+    result = construct_sunflower_family(_family((), ground=ground), 2)
+    assert result.sunflowers == ()
+    assert result.hypergraph.vertices == ()
+    assert result.source.ground_set_size == ground
+    assert type(result).model_validate_json(result.model_dump_json()) == result

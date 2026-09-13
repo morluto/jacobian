@@ -73,9 +73,17 @@ def _preflight_pullback_sources(
     metric: object, map_value: object
 ) -> tuple[RationalCoordinateMetric, RationalFunctionMap]:
     if type(metric) is not RationalCoordinateMetric:
-        raise TypeError("metric must be a RationalCoordinateMetric")
+        raise OperationDomainValidationError(
+            location=("metric",),
+            code="differential_geometry.rational_metric.pullback.invalid_source",
+            message="metric must be a RationalCoordinateMetric",
+        )
     if type(map_value) is not RationalFunctionMap:
-        raise TypeError("map_value must be a RationalFunctionMap")
+        raise OperationDomainValidationError(
+            location=("map",),
+            code="differential_geometry.rational_metric.pullback.invalid_source",
+            message="map must be a RationalFunctionMap",
+        )
     tensor = getattr(metric, "tensor", None)
     axis = getattr(tensor, "coordinate_axis", None)
     components = getattr(tensor, "components", None)
@@ -111,9 +119,18 @@ def _preflight_pullback_sources(
         location=("map", "components"),
         message="map exceeds the admitted component envelope",
     )
+    targets = getattr(map_value, "target_coordinates", None)
+    components = getattr(map_value, "components", None)
+    if isinstance(targets, Sized) and isinstance(components, Sized):
+        if len(components) != len(targets):
+            raise OperationDomainValidationError(
+                location=("map", "components"),
+                code="differential_geometry.rational_metric.pullback.invalid_source",
+                message="metric and map must be canonical native values before planning",
+            )
     try:
-        metric = RationalCoordinateMetric.model_validate(metric)
-        map_value = RationalFunctionMap.model_validate(map_value)
+        metric = RationalCoordinateMetric.model_validate(metric.model_dump())
+        map_value = RationalFunctionMap.model_validate(map_value.model_dump())
     except ValidationError as exc:
         raise OperationDomainValidationError(
             location=("metric", "map"),
@@ -212,6 +229,11 @@ def pullback_metric(
         axis,
         fractions=tuple(plan.fractions[value] for value in unique_values),
         determinants=tuple(dict.fromkeys(plan.determinant.numerator)),
+        undefined_numerators=tuple(
+            dict.fromkeys(
+                plan.fractions[value][0] for value in plan.guards[:-1]
+            )
+        ),
         sources=(),
         deadline=deadline,
         owner="rational metric pullback",

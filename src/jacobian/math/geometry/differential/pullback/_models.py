@@ -15,8 +15,22 @@ from jacobian.math.polynomials.values import SparseRationalPolynomial
 
 
 class RationalMetricPullbackRequest(StrictModel):
-    metric: RationalCoordinateMetric
-    map: RationalFunctionMap
+    """Exact pullback of a rational coordinate metric along a rational map.
+
+    ``map.target_coordinates`` must equal ``metric.tensor.coordinate_axis``.
+    """
+
+    metric: RationalCoordinateMetric = Field(
+        description=(
+            "Source metric. The ordered tensor axis is the map target axis."
+        )
+    )
+    map: RationalFunctionMap = Field(
+        description=(
+            "Coordinate map. target_coordinates must equal "
+            "metric.tensor.coordinate_axis."
+        )
+    )
 
     @model_validator(mode="after")
     def require_target_axis(self) -> Self:

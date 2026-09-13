@@ -26,7 +26,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             OperationExample(
                 name="square_map_on_a_line",
-                description="Pull back du² along u=x² to obtain 4x² dx², retaining the valid degenerate point x=0.",
+                description="Pull back du² along u=x² to obtain 4x² dx², retaining the valid degenerate point x=0. The map target_coordinates must equal the metric tensor axis.",
                 input={
                     "metric": {
                         "tensor": {

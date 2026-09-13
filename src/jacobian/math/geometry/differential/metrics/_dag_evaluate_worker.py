@@ -182,6 +182,7 @@ def _run(payload: dict[str, Any]) -> dict[str, Any]:
         "nodes",
         "fractions",
         "determinants",
+        "undefined_numerators",
         "sources",
     }:
         raise ValueError("malformed DAG request")
@@ -199,6 +200,7 @@ def _run(payload: dict[str, Any]) -> dict[str, Any]:
         return {"status": "noncanonical"}
     fractions = payload["fractions"]
     determinants = payload["determinants"]
+    undefined_numerators = payload["undefined_numerators"]
     cache, _variable_count = _expand_nodes(payload)
     if not isinstance(fractions, list):
         raise ValueError("malformed fraction request")
@@ -219,6 +221,14 @@ def _run(payload: dict[str, Any]) -> dict[str, Any]:
         cancelled.append(
             {"numerator": _dump(numerator), "denominator": _dump(denominator)}
         )
+    if not isinstance(undefined_numerators, list) or any(
+        type(index) is not int or index < 0 or index >= len(cache)
+        for index in undefined_numerators
+    ):
+        raise ValueError("malformed undefined-numerator request")
+    for index in undefined_numerators:
+        if cache[index].is_zero:
+            return {"status": "undefined"}
     if not isinstance(determinants, list) or any(
         type(index) is not int or index < 0 or index >= len(cache)
         for index in determinants

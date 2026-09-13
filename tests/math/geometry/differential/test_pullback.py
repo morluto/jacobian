@@ -447,3 +447,70 @@ def test_forged_oversize_metric_components_are_rejected_before_dump() -> None:
     )
     with pytest.raises(OperationDomainValidationError, match="component"):
         pullback_metric(forged, mapping)
+
+
+def test_native_non_models_raise_structured_domain_errors() -> None:
+    x = symbols("x")
+    mapping = map_value((x,), ("x",), ("u",))
+    source = metric((1,), ("u",))
+    with pytest.raises(OperationDomainValidationError, match="RationalCoordinateMetric"):
+        pullback_metric({"tensor": {}}, mapping)  # type: ignore[arg-type]
+    with pytest.raises(OperationDomainValidationError, match="RationalFunctionMap"):
+        pullback_metric(source, {"components": ()})  # type: ignore[arg-type]
+
+
+def test_request_schema_states_target_axis_constraint() -> None:
+    from jacobian.math.geometry.differential.pullback._models import (
+        RationalMetricPullbackRequest,
+    )
+    from jacobian.math.geometry.differential.pullback._tools import TOOLS
+
+    schema = RationalMetricPullbackRequest.model_json_schema()
+    text = schema["properties"]["map"].get("description", "") + schema.get(
+        "description", ""
+    )
+    assert "target_coordinates" in text
+    assert "coordinate_axis" in text
+    assert "target_coordinates" in TOOLS[0].examples[0].description
+
+
+def test_forged_short_map_is_rejected_before_planning() -> None:
+    x = symbols("x")
+    mapping = RationalFunctionMap.model_construct(
+        source_variables=("x", "y"),
+        target_coordinates=("u", "v"),
+        components=(rf(x, ("x", "y")),),
+        domain="COMMON_REGULAR_LOCUS",
+    )
+    with pytest.raises(OperationDomainValidationError, match="canonical native"):
+        pullback_metric(metric((1, 0, 0, 1), ("u", "v")), mapping)
+
+
+def test_expanded_inherited_guard_precedes_substituted_determinant() -> None:
+    u, v, w, x, y = symbols("u v w x y")
+    axis = ("u", "v", "w")
+    guard = rf(u - v - w, axis).numerator
+    source = RationalCoordinateMetric(
+        tensor=RationalCoordinateTensor(
+            coordinate_axis=axis,
+            variance=("COVARIANT", "COVARIANT"),
+            components=(
+                rf(u - v - w, axis),
+                rf(0, axis),
+                rf(0, axis),
+                rf(0, axis),
+                rf(1, axis),
+                rf(0, axis),
+                rf(0, axis),
+                rf(0, axis),
+                rf(1, axis),
+            ),
+            retained_nonzero_denominators=(guard,),
+        )
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        pullback_metric(
+            source,
+            map_value((x + y, x, y), ("x", "y"), axis),
+        )
+    assert error.value.errors()[0]["type"].endswith("undefined_metric_locus")

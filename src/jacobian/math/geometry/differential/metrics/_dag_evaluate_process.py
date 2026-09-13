@@ -125,6 +125,7 @@ def evaluate_admitted_dag(
     owner: str,
     singular_metric: Callable[[], OperationDomainValidationError],
     undefined_metric_locus: Callable[[], OperationDomainValidationError] | None = None,
+    undefined_numerators: Sequence[int] = (),
     noncanonical_location: tuple[str, ...] = (),
     noncanonical_code: str = "",
     noncanonical_message: str = "",
@@ -145,6 +146,7 @@ def evaluate_admitted_dag(
             "nodes": [_node_payload(node) for node in nodes],
             "fractions": fraction_pairs,
             "determinants": determinant_indices,
+            "undefined_numerators": list(undefined_numerators),
             "sources": [
                 {
                     "numerator": _source_payload(component.numerator),

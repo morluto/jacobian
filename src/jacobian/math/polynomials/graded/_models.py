@@ -385,7 +385,6 @@ class HilbertSeriesResult(StrictModel):
             raise ValueError(
                 "ambient numerator must reduce to the reported Hilbert series"
             )
-        return self
 
 
 class HilbertPolynomialResult(StrictModel):

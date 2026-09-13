@@ -249,6 +249,44 @@ def test_low_dimensional_power_uses_attainable_support() -> None:
     ] == [scale * comb(11, exponent) for exponent in range(11, -1, -1)]
 
 
+def test_repeated_binomial_product_uses_attainable_support() -> None:
+    """Twelve copies of A*(1+x) have 4,096 paths but only 13 monomials."""
+
+    expression = {
+        "kind": "MULTIPLY",
+        "operands": [
+            {
+                "kind": "ADD",
+                "operands": [
+                    {"kind": "LITERAL", "value": {"num": 10**127, "den": 1}},
+                    {
+                        "kind": "MULTIPLY",
+                        "operands": [
+                            {"kind": "LITERAL", "value": {"num": 10**127, "den": 1}},
+                            {"kind": "VARIABLE", "name": "x"},
+                        ],
+                    },
+                ],
+            }
+            for _ in range(12)
+        ],
+    }
+
+    result = normalize_polynomial_expression(_request("ZZ", expression))
+    assert [term.exponents for term in result.polynomial.polynomial.terms] == [
+        (exponent,) for exponent in range(12, -1, -1)
+    ]
+    reference = sympy.expand((10**127) ** 12 * (1 + sympy.Symbol("x")) ** 12)
+    assembled = sympy.expand(
+        sum(
+            term.coefficient.as_fraction().numerator
+            * sympy.Symbol("x") ** term.exponents[0]
+            for term in result.polynomial.polynomial.terms
+        )
+    )
+    assert sympy.simplify(assembled - reference) == 0
+
+
 def test_expansion_work_is_charged_separately_from_support() -> None:
     """A small one-variable result can still exceed convolution work."""
 

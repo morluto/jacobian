@@ -919,19 +919,35 @@ def _nary_expression_metrics(  # noqa: C901
         current_expansion_terms = 1
         total_coefficient_digits = 1
         accumulated_support = 1
+        accumulated_degree = 0
+        accumulated_variables: frozenset[str] = frozenset()
         for child in child_metrics:
             expansion_terms = _bounded_product(
                 expansion_terms, child.expansion_terms, MAX_POLYNOMIAL_TERMS
             )
+            # Charge the *attainable* support of each partial product, not the
+            # raw Cartesian path count: a repeated factor such as
+            # ``(A + A*x)**12`` has 4,096 expansion paths but only 13
+            # monomials, and charging the raw count saturates the aggregate
+            # digit envelope and rejects a cheap result.
+            accumulated_degree = min(
+                MAX_POLYNOMIAL_EXPONENT + 1, accumulated_degree + child.degree
+            )
+            accumulated_variables = accumulated_variables | child.variables
+            next_support = _support_bound(
+                _bounded_product(
+                    accumulated_support, child.support, MAX_POLYNOMIAL_TERMS
+                ),
+                accumulated_degree,
+                accumulated_variables,
+            )
             total_coefficient_digits = _product_total_coefficient_digits(
                 accumulated_support,
                 total_coefficient_digits,
-                child.support,
+                min(child.support, next_support),
                 child.total_coefficient_digits,
             )
-            accumulated_support = _bounded_product(
-                accumulated_support, child.support, MAX_POLYNOMIAL_TERMS
-            )
+            accumulated_support = next_support
             support = _bounded_product(support, child.support, MAX_POLYNOMIAL_TERMS)
             work = min(
                 _MAX_EXPRESSION_WORK + 1,

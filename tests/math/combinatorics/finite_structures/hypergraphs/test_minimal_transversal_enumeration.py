@@ -1,7 +1,7 @@
 """Complete bounded-cardinality minimal transversal enumeration."""
 
 import time
-from itertools import combinations
+from itertools import combinations, product
 from math import comb
 from typing import Any
 from unittest.mock import patch
@@ -190,6 +190,33 @@ def test_three_near_universal_edges_use_source_sensitive_row_bound() -> None:
         ("v01", "v02"),
     )
     assert result.transversals == expected_singletons + expected_pairs
+
+
+def test_disjoint_residual_edges_use_source_sensitive_row_bound() -> None:
+    blocks = tuple(
+        tuple(f"v{offset:02d}" for offset in range(index * 16, index * 16 + 16))
+        for index in range(3)
+    )
+    source = FiniteHypergraph(
+        vertices=tuple(f"v{index:02d}" for index in range(48)),
+        edges=tuple((f"e{index}", block) for index, block in enumerate(blocks)),
+    )
+    result = enumerate_minimal_transversals(
+        MinimalTransversalEnumerationRequest(hypergraph=source, maximum_cardinality=4)
+    )
+    expected = {tuple(sorted(combo)) for combo in product(*blocks)}
+    assert len(result.transversals) == 16**3
+    assert set(result.transversals) == expected
+    assert [
+        (row.cardinality, row.count) for row in result.cardinality_profile if row.count
+    ] == [(3, 16**3)]
+
+
+def test_disjoint_row_bound_is_product_and_rank_gated() -> None:
+    edges = (frozenset({"a", "b"}), frozenset({"c", "d"}), frozenset({"e", "f"}))
+    free = ("a", "b", "c", "d", "e", "f")
+    assert enumeration._source_sensitive_row_bound(edges, free, 3, 1) == 2**3
+    assert enumeration._source_sensitive_row_bound(edges, free, 2, 1) == 0
 
 
 def test_direct_native_guard_rejects_model_constructed_request() -> None:

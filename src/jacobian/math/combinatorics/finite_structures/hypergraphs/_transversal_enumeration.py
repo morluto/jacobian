@@ -280,6 +280,16 @@ def _source_sensitive_row_bound(
     if not remaining_edges:
         return 0
     occupied = frozenset().union(*remaining_edges)
+    if sum(len(edge) for edge in remaining_edges) == len(occupied):
+        # Pairwise-disjoint residual edges force exactly one chosen vertex per
+        # edge in every minimal transversal, so the antichain is the Cartesian
+        # product of the edges instead of the ambient Boolean-lattice width.
+        if free_maximum < len(remaining_edges):
+            return 0
+        possible_rows = 1
+        for edge in remaining_edges:
+            possible_rows *= len(edge)
+        return possible_rows
     omitted = tuple(occupied - edge for edge in remaining_edges)
     if occupied and all(len(edge) == len(occupied) - 1 for edge in remaining_edges):
         omitted_vertices = [next(iter(part)) for part in omitted if len(part) == 1]

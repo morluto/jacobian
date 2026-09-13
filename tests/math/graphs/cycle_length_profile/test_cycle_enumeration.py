@@ -515,3 +515,34 @@ def test_incidence_rows_are_bounded_before_decoding() -> None:
     # The outer incidence arrays are rejected at field level before any
     # structural validator walks the forged rows.
     assert error.value.errors()[0]["loc"] == ("vertex_incidence",)
+
+
+def test_bipartite_higher_odd_length_is_presolved_empty() -> None:
+    """K10,10 has no 5-cycle: every cycle in a bipartite graph is even."""
+    result = enumerate_fixed_length_cycles(_complete_bipartite(10, 10), 5)
+    assert result.cycles == ()
+    assert result.cycle_count == 0
+
+
+def test_exact_chordless_four_cycle_block_charges_traversal_work() -> None:
+    """A near-complete multipartite block is refused before its dense DFS.
+
+    The parts ``(2, 2, 1, ..., 1)`` span 256 vertices, so a DFS over the block
+    would visit billions of terminal paths. Its traversal work must be charged
+    even though the exact induced four-cycle count is one.
+    """
+    left_pair = ("p0a", "p0b")
+    right_pair = ("p1a", "p1b")
+    singletons = [(f"s{index}",) for index in range(252)]
+    parts = [left_pair, right_pair, *singletons]
+    vertices = tuple(vertex for part in parts for vertex in part)
+    part_of = {vertex: index for index, part in enumerate(parts) for vertex in part}
+    edges = tuple(
+        tuple(sorted((first, second)))
+        for index, first in enumerate(vertices)
+        for second in vertices[index + 1 :]
+        if part_of[first] != part_of[second]
+    )
+    graph = SimpleUndirectedGraph(vertices=vertices, edges=edges)
+    with pytest.raises(OperationResourceAdmissionError, match="work"):
+        enumerate_chordless_fixed_length_cycles(graph, 4)

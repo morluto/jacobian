@@ -580,12 +580,13 @@ def _multipartite_cycle_exists(part_sizes: tuple[int, ...], cycle_length: int) -
     total = sum(part_sizes)
     if cycle_length > total or cycle_length < 3:
         return False
-    if cycle_length == 3:
-        return len(part_sizes) >= 3
-    if cycle_length % 2 == 0 and 2 * min(part_sizes, default=0) < cycle_length:
-        # An even cycle may still route through three or more parts.
-        non_minimum = total - min(part_sizes, default=0)
-        return len(part_sizes) >= 3 and non_minimum >= cycle_length // 2 + 1
+    if len(part_sizes) < 3:
+        # A bipartite graph (exactly two parts, or one) has only even cycles,
+        # and a ``cycle_length``-cycle needs ``cycle_length / 2`` vertices from
+        # each part.
+        return cycle_length % 2 == 0 and 2 * min(part_sizes, default=0) >= cycle_length
+    # At least three parts: any length from 3 to the total vertex count is
+    # realizable (a triangle needs three distinct parts, which we have).
     return True
 
 
@@ -838,14 +839,14 @@ def _admit_fixed_cycle_search_plan(
         if exact_chordless is not None:
             cycle_upper_bound += exact_chordless
             if exact_chordless and cycle_length == 4:
+                # The block is enumerated by DFS; charge its traversal work even
+                # though the exact induced-cycle count is already known.
+                block_work, _, block_adjacency = _block_fixed_cycle_bounds(
+                    block, adjacency_sets, cycle_length, chordless=chordless
+                )
+                complete_work += block_work
                 search_blocks.append(
-                    _FixedCycleBlock(
-                        adjacency={
-                            vertex: tuple(sorted(adjacency_sets[vertex] & set(block)))
-                            for vertex in block
-                        },
-                        core_vertices=block,
-                    )
+                    _FixedCycleBlock(adjacency=block_adjacency, core_vertices=block)
                 )
             continue
         part_sizes = _complete_multipartite_part_sizes(

@@ -215,11 +215,7 @@ class HilbertSeriesResult(StrictModel):
             )
         if self.ambient_numerator.variables != ("t",):
             raise ValueError("Hilbert-series numerators use the t axis")
-        if (
-            self.series.variables != ("t",)
-            or self.reduced_numerator.variables != ("t",)
-            or self.h_numerator.variables != ("t",)
-        ):
+        if self.series.variables != ("t",):
             raise ValueError("Hilbert-series values use the t axis")
         if self.series.numerator != self.reduced_numerator.polynomial:
             raise ValueError("reduced numerator must match the rational-series carrier")
@@ -244,6 +240,37 @@ class HilbertSeriesResult(StrictModel):
         )
         if self.h_numerator.polynomial.terms != expected_h:
             raise ValueError("h-numerator must match the (1-t)^d sign convention")
+        # The ambient presentation ``ambient_numerator / (1-t)^n`` must reduce to
+        # the reported series, so the two identities describe one value.
+        from sympy import Poly as _SympyPoly
+        from sympy import Symbol as _Symbol
+        from sympy import cancel as _cancel
+        from sympy import fraction as _fraction
+
+        from jacobian.math.polynomials._conversions import (
+            rational_polynomial_to_sympy as _to_sympy,
+        )
+
+        t_symbol = _Symbol("t")
+        ambient_expression = (
+            _to_sympy(self.ambient_numerator).as_expr()
+            / (1 - t_symbol) ** self.ambient_denominator_exponent
+        )
+        ambient_num_expr, ambient_den_expr = _fraction(_cancel(ambient_expression))
+        series_num_expr = _to_sympy(self.reduced_numerator).as_expr()
+        series_den_expr = _to_sympy(
+            RationalPolynomial(variables=("t",), polynomial=self.series.denominator)
+        ).as_expr()
+        if (
+            _SympyPoly(
+                ambient_num_expr * series_den_expr - series_num_expr * ambient_den_expr,
+                t_symbol,
+            ).is_zero
+            is not True
+        ):
+            raise ValueError(
+                "ambient numerator must reduce to the reported Hilbert series"
+            )
         return self
 
 

@@ -854,3 +854,69 @@ def test_graded_binds_one_deadline_before_groebner(
         )
     assert observed["deadline"] is not None
     assert observed["deadline"] <= started + 5 + 1
+
+
+def _monomial_ideal(
+    variables: tuple[str, ...], exponents: tuple[tuple[int, ...], ...]
+) -> RationalPolynomialIdeal:
+    return RationalPolynomialIdeal(
+        variables=variables,
+        generators=tuple(
+            RationalPolynomial(
+                variables=variables,
+                polynomial=SparseRationalPolynomial(
+                    terms=(
+                        RationalPolynomialTerm(
+                            coefficient=CanonicalRational(num=1, den=1),
+                            exponents=exponent,
+                        ),
+                    )
+                ),
+            )
+            for exponent in exponents
+        ),
+    )
+
+
+def test_hilbert_function_admits_mixed_generator_pruning() -> None:
+    """(x0*x1, ..., x0*x7) at max_degree=11 has 12377 standard monomials."""
+    variables = tuple(f"x{index}" for index in range(8))
+    generators = tuple(
+        tuple(1 if axis in (0, index) else 0 for axis in range(8))
+        for index in range(1, 8)
+    )
+    ideal = _monomial_ideal(variables, generators)
+    result = hilbert_function(ideal, max_degree=11)
+    assert result.values[-1] == 12377
+
+
+def test_hilbert_function_reports_nonhomogeneous_before_slice_budget() -> None:
+    """x0^2 + x0 is nonhomogeneous and must report the domain error, not a bound."""
+    variables = tuple(f"x{index}" for index in range(8))
+    generator = RationalPolynomial(
+        variables=variables,
+        polynomial=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=1, den=1),
+                    exponents=(2,) + (0,) * 7,
+                ),
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=1, den=1),
+                    exponents=(1,) + (0,) * 7,
+                ),
+            )
+        ),
+    )
+    ideal = RationalPolynomialIdeal(variables=variables, generators=(generator,))
+    with pytest.raises(OperationDomainValidationError, match="homogeneous"):
+        hilbert_function(ideal, max_degree=11)
+
+
+def test_hilbert_series_ambient_numerator_must_reduce_to_series() -> None:
+    """A zeroed ambient numerator cannot coexist with a nonzero series."""
+    series = hilbert_series(_ideal((2, 0)), prefix_degree=2)
+    payload = series.model_dump()
+    payload["ambient_numerator"]["polynomial"]["terms"] = []
+    with pytest.raises(ValidationError):
+        HilbertSeriesResult.model_validate(payload)

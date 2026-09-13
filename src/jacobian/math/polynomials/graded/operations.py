@@ -50,6 +50,10 @@ from jacobian.math.polynomials.values import (
     SparseRationalPolynomial,
 )
 
+# An exact degree-slice monomial count is only enumerated when the ambient
+# slice is small enough to walk; above this the pure-power bound is used.
+_MONOMIAL_ENUMERATION_CEILING = 200_000
+
 
 def _require_monomial_order(
     monomial_order: object,
@@ -359,7 +363,40 @@ def _pruned_standard_monomial_bound(
             for target in range(current, limit + 1):
                 next_ways[target] += count
         ways = next_ways
-    return ways[degree]
+    cap_bound = ways[degree]
+    # Mixed generators (more than one nonzero axis) are not captured by the
+    # per-axis caps. Count the degree slice exactly when the ambient slice is
+    # small enough to enumerate; otherwise keep the pure-power bound.
+    ambient = comb(degree + variable_count - 1, variable_count - 1)
+    if cap_bound > MAX_STANDARD_MONOMIALS and ambient <= _MONOMIAL_ENUMERATION_CEILING:
+        return _enumerated_standard_monomial_count(generators, variable_count, degree)
+    return cap_bound
+
+
+def _enumerated_standard_monomial_count(
+    generators: tuple[tuple[int, ...], ...], variable_count: int, degree: int
+) -> int:
+    """Count degree-slice monomials not divisible by any generator."""
+
+    count = 0
+    for composition in _degree_compositions(variable_count, degree):
+        if not any(
+            all(composition[axis] >= generator[axis] for axis in range(variable_count))
+            for generator in generators
+        ):
+            count += 1
+    return count
+
+
+def _degree_compositions(variable_count: int, degree: int) -> Iterator[tuple[int, ...]]:
+    """Yield monomial exponent tuples of one total degree."""
+
+    if variable_count == 1:
+        yield (degree,)
+        return
+    for first in range(degree + 1):
+        for rest in _degree_compositions(variable_count - 1, degree - first):
+            yield (first, *rest)
 
 
 def _require_hilbert_function_slices(
@@ -479,15 +516,22 @@ def hilbert_function(
             message="Hilbert-function prefixes support degrees from 0 through 32",
         )
     if not _is_explicit_unit_ideal(ideal):
+        # Validate source applicability and homogeneity before estimating the
+        # slice budget, so a nonhomogeneous presentation reports the domain
+        # error instead of an oversized-computation resource error.
+        _require_homogeneous(ideal)
         leading = _leading_source_monomials(ideal, monomial_order)
         if not any(not any(exponent) for exponent in leading):
             _require_hilbert_function_slices(leading, len(ideal.variables), max_degree)
+    resource_budget = resource_budget or IdealComputationBudget()
+    deadline = execution_deadline(float(resource_budget.wall_seconds))
     initial = initial_monomial_ideal(
         ideal, monomial_order, resource_budget=resource_budget
     )
     values = []
     for degree in range(max_degree + 1):
         request_checkpoint("during Hilbert-function enumeration")
+        require_execution_deadline(deadline)
         values.append(standard_monomials(initial.initial_ideal, degree).count)
     return HilbertFunctionResult(
         ideal=ideal,

@@ -216,12 +216,8 @@ def _require_monomial_ideal(
     return tuple(generators)
 
 
-def _divides_monomial(
-    generator: tuple[int, ...], monomial: tuple[int, ...]
-) -> bool:
-    return all(
-        left <= right for left, right in zip(generator, monomial, strict=True)
-    )
+def _divides_monomial(generator: tuple[int, ...], monomial: tuple[int, ...]) -> bool:
+    return all(left <= right for left, right in zip(generator, monomial, strict=True))
 
 
 def _prefix_already_nonstandard(
@@ -232,9 +228,7 @@ def _prefix_already_nonstandard(
     assigned = len(prefix)
     return any(
         all(generator[index] <= prefix[index] for index in range(assigned))
-        and all(
-            generator[index] == 0 for index in range(assigned, variable_count)
-        )
+        and all(generator[index] == 0 for index in range(assigned, variable_count))
         for generator in generators
     )
 

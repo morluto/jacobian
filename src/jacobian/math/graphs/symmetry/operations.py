@@ -76,7 +76,8 @@ def _complete_edge_colors_determined_by_vertex_classes(
     )
     pair_color: dict[tuple[str, str], str] = {}
     for left, right in graph.graph.edges:
-        key = tuple(sorted((vertex_colors[left], vertex_colors[right])))
+        low, high = sorted((vertex_colors[left], vertex_colors[right]))
+        key = (low, high)
         color = edge_colors[canonical_edge(left, right)]
         previous = pair_color.get(key)
         if previous is None:
@@ -211,7 +212,8 @@ def _is_quotient_automorphism(
     for left in range(len(sigma)):
         for right in range(left + 1, len(sigma)):
             source = (left, right)
-            image = tuple(sorted((sigma[left], sigma[right])))
+            low, high = sorted((sigma[left], sigma[right]))
+            image = (low, high)
             if pair_color[source] != pair_color[image]:
                 return False
     return True
@@ -951,14 +953,10 @@ def _component_class_pair_edge_profile(
         for right in aligned:
             if left >= right:
                 continue
-            key = tuple(
-                sorted(
-                    (
-                        vertex_colors[vertices[left]],
-                        vertex_colors[vertices[right]],
-                    )
-                )
+            low, high = sorted(
+                (vertex_colors[vertices[left]], vertex_colors[vertices[right]])
             )
+            key = (low, high)
             color = edge_colors[canonical_edge(vertices[left], vertices[right])]
             previous = pair_color.get(key)
             if previous is None:

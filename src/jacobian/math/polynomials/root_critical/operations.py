@@ -152,6 +152,52 @@ def _fit_rectangle_component(value: Fraction, *, round_up: bool) -> CanonicalRat
     return CanonicalRational.from_fraction(Fraction(quotient, scale))
 
 
+def _simplest_rational_between(low: Fraction, high: Fraction) -> Fraction:
+    """Smallest-denominator rational strictly inside ``(low, high)``."""
+
+    if not low < high:
+        raise ValueError("separating interval must be nonempty")
+    floor_low = low.numerator // low.denominator
+    if Fraction(floor_low + 1) < high:
+        return Fraction(floor_low + 1, 1)
+    frac_low = low - floor_low
+    frac_high = high - floor_low
+    if frac_low == 0:
+        # ``(0, frac_high)`` shifted by ``floor_low``: ``1/k`` for the least
+        # ``k`` above ``1/frac_high`` is the unique simplest choice.
+        inverse = Fraction(frac_high.denominator, frac_high.numerator)
+        step = inverse.numerator // inverse.denominator + 1
+        return Fraction(floor_low * step + 1, step)
+    inner = _simplest_rational_between(
+        Fraction(frac_high.denominator, frac_high.numerator),
+        Fraction(frac_low.denominator, frac_low.numerator),
+    )
+    return Fraction(
+        floor_low * inner.numerator + inner.denominator, inner.numerator
+    )
+
+
+def _representable_separating_bound(low: Fraction, high: Fraction) -> CanonicalRational:
+    """A carrier-representable rational strictly inside ``(low, high)``."""
+
+    candidate = _simplest_rational_between(low, high)
+    if (
+        _component_digit_count(candidate.numerator)
+        > MAX_ROOT_CRITICAL_ROOT_COMPONENT_DIGITS
+        or _component_digit_count(candidate.denominator)
+        > MAX_ROOT_CRITICAL_ROOT_COMPONENT_DIGITS
+    ):
+        raise OperationResourceAdmissionError(
+            location=("polynomial",),
+            code="polynomial.root_critical.sibling_separation",
+            message=(
+                "a sibling root separation needs more exact digits than the "
+                "admitted root-component envelope"
+            ),
+        )
+    return CanonicalRational.from_fraction(candidate)
+
+
 def _evalf_containing_box(
     root: object,
 ) -> tuple[Fraction, Fraction, Fraction, Fraction]:
@@ -329,9 +375,59 @@ def _isolating_rectangle(
         lower, upper = candidate_lower, candidate_upper
         if not any(lower <= value <= upper for value in colliding):
             break
+    fitted_lower = _fit_rectangle_component(lower, round_up=False)
+    fitted_upper = _fit_rectangle_component(upper, round_up=True)
+    if not any(
+        fitted_lower.as_fraction() <= value <= fitted_upper.as_fraction()
+        for value in colliding
+    ):
+        return RootCriticalRectangle(
+            real_lower=fitted_lower,
+            real_upper=fitted_upper,
+            imaginary_lower=rectangle.imaginary_lower,
+            imaginary_upper=rectangle.imaginary_upper,
+        )
+    # Fitting snapped the interval onto a carrier grid cell shared with a
+    # sibling (for example a 256-digit Pell gap inside one 10**-255 cell), so
+    # reintroducing the grid bounds would publish a non-isolating rectangle.
+    # Separate with carrier-representable bounds instead; each tightened side
+    # only shrinks toward the excluding interval, so no sibling is re-included.
+    if any(lower <= value <= upper for value in colliding):
+        raise OperationResourceAdmissionError(
+            location=("polynomial",),
+            code="polynomial.root_critical.sibling_separation",
+            message=(
+                "a sibling root separation needs more exact digits than the "
+                "admitted root-component envelope"
+            ),
+        )
+    below = [value for value in colliding if value < lower]
+    above = [value for value in colliding if value > upper]
+    real_lower = (
+        _representable_separating_bound(max(below), lower) if below else fitted_lower
+    )
+    real_upper = (
+        _representable_separating_bound(upper, min(above)) if above else fitted_upper
+    )
+    if (
+        real_lower.as_fraction() > lower
+        or real_upper.as_fraction() < upper
+        or any(
+            real_lower.as_fraction() <= value <= real_upper.as_fraction()
+            for value in colliding
+        )
+    ):
+        raise OperationResourceAdmissionError(
+            location=("polynomial",),
+            code="polynomial.root_critical.sibling_separation",
+            message=(
+                "a sibling root separation needs more exact digits than the "
+                "admitted root-component envelope"
+            ),
+        )
     return RootCriticalRectangle(
-        real_lower=_fit_rectangle_component(lower, round_up=False),
-        real_upper=_fit_rectangle_component(upper, round_up=True),
+        real_lower=real_lower,
+        real_upper=real_upper,
         imaginary_lower=rectangle.imaginary_lower,
         imaginary_upper=rectangle.imaginary_upper,
     )

@@ -518,6 +518,69 @@ def test_rectangles_are_isolating_across_factors() -> None:
             real_lower <= rational <= real_upper
             and imaginary_lower <= 0 <= imaginary_upper
         )
+    # Only the rational root's own singleton rectangle may contain it.
+    if contains_rational:
+        assert real_lower == real_upper == rational
+
+
+def test_simplest_rational_between_uses_minimal_denominators() -> None:
+    """The sibling-separation helper returns the simplest interior rational."""
+    from fractions import Fraction
+
+    from jacobian.math.polynomials.root_critical.operations import (
+        _simplest_rational_between,
+    )
+
+    assert _simplest_rational_between(Fraction(0), Fraction(10)) == Fraction(1)
+    assert _simplest_rational_between(Fraction(1, 3), Fraction(1, 2)) == Fraction(2, 5)
+    assert _simplest_rational_between(Fraction(2), Fraction(3)) == Fraction(5, 2)
+    assert _simplest_rational_between(Fraction(-5, 2), Fraction(-9, 4)) == Fraction(
+        -7, 3
+    )
+
+
+def test_rectangles_separate_pell_siblings_after_fitting() -> None:
+    """A 256-digit Pell gap survives carrier-grid fitting as isolating.
+
+    ``(z - p/q)(z^2 - 2)`` with the Pell solution ``p^2 - 2q^2 = 1`` puts
+    ``p/q`` about ``5.72e-256`` above ``sqrt(2)``, inside one ``10**-255``
+    carrier cell. The refined interval excludes ``p/q`` but grid fitting
+    would republish the shared cell, so the separation must use
+    carrier-representable bounds instead.
+    """
+    from fractions import Fraction
+
+    import sympy
+
+    from jacobian.math.polynomials.root_critical.operations import _family
+
+    numerator = int(
+        "3516000330154850977384610988889313749623219658947581531941618646"
+        "4662997079480091099971328100179573232051463624273585519792514883"
+    )
+    denominator = int(
+        "2486187676106635063536074971212188444452320723524864312416871281"
+        "6086617787865585526449362118108604080589062492969360100219935438"
+    )
+    assert numerator * numerator - 2 * denominator * denominator == 1
+    rational = Fraction(numerator, denominator)
+    z = sympy.Symbol("z")
+    polynomial = sympy.Poly(
+        (z - sympy.Rational(numerator, denominator)) * (z**2 - 2),
+        z,
+        domain="QQ",
+    )
+    records, _values = _family(polynomial)
+    assert len(records) == 3
+    for record in records:
+        real_lower = record.rectangle.real_lower.as_fraction()
+        real_upper = record.rectangle.real_upper.as_fraction()
+        imaginary_lower = record.rectangle.imaginary_lower.as_fraction()
+        imaginary_upper = record.rectangle.imaginary_upper.as_fraction()
+        contains_rational = (
+            real_lower <= rational <= real_upper
+            and imaginary_lower <= 0 <= imaginary_upper
+        )
         # Only the rational root's own singleton rectangle may contain it.
         if contains_rational:
             assert real_lower == real_upper == rational

@@ -1,5 +1,10 @@
 """Plane algebraic curve operations."""
 
+from jacobian.math.geometry.algebraic_curves._arclength_models import (
+    PlaneCurveArclengthBudget,
+    PlaneCurveArclengthRequest,
+    PlaneCurveArclengthResult,
+)
 from jacobian.math.geometry.algebraic_curves._gaussian_realification import (
     GaussianRealificationResult,
     UnivariateGaussianPolynomial,
@@ -12,6 +17,7 @@ from jacobian.math.geometry.algebraic_curves._singularity_models import (
 from jacobian.math.geometry.algebraic_curves.operations import (
     affine_chart,
     affine_curve_check,
+    enclose_arclength,
     gaussian_realification,
     projective_closure,
     rational_conic_parametrization,
@@ -26,12 +32,16 @@ from jacobian.math.geometry.algebraic_curves.operations import (
 
 __all__ = [
     "GaussianRealificationResult",
+    "PlaneCurveArclengthBudget",
+    "PlaneCurveArclengthRequest",
+    "PlaneCurveArclengthResult",
     "ProjectivePlaneCurveSingularityBudget",
     "ProjectivePlaneCurveSingularityProfile",
     "UnivariateGaussianPolynomial",
     "UnivariateGaussianPolynomialTerm",
     "affine_chart",
     "affine_curve_check",
+    "enclose_arclength",
     "gaussian_realification",
     "projective_closure",
     "rational_conic_parametrization",

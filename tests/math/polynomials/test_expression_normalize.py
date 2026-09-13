@@ -414,7 +414,10 @@ def test_malformed_operand_container_is_bounded_before_copying() -> None:
     payload = {
         "coefficient_domain": "ZZ",
         "variables": ["x"],
-        "expression": {"kind": "ADD", "operands": {str(i): i for i in range(5_000_000)}},
+        "expression": {
+            "kind": "ADD",
+            "operands": {str(i): i for i in range(5_000_000)},
+        },
     }
     started = time.monotonic()
     with pytest.raises(ValidationError):

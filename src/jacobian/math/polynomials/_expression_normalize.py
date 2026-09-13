@@ -495,9 +495,28 @@ def _metrics(
             _MAX_EXPRESSION_COEFFICIENT_BITS + 1,
             numerator_bits + ceil(log2(len(child_metrics))),
         )
-        work = _bounded_sum(
-            tuple(row.work + row.support_terms for row in child_metrics),
-            _MAX_EXPRESSION_WORK,
+        # `_add` clones the whole accumulated dictionary for every operand, so
+        # charge the running support of the union at each addition step, not
+        # just each child's support once.
+        accumulated_terms = 0
+        accumulated_degree = 0
+        accumulated_support = 0
+        work = 0
+        for child in child_metrics:
+            work = min(
+                _MAX_EXPRESSION_WORK + 1,
+                work + accumulated_support + child.support_terms,
+            )
+            accumulated_terms = _bounded_sum(
+                (accumulated_terms, child.terms), MAX_POLYNOMIAL_TERMS
+            )
+            accumulated_degree = max(accumulated_degree, child.degree)
+            accumulated_support = _support_bound(
+                variable_count, accumulated_degree, accumulated_terms
+            )
+        work = min(
+            _MAX_EXPRESSION_WORK + 1,
+            work + sum(row.work for row in child_metrics),
         )
     else:
         terms = 1

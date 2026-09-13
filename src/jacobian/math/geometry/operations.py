@@ -71,6 +71,11 @@ from jacobian.math.geometry.exact._models import PointConfiguration
 # Exact circle construction shares one operation-owned wall envelope, and
 # every full-sequence phase checkpoints at this interval.
 SPANNED_CIRCLE_WALL_SECONDS = 120.0
+
+# Small multiples of the denominator-lattice step tried as translation
+# origins. Each multiple costs one linear selection pass; the bound keeps the
+# candidate set small while reaching offsets such as 2/g.
+_SMALL_LATTICE_MULTIPLE = 8
 _CIRCLE_CHECKPOINT_INTERVAL = 64
 
 __all__ = [
@@ -900,12 +905,15 @@ def _axis_origin_candidates(values: tuple[Fraction, ...]) -> tuple[Fraction, ...
     * an integer part, removed by truncating toward zero: for
       `x_i = 10^20 + 1/q_i` the source points and the bounding-box centre all
       leave a 20-digit integer part, while the truncation cancels it.
-    * a rational common offset whose denominator divides every coordinate
-      denominator. Then `g = gcd(denominators)` is a multiple of that
-      denominator, so the offset is an integer multiple of `1/g` and `1/g`
-      reaches the same lattice. For `x_i = 1/(10^20+39) + 1/q_i` the common
-      offset is exactly `1/g`, and it leaves 11-digit offsets where every
-      source or endpoint candidate leaves 21.
+    * a small multiple of the rational lattice step. When a common offset has
+      a denominator dividing every coordinate denominator, `g` (the gcd of the
+      denominators) is a multiple of that denominator, so the offset is an
+      integer multiple `k/g` of the lattice step. For
+      `x_i = 1/(10^20+39) + 1/q_i` the offset is the unit `1/g`, but for
+      `x_i = 2/(10^20+39) + 1/q_i` only `2/g` leaves 11-digit offsets where
+      every source or endpoint candidate leaves 21. Small multiples are tried
+      because each costs one linear selection pass; larger offsets remain
+      unreached.
 
     The ambient origin and the bounding interval's endpoints and centre are
     retained so those earlier candidates keep their reach.
@@ -918,9 +926,8 @@ def _axis_origin_candidates(values: tuple[Fraction, ...]) -> tuple[Fraction, ...
         candidates.add(Fraction(value.numerator // value.denominator))
         denominator_gcd = gcd(denominator_gcd, value.denominator)
     if denominator_gcd > 1:
-        lattice = Fraction(1, denominator_gcd)
-        candidates.add(lattice)
-        candidates.add(-lattice)
+        for multiple in range(-_SMALL_LATTICE_MULTIPLE, _SMALL_LATTICE_MULTIPLE + 1):
+            candidates.add(Fraction(multiple, denominator_gcd))
     low = min(values)
     high = max(values)
     candidates.update((low, high, (low + high) / 2))
@@ -1141,6 +1148,19 @@ def _spanned_circle_profile(
                 "-unit bound; reduce point count or coordinate size"
             ),
         )
+    # Deriving the incidences is linear in the generated triples
+    # (`len(generated)` units), and that count is already known here, so it is
+    # charged before any circle is constructed rather than after.
+    incidence_work = len(generated)
+    if collinearity_work + construction_work + incidence_work > MAX_SPANNED_CIRCLE_WORK:
+        raise OperationResourceAdmissionError(
+            location=("configuration",),
+            code="geometry.spanned_circle_profile_work_bound",
+            message=(
+                f"spanned-circle incidence work exceeds the {MAX_SPANNED_CIRCLE_WORK}"
+                "-unit bound; reduce point count or coordinate size"
+            ),
+        )
 
     grouped: dict[tuple[Fraction, Fraction, Fraction], None] = {}
     # The generated triples already carry every incidence: a point lies on a
@@ -1182,20 +1202,8 @@ def _spanned_circle_profile(
         else:
             members.update((i, j, k))
 
-    # Deriving the incidences is linear in the generated triples, which the
-    # construction charge above already admits; the old `n * len(grouped)`
-    # rescan is gone with the work it measured.
-    incidence_work = len(generated)
-    if collinearity_work + construction_work + incidence_work > MAX_SPANNED_CIRCLE_WORK:
-        raise OperationResourceAdmissionError(
-            location=("configuration",),
-            code="geometry.spanned_circle_profile_work_bound",
-            message=(
-                f"spanned-circle incidence work exceeds the {MAX_SPANNED_CIRCLE_WORK}"
-                "-unit bound; reduce point count or coordinate size"
-            ),
-        )
-
+    # The incidence units were already admitted with the construction charge
+    # above, since the generated-triple count is known before the loop.
     incidences: dict[tuple[Fraction, Fraction, Fraction], tuple[int, ...]] = {
         key: tuple(sorted(members)) for key, members in incidence_members.items()
     }
@@ -1248,7 +1256,10 @@ def _spanned_circle_profile(
         )
 
     request_checkpoint("after spanned-circle result construction")
-    return SpannedCircleProfileResult._from_kernel(
+    entries = _wire_spanned_circle_entries(grouped, incidences, origin)
+    result = SpannedCircleProfileResult._from_kernel(
         configuration=configuration,
-        circles=_wire_spanned_circle_entries(grouped, incidences, origin),
+        circles=entries,
     )
+    request_checkpoint("after spanned-circle result wiring")
+    return result

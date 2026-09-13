@@ -910,7 +910,7 @@ class TestSpannedCircleIncidences:
 
 
 class TestSpannedCircleFinalCheckpoint:
-    def test_result_construction_is_followed_by_a_checkpoint(self) -> None:
+    def test_result_wiring_is_followed_by_a_checkpoint(self) -> None:
         """The public path observes expiry after the tail of entry wiring."""
 
         observed: list[str] = []
@@ -925,7 +925,32 @@ class TestSpannedCircleFinalCheckpoint:
             native_spanned_circle_profile(
                 _configuration(_point("0", "0"), _point("1", "0"), _point("0", "1"))
             )
-        assert observed[-1] == "after spanned-circle result construction"
+        assert observed[-1] == "after spanned-circle result wiring"
+
+    def test_incidence_is_admitted_before_circle_construction(self) -> None:
+        """Incidence overflow rejects before any circumcircle is built.
+
+        Eighteen scaled parabola points give 816 generated triples whose
+        collinearity plus construction fit just below the ceiling while the
+        incidence units push past it; no construction checkpoint may run.
+        """
+
+        observed: list[str] = []
+
+        def _observe(stage: str) -> None:
+            observed.append(stage)
+
+        scale = 10**32
+        points = tuple(
+            _point(str(scale * index), str(scale * index * index)) for index in range(18)
+        )
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setattr(
+                "jacobian.math.geometry.operations.request_checkpoint", _observe
+            )
+            with pytest.raises(OperationResourceAdmissionError, match="incidence"):
+                native_spanned_circle_profile(_configuration(*points))
+        assert "during spanned-circle construction" not in observed
 
 
 class TestSpannedCircleRationalOffsetOrigin:
@@ -953,6 +978,47 @@ class TestSpannedCircleRationalOffsetOrigin:
             for index in range(32)
         )
         assert _minimum_axis_origin(coordinates) == Fraction(1, shift)
+
+        configuration = _configuration(
+            *tuple(
+                RationalPoint2D(
+                    x=CanonicalRational(num=value.numerator, den=value.denominator),
+                    y=CanonicalRational(num=0, den=1),
+                )
+                for value in coordinates
+            )
+        )
+        result = native_spanned_circle_profile(configuration)
+        assert result.circles == ()
+
+    def test_nonunit_rational_offset_is_reached_by_lattice_multiples(
+        self,
+    ) -> None:
+        """A shared 2/g offset must not defeat the origin search.
+
+        For `x_i = 2/g + 1/q_i` with `g = 10^20 + 39` and 32 distinct
+        11-digit primes, the unit lattice steps `±1/g` still leave ~21-digit
+        pairwise denominators, charging `4960 * 21^2 = 2,187,360` and refusing
+        the request, while `2/g` leaves 11-digit offsets at 600,160 units and
+        returns the (empty, collinear) profile.
+        """
+
+        from jacobian.math.geometry.operations import _minimum_axis_origin
+
+        shift = 10**20 + 39
+        primes = (
+            10000000019, 10000000033, 10000000061, 10000000069, 10000000097,
+            10000000103, 10000000121, 10000000141, 10000000147, 10000000207,
+            10000000259, 10000000277, 10000000279, 10000000319, 10000000343,
+            10000000391, 10000000403, 10000000469, 10000000501, 10000000537,
+            10000000583, 10000000589, 10000000597, 10000000601, 10000000631,
+            10000000643, 10000000649, 10000000667, 10000000679, 10000000711,
+            10000000723, 10000000741,
+        )
+        coordinates = tuple(
+            Fraction(2 * prime + shift, shift * prime) for prime in primes
+        )
+        assert _minimum_axis_origin(coordinates) == Fraction(2, shift)
 
         configuration = _configuration(
             *tuple(

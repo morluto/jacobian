@@ -46,17 +46,22 @@ each create their own 50,000,000-unit work ledger; those phases do not share
 one envelope, so a request can consume up to that allowance twice. The
 recognition ledger charges only coprimality of authored source components.
 DAG-node growth, determinant and cofactor expansion, derivatives, rational
-products, complete tensor output, and the 16,384-node / 256-term / 128-digit
-caps belong to the curvature-plan ledger. Authored
+products, complete tensor output, and the 16,384-node cap belong to the
+curvature-plan ledger.
+
+Source-carrier caps apply during request-model validation, before either
+ledger exists, and are separate from the plan ledger. Each authored metric
+component is a `RationalFunction`, whose model validation enforces at most
+256 numerator or denominator terms, an exponent of at most 64, and
+coefficient components of at most 128 digits; `RationalCoordinateMetric`
+also caps the axis at four coordinates. Authored
 `retained_nonzero_denominators` are capped at 768 guards during
-`RationalCoordinateTensor` model validation (`preflight_tensor_shape`), before
-any curvature-plan ledger exists. The curvature plan separately caps the
-complete output locus — inherited source guards plus generated denominator
-identities — at 768 guards. Four coordinate axes are a metric-model cap applied
-during `RationalCoordinateMetric` validation, before any curvature-plan ledger
-is created. Transport byte limits are not used as mathematical admission
-quantities. A request inherits `started_at + 120` as the owner wall envelope;
-a shorter caller deadline wins.
+`RationalCoordinateTensor` model validation (`preflight_tensor_shape`). The
+curvature plan then separately caps the complete output locus — inherited
+source guards plus generated denominator identities — at 768 guards.
+Transport byte limits are not used as mathematical admission quantities. A
+request inherits `started_at + 120` as the fixed operation-owned wall safety
+envelope; a shorter caller deadline wins.
 
 The metric must be symmetric and its determinant must be a nonzero rational
 function. A singular metric, excessive exact work or growth, noncanonical

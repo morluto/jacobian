@@ -9,6 +9,12 @@ from fractions import Fraction
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
+from jacobian._execution import (
+    OperationBackendError,
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+    OperationResourceExhaustedError,
+)
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials.support_geometry._models import (
@@ -46,6 +52,20 @@ __all__ = [
 ]
 
 _POLYNOMIAL_VARIABLE_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,31}$")
+
+# Operational failures must never become malformed-data conclusions. These are
+# re-raised from the preflight boundaries below; all other Exception
+# subclasses from caller-owned attribute code are treated as false claims.
+_PREFLIGHT_OPERATIONAL_ERRORS = (
+    MemoryError,
+    RecursionError,
+    TimeoutError,
+    InterruptedError,
+    OperationBackendError,
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+    OperationResourceExhaustedError,
+)
 
 
 def _run_admission(
@@ -720,9 +740,13 @@ def _bounded_weighted_source(
         return _rebuild_weighted_source(
             polynomial, variables, term_payloads, tuple(exponents)
         )
+    except _PREFLIGHT_OPERATIONAL_ERRORS:
+        raise
     except Exception:
         # The source may be a caller-owned subtype whose fields execute code;
         # malformed source data is a false claim at this boundary.
+        # Resource/execution failures above must propagate, not become
+        # malformed data.
         return None
 
 
@@ -832,8 +856,11 @@ def _verify_weighted_profile_carrier(
             minimizing_exponents=minimizing,
             weight_layers=tuple(normalized_layers),
         )
+    except _PREFLIGHT_OPERATIONAL_ERRORS:
+        raise
     except Exception:
         # Caller-owned model/subtype attributes are untrusted during preflight.
+        # Resource/execution failures above must propagate, not become False.
         return None
 
 
@@ -862,8 +889,11 @@ def _verify_face_carrier(claim: PolynomialFaceData) -> PolynomialFaceData | None
             weight=claim.weight,
             initial_form=normalized_face,
         )
+    except _PREFLIGHT_OPERATIONAL_ERRORS:
+        raise
     except Exception:
         # Caller-owned model/subtype attributes are untrusted during preflight.
+        # Resource/execution failures above must propagate, not become False.
         return None
 
 

@@ -841,9 +841,7 @@ def test_graded_binds_one_deadline_before_groebner(
     observed: dict[str, float | None] = {}
     real_groebner = graded_operations.groebner_basis
 
-    def wrapped(
-        *args: object, **kwargs: object
-    ) -> object:
+    def wrapped(*args: object, **kwargs: object) -> object:
         execution = current_request_execution()
         observed["deadline"] = None if execution is None else execution.deadline
         return real_groebner(*args, **kwargs)

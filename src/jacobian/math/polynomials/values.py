@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, StringConstraints, model_validator
+from pydantic import Field, StrictInt, StringConstraints, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
@@ -29,7 +29,7 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 
 class RationalPolynomialTerm(StrictModel):
     coefficient: CanonicalRational
-    exponents: tuple[int, ...] = Field(
+    exponents: tuple[StrictInt, ...] = Field(
         min_length=0, max_length=MAX_POLYNOMIAL_VARIABLES
     )
 

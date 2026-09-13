@@ -20,7 +20,9 @@ from jacobian.math.polynomials.support_geometry.operations import (
     exponent_support,
     initial_form,
     newton_polytope,
+    verify_polynomial_face_data,
     verify_polynomial_support,
+    verify_polynomial_weight_profile,
     weight_profile,
 )
 from jacobian.math.polynomials.support_geometry.values import (
@@ -101,6 +103,365 @@ VARS = ("x", "y")
 
 
 class TestSupport:
+    def test_serialized_initial_form_verifier_rejects_forged_face(self) -> None:
+        source = _polynomial((_term(1, [2, 0]), _term(1, [0, 2])), VARS)
+        genuine = compute_initial_form(
+            InitialFormRequest(polynomial=source, weight=(1, 2))
+        )
+        decoded = PolynomialFaceData.model_validate_json(genuine.model_dump_json())
+        assert verify_polynomial_face_data(decoded)
+        forged = genuine.model_copy(
+            update={"initial_form": _polynomial((_term(1, [0, 0]),), VARS)}
+        )
+        assert not verify_polynomial_face_data(forged)
+
+    def test_serialized_weight_profile_verifier_rejects_forged_layers(self) -> None:
+        source = _polynomial((_term(1, [2, 0]), _term(1, [0, 2])), VARS)
+        genuine = compute_weight_profile(
+            WeightProfileRequest(polynomial=source, weight=(1, 2))
+        )
+        decoded = PolynomialWeightProfile.model_validate_json(genuine.model_dump_json())
+        assert verify_polynomial_weight_profile(decoded)
+        forged = genuine.model_copy(
+            update={"minimum_weight": genuine.minimum_weight + 1}
+        )
+        assert not verify_polynomial_weight_profile(forged)
+
+    @pytest.mark.parametrize("component", [1.5, True])
+    def test_verifiers_reject_non_integer_model_construct_weights(
+        self, component: object
+    ) -> None:
+        source = _polynomial((_term(1, [2, 0]), _term(1, [0, 2])), VARS)
+        profile = compute_weight_profile(
+            WeightProfileRequest(polynomial=source, weight=(1, 2))
+        )
+        face = compute_initial_form(
+            InitialFormRequest(polynomial=source, weight=(1, 2))
+        )
+        forged_profile = profile.model_copy(update={"weight": (component, 2)})
+        forged_face = face.model_copy(update={"weight": (component, 2)})
+        assert not verify_polynomial_weight_profile(forged_profile)
+        assert not verify_polynomial_face_data(forged_face)
+
+    def test_verifiers_reject_model_construct_scalar_and_layer_forgery(self) -> None:
+        source = _polynomial((_term(1, [2, 0]), _term(1, [0, 2])), VARS)
+        profile = compute_weight_profile(
+            WeightProfileRequest(polynomial=source, weight=(1, 2))
+        )
+        forged_minimum = PolynomialWeightProfile.model_construct(
+            polynomial=profile.polynomial,
+            weight=profile.weight,
+            minimum_weight=float(profile.minimum_weight),
+            minimizing_exponents=profile.minimizing_exponents,
+            weight_layers=profile.weight_layers,
+        )
+        forged_layers = profile.model_copy(
+            update={
+                "weight_layers": (
+                    (profile.minimum_weight, profile.minimizing_exponents),
+                )
+            }
+        )
+        assert not verify_polynomial_weight_profile(forged_minimum)
+        assert not verify_polynomial_weight_profile(forged_layers)
+
+    @pytest.mark.parametrize("exponent", [-1, 32_769])
+    def test_verifiers_reject_constructed_source_exponent_forgery(
+        self, exponent: int
+    ) -> None:
+        from jacobian.math.polynomials.values import SparseRationalPolynomial
+
+        source = _polynomial((_term(1, [2, 0]), _term(1, [0, 2])), VARS)
+        profile = compute_weight_profile(
+            WeightProfileRequest(polynomial=source, weight=(1, 2))
+        )
+        malformed_term = source.polynomial.terms[0].model_copy(
+            update={"exponents": (exponent, 0)}
+        )
+        malformed_sparse = SparseRationalPolynomial.model_construct(
+            terms=(malformed_term, source.polynomial.terms[1])
+        )
+        malformed_source = source.model_copy(update={"polynomial": malformed_sparse})
+        forged_profile = profile.model_copy(update={"polynomial": malformed_source})
+        assert not verify_polynomial_weight_profile(forged_profile)
+
+    def test_face_verifier_rejects_malformed_constructed_face(self) -> None:
+        from jacobian.math.polynomials.values import SparseRationalPolynomial
+
+        source = _polynomial((_term(1, [2, 0]), _term(1, [0, 2])), VARS)
+        face = compute_initial_form(
+            InitialFormRequest(polynomial=source, weight=(1, 2))
+        )
+        malformed_term = face.initial_form.polynomial.terms[0].model_copy(
+            update={"exponents": (32_769, 0)}
+        )
+        malformed_sparse = SparseRationalPolynomial.model_construct(
+            terms=(malformed_term,)
+        )
+        malformed_face = face.initial_form.model_copy(
+            update={"polynomial": malformed_sparse}
+        )
+        forged_face = face.model_copy(update={"initial_form": malformed_face})
+        assert not verify_polynomial_face_data(forged_face)
+
+    @pytest.mark.parametrize("kind", ("profile", "face"))
+    @pytest.mark.parametrize("malformation", ("negative", "duplicate", "zero", "list"))
+    def test_native_weighted_admission_rejects_malformed_constructed_source(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        kind: str,
+        malformation: str,
+    ) -> None:
+        from jacobian._exact import CanonicalRational
+        from jacobian.math.polynomials.support_geometry import operations
+        from jacobian.math.polynomials.values import (
+            RationalPolynomialTerm,
+            SparseRationalPolynomial,
+        )
+
+        source = _polynomial((_term(1, [2, 0]), _term(1, [0, 2])), VARS)
+        terms: object
+        if malformation == "negative":
+            terms = (
+                source.polynomial.terms[0].model_copy(update={"exponents": (-1, 0)}),
+                source.polynomial.terms[1],
+            )
+        elif malformation == "duplicate":
+            terms = (source.polynomial.terms[0], source.polynomial.terms[0])
+        elif malformation == "zero":
+            terms = (
+                RationalPolynomialTerm.model_construct(
+                    coefficient=CanonicalRational(num=0, den=1),
+                    exponents=(2, 0),
+                ),
+                source.polynomial.terms[1],
+            )
+        else:
+            terms = list(source.polynomial.terms)
+        malformed_source = RationalPolynomial.model_construct(
+            domain="QQ",
+            variables=VARS,
+            polynomial=SparseRationalPolynomial.model_construct(terms=terms),
+        )
+
+        def fail(*args: object, **kwargs: object) -> object:
+            raise AssertionError("malformed source reached computation")
+
+        if kind == "profile":
+            monkeypatch.setattr(operations, "_compute_weight_layers", fail)
+            with raises_domain_code("polynomial_support_geometry.malformed_polynomial"):
+                weight_profile(malformed_source, (1, 2))
+        else:
+            monkeypatch.setattr(operations, "_initial_form_terms", fail)
+            with raises_domain_code("polynomial_support_geometry.malformed_polynomial"):
+                initial_form(malformed_source, (1, 2))
+
+    @pytest.mark.parametrize("component", (True, 1.0))
+    def test_weight_components_reject_json_coercion(self, component: object) -> None:
+        source = _polynomial((_term(1, [2, 0]), _term(1, [0, 2])), VARS)
+        profile = compute_weight_profile(
+            WeightProfileRequest(polynomial=source, weight=(1, 2))
+        )
+        face = compute_initial_form(
+            InitialFormRequest(polynomial=source, weight=(1, 2))
+        )
+        payloads = (
+            (
+                WeightProfileRequest,
+                {
+                    "polynomial": source.model_dump(mode="json"),
+                    "weight": [component, 2],
+                },
+            ),
+            (
+                InitialFormRequest,
+                {
+                    "polynomial": source.model_dump(mode="json"),
+                    "weight": [1, component],
+                },
+            ),
+            (
+                PolynomialWeightProfile,
+                profile.model_dump(mode="json") | {"weight": [component, 2]},
+            ),
+            (
+                PolynomialFaceData,
+                face.model_dump(mode="json") | {"weight": [1, component]},
+            ),
+        )
+        for model, payload in payloads:
+            with pytest.raises(ValidationError):
+                model.model_validate_json(json.dumps(payload))
+
+    def test_profile_integers_reject_json_boolean_coercion(self) -> None:
+        source = _polynomial((_term(1, [2, 0]), _term(1, [0, 2])), VARS)
+        profile = compute_weight_profile(
+            WeightProfileRequest(polynomial=source, weight=(1, 2))
+        )
+        payload = profile.model_dump(mode="json")
+        payload["minimum_weight"] = True
+        with pytest.raises(ValidationError):
+            PolynomialWeightProfile.model_validate_json(json.dumps(payload))
+        payload = profile.model_dump(mode="json")
+        payload["weight_layers"][0][0] = True
+        with pytest.raises(ValidationError):
+            PolynomialWeightProfile.model_validate_json(json.dumps(payload))
+        payload = profile.model_dump(mode="json")
+        payload["minimizing_exponents"][0][0] = True
+        with pytest.raises(ValidationError):
+            PolynomialWeightProfile.model_validate_json(json.dumps(payload))
+
+    def test_term_exponents_reject_json_boolean_and_float_coercion(self) -> None:
+        from jacobian.math.polynomials.values import RationalPolynomialTerm
+
+        source = _polynomial((_term(1, [2, 0]), _term(1, [0, 2])), VARS)
+        payload = source.polynomial.terms[0].model_dump(mode="json")
+        payload["exponents"][0] = True
+        with pytest.raises(ValidationError):
+            RationalPolynomialTerm.model_validate_json(json.dumps(payload))
+        payload["exponents"][0] = 1.0
+        with pytest.raises(ValidationError):
+            RationalPolynomialTerm.model_validate_json(json.dumps(payload))
+
+    def test_verifiers_reject_hostile_monic_subtype_without_raising(self) -> None:
+        from jacobian._exact import CanonicalRational
+        from jacobian.math.polynomials.values import (
+            MonicPolynomial,
+            monic_polynomial_from_coefficients,
+        )
+
+        source = monic_polynomial_from_coefficients(
+            (
+                CanonicalRational(num=-1, den=1),
+                CanonicalRational(num=1, den=1),
+            ),
+            variable="t",
+        )
+
+        class HostileMonicPolynomial(MonicPolynomial):
+            def __getattribute__(self, name: str) -> object:
+                if name in {"domain", "variables", "polynomial"}:
+                    raise RuntimeError("hostile polynomial access")
+                return super().__getattribute__(name)
+
+        hostile = HostileMonicPolynomial.model_construct(
+            domain="QQ", variables=("t",), polynomial=source.polynomial
+        )
+        profile = compute_weight_profile(
+            WeightProfileRequest(polynomial=source, weight=(1,))
+        )
+        face = compute_initial_form(InitialFormRequest(polynomial=source, weight=(1,)))
+
+        assert not verify_polynomial_weight_profile(
+            profile.model_copy(update={"polynomial": hostile})
+        )
+        assert not verify_polynomial_face_data(
+            face.model_copy(update={"polynomial": hostile})
+        )
+
+    def test_verifiers_accept_zero_variable_constant_round_trip(self) -> None:
+        source = _polynomial((_term(1, []),), ())
+        profile = weight_profile(source, ())
+        face = initial_form(source, ())
+
+        assert verify_polynomial_weight_profile(profile)
+        assert verify_polynomial_face_data(face)
+        assert verify_polynomial_weight_profile(
+            PolynomialWeightProfile.model_validate_json(profile.model_dump_json())
+        )
+        assert verify_polynomial_face_data(
+            PolynomialFaceData.model_validate_json(face.model_dump_json())
+        )
+
+    def test_verifiers_accept_monic_polynomial_subtype(self) -> None:
+        from jacobian._exact import CanonicalRational
+        from jacobian.math.polynomials.values import monic_polynomial_from_coefficients
+
+        source = monic_polynomial_from_coefficients(
+            (
+                CanonicalRational(num=-1, den=1),
+                CanonicalRational(num=1, den=1),
+            ),
+            variable="t",
+        )
+        profile = compute_weight_profile(
+            WeightProfileRequest(polynomial=source, weight=(1,))
+        )
+        face = compute_initial_form(InitialFormRequest(polynomial=source, weight=(1,)))
+
+        assert profile.polynomial is source
+        assert face.polynomial is source
+        assert verify_polynomial_weight_profile(profile)
+        assert verify_polynomial_face_data(face)
+
+    def test_invalid_monic_subtype_is_rejected_before_retain_or_verify(self) -> None:
+        from jacobian.math.polynomials.values import MonicPolynomial
+
+        source = _polynomial((_term(2, [1]), _term(1, [0])), ("t",))
+        with pytest.raises(ValidationError):
+            MonicPolynomial(variables=("t",), polynomial=source.polynomial)
+        invalid_monic = MonicPolynomial.model_construct(
+            domain="QQ",
+            variables=("t",),
+            polynomial=source.polynomial,
+        )
+
+        with raises_domain_code("polynomial_support_geometry.malformed_polynomial"):
+            weight_profile(invalid_monic, (1,))
+        with raises_domain_code("polynomial_support_geometry.malformed_polynomial"):
+            initial_form(invalid_monic, (1,))
+
+        profile = weight_profile(source, (1,))
+        face = initial_form(source, (1,))
+        assert not verify_polynomial_weight_profile(
+            profile.model_copy(update={"polynomial": invalid_monic})
+        )
+        assert not verify_polynomial_face_data(
+            face.model_copy(update={"polynomial": invalid_monic})
+        )
+        assert not verify_polynomial_face_data(
+            face.model_copy(update={"initial_form": invalid_monic})
+        )
+
+    @pytest.mark.parametrize("kind", ("profile", "face"))
+    @pytest.mark.parametrize(
+        "failure", (RuntimeError, ValueError, TypeError, OperationDomainValidationError)
+    )
+    def test_weighted_verifiers_propagate_computation_failures(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        kind: str,
+        failure: type[Exception],
+    ) -> None:
+        from jacobian.math.polynomials.support_geometry import operations
+
+        source = _polynomial((_term(1, [2, 0]), _term(1, [0, 2])), VARS)
+        error: Exception
+        if failure is OperationDomainValidationError:
+            error = failure(
+                location=(), code="test.computation", message="injected failure"
+            )
+        else:
+            error = failure("injected failure")
+
+        def fail(*args: object, **kwargs: object) -> object:
+            raise error
+
+        if kind == "profile":
+            profile_claim = compute_weight_profile(
+                WeightProfileRequest(polynomial=source, weight=(1, 2))
+            )
+            monkeypatch.setattr(operations, "weight_profile", fail)
+            with pytest.raises(failure, match="injected failure"):
+                verify_polynomial_weight_profile(profile_claim)
+        else:
+            face_claim = compute_initial_form(
+                InitialFormRequest(polynomial=source, weight=(1, 2))
+            )
+            monkeypatch.setattr(operations, "initial_form", fail)
+            with pytest.raises(failure, match="injected failure"):
+                verify_polynomial_face_data(face_claim)
+
     def test_nonzero_support(self) -> None:
         result = compute_support(
             SupportRequest(polynomial=_polynomial(_XY_TERMS, VARS))
@@ -410,6 +771,60 @@ class TestNativeSurface:
             OperationDomainValidationError, match="weight vector length"
         ):
             initial_form(nonzero, (1,))
+
+    def test_native_weighted_admission_rejects_before_source_rebuild(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from jacobian._exact import CanonicalRational
+        from jacobian.math.polynomials.support_geometry import operations
+        from jacobian.math.polynomials.support_geometry._models import (
+            MAX_WEIGHTED_COEFFICIENT_DIGITS,
+            MAX_WEIGHTED_POLYNOMIAL_TERMS,
+        )
+        from jacobian.math.polynomials.values import (
+            RationalPolynomialTerm,
+            SparseRationalPolynomial,
+        )
+
+        def fail(*_args: object, **_kwargs: object) -> object:
+            raise AssertionError("oversized source reached rebuild")
+
+        monkeypatch.setattr(operations, "_bounded_weighted_source", fail)
+        oversized_terms = tuple(
+            RationalPolynomialTerm.model_construct(
+                coefficient=CanonicalRational(num=1, den=1),
+                exponents=(index, 0),
+            )
+            for index in range(MAX_WEIGHTED_POLYNOMIAL_TERMS + 1)
+        )
+        oversized = RationalPolynomial.model_construct(
+            domain="QQ",
+            variables=VARS,
+            polynomial=SparseRationalPolynomial.model_construct(terms=oversized_terms),
+        )
+        with raises_domain_code(
+            "polynomial_support_geometry.weighted_term_count_exceeded"
+        ):
+            weight_profile(oversized, (1, 0))
+
+        tall = RationalPolynomial.model_construct(
+            domain="QQ",
+            variables=VARS,
+            polynomial=SparseRationalPolynomial.model_construct(
+                terms=(
+                    RationalPolynomialTerm.model_construct(
+                        coefficient=CanonicalRational.model_construct(
+                            num=10**MAX_WEIGHTED_COEFFICIENT_DIGITS, den=1
+                        ),
+                        exponents=(1, 0),
+                    ),
+                )
+            ),
+        )
+        with raises_domain_code(
+            "polynomial_support_geometry.weighted_coefficient_bound"
+        ):
+            initial_form(tall, (1, 0))
 
 
 class TestSupportCrossFieldValidation:

@@ -168,6 +168,86 @@ def _wheel_search_order(graph: SimpleUndirectedGraph) -> tuple[str, ...] | None:
     return (hub, *order)
 
 
+def _wheel_cycle_count(wheel_order: tuple[str, ...], cycle_length: int) -> int:
+    """Exact number of simple or chordless `cycle_length`-cycles in a wheel.
+
+    ``wheel_order`` is ``(hub, rim...)`` in cyclic rim order. Simple cycles are
+    the ``m`` hub-plus-consecutive-arc families for each arc length plus the rim
+    cycle; a wheel has no induced cycle longer than four, so the chordless
+    family is separately counted.
+    """
+
+    rim_count = len(wheel_order) - 1
+    if cycle_length < 3 or cycle_length > rim_count + 1:
+        return 0
+    if cycle_length == rim_count + 1:
+        # Hamiltonians use the whole rim plus the hub; there is exactly one.
+        return 1
+    # Hub cycles: one per consecutive arc of ``cycle_length - 1`` rim vertices,
+    # of which there are ``rim_count`` proper arcs.
+    count = rim_count
+    if cycle_length == rim_count:
+        # The rim itself is an additional cycle that avoids the hub.
+        count += 1
+    return count
+
+
+def _wheel_chordless_cycle_count(
+    wheel_order: tuple[str, ...], cycle_length: int
+) -> int:
+    """Exact number of induced `cycle_length`-cycles in a wheel."""
+
+    rim_count = len(wheel_order) - 1
+    if cycle_length == 3:
+        # Triangles use the hub plus a rim edge, one per rim edge; the rim edge
+        # is a chord-free triangle.
+        return rim_count
+    if cycle_length == 4:
+        # Hub + three consecutive rim vertices has the chord hub-to-middle, so
+        # there is no induced four-cycle through the hub.
+        return 0
+    if cycle_length == rim_count:
+        # The rim itself is induced (no rim chords in a wheel) for length >= 5.
+        return 1 if rim_count >= 5 else 0
+    return 0
+
+
+def _wheel_order_for_block(
+    block: tuple[str, ...], local: dict[str, set[str]]
+) -> tuple[str, ...] | None:
+    """Return ``(hub, rim...)`` when the block is a wheel, else ``None``."""
+
+    vertex_count = len(block)
+    if vertex_count < 4:
+        return None
+    hubs = [vertex for vertex in block if len(local[vertex]) == vertex_count - 1]
+    if len(hubs) != 1:
+        return None
+    hub = hubs[0]
+    rim = [vertex for vertex in block if vertex != hub]
+    if any(len(local[vertex]) != 3 for vertex in rim):
+        return None
+    rim_adjacency = {vertex: local[vertex] - {hub} for vertex in rim}
+    if any(len(neighbors) != 2 for neighbors in rim_adjacency.values()):
+        return None
+    start = sorted(rim)[0]
+    order = [start]
+    previous: str | None = None
+    current = start
+    while len(order) < len(rim):
+        candidates = sorted(
+            neighbor for neighbor in rim_adjacency[current] if neighbor != previous
+        )
+        next_vertex = next(
+            candidate for candidate in candidates if candidate not in order
+        )
+        if next_vertex is None:
+            return None
+        order.append(next_vertex)
+        previous, current = current, next_vertex
+    return (hub, *order)
+
+
 def _cycle_core_vertices(graph: SimpleUndirectedGraph) -> set[str]:
     """Return vertices in the graph's cycle-bearing 2-core."""
     adjacency: dict[str, set[str]] = {vertex: set() for vertex in graph.vertices}
@@ -688,6 +768,14 @@ def _block_fixed_cycle_bounds(
     adjacency = {vertex: tuple(sorted(local[vertex])) for vertex in block}
     if cycle_length > core_order:
         return 0, 0, adjacency
+    wheel_order = _wheel_order_for_block(block, local)
+    if wheel_order is not None:
+        count = (
+            _wheel_chordless_cycle_count(wheel_order, cycle_length)
+            if chordless
+            else _wheel_cycle_count(wheel_order, cycle_length)
+        )
+        return 2 * core_order * core_order, count, adjacency
     max_core_degree = max((len(local[vertex]) for vertex in block), default=0)
     prefix_bound = core_order
     for depth in range(1, cycle_length):

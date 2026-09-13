@@ -26,6 +26,7 @@ from jacobian.math.graphs.cycle_length_profile.operations import (
     enumerate_chordless_fixed_length_cycles,
     enumerate_fixed_length_cycles,
 )
+from jacobian.math.graphs.symmetry._edges import canonical_edge
 from jacobian.math.graphs.values import MAX_SIMPLE_GRAPH_VERTICES, SimpleUndirectedGraph
 
 
@@ -580,3 +581,22 @@ def test_oversized_cycle_row_is_bounded_before_decoding() -> None:
     with pytest.raises(ValidationError) as error:
         FixedLengthCycleEnumerationResult.model_validate(payload)
     assert error.value.errors()[0]["loc"] == ("cycles", 0)
+
+
+def _wheel(rim_count: int) -> SimpleUndirectedGraph:
+    rim = tuple(f"r{index}" for index in range(rim_count))
+    hub = "h"
+    edges = tuple(canonical_edge(hub, vertex) for vertex in rim) + tuple(
+        canonical_edge(rim[index], rim[(index + 1) % rim_count])
+        for index in range(rim_count)
+    )
+    return SimpleUndirectedGraph(vertices=(hub, *rim), edges=edges)
+
+
+def test_sparse_wheel_blocks_use_an_exact_cycle_bound() -> None:
+    """A 22-vertex wheel has 21 four-cycles and no induced four-cycle."""
+    graph = _wheel(21)
+    simple = enumerate_fixed_length_cycles(graph, 4)
+    assert simple.cycle_count == 21
+    chordless = enumerate_chordless_fixed_length_cycles(graph, 4)
+    assert chordless.cycle_count == 0

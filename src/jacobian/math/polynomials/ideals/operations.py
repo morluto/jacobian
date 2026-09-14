@@ -19,6 +19,8 @@ from jacobian._execution import (
     bind_request_deadline,
     current_request_execution,
     request_cancelled,
+    request_checkpoint,
+    require_execution_deadline,
 )
 from jacobian.backends import BackendUnavailableError
 from jacobian.catalog.models import (
@@ -1155,13 +1157,18 @@ def _raise_if_relation_deadline_exceeded(deadline: float) -> None:
         raise _SympyKernelTimeoutError()
 
 
-def _bind_relation_deadline(resource_budget: IdealComputationBudget) -> float:
+def _bind_relation_deadline(
+    resource_budget: IdealComputationBudget, outer_deadline: float | None = None
+) -> float:
     """Bind the relation kernel to the request's complete deadline."""
     execution = current_request_execution()
     started_at = execution.started_at if execution is not None else time.monotonic()
     request_deadline = started_at + resource_budget.wall_seconds
     if execution is not None and execution.deadline is not None:
         request_deadline = min(request_deadline, execution.deadline)
+    if outer_deadline is not None:
+        # Never restart a fresh sub-window past a caller's absolute deadline.
+        request_deadline = min(request_deadline, outer_deadline)
     bind_request_deadline(request_deadline)
     return request_deadline
 
@@ -1469,10 +1476,12 @@ def groebner_basis(
     monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex",
     *,
     resource_budget: IdealComputationBudget | None = None,
+    _outer_deadline: float | None = None,
 ) -> GroebnerBasisResult:
     """Compute a reduced Gröbner basis for a bounded ideal over QQ using SymPy."""
     resource_budget = resource_budget or IdealComputationBudget()
     _run_admission(lambda: _admit_groebner(ideal))
+    deadline = _bind_relation_deadline(resource_budget, _outer_deadline)
     source_ideal = ideal
     variables = source_ideal.variables
     order_map = {"lex": "lex", "grlex": "grlex", "grevlex": "grevlex"}
@@ -1487,11 +1496,10 @@ def groebner_basis(
         ],
     }
 
-    # The unbounded search runs in a killable worker under the declared
-    # wall-time budget; result assembly then operates only on the declared
-    # output limits.
+    # The unbounded search runs in a killable worker under the one shared
+    # request deadline; result assembly then charges the remaining allowance.
     try:
-        result_payload = _run_sympy_kernel(payload, resource_budget.wall_seconds)
+        result_payload = _run_relation_kernel_before_deadline(payload, deadline)
     except _SympyKernelCancelledError:
         raise OperationExecutionCancelledError(
             "the Groebner computation was cancelled before producing a result"
@@ -1512,10 +1520,21 @@ def groebner_basis(
             f"exact basis: {error}"
         ) from error
 
-    basis_generators = [
-        RationalPolynomial.model_validate_json(json.dumps(item))
-        for item in result_payload["generators"]
-    ]
+    basis_generators = []
+    request_checkpoint("after Groebner kernel worker")
+    # A native call has no request envelope, so request_checkpoint cannot see
+    # the absolute deadline. Enforce it explicitly before decoding and result
+    # assembly, which happen after the worker and could otherwise return
+    # success past the shared wall limit.
+    require_execution_deadline(deadline)
+    for position, item in enumerate(result_payload["generators"]):
+        if position % 256 == 0:
+            request_checkpoint("during Groebner basis decoding")
+        basis_generators.append(
+            RationalPolynomial.model_validate_json(json.dumps(item))
+        )
+    request_checkpoint("after Groebner basis decoding")
+    require_execution_deadline(deadline)
     if not basis_generators:
         from jacobian.math.polynomials.values import SparseRationalPolynomial
 
@@ -1529,7 +1548,7 @@ def groebner_basis(
         variables=variables,
         generators=tuple(basis_generators),
     )
-
+    request_checkpoint("before Groebner result construction")
     return GroebnerBasisResult._from_kernel(source_ideal, basis_ideal, monomial_order)
 
 

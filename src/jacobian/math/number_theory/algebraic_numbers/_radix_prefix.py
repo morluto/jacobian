@@ -312,7 +312,7 @@ def _scaled_integer_part(
         # scaled floor adds only ``scale``'s width, so a response past that is
         # malformed rather than a legitimate but unmaterializable value.
         scaled_floor_digit_bound=(
-            MAX_RADIX_INTEGER_PART_DIGITS + len(format_canonical_integer(scale)) + 2
+            MAX_RADIX_INTEGER_PART_DIGITS + len(format_canonical_integer(scale))
         ),
     )
 

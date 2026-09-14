@@ -160,6 +160,11 @@ def _multiplication_work(a_limbs: int, b_limbs: int) -> int:
 def _upper_decimal_digits(value: int) -> int:
     """Return the exact decimal-digit count without converting to text."""
     estimate = (value.bit_length() * 30103) // 100000 + 1
+    # Materializing 10**(estimate - 1) costs work linear in the decimal width,
+    # so only resolve the exact boundary near the canonical envelope; far
+    # beyond it the estimate is already a sound upper bound.
+    if estimate - 1 > _EXACT_BOUNDARY_MAX_OPERAND_DIGITS:
+        return estimate
     if value < 10 ** (estimate - 1):
         return estimate - 1
     return estimate
@@ -512,7 +517,7 @@ def _require_canonical_partition(partition: object) -> IntegerPartition:
             code="algebraic_combinatorics.partition_carrier",
             message="partition operations require an IntegerPartition value",
         )
-    parts = partition.parts
+    parts = getattr(partition, "parts", None)
     if not isinstance(parts, tuple):
         raise OperationDomainValidationError(
             location=("partition", "parts"),

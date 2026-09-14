@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+import time
 from typing import NoReturn
 
 import pytest
@@ -755,3 +756,20 @@ def test_decimal_width_matches_str_beyond_the_conversion_limit() -> None:
         value = 10**exponent
         assert _decimal_width(value) == exponent + 1
         assert _decimal_width(value - 1) == exponent
+
+
+def test_oversized_native_alphabet_is_rejected_before_decimal_power() -> None:
+    """A native alphabet far beyond the carrier fails without 10**materialization."""
+    started = time.monotonic()
+    with pytest.raises(OperationDomainValidationError):
+        native.semistandard_young_tableaux_count(
+            IntegerPartition(parts=(1,)), 1 << 50_000_000
+        )
+    assert time.monotonic() - started < 1.0
+
+
+def test_constructed_partition_without_parts_is_a_typed_domain_error() -> None:
+    """A carrier missing its parts field is a domain error, not AttributeError."""
+    forged = IntegerPartition.model_construct()
+    with pytest.raises(OperationDomainValidationError):
+        native.partition_dominance(forged, IntegerPartition(parts=(1,)))

@@ -1,5 +1,10 @@
 """Supported exact polynomial API."""
 
+from jacobian.math.polynomials._cyclotomic import cyclotomic
+from jacobian.math.polynomials._discrete_antiderivative import (
+    RationalDiscreteAntiderivativeResult,
+    rational_discrete_antiderivative,
+)
 from jacobian.math.polynomials._elementary_kernel import (
     integer_polynomial_compose,
     integer_polynomial_content,
@@ -15,6 +20,10 @@ from jacobian.math.polynomials._elementary_kernel import (
 )
 from jacobian.math.polynomials._elementary_symmetric import (
     elementary_symmetric_family,
+)
+from jacobian.math.polynomials._expression_normalize import (
+    PolynomialExpressionSource,
+    normalize_polynomial_expression,
 )
 from jacobian.math.polynomials._laurent import rational_laurent_multiply
 from jacobian.math.polynomials._mahler_kernel import (
@@ -73,8 +82,11 @@ def __getattr__(name: str) -> object:
 
 
 __all__ = [
+    "PolynomialExpressionSource",
+    "RationalDiscreteAntiderivativeResult",
     "RationalLaurentPolynomial",
     "RationalLaurentPolynomialTerm",
+    "cyclotomic",
     "derivative",
     "discriminant",
     "divide",
@@ -97,6 +109,7 @@ __all__ = [
     "integral",
     "mahler_measure",
     "multiply",
+    "normalize_polynomial_expression",
     "partial_fractions",
     "polynomial_discriminant",
     "polynomial_factorization",
@@ -105,6 +118,7 @@ __all__ = [
     "polynomial_resultant",
     "polynomial_square_free_decomposition",
     "quadratic_root_profile",
+    "rational_discrete_antiderivative",
     "rational_laurent_multiply",
     "rational_partial_fraction_decomposition",
     "rational_polynomial_derivative",

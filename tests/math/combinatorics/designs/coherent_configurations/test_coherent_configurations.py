@@ -20,7 +20,9 @@ from jacobian.math.combinatorics.designs.coherent_configurations.values import (
 )
 
 
-def compute_analyze(request: CoherentConfigurationAnalyzeRequest):
+def compute_analyze(
+    request: CoherentConfigurationAnalyzeRequest,
+) -> CoherentConfigurationAnalyzeResult:
     return analyze_configuration(request.configuration)
 
 

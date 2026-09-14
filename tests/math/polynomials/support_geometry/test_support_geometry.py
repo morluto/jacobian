@@ -602,13 +602,13 @@ class TestWeightProfile:
         assert result.minimizing_exponents == ((0, 2),)
 
     def test_dimension_mismatch(self) -> None:
-        request = WeightProfileRequest(
-            polynomial=_polynomial(_XY_TERMS, VARS), weight=(1, 1, 1)
-        )
-        with raises_domain_code(
+        with pytest.raises(ValidationError) as caught:
+            WeightProfileRequest(
+                polynomial=_polynomial(_XY_TERMS, VARS), weight=(1, 1, 1)
+            )
+        assert caught.value.errors()[0]["type"] == (
             "polynomial_support_geometry.weight_dimension_mismatch"
-        ):
-            compute_weight_profile(request)
+        )
 
     def test_zero_polynomial_rejected(self) -> None:
         """The empty support has no minimum; the zero polynomial is inadmissible."""
@@ -677,13 +677,13 @@ class TestTransportableBounds:
     def test_huge_weight_component_rejected(self) -> None:
         """Derived weights must stay inside the interoperable JSON range."""
         big = 9007199254740991
-        request = WeightProfileRequest(
-            polynomial=_polynomial(_XY_TERMS, VARS), weight=(big, 1)
-        )
-        with raises_domain_code(
+        with pytest.raises(ValidationError) as caught:
+            WeightProfileRequest(
+                polynomial=_polynomial(_XY_TERMS, VARS), weight=(big, 1)
+            )
+        assert caught.value.errors()[0]["type"] == (
             "polynomial_support_geometry.weight_component_out_of_range"
-        ):
-            compute_weight_profile(request)
+        )
 
     def test_initial_form_output_growth_bounded(self) -> None:
         """A zero weight makes every term minimal; oversized sources are
@@ -1205,3 +1205,33 @@ class TestSupportValueInvariants:
                     "all_support_exponents": [[0], [0]],
                 }
             )
+
+
+class TestConstantAxisComposition:
+    def test_empty_weight_for_a_zero_variable_polynomial(self) -> None:
+        """A constant with no variables accepts the empty weight vector."""
+        polynomial = RationalPolynomial.model_validate(
+            {
+                "variables": [],
+                "polynomial": {
+                    "terms": [{"coefficient": {"num": 5, "den": 1}, "exponents": []}]
+                },
+            }
+        )
+        request = WeightProfileRequest(polynomial=polynomial, weight=())
+        result = compute_weight_profile(request)
+        restored = type(result).model_validate_json(result.model_dump_json())
+        assert restored == result
+
+    def test_empty_weight_for_an_initial_form(self) -> None:
+        polynomial = RationalPolynomial.model_validate(
+            {
+                "variables": [],
+                "polynomial": {
+                    "terms": [{"coefficient": {"num": 5, "den": 1}, "exponents": []}]
+                },
+            }
+        )
+        request = InitialFormRequest(polynomial=polynomial, weight=())
+        result = compute_initial_form(request)
+        assert result is not None

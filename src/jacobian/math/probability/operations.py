@@ -14,6 +14,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.number_theory.number_fields import GaussianRational
+from jacobian.math.probability._compound_poisson import compound_poisson_cumulant_prefix
 from jacobian.math.probability._distribution import (
     MAX_FINITE_CONVOLUTION_OUTPUT_ATOMS,
     MAX_FINITE_CONVOLUTION_PAIRS,
@@ -1021,6 +1022,7 @@ def gaussian_polynomial_moment(
 
 
 __all__ = [
+    "compound_poisson_cumulant_prefix",
     "condition",
     "convolution",
     "convolution_peak",

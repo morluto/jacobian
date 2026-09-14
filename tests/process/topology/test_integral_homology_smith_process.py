@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 import threading
 import time
 from collections.abc import Iterator
@@ -241,10 +242,8 @@ def test_worker_applies_the_parent_projection_limit_to_canonical_encoding(
         _smith_worker, "_smith_projection", lambda *args, **kwargs: projection
     )
     monkeypatch.setattr(_smith_worker, "encode_strict_json", inspect_encode)
-    monkeypatch.setattr(
-        _smith_worker.sys, "stdin", SimpleNamespace(buffer=BytesIO(input_bytes))
-    )
-    monkeypatch.setattr(_smith_worker.sys, "stdout", SimpleNamespace(buffer=stdout))
+    monkeypatch.setattr(sys, "stdin", SimpleNamespace(buffer=BytesIO(input_bytes)))
+    monkeypatch.setattr(sys, "stdout", SimpleNamespace(buffer=stdout))
 
     assert _smith_worker.main() == 0
     assert observed_limit == output_limit

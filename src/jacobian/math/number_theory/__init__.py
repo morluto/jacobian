@@ -20,6 +20,10 @@ if TYPE_CHECKING:
     from jacobian.math.number_theory._friable_enumerate import enumerate_friable
     from jacobian.math.number_theory._friable_kernel import count_friable
     from jacobian.math.number_theory._friable_models import FriableCountResult
+    from jacobian.math.number_theory._kempner_models import (
+        KempnerArithmeticProgressionResult,
+        KempnerDigitSet,
+    )
     from jacobian.math.number_theory._prime_shift_models import PrimeShiftProfileResult
     from jacobian.math.number_theory._r_full_enumerate import enumerate_r_full
     from jacobian.math.number_theory._r_full_enumerate_models import (
@@ -34,6 +38,7 @@ if TYPE_CHECKING:
         floor_square_root,
         is_prime,
         jacobi_symbol,
+        kempner_arithmetic_progression,
         ksigma_preimage,
         legendre_symbol,
         mobius,
@@ -61,6 +66,8 @@ __all__ = [
     "DickmanRhoPiecewiseEnclosureResult",
     "DyadicCoefficientBall",
     "FriableCountResult",
+    "KempnerArithmeticProgressionResult",
+    "KempnerDigitSet",
     "PrimeShiftProfileResult",
     "RFullEnumerateResult",
     "binomial_prime_valuation",
@@ -76,6 +83,7 @@ __all__ = [
     "floor_square_root",
     "is_prime",
     "jacobi_symbol",
+    "kempner_arithmetic_progression",
     "ksigma_preimage",
     "legendre_symbol",
     "mobius",
@@ -108,6 +116,8 @@ _OWNER_MODULES = {
     "FriableCountResult": "_friable_models",
     "PrimeShiftProfileResult": "_prime_shift_models",
     "RFullEnumerateResult": "_r_full_enumerate_models",
+    "KempnerArithmeticProgressionResult": "_kempner_models",
+    "KempnerDigitSet": "_kempner_models",
     "count_friable": "_friable_kernel",
     "dickman_rho_piecewise_enclosure": "_dickman_rho",
     "divisibility_poset": "_divisibility_poset",

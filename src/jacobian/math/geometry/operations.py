@@ -2,12 +2,27 @@
 
 from __future__ import annotations
 
+import time
+from collections.abc import Iterable
 from fractions import Fraction
+from itertools import combinations
+from math import gcd
 from typing import Any, cast
 
-from jacobian._exact import CanonicalRational
+from pydantic import ValidationError
+
+from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS, CanonicalRational
+from jacobian._execution import (
+    bind_request_deadline,
+    current_request_execution,
+    request_checkpoint,
+    request_execution,
+)
 from jacobian.canonical import format_canonical_integer
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.geometry._convex_polygon_intersection import (
     ConvexPolygonIntersectionResult,
     ConvexRationalPolygon,
@@ -17,7 +32,10 @@ from jacobian.math.geometry._convex_polygon_intersection import (
 )
 from jacobian.math.geometry._models import (
     INVERSION_ADMISSION_DIGITS,
+    MAX_CONFIGURATION_POINTS,
     MAX_COORDINATE_DIGITS,
+    MAX_SPANNED_CIRCLE_WORK,
+    MAX_SPANNED_CIRCLES,
     CircumradiusProfileResult,
     CircumradiusTripleEntry,
     ClosedSegment2D,
@@ -38,6 +56,8 @@ from jacobian.math.geometry._models import (
     RationalPoint2D,
     SegmentIntersectionResult,
     SimplePolygonDecisionResult,
+    SpannedCircleEntry,
+    SpannedCircleProfileResult,
     _inverted_components_within_bound,
     _is_simple_ring,
     _point_key,
@@ -46,6 +66,14 @@ from jacobian.math.geometry._models import (
     _require_inversion_admission_bound,
 )
 from jacobian.math.geometry._predicates import are_collinear, determinant4
+from jacobian.math.geometry.exact._models import PointConfiguration
+
+# Exact circle construction shares one operation-owned wall envelope, and
+# every full-sequence phase checkpoints at this interval.
+SPANNED_CIRCLE_WALL_SECONDS = 120.0
+
+# Every full-sequence phase checkpoints at this interval.
+_CIRCLE_CHECKPOINT_INTERVAL = 64
 
 __all__ = [
     "centroid",
@@ -65,6 +93,7 @@ __all__ = [
     "segment_intersection",
     "signed_area",
     "simple_polygon",
+    "spanned_circle_profile",
     "squared_distance",
     "verify_collinearity",
     "verify_concyclicity",
@@ -187,6 +216,66 @@ def _admit_circumcircle(
             code="geometry.circumcircle_requires_three_noncollinear_points",
             message="circumcircle requires three noncollinear points",
         )
+
+
+def _admit_spanned_circle_source(
+    configuration: PointConfiguration,
+) -> tuple[PointConfiguration, tuple[RationalPoint2D, ...]]:
+    if not isinstance(configuration, PointConfiguration):
+        _reject_geometry_domain(
+            location=("configuration",),
+            code="geometry.spanned_circle_requires_point_configuration",
+            message="spanned-circle profiles require a labelled PointConfiguration",
+        )
+    try:
+        configuration = PointConfiguration.model_validate(
+            configuration.model_dump(warnings="none")
+        )
+        request_checkpoint("during spanned-circle source revalidation")
+    except ValidationError as error:
+        detail = error.errors()[0]
+        _reject_geometry_domain(
+            location=("configuration", *tuple(detail.get("loc", ()))),
+            code=str(detail["type"]),
+            message=str(detail["msg"]),
+        )
+    except AttributeError:
+        _reject_geometry_domain(
+            location=("configuration",),
+            code="geometry.spanned_circle_requires_point_configuration",
+            message="spanned-circle profiles require a labelled PointConfiguration",
+        )
+    points = configuration.points
+    if not 3 <= len(points) <= MAX_CONFIGURATION_POINTS:
+        _reject_geometry_domain(
+            location=("configuration",),
+            code="geometry.spanned_circle_point_count",
+            message=(
+                "spanned-circle profiles require between 3 and "
+                f"{MAX_CONFIGURATION_POINTS} source points"
+            ),
+        )
+    for index, point in enumerate(points):
+        request_checkpoint("during spanned-circle source admission")
+        coordinates = getattr(point, "coordinates", None)
+        if not isinstance(coordinates, tuple) or len(coordinates) != 2:
+            _reject_geometry_domain(
+                location=("configuration", "points", index, "coordinates"),
+                code="geometry.spanned_circle_requires_planar_points",
+                message="spanned-circle profiles require planar source points",
+            )
+    planar = tuple(
+        RationalPoint2D(x=point.coordinates[0], y=point.coordinates[1])
+        for point in points
+    )
+    keys = tuple(_point_key(point) for point in planar)
+    if len(keys) != len(set(keys)):
+        _reject_geometry_domain(
+            location=("configuration",),
+            code="geometry.spanned_circle_points_unique",
+            message="spanned-circle source point coordinates must be unique",
+        )
+    return configuration, planar
 
 
 def _admit_simple_polygon_point(
@@ -705,7 +794,6 @@ def general_position_search(
     points: tuple[RationalPoint2D, ...],
 ) -> GeneralPositionResult:
     """Find all collinear triples and concyclic quadruples in a point configuration."""
-    from itertools import combinations
 
     _admit_configuration(points, output_bound=False)
     pts = _points_to_fractions(points)
@@ -751,8 +839,6 @@ def circumradius_profile(
     points: tuple[RationalPoint2D, ...],
 ) -> CircumradiusProfileResult:
     """Compute circumradius squared for every unordered triple in a configuration."""
-    from fractions import Fraction
-    from itertools import combinations
 
     _admit_configuration(points, output_bound=True)
     pts = _points_to_fractions(points)
@@ -791,3 +877,413 @@ def circumradius_profile(
         points=points,
         entries=tuple(entries),
     )
+
+
+def _fraction_digits(value: Fraction) -> int:
+    return max(
+        len(format_canonical_integer(abs(value.numerator))),
+        len(format_canonical_integer(value.denominator)),
+    )
+
+
+def _fraction_serialized_digits(value: Fraction) -> int:
+    return len(format_canonical_integer(abs(value.numerator))) + len(
+        format_canonical_integer(value.denominator)
+    )
+
+
+def _lattice_origin_candidates(a: int, b: int, g: int) -> tuple[Fraction, ...]:
+    """Return the lattice offsets ``k/g`` that reduce ``a/b`` by the common gcd.
+
+    Write ``b = g * m`` with ``g`` the gcd of every coordinate denominator, so
+    ``(a/b) - (k/g) = (a - k*m)/b``. That difference gains a factor ``g`` in
+    its numerator exactly when ``a - k*m == 0 (mod g)``, i.e.
+    ``k == a * m^{-1} (mod g)``. Choosing that ``k`` makes the translated
+    coordinate reduce by the whole common factor, which is what turns a family
+    such as ``x_i = c/g + 1/q_i`` into the short ``1/q_i`` offsets. The
+    representative in ``[0, g)`` is returned.
+    """
+
+    if g <= 1:
+        return ()
+    m = b // g
+    if m % g == 0 or gcd(m, g) != 1:
+        # No modular inverse exists; keep the truncation-style candidate only.
+        return (Fraction(a % g, g),)
+    inverse = pow(m, -1, g)
+    return (Fraction((a * inverse) % g, g),)
+
+
+def _axis_origin_candidates(values: tuple[Fraction, ...]) -> tuple[Fraction, ...]:
+    """Return the origin values this axis considers, in a stable order.
+
+    A fixed list of source points cannot reach the origin that matters for a
+    shifted family. Three shifts are common in practice and all are cheap to
+    derive exactly:
+
+    * an integer part, removed by truncating toward zero: for
+      ``x_i = 10^20 + 1/q_i`` the source points and the bounding-box centre all
+      leave a 20-digit integer part, while the truncation cancels it.
+    * the lattice offset ``k/g`` that cancels the common denominator factor,
+      derived exactly from each coordinate by ``_lattice_origin_candidates``.
+      For ``x_i = c/g + 1/q_i`` this yields ``c/g`` directly, so the shifted
+      family is reachable for every integer ``c`` instead of only a fixed small
+      range of multiples.
+    * the ambient origin, the bounding interval's endpoints, and its centre.
+
+    The chosen origin minimises the widest offset, so an exact reduction such
+    as ``c/g`` is selected whenever it is the cheapest reachable candidate.
+    """
+
+    candidates: set[Fraction] = {Fraction(0)}
+    denominator_gcd = 0
+    for value in values:
+        candidates.add(value)
+        candidates.add(Fraction(value.numerator // value.denominator))
+        denominator_gcd = gcd(denominator_gcd, value.denominator)
+    if denominator_gcd > 1:
+        for value in values:
+            candidates.update(
+                _lattice_origin_candidates(
+                    value.numerator, value.denominator, denominator_gcd
+                )
+            )
+    low = min(values)
+    high = max(values)
+    candidates.update((low, high, (low + high) / 2))
+    return tuple(sorted(candidates))
+
+
+def _minimum_axis_origin(values: tuple[Fraction, ...]) -> Fraction:
+    """Choose the origin component minimising this axis's widest offset.
+
+    Ties are broken by the smallest candidate value, so the choice depends only
+    on the multiset of coordinates and not on the order the caller listed them.
+    """
+
+    best_key: tuple[int, Fraction] | None = None
+    best: Fraction | None = None
+    for candidate in _axis_origin_candidates(values):
+        request_checkpoint("during spanned-circle origin selection")
+        key = (max(_fraction_digits(value - candidate) for value in values), candidate)
+        if best_key is None or key < best_key:
+            best_key = key
+            best = candidate
+    assert best is not None
+    return best
+
+
+def _minimum_height_origin(
+    points: tuple[tuple[Fraction, Fraction], ...],
+) -> tuple[Fraction, Fraction]:
+    """Choose an origin that minimises translated coordinate height.
+
+    The widest translated offset is
+    `max(max_i digits(x_i - o_x), max_j digits(y_j - o_y))`, which is separable:
+    the two axes never interact. Minimising each axis independently therefore
+    attains the joint minimum over the product of the per-axis candidate sets,
+    and no joint choice can beat `max(min_x, min_y)` because each offset bounds
+    its own axis minimum. The selection is independent of source order.
+    """
+
+    return (
+        _minimum_axis_origin(tuple(point[0] for point in points)),
+        _minimum_axis_origin(tuple(point[1] for point in points)),
+    )
+
+
+def _bind_circle_deadline() -> None:
+    """Bind the operation-owned wall envelope before exact circle work."""
+
+    execution = current_request_execution()
+    started = execution.started_at if execution is not None else time.monotonic()
+    deadline = started + SPANNED_CIRCLE_WALL_SECONDS
+    if execution is not None and execution.deadline is not None:
+        deadline = min(deadline, execution.deadline)
+    bind_request_deadline(deadline)
+
+
+def _checkpoint_circle_work(completed: int, stage: str) -> int:
+    completed += 1
+    if completed % _CIRCLE_CHECKPOINT_INTERVAL == 0:
+        request_checkpoint(stage)
+    return completed
+
+
+def _merge_sorted_keys(
+    left: list[tuple[Fraction, Fraction, Fraction]],
+    right: list[tuple[Fraction, Fraction, Fraction]],
+) -> list[tuple[Fraction, Fraction, Fraction]]:
+    """Merge two ascending key runs using the same total order as ``sorted``."""
+
+    result: list[tuple[Fraction, Fraction, Fraction]] = []
+    left_index = 0
+    right_index = 0
+    while left_index < len(left) and right_index < len(right):
+        if left[left_index] <= right[right_index]:
+            result.append(left[left_index])
+            left_index += 1
+        else:
+            result.append(right[right_index])
+            right_index += 1
+    result.extend(left[left_index:])
+    result.extend(right[right_index:])
+    return result
+
+
+def _checkpointed_sorted(
+    keys: Iterable[tuple[Fraction, Fraction, Fraction]],
+) -> list[tuple[Fraction, Fraction, Fraction]]:
+    """Sort circle keys while staying cancellable inside the comparison sort.
+
+    ``sorted(keys)`` is evaluated eagerly, so the result-construction checkpoint
+    that follows it could not observe a cancellation raised during the sort. A
+    profile can hold thousands of exact-rational keys, so this runs a bottom-up
+    merge sort and checkpoints once per merge.
+    """
+
+    level = [[key] for key in keys]
+    while len(level) > 1:
+        merged: list[list[tuple[Fraction, Fraction, Fraction]]] = []
+        for index in range(0, len(level) - 1, 2):
+            request_checkpoint("while ordering spanned-circle keys")
+            merged.append(_merge_sorted_keys(level[index], level[index + 1]))
+        if len(level) % 2:
+            merged.append(level[-1])
+        level = merged
+    return level[0] if level else []
+
+
+def _wire_spanned_circle_entries(
+    grouped: dict[tuple[Fraction, Fraction, Fraction], None],
+    incidences: dict[tuple[Fraction, Fraction, Fraction], tuple[int, ...]],
+    origin: tuple[Fraction, Fraction],
+) -> tuple[SpannedCircleEntry, ...]:
+    entries: list[SpannedCircleEntry] = []
+    completed = 0
+    for key in _checkpointed_sorted(grouped):
+        completed = _checkpoint_circle_work(
+            completed, "during spanned-circle result construction"
+        )
+        entries.append(
+            SpannedCircleEntry(
+                circle=GeometryCircleResult(
+                    center=RationalPoint2D(
+                        x=_wire_rational(key[0] + origin[0]),
+                        y=_wire_rational(key[1] + origin[1]),
+                    ),
+                    radius_squared=_wire_rational(key[2]),
+                ),
+                point_indices=incidences[key],
+            )
+        )
+    return tuple(entries)
+
+
+def spanned_circle_profile(
+    configuration: PointConfiguration,
+) -> SpannedCircleProfileResult:
+    """Return every distinct circle spanned by a non-collinear source triple.
+
+    The operation wall envelope is opened for the whole call and bound before
+    the source is revalidated, so the copy, projection, and per-point digit
+    checks are participants in the same envelope as the circle search that
+    follows them. A native caller arrives without a request envelope, and
+    `bind_request_deadline` stores nothing in that case, so this opens one here
+    rather than letting the wall bound and every checkpoint stay inert.
+    """
+
+    if current_request_execution() is None:
+        with request_execution(time.monotonic()):
+            return spanned_circle_profile(configuration)
+    return _spanned_circle_profile(configuration)
+
+
+def _spanned_circle_profile(
+    configuration: PointConfiguration,
+) -> SpannedCircleProfileResult:
+    """Compute the profile inside an already bound operation envelope."""
+
+    _bind_circle_deadline()
+    configuration, points = _admit_spanned_circle_source(configuration)
+    point_values = tuple(_points_to_fractions(points))
+    origin = _minimum_height_origin(point_values)
+    translated = tuple(
+        (point[0] - origin[0], point[1] - origin[1]) for point in point_values
+    )
+    for index, point in enumerate(translated):
+        for axis, value in enumerate(point):
+            if _fraction_digits(value) > MAX_COORDINATE_DIGITS:
+                _reject_geometry_domain(
+                    location=(
+                        "configuration",
+                        "points",
+                        index,
+                        "coordinates",
+                        axis,
+                    ),
+                    code="geometry.coordinate_digits_max",
+                    message=(
+                        "translated spanned-circle coordinates exceed the "
+                        f"{MAX_COORDINATE_DIGITS}-digit bound"
+                    ),
+                )
+    n = len(translated)
+    triples = n * (n - 1) * (n - 2) // 6
+    max_digits = max(
+        max(_fraction_digits(coordinate) for coordinate in point)
+        for point in translated
+    )
+    digit_work = max_digits * max_digits
+    collinearity_work = triples * digit_work
+    if collinearity_work > MAX_SPANNED_CIRCLE_WORK:
+        raise OperationResourceAdmissionError(
+            location=("configuration",),
+            code="geometry.spanned_circle_profile_work_bound",
+            message=(
+                f"spanned-circle collinearity work exceeds the {MAX_SPANNED_CIRCLE_WORK}"
+                "-unit bound; reduce point count or coordinate size"
+            ),
+        )
+
+    generated: list[tuple[int, int, int]] = []
+    completed = 0
+    for i, j, k in combinations(range(n), 3):
+        completed = _checkpoint_circle_work(
+            completed, "during spanned-circle collinearity enumeration"
+        )
+        first, second, third = translated[i], translated[j], translated[k]
+        cross = (second[0] - first[0]) * (third[1] - first[1]) - (
+            second[1] - first[1]
+        ) * (third[0] - first[0])
+        if cross != 0:
+            generated.append((i, j, k))
+    construction_work = len(generated) * digit_work
+    if collinearity_work + construction_work > MAX_SPANNED_CIRCLE_WORK:
+        raise OperationResourceAdmissionError(
+            location=("configuration",),
+            code="geometry.spanned_circle_profile_work_bound",
+            message=(
+                f"spanned-circle construction work exceeds the {MAX_SPANNED_CIRCLE_WORK}"
+                "-unit bound; reduce point count or coordinate size"
+            ),
+        )
+    # Deriving the incidences is linear in the generated triples
+    # (`len(generated)` units), and that count is already known here, so it is
+    # charged before any circle is constructed rather than after.
+    incidence_work = len(generated)
+    if collinearity_work + construction_work + incidence_work > MAX_SPANNED_CIRCLE_WORK:
+        raise OperationResourceAdmissionError(
+            location=("configuration",),
+            code="geometry.spanned_circle_profile_work_bound",
+            message=(
+                f"spanned-circle incidence work exceeds the {MAX_SPANNED_CIRCLE_WORK}"
+                "-unit bound; reduce point count or coordinate size"
+            ),
+        )
+
+    grouped: dict[tuple[Fraction, Fraction, Fraction], None] = {}
+    # The generated triples already carry every incidence: a point lies on a
+    # circle exactly when it appears in a generated triple with that circle's
+    # key, because any point `q` on a circle through the non-collinear `a, b`
+    # yields the non-collinear triple `(a, b, q)` with the same key. Accumulating
+    # the three indices here therefore replaces the previous per-circle rescan
+    # of every source point, which charged `n * len(grouped)` and refused
+    # full-size profiles whose circles are cheap to build.
+    incidence_members: dict[tuple[Fraction, Fraction, Fraction], set[int]] = {}
+    completed = 0
+    for i, j, k in generated:
+        completed = _checkpoint_circle_work(
+            completed, "during spanned-circle construction"
+        )
+        first, second, third = translated[i], translated[j], translated[k]
+        cross = (second[0] - first[0]) * (third[1] - first[1]) - (
+            second[1] - first[1]
+        ) * (third[0] - first[0])
+        first_norm = first[0] * first[0] + first[1] * first[1]
+        second_norm = second[0] * second[0] + second[1] * second[1]
+        third_norm = third[0] * third[0] + third[1] * third[1]
+        center_x = (
+            first_norm * (second[1] - third[1])
+            + second_norm * (third[1] - first[1])
+            + third_norm * (first[1] - second[1])
+        ) / (2 * cross)
+        center_y = (
+            first_norm * (third[0] - second[0])
+            + second_norm * (first[0] - third[0])
+            + third_norm * (second[0] - first[0])
+        ) / (2 * cross)
+        radius_squared = (center_x - first[0]) ** 2 + (center_y - first[1]) ** 2
+        key = (center_x, center_y, radius_squared)
+        grouped[key] = None
+        members = incidence_members.get(key)
+        if members is None:
+            incidence_members[key] = {i, j, k}
+        else:
+            members.update((i, j, k))
+
+    # The incidence units were already admitted with the construction charge
+    # above, since the generated-triple count is known before the loop.
+    incidences: dict[tuple[Fraction, Fraction, Fraction], tuple[int, ...]] = {
+        key: tuple(sorted(members)) for key, members in incidence_members.items()
+    }
+
+    if len(grouped) > MAX_SPANNED_CIRCLES:
+        raise OperationResourceAdmissionError(
+            location=("configuration",),
+            code="geometry.spanned_circle_profile_work_bound",
+            message=(
+                "spanned-circle result exceeds the "
+                f"{MAX_SPANNED_CIRCLES}-circle envelope"
+            ),
+        )
+
+    restored_digit_total = 0
+    completed = 0
+    for key in grouped:
+        completed = _checkpoint_circle_work(
+            completed, "during spanned-circle translated-back admission"
+        )
+        restored_x = key[0] + origin[0]
+        restored_y = key[1] + origin[1]
+        restored_digits = (
+            _fraction_serialized_digits(restored_x)
+            + _fraction_serialized_digits(restored_y)
+            + _fraction_serialized_digits(key[2])
+        )
+        if (
+            _fraction_digits(restored_x) > MAX_CANONICAL_INTEGER_DIGITS
+            or _fraction_digits(restored_y) > MAX_CANONICAL_INTEGER_DIGITS
+            or _fraction_digits(key[2]) > MAX_CANONICAL_INTEGER_DIGITS
+        ):
+            raise OperationResourceAdmissionError(
+                location=("configuration",),
+                code="geometry.spanned_circle_result_digit_bound",
+                message=(
+                    "translated-back spanned-circle coordinates exceed the "
+                    f"{MAX_CANONICAL_INTEGER_DIGITS}-digit canonical envelope"
+                ),
+            )
+        restored_digit_total += restored_digits
+        if restored_digit_total > MAX_SPANNED_CIRCLE_WORK:
+            # Raise as soon as the aggregate crosses the envelope rather than
+            # after restoring every remaining circle: a shifted family can
+            # otherwise format hundreds of millions of decimal digits for a
+            # request that is already doomed.
+            raise OperationResourceAdmissionError(
+                location=("configuration",),
+                code="geometry.spanned_circle_result_digit_bound",
+                message=(
+                    "translated-back spanned-circle output exceeds the "
+                    f"{MAX_SPANNED_CIRCLE_WORK}-digit aggregate envelope"
+                ),
+            )
+
+    request_checkpoint("after spanned-circle result construction")
+    entries = _wire_spanned_circle_entries(grouped, incidences, origin)
+    result = SpannedCircleProfileResult._from_kernel(
+        configuration=configuration,
+        circles=entries,
+    )
+    request_checkpoint("after spanned-circle result wiring")
+    return result

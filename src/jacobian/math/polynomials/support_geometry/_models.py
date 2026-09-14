@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from pydantic import Field, StrictInt
+from typing import Self
+
+from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -90,14 +92,20 @@ class WeightProfileRequest(StrictModel):
         )
     )
     weight: tuple[StrictInt, ...] = Field(
-        min_length=1,
+        min_length=0,
         max_length=MAX_WEIGHT_COMPONENTS,
         description=(
-            "One integer per variable of the retained polynomial; each "
-            "component is bounded in magnitude by 2**31 so derived "
-            "weights stay inside the interoperable JSON integer range."
+            "One integer per variable of the retained polynomial (empty when "
+            "the polynomial has no variables); each component is bounded in "
+            "magnitude by 2**31 so derived weights stay inside the "
+            "interoperable JSON integer range."
         ),
     )
+
+    @model_validator(mode="after")
+    def require_transportable_weight(self) -> Self:
+        _require_transportable_weight(self.weight, self.polynomial.variables)
+        return self
 
 
 class InitialFormRequest(StrictModel):
@@ -112,14 +120,20 @@ class InitialFormRequest(StrictModel):
         )
     )
     weight: tuple[StrictInt, ...] = Field(
-        min_length=1,
+        min_length=0,
         max_length=MAX_WEIGHT_COMPONENTS,
         description=(
-            "One integer per variable of the retained polynomial; each "
-            "component is bounded in magnitude by 2**31 so derived "
-            "weights stay inside the interoperable JSON integer range."
+            "One integer per variable of the retained polynomial (empty when "
+            "the polynomial has no variables); each component is bounded in "
+            "magnitude by 2**31 so derived weights stay inside the "
+            "interoperable JSON integer range."
         ),
     )
+
+    @model_validator(mode="after")
+    def require_transportable_weight(self) -> Self:
+        _require_transportable_weight(self.weight, self.polynomial.variables)
+        return self
 
 
 __all__ = [

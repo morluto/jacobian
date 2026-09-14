@@ -78,6 +78,11 @@ def test_release_build_resolves_and_verifies_one_immutable_sha() -> None:
         "actions/workflows/ci.yml/runs?head_sha=$RELEASE_SHA&status=success"
         in ci_gate_run
     )
+    # A non-green release commit must fail with an actionable recovery message
+    # instead of an opaque exit code, so a flaky lane cannot silently strand a
+    # release.  See issue #1383.
+    assert "::error" in ci_gate_run
+    assert "exit 1" in ci_gate_run
     assert _step_names(build).index(
         "Require successful CI for release commit"
     ) < _step_names(build).index("Build Python distributions")

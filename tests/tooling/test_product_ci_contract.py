@@ -254,3 +254,85 @@ def test_required_accepts_only_explicitly_skipped_pr_evidence() -> None:
     assert 'selected_result "$RUN_WHEEL" "$WHEEL_RESULT"' in required
     assert 'test "$COVERAGE_RESULT" = skipped' in required
     assert 'test "$COVERAGE_RESULT" = success' in required
+
+
+def _scale_marked_tests(path: Path) -> set[str]:
+    """Return test-function names carrying the ``scale`` tier marker."""
+
+    import ast
+
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    marked: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for decorator in node.decorator_list:
+            candidate = decorator
+            if isinstance(candidate, ast.Call):
+                candidate = candidate.func
+            if not isinstance(candidate, ast.Attribute):
+                continue
+            if candidate.attr != "scale":
+                continue
+            owner = candidate.value
+            if isinstance(owner, ast.Attribute) and owner.attr == "mark":
+                marked.add(node.name)
+    return marked
+
+
+def _all_test_functions(path: Path) -> set[str]:
+    import ast
+
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    return {
+        node.name
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name.startswith("test_")
+    }
+
+
+def test_scale_evidence_keeps_an_ordinary_regression_in_its_module() -> None:
+    """A module may move near-envelope proof to ``scale`` only with ordinary peers.
+
+    The tier contract in ``docs/reference/testing-strategy.md`` requires a small
+    ordinary regression for the same public behavior.  Every module that owns a
+    ``scale`` test must also own at least one ordinary test, so a module cannot
+    be wholly demoted out of the lane that ``main`` always runs.  A module whose
+    filename explicitly declares the scale purpose (``*_scale.py`` or
+    ``test_scale*.py``) is dedicated scale evidence and is exempt.
+    """
+
+    math_root = ROOT / "tests" / "math"
+    offenders: list[str] = []
+    scale_modules = 0
+    for path in sorted(math_root.rglob("test_*.py")):
+        marked = _scale_marked_tests(path)
+        if not marked:
+            continue
+        scale_modules += 1
+        if path.stem.endswith("scale") or path.stem.startswith("test_scale"):
+            continue
+        ordinary = _all_test_functions(path) - marked
+        if not ordinary:
+            offenders.append(str(path.relative_to(ROOT)))
+
+    assert scale_modules > 0, "expected at least one scale-marked module"
+    assert offenders == [], (
+        "scale-only test modules must keep an ordinary regression: "
+        + ", ".join(offenders)
+    )
+
+
+def test_ordinary_math_lane_excludes_every_heavy_tier() -> None:
+    """The ordinary lane expression excludes all non-ordinary execution tiers."""
+
+    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+    line = next(
+        entry
+        for entry in makefile.splitlines()
+        if entry.startswith("ORDINARY_MARKER_EXPRESSION")
+    )
+
+    for tier in ("property", "exhaustive", "scale"):
+        assert f"not {tier}" in line, f"{tier} must be excluded from the ordinary lane"

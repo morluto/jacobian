@@ -58,9 +58,22 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_SHA: ${{ steps.release.outputs.sha }}
         run: |
-          test "$(gh api \
+          green="$(gh api \
             "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$RELEASE_SHA&status=success&per_page=100" \
-            --jq '[.workflow_runs[] | select(.head_sha == env.RELEASE_SHA and .conclusion == "success")] | length')" -gt 0
+            --jq '[.workflow_runs[] | select(.head_sha == env.RELEASE_SHA and .conclusion == "success")] | length')"
+          if [ "$green" -gt 0 ]; then
+            exit 0
+          fi
+          # A release can only publish from a commit whose CI is green.  The
+          # common cause is a flaky ordinary lane that failed after the release
+          # commit landed; surface the exact recovery instead of stranding the
+          # release with an opaque exit code.  Re-running the failed CI for this
+          # SHA (it is immutable) is the supported repair.
+          {
+            echo "::error title=Release commit is not green::CI has no successful run for release commit $RELEASE_SHA."
+            echo "::error ::Re-run CI for $RELEASE_SHA, then re-dispatch this workflow with tag=${{ inputs.tag || github.event.release.tag_name }}."
+          }
+          exit 1
       - name: Build Python distributions
         run: uv build --out-dir dist/python
       - name: Test and pack npm distribution

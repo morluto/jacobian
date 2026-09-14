@@ -13,6 +13,7 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.polynomials.graded import operations as graded_operations
 from jacobian.math.polynomials.graded._models import (
+    MAX_GRADED_DEGREE,
     HilbertDimensionResult,
     HilbertFunctionRequest,
     HilbertFunctionResult,
@@ -968,8 +969,15 @@ def test_hilbert_series_ambient_numerator_must_reduce_to_series() -> None:
         HilbertSeriesResult.model_validate(payload)
 
 
+@pytest.mark.scale
 def test_hilbert_function_admits_mixed_constraints_above_enumerator_ceiling() -> None:
-    """The 28 pairwise products have 8 standard monomials at degree 32."""
+    """The 28 pairwise products have 8 standard monomials at degree 32.
+
+    This sits at the published degree envelope (``MAX_GRADED_DEGREE``) and
+    charges a full Groebner pass, so it is near-envelope evidence rather than
+    an ordinary regression.  An explicit budget keeps it off the operation's
+    short default when the scheduled scale lane is loaded.
+    """
     from jacobian.math.polynomials.ideals._models import IdealComputationBudget
 
     variables = tuple("xyzwuvst")
@@ -979,12 +987,9 @@ def test_hilbert_function_admits_mixed_constraints_above_enumerator_ceiling() ->
         for right in range(left + 1, 8)
     )
     ideal = _monomial_ideal(variables, generators)
-    # This boundary sits well above the enumerator ceiling and costs a full
-    # Groebner pass; charge an explicit budget so a loaded hosted runner does
-    # not trip the operation's 10s default.
     result = hilbert_function(
         ideal,
-        max_degree=32,
+        max_degree=MAX_GRADED_DEGREE,
         resource_budget=IdealComputationBudget(wall_seconds=60),
     )
     assert result.values[-1] == 8

@@ -426,3 +426,69 @@ def test_quintic_coefficient_at_the_digit_limit_has_an_exact_inverse() -> None:
     )
     result = rational_discrete_antiderivative(source, "x")
     assert result.reconstructed_difference == source
+
+
+def test_sextic_coefficient_at_the_digit_limit_has_an_exact_inverse() -> None:
+    """The generic degree admits a representable sextic boundary input.
+
+    ``A*x^6`` with ``A = 10**32766 + 1`` keeps every intermediate (largest
+    ``15*A``) below the canonical carrier, so the exact incremental preflight
+    admits it where the closed-form numerator envelope refused it.
+    """
+    coefficient = 10**32_766 + 1
+    source = RationalPolynomial(
+        variables=("x",),
+        polynomial=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=coefficient, den=1),
+                    exponents=(6,),
+                ),
+            )
+        ),
+    )
+    result = rational_discrete_antiderivative(source, "x")
+    assert result.reconstructed_difference == source
+
+
+def test_sextic_intermediate_growth_is_rejected_at_the_digit_bound() -> None:
+    """A sextic whose intermediates exceed the carrier is still refused."""
+    source = RationalPolynomial(
+        variables=("x",),
+        polynomial=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=10**32_767, den=1),
+                    exponents=(6,),
+                ),
+            )
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        rational_discrete_antiderivative(source, "x")
+    assert error.value.errors()[0]["type"] == (
+        "polynomial.discrete_antiderivative.intermediate_growth"
+    )
+
+
+def test_catalog_path_skips_the_native_reparse(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Dispatch-validated polynomials are not dumped and revalidated again."""
+    from jacobian.math.polynomials import _discrete_antiderivative as module
+    from jacobian.math.polynomials._discrete_antiderivative_tools import _run
+
+    source = _polynomial(((1, (2, 0)),))
+
+    def forbidden(value: object) -> object:
+        raise AssertionError("the catalog path must not reparse a validated input")
+
+    monkeypatch.setattr(module, "_parse_native_polynomial", forbidden)
+    # The trusted catalog path completes without the native reparse.
+    result = _run(
+        RationalDiscreteAntiderivativeRequest(polynomial=source, variable="k")
+    )
+    assert result.reconstructed_difference == source
+    # The direct native boundary still reparses caller-built values.
+    with pytest.raises(AssertionError, match="must not reparse"):
+        rational_discrete_antiderivative(source, "k")

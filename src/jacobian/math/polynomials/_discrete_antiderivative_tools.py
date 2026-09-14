@@ -11,7 +11,12 @@ from jacobian.math.polynomials._discrete_antiderivative import (
 def _run(
     request: RationalDiscreteAntiderivativeRequest,
 ) -> RationalDiscreteAntiderivativeResult:
-    return _compute_discrete_antiderivative(request.polynomial, request.variable)
+    # Dispatch already validated the nested polynomial through strict JSON, so
+    # the catalog path skips the defensive native reparse instead of dumping
+    # and revalidating every canonical rational a second time.
+    return _compute_discrete_antiderivative(
+        request.polynomial, request.variable, trusted=True
+    )
 
 
 RATIONAL_DISCRETE_ANTIDERIVATIVE_OPERATION = MathTool(

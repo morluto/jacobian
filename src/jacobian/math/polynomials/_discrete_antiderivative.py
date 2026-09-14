@@ -62,6 +62,7 @@ def _parse_native_polynomial(source: RationalPolynomial) -> RationalPolynomial:
 
     try:
         payload = source.model_dump(mode="python", warnings=False)
+        request_checkpoint("during discrete antiderivative native reparse")
         return RationalPolynomial.model_validate(payload)
     except (AttributeError, RecursionError, TypeError, ValueError) as exc:
         raise OperationDomainValidationError(
@@ -355,12 +356,7 @@ def _admit_group(
         return
 
     common_denominator = 1
-    maximum_numerator_digits = 1
     for coefficient in coefficients.values():
-        maximum_numerator_digits = max(
-            maximum_numerator_digits,
-            _decimal_digits_upper(abs(coefficient.numerator)),
-        )
         denominator = coefficient.denominator
         factor = denominator // gcd(common_denominator, denominator)
         common_digits = _decimal_digits_upper(common_denominator)
@@ -376,19 +372,17 @@ def _admit_group(
             )
         common_denominator *= factor
 
-    common_denominator_digits = _decimal_digits_upper(common_denominator)
-    factorial_digits = _factorial_digits_upper(maximum_degree)
-    binomial_digits = (maximum_degree + 1) * 30103 // 100000 + 2
-    term_count_digits = _decimal_digits_upper(len(coefficients))
-    denominator_digits = common_denominator_digits + factorial_digits
-    coefficient_digits = (
-        maximum_numerator_digits
-        + common_denominator_digits
-        + factorial_digits
-        + (2 * binomial_digits)
-        + term_count_digits
+    # The generic degree has no compact closed form, so admission bounds only
+    # the common denominator here. Every numerator materialized by the solve
+    # and reconstruction is preflighted exactly as it is produced (see
+    # ``_solve_slices`` and ``_reconstruct_difference``), which admits
+    # representable degree-six-and-up slices such as ``A*x^6`` that the old
+    # closed-form digit envelope refused while still refusing over-height
+    # intermediates before they accumulate.
+    denominator_digits = _decimal_digits_upper(common_denominator) + (
+        _factorial_digits_upper(maximum_degree)
     )
-    if max(denominator_digits, coefficient_digits) > MAX_CANONICAL_RATIONAL_DIGITS:
+    if denominator_digits > MAX_CANONICAL_RATIONAL_DIGITS:
         raise OperationResourceAdmissionError(
             location=("polynomial",),
             code="polynomial.discrete_antiderivative.intermediate_growth",
@@ -452,6 +446,7 @@ def _solve_slices(
             if not leading:
                 continue
             antiderivative_coefficient = leading / (degree + 1)
+            _admit_closed_form_coefficients((antiderivative_coefficient,))
             exponent = (
                 *other[:variable_index],
                 degree + 1,
@@ -462,9 +457,11 @@ def _solve_slices(
                 charged = _checkpoint_work(
                     charged, "during discrete antiderivative solve"
                 )
-                residual[lower_degree] = residual.get(
+                updated = residual.get(
                     lower_degree, Fraction()
                 ) - antiderivative_coefficient * comb(degree + 1, lower_degree)
+                _admit_closed_form_coefficients((updated,))
+                residual[lower_degree] = updated
     return answer, charged
 
 
@@ -483,15 +480,19 @@ def _reconstruct_difference(
             target = list(exponents)
             target[variable_index] = lower_degree
             key = tuple(target)
-            reconstructed[key] = reconstructed.get(
-                key, Fraction()
-            ) + coefficient * comb(degree, lower_degree)
+            contribution = coefficient * comb(degree, lower_degree)
+            _admit_closed_form_coefficients((contribution,))
+            updated = reconstructed.get(key, Fraction()) + contribution
+            _admit_closed_form_coefficients((updated,))
+            reconstructed[key] = updated
     return reconstructed
 
 
 def _compute_discrete_antiderivative(
     source: RationalPolynomial,
     variable: PolynomialVariable,
+    *,
+    trusted: bool = False,
 ) -> RationalDiscreteAntiderivativeResult:
     if not isinstance(source, RationalPolynomial):
         raise OperationDomainValidationError(
@@ -499,8 +500,13 @@ def _compute_discrete_antiderivative(
             code="polynomial.discrete_antiderivative.polynomial_type",
             message="polynomial must be a RationalPolynomial",
         )
-    source = _parse_native_polynomial(source)
-    request_checkpoint("after discrete antiderivative native reparse")
+    if not trusted:
+        # The direct native boundary accepts caller-built values, so reparse
+        # them; checkpoint first so an already-cancelled request does not run a
+        # complete deep dump and Pydantic revalidation before it is observed.
+        request_checkpoint("before discrete antiderivative native reparse")
+        source = _parse_native_polynomial(source)
+        request_checkpoint("after discrete antiderivative native reparse")
     if type(variable) is not str or not variable.isidentifier():
         raise OperationDomainValidationError(
             location=("variable",),

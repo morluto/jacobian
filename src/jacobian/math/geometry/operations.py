@@ -72,10 +72,7 @@ from jacobian.math.geometry.exact._models import PointConfiguration
 # every full-sequence phase checkpoints at this interval.
 SPANNED_CIRCLE_WALL_SECONDS = 120.0
 
-# Small multiples of the denominator-lattice step tried as translation
-# origins. Each multiple costs one linear selection pass; the bound keeps the
-# candidate set small while reaching offsets such as 2/g.
-_SMALL_LATTICE_MULTIPLE = 8
+# Every full-sequence phase checkpoints at this interval.
 _CIRCLE_CHECKPOINT_INTERVAL = 64
 
 __all__ = [
@@ -895,28 +892,47 @@ def _fraction_serialized_digits(value: Fraction) -> int:
     )
 
 
+def _lattice_origin_candidates(a: int, b: int, g: int) -> tuple[Fraction, ...]:
+    """Return the lattice offsets ``k/g`` that reduce ``a/b`` by the common gcd.
+
+    Write ``b = g * m`` with ``g`` the gcd of every coordinate denominator, so
+    ``(a/b) - (k/g) = (a - k*m)/b``. That difference gains a factor ``g`` in
+    its numerator exactly when ``a - k*m == 0 (mod g)``, i.e.
+    ``k == a * m^{-1} (mod g)``. Choosing that ``k`` makes the translated
+    coordinate reduce by the whole common factor, which is what turns a family
+    such as ``x_i = c/g + 1/q_i`` into the short ``1/q_i`` offsets. The
+    representative in ``[0, g)`` is returned.
+    """
+
+    if g <= 1:
+        return ()
+    m = b // g
+    if m % g == 0 or gcd(m, g) != 1:
+        # No modular inverse exists; keep the truncation-style candidate only.
+        return (Fraction(a % g, g),)
+    inverse = pow(m, -1, g)
+    return (Fraction((a * inverse) % g, g),)
+
+
 def _axis_origin_candidates(values: tuple[Fraction, ...]) -> tuple[Fraction, ...]:
     """Return the origin values this axis considers, in a stable order.
 
     A fixed list of source points cannot reach the origin that matters for a
-    shifted family. Two shifts are common in practice and both are cheap to
+    shifted family. Three shifts are common in practice and all are cheap to
     derive exactly:
 
     * an integer part, removed by truncating toward zero: for
-      `x_i = 10^20 + 1/q_i` the source points and the bounding-box centre all
+      ``x_i = 10^20 + 1/q_i`` the source points and the bounding-box centre all
       leave a 20-digit integer part, while the truncation cancels it.
-    * a small multiple of the rational lattice step. When a common offset has
-      a denominator dividing every coordinate denominator, `g` (the gcd of the
-      denominators) is a multiple of that denominator, so the offset is an
-      integer multiple `k/g` of the lattice step. For
-      `x_i = 1/(10^20+39) + 1/q_i` the offset is the unit `1/g`, but for
-      `x_i = 2/(10^20+39) + 1/q_i` only `2/g` leaves 11-digit offsets where
-      every source or endpoint candidate leaves 21. Small multiples are tried
-      because each costs one linear selection pass; larger offsets remain
-      unreached.
+    * the lattice offset ``k/g`` that cancels the common denominator factor,
+      derived exactly from each coordinate by ``_lattice_origin_candidates``.
+      For ``x_i = c/g + 1/q_i`` this yields ``c/g`` directly, so the shifted
+      family is reachable for every integer ``c`` instead of only a fixed small
+      range of multiples.
+    * the ambient origin, the bounding interval's endpoints, and its centre.
 
-    The ambient origin and the bounding interval's endpoints and centre are
-    retained so those earlier candidates keep their reach.
+    The chosen origin minimises the widest offset, so an exact reduction such
+    as ``c/g`` is selected whenever it is the cheapest reachable candidate.
     """
 
     candidates: set[Fraction] = {Fraction(0)}
@@ -926,8 +942,12 @@ def _axis_origin_candidates(values: tuple[Fraction, ...]) -> tuple[Fraction, ...
         candidates.add(Fraction(value.numerator // value.denominator))
         denominator_gcd = gcd(denominator_gcd, value.denominator)
     if denominator_gcd > 1:
-        for multiple in range(-_SMALL_LATTICE_MULTIPLE, _SMALL_LATTICE_MULTIPLE + 1):
-            candidates.add(Fraction(multiple, denominator_gcd))
+        for value in values:
+            candidates.update(
+                _lattice_origin_candidates(
+                    value.numerator, value.denominator, denominator_gcd
+                )
+            )
     low = min(values)
     high = max(values)
     candidates.update((low, high, (low + high) / 2))
@@ -1245,15 +1265,19 @@ def _spanned_circle_profile(
                 ),
             )
         restored_digit_total += restored_digits
-    if restored_digit_total > MAX_SPANNED_CIRCLE_WORK:
-        raise OperationResourceAdmissionError(
-            location=("configuration",),
-            code="geometry.spanned_circle_result_digit_bound",
-            message=(
-                "translated-back spanned-circle output exceeds the "
-                f"{MAX_SPANNED_CIRCLE_WORK}-digit aggregate envelope"
-            ),
-        )
+        if restored_digit_total > MAX_SPANNED_CIRCLE_WORK:
+            # Raise as soon as the aggregate crosses the envelope rather than
+            # after restoring every remaining circle: a shifted family can
+            # otherwise format hundreds of millions of decimal digits for a
+            # request that is already doomed.
+            raise OperationResourceAdmissionError(
+                location=("configuration",),
+                code="geometry.spanned_circle_result_digit_bound",
+                message=(
+                    "translated-back spanned-circle output exceeds the "
+                    f"{MAX_SPANNED_CIRCLE_WORK}-digit aggregate envelope"
+                ),
+            )
 
     request_checkpoint("after spanned-circle result construction")
     entries = _wire_spanned_circle_entries(grouped, incidences, origin)

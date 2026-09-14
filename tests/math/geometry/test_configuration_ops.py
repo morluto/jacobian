@@ -539,6 +539,41 @@ class TestSpannedCircleProfile:
         )
         assert "aggregate" in error.value.errors()[0]["msg"]
 
+    def test_aggregate_overflow_is_rejected_inside_the_restoration_loop(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The aggregate check raises as soon as it is crossed.
+
+        If the threshold is tested only after the loop, a shifted family whose
+        aggregate budget is exceeded by its first rows still restores and
+        formats every remaining circle. Making one circle's serialized width
+        already exceed the envelope pins the early exit: exactly the three
+        widths of the first circle are measured before the rejection.
+        """
+
+        points = (
+            _point("0", "0"),
+            _point("1", "0"),
+            _point("0", "1"),
+            _point("1", "1"),
+            _point("2", "1"),
+        )
+        calls = {"count": 0}
+
+        def oversized(value: Fraction) -> int:
+            calls["count"] += 1
+            return MAX_SPANNED_CIRCLE_WORK
+
+        monkeypatch.setattr(operations_module, "_fraction_serialized_digits", oversized)
+        with pytest.raises(OperationResourceAdmissionError) as error:
+            spanned_circle_profile(
+                SpannedCircleProfileRequest(configuration=_configuration(*points))
+            )
+        assert error.value.errors()[0]["type"] == (
+            "geometry.spanned_circle_result_digit_bound"
+        )
+        assert calls["count"] == 3
+
     def test_translated_back_centers_are_admitted_before_wiring(self) -> None:
         shift = CanonicalRational(num=6 * 10**32767, den=1)
         points = (
@@ -1057,3 +1092,52 @@ class TestSpannedCircleRationalOffsetOrigin:
         )
         result = native_spanned_circle_profile(configuration)
         assert result.circles == ()
+
+    @pytest.mark.parametrize("multiple", (9, 137, 10**6 + 3))
+    def test_lattice_multiple_beyond_any_fixed_cap_is_derived(
+        self, multiple: int
+    ) -> None:
+        """The lattice offset is derived, not enumerated up to a fixed cap.
+
+        For `x_i = c/g + 1/q_i`, an implementation that tries only small
+        integer multiples of `1/g` reaches `c/g` for small `c` but leaves every
+        larger shift with ~21-digit offsets, refusing the family. Deriving `c`
+        from the modular relation `c = a * m^{-1} (mod g)` reaches every
+        multiple, so the shifted family stays cheap for arbitrary `c`.
+        """
+
+        from jacobian.math.geometry.operations import _minimum_axis_origin
+
+        shift = 10**20 + 39
+        primes = (
+            10000000019,
+            10000000033,
+            10000000061,
+            10000000069,
+            10000000097,
+            10000000103,
+            10000000121,
+            10000000141,
+        )
+        coordinates = tuple(
+            Fraction(multiple * prime + shift, shift * prime) for prime in primes
+        )
+        assert _minimum_axis_origin(coordinates) == Fraction(multiple, shift)
+        assert (
+            max(
+                operations_module._fraction_digits(value - Fraction(multiple, shift))
+                for value in coordinates
+            )
+            == 11
+        )
+
+        configuration = _configuration(
+            *tuple(
+                RationalPoint2D(
+                    x=CanonicalRational(num=value.numerator, den=value.denominator),
+                    y=CanonicalRational(num=0, den=1),
+                )
+                for value in coordinates
+            )
+        )
+        assert native_spanned_circle_profile(configuration).circles == ()

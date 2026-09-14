@@ -2,19 +2,27 @@
 
 from __future__ import annotations
 
+import time
+from collections.abc import Mapping
 from dataclasses import dataclass
 from fractions import Fraction
 from math import gcd
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, StrictInt, ValidationError, model_validator
 
 from jacobian._exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
     CanonicalRational,
     require_bounded_rational,
 )
-from jacobian._models import StrictModel
+from jacobian._execution import (
+    bind_request_deadline,
+    current_request_execution,
+    request_checkpoint,
+    request_execution,
+)
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -22,6 +30,7 @@ from jacobian.catalog.models import (
 from jacobian.math.polynomials.values import (
     MAX_POLYNOMIAL_EXPONENT,
     MAX_POLYNOMIAL_TERMS,
+    MAX_POLYNOMIAL_VARIABLES,
     PolynomialVariable,
     RationalPolynomial,
     RationalPolynomialTerm,
@@ -30,26 +39,38 @@ from jacobian.math.polynomials.values import (
 
 
 class PolynomialLiteral(StrictModel):
+    """One exact reduced rational literal in the closed expression grammar."""
+
     kind: Literal["LITERAL"] = "LITERAL"
-    value: CanonicalRational
+    value: CanonicalRational = Field(
+        description="Reduced exact rational literal; source literals have at most 128 decimal digits per component."
+    )
 
 
 class PolynomialVariableExpression(StrictModel):
+    """One variable selected from the request's ordered variable axis."""
+
     kind: Literal["VARIABLE"] = "VARIABLE"
     name: PolynomialVariable
 
 
 class PolynomialAdd(StrictModel):
+    """A finite sum; no textual or executable syntax is accepted."""
+
     kind: Literal["ADD"] = "ADD"
     operands: tuple[PolynomialExpression, ...] = Field(min_length=1, max_length=64)
 
 
 class PolynomialMultiply(StrictModel):
+    """A finite product; no division or negative powers are accepted."""
+
     kind: Literal["MULTIPLY"] = "MULTIPLY"
     operands: tuple[PolynomialExpression, ...] = Field(min_length=1, max_length=64)
 
 
 class PolynomialPower(StrictModel):
+    """A bounded power by a nonnegative integer exponent."""
+
     kind: Literal["POWER"] = "POWER"
     base: PolynomialExpression
     exponent: StrictInt = Field(ge=0, le=32)
@@ -68,10 +89,33 @@ for model in (PolynomialAdd, PolynomialMultiply, PolynomialPower):
     model.model_rebuild(_types_namespace={"PolynomialExpression": PolynomialExpression})
 
 
-class PolynomialExpressionNormalizeRequest(StrictModel):
-    coefficient_domain: Literal["ZZ", "QQ"]
-    variables: tuple[PolynomialVariable, ...] = Field(min_length=0, max_length=8)
-    expression: PolynomialExpression
+class PolynomialExpressionSource(StrictModel):
+    coefficient_domain: Literal["ZZ", "QQ"] = Field(
+        description="The coefficient ring; ZZ accepts only integral literals, QQ accepts reduced rationals."
+    )
+    variables: tuple[PolynomialVariable, ...] = Field(
+        min_length=0,
+        max_length=8,
+        description="The ordered variable axis used by every exponent tuple; variables must be unique.",
+    )
+    expression: PolynomialExpression = Field(
+        description=(
+            "A closed non-evaluating AST containing only LITERAL, VARIABLE, ADD, "
+            "MULTIPLY, and POWER nodes. ADD and MULTIPLY have 1-64 operands; "
+            "POWER has a nonnegative exponent at most 32. Admission additionally "
+            "bounds the tree to 256 nodes and depth 64, support to 4096 terms, "
+            "total degree to 32768, and exact intermediate work/representation."
+        )
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def bound_raw_tree(cls, value: object) -> object:
+        """Reject deep or oversized raw trees before copying or parsing them."""
+
+        if isinstance(value, Mapping):
+            _bound_raw_request(value)
+        return canonicalize_json_containers(value)
 
     @model_validator(mode="after")
     def require_variable_axis(self) -> Self:
@@ -80,17 +124,28 @@ class PolynomialExpressionNormalizeRequest(StrictModel):
         return self
 
 
+class PolynomialExpressionNormalizeRequest(PolynomialExpressionSource):
+    """Wire request model; raw JSON trees are bounded before AST parsing."""
+
+
 class PolynomialExpressionNormalizeResult(StrictModel):
-    source: PolynomialExpressionNormalizeRequest
+    source: PolynomialExpressionSource
     polynomial: RationalPolynomial
 
 
 _MAX_EXPRESSION_NODES = 256
+_MAX_EXPRESSION_DEPTH = 64
 _MAX_EXPRESSION_WORK = 8_000_000
+_OWNER_DEADLINE_SECONDS = 60.0
+_CHECKPOINT_STRIDE = 256
 # This is an intrinsic exact-representation budget, not a transport setting:
 # 5M decimal coefficient digits leaves headroom for bounded sparse-term and
 # source scaffolding while retaining useful dense results.
 _MAX_EXPRESSION_TOTAL_COEFFICIENT_DIGITS = 5_000_000
+# Keep the operation's exact intermediate-height envelope in bits.  This is
+# intentionally below the transport carrier's decimal-digit ceiling because
+# additions with many unrelated denominators otherwise build very large
+# unreduced intermediates before canonicalization.
 _MAX_EXPRESSION_COEFFICIENT_BITS = MAX_CANONICAL_RATIONAL_DIGITS
 
 
@@ -127,6 +182,189 @@ class _ExpressionMetrics:
     support_keys: frozenset[tuple[tuple[str, int], ...]] | None = None
     termwise_disjoint: bool = False
     single_term: tuple[frozenset[tuple[str, int]], Fraction] | None = None
+
+
+class _MalformedExpressionError(ValueError):
+    """A node violates the closed expression grammar or operand shape."""
+
+
+def _is_expression_node(node: object) -> bool:
+    """Return whether ``node`` is a raw mapping or a recognized AST node."""
+
+    return isinstance(
+        node,
+        (
+            Mapping,
+            PolynomialLiteral,
+            PolynomialVariableExpression,
+            PolynomialAdd,
+            PolynomialMultiply,
+            PolynomialPower,
+        ),
+    )
+
+
+def _bounded_operands(operands: object) -> tuple[object, ...]:
+    """Materialize operands under the arity cap and require expression nodes."""
+
+    if not isinstance(operands, (list, tuple)):
+        raise _MalformedExpressionError(
+            "expression operands must be a bounded sequence"
+        )
+    bounded: list[object] = []
+    for operand in operands:
+        if len(bounded) >= 64:
+            raise _MalformedExpressionError(
+                "expression nodes may have at most 64 operands"
+            )
+        if not _is_expression_node(operand):
+            raise _MalformedExpressionError(
+                "every expression operand must be a mapping or recognized node"
+            )
+        bounded.append(operand)
+    return tuple(bounded)
+
+
+def _expression_children(node: object) -> tuple[object, ...]:
+    if isinstance(node, (PolynomialAdd, PolynomialMultiply)):
+        operands = getattr(node, "operands", ())
+        return _bounded_operands(operands)
+    if isinstance(node, PolynomialPower):
+        base = getattr(node, "base", None)
+        return (base,) if base is not None else ()
+    if (
+        isinstance(node, (PolynomialLiteral, PolynomialVariableExpression))
+        or node is None
+    ):
+        return ()
+    if isinstance(node, Mapping):
+        kind = node.get("kind")
+        if kind in ("ADD", "MULTIPLY"):
+            return _bounded_operands(node.get("operands"))
+        if kind == "POWER":
+            if "base" not in node:
+                raise _MalformedExpressionError("a POWER node requires a base")
+            return (node["base"],)
+        if kind is None:
+            return ()
+        if kind in ("VARIABLE", "LITERAL"):
+            return ()
+        raise _MalformedExpressionError(f"unrecognized expression node kind: {kind!r}")
+    raise _MalformedExpressionError(
+        f"unrecognized expression node: {type(node).__name__}"
+    )
+
+
+def _require_bounded_variables(variables: list[object] | tuple[object, ...]) -> None:
+    """Require scalar string axis entries before the recursive copy touches them."""
+
+    for variable in variables:
+        if not isinstance(variable, str):
+            raise ValueError("variables must be scalar strings")
+
+
+def _bound_raw_request(value: Mapping[str, object]) -> None:
+    """Bound every raw request field before the recursive canonicalization copy."""
+
+    allowed = {"coefficient_domain", "variables", "expression"}
+    # Iterate keys instead of materializing a set, and reject the first
+    # unexpected key or any surplus key, so a request with millions of extra
+    # fields never allocates a sorted copy of them.
+    for index, key in enumerate(value):
+        if index >= len(allowed):
+            raise ValueError("expression requests may not carry unexpected fields")
+        if key not in allowed:
+            raise ValueError(
+                f"expression requests may not carry the unexpected field {key!r}"
+            )
+    variables = value.get("variables")
+    if variables is not None:
+        if not isinstance(variables, (list, tuple)):
+            raise ValueError("variables must be a bounded sequence")
+        if len(variables) > MAX_POLYNOMIAL_VARIABLES:
+            raise ValueError("variables exceed the admitted axis bound")
+        _require_bounded_variables(variables)
+    domain = value.get("coefficient_domain")
+    if domain is not None and not isinstance(domain, str):
+        raise ValueError("coefficient_domain must be a string")
+    _bound_raw_expression(value.get("expression"))
+
+
+def _bound_raw_expression(expression: object) -> None:
+    """Bound AST depth and cardinality for mappings and validated models.
+
+    Malformed recognized nodes are rejected here rather than treated as
+    childless, so an unexpected container field cannot reach the recursive
+    canonicalization copy without first being bounded.
+    """
+
+    stack: list[tuple[object, int, tuple[int, ...]]] = [(expression, 1, ())]
+    count = 0
+    while stack:
+        node, depth, path = stack.pop()
+        identity = id(node)
+        if identity in path:
+            raise ValueError("expression nodes may not form a cycle")
+        count += 1
+        if depth > _MAX_EXPRESSION_DEPTH:
+            raise ValueError(
+                f"expression depth exceeds the {_MAX_EXPRESSION_DEPTH}-node path bound"
+            )
+        if count > _MAX_EXPRESSION_NODES:
+            raise ValueError(f"expression node count exceeds {_MAX_EXPRESSION_NODES}")
+        children = _expression_children(node)
+        if len(children) > 64:
+            raise ValueError("expression nodes may have at most 64 operands")
+        if isinstance(node, Mapping):
+            _require_bounded_mapping_fields(node)
+        child_path = (*path, identity)
+        stack.extend((child, depth + 1, child_path) for child in children)
+
+
+def _require_bounded_mapping_fields(node: Mapping[str, object]) -> None:
+    """Reject unexpected keys and unbounded scalar/container fields."""
+
+    kind = node.get("kind")
+    allowed = {
+        "ADD": {"kind", "operands"},
+        "MULTIPLY": {"kind", "operands"},
+        "POWER": {"kind", "base", "exponent"},
+        "VARIABLE": {"kind", "name"},
+        "LITERAL": {"kind", "value"},
+    }.get(kind if isinstance(kind, str) else "")
+    if allowed is None:
+        raise _MalformedExpressionError(f"unrecognized expression node kind: {kind!r}")
+    unexpected = set(node).difference(allowed)
+    if unexpected:
+        raise _MalformedExpressionError(
+            "expression nodes may not carry unexpected fields: "
+            + ", ".join(sorted(map(str, unexpected)))
+        )
+    value = node.get("value")
+    if "value" in node:
+        if isinstance(value, (list, tuple)):
+            raise _MalformedExpressionError(
+                "LITERAL value must be a num/den object, not a sequence"
+            )
+        if isinstance(value, Mapping) and (
+            set(value).difference({"num", "den"}) or len(value) > 2
+        ):
+            raise _MalformedExpressionError(
+                "LITERAL value must contain only num and den"
+            )
+        if isinstance(value, Mapping):
+            for component in value.values():
+                if isinstance(component, (list, tuple, Mapping)):
+                    raise _MalformedExpressionError(
+                        "LITERAL components must be scalars, not containers"
+                    )
+    for scalar_field in ("name", "exponent"):
+        if scalar_field in node and isinstance(
+            node[scalar_field], (list, tuple, Mapping)
+        ):
+            raise _MalformedExpressionError(
+                f"{scalar_field} must be a scalar, not a container"
+            )
 
 
 def _bounded_sum(values: list[int] | tuple[int, ...], limit: int) -> int:
@@ -319,6 +557,17 @@ def _digits_of_rational(value: Fraction) -> int:
     return _decimal_digits_from_bits(
         max(1, abs(value.numerator).bit_length())
     ) + _decimal_digits_from_bits(_denominator_bits(value.denominator))
+
+
+def _admit_literal(value: CanonicalRational) -> None:
+    try:
+        require_bounded_rational(value, max_digits=128, label="literal")
+    except ValueError as error:
+        raise OperationResourceAdmissionError(
+            location=("expression",),
+            code="polynomial.expression.literal_bound",
+            message="expression literals exceed the admitted 128-digit source bound",
+        ) from error
 
 
 def _scale_monomial(
@@ -658,7 +907,7 @@ def _product_total_coefficient_digits(
 def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
     denominator: int | None
     if isinstance(expression, PolynomialLiteral):
-        require_bounded_rational(expression.value, max_digits=128, label="literal")
+        _admit_literal(expression.value)
         numerator_bits = max(1, abs(expression.value.num).bit_length())
         return _ExpressionMetrics(
             nodes=1,
@@ -715,6 +964,9 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
         base = _metrics(expression.base)
         exponent = expression.exponent
         if exponent == 0:
+            # A zero power is the constant one and never expands the base, so
+            # only its node count is charged; coefficient, work, and
+            # representation growth all belong to the discarded base.
             return _ExpressionMetrics(
                 nodes=min(_MAX_EXPRESSION_NODES + 1, base.nodes + 1),
                 support=1,
@@ -727,11 +979,11 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
                 constant=Fraction(1),
                 monomial=frozenset(),
                 total_coefficient_digits=2,
-                maximum_numerator_bits=max(base.maximum_numerator_bits, 1),
-                maximum_denominator_bits=base.maximum_denominator_bits,
+                maximum_numerator_bits=1,
+                maximum_denominator_bits=0,
                 denominator_mass_bits=0,
-                work=base.work,
-                intermediate_digits=max(base.intermediate_digits, 2),
+                work=1,
+                intermediate_digits=2,
                 support_keys=frozenset(((),)),
                 termwise_disjoint=True,
             )
@@ -1239,12 +1491,140 @@ def _nary_expression_metrics(  # noqa: C901
     )
 
 
+def _bind_expansion_deadline() -> None:
+    execution = current_request_execution()
+    started = execution.started_at if execution is not None else time.monotonic()
+    deadline = started + _OWNER_DEADLINE_SECONDS
+    if execution is not None and execution.deadline is not None:
+        deadline = min(deadline, execution.deadline)
+    bind_request_deadline(deadline)
+    request_checkpoint("before polynomial expression expansion")
+
+
+def _bound_source_expression(expression: object) -> None:
+    """Bound an expression node tree, mapping failures to typed errors."""
+
+    try:
+        _bound_raw_expression(expression)
+    except _MalformedExpressionError as exc:
+        raise OperationDomainValidationError(
+            location=("expression",),
+            code="polynomial.expression.invalid_source",
+            message=str(exc),
+        ) from exc
+    except ValueError as exc:
+        raise OperationResourceAdmissionError(
+            location=("expression",),
+            code="polynomial.expression.expansion_bound",
+            message=str(exc),
+        ) from exc
+
+
+def _revalidate_expression_source(
+    source: PolynomialExpressionSource,
+) -> PolynomialExpressionSource:
+    """Reject forged native AST nodes before expansion metrics."""
+
+    if not isinstance(source, PolynomialExpressionSource):
+        raise OperationDomainValidationError(
+            location=("source",),
+            code="polynomial.expression.invalid_source",
+            message="expression source must be a PolynomialExpressionSource",
+        )
+    _bound_source_expression(getattr(source, "expression", None))
+    try:
+        return PolynomialExpressionSource.model_validate(
+            {
+                "coefficient_domain": getattr(source, "coefficient_domain", None),
+                "variables": getattr(source, "variables", None),
+                "expression": getattr(source, "expression", None),
+            }
+        )
+    except ValidationError as exc:
+        details = exc.errors()
+        text = " ".join(str(item.get("msg", "")) for item in details)
+        if "depth" in text or "node count" in text:
+            raise OperationResourceAdmissionError(
+                location=("expression",),
+                code="polynomial.expression.expansion_bound",
+                message=text or "expression expansion exceeds the admitted bound",
+            ) from exc
+        raise OperationDomainValidationError(
+            location=("expression",),
+            code="polynomial.expression.invalid_source",
+            message="expression nodes must satisfy the closed grammar before expansion",
+        ) from exc
+
+
+def _admit_source_domain_claims(source: PolynomialExpressionSource) -> None:
+    """Reject ZZ fractional literals and undeclared variables before expansion."""
+
+    declared = set(source.variables)
+    stack: list[PolynomialExpression] = [source.expression]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, PolynomialLiteral):
+            denominator = getattr(getattr(node, "value", None), "den", None)
+            if denominator is None:
+                raise _invalid_expression_source(
+                    "LITERAL nodes require a num/den value"
+                )
+            if source.coefficient_domain == "ZZ" and denominator != 1:
+                raise OperationDomainValidationError(
+                    location=("expression",),
+                    code="polynomial.expression.nonintegral_literal",
+                    message="ZZ expressions require integral literals",
+                )
+        elif isinstance(node, PolynomialVariableExpression):
+            if getattr(node, "name", None) not in declared:
+                raise OperationDomainValidationError(
+                    location=("expression",),
+                    code="polynomial.expression.undeclared_variable",
+                    message="every expression variable must belong to the declared axis",
+                )
+        elif isinstance(node, (PolynomialAdd, PolynomialMultiply)):
+            operands = getattr(node, "operands", None)
+            if not isinstance(operands, (list, tuple)):
+                raise _invalid_expression_source(
+                    "ADD and MULTIPLY nodes require an operands sequence"
+                )
+            if not 1 <= len(operands) <= 64:
+                raise _invalid_expression_source(
+                    "ADD and MULTIPLY nodes require 1 to 64 operands"
+                )
+            stack.extend(operands)
+        elif isinstance(node, PolynomialPower):
+            base = getattr(node, "base", None)
+            if base is None:
+                raise _invalid_expression_source("POWER nodes require a base")
+            exponent = getattr(node, "exponent", None)
+            if isinstance(exponent, bool) or not isinstance(exponent, int):
+                raise _invalid_expression_source(
+                    "POWER nodes require an integer exponent"
+                )
+            if not 0 <= exponent <= 32:
+                raise _invalid_expression_source(
+                    "POWER nodes require an exponent between 0 and 32"
+                )
+            stack.append(base)
+
+
+def _invalid_expression_source(message: str) -> OperationDomainValidationError:
+    return OperationDomainValidationError(
+        location=("expression",),
+        code="polynomial.expression.invalid_source",
+        message=message,
+    )
+
+
 def _add(
     left: dict[tuple[int, ...], Fraction],
     right: dict[tuple[int, ...], Fraction],
 ) -> dict[tuple[int, ...], Fraction]:
     result = dict(left)
-    for exponent, coefficient in right.items():
+    for index, (exponent, coefficient) in enumerate(right.items()):
+        if index % _CHECKPOINT_STRIDE == 0:
+            request_checkpoint("during polynomial expression addition")
         result[exponent] = result.get(exponent, Fraction()) + coefficient
         if not result[exponent]:
             del result[exponent]
@@ -1256,8 +1636,12 @@ def _multiply(
     right: dict[tuple[int, ...], Fraction],
 ) -> dict[tuple[int, ...], Fraction]:
     result: dict[tuple[int, ...], Fraction] = {}
+    products = 0
     for left_exp, left_coefficient in left.items():
         for right_exp, right_coefficient in right.items():
+            if products % _CHECKPOINT_STRIDE == 0:
+                request_checkpoint("during polynomial expression multiplication")
+            products += 1
             exponent = tuple(a + b for a, b in zip(left_exp, right_exp, strict=True))
             result[exponent] = (
                 result.get(exponent, Fraction()) + left_coefficient * right_coefficient
@@ -1267,10 +1651,16 @@ def _multiply(
     }
 
 
-def normalize_polynomial_expression(
-    request: PolynomialExpressionNormalizeRequest,
+def normalize_polynomial_expression(  # noqa: C901
+    source: PolynomialExpressionSource,
 ) -> PolynomialExpressionNormalizeResult:
-    metrics = _metrics(request.expression)
+    if current_request_execution() is None:
+        with request_execution(time.monotonic()):
+            return normalize_polynomial_expression(source)
+    source = _revalidate_expression_source(source)
+    _admit_source_domain_claims(source)
+    _bound_source_expression(source.expression)
+    metrics = _metrics(source.expression)
     if (
         metrics.nodes > _MAX_EXPRESSION_NODES
         or metrics.support > MAX_POLYNOMIAL_TERMS
@@ -1298,14 +1688,16 @@ def normalize_polynomial_expression(
                 "representation envelope"
             ),
         )
+    _bind_expansion_deadline()
     variable_index = {
-        variable: index for index, variable in enumerate(request.variables)
+        variable: index for index, variable in enumerate(source.variables)
     }
-    zero_exp = (0,) * len(request.variables)
+    zero_exp = (0,) * len(source.variables)
 
     def evaluate(expression: PolynomialExpression) -> dict[tuple[int, ...], Fraction]:
+        request_checkpoint("during polynomial expression expansion")
         if isinstance(expression, PolynomialLiteral):
-            if request.coefficient_domain == "ZZ" and expression.value.den != 1:
+            if source.coefficient_domain == "ZZ" and expression.value.den != 1:
                 raise OperationDomainValidationError(
                     location=("expression",),
                     code="polynomial.expression.nonintegral_literal",
@@ -1320,7 +1712,7 @@ def normalize_polynomial_expression(
                     code="polynomial.expression.undeclared_variable",
                     message="every expression variable must belong to the declared axis",
                 )
-            exponent_vector = [0] * len(request.variables)
+            exponent_vector = [0] * len(source.variables)
             exponent_vector[variable_index[expression.name]] = 1
             return {tuple(exponent_vector): Fraction(1)}
         if isinstance(expression, PolynomialAdd):
@@ -1333,6 +1725,10 @@ def normalize_polynomial_expression(
             for operand in expression.operands:
                 result = _multiply(result, evaluate(operand))
             return result
+        if expression.exponent == 0:
+            # A zero power is the constant one; do not expand the base, which
+            # admission cannot bound through this branch.
+            return {zero_exp: Fraction(1)}
         result = {zero_exp: Fraction(1)}
         base = evaluate(expression.base)
         power = expression.exponent
@@ -1344,20 +1740,25 @@ def normalize_polynomial_expression(
                 base = _multiply(base, base)
         return result
 
-    coefficients = evaluate(request.expression)
-    polynomial = RationalPolynomial(
-        variables=request.variables,
-        polynomial=SparseRationalPolynomial(
-            terms=tuple(
-                RationalPolynomialTerm(
-                    coefficient=CanonicalRational.from_fraction(coefficient),
-                    exponents=exponent,
-                )
-                for exponent, coefficient in sorted(coefficients.items(), reverse=True)
+    coefficients = evaluate(source.expression)
+    terms: list[RationalPolynomialTerm] = []
+    for index, (exponent, coefficient) in enumerate(
+        sorted(coefficients.items(), reverse=True)
+    ):
+        if index % _CHECKPOINT_STRIDE == 0:
+            request_checkpoint("during polynomial expression result construction")
+        terms.append(
+            RationalPolynomialTerm(
+                coefficient=CanonicalRational.from_fraction(coefficient),
+                exponents=exponent,
             )
-        ),
+        )
+    polynomial = RationalPolynomial(
+        variables=source.variables,
+        polynomial=SparseRationalPolynomial(terms=tuple(terms)),
     )
-    return PolynomialExpressionNormalizeResult(source=request, polynomial=polynomial)
+    request_checkpoint("after polynomial expression result construction")
+    return PolynomialExpressionNormalizeResult(source=source, polynomial=polynomial)
 
 
 __all__ = ["normalize_polynomial_expression"]

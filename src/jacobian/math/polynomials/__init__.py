@@ -21,6 +21,10 @@ from jacobian.math.polynomials._elementary_kernel import (
 from jacobian.math.polynomials._elementary_symmetric import (
     elementary_symmetric_family,
 )
+from jacobian.math.polynomials._expression_normalize import (
+    PolynomialExpressionSource,
+    normalize_polynomial_expression,
+)
 from jacobian.math.polynomials._mahler_kernel import (
     mahler_measure,
     quadratic_root_profile,
@@ -73,6 +77,7 @@ def __getattr__(name: str) -> object:
 
 
 __all__ = [
+    "PolynomialExpressionSource",
     "RationalDiscreteAntiderivativeResult",
     "cyclotomic",
     "derivative",
@@ -97,6 +102,7 @@ __all__ = [
     "integral",
     "mahler_measure",
     "multiply",
+    "normalize_polynomial_expression",
     "partial_fractions",
     "polynomial_discriminant",
     "polynomial_factorization",

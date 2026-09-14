@@ -57,31 +57,31 @@ def test_addition_charges_accumulated_clone_work() -> None:
     single-pass sum of operand supports.
     """
     variables = _variables(4)
+    variable_set = frozenset(variables)
     expression = _power_of_sum(variables, 12)
     for _ in range(4):
         expression = PolynomialAdd(
             operands=(expression, *(_literal_one() for _ in range(16)))
         )
-    children = [_metrics(child, len(variables)) for child in expression.operands]
+    child_metrics = [_metrics(child) for child in expression.operands]
     accumulated_terms = 0
     accumulated_degree = 0
     accumulated_support = 0
     clone_work = 0
-    for child in children:
-        clone_work += accumulated_support + child.support_terms
+    for child in child_metrics:
+        clone_work += accumulated_support
         accumulated_terms = _bounded_sum(
-            (accumulated_terms, child.terms), MAX_POLYNOMIAL_TERMS
+            (accumulated_terms, child.support), MAX_POLYNOMIAL_TERMS
         )
         accumulated_degree = max(accumulated_degree, child.degree)
         accumulated_support = _support_bound(
-            len(variables), accumulated_degree, accumulated_terms
+            accumulated_terms, accumulated_degree, variable_set
         )
-    expected = clone_work + sum(child.work for child in children)
-    single_pass = sum(child.support_terms for child in children) + sum(
-        child.work for child in children
-    )
+    base_work = sum(child.work + child.expansion_terms for child in child_metrics)
+    expected = base_work + clone_work
+    single_pass = sum(child.support for child in child_metrics) + base_work
     assert single_pass < expected
-    assert _metrics(expression, len(variables)).work == expected
+    assert _metrics(expression).work == expected
 
 
 def _request(expression: dict[str, Any], variables: tuple[str, ...]):

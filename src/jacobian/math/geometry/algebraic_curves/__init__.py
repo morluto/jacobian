@@ -2,7 +2,6 @@
 
 from jacobian.math.geometry.algebraic_curves._arclength_models import (
     PlaneCurveArclengthBudget,
-    PlaneCurveArclengthRequest,
     PlaneCurveArclengthResult,
 )
 from jacobian.math.geometry.algebraic_curves._gaussian_realification import (
@@ -33,7 +32,6 @@ from jacobian.math.geometry.algebraic_curves.operations import (
 __all__ = [
     "GaussianRealificationResult",
     "PlaneCurveArclengthBudget",
-    "PlaneCurveArclengthRequest",
     "PlaneCurveArclengthResult",
     "ProjectivePlaneCurveSingularityBudget",
     "ProjectivePlaneCurveSingularityProfile",

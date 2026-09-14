@@ -313,7 +313,9 @@ class SteinerTripleSystemNotFound(StrictModel):
     )
 
 
-def _revalidate_shard_instance(shard: SteinerTripleSystemShard) -> SteinerTripleSystemShard:
+def _revalidate_shard_instance(
+    shard: SteinerTripleSystemShard,
+) -> SteinerTripleSystemShard:
     """Rebuild a possibly forged shard instance through owned validators.
 
     Pydantic trusts existing model instances during nested validation, so a

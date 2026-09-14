@@ -215,12 +215,92 @@ def _reconstruct(
     return first, difference, len(digits)
 
 
+# A presolve BFS explores at most this many states before the full admission
+# envelope is applied, so a cheap multi-column witness is found even when the
+# combinatorial state bound is far above the admitted graph envelope.
+_KEMPNER_PRESOLVE_STATE_BUDGET = 512
+
+
+def _carry_witness(
+    digit_set: KempnerDigitSet,
+    arity: int,
+    *,
+    state_budget: int,
+) -> tuple[int, int, int] | None:
+    """Run the carry BFS under a state budget, returning the first witness.
+
+    ``None`` means no accepting state was reached within ``state_budget``; the
+    caller decides whether that is a proof of progression-freedom or simply a
+    budget that was too small.
+    """
+
+    base = digit_set.base
+    allowed = frozenset(digit_set.allowed_digits)
+    start = _State((0,) * (arity - 1), 0, 0, False)
+    queue: deque[_State] = deque((start,))
+    predecessors: dict[_State, tuple[_State | None, int, int]] = {start: (None, 0, 0)}
+    while queue:
+        request_checkpoint("during Kempner progression BFS")
+        state = queue.popleft()
+        if _accepting(state, arity=arity):
+            return _reconstruct(state, predecessors, base=base)
+        for x in range(base):
+            for y in range(base):
+                candidate = _next_state(
+                    state,
+                    x=x,
+                    y=y,
+                    base=base,
+                    allowed=allowed,
+                    arity=arity,
+                )
+                if candidate is None or candidate in predecessors:
+                    continue
+                predecessors[candidate] = (state, x, y)
+                if len(predecessors) > state_budget:
+                    return None
+                queue.append(candidate)
+    return None
+
+
+def _contains_progression_result(
+    digit_set: KempnerDigitSet,
+    arity: int,
+    witness: tuple[int, int, int],
+) -> KempnerArithmeticProgressionResult:
+    first, difference, witness_depth = witness
+    witness_digits = ceil(witness_depth * log10(digit_set.base)) + 1
+    result_allocation = arity * (witness_digits + 24) + 256
+    if (
+        witness_digits > MAX_KEMPNER_INTEGER_DIGITS
+        or result_allocation > MAX_CARRY_RESULT_ALLOCATION
+    ):
+        raise OperationResourceAdmissionError(
+            location=("arity",),
+            code="number_theory.kempner_progression.result_size",
+            message="the derived exact witness output exceeds the admitted budget",
+        )
+    values = tuple(first + index * difference for index in range(arity))
+    if first < 1 or difference < 1 or values[-1] != first + (arity - 1) * difference:
+        raise RuntimeError("Kempner BFS produced an invalid progression witness")
+    return KempnerArithmeticProgressionResult(
+        digit_set=digit_set,
+        arity=arity,
+        conclusion=KempnerContainsProgression(
+            status="CONTAINS_PROGRESSION",
+            indices=tuple(range(arity)),
+            values=values,
+            first_term=first,
+            common_difference=difference,
+        ),
+    )
+
+
 def decide_kempner_arithmetic_progression(
     digit_set: KempnerDigitSet,
     arity: int,
 ) -> KempnerArithmeticProgressionResult:
     """Decide exactly whether a Kempner family contains a nontrivial AP."""
-
     if not isinstance(arity, int) or isinstance(arity, bool) or arity < 3:
         raise OperationDomainValidationError(
             location=("arity",),
@@ -269,67 +349,20 @@ def decide_kempner_arithmetic_progression(
                 common_difference=difference,
             ),
         )
+    presolved = _carry_witness(
+        digit_set, arity, state_budget=_KEMPNER_PRESOLVE_STATE_BUDGET
+    )
+    if presolved is not None:
+        return _contains_progression_result(digit_set, arity, presolved)
     admission = _require_admission(digit_set, arity)
-    base = digit_set.base
-    allowed = frozenset(digit_set.allowed_digits)
-    start = _State((0,) * (arity - 1), 0, 0, False)
-    queue: deque[_State] = deque((start,))
-    predecessors: dict[_State, tuple[_State | None, int, int]] = {start: (None, 0, 0)}
-    terminal: _State | None = None
-    while queue:
-        request_checkpoint("during Kempner progression BFS")
-        state = queue.popleft()
-        if _accepting(state, arity=arity):
-            terminal = state
-            break
-        for x in range(base):
-            for y in range(base):
-                candidate = _next_state(
-                    state,
-                    x=x,
-                    y=y,
-                    base=base,
-                    allowed=allowed,
-                    arity=arity,
-                )
-                if candidate is None or candidate in predecessors:
-                    continue
-                predecessors[candidate] = (state, x, y)
-                if len(predecessors) > admission.state_bound:
-                    raise RuntimeError("Kempner BFS exceeded its admitted state bound")
-                queue.append(candidate)
-    if terminal is None:
+    witness = _carry_witness(digit_set, arity, state_budget=admission.state_bound)
+    if witness is None:
         return KempnerArithmeticProgressionResult(
             digit_set=digit_set,
             arity=arity,
             conclusion=KempnerProgressionFree(status="PROGRESSION_FREE"),
         )
-    first, difference, witness_depth = _reconstruct(terminal, predecessors, base=base)
-    witness_digits = ceil(witness_depth * log10(base)) + 1
-    result_allocation = arity * (witness_digits + 24) + 256
-    if (
-        witness_digits > MAX_KEMPNER_INTEGER_DIGITS
-        or result_allocation > MAX_CARRY_RESULT_ALLOCATION
-    ):
-        raise OperationResourceAdmissionError(
-            location=("arity",),
-            code="number_theory.kempner_progression.result_size",
-            message="the derived exact witness output exceeds the admitted budget",
-        )
-    values = tuple(first + index * difference for index in range(arity))
-    if first < 1 or difference < 1 or values[-1] != first + (arity - 1) * difference:
-        raise RuntimeError("Kempner BFS produced an invalid progression witness")
-    return KempnerArithmeticProgressionResult(
-        digit_set=digit_set,
-        arity=arity,
-        conclusion=KempnerContainsProgression(
-            status="CONTAINS_PROGRESSION",
-            indices=tuple(range(arity)),
-            values=values,
-            first_term=first,
-            common_difference=difference,
-        ),
-    )
+    return _contains_progression_result(digit_set, arity, witness)
 
 
 def compute_kempner_arithmetic_progression(

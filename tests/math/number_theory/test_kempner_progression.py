@@ -376,3 +376,15 @@ def test_oversized_constructed_digit_set_is_rejected_before_scanning() -> None:
     )
     with pytest.raises(OperationDomainValidationError):
         decide_kempner_arithmetic_progression(digit_set, 3)
+
+
+def test_multi_column_progression_is_admitted_before_graph_rejection() -> None:
+    """A cheap multi-column witness is found before the combinatorial bound."""
+    digit_set = KempnerDigitSet(base=4, allowed_digits=(0, 1, 2))
+    result = decide_kempner_arithmetic_progression(digit_set, 6)
+    assert result.status == "CONTAINS_PROGRESSION"
+    values = result.values
+    assert len(values) == 6
+    assert all(_member(value, 4, (0, 1, 2)) for value in values)
+    differences = {values[index + 1] - values[index] for index in range(5)}
+    assert len(differences) == 1

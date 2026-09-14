@@ -134,7 +134,7 @@ def _normalized_source(polynomial: RationalPolynomial) -> sympy.Poly:
 def _admit_singularity(source: sympy.Poly) -> _SingularityAdmission:
     """Derive intermediate, quotient, point, and exact-result bounds once."""
 
-    degree = int(source.total_degree())
+    degree = 0 if source.is_zero else int(source.total_degree())
     source_terms = len(source.terms())
     coefficient_height = max(abs(int(coefficient)) for coefficient in source.coeffs())
     coefficient_digits = len(format_canonical_integer(coefficient_height))

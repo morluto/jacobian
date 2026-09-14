@@ -978,3 +978,12 @@ def test_standard_basis_dim_32_is_admitted_by_profile_and_sic() -> None:
     assert sic.is_sic is False
     assert sic.cardinality_residual == 32 - 32 * 32
     assert sic.tight_residual[0][0].as_fractions() == (Fraction(0), Fraction(0))
+
+
+def test_height_from_fraction_measures_beyond_the_canonical_carrier() -> None:
+    """A derived norm past the CanonicalRational carrier is measured, not raised."""
+    from jacobian.math.topology.frames.operations import _height_from_fraction
+
+    height = _height_from_fraction(Fraction(1, 10**40_000))
+    assert height.numerator_digits == 1
+    assert height.denominator_digits == 40_001

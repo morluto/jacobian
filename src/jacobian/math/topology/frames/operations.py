@@ -11,6 +11,7 @@ from jacobian._exact import (
     canonical_rational_component_digits,
     require_bounded_rational,
 )
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -424,7 +425,17 @@ def _frame_inner_product_height(frame: ComplexFrame) -> RationalHeight:
 
 
 def _height_from_fraction(value: Fraction) -> RationalHeight:
-    return RationalHeight.from_canonical(CanonicalRational.from_fraction(value))
+    """Return a component-height bound without constructing a bounded value.
+
+    A derived exact norm can exceed the ``CanonicalRational`` carrier before
+    admission decides, so measure the ``Fraction`` directly instead of
+    letting ``CanonicalRational.from_fraction`` raise a validation error.
+    """
+
+    return RationalHeight(
+        len(format_canonical_integer(abs(value.numerator))),
+        len(format_canonical_integer(value.denominator)),
+    )
 
 
 def _operator_entry_height(

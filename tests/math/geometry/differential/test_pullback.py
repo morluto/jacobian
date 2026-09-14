@@ -1,7 +1,8 @@
 """Exact identities for rational metric pullbacks."""
 
 import time
-from typing import Any
+from collections.abc import Callable
+from typing import Any, NoReturn
 
 import pytest
 from pydantic import ValidationError
@@ -249,10 +250,16 @@ def test_pullback_dag_is_bound_to_pullback_admission_errors(
 ) -> None:
     from jacobian.math.geometry.differential.metrics._dag import Dag
 
-    seen: list[object] = []
+    seen: list[tuple[Callable[[str, str], NoReturn] | None, str | None]] = []
     original = Dag.__init__
 
-    def capturing_init(self, dimension, *, reject=None, label=None):
+    def capturing_init(
+        self: Dag,
+        dimension: int,
+        *,
+        reject: Callable[[str, str], NoReturn] | None = None,
+        label: str | None = None,
+    ) -> None:
         seen.append((reject, label))
         original(self, dimension, reject=reject, label=label)
 
@@ -435,7 +442,7 @@ def test_forged_oversize_metric_components_are_rejected_before_dump() -> None:
         tensor=RationalCoordinateTensor.model_construct(
             coordinate_axis=("x",),
             variance=("COVARIANT", "COVARIANT"),
-            components=_Huge(),  # type: ignore[arg-type]
+            components=_Huge(),
             retained_nonzero_denominators=(),
         ),
         chart_semantics="GENERIC_NONDEGENERATE_LOCUS",

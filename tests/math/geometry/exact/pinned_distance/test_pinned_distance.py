@@ -15,7 +15,7 @@ from jacobian.math.geometry.exact.pinned_distance.operations import (
 )
 
 
-def _pt(label, coords):
+def _pt(label: str, coords: tuple[int, ...]) -> LabelledRationalPoint:
     return LabelledRationalPoint(
         label=label,
         coordinates=tuple(CanonicalRational.from_fraction(Fraction(c)) for c in coords),

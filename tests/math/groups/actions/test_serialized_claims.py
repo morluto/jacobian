@@ -2,7 +2,7 @@
 
 import json
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from pydantic import ValidationError
@@ -52,7 +52,9 @@ def test_serialized_action_claims() -> None:
         assert not verifier(type(result).model_validate(payload))
 
 
-def test_action_claim_decoding_does_not_replay_relations(monkeypatch) -> None:
+def test_action_claim_decoding_does_not_replay_relations(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Serialized producer claims decode without running their mathematics."""
     action = FinitePermutationAction(domain=("a", "b"), generators=((1, 0),))
     results = (
@@ -62,7 +64,7 @@ def test_action_claim_decoding_does_not_replay_relations(monkeypatch) -> None:
         polya_inventory(action, 2),
     )
 
-    def fail_if_replayed(*args, **kwargs):
+    def fail_if_replayed(*args: object, **kwargs: object) -> None:
         raise AssertionError("result decoding replayed an action relation")
 
     monkeypatch.setattr(action_operations, "_cycle_decomposition", fail_if_replayed)
@@ -72,12 +74,13 @@ def test_action_claim_decoding_does_not_replay_relations(monkeypatch) -> None:
 
 def test_action_claim_verifiers_are_total() -> None:
     """Malformed caller values are rejected as a boolean result."""
-    for verifier in (
-        verify_element_cycles,
-        verify_cycle_index,
-        verify_burnside_count,
-        verify_polya_inventory,
-    ):
+    verifiers: tuple[Callable[[object], bool], ...] = (
+        cast(Callable[[object], bool], verify_element_cycles),
+        cast(Callable[[object], bool], verify_cycle_index),
+        cast(Callable[[object], bool], verify_burnside_count),
+        cast(Callable[[object], bool], verify_polya_inventory),
+    )
+    for verifier in verifiers:
         assert verifier(None) is False
         assert verifier(object()) is False
 

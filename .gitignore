@@ -48,3 +48,7 @@ benchmarks/results/
 tmp/
 # Local agent worktrees
 .trees/
+
+# Local Jacobian artifact store and annotated build outputs
+.jacobian/
+mcp-schema-*.png

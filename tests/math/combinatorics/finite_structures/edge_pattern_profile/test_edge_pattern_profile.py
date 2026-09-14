@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 import pytest
 from pydantic import ValidationError
 
@@ -16,7 +18,9 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
 )
 
 
-def _hg(vertices, edges):
+def _hg(
+    vertices: Iterable[str], edges: Iterable[tuple[str, Iterable[str]]]
+) -> FiniteHypergraph:
     return FiniteHypergraph(
         vertices=tuple(vertices),
         edges=tuple((eid, tuple(m)) for eid, m in edges),

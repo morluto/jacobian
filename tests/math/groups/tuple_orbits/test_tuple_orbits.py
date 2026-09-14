@@ -453,6 +453,9 @@ def test_orbit_row_payloads_are_preflighted_before_container_copy() -> None:
         def __len__(self) -> int:
             return 2_000_000
 
+        def __iter__(self):
+            return iter(range(2_000_000))
+
     payload = {
         "representative": _HugeRepresentative(),
         "source_indices": [0],
@@ -842,6 +845,81 @@ def test_non_iterable_sized_generators_are_a_validation_error() -> None:
         "action": {"domain": ["a"], "generators": _SizedOnly()},
         "arity": 0,
         "family": [],
+    }
+    with pytest.raises(ValidationError):
+        TupleFamilyOrbitSource.model_validate(payload)
+
+
+def test_standalone_row_mapping_extra_field_is_not_copied() -> None:
+    """A standalone row mapping rejects extras before traversing their values."""
+
+    def _boom():
+        raise AssertionError("unknown row field was traversed")
+        yield 0
+
+    payload = {
+        "representative": (),
+        "source_indices": (0,),
+        "orbit_size": 1,
+        "stabilizer_size": 1,
+        "least_transporter": (0,),
+        "unexpected": _boom(),
+    }
+    with pytest.raises(ValidationError) as extra:
+        TupleOrbitRow.model_validate(payload)
+    assert extra.value.errors()[0]["type"] == "extra_forbidden"
+
+
+def test_forged_family_iterator_is_bounded_before_structural_scans() -> None:
+    """A forged family whose iterator never ends is bounded by the row cap."""
+
+    class _LyingFamily(tuple):
+        def __len__(self) -> int:
+            return 1
+
+        def __iter__(self):
+            while True:
+                yield (0,)
+
+    action = FinitePermutationAction(domain=("a",), generators=((0,),))
+    source = TupleFamilyOrbitSource.model_construct(
+        action=action, arity=1, family=_LyingFamily()
+    )
+    with pytest.raises(OperationResourceAdmissionError):
+        tuple_family_orbit_profile(source)
+
+
+def test_forged_action_generator_row_is_bounded_despite_reported_length() -> None:
+    """A generator row that lies about its length is still bounded."""
+
+    class _LyingRow(tuple):
+        def __len__(self) -> int:
+            return 1
+
+        def __iter__(self):
+            return iter(range(2_000_000))
+
+    action = FinitePermutationAction.model_construct(
+        domain=("a",), generators=(_LyingRow(),)
+    )
+    source = TupleFamilyOrbitSource.model_construct(action=action, arity=0, family=())
+    with pytest.raises(
+        (OperationDomainValidationError, OperationResourceAdmissionError)
+    ):
+        tuple_family_orbit_profile(source)
+
+
+def test_nested_tuple_coordinate_is_rejected_before_container_copy() -> None:
+    """A nested container coordinate is rejected without traversing it."""
+
+    class _BoomList(list):
+        def __iter__(self):
+            raise AssertionError("nested coordinate was traversed")
+
+    payload = {
+        "action": {"domain": ["a"], "generators": [[0]]},
+        "arity": 1,
+        "family": [[_BoomList([0])]],
     }
     with pytest.raises(ValidationError):
         TupleFamilyOrbitSource.model_validate(payload)

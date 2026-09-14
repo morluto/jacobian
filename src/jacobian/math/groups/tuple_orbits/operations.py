@@ -22,11 +22,13 @@ from jacobian.math.groups.actions._models import (
 )
 from jacobian.math.groups.operations import _backend_group, _full_permutation_form
 from jacobian.math.groups.tuple_orbits._models import (
+    _SEQUENCE_OVERFLOW,
     MAX_TUPLE_ARITY,
     TupleFamilyOrbitResult,
     TupleFamilyOrbitSource,
     TupleOrbitRow,
     _declared_attr,
+    _materialize_bounded_sequence,
     _preflight_action_dimensions,
 )
 
@@ -113,7 +115,6 @@ def _admit_source(
     request_checkpoint("before tuple-family orbit admission")
     action = _revalidate_action(request)
     arity = _declared_attr(request, "arity")
-    family = _declared_attr(request, "family")
     if (
         not isinstance(arity, int)
         or isinstance(arity, bool)
@@ -124,6 +125,15 @@ def _admit_source(
             code="finite_group_action.tuple_family_arity_out_of_range",
             message="tuple arity must be a non-negative action-domain-sized integer",
         )
+    family = _declared_attr(request, "family")
+    materialized_family = _materialize_bounded_sequence(family, MAX_FAMILY_MEMBERS)
+    if materialized_family is _SEQUENCE_OVERFLOW:
+        raise OperationResourceAdmissionError(
+            location=("family",),
+            code="finite_group_action.tuple_family_input_bound",
+            message=f"at most {MAX_FAMILY_MEMBERS} tuple rows are admitted",
+        )
+    family = materialized_family
     if not isinstance(family, tuple) or any(
         not isinstance(member, tuple) for member in family
     ):

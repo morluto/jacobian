@@ -91,18 +91,11 @@ def _preflight_action_dimensions(*, domain: object, generators: object) -> None:
             f"actions admit at most {MAX_GENERATORS} generators",
         )
     for generator in cast(Iterable[Any], generators):
-        row_length = _collection_length(generator)
-        if row_length is None and isinstance(generator, Iterable):
-            if isinstance(generator, (str, bytes, bytearray, Mapping)):
-                continue
-            for counted, _item in enumerate(generator, start=1):
-                if counted > degree:
-                    raise _tuple_error(
-                        "generator_length_mismatch",
-                        "every generator must be a permutation of the domain",
-                    )
+        if isinstance(generator, (str, bytes, bytearray, Mapping)):
             continue
-        if row_length is not None and row_length > degree:
+        if not isinstance(generator, Iterable):
+            continue
+        if _materialize_bounded_sequence(generator, degree) is _SEQUENCE_OVERFLOW:
             raise _tuple_error(
                 "generator_length_mismatch",
                 "every generator must be a permutation of the domain",
@@ -200,6 +193,13 @@ def _action_mapping(action: object) -> dict[str, Any] | None:
                     "generator_length_mismatch",
                     "every generator must be a permutation of the domain",
                 )
+            if isinstance(materialized, tuple) and any(
+                isinstance(item, (list, tuple, Mapping)) for item in materialized
+            ):
+                raise _tuple_error(
+                    "generator_length_mismatch",
+                    "every generator must be a permutation of the domain",
+                )
             bounded_rows.append(materialized)
             if len(bounded_rows) > MAX_GENERATORS:
                 raise _tuple_error(
@@ -272,6 +272,13 @@ def _source_mapping(data: object) -> dict[str, Any]:
         for member in family:
             materialized = _materialize_bounded_sequence(member, MAX_TUPLE_ARITY)
             if materialized is _SEQUENCE_OVERFLOW:
+                raise _tuple_error(
+                    "arity_out_of_range",
+                    "tuple arity must be a non-negative action-domain-sized integer",
+                )
+            if isinstance(materialized, tuple) and any(
+                isinstance(item, (list, tuple, Mapping)) for item in materialized
+            ):
                 raise _tuple_error(
                     "arity_out_of_range",
                     "tuple arity must be a non-negative action-domain-sized integer",
@@ -470,7 +477,7 @@ class TupleOrbitRow(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def normalize_json_containers(cls, data: Any) -> Any:
-        payload = data if isinstance(data, Mapping) else _row_mapping(data)
+        payload = _row_mapping(data)
         _preflight_row_payload(payload)
         return canonicalize_json_containers(payload)
 

@@ -414,6 +414,48 @@ def test_opposite_jump_charges_cancel_before_the_denominator_bound() -> None:
     assert result.cumulants[0].cumulant.as_fraction() == 0
 
 
+def test_general_cancelling_jump_groups_are_admitted() -> None:
+    """A three-term group that cancels is not combined into one common LCM.
+
+    For each of six pairwise-coprime 100-digit primes ``p_i`` the charges
+    ``-i/(2 p_i) + i/(6 p_i) + i/(3 p_i)`` cancel exactly, though no two terms
+    are opposites, so the grouped sum must reduce before the denominator bound.
+    """
+
+    import sympy
+
+    primes: list[int] = []
+    candidate = 10**99 + 1
+    while len(primes) < 6:
+        candidate = int(sympy.nextprime(candidate))
+        if candidate % 6 in (1, 5):
+            primes.append(candidate)
+    atoms: list[FiniteDistributionAtom] = []
+    for index, prime in enumerate(primes, start=1):
+        atoms.append(
+            FiniteDistributionAtom(
+                value=_q(Fraction(-3 * index)),
+                probability=_q(Fraction(1, 6 * prime)),
+            )
+        )
+        atoms.append(
+            FiniteDistributionAtom(
+                value=_q(Fraction(index)),
+                probability=_q(Fraction(1, 6 * prime)),
+            )
+        )
+        atoms.append(
+            FiniteDistributionAtom(
+                value=_q(Fraction(2 * index, prime - 2)),
+                probability=_q(Fraction(prime - 2, 6 * prime)),
+            )
+        )
+    atoms.sort(key=lambda atom: atom.value.as_fraction())
+    jumps = FiniteRationalDistribution(atoms=tuple(atoms))
+    result = compound_poisson_cumulant_prefix(_q(Fraction(1)), jumps, 1)
+    assert result.cumulants[0].jump_raw_moment.as_fraction() == 0
+
+
 def test_oversized_support_is_rejected_before_atom_type_scan() -> None:
     atom = FiniteDistributionAtom(value=_q(Fraction(0)), probability=_q(Fraction(1)))
     forged = FiniteRationalDistribution.model_construct(

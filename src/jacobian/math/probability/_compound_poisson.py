@@ -137,16 +137,26 @@ def _bounded_sum(
     location: tuple[str, ...],
     label: str,
 ) -> Fraction:
-    """Add two exact terms while bounding common-denominator arithmetic."""
+    """Add two exact terms, bounding the reduced running denominator.
 
+    The exact merged denominator is computed and the reduced result is checked,
+    so a sum whose intermediate LCM exceeds the envelope but reduces below it
+    stays admissible while a group of unrelated denominators cannot grow
+    without bound.  Large numerators are allowed to cancel.
+    """
+
+    if right == 0:
+        return left
+    if left == 0:
+        return right
     common = gcd(left.denominator, right.denominator)
     left_scale = right.denominator // common
     right_scale = left.denominator // common
-    if (
-        left_scale > _RESULT_VALUE_LIMIT // max(1, abs(left.numerator))
-        or right_scale > _RESULT_VALUE_LIMIT // max(1, abs(right.numerator))
-        or left_scale > _RESULT_VALUE_LIMIT // left.denominator
-    ):
+    result = Fraction(
+        left.numerator * left_scale + right.numerator * right_scale,
+        left.denominator * left_scale,
+    )
+    if result.denominator > _RESULT_VALUE_LIMIT:
         raise _resource_error(
             location=location,
             code="probability.compound_poisson.intermediate_height_bound",
@@ -155,20 +165,31 @@ def _bounded_sum(
                 "exact intermediate bound"
             ),
         )
-    left_numerator = left.numerator * left_scale
-    right_numerator = right.numerator * right_scale
-    denominator = left.denominator * left_scale
-    numerator = left_numerator + right_numerator
-    if abs(numerator) > _RESULT_VALUE_LIMIT:
-        raise _resource_error(
-            location=location,
-            code="probability.compound_poisson.intermediate_height_bound",
-            message=(
-                f"{label} exceeds the {MAX_RESULT_RATIONAL_DIGITS}-digit "
-                "exact intermediate bound"
-            ),
-        )
-    return Fraction(numerator, denominator)
+    return result
+
+
+_SMALL_KERNEL_PRIMES: Final = tuple(
+    candidate
+    for candidate in range(2, 1_000)
+    if all(candidate % divisor for divisor in range(2, int(candidate**0.5) + 1))
+)
+
+
+def _large_denominator_kernel(denominator: int) -> int:
+    """Return the part of a denominator left after removing small prime factors.
+
+    Charges that share a large factor (for example ``2p``, ``3p``, and ``6p``)
+    collapse to one group so their exact sum can cancel before unrelated groups
+    are combined.
+    """
+
+    kernel = denominator
+    for prime in _SMALL_KERNEL_PRIMES:
+        if prime * prime > kernel:
+            break
+        while kernel % prime == 0:
+            kernel //= prime
+    return kernel
 
 
 def _reduced_signed_terms(terms: list[Fraction]) -> list[Fraction]:
@@ -196,33 +217,27 @@ def _reduced_signed_terms(terms: list[Fraction]) -> list[Fraction]:
     return reduced
 
 
-def _require_bounded_denominator_lcm(
+def _bounded_sum_terms(
     terms: list[Fraction],
     *,
     location: tuple[str, ...],
     label: str,
-) -> None:
-    """Reject a sum whose exact common denominator would exceed the envelope.
+) -> Fraction:
+    """Sum exact terms after grouping by their large denominator kernel."""
 
-    Summing terms with unrelated denominators materializes their LCM before
-    the result can be inspected, so bound that denominator here.  Signed
-    numerators may still cancel because only the common denominator grows.
-    """
-
-    lcm = 1
+    groups: dict[int, list[Fraction]] = {}
     for term in terms:
-        denominator = term.denominator
-        scale = denominator // gcd(lcm, denominator)
-        if scale > _RESULT_VALUE_LIMIT // lcm:
-            raise _resource_error(
-                location=location,
-                code="probability.compound_poisson.intermediate_height_bound",
-                message=(
-                    f"{label} exceeds the {MAX_RESULT_RATIONAL_DIGITS}-digit "
-                    "exact intermediate bound"
-                ),
+        groups.setdefault(_large_denominator_kernel(term.denominator), []).append(term)
+    total = Fraction()
+    for kernel in sorted(groups):
+        group_total = Fraction()
+        for term in _reduced_signed_terms(groups[kernel]):
+            group_total = _bounded_sum(
+                group_total, term, location=location, label=label
             )
-        lcm *= scale
+        if group_total:
+            total = _bounded_sum(total, group_total, location=location, label=label)
+    return total
 
 
 def _require_canonical_rational(
@@ -413,13 +428,11 @@ def _admit_and_plan(
         moment_location: tuple[str, ...] = ("jump_distribution", "atoms")
         if len(values) == 1:
             moment_location = ("jump_distribution", "atoms", str(values[0][0]))
-        reduced_terms = _reduced_signed_terms(weighted_powers)
-        _require_bounded_denominator_lcm(
-            reduced_terms,
+        moment = _bounded_sum_terms(
+            weighted_powers,
             location=moment_location,
             label="jump raw moment",
         )
-        moment = sum(reduced_terms, start=Fraction())
         if (
             abs(moment.numerator) > _RESULT_VALUE_LIMIT
             or moment.denominator > _RESULT_VALUE_LIMIT

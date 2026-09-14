@@ -1125,3 +1125,26 @@ def test_syzygy_forged_none_indices_is_a_typed_domain_error() -> None:
     )
     with pytest.raises(OperationDomainValidationError):
         _admit_source_relation(forged)
+
+
+def test_equal_denominator_components_are_grouped_before_the_lcm_guard() -> None:
+    """Equal-denominator cancellations are found before unrelated LCM growth."""
+    from fractions import Fraction
+
+    from jacobian.math.combinatorics.matroids.oriented._bracket_kernel import (
+        _bounded_component_sum,
+    )
+
+    left_denominator = 10**20000 + 7
+    right_denominator = 10**20000 + 9
+    width = (1, 20001)
+    components = [
+        (Fraction(1, left_denominator), width),
+        (Fraction(1, right_denominator), width),
+        (Fraction(2, left_denominator), width),
+        (Fraction(2, right_denominator), width),
+        (Fraction(-3, left_denominator), width),
+        (Fraction(-3, right_denominator), width),
+    ]
+    total, _bound = _bounded_component_sum(components)
+    assert total == 0

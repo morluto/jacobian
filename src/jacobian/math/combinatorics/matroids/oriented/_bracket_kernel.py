@@ -391,6 +391,21 @@ def _bounded_component_sum(
     """
 
     pending = _cancel_opposite_components(components)
+    # Sum components sharing one denominator before the cross-denominator
+    # reducer. Each group's sum has denominator dividing the shared one, so
+    # equal-denominator cancellations are found without combining unrelated
+    # denominators first.
+    grouped: dict[int, Fraction] = {}
+    grouped_widths: dict[int, tuple[int, int]] = {}
+    for value, widths in pending:
+        denominator = value.denominator
+        grouped[denominator] = grouped.get(denominator, Fraction(0)) + value
+        grouped_widths[denominator] = widths
+    pending = [
+        (value, grouped_widths[denominator])
+        for denominator, value in grouped.items()
+        if value != 0
+    ]
     total = Fraction(0)
     work_digit_bound = 0
     denominator_lcm = 1

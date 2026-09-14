@@ -106,8 +106,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "discriminant. The defining polynomial must be irreducible over QQ "
             "and have degree at most 31. Admission additionally proves the "
             "defining-polynomial discriminant factors within a bounded trial "
-            "envelope (remaining cofactor one, prime, or a prime power), so "
-            "the exact backend completes instead of timing out."
+            "envelope (remaining cofactor at most 4096 digits and one, prime, "
+            "or a prime power), so the exact backend completes instead of "
+            "timing out."
         ),
         request_type=NumberFieldRingOfIntegersRequest,
         result_type=NumberFieldRingOfIntegersResult,
@@ -116,7 +117,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             OperationExample(
                 name="golden_field",
-                description="The ring of integers of QQ(sqrt(5)) has basis 1 and (1+sqrt(5))/2.",
+                description=(
+                    "QQ(sqrt(5)) is irreducible and within the degree bound; "
+                    "its ring of integers has basis 1 and (1+sqrt(5))/2."
+                ),
                 input={
                     "field": {
                         "domain": "QQ",
@@ -129,7 +133,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="number_field.discriminant.compute",
         title="Compute the discriminant of a number field",
-        description="Compute the field discriminant of one canonical SimpleNumberFieldPresentation in an isolated SymPy worker. Worker non-completion raises an execution error without a discriminant claim.",
+        description="Compute the field discriminant of one canonical SimpleNumberFieldPresentation in an isolated SymPy worker. The defining polynomial must be irreducible and within the degree bound, and its monicized discriminant must factor with a cofactor of at most 4096 digits that is one, prime, or a prime power. Worker non-completion raises an execution error without a discriminant claim.",
         request_type=NumberFieldRequest,
         result_type=NumberFieldDiscriminantResult,
         run=compute_nf_discriminant,

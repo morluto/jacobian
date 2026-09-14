@@ -553,9 +553,7 @@ def test_production_floor_bound_is_derived_from_the_admitted_scale(
 
     monkeypatch.setattr(radix_module, "run_scaled_integer_part_worker", fake)
     radix_prefix(_value((1, 0, -2), 1), 10, 1)
-    assert seen == [
-        MAX_RADIX_INTEGER_PART_DIGITS + len(format_canonical_integer(10)) + 2
-    ]
+    assert seen == [MAX_RADIX_INTEGER_PART_DIGITS + len(format_canonical_integer(10))]
 
 
 def test_native_argument_type_errors_point_at_the_offending_field() -> None:

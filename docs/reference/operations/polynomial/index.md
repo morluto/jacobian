@@ -87,5 +87,10 @@ to another polynomial operation.
 
 ## Focused contracts
 
+- [Exact cyclotomic polynomials](cyclotomic.md)
 - [Elementary-symmetric polynomial families](elementary-symmetric.md)
+- [Rational discrete antiderivatives](rational-discrete-antiderivative.md)
+  compute the unique zero-based inverse of a selected-variable forward
+  difference over `QQ`.
 - [Monomial-ideal graded Betti profiles](monomial-ideal-graded-betti.md)
+- [Exact root--critical-point distance profiles](root-critical-distance-profile.md)

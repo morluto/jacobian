@@ -1,5 +1,10 @@
 """Supported exact polynomial API."""
 
+from jacobian.math.polynomials._cyclotomic import cyclotomic
+from jacobian.math.polynomials._discrete_antiderivative import (
+    RationalDiscreteAntiderivativeResult,
+    rational_discrete_antiderivative,
+)
 from jacobian.math.polynomials._elementary_kernel import (
     integer_polynomial_compose,
     integer_polynomial_content,
@@ -73,6 +78,8 @@ def __getattr__(name: str) -> object:
 
 __all__ = [
     "PolynomialExpressionSource",
+    "RationalDiscreteAntiderivativeResult",
+    "cyclotomic",
     "derivative",
     "discriminant",
     "divide",
@@ -104,6 +111,7 @@ __all__ = [
     "polynomial_resultant",
     "polynomial_square_free_decomposition",
     "quadratic_root_profile",
+    "rational_discrete_antiderivative",
     "rational_partial_fraction_decomposition",
     "rational_polynomial_derivative",
     "rational_polynomial_division",

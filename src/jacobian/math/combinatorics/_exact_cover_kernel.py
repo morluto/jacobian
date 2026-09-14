@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from jacobian._execution import report_request_progress
+from jacobian._execution import report_request_progress, request_checkpoint
 from jacobian.math.combinatorics.exact_cover import GeneralizedExactCoverInstance
 
 
@@ -113,6 +113,7 @@ def search_generalized_exact_cover(
         state = stack.pop()
         visited += 1
         if visited == 1 or visited % 256 == 0:
+            request_checkpoint("during exact-cover search")
             report_request_progress(visited, message="exact-cover search nodes visited")
         if state.uncovered_primary == 0:
             return ExactCoverKernelResult(

@@ -30,6 +30,25 @@ class CanonicalizationError(ValueError):
     """The input cannot be represented by Jacobian's canonical JSON profile."""
 
 
+def decimal_digit_width(value: SupportsInt) -> int:
+    """Return the exact decimal digit count without Python's string limit.
+
+    ``len(str(value))`` raises beyond ``sys.int_max_str_digits``.  Small
+    integers use the built-in conversion; larger ones reuse the FLINT decimal
+    formatter that :func:`format_canonical_integer` already relies on, so the
+    count is exact rather than an approximation suitable only for comparisons.
+    """
+
+    integer = int(value)
+    if integer < 0:
+        integer = -integer
+    if integer < _BUILTIN_DECIMAL_BOUND:
+        return len(str(integer))
+    from flint import fmpz
+
+    return len(fmpz(integer).str())
+
+
 def parse_canonical_integer(value: str) -> int:
     """Parse a canonical decimal integer without Python's string-digit limit."""
 

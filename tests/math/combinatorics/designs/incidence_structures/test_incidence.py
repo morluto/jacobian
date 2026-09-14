@@ -207,6 +207,7 @@ class TestContainmentProfile:
             (("p2",), 2),
             (("p3",), 1),
         )
+        assert isinstance(result.incidence, IncidenceStructure)
         assert result.incidence.points == ("p1", "p2", "p3")
         assert result.total_multiplicity == 4
         assert result.min_multiplicity == 1

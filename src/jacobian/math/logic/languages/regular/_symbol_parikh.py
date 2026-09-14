@@ -111,7 +111,23 @@ class SymbolParikhProfileResult(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_cells(self) -> Self:
-        if self.alphabet != tuple(range(self.dfa.alphabet_size)):
+        # A model_construct DFA is trusted when nested, so rerun the DFA's own
+        # contract before checking profile invariants against its fields.
+        try:
+            source = DFA.model_validate(
+                {
+                    "state_count": getattr(self.dfa, "state_count", None),
+                    "alphabet_size": getattr(self.dfa, "alphabet_size", None),
+                    "transitions": getattr(self.dfa, "transitions", None),
+                    "initial_state": getattr(self.dfa, "initial_state", None),
+                    "accepting_states": getattr(self.dfa, "accepting_states", None),
+                }
+            )
+        except (ValidationError, AttributeError, TypeError) as exc:
+            raise ValueError(
+                "symbol-Parikh source must be a canonical total DFA"
+            ) from exc
+        if self.alphabet != tuple(range(source.alphabet_size)):
             raise ValueError("symbol-Parikh alphabet must be the DFA's ordered axis")
         vectors = tuple(cell.symbol_counts for cell in self.cells)
         for cell in self.cells:
@@ -125,7 +141,7 @@ class SymbolParikhProfileResult(StrictModel):
                 "symbol-Parikh cells must be lexicographically sorted and unique"
             )
         for vector in vectors:
-            if len(vector) != self.dfa.alphabet_size:
+            if len(vector) != source.alphabet_size:
                 raise ValueError(
                     "symbol-Parikh vectors must use the complete alphabet axis"
                 )

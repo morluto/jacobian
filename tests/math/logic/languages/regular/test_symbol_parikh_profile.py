@@ -976,3 +976,22 @@ def test_unreachable_acceptance_at_depth_constructs_no_cells() -> None:
     result = symbol_parikh_profile(dfa, 998)
     assert result.cells == ()
     assert result.total_accepted_words == 0
+
+
+def test_profile_result_revalidates_a_constructed_source_dfa() -> None:
+    """A validation-bypassed non-total DFA source is rejected."""
+    forged = DFA.model_construct(
+        state_count=1,
+        alphabet_size=1,
+        transitions=(),
+        initial_state=0,
+        accepting_states=(),
+    )
+    with pytest.raises(ValidationError):
+        SymbolParikhProfileResult(
+            dfa=forged,
+            alphabet=(0,),
+            word_length=0,
+            cells=(),
+            total_accepted_words=0,
+        )

@@ -107,6 +107,20 @@ class TightEquiangularProfileResult(VectorFamily):
                 "frames.profile_shape",
                 "non-equiangular frames cannot carry a common value",
             )
+        # An equiangular frame with an observed pair always has a common
+        # squared inner product.  Only a singleton (or empty) family has no
+        # off-diagonal pair from which to observe one, so a nontrivial
+        # equiangular profile without the value is structurally impossible.
+        if (
+            self.equiangular
+            and self.common_squared_inner_product is None
+            and len(self.vectors) > 1
+        ):
+            raise PydanticCustomError(
+                "frames.profile_shape",
+                "equiangular frames with at least one vector pair require the "
+                "common squared inner product",
+            )
         return self
 
     @classmethod

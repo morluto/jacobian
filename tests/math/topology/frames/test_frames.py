@@ -887,6 +887,7 @@ def test_dimension_32_independent_denominators_admit_before_tight_residual() -> 
     assert error.value.errors()[0]["type"] == "frames.complex_scalar_height"
 
 
+@pytest.mark.scale
 def test_mub_cross_basis_independent_denominators_are_admitted() -> None:
     """Independent cross denominators below the canonical limit are admitted.
 

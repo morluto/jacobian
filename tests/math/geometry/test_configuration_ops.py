@@ -990,6 +990,7 @@ class TestSpannedCircleFinalCheckpoint:
 
 
 class TestSpannedCircleRationalOffsetOrigin:
+    @pytest.mark.scale
     def test_rational_common_offset_is_reached_by_the_denominator_lattice(
         self,
     ) -> None:

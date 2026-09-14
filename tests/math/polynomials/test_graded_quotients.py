@@ -970,6 +970,8 @@ def test_hilbert_series_ambient_numerator_must_reduce_to_series() -> None:
 
 def test_hilbert_function_admits_mixed_constraints_above_enumerator_ceiling() -> None:
     """The 28 pairwise products have 8 standard monomials at degree 32."""
+    from jacobian.math.polynomials.ideals._models import IdealComputationBudget
+
     variables = tuple("xyzwuvst")
     generators = tuple(
         tuple(1 if axis in (left, right) else 0 for axis in range(8))
@@ -977,7 +979,14 @@ def test_hilbert_function_admits_mixed_constraints_above_enumerator_ceiling() ->
         for right in range(left + 1, 8)
     )
     ideal = _monomial_ideal(variables, generators)
-    result = hilbert_function(ideal, max_degree=32)
+    # This boundary sits well above the enumerator ceiling and costs a full
+    # Groebner pass; charge an explicit budget so a loaded hosted runner does
+    # not trip the operation's 10s default.
+    result = hilbert_function(
+        ideal,
+        max_degree=32,
+        resource_budget=IdealComputationBudget(wall_seconds=60),
+    )
     assert result.values[-1] == 8
 
 

@@ -270,6 +270,7 @@ def test_enlargement_units_separate_the_motivating_degrees() -> None:
             assert units > integral_basis_kernel._ROUND_TWO_ENLARGEMENT_UNIT_ENVELOPE
 
 
+@pytest.mark.scale
 def test_bounded_enlargement_family_completes() -> None:
     """The n=10 member of the deep-index family still completes exactly.
 

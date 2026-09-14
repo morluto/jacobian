@@ -827,7 +827,7 @@ def test_scaled_dimension_16_standard_hadamard_mub_uses_shared_denominators() ->
 
 
 def test_equal_denominator_widths_do_not_collapse_distinct_primes() -> None:
-    primes = []
+    primes: list[int] = []
     candidate = 2
     while len(primes) < 64:
         if all(candidate % prime for prime in primes):

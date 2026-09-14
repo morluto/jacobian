@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.posets.antichain_enumeration._models import (
+    MAX_ELEMENTS,
     AntichainEnumerationRequest,
 )
 from jacobian.math.combinatorics.posets.antichain_enumeration.operations import (
@@ -178,5 +179,7 @@ def test_enumeration_rejects_size_bound_before_strict_closure(
     monkeypatch.setattr(poset_models, "_validated_presentation", fail_presentation)
     monkeypatch.setattr(poset_operations, "_validated_presentation", fail_presentation)
     monkeypatch.setattr(poset_models, "_strict_closure", fail_presentation)
-    with pytest.raises(OperationDomainValidationError, match="at most 24 elements"):
+    with pytest.raises(
+        OperationDomainValidationError, match=f"at most {MAX_ELEMENTS} elements"
+    ):
         enumerate_antichains(poset, 1, 1)

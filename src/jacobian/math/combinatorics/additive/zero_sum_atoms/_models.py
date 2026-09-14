@@ -92,7 +92,8 @@ class ZeroSumAtomSource(StrictModel):
             if len(raw_elements) > MAX_ATOM_SOURCE_ELEMENTS:
                 raise _validation_error(
                     "zero_sum_atom_source_cardinality",
-                    "zero-sum atom source permits at most 24 items",
+                    "zero-sum atom source permits at most "
+                    f"{MAX_ATOM_SOURCE_ELEMENTS} items",
                 )
             if any(
                 not isinstance(element, list)

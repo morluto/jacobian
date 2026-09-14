@@ -12,6 +12,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.combinatorics.finite_structures.hypergraphs import FiniteHypergraph
+from jacobian.math.combinatorics.finite_structures.hypergraphs._models import MAX_EDGES
 from jacobian.math.combinatorics.finite_structures.hypergraphs.colorings import (
     HyperedgeColorAssignment,
     IndexedHyperedgeColoring,
@@ -226,7 +227,7 @@ def test_source_sensitive_candidate_bound_rejects_large_possible_profile() -> No
     vertices = tuple(str(index) for index in range(200))
     source = make_coloring(vertices, [(vertex,) for vertex in vertices], [0] * 200)
 
-    with pytest.raises(OperationResourceAdmissionError, match="12000-edge"):
+    with pytest.raises(OperationResourceAdmissionError, match=f"{MAX_EDGES}-edge"):
         construct(source, 1, 2)
 
 

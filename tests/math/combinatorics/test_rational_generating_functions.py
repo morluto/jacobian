@@ -13,6 +13,7 @@ from jacobian.math.combinatorics._recurrence_admission import (
     _require_bounded_fraction,
 )
 from jacobian.math.combinatorics._recurrence_models import (
+    MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS,
     RationalGeneratingFunctionCoefficientsRequest,
     RationalGeneratingFunctionCoefficientsResult,
 )
@@ -163,16 +164,17 @@ def test_verifier_rejects_overwork_before_scanning_a_forged_series() -> None:
 
 
 def test_decimal_digit_bound_counts_power_of_ten_exactly() -> None:
-    below = 10**32_768 - 1
-    at = 10**32_768
-    assert _lower_decimal_digits(below) == 32_768
-    assert _lower_decimal_digits(at) == 32_769
+    bound = MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS
+    below = 10**bound - 1
+    at = 10**bound
+    assert _lower_decimal_digits(below) == bound
+    assert _lower_decimal_digits(at) == bound + 1
     _require_bounded_fraction(
         Fraction(below),
         label="series coefficient",
         location=("coefficients", 0),
     )
-    with pytest.raises(OperationDomainValidationError, match="32768-digit bound"):
+    with pytest.raises(OperationDomainValidationError, match=rf"{bound}-digit bound"):
         _require_bounded_fraction(
             Fraction(at),
             label="series coefficient",

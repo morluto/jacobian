@@ -293,7 +293,9 @@ def test_projection_composes_with_transversal_and_matching_consumers() -> None:
 def test_admission_accepts_cheap_large_group_sources_and_result_boundaries() -> None:
     assert _run((), (4097,)).atom_count == 0
 
-    with pytest.raises(ValidationError, match="at most 24 items"):
+    with pytest.raises(
+        ValidationError, match=f"at most {MAX_ATOM_SOURCE_ELEMENTS} items"
+    ):
         ZeroSumAtomSource.model_validate_json(
             encode_strict_json(
                 {

@@ -289,6 +289,19 @@ class SteinerTripleSystemShard(StrictModel):
                 "steiner_shard_duplicate",
                 "continuation triples must be unique",
             )
+        covered: set[tuple[int, int]] = set()
+        for triple in triples:
+            for pair in (
+                (triple[0], triple[1]),
+                (triple[0], triple[2]),
+                (triple[1], triple[2]),
+            ):
+                if pair in covered:
+                    raise _validation_error(
+                        "steiner_shard_overlap",
+                        "fixed triples must cover distinct pairs",
+                    )
+                covered.add(pair)
         return self
 
 
@@ -502,6 +515,13 @@ class SteinerTripleSystemResult(StrictModel):
                     "steiner_source_shard_order",
                     "a searched source shard must have the result order",
                 )
+            # Retain the canonical shard so a forged, unsorted source cannot
+            # survive into the serialized result.
+            object.__setattr__(
+                self,
+                "outcome",
+                outcome.model_copy(update={"source_shard": validated_source}),
+            )
         return self
 
 

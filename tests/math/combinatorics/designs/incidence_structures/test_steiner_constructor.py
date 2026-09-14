@@ -365,12 +365,8 @@ def test_generated_schema_encodes_each_outcome_branch() -> None:
 
 def test_nonsemantic_shard_prefix_is_a_typed_domain_error() -> None:
     """Overlapping pair constraints are rejected independently of traversal."""
-    with pytest.raises(OperationDomainValidationError, match="distinct pairs"):
-        construct_steiner_triple_system(
-            7,
-            100,
-            SteinerTripleSystemShard(order=7, fixed_triples=((0, 1, 2), (0, 1, 3))),
-        )
+    with pytest.raises(ValidationError, match="distinct pairs"):
+        SteinerTripleSystemShard(order=7, fixed_triples=((0, 1, 2), (0, 1, 3)))
 
 
 def test_continuation_treats_fixed_triples_as_block_constraints() -> None:
@@ -793,3 +789,28 @@ def test_frontier_rejects_unhashable_forged_shard_fields() -> None:
     }
     with pytest.raises(ValidationError):
         SteinerTripleSystemResult.model_validate(payload)
+
+
+def test_wire_result_rejects_pair_overlapping_frontier_shard() -> None:
+    """A forged frontier shard that repeats a pair is rejected on result build."""
+    forged = SteinerTripleSystemShard.model_construct(
+        order=7, fixed_triples=((0, 1, 2), (0, 1, 3))
+    )
+    with pytest.raises(ValidationError, match="distinct pairs"):
+        SteinerTripleSystemUnknown(
+            states_explored=1,
+            unresolved_frontier=(forged,),
+        )
+
+
+def test_result_retains_the_canonicalized_source_shard() -> None:
+    """A forged unsorted source shard is replaced by its canonical copy."""
+    forged = SteinerTripleSystemShard.model_construct(
+        order=7, fixed_triples=((0, 2, 3), (0, 1, 4))
+    )
+    result = SteinerTripleSystemResult(
+        order=7,
+        outcome=SteinerTripleSystemNotFound(source_shard=forged),
+    )
+    assert result.outcome.source_shard is not None
+    assert result.outcome.source_shard.fixed_triples == ((0, 1, 4), (0, 2, 3))

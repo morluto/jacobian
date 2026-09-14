@@ -69,10 +69,10 @@ def _large_denominator_kernel(value: int) -> int:
 
 
 _SUM_VALUE_LIMIT = 10**MAX_FINITE_DISTRIBUTION_SUM_DIGITS
-# Above this many distinct buckets the all-pairs merge scan is replaced by a
-# bounded linear accumulation, so a permitted request cannot monopolize a
-# worker with an exhaustive GCD search.
-_MAX_GREEDY_MERGE_TERMS = 64
+# The cancellation scan is a mandatory phase: it is checkpointed periodically so
+# a law with many unrelated denominators stays bounded by the request deadline
+# instead of monopolizing a worker.
+_CANCELLATION_CHECKPOINT_STRIDE: Final = 65_536
 
 
 def _raise_normalization_bound(label: str) -> None:
@@ -82,27 +82,28 @@ def _raise_normalization_bound(label: str) -> None:
     )
 
 
-def _add_height_bounded(left: Fraction, right: Fraction, *, label: str) -> Fraction:
-    """Add two nonnegative rationals after bounding common-denominator growth."""
+def _bounded_pair_sum(left: Fraction, right: Fraction, *, label: str) -> Fraction:
+    """Add two rationals or refuse the intermediate they form.
+
+    The numerator bound uses the absolute values, so a signed or cancelling
+    pair cannot hide an unreduced intermediate taller than the plain sum.
+    """
 
     if right == 0:
         return left
     if left == 0:
         return right
     common = gcd(left.denominator, right.denominator)
-    left_scale = right.denominator // common
-    right_scale = left.denominator // common
-    if (
-        left_scale > _SUM_VALUE_LIMIT // max(1, abs(left.numerator))
-        or right_scale > _SUM_VALUE_LIMIT // max(1, abs(right.numerator))
-        or left_scale > _SUM_VALUE_LIMIT // left.denominator
-    ):
+    left_denominator = left.denominator // common
+    right_denominator = right.denominator // common
+    scaled_numerator = (
+        abs(left.numerator) * right_denominator
+        + abs(right.numerator) * left_denominator
+    )
+    common_denominator = left_denominator * right.denominator
+    if common_denominator >= _SUM_VALUE_LIMIT or scaled_numerator >= _SUM_VALUE_LIMIT:
         _raise_normalization_bound(label)
-    numerator = left.numerator * left_scale + right.numerator * right_scale
-    denominator = left.denominator * left_scale
-    if abs(numerator) >= _SUM_VALUE_LIMIT or denominator >= _SUM_VALUE_LIMIT:
-        _raise_normalization_bound(label)
-    return Fraction(numerator, denominator)
+    return left + right
 
 
 def _bounded_fraction_sum(
@@ -112,26 +113,41 @@ def _bounded_fraction_sum(
 ) -> Fraction:
     """Sum nonnegative rationals without paying source-order LCD growth.
 
-    Masses are bucketed by the small-prime-free kernel of each denominator so
-    complementary pairs such as ``1/(5p)`` and ``(p-1)/(5p)`` reduce before
-    unrelated primes are combined. Unique reduced denominators are then
-    digit-budgeted, and each addition bounds its cancelled scales before any
-    common-denominator multiply, so a unit-sum law cannot force unbounded GCD
-    work.
+    Equal denominators combine exactly first, where no denominator growth can
+    occur at all. The reduced totals are bucketed by the small-prime-free kernel
+    of each denominator so complementary masses such as ``1/(5p)`` and
+    ``(p-1)/(5p)`` reduce before unrelated primes are combined. The bucket
+    totals are then combined by repeatedly merging the pair whose denominators
+    share the largest factor, which reaches cancellation through large primes
+    that no fixed sieve covers.
     """
 
+    if not values:
+        return Fraction()
+
+    grouped: dict[int, int] = {}
+    for value in values:
+        denominator = value.denominator
+        grouped[denominator] = grouped.get(denominator, 0) + value.numerator
+    terms = [
+        Fraction(numerator, denominator)
+        for denominator, numerator in grouped.items()
+        if numerator
+    ]
+    if not terms:
+        return Fraction()
+
     buckets: dict[int, Fraction] = {}
-    for index, value in enumerate(values):
+    for index, term in enumerate(terms):
         if index % 128 == 0:
             request_checkpoint("during finite-distribution normalization")
-        kernel = _large_denominator_kernel(value.denominator)
-        buckets[kernel] = _add_height_bounded(
+        kernel = _large_denominator_kernel(term.denominator)
+        buckets[kernel] = _bounded_pair_sum(
             buckets.get(kernel, Fraction()),
-            value,
+            term,
             label=label,
         )
-    reduced = list(buckets.values())
-    return _merge_terms_by_largest_gcd(reduced, label=label)
+    return _merge_terms_by_largest_gcd(list(buckets.values()), label=label)
 
 
 def _merge_terms_by_largest_gcd(
@@ -142,27 +158,31 @@ def _merge_terms_by_largest_gcd(
     """Combine exact rationals by repeatedly merging the largest shared factor.
 
     Complementary masses need not reduce through a fixed small-prime set: any
-    two denominators sharing a prime can cancel. Merging the pair with the
-    largest gcd first keeps intermediate denominators minimal, so a law whose
-    pairs reduce through a large shared factor is admitted without a hard-coded
-    cutoff, while genuinely unrelated denominators still hit the digit bound.
+    two denominators sharing a prime can cancel, so no fixed cutoff can replace
+    this scan. The scan is checkpointed periodically and stops as soon as no
+    pair shares a factor, so a law with unrelated denominators pays one scan and
+    is then refused by the ordinary digit bound instead of a term-count cutoff.
     """
 
     pool = [term for term in terms if term != 0]
-    while len(pool) > 1 and len(pool) <= _MAX_GREEDY_MERGE_TERMS:
+    while len(pool) > 1:
         request_checkpoint("during finite-distribution cancellation")
         best_left = -1
         best_right = -1
         best_shared = 1
+        comparisons = 0
         for left in range(len(pool)):
             for right in range(left + 1, len(pool)):
+                comparisons += 1
+                if comparisons % _CANCELLATION_CHECKPOINT_STRIDE == 0:
+                    request_checkpoint("during finite-distribution cancellation")
                 shared = gcd(pool[left].denominator, pool[right].denominator)
                 if shared > best_shared:
                     best_shared = shared
                     best_left, best_right = left, right
         if best_left < 0:
             break
-        merged = _add_height_bounded(pool[best_left], pool[best_right], label=label)
+        merged = _bounded_pair_sum(pool[best_left], pool[best_right], label=label)
         pool = [
             term
             for index, term in enumerate(pool)
@@ -172,7 +192,7 @@ def _merge_terms_by_largest_gcd(
             pool.append(merged)
     total = Fraction()
     for term in pool:
-        total = _add_height_bounded(total, term, label=label)
+        total = _bounded_pair_sum(total, term, label=label)
     return total
 
 

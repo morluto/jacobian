@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 import pytest
 
 from jacobian.catalog.models import OperationDomainValidationError
@@ -10,29 +12,31 @@ from jacobian.math.graphs.edge_coloring_arrowing.operations import (
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
-def _graph(vertices, edges):
+def _graph(
+    vertices: Iterable[str], edges: Iterable[tuple[str, str]]
+) -> SimpleUndirectedGraph:
     return SimpleUndirectedGraph(
         vertices=tuple(vertices),
         edges=tuple((a, b) for a, b in edges),
     )
 
 
-def _k3():
+def _k3() -> SimpleUndirectedGraph:
     return _graph(["a", "b", "c"], [("a", "b"), ("a", "c"), ("b", "c")])
 
 
-def _k6():
+def _k6() -> SimpleUndirectedGraph:
     vs = [str(i) for i in range(6)]
-    edges = []
+    edges: list[tuple[str, str]] = []
     for i in range(6):
         for j in range(i + 1, 6):
             edges.append((str(i), str(j)))
     return _graph(vs, edges)
 
 
-def _k5():
+def _k5() -> SimpleUndirectedGraph:
     vs = [str(i) for i in range(5)]
-    edges = []
+    edges: list[tuple[str, str]] = []
     for i in range(5):
         for j in range(i + 1, 5):
             edges.append((str(i), str(j)))

@@ -24,6 +24,19 @@ def test_discriminant_rejects_noncanonical_integer(value: str) -> None:
         )
 
 
+def test_verify_discriminant_propagates_resource_refusals() -> None:
+    """A field outside the factorization envelope is unknown, not false."""
+
+    from jacobian.catalog.models import OperationResourceAdmissionError
+
+    field = SimpleNumberFieldPresentation(
+        coefficients_descending=(1, 0, -(100003 * 100019))
+    )
+    claim = NumberFieldDiscriminantResult(field=field, discriminant=0)
+    with pytest.raises(OperationResourceAdmissionError):
+        verify_discriminant(claim)
+
+
 def test_field_discriminant_claim_round_trip() -> None:
     field = SimpleNumberFieldPresentation(coefficients_descending=(1, 0, -5))
     # Q(sqrt(5)) has field discriminant 5, not polynomial discriminant 20.

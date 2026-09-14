@@ -638,6 +638,30 @@ def enumerate_fixed_length_cycles(
     return _enumerate_cycles(graph, cycle_length, chordless=False)
 
 
+def _multipartite_triangle_cycles(
+    parts: tuple[tuple[str, ...], ...],
+) -> set[tuple[str, ...]]:
+    """Enumerate one-vertex-per-part triangles directly from the parts.
+
+    A complete multipartite triangle uses one vertex from each of three
+    distinct parts. Enumerating those triples avoids the generic DFS, whose
+    prefix count is quadratic in the block order even though the output is
+    polynomial in the parts.
+    """
+
+    cycles: set[tuple[str, ...]] = set()
+    emitted = 0
+    for first_part, second_part, third_part in combinations(parts, 3):
+        for first in first_part:
+            for second in second_part:
+                for third in third_part:
+                    cycles.add(_canonicalize_cycle((first, second, third)))
+                    emitted += 1
+                    if emitted % 1024 == 0:
+                        request_checkpoint("during fixed-length cycle enumeration")
+    return cycles
+
+
 def _enumerate_cycles(
     graph: SimpleUndirectedGraph,
     cycle_length: int,
@@ -665,6 +689,9 @@ def _enumerate_cycles(
             cycles.update(
                 _fan_cycles(block.fan_order, cycle_length, chordless=chordless)
             )
+            continue
+        if block.multipartite_parts is not None:
+            cycles.update(_multipartite_triangle_cycles(block.multipartite_parts))
             continue
         adjacency = block.adjacency
 
@@ -768,6 +795,7 @@ class _FixedCycleBlock:
     core_vertices: tuple[str, ...]
     wheel_order: tuple[str, ...] | None = None
     fan_order: tuple[str, ...] | None = None
+    multipartite_parts: tuple[tuple[str, ...], ...] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -775,11 +803,11 @@ class _FixedCyclePlan:
     blocks: tuple[_FixedCycleBlock, ...]
 
 
-def _complete_multipartite_part_sizes(
+def _complete_multipartite_parts(
     core_vertices: tuple[str, ...],
     adjacency_sets: dict[str, set[str]],
-) -> tuple[int, ...] | None:
-    """Return independent-set sizes when the 2-core is complete multipartite."""
+) -> tuple[tuple[str, ...], ...] | None:
+    """Return the independent-set parts when the 2-core is complete multipartite."""
 
     if not core_vertices:
         return ()
@@ -788,15 +816,27 @@ def _complete_multipartite_part_sizes(
     for vertex in core_vertices:
         neighbors = frozenset(adjacency_sets[vertex])
         parts.setdefault(neighbors, set()).add(vertex)
-    sizes: list[int] = []
+    result: list[tuple[str, ...]] = []
     for neighbors, part in parts.items():
         expected_neighbors = vertex_set - part
         if neighbors != expected_neighbors:
             return None
         if any(adjacency_sets[vertex] != expected_neighbors for vertex in part):
             return None
-        sizes.append(len(part))
-    return tuple(sizes)
+        result.append(tuple(sorted(part)))
+    return tuple(sorted(result))
+
+
+def _complete_multipartite_part_sizes(
+    core_vertices: tuple[str, ...],
+    adjacency_sets: dict[str, set[str]],
+) -> tuple[int, ...] | None:
+    """Return independent-set sizes when the 2-core is complete multipartite."""
+
+    parts = _complete_multipartite_parts(core_vertices, adjacency_sets)
+    if parts is None:
+        return None
+    return tuple(len(part) for part in parts)
 
 
 def _multipartite_cycle_exists(part_sizes: tuple[int, ...], cycle_length: int) -> bool:
@@ -967,13 +1007,20 @@ def _falling_factorial(n: int, k: int) -> int:
 
 
 def _multipartite_triangle_work(
-    block: tuple[str, ...], adjacency_sets: dict[str, set[str]]
+    block: tuple[str, ...],
+    adjacency_sets: dict[str, set[str]],
+    part_sizes: tuple[int, ...],
 ) -> tuple[int, dict[str, tuple[str, ...]]]:
-    """Traversal work and adjacency for a multipartite triangle block."""
+    """Traversal work and adjacency for a multipartite triangle block.
+
+    Triangles are enumerated directly from the part structure, so the work is
+    the exact number of one-vertex-per-part triples rather than the generic
+    DFS prefix envelope.
+    """
 
     local = _block_adjacency(block, adjacency_sets)
     adjacency = {vertex: tuple(sorted(local[vertex])) for vertex in block}
-    return len(block) ** 2, adjacency
+    return _simple_triangle_count(part_sizes) + len(block), adjacency
 
 
 def _multipartite_four_cycle_work(
@@ -1196,13 +1243,21 @@ def _admit_fixed_cycle_search_plan(
             # Every triangle selects one vertex from each of three distinct
             # parts, so its exact count is a bounded polynomial in the part
             # sizes rather than the generic all-vertex permutation bound.
+            parts = _complete_multipartite_parts(
+                block, _block_adjacency(block, adjacency_sets)
+            )
+            assert parts is not None
             block_work, block_adjacency = _multipartite_triangle_work(
-                block, adjacency_sets
+                block, adjacency_sets, part_sizes
             )
             complete_work += block_work
             cycle_upper_bound += _simple_triangle_count(part_sizes)
             search_blocks.append(
-                _FixedCycleBlock(adjacency=block_adjacency, core_vertices=block)
+                _FixedCycleBlock(
+                    adjacency=block_adjacency,
+                    core_vertices=block,
+                    multipartite_parts=parts,
+                )
             )
             continue
         if part_sizes is not None and cycle_length == 4 and not chordless:

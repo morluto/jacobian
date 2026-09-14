@@ -777,3 +777,30 @@ def test_request_schema_publishes_the_vertex_envelope() -> None:
     schema = FixedLengthCycleEnumerationRequest.model_json_schema()
     text = schema["properties"]["graph"].get("description", "")
     assert "256" in text
+
+
+def _complete_multipartite(part_sizes: tuple[int, ...]) -> SimpleUndirectedGraph:
+    parts = [
+        tuple(f"p{index}_{position}" for position in range(size))
+        for index, size in enumerate(part_sizes)
+    ]
+    edges = [
+        (left, right)
+        for first in range(len(parts))
+        for second in range(first + 1, len(parts))
+        for left in parts[first]
+        for right in parts[second]
+    ]
+    return SimpleUndirectedGraph(
+        vertices=tuple(vertex for part in parts for vertex in part),
+        edges=tuple(edges),
+    )
+
+
+def test_multipartite_triangles_are_enumerated_directly() -> None:
+    """The exact triangle family is emitted without the DFS prefix blow-up."""
+    graph = _complete_multipartite((127, 127, 1))
+    result = enumerate_fixed_length_cycles(graph, 3)
+
+    assert len(result.cycles) == 127 * 127 * 1
+    assert all(len(cycle) == 3 for cycle in result.cycles)

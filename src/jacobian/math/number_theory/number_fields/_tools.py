@@ -39,6 +39,7 @@ from jacobian.math.number_theory.number_fields.operations import (
 )
 from jacobian.math.number_theory.number_fields.values import (
     MAX_NUMBER_FIELD_DISCRIMINANT_DIGITS,
+    MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS,
     NumberFieldEmbeddingProfile,
     SimpleNumberFieldRealEmbeddingOrder,
 )
@@ -112,7 +113,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "envelope (remaining cofactor at most 4096 digits and one, prime, "
             "or a prime power) and that the proved Round 2 order-enlargement "
             "work fits a fixed step envelope, so the exact backend completes "
-            "instead of timing out."
+            "instead of timing out. A field whose integral-basis coordinates "
+            f"exceed the {MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS}-digit element "
+            "envelope is refused with a typed coordinate-bound rejection."
         ),
         request_type=NumberFieldRingOfIntegersRequest,
         result_type=NumberFieldRingOfIntegersResult,

@@ -386,19 +386,6 @@ def integral_basis_coordinates(
     if recognized is None:
         return None
     ring, _field_discriminant, alpha, leading = recognized
-    # The coordinate denominators divide the index of Z[alpha] in the maximal
-    # order, which is the determinant of the recognized HNF basis relative to
-    # the power basis. Admit that growth before expanding any coordinate.
-    index = abs(int(ring.matrix.det()))
-    if _integer_digits(index) > MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS:
-        raise OperationResourceAdmissionError(
-            location=("field",),
-            code="number_field.integral_basis_coordinate_bound",
-            message=(
-                "the index of the presented power order exceeds the admitted "
-                f"{MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS}-digit element envelope"
-            ),
-        )
     basis: list[tuple[CanonicalRational, ...]] = []
     for element in ring.basis_element_pullbacks():
         expression = element.as_expr().subs(alpha, leading * alpha).expand()

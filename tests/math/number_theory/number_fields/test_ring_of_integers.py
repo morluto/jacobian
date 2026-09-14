@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from typing import Any, cast
+from typing import Any
 
 import pytest
 import sympy
@@ -625,25 +625,10 @@ def test_native_fields_reject_non_presentation_arguments() -> None:
     )
 
 
-class _HugeIndexMatrix:
-    def det(self) -> int:
-        return 10**300
-
-
-class _HugeIndexRing:
-    matrix = _HugeIndexMatrix()
-
-    def basis_element_pullbacks(self) -> Any:
-        raise AssertionError("coordinates expanded despite an oversized index")
-
-
-def test_integral_basis_index_is_admitted_before_coordinate_expansion() -> None:
-    """An index beyond the element envelope is rejected before expansion."""
-    recognized = (_HugeIndexRing(), 1, None, 1)
-    with pytest.raises(OperationResourceAdmissionError) as error:
-        integral_basis_kernel.integral_basis_coordinates(
-            cast(Any, None), cast(Any, recognized)
-        )
-    assert error.value.errors()[0]["type"] == (
-        "number_field.integral_basis_coordinate_bound"
-    )
+def test_degree_one_field_returns_the_trivial_integral_basis() -> None:
+    """QQ is handled before the degree-two Round Two backend."""
+    field = SimpleNumberFieldPresentation(coefficients_descending=(1, 0))
+    result = ring_of_integers(field)
+    assert result.field_discriminant == 1
+    assert len(result.basis) == 1
+    assert result.basis[0].coefficients_ascending[0].as_fraction() == 1

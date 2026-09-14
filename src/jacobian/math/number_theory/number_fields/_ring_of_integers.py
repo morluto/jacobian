@@ -133,6 +133,23 @@ def ring_of_integers(
                 f"{MAX_INTEGRAL_BASIS_DEGREE}"
             ),
         )
+    if field.degree == 1:
+        # ``SimpleNumberFieldPresentation`` presents ``x`` as QQ, whose maximal
+        # order is ZZ with the single power-basis coordinate 1. SymPy's
+        # round_two only accepts degree at least two, so answer this case
+        # before launching the worker.
+        result = NumberFieldRingOfIntegersResult(
+            field=field,
+            basis=(
+                SimpleNumberFieldElement(
+                    presentation=field,
+                    coefficients_ascending=(CanonicalRational(num=1, den=1),),
+                ),
+            ),
+            field_discriminant=1,
+        )
+        result.require_canonical_basis()
+        return result
     worker_result = run_integral_basis_worker(
         NumberFieldRequest(field=field),
         include_basis=True,

@@ -58,6 +58,13 @@ from jacobian.math.number_theory._divisibility_profile_models import (
     ProductDivisibilityProfileResult,
 )
 from jacobian.math.number_theory._integer_models import BooleanResult
+from jacobian.math.number_theory._kempner_models import (
+    KempnerArithmeticProgressionResult,
+    KempnerDigitSet,
+)
+from jacobian.math.number_theory._kempner_progression import (
+    decide_kempner_arithmetic_progression,
+)
 from jacobian.math.number_theory._models import MAX_INTEGER_DIGITS
 from jacobian.math.number_theory._modular_basic_models import (
     MAX_CRT_COMBINED_MODULUS,
@@ -131,6 +138,7 @@ __all__ = [
     "gcd_quotient_profile",
     "is_prime",
     "jacobi_symbol",
+    "kempner_arithmetic_progression",
     "ksigma_preimage",
     "legendre_symbol",
     "mobius",
@@ -151,6 +159,29 @@ __all__ = [
     "product_divisibility_profile",
     "quadratic_residues",
 ]
+
+
+def kempner_arithmetic_progression(
+    digit_set: KempnerDigitSet,
+    arity: SupportsIndex,
+) -> KempnerArithmeticProgressionResult:
+    """Decide exactly whether a Kempner digit family contains a fixed-arity AP."""
+
+    if not isinstance(digit_set, KempnerDigitSet):
+        raise OperationDomainValidationError(
+            location=("digit_set",),
+            code="number_theory.kempner_progression.digit_set",
+            message="digit_set must be a canonical KempnerDigitSet",
+        )
+    try:
+        arity_value = operator.index(arity)
+    except TypeError as exc:
+        raise OperationDomainValidationError(
+            location=("arity",),
+            code="number_theory.kempner_progression.arity",
+            message="arity must be an integer of at least three",
+        ) from exc
+    return decide_kempner_arithmetic_progression(digit_set, arity_value)
 
 
 def _integer(value: SupportsIndex | IntegerValue) -> int:

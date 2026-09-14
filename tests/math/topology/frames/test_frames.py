@@ -1000,3 +1000,18 @@ def test_complex_profile_charges_every_pair_preflight_pass() -> None:
     with pytest.raises(OperationResourceAdmissionError) as work:
         _complex_frame_profile(ComplexFrameProfileRequest(frame=frame))
     assert work.value.errors()[0]["type"] == "frames.complex_profile_work"
+
+
+def test_sic_profile_admits_cancelled_normalized_projector_height() -> None:
+    """A unit normalized projector term is bounded after reduction, not before."""
+    vector = GaussianRational.from_fractions(Fraction(10**2048), Fraction(0))
+    frame = ComplexFrame(dimension=1, vectors=((vector,),))
+    result = _sic_profile(SicProfileRequest(frame=frame))
+    assert result.is_sic is True
+
+
+def test_mub_request_schema_publishes_the_per_basis_shape() -> None:
+    """The bases field documents the per-basis dimension and vector count."""
+    schema = MutuallyUnbiasedBasesRequest.model_json_schema()
+    description = schema["properties"]["bases"]["description"]
+    assert "dimension" in description

@@ -457,11 +457,13 @@ def _operator_entry_height(
             divisor = norms[index]
             if divisor == 0:
                 continue
-            divisor_height = _height_from_fraction(divisor)
-            real_height = real_height.quotient(divisor_height)
-            imaginary_height = imaginary_height.quotient(divisor_height)
             real_part = real_part / divisor
             imaginary_part = imaginary_part / divisor
+            # Bound the already-reduced quotient rather than propagating
+            # independent numerator/denominator heights, which can overstate a
+            # term such as |x|^2 / |x|^2 = 1.
+            real_height = _height_from_fraction(real_part)
+            imaginary_height = _height_from_fraction(imaginary_part)
         real_terms.append(real_height)
         imaginary_terms.append(imaginary_height)
         real_denominators.append(real_part.denominator)

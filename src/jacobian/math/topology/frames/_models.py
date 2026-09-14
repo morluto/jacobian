@@ -139,7 +139,12 @@ class MutuallyUnbiasedBasesRequest(StrictModel):
 
     dimension: int = Field(ge=1, le=MAX_DIM)
     bases: tuple[ComplexFrame, ...] = Field(
-        min_length=1, max_length=MAX_COMPLEX_BASIS_COUNT
+        min_length=1,
+        max_length=MAX_COMPLEX_BASIS_COUNT,
+        description=(
+            "One to MAX_COMPLEX_BASIS_COUNT bases; every base must have "
+            "exactly `dimension` vectors, each of ambient dimension `dimension`."
+        ),
     )
 
     @model_validator(mode="after")

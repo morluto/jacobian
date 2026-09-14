@@ -529,3 +529,57 @@ def test_forged_source_missing_expression_is_a_typed_domain_error() -> None:
     with pytest.raises(OperationDomainValidationError) as error:
         normalize_polynomial_expression(source)
     assert error.value.errors()[0]["type"] == "polynomial.expression.invalid_source"
+
+
+def test_zero_power_does_not_charge_an_over_budget_base() -> None:
+    """A zero power wrapping an over-budget base is still the constant one."""
+    variables = tuple(f"x{index}" for index in range(8))
+    literals = [
+        {
+            "kind": "MULTIPLY",
+            "operands": [
+                {"kind": "LITERAL", "value": {"num": 10**89, "den": 1}},
+                {"kind": "VARIABLE", "name": f"x{index}"},
+            ],
+        }
+        for index in range(8)
+    ]
+    base = {
+        "kind": "POWER",
+        "base": {"kind": "ADD", "operands": literals},
+        "exponent": 32,
+    }
+    request = _request("ZZ", {"kind": "POWER", "base": base, "exponent": 0}, variables)
+    result = _normalize(request)
+    assert result.polynomial.polynomial.terms[0].coefficient == CanonicalRational(
+        num=1, den=1
+    )
+
+
+def test_forged_nested_power_without_base_is_a_typed_domain_error() -> None:
+    """A forged nested POWER node without a base is a domain error."""
+    forged = PolynomialPower.model_construct(exponent=1)
+    source = PolynomialExpressionSource.model_construct(
+        coefficient_domain="QQ",
+        variables=("x",),
+        expression=forged,
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        normalize_polynomial_expression(source)
+    assert error.value.errors()[0]["type"] == "polynomial.expression.invalid_source"
+
+
+def test_nested_literal_component_sequence_is_rejected_before_copy() -> None:
+    """A sequence nested under a literal num key is rejected before the copy."""
+    payload = {
+        "coefficient_domain": "QQ",
+        "variables": ["x"],
+        "expression": {
+            "kind": "LITERAL",
+            "value": {"num": [0] * 5_000_000, "den": 1},
+        },
+    }
+    started = time.monotonic()
+    with pytest.raises(ValidationError):
+        PolynomialExpressionNormalizeRequest.model_validate(payload)
+    assert time.monotonic() - started < 1.0

@@ -326,6 +326,12 @@ def _require_bounded_mapping_fields(node: Mapping[str, object]) -> None:
             raise _MalformedExpressionError(
                 "LITERAL value must contain only num and den"
             )
+        if isinstance(value, Mapping):
+            for component in value.values():
+                if isinstance(component, (list, tuple, Mapping)):
+                    raise _MalformedExpressionError(
+                        "LITERAL components must be scalars, not containers"
+                    )
 
 
 def _bounded_sum(values: list[int] | tuple[int, ...], limit: int) -> int:
@@ -481,8 +487,8 @@ def _power_metrics(
             degree=0,
             numerator_bits=1,
             denominator_bits=0,
-            work=base.work,
-            intermediate_digits=max(base.intermediate_digits, 2),
+            work=1,
+            intermediate_digits=2,
             common_denominator=1,
         )
     terms = _bounded_power(base.terms, exponent, MAX_POLYNOMIAL_TERMS)
@@ -834,23 +840,44 @@ def _admit_source_domain_claims(source: PolynomialExpressionSource) -> None:
     while stack:
         node = stack.pop()
         if isinstance(node, PolynomialLiteral):
-            if source.coefficient_domain == "ZZ" and node.value.den != 1:
+            denominator = getattr(getattr(node, "value", None), "den", None)
+            if denominator is None:
+                raise _invalid_expression_source(
+                    "LITERAL nodes require a num/den value"
+                )
+            if source.coefficient_domain == "ZZ" and denominator != 1:
                 raise OperationDomainValidationError(
                     location=("expression",),
                     code="polynomial.expression.nonintegral_literal",
                     message="ZZ expressions require integral literals",
                 )
         elif isinstance(node, PolynomialVariableExpression):
-            if node.name not in declared:
+            if getattr(node, "name", None) not in declared:
                 raise OperationDomainValidationError(
                     location=("expression",),
                     code="polynomial.expression.undeclared_variable",
                     message="every expression variable must belong to the declared axis",
                 )
         elif isinstance(node, (PolynomialAdd, PolynomialMultiply)):
-            stack.extend(node.operands)
+            operands = getattr(node, "operands", None)
+            if not isinstance(operands, (list, tuple)):
+                raise _invalid_expression_source(
+                    "ADD and MULTIPLY nodes require an operands sequence"
+                )
+            stack.extend(operands)
         elif isinstance(node, PolynomialPower):
-            stack.append(node.base)
+            base = getattr(node, "base", None)
+            if base is None:
+                raise _invalid_expression_source("POWER nodes require a base")
+            stack.append(base)
+
+
+def _invalid_expression_source(message: str) -> OperationDomainValidationError:
+    return OperationDomainValidationError(
+        location=("expression",),
+        code="polynomial.expression.invalid_source",
+        message=message,
+    )
 
 
 def normalize_polynomial_expression(  # noqa: C901

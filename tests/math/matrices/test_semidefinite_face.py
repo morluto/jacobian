@@ -18,7 +18,10 @@ from jacobian.math.matrices.semidefinite import (
     SemidefiniteFaceReduction,
     reduce_exposed_face,
 )
-from jacobian.math.matrices.semidefinite._models import SemidefiniteFaceReductionRequest
+from jacobian.math.matrices.semidefinite._models import (
+    _MAX_EQUALITIES,
+    SemidefiniteFaceReductionRequest,
+)
 from jacobian.math.matrices.values import RationalMatrix, rational_matrix_from_fractions
 
 
@@ -269,13 +272,13 @@ def test_raw_request_preflight_rejects_over_budget_cells() -> None:
 
 def test_raw_request_preflight_rejects_oversized_scalar_lists() -> None:
     zero = {"num": "0", "den": "1"}
-    with pytest.raises(ValidationError, match="8192-item"):
+    with pytest.raises(ValidationError, match=f"{_MAX_EQUALITIES}-item"):
         SemidefiniteFaceReductionRequest.model_validate(
             {
                 "system": {
                     "order": 1,
                     "matrices": [{"entries": [[zero]]}],
-                    "rhs": [zero] * 10_000,
+                    "rhs": [zero] * (_MAX_EQUALITIES + 1),
                 },
                 "multipliers": [zero],
             }

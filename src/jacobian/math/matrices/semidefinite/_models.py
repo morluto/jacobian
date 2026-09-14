@@ -108,7 +108,9 @@ def _scan_and_install_scalars(
     if not isinstance(value, Iterable):
         return digits
     if isinstance(value, (list, tuple)) and len(value) > _MAX_EQUALITIES:
-        raise ValueError("source equalities exceed the admitted 8192-item envelope")
+        raise ValueError(
+            f"source equalities exceed the admitted {_MAX_EQUALITIES}-item envelope"
+        )
     collected: list[object] = []
     extra = 0
     remaining = _MAX_SOURCE_DIGITS - digits
@@ -119,7 +121,8 @@ def _scan_and_install_scalars(
             if isinstance(value, (list, tuple)):
                 if len(collected) > _MAX_EQUALITIES:
                     raise ValueError(
-                        "source equalities exceed the admitted 8192-item envelope"
+                        "source equalities exceed the admitted "
+                        f"{_MAX_EQUALITIES}-item envelope"
                     )
                 raise ValueError(
                     "source rationals exceed the admitted aggregate digit envelope"

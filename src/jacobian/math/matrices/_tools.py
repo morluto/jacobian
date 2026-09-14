@@ -44,7 +44,10 @@ from jacobian.math.matrices.operations import (
     smith_normal_form_result,
     trace_result,
 )
-from jacobian.math.matrices.values import SmithNormalForm
+from jacobian.math.matrices.values import (
+    MAX_EXACT_LINEAR_MATRIX_AXIS,
+    SmithNormalForm,
+)
 
 
 def compute_determinant(request: MatrixDeterminantRequest) -> MatrixDeterminantResult:
@@ -410,7 +413,7 @@ TOOLS = (
     MathTool(
         operation_id="matrix.normal_form.rref.compute",
         title="Compute exact reduced row echelon form",
-        description="Compute the unique reduced row echelon form over QQ through 64 rows and columns, subject to scalar-work and result-height bounds.",
+        description=f"Compute the unique reduced row echelon form over QQ through {MAX_EXACT_LINEAR_MATRIX_AXIS} rows and columns, subject to scalar-work and result-height bounds.",
         request_type=RationalMatrixRequest,
         result_type=RrefResult,
         run=compute_rref,
@@ -530,7 +533,10 @@ TOOLS = (
         operation_id="matrix.normal_form.smith.compute",
         title="Compute an exact Smith normal form",
         description=(
-            "Compute the canonical diagonal Smith form over ZZ through 64 rows and columns, subject to scalar-work and result-height bounds, without claiming unavailable left or right transformations."
+            f"Compute the canonical diagonal Smith form over ZZ through "
+            f"{MAX_EXACT_LINEAR_MATRIX_AXIS} rows and columns, subject to "
+            "scalar-work and result-height bounds, without claiming unavailable "
+            "left or right transformations."
         ),
         request_type=IntegerMatrixRequest,
         result_type=SmithNormalForm,

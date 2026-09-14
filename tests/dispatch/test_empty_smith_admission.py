@@ -7,10 +7,23 @@ from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.dispatch import invoke_operation
 from jacobian.math.matrices.operations import smith_normal_form_result
-from jacobian.math.matrices.values import IntegerMatrix, integer_matrix_axis_schema
+from jacobian.math.matrices.values import (
+    MAX_EXACT_LINEAR_MATRIX_AXIS,
+    MAX_MATRIX_DIMENSION,
+    IntegerMatrix,
+    integer_matrix_axis_schema,
+)
 
 
-@pytest.mark.parametrize("shape", [(0, 33), (33, 0), (0, 64), (64, 0)])
+@pytest.mark.parametrize(
+    "shape",
+    [
+        (0, MAX_MATRIX_DIMENSION + 1),
+        (MAX_MATRIX_DIMENSION + 1, 0),
+        (0, MAX_EXACT_LINEAR_MATRIX_AXIS),
+        (MAX_EXACT_LINEAR_MATRIX_AXIS, 0),
+    ],
+)
 def test_empty_smith_at_admitted_boundary(shape: tuple[int, int]) -> None:
     rows, columns = shape
     matrix = IntegerMatrix(
@@ -28,17 +41,28 @@ def test_empty_smith_at_admitted_boundary(shape: tuple[int, int]) -> None:
     assert native.invariant_factors == ()
 
 
-@pytest.mark.parametrize("shape", [(0, 65), (65, 0)])
+@pytest.mark.parametrize(
+    "shape",
+    [
+        (0, MAX_EXACT_LINEAR_MATRIX_AXIS + 1),
+        (MAX_EXACT_LINEAR_MATRIX_AXIS + 1, 0),
+    ],
+)
 def test_empty_smith_rejects_excessive_axes(shape: tuple[int, int]) -> None:
     rows, columns = shape
     matrix = IntegerMatrix(
         row_count=rows, column_count=columns, entries=tuple(() for _ in range(rows))
     )
-    with pytest.raises(OperationDomainValidationError, match="64 rows and columns"):
+    with pytest.raises(
+        OperationDomainValidationError,
+        match=f"{MAX_EXACT_LINEAR_MATRIX_AXIS} rows and columns",
+    ):
         smith_normal_form_result(matrix)
 
 
-@pytest.mark.parametrize("maximum", [32, 64])
+@pytest.mark.parametrize(
+    "maximum", [MAX_MATRIX_DIMENSION, MAX_EXACT_LINEAR_MATRIX_AXIS]
+)
 @pytest.mark.parametrize("empty_rows", [False, True])
 def test_integer_schema_caps_explicit_axes(maximum: int, empty_rows: bool) -> None:
     validator = Draft202012Validator(integer_matrix_axis_schema(maximum))

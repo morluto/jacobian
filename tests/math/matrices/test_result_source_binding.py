@@ -139,11 +139,17 @@ def test_native_exact_linear_operations_reject_an_axis_above_the_flint_envelope(
 ):
     oversized = sympy.zeros(MAX_EXACT_LINEAR_MATRIX_AXIS + 1, 1)
 
-    with pytest.raises(ValueError, match="between 1 and 64"):
+    with pytest.raises(
+        ValueError, match=f"between 1 and {MAX_EXACT_LINEAR_MATRIX_AXIS}"
+    ):
         matrices.rank(oversized)
-    with pytest.raises(ValueError, match="between 1 and 64"):
+    with pytest.raises(
+        ValueError, match=f"between 1 and {MAX_EXACT_LINEAR_MATRIX_AXIS}"
+    ):
         matrices.rref(oversized)
-    with pytest.raises(ValueError, match="between 1 and 64"):
+    with pytest.raises(
+        ValueError, match=f"between 1 and {MAX_EXACT_LINEAR_MATRIX_AXIS}"
+    ):
         matrices.smith_normal_form(oversized)
 
 
@@ -506,9 +512,15 @@ def test_request_admission_rejects_matrices_above_the_computation_dimension() ->
     rref_request = RationalMatrixRequest(matrix=oversized)
     rank_request = MatrixRankRequest(matrix=oversized)
 
-    with pytest.raises(OperationDomainValidationError, match="64 rows and columns"):
+    with pytest.raises(
+        OperationDomainValidationError,
+        match=f"{MAX_EXACT_LINEAR_MATRIX_AXIS} rows and columns",
+    ):
         compute_rref(rref_request)
-    with pytest.raises(OperationDomainValidationError, match="64 rows and columns"):
+    with pytest.raises(
+        OperationDomainValidationError,
+        match=f"{MAX_EXACT_LINEAR_MATRIX_AXIS} rows and columns",
+    ):
         compute_rank(rank_request)
 
 
@@ -537,7 +549,10 @@ def test_exact_linear_requests_reject_an_axis_above_the_operation_envelope() -> 
         rank_result(matrix)
 
     assert excinfo.value.errors()[0]["type"] == "matrix.budget_exceeded"
-    assert "64 rows and columns" in excinfo.value.errors()[0]["msg"]
+    assert (
+        f"{MAX_EXACT_LINEAR_MATRIX_AXIS} rows and columns"
+        in excinfo.value.errors()[0]["msg"]
+    )
 
 
 def test_request_admission_keeps_the_boundary_computation_dimension() -> None:
@@ -651,7 +666,10 @@ def test_raw_preflight_keeps_exact_linear_and_determinant_axis_boundaries() -> N
             {"matrix": {"entries": wire_identity(MAX_EXACT_LINEAR_MATRIX_AXIS + 1)}}
         )
     )
-    with pytest.raises(OperationDomainValidationError, match="64 rows and columns"):
+    with pytest.raises(
+        OperationDomainValidationError,
+        match=f"{MAX_EXACT_LINEAR_MATRIX_AXIS} rows and columns",
+    ):
         compute_rank(rank_above_operation_axis)
 
     determinant_boundary = {

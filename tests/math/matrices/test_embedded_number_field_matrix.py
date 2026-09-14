@@ -23,7 +23,10 @@ from jacobian.math.matrices.analysis._tools import (
     compute_inertia as compute_inertia_wire,
 )
 from jacobian.math.matrices.analysis.operations import compute_inertia, verify_inertia
-from jacobian.math.matrices.values import EmbeddedRealSimpleNumberFieldMatrix
+from jacobian.math.matrices.values import (
+    MAX_MATRIX_DIMENSION,
+    EmbeddedRealSimpleNumberFieldMatrix,
+)
 from jacobian.math.number_theory.number_fields import (
     RealNumberFieldEmbedding,
     SimpleNumberFieldElement,
@@ -131,8 +134,8 @@ def test_raw_embedded_matrix_bounds_iterable_axes_before_nested_validation() -> 
     ):
         EmbeddedRealSimpleNumberFieldMatrix.model_validate(payload)
 
-    payload["entries"] = [[[]] for _ in range(33)]
-    with pytest.raises(ValidationError, match="at most 32 rows"):
+    payload["entries"] = [[[]] for _ in range(MAX_MATRIX_DIMENSION + 1)]
+    with pytest.raises(ValidationError, match=f"at most {MAX_MATRIX_DIMENSION} rows"):
         EmbeddedRealSimpleNumberFieldMatrix.model_validate(payload)
 
 

@@ -1,5 +1,15 @@
 """Deterministic generalized exact-cover continuation tests."""
 
+import time
+from threading import Event
+
+import pytest
+
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    request_cancellation,
+    request_execution,
+)
 from jacobian.math.combinatorics.exact_cover import (
     ExactCoverRow,
     GeneralizedExactCoverInstance,
@@ -94,3 +104,23 @@ def test_combine_rechecks_caller_authored_negative_results() -> None:
     )
     assert combined.status == "FOUND"
     assert combined.selected_row_ids == ("a",)
+
+
+def test_exact_cover_search_observes_cancellation_inside_the_kernel() -> None:
+    """A cancelled request must stop during node expansion, not after the search."""
+    instance = GeneralizedExactCoverInstance(
+        primary_items=("p",),
+        secondary_items=(),
+        rows=(
+            ExactCoverRow(row_id="a", items=("p",)),
+            ExactCoverRow(row_id="b", items=("p",)),
+        ),
+    )
+    cancellation = Event()
+    cancellation.set()
+    with (
+        request_execution(time.monotonic()),
+        request_cancellation(cancellation),
+        pytest.raises(OperationExecutionCancelledError, match="exact-cover search"),
+    ):
+        find_generalized_exact_cover(instance, search_node_limit=10_000)

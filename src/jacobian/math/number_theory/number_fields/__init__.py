@@ -9,12 +9,15 @@ if TYPE_CHECKING:
         BinaryPowerSumGapProfile,
         BinaryPowerSumValueBucket,
     )
+    from jacobian.math.number_theory.number_fields._ring_of_integers import (
+        NumberFieldRingOfIntegersResult,
+        ring_of_integers,
+    )
     from jacobian.math.number_theory.number_fields.operations import (
         binary_power_sum_gap_profile,
         compare_real_embedding_elements,
         discriminant,
         embeddings,
-        ring_of_integers,
         verify_binary_power_sum_gap_profile,
         verify_discriminant,
     )
@@ -37,6 +40,7 @@ __all__ = [
     "GaussianRational",
     "NumberFieldEmbeddingProfile",
     "NumberFieldRealValueEnclosure",
+    "NumberFieldRingOfIntegersResult",
     "RealNumberFieldEmbedding",
     "SimpleNumberFieldElement",
     "SimpleNumberFieldPresentation",
@@ -59,11 +63,13 @@ _OWNER_MODULES = {
     "GaussianRational": "values",
     "NumberFieldEmbeddingProfile": "values",
     "NumberFieldRealValueEnclosure": "values",
+    "NumberFieldRingOfIntegersResult": "_ring_of_integers",
     "RealNumberFieldEmbedding": "values",
     "SimpleNumberFieldElement": "values",
     "SimpleNumberFieldPresentation": "values",
     "SimpleNumberFieldRealEmbeddingBinding": "values",
     "SimpleNumberFieldRealEmbeddingOrder": "values",
+    "ring_of_integers": "_ring_of_integers",
 }
 
 

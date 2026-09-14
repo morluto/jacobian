@@ -171,6 +171,15 @@ class BracketPolynomial(StrictModel):
     ground_size: StrictInt = Field(ge=3, le=MAX_BRACKET_GROUND_SIZE)
     terms: tuple[BracketPolynomialTerm, ...] = Field(max_length=MAX_BRACKET_TERMS)
 
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        # Revalidate a nested polynomial so a model_construct instance with a
+        # missing or forged field cannot reach a relation validator as a raw
+        # AttributeError.
+        revalidate_instances="always",
+    )
+
     @model_validator(mode="after")
     def require_canonical_terms(self) -> Self:
         keys = tuple(
@@ -267,10 +276,6 @@ class GrassmannPlueckerRelation(StrictModel):
         return self
 
 
-class GrassmannPlueckerRelationResult(GrassmannPlueckerRelation):
-    """The canonical formal expression of one Grassmann-Pluecker relation."""
-
-
 class BracketSyzygyResidualRequest(StrictModel):
     """One target polynomial minus a finite combination of supplied relations."""
 
@@ -321,6 +326,5 @@ __all__ = [
     "CanonicalBracket",
     "GrassmannPlueckerRelation",
     "GrassmannPlueckerRelationRequest",
-    "GrassmannPlueckerRelationResult",
     "ordered_bracket",
 ]

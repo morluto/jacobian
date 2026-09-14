@@ -7,14 +7,14 @@ from jacobian.math.combinatorics.matroids.oriented import _bracket_kernel as nat
 from jacobian.math.combinatorics.matroids.oriented._bracket_models import (
     BracketPolynomial,
     BracketSyzygyResidualRequest,
+    GrassmannPlueckerRelation,
     GrassmannPlueckerRelationRequest,
-    GrassmannPlueckerRelationResult,
 )
 
 
 def _run_grassmann_pluecker(
     request: GrassmannPlueckerRelationRequest,
-) -> GrassmannPlueckerRelationResult:
+) -> GrassmannPlueckerRelation:
     return native.grassmann_pluecker_relation(
         request.ground_size,
         request.indices,
@@ -39,7 +39,7 @@ BRACKET_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
             "relation; it does not decide ideal membership or realizability."
         ),
         request_type=GrassmannPlueckerRelationRequest,
-        result_type=GrassmannPlueckerRelationResult,
+        result_type=GrassmannPlueckerRelation,
         run=_run_grassmann_pluecker,
         tags=("bracket", "pluecker", "formal", "exact"),
         examples=(

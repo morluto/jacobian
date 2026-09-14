@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 import random
 from fractions import Fraction
-from itertools import combinations, islice
+from itertools import combinations, islice, permutations
 from typing import cast
 
 import pytest
@@ -29,13 +29,12 @@ from jacobian.math.combinatorics.matroids.oriented._bracket_models import (
     BracketPolynomialTerm,
     CanonicalBracket,
     GrassmannPlueckerRelation,
-    GrassmannPlueckerRelationResult,
     ordered_bracket,
 )
 
 
 def _bracket_value(
-    result: GrassmannPlueckerRelationResult, columns: list[list[Fraction]]
+    result: GrassmannPlueckerRelation, columns: list[list[Fraction]]
 ) -> Fraction:
     """Evaluate the formal relation through literal 3xN determinants."""
 
@@ -171,7 +170,7 @@ def test_normalized_relation_agrees_with_the_permuted_presentation() -> None:
 def test_result_round_trips_through_strict_json() -> None:
     """The formal relation survives strict JSON serialization unchanged."""
     result = grassmann_pluecker_relation(6, (0, 1, 2, 3, 4, 5), "FOUR_TERM")
-    restored = GrassmannPlueckerRelationResult.model_validate_json(
+    restored = GrassmannPlueckerRelation.model_validate_json(
         encode_strict_json(result.model_dump(mode="json")), strict=True
     )
     assert restored == result
@@ -182,7 +181,7 @@ def test_result_rejects_serialized_relation_index_outside_ground() -> None:
     payload = result.model_dump(mode="json")
     payload["indices"] = [0, 1, 2, 3, 4, 6]
     with pytest.raises(ValidationError, match="relation_index_outside_ground"):
-        GrassmannPlueckerRelationResult.model_validate_json(
+        GrassmannPlueckerRelation.model_validate_json(
             encode_strict_json(payload), strict=True
         )
 
@@ -1213,3 +1212,116 @@ def test_syzygy_request_schema_publishes_assembled_factor_limit() -> None:
 
     schema = BracketSyzygyResidualRequest.model_json_schema()
     assert "4 distinct atoms" in schema["properties"]["terms"]["description"]
+
+
+def test_distinct_denominator_reduction_is_order_independent() -> None:
+    """Permuting distinct-denominator components cannot change admission.
+
+    Four exact components that sum to zero share enough denominator structure
+    that one reduction order crosses the canonical digit bound while another
+    reaches zero through an intermediate cancellation. Admission must depend
+    only on the component multiset, never on the caller's order.
+    """
+
+    shared = 10 ** (MAX_CANONICAL_INTEGER_DIGITS - 3)
+    components = [
+        (Fraction(num, den), (1, MAX_CANONICAL_INTEGER_DIGITS))
+        for num, den in (
+            (-179, 54 * shared),
+            (131, 315 * shared),
+            (536, 189 * shared),
+            (17, 270 * shared),
+        )
+    ]
+    assert sum((value for value, _ in components), Fraction(0)) == 0
+    totals = {
+        _bounded_component_sum(list(order))[0] for order in permutations(components)
+    }
+    assert totals == {Fraction(0)}
+
+
+def test_syzygy_distinct_denominator_admission_is_order_independent() -> None:
+    """The public operation admits the same zero residual in every term order."""
+
+    shared = 10 ** (MAX_CANONICAL_INTEGER_DIGITS - 3)
+    scalars = [
+        CanonicalRational(num=num, den=den)
+        for num, den in (
+            (-179, 54 * shared),
+            (131, 315 * shared),
+            (67, 189 * shared // 8),
+            (17, 270 * shared),
+        )
+    ]
+    relation = grassmann_pluecker_relation(
+        5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM"
+    )
+    target = BracketPolynomial(ground_size=5, terms=())
+    for order in ((0, 1, 2, 3), (0, 2, 1, 3), (3, 2, 1, 0)):
+        terms = tuple(
+            (scalars[index], BracketMonomial(factors=()), relation) for index in order
+        )
+        assert bracket_syzygy_residual(target, terms).terms == ()
+
+
+def test_syzygy_revalidates_incomplete_nested_relation_polynomial() -> None:
+    """A relation's nested polynomial without ``terms`` is a typed domain error.
+
+    ``BracketPolynomial`` is revalidated when it is nested in a relation, so a
+    ``model_construct`` instance that omits a required field cannot escalate
+    the relation validator's field access into a raw ``AttributeError``.
+    """
+
+    forged = GrassmannPlueckerRelation.model_construct(
+        ground_size=5,
+        indices=(0, 1, 2, 3, 4),
+        family="SHARED_INDEX_THREE_TERM",
+        polynomial=BracketPolynomial.model_construct(ground_size=5),
+    )
+    with pytest.raises(OperationDomainValidationError):
+        bracket_syzygy_residual(
+            BracketPolynomial(ground_size=5, terms=()),
+            ((CanonicalRational(num=1, den=1), BracketMonomial(factors=()), forged),),
+        )
+
+
+def test_syzygy_admits_each_source_relation_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Semantic relation admission is not replayed per active term."""
+
+    from jacobian.math.combinatorics.matroids.oriented import _bracket_kernel as kernel
+
+    relation = grassmann_pluecker_relation(
+        5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM"
+    )
+    original = kernel._admit_source_relation
+    calls: list[GrassmannPlueckerRelation] = []
+
+    def counting(candidate: GrassmannPlueckerRelation) -> GrassmannPlueckerRelation:
+        calls.append(candidate)
+        return original(candidate)
+
+    monkeypatch.setattr(kernel, "_admit_source_relation", counting)
+    bracket_syzygy_residual(
+        BracketPolynomial(ground_size=5, terms=()),
+        ((CanonicalRational(num=1, den=1), BracketMonomial(factors=()), relation),),
+    )
+    assert len(calls) == 1
+
+
+def test_relation_result_is_the_canonical_relation_type() -> None:
+    """The producer returns and registers the one source-bound relation type."""
+
+    from jacobian.math.combinatorics.matroids.oriented._bracket_tools import (
+        BRACKET_OPERATIONS,
+    )
+
+    result = grassmann_pluecker_relation(6, (0, 1, 2, 3, 4, 5), "FOUR_TERM")
+    assert type(result) is GrassmannPlueckerRelation
+    relation_tool = next(
+        tool
+        for tool in BRACKET_OPERATIONS
+        if tool.operation_id.endswith("grassmann_pluecker_relation.rank3.compute")
+    )
+    assert relation_tool.result_type is GrassmannPlueckerRelation

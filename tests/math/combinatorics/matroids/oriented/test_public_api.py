@@ -19,7 +19,6 @@ def test_public_api_exports_bracket_operations_and_values() -> None:
         "BracketPolynomialTerm",
         "CanonicalBracket",
         "GrassmannPlueckerRelation",
-        "GrassmannPlueckerRelationResult",
         "bracket_syzygy_residual",
         "check_chirotope",
         "grassmann_pluecker_relation",

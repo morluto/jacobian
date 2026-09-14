@@ -6,7 +6,6 @@ from jacobian.math.combinatorics.matroids.oriented._bracket_models import (
     BracketPolynomialTerm,
     CanonicalBracket,
     GrassmannPlueckerRelation,
-    GrassmannPlueckerRelationResult,
     ordered_bracket,
 )
 from jacobian.math.combinatorics.matroids.oriented.operations import (
@@ -22,7 +21,6 @@ __all__ = [
     "BracketPolynomialTerm",
     "CanonicalBracket",
     "GrassmannPlueckerRelation",
-    "GrassmannPlueckerRelationResult",
     "bracket_syzygy_residual",
     "check_chirotope",
     "grassmann_pluecker_relation",

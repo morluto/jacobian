@@ -28,7 +28,6 @@ from jacobian.math.combinatorics.matroids.oriented._bracket_models import (
     BracketPolynomialTerm,
     CanonicalBracket,
     GrassmannPlueckerRelation,
-    GrassmannPlueckerRelationResult,
     ordered_bracket,
 )
 
@@ -407,12 +406,27 @@ def _bounded_component_sum(
     for value, widths in pending:
         denominator = value.denominator
         grouped[denominator] = grouped.get(denominator, Fraction(0)) + value
-        grouped_widths[denominator] = widths
-    pending = [
-        (value, grouped_widths[denominator])
-        for denominator, value in grouped.items()
-        if value != 0
-    ]
+        retained = grouped_widths.get(denominator)
+        if retained is None:
+            grouped_widths[denominator] = widths
+        else:
+            grouped_widths[denominator] = (
+                max(retained[0], widths[0]),
+                max(retained[1], widths[1]),
+            )
+    # Reduce distinct denominators in a canonical order. Successive reduced
+    # denominators depend on the reduction order, so caller order would let a
+    # permutation of the same terms change acceptance; ascending denominators
+    # keeps the LCM growth minimal and makes admission a function of the
+    # component multiset alone.
+    pending = sorted(
+        (
+            (value, grouped_widths[denominator])
+            for denominator, value in grouped.items()
+            if value != 0
+        ),
+        key=lambda component: (component[0].denominator, component[0].numerator),
+    )
     total = Fraction(0)
     work_digit_bound = 0
     denominator_lcm = 1
@@ -664,17 +678,13 @@ def _admit_residual_envelope(
 
     terms = _require_syzygy_terms(target, terms)
 
+    # ``_require_syzygy_terms`` already admitted every authored relation and
+    # returned the canonical copies, so filter those copies directly instead of
+    # replaying semantic admission for each active term.
     active_terms = tuple(
         (scalar, multiplier, relation)
         for scalar, multiplier, relation in terms
         if scalar.num != 0
-    )
-    # Admit every authored relation before reading its polynomial, so a forged
-    # carrier cannot leak an AttributeError from the contribution count below,
-    # and retain the validated copy for all later field access.
-    active_terms = tuple(
-        (scalar, multiplier, _admit_source_relation(relation))
-        for scalar, multiplier, relation in active_terms
     )
     contribution_count = len(target.terms) + sum(
         len(relation.polynomial.terms) for _, _, relation in active_terms
@@ -758,12 +768,12 @@ def grassmann_pluecker_relation(
     ground_size: int,
     indices: tuple[int, ...],
     family: Literal["FOUR_TERM", "SHARED_INDEX_THREE_TERM"],
-) -> GrassmannPlueckerRelationResult:
+) -> GrassmannPlueckerRelation:
     """Return the canonical formal expression of one GP relation."""
 
     _require_grassmann_pluecker_relation(ground_size, indices, family)
     polynomial = _relation_polynomial(ground_size, indices, family)
-    return GrassmannPlueckerRelationResult(
+    return GrassmannPlueckerRelation(
         ground_size=ground_size,
         indices=indices,
         family=family,

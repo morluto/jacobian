@@ -99,10 +99,11 @@ def _maximum_coefficient_digits(
                 for a, b in zip(left_term.exponents, right_term.exponents, strict=True)
             )
             # Accumulate the exact signed pair coefficient and bound the
-            # reduced running group after every addition.  Checking the reduced
-            # sum (rather than the pre-reduction merged denominator) keeps a
-            # collision whose intermediate LCM reduces below the cap admissible
-            # while a group of unrelated denominators cannot grow unbounded.
+            # reduced running group after every addition.  The denominator is
+            # held to the canonical envelope so a group of unrelated
+            # denominators cannot grow unbounded, while the numerator is given
+            # a transient allowance: a later contribution in the same group can
+            # cancel it, so a temporary overshoot is not yet an output bound.
             pair = Fraction(
                 left_coefficient.num * right_term.coefficient.num,
                 left_coefficient.den * right_term.coefficient.den,
@@ -110,11 +111,8 @@ def _maximum_coefficient_digits(
             current = groups.get(exponent)
             result = pair if current is None else current + pair
             if (
-                max(
-                    _integer_digits(result.numerator),
-                    _integer_digits(result.denominator),
-                )
-                > MAX_CANONICAL_RATIONAL_DIGITS
+                _integer_digits(result.denominator) > MAX_CANONICAL_RATIONAL_DIGITS
+                or _integer_digits(result.numerator) > 2 * MAX_CANONICAL_RATIONAL_DIGITS
             ):
                 return MAX_CANONICAL_RATIONAL_DIGITS + 1, groups
             groups[exponent] = result

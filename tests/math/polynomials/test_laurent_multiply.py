@@ -563,3 +563,31 @@ def test_collision_group_growth_is_bounded_before_materialization() -> None:
     with pytest.raises(OperationResourceAdmissionError, match="coefficient"):
         rational_laurent_multiply(left, right)
     assert time.monotonic() - started < 2.0
+
+
+def test_transient_collision_overflow_can_cancel_in_a_later_term() -> None:
+    """A group's intermediate overshoot is not yet a final output bound."""
+    tall = 4 * 10 ** (MAX_CANONICAL_RATIONAL_DIGITS - 1)
+    left = RationalLaurentPolynomial(
+        variables=("x",),
+        terms=(
+            _rational_term(-2, 1, 2),
+            _rational_term(-2, 1, 1),
+            _rational_term(-2, 1, 0),
+        ),
+    )
+    right = RationalLaurentPolynomial(
+        variables=("x",),
+        terms=(
+            _rational_term(-tall, 1, 2),
+            _rational_term(2 * tall, 1, 1),
+            _rational_term(-tall, 1, 0),
+        ),
+    )
+    product = rational_laurent_multiply(left, right)
+    assert [item.exponents for item in product.terms] == [
+        (4,),
+        (3,),
+        (1,),
+        (0,),
+    ]

@@ -133,17 +133,25 @@ def test_ssyt_bound_is_tight_at_the_exact_digit_boundary() -> None:
     """The leading-bit log10 lower bound keeps an exactly-32,768-digit count."""
     import sys
 
+    previous_limit = sys.get_int_max_str_digits()
     sys.set_int_max_str_digits(200_000)
-    partition = IntegerPartition(parts=(500,))
-    alphabet_size = 154_750 * 2**208
-    alphabet_digits = _upper_decimal_digits(alphabet_size)
-    assert _ssyt_count_digit_bound(partition, alphabet_size, alphabet_digits) == 32_768
-    result = semistandard_young_tableaux_count(
-        SemistandardYoungTableauCountRequest(
-            partition=partition, alphabet_size=alphabet_size
+    try:
+        partition = IntegerPartition(parts=(500,))
+        alphabet_size = 154_750 * 2**208
+        alphabet_digits = _upper_decimal_digits(alphabet_size)
+        assert (
+            _ssyt_count_digit_bound(partition, alphabet_size, alphabet_digits) == 32_768
         )
-    )
-    assert result.count == math.comb(alphabet_size + 499, 500)
+        result = semistandard_young_tableaux_count(
+            SemistandardYoungTableauCountRequest(
+                partition=partition, alphabet_size=alphabet_size
+            )
+        )
+        assert result.count == math.comb(alphabet_size + 499, 500)
+    finally:
+        # The limit is process-global; restore it so later tests in the same
+        # worker observe the configured value.
+        sys.set_int_max_str_digits(previous_limit)
 
 
 def test_ssyt_count_rejects_a_non_carrier_partition() -> None:

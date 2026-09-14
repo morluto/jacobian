@@ -41,8 +41,6 @@ class _Admission(NamedTuple):
     state_bound: int
     transition_work: int
     predecessor_allocation: int
-    result_digits: int
-    result_allocation: int
 
 
 def _state_bound(arity: int) -> int:
@@ -126,9 +124,6 @@ def _require_admission(digit_set: KempnerDigitSet, arity: int) -> _Admission:
     # A predecessor stores a state, two source digits, and a pointer.  This is
     # deliberately charged before BFS; the kernel never grows past the charge.
     predecessor_allocation = state_bound * (8 * (arity + 4) + 24)
-    witness_digit_bound = state_bound
-    result_digits = ceil(witness_digit_bound * log10(base)) + 1
-    result_allocation = arity * (result_digits + 24) + 256
     if state_bound > MAX_CARRY_GRAPH_STATES:
         raise OperationResourceAdmissionError(
             location=("arity",),
@@ -150,21 +145,10 @@ def _require_admission(digit_set: KempnerDigitSet, arity: int) -> _Admission:
             code="number_theory.kempner_progression.predecessors",
             message="the derived predecessor storage exceeds the admitted budget",
         )
-    if (
-        result_digits > MAX_KEMPNER_INTEGER_DIGITS
-        or result_allocation > MAX_CARRY_RESULT_ALLOCATION
-    ):
-        raise OperationResourceAdmissionError(
-            location=("arity",),
-            code="number_theory.kempner_progression.result_size",
-            message="the derived exact witness output exceeds the admitted budget",
-        )
     return _Admission(
         state_bound=state_bound,
         transition_work=transition_work,
         predecessor_allocation=predecessor_allocation,
-        result_digits=result_digits,
-        result_allocation=result_allocation,
     )
 
 
@@ -211,7 +195,7 @@ def _reconstruct(
     predecessors: dict[_State, tuple[_State | None, int, int]],
     *,
     base: int,
-) -> tuple[int, int]:
+) -> tuple[int, int, int]:
     digits: list[tuple[int, int]] = []
     state = terminal
     while True:
@@ -223,7 +207,10 @@ def _reconstruct(
     digits.reverse()
     first = sum(x * base**position for position, (x, _) in enumerate(digits))
     difference = sum(y * base**position for position, (_, y) in enumerate(digits))
-    return first, difference
+    # The source-reachable predecessor path fixes the actual witness width: the
+    # BFS accepts at the shallowest depth, so its digit count bounds the output
+    # far below the worst-case state count.
+    return first, difference, len(digits)
 
 
 def decide_kempner_arithmetic_progression(
@@ -315,7 +302,18 @@ def decide_kempner_arithmetic_progression(
             arity=arity,
             conclusion=KempnerProgressionFree(status="PROGRESSION_FREE"),
         )
-    first, difference = _reconstruct(terminal, predecessors, base=base)
+    first, difference, witness_depth = _reconstruct(terminal, predecessors, base=base)
+    witness_digits = ceil(witness_depth * log10(base)) + 1
+    result_allocation = arity * (witness_digits + 24) + 256
+    if (
+        witness_digits > MAX_KEMPNER_INTEGER_DIGITS
+        or result_allocation > MAX_CARRY_RESULT_ALLOCATION
+    ):
+        raise OperationResourceAdmissionError(
+            location=("arity",),
+            code="number_theory.kempner_progression.result_size",
+            message="the derived exact witness output exceeds the admitted budget",
+        )
     values = tuple(first + index * difference for index in range(arity))
     if first < 1 or difference < 1 or values[-1] != first + (arity - 1) * difference:
         raise RuntimeError("Kempner BFS produced an invalid progression witness")

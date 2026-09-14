@@ -345,3 +345,17 @@ def test_digit_level_progression_is_presolved_before_graph_admission() -> None:
     )
     assert isinstance(result.conclusion, KempnerContainsProgression)
     assert result.conclusion.values == (1, 2, 3, 4, 5, 6)
+
+
+def test_source_reachable_witness_bound_admits_two_digit_family() -> None:
+    """A two-column witness is admitted without charging the full state count."""
+    digit_set = KempnerDigitSet(base=5, allowed_digits=(1, 2, 3))
+    result = decide_kempner_arithmetic_progression(digit_set, 4)
+
+    assert result.status == "CONTAINS_PROGRESSION"
+    assert result.first_term == 1
+    assert result.common_difference == 5
+    assert result.values == (1, 6, 11, 16)
+    independent = _finite_witness(5, (1, 2, 3), 4, 16)
+    assert independent is not None
+    assert result.values == independent[2]

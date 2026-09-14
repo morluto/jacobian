@@ -14,6 +14,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.number_theory._kempner_models import (
+    MAX_ALLOWED_DIGITS,
     MAX_KEMPNER_ARITY,
     MAX_KEMPNER_BASE,
     MAX_KEMPNER_INTEGER_DIGITS,
@@ -69,6 +70,7 @@ def _require_canonical_digit_set(digit_set: KempnerDigitSet) -> None:
         or not 2 <= digit_set.base <= MAX_KEMPNER_BASE
         or not isinstance(digit_set.allowed_digits, tuple)
         or not digit_set.allowed_digits
+        or len(digit_set.allowed_digits) > MAX_ALLOWED_DIGITS
         or any(
             not isinstance(digit, int)
             or isinstance(digit, bool)

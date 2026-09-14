@@ -8,7 +8,10 @@ import pytest
 from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.number_theory._kempner_models import (
     _KEMPNER_ARITY_PATTERN,
     _KEMPNER_BASE_PATTERN,
@@ -359,3 +362,17 @@ def test_source_reachable_witness_bound_admits_two_digit_family() -> None:
     independent = _finite_witness(5, (1, 2, 3), 4, 16)
     assert independent is not None
     assert result.values == independent[2]
+
+
+def test_oversized_constructed_digit_set_is_rejected_before_scanning() -> None:
+    """A forged oversized digit tuple is rejected by length before inspection."""
+
+    class _NoIterTuple(tuple):
+        def __iter__(self):
+            raise AssertionError("oversized digit set was scanned")
+
+    digit_set = KempnerDigitSet.model_construct(
+        base=64, allowed_digits=_NoIterTuple((0,) * 64)
+    )
+    with pytest.raises(OperationDomainValidationError):
+        decide_kempner_arithmetic_progression(digit_set, 3)

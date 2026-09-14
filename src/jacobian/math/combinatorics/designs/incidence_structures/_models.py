@@ -254,21 +254,31 @@ class SteinerTripleSystemShard(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_prefix(self) -> Self:
-        if self.order % 6 not in (1, 3):
+        # getattr keeps a forged instance (union member revalidation runs this
+        # validator on model_construct values) a typed shape failure instead
+        # of a raw AttributeError.
+        order = getattr(self, "order", None)
+        triples = getattr(self, "fixed_triples", None)
+        if type(order) is not int or type(triples) is not tuple:
+            raise _validation_error(
+                "steiner_shard_shape",
+                "continuation shards must carry an order and a triple family",
+            )
+        if order % 6 not in (1, 3):
             raise _validation_error(
                 "steiner_order_necessary_condition",
                 "a Steiner triple system requires order congruent to 1 or 3 modulo 6",
             )
-        if len(self.fixed_triples) > self.order * (self.order - 1) // 6:
+        if len(triples) > order * (order - 1) // 6:
             raise _validation_error(
                 "steiner_shard_length",
                 "a continuation prefix cannot contain more triples than the design",
             )
         if any(
             triple != tuple(sorted(triple))
-            or any(point < 0 or point >= self.order for point in triple)
+            or any(point < 0 or point >= order for point in triple)
             or len(set(triple)) != 3
-            for triple in self.fixed_triples
+            for triple in triples
         ):
             raise _validation_error(
                 "steiner_shard_triple",
@@ -303,8 +313,38 @@ class SteinerTripleSystemNotFound(StrictModel):
     )
 
 
-def _canonical_shard_family_key(shard: object) -> tuple[Any, ...] | None:
-    """Return the canonical frontier key for an instance or wire shard dict.
+def _revalidate_shard_instance(shard: SteinerTripleSystemShard) -> SteinerTripleSystemShard:
+    """Rebuild a possibly forged shard instance through owned validators.
+
+    Pydantic trusts existing model instances during nested validation, so a
+    ``model_construct`` value can carry missing fields, an oversized family,
+    or out-of-range triples past field checks. A validated instance always
+    carries canonical tuples, so a non-tuple family already proves forgery;
+    exact-type and length pre-checks then bound the traversal before
+    ``model_validate`` replays semantic admission with typed errors.
+    """
+
+    raw_order = getattr(shard, "order", None)
+    raw_triples = getattr(shard, "fixed_triples", None)
+    if type(raw_order) is not int or type(raw_triples) is not tuple:
+        raise _validation_error(
+            "steiner_shard_shape",
+            "frontier shards must carry an order and a canonical triple family",
+        )
+    if len(raw_triples) > MAX_STEINER_BLOCKS:
+        raise _validation_error(
+            "steiner_shard_length",
+            "a continuation prefix cannot contain more triples than the design",
+        )
+    return SteinerTripleSystemShard.model_validate(
+        {"order": raw_order, "fixed_triples": raw_triples}
+    )
+
+
+def _canonical_shard_family_key(
+    shard: object,
+) -> tuple[tuple[Any, ...], Any] | None:
+    """Return the canonical frontier key and the value to retain for a shard.
 
     A validated ``SteinerTripleSystemShard`` exposes its canonical fields
     directly.  A Pydantic wire payload supplies each shard as a plain dict, so
@@ -314,22 +354,11 @@ def _canonical_shard_family_key(shard: object) -> tuple[Any, ...] | None:
     """
 
     if isinstance(shard, SteinerTripleSystemShard):
-        # A model_construct instance can carry unhashable or oversized fields,
-        # so bound and type-check them before they enter a dictionary key.
-        order = getattr(shard, "order", None)
-        if type(order) is not int:
-            return None
-        raw = getattr(shard, "fixed_triples", None)
-        if type(raw) is not tuple or len(raw) > MAX_STEINER_BLOCKS:
-            return None
-        instance_triples: list[tuple[int, int, int]] = []
-        for triple in raw:
-            if type(triple) is not tuple or len(triple) != 3:
-                return None
-            if any(type(point) is not int for point in triple):
-                return None
-            instance_triples.append((triple[0], triple[1], triple[2]))
-        return (order, tuple(sorted(instance_triples)))
+        # Pydantic trusts existing instances, so a forged value would keep its
+        # unvalidated semantics here. Rebuild it through the owned validators
+        # and retain the canonical copy.
+        validated = _revalidate_shard_instance(shard)
+        return ((validated.order, validated.fixed_triples), validated)
     if not isinstance(shard, dict):
         return None
     if set(shard) - {"order", "fixed_triples"}:
@@ -347,7 +376,7 @@ def _canonical_shard_family_key(shard: object) -> tuple[Any, ...] | None:
         if any(type(point) is not int for point in triple):
             return None
         triples.append((triple[0], triple[1], triple[2]))
-    return (order, tuple(sorted(triples)))
+    return ((order, tuple(sorted(triples))), shard)
 
 
 class SteinerTripleSystemUnknown(StrictModel):
@@ -396,8 +425,8 @@ class SteinerTripleSystemUnknown(StrictModel):
             return data
         canonical: dict[tuple[Any, ...], Any] = {}
         for shard in frontier:
-            key = _canonical_shard_family_key(shard)
-            if key is None:
+            keyed = _canonical_shard_family_key(shard)
+            if keyed is None:
                 if isinstance(shard, SteinerTripleSystemShard):
                     # Pydantic trusts an existing instance, so a forged shard
                     # must be rejected here rather than passed through.
@@ -409,7 +438,8 @@ class SteinerTripleSystemUnknown(StrictModel):
                 # A malformed wire shard must reach strict field validation
                 # unchanged so it is reported, not silently merged.
                 return data
-            canonical.setdefault(key, shard)
+            key, retain = keyed
+            canonical.setdefault(key, retain)
         payload = dict(data)
         payload["unresolved_frontier"] = tuple(
             canonical[key] for key in sorted(canonical)
@@ -456,11 +486,20 @@ class SteinerTripleSystemResult(StrictModel):
         if isinstance(outcome, SteinerTripleSystemUnknown):
             _require_steiner_frontier_order(self.order, outcome.unresolved_frontier)
         source_shard = outcome.source_shard
-        if source_shard is not None and source_shard.order != self.order:
-            raise _validation_error(
-                "steiner_source_shard_order",
-                "a searched source shard must have the result order",
+        if source_shard is not None:
+            # Pydantic trusts existing instances, so a forged shard would
+            # expose missing fields as raw AttributeError here. Rebuild it
+            # through the owned validators before reading its order.
+            validated_source = (
+                _revalidate_shard_instance(source_shard)
+                if isinstance(source_shard, SteinerTripleSystemShard)
+                else SteinerTripleSystemShard.model_validate(source_shard)
             )
+            if validated_source.order != self.order:
+                raise _validation_error(
+                    "steiner_source_shard_order",
+                    "a searched source shard must have the result order",
+                )
         return self
 
 
@@ -492,6 +531,16 @@ def _require_computed_steiner_design(order: int, design: IncidenceStructure) -> 
             "steiner_block_size",
             "every Steiner block must contain exactly 3 points",
         )
+    point_set = set(design.points)
+    if any(
+        type(point) is not str or point not in point_set
+        for block in design.blocks
+        for point in block
+    ):
+        raise _validation_error(
+            "steiner_design_undeclared_member",
+            "every computed block member must be a declared point",
+        )
     point_index = {point: index for index, point in enumerate(expected_points)}
     block_indices = tuple(
         tuple(point_index[point] for point in block) for block in design.blocks
@@ -506,7 +555,9 @@ def _require_computed_steiner_design(order: int, design: IncidenceStructure) -> 
 def _require_steiner_frontier_order(
     order: int, frontier: tuple[SteinerTripleSystemShard, ...]
 ) -> None:
-    if any(shard.order != order for shard in frontier):
+    # getattr keeps a forged instance (or mapping) a typed order mismatch
+    # instead of a raw AttributeError.
+    if any(getattr(shard, "order", None) != order for shard in frontier):
         raise _validation_error(
             "steiner_frontier_order",
             "every frontier shard must have the result order",

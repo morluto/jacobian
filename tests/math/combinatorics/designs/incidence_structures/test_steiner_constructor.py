@@ -146,6 +146,40 @@ def test_native_continuation_revalidates_a_forged_shard() -> None:
         construct_steiner_triple_system(7, 100, forged)
 
 
+def test_computed_result_rejects_forged_undeclared_members() -> None:
+    forged_design = IncidenceStructure.model_construct(
+        points=("p0", "p1", "p2", "p3", "p4", "p5", "p6"),
+        block_ids=tuple(f"b{index}" for index in range(7)),
+        blocks=(("p0", "p1", "ghost"),) + (("p0", "p1", "p2"),) * 6,
+    )
+    wrapped = ComputedSteinerTripleSystem.model_construct(design=forged_design)
+    with pytest.raises(ValidationError, match="declared point") as exc_info:
+        SteinerTripleSystemResult(order=7, outcome=wrapped)
+    assert exc_info.value.errors()[0]["type"] == (
+        "incidence_structure.steiner_design_undeclared_member"
+    )
+
+
+def test_wire_result_rejects_forged_frontier_shard() -> None:
+    forged = SteinerTripleSystemShard.model_construct(
+        order=7, fixed_triples=((0, 99, 100),)
+    )
+    with pytest.raises(ValidationError, match="in range"):
+        SteinerTripleSystemUnknown(
+            states_explored=1,
+            unresolved_frontier=(forged,),
+        )
+
+
+def test_wire_result_rejects_sourceless_source_shard() -> None:
+    forged = SteinerTripleSystemShard.model_construct(fixed_triples=())
+    with pytest.raises(ValidationError):
+        SteinerTripleSystemResult(
+            order=7,
+            outcome=SteinerTripleSystemNotFound(source_shard=forged),
+        )
+
+
 def test_necessary_parameter_condition_rejects_order() -> None:
     with pytest.raises(ValidationError, match="congruent to 1 or 3"):
         SteinerTripleSystemRequest(order=5, search_budget=100)

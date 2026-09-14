@@ -1,6 +1,7 @@
 """Typed polynomial expression normalization tests."""
 
 import time
+from collections.abc import Iterator, Mapping
 from fractions import Fraction
 from math import comb, gcd, prod
 from typing import Any
@@ -1202,6 +1203,8 @@ def test_noncolliding_product_charges_no_denominator_scaling() -> None:
     )
     result = normalize_polynomial_expression(request)
     assert len(result.polynomial.polynomial.terms) == 4
+
+
 def test_expression_result_round_trips_and_is_canonical() -> None:
     request = _request(
         "QQ",
@@ -1335,6 +1338,105 @@ def test_forged_negative_exponent_is_rejected_before_metrics() -> None:
     with pytest.raises(OperationDomainValidationError) as error:
         normalize_polynomial_expression(source)
     assert error.value.errors()[0]["type"] == "polynomial.expression.invalid_source"
+
+
+def test_forged_power_exponent_above_the_grammar_bound_is_rejected() -> None:
+    """A forged ``exponent=33`` violates the per-node maximum of 32."""
+
+    forged = PolynomialPower.model_construct(
+        kind="POWER",
+        base=PolynomialVariableExpression(name="x"),
+        exponent=33,
+    )
+    source = PolynomialExpressionSource.model_construct(
+        coefficient_domain="QQ",
+        variables=("x",),
+        expression=forged,
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        normalize_polynomial_expression(source)
+    assert error.value.errors()[0]["type"] == "polynomial.expression.invalid_source"
+
+
+@pytest.mark.parametrize("exponent", ["2", 2.0, 3.5, True, None])
+def test_forged_non_integer_power_exponent_is_a_typed_domain_error(
+    exponent: object,
+) -> None:
+    """A forged non-integer exponent is a domain error, not a ``TypeError``."""
+
+    forged = PolynomialPower.model_construct(
+        kind="POWER",
+        base=PolynomialVariableExpression(name="x"),
+        exponent=exponent,
+    )
+    source = PolynomialExpressionSource.model_construct(
+        coefficient_domain="QQ",
+        variables=("x",),
+        expression=forged,
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        normalize_polynomial_expression(source)
+    assert error.value.errors()[0]["type"] == "polynomial.expression.invalid_source"
+
+
+class _ExplodingList(list[int]):
+    """A nested axis member that fails if canonicalization ever iterates it."""
+
+    def __iter__(self) -> Iterator[int]:
+        raise RuntimeError("nested variable container was copied")
+
+
+def test_nested_variable_member_is_rejected_before_copying() -> None:
+    """One axis member that is itself a container is rejected pre-copy."""
+
+    payload = {
+        "coefficient_domain": "QQ",
+        "variables": [_ExplodingList()],
+        "expression": {"kind": "LITERAL", "value": {"num": 1, "den": 1}},
+    }
+    started = time.monotonic()
+    with pytest.raises(ValidationError):
+        PolynomialExpressionNormalizeRequest.model_validate(payload)
+    assert time.monotonic() - started < 1.0
+
+
+class _HugeKeyMapping(Mapping[str, object]):
+    """Lazy mapping whose iteration fails rather than materializing keys."""
+
+    def __init__(self, items: dict[str, object]) -> None:
+        self._items = items
+        self.iterated = 0
+
+    def __getitem__(self, key: str) -> object:
+        return self._items[key]
+
+    def __iter__(self) -> Iterator[str]:
+        for key in self._items:
+            self.iterated += 1
+            yield key
+        while True:
+            self.iterated += 1
+            yield f"extra_{self.iterated}"
+
+    def __len__(self) -> int:
+        return 10**9
+
+
+def test_many_unexpected_request_keys_are_rejected_early() -> None:
+    """Millions of unexpected top-level keys are rejected without copying them."""
+
+    mapping = _HugeKeyMapping(
+        {
+            "coefficient_domain": "QQ",
+            "variables": ["x"],
+            "expression": {"kind": "LITERAL", "value": {"num": 1, "den": 1}},
+        }
+    )
+    started = time.monotonic()
+    with pytest.raises(ValidationError):
+        PolynomialExpressionNormalizeRequest.model_validate(mapping)
+    assert mapping.iterated <= 8
+    assert time.monotonic() - started < 1.0
 
 
 def test_oversized_literal_is_a_typed_resource_rejection() -> None:
@@ -1641,5 +1743,3 @@ def test_forged_empty_operands_are_a_typed_domain_error() -> None:
         assert error.value.errors()[0]["type"] == (
             "polynomial.expression.invalid_source"
         )
-
-

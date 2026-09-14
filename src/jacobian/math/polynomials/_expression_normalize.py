@@ -270,13 +270,9 @@ def _bound_raw_request(value: Mapping[str, object]) -> None:
     # Iterate keys instead of materializing a set, and reject the first
     # unexpected key or any surplus key, so a request with millions of extra
     # fields never allocates a sorted copy of them.
-    seen = 0
-    for key in value:
-        seen += 1
-        if seen > len(allowed):
-            raise ValueError(
-                "expression requests may not carry unexpected fields"
-            )
+    for index, key in enumerate(value):
+        if index >= len(allowed):
+            raise ValueError("expression requests may not carry unexpected fields")
         if key not in allowed:
             raise ValueError(
                 f"expression requests may not carry the unexpected field {key!r}"

@@ -110,8 +110,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "Admission additionally proves the"
             "defining-polynomial discriminant factors within a bounded trial "
             "envelope (remaining cofactor at most 4096 digits and one, prime, "
-            "or a prime power), so the exact backend completes instead of "
-            "timing out."
+            "or a prime power) and that the proved Round 2 order-enlargement "
+            "work fits a fixed step envelope, so the exact backend completes "
+            "instead of timing out."
         ),
         request_type=NumberFieldRingOfIntegersRequest,
         result_type=NumberFieldRingOfIntegersResult,
@@ -143,7 +144,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             f"bound, and its monicized discriminant must not exceed "
             f"{MAX_NUMBER_FIELD_DISCRIMINANT_DIGITS} digits and must factor "
             "with a cofactor of at most 4096 digits that is one, prime, or a "
-            "prime power. Worker non-completion raises an execution error "
+            "prime power, with proved Round 2 enlargement work inside a fixed "
+            "step envelope. Worker non-completion raises an execution error "
             "without a discriminant claim."
         ),
         request_type=NumberFieldRequest,

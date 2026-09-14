@@ -198,6 +198,94 @@ def test_semiprime_discriminant_is_rejected_before_backend_expansion() -> None:
     )
 
 
+def _deep_index_coefficients(degree: int) -> tuple[int, ...]:
+    """Coefficients of ``x^n + 2*3**534`` (irreducible, deep 3-adic index)."""
+
+    return (1, *((0,) * (degree - 1)), 2 * 3**534)
+
+
+def test_deep_enlargement_work_is_rejected_before_round_two() -> None:
+    """A huge square-part exponent rejects fast instead of burning the lease.
+
+    ``x^20 + 2*3**534`` passes factorization admission (every prime factor is
+    small) but its discriminant carries ``3**(534*19)``, so Round 2 would need
+    thousands of sequential p-adic enlargements past the 60-second worker
+    lease. Admission must prove that from the factorization and raise the
+    typed resource error in milliseconds, not after a timeout.
+    """
+
+    field = SimpleNumberFieldPresentation(
+        coefficients_descending=_deep_index_coefficients(20)
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        require_factorizable_discriminant(field)
+    assert error.value.errors()[0]["type"] == (
+        "number_field.ring_of_integers_round_two_work_bound"
+    )
+
+
+def test_deep_enlargement_rejection_propagates_through_the_worker() -> None:
+    """The enlargement bound is enforced inside the killable worker.
+
+    The same field through the public native entry point must raise the typed
+    resource error (not a timeout) well inside the worker lease.
+    """
+
+    import time
+
+    field = SimpleNumberFieldPresentation(
+        coefficients_descending=_deep_index_coefficients(20)
+    )
+    started = time.monotonic()
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        ring_of_integers(field)
+    assert error.value.errors()[0]["type"] == (
+        "number_field.ring_of_integers_round_two_work_bound"
+    )
+    assert time.monotonic() - started < 30
+
+
+def test_enlargement_units_separate_the_motivating_degrees() -> None:
+    """The fixed envelope admits n=10 and rejects n=20 of the deep family."""
+
+    import sympy
+
+    for degree, admitted in ((10, True), (20, False)):
+        polynomial = sympy.Poly.from_list(
+            list(_deep_index_coefficients(degree)),
+            gens=sympy.Symbol("alpha"),
+            domain=sympy.ZZ,
+        )
+        discriminant = int(polynomial.discriminant())
+        cofactor, small = integral_basis_kernel._factorize_small_factors(
+            abs(discriminant)
+        )
+        assert cofactor == 1
+        units = integral_basis_kernel._round_two_enlargement_units(
+            discriminant, dict(small), degree
+        )
+        if admitted:
+            assert units <= integral_basis_kernel._ROUND_TWO_ENLARGEMENT_UNIT_ENVELOPE
+        else:
+            assert units > integral_basis_kernel._ROUND_TWO_ENLARGEMENT_UNIT_ENVELOPE
+
+
+def test_bounded_enlargement_family_completes() -> None:
+    """The n=10 member of the deep-index family still completes exactly.
+
+    ``x^10 + 2*3**534`` charges inside the enlargement envelope, so admission
+    keeps it and the backend establishes its basis. The field discriminant
+    below is mathematically determined, not a timing snapshot.
+    """
+
+    field = SimpleNumberFieldPresentation(
+        coefficients_descending=_deep_index_coefficients(10)
+    )
+    recognized = recognized_integral_basis(field)
+    assert recognized is not None
+    assert int(recognized[1]) == -33592320000000000
+
+
 def test_semiprime_discriminant_is_rejected_inside_the_worker(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -458,14 +546,22 @@ def test_high_degree_monic_field_is_not_rejected_on_the_phantom_digit_estimate()
     ``x^126 + 2*3^534`` has a 32,151-digit polynomial discriminant. The
     monicization envelope must admit it instead of rejecting the request on an
     estimate that charged 125 phantom digits to the constant coefficient.
+    Round 2 itself is still out of reach there, so full admission raises the
+    enlargement-work bound fast rather than timing out.
     """
 
     field = SimpleNumberFieldPresentation(
         coefficients_descending=(1, *([0] * 125), -(2 * 3**534))
     )
-    admitted = require_factorizable_discriminant(field)
-    assert admitted is not None
-    assert abs(admitted) < 10**MAX_NUMBER_FIELD_DISCRIMINANT_DIGITS
+    assert (
+        monicized_discriminant_digit_bound(field)
+        <= MAX_NUMBER_FIELD_DISCRIMINANT_DIGITS
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        require_factorizable_discriminant(field)
+    assert error.value.errors()[0]["type"] == (
+        "number_field.ring_of_integers_round_two_work_bound"
+    )
 
 
 def test_native_discriminant_shares_the_worker_admission(

@@ -31,6 +31,18 @@ _ROUND_TWO_TRIAL_PRIME_BOUND = 100_000
 _ROUND_TWO_COFACTOR_DIGIT_BOUND = 4096
 _ROUND_TWO_COFACTOR_LIMIT = 10**_ROUND_TWO_COFACTOR_DIGIT_BOUND
 
+# Largest admitted Round 2 enlargement-work charge, in per-step units defined
+# by `_round_two_enlargement_units`. Placement: the motivating
+# ``x^n + 2*3**534`` family charges about 1.3e14 units at n=10 (about 16
+# seconds of backend work here, completing inside the worker lease) and about
+# 2.0e16 units at n=20 (past the lease, previously a 60-second timeout), so
+# this envelope admits the completed side with margin while the timeout side
+# exceeds it twentyfold and rejects fast. Every previously accepted
+# regression charges a small fraction of this envelope (see
+# ``test_ring_of_integers.py``); the killable worker lease remains the
+# absolute backstop for admitted requests.
+_ROUND_TWO_ENLARGEMENT_UNIT_ENVELOPE = 10**15
+
 
 def _monic_zz_coefficients(
     field: SimpleNumberFieldPresentation,
@@ -186,6 +198,37 @@ def _seed_round_two_factor_cache(
             return
 
 
+def _round_two_enlargement_units(
+    discriminant: int, factorization: dict[int, int], degree: int
+) -> int:
+    """Bound the Round 2 order-enlargement work in per-step units.
+
+    After factoring, SymPy's ``round_two`` iterates the primes of the square
+    part ``F`` of the discriminant (``D = D_0 * F**2``), enlarging the order at
+    each prime until it is maximal there. Every second enlargement strictly
+    grows the order, so its count at ``p`` cannot exceed the ``p``-adic
+    valuation of the finite power-basis index, which divides ``F``: at most
+    ``v_p(F)`` steps. The admitted factorization proves every prime exponent
+    of ``|D|`` exactly, hence ``v_p(F) = a_p // 2`` for each tabulated
+    exponent ``a_p``; primes outside the square part need no enlargement.
+    Each step performs a fixed small number of ``n``-by-``n`` kernel,
+    endomorphism-ring, and HNF-with-modulus operations on integers of at most
+    ``B`` discriminant digits, covered here by ``n**4 * B**2`` (schoolbook
+    arithmetic is an upper bound on the big-integer cost). One extra step per
+    prime covers the Dedekind test and first enlargement.
+    """
+
+    if discriminant in (0, 1, -1):
+        return 0
+    digits = _integer_digits(abs(discriminant))
+    units = 0
+    for prime, exponent in factorization.items():
+        if prime < 2 or exponent < 2:
+            continue
+        units += (exponent // 2 + 1) * degree**4 * digits**2
+    return units
+
+
 def require_factorizable_discriminant(
     field: SimpleNumberFieldPresentation,
 ) -> int | None:
@@ -247,6 +290,20 @@ def require_factorizable_discriminant(
             )
         base, exponent = prime_power
         factorization[base] = factorization.get(base, 0) + exponent
+    enlargement_units = _round_two_enlargement_units(
+        discriminant, factorization, field.degree
+    )
+    if enlargement_units > _ROUND_TWO_ENLARGEMENT_UNIT_ENVELOPE:
+        raise OperationResourceAdmissionError(
+            location=("field",),
+            code="number_field.ring_of_integers_round_two_work_bound",
+            message=(
+                "the admitted discriminant factorization proves more Round 2 "
+                f"order-enlargement work ({enlargement_units} steps) than the "
+                f"{_ROUND_TWO_ENLARGEMENT_UNIT_ENVELOPE}-step envelope, so the "
+                "backend would exhaust the worker lease instead of completing"
+            ),
+        )
     _seed_round_two_factor_cache(discriminant, factorization)
     return discriminant
 

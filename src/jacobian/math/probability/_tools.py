@@ -6,6 +6,9 @@ from typing import Any
 
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.probability import operations as native
+from jacobian.math.probability._berry_esseen_tools import (
+    BERRY_ESSEEN_OPERATION,
+)
 from jacobian.math.probability._compound_poisson_tools import (
     COMPOUND_POISSON_CUMULANT_OPERATION,
 )
@@ -116,6 +119,7 @@ _FAIR_DIE_3 = {
 }
 
 FINITE_PROBABILITY_OPERATIONS = (
+    BERRY_ESSEEN_OPERATION,
     COMPOUND_POISSON_CUMULANT_OPERATION,
     MathTool(
         operation_id="probability.finite_distribution.event_probability.compute",

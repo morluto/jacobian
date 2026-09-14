@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 
 import pytest
 from pydantic import ValidationError
 
 from jacobian.math.combinatorics.finite_structures.divisibility_sum_triples._models import (
     DivisibilitySumTriplesRequest,
+    DivisibilitySumTriplesResult,
 )
 from jacobian.math.combinatorics.finite_structures.divisibility_sum_triples.operations import (
     construct_divisibility_sum_triples_hypergraph,
@@ -14,11 +16,11 @@ from jacobian.math.combinatorics.finite_structures.divisibility_sum_triples.oper
 )
 
 
-def _edge_member_sets(result):
+def _edge_member_sets(result: DivisibilitySumTriplesResult) -> list[frozenset[str]]:
     return [frozenset(members) for _, members in result.hypergraph.edges]
 
 
-def _sorted_ints(members):
+def _sorted_ints(members: Iterable[str]) -> list[int]:
     return sorted(int(x) for x in members)
 
 

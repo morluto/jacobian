@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from pydantic import ValidationError
+
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.greedoids.values import FiniteFeasibleSetSystem
 from jacobian.math.combinatorics.matroids.delta._models import (
     DeltaMatroidRecognitionResult,
@@ -114,7 +117,24 @@ def twist(
 
 
 def width(delta_matroid: FiniteDeltaMatroid) -> int:
-    """Return the delta-matroid width ``max |F| - min |F|``."""
+    """Return the delta-matroid width ``max |F| - min |F|``.
 
-    sizes = tuple(len(row) for row in delta_matroid.feasible)
+    The width is a linear projection of the feasible rows, so recognition
+    admission is not replayed; the structural carrier is reconstructed so a
+    forged instance with malformed rows cannot produce an incorrect value.
+    """
+
+    try:
+        system = FiniteFeasibleSetSystem(
+            ground=delta_matroid.ground, feasible=delta_matroid.feasible
+        )
+        if not system.feasible:
+            raise ValueError("a delta-matroid has at least one feasible set")
+    except (ValidationError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("delta_matroid",),
+            code="delta_matroid.source_not_valid",
+            message=str(exc),
+        ) from exc
+    sizes = tuple(len(row) for row in system.feasible)
     return max(sizes) - min(sizes)

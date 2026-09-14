@@ -7,12 +7,14 @@ from typing import Literal, Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._execution import request_checkpoint
 from jacobian._models import StrictModel
 from jacobian.math.combinatorics.greedoids.values import FiniteFeasibleSetSystem
 
 MAX_DELTA_MEMBERSHIPS = 16_384
 MAX_DELTA_LABEL_BYTES = 2_048
 MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS = 250_000
+_CHECKPOINT_STRIDE = 4_096
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -75,8 +77,12 @@ def _exchange_work(
     sets = tuple(frozenset(row) for row in rows)
     instances = 0
     candidate_space = 0
+    pairs = 0
     for left in sets:
         for right in sets:
+            pairs += 1
+            if pairs % _CHECKPOINT_STRIDE == 0:
+                request_checkpoint("during delta-matroid exchange-work admission")
             difference_size = len(left ^ right)
             instances += difference_size
             candidate_space += difference_size * difference_size
@@ -144,15 +150,30 @@ def first_symmetric_exchange_obstruction(
     if not rows:
         return DeltaMatroidObstruction(kind="EMPTY_FEASIBLE_FAMILY")
     feasible = set(rows)
+    probes = 0
     for left_row in rows:
         left = frozenset(left_row)
         for right_row in rows:
             difference = tuple(sorted(left ^ frozenset(right_row)))
             for element in difference:
-                if any(
-                    tuple(sorted(left ^ frozenset((element, candidate)))) in feasible
-                    for candidate in difference
-                ):
+                probes += 1
+                if probes % _CHECKPOINT_STRIDE == 0:
+                    request_checkpoint("during delta-matroid exchange replay")
+                exchange_found = False
+                for candidate in difference:
+                    # Count every candidate iteration: each one rebuilds and
+                    # sorts a full row, so the checkpoint must not wait for the
+                    # outer element loop.
+                    probes += 1
+                    if probes % _CHECKPOINT_STRIDE == 0:
+                        request_checkpoint("during delta-matroid exchange replay")
+                    if (
+                        tuple(sorted(left ^ frozenset((element, candidate))))
+                        in feasible
+                    ):
+                        exchange_found = True
+                        break
+                if exchange_found:
                     continue
                 return DeltaMatroidObstruction(
                     kind="SYMMETRIC_EXCHANGE",

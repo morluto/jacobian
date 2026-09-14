@@ -100,7 +100,7 @@ def _require_strict_columns(rows: tuple[TableauRow, ...]) -> None:
 
 
 def require_semistandard(
-    tableau: SemistandardYoungTableau | StandardYoungTableau,
+    tableau: SemistandardYoungTableau | StandardYoungTableau | TableauCandidate,
 ) -> None:
     """Admit the semistandard membership claim for a tableau carrier."""
     _shape(tableau.rows)
@@ -113,7 +113,7 @@ def require_semistandard(
     _require_strict_columns(tableau.rows)
 
 
-def require_standard(tableau: StandardYoungTableau) -> None:
+def require_standard(tableau: StandardYoungTableau | TableauCandidate) -> None:
     """Admit the standard membership claim for a tableau carrier."""
     shape = _shape(tableau.rows)
     for row in tableau.rows:
@@ -148,6 +148,20 @@ class SemistandardYoungTableau(StrictModel):
         ),
     )
 
+    @model_validator(mode="after")
+    def require_cell_budget(self) -> Self:
+        # The row-length envelope alone does not bound the diagram: without a
+        # total cell check, an oversized carrier would pass request admission
+        # and only fail later inside the shared partition validator, where a
+        # membership checker could misread the operational budget as a false
+        # mathematical nonmembership result.
+        if sum(len(row) for row in self.rows) > MAX_PARTITION_SIZE:
+            raise _validation_error(
+                "tableau_size_exceeded",
+                "tableau cell count exceeds the supported bound",
+            )
+        return self
+
     @property
     def shape(self) -> IntegerPartition:
         """Return the tableau shape derived from its row lengths."""
@@ -170,10 +184,52 @@ class StandardYoungTableau(StrictModel):
         ),
     )
 
+    @model_validator(mode="after")
+    def require_cell_budget(self) -> Self:
+        # See SemistandardYoungTableau: enforce the documented cell envelope
+        # at admission so oversized carriers never reach membership replay.
+        if sum(len(row) for row in self.rows) > MAX_PARTITION_SIZE:
+            raise _validation_error(
+                "tableau_size_exceeded",
+                "tableau cell count exceeds the supported bound",
+            )
+        return self
+
     @property
     def shape(self) -> IntegerPartition:
         """Return the tableau shape derived from its row lengths."""
         return _shape(self.rows)
+
+
+class TableauCandidate(StrictModel):
+    """A bounded structural tableau candidate for a membership check.
+
+    Rows are nonempty bounded tuples of positive JSON-safe integers with a
+    total of at most ``MAX_PARTITION_SIZE`` cells.  It deliberately states no
+    monotonicity, Young-diagram, or consecutive-entry claim: whether the rows
+    form a standard or semistandard tableau is exactly what the check
+    operation decides, so a negative outcome is a representable value rather
+    than a schema contradiction.
+    """
+
+    rows: tuple[TableauRow, ...] = Field(
+        max_length=MAX_PARTITION_PARTS,
+        description=(
+            "Candidate rows of positive integers with a total of at most "
+            f"{MAX_PARTITION_SIZE} cells. No monotonicity, Young-diagram, or "
+            "consecutive-entry claim is made; the check operation decides "
+            "membership."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_cell_budget(self) -> Self:
+        if sum(len(row) for row in self.rows) > MAX_PARTITION_SIZE:
+            raise _validation_error(
+                "tableau_size_exceeded",
+                "tableau cell count exceeds the supported bound",
+            )
+        return self
 
 
 __all__ = [
@@ -183,6 +239,7 @@ __all__ = [
     "IntegerPartition",
     "SemistandardYoungTableau",
     "StandardYoungTableau",
+    "TableauCandidate",
     "TableauEntry",
     "TableauRow",
     "require_semistandard",

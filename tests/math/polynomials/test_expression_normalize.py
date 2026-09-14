@@ -1019,6 +1019,39 @@ def test_mutually_exclusive_factor_denominators_are_not_summed() -> None:
     assert len(result.polynomial.polynomial.terms) == 8
 
 
+def test_symbolic_single_monomial_cancellation_is_detected() -> None:
+    """Cancelling powered single-monomial addends are not charged an LCM.
+
+    ``x/p_i**31 - x/p_i**31`` for three pairwise-coprime 128-digit primes sums
+    to zero, but the sign-blind height aggregation would form the LCM of the
+    three powered denominators and refuse the request.
+    """
+    primes = (10**127 + 51, 10**127 + 117, 10**127 + 183)
+    operands: list[dict[str, Any]] = []
+    for prime in primes:
+        for sign in (1, -1):
+            operands.append(
+                {
+                    "kind": "MULTIPLY",
+                    "operands": [
+                        {"kind": "VARIABLE", "name": "x"},
+                        {
+                            "kind": "POWER",
+                            "base": {
+                                "kind": "LITERAL",
+                                "value": {"num": sign, "den": prime},
+                            },
+                            "exponent": 31,
+                        },
+                    ],
+                }
+            )
+    result = normalize_polynomial_expression(
+        _request("QQ", {"kind": "ADD", "operands": operands})
+    )
+    assert result.polynomial.polynomial.terms == ()
+
+
 @pytest.mark.parametrize(
     ("factor_count", "denominator_digits"), [(4, 40), (6, 100), (8, 80)]
 )

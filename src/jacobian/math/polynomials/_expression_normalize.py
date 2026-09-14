@@ -126,6 +126,7 @@ class _ExpressionMetrics:
     intermediate_digits: int
     support_keys: frozenset[tuple[tuple[str, int], ...]] | None = None
     termwise_disjoint: bool = False
+    single_term: tuple[frozenset[tuple[str, int]], Fraction] | None = None
 
 
 def _bounded_sum(values: list[int] | tuple[int, ...], limit: int) -> int:
@@ -344,6 +345,108 @@ def _multiply_monomials(
     return frozenset((name, power) for name, power in powers.items() if power)
 
 
+def _bounded_single_term(
+    monomial: frozenset[tuple[str, int]] | None,
+    coefficient: Fraction,
+) -> tuple[frozenset[tuple[str, int]], Fraction] | None:
+    """Return an exact single-monomial state when both parts stay representable."""
+
+    if monomial is None:
+        return None
+    if (
+        abs(coefficient.numerator).bit_length() > _MAX_EXPRESSION_COEFFICIENT_BITS
+        or coefficient.denominator.bit_length() > _MAX_EXPRESSION_COEFFICIENT_BITS
+    ):
+        return None
+    return (monomial, coefficient)
+
+
+def _single_term_power(
+    base: tuple[frozenset[tuple[str, int]], Fraction] | None,
+    exponent: int,
+) -> tuple[frozenset[tuple[str, int]], Fraction] | None:
+    """Raise an exact single term to a power without over-height expansion."""
+
+    if base is None or exponent < 0:
+        return None
+    monomial, coefficient = base
+    if coefficient == 0:
+        return _bounded_single_term(frozenset(), Fraction(0))
+    bound = _MAX_EXPRESSION_COEFFICIENT_BITS
+    if (
+        abs(coefficient.numerator).bit_length() * exponent > bound
+        or coefficient.denominator.bit_length() * exponent > bound
+    ):
+        return None
+    return _bounded_single_term(
+        _scale_monomial(monomial, exponent), coefficient**exponent
+    )
+
+
+def _multiply_single_terms(
+    children: list[_ExpressionMetrics],
+) -> tuple[frozenset[tuple[str, int]], Fraction] | None:
+    """Multiply exact single-term children into one term when representable."""
+
+    powers: dict[str, int] = {}
+    coefficient = Fraction(1)
+    for child in children:
+        if child.single_term is None:
+            return None
+        monomial, child_coefficient = child.single_term
+        # Check the product's size before materializing it, so an over-envelope
+        # constant product is never built.
+        if (
+            abs(coefficient.numerator).bit_length()
+            + abs(child_coefficient.numerator).bit_length()
+            > _MAX_EXPRESSION_COEFFICIENT_BITS
+            or coefficient.denominator.bit_length()
+            + child_coefficient.denominator.bit_length()
+            > _MAX_EXPRESSION_COEFFICIENT_BITS
+        ):
+            return None
+        coefficient = coefficient * child_coefficient
+        for name, power in monomial:
+            powers[name] = powers.get(name, 0) + power
+    return _bounded_single_term(
+        frozenset((name, power) for name, power in powers.items() if power),
+        coefficient,
+    )
+
+
+def _exact_addend_cancellation(
+    child_metrics: list[_ExpressionMetrics],
+) -> dict[frozenset[tuple[str, int]], Fraction] | None:
+    """Sum exact single-term addends by monomial, or ``None`` if not all are single.
+
+    Returns the per-monomial coefficient map when every nonzero addend is an
+    exact single term. A monomial whose summed coefficient is zero has cancelled
+    symbolically, which the sign-blind height aggregation cannot see.
+    """
+
+    groups: dict[frozenset[tuple[str, int]], Fraction] = {}
+    for child in child_metrics:
+        if child.zero:
+            continue
+        if child.single_term is None:
+            return None
+        monomial, coefficient = child.single_term
+        existing = groups.get(monomial, Fraction())
+        # Bound each running addition before it is materialized. For an exact
+        # cancellation the denominators are equal, so the sum-of-bit-lengths
+        # estimate still fits and the symbolic zero is found.
+        if (
+            existing.denominator.bit_length() + coefficient.denominator.bit_length()
+            > _MAX_EXPRESSION_COEFFICIENT_BITS
+            or abs(existing.numerator).bit_length()
+            + abs(coefficient.numerator).bit_length()
+            > _MAX_EXPRESSION_COEFFICIENT_BITS
+        ):
+            return None
+        groups[monomial] = existing + coefficient
+    return groups
+
+
 def _support_keys_are_uniquely_decomposable(
     keys: frozenset[tuple[tuple[str, int], ...]] | None,
 ) -> bool:
@@ -482,9 +585,12 @@ def _product_denominator_scaling_bits(
     each summand is scaled by the denominators the other factors contributed.
     The combined denominator divides ``d_1 * ... * d_k``, so summand ``i``
     grows by at most the bits of every other factor denominator: ``(k - 1)``
-    times the total. Without collisions this scaling never happens and the
-    bound is zero. This mirrors ``_addition_numerator_bits``, which already
-    charges an addition for reaching its common denominator.
+    times the total. Each factor contributes its whole denominator mass, not
+    only its representative denominator, because a colliding coefficient can
+    combine every denominator the factor hides. Without collisions this scaling
+    never happens and the bound is zero. This mirrors
+    ``_addition_numerator_bits``, which already charges an addition for reaching
+    its common denominator.
     """
 
     if not colliding:
@@ -495,7 +601,11 @@ def _product_denominator_scaling_bits(
             return _MAX_EXPRESSION_COEFFICIENT_BITS + 1
         total_bits = min(
             _MAX_EXPRESSION_COEFFICIENT_BITS + 1,
-            total_bits + _denominator_bits(child.denominator),
+            total_bits
+            + max(
+                _denominator_bits(child.denominator),
+                child.denominator_mass_bits,
+            ),
         )
     return min(
         _MAX_EXPRESSION_COEFFICIENT_BITS + 1,
@@ -573,6 +683,7 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
             ),
             support_keys=frozenset() if expression.value.num == 0 else frozenset(((),)),
             termwise_disjoint=True,
+            single_term=(frozenset(), expression.value.as_fraction()),
         )
     if isinstance(expression, PolynomialVariableExpression):
         variables = frozenset((expression.name,))
@@ -595,6 +706,10 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
             intermediate_digits=_representation_digits(1, 1, 0),
             support_keys=frozenset((((expression.name, 1),),)),
             termwise_disjoint=True,
+            single_term=(
+                frozenset(((expression.name, 1),)),
+                Fraction(1),
+            ),
         )
     if isinstance(expression, PolynomialPower):
         base = _metrics(expression.base)
@@ -763,6 +878,7 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
                 exponent <= 1
                 or (base.support_keys is not None and len(base.support_keys) <= 1)
             ),
+            single_term=_single_term_power(base.single_term, exponent),
         )
     if isinstance(expression, (PolynomialAdd, PolynomialMultiply)):
         return _nary_expression_metrics(expression)
@@ -790,6 +906,24 @@ def _nary_expression_metrics(  # noqa: C901
             if child_metrics and all(child.zero for child in child_metrics)
             else _bounded_denominator_lcm(child_metrics, skip_zero=True)
         )
+        # Exact single-monomial addends can cancel symbolically (for example
+        # ``x/p - x/p``), which the sign-blind height aggregation cannot see and
+        # would otherwise charge as one common denominator. All-constant sums
+        # already reduce exactly in the constant branch below, so only
+        # non-constant addends need this path.
+        exact_addends = (
+            None if all_constant else _exact_addend_cancellation(child_metrics)
+        )
+        exact_zero = exact_addends is not None and not any(exact_addends.values())
+        survivors = (
+            {
+                monomial: coefficient
+                for monomial, coefficient in exact_addends.items()
+                if coefficient
+            }
+            if exact_addends is not None
+            else {}
+        )
         if all_constant and projected_denominator is not None:
             constant = sum(
                 (
@@ -805,8 +939,10 @@ def _nary_expression_metrics(  # noqa: C901
             zero = False
         else:
             constant = None
-            zero = all(child.zero for child in child_metrics) or _is_literal_zero_add(
-                expression
+            zero = (
+                all(child.zero for child in child_metrics)
+                or _is_literal_zero_add(expression)
+                or exact_zero
             )
         active_metrics = [child for child in child_metrics if not child.zero]
         if zero:
@@ -1094,6 +1230,11 @@ def _nary_expression_metrics(  # noqa: C901
             not isinstance(expression, PolynomialAdd)
             and all(child.termwise_disjoint for child in child_metrics)
             and combined_keys is not None
+        ),
+        single_term=(
+            (next(iter(survivors.items())) if len(survivors) == 1 else None)
+            if isinstance(expression, PolynomialAdd)
+            else _multiply_single_terms(child_metrics)
         ),
     )
 

@@ -8,7 +8,6 @@ from math import gcd
 from jacobian._exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
     CanonicalRational,
-    canonical_rational_component_digits,
     require_bounded_rational,
 )
 from jacobian.canonical import format_canonical_integer
@@ -36,7 +35,6 @@ from jacobian.math.topology.frames.values import (
     _MAX_VECTOR_ENTRY,
     MAX_COMPLEX_BASIS_COUNT,
     MAX_COMPLEX_BASIS_PAIRS,
-    MAX_COMPLEX_COMPONENT_DIGITS,
     MAX_COMPLEX_FRAME_CELLS,
     MAX_COMPLEX_INNER_PRODUCT_WORK,
     MAX_COMPLEX_PROFILE_CELLS,
@@ -585,17 +583,6 @@ def _complex_frame_admitted(
             location=("frame", "vectors"),
             code="frames.complex_profile_cells",
             message="complex profile cells exceed the admitted output envelope",
-        )
-    if any(
-        canonical_rational_component_digits(component) > MAX_COMPLEX_COMPONENT_DIGITS
-        for vector in frame.vectors
-        for scalar in vector
-        for component in (scalar.real, scalar.imaginary)
-    ):
-        raise OperationResourceAdmissionError(
-            location=("frame", "vectors"),
-            code="frames.complex_scalar_digits",
-            message="complex scalar components exceed the admitted profile height",
         )
     _require_complex_accumulation_height(
         frame,

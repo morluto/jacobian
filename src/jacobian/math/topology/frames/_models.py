@@ -157,7 +157,13 @@ class MutuallyUnbiasedBasesRequest(StrictModel):
 
 class MutuallyUnbiasedBasesResult(MutuallyUnbiasedBasesRequest):
     basis_grams: tuple[tuple[tuple[GaussianRational, ...], ...], ...]
-    cross_gram_squared: tuple[tuple[tuple[CanonicalRational, ...], ...], ...]
+    cross_gram_squared: tuple[tuple[tuple[CanonicalRational, ...], ...], ...] = Field(
+        description=(
+            "Squared normalized cross-Gram matrices in canonical pair order: "
+            "every pair (first, second) with first < second, ordered by first "
+            "then second."
+        )
+    )
     is_mutually_unbiased: bool
     basis_pair_count: int
 

@@ -435,11 +435,13 @@ def test_complex_profile_rejects_forged_noncanonical_or_oversized_scalars() -> N
     assert error.value.errors()[0]["type"] == "frames.complex_scalar_height"
 
 
-def test_complex_profile_rejects_scalar_height_before_expansion() -> None:
-    huge = GaussianRational.from_fractions(Fraction(10**129), Fraction(0))
+def test_complex_profile_admits_large_scalar_before_expansion() -> None:
+    """A cheap large coordinate is admitted instead of a blanket 128-digit cap."""
+    huge = GaussianRational.from_fractions(Fraction(10**128), Fraction(0))
     frame = ComplexFrame(dimension=1, vectors=((huge,),))
-    with pytest.raises(OperationResourceAdmissionError, match="scalar components"):
-        _sic_profile(SicProfileRequest(frame=frame))
+    result = _sic_profile(SicProfileRequest(frame=frame))
+    assert result.is_sic is True
+    assert result.cardinality_residual == 0
 
 
 def test_sic_profile_rejects_forged_structural_residuals() -> None:

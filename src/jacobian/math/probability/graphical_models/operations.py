@@ -356,30 +356,17 @@ def _factor_from_kernel_table(
     table: Sequence[CanonicalRational],
     operation: str,
 ) -> Factor:
-    """Bind one already-computed table after checking its exact result height.
+    """Bind one already-admitted table into a factor result.
 
-    Factor construction validates caller-owned values, but a kernel result is
-    not caller input.  Check the result height at this boundary so an exact
-    product or marginal that exceeds the owner envelope becomes a typed
-    admission failure instead of leaking a Pydantic ``ValidationError``.
-    The table is produced once by the kernel and then trusted by the result
-    model; no validator recomputes the mathematical operation or re-scans
-    the already-admitted height.
+    Every caller admits the exact result height before expansion:
+    ``factor_multiply`` and ``factor_marginalize`` bound the product or sum with
+    ``_product_height``/``_sum_height_bound`` (sound upper bounds), and
+    ``_reindex_factor`` only permutes values from an already-admitted factor.
+    The kernel result is trusted here; re-scanning the table would replay the
+    admission the preflight already established.
     """
 
-    for value in table:
-        try:
-            require_bounded_rational(
-                value,
-                max_digits=MAX_RATIONAL_DIGITS,
-                label="factor result",
-            )
-        except ValueError as error:
-            raise OperationResourceAdmissionError(
-                location=_growth_location(operation),
-                code=f"graphical_model.factor_{operation}_rational_bound",
-                message="exact factor result exceeds the rational digit bound",
-            ) from error
+    del operation
     return Factor.model_construct(
         variables=variables,
         domain_sizes=domain_sizes,

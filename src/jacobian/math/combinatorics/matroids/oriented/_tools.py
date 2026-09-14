@@ -3,6 +3,9 @@
 from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.math.combinatorics.matroids.oriented._bracket_tools import (
+    BRACKET_OPERATIONS,
+)
 from jacobian.math.combinatorics.matroids.oriented._models import (
     ChirotopeCheckRequest,
     ChirotopeCheckResult,
@@ -29,6 +32,7 @@ _ALTERNATING_RANK3_EXAMPLE: dict[str, Any] = {
 }
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    *BRACKET_OPERATIONS,
     MathTool(
         operation_id="oriented_matroid.chirotope.check",
         title="Check a complete uniform rank-3 chirotope",

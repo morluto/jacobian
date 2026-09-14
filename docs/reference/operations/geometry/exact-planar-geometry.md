@@ -7,7 +7,10 @@ lines, triangles, and polygons. The catalog includes direct computations for
 intersection, projection, midpoint, orientation, centroid, circumcircle,
 convex hull, signed area, triangulation, and projective line-arrangement flats,
 as well as direct predicates for parallelism, perpendicularity, collinearity,
-concyclicity, and polygon simplicity.
+concyclicity, and polygon simplicity. The source-bound
+`geometry.points.spanned_circle_profile.compute` operation groups all
+non-collinear source triples by exact center and squared radius and retains the
+complete point-index incidence set for each distinct circle.
 
 Inputs are validated as their owning geometric value before computation. Results
 are returned inline and can be passed to another compatible typed operation;

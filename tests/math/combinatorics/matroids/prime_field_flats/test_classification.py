@@ -22,6 +22,7 @@ from jacobian.math.combinatorics.matroids.prime_field_flats._models import (
     ClauseConstrainedPrimeFieldFlatClassification,
     ClauseConstrainedPrimeFieldFlatProblem,
     ClauseConstrainedPrimeFieldFlatRequest,
+    PrimeFieldFlatClassificationComplete,
     PrimeFieldFlatRankInterval,
     PrimeFieldFlatSymmetryGenerator,
     PrimeFieldVectorConfiguration,
@@ -427,6 +428,7 @@ def test_serialized_complete_claim_and_representative_are_verifiable() -> None:
         result.model_dump_json()
     )
     assert verify_prime_field_flat_classification(decoded)
+    assert isinstance(decoded.outcome, PrimeFieldFlatClassificationComplete)
     representative = decoded.outcome.representatives[0]
     assert verify_prime_field_flat_representative(decoded, representative)
 

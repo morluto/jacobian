@@ -21,6 +21,9 @@ from jacobian.math.number_theory._friable_enumerate import FRIABLE_ENUMERATE_OPE
 from jacobian.math.number_theory._interval_profiles import (
     INTERVAL_PROFILE_OPERATIONS,
 )
+from jacobian.math.number_theory._kempner_progression import (
+    KEMPNER_ARITHMETIC_PROGRESSION_OPERATION,
+)
 from jacobian.math.number_theory._modular import MODULAR_OPERATIONS
 from jacobian.math.number_theory._modular_identity import MODULAR_IDENTITY_OPERATIONS
 from jacobian.math.number_theory._periodic import PERIODIC_CONGRUENCE_OPERATIONS
@@ -53,6 +56,7 @@ TOOLS: MathTools = (
     CONTIGUOUS_SUM_OPERATION,
     PRIME_SHIFT_OPERATION,
     *INTERVAL_PROFILE_OPERATIONS,
+    KEMPNER_ARITHMETIC_PROGRESSION_OPERATION,
     *ADDITIONAL_NT_OPERATIONS,
     DIVISIBILITY_GRAPH_OPERATION,
     *DIVISIBILITY_PROFILE_OPERATIONS,

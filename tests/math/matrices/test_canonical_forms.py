@@ -35,6 +35,7 @@ from jacobian.math.matrices.canonical_forms._tools import (
 )
 from jacobian.math.matrices.values import RationalMatrix
 from jacobian.math.polynomials.values import (
+    MAX_POLYNOMIAL_TERMS,
     RationalPolynomial,
     RationalPolynomialTerm,
     SparseRationalPolynomial,
@@ -184,6 +185,24 @@ def test_matrix_polynomial_remainder_rejects_unbounded_quotient_growth() -> None
                 RationalPolynomialTerm(
                     coefficient=R(num=1, den=1), exponents=(32_768,)
                 ),
+            )
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="support"):
+        compute_matrix_polynomial_remainder(matrix, polynomial)
+
+
+def test_matrix_polynomial_remainder_stops_support_simulation_at_the_term_cap() -> None:
+    matrix = _diagonal(1)
+    polynomial = RationalPolynomial(
+        variables=("t",),
+        polynomial=SparseRationalPolynomial(
+            terms=tuple(
+                RationalPolynomialTerm(
+                    coefficient=R(num=1, den=1),
+                    exponents=(8 * index,),
+                )
+                for index in range(MAX_POLYNOMIAL_TERMS, 0, -1)
             )
         ),
     )

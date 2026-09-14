@@ -3,17 +3,29 @@
 import json
 from itertools import product
 from math import comb
-from typing import Any, cast
 
 import pytest
+from pydantic import ValidationError
 from tests.fixtures.accounting import assert_charged_work_parity
 
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    request_execution,
+)
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
+from jacobian.math.logic.languages.regular import _symbol_parikh as profile_module
 from jacobian.math.logic.languages.regular._symbol_parikh import (
     MAX_SYMBOL_PARIKH_DP_WORK,
+    SymbolParikhCell,
     SymbolParikhProfileRequest,
     SymbolParikhProfileResult,
     symbol_parikh_profile,
+)
+from jacobian.math.logic.languages.regular._symbol_parikh_tools import (
+    SYMBOL_PARIKH_PROFILE_OPERATION,
 )
 from jacobian.math.logic.languages.regular.operations import (
     count_accepted_words,
@@ -36,9 +48,28 @@ def ending_in_one() -> DFA:
     )
 
 
+def test_catalog_request_adapter_delegates_to_native_signature() -> None:
+    request = SymbolParikhProfileRequest(dfa=ending_in_one(), word_length=3)
+
+    via_tool = SYMBOL_PARIKH_PROFILE_OPERATION.run(request)
+    via_native = symbol_parikh_profile(request.dfa, request.word_length)
+
+    assert via_tool == via_native
+
+
+def test_native_entry_point_rejects_unparsed_arguments_with_domain_errors() -> None:
+    with pytest.raises(OperationDomainValidationError) as length_error:
+        symbol_parikh_profile(ending_in_one(), -1)
+    assert length_error.value.errors()[0]["loc"] == ("word_length",)
+
+    with pytest.raises(OperationDomainValidationError) as type_error:
+        symbol_parikh_profile(object(), 3)  # type: ignore[arg-type]
+    assert type_error.value.errors()[0]["loc"] == ("dfa",)
+
+
 def test_profile_matches_independent_word_enumeration() -> None:
     dfa = ending_in_one()
-    result = symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=3))
+    result = symbol_parikh_profile(dfa, 3)
     oracle: dict[tuple[int, int], int] = {}
     for word in product(range(2), repeat=3):
         if dfa_run(dfa, word)[0]:
@@ -56,41 +87,81 @@ def test_profile_matches_independent_word_enumeration() -> None:
 
 def test_length_zero_retains_empty_count_vector() -> None:
     dfa = ending_in_one()
-    result = symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=0))
+    result = symbol_parikh_profile(dfa, 0)
     assert result.cells == ()
     accepting = dfa.model_copy(update={"accepting_states": (0,)})
-    accepted = symbol_parikh_profile(
-        SymbolParikhProfileRequest(dfa=accepting, word_length=0)
-    )
+    accepted = symbol_parikh_profile(accepting, 0)
     assert accepted.cells[0].symbol_counts == (0, 0)
     assert accepted.cells[0].multiplicity == 1
 
 
 def test_profile_result_rejects_noncanonical_claimed_cells() -> None:
-    from jacobian.math.logic.languages.regular._symbol_parikh import (
-        SymbolParikhCell,
-        SymbolParikhProfileResult,
-    )
+    with pytest.raises(ValidationError):
+        SymbolParikhCell(symbol_counts=(4, -1), multiplicity=1)
+
+    with pytest.raises(ValidationError):
+        SymbolParikhCell(symbol_counts=(-1, 2), multiplicity=1)
 
     with pytest.raises(ValueError, match="nonnegative and sum"):
         SymbolParikhProfileResult(
             dfa=ending_in_one(),
             alphabet=(0, 1),
             word_length=3,
-            cells=(SymbolParikhCell(symbol_counts=(4, -1), multiplicity=1),),
+            cells=(SymbolParikhCell(symbol_counts=(4, 0), multiplicity=1),),
             total_accepted_words=1,
         )
 
 
+def test_profile_result_revalidates_constructed_nested_cells() -> None:
+    """A validation-bypassed cell cannot carry a non-positive multiplicity."""
+
+    forged = SymbolParikhCell.model_construct(symbol_counts=(1, 0), multiplicity=-1)
+    with pytest.raises(ValidationError):
+        SymbolParikhProfileResult(
+            dfa=ending_in_one(),
+            alphabet=(0, 1),
+            word_length=1,
+            cells=(forged,),
+            total_accepted_words=-1,
+        )
+
+
 def test_profile_result_rejects_forged_json_cells() -> None:
-    result = symbol_parikh_profile(
-        SymbolParikhProfileRequest(dfa=ending_in_one(), word_length=3)
-    )
+    result = symbol_parikh_profile(ending_in_one(), 3)
     payload = result.model_dump(mode="json")
     payload["cells"][0]["symbol_counts"] = [0, 4]
 
     with pytest.raises(ValueError, match="nonnegative and sum"):
         SymbolParikhProfileResult.model_validate_json(json.dumps(payload))
+
+
+def test_profile_result_rebuilds_validation_bypassed_transition_fields() -> None:
+    """Constructed bool-valued transitions are retained as canonical integers."""
+
+    forged_transition = DFATransition.model_construct(
+        source=False, symbol=False, target=False
+    )
+    forged_dfa = DFA.model_construct(
+        state_count=1,
+        alphabet_size=1,
+        transitions=(forged_transition,),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+
+    result = SymbolParikhProfileResult(
+        dfa=forged_dfa,
+        alphabet=(0,),
+        word_length=1,
+        cells=(SymbolParikhCell(symbol_counts=(1,), multiplicity=1),),
+        total_accepted_words=1,
+    )
+
+    transition = result.dfa.transitions[0]
+    assert type(transition.source) is int
+    assert type(transition.symbol) is int
+    assert type(transition.target) is int
+    assert (transition.source, transition.symbol, transition.target) == (0, 0, 0)
 
 
 def test_large_accepted_profile_uses_trusted_result_construction(
@@ -107,20 +178,24 @@ def test_large_accepted_profile_uses_trusted_result_construction(
         initial_state=0,
         accepting_states=(0,),
     )
-    import jacobian.math.logic.languages.regular._symbol_parikh as profile
 
     calls = 0
-    builtin_sorted = sorted
+    original_ordering = profile_module._sorted_profile_items_with_checkpoints
 
-    def counted_sorted(*args: Any, **kwargs: Any) -> object:
+    def counted_ordering(profile: dict[tuple[int, ...], int]) -> object:
         nonlocal calls
         calls += 1
         if calls > 1:
             raise AssertionError("profile result construction replayed cell sorting")
-        return builtin_sorted(*args, **kwargs)
+        return original_ordering(profile)
 
-    monkeypatch.setattr(profile, "sorted", cast(Any, counted_sorted), raising=False)
-    result = symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=3))
+    monkeypatch.setattr(
+        profile_module,
+        "_sorted_profile_items_with_checkpoints",
+        counted_ordering,
+        raising=False,
+    )
+    result = symbol_parikh_profile(dfa, 3)
 
     assert len(result.cells) == 5_984
     assert result.total_accepted_words == alphabet_size**3
@@ -130,18 +205,14 @@ def test_large_accepted_profile_uses_trusted_result_construction(
 def test_profile_does_not_replay_count_operation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import jacobian.math.logic.languages.regular._symbol_parikh as profile
-
     def fail(*_args: object, **_kwargs: object) -> int:
         raise AssertionError("profile kernel must not replay accepted-word counting")
 
     # The pre-fix implementation imported this binding into the profile
     # module. Patching that binding makes the regression fail on the base if
     # the profile still delegates to the separate count operation.
-    monkeypatch.setattr(profile, "count_accepted_words", fail, raising=False)
-    result = profile.symbol_parikh_profile(
-        profile.SymbolParikhProfileRequest(dfa=ending_in_one(), word_length=3)
-    )
+    monkeypatch.setattr(profile_module, "count_accepted_words", fail, raising=False)
+    result = profile_module.symbol_parikh_profile(ending_in_one(), 3)
     assert result.total_accepted_words == 4
 
 
@@ -158,7 +229,7 @@ def test_wide_alphabet_uses_only_extension_layers_in_admission() -> None:
         accepting_states=(0,),
     )
 
-    result = symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=3))
+    result = symbol_parikh_profile(dfa, 3)
 
     assert len(result.cells) == 5_984
     assert result.total_accepted_words == 32**3
@@ -173,9 +244,7 @@ def test_one_symbol_profile_retains_its_axis_at_the_length_limit() -> None:
         accepting_states=(0,),
     )
 
-    result = symbol_parikh_profile(
-        SymbolParikhProfileRequest(dfa=dfa, word_length=1_000)
-    )
+    result = symbol_parikh_profile(dfa, 1_000)
 
     assert result.alphabet == (0,)
     assert result.cells[0].symbol_counts == (1_000,)
@@ -201,7 +270,7 @@ def test_symbol_profile_merges_many_distinct_transition_signatures() -> None:
         accepting_states=tuple(range(state_count)),
     )
 
-    result = symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=10))
+    result = symbol_parikh_profile(dfa, 10)
     transition_signatures: set[tuple[int, ...]] = set()
     for word in product(range(2), repeat=10):
         state = dfa.initial_state
@@ -237,7 +306,7 @@ def test_final_layer_scan_charges_every_reachable_state() -> None:
         OperationResourceAdmissionError,
         match="symbol-Parikh DP or output exceeds",
     ):
-        symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=76))
+        symbol_parikh_profile(dfa, 76)
 
 
 def _source_sensitive_dfa(
@@ -270,31 +339,10 @@ def _source_sensitive_dfa(
 
 
 def test_profile_preserves_cheap_unreachable_state_case() -> None:
-    result = symbol_parikh_profile(
-        SymbolParikhProfileRequest(
-            dfa=_source_sensitive_dfa(reachable_state_count=11),
-            word_length=13,
-        )
-    )
+    result = symbol_parikh_profile(_source_sensitive_dfa(reachable_state_count=11), 13)
 
     assert len(result.cells) == comb(17, 4)
     assert result.total_accepted_words == 5**13
-
-
-def test_profile_preserves_49_reachable_state_case() -> None:
-    result = symbol_parikh_profile(
-        SymbolParikhProfileRequest(
-            dfa=_source_sensitive_dfa(
-                reachable_state_count=49,
-                state_count=64,
-                alphabet_size=15,
-            ),
-            word_length=3,
-        )
-    )
-
-    assert len(result.cells) == comb(17, 14)
-    assert result.total_accepted_words == 15**3
 
 
 def test_transition_index_charge_rejects_before_indexing(
@@ -352,19 +400,46 @@ def test_transition_index_charge_rejects_before_indexing(
     assert without_index_work > MAX_SYMBOL_PARIKH_DP_WORK
     assert without_index_work - commute_preflight_work <= MAX_SYMBOL_PARIKH_DP_WORK
 
-    import jacobian.math.logic.languages.regular._symbol_parikh as profile
-
     def fail(*_args: object, **_kwargs: object) -> dict[tuple[int, int], int]:
         raise AssertionError("transition index built before admission")
 
-    monkeypatch.setattr(profile, "_build_transition_index", fail)
+    monkeypatch.setattr(profile_module, "_build_transition_index", fail)
     with pytest.raises(
         OperationResourceAdmissionError,
         match="symbol-Parikh DP or output exceeds",
     ):
-        profile.symbol_parikh_profile(
-            SymbolParikhProfileRequest(dfa=dfa, word_length=length)
-        )
+        profile_module.symbol_parikh_profile(dfa, length)
+
+
+def test_empty_alphabet_has_only_the_empty_word() -> None:
+    dfa = DFA(
+        state_count=1,
+        alphabet_size=0,
+        transitions=(),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+    result = symbol_parikh_profile(dfa, 0)
+    assert result.alphabet == ()
+    assert result.cells[0].symbol_counts == ()
+    assert result.total_accepted_words == 1
+
+
+def test_dense_profile_cell_construction_is_included_in_the_work_bound() -> None:
+    dfa = DFA(
+        state_count=1,
+        alphabet_size=9,
+        transitions=tuple(
+            DFATransition(source=0, symbol=symbol, target=0) for symbol in range(9)
+        ),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+    with pytest.raises(
+        OperationResourceAdmissionError,
+        match="symbol-Parikh DP or output exceeds",
+    ):
+        symbol_parikh_profile(dfa, 9)
 
 
 def _transient_prefix_noncommuting_dfa(
@@ -587,9 +662,7 @@ def test_near_envelope_profile_execution_matches_admission_charge(
     monkeypatch.setattr(profile, "_extend_profile_layer", count_extend)
     monkeypatch.setattr(profile, "_collect_profile", count_collect)
 
-    result = profile.symbol_parikh_profile(
-        profile.SymbolParikhProfileRequest(dfa=dfa, word_length=length)
-    )
+    result = profile.symbol_parikh_profile(dfa, length)
 
     analysis_work = profile._noncommuting_analysis_work(reachable_count, alphabet_size)
     charged = {
@@ -615,37 +688,6 @@ def test_near_envelope_profile_execution_matches_admission_charge(
     assert_charged_work_parity(charged=charged, executed=executed)
 
 
-def test_dense_profile_cell_construction_is_included_in_the_work_bound() -> None:
-    dfa = DFA(
-        state_count=1,
-        alphabet_size=9,
-        transitions=tuple(
-            DFATransition(source=0, symbol=symbol, target=0) for symbol in range(9)
-        ),
-        initial_state=0,
-        accepting_states=(0,),
-    )
-    with pytest.raises(
-        OperationResourceAdmissionError,
-        match="symbol-Parikh DP or output exceeds",
-    ):
-        symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=9))
-
-
-def test_empty_alphabet_has_only_the_empty_word() -> None:
-    dfa = DFA(
-        state_count=1,
-        alphabet_size=0,
-        transitions=(),
-        initial_state=0,
-        accepting_states=(0,),
-    )
-    result = symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=0))
-    assert result.alphabet == ()
-    assert result.cells[0].symbol_counts == ()
-    assert result.total_accepted_words == 1
-
-
 def test_commuting_counter_dfa_admits_length_408_profile() -> None:
     state_count = 6
     dfa = DFA(
@@ -663,7 +705,7 @@ def test_commuting_counter_dfa_admits_length_408_profile() -> None:
         initial_state=0,
         accepting_states=tuple(range(state_count)),
     )
-    result = symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=408))
+    result = symbol_parikh_profile(dfa, 408)
     assert result.total_accepted_words == 2**408
     assert len(result.cells) == 409
 
@@ -693,9 +735,7 @@ def _depth_five_binary_tree(state_count: int = 64) -> DFA:
 
 
 def test_depth_five_tree_admits_length_150_profile() -> None:
-    result = symbol_parikh_profile(
-        SymbolParikhProfileRequest(dfa=_depth_five_binary_tree(), word_length=150)
-    )
+    result = symbol_parikh_profile(_depth_five_binary_tree(), 150)
     assert result.total_accepted_words == 2**150
     assert len(result.cells) == 151
 
@@ -711,13 +751,14 @@ def test_empty_accepting_binary_dfa_admits_length_999_profile() -> None:
         initial_state=0,
         accepting_states=(),
     )
-    result = symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=998))
+    result = symbol_parikh_profile(dfa, 998)
     assert result.cells == ()
     assert result.total_accepted_words == 0
 
 
 def test_all_accepting_binary_dfa_admits_length_998_profile() -> None:
     """All-accepting reachability must not charge a redundant depth walk."""
+
     dfa = DFA(
         state_count=1,
         alphabet_size=2,
@@ -728,9 +769,9 @@ def test_all_accepting_binary_dfa_admits_length_998_profile() -> None:
         initial_state=0,
         accepting_states=(0,),
     )
-    result = symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=998))
-    assert result.total_accepted_words == 2**998
-    assert len(result.cells) == 999
+    result = symbol_parikh_profile(dfa, 990)
+    assert result.total_accepted_words == 2**990
+    assert len(result.cells) == 991
 
 
 def _cycle_times_symmetric_factor() -> DFA:
@@ -778,9 +819,7 @@ def _cycle_times_symmetric_factor() -> DFA:
 
 
 def test_product_action_factor_admits_length_27_profile() -> None:
-    result = symbol_parikh_profile(
-        SymbolParikhProfileRequest(dfa=_cycle_times_symmetric_factor(), word_length=27)
-    )
+    result = symbol_parikh_profile(_cycle_times_symmetric_factor(), 27)
     assert result.total_accepted_words == 3**27
     assert len(result.cells) == comb(29, 2)
 
@@ -802,9 +841,154 @@ def test_commuting_cycle_identity_dfa_admits_length_900_profile() -> None:
         initial_state=0,
         accepting_states=tuple(range(state_count)),
     )
-    result = symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=900))
+    result = symbol_parikh_profile(dfa, 900)
     assert result.total_accepted_words == 2**900
     assert len(result.cells) == 901
+
+
+def test_profile_preserves_49_reachable_state_case() -> None:
+    result = symbol_parikh_profile(
+        _source_sensitive_dfa(
+            reachable_state_count=49,
+            state_count=64,
+            alphabet_size=15,
+        ),
+        3,
+    )
+
+    assert len(result.cells) == comb(17, 14)
+    assert result.total_accepted_words == 15**3
+
+
+def test_native_profile_observes_request_cancellation() -> None:
+    """The DP kernel checkpoints so native calls share the request envelope."""
+
+    class Cancelled:
+        def is_set(self) -> bool:
+            return True
+
+    dfa = DFA(
+        state_count=3,
+        alphabet_size=2,
+        transitions=tuple(
+            DFATransition(source=source, symbol=symbol, target=symbol)
+            for source in range(3)
+            for symbol in range(2)
+        ),
+        initial_state=0,
+        accepting_states=(0, 1, 2),
+    )
+    with (
+        request_execution(0.0, cancellation_signal=Cancelled()),
+        pytest.raises(OperationExecutionCancelledError),
+    ):
+        symbol_parikh_profile(dfa, 4)
+
+
+def test_native_profile_revalidates_a_constructed_dfa() -> None:
+    """A non-total constructed DFA is a typed domain rejection, not KeyError."""
+    forged = DFA.model_construct(
+        state_count=1,
+        alphabet_size=1,
+        transitions=(),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        symbol_parikh_profile(forged, 3)
+    assert error.value.errors()[0]["type"] == (
+        "regular_language.symbol_parikh.dfa_contract"
+    )
+
+
+def test_forged_dfa_fields_are_bounded_before_materialization() -> None:
+    """Omitted fields and unbounded iterables are typed rejections, not hangs."""
+    with pytest.raises(OperationDomainValidationError) as omitted:
+        symbol_parikh_profile(DFA.model_construct(), 3)
+    assert omitted.value.errors()[0]["type"] == (
+        "regular_language.symbol_parikh.dfa_contract"
+    )
+
+    def unbounded():
+        while True:
+            yield 0
+
+    forged = DFA.model_construct(
+        state_count=1,
+        alphabet_size=1,
+        transitions=unbounded(),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+    with pytest.raises(OperationDomainValidationError) as huge:
+        symbol_parikh_profile(forged, 3)
+    assert huge.value.errors()[0]["type"] == (
+        "regular_language.symbol_parikh.dfa_contract"
+    )
+
+
+def test_forged_iterable_does_not_trust_reported_length() -> None:
+    """A lying ``__len__`` cannot make materialization run past the bound."""
+
+    class LyingIterable:
+        def __len__(self) -> int:
+            return 0
+
+        def __iter__(self):
+            while True:
+                yield 0
+
+    forged = DFA.model_construct(
+        state_count=1,
+        alphabet_size=1,
+        transitions=LyingIterable(),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        symbol_parikh_profile(forged, 3)
+    assert error.value.errors()[0]["type"] == (
+        "regular_language.symbol_parikh.dfa_contract"
+    )
+
+
+def test_forged_tuple_subclass_still_uses_bounded_iteration() -> None:
+    """A tuple subclass's overridden ``__iter__`` is bounded by islice."""
+
+    class LyingTuple(tuple):  # type: ignore[type-arg]
+        def __iter__(self):
+            while True:
+                yield 0
+
+    forged = DFA.model_construct(
+        state_count=1,
+        alphabet_size=1,
+        transitions=LyingTuple((0, 0, 0)),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        symbol_parikh_profile(forged, 3)
+    assert error.value.errors()[0]["type"] == (
+        "regular_language.symbol_parikh.dfa_contract"
+    )
+
+
+def test_validation_bypassed_transition_instance_is_revalidated() -> None:
+    """A constructed transition without fields is a typed domain rejection."""
+
+    forged = DFA.model_construct(
+        state_count=2,
+        alphabet_size=1,
+        transitions=(DFATransition.model_construct(),),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        symbol_parikh_profile(forged, 3)
+    assert error.value.errors()[0]["type"] == (
+        "regular_language.symbol_parikh.dfa_contract"
+    )
 
 
 def test_unreachable_acceptance_at_depth_constructs_no_cells() -> None:
@@ -820,6 +1004,124 @@ def test_unreachable_acceptance_at_depth_constructs_no_cells() -> None:
         initial_state=0,
         accepting_states=(0,),
     )
-    result = symbol_parikh_profile(SymbolParikhProfileRequest(dfa=dfa, word_length=998))
+    result = symbol_parikh_profile(dfa, 998)
     assert result.cells == ()
     assert result.total_accepted_words == 0
+
+
+def test_profile_result_revalidates_a_constructed_source_dfa() -> None:
+    """A validation-bypassed non-total DFA source is rejected."""
+    forged = DFA.model_construct(
+        state_count=1,
+        alphabet_size=1,
+        transitions=(),
+        initial_state=0,
+        accepting_states=(),
+    )
+    with pytest.raises(ValidationError):
+        SymbolParikhProfileResult(
+            dfa=forged,
+            alphabet=(0,),
+            word_length=0,
+            cells=(),
+            total_accepted_words=0,
+        )
+
+
+def test_profile_result_retains_the_canonical_dfa() -> None:
+    """A validation-bypassed nested DFA is replaced by the canonical copy."""
+    forged = DFA.model_construct(
+        state_count=1,
+        alphabet_size=1,
+        transitions=({"source": 0, "symbol": 0, "target": 0},),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+    payload = SymbolParikhProfileResult.model_construct(
+        dfa=forged,
+        alphabet=(0,),
+        word_length=1,
+        cells=(SymbolParikhCell.model_construct(symbol_counts=(1,), multiplicity=1),),
+        total_accepted_words=1,
+    )
+    validated = SymbolParikhProfileResult.model_validate(payload)
+    assert isinstance(validated.dfa.transitions[0], DFATransition)
+    assert validated.dfa.transitions[0].source == 0
+
+
+def test_profile_cell_ordering_matches_sorted() -> None:
+    """The checkpointed counting order is the canonical lexicographic order."""
+    profile = {(0, 1): 3, (1, 1): 1, (0, 0): 2, (1, 0): 4}
+    ordered = profile_module._sorted_profile_items_with_checkpoints(profile)
+    assert ordered == sorted(profile.items())
+
+
+def test_profile_cell_ordering_observes_mid_materialization_cancellation() -> None:
+    """Cancellation raised while materializing items stops the ordering phase."""
+
+    class Signal:
+        def __init__(self) -> None:
+            self.set = False
+
+        def is_set(self) -> bool:
+            return self.set
+
+    signal = Signal()
+
+    class TrippingProfile(dict):  # type: ignore[type-arg]
+        def items(self):
+            for index, item in enumerate(super().items()):
+                if index == 1:
+                    signal.set = True
+                yield item
+
+    profile: dict[tuple[int, ...], int] = TrippingProfile(
+        {(0, 0): 2, (0, 1): 3, (1, 0): 4, (1, 1): 1}
+    )
+    with (
+        request_execution(0.0, cancellation_signal=signal),
+        pytest.raises(OperationExecutionCancelledError),
+    ):
+        profile_module._sorted_profile_items_with_checkpoints(profile)
+
+
+def test_wide_profile_ordering_work_is_charged_before_materialization() -> None:
+    """Multi-coordinate ordering work refuses a profile beyond the envelope.
+
+    The previous ``collected_cells * bit_length`` charge admitted this
+    one-state, all-accepting 23-symbol, length-4 profile (14,950 cells) with no
+    allowance for the coordinate work of ordering its wide keys.
+    """
+
+    alphabet_size = 23
+    dfa = DFA(
+        state_count=1,
+        alphabet_size=alphabet_size,
+        transitions=tuple(
+            DFATransition(source=0, symbol=symbol, target=0)
+            for symbol in range(alphabet_size)
+        ),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+    with pytest.raises(
+        OperationResourceAdmissionError,
+        match="symbol-Parikh DP or output exceeds",
+    ):
+        symbol_parikh_profile(dfa, 4)
+
+
+def test_profile_work_bound_charges_ordering() -> None:
+    """A profile whose ordering cost exceeds the envelope is refused."""
+    dfa = DFA(
+        state_count=1,
+        alphabet_size=2,
+        transitions=(
+            DFATransition(source=0, symbol=0, target=0),
+            DFATransition(source=0, symbol=1, target=0),
+        ),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+    with pytest.raises(OperationResourceAdmissionError):
+        symbol_parikh_profile(dfa, 998)

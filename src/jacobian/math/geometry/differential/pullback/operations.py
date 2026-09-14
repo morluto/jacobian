@@ -44,6 +44,7 @@ from jacobian.math.polynomials.rational_functions.values import (
 from jacobian.math.polynomials.values import (
     MAX_POLYNOMIAL_VARIABLES,
     RationalFunction,
+    SparseRationalPolynomial,
     require_canonical_rational_function,
 )
 
@@ -118,6 +119,12 @@ def _preflight_pullback_sources(
         MAX_RATIONAL_MAP_COMPONENTS,
         location=("map", "components"),
         message="map exceeds the admitted component envelope",
+    )
+    _bounded_sized(
+        getattr(map_value, "source_variables", None),
+        MAX_POLYNOMIAL_VARIABLES,
+        location=("map", "source_variables"),
+        message="map source axis exceeds the admitted envelope",
     )
     targets = getattr(map_value, "target_coordinates", None)
     components = getattr(map_value, "components", None)
@@ -266,17 +273,22 @@ def pullback_metric(
             code="differential_geometry.rational_metric.pullback.singular_metric",
             message="metric determinant vanishes identically after substitution",
         )
-    guards = tuple(
-        sparse_rational_polynomial_from_sympy(
-            sparse_rational_polynomial_to_sympy(
-                normalized[value].numerator, axis
-            ).monic(),
-            axis,
-            maximum_terms=256,
+    guarded: list[SparseRationalPolynomial] = []
+    for guard_index, value in enumerate(plan.guards):
+        if guard_index % 64 == 0:
+            request_checkpoint("during pullback guard normalization")
+        numerator = normalized[value].numerator
+        if not numerator.terms:
+            continue
+        guarded.append(
+            sparse_rational_polynomial_from_sympy(
+                sparse_rational_polynomial_to_sympy(numerator, axis).monic(),
+                axis,
+                maximum_terms=256,
+            )
         )
-        for value in plan.guards
-        if normalized[value].numerator.terms
-    )
+    guards = tuple(guarded)
+    request_checkpoint("after pullback guard normalization")
     output = tuple(normalized[value] for value in plan.output)
     guard_polynomials = tuple(guards)
     tensor = RationalCoordinateTensor(

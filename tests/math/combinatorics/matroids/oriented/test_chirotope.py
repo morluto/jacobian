@@ -28,7 +28,7 @@ from jacobian.math.combinatorics.matroids.oriented.operations import (
 )
 
 
-def check_chirotope(request: ChirotopeCheckRequest):
+def check_chirotope(request: ChirotopeCheckRequest) -> ChirotopeCheckResult:
     return native_check_chirotope(request.chirotope)
 
 
@@ -222,6 +222,7 @@ class TestChirotopeCheck:
         assert verify_chirotope_check(decoded)
         forged = decoded.model_copy(update={"b2_exchange_instances_checked": 0})
         assert verify_chirotope_check(forged)
+        assert decoded.obstruction is not None
         forged = decoded.model_copy(
             update={
                 "obstruction": decoded.obstruction.model_copy(

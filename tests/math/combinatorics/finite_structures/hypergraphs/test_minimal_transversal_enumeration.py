@@ -162,7 +162,9 @@ def test_single_edge_slice_uses_closed_form_above_global_row_bound() -> None:
 
 def test_direct_native_guard_rejects_untyped_request() -> None:
     with pytest.raises(OperationDomainValidationError, match="malformed typed request"):
-        enumerate_minimal_transversals({"hypergraph": None, "maximum_cardinality": 1})
+        enumerate_minimal_transversals(
+            {"hypergraph": None, "maximum_cardinality": 1}  # type: ignore[arg-type]
+        )
 
 
 def test_three_near_universal_edges_use_source_sensitive_row_bound() -> None:

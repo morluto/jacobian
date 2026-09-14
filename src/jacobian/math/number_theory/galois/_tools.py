@@ -60,6 +60,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "finite field irreducibility",
             "degree 108 polynomial using Frobenius",
             "irreducibility from coefficients",
+            "factor a polynomial over a finite field with Frobenius splitting",
+            "decide finite-field polynomial irreducibility from coefficients",
         ),
         examples=(
             OperationExample(

@@ -11,6 +11,7 @@ from jacobian.math.geometry.algebraic_curves._arclength import enclose_arclength
 from jacobian.math.geometry.algebraic_curves._arclength_models import (
     ArclengthEnclosed,
     ArclengthSegment,
+    PlaneCurveArclengthBudget,
     PlaneCurveArclengthRequest,
 )
 from jacobian.math.polynomials.values import (
@@ -62,11 +63,11 @@ def _request(
         polynomial=polynomial,
         box=box,
         target_width=_rational(width),
-        resource_budget={
-            "precision_bits": 192,
-            "max_segments": 128,
-            "wall_seconds": 120,
-        },
+        resource_budget=PlaneCurveArclengthBudget(
+            precision_bits=192,
+            max_segments=128,
+            wall_seconds=120,
+        ),
     )
 
 
@@ -130,7 +131,7 @@ def test_unit_circle_enclosure_contains_two_pi() -> None:
     )
 
 
-def test_nonconverged_integral_is_unknown(monkeypatch) -> None:
+def test_nonconverged_integral_is_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
     import jacobian.math.geometry.algebraic_curves._arclength as kernel
 
     monkeypatch.setattr(kernel, "_integrate_cell", lambda *args, **kwargs: None)
@@ -245,7 +246,7 @@ def test_projective_left_tangency_off_the_face_is_empty() -> None:
 def test_rational_axis_clip_of_contained_irrational_ellipse_is_enclosed() -> None:
     """x^2+2y^2-2=0 in [-2,2]x[0,2]: the y=0 clip has rational endpoints."""
 
-    import mpmath
+    import mpmath  # type: ignore[import-untyped]
 
     mpmath.mp.dps = 40
     result = enclose_arclength(

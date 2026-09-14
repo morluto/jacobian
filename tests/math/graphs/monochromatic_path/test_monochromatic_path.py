@@ -6,7 +6,7 @@ from jacobian.math.graphs.monochromatic_path.operations import (
 from jacobian.math.graphs.values import ColoredUndirectedGraph, SimpleUndirectedGraph
 
 
-def _k3_red():
+def _k3_red() -> ColoredUndirectedGraph:
     return ColoredUndirectedGraph(
         graph=SimpleUndirectedGraph(
             vertices=("0", "1", "2"),
@@ -65,7 +65,7 @@ def test_replay_hamiltonian_path() -> None:
         assert _has_spanning_path(members_list, adjacency)
 
 
-def _has_spanning_path(vertices, adj):
+def _has_spanning_path(vertices: list[str], adj: dict[str, set[str]]) -> bool:
     from itertools import permutations
 
     n = len(vertices)

@@ -164,6 +164,19 @@ def test_ssyt_count_rejects_an_oversized_constructed_partition() -> None:
     assert error.value.errors()[0]["type"] == "algebraic_combinatorics.partition_size"
 
 
+def test_ssyt_count_rejects_an_oversized_native_alphabet() -> None:
+    """A native alphabet beyond the ExactInteger carrier is a domain error."""
+    from jacobian.catalog.models import OperationDomainValidationError
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        native.semistandard_young_tableaux_count(
+            IntegerPartition(parts=(1,)), 10**MAX_CANONICAL_INTEGER_DIGITS
+        )
+    assert error.value.errors()[0]["type"] == (
+        "algebraic_combinatorics.hook_content_alphabet"
+    )
+
+
 def test_partition_dominance_rejects_a_non_carrier_argument() -> None:
     from jacobian.catalog.models import OperationDomainValidationError
 

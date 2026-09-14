@@ -382,6 +382,18 @@ def _admit_hook_content(partition: IntegerPartition, alphabet_size: int) -> None
             code="algebraic_combinatorics.hook_content_alphabet",
             message="alphabet_size must be a positive integer",
         )
+    if _upper_decimal_digits(alphabet_size) > MAX_CANONICAL_INTEGER_DIGITS:
+        # Match the catalog request's ExactInteger carrier so a native call and
+        # a wire call classify an oversized alphabet the same way, before any
+        # big-integer admission arithmetic runs.
+        raise OperationDomainValidationError(
+            location=("alphabet_size",),
+            code="algebraic_combinatorics.hook_content_alphabet",
+            message=(
+                "alphabet_size must have at most "
+                f"{MAX_CANONICAL_INTEGER_DIGITS} decimal digits"
+            ),
+        )
     partition = _require_canonical_partition(partition)
 
     cell_count = sum(partition.parts)

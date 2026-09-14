@@ -10,7 +10,6 @@ from jacobian.math.number_theory.sequences.core._models import (
 )
 from jacobian.math.number_theory.sequences.core.operations import (
     aperiodic_autocorrelation,
-    sequence_order_shape,
 )
 
 
@@ -25,7 +24,7 @@ def test_record_minima_remains_unpublished() -> None:
 
 
 def test_catalog_accepts_serialized_integer_sequence_source() -> None:
-    source = sequence_order_shape(FiniteIntegerSequence(values=(1, 2, 3))).source
+    source = FiniteIntegerSequence(values=(1, 2, 3))
     payload = json.loads(source.model_dump_json())
     result = invoke_operation(
         "sequence.autocorrelation.aperiodic.compute",

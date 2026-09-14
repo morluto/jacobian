@@ -1,46 +1,100 @@
 """Exact symbol-level Parikh profiles for accepted DFA words."""
 
+from collections.abc import Iterable
+from itertools import islice
 from math import comb
-from typing import Self
+from typing import Annotated, Self, cast
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import ConfigDict, Field, StrictInt, ValidationError, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import ExactInteger
 from jacobian._execution import request_checkpoint
 from jacobian._models import StrictModel
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.logic.languages.regular.values import (
     DFA,
     MAX_COUNT_RESULT_DIGITS,
     MAX_DFA_ALPHABET,
+    MAX_DFA_STATES,
+    MAX_DFA_TRANSITIONS,
 )
 
 MAX_SYMBOL_PARIKH_LENGTH = 1_000
 MAX_SYMBOL_PARIKH_DP_WORK = 2_000_000
 MAX_SYMBOL_PARIKH_CELLS = 43_000
+_CHECKPOINT_STRIDE = 512
 
 
 class SymbolParikhProfileRequest(StrictModel):
-    dfa: DFA
-    word_length: StrictInt = Field(ge=0, le=MAX_SYMBOL_PARIKH_LENGTH)
+    """Request for the complete accepted-word symbol-count profile."""
+
+    dfa: DFA = Field(
+        description=(
+            "Complete deterministic finite automaton; symbol coordinates use its "
+            "ordered zero-based alphabet axis."
+        )
+    )
+    word_length: StrictInt = Field(
+        ge=0,
+        le=MAX_SYMBOL_PARIKH_LENGTH,
+        description="Exact nonnegative length of every counted accepted word.",
+    )
 
 
 class SymbolParikhCell(StrictModel):
-    symbol_counts: tuple[StrictInt, ...] = Field(max_length=MAX_DFA_ALPHABET)
-    multiplicity: ExactInteger = Field(ge=1)
+    """One canonical symbol-count vector and its positive exact multiplicity."""
+
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        # A validation-bypassed cell must not be trusted when nested in a
+        # public result, so revalidate instances of this model as fields.
+        revalidate_instances="always",
+    )
+
+    symbol_counts: tuple[Annotated[StrictInt, Field(ge=0)], ...] = Field(
+        max_length=MAX_DFA_ALPHABET,
+        description=(
+            "Dense nonnegative counts on the DFA alphabet axis; coordinates sum "
+            "to the requested word length."
+        ),
+    )
+    multiplicity: ExactInteger = Field(
+        ge=1,
+        description="Positive exact number of accepted words with this vector.",
+    )
 
 
 class SymbolParikhProfileResult(StrictModel):
-    dfa: DFA
-    alphabet: tuple[StrictInt, ...] = Field(max_length=MAX_DFA_ALPHABET)
-    word_length: StrictInt = Field(ge=0, le=MAX_SYMBOL_PARIKH_LENGTH)
-    cells: tuple[SymbolParikhCell, ...] = Field(max_length=MAX_SYMBOL_PARIKH_CELLS)
-    total_accepted_words: ExactInteger
+    """Complete canonical map from symbol-count vectors to accepted words."""
+
+    dfa: DFA = Field(description="The source DFA retained for composition.")
+    alphabet: tuple[StrictInt, ...] = Field(
+        max_length=MAX_DFA_ALPHABET,
+        description="Ordered zero-based alphabet axis retained by every vector.",
+    )
+    word_length: StrictInt = Field(
+        ge=0,
+        le=MAX_SYMBOL_PARIKH_LENGTH,
+        description="Exact length shared by every profile vector.",
+    )
+    cells: tuple[SymbolParikhCell, ...] = Field(
+        max_length=MAX_SYMBOL_PARIKH_CELLS,
+        description="Lexicographically sorted, unique nonzero profile cells.",
+    )
+    total_accepted_words: ExactInteger = Field(
+        description="Exact sum of all cell multiplicities.",
+    )
 
     @classmethod
     def _from_kernel(
         cls,
-        request: SymbolParikhProfileRequest,
+        dfa: DFA,
+        word_length: int,
         *,
         cells: tuple[SymbolParikhCell, ...],
         total_accepted_words: ExactInteger,
@@ -48,24 +102,60 @@ class SymbolParikhProfileResult(StrictModel):
         """Construct a profile after the trusted DP established its invariants."""
 
         return cls.model_construct(
-            dfa=request.dfa,
-            alphabet=tuple(range(request.dfa.alphabet_size)),
-            word_length=request.word_length,
+            dfa=dfa,
+            alphabet=tuple(range(dfa.alphabet_size)),
+            word_length=word_length,
             cells=cells,
             total_accepted_words=total_accepted_words,
         )
 
     @model_validator(mode="after")
     def require_canonical_cells(self) -> Self:
-        if self.alphabet != tuple(range(self.dfa.alphabet_size)):
+        # A model_construct DFA is trusted when nested, so rerun the DFA's own
+        # contract before checking profile invariants against its fields.
+        # Nested transition instances are forwarded as raw field maps so strict
+        # validation rebuilds them instead of trusting a validation-bypassed
+        # instance (for example one whose coordinates are booleans).
+        try:
+            source = DFA.model_validate(
+                {
+                    "state_count": getattr(self.dfa, "state_count", None),
+                    "alphabet_size": getattr(self.dfa, "alphabet_size", None),
+                    "transitions": _bounded_dfa_tuple(
+                        getattr(self.dfa, "transitions", None),
+                        MAX_DFA_TRANSITIONS,
+                        item_fields=("source", "symbol", "target"),
+                    ),
+                    "initial_state": getattr(self.dfa, "initial_state", None),
+                    "accepting_states": _bounded_dfa_tuple(
+                        getattr(self.dfa, "accepting_states", None), MAX_DFA_STATES
+                    ),
+                }
+            )
+        except (
+            ValidationError,
+            PydanticCustomError,
+            AttributeError,
+            TypeError,
+        ) as exc:
+            raise ValueError(
+                "symbol-Parikh source must be a canonical total DFA"
+            ) from exc
+        if self.alphabet != tuple(range(source.alphabet_size)):
             raise ValueError("symbol-Parikh alphabet must be the DFA's ordered axis")
         vectors = tuple(cell.symbol_counts for cell in self.cells)
+        for cell in self.cells:
+            # A validation-bypassed nested cell can carry a non-positive
+            # multiplicity because the direct constructor does not revalidate
+            # existing instances; enforce the documented bound explicitly.
+            if cell.multiplicity < 1:
+                raise ValueError("symbol-Parikh cell multiplicities must be positive")
         if vectors != tuple(sorted(set(vectors))):
             raise ValueError(
                 "symbol-Parikh cells must be lexicographically sorted and unique"
             )
         for vector in vectors:
-            if len(vector) != self.dfa.alphabet_size:
+            if len(vector) != source.alphabet_size:
                 raise ValueError(
                     "symbol-Parikh vectors must use the complete alphabet axis"
                 )
@@ -77,6 +167,11 @@ class SymbolParikhProfileResult(StrictModel):
             raise ValueError(
                 "total_accepted_words must equal the sum of cell multiplicities"
             )
+        # Retain the canonical revalidated DFA so a validation-bypassed nested
+        # carrier cannot survive into the public result. ``__init__`` discards
+        # a replacement returned from an after-validator, so assign the frozen
+        # field directly and return ``self``.
+        object.__setattr__(self, "dfa", source)
         return self
 
 
@@ -422,8 +517,12 @@ def _extend_profile_layer(
     alphabet_size: int,
 ) -> dict[tuple[int, tuple[int, ...]], int]:
     next_layer: dict[tuple[int, tuple[int, ...]], int] = {}
+    visited = 0
     for (state, counts), multiplicity in layer.items():
         for symbol in range(alphabet_size):
+            if visited % _CHECKPOINT_STRIDE == 0:
+                request_checkpoint("during symbol-Parikh DP extension")
+            visited += 1
             target = transitions[(state, symbol)]
             if target not in reachable:
                 continue
@@ -438,23 +537,25 @@ def _collect_profile(
     accepting: set[int],
 ) -> dict[tuple[int, ...], int]:
     profile: dict[tuple[int, ...], int] = {}
-    for (state, counts), multiplicity in layer.items():
+    for index, ((state, counts), multiplicity) in enumerate(layer.items()):
+        if index % _CHECKPOINT_STRIDE == 0:
+            request_checkpoint("during symbol-Parikh profile collection")
         if state in accepting:
             profile[counts] = profile.get(counts, 0) + multiplicity
     return profile
 
 
-def symbol_parikh_profile(
-    request: SymbolParikhProfileRequest,
+def _compute_symbol_parikh_profile(
+    dfa: DFA,
+    length: int,
 ) -> SymbolParikhProfileResult:
-    dfa = request.dfa
-    length = request.word_length
     alphabet_size = dfa.alphabet_size
     if alphabet_size == 0:
         total = int(length == 0 and dfa.initial_state in dfa.accepting_states)
         cells = (SymbolParikhCell(symbol_counts=(), multiplicity=1),) if total else ()
         return SymbolParikhProfileResult._from_kernel(
-            request,
+            dfa,
+            length,
             cells=cells,
             total_accepted_words=total,
         )
@@ -580,6 +681,16 @@ def symbol_parikh_profile(
             )
     cell_construction_work = collected_cells * max(1, alphabet_size)
     result_reduce_work = 2 * collected_cells
+    # Ordering uses stable counting passes over the count coordinates rather
+    # than a comparison heap, so the whole phase is bounded by one pass per
+    # coordinate over the item count plus the word-length bucket axis.  A
+    # comparison sort would instead pay up to ``alphabet_size`` coordinate
+    # comparisons per heap comparison and is not cheaply bounded.
+    ordering_work = (
+        max(1, alphabet_size) * (2 * collected_cells + length + 1)
+        if collected_cells
+        else 0
+    )
     transition_index_work = transition_count
     reachability_scan_work = len(reachable) * transition_count
     work_bound = (
@@ -592,6 +703,7 @@ def symbol_parikh_profile(
         + output_materialization_work
         + cell_construction_work
         + result_reduce_work
+        + ordering_work
         + exact_depth_work
     )
     if work_bound > MAX_SYMBOL_PARIKH_DP_WORK:
@@ -603,16 +715,177 @@ def symbol_parikh_profile(
     transitions = _build_transition_index(dfa)
     zero = (0,) * alphabet_size
     layer: dict[tuple[int, tuple[int, ...]], int] = {(dfa.initial_state, zero): 1}
-    for _step in range(length):
+    for step in range(length):
+        if step % _CHECKPOINT_STRIDE == 0:
+            request_checkpoint("during symbol-Parikh DP")
         layer = _extend_profile_layer(layer, transitions, reachable, alphabet_size)
     accepting = set(dfa.accepting_states)
     profile = _collect_profile(layer, accepting)
     total = sum(profile.values())
-    return SymbolParikhProfileResult._from_kernel(
-        request,
-        cells=tuple(
+    materialized_cells: list[SymbolParikhCell] = []
+    for index, (counts, multiplicity) in enumerate(
+        _sorted_profile_items_with_checkpoints(profile)
+    ):
+        if index % _CHECKPOINT_STRIDE == 0:
+            request_checkpoint("during symbol-Parikh cell materialization")
+        materialized_cells.append(
             SymbolParikhCell(symbol_counts=counts, multiplicity=multiplicity)
-            for counts, multiplicity in sorted(profile.items())
-        ),
+        )
+    return SymbolParikhProfileResult._from_kernel(
+        dfa,
+        length,
+        cells=tuple(materialized_cells),
         total_accepted_words=total,
     )
+
+
+def _symbol_parikh_profile_request(
+    request: SymbolParikhProfileRequest,
+) -> SymbolParikhProfileResult:
+    return symbol_parikh_profile(request.dfa, request.word_length)
+
+
+def _bounded_dfa_tuple(
+    value: object,
+    limit: int,
+    item_fields: tuple[str, ...] | None = None,
+) -> tuple[object, ...]:
+    """Materialize a DFA container only when its bounded size is known first.
+
+    ``__len__`` is not trusted: at most ``limit + 1`` items are consumed, so a
+    lying or infinite iterable cannot allocate past the carrier bound.  When
+    ``item_fields`` is given, already-constructed nested models are rewritten
+    as plain field maps so strict validation revalidates them instead of
+    accepting a validation-bypassed instance.
+    """
+
+    if value is None or isinstance(value, (str, bytes, bytearray)):
+        raise PydanticCustomError(
+            "regular_language.symbol_parikh.dfa_contract",
+            "dfa containers must be bounded tuples",
+        )
+    if type(value) is tuple:
+        if len(value) > limit:
+            raise PydanticCustomError(
+                "regular_language.symbol_parikh.dfa_contract",
+                "dfa container exceeds its admitted length",
+            )
+        items = list(value)
+    else:
+        if getattr(value, "__len__", None) is None:
+            raise PydanticCustomError(
+                "regular_language.symbol_parikh.dfa_contract",
+                "dfa containers must be bounded tuples",
+            )
+        try:
+            items = list(islice(cast(Iterable[object], value), limit + 1))
+        except TypeError:
+            raise PydanticCustomError(
+                "regular_language.symbol_parikh.dfa_contract",
+                "dfa containers must be bounded tuples",
+            ) from None
+        if len(items) > limit:
+            raise PydanticCustomError(
+                "regular_language.symbol_parikh.dfa_contract",
+                "dfa container exceeds its admitted length",
+            )
+    if item_fields is None:
+        return tuple(items)
+    return tuple(
+        item
+        if isinstance(item, dict)
+        else {field: getattr(item, field, None) for field in item_fields}
+        for item in items
+    )
+
+
+def _sorted_profile_items_with_checkpoints(
+    profile: dict[tuple[int, ...], int],
+) -> list[tuple[tuple[int, ...], int]]:
+    """Return the profile items in canonical order without a long frozen sort.
+
+    A comparison heap is not cheaply bounded: each tuple comparison may scan up
+    to ``alphabet_size`` coordinates and every pop can perform several of them.
+    Ordering instead applies stable counting passes over the count coordinates,
+    from the last coordinate to the first.  Lexicographic order on dense
+    integer vectors is exactly the result of least-significant-coordinate-first
+    stable passes, every pass is linear in the item count, and each pass
+    observes a request checkpoint so cancellation and the deadline cover the
+    materialization as well as the extraction.
+    """
+
+    request_checkpoint("before symbol-Parikh cell ordering")
+    items: list[tuple[tuple[int, ...], int]] = []
+    for index, item in enumerate(profile.items()):
+        if index % _CHECKPOINT_STRIDE == 0:
+            request_checkpoint("during symbol-Parikh cell ordering")
+        items.append(item)
+    if not items:
+        return items
+    vector_length = len(items[0][0])
+    if vector_length == 0:
+        return items
+    word_length = sum(items[0][0])
+    for coordinate in range(vector_length - 1, -1, -1):
+        request_checkpoint("during symbol-Parikh cell ordering")
+        buckets: list[list[tuple[tuple[int, ...], int]]] = [
+            [] for _ in range(word_length + 1)
+        ]
+        for index, item in enumerate(items):
+            if index % _CHECKPOINT_STRIDE == 0:
+                request_checkpoint("during symbol-Parikh cell ordering")
+            buckets[item[0][coordinate]].append(item)
+        ordered: list[tuple[tuple[int, ...], int]] = []
+        for index, bucket in enumerate(buckets):
+            if index % _CHECKPOINT_STRIDE == 0:
+                request_checkpoint("during symbol-Parikh cell ordering")
+            ordered.extend(bucket)
+        items = ordered
+    return items
+
+
+def symbol_parikh_profile(dfa: DFA, word_length: int) -> SymbolParikhProfileResult:
+    """Return the accepted-word symbol Parikh profile for one exact length."""
+
+    if not isinstance(dfa, DFA):
+        raise OperationDomainValidationError(
+            location=("dfa",),
+            code="regular_language.symbol_parikh.dfa_type",
+            message="dfa must be a canonical DFA value",
+        )
+    try:
+        dfa = DFA.model_validate(
+            {
+                "state_count": getattr(dfa, "state_count", None),
+                "alphabet_size": getattr(dfa, "alphabet_size", None),
+                "transitions": _bounded_dfa_tuple(
+                    getattr(dfa, "transitions", None),
+                    MAX_DFA_TRANSITIONS,
+                    item_fields=("source", "symbol", "target"),
+                ),
+                "initial_state": getattr(dfa, "initial_state", None),
+                "accepting_states": _bounded_dfa_tuple(
+                    getattr(dfa, "accepting_states", None), MAX_DFA_STATES
+                ),
+            }
+        )
+    except (ValidationError, PydanticCustomError) as exc:
+        raise OperationDomainValidationError(
+            location=("dfa",),
+            code="regular_language.symbol_parikh.dfa_contract",
+            message="dfa must be a total deterministic automaton",
+        ) from exc
+    if (
+        type(word_length) is not int
+        or word_length < 0
+        or word_length > MAX_SYMBOL_PARIKH_LENGTH
+    ):
+        raise OperationDomainValidationError(
+            location=("word_length",),
+            code="regular_language.symbol_parikh.word_length",
+            message=(
+                "word_length must be an integer from 0 through "
+                f"{MAX_SYMBOL_PARIKH_LENGTH}"
+            ),
+        )
+    return _compute_symbol_parikh_profile(dfa, word_length)

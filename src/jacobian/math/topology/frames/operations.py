@@ -10,7 +10,7 @@ from jacobian._exact import (
     CanonicalRational,
     require_bounded_rational,
 )
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import decimal_digit_width
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -58,6 +58,22 @@ __all__ = [
 
 MAX_FRAME_GRAM_ENTRIES = 2_097_152
 MAX_FRAME_GRAM_MULTIPLY_ADDS = 536_870_912
+# ``tight_equiangular_profile`` evaluates the raw frame operator
+# ``sum_i v_i v_i^T`` in addition to the Gram matrix.  Charge that pass from
+# the same envelope so a dense spanning family cannot execute roughly twice
+# the declared multiply-add work: the Gram pass is ``n * d**2`` multiply-adds
+# for ``n = len(vectors)`` and ``d = dimension``, and the operator pass costs
+# the same, so together they may use at most ``MAX_FRAME_GRAM_MULTIPLY_ADDS``.
+MAX_FRAME_PROFILE_MULTIPLY_ADDS = MAX_FRAME_GRAM_MULTIPLY_ADDS // 2
+# A normalized operator pass derives ``|z_i|^2`` for every vector and then
+# divides retained entries by it.  Each derived norm stays a modest exact
+# value, and the later divisions and reductions are charged from the declared
+# profile work envelope, but the estimate must be bounded before any of that
+# arithmetic runs.  The bound admits high-but-cancelling coordinates (for
+# example ``10**2048``, whose squared norm is 4097 digits) while refusing
+# families of pairwise-coprime denominators whose norm estimate would otherwise
+# reach hundreds of thousands of digits.
+MAX_COMPLEX_NORMALIZED_NORM_DIGITS = 8_192
 
 
 def _admit_canonical_component(
@@ -431,8 +447,8 @@ def _height_from_fraction(value: Fraction) -> RationalHeight:
     """
 
     return RationalHeight(
-        len(format_canonical_integer(abs(value.numerator))),
-        len(format_canonical_integer(value.denominator)),
+        decimal_digit_width(value.numerator),
+        decimal_digit_width(value.denominator),
     )
 
 
@@ -519,6 +535,36 @@ def _complex_operator_residual_height(
     return operator, residual
 
 
+def _require_normalized_norm_height(frame: ComplexFrame) -> None:
+    """Bound the exact squared norms a normalized operator pass will build.
+
+    A normalized SIC or profile pass derives ``|z_i|^2`` for every vector and
+    then divides every retained operator entry by one of them.  The squared
+    norm of a single coordinate is cheap to *estimate* from the reduced
+    coordinates but can be enormous to *materialize*: pairwise-coprime wide
+    denominators make ``sum_k |z_k|^2`` scale with the whole coordinate
+    width, and every later division then runs a many-hundred-thousand-digit
+    ``gcd``.  Bound the estimate here so an oversized normalization is a
+    resource refusal instead of substantial unadmitted big-integer work.
+
+    The bound uses the same sparse reduced-term sum that the entry heights do,
+    so it is an upper bound on the reduced norm components and never needs the
+    decimal expansion of the individual denominators.
+    """
+
+    for vector in frame.vectors:
+        norm = _sparse_inner_product_height(vector, vector)
+        if norm.exceeds(MAX_COMPLEX_NORMALIZED_NORM_DIGITS):
+            raise OperationResourceAdmissionError(
+                location=("frame", "vectors"),
+                code="frames.complex_scalar_height",
+                message=(
+                    "Gaussian-rational normalized frame accumulation exceeds "
+                    "its admitted height"
+                ),
+            )
+
+
 def _require_complex_accumulation_height(
     frame: ComplexFrame,
     *,
@@ -531,6 +577,9 @@ def _require_complex_accumulation_height(
 
     inner_product = _frame_inner_product_height(frame)
     norm = inner_product
+
+    if normalized_operator:
+        _require_normalized_norm_height(frame)
 
     if estimate_operator:
         operator, residual = _complex_operator_residual_height(
@@ -706,7 +755,9 @@ def _equiangular_complex_frame(
     return True, common
 
 
-def _require_gram_work_budget(value: VectorFamily) -> None:
+def _require_gram_work_budget(
+    value: VectorFamily, *, with_frame_operator: bool = False
+) -> None:
     vector_count = len(value.vectors)
     dimension = value.dimension
     gram_entries = vector_count**2
@@ -721,6 +772,21 @@ def _require_gram_work_budget(value: VectorFamily) -> None:
             location=("vectors",),
             code="frames.gram_work_budget",
             message="frame Gram computation exceeds its multiply-add work budget",
+        )
+    if not with_frame_operator:
+        return
+    # The profile additionally builds the raw frame operator, so the whole
+    # request costs two structural passes over the same ``n * d**2`` products.
+    # Charge both against the shared envelope instead of admitting the Gram
+    # pass alone and then silently running a second unadmitted pass.
+    if gram_entries * dimension > MAX_FRAME_PROFILE_MULTIPLY_ADDS:
+        raise OperationResourceAdmissionError(
+            location=("vectors",),
+            code="frames.profile_work_budget",
+            message=(
+                "frame profile Gram and operator computation exceeds its "
+                "multiply-add work budget"
+            ),
         )
 
 
@@ -838,7 +904,7 @@ def tight_equiangular_profile(value: VectorFamily) -> TightEquiangularProfileRes
     """Classify tightness and equiangularity using exact integer Gram data."""
 
     value = _admit_vector_family(value)
-    _require_gram_work_budget(value)
+    _require_gram_work_budget(value, with_frame_operator=True)
     if any(not any(vector) for vector in value.vectors):
         raise OperationDomainValidationError(
             location=("vectors",),

@@ -827,7 +827,7 @@ def test_scaled_dimension_16_standard_hadamard_mub_uses_shared_denominators() ->
 
 
 def test_equal_denominator_widths_do_not_collapse_distinct_primes() -> None:
-    primes = []
+    primes: list[int] = []
     candidate = 2
     while len(primes) < 64:
         if all(candidate % prime for prime in primes):
@@ -1015,3 +1015,93 @@ def test_mub_request_schema_publishes_the_per_basis_shape() -> None:
     schema = MutuallyUnbiasedBasesRequest.model_json_schema()
     description = schema["properties"]["bases"]["description"]
     assert "dimension" in description
+
+
+def _coprime_denominators(count: int, *, digits: int) -> tuple[int, ...]:
+    """Return ``count`` pairwise-coprime powers with about ``digits`` digits."""
+
+    primes: list[int] = []
+    candidate = 2
+    while len(primes) < count:
+        if all(candidate % prime for prime in primes):
+            primes.append(candidate)
+        candidate += 1 if candidate == 2 else 2
+    denominators = []
+    for prime in primes:
+        denominator = prime
+        while len(str(denominator * prime)) <= digits:
+            denominator *= prime
+        denominators.append(denominator)
+    assert max(len(str(item)) for item in denominators) <= digits
+    return tuple(denominators)
+
+
+def test_sic_profile_refuses_norm_growth_before_expanding_normalization() -> None:
+    """A one-vector wide-denominator frame is refused before building its norm.
+
+    Pairwise-coprime denominators make the exact squared norm grow with the
+    whole coordinate width: at the reported 4,096-digit width a dimension-90
+    vector reaches roughly 737,000 digits, and every normalized operator entry
+    would divide by it.  The cell, output, and work checks all pass, so the
+    request must be refused by an intermediate-growth bound before that
+    arithmetic is materialized rather than expanded to obtain a refusal.  A
+    narrower coprime width exercises the same growth with the same magnitude
+    relation while keeping the fixture cheap to build.
+    """
+
+    denominators = _coprime_denominators(90, digits=64)
+    vector = tuple(
+        GaussianRational.from_fractions(Fraction(1, denominator), Fraction(0))
+        for denominator in denominators
+    )
+    frame = ComplexFrame(dimension=90, vectors=(vector,))
+
+    with pytest.raises(OperationResourceAdmissionError, match="height") as error:
+        _sic_profile(SicProfileRequest(frame=frame))
+    assert error.value.errors()[0]["type"] == "frames.complex_scalar_height"
+
+
+def test_tight_equiangular_profile_charges_both_structural_passes() -> None:
+    """The Gram and frame-operator passes together may not exceed the envelope.
+
+    A dense family with ``len(vectors) == dimension == 724`` admits the Gram
+    multiply-adds, but the profile also evaluates the raw frame operator.  The
+    two passes together exceed the declared bound, so the request is refused
+    instead of silently running about twice the admitted work.
+    """
+
+    from jacobian.math.topology.frames.operations import MAX_FRAME_GRAM_MULTIPLY_ADDS
+
+    dimension = 724
+    assert dimension**3 <= MAX_FRAME_GRAM_MULTIPLY_ADDS
+    assert 2 * dimension**3 > MAX_FRAME_GRAM_MULTIPLY_ADDS
+    vectors = tuple(
+        tuple((row * dimension + column) % 7 for column in range(dimension))
+        for row in range(dimension)
+    )
+    family = VectorFamily(dimension=dimension, vectors=vectors)
+    # The Gram-only budget still admits this family...
+    assert gram(family).gram[0][0] == sum(value * value for value in vectors[0])
+    # ...but the profile's additional operator pass must be charged too.
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        _tight_equiangular_profile(family)
+    assert error.value.errors()[0]["type"] == "frames.profile_work_budget"
+
+
+def test_nontrivial_equiangular_profile_requires_common_value() -> None:
+    """An equiangular frame with an observed pair retains its common value."""
+
+    result = _tight_equiangular_profile(
+        VectorFamily(dimension=2, vectors=((1, 0), (0, 1)))
+    )
+    assert result.equiangular is True
+    forged = json.loads(result.model_dump_json())
+    forged["common_squared_inner_product"] = None
+    with pytest.raises(ValueError, match="common squared inner product"):
+        type(result).model_validate_json(json.dumps(forged))
+
+    # A singleton has no off-diagonal pair, so the field stays optional there.
+    singleton = _tight_equiangular_profile(VectorFamily(dimension=1, vectors=((1,),)))
+    payload = json.loads(singleton.model_dump_json())
+    assert payload["common_squared_inner_product"] is None
+    assert type(singleton).model_validate_json(json.dumps(payload)) == singleton

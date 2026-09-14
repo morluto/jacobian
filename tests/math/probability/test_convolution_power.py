@@ -350,13 +350,15 @@ def test_power_rejects_a_lattice_value_over_the_exact_decimal_bound() -> None:
         )
     )
 
-    with pytest.raises(OperationDomainValidationError, match="512-digit"):
+    with pytest.raises(
+        OperationDomainValidationError, match=f"{MAX_RESULT_RATIONAL_DIGITS}-digit"
+    ):
         convolution_power(source, 2)
 
 
 def test_power_rejects_an_interior_value_with_a_larger_reduced_numerator() -> None:
-    numerator = 2 * 10**511 + 3
-    denominator = 18 * (10**510 + 1)
+    numerator = 2 * 10 ** (MAX_RESULT_RATIONAL_DIGITS - 1) + 3
+    denominator = 18 * (10 ** (MAX_RESULT_RATIONAL_DIGITS - 2) + 1)
     source = _distribution(
         (
             (Fraction(0), Fraction(1, 3)),
@@ -365,7 +367,9 @@ def test_power_rejects_an_interior_value_with_a_larger_reduced_numerator() -> No
         )
     )
 
-    with pytest.raises(OperationDomainValidationError, match="512-digit"):
+    with pytest.raises(
+        OperationDomainValidationError, match=f"{MAX_RESULT_RATIONAL_DIGITS}-digit"
+    ):
         convolution_power(source, 2)
 
 

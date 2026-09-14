@@ -33,6 +33,10 @@ from jacobian.math.probability._berry_esseen import (
     berry_esseen_bound,
 )
 from jacobian.math.probability._berry_esseen_tools import BERRY_ESSEEN_OPERATION
+from jacobian.math.probability._models import (
+    MAX_INPUT_RATIONAL_DIGITS,
+    MAX_RESULT_RATIONAL_DIGITS,
+)
 
 
 def _distribution(*atoms: tuple[int | Fraction, Fraction]) -> dict[str, object]:
@@ -293,7 +297,10 @@ def test_input_rational_height_boundary_is_enforced() -> None:
     )
     assert accepted.source.distribution.atoms[-1].value.as_fraction() == second_value
 
-    with pytest.raises(OperationResourceAdmissionError, match="128-digit bound"):
+    with pytest.raises(
+        OperationResourceAdmissionError,
+        match=f"{MAX_INPUT_RATIONAL_DIGITS}-digit bound",
+    ):
         berry_esseen_bound(
             _request(_distribution((0, Fraction(1, 2)), (10**128, Fraction(1, 2))))
         )
@@ -306,7 +313,10 @@ def test_input_height_is_checked_before_normalization(
         raise AssertionError("normalization must not precede input-height admission")
 
     monkeypatch.setattr(berry_module, "require_input_distribution", fail)
-    with pytest.raises(OperationResourceAdmissionError, match="128-digit bound"):
+    with pytest.raises(
+        OperationResourceAdmissionError,
+        match=f"{MAX_INPUT_RATIONAL_DIGITS}-digit bound",
+    ):
         berry_esseen_bound(
             _request(_distribution((0, Fraction(1, 2)), (10**128, Fraction(1, 2))))
         )
@@ -328,7 +338,10 @@ def test_native_sample_count_rejects_non_integers() -> None:
 
 def test_native_sample_count_rejects_over_digit_cap() -> None:
     request = _request(_distribution((0, Fraction(1, 2)), (1, Fraction(1, 2))))
-    with pytest.raises(OperationDomainValidationError, match="512 decimal digits"):
+    with pytest.raises(
+        OperationDomainValidationError,
+        match=f"{MAX_RESULT_RATIONAL_DIGITS} decimal digits",
+    ):
         berry_esseen_bound(
             BerryEsseenRequest.model_construct(
                 distribution=request.distribution,
@@ -426,7 +439,7 @@ def test_result_enforces_owner_rational_height_bound() -> None:
     payload = genuine.model_dump()
     payload["mean"] = {"num": 1, "den": 10**512}
 
-    with pytest.raises(ValueError, match="512-digit bound"):
+    with pytest.raises(ValueError, match=f"{MAX_RESULT_RATIONAL_DIGITS}-digit bound"):
         BerryEsseenResult.model_validate(payload)
 
 

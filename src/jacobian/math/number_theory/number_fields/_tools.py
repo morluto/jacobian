@@ -38,6 +38,7 @@ from jacobian.math.number_theory.number_fields.operations import (
     embeddings,
 )
 from jacobian.math.number_theory.number_fields.values import (
+    MAX_NUMBER_FIELD_DISCRIMINANT_DIGITS,
     NumberFieldEmbeddingProfile,
     SimpleNumberFieldRealEmbeddingOrder,
 )
@@ -104,7 +105,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "basis member represented as a canonical field element on the "
             "presentation's own ascending power basis, together with the field "
             "discriminant. The defining polynomial must be irreducible over QQ "
-            "and have degree at most 31. Admission additionally proves the "
+            "and have degree at most 31, and its monicized discriminant must "
+            f"not exceed {MAX_NUMBER_FIELD_DISCRIMINANT_DIGITS} digits. "
+            "Admission additionally proves the"
             "defining-polynomial discriminant factors within a bounded trial "
             "envelope (remaining cofactor at most 4096 digits and one, prime, "
             "or a prime power), so the exact backend completes instead of "
@@ -133,7 +136,16 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="number_field.discriminant.compute",
         title="Compute the discriminant of a number field",
-        description="Compute the field discriminant of one canonical SimpleNumberFieldPresentation in an isolated SymPy worker. The defining polynomial must be irreducible and within the degree bound, and its monicized discriminant must factor with a cofactor of at most 4096 digits that is one, prime, or a prime power. Worker non-completion raises an execution error without a discriminant claim.",
+        description=(
+            "Compute the field discriminant of one canonical "
+            "SimpleNumberFieldPresentation in an isolated SymPy worker. The "
+            "defining polynomial must be irreducible and within the degree "
+            f"bound, and its monicized discriminant must not exceed "
+            f"{MAX_NUMBER_FIELD_DISCRIMINANT_DIGITS} digits and must factor "
+            "with a cofactor of at most 4096 digits that is one, prime, or a "
+            "prime power. Worker non-completion raises an execution error "
+            "without a discriminant claim."
+        ),
         request_type=NumberFieldRequest,
         result_type=NumberFieldDiscriminantResult,
         run=compute_nf_discriminant,

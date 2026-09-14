@@ -11,11 +11,11 @@ from jacobian.math.graphs.rainbow_embedding.operations import (
 from jacobian.math.graphs.values import ColoredUndirectedGraph, SimpleUndirectedGraph
 
 
-def _p2():
+def _p2() -> SimpleUndirectedGraph:
     return SimpleUndirectedGraph(vertices=("a", "b"), edges=(("a", "b"),))
 
 
-def _k3_all_distinct():
+def _k3_all_distinct() -> ColoredUndirectedGraph:
     return ColoredUndirectedGraph(
         graph=SimpleUndirectedGraph(
             vertices=("0", "1", "2"),
@@ -25,7 +25,7 @@ def _k3_all_distinct():
     )
 
 
-def _k3_two_same():
+def _k3_two_same() -> ColoredUndirectedGraph:
     return ColoredUndirectedGraph(
         graph=SimpleUndirectedGraph(
             vertices=("0", "1", "2"),

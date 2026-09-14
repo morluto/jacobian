@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from math import comb
-from typing import Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import (
     ConfigDict,
@@ -14,7 +14,7 @@ from pydantic import (
 )
 from pydantic_core import PydanticCustomError
 
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     MAX_EDGES as MAX_HYPERGRAPH_EDGES,
 )
@@ -33,6 +33,21 @@ MAX_GRAPH_EDGES = 5_000
 MAX_LABEL_BYTES = 1_024
 MAX_TRADE_ORDER = MAX_T
 MAX_TRADE_DIFFERENCES = MAX_POINTS + MAX_SUBSETS
+
+# A small exact-cover envelope for the first public design constructor. The
+# complete candidate triple family is materialized before the maintained
+# generalized exact-cover backend runs, so these bounds cover both the
+# candidate representation and its deterministic node-by-item scan.
+MAX_STEINER_TRIPLE_ORDER = 15
+MAX_STEINER_SEARCH_STATES = 100_000
+MAX_STEINER_BLOCKS = MAX_STEINER_TRIPLE_ORDER * (MAX_STEINER_TRIPLE_ORDER - 1) // 6
+MAX_STEINER_FRONTIER_SHARDS = 4_096
+# Intrinsic allocation envelope for the retained design and resumable search
+# frontier: axis entries, block IDs, point memberships, and fixed-prefix
+# positions. Concrete transports own their encoded-byte ceilings independently.
+MAX_STEINER_RESULT_ALLOCATION_UNITS = 1_048_576
+_MAX_STEINER_EXACT_COVER_WORK_UNITS = 256 * 100_000 * 64
+_MAX_STEINER_INTERMEDIATE_UNITS = 8_192
 
 _MAX_CONTAINMENT_TOTAL_WORK_UNITS = 4_000_000
 _MAX_TRADE_TOTAL_WORK_UNITS = 5_000_000
@@ -115,6 +130,549 @@ class IncidenceStructure(StrictModel):
             )
         object.__setattr__(self, "blocks", tuple(canonical_blocks))
         return self
+
+
+class SteinerTripleSystemRequest(StrictModel):
+    """Construct an STS(v) through bounded exact pair-cover search."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Construct one canonical Steiner triple system of order v, "
+                "with v at least 3. The order must be congruent to 1 or 3 "
+                "modulo 6; a bounded "
+                "search may return UNKNOWN with resumable frontier shards "
+                "when its state budget is exhausted."
+            )
+        }
+    )
+
+    order: StrictInt = Field(
+        ge=3,
+        le=MAX_STEINER_TRIPLE_ORDER,
+        description=(
+            "Number of points; must be congruent to 1 or 3 modulo 6, at "
+            "least 3 (a triple system needs triples), and at "
+            f"most {MAX_STEINER_TRIPLE_ORDER}."
+        ),
+    )
+    search_budget: StrictInt = Field(
+        default=MAX_STEINER_SEARCH_STATES,
+        ge=1,
+        le=MAX_STEINER_SEARCH_STATES,
+        description=(
+            "Maximum exact-cover search states; exhaustion is reported as "
+            "UNKNOWN with resumable frontier shards."
+        ),
+    )
+    shard: SteinerTripleSystemShard | None = Field(
+        default=None,
+        description=(
+            "Optional unresolved fixed-triple constraints from an earlier "
+            "UNKNOWN result; the order must match. Continuation treats the "
+            "triples as included blocks, not as a private search-path prefix."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_necessary_parameters(self) -> Self:
+        # Every pair must occur in one triple, hence b=v(v-1)/6 must be an
+        # integer; this is the elementary necessary condition v=1 or 3 mod 6.
+        if self.order % 6 not in (1, 3):
+            raise _validation_error(
+                "steiner_order_necessary_condition",
+                "a Steiner triple system requires order congruent to 1 or 3 modulo 6",
+            )
+        if self.shard is not None and self.shard.order != self.order:
+            raise _validation_error(
+                "steiner_shard_order",
+                "a continuation shard must have the same order as the request",
+            )
+        return self
+
+
+class SteinerTripleSystemShard(StrictModel):
+    """Algorithm-independent fixed triples that constrain one continuation."""
+
+    order: StrictInt = Field(
+        ge=3,
+        le=MAX_STEINER_TRIPLE_ORDER,
+        description="Steiner order associated with this search prefix.",
+    )
+    fixed_triples: tuple[tuple[StrictInt, StrictInt, StrictInt], ...] = Field(
+        default=(),
+        max_length=MAX_STEINER_BLOCKS,
+        description=(
+            "Fixed triples that must appear in any completion. They are "
+            "block constraints, not a backend traversal prefix; each triple "
+            "is sorted and uses point positions in the range 0 through order-1."
+        ),
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def canonicalize_fixed_triple_family(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        triples = data.get("fixed_triples")
+        if triples is None:
+            return data
+        # Require the exact built-in containers: a list/tuple subclass can
+        # override ``__len__`` to report a value under the ceiling while
+        # iteration still yields the whole underlying family, so any
+        # ``isinstance`` guard would let the copy and sort run unbounded.
+        if type(triples) not in (list, tuple):
+            raise _validation_error(
+                "steiner_shard_shape",
+                "fixed_triples must be a bounded list or tuple",
+            )
+        if len(triples) > MAX_STEINER_BLOCKS:
+            # The field's own `max_length` already decides this request, and it
+            # costs one length read. Copying every inner list and sorting the
+            # whole family first would make a guaranteed rejection spend work
+            # proportional to an arbitrarily large input.
+            return data
+        # Bound every inner container before the shared projection copies it:
+        # an oversized array must be rejected without materializing its tuple
+        # form. Exact-type checks avoid invoking subclass-overridden methods.
+        for triple in triples:
+            if type(triple) not in (list, tuple):
+                raise _validation_error(
+                    "steiner_shard_shape",
+                    "each fixed triple must be a list or tuple of three integers",
+                )
+            if len(triple) != 3:
+                raise _validation_error(
+                    "steiner_shard_triple",
+                    "continuation triples must contain exactly three points",
+                )
+        # Project strict-JSON arrays to canonical tuples. The bounds above
+        # make this copy admitted work.
+        data = canonicalize_json_containers(data)
+        normalized = tuple(sorted(data["fixed_triples"]))
+        payload = dict(data)
+        payload["fixed_triples"] = normalized
+        return payload
+
+    @model_validator(mode="after")
+    def require_canonical_prefix(self) -> Self:
+        # getattr keeps a forged instance (union member revalidation runs this
+        # validator on model_construct values) a typed shape failure instead
+        # of a raw AttributeError.
+        order = getattr(self, "order", None)
+        triples = getattr(self, "fixed_triples", None)
+        if type(order) is not int or type(triples) is not tuple:
+            raise _validation_error(
+                "steiner_shard_shape",
+                "continuation shards must carry an order and a triple family",
+            )
+        if order % 6 not in (1, 3):
+            raise _validation_error(
+                "steiner_order_necessary_condition",
+                "a Steiner triple system requires order congruent to 1 or 3 modulo 6",
+            )
+        if len(triples) > order * (order - 1) // 6:
+            raise _validation_error(
+                "steiner_shard_length",
+                "a continuation prefix cannot contain more triples than the design",
+            )
+        if any(
+            triple != tuple(sorted(triple))
+            or any(point < 0 or point >= order for point in triple)
+            or len(set(triple)) != 3
+            for triple in triples
+        ):
+            raise _validation_error(
+                "steiner_shard_triple",
+                "continuation triples must be sorted, distinct, and in range",
+            )
+        if len(set(self.fixed_triples)) != len(self.fixed_triples):
+            raise _validation_error(
+                "steiner_shard_duplicate",
+                "continuation triples must be unique",
+            )
+        covered: set[tuple[int, int]] = set()
+        for triple in triples:
+            for pair in (
+                (triple[0], triple[1]),
+                (triple[0], triple[2]),
+                (triple[1], triple[2]),
+            ):
+                if pair in covered:
+                    raise _validation_error(
+                        "steiner_shard_overlap",
+                        "fixed triples must cover distinct pairs",
+                    )
+                covered.add(pair)
+        return self
+
+
+class ComputedSteinerTripleSystem(StrictModel):
+    """A complete design, established by an exact cover of every pair."""
+
+    status: Literal["COMPUTED"] = "COMPUTED"
+    design: IncidenceStructure
+
+
+class SteinerTripleSystemNotFound(StrictModel):
+    """No completion was found within the admitted search envelope."""
+
+    status: Literal["NOT_FOUND"] = "NOT_FOUND"
+    source_shard: SteinerTripleSystemShard | None = Field(
+        default=None,
+        description=(
+            "The continuation prefix actually searched. When set, this is "
+            "shard-local infeasibility, not global nonexistence of an STS of "
+            "this order."
+        ),
+    )
+
+
+def _revalidate_shard_instance(
+    shard: SteinerTripleSystemShard,
+) -> SteinerTripleSystemShard:
+    """Rebuild a possibly forged shard instance through owned validators.
+
+    Pydantic trusts existing model instances during nested validation, so a
+    ``model_construct`` value can carry missing fields, an oversized family,
+    or out-of-range triples past field checks. A validated instance always
+    carries canonical tuples, so a non-tuple family already proves forgery;
+    exact-type and length pre-checks then bound the traversal before
+    ``model_validate`` replays semantic admission with typed errors.
+    """
+
+    raw_order = getattr(shard, "order", None)
+    raw_triples = getattr(shard, "fixed_triples", None)
+    if type(raw_order) is not int or type(raw_triples) is not tuple:
+        raise _validation_error(
+            "steiner_shard_shape",
+            "frontier shards must carry an order and a canonical triple family",
+        )
+    if len(raw_triples) > MAX_STEINER_BLOCKS:
+        raise _validation_error(
+            "steiner_shard_length",
+            "a continuation prefix cannot contain more triples than the design",
+        )
+    return SteinerTripleSystemShard.model_validate(
+        {"order": raw_order, "fixed_triples": raw_triples}
+    )
+
+
+def _canonical_shard_family_key(
+    shard: object,
+) -> tuple[tuple[Any, ...], Any] | None:
+    """Return the canonical frontier key and the value to retain for a shard.
+
+    A validated ``SteinerTripleSystemShard`` exposes its canonical fields
+    directly.  A Pydantic wire payload supplies each shard as a plain dict, so
+    the same key is recovered from ``order`` and ``fixed_triples`` after the
+    shard's own family canonicalization.  Anything unrecognized returns
+    ``None`` so strict validation still reports the offending field.
+    """
+
+    if isinstance(shard, SteinerTripleSystemShard):
+        # Pydantic trusts existing instances, so a forged value would keep its
+        # unvalidated semantics here. Rebuild it through the owned validators
+        # and retain the canonical copy.
+        validated = _revalidate_shard_instance(shard)
+        return ((validated.order, validated.fixed_triples), validated)
+    if not isinstance(shard, dict):
+        return None
+    if set(shard) - {"order", "fixed_triples"}:
+        return None
+    order = shard.get("order")
+    if type(order) is not int:
+        return None
+    raw = shard.get("fixed_triples", ())
+    if type(raw) not in (list, tuple) or len(raw) > MAX_STEINER_BLOCKS:
+        return None
+    triples: list[tuple[int, int, int]] = []
+    for triple in raw:
+        if type(triple) not in (list, tuple) or len(triple) != 3:
+            return None
+        if any(type(point) is not int for point in triple):
+            return None
+        triples.append((triple[0], triple[1], triple[2]))
+    return ((order, tuple(sorted(triples))), shard)
+
+
+class SteinerTripleSystemUnknown(StrictModel):
+    """A bounded stop that retains at least one unresolved frontier shard."""
+
+    status: Literal["UNKNOWN"] = "UNKNOWN"
+    states_explored: StrictInt = Field(ge=0, le=MAX_STEINER_SEARCH_STATES)
+    unresolved_frontier: tuple[SteinerTripleSystemShard, ...] = Field(
+        min_length=1, max_length=MAX_STEINER_FRONTIER_SHARDS
+    )
+    source_shard: SteinerTripleSystemShard | None = Field(
+        default=None,
+        description=(
+            "The continuation prefix actually searched, when the request was "
+            "itself a continuation."
+        ),
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def canonicalize_unresolved_frontier(cls, data: Any) -> Any:
+        """Normalize the frontier to one sorted, duplicate-free encoding.
+
+        The frontier is an unordered family of unresolved subdomains and no
+        ordering semantics are documented, so accepting several orders - or
+        duplicates - would expose private DFS ordering as wire-visible
+        structure and admit multiple encodings of one continuation state.
+        """
+
+        if not isinstance(data, dict):
+            return data
+        frontier = data.get("unresolved_frontier")
+        if frontier is None:
+            return data
+        if type(frontier) not in (list, tuple):
+            # A sequence subclass can understate __len__ while iteration
+            # yields an arbitrarily large family; require the exact builtin
+            # container before inspection.
+            raise _validation_error(
+                "steiner_frontier_shape",
+                "the unresolved frontier must be a bounded list or tuple",
+            )
+        if len(frontier) > MAX_STEINER_FRONTIER_SHARDS:
+            # Let the field's own `max_length` decide; sorting a guaranteed
+            # rejection would spend work proportional to its input.
+            return data
+        canonical: dict[tuple[Any, ...], Any] = {}
+        for shard in frontier:
+            keyed = _canonical_shard_family_key(shard)
+            if keyed is None:
+                if isinstance(shard, SteinerTripleSystemShard):
+                    # Pydantic trusts an existing instance, so a forged shard
+                    # must be rejected here rather than passed through.
+                    raise _validation_error(
+                        "steiner_frontier_shard",
+                        "each frontier shard must be a canonical "
+                        "SteinerTripleSystemShard",
+                    )
+                # A malformed wire shard must reach strict field validation
+                # unchanged so it is reported, not silently merged.
+                return data
+            key, retain = keyed
+            canonical.setdefault(key, retain)
+        payload = dict(data)
+        payload["unresolved_frontier"] = tuple(
+            canonical[key] for key in sorted(canonical)
+        )
+        # Project strict-JSON arrays to canonical tuples. The shard keys above
+        # already traversed these bounded families, so this copy is admitted
+        # work; nested shard dicts reach field validation in canonical form.
+        return canonicalize_json_containers(payload)
+
+
+SteinerTripleSystemOutcome = Annotated[
+    ComputedSteinerTripleSystem
+    | SteinerTripleSystemNotFound
+    | SteinerTripleSystemUnknown,
+    Field(discriminator="status"),
+]
+
+
+class SteinerTripleSystemResult(StrictModel):
+    """One exact construction outcome, including bounded non-completion.
+
+    The status selects the payload: only ``COMPUTED`` carries a design, only
+    ``UNKNOWN`` carries a frontier, and neither optional field can appear on a
+    branch that does not guarantee it. Encoding the branches as a
+    status-discriminated union rather than one model with independently
+    optional fields means a schema-driven caller learns the same guarantee
+    from the generated JSON Schema that the runtime enforces.
+    """
+
+    order: StrictInt = Field(ge=3, le=MAX_STEINER_TRIPLE_ORDER)
+    outcome: SteinerTripleSystemOutcome
+
+    @model_validator(mode="after")
+    def bind_outcome_to_order(self) -> Self:
+        if self.order % 6 not in (1, 3):
+            raise _validation_error(
+                "steiner_order_necessary_condition",
+                "a Steiner triple system requires order congruent to 1 or 3 modulo 6",
+            )
+        outcome = self.outcome
+        if isinstance(outcome, ComputedSteinerTripleSystem):
+            _require_computed_steiner_design(self.order, outcome.design)
+            return self
+        if isinstance(outcome, SteinerTripleSystemUnknown):
+            _require_steiner_frontier_order(self.order, outcome.unresolved_frontier)
+        source_shard = outcome.source_shard
+        if source_shard is not None:
+            # Pydantic trusts existing instances, so a forged shard would
+            # expose missing fields as raw AttributeError here. Rebuild it
+            # through the owned validators before reading its order.
+            validated_source = (
+                _revalidate_shard_instance(source_shard)
+                if isinstance(source_shard, SteinerTripleSystemShard)
+                else SteinerTripleSystemShard.model_validate(source_shard)
+            )
+            if validated_source.order != self.order:
+                raise _validation_error(
+                    "steiner_source_shard_order",
+                    "a searched source shard must have the result order",
+                )
+            # Retain the canonical shard so a forged, unsorted source cannot
+            # survive into the serialized result.
+            object.__setattr__(
+                self,
+                "outcome",
+                outcome.model_copy(update={"source_shard": validated_source}),
+            )
+        return self
+
+
+def _require_computed_steiner_design(order: int, design: IncidenceStructure) -> None:
+    # Require built-in tuples so a forged subclass cannot under-report its
+    # length while iteration yields an unbounded family.
+    if (
+        type(design.points) is not tuple
+        or type(design.blocks) is not tuple
+        or type(design.block_ids) is not tuple
+    ):
+        raise _validation_error(
+            "steiner_design_shape",
+            "a computed design must carry built-in tuples on every axis",
+        )
+    if len(design.points) != order:
+        raise _validation_error(
+            "steiner_design_order", "design point count must equal order"
+        )
+    expected_blocks = order * (order - 1) // 6
+    if len(design.blocks) != expected_blocks:
+        raise _validation_error(
+            "steiner_design_block_count",
+            "design block count must equal v(v-1)/6",
+        )
+    expected_points = tuple(f"p{point}" for point in range(order))
+    expected_block_ids = tuple(f"b{index}" for index in range(expected_blocks))
+    if design.points != expected_points:
+        raise _validation_error(
+            "steiner_design_point_axis",
+            "computed designs must use the canonical point axis",
+        )
+    if design.block_ids != expected_block_ids:
+        raise _validation_error(
+            "steiner_design_block_axis",
+            "computed designs must use canonical block IDs",
+        )
+    if any(type(block) is not tuple for block in design.blocks):
+        raise _validation_error(
+            "steiner_block_shape",
+            "every computed block must be a built-in tuple",
+        )
+    if any(len(block) != 3 for block in design.blocks):
+        raise _validation_error(
+            "steiner_block_size",
+            "every Steiner block must contain exactly 3 points",
+        )
+    point_set = set(design.points)
+    if any(
+        type(point) is not str or point not in point_set
+        for block in design.blocks
+        for point in block
+    ):
+        raise _validation_error(
+            "steiner_design_undeclared_member",
+            "every computed block member must be a declared point",
+        )
+    if any(len(set(block)) != 3 for block in design.blocks):
+        raise _validation_error(
+            "steiner_block_distinct",
+            "every Steiner block must contain three distinct points",
+        )
+    point_index = {point: index for index, point in enumerate(expected_points)}
+    block_indices = tuple(
+        tuple(point_index[point] for point in block) for block in design.blocks
+    )
+    if block_indices != tuple(sorted(block_indices)) or any(
+        tuple(sorted(block)) != block for block in block_indices
+    ):
+        raise _validation_error(
+            "steiner_block_order",
+            "computed blocks must be in canonical lexicographic order",
+        )
+
+
+def _require_steiner_frontier_order(
+    order: int, frontier: tuple[SteinerTripleSystemShard, ...]
+) -> None:
+    # Require a built-in tuple so a forged subclass cannot under-report its
+    # length while iteration is unbounded.
+    if type(frontier) is not tuple:
+        raise _validation_error(
+            "steiner_frontier_shape",
+            "the unresolved frontier must be a built-in tuple",
+        )
+    if len(frontier) > MAX_STEINER_FRONTIER_SHARDS:
+        raise _validation_error(
+            "steiner_frontier_length",
+            "the unresolved frontier exceeds the admitted shard bound",
+        )
+    # getattr keeps a forged instance (or mapping) a typed order mismatch
+    # instead of a raw AttributeError.
+    if any(getattr(shard, "order", None) != order for shard in frontier):
+        raise _validation_error(
+            "steiner_frontier_order",
+            "every frontier shard must have the result order",
+        )
+
+
+def _steiner_result_allocation_units(order: int) -> int:
+    """Return retained structural slots for every canonical result state."""
+
+    block_count = order * (order - 1) // 6
+    design_units = order + block_count + 3 * block_count
+    frontier_units = MAX_STEINER_FRONTIER_SHARDS * (1 + 3 * MAX_STEINER_BLOCKS)
+    return 8 + design_units + frontier_units
+
+
+def _require_steiner_triple_system_admitted(order: int, search_budget: int) -> None:
+    """Admit all materialized construction work before the search starts."""
+
+    if not 3 <= order <= MAX_STEINER_TRIPLE_ORDER:
+        raise IncidenceStructureAdmissionError(
+            "steiner_order_out_of_range",
+            f"Steiner order must be between 3 and {MAX_STEINER_TRIPLE_ORDER}",
+        )
+    if order % 6 not in (1, 3):
+        raise IncidenceStructureAdmissionError(
+            "steiner_order_necessary_condition",
+            "a Steiner triple system requires order congruent to 1 or 3 modulo 6",
+        )
+    if not 1 <= search_budget <= MAX_STEINER_SEARCH_STATES:
+        raise IncidenceStructureAdmissionError(
+            "steiner_search_budget_out_of_range",
+            f"Steiner search budget must be between 1 and {MAX_STEINER_SEARCH_STATES}",
+        )
+    pair_count = comb(order, 2)
+    triple_count = comb(order, 3)
+    # Match the generalized exact-cover backend's admitted node-by-item scan
+    # bound before materializing its canonical instance.
+    work_units = (
+        search_budget * pair_count * ((max(triple_count, pair_count) + 63) // 64)
+    )
+    if work_units > _MAX_STEINER_EXACT_COVER_WORK_UNITS:
+        raise IncidenceStructureAdmissionError(
+            "steiner_work_budget_exceeded",
+            "Steiner construction exceeds the exact-cover work budget",
+        )
+    intermediate_units = triple_count + 3 * triple_count + pair_count
+    if intermediate_units > _MAX_STEINER_INTERMEDIATE_UNITS:
+        raise IncidenceStructureAdmissionError(
+            "steiner_intermediate_budget_exceeded",
+            "Steiner construction exceeds its candidate-family allocation budget",
+        )
+    if _steiner_result_allocation_units(order) > MAX_STEINER_RESULT_ALLOCATION_UNITS:
+        raise IncidenceStructureAdmissionError(
+            "steiner_result_allocation_exceeded",
+            "Steiner construction exceeds its retained result allocation budget",
+        )
 
 
 def _subset_count(point_count: int, order: int) -> int:

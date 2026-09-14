@@ -10,6 +10,7 @@ from jacobian.math.topology.cohomology.operations._models import (
     BocksteinRequest,
     BocksteinResult,
     SteenrodSquareRequest,
+    SteenrodSquareResult,
 )
 from jacobian.math.topology.cohomology.operations.operations import (
     bockstein,
@@ -19,7 +20,9 @@ from jacobian.math.topology.cohomology.operations.operations import (
 )
 
 
-def compute_steenrod_square(request: SteenrodSquareRequest):
+def compute_steenrod_square(
+    request: SteenrodSquareRequest,
+) -> SteenrodSquareResult:
     return steenrod_square(
         request.cochain_degree,
         request.simplex_values,
@@ -30,7 +33,7 @@ def compute_steenrod_square(request: SteenrodSquareRequest):
     )
 
 
-def compute_bockstein(request: BocksteinRequest):
+def compute_bockstein(request: BocksteinRequest) -> BocksteinResult:
     return bockstein(
         request.prime,
         request.cochain_degree,

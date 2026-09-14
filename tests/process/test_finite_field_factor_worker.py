@@ -5,6 +5,7 @@ import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from threading import Event, Thread
 from typing import Any
 
@@ -76,7 +77,7 @@ def test_request_stops_and_reaps_a_blocked_backend_call(
 def test_cancellation_during_directory_setup_does_not_start_a_worker(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    original = _factor_process.TemporaryDirectory
+    original = TemporaryDirectory
     cancellation = Event()
 
     @contextmanager

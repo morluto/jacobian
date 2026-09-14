@@ -1,21 +1,47 @@
 """Exact frame and vector-family contract tests."""
 
+import json
 from fractions import Fraction
 
 import pytest
 
-from jacobian.canonical import encode_strict_json
-from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.matrices.values import IntegerMatrix
-from jacobian.math.topology.frames._models import (
-    GramResult,
+from jacobian._exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    CanonicalRational,
+    canonical_rational_component_digits,
 )
-from jacobian.math.topology.frames._tools import _coherence, _frame_potential, _gram
+from jacobian.canonical import encode_strict_json
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
+from jacobian.math.matrices.values import IntegerMatrix
+from jacobian.math.number_theory.number_fields import GaussianRational
+from jacobian.math.topology.frames._models import (
+    ComplexFrameProfileRequest,
+    GramResult,
+    MutuallyUnbiasedBasesRequest,
+    SicProfileRequest,
+)
+from jacobian.math.topology.frames._tools import (
+    _coherence,
+    _complex_frame_profile,
+    _frame_potential,
+    _gram,
+    _mutually_unbiased_bases,
+    _sic_profile,
+    _tight_equiangular_profile,
+)
 from jacobian.math.topology.frames.operations import gram, verify_gram
 from jacobian.math.topology.frames.values import (
     MAX_VECTOR_CELLS,
+    ComplexFrame,
     VectorFamily,
 )
+
+
+def _z(real: int, imaginary: int = 0) -> GaussianRational:
+    return GaussianRational.from_fractions(Fraction(real), Fraction(imaginary))
 
 
 def _repeated_standard_basis(
@@ -104,6 +130,403 @@ def test_coherence_rejects_zero_vector() -> None:
     with pytest.raises(OperationDomainValidationError) as error:
         _coherence(request)
     assert error.value.errors()[0]["type"] == "frames.zero_vector"
+
+
+def test_tight_equiangular_profile_is_exact_and_serializable() -> None:
+    result = _tight_equiangular_profile(
+        VectorFamily(dimension=2, vectors=((1, 0), (0, 1)))
+    )
+    assert result.tight is True
+    assert result.tight_constant == 1
+    assert result.equiangular is True
+    assert result.common_squared_inner_product is not None
+    assert result.common_squared_inner_product.as_integer_ratio() == (0, 1)
+    assert type(result).model_validate_json(result.model_dump_json()) == result
+
+
+def test_exact_complex_mub_profile_and_forged_shape_rejection() -> None:
+    standard = ComplexFrame(dimension=2, vectors=((_z(1), _z(0)), (_z(0), _z(1))))
+    hadamard = ComplexFrame(dimension=2, vectors=((_z(1), _z(1)), (_z(1), _z(-1))))
+    request = MutuallyUnbiasedBasesRequest(dimension=2, bases=(standard, hadamard))
+    result = _mutually_unbiased_bases(request)
+    assert result.is_mutually_unbiased is True
+    assert result.basis_pair_count == 1
+    assert result.cross_gram_squared[0][0][0].as_integer_ratio() == (1, 2)
+    assert result.basis_grams[0][0][1].as_fractions() == (Fraction(0), Fraction(0))
+    assert type(result).model_validate_json(result.model_dump_json()) == result
+    forged = json.loads(result.model_dump_json())
+    forged["basis_pair_count"] = 0
+    with pytest.raises(ValueError, match="pair count"):
+        type(result).model_validate_json(json.dumps(forged))
+    non_mub = _mutually_unbiased_bases(
+        MutuallyUnbiasedBasesRequest(dimension=2, bases=(standard, standard))
+    )
+    assert non_mub.is_mutually_unbiased is False
+    with pytest.raises(ValueError, match="at most 16"):
+        MutuallyUnbiasedBasesRequest(dimension=2, bases=(standard,) * 17)
+
+
+def test_exact_complex_sic_and_design_profiles_are_decisions() -> None:
+    basis = ComplexFrame(dimension=2, vectors=((_z(1), _z(0)), (_z(0), _z(1))))
+    design = _complex_frame_profile(ComplexFrameProfileRequest(frame=basis))
+    assert design.tight is True
+    assert design.equiangular is True
+    assert design.common_squared_overlap is not None
+    assert design.common_squared_overlap.as_integer_ratio() == (0, 1)
+
+    sic = _sic_profile(
+        SicProfileRequest(frame=ComplexFrame(dimension=1, vectors=((_z(1),),)))
+    )
+    assert sic.is_sic is True
+    assert sic.cardinality_residual == 0
+    assert sic.equiangular is True
+    assert sic.common_squared_overlap is not None
+    assert sic.common_squared_overlap.as_integer_ratio() == (1, 2)
+    assert sic.common_squared_overlap_residual is not None
+    assert sic.common_squared_overlap_residual.as_integer_ratio() == (0, 1)
+    assert sic.squared_overlaps[0][0].as_integer_ratio() == (1, 1)
+    assert sic.tight_residual[0][0].as_fractions() == (Fraction(0), Fraction(0))
+    assert type(sic).model_validate_json(sic.model_dump_json()) == sic
+    forged = json.loads(sic.model_dump_json())
+    forged["squared_overlaps"] = []
+    with pytest.raises(ValueError, match="SIC ledgers"):
+        type(sic).model_validate_json(json.dumps(forged))
+
+    phase_scaled = _sic_profile(
+        SicProfileRequest(
+            frame=ComplexFrame(
+                dimension=1,
+                vectors=((GaussianRational.from_fractions(Fraction(0), Fraction(3)),),),
+            )
+        )
+    )
+    assert phase_scaled.is_sic is True
+    assert phase_scaled.frame_operator[0][0].as_fractions() == (
+        Fraction(1),
+        Fraction(0),
+    )
+    non_sic = _sic_profile(SicProfileRequest(frame=basis))
+    assert non_sic.is_sic is False
+    assert non_sic.cardinality_residual == -2
+    assert non_sic.equiangular is True
+    assert non_sic.common_squared_overlap is not None
+    assert non_sic.common_squared_overlap.as_integer_ratio() == (0, 1)
+    assert non_sic.common_squared_overlap_residual is not None
+    assert non_sic.common_squared_overlap_residual.as_integer_ratio() == (-1, 3)
+    assert type(non_sic).model_validate_json(non_sic.model_dump_json()) == non_sic
+
+    equal_norm_wrong_overlap = _sic_profile(
+        SicProfileRequest(
+            frame=ComplexFrame(
+                dimension=2,
+                vectors=((_z(1), _z(0)),) * 4,
+            )
+        )
+    )
+    assert equal_norm_wrong_overlap.cardinality_residual == 0
+    assert equal_norm_wrong_overlap.equiangular is True
+    assert equal_norm_wrong_overlap.common_squared_overlap is not None
+    assert equal_norm_wrong_overlap.common_squared_overlap.as_integer_ratio() == (1, 1)
+    assert equal_norm_wrong_overlap.common_squared_overlap_residual is not None
+    assert (
+        equal_norm_wrong_overlap.common_squared_overlap_residual.as_integer_ratio()
+        == (
+            2,
+            3,
+        )
+    )
+    assert equal_norm_wrong_overlap.is_sic is False
+
+
+def test_complex_operator_uses_vector_times_conjugate_vector_and_trace_average() -> (
+    None
+):
+    frame = ComplexFrame(
+        dimension=2,
+        vectors=(
+            (_z(1), _z(0, 1)),
+            (_z(0), _z(2)),
+        ),
+    )
+    result = _complex_frame_profile(ComplexFrameProfileRequest(frame=frame))
+
+    assert result.frame_operator[0][1].as_fractions() == (Fraction(0), Fraction(-1))
+    assert result.frame_operator[1][0].as_fractions() == (Fraction(0), Fraction(1))
+    assert result.tight is False
+    assert result.tight_residual[0][0].as_fractions() == (
+        Fraction(-2),
+        Fraction(0),
+    )
+    assert result.tight_residual[1][1].as_fractions() == (
+        Fraction(2),
+        Fraction(0),
+    )
+
+
+def test_mub_accepts_scaled_nonunit_representatives() -> None:
+    standard = ComplexFrame(
+        dimension=2,
+        vectors=((_z(2), _z(0)), (_z(0), _z(3))),
+    )
+    hadamard = ComplexFrame(
+        dimension=2,
+        vectors=((_z(5), _z(5)), (_z(7), _z(-7))),
+    )
+
+    result = _mutually_unbiased_bases(
+        MutuallyUnbiasedBasesRequest(dimension=2, bases=(standard, hadamard))
+    )
+
+    assert result.is_mutually_unbiased is True
+    assert result.cross_gram_squared[0][0][0].as_integer_ratio() == (1, 2)
+
+
+def test_sic_ledgers_are_invariant_under_independent_representative_scaling() -> None:
+    base = ComplexFrame(
+        dimension=2,
+        vectors=(
+            (_z(1), _z(0)),
+            (_z(0), _z(1)),
+            (_z(1), _z(1)),
+            (_z(1), _z(2)),
+        ),
+    )
+    scaled = ComplexFrame(
+        dimension=2,
+        vectors=(
+            (_z(2), _z(0)),
+            (_z(0), _z(3)),
+            (_z(4), _z(4)),
+            (_z(5), _z(10)),
+        ),
+    )
+
+    base_result = _sic_profile(SicProfileRequest(frame=base))
+    scaled_result = _sic_profile(SicProfileRequest(frame=scaled))
+
+    assert scaled_result.is_sic == base_result.is_sic
+    assert scaled_result.cardinality_residual == base_result.cardinality_residual
+    assert scaled_result.equiangular == base_result.equiangular
+    assert scaled_result.common_squared_overlap == base_result.common_squared_overlap
+    assert (
+        scaled_result.common_squared_overlap_residual
+        == base_result.common_squared_overlap_residual
+    )
+    assert scaled_result.squared_overlaps == base_result.squared_overlaps
+    assert scaled_result.frame_operator == base_result.frame_operator
+    assert scaled_result.tight_residual == base_result.tight_residual
+    assert base_result.equiangular is False
+    assert base_result.common_squared_overlap is None
+    assert base_result.common_squared_overlap_residual is None
+    assert (
+        type(base_result).model_validate_json(base_result.model_dump_json())
+        == base_result
+    )
+
+
+def test_complex_accumulation_height_is_admitted_before_arithmetic() -> None:
+    frame = ComplexFrame(
+        dimension=1,
+        vectors=tuple(
+            (GaussianRational.from_fractions(Fraction(1, 10**70 + index), Fraction(0)),)
+            for index in range(64)
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="accumulation"):
+        _complex_frame_profile(ComplexFrameProfileRequest(frame=frame))
+
+
+def test_complex_derived_denominator_growth_is_admitted_before_basis_grams() -> None:
+    primes = (
+        2,
+        3,
+        5,
+        7,
+        11,
+        13,
+        17,
+        19,
+        23,
+        29,
+        31,
+        37,
+        41,
+        43,
+        47,
+        53,
+        59,
+        61,
+        67,
+        71,
+        73,
+        79,
+        83,
+        89,
+        97,
+        101,
+        103,
+        107,
+        109,
+        113,
+        127,
+        131,
+        137,
+    )
+    denominators = []
+    for prime in primes:
+        denominator = prime
+        while len(str(denominator)) < 70:
+            denominator *= prime
+        denominators.append(denominator)
+    vector = tuple(
+        GaussianRational.from_fractions(Fraction(1, denominator), Fraction(0))
+        for denominator in denominators
+    )
+    frame = ComplexFrame(dimension=33, vectors=(vector,) * 33)
+
+    with pytest.raises(OperationResourceAdmissionError, match="height") as error:
+        _mutually_unbiased_bases(
+            MutuallyUnbiasedBasesRequest(dimension=33, bases=(frame,))
+        )
+    assert error.value.errors()[0]["type"] == "frames.complex_inner_product_height"
+
+
+@pytest.mark.parametrize("operation", (_complex_frame_profile, _sic_profile))
+def test_complex_profiles_reject_empty_frames_before_tightness(
+    operation: object,
+) -> None:
+    empty = ComplexFrame(dimension=2, vectors=())
+    request_type = (
+        ComplexFrameProfileRequest
+        if operation is _complex_frame_profile
+        else SicProfileRequest
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        operation(request_type(frame=empty))  # type: ignore[operator]
+    assert error.value.errors()[0]["type"] == "frames.empty_complex_frame"
+
+
+def test_complex_profile_rejects_forged_vector_axes_at_native_boundary() -> None:
+    malformed = ComplexFrame.model_construct(dimension=2, vectors=((_z(1),),))
+    request = ComplexFrameProfileRequest.model_construct(frame=malformed)
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        _complex_frame_profile(request)
+    assert error.value.errors()[0]["type"] == (
+        "frames.complex_vector_dimension_mismatch"
+    )
+
+
+def test_complex_profile_rejects_forged_noncanonical_or_oversized_scalars() -> None:
+    noncanonical = CanonicalRational.model_construct(num=2, den=4)
+    scalar = GaussianRational.model_construct(real=noncanonical, imaginary=_z(0).real)
+    frame = ComplexFrame.model_construct(dimension=1, vectors=((scalar,),))
+    request = ComplexFrameProfileRequest.model_construct(frame=frame)
+    with pytest.raises(OperationDomainValidationError) as error:
+        _complex_frame_profile(request)
+    assert error.value.errors()[0]["type"] == "frames.complex_scalar_component"
+
+    oversized = CanonicalRational.model_construct(num=10**5000, den=1)
+    scalar = GaussianRational.model_construct(real=oversized, imaginary=_z(0).imaginary)
+    frame = ComplexFrame.model_construct(dimension=1, vectors=((scalar,),))
+    request = ComplexFrameProfileRequest.model_construct(frame=frame)
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        _complex_frame_profile(request)
+    assert error.value.errors()[0]["type"] == "frames.complex_scalar_height"
+
+
+def test_complex_profile_admits_large_scalar_before_expansion() -> None:
+    """A cheap large coordinate is admitted instead of a blanket 128-digit cap."""
+    huge = GaussianRational.from_fractions(Fraction(10**128), Fraction(0))
+    frame = ComplexFrame(dimension=1, vectors=((huge,),))
+    result = _sic_profile(SicProfileRequest(frame=frame))
+    assert result.is_sic is True
+    assert result.cardinality_residual == 0
+
+
+def test_sic_profile_rejects_forged_structural_residuals() -> None:
+    result = _sic_profile(
+        SicProfileRequest(frame=ComplexFrame(dimension=1, vectors=((_z(1),),)))
+    )
+    forged = json.loads(result.model_dump_json())
+    forged["cardinality_residual"] = "1"
+    with pytest.raises(ValueError, match="cardinality residual"):
+        type(result).model_validate_json(json.dumps(forged))
+
+    forged = json.loads(result.model_dump_json())
+    forged["common_squared_overlap_residual"] = None
+    with pytest.raises(ValueError, match="present together"):
+        type(result).model_validate_json(json.dumps(forged))
+
+    forged = json.loads(result.model_dump_json())
+    forged["equiangular"] = False
+    with pytest.raises(ValueError, match="equiangular status"):
+        type(result).model_validate_json(json.dumps(forged))
+
+    forged = json.loads(result.model_dump_json())
+    forged["common_squared_overlap"] = {"num": "0", "den": "1"}
+    forged["common_squared_overlap_residual"] = {"num": "-1", "den": "2"}
+    restored_overlap = type(result).model_validate_json(json.dumps(forged))
+    assert restored_overlap.common_squared_overlap is not None
+    assert restored_overlap.common_squared_overlap.as_integer_ratio() == (0, 1)
+
+    forged = json.loads(result.model_dump_json())
+    forged["common_squared_overlap_residual"] = {"num": "1", "den": "1"}
+    restored_residual = type(result).model_validate_json(json.dumps(forged))
+    assert restored_residual.common_squared_overlap_residual is not None
+    assert restored_residual.common_squared_overlap_residual.as_integer_ratio() == (
+        1,
+        1,
+    )
+
+    forged = json.loads(result.model_dump_json())
+    forged["is_sic"] = False
+    restored = type(result).model_validate_json(json.dumps(forged))
+    assert restored.is_sic is False
+
+
+@pytest.mark.parametrize(
+    ("operation", "request_type"),
+    (
+        (_tight_equiangular_profile, VectorFamily),
+        (_complex_frame_profile, ComplexFrameProfileRequest),
+        (_mutually_unbiased_bases, MutuallyUnbiasedBasesRequest),
+        (_sic_profile, SicProfileRequest),
+    ),
+)
+def test_new_frame_operations_reject_untyped_native_requests(
+    operation: object, request_type: type[object]
+) -> None:
+    expected_message = (
+        "VectorFamily" if operation is _tight_equiangular_profile else "request"
+    )
+    with pytest.raises(OperationDomainValidationError, match=expected_message) as error:
+        operation({})  # type: ignore[operator]
+    expected_code = (
+        "frames.vector_family_type"
+        if operation is _tight_equiangular_profile
+        else "frames.request_type"
+    )
+    assert error.value.errors()[0]["type"] == expected_code
+    assert request_type.__name__ in str(error.value)
+
+
+@pytest.mark.parametrize("operation", (_gram, _coherence, _frame_potential))
+def test_existing_frame_operations_reject_untyped_native_requests(
+    operation: object,
+) -> None:
+    with pytest.raises(OperationDomainValidationError) as error:
+        operation({})  # type: ignore[operator]
+    assert error.value.errors()[0]["type"] == "frames.vector_family_type"
+
+
+def test_existing_frame_operations_reject_forged_vector_axes_at_native_boundary() -> (
+    None
+):
+    malformed = VectorFamily.model_construct(dimension=2, vectors=((1,),))
+    with pytest.raises(OperationDomainValidationError) as error:
+        _gram(malformed)
+    assert error.value.errors()[0]["type"] == "frames.vector_dimension_mismatch"
 
 
 def test_coherence_is_exact_and_carries_canonical_maximizer() -> None:
@@ -331,3 +754,354 @@ def test_gram_verifier_propagates_unexpected_kernel_errors(
     monkeypatch.setattr(operations, "integer_gram", unavailable)
     with pytest.raises(ValueError, match="backend arithmetic unavailable"):
         verify_gram(claim)
+
+
+def _sylvester_hadamard(order: int) -> tuple[tuple[int, ...], ...]:
+    rows: tuple[tuple[int, ...], ...] = ((1,),)
+    while len(rows) < order:
+        rows = tuple(row + row for row in rows) + tuple(
+            row + tuple(-entry for entry in row) for row in rows
+        )
+    return rows
+
+
+def test_dimension_32_standard_hadamard_mub_skips_operator_height() -> None:
+    dimension = 32
+    standard = ComplexFrame(
+        dimension=dimension,
+        vectors=tuple(
+            tuple(_z(int(row == column)) for column in range(dimension))
+            for row in range(dimension)
+        ),
+    )
+    hadamard = ComplexFrame(
+        dimension=dimension,
+        vectors=tuple(
+            tuple(_z(entry) for entry in row) for row in _sylvester_hadamard(dimension)
+        ),
+    )
+
+    result = _mutually_unbiased_bases(
+        MutuallyUnbiasedBasesRequest(dimension=dimension, bases=(standard, hadamard))
+    )
+
+    assert result.is_mutually_unbiased is True
+    assert result.basis_pair_count == 1
+
+
+def test_sic_profile_deserializes_asymmetric_squared_overlaps() -> None:
+    result = _sic_profile(
+        SicProfileRequest(frame=ComplexFrame(dimension=1, vectors=((_z(1),), (_z(1),))))
+    )
+    forged = json.loads(result.model_dump_json())
+    forged["squared_overlaps"][1][0] = {"num": "0", "den": "1"}
+    restored = type(result).model_validate_json(json.dumps(forged))
+    assert restored.squared_overlaps[1][0].as_integer_ratio() == (0, 1)
+
+
+def test_scaled_dimension_16_standard_hadamard_mub_uses_shared_denominators() -> None:
+    dimension = 16
+    scale = 10**127 + 19
+    standard = ComplexFrame(
+        dimension=dimension,
+        vectors=tuple(
+            tuple(_z(int(row == column)) for column in range(dimension))
+            for row in range(dimension)
+        ),
+    )
+    hadamard = ComplexFrame(
+        dimension=dimension,
+        vectors=tuple(
+            tuple(
+                GaussianRational.from_fractions(Fraction(entry, scale), Fraction(0))
+                for entry in row
+            )
+            for row in _sylvester_hadamard(dimension)
+        ),
+    )
+    result = _mutually_unbiased_bases(
+        MutuallyUnbiasedBasesRequest(dimension=dimension, bases=(standard, hadamard))
+    )
+    assert result.is_mutually_unbiased is True
+    assert result.cross_gram_squared[0][0][0].as_integer_ratio() == (1, dimension)
+
+
+def test_equal_denominator_widths_do_not_collapse_distinct_primes() -> None:
+    primes: list[int] = []
+    candidate = 2
+    while len(primes) < 64:
+        if all(candidate % prime for prime in primes):
+            primes.append(candidate)
+        candidate += 1 if candidate == 2 else 2
+    denominators = []
+    for prime in primes:
+        denominator = prime
+        while len(str(denominator)) < 70:
+            denominator *= prime
+        denominators.append(denominator)
+    vector = tuple(
+        GaussianRational.from_fractions(Fraction(1, denominator), Fraction(0))
+        for denominator in denominators
+    )
+    frame = ComplexFrame(dimension=64, vectors=(vector,) * 64)
+    with pytest.raises(OperationResourceAdmissionError, match="height") as error:
+        _mutually_unbiased_bases(
+            MutuallyUnbiasedBasesRequest(dimension=64, bases=(frame,))
+        )
+    assert error.value.errors()[0]["type"] == "frames.complex_inner_product_height"
+
+
+def test_dimension_32_independent_denominators_admit_before_tight_residual() -> None:
+    """A trace of independently scaled basis vectors is refused, not raised.
+
+    Each vector is ``e_i / p_i`` with pairwise-coprime 70-digit denominators,
+    so every operator entry fits but the diagonal trace denominator does not.
+    """
+
+    primes: list[int] = []
+    candidate = 2
+    while len(primes) < 32:
+        if all(candidate % prime for prime in primes):
+            primes.append(candidate)
+        candidate += 1 if candidate == 2 else 2
+    denominators = []
+    for prime in primes:
+        denominator = prime
+        while len(str(denominator)) < 70:
+            denominator *= prime
+        denominators.append(denominator)
+    vectors = tuple(
+        tuple(
+            GaussianRational.from_fractions(
+                Fraction(1, denominators[index]), Fraction(0)
+            )
+            if index == axis
+            else GaussianRational.from_fractions(Fraction(0), Fraction(0))
+            for index in range(32)
+        )
+        for axis in range(32)
+    )
+    frame = ComplexFrame(dimension=32, vectors=vectors)
+    with pytest.raises(OperationResourceAdmissionError, match="height") as error:
+        _complex_frame_profile(ComplexFrameProfileRequest(frame=frame))
+    assert error.value.errors()[0]["type"] == "frames.complex_scalar_height"
+
+
+def test_mub_cross_basis_independent_denominators_are_admitted() -> None:
+    """Independent cross denominators below the canonical limit are admitted.
+
+    Two dimension-64 Sylvester-Hadamard bases differ by rational unit phases
+    whose denominators are pairwise coprime.  Each within-basis Gram is
+    integral, and the cross overlaps fit the ``CanonicalRational`` result type,
+    so the request must not be refused by the tighter Gaussian scalar bound.
+    """
+
+    primes: list[int] = []
+    candidate = 2
+    while len(primes) < 64:
+        if all(candidate % prime for prime in primes):
+            primes.append(candidate)
+        candidate += 1 if candidate == 2 else 2
+    unit_phases = []
+    for prime in primes:
+        scale = prime
+        while len(str(scale)) < 35:
+            scale *= prime
+        denominator = scale * scale + 1
+        unit_phases.append(
+            GaussianRational.from_fractions(
+                Fraction(scale * scale - 1, denominator),
+                Fraction(2 * scale, denominator),
+            )
+        )
+    rows: tuple[tuple[int, ...], ...] = ((1,),)
+    while len(rows) < 64:
+        rows = tuple(row + row for row in rows) + tuple(
+            row + tuple(-entry for entry in row) for row in rows
+        )
+    standard = ComplexFrame(
+        dimension=64,
+        vectors=tuple(tuple(_z(entry) for entry in row) for row in rows),
+    )
+    phased = ComplexFrame(
+        dimension=64,
+        vectors=tuple(
+            tuple(_z(rows[row][column]) * unit_phases[column] for column in range(64))
+            for row in range(64)
+        ),
+    )
+    result = _mutually_unbiased_bases(
+        MutuallyUnbiasedBasesRequest(dimension=64, bases=(standard, phased))
+    )
+    assert result.is_mutually_unbiased is False
+    overlap = result.cross_gram_squared[0][0][0]
+    assert canonical_rational_component_digits(overlap) <= MAX_CANONICAL_RATIONAL_DIGITS
+
+
+def test_complex_frame_schema_advertises_the_cell_constraint() -> None:
+    """The generated schema states the materialized-cell relation."""
+
+    schema = ComplexFrame.model_json_schema()
+    text = schema["properties"]["vectors"].get("description", "")
+    assert "len(vectors) * dimension" in text
+    assert "4_096" in text or "4096" in text
+
+
+def test_mub_status_is_not_replayed_on_deserialization() -> None:
+    standard = ComplexFrame(dimension=2, vectors=((_z(1), _z(0)), (_z(0), _z(1))))
+    result = _mutually_unbiased_bases(
+        MutuallyUnbiasedBasesRequest(dimension=2, bases=(standard, standard))
+    )
+    assert result.is_mutually_unbiased is False
+    forged = json.loads(result.model_dump_json())
+    forged["is_mutually_unbiased"] = True
+    restored = type(result).model_validate_json(json.dumps(forged))
+    assert restored.is_mutually_unbiased is True
+
+
+def _standard_complex_basis(dimension: int) -> ComplexFrame:
+    zero = _z(0)
+    one = _z(1)
+    return ComplexFrame(
+        dimension=dimension,
+        vectors=tuple(
+            tuple(one if index == axis else zero for index in range(dimension))
+            for axis in range(dimension)
+        ),
+    )
+
+
+def test_standard_basis_dim_32_is_admitted_by_profile_and_sic() -> None:
+    frame = _standard_complex_basis(32)
+    profile = _complex_frame_profile(ComplexFrameProfileRequest(frame=frame))
+    assert profile.tight is True
+    assert profile.equiangular is True
+    sic = _sic_profile(SicProfileRequest(frame=frame))
+    assert sic.is_sic is False
+    assert sic.cardinality_residual == 32 - 32 * 32
+    assert sic.tight_residual[0][0].as_fractions() == (Fraction(0), Fraction(0))
+
+
+def test_height_from_fraction_measures_beyond_the_canonical_carrier() -> None:
+    """A derived norm past the CanonicalRational carrier is measured, not raised."""
+    from jacobian.math.topology.frames.operations import _height_from_fraction
+
+    height = _height_from_fraction(Fraction(1, 10**40_000))
+    assert height.numerator_digits == 1
+    assert height.denominator_digits == 40_001
+
+
+def test_complex_profile_charges_every_pair_preflight_pass() -> None:
+    """A frame whose pair work exceeds the envelope after every pass is refused."""
+    frame = ComplexFrame(
+        dimension=1,
+        vectors=tuple((_z(value),) for value in range(1, 1_414)),
+    )
+    with pytest.raises(OperationResourceAdmissionError) as work:
+        _complex_frame_profile(ComplexFrameProfileRequest(frame=frame))
+    assert work.value.errors()[0]["type"] == "frames.complex_profile_work"
+
+
+def test_sic_profile_admits_cancelled_normalized_projector_height() -> None:
+    """A unit normalized projector term is bounded after reduction, not before."""
+    vector = GaussianRational.from_fractions(Fraction(10**2048), Fraction(0))
+    frame = ComplexFrame(dimension=1, vectors=((vector,),))
+    result = _sic_profile(SicProfileRequest(frame=frame))
+    assert result.is_sic is True
+
+
+def test_mub_request_schema_publishes_the_per_basis_shape() -> None:
+    """The bases field documents the per-basis dimension and vector count."""
+    schema = MutuallyUnbiasedBasesRequest.model_json_schema()
+    description = schema["properties"]["bases"]["description"]
+    assert "dimension" in description
+
+
+def _coprime_denominators(count: int, *, digits: int) -> tuple[int, ...]:
+    """Return ``count`` pairwise-coprime powers with about ``digits`` digits."""
+
+    primes: list[int] = []
+    candidate = 2
+    while len(primes) < count:
+        if all(candidate % prime for prime in primes):
+            primes.append(candidate)
+        candidate += 1 if candidate == 2 else 2
+    denominators = []
+    for prime in primes:
+        denominator = prime
+        while len(str(denominator * prime)) <= digits:
+            denominator *= prime
+        denominators.append(denominator)
+    assert max(len(str(item)) for item in denominators) <= digits
+    return tuple(denominators)
+
+
+def test_sic_profile_refuses_norm_growth_before_expanding_normalization() -> None:
+    """A one-vector wide-denominator frame is refused before building its norm.
+
+    Pairwise-coprime denominators make the exact squared norm grow with the
+    whole coordinate width: at the reported 4,096-digit width a dimension-90
+    vector reaches roughly 737,000 digits, and every normalized operator entry
+    would divide by it.  The cell, output, and work checks all pass, so the
+    request must be refused by an intermediate-growth bound before that
+    arithmetic is materialized rather than expanded to obtain a refusal.  A
+    narrower coprime width exercises the same growth with the same magnitude
+    relation while keeping the fixture cheap to build.
+    """
+
+    denominators = _coprime_denominators(90, digits=64)
+    vector = tuple(
+        GaussianRational.from_fractions(Fraction(1, denominator), Fraction(0))
+        for denominator in denominators
+    )
+    frame = ComplexFrame(dimension=90, vectors=(vector,))
+
+    with pytest.raises(OperationResourceAdmissionError, match="height") as error:
+        _sic_profile(SicProfileRequest(frame=frame))
+    assert error.value.errors()[0]["type"] == "frames.complex_scalar_height"
+
+
+def test_tight_equiangular_profile_charges_both_structural_passes() -> None:
+    """The Gram and frame-operator passes together may not exceed the envelope.
+
+    A dense family with ``len(vectors) == dimension == 724`` admits the Gram
+    multiply-adds, but the profile also evaluates the raw frame operator.  The
+    two passes together exceed the declared bound, so the request is refused
+    instead of silently running about twice the admitted work.
+    """
+
+    from jacobian.math.topology.frames.operations import MAX_FRAME_GRAM_MULTIPLY_ADDS
+
+    dimension = 724
+    assert dimension**3 <= MAX_FRAME_GRAM_MULTIPLY_ADDS
+    assert 2 * dimension**3 > MAX_FRAME_GRAM_MULTIPLY_ADDS
+    vectors = tuple(
+        tuple((row * dimension + column) % 7 for column in range(dimension))
+        for row in range(dimension)
+    )
+    family = VectorFamily(dimension=dimension, vectors=vectors)
+    # The Gram-only budget still admits this family...
+    assert gram(family).gram[0][0] == sum(value * value for value in vectors[0])
+    # ...but the profile's additional operator pass must be charged too.
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        _tight_equiangular_profile(family)
+    assert error.value.errors()[0]["type"] == "frames.profile_work_budget"
+
+
+def test_nontrivial_equiangular_profile_requires_common_value() -> None:
+    """An equiangular frame with an observed pair retains its common value."""
+
+    result = _tight_equiangular_profile(
+        VectorFamily(dimension=2, vectors=((1, 0), (0, 1)))
+    )
+    assert result.equiangular is True
+    forged = json.loads(result.model_dump_json())
+    forged["common_squared_inner_product"] = None
+    with pytest.raises(ValueError, match="common squared inner product"):
+        type(result).model_validate_json(json.dumps(forged))
+
+    # A singleton has no off-diagonal pair, so the field stays optional there.
+    singleton = _tight_equiangular_profile(VectorFamily(dimension=1, vectors=((1,),)))
+    payload = json.loads(singleton.model_dump_json())
+    assert payload["common_squared_inner_product"] is None
+    assert type(singleton).model_validate_json(json.dumps(payload)) == singleton

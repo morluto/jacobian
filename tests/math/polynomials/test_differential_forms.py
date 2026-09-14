@@ -740,3 +740,161 @@ def test_wedge_work_preflight_checkpoints_during_height_scans(
     scalar = _form(0, ((), _poly(*terms)))
     wedge(scalar, scalar)
     assert any("preflight" in phase for phase in observed)
+
+
+def test_wedge_digit_work_preflight_rejects_before_convolution(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A weighted-budget rejection happens before any product is collected."""
+    import jacobian.math.polynomials.differential_forms.operations as operations
+
+    collected = {"count": 0}
+    original_collect = operations._collect_contributions
+
+    def _spy(pairs: object) -> object:
+        collected["count"] += 1
+        return original_collect(pairs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(operations, "MAX_WEDGE_DIGIT_WORK", 50)
+    monkeypatch.setattr(operations, "_collect_contributions", _spy)
+    left = _form(0, ((), _poly((10**4, (1, 0)), (10**4, (0, 0)))))
+    right = _form(0, ((), _poly((10**4, (1, 0)), (10**4, (0, 0)))))
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        wedge(left, right)
+    assert error.value.errors()[0]["type"] == "differential_form.wedge.term_budget"
+    assert collected["count"] == 0
+
+
+def test_wedge_convolution_does_not_replay_height_accounting(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The admitted digit-work decision is consumed, not recomputed, in convolution."""
+    import jacobian.math.polynomials.differential_forms.operations as operations
+
+    calls = {"count": 0}
+    original_height = operations._rational_height_digits
+    original_collect = operations._collect_contributions
+
+    def _counted(value: CanonicalRational) -> int:
+        calls["count"] += 1
+        return original_height(value)
+
+    def _resetting_collect(pairs: object) -> object:
+        calls["count"] = 0
+        return original_collect(pairs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(operations, "_rational_height_digits", _counted)
+    monkeypatch.setattr(operations, "_collect_contributions", _resetting_collect)
+    left = _form(0, ((), _poly((10**4, (1, 0)), (10**4, (0, 0)))))
+    right = _form(0, ((), _poly((10**4, (1, 0)), (10**4, (0, 0)))))
+    wedge(left, right)
+    assert calls["count"] == 0
+
+
+def test_native_admission_rejects_forged_basis_indices() -> None:
+    """Forged unsorted, duplicate, or off-axis indices are typed rejections."""
+    coefficient = _poly((1, (0, 0)))
+    unit = _form(0, ((), _poly((1, (0, 0)))))
+    for indices in ((1, 0), (0, 0), (2, 0), (-1, 0)):
+        forged_component = FormComponent.model_construct(
+            indices=indices, coefficient=coefficient
+        )
+        forged = PolynomialDifferentialForm.model_construct(
+            variables=("x", "y"), degree=2, components=(forged_component,)
+        )
+        with pytest.raises(OperationDomainValidationError) as error:
+            wedge(forged, unit)
+        assert error.value.errors()[0]["type"] == "differential_form.component_basis"
+
+
+@pytest.mark.parametrize("num,den", ((1, 0), (2, 4), (1, -2)))
+def test_native_admission_rejects_forged_canonical_rationals(
+    num: int, den: int
+) -> None:
+    """Forged non-reduced or nonpositive-denominator rationals are rejected."""
+    unit = _form(0, ((), _poly((1, (0, 0)))))
+    bad = R.model_construct(num=num, den=den)
+    term = RationalPolynomialTerm.model_construct(coefficient=bad, exponents=(0, 0))
+    coefficient = RationalPolynomial.model_construct(
+        variables=("x", "y"),
+        polynomial=SparseRationalPolynomial.model_construct(terms=(term,)),
+    )
+    forged = PolynomialDifferentialForm.model_construct(
+        variables=("x", "y"),
+        degree=0,
+        components=(
+            FormComponent.model_construct(indices=(), coefficient=coefficient),
+        ),
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        wedge(forged, unit)
+    assert error.value.errors()[0]["type"] == (
+        "differential_form.coefficient_canonical"
+    )
+
+
+def test_proportional_multiterm_odd_forms_cancel_before_work_preflight() -> None:
+    """A multiterm proportional odd wedge is zero before the weighted budget."""
+    coefficient = 10**4094
+    basis = _poly((coefficient, (1, 0)), (coefficient, (0, 0)))
+    alpha = _form(1, ((0,), basis), ((1,), basis))
+    doubled = _poly((2 * coefficient, (1, 0)), (2 * coefficient, (0, 0)))
+    beta = _form(1, ((0,), doubled), ((1,), doubled))
+    product = wedge(alpha, beta)
+    assert product.degree == 2
+    assert product.components == ()
+
+
+def test_wedge_checkpoints_while_materializing_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Result materialization observes cancellation throughout its term loops."""
+    observed: list[str] = []
+
+    def _observe(phase: str) -> None:
+        observed.append(phase)
+
+    monkeypatch.setattr(
+        "jacobian.math.polynomials.differential_forms.operations.request_checkpoint",
+        _observe,
+    )
+    monkeypatch.setattr(
+        "jacobian.math.polynomials.differential_forms.operations._CONVOLUTION_CHECKPOINT_INTERVAL",
+        4,
+    )
+    terms = tuple((1, (exponent, 0)) for exponent in range(31, -1, -1))
+    scalar = _form(0, ((), _poly(*terms)))
+    wedge(scalar, scalar)
+    assert sum("result construction" in phase for phase in observed) >= 2
+
+
+def test_wedge_cancels_related_denominators_before_lcm_cap() -> None:
+    """A nine-product wedge with only 4096-digit denominators is representable."""
+    p = 10**2047 + 3
+    q = 10**2047 + 7
+    r = p + q
+    left = _form(
+        0,
+        (
+            (),
+            _poly(
+                (Fraction(1, r * p), (2, 0)),
+                (Fraction(1, r * q), (1, 0)),
+                (Fraction(-1, p * q), (0, 0)),
+            ),
+        ),
+    )
+    right = _form(
+        0,
+        ((), _poly((1, (2, 0)), (1, (1, 0)), (1, (0, 0)))),
+    )
+    product = wedge(left, right)
+    terms = {
+        term.exponents: term.coefficient
+        for term in product.components[0].coefficient.polynomial.terms
+    }
+    assert (2, 0) not in terms
+    assert terms[(3, 0)] == R.from_fraction(Fraction(1, p * q))
+    assert max(len(str(abs(term.num))) for term in terms.values()) <= 4096
+    assert max(len(str(term.den)) for term in terms.values()) <= 4096
+    assert type(product).model_validate_json(product.model_dump_json()) == product

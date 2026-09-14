@@ -164,19 +164,13 @@ def _merged_indices(
 def _collect_contributions(pairs: tuple[_MergedPair, ...]) -> _ContributionMap:
     grouped: _ContributionMap = {}
     completed = 0
-    digit_work = 0
     for first, second, indices, sign in pairs:
         terms = grouped.setdefault(indices, {})
         for left_term in first.coefficient.polynomial.terms:
-            left_digits = _rational_height_digits(left_term.coefficient)
             for right_term in second.coefficient.polynomial.terms:
                 completed += 1
                 if completed % _CONVOLUTION_CHECKPOINT_INTERVAL == 0:
                     request_checkpoint("during differential wedge convolution")
-                right_digits = _rational_height_digits(right_term.coefficient)
-                digit_work += left_digits * right_digits
-                if digit_work > MAX_WEDGE_DIGIT_WORK:
-                    _term_budget()
                 exponents = tuple(
                     a + b
                     for a, b in zip(
@@ -254,6 +248,45 @@ def _scalar_unit_sign(form: PolynomialDifferentialForm) -> int | None:
 def _negate_rational(value: CanonicalRational) -> CanonicalRational:
     numerator, denominator = value.as_integer_ratio()
     return CanonicalRational.from_integer_ratio(-numerator, denominator)
+
+
+def _rational_scalar_multiple(
+    left: PolynomialDifferentialForm, right: PolynomialDifferentialForm
+) -> Fraction | None:
+    """Return the nonzero rational ``c`` with ``right == c * left``, if any.
+
+    Odd-degree forms satisfy ``alpha wedge (c alpha) == c (alpha wedge alpha)
+    == 0``, so a bounded rational-constant proportionality check can cancel a
+    zero product before the weighted work preflight charges its products.  The
+    check scans the matched component and term support once and never expands a
+    product, so it stays inside the admitted operand envelopes.
+    """
+
+    if len(left.components) != len(right.components) or not left.components:
+        return None
+    factor: Fraction | None = None
+    for left_component, right_component in zip(
+        left.components, right.components, strict=True
+    ):
+        if left_component.indices != right_component.indices:
+            return None
+        left_terms = left_component.coefficient.polynomial.terms
+        right_terms = right_component.coefficient.polynomial.terms
+        if len(left_terms) != len(right_terms):
+            return None
+        for left_term, right_term in zip(left_terms, right_terms, strict=True):
+            if left_term.exponents != right_term.exponents:
+                return None
+            left_value = left_term.coefficient.as_fraction()
+            right_value = right_term.coefficient.as_fraction()
+            if not left_value:
+                return None
+            ratio = right_value / left_value
+            if factor is None:
+                factor = ratio
+            elif ratio != factor:
+                return None
+    return factor
 
 
 def _scale_form_by_unit(
@@ -369,6 +402,19 @@ def _admit_component(
             code="differential_form.component_basis",
             message="component indices must match the form degree on the variable axis",
         )
+    if (
+        any(type(index) is not int for index in indices)
+        or indices != tuple(sorted(set(indices)))
+        or any(index < 0 or index >= dimension for index in indices)
+    ):
+        raise OperationDomainValidationError(
+            location=(*location, "components", "indices"),
+            code="differential_form.component_basis",
+            message=(
+                "component indices must be unique, strictly increasing, and lie "
+                "on the variable axis"
+            ),
+        )
     coefficient = component.coefficient
     if not isinstance(coefficient, RationalPolynomial):
         raise OperationDomainValidationError(
@@ -416,6 +462,7 @@ def _admit_component(
                 code="differential_form.coefficient_exponent",
                 message="wedge coefficient exponents exceed the bounded output envelope",
             )
+        numerator, denominator = term_coefficient.as_integer_ratio()
         if (
             _rational_height_digits(term_coefficient)
             > MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS
@@ -424,6 +471,23 @@ def _admit_component(
                 location=(*location, "components", "coefficient"),
                 code="differential_form.coefficient_height",
                 message="wedge coefficient height exceeds the bounded output envelope",
+            )
+        reduced = (
+            Fraction(numerator, denominator)
+            if type(numerator) is int and type(denominator) is int and denominator > 0
+            else None
+        )
+        if reduced is None or (
+            reduced.numerator,
+            reduced.denominator,
+        ) != (numerator, denominator):
+            raise OperationDomainValidationError(
+                location=(*location, "components", "coefficient"),
+                code="differential_form.coefficient_canonical",
+                message=(
+                    "wedge coefficient terms must carry reduced rationals with a "
+                    "positive denominator"
+                ),
             )
 
 
@@ -448,21 +512,25 @@ def _admitted_result(
 ) -> PolynomialDifferentialForm:
     request_checkpoint("during differential wedge result construction")
     components: list[FormComponent] = []
+    completed = 0
     for indices in sorted(aggregate):
         terms = aggregate[indices]
         if not terms:
             continue
+        materialized: list[RationalPolynomialTerm] = []
+        for exponents, value in sorted(terms.items(), reverse=True):
+            completed += 1
+            if completed % _CONVOLUTION_CHECKPOINT_INTERVAL == 0:
+                request_checkpoint("during differential wedge result construction")
+            materialized.append(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational.from_fraction(value),
+                    exponents=exponents,
+                )
+            )
         polynomial_coefficient = RationalPolynomial(
             variables=variables,
-            polynomial=SparseRationalPolynomial(
-                terms=tuple(
-                    RationalPolynomialTerm(
-                        coefficient=CanonicalRational.from_fraction(value),
-                        exponents=exponents,
-                    )
-                    for exponents, value in sorted(terms.items(), reverse=True)
-                )
-            ),
+            polynomial=SparseRationalPolynomial(terms=tuple(materialized)),
         )
         components.append(
             FormComponent(indices=indices, coefficient=polynomial_coefficient)
@@ -490,9 +558,10 @@ def wedge(
     _admit_degree(degree)
     if degree > len(left.variables):
         return _zero_form(left.variables, degree)
-    if int(left.degree) % 2 == 1 and left == right:
-        # Graded commutativity forces an odd form's self-wedge to vanish
-        # before exponent or coefficient expansion.
+    # Graded commutativity forces an odd form's wedge with any rational
+    # multiple of itself (including its own self-wedge) to vanish before
+    # exponent or coefficient expansion.
+    if int(left.degree) % 2 == 1 and _rational_scalar_multiple(left, right) is not None:
         return _zero_form(left.variables, degree)
     right_unit = _scalar_unit_sign(right)
     if right_unit is not None:

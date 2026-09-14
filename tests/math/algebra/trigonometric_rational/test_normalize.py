@@ -1,3 +1,6 @@
+import time
+from fractions import Fraction
+
 import pytest
 
 from jacobian.catalog.models import OperationResourceAdmissionError
@@ -54,6 +57,27 @@ def test_tangent_retains_cosine_nonzero_locus() -> None:
     assert result.denominator == result.denominator_nonzero
 
 
+def test_common_laurent_factors_are_cancelled_but_source_locus_is_retained() -> None:
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x"],
+            "expression": {
+                "kind": "DIVIDE",
+                "numerator": {"kind": "SINE", "angle": {"coefficients": [1]}},
+                "denominator": {
+                    "kind": "SINE",
+                    "angle": {"coefficients": [1]},
+                },
+            },
+        }
+    )
+    result = normalize_trigonometric_rational(request)
+    assert result.numerator.terms[0].exponents == (0,)
+    assert result.denominator.terms[0].exponents == (0,)
+    assert len(result.denominator_nonzero.terms) == 2
+    assert result.denominator != result.denominator_nonzero
+
+
 def test_zero_quotient_retains_denominator_nonzero_locus() -> None:
     request = TrigonometricRationalSource.model_validate(
         {
@@ -83,3 +107,787 @@ def test_oversized_gaussian_output_is_rejected_by_admission() -> None:
     )
     with pytest.raises(OperationResourceAdmissionError):
         normalize_trigonometric_rational(request)
+
+
+def test_oversized_angle_exponent_is_rejected_before_expansion() -> None:
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x"],
+            "expression": {
+                "kind": "SINE",
+                "angle": {"coefficients": [4_097]},
+            },
+        }
+    )
+    with pytest.raises(OperationResourceAdmissionError):
+        normalize_trigonometric_rational(request)
+
+
+def test_boundary_angle_is_kept_when_no_polynomial_reduction_is_needed() -> None:
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x"],
+            "expression": {
+                "kind": "SINE",
+                "angle": {"coefficients": [4_096]},
+            },
+        }
+    )
+    result = normalize_trigonometric_rational(request)
+    assert {term.exponents for term in result.numerator.terms} == {
+        (4_096,),
+        (-4_096,),
+    }
+
+
+def test_boundary_frequency_cancellation_keeps_the_source_locus() -> None:
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x"],
+            "expression": {
+                "kind": "DIVIDE",
+                "numerator": {
+                    "kind": "SINE",
+                    "angle": {"coefficients": [4_096]},
+                },
+                "denominator": {
+                    "kind": "SINE",
+                    "angle": {"coefficients": [4_096]},
+                },
+            },
+        }
+    )
+    result = normalize_trigonometric_rational(request)
+    assert result.denominator.terms[0].exponents == (0,)
+    assert {term.exponents for term in result.denominator_nonzero.terms} == {
+        (4_096,),
+        (-4_096,),
+    }
+
+
+def test_nested_reciprocal_retains_inner_sine_locus() -> None:
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x"],
+            "expression": {
+                "kind": "DIVIDE",
+                "numerator": {"kind": "LITERAL", "value": {"num": 1, "den": 1}},
+                "denominator": {
+                    "kind": "DIVIDE",
+                    "numerator": {"kind": "LITERAL", "value": {"num": 1, "den": 1}},
+                    "denominator": {"kind": "SINE", "angle": {"coefficients": [1]}},
+                },
+            },
+        }
+    )
+    result = normalize_trigonometric_rational(request)
+    assert result.denominator.terms[0].exponents == (0,)
+    assert len(result.denominator_nonzero.terms) == 2
+    assert result.denominator != result.denominator_nonzero
+
+
+def test_zero_power_of_reciprocal_keeps_denominator_locus() -> None:
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x"],
+            "expression": {
+                "kind": "POWER",
+                "base": {
+                    "kind": "DIVIDE",
+                    "numerator": {"kind": "LITERAL", "value": {"num": 1, "den": 1}},
+                    "denominator": {"kind": "SINE", "angle": {"coefficients": [1]}},
+                },
+                "exponent": 0,
+            },
+        }
+    )
+    result = normalize_trigonometric_rational(request)
+    assert result.numerator.terms[0].exponents == (0,)
+    assert result.denominator.terms[0].exponents == (0,)
+    assert len(result.denominator_nonzero.terms) == 2
+    assert result.denominator != result.denominator_nonzero
+
+
+def _cosine(coefficient: int) -> dict[str, object]:
+    return {"kind": "COSINE", "angle": {"coefficients": [coefficient]}}
+
+
+def _reciprocal_of_reciprocal(inner: dict[str, object]) -> dict[str, object]:
+    one = {"kind": "LITERAL", "value": {"num": 1, "den": 1}}
+    return {
+        "kind": "DIVIDE",
+        "numerator": one,
+        "denominator": {
+            "kind": "DIVIDE",
+            "numerator": one,
+            "denominator": inner,
+        },
+    }
+
+
+def test_retained_loci_are_admitted_before_the_gcd_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _forbidden(payload: dict[str, object]) -> dict[str, object]:
+        raise AssertionError(f"GCD worker started: {payload}")
+
+    monkeypatch.setattr(
+        "jacobian.math.algebra.trigonometric_rational.operations.cancel_common_factor",
+        _forbidden,
+    )
+
+    def _product(first_frequency: int) -> dict[str, object]:
+        return {
+            "kind": "MULTIPLY",
+            "children": [
+                {
+                    "kind": "COSINE",
+                    "angle": {
+                        "coefficients": [
+                            first_frequency if axis == 0 else int(index == axis)
+                            for axis in range(7)
+                        ]
+                    },
+                }
+                for index in range(7)
+            ],
+        }
+
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": [f"x{index}" for index in range(7)],
+            "expression": {
+                "kind": "DIVIDE",
+                "numerator": _reciprocal_of_reciprocal(_product(1)),
+                "denominator": _reciprocal_of_reciprocal(_product(2)),
+            },
+        }
+    )
+    with pytest.raises(OperationResourceAdmissionError):
+        normalize_trigonometric_rational(request)
+
+
+def test_monomial_numerator_skips_the_gcd_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _forbidden(payload: dict[str, object]) -> dict[str, object]:
+        raise AssertionError("GCD worker started for a monomial numerator")
+
+    monkeypatch.setattr(
+        "jacobian.math.algebra.trigonometric_rational.operations.cancel_common_factor",
+        _forbidden,
+    )
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x"],
+            "expression": {
+                "kind": "DIVIDE",
+                "numerator": {"kind": "LITERAL", "value": {"num": 1, "den": 1}},
+                "denominator": {
+                    "kind": "MULTIPLY",
+                    "children": [_cosine(1), _cosine(2), _cosine(3)],
+                },
+            },
+        }
+    )
+    result = normalize_trigonometric_rational(request)
+    assert len(result.numerator.terms) == 1
+
+
+def test_reduced_quotient_support_is_bounded_before_gcd() -> None:
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x", "y"],
+            "expression": {
+                "kind": "DIVIDE",
+                "numerator": {
+                    "kind": "MULTIPLY",
+                    "children": [
+                        {"kind": "SINE", "angle": {"coefficients": [65, 0]}},
+                        {"kind": "SINE", "angle": {"coefficients": [0, 65]}},
+                    ],
+                },
+                "denominator": {
+                    "kind": "MULTIPLY",
+                    "children": [
+                        {"kind": "SINE", "angle": {"coefficients": [1, 0]}},
+                        {"kind": "SINE", "angle": {"coefficients": [0, 1]}},
+                    ],
+                },
+            },
+        }
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="support"):
+        normalize_trigonometric_rational(request)
+
+
+def test_univariate_lattice_stride_admits_sin_4096_over_sin() -> None:
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x"],
+            "expression": {
+                "kind": "DIVIDE",
+                "numerator": {"kind": "SINE", "angle": {"coefficients": [4096]}},
+                "denominator": {"kind": "SINE", "angle": {"coefficients": [1]}},
+            },
+        }
+    )
+    result = normalize_trigonometric_rational(request)
+    assert len(result.numerator.terms) == 4096
+    assert len(result.denominator.terms) == 1
+
+
+def _scaled_sine(scale: int, coefficient: int = 1) -> dict[str, object]:
+    return {
+        "kind": "MULTIPLY",
+        "children": [
+            {"kind": "LITERAL", "value": {"num": scale, "den": 1}},
+            {"kind": "SINE", "angle": {"coefficients": [coefficient]}},
+        ],
+    }
+
+
+def test_proportional_large_scalars_cancel_without_admitted_cross_products(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _forbidden(payload: dict[str, object]) -> dict[str, object]:
+        raise AssertionError("GCD worker started for proportional Laurent operands")
+
+    monkeypatch.setattr(
+        "jacobian.math.algebra.trigonometric_rational.operations.cancel_common_factor",
+        _forbidden,
+    )
+    scaled = _scaled_sine(10**3000)
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x"],
+            "expression": {
+                "kind": "DIVIDE",
+                "numerator": scaled,
+                "denominator": scaled,
+            },
+        }
+    )
+    result = normalize_trigonometric_rational(request)
+    assert result.numerator.terms[0].exponents == (0,)
+    assert result.denominator.terms[0].exponents == (0,)
+    assert (
+        result.numerator.terms[0].coefficient == result.denominator.terms[0].coefficient
+    )
+    assert {term.exponents for term in result.denominator_nonzero.terms} == {
+        (0,),
+        (2,),
+    }
+    assert all(
+        abs(term.coefficient.real.num) < 10 and abs(term.coefficient.imaginary.num) < 10
+        for term in result.denominator_nonzero.terms
+    )
+
+
+def test_locus_scalar_units_are_normalized_before_combining(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _forbidden(payload: dict[str, object]) -> dict[str, object]:
+        raise AssertionError("GCD worker started after scalar-unit locus cancellation")
+
+    monkeypatch.setattr(
+        "jacobian.math.algebra.trigonometric_rational.operations.cancel_common_factor",
+        _forbidden,
+    )
+    scaled = _scaled_sine(10**3000)
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x"],
+            "expression": {
+                "kind": "DIVIDE",
+                "numerator": {"kind": "LITERAL", "value": {"num": 1, "den": 1}},
+                "denominator": {
+                    "kind": "DIVIDE",
+                    "numerator": scaled,
+                    "denominator": scaled,
+                },
+            },
+        }
+    )
+    result = normalize_trigonometric_rational(request)
+    assert result.numerator.terms[0].exponents == (0,)
+    assert result.denominator.terms[0].exponents == (0,)
+    assert {term.exponents for term in result.denominator_nonzero.terms} == {
+        (0,),
+        (2,),
+    }
+    assert all(
+        abs(term.coefficient.real.num) < 10 and abs(term.coefficient.imaginary.num) < 10
+        for term in result.denominator_nonzero.terms
+    )
+
+
+def test_equivalent_locus_factors_are_deduplicated_before_combining() -> None:
+    sine = {"kind": "SINE", "angle": {"coefficients": [3000]}}
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x"],
+            "expression": {
+                "kind": "DIVIDE",
+                "numerator": {"kind": "LITERAL", "value": {"num": 1, "den": 1}},
+                "denominator": {
+                    "kind": "DIVIDE",
+                    "numerator": sine,
+                    "denominator": sine,
+                },
+            },
+        }
+    )
+    result = normalize_trigonometric_rational(request)
+    assert result.numerator.terms[0].exponents == (0,)
+    assert result.denominator.terms[0].exponents == (0,)
+    assert {term.exponents for term in result.denominator_nonzero.terms} == {
+        (3000,),
+        (-3000,),
+    }
+
+
+def test_reduced_denominator_support_is_bounded_before_gcd(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _forbidden(payload: dict[str, object]) -> dict[str, object]:
+        raise AssertionError("GCD worker started for an oversized reduced denominator")
+
+    monkeypatch.setattr(
+        "jacobian.math.algebra.trigonometric_rational.operations.cancel_common_factor",
+        _forbidden,
+    )
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x", "y"],
+            "expression": {
+                "kind": "DIVIDE",
+                "numerator": {
+                    "kind": "MULTIPLY",
+                    "children": [
+                        {"kind": "SINE", "angle": {"coefficients": [1, 0]}},
+                        {"kind": "SINE", "angle": {"coefficients": [0, 1]}},
+                    ],
+                },
+                "denominator": {
+                    "kind": "MULTIPLY",
+                    "children": [
+                        {"kind": "SINE", "angle": {"coefficients": [65, 0]}},
+                        {"kind": "SINE", "angle": {"coefficients": [0, 65]}},
+                    ],
+                },
+            },
+        }
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="support"):
+        normalize_trigonometric_rational(request)
+
+
+def test_coupled_denominator_reduction_reports_typed_resource_admission() -> None:
+    """A reduced quotient that exceeds the envelope must fail with a typed error.
+
+    ``sin(65x)sin(65y)/(sin(x)sin(y)cos(x+y))`` cancels to a numerator with
+    4225 terms, which is inside the preflight estimate but beyond the admitted
+    output support. The reduction must surface the typed resource-admission
+    error rather than an untyped model-validation failure.
+    """
+
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x", "y"],
+            "expression": {
+                "kind": "DIVIDE",
+                "numerator": {
+                    "kind": "MULTIPLY",
+                    "children": [
+                        {"kind": "SINE", "angle": {"coefficients": [65, 0]}},
+                        {"kind": "SINE", "angle": {"coefficients": [0, 65]}},
+                    ],
+                },
+                "denominator": {
+                    "kind": "MULTIPLY",
+                    "children": [
+                        {"kind": "SINE", "angle": {"coefficients": [1, 0]}},
+                        {"kind": "SINE", "angle": {"coefficients": [0, 1]}},
+                        {
+                            "kind": "COSINE",
+                            "angle": {"coefficients": [1, 1]},
+                        },
+                    ],
+                },
+            },
+        }
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="expansion"):
+        normalize_trigonometric_rational(request)
+
+
+def test_high_degree_sparse_denominator_reduction_stays_within_deadline() -> None:
+    """A sparse high-degree quotient must reduce through the fast backend.
+
+    ``sin(4096x)/(cos(x)+2sin(x))`` shares the shifted support of
+    ``sin(4096x)/sin(x)`` but does not cancel; its reduced numerator exceeds the
+    output envelope. The reduction must return the typed admission error well
+    inside the worker lease instead of exhausting the deadline.
+    """
+
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x"],
+            "expression": {
+                "kind": "DIVIDE",
+                "numerator": {"kind": "SINE", "angle": {"coefficients": [4096]}},
+                "denominator": {
+                    "kind": "ADD",
+                    "children": [
+                        {"kind": "COSINE", "angle": {"coefficients": [1]}},
+                        {
+                            "kind": "MULTIPLY",
+                            "children": [
+                                {"kind": "LITERAL", "value": {"num": 2, "den": 1}},
+                                {
+                                    "kind": "SINE",
+                                    "angle": {"coefficients": [1]},
+                                },
+                            ],
+                        },
+                    ],
+                },
+            },
+        }
+    )
+    started = time.monotonic()
+    with pytest.raises(OperationResourceAdmissionError, match="expansion"):
+        normalize_trigonometric_rational(request)
+    assert time.monotonic() - started < 5.0
+
+
+def test_univariate_lattice_stride_still_admits_after_fast_backend() -> None:
+    """The fast reduction must not regress the accepted ``sin(4096x)/sin(x)``."""
+
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x"],
+            "expression": {
+                "kind": "DIVIDE",
+                "numerator": {"kind": "SINE", "angle": {"coefficients": [4096]}},
+                "denominator": {"kind": "SINE", "angle": {"coefficients": [1]}},
+            },
+        }
+    )
+    result = normalize_trigonometric_rational(request)
+    assert len(result.numerator.terms) == 4096
+    assert len(result.denominator.terms) == 1
+
+
+def test_reduced_canonical_exponent_is_admitted_before_result_construction() -> None:
+    """``sin(4096x)/sin(4095x)`` reduces past the output exponent envelope.
+
+    The reduced numerator reaches exponent 8189, so the request must fail with
+    the typed resource-admission error instead of constructing thousands of
+    quotient terms and failing model validation afterwards.
+    """
+
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x"],
+            "expression": {
+                "kind": "DIVIDE",
+                "numerator": {"kind": "SINE", "angle": {"coefficients": [4096]}},
+                "denominator": {"kind": "SINE", "angle": {"coefficients": [4095]}},
+            },
+        }
+    )
+    started = time.monotonic()
+    with pytest.raises(OperationResourceAdmissionError, match="expansion"):
+        normalize_trigonometric_rational(request)
+    assert time.monotonic() - started < 5.0
+
+
+def test_gaussian_gcd_uses_the_field_relation() -> None:
+    """cos(2x)/(sin(x)+cos(x)) shares z^2+1-type factors over QQ(i).
+
+    The flint QQ[z,I] path cannot see a factor that needs ``I^2 = -1``, so the
+    worker must verify the candidate over QQ(i) and fall back to the ring path.
+    The reduced quotient is real; sample it at x = 1/3 against the direct
+    trigonometric value.
+    """
+    import sympy
+
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x"],
+            "expression": {
+                "kind": "DIVIDE",
+                "numerator": {"kind": "COSINE", "angle": {"coefficients": [2]}},
+                "denominator": {
+                    "kind": "ADD",
+                    "children": [
+                        {"kind": "SINE", "angle": {"coefficients": [1]}},
+                        {"kind": "COSINE", "angle": {"coefficients": [1]}},
+                    ],
+                },
+            },
+        }
+    )
+    result = normalize_trigonometric_rational(request)
+    z = sympy.Symbol("z")
+    num = sum(
+        (
+            sympy.Rational(term.coefficient.real.as_fraction())
+            + sympy.I * sympy.Rational(term.coefficient.imaginary.as_fraction())
+        )
+        * z ** term.exponents[0]
+        for term in result.numerator.terms
+    )
+    den = sum(
+        (
+            sympy.Rational(term.coefficient.real.as_fraction())
+            + sympy.I * sympy.Rational(term.coefficient.imaginary.as_fraction())
+        )
+        * z ** term.exponents[0]
+        for term in result.denominator.terms
+    )
+    value = complex(
+        sympy.N((num / den).subs(z, sympy.exp(sympy.I * sympy.Rational(1, 3))), 30)
+    )
+    direct = complex(
+        sympy.N(
+            sympy.cos(sympy.Rational(2, 3))
+            / (sympy.sin(sympy.Rational(1, 3)) + sympy.cos(sympy.Rational(1, 3))),
+            30,
+        )
+    )
+    assert abs(value - direct) < 1e-9
+    assert abs(value.imag) < 1e-9
+
+
+def test_imaginary_flint_terms_keep_their_real_component() -> None:
+    """A quotient term ``I*z^e`` must not be folded into the real component."""
+    from flint import fmpq_mpoly_ctx
+
+    from jacobian.math.algebra.trigonometric_rational._laurent_gcd_worker import (
+        _flint_to_payload,
+    )
+
+    ctx = fmpq_mpoly_ctx.get(["z", "I"])
+    z, imaginary = ctx.gens()
+    payload = _flint_to_payload(z**2 + imaginary * z, 0)
+    pairs = {
+        support[0]: (real, imag)
+        for support, real, imag in zip(
+            payload["supports"],
+            payload["real_numerators"],
+            payload["imag_numerators"],
+            strict=True,
+        )
+    }
+    assert pairs[2] == ("1", "0")
+    assert pairs[1] == ("0", "1")
+
+
+def test_locus_union_retains_the_larger_zero_set() -> None:
+    """A locus factor dividing another must not replace it in the union.
+
+    The union of zero sets is represented by the factor with the larger zero
+    set: ``(1-z^2)`` has zeros at z = +-1, so ``(1-z^2)`` must be retained over
+    the smaller ``(1-z)``.
+    """
+    from fractions import Fraction
+
+    from jacobian.math.algebra.trigonometric_rational.operations import _combine_loci
+
+    gaussian = (Fraction(1), Fraction())
+    larger = {
+        (2,): (-gaussian[0], gaussian[1]),
+        (0,): gaussian,
+    }
+    smaller = {
+        (1,): (-gaussian[0], gaussian[1]),
+        (0,): gaussian,
+    }
+    combined = _combine_loci((larger, smaller), 1)
+    assert set(combined) == set(larger)
+
+
+def test_locus_divisibility_uses_the_laurent_ring() -> None:
+    """sin(x) divides sin(3000x) in the Laurent ring, so sin(3000x) is the locus.
+
+    The minimal zero-set cover keeps only ``sin(3000x)``, whose zero set
+    contains the zeros of ``sin(x)``, instead of multiplying both factors.
+    """
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x"],
+            "expression": {
+                "kind": "DIVIDE",
+                "numerator": {"kind": "LITERAL", "value": {"num": 1, "den": 1}},
+                "denominator": {
+                    "kind": "DIVIDE",
+                    "numerator": {"kind": "SINE", "angle": {"coefficients": [3000]}},
+                    "denominator": {
+                        "kind": "MULTIPLY",
+                        "children": [
+                            {"kind": "SINE", "angle": {"coefficients": [3000]}},
+                            {"kind": "SINE", "angle": {"coefficients": [1]}},
+                        ],
+                    },
+                },
+            },
+        }
+    )
+    result = normalize_trigonometric_rational(request)
+    assert len(result.denominator_nonzero.terms) == 2
+
+
+def test_shared_locus_factor_is_charged_once() -> None:
+    """A factor shared by two loci is a single atom of the zero locus.
+
+    For ``1/((P*sin(x))/(P*cos(x)))`` with ``P = 2 + sin(3000*x)`` the two
+    division denominators share ``P``; the structural atom decomposition keeps
+    one ``P`` so the locus is ``P*sin(x)*cos(x)`` at exponent 3002 instead of
+    ``P^2`` at exponent 6002, which would exceed the envelope.
+    """
+    product = {
+        "kind": "ADD",
+        "children": [
+            {"kind": "LITERAL", "value": {"num": 2, "den": 1}},
+            {"kind": "SINE", "angle": {"coefficients": [3000]}},
+        ],
+    }
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x"],
+            "expression": {
+                "kind": "DIVIDE",
+                "numerator": {"kind": "LITERAL", "value": {"num": 1, "den": 1}},
+                "denominator": {
+                    "kind": "DIVIDE",
+                    "numerator": {
+                        "kind": "MULTIPLY",
+                        "children": [
+                            product,
+                            {"kind": "SINE", "angle": {"coefficients": [1]}},
+                        ],
+                    },
+                    "denominator": {
+                        "kind": "MULTIPLY",
+                        "children": [
+                            product,
+                            {"kind": "COSINE", "angle": {"coefficients": [1]}},
+                        ],
+                    },
+                },
+            },
+        }
+    )
+    result = normalize_trigonometric_rational(request)
+    assert len(result.denominator_nonzero.terms) == 6
+
+
+def test_worker_cancels_a_laurent_common_factor_in_the_fallback() -> None:
+    """The sympy worker fallback cancels a Laurent common factor exactly.
+
+    ``P*sin(x)`` and ``P*cos(x)`` for ``P = 2 + sin(3000*x)`` share ``P``; the
+    sparse ring GCD raised ``ExactQuotientFailed`` on the negative-exponent
+    operands, so both operands must reduce to their coprimes.
+    """
+    from jacobian.math.algebra.trigonometric_rational._laurent_gcd_worker import (
+        _sympy_cancel,
+    )
+
+    def _laurent(polynomial: dict) -> dict:
+        keys = sorted(polynomial)
+        return {
+            "supports": [[key[0]] for key in keys],
+            "real_numerators": [str(polynomial[key][0].numerator) for key in keys],
+            "real_denominators": [str(polynomial[key][0].denominator) for key in keys],
+            "imag_numerators": [str(polynomial[key][1].numerator) for key in keys],
+            "imag_denominators": [str(polynomial[key][1].denominator) for key in keys],
+        }
+
+    def _sine(k: int) -> dict:
+        return {
+            (k,): (Fraction(0), Fraction(1)),
+            (-k,): (Fraction(0), Fraction(-1)),
+        }
+
+    def _cosine(k: int) -> dict:
+        return {(k,): (Fraction(1), Fraction(0)), (-k,): (Fraction(1), Fraction(0))}
+
+    def _multiply(left: dict, right: dict) -> dict:
+        result: dict = {}
+        for left_support, left_value in left.items():
+            for right_support, right_value in right.items():
+                support = (left_support[0] + right_support[0],)
+                real = left_value[0] * right_value[0] - left_value[1] * right_value[1]
+                imag = left_value[0] * right_value[1] + left_value[1] * right_value[0]
+                current = result.get(support, (Fraction(), Fraction()))
+                result[support] = (current[0] + real, current[1] + imag)
+        return {
+            key: value
+            for key, value in result.items()
+            if value != (Fraction(), Fraction())
+        }
+
+    common = {
+        (0,): (Fraction(2), Fraction()),
+        (3000,): (Fraction(0), Fraction(1)),
+        (-3000,): (Fraction(0), Fraction(-1)),
+    }
+    left = _multiply(common, _sine(1))
+    right = _multiply(common, _cosine(1))
+    response = _sympy_cancel(
+        {"axis": 1, "left": _laurent(left), "right": _laurent(right)}
+    )
+    # The shared factor is cancelled, leaving the coprime cofactors.
+    assert len(response["left"]["supports"]) == 2
+    assert len(response["right"]["supports"]) == 2
+
+
+def test_zero_power_drops_base_factor_atoms() -> None:
+    """``1 / (sin(x) ** 0)`` has denominator one and no nonzero restriction.
+
+    A zero exponent gives the constant one, so the base's factor atoms must not
+    leak into the nonzero locus and exclude the zeros of ``sin(x)``.
+    """
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x"],
+            "expression": {
+                "kind": "DIVIDE",
+                "numerator": {"kind": "LITERAL", "value": {"num": 1, "den": 1}},
+                "denominator": {
+                    "kind": "POWER",
+                    "base": {"kind": "SINE", "angle": {"coefficients": [1]}},
+                    "exponent": 0,
+                },
+            },
+        }
+    )
+    result = normalize_trigonometric_rational(request)
+    assert len(result.denominator_nonzero.terms) == 1
+
+
+def test_zero_power_keeps_inner_base_restrictions() -> None:
+    """A restriction recorded inside a zero-power base is still retained.
+
+    ``(1 / sin(x)) ** 0`` is the constant one, but the inner division restricts
+    the locus to ``sin(x) != 0``, which the source evaluation must preserve.
+    """
+    request = TrigonometricRationalSource.model_validate(
+        {
+            "variables": ["x"],
+            "expression": {
+                "kind": "POWER",
+                "base": {
+                    "kind": "DIVIDE",
+                    "numerator": {"kind": "LITERAL", "value": {"num": 1, "den": 1}},
+                    "denominator": {"kind": "SINE", "angle": {"coefficients": [1]}},
+                },
+                "exponent": 0,
+            },
+        }
+    )
+    result = normalize_trigonometric_rational(request)
+    assert len(result.denominator_nonzero.terms) == 2

@@ -5,7 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 from itertools import pairwise
 from math import gcd
-from typing import Literal, Self
+from typing import Final, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
@@ -27,14 +27,72 @@ MAX_FINITE_CONVOLUTION_POWER = 10**15
 MAX_FINITE_DISTRIBUTION_SUM_DIGITS = MAX_RESULT_RATIONAL_DIGITS
 
 
-def _bounded_pair_sum(
-    left: Fraction,
-    right: Fraction,
-    *,
-    label: str,
-) -> Fraction:
-    """Add two nonnegative rationals or refuse the intermediate they form."""
+def _remove_prime_power(value: int, prime: int) -> int:
+    if value % prime:
+        return value
+    powers = [prime]
+    square = prime * prime
+    while value % square == 0:
+        powers.append(square)
+        if square > value // square:
+            break
+        square *= square
+    for power in reversed(powers):
+        if value % power == 0:
+            value //= power
+    return value
 
+
+_SMALL_KERNEL_PRIMES: Final = tuple(
+    candidate
+    for candidate in range(2, 1_000)
+    if all(candidate % divisor for divisor in range(2, int(candidate**0.5) + 1))
+)
+
+
+def _large_denominator_kernel(value: int) -> int:
+    """Return the part of a denominator left after removing small prime factors.
+
+    Charges that share a large factor (for example ``2p``, ``3p``, and ``6p``)
+    collapse to one group so their exact sum can cancel before unrelated groups
+    are combined. Removing a general small-prime set (rather than only two and
+    three) also pairs masses whose reduction cancelled a shared middle prime,
+    such as ``1/(5p)`` and ``(p-1)/(5p)``.
+    """
+
+    kernel = abs(value) or 1
+    for prime in _SMALL_KERNEL_PRIMES:
+        if prime * prime > kernel:
+            break
+        kernel = _remove_prime_power(kernel, prime)
+    return kernel
+
+
+_SUM_VALUE_LIMIT = 10**MAX_FINITE_DISTRIBUTION_SUM_DIGITS
+# The cancellation scan is a mandatory phase: it is checkpointed periodically so
+# a law with many unrelated denominators stays bounded by the request deadline
+# instead of monopolizing a worker.
+_CANCELLATION_CHECKPOINT_STRIDE: Final = 65_536
+
+
+def _raise_normalization_bound(label: str) -> None:
+    raise _validation_error(
+        f"{label} normalization exceeds the "
+        f"{MAX_FINITE_DISTRIBUTION_SUM_DIGITS}-digit intermediate bound"
+    )
+
+
+def _bounded_pair_sum(left: Fraction, right: Fraction, *, label: str) -> Fraction:
+    """Add two rationals or refuse the intermediate they form.
+
+    The numerator bound uses the absolute values, so a signed or cancelling
+    pair cannot hide an unreduced intermediate taller than the plain sum.
+    """
+
+    if right == 0:
+        return left
+    if left == 0:
+        return right
     common = gcd(left.denominator, right.denominator)
     left_denominator = left.denominator // common
     right_denominator = right.denominator // common
@@ -43,14 +101,8 @@ def _bounded_pair_sum(
         + abs(right.numerator) * left_denominator
     )
     common_denominator = left_denominator * right.denominator
-    if (
-        common_denominator >= 10**MAX_FINITE_DISTRIBUTION_SUM_DIGITS
-        or scaled_numerator >= 10**MAX_FINITE_DISTRIBUTION_SUM_DIGITS
-    ):
-        raise _validation_error(
-            f"{label} normalization exceeds the "
-            f"{MAX_FINITE_DISTRIBUTION_SUM_DIGITS}-digit intermediate bound"
-        )
+    if common_denominator >= _SUM_VALUE_LIMIT or scaled_numerator >= _SUM_VALUE_LIMIT:
+        _raise_normalization_bound(label)
     return left + right
 
 
@@ -59,22 +111,15 @@ def _bounded_fraction_sum(
     *,
     label: str,
 ) -> Fraction:
-    """Sum nonnegative rationals without materializing an over-height fraction.
+    """Sum nonnegative rationals without paying source-order LCD growth.
 
-    Two orderings are avoided deliberately:
-
-    * **Source order.** Accumulating in support order makes the answer depend on
-      how the caller happened to list its atoms. Masses that cancel to a small
-      fraction - `1/(11p)` and `(11p-1... )`-shaped complements sharing a
-      denominator - are pushed past the intermediate bound by the partial sum
-      that precedes them, so a normalized law whose every moment fits the
-      envelope is refused for a reason unrelated to its mathematics.
-    * **Growing partial sums.** Combining mutually coprime denominators one at a
-      time accumulates their product monotonically.
-
-    So equal denominators are combined exactly first, where no denominator
-    growth can occur at all, and the reduced group totals are then merged as a
-    balanced pairwise tree rather than a running prefix.
+    Equal denominators combine exactly first, where no denominator growth can
+    occur at all. The reduced totals are bucketed by the small-prime-free kernel
+    of each denominator so complementary masses such as ``1/(5p)`` and
+    ``(p-1)/(5p)`` reduce before unrelated primes are combined. The bucket
+    totals are then combined by repeatedly merging the pair whose denominators
+    share the largest factor, which reaches cancellation through large primes
+    that no fixed sieve covers.
     """
 
     if not values:
@@ -84,31 +129,71 @@ def _bounded_fraction_sum(
     for value in values:
         denominator = value.denominator
         grouped[denominator] = grouped.get(denominator, 0) + value.numerator
-
-    level = [
+    terms = [
         Fraction(numerator, denominator)
-        for denominator, numerator in sorted(grouped.items())
+        for denominator, numerator in grouped.items()
         if numerator
     ]
-    if not level:
+    if not terms:
         return Fraction()
 
-    completed = 0
-    while len(level) > 1:
-        merged: list[Fraction] = []
-        for index in range(0, len(level) - 1, 2):
-            if completed % 256 == 0:
-                request_checkpoint(
-                    "during finite-distribution probability normalization"
-                )
-            completed += 1
-            merged.append(
-                _bounded_pair_sum(level[index], level[index + 1], label=label)
-            )
-        if len(level) % 2:
-            merged.append(level[-1])
-        level = merged
-    return level[0]
+    buckets: dict[int, Fraction] = {}
+    for index, term in enumerate(terms):
+        if index % 128 == 0:
+            request_checkpoint("during finite-distribution normalization")
+        kernel = _large_denominator_kernel(term.denominator)
+        buckets[kernel] = _bounded_pair_sum(
+            buckets.get(kernel, Fraction()),
+            term,
+            label=label,
+        )
+    return _merge_terms_by_largest_gcd(list(buckets.values()), label=label)
+
+
+def _merge_terms_by_largest_gcd(
+    terms: list[Fraction],
+    *,
+    label: str,
+) -> Fraction:
+    """Combine exact rationals by repeatedly merging the largest shared factor.
+
+    Complementary masses need not reduce through a fixed small-prime set: any
+    two denominators sharing a prime can cancel, so no fixed cutoff can replace
+    this scan. The scan is checkpointed periodically and stops as soon as no
+    pair shares a factor, so a law with unrelated denominators pays one scan and
+    is then refused by the ordinary digit bound instead of a term-count cutoff.
+    """
+
+    pool = [term for term in terms if term != 0]
+    while len(pool) > 1:
+        request_checkpoint("during finite-distribution cancellation")
+        best_left = -1
+        best_right = -1
+        best_shared = 1
+        comparisons = 0
+        for left in range(len(pool)):
+            for right in range(left + 1, len(pool)):
+                comparisons += 1
+                if comparisons % _CANCELLATION_CHECKPOINT_STRIDE == 0:
+                    request_checkpoint("during finite-distribution cancellation")
+                shared = gcd(pool[left].denominator, pool[right].denominator)
+                if shared > best_shared:
+                    best_shared = shared
+                    best_left, best_right = left, right
+        if best_left < 0:
+            break
+        merged = _bounded_pair_sum(pool[best_left], pool[best_right], label=label)
+        pool = [
+            term
+            for index, term in enumerate(pool)
+            if index not in (best_left, best_right)
+        ]
+        if merged:
+            pool.append(merged)
+    total = Fraction()
+    for term in pool:
+        total = _bounded_pair_sum(total, term, label=label)
+    return total
 
 
 class FiniteDistributionAtom(StrictModel):

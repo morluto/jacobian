@@ -20,6 +20,7 @@ from jacobian.math.probability._distribution import (
     FiniteConvolutionPowerResult,
     FiniteDistributionAtom,
     FiniteRationalDistribution,
+    require_input_distribution,
 )
 from jacobian.math.probability._models import MAX_RESULT_RATIONAL_DIGITS
 from jacobian.math.probability.operations import (
@@ -397,23 +398,32 @@ def test_distribution_normalization_bounds_intermediate_denominators() -> None:
     atoms = tuple(
         FiniteDistributionAtom(
             value=CanonicalRational.from_fraction(Fraction(index)),
-            probability=CanonicalRational.from_fraction(probability),
+            probability=CanonicalRational.from_fraction(Fraction(1, denominator)),
         )
-        for index, probability in enumerate(
-            probability
-            for probability in tuple(
-                Fraction(1, 6 * denominator) for denominator in denominators
-            )
-            + tuple(
-                Fraction(denominator - 1, 6 * denominator)
-                for denominator in denominators
-            )
-        )
+        for index, denominator in enumerate(denominators)
     )
 
     distribution = FiniteRationalDistribution(atoms=atoms)
     with pytest.raises(OperationDomainValidationError, match="intermediate bound"):
         event_probability(distribution, (atoms[0].value,))
+
+
+def test_complementary_two_three_free_masses_cancel_before_lcd_growth() -> None:
+    prime = 10**12 + 39
+    density = 6 * prime
+    atoms = (
+        FiniteDistributionAtom(
+            value=CanonicalRational.from_fraction(Fraction(0)),
+            probability=CanonicalRational.from_fraction(Fraction(1, density)),
+        ),
+        FiniteDistributionAtom(
+            value=CanonicalRational.from_fraction(Fraction(1)),
+            probability=CanonicalRational.from_fraction(Fraction(density - 1, density)),
+        ),
+    )
+    distribution = FiniteRationalDistribution(atoms=atoms)
+    result = event_probability(distribution, (atoms[0].value,))
+    assert result.event_probability.as_fraction() == Fraction(1, density)
 
 
 def test_result_deserialization_does_not_repeat_power_admission() -> None:
@@ -434,3 +444,97 @@ def test_result_deserialization_does_not_repeat_power_admission() -> None:
         )
     )
     assert restored.source == source
+
+
+def test_complementary_middle_prime_masses_group_before_lcd_growth() -> None:
+    """A shared reduction factor beyond 2 and 3 still cancels complementary pairs."""
+    primes = (
+        10**103 + 2_901,
+        10**103 + 4_521,
+        10**103 + 6_351,
+        10**103 + 9_261,
+        10**103 + 9_381,
+    )
+    atoms = tuple(
+        FiniteDistributionAtom(
+            value=CanonicalRational.from_fraction(Fraction(index)),
+            probability=CanonicalRational.from_fraction(
+                Fraction(
+                    1 if index % 2 == 0 else primes[index // 2] - 1,
+                    5 * primes[index // 2],
+                )
+            ),
+        )
+        for index in range(2 * len(primes))
+    )
+    distribution = FiniteRationalDistribution(atoms=atoms)
+    assert sum(atom.probability.as_fraction() for atom in distribution.atoms) == 1
+
+
+def test_complementary_large_middle_prime_masses_group_without_cutoff() -> None:
+    """Complementary pairs reducing through a prime above any sieve still cancel."""
+    primes = (
+        10**99 + 89_941,
+        10**99 + 122_229,
+        10**99 + 985_933,
+        10**99 + 1_324_957,
+        10**99 + 1_379_443,
+        10**99 + 1_561_063,
+    )
+    atoms = [
+        FiniteDistributionAtom(
+            value=CanonicalRational.from_fraction(Fraction(2 * index + offset)),
+            probability=CanonicalRational.from_fraction(
+                Fraction(
+                    (1 if offset == 0 else primes[index] - 1),
+                    1009 * primes[index],
+                )
+            ),
+        )
+        for index in range(len(primes))
+        for offset in (0, 1)
+    ]
+    atoms.append(
+        FiniteDistributionAtom(
+            value=CanonicalRational.from_fraction(Fraction(2 * len(primes))),
+            probability=CanonicalRational.from_fraction(Fraction(1003, 1009)),
+        )
+    )
+    distribution = FiniteRationalDistribution(atoms=tuple(atoms))
+    assert sum(atom.probability.as_fraction() for atom in distribution.atoms) == 1
+
+
+def test_complementary_cancellation_survives_many_kernel_buckets() -> None:
+    """Cancellation above the former 64-bucket cutoff still normalizes a law.
+
+    Sixty-five distinct 100-digit primes ``p_i == 1 (mod 1009)`` give masses
+    ``1/(1009 p_i)`` and ``(p_i - 1)/(1009 p_i)`` plus ``944/1009``. The 131
+    masses sum to exactly one and each complementary pair reduces through
+    ``p_i``, but the pair members land in distinct kernels. A term-count cutoff
+    bypassed the shared-factor scan once the buckets exceeded 64 and refused the
+    valid law.
+    """
+
+    import sympy
+
+    primes: list[int] = []
+    candidate = 1009 * ((10**99) // 1009 + 1) + 1
+    while len(primes) < 65:
+        if len(str(candidate)) == 100 and sympy.isprime(candidate):
+            primes.append(candidate)
+        candidate += 1009
+    assert all(prime % 1009 == 1 for prime in primes)
+    masses = [Fraction(1, 1009 * prime) for prime in primes]
+    masses += [Fraction(prime - 1, 1009 * prime) for prime in primes]
+    masses.append(Fraction(944, 1009))
+    assert sum(masses) == 1
+    atoms = tuple(
+        FiniteDistributionAtom(
+            value=CanonicalRational.from_fraction(Fraction(index)),
+            probability=CanonicalRational.from_fraction(mass),
+        )
+        for index, mass in enumerate(masses)
+    )
+    distribution = FiniteRationalDistribution(atoms=atoms)
+    assert sum(atom.probability.as_fraction() for atom in distribution.atoms) == 1
+    require_input_distribution(distribution.atoms, require_canonical=True)

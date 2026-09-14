@@ -3,7 +3,6 @@
 import json
 from itertools import product
 from math import comb
-from typing import Any, cast
 
 import pytest
 from pydantic import ValidationError
@@ -152,17 +151,20 @@ def test_large_accepted_profile_uses_trusted_result_construction(
     )
 
     calls = 0
-    builtin_sorted = sorted
+    original_ordering = profile_module._sorted_profile_items_with_checkpoints
 
-    def counted_sorted(*args: Any, **kwargs: Any) -> object:
+    def counted_ordering(profile: dict[tuple[int, ...], int]) -> object:
         nonlocal calls
         calls += 1
         if calls > 1:
             raise AssertionError("profile result construction replayed cell sorting")
-        return builtin_sorted(*args, **kwargs)
+        return original_ordering(profile)
 
     monkeypatch.setattr(
-        profile_module, "sorted", cast(Any, counted_sorted), raising=False
+        profile_module,
+        "_sorted_profile_items_with_checkpoints",
+        counted_ordering,
+        raising=False,
     )
     result = symbol_parikh_profile(dfa, 3)
 
@@ -995,3 +997,31 @@ def test_profile_result_revalidates_a_constructed_source_dfa() -> None:
             cells=(),
             total_accepted_words=0,
         )
+
+
+def test_profile_result_retains_the_canonical_dfa() -> None:
+    """A validation-bypassed nested DFA is replaced by the canonical copy."""
+    forged = DFA.model_construct(
+        state_count=1,
+        alphabet_size=1,
+        transitions=({"source": 0, "symbol": 0, "target": 0},),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+    payload = SymbolParikhProfileResult.model_construct(
+        dfa=forged,
+        alphabet=(0,),
+        word_length=1,
+        cells=(SymbolParikhCell.model_construct(symbol_counts=(1,), multiplicity=1),),
+        total_accepted_words=1,
+    )
+    validated = SymbolParikhProfileResult.model_validate(payload)
+    assert isinstance(validated.dfa.transitions[0], DFATransition)
+    assert validated.dfa.transitions[0].source == 0
+
+
+def test_profile_cell_ordering_matches_sorted() -> None:
+    """The checkpointed heap ordering is the canonical lexicographic order."""
+    profile = {(0, 1): 3, (1, 1): 1, (0, 0): 2, (1, 0): 4}
+    ordered = profile_module._sorted_profile_items_with_checkpoints(profile)
+    assert ordered == sorted(profile.items())

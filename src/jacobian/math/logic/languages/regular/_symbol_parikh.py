@@ -1,5 +1,6 @@
 """Exact symbol-level Parikh profiles for accepted DFA words."""
 
+import heapq
 from collections.abc import Iterable
 from itertools import islice
 from math import comb
@@ -153,7 +154,9 @@ class SymbolParikhProfileResult(StrictModel):
             raise ValueError(
                 "total_accepted_words must equal the sum of cell multiplicities"
             )
-        return self
+        # Retain the canonical revalidated DFA so a validation-bypassed nested
+        # carrier cannot survive into the public result.
+        return self.model_copy(update={"dfa": source})
 
 
 def _build_transition_index(
@@ -693,7 +696,9 @@ def _compute_symbol_parikh_profile(
     profile = _collect_profile(layer, accepting)
     total = sum(profile.values())
     materialized_cells: list[SymbolParikhCell] = []
-    for index, (counts, multiplicity) in enumerate(sorted(profile.items())):
+    for index, (counts, multiplicity) in enumerate(
+        _sorted_profile_items_with_checkpoints(profile)
+    ):
         if index % _CHECKPOINT_STRIDE == 0:
             request_checkpoint("during symbol-Parikh cell materialization")
         materialized_cells.append(
@@ -765,6 +770,26 @@ def _bounded_dfa_tuple(
         else {field: getattr(item, field, None) for field in item_fields}
         for item in items
     )
+
+
+def _sorted_profile_items_with_checkpoints(
+    profile: dict[tuple[int, ...], int],
+) -> list[tuple[tuple[int, ...], int]]:
+    """Return the profile items in canonical order without a long frozen sort.
+
+    ``sorted`` evaluates its whole argument before the caller can checkpoint,
+    so materialize through a heap and checkpoint throughout the pops.
+    """
+
+    request_checkpoint("before symbol-Parikh cell ordering")
+    heap = list(profile.items())
+    heapq.heapify(heap)
+    ordered: list[tuple[tuple[int, ...], int]] = []
+    while heap:
+        ordered.append(heapq.heappop(heap))
+        if len(ordered) % _CHECKPOINT_STRIDE == 0:
+            request_checkpoint("during symbol-Parikh cell ordering")
+    return ordered
 
 
 def symbol_parikh_profile(dfa: DFA, word_length: int) -> SymbolParikhProfileResult:

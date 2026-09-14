@@ -1,7 +1,8 @@
 """Exact identities for rational metric pullbacks."""
 
 import time
-from typing import Any
+from collections.abc import Callable
+from typing import Any, NoReturn
 
 import pytest
 from pydantic import ValidationError
@@ -249,10 +250,16 @@ def test_pullback_dag_is_bound_to_pullback_admission_errors(
 ) -> None:
     from jacobian.math.geometry.differential.metrics._dag import Dag
 
-    seen: list[object] = []
+    seen: list[tuple[Callable[[str, str], NoReturn] | None, str | None]] = []
     original = Dag.__init__
 
-    def capturing_init(self, dimension, *, reject=None, label=None):
+    def capturing_init(
+        self: Dag,
+        dimension: int,
+        *,
+        reject: Callable[[str, str], NoReturn] | None = None,
+        label: str | None = None,
+    ) -> None:
         seen.append((reject, label))
         original(self, dimension, reject=reject, label=label)
 
@@ -435,7 +442,7 @@ def test_forged_oversize_metric_components_are_rejected_before_dump() -> None:
         tensor=RationalCoordinateTensor.model_construct(
             coordinate_axis=("x",),
             variance=("COVARIANT", "COVARIANT"),
-            components=_Huge(),  # type: ignore[arg-type]
+            components=_Huge(),
             retained_nonzero_denominators=(),
         ),
         chart_semantics="GENERIC_NONDEGENERATE_LOCUS",
@@ -490,6 +497,23 @@ def test_empty_source_axis_is_rejected_at_the_request_boundary() -> None:
     mapping = map_value((1,), (), ("u",))
     with pytest.raises(ValidationError, match="nonempty"):
         RationalMetricPullbackRequest(metric=source, map=mapping)
+
+
+def test_forged_oversized_map_source_axis_is_rejected() -> None:
+    """A map with too many source variables is refused before serialization."""
+    from jacobian.math.polynomials.values import MAX_POLYNOMIAL_VARIABLES
+
+    mapping = RationalFunctionMap.model_construct(
+        source_variables=tuple(
+            f"x{index}" for index in range(MAX_POLYNOMIAL_VARIABLES + 1)
+        ),
+        target_coordinates=("u",),
+        components=(rf(1, ("u",)),),
+        domain="COMMON_REGULAR_LOCUS",
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        pullback_metric(metric((1,), ("u",)), mapping)
+    assert error.value.errors()[0]["loc"] == ("map", "source_variables")
 
 
 def test_forged_short_map_is_rejected_before_planning() -> None:

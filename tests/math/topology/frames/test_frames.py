@@ -989,3 +989,14 @@ def test_height_from_fraction_measures_beyond_the_canonical_carrier() -> None:
     height = _height_from_fraction(Fraction(1, 10**40_000))
     assert height.numerator_digits == 1
     assert height.denominator_digits == 40_001
+
+
+def test_complex_profile_charges_every_pair_preflight_pass() -> None:
+    """A frame whose pair work exceeds the envelope after every pass is refused."""
+    frame = ComplexFrame(
+        dimension=1,
+        vectors=tuple((_z(value),) for value in range(1, 1_414)),
+    )
+    with pytest.raises(OperationResourceAdmissionError) as work:
+        _complex_frame_profile(ComplexFrameProfileRequest(frame=frame))
+    assert work.value.errors()[0]["type"] == "frames.complex_profile_work"

@@ -606,7 +606,10 @@ def _require_complex_profile_work(
 ) -> None:
     vectors = len(frame.vectors)
     pair_cells = vectors * vectors
-    work = pair_cells * frame.dimension + len(frame.vectors) * frame.dimension**2
+    # Both the accumulation-height preflight and the construction pass evaluate
+    # every ordered pair and rebuild the frame operator, so charge every phase
+    # the operation will actually run instead of a single pass.
+    work = 2 * pair_cells * frame.dimension + 2 * vectors * frame.dimension**2
     if emitted_matrix_cells > MAX_COMPLEX_PROFILE_CELLS:
         raise OperationResourceAdmissionError(
             location=("frame",),

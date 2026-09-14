@@ -24,6 +24,7 @@ from jacobian.math.polynomials._expression_normalize import (
     PolynomialExpressionNormalizeResult,
     PolynomialExpressionSource,
     PolynomialLiteral,
+    PolynomialMultiply,
     PolynomialPower,
     PolynomialVariableExpression,
     normalize_polynomial_expression,
@@ -583,3 +584,32 @@ def test_nested_literal_component_sequence_is_rejected_before_copy() -> None:
     with pytest.raises(ValidationError):
         PolynomialExpressionNormalizeRequest.model_validate(payload)
     assert time.monotonic() - started < 1.0
+
+
+def test_container_shaped_variable_name_is_rejected_before_copy() -> None:
+    """A container in a scalar grammar field is rejected before the copy."""
+    payload = {
+        "coefficient_domain": "QQ",
+        "variables": ["x"],
+        "expression": {"kind": "VARIABLE", "name": [0] * 5_000_000},
+    }
+    started = time.monotonic()
+    with pytest.raises(ValidationError):
+        PolynomialExpressionNormalizeRequest.model_validate(payload)
+    assert time.monotonic() - started < 1.0
+
+
+def test_forged_empty_operands_are_a_typed_domain_error() -> None:
+    """An empty forged operand tuple is outside the closed grammar."""
+    for node_type in (PolynomialAdd, PolynomialMultiply):
+        forged = node_type.model_construct(operands=())
+        source = PolynomialExpressionSource.model_construct(
+            coefficient_domain="QQ",
+            variables=("x",),
+            expression=forged,
+        )
+        with pytest.raises(OperationDomainValidationError) as error:
+            normalize_polynomial_expression(source)
+        assert error.value.errors()[0]["type"] == (
+            "polynomial.expression.invalid_source"
+        )

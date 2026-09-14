@@ -332,6 +332,13 @@ def _require_bounded_mapping_fields(node: Mapping[str, object]) -> None:
                     raise _MalformedExpressionError(
                         "LITERAL components must be scalars, not containers"
                     )
+    for scalar_field in ("name", "exponent"):
+        if scalar_field in node and isinstance(
+            node[scalar_field], (list, tuple, Mapping)
+        ):
+            raise _MalformedExpressionError(
+                f"{scalar_field} must be a scalar, not a container"
+            )
 
 
 def _bounded_sum(values: list[int] | tuple[int, ...], limit: int) -> int:
@@ -863,6 +870,10 @@ def _admit_source_domain_claims(source: PolynomialExpressionSource) -> None:
             if not isinstance(operands, (list, tuple)):
                 raise _invalid_expression_source(
                     "ADD and MULTIPLY nodes require an operands sequence"
+                )
+            if not 1 <= len(operands) <= 64:
+                raise _invalid_expression_source(
+                    "ADD and MULTIPLY nodes require 1 to 64 operands"
                 )
             stack.extend(operands)
         elif isinstance(node, PolynomialPower):

@@ -814,3 +814,24 @@ def test_result_retains_the_canonicalized_source_shard() -> None:
     )
     assert result.outcome.source_shard is not None
     assert result.outcome.source_shard.fixed_triples == ((0, 1, 4), (0, 2, 3))
+
+
+def test_computed_result_rejects_lying_block_family() -> None:
+    """A forged block tuple subclass is rejected before any block scan."""
+
+    class _LyingBlocks(tuple):
+        def __len__(self) -> int:
+            return 7
+
+        def __iter__(self):
+            while True:
+                yield ("p0", "p1", "p2")
+
+    forged_design = IncidenceStructure.model_construct(
+        points=tuple(f"p{index}" for index in range(7)),
+        block_ids=tuple(f"b{index}" for index in range(7)),
+        blocks=_LyingBlocks((("p0", "p1", "p2"),)),
+    )
+    wrapped = ComputedSteinerTripleSystem.model_construct(design=forged_design)
+    with pytest.raises(ValidationError, match="built-in tuple"):
+        SteinerTripleSystemResult(order=7, outcome=wrapped)

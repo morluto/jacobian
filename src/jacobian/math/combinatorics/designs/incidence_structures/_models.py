@@ -526,6 +526,17 @@ class SteinerTripleSystemResult(StrictModel):
 
 
 def _require_computed_steiner_design(order: int, design: IncidenceStructure) -> None:
+    # Require built-in tuples so a forged subclass cannot under-report its
+    # length while iteration yields an unbounded family.
+    if (
+        type(design.points) is not tuple
+        or type(design.blocks) is not tuple
+        or type(design.block_ids) is not tuple
+    ):
+        raise _validation_error(
+            "steiner_design_shape",
+            "a computed design must carry built-in tuples on every axis",
+        )
     if len(design.points) != order:
         raise _validation_error(
             "steiner_design_order", "design point count must equal order"

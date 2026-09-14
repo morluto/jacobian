@@ -295,6 +295,7 @@ def test_schema_item_ceiling_matches_validator_at_the_boundary() -> None:
     at_ceiling = _request(
         (0,) * MAX_RESIDUE_PROFILE_ITEMS, 1, include_empty_subset=False
     )
+    assert at_ceiling.source is not None
     assert len(at_ceiling.source.items) == MAX_RESIDUE_PROFILE_ITEMS
 
     with pytest.raises(ValidationError):

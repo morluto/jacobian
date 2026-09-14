@@ -19,7 +19,7 @@ def _run(
     palette: list[str],
     lists: list[tuple[tuple[str, str], list[str]]],
     capacities: list[tuple[str, int]],
-):
+) -> ListCapacityEdgeColoringResult:
     graph = SimpleUndirectedGraph(
         vertices=tuple(vertices),
         edges=tuple((a, b) if a < b else (b, a) for a, b in edges),
@@ -39,7 +39,7 @@ def _run(
     )
 
 
-def _assert_valid_assignment(result) -> None:
+def _assert_valid_assignment(result: ListCapacityEdgeColoringResult) -> None:
     assert result.status == "FEASIBLE"
     assert result.assignment is not None
     graph = result.graph

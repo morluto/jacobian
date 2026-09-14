@@ -296,8 +296,10 @@ def test_rectangle_component_rounds_negative_upper_endpoint_up() -> None:
     """A negative upper endpoint must round toward +infinity to stay an upper bound."""
     from fractions import Fraction
 
-    from jacobian.math.polynomials.root_critical.operations import (
+    from jacobian.math.polynomials.root_critical._models import (
         MAX_ROOT_CRITICAL_ROOT_COMPONENT_DIGITS,
+    )
+    from jacobian.math.polynomials.root_critical.operations import (
         _fit_rectangle_component,
     )
 

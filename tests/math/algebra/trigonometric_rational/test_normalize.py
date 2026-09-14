@@ -698,11 +698,11 @@ def test_locus_union_retains_the_larger_zero_set() -> None:
     from jacobian.math.algebra.trigonometric_rational.operations import _combine_loci
 
     gaussian = (Fraction(1), Fraction())
-    larger = {
+    larger: dict[tuple[int, ...], tuple[Fraction, Fraction]] = {
         (2,): (-gaussian[0], gaussian[1]),
         (0,): gaussian,
     }
-    smaller = {
+    smaller: dict[tuple[int, ...], tuple[Fraction, Fraction]] = {
         (1,): (-gaussian[0], gaussian[1]),
         (0,): gaussian,
     }
@@ -796,7 +796,9 @@ def test_worker_cancels_a_laurent_common_factor_in_the_fallback() -> None:
         _sympy_cancel,
     )
 
-    def _laurent(polynomial: dict) -> dict:
+    def _laurent(
+        polynomial: dict[tuple[int, ...], tuple[Fraction, Fraction]],
+    ) -> dict[str, object]:
         keys = sorted(polynomial)
         return {
             "supports": [[key[0]] for key in keys],
@@ -806,17 +808,20 @@ def test_worker_cancels_a_laurent_common_factor_in_the_fallback() -> None:
             "imag_denominators": [str(polynomial[key][1].denominator) for key in keys],
         }
 
-    def _sine(k: int) -> dict:
+    def _sine(k: int) -> dict[tuple[int, ...], tuple[Fraction, Fraction]]:
         return {
             (k,): (Fraction(0), Fraction(1)),
             (-k,): (Fraction(0), Fraction(-1)),
         }
 
-    def _cosine(k: int) -> dict:
+    def _cosine(k: int) -> dict[tuple[int, ...], tuple[Fraction, Fraction]]:
         return {(k,): (Fraction(1), Fraction(0)), (-k,): (Fraction(1), Fraction(0))}
 
-    def _multiply(left: dict, right: dict) -> dict:
-        result: dict = {}
+    def _multiply(
+        left: dict[tuple[int, ...], tuple[Fraction, Fraction]],
+        right: dict[tuple[int, ...], tuple[Fraction, Fraction]],
+    ) -> dict[tuple[int, ...], tuple[Fraction, Fraction]]:
+        result: dict[tuple[int, ...], tuple[Fraction, Fraction]] = {}
         for left_support, left_value in left.items():
             for right_support, right_value in right.items():
                 support = (left_support[0] + right_support[0],)
@@ -830,7 +835,7 @@ def test_worker_cancels_a_laurent_common_factor_in_the_fallback() -> None:
             if value != (Fraction(), Fraction())
         }
 
-    common = {
+    common: dict[tuple[int, ...], tuple[Fraction, Fraction]] = {
         (0,): (Fraction(2), Fraction()),
         (3000,): (Fraction(0), Fraction(1)),
         (-3000,): (Fraction(0), Fraction(-1)),

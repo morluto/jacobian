@@ -221,6 +221,20 @@ def _reconstruct(
 _KEMPNER_PRESOLVE_STATE_BUDGET = 512
 
 
+def _presolve_transition_work(digit_set: KempnerDigitSet, arity: int) -> int:
+    """Bound the presolve carry-BFS transitions before it is launched.
+
+    Each dequeued state scans ``base**2`` digit pairs and each transition
+    inspects ``arity`` terms, and at most the state budget can be dequeued, so
+    this product bounds the mandatory presolve work. The presolve is only an
+    optimization over the full search, so it may be skipped when this bound is
+    not admissible rather than spending it before ``_require_admission`` runs.
+    """
+
+    base = digit_set.base
+    return (_KEMPNER_PRESOLVE_STATE_BUDGET + 1) * base * base * arity
+
+
 def _carry_witness(
     digit_set: KempnerDigitSet,
     arity: int,
@@ -349,11 +363,15 @@ def decide_kempner_arithmetic_progression(
                 common_difference=difference,
             ),
         )
-    presolved = _carry_witness(
-        digit_set, arity, state_budget=_KEMPNER_PRESOLVE_STATE_BUDGET
-    )
-    if presolved is not None:
-        return _contains_progression_result(digit_set, arity, presolved)
+    if _presolve_transition_work(digit_set, arity) <= MAX_CARRY_GRAPH_WORK:
+        # The presolve is admitted by its own exact work bound before it runs;
+        # an expensive presolve is skipped so the semantic admission owns the
+        # rejection instead of the request spending unadmitted work first.
+        presolved = _carry_witness(
+            digit_set, arity, state_budget=_KEMPNER_PRESOLVE_STATE_BUDGET
+        )
+        if presolved is not None:
+            return _contains_progression_result(digit_set, arity, presolved)
     admission = _require_admission(digit_set, arity)
     witness = _carry_witness(digit_set, arity, state_budget=admission.state_bound)
     if witness is None:

@@ -388,3 +388,24 @@ def test_multi_column_progression_is_admitted_before_graph_rejection() -> None:
     assert all(_member(value, 4, (0, 1, 2)) for value in values)
     differences = {values[index + 1] - values[index] for index in range(5)}
     assert len(differences) == 1
+
+
+def test_expensive_presolve_is_admitted_before_the_carry_search(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unadmitted presolve must not run before semantic admission rejects.
+
+    Base 64 with all nonzero digits and arity 999 would scan roughly
+    ``512 * 64**2 * 999`` transitions. The presolve work bound is checked
+    first, so the carry search is never entered and the resource admission
+    owns the rejection.
+    """
+    from jacobian.math.number_theory import _kempner_progression as module
+
+    def forbidden(*args: object, **kwargs: object) -> None:
+        raise AssertionError("the unadmitted presolve must not run")
+
+    monkeypatch.setattr(module, "_carry_witness", forbidden)
+    digit_set = KempnerDigitSet(base=64, allowed_digits=tuple(range(63)))
+    with pytest.raises(OperationResourceAdmissionError):
+        decide_kempner_arithmetic_progression(digit_set, 999)

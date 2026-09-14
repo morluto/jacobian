@@ -492,6 +492,23 @@ def test_empty_source_axis_is_rejected_at_the_request_boundary() -> None:
         RationalMetricPullbackRequest(metric=source, map=mapping)
 
 
+def test_forged_oversized_map_source_axis_is_rejected() -> None:
+    """A map with too many source variables is refused before serialization."""
+    from jacobian.math.polynomials.values import MAX_POLYNOMIAL_VARIABLES
+
+    mapping = RationalFunctionMap.model_construct(
+        source_variables=tuple(
+            f"x{index}" for index in range(MAX_POLYNOMIAL_VARIABLES + 1)
+        ),
+        target_coordinates=("u",),
+        components=(rf(1, ("u",)),),
+        domain="COMMON_REGULAR_LOCUS",
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        pullback_metric(metric((1,), ("u",)), mapping)
+    assert error.value.errors()[0]["loc"] == ("map", "source_variables")
+
+
 def test_forged_short_map_is_rejected_before_planning() -> None:
     x = symbols("x")
     mapping = RationalFunctionMap.model_construct(

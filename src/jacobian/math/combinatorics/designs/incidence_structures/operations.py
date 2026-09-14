@@ -263,10 +263,9 @@ def construct_steiner_triple_system(
 
     Each candidate triple covers exactly three pair constraints. The canonical
     instance is solved by the maintained generalized exact-cover backend. An
-    UNKNOWN result retains algorithm-independent fixed-triple constraints so
-    callers can continue one unresolved subdomain. A found design is
-    independently checked by replaying all pair multiplicities before crossing
-    the operation boundary.
+    UNKNOWN result retains algorithm-independent fixed-triple constraints for
+    one unresolved subdomain within the admitted search budget. A COMPUTED
+    outcome is an exact cover of every point pair.
     """
     if type(order) is not int or type(search_budget) is not int:
         raise OperationDomainValidationError(
@@ -355,10 +354,7 @@ def construct_steiner_triple_system(
     )
     return SteinerTripleSystemResult(
         order=order,
-        outcome=ComputedSteinerTripleSystem(
-            states_explored=states,
-            design=design,
-        ),
+        outcome=ComputedSteinerTripleSystem(design=design),
     )
 
 

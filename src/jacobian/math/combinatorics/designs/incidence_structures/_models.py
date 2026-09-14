@@ -281,7 +281,6 @@ class ComputedSteinerTripleSystem(StrictModel):
     """A complete design, established by an exact cover of every pair."""
 
     status: Literal["COMPUTED"] = "COMPUTED"
-    states_explored: StrictInt = Field(ge=0, le=MAX_STEINER_SEARCH_STATES)
     design: IncidenceStructure
 
 
@@ -320,11 +319,11 @@ def _canonical_shard_family_key(shard: object) -> tuple[Any, ...] | None:
     if type(order) is not int:
         return None
     raw = shard.get("fixed_triples", ())
-    if not isinstance(raw, (list, tuple)) or len(raw) > MAX_STEINER_BLOCKS:
+    if type(raw) not in (list, tuple) or len(raw) > MAX_STEINER_BLOCKS:
         return None
     triples: list[tuple[int, int, int]] = []
     for triple in raw:
-        if not isinstance(triple, (list, tuple)) or len(triple) != 3:
+        if type(triple) not in (list, tuple) or len(triple) != 3:
             return None
         if any(type(point) is not int for point in triple):
             return None

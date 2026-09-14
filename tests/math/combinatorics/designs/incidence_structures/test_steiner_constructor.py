@@ -87,7 +87,7 @@ def test_construct_trivial_sts3() -> None:
 def test_native_constructor_uses_request_default_budget() -> None:
     result = construct_steiner_triple_system(3)
     assert result.outcome.status == "COMPUTED"
-    assert result.outcome.states_explored < 100_000
+    assert result.outcome.design.blocks == (("p0", "p1", "p2"),)
 
 
 def test_budget_exhaustion_is_unknown() -> None:
@@ -206,7 +206,6 @@ def test_computed_result_rejects_noncanonical_design_axes() -> None:
                         "block_ids": tuple(f"x{index}" for index in range(7)),
                     }
                 ),
-                states_explored=1,
             ),
         )
 
@@ -716,3 +715,27 @@ def test_wire_frontier_shards_are_canonicalized_after_decoding() -> None:
     )
     assert isinstance(duplicated.outcome, SteinerTripleSystemUnknown)
     assert len(duplicated.outcome.unresolved_frontier) == 2
+
+
+def test_wire_frontier_shard_rejects_fixed_triple_subclasses() -> None:
+    """A shard dict whose fixed_triples is a lying subclass is rejected."""
+
+    class LyingTriples(tuple):  # type: ignore[type-arg]
+        def __len__(self) -> int:
+            return 1
+
+        def __iter__(self) -> Iterator[Any]:
+            raise AssertionError("a rejected family must not be traversed")
+
+    payload = {
+        "order": 7,
+        "outcome": {
+            "status": "UNKNOWN",
+            "states_explored": 1,
+            "unresolved_frontier": [
+                {"order": 7, "fixed_triples": LyingTriples(((0, 1, 2),))}
+            ],
+        },
+    }
+    with pytest.raises(ValidationError):
+        SteinerTripleSystemResult.model_validate(payload)

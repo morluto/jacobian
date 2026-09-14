@@ -175,26 +175,59 @@ class _MalformedExpressionError(ValueError):
     """A node violates the closed expression grammar or operand shape."""
 
 
-def _expression_children(node: object) -> tuple[object, ...]:
-    if isinstance(node, (PolynomialAdd, PolynomialMultiply)):
-        operands = getattr(node, "operands", ())
-        if isinstance(operands, (list, tuple)):
-            return tuple(operands)
+def _is_expression_node(node: object) -> bool:
+    """Return whether ``node`` is a raw mapping or a recognized AST node."""
+
+    return isinstance(
+        node,
+        (
+            Mapping,
+            PolynomialLiteral,
+            PolynomialVariableExpression,
+            PolynomialAdd,
+            PolynomialMultiply,
+            PolynomialPower,
+        ),
+    )
+
+
+def _bounded_operands(operands: object) -> tuple[object, ...]:
+    """Materialize operands under the arity cap and require expression nodes."""
+
+    if not isinstance(operands, (list, tuple)):
         raise _MalformedExpressionError(
             "expression operands must be a bounded sequence"
         )
+    bounded: list[object] = []
+    for operand in operands:
+        if len(bounded) >= 64:
+            raise _MalformedExpressionError(
+                "expression nodes may have at most 64 operands"
+            )
+        if not _is_expression_node(operand):
+            raise _MalformedExpressionError(
+                "every expression operand must be a mapping or recognized node"
+            )
+        bounded.append(operand)
+    return tuple(bounded)
+
+
+def _expression_children(node: object) -> tuple[object, ...]:
+    if isinstance(node, (PolynomialAdd, PolynomialMultiply)):
+        operands = getattr(node, "operands", ())
+        return _bounded_operands(operands)
     if isinstance(node, PolynomialPower):
         base = getattr(node, "base", None)
         return (base,) if base is not None else ()
+    if (
+        isinstance(node, (PolynomialLiteral, PolynomialVariableExpression))
+        or node is None
+    ):
+        return ()
     if isinstance(node, Mapping):
         kind = node.get("kind")
         if kind in ("ADD", "MULTIPLY"):
-            operands = node.get("operands")
-            if isinstance(operands, (list, tuple)):
-                return tuple(operands)
-            raise _MalformedExpressionError(
-                "expression operands must be a bounded sequence"
-            )
+            return _bounded_operands(node.get("operands"))
         if kind == "POWER":
             if "base" not in node:
                 raise _MalformedExpressionError("a POWER node requires a base")
@@ -204,7 +237,9 @@ def _expression_children(node: object) -> tuple[object, ...]:
         if kind in ("VARIABLE", "LITERAL"):
             return ()
         raise _MalformedExpressionError(f"unrecognized expression node kind: {kind!r}")
-    return ()
+    raise _MalformedExpressionError(
+        f"unrecognized expression node: {type(node).__name__}"
+    )
 
 
 def _bound_raw_request(value: Mapping[str, object]) -> None:
@@ -766,10 +801,14 @@ def _revalidate_expression_source(
             code="polynomial.expression.invalid_source",
             message="expression source must be a PolynomialExpressionSource",
         )
-    _bound_source_expression(source.expression)
+    _bound_source_expression(getattr(source, "expression", None))
     try:
         return PolynomialExpressionSource.model_validate(
-            source.model_dump(mode="python")
+            {
+                "coefficient_domain": getattr(source, "coefficient_domain", None),
+                "variables": getattr(source, "variables", None),
+                "expression": getattr(source, "expression", None),
+            }
         )
     except ValidationError as exc:
         details = exc.errors()

@@ -505,3 +505,27 @@ def test_zero_power_returns_one_without_expanding_the_base() -> None:
     assert result.polynomial.polynomial.terms[0].coefficient == CanonicalRational(
         num=1, den=1
     )
+
+
+def test_non_node_operand_is_rejected_before_container_copy() -> None:
+    """An ADD operand that is a large list is rejected before the copy."""
+    payload = {
+        "coefficient_domain": "ZZ",
+        "variables": ["x"],
+        "expression": {"kind": "ADD", "operands": [[0] * 5_000_000]},
+    }
+    started = time.monotonic()
+    with pytest.raises(ValidationError):
+        PolynomialExpressionNormalizeRequest.model_validate(payload)
+    assert time.monotonic() - started < 1.0
+
+
+def test_forged_source_missing_expression_is_a_typed_domain_error() -> None:
+    """A source instance without a top-level expression is a domain error."""
+    source = PolynomialExpressionSource.model_construct(
+        coefficient_domain="QQ",
+        variables=("x",),
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        normalize_polynomial_expression(source)
+    assert error.value.errors()[0]["type"] == "polynomial.expression.invalid_source"

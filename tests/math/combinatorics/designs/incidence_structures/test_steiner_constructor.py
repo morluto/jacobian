@@ -780,3 +780,18 @@ def test_wire_frontier_rejects_sequence_subclasses() -> None:
 def test_not_found_outcome_omits_execution_history() -> None:
     """An exact NOT_FOUND outcome does not carry private search counts."""
     assert "states_explored" not in SteinerTripleSystemNotFound.model_fields
+
+
+def test_frontier_rejects_unhashable_forged_shard_fields() -> None:
+    """A constructed shard with an unhashable field is a ValidationError."""
+    forged = SteinerTripleSystemShard.model_construct(order=7, fixed_triples=[])
+    payload = {
+        "order": 7,
+        "outcome": {
+            "status": "UNKNOWN",
+            "states_explored": 1,
+            "unresolved_frontier": [forged],
+        },
+    }
+    with pytest.raises(ValidationError):
+        SteinerTripleSystemResult.model_validate(payload)

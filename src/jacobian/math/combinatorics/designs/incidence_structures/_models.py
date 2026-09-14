@@ -316,7 +316,22 @@ def _canonical_shard_family_key(shard: object) -> tuple[Any, ...] | None:
     """
 
     if isinstance(shard, SteinerTripleSystemShard):
-        return (shard.order, shard.fixed_triples)
+        # A model_construct instance can carry unhashable or oversized fields,
+        # so bound and type-check them before they enter a dictionary key.
+        order = getattr(shard, "order", None)
+        if type(order) is not int:
+            return None
+        raw = getattr(shard, "fixed_triples", None)
+        if type(raw) is not tuple or len(raw) > MAX_STEINER_BLOCKS:
+            return None
+        instance_triples: list[tuple[int, int, int]] = []
+        for triple in raw:
+            if type(triple) is not tuple or len(triple) != 3:
+                return None
+            if any(type(point) is not int for point in triple):
+                return None
+            instance_triples.append((triple[0], triple[1], triple[2]))
+        return (order, tuple(sorted(instance_triples)))
     if not isinstance(shard, dict):
         return None
     if set(shard) - {"order", "fixed_triples"}:
@@ -385,8 +400,16 @@ class SteinerTripleSystemUnknown(StrictModel):
         for shard in frontier:
             key = _canonical_shard_family_key(shard)
             if key is None:
-                # An unrecognized or malformed shard must reach strict field
-                # validation unchanged so it is reported, not silently merged.
+                if isinstance(shard, SteinerTripleSystemShard):
+                    # Pydantic trusts an existing instance, so a forged shard
+                    # must be rejected here rather than passed through.
+                    raise _validation_error(
+                        "steiner_frontier_shard",
+                        "each frontier shard must be a canonical "
+                        "SteinerTripleSystemShard",
+                    )
+                # A malformed wire shard must reach strict field validation
+                # unchanged so it is reported, not silently merged.
                 return data
             canonical.setdefault(key, shard)
         payload = dict(data)

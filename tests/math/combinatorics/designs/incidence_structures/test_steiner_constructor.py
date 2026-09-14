@@ -835,3 +835,42 @@ def test_computed_result_rejects_lying_block_family() -> None:
     wrapped = ComputedSteinerTripleSystem.model_construct(design=forged_design)
     with pytest.raises(ValidationError, match="built-in tuple"):
         SteinerTripleSystemResult(order=7, outcome=wrapped)
+
+
+def test_result_rejects_forged_unresolved_frontier_subclass() -> None:
+    """A forged frontier tuple subclass is rejected before iteration."""
+
+    class _LyingFrontier(tuple):
+        def __len__(self) -> int:
+            return 1
+
+        def __iter__(self):
+            while True:
+                yield SteinerTripleSystemShard(order=7, fixed_triples=())
+
+    outcome = SteinerTripleSystemUnknown.model_construct(
+        states_explored=1, unresolved_frontier=_LyingFrontier()
+    )
+    with pytest.raises(ValidationError, match="built-in tuple"):
+        SteinerTripleSystemResult(order=7, outcome=outcome)
+
+
+def test_computed_result_rejects_forged_inner_block_subclass() -> None:
+    """A forged inner block tuple subclass is rejected before scanning."""
+
+    class _LyingBlock(tuple):
+        def __len__(self) -> int:
+            return 3
+
+        def __iter__(self):
+            while True:
+                yield "p0"
+
+    forged_design = IncidenceStructure.model_construct(
+        points=tuple(f"p{index}" for index in range(7)),
+        block_ids=tuple(f"b{index}" for index in range(7)),
+        blocks=(_LyingBlock(("p0", "p1", "p2")),) * 7,
+    )
+    wrapped = ComputedSteinerTripleSystem.model_construct(design=forged_design)
+    with pytest.raises(ValidationError, match="built-in tuple"):
+        SteinerTripleSystemResult(order=7, outcome=wrapped)

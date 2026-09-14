@@ -559,6 +559,11 @@ def _require_computed_steiner_design(order: int, design: IncidenceStructure) -> 
             "steiner_design_block_axis",
             "computed designs must use canonical block IDs",
         )
+    if any(type(block) is not tuple for block in design.blocks):
+        raise _validation_error(
+            "steiner_block_shape",
+            "every computed block must be a built-in tuple",
+        )
     if any(len(block) != 3 for block in design.blocks):
         raise _validation_error(
             "steiner_block_size",
@@ -588,6 +593,18 @@ def _require_computed_steiner_design(order: int, design: IncidenceStructure) -> 
 def _require_steiner_frontier_order(
     order: int, frontier: tuple[SteinerTripleSystemShard, ...]
 ) -> None:
+    # Require a built-in tuple so a forged subclass cannot under-report its
+    # length while iteration is unbounded.
+    if type(frontier) is not tuple:
+        raise _validation_error(
+            "steiner_frontier_shape",
+            "the unresolved frontier must be a built-in tuple",
+        )
+    if len(frontier) > MAX_STEINER_FRONTIER_SHARDS:
+        raise _validation_error(
+            "steiner_frontier_length",
+            "the unresolved frontier exceeds the admitted shard bound",
+        )
     # getattr keeps a forged instance (or mapping) a typed order mismatch
     # instead of a raw AttributeError.
     if any(getattr(shard, "order", None) != order for shard in frontier):

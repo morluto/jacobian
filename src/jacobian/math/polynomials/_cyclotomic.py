@@ -392,8 +392,10 @@ def _twice_odd_cyclotomic(
         else:
             # The odd half may itself need a bounded reduction (for example a
             # three-prime lift); dispatch through the admitted construction so
-            # every shape it accepts is available through this path.
-            _, odd_value = _compute(odd)
+            # every shape it accepts is available through this path. The odd
+            # half's factor map is already known, so reuse it instead of
+            # factoring again.
+            _, odd_value = _construct(odd, odd_factorization)
             base_coefficients = odd_value.coefficients
         # The odd half is ``Phi_odd`` with the same degree as ``Phi_{2*odd}``
         # and, for odd > 1, the exact constant term 1. Checking only digit
@@ -475,13 +477,14 @@ def _prime_lift_quotient_coefficients(
     index: int,
     prime: int,
     other: int,
+    other_factorization: dict[int, int],
     admission: _CyclotomicAdmission,
 ) -> tuple[int, ...]:
     """Return ``Phi_{pm}(x) = Phi_m(x**p) / Phi_m(x)`` for prime ``p`` not dividing ``m``."""
 
     request_checkpoint("during prime-lift cyclotomic construction")
     try:
-        _, base = _compute(other)
+        _, base = _construct(other, other_factorization)
         quotient = _exact_divide(_substitute_power(base, prime), base)
     except (
         OperationDomainValidationError,
@@ -569,7 +572,9 @@ def _substitute_power(
     return IntegerPolynomial(coefficients=tuple(reversed(ascending)))
 
 
-def _backend_cyclotomic_coefficients(index: int) -> tuple[int, ...]:
+def _backend_cyclotomic_coefficients(
+    index: int, expected_cardinality: int
+) -> tuple[int, ...]:
     try:
         from sympy import Symbol, cyclotomic_poly
     except Exception as exc:
@@ -577,12 +582,17 @@ def _backend_cyclotomic_coefficients(index: int) -> tuple[int, ...]:
     request_checkpoint("before cyclotomic backend")
     try:
         polynomial = cyclotomic_poly(index, Symbol("x"), polys=True)
-        raw_coefficients = tuple(polynomial.all_coeffs())
+        raw_coefficients = polynomial.all_coeffs()
     except OperationBackendError:
         raise
     except Exception as exc:
         _backend_error(BackendFailureReason.INVALID_OUTPUT, exc)
     request_checkpoint("after cyclotomic backend")
+    # Reject a malformed sequence by its admitted cardinality before copying it
+    # or converting any element, so a wide erroneous response becomes a bounded
+    # INVALID_OUTPUT instead of unadmitted allocation and conversion work.
+    if len(raw_coefficients) != expected_cardinality:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
     coefficients: tuple[int, ...]
     normalized_coefficients: list[int] = []
     try:
@@ -601,10 +611,16 @@ def _backend_cyclotomic_coefficients(index: int) -> tuple[int, ...]:
     return coefficients
 
 
-def _compute(index: int) -> tuple[int, IntegerPolynomial]:
-    request_checkpoint("before cyclotomic admission")
-    _require_factorization_work(index)
-    factorization = _factor_index(index)
+def _construct(index: int, factorization: dict[int, int]) -> tuple[int, IntegerPolynomial]:
+    """Build ``Phi_index`` from an already validated exact factor map.
+
+    Factorization is the only backend-failure point, and the caller has
+    already factored this index and charged its work, so every reduction below
+    reuses the known factor map rather than re-entering ``_compute`` (which
+    would factor again and expose a second failure point the recorded plan
+    does not charge).
+    """
+
     admission = _admit(index, factorization)
     request_checkpoint("after cyclotomic admission")
     if _is_prime_index(index, factorization):
@@ -623,8 +639,9 @@ def _compute(index: int) -> tuple[int, IntegerPolynomial]:
     radical = prod(factorization) if factorization else 1
     if radical != index:
         # ``Phi_n(x) = Phi_rad(n)(x^(n/rad(n)))``: build the reduced cyclotomic
-        # and substitute the sparse power.
-        _, reduced_polynomial = _compute(radical)
+        # from the known squarefree factor map and substitute the sparse power.
+        radical_factorization = dict.fromkeys(factorization, 1)
+        _, reduced_polynomial = _construct(radical, radical_factorization)
         request_checkpoint("before cyclotomic result construction")
         substituted = _substitute_power(reduced_polynomial, index // radical)
         _require_admitted_coefficients(
@@ -637,7 +654,14 @@ def _compute(index: int) -> tuple[int, IntegerPolynomial]:
     lifted = _lift_prime(index, factorization)
     if lifted is not None:
         prime, other = lifted
-        coefficients = _prime_lift_quotient_coefficients(index, prime, other, admission)
+        other_factorization = {
+            base: exponent
+            for base, exponent in factorization.items()
+            if base != prime
+        }
+        coefficients = _prime_lift_quotient_coefficients(
+            index, prime, other, other_factorization, admission
+        )
         _require_admitted_coefficients(
             coefficients,
             admission,
@@ -649,7 +673,7 @@ def _compute(index: int) -> tuple[int, IntegerPolynomial]:
             return admission.degree, IntegerPolynomial(coefficients=coefficients)
         except Exception as exc:
             _backend_error(BackendFailureReason.INVALID_OUTPUT, exc)
-    coefficients = _backend_cyclotomic_coefficients(index)
+    coefficients = _backend_cyclotomic_coefficients(index, admission.degree + 1)
     _require_admitted_coefficients(
         coefficients,
         admission,
@@ -664,6 +688,13 @@ def _compute(index: int) -> tuple[int, IntegerPolynomial]:
     except Exception as exc:
         _backend_error(BackendFailureReason.INVALID_OUTPUT, exc)
     return admission.degree, polynomial_value
+
+
+def _compute(index: int) -> tuple[int, IntegerPolynomial]:
+    request_checkpoint("before cyclotomic admission")
+    _require_factorization_work(index)
+    factorization = _factor_index(index)
+    return _construct(index, factorization)
 
 
 def _require_native_index(index: int) -> int:

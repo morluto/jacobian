@@ -11,8 +11,9 @@ CYCLOTOMIC_OPERATION = MathTool(
     operation_id="polynomial.cyclotomic.compute",
     title="Compute an integer cyclotomic polynomial",
     description=(
-        "Compute Phi_n with SymPy's maintained exact ZZ polynomial kernel and "
-        "return its source index and Euler totient degree."
+        "Compute the exact integer cyclotomic polynomial Phi_n together with "
+        "its source index and Euler totient degree. The result is the minimal "
+        "polynomial of a primitive n-th root of unity over the integers."
     ),
     request_type=CyclotomicRequest,
     result_type=CyclotomicResult,

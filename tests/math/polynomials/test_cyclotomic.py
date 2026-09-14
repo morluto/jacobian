@@ -304,6 +304,64 @@ def test_construction_work_is_admitted_before_backend_expansion(
         cyclotomic(30)
 
 
+def test_reductions_reuse_the_admitted_factor_map(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A reduction must not re-enter the factorint backend it already paid for.
+
+    ``3988 = 2**2 * 997`` reduces to the squarefree ``997``; ``426 = 2*3*71``
+    reduces through the twice-odd path. Both must construct from the factor map
+    the entry point already validated, so the backend-failure point stays
+    single and the recorded plan is complete.
+    """
+    import sympy
+
+    original = sympy.factorint
+    calls: list[int] = []
+
+    def counting(index: int) -> dict[int, int]:
+        calls.append(index)
+        return original(index)
+
+    monkeypatch.setattr(sympy, "factorint", counting)
+    assert len(cyclotomic(3988).coefficients) == 1992 + 1
+    assert len(cyclotomic(426).coefficients) == 140 + 1
+    assert calls == [3988, 426]
+
+
+def test_backend_cardinality_is_bounded_before_conversion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A backend polynomial wider than the admitted degree is refused early.
+
+    The fallthrough dense path passes the admitted cardinality into the
+    adapter, so a malformed response is rejected as a bounded INVALID_OUTPUT
+    before it is copied or converted coefficient by coefficient.
+    """
+    import sympy
+
+    from jacobian.math.polynomials import _cyclotomic as module
+
+    class _Untouchable:
+        converted = False
+
+        def __int__(self) -> int:
+            _Untouchable.converted = True
+            return 0
+
+    class _WideBackendPoly:
+        def all_coeffs(self) -> list[object]:
+            return [1, 2, 3, _Untouchable()]
+
+    monkeypatch.setattr(
+        sympy, "cyclotomic_poly", lambda index, symbol, polys=False: _WideBackendPoly()
+    )
+    with pytest.raises(OperationBackendError) as exc_info:
+        module._backend_cyclotomic_coefficients(7, 3)
+    assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT
+    assert _Untouchable.converted is False
+
+
 def test_three_prime_lifting_charge_stays_inside_the_construction_envelope() -> None:
     """The prime-lifting regime admits cheap multi-prime squarefree indices."""
     from jacobian.math.polynomials._cyclotomic import (
